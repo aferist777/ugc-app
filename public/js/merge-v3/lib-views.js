@@ -217,6 +217,8 @@ function _paint() {
     // (phase V60.2) A link always: it leads to the Library's roots, from the shelf too.
     title.classList.add('is-link');
     title.title = 'The Library - REFERENCES, VIDEO, IMAGES, AUDIO';
+    // (phase V64, fix (ж)) Blue while the gallery is what shows; white over a view or the captions.
+    title.classList.toggle('is-on', t === 'shelf');
   }
   for (const [name, c] of _chats) {
     const on = t === name;

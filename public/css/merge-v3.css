@@ -733,15 +733,21 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    header reads "LIBRARY / generate image" - "Library" is the way back - and the gallery and the
    media tree give way to the chat. On the shelf the crumb stays, pale, while the
    project has a conversation: one press back to it. */
+/* (phase V64, fix (ж), the owner 2026-11-01: "сделай чтобы выделеная крошка была синей, а не выделенная белой. сейчас library не
+   выделяется синим") The crumb of what shows - blue; every other one - white (a pale one is still waiting, .is-off). "Library"
+   is blue while the gallery shows (lib-views.js), SETUP while setup is where you are (workshop.js). */
 .mv3-lib-crumb{
   flex:0 1 auto; min-width:0; padding:0; border:0; background:none; cursor:pointer;
   font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-  color:var(--muted); opacity:.6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.mv3-lib-crumb:hover{opacity:1; color:var(--ink)}
-.mv3-lib-crumb.is-on{opacity:1; color:var(--primary); cursor:default}
-#mv3-library .mv3-panel-title.is-link{cursor:pointer; color:var(--muted)}
-#mv3-library .mv3-panel-title.is-link:hover{color:var(--ink); text-decoration:underline dotted}
+.mv3-lib-crumb:hover{text-decoration:underline dotted; text-underline-offset:3px}
+.mv3-lib-crumb.is-on{color:var(--primary); cursor:default; text-decoration:none}
+#mv3-library .mv3-panel-title.is-link{cursor:pointer; color:var(--ink)}
+#mv3-library .mv3-panel-title.is-link:hover{text-decoration:underline dotted; text-underline-offset:3px}
+#mv3-library .mv3-panel-title.is-link.is-on{color:var(--primary)}
+#mv3-library .mv3-panel-title.is-link.is-on:hover{text-decoration:none}
+#mv3-inspector .mv3-panel-title.is-on{color:var(--primary)}
 #mv3-library .mv3-panel-head{gap:6px; container:libhead / inline-size}
 /* (phase V18.2) The crumbs are always there: in a narrow panel the chats' read "image" / "video". */
 @container libhead (max-width: 620px){ .mv3-lib-crumb .lg{display:none} }
@@ -1377,7 +1383,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline *{pointer-events:none}
 body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var(--gold)}
 /* (во53) The crumb "b-roll /" before the B-roll is laid. */
 #mv3-lib-br.is-off{opacity:.35; cursor:default}
-#mv3-lib-br.is-off:hover{color:var(--muted)}
+#mv3-lib-br.is-off:hover{text-decoration:none}
 
 /* ── The workshop's first step ───────────────────────────────────────────────
    Casting in a 280px column (js/merge-v3/wk-setup.js). Three faces to a row is the
@@ -1483,7 +1489,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-crumbs{display:flex; align-items:center; gap:6px; flex:0 0 auto}
 .mv3-wk-crumbs .mv3-lib-crumb{flex:0 0 auto; overflow:visible}
 .mv3-lib-crumb.mv3-wk-on.is-off{opacity:.35; cursor:default}
-.mv3-lib-crumb.mv3-wk-on.is-off:hover{opacity:.35; color:var(--muted)}
+.mv3-lib-crumb.mv3-wk-on.is-off:hover{opacity:.35; text-decoration:none}
 
 /* The sentence and its button, at the foot of the right half and ON the panel's bottom edge:
    the half that holds it gives up the padding every other half keeps under its content. */

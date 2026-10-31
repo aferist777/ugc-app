@@ -260,6 +260,9 @@ function _paintRoute() {
   // reads "setup → looks → …", its first word being the way back to the hub.
   const mod = _loaded.setup;
   const crumbs = (_pid && _step === 'setup' && mod && typeof mod.crumbs === 'function') ? (mod.crumbs() || []) : [];
+  // (phase V64, fix (ж)) SETUP is blue while it is where you are - not a place inside it, not the timeline step.
+  const setupTitle = head.querySelector('.mv3-panel-title');
+  if (setupTitle) setupTitle.classList.toggle('is-on', !!_pid && _step === 'setup' && !crumbs.some(c => c.here));
   // (phase V62) In setup the bar is always there: "setup", the route inside it, and the way on (_paintOn).
   if (!(_pid && _step === 'setup')) { if (bar) bar.remove(); return; }
   if (!bar) {
