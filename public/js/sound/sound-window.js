@@ -50,7 +50,7 @@
      projectChanged()  Merge: another project opened - its presses read again
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 import { waveEl, secs } from './wave.js';
 import { createSunoForm, el, api, post, ls, lsSet, copyText, titleOf, qmark, withQ, closeQ, modeRowHelp, MODEL_ROW_HELP } from './suno-form.js';
@@ -992,7 +992,8 @@ export async function open(o) {
   _placeKey = null;
   _err = '';
   _win = openFrame({
-    name: 'generate audio', anchor: _o.anchor, cls: 'is-music is-sound', size: GEN_SIZE, passDrags: true,
+    // (fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
+    name: 'generate audio', anchor: _o.anchor, cls: 'is-music is-sound', size: GEN_SIZE, geom: GEOM_CHAT,  passDrags: true,
     onClose: () => {
       F.closeAlmanac();
       closeQ();

@@ -866,7 +866,9 @@ export function open() {
   if (!host) return;
   if (!_built) _build();
   if (!isOpen()) {
-    _win = openFrame({ name: 'New Character', size: GEN_SIZE, cls: 'is-chmake', onClose: _park });
+    // (phase V64, fix (л)) Moved and stretched; its size kept, its place not (it opens in the middle).
+    _win = openFrame({ name: 'New Character', size: GEN_SIZE, geom: { key: 'chmake', resize: true, move: true, keepSize: true },
+      cls: 'is-chmake', onClose: _park });
     _win.setCrumbs([{ label: 'New Character' }]);
     // The same nodes, moved - what is typed, picked, waited for and drawn stays as it was.
     _win.body.appendChild(_root);

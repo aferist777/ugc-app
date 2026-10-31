@@ -27,7 +27,7 @@ import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
-import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { markText, markField } from './image-words.js';
 
 const MAX_ATTS = 6;
@@ -836,7 +836,8 @@ export function open(p, hooks) {
   const root = $root();
   if (!root) return;
   if (!isOpen()) {
-    _win = openFrame({ name: 'frames chat', size: GEN_SIZE, cls: 'is-fchat', onClose: _park });
+    // (phase V64, fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
+    _win = openFrame({ name: 'frames chat', size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-fchat', onClose: _park });
     _win.setCrumbs([{ label: 'frames chat' }]);
     root.removeAttribute('style');        // the place the old overlay measured for it
     _win.body.appendChild(root);

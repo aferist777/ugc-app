@@ -267,7 +267,8 @@ function _openVoices() {
       : !text.trim() || !/[^ -~‘’“”–—…]/.test(text) ? 'en' : '';
   VOICE.languageFor(String(p.id), lang);
   _voiceWin = GW.openFrame({
-    name: 'voices', size: { w: 900, h: 660 },
+    // (phase V64, fix (л)) Moved and stretched; its size kept.
+    name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
     onClose: () => { _voiceWin = null; VOICE.leave(); },
   });
   _voiceWin.setCrumbs([{ label: 'voices' }]);
@@ -536,7 +537,9 @@ function _openWho(page, char) {
   if (!_chars) return;
   if (_who && _who.win.alive() && !_who.win.isTop()) _who.win.close();
   if (!_who || !_who.win.alive()) {
-    const win = GW.openFrame({ name: 'character and look', anchor: _host, onClose: () => { if (_who && _who.win === win) _who = null; } });
+    // (phase V64, fix (л), (зг14): "окна who/where - только передвигаем и запоминаем. размеры не меняем") Moved; its place kept.
+    const win = GW.openFrame({ name: 'character and look', anchor: _host, geom: { key: 'who', move: true, keepPos: true },
+      onClose: () => { if (_who && _who.win === win) _who = null; } });
     _who = { win, page: 'list', char: null };
     // Opened on the one cast, else the first.
     const c = _castChar();

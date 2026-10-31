@@ -30,6 +30,19 @@ button.gw-crumb:hover{ color:var(--ink); text-decoration:underline }
 }
 .gw-act:hover{ background:var(--primary); color:var(--primary-ink, #111) }
 .gw-act[disabled]{ opacity:.45; cursor:default }
+/* (phase V64, fix (л)) A window moved by its head and stretched by its edges and corners (js/gen-window.js _wireGeom). */
+.gw.is-movable .gw-head{ cursor:move; touch-action:none }
+.gw.is-movable .gw-head button, .gw.is-movable .gw-head .qm{ cursor:pointer }
+.gw-rs{ position:absolute; z-index:6; touch-action:none }
+.gw-rs[data-d="n"]{ top:0; left:10px; right:10px; height:5px; cursor:ns-resize }
+.gw-rs[data-d="s"]{ bottom:0; left:10px; right:10px; height:6px; cursor:ns-resize }
+.gw-rs[data-d="e"]{ right:0; top:10px; bottom:10px; width:6px; cursor:ew-resize }
+.gw-rs[data-d="w"]{ left:0; top:10px; bottom:10px; width:6px; cursor:ew-resize }
+.gw-rs[data-d="ne"]{ top:0; right:0; width:12px; height:12px; cursor:nesw-resize }
+.gw-rs[data-d="nw"]{ top:0; left:0; width:12px; height:12px; cursor:nwse-resize }
+.gw-rs[data-d="se"]{ bottom:0; right:0; width:14px; height:14px; cursor:nwse-resize }
+.gw-rs[data-d="sw"]{ bottom:0; left:0; width:12px; height:12px; cursor:nesw-resize }
+body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-x{ flex:0 0 auto; width:22px; height:22px; padding:0; border:0; border-radius:var(--r-xs); background:none;
   color:var(--muted); font:600 13px/1 var(--font); cursor:pointer }
 .gw-x:hover{ color:var(--ink); background:var(--surface-2) }

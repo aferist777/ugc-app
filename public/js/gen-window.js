@@ -63,13 +63,34 @@ const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vh
 // the almanac, the viewer and the "who" / "where" windows.
 // (fix (б)) And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
 export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
+// (fix (л), (зг14)) The chats' windows - pictures, video, sound, frames - are ONE size in ONE place, both the person's and kept.
+export const GEOM_CHAT = Object.freeze({ key: 'chat', resize: true, move: true, keepSize: true, keepPos: true });
 const _frames = [];                        // open, the top last
 
+// (phase V64, fix (л), the owner 2026-11-01: "попапы которые мы делали сделаем, чтобы пользователь мог менять их размеры ...
+// будет запоминаться размер попапов и ... можно было перемещать попап по интерфейсу"; (зг14): "чаты картинок, видео и звука, чат
+// кадров - размер и положение общее - запоминаем и размер и положение. окна create props/environment/lookbook статичные ... окна
+// who/where - только передвигаем и запоминаем. размеры не меняем. в остальном согласен") A WINDOW'S OWN SIZE AND PLACE. A window
+// opened with `geom: { key, resize, move, keepSize, keepPos }` is dragged by its head (`move`) and stretched by its edges and
+// corners (`resize`); what the person set is kept in the browser under `key` (`keepSize`, `keepPos`) - one key shared by
+// several windows makes them one size in one place (the chats: 'chat'). A double press on the head puts the window back to its
+// own size, centred, and forgets what was kept. A window without `geom` stays as it opens (New environment / lookbook / prop).
+const LS_GEOM = 'gw_geom_v1';
+const MIN_W = 520, MIN_H = 340;
+function _geomAll() { try { return JSON.parse(localStorage.getItem(LS_GEOM) || '{}') || {}; } catch (e) { return {}; } }
+function _geomOf(key) { const g = _geomAll()[key]; return g && typeof g === 'object' ? g : null; }
+function _geomPut(key, g) {
+  const all = _geomAll();
+  if (g) all[key] = g; else delete all[key];
+  try { localStorage.setItem(LS_GEOM, JSON.stringify(all)); } catch (e) { /* a private window */ }
+}
+
 /**
- * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags }.
+ * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags, geom }.
  *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720; V64: a
  *         generation's GEN_SIZE); a smaller screen still makes it smaller
  *   passDrags  (phase V64) a thing of the app dragged out of it lays the windows aside until it is let go (_passing)
+ *   geom  (phase V64, fix (л)) { key, resize, move, keepSize, keepPos } - moved by its head, stretched by its edges, kept
  * -> { box, head, crumbs, body, close(), alive(), isTop(), setCrumbs(list) }
  *    setCrumbs([{ label, on?, act?: { label, title, on } }]) - the last is where the window is; the others go back.
  */
@@ -88,21 +109,33 @@ export function openFrame(o) {
   box.append(head, body);
   ov.appendChild(box);
   document.body.appendChild(ov);
+  const G = o.geom && o.geom.key ? o.geom : null;
+  let live = null;                         // (fix (л)) { x, y, w, h } the person set in this opening
   const place = () => {
     const W = window.innerWidth, H = window.innerHeight, M = 8;
     const sz = o.size || {};
-    const w = Math.min(+sz.w || W_WIN, W - 2 * M), h = Math.min(+sz.h || H_WIN, H - 2 * M);
-    // (phase V64, fix (б), the owner 2026-10-31: "сделай чтобы окна чатов были в одном месте") A generation's window
-    // (GEN_SIZE) stands in the middle of the screen whatever opened it - the chats, the sound, the generators all in one place.
-    const a = o.size !== GEN_SIZE && o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
-    const cx = a && a.width ? a.left + a.width / 2 : W / 2;
-    const cy = a && a.height ? a.top + a.height / 2 : H / 2;
-    box.style.width = w + 'px';
-    box.style.height = h + 'px';
-    box.style.left = Math.round(Math.max(M, Math.min(W - w - M, cx - w / 2))) + 'px';
-    box.style.top = Math.round(Math.max(M, Math.min(H - h - M, cy - h / 2))) + 'px';
+    const kept = G ? _geomOf(G.key) : null;
+    let w = +sz.w || W_WIN, h = +sz.h || H_WIN;
+    if (live) { w = live.w; h = live.h; } else if (kept && G.keepSize && +kept.w > 0 && +kept.h > 0) { w = +kept.w; h = +kept.h; }
+    w = Math.min(w, W - 2 * M);
+    h = Math.min(h, H - 2 * M);
+    let left, top;
+    if (live) { left = live.x; top = live.y; } else if (kept && G.keepPos && kept.x != null && kept.y != null) { left = +kept.x; top = +kept.y; } else {
+      // (phase V64, fix (б), the owner 2026-10-31: "сделай чтобы окна чатов были в одном месте") A generation's window
+      // (GEN_SIZE) stands in the middle of the screen whatever opened it - the chats, the sound, the generators all in one place.
+      const a = o.size !== GEN_SIZE && o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
+      const cx = a && a.width ? a.left + a.width / 2 : W / 2;
+      const cy = a && a.height ? a.top + a.height / 2 : H / 2;
+      left = cx - w / 2;
+      top = cy - h / 2;
+    }
+    box.style.width = Math.round(w) + 'px';
+    box.style.height = Math.round(h) + 'px';
+    box.style.left = Math.round(Math.max(M, Math.min(W - w - M, left))) + 'px';
+    box.style.top = Math.round(Math.max(M, Math.min(H - h - M, top))) + 'px';
   };
   place();
+  if (G) _wireGeom(box, head, G, place, (g) => { live = g; });
   window.addEventListener('resize', place);
   let open = true;
   const win = {
@@ -175,6 +208,82 @@ function _crumbs(host, list) {
 
 /** The frames open now, the top last. */
 export const frames = () => _frames.slice();
+
+// (fix (л)) Moved by the head and stretched by the edges and corners - what was set kept under the window's key; a double press
+// on the head puts it back. `setLive(g)` tells the frame what the person set in this opening (null - none).
+function _wireGeom(box, head, G, place, setLive) {
+  const M = 8;
+  const rectNow = () => { const r = box.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+  const keep = (g) => {
+    const was = _geomOf(G.key) || {};
+    const next = Object.assign({}, was);
+    if (G.keepSize) { next.w = Math.round(g.w); next.h = Math.round(g.h); }
+    if (G.keepPos) { next.x = Math.round(g.x); next.y = Math.round(g.y); }
+    if (G.keepSize || G.keepPos) _geomPut(G.key, next);
+  };
+  const apply = (g) => {
+    box.style.left = Math.round(g.x) + 'px';
+    box.style.top = Math.round(g.y) + 'px';
+    box.style.width = Math.round(g.w) + 'px';
+    box.style.height = Math.round(g.h) + 'px';
+  };
+  const drag = (e, onMove) => {
+    e.preventDefault();
+    const t = e.currentTarget;
+    try { t.setPointerCapture(e.pointerId); } catch (er) { /* not captured: the moves still come while over it */ }
+    const x0 = e.clientX, y0 = e.clientY, r0 = rectNow();
+    document.body.classList.add('gw-sizing');
+    const move = (ev) => apply(onMove(r0, ev.clientX - x0, ev.clientY - y0));
+    const up = () => {
+      t.removeEventListener('pointermove', move);
+      t.removeEventListener('pointerup', up);
+      t.removeEventListener('pointercancel', up);
+      document.body.classList.remove('gw-sizing');
+      const g = rectNow();
+      setLive(g);
+      keep(g);
+    };
+    t.addEventListener('pointermove', move);
+    t.addEventListener('pointerup', up);
+    t.addEventListener('pointercancel', up);
+  };
+  const W = () => window.innerWidth, H = () => window.innerHeight;
+  if (G.move) {
+    box.classList.add('is-movable');
+    head.title = 'Drag to move · double-click: back to its own size and place';
+    head.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || (e.target.closest && e.target.closest('button, a, input, select, textarea, .qm'))) return;
+      drag(e, (r0, dx, dy) => ({ w: r0.w, h: r0.h,
+        x: Math.max(M, Math.min(W() - r0.w - M, r0.x + dx)), y: Math.max(M, Math.min(H() - r0.h - M, r0.y + dy)) }));
+    });
+  }
+  if (G.resize) {
+    for (const d of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
+      const h = el('div', 'gw-rs');
+      h.dataset.d = d;
+      h.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        drag(e, (r0, dx, dy) => {
+          let { x, y, w, h: hh } = r0;
+          if (d.includes('e')) w = Math.max(MIN_W, Math.min(W() - M - x, r0.w + dx));
+          if (d.includes('s')) hh = Math.max(MIN_H, Math.min(H() - M - y, r0.h + dy));
+          if (d.includes('w')) { const nx = Math.max(M, Math.min(r0.x + r0.w - MIN_W, r0.x + dx)); w = r0.w + (r0.x - nx); x = nx; }
+          if (d.includes('n')) { const ny = Math.max(M, Math.min(r0.y + r0.h - MIN_H, r0.y + dy)); hh = r0.h + (r0.y - ny); y = ny; }
+          return { x, y, w, h: hh };
+        });
+      });
+      box.appendChild(h);
+    }
+  }
+  // A double press on the head (not on its buttons): its own size, centred - and nothing kept.
+  head.addEventListener('dblclick', (e) => {
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea, .qm')) return;
+    setLive(null);
+    _geomPut(G.key, null);
+    place();
+  });
+}
 
 // ── The bench ───────────────────────────────────────────────────────────────
 const KINDS = {

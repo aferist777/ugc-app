@@ -22,7 +22,7 @@
        title   its crumb
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 
 // Where a chat's root waits while its window is closed: in the document (the chat finds its root by its id when it hides
 // and when it is built), never seen.
@@ -84,7 +84,8 @@ export function chatWindow(o) {
   async function open() {
     const r = root();
     if (!isOpen()) {
-      win = openFrame({ name: o.name, size: GEN_SIZE, cls: 'is-chatwin', passDrags: true, onClose: park });
+      // (fix (л)) Moved and stretched; one size and place for every chat's window, kept.
+      win = openFrame({ name: o.name, size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-chatwin', passDrags: true, onClose: park });
       win.setCrumbs([{ label: o.title }]);
       r.removeAttribute('style');
       win.body.appendChild(r);

@@ -38,7 +38,9 @@ export function openWhere(api, page) {
   const want = page === 'make' ? 'make' : 'list';
   if (_w && _w.win.alive() && !_w.win.isTop()) _w.win.close();
   if (!_w || !_w.win.alive()) {
-    const win = openFrame({ name: 'environment', anchor: api.anchor(), onClose: () => { if (_w && _w.win === win) _w = null; } });
+    // (phase V64, fix (л), (зг14)) "where": moved, its place kept; its size as it is.
+    const win = openFrame({ name: 'environment', anchor: api.anchor(), geom: { key: 'where', move: true, keepPos: true },
+      onClose: () => { if (_w && _w.win === win) _w = null; } });
     _w = { win, page: want };
     _envs = null;
   }
