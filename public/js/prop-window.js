@@ -16,7 +16,7 @@
 
 import { openFrame, ensureCss } from './gen-window.js';
 import { isPictureFile, pictureDataUrl, PICTURE_ACCEPT } from './picture-file.js';
-import { openPick, closePick } from './merge-v3/chat-pick.js';
+import { openPick, closePick, ensurePickCss } from './merge-v3/chat-pick.js';
 import * as Src from './merge-v3/chat-sources.js';
 import { showPicture } from './merge-v3/wk-maker.js';
 
@@ -51,6 +51,7 @@ export function openNewProp(o) {
   _o = o || {};
   if (_win && _win.alive()) return _win;
   ensureCss();
+  ensurePickCss();                         // "from IMAGES…" opens the attachment window - its look ready before
   _s = _blank();
   _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', onClose: _closed });
   _win.setCrumbs([{ label: 'new prop' }]);

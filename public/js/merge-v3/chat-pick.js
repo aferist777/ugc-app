@@ -90,6 +90,28 @@ let _sound = null;                // { path, audio, btn } - the one sound being 
 // window without it.
 let _t = null;
 
+// (phase V26.6, the owner's check 2026-10-31) The window's look is css/mv3-imagen.css: Merge and the 3D Studio link it,
+// the Library does not - New prop's "from IMAGES…" opened it there with no look, under the window. So it puts the sheet in
+// itself the first time, as js/gen-window.js does, and stays hidden until the sheet has come.
+let _css = null;                  // a promise - the sheet in
+let _cssIn = false;
+export function ensurePickCss() {
+  if (_css) return _css;
+  const had = [...document.querySelectorAll('link[rel="stylesheet"]')].some(l => String(l.href).split('?')[0].endsWith('/css/mv3-imagen.css'));
+  if (had) { _cssIn = true; return (_css = Promise.resolve()); }
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = '/css/mv3-imagen.css';
+  _css = new Promise((res) => { l.onload = l.onerror = () => { _cssIn = true; res(); }; });
+  document.head.appendChild(l);
+  return _css;
+}
+function _styled(ov) {
+  if (_cssIn) return;
+  ov.style.visibility = 'hidden';
+  ensurePickCss().then(() => { ov.style.visibility = ''; });
+}
+
 const _lc = (s) => String(s || '').trim().toLowerCase();
 const _secs = (v) => (+v).toFixed(1).replace(/\.0$/, '') + ' s';
 function el(tag, cls, text) {
@@ -133,6 +155,7 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  */
 export function openPick(o) {
   closePick();
+  ensurePickCss();
   if (o.tree) { _openTree(o); return; }
   _o = o;
   _cache.clear();
@@ -257,6 +280,7 @@ function _build() {
   box.append(head, body, foot, drop);
   ov.appendChild(box);
   document.body.appendChild(ov);
+  _styled(ov);
 
   const layer = Layers.open(ov, { name: 'attachment picker', onEsc: closePick });
   x.addEventListener('click', closePick);
@@ -795,6 +819,7 @@ function _buildTree() {
   box.append(head, body, foot, drop);
   ov.appendChild(box);
   document.body.appendChild(ov);
+  _styled(ov);
 
   const layer = Layers.open(ov, { name: 'attachment picker', onEsc: closePick });
   x.addEventListener('click', closePick);
