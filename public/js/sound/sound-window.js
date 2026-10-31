@@ -88,6 +88,7 @@ const _rowOpen = new Map(); // a text's row the person opened or folded: `<gen>:
 let _looked = false;
 let _timer = 0;
 let _rest = '';            // the Library: the music mode remembered for the folders that are not a mood's
+let _groupShown = '';      // (fix (з)) the group the switch last showed - its thumb slides from there
 let _placeKey = null;      // the Library: the folder the window was last fitted to
 // Merge: the open project's presses (`made`)
 let GENS = [];
@@ -260,16 +261,24 @@ function paintCol() {
     col.appendChild(r);
     return r;
   };
-  // MUSIC | SOUNDS ((зг6)): over the mode.
+  // MUSIC | SOUNDS ((зг6)): over the mode. (fix (з), the owner 2026-11-01: "переключатель MUSIC | SOUND сделай аккуратней, как
+  // пилюля тумблер айфоновская") A pill with a thumb that slides under the group chosen (css/music-window.css .au-switch) - drawn
+  // where it was, then moved, so the column painted again still shows the slide.
   const g = groupOf(S().mode);
   const seg = el('div', 'au-switch');
+  seg.dataset.on = _groupShown || g;
   for (const k of ['music', 'sounds']) {
     const b = el('button', 'au-switch-b' + (g === k ? ' on' : ''), GROUP_WORD[k]);
     b.type = 'button';
+    b.setAttribute('aria-pressed', g === k ? 'true' : 'false');
     b.addEventListener('click', () => setGroup(k));
     seg.appendChild(b);
   }
-  row('', withQ(seg, GROUP_HELP));
+  if (seg.dataset.on !== g) requestAnimationFrame(() => { seg.dataset.on = g; });
+  _groupShown = g;
+  const swRow = el('div', 'au-switch-row');
+  swRow.appendChild(seg);
+  row('', withQ(swRow, GROUP_HELP));
   const modes = CAT.modes.filter(m => _modes(g).includes(m.id)).sort((a, b) => _modes(g).indexOf(a.id) - _modes(g).indexOf(b.id));
   const eng = _engineOf(S().mode);
   // A missing key stays in words: it is why nothing would come.

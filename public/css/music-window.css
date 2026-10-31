@@ -97,14 +97,27 @@
 /* ── THE SOUND WINDOW (phase V64 block 5; js/sound/sound-window.js) - the music window grown into ONE window of music and
    sounds on both pages (.gw-ov.is-music.is-sound), 1280×800: MUSIC | SOUNDS over the mode, Video to Music's VIDEO tree
    beside the middle (.au-pair), Merge's project presses under the gold card. ── */
-.au-switch{ display:flex; align-items:center; gap:4px; margin:2px 0 4px }
-.au-switch-b{
-  flex:1 1 0; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); font:700 11px/26px var(--font); letter-spacing:.05em; text-transform:uppercase;
-  cursor:pointer; transition:.12s var(--ease);
+/* (fix (з), the owner 2026-11-01: "как пилюля тумблер айфоновская") MUSIC | SOUNDS as an iOS pill: a sunken track, a thumb
+   sliding under the group chosen (data-on), the words over it. */
+.au-switch-row{ display:flex; align-items:center; gap:7px; margin:2px 0 6px }
+.au-switch{
+  position:relative; isolation:isolate; flex:1 1 auto; max-width:230px; display:flex; align-items:stretch;
+  height:30px; padding:3px; box-sizing:border-box; border-radius:999px;
+  background:var(--bg); border:1px solid var(--border); box-shadow:inset 0 1px 2px oklch(0 0 0 / .35);
 }
-.au-switch-b:hover{ color:var(--ink); border-color:var(--muted) }
-.au-switch-b.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.au-switch::before{
+  content:''; position:absolute; z-index:-1; top:3px; bottom:3px; left:3px; width:calc(50% - 3px);
+  border-radius:999px; background:var(--primary); box-shadow:0 1px 3px oklch(0 0 0 / .4);
+  transition:transform .24s cubic-bezier(.3,.7,.2,1);
+}
+.au-switch[data-on="sounds"]::before{ transform:translateX(100%) }
+.au-switch-b{
+  flex:1 1 0; min-width:0; padding:0 8px; border:0; border-radius:999px; background:none; cursor:pointer;
+  color:var(--muted); font:700 10.5px/24px var(--font); letter-spacing:.06em; text-transform:uppercase;
+  transition:color .2s ease;
+}
+.au-switch-b:hover{ color:var(--ink) }
+.au-switch-b.on{ color:var(--primary-ink); cursor:default }
 .au-pair{ flex:1 1 auto; min-width:0; min-height:0; display:flex }
 .gw-body.au-win .au-pair .au-mid{ flex:1 1 auto; min-width:0; min-height:0 }
 .gw-ov.is-sound .au-v2m{ flex:0 0 42%; min-width:300px }
