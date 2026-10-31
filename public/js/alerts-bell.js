@@ -191,7 +191,8 @@ function _hrefOf(rec) {
       + '&sel=' + encodeURIComponent(path.split('/').pop());
   }
   // (phase V59, the owner 2026-10-29: "клик по alerts будет вести не в окно попап, а в папку с выделением сгенерированного
-  // файла музыки") Music made in the Library's window (js/library/music-window.js): the folder under Music its tracks went into
+  // файла музыки") Music made in the Library's window (js/library/music-window.js; since phase V64 the sound window, js/sound/sound-window.js - a
+  // sound's row leads to SFX → My sounds → Generated the same way): the folder under Music its tracks went into
   // (`spot.key` - the tree's key), both tracks outlined once they are filed (the result's `ids`, lib/audio-gens.js); while it
   // runs, or when it failed, that folder alone.
   if (w.page === 'library' && spot.view === 'musicmake') {

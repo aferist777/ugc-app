@@ -41,8 +41,10 @@
 <link rel="stylesheet" href="css/mv3-highlights.css">
 <!-- (phase V34.E) Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
 <link rel="stylesheet" href="css/sound.css">
-<!-- (phase V34.E) The "generate audio" view (js/merge-v3/audchat.js). -->
+<!-- (phase V34.E) The "generate audio" view's look - the sound window's since phase V64 (js/sound/sound-window.js). -->
 <link rel="stylesheet" href="css/mv3-audio.css">
+<!-- (phase V64 block 5) The sound window - one for both pages (js/sound/sound-window.js): the music window's look. -->
+<link rel="stylesheet" href="css/music-window.css">
 <!-- (phase V36) The timeline's transport, a sound's waveform on its clip, the stretch cut out of every lane. -->
 <link rel="stylesheet" href="css/mv3-timeline.css">
 </head>
@@ -156,8 +158,8 @@
         </div>
         <!-- (phase V64 block 3) The pictures chat and the video chat have no place here any more: their roots are made by
              js/merge-v3/chat-window.js and live in their windows. -->
-        <!-- (phase V34.E) "generate audio": the settings, the constructor, "Made here" (js/merge-v3/audchat.js). -->
-        <div class="mv3-pc is-audio" id="mv3-ac"></div>
+        <!-- (phase V64 block 5) "generate audio" is no view here any more: the sound window, one for both pages
+             (js/sound/sound-window.js; Merge's host js/merge-v3/audchat.js). -->
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
         <div class="mv3-scv" id="mv3-sc"></div>
         <!-- (phase V62, block 2) Another item for a piece of a voiceover's B-roll (js/merge-v3/broll-view.js). -->

@@ -5,6 +5,8 @@
        ElevenLabs, Sounds, Video to Music, the project's presses under the card, "by the video", the mode a project was
        left on;
      - the Library's window (js/library/music-window.js) - Simple, Custom and Lyrics, nothing else.
+   (phase V64 block 5) Both are ONE window now - js/sound/sound-window.js, music and sounds on both pages; this form is its
+   Suno's part (Simple, Custom, Lyrics, the rows, the chips, the almanac).
 
    What is here:
      the state of a page's form    remembered in the browser under the page's own key (Merge `mv3_audio_v1` as before)

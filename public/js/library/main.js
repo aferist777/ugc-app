@@ -27,8 +27,9 @@ import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V58, the owner's (лк6)) New environment / New lookbook - the generators' window (sub-session P's module).
 import { openGenerator } from '../gen-window.js';
-// (phase V59) Generate music - Suno's window over Media (js/library/music-window.js, sub-session P's).
-import * as MW from './music-window.js';
+// (phase V59) Generate music - Suno's window over Media (js/library/music-window.js, sub-session P's); (phase V64 block 5) the
+// sound window - one for both pages, music and sounds (js/sound/sound-window.js), told the Library's own (_soundHost, below).
+import * as SW from '../sound/sound-window.js';
 // (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
 // - the same modules as Merge's Library panel.
 import { waveEl } from '../sound/wave.js';
@@ -263,7 +264,8 @@ function _genLanded(kind, path) {
 }
 
 // (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge ... в library") GENERATE MUSIC - Suno's
-// window over Media (js/library/music-window.js), the size of the almanac, the gallery and the tree staying behind it.
+// window over Media (js/library/music-window.js; since phase V64 the sound window, js/sound/sound-window.js), the gallery and
+// the tree staying behind it.
 // From Music's "+" in the tree (and its menu, and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
 // the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
 // moods take only a mood's preset - the window and the server say so). `lyric` (phase V59.1) - a saved text's "use in custom"
@@ -277,9 +279,28 @@ async function _openMusic(fromTree, lyric) {
   }
   const at = _musicish(_node) ? _node : null;
   try {
-    await MW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), onLanded: _musicLanded, onSaved: _lyricsSaved, lyric });
+    await SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric });
   } catch (e) { _status((e && e.message) || 'The music generator did not open', 'err'); }
 }
+// (phase V64 block 5) The Library's host of the sound window (js/sound/sound-window.js): no project, the folder under Music the
+// window was opened on (`place`), the Alerts row back to that folder - or, for sounds, to SFX → My sounds → Generated - and the
+// tracks or sounds outlined there when they land.
+function _soundsGenKey() {
+  const n = _tree ? _tree.node('sounds') : null;
+  const g = n ? (n.children || []).find(c => c.label === 'Generated') : null;
+  return g ? g.key : 'sounds';
+}
+const _soundHost = {
+  page: 'library', view: 'musicmake', store: 'lib_music_v1',
+  key: () => '', title: () => '', writerKind: () => 'blank', videoSecs: () => 0,
+  soundsNode: _soundsGenKey,
+  where: (d, label) => ({
+    page: 'library', href: '/library?shelf=media&kind=' + encodeURIComponent(d.node),
+    label: 'Library · ' + (d.label || 'Generate audio') + ' · ' + label, spot: { view: 'musicmake', key: d.node, label: d.label },
+  }),
+  onLanded: (gen, dest) => _musicLanded(gen, dest),
+  onSaved: () => _lyricsSaved(),
+};
 // (phase V59.1) A text saved by the window into Music -> Lyrics: the tree's numbers again, and the gallery while it shows Lyrics.
 async function _lyricsSaved() {
   if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
@@ -302,7 +323,8 @@ function _musicPlace(n) {
 async function _musicLanded(gen, dest) {
   if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
   _counts();
-  if (_shelf !== 'media' || !_node || _node.kind !== 'music') return;
+  // (phase V64) Sounds too - in SFX → My sounds → Generated.
+  if (_shelf !== 'media' || !_node || !['music', 'sounds'].includes(_node.kind)) return;
   const ids = ((gen && gen.results) || []).map(r => String(r.id || '')).filter(Boolean);
   if (dest && _node.key === dest.node && ids.length) {
     _sel = ids[0];
@@ -2075,7 +2097,8 @@ function boot() {
   _wireScSash();
   _initTree();
   // (phase V59) The music window's presses still being made (a reload) - the gallery read again when they land.
-  MW.follow({ onLanded: _musicLanded, onSaved: _lyricsSaved });
+  SW.configure(_soundHost);
+  SW.follow();
   // (phase V59.1) "use in custom" on a saved text - its tile or its viewer (js/sound/lyrics.js, which closes the viewer first).
   window.addEventListener('ugc:lyric-use', (e) => { const l = e && e.detail; if (l && String(l.text || '').trim()) _openMusic(false, l); });
   // (phase V54) Several tiles picked on Media (js/tile-select.js).

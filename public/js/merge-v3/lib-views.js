@@ -21,7 +21,8 @@
 
    (phase V64 block 3, the owner 2026-10-31) THE PICTURES CHAT AND THE VIDEO CHAT ARE WINDOWS (chat-window.js) - hosted chats
    that register nothing here. What is still registered the way a chat is: the scenarios (scen-pick.js), a highlights
-   project's tiles (highlights.js), a voiceover's B-roll piece (broll-view.js) - and, until block 5, "generate audio".
+   project's tiles (highlights.js), a voiceover's B-roll piece (broll-view.js). "generate audio" went too (block 5): the sound
+   window, js/sound/sound-window.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { panelRoom, onColumnOpen } from './layout.js';

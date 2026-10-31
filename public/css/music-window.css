@@ -1,4 +1,5 @@
-/* ── The Library's music window (phase V59, V59.1; js/library/music-window.js) ──
+/* ── The Library's music window (phase V59, V59.1; js/library/music-window.js) - since phase V64 THE SOUND WINDOW of both
+   pages (js/sound/sound-window.js; Merge loads this sheet too) ──
    Suno's generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1100×720: the mode's name and its "?" in
    the head, the settings column on the left, the sash, the right column - the gold card (drawn by Merge's css/mv3-audio.css,
    .au-*, linked on the Library's page too, as are the "?" and the almanac's window since phase V60) and under it the foot:
@@ -92,3 +93,19 @@
 .au-lr-text{ display:none; margin:0; padding:0 12px 10px 26px; white-space:pre-wrap; font:12px/1.5 var(--font); color:var(--ink) }
 .au-lr.is-open .au-lr-text{ display:block }
 .gw-ov.is-music .sp{ flex:1 }
+
+/* ── THE SOUND WINDOW (phase V64 block 5; js/sound/sound-window.js) - the music window grown into ONE window of music and
+   sounds on both pages (.gw-ov.is-music.is-sound), 1280×800: MUSIC | SOUNDS over the mode, Video to Music's VIDEO tree
+   beside the middle (.au-pair), Merge's project presses under the gold card. ── */
+.au-switch{ display:flex; align-items:center; gap:4px; margin:2px 0 4px }
+.au-switch-b{
+  flex:1 1 0; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted); font:700 11px/26px var(--font); letter-spacing:.05em; text-transform:uppercase;
+  cursor:pointer; transition:.12s var(--ease);
+}
+.au-switch-b:hover{ color:var(--ink); border-color:var(--muted) }
+.au-switch-b.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.au-pair{ flex:1 1 auto; min-width:0; min-height:0; display:flex }
+.gw-body.au-win .au-pair .au-mid{ flex:1 1 auto; min-width:0; min-height:0 }
+.gw-ov.is-sound .au-v2m{ flex:0 0 42%; min-width:300px }
+.au-made-box{ display:flex; flex-direction:column; gap:8px; margin-top:12px }
