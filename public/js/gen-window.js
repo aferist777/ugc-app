@@ -59,6 +59,7 @@ const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vh
 // (phase V64 block 2, the owner 2026-10-31, (зг5), (зг9): "давай все окна генераций 1280×800") EVERY GENERATION'S WINDOW - the
 // pictures, video and sound chats, the frames chat, New Character, New environment, New lookbook, New prop - is this size; a
 // smaller screen makes it smaller (openFrame). Pickers, the almanac, the viewer and the "who" / "where" windows keep theirs.
+// (fix (б)) And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
 export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
 const _frames = [];                        // open, the top last
 
@@ -89,7 +90,9 @@ export function openFrame(o) {
     const W = window.innerWidth, H = window.innerHeight, M = 8;
     const sz = o.size || {};
     const w = Math.min(+sz.w || W_WIN, W - 2 * M), h = Math.min(+sz.h || H_WIN, H - 2 * M);
-    const a = o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
+    // (phase V64, fix (б), the owner 2026-10-31: "сделай чтобы окна чатов были в одном месте") A generation's window
+    // (GEN_SIZE) stands in the middle of the screen whatever opened it - the chats, the sound, the generators all in one place.
+    const a = o.size !== GEN_SIZE && o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
     const cx = a && a.width ? a.left + a.width / 2 : W / 2;
     const cy = a && a.height ? a.top + a.height / 2 : H / 2;
     box.style.width = w + 'px';
