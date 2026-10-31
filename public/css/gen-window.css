@@ -15,7 +15,8 @@
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
   box-shadow:0 14px 40px rgba(0,0,0,.5); color:var(--ink); font:500 11px/1.4 var(--font);
 }
-.gw-head{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:7px 9px 7px 12px; border-bottom:1px solid var(--border) }
+/* (phase V64, fix (м), the owner 2026-11-01: "хэдеры сделай тоньше по высоте") A thin head: ~28 px, the crumbs and the ✕. */
+.gw-head{ flex:0 0 auto; display:flex; align-items:center; gap:10px; min-height:28px; padding:2px 5px 2px 12px; box-sizing:border-box; border-bottom:1px solid var(--border) }
 .gw-crumbs{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; overflow:hidden; white-space:nowrap }
 .gw-crumb{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; padding:2px 2px; border:0; background:none;
   color:var(--muted); font:600 12px/1.3 var(--font) }
@@ -29,7 +30,7 @@ button.gw-crumb:hover{ color:var(--ink); text-decoration:underline }
 }
 .gw-act:hover{ background:var(--primary); color:var(--primary-ink, #111) }
 .gw-act[disabled]{ opacity:.45; cursor:default }
-.gw-x{ flex:0 0 auto; width:24px; height:24px; padding:0; border:0; border-radius:var(--r-xs); background:none;
+.gw-x{ flex:0 0 auto; width:22px; height:22px; padding:0; border:0; border-radius:var(--r-xs); background:none;
   color:var(--muted); font:600 13px/1 var(--font); cursor:pointer }
 .gw-x:hover{ color:var(--ink); background:var(--surface-2) }
 .gw-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden }
