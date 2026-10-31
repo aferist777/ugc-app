@@ -3,7 +3,8 @@
    сможет перематывать, обрезать и все то, что делает попап cut"; (зв12)-(зв16), (зв25): only on the Library's page, only
    with Music; "этот плеер я бы поместил перманентно в музыкальной вкладке библиотеки") - a bar under the gallery only
    (the owner 2026-10-28: "плеер не должен заходить под столбец дерева" - library.html #lib-field), outside the grid that
-   is drawn again, there while Music is open (its root, highlights, its moods).
+   is drawn again, there while Music is open (its root, highlights, its moods) - and (phase V64 fix (а)) while its track is picked
+   on the Library's page: the page shows and hides it (js/library/main.js _paintPlayer); hidden, it stops.
 
    Until a track is pressed it says "choose a track"; then the last track stays on it where it was. Leaving Music stops the
    sound and hides the bar; coming back shows the same track at the same place (kept for the next visit of the page too).

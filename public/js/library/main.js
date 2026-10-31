@@ -390,10 +390,17 @@ async function _musicLanded(gen, dest) {
 // ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
 // A bar under the gallery (not under the tree's column), there while Music is open (its root, highlights, its moods) -
 // out of the grid, so drawing the grid again stops nothing. Leaving Music stops it and hides it; back, the same track where it was.
+// (phase V64, fix (а), the owner 2026-10-31: "плеер должен исчезать при снятии выделения аудиоклипа") And only while ITS track is
+// picked (js/tile-select.js): a track pressed - the bar with it; the pick let go (a press on empty space, Escape, another folder,
+// another tile pressed) - the bar hides and the sound stops; the track and its place are kept for its next press.
 let _player = null;
 const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
+function _playerPicked() {
+  const c = _player && _player.current();
+  return !!c && !!_tsel && _tsel.has('music:' + c.id);
+}
 function _paintPlayer() {
-  if (_player) _player.show(_inMusic());
+  if (_player) _player.show(_inMusic() && _playerPicked());
 }
 
 // (phase V60) New Character's window over the Characters shelf - the shelf itself stays behind it. The column lets go
@@ -1089,7 +1096,9 @@ function _card(it, extra) {
         catch (err) { _status(err.message, 'err'); }
       },
       // (phase V54, (зв14)) A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
-      cut: (x) => (x.kind === 'music' && _player && _inMusic() ? (_player.open(x, { cut: true }), true) : false),
+      // (phase V64, fix (а)) The track picked with it - the bar is there while its track is.
+      cut: (x) => (x.kind === 'music' && _player && _inMusic()
+        ? (_player.open(x, { cut: true }), (_tsel && _tsel.only(_keyOf(x))), _paintPlayer(), true) : false),
     });
   });
   return card;
@@ -1313,7 +1322,7 @@ function _renderGrid() {
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel || _selAlso.has(String(it.id)));
       // (phase V54) A track in Music plays in the player; SFX and My sounds on their cards, as before.
-      if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); });
+      if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); _paintPlayer(); });
       else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
       else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
       else if (LYR.isLyrics(it)) card.addEventListener('click', () => _openLyric(it));
@@ -2178,6 +2187,8 @@ function boot() {
       // music window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
       // on a tile only that one (its own pick). A track in the player still glows while it plays (js/sound/player.js).
       onPress: _dropArrived,
+      // (phase V64, fix (а)) The player is there while its track is picked.
+      onChange: () => _paintPlayer(),
     });
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
