@@ -37,6 +37,7 @@ export function placesOf(tree, opts) {
   const map = (n, path) => {
     if (n.kind === 'heads' || n.ref) return null;
     if (n.kind === 'sfx' || n.key === 'sfx-fav') return null;          // Built-in is the app's; Favorites is a star
+    if (n.kind === 'patterns') return null;                             // (phase V65) Patterns is the app's too
     // (phase V57, the owner's (ок2)) The references of Environments / Lookbooks and the folders in them take nothing by hand.
     if (n.closed) return null;
     let to = null;

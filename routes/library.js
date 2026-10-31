@@ -367,6 +367,17 @@ function _mediaShelf(opts) {
               info: { author: s.author, authorUrl: s.authorUrl, license: s.license, licenseUrl: s.licenseUrl, from: s.source, url: s.url } },
     }));
   }
+  // (phase V65) IMAGES -> Patterns: the program's set (lib/patterns-builtin.js, vendor/patterns/ at /patterns/) - read only,
+  // only when asked; its tiles are the set's own thumbnails (the middle of the file at half size, not the whole shrunk).
+  let fromPatterns = [];
+  if (opts && opts.patterns) {
+    fromPatterns = require('../lib/patterns-builtin').read().patterns.map(p => ({
+      id: p.id, name: p.name, kind: 'patterns', media: p.path, thumb: p.thumb, dur: 0,
+      meta: { categoryId: '', date: null, favorite: false, builtin: true, size: p.size,
+              info: { author: p.author, license: p.license, licenseUrl: p.licenseUrl, from: p.source, url: p.url,
+                      original: p.original, changed: p.changed } },
+    }));
+  }
   // The tiles still with no waveform are measured behind this answer.
   if (fromSounds.some(i => !i.meta.wave.length) || fromMusic.some(i => !i.meta.wave.length)) require('../lib/audio-wave').fill();
 
@@ -389,7 +400,7 @@ function _mediaShelf(opts) {
   }
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
-    .filter(i => _onDisk(i.media)).concat(fromSfx);
+    .filter(i => _onDisk(i.media)).concat(fromSfx).concat(fromPatterns);
   // (phase V55) IMAGES -> Environments / Lookbooks: the pictures their generators made - only when asked (`filter`), read
   // from their folders (always on the disk).
   if (opts && opts.made && MADE_KINDS.has(opts.made)) items.push(..._madeItems(opts.made));
@@ -738,6 +749,7 @@ function _tree() {
   // (after block 8) No root YOUTUBE any more: its videos are REFERENCES -> YouTube -> Videos (the owner 2026-10-22).
   const images = kindNode('images', 'images', 'IMAGES');
   _madeFolders(images);
+  _patternsFolder(images);
   const roots = [references, video, images, audio];
   _stampNewest(roots, items);
   return roots;
@@ -802,6 +814,23 @@ function _madeFolders(images) {
   });
   images.children = made.concat(kids);
   images.count += made.reduce((s, m) => s + m.direct, 0);
+}
+// (phase V65, the owner 2026-10-31, (пз4), (пз13)) IMAGES -> PATTERNS, right after Props, locked: the program's own set
+// (lib/patterns-builtin.js) - read only as SFX -> Built-in is (`builtin`, `noAdd`), asked for as `filter=patterns`, its tiles
+// on a dark ground (`tiles: 'pattern'`: white on transparent). The chats never show it (js/folder-column.js, the attachment
+// window): a pattern is for the timeline.
+const PATTERNS_STAY = 'a pattern is part of the app - it stays in Patterns';
+const PATTERNS_TAKE = 'Patterns holds only the app\'s own patterns';
+function _patternsFolder(images) {
+  const n = require('../lib/patterns-builtin').read().patterns.length;
+  const node = { key: 'patterns', kind: 'patterns', label: 'Patterns', locked: true, noAdd: true, builtin: true, patterns: true,
+    count: n, direct: n, empty: !n, q: { filter: 'patterns' }, tiles: 'pattern',
+    tip: 'Patterns - built into the app, read only: drag one onto a lane to lay it over the video' };
+  const kids = images.children || [];
+  const at = kids.findIndex(c => c.key === 'props');
+  kids.splice(at >= 0 ? at + 1 : 0, 0, node);
+  images.children = kids;
+  images.count += n;
 }
 // What the media shelf gives for them (`filter=environments|lookbooks`) - a picture's shape, as Images' are: `thumb` a
 // thumbnail door address (of the shelf's own 600px copy when there is one), and what is known about it for the viewer.
@@ -1140,7 +1169,7 @@ router.get('/library/shelf/:kind', (req, res) => {
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
         youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '',
-        lyrics: f === 'lyrics' })
+        lyrics: f === 'lyrics', patterns: f === 'patterns' })
       : build();
     const { items, filters, labelFor, labelKeys, running } = built;
     // Built from the kind but BEFORE the category filter, so choosing a category does not
@@ -1636,6 +1665,8 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
     // (phase V55) A made environment or lookbook: written about on its shelf (PATCH /library/meta), never filed elsewhere.
     if (MADE_KINDS.has(kind)) return _r(409, { success: false, error: MADE_STAYS[kind] });
+    // (phase V65) A built-in pattern: nothing about it changes.
+    if (kind === 'patterns') return _r(409, { success: false, error: 'A pattern is part of the app - nothing about it changes.' });
     const store = RECORD_STORES[kind];
     if (!store) return _r(400, { success: false, error: `"${kind}" cannot be edited here` });
     const id = String(req.params.id || '');
@@ -1764,6 +1795,7 @@ function _deleteOne(kindIn, idIn, filesIn) {
     const req = { params: { kind: kindIn, id: idIn }, query: { files: filesIn === false ? '0' : '1' } };
     const kind = String(req.params.kind || '');
     if (kind === 'sfx') return _r(409, { success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
+    if (kind === 'patterns') return _r(409, { success: false, error: 'A pattern is part of the app - it is not deleted.' });
     const id = String(req.params.id || '');
     // (phase V59.1) A saved text of Music -> Lyrics: no file goes with it.
     if (kind === 'lyrics') {
@@ -2037,6 +2069,7 @@ const _nameOfRec = (kind, id) => {
   if (kind === 'props') { const m = SM.read('props')[toUrl(PROPS_DIR) + '/' + path.basename(String(id || ''))] || {}; if (m.name) return String(m.name); }
   if (MADE_KINDS.has(kind)) return String(id || '').replace(/\.[^.]+$/, '');
   if (kind === 'lyrics') { const l = LY.get(id); return l ? l.title : ''; }
+  if (kind === 'patterns') { const p = require('../lib/patterns-builtin').read().patterns.find(x => x.id === String(id)); return p ? p.name : ''; }
   const r = _recOf(kind, id);
   return r ? String(r.name || r.title || '') : '';
 };
@@ -2049,6 +2082,9 @@ const LYRICS_TAKE = 'only Generate music saves texts into Music → Lyrics';
 function _moveOne(it, to) {
   const from = it.kind;
   if (from === 'sfx') return 'a built-in sound stays in Built-in';
+  // (phase V65) A pattern stays in Patterns, and nothing else goes there.
+  if (from === 'patterns') return PATTERNS_STAY;
+  if (to.kind === 'patterns') return PATTERNS_TAKE;
   if (from === 'heads') return 'a talking head is its project\'s';
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
   // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.

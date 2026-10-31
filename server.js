@@ -111,6 +111,11 @@ app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
 app.use('/sfx', express.static(require('./lib/media').SFX_DIR, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
+// (phase V65) The built-in patterns - IMAGES -> Patterns: laid out by tools/fetch-patterns.js, part of the program, read
+// only, addressed the same way (lib/media.js toDisk).
+app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via

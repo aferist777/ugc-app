@@ -1123,6 +1123,9 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* (phase V26.6) IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
 .lib-grid.is-whole{ --card-w:120px; --card-h:120px; }
 .lib-grid.is-whole .lib-thumb{ object-fit:contain; padding:4px; box-sizing:border-box; }
+/* (phase V65) IMAGES -> Patterns: white on transparent - square cards on a dark ground, or nothing would show. */
+.lib-grid.is-pattern{ --card-w:120px; --card-h:120px; }
+.lib-grid.is-pattern .lib-thumb{ background:oklch(.24 0 0); }
 /* The square of a sound: the note, its name (two lines at most) under it, the wave and the length at the bottom - laid out
    as Merge's sound tile is. */
 .lib-grid.is-sound .lib-thumb-sound{ flex-direction:column; justify-content:flex-start; gap:2px; padding:12px 6px 0; box-sizing:border-box; }

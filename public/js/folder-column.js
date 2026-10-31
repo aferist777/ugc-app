@@ -140,15 +140,17 @@ export async function folderIndex(nodes, type, cache, fit) {
   const walk = (list, rk) => { for (const n of list || []) { all.push(n); byKey.set(n.key, n); rootOf.set(n.key, rk || n.key); walk(n.children, rk || n.key); } };
   walk(nodes, '');
   const typesOf = typeof type === 'function' ? (k) => [].concat(type(rootOf.get(k)) || []).filter(t => RX[t]) : () => [type];
-  const kinds = [...new Set(all.filter(n => _grouped(n.q)).map(n => n.q.filter))];
-  const own = all.filter(n => n.q && !_grouped(n.q));
+  // (phase V65, the owner's (пз13)) IMAGES -> Patterns is for the timeline: no chat column or attachment window offers it -
+  // it holds nothing here, so pruneTree leaves it out.
+  const kinds = [...new Set(all.filter(n => _grouped(n.q) && !n.patterns).map(n => n.q.filter))];
+  const own = all.filter(n => n.q && !_grouped(n.q) && !n.patterns);
   const [kindRecs, ownRecs] = await Promise.all([Promise.all(kinds.map(f => read({ filter: f }))), Promise.all(own.map(n => read(n.q)))]);
   const recsOf = new Map(kinds.map((f, i) => [f, kindRecs[i]]));
   const ownOf = new Map(own.map((n, i) => [n.key, ownRecs[i]]));
   const foldersOf = (s) => (((byKey.get('references:' + s) || {}).children) || []).map(c => String(c.ref || '').split('/')[1]).filter(Boolean);
   const direct = new Map();
   for (const n of all) {
-    if (!n.q) continue;
+    if (!n.q || n.patterns) continue;
     const recs = ownOf.has(n.key) ? ownOf.get(n.key) : (recsOf.get(n.q.filter) || []).filter(i => _inQ(i, n.q, foldersOf));
     const seen = new Set();
     direct.set(n.key, typesOf(n.key).flatMap(t => filesOf(recs, t)).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)) && (!fit || fit(f))));

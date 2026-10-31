@@ -269,7 +269,8 @@ const _plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 /** Whether a tile of `kind` can go to the place `to` - one tile let go on a node, as js/media-tree.js _dropAction. */
 export function canGo(kind, to) {
   // (phase V59.1) A saved text of Music -> Lyrics stays there.
-  if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube' || kind === 'lyrics') return false;
+  // (phase V65) A built-in pattern stays in Patterns, and nothing goes there.
+  if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube' || kind === 'lyrics' || kind === 'patterns' || to.kind === 'patterns') return false;
   if (kind === 'music' || to.kind === 'music') return kind === to.kind;
   if (kind === 'references' || to.kind === 'references') return kind === to.kind;
   if (kind === to.kind) return true;
@@ -305,6 +306,7 @@ export async function deleteQuestion(items) {
   let text = 'Delete ' + _plural(n, 'item') + '?\n\n' + names.join('\n') + '\n\n'
     + (texts ? 'The texts are removed from Music → Lyrics.' : 'Their files are removed from disk.');
   if (items.some(i => i.kind === 'sfx')) text += '\nBuilt-in sounds are the app\'s - they stay.';
+  if (items.some(i => i.kind === 'patterns')) text += '\nPatterns are the app\'s - they stay.';
   const media = [];
   for (const i of items) {
     if (i.media) media.push(String(i.media));

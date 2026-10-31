@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "built": "2026-10-31",
+  "note": "IMAGES -> Patterns (phase V65). Every file is a seamless tile, white on transparent; made in the V65 sub-session and approved by the owner 2026-10-31 in the folder 'Паттерны — просмотр' on the desktop. `from` is the file's name there. `changed` says what was done to the source. Ids never change: a project points at /patterns/<id>.png.",
+  "sources": {
+    "hero": { "title": "Hero Patterns", "author": "Steve Schoger", "page": "https://heropatterns.com/", "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/" },
+    "own": { "title": "UGC Studio", "author": "UGC Studio", "page": "", "license": "made for UGC Studio", "licenseUrl": "" }
+  },
+  "patterns": [
+    { "id": "hexagons", "name": "Hexagons", "from": "01-соты.png", "source": "hero", "original": "Hexagons", "changed": "white, laid as a 2160 px tile" },
+    { "id": "concentric-circles", "name": "Concentric circles", "from": "02-концентрические-круги.png", "original": "600px White concentric circles on HEX-220070 background.svg", "via": "Wikimedia Commons", "page": "https://commons.wikimedia.org/w/index.php?curid=56274908", "author": "Blackcat", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "background and frame taken away, the rings white, one set per tile" },
+    { "id": "scales", "name": "Scales", "from": "03-круги-чешуёй.png", "source": "hero", "original": "Endless Clouds", "changed": "white, laid as a 2160 px tile" },
+    { "id": "polka-dots", "name": "Polka dots", "from": "04-горох.png", "source": "hero", "original": "Polka Dots", "changed": "white, laid as a 2160 px tile" },
+    { "id": "halftone", "name": "Halftone", "from": "05-полутон.png", "source": "own", "original": "", "changed": "drawn: a 45-degree dot screen, its dots sized by slow waves" },
+    { "id": "noise", "name": "Noise", "from": "06-шум.png", "original": "2k Dissolve Noise Texture.png", "via": "Wikimedia Commons", "page": "https://commons.wikimedia.org/w/index.php?curid=91608130", "author": "Spamrakuen", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "a 1080 px tile of it, brightness as opacity" },
+    { "id": "film-grain", "name": "Film grain", "from": "07-плёночное-зерно.png", "original": "2k Dissolve Noise Texture.png", "via": "Wikimedia Commons", "page": "https://commons.wikimedia.org/w/index.php?curid=91608130", "author": "Spamrakuen", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "made from the noise: turned, softened into grains, the bright ones kept; a 1080 px tile" },
+    { "id": "grid", "name": "Grid", "from": "08-сетка.png", "source": "hero", "original": "Graph Paper", "changed": "the fine lines taken away; white, laid as a 2160 px tile" },
+    { "id": "graph-paper", "name": "Graph paper", "from": "09-миллиметровка.png", "source": "hero", "original": "Graph Paper", "changed": "white, laid as a 2160 px tile" },
+    { "id": "diagonal-lines", "name": "Diagonal lines", "from": "10-диагональные-линии.png", "source": "hero", "original": "Diagonal Lines", "changed": "white, laid as a 2160 px tile" },
+    { "id": "scanlines", "name": "Scanlines", "from": "11-сканлайны.png", "source": "own", "original": "", "changed": "drawn: a soft bright line every 6 px" },
+    { "id": "diamonds", "name": "Diamonds", "from": "12-ромбы.png", "source": "hero", "original": "Overlapping Diamonds", "changed": "white, laid as a 2160 px tile" },
+    { "id": "triangles", "name": "Triangles", "from": "13-треугольники.png", "source": "hero", "original": "Falling Triangles", "changed": "white, laid as a 2160 px tile" },
+    { "id": "waves", "name": "Waves", "from": "14-волны.png", "source": "hero", "original": "Bank Note", "changed": "white, laid as a 2160 px tile" },
+    { "id": "checkers", "name": "Checkers", "from": "15-шахматка.png", "source": "hero", "original": "Tiny Checkers", "changed": "white, laid as a 2160 px tile" },
+    { "id": "plus", "name": "Plus", "from": "16-плюсы.png", "source": "hero", "original": "Plus", "changed": "white, laid as a 2160 px tile" },
+    { "id": "bokeh", "name": "Bokeh", "from": "17-боке.png", "original": "Black Bokeh 6", "via": "Flickr", "page": "https://www.flickr.com/photos/35608308@N05/21510538432", "author": "megforce1", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "squared, brightness as opacity, its edges joined into a tile" },
+    { "id": "dust-scratches", "name": "Dust & scratches", "from": "18-пыль-и-царапины.png", "original": "Scratches002 (Opacity map)", "via": "ambientCG", "page": "https://ambientcg.com/a/Scratches002", "author": "ambientCG.com", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "laid as a 2160 px tile, dust specks added from the Noise" },
+    { "id": "topography", "name": "Topography", "from": "19-топография.png", "source": "hero", "original": "Topography", "changed": "white, laid as a 2160 px tile" },
+    { "id": "vhs", "name": "VHS", "from": "20-vhs-полосы.png", "source": "own", "original": "", "changed": "drawn: bands of brightness, torn rows, dashes" },
+    { "id": "halftone-print", "name": "Halftone print", "from": "21-запасной-полутон-с-печати.png", "original": "halftone 60 uneven", "via": "Flickr", "page": "https://www.flickr.com/photos/192478860@N04/54605435090", "author": "Saturn (saturns_day)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "a part enlarged, the dots white, its edges joined into a tile" },
+    { "id": "bokeh-large", "name": "Bokeh large", "from": "22-запасное-боке-крупное.png", "original": "Bokeh: Matrix", "via": "Flickr", "page": "https://www.flickr.com/photos/38451115@N04/3641317086", "author": "Pascal (pasukaru76)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "squared, brightness as opacity, its edges joined, laid 2 x 2" },
+    { "id": "film-scratches", "name": "Film scratches", "from": "23-запасные-царапины-вертикальные.png", "original": "Scratches001 (Opacity map)", "via": "ambientCG", "page": "https://ambientcg.com/a/Scratches001", "author": "ambientCG.com", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/", "changed": "turned upright, laid as a 2160 px tile" },
+    { "id": "diagonal-stripes", "name": "Diagonal stripes", "from": "24-запасные-диагональные-полосы.png", "source": "hero", "original": "Diagonal Stripes", "changed": "white, laid as a 2160 px tile" },
+    { "id": "triangles-2", "name": "Triangles 2", "from": "25-запасные-треугольники-2.png", "source": "hero", "original": "Boxes", "changed": "white, laid as a 2160 px tile" }
+  ]
+}
