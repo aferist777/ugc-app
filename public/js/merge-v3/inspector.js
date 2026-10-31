@@ -61,9 +61,11 @@ import * as FRAMING from './framing-ui.js';
 // (phase V51, point 1) A clip's crop: the switch and its field.
 import { cropRows, pipOffCrop } from './crop-box.js';
 import { active as cropActive } from '../framing/crop.js';
-// (phase V65) How much of a clip is seen; held on the preview while the slider moves (place-b.js setLive).
-import { opacityOf } from '../overlay/look.js';
+// (phase V65) How much of a clip is seen and how it mixes; held on the preview while the slider moves or the pointer rests
+// on a mode (place-b.js setLive).
+import { opacityOf, blendOf, BLENDS } from '../overlay/look.js';
 import { setLive as setLivePlace } from './place-b.js';
+import * as Layers from '../layers.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -210,6 +212,64 @@ function _opacitySlider(items) {
   sl.title = 'How much of ' + (items.length > 1 ? 'these clips' : 'this clip') + ' is seen - 100% all of it'
     + (items.some(x => isMainVideo(x.track)) ? '; on main video, under it is black' : '');
   return sl;
+}
+
+// (phase V65, the owner's (пз7), (пз10)) THE BLEND MODE of the clips of lanes ABOVE main - a list of its own, not a <select>
+// (which never says which option the pointer is over): the pointer resting on a mode shows it on the preview at once
+// (place-b.js setLive - nothing written), a press chooses it - written into every one picked, ONE undo step -, Escape, a
+// press away or the pointer leaving the list puts the preview back as it was. `items` - [{ track, clip }] off main.
+function _blendRow(host, items) {
+  host.appendChild(C.row(items.length > 1 ? 'Blend · ' + items.length : 'Blend', _blendButton(items)));
+}
+function _blendButton(items) {
+  const ids = items.map(x => blendOf(x.clip).id);
+  const mixed = ids.some(v => v !== ids[0]);
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mv3-c-sel mv3-blend-btn';
+  b.textContent = (mixed ? 'mixed' : blendOf(items[0].clip).label) + ' ▾';
+  b.title = 'How ' + (items.length > 1 ? 'these clips mix' : 'this clip mixes') + ' with what is under it'
+    + ' - rest the pointer on a mode to see it';
+  b.addEventListener('click', (e) => { e.stopPropagation(); _openBlendMenu(b, items, mixed ? '' : ids[0]); });
+  return b;
+}
+let _blendMenu = null;     // { el, layer, away } while the list is open
+function _closeBlendMenu() {
+  if (!_blendMenu) return;
+  const m = _blendMenu;
+  _blendMenu = null;
+  setLivePlace(null);
+  document.removeEventListener('mousedown', m.away, true);
+  Layers.close(m.layer);
+  m.el.remove();
+}
+function _openBlendMenu(anchor, items, current) {
+  _closeBlendMenu();
+  const el = _el('div', 'mv3-blend-menu');
+  const live = (id) => setLivePlace(new Map(items.map(x => [x.clip.id, { blend: id }])));
+  for (const m of BLENDS) {
+    const it = _el('button', 'mv3-blend-item' + (m.id === current ? ' is-on' : ''), m.label);
+    it.type = 'button';
+    it.title = m.tip;
+    it.addEventListener('mouseenter', () => live(m.id));
+    it.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _closeBlendMenu();
+      setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { blend: m.id } })));
+    });
+    el.appendChild(it);
+  }
+  el.addEventListener('mouseleave', () => setLivePlace(null));
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  el.style.minWidth = Math.round(r.width) + 'px';
+  const h = el.offsetHeight;
+  // Kept on the screen: in a narrow window the button may stand at its right edge.
+  el.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8))) + 'px';
+  el.style.top = Math.round(r.bottom + 2 + h > window.innerHeight - 8 ? Math.max(8, r.top - 2 - h) : r.bottom + 2) + 'px';
+  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeBlendMenu(); };
+  document.addEventListener('mousedown', away, true);
+  _blendMenu = { el, away, layer: Layers.open(el, { modal: false, name: 'blend', onEsc: _closeBlendMenu }) };
 }
 
 function _pipSection(host, items) {
@@ -388,6 +448,7 @@ function _blankFilm(host, track, c, set, pair) {
     host.appendChild(C.hint('No sound attached to this clip.'));
   }
   _opacityRow(host, [{ track, clip: c }]);
+  if (!isMainVideo(track)) _blendRow(host, [{ track, clip: c }]);
 
   // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
   const main = isMainVideo(track);
@@ -474,6 +535,7 @@ function _blankStill(host, track, c, set) {
   }
 
   cell('opacity', _opacitySlider([{ track, clip: c }]));
+  if (!main) cell('blend', _blendButton([{ track, clip: c }]));
   cell('', C.button('Remove', () => removeB(track.id, c.id), {
     danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
   }));
@@ -1484,6 +1546,12 @@ function _renderMany(host, n) {
   if (videos.length) {
     _opacityRow(host, videos);
     if (videos.length < n) host.appendChild(C.hint('Opacity is for the ' + videos.length + ' picked clips of the video lanes.'));
+    // (phase V65, (пз10)) The blend mode - for those of lanes above main.
+    const above = videos.filter(x => !isMainVideo(x.track));
+    if (above.length) {
+      _blendRow(host, above);
+      if (above.length < videos.length) host.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
+    }
     _bsep(host);
   }
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.

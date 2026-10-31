@@ -33,7 +33,7 @@ import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
 import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen - one rule with the render (overlay/look.js).
-import { opacityOf } from '../overlay/look.js';
+import { opacityOf, blendOf } from '../overlay/look.js';
 
 const STAGE = 'mv3-stage';
 
@@ -759,11 +759,16 @@ function _fileTime(el, c) {
 // (phase V65, the owner's (пз5), (пз6)) A CLIP SEEN IN PART: drawn ALONE on a layer of the canvas's size - whatever it is,
 // a PiP over its blur, a crop, a band, a placed insert - and the layer laid on the frame at the clip's opacity. As the
 // render does it (lib/mv3b-render.js): the clip's picture whole, its alpha scaled last. A clip fully seen is drawn straight.
+// (phase V65, (пз7), (пз10)) A clip of a lane ABOVE main laid by its blend mode too - the canvas's (overlay/look.js BLENDS);
+// held on hover in the inspector's list (place-b.js liveOf), so the frame shows the mode before it is chosen.
 let _layerCv = null;
 function _showAs(el, sw, sh, c, gaps, main) {
   const lv = liveOf(c.id);
-  const op = opacityOf(lv ? Object.assign({}, c, lv) : c);
-  if (op >= 1) { _show(el, sw, sh, c, gaps, main); return; }
+  const look = lv ? Object.assign({}, c, lv) : c;
+  const op = opacityOf(look);
+  const mode = main ? null : blendOf(look);
+  const mixed = !!(mode && mode.id !== 'none');
+  if (op >= 1 && !mixed) { _show(el, sw, sh, c, gaps, main); return; }
   if (op <= 0) return;
   if (!_layerCv) _layerCv = document.createElement('canvas');
   if (_layerCv.width !== CW || _layerCv.height !== CH) { _layerCv.width = CW; _layerCv.height = CH; }
@@ -780,6 +785,7 @@ function _showAs(el, sw, sh, c, gaps, main) {
   _ctx.save();
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
   _ctx.globalAlpha = op;
+  if (mixed) _ctx.globalCompositeOperation = mode.canvas;
   _ctx.drawImage(_layerCv, 0, 0);
   _ctx.restore();
 }
