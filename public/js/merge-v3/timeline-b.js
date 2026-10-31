@@ -40,6 +40,8 @@ import { isHeard } from '../captions/heard.js';
 // (phase V33.2) A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
 import { normalize as normalizeCrop } from '../framing/crop.js';
+// (phase V65) A clip's opacity - one rule for the page and the server; a pattern lands at 0.7.
+import { normalizeOpacity, isPattern, PATTERN_OPACITY } from '../overlay/look.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
@@ -361,7 +363,9 @@ function _drop(trackId, want, data, make) {
     }
 
     const mate = still ? null : (track.linkId ? t.find(x => x.id === track.linkId) : null);
-    const vid = { ...base, id: vidId, volume: 0, pairId: mate ? pairId : null };
+    const vid = { ...base, id: vidId, volume: 0, pairId: mate ? pairId : null,
+      // (phase V65, the owner's (пз7)) A pattern lands seen at 70 %.
+      ...(isPattern(data.src) ? { opacity: PATTERN_OPACITY } : {}) };
     track.clips.push(vid);
     if (mate) {
       mate.clips.push({
@@ -2242,7 +2246,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'crop',
                              // (phase V54, the owner's (зв11) а) A sound's own fades - offered by the inspector since V23 and
                              // never let through: the slider stayed where it was let go, and nothing was written.
-                             'fadeIn', 'fadeOut']);
+                             'fadeIn', 'fadeOut',
+                             // (phase V65, (пз5)) How much of a clip of a video lane is seen (overlay/look.js).
+                             'opacity']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2279,6 +2285,8 @@ function _write(c, key, value) {
     return;
   }
   if (key === 'reversed') { c.reversed = !!value; return; }
+  // (phase V65) 0..1 in hundredths; fully seen takes the field off.
+  if (key === 'opacity') { const v = normalizeOpacity(value); if (v == null) delete c.opacity; else c.opacity = v; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
   // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which

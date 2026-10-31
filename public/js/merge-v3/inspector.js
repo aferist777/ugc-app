@@ -61,6 +61,9 @@ import * as FRAMING from './framing-ui.js';
 // (phase V51, point 1) A clip's crop: the switch and its field.
 import { cropRows, pipOffCrop } from './crop-box.js';
 import { active as cropActive } from '../framing/crop.js';
+// (phase V65) How much of a clip is seen; held on the preview while the slider moves (place-b.js setLive).
+import { opacityOf } from '../overlay/look.js';
+import { setLive as setLivePlace } from './place-b.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -184,6 +187,30 @@ function _pipRows(host, track, c) {
 // the whole frame again. Written into EVERY main clip picked at once ((пр9): cut silence leaves 20-30 pieces a minute), one
 // undo step. `items` - [{ track, clip }] of the main lane.
 const isMainVideo = (track) => !!(track && track.kind === 'video' && track.main);
+
+// (phase V65, the owner's (пз5), (пз6)) OPACITY - how much of a clip of any video lane is seen, 0-100 %; one slider for
+// every video clip picked ((пз5) a: several picked, one value for all). Held on the preview while it moves - nothing written
+// (place-b.js setLive, as the crop's frame) - and written into all of them on release, ONE undo step. On main video the
+// clip is over black, so less of it is darker. `items` - [{ track, clip }] of video lanes.
+function _opacityRow(host, items) {
+  host.appendChild(C.row(items.length > 1 ? 'Opacity · ' + items.length : 'Opacity', _opacitySlider(items)));
+}
+function _opacitySlider(items) {
+  const vals = items.map(x => opacityOf(x.clip));
+  const mixed = vals.some(v => Math.abs(v - vals[0]) > 0.004);
+  const live = (v) => new Map(items.map(x => [x.clip.id, { opacity: v / 100 }]));
+  const sl = C.slider({
+    min: 0, max: 100, step: 1, value: Math.round(vals[0] * 100), fmt: (v) => Math.round(v) + '%', mixed,
+    onInput: (v) => setLivePlace(live(v)),
+    onChange: (v) => {
+      setLivePlace(null);
+      setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { opacity: v / 100 } })));
+    },
+  });
+  sl.title = 'How much of ' + (items.length > 1 ? 'these clips' : 'this clip') + ' is seen - 100% all of it'
+    + (items.some(x => isMainVideo(x.track)) ? '; on main video, under it is black' : '');
+  return sl;
+}
 
 function _pipSection(host, items) {
   const clips = items.map(x => x.clip);
@@ -360,6 +387,7 @@ function _blankFilm(host, track, c, set, pair) {
   } else {
     host.appendChild(C.hint('No sound attached to this clip.'));
   }
+  _opacityRow(host, [{ track, clip: c }]);
 
   // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
   const main = isMainVideo(track);
@@ -445,6 +473,7 @@ function _blankStill(host, track, c, set) {
     }
   }
 
+  cell('opacity', _opacitySlider([{ track, clip: c }]));
   cell('', C.button('Remove', () => removeB(track.id, c.id), {
     danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
   }));
@@ -1450,6 +1479,13 @@ function _renderMany(host, n) {
     _soundSection(host, sounds, picked.every(x => x.track.kind === 'audio'));
     _bsep(host);
   }
+  // (phase V65, (пз5)) The video clips among them - every video lane - seen as much as one another: one slider, one step.
+  const videos = picked.filter(x => x.track.kind === 'video');
+  if (videos.length) {
+    _opacityRow(host, videos);
+    if (videos.length < n) host.appendChild(C.hint('Opacity is for the ' + videos.length + ' picked clips of the video lanes.'));
+    _bsep(host);
+  }
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
   const mains = picked.filter(x => isMainVideo(x.track));
   if (mains.length) {
@@ -1459,7 +1495,7 @@ function _renderMany(host, n) {
     _bsep(host);
     _pipSection(host, mains);
     _bsep(host);
-  } else if (!sounds.length) {
+  } else if (!sounds.length && !videos.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
     p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '

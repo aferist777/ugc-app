@@ -32,6 +32,8 @@ import { setPlayhead, setFormat, liveVolumeOf } from './timeline-b.js';
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
 import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
+// (phase V65) How much of a clip is seen - one rule with the render (overlay/look.js).
+import { opacityOf } from '../overlay/look.js';
 
 const STAGE = 'mv3-stage';
 
@@ -754,6 +756,34 @@ function _fileTime(el, c) {
   return t;
 }
 
+// (phase V65, the owner's (пз5), (пз6)) A CLIP SEEN IN PART: drawn ALONE on a layer of the canvas's size - whatever it is,
+// a PiP over its blur, a crop, a band, a placed insert - and the layer laid on the frame at the clip's opacity. As the
+// render does it (lib/mv3b-render.js): the clip's picture whole, its alpha scaled last. A clip fully seen is drawn straight.
+let _layerCv = null;
+function _showAs(el, sw, sh, c, gaps, main) {
+  const lv = liveOf(c.id);
+  const op = opacityOf(lv ? Object.assign({}, c, lv) : c);
+  if (op >= 1) { _show(el, sw, sh, c, gaps, main); return; }
+  if (op <= 0) return;
+  if (!_layerCv) _layerCv = document.createElement('canvas');
+  if (_layerCv.width !== CW || _layerCv.height !== CH) { _layerCv.width = CW; _layerCv.height = CH; }
+  const g = _layerCv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  g.filter = 'none';
+  g.clearRect(0, 0, CW, CH);
+  g.setTransform(1, 0, 0, 1, PAD, PAD);
+  const frame = _ctx;
+  _ctx = g;
+  try { _show(el, sw, sh, c, gaps, main); } finally { _ctx = frame; }
+  _ctx.save();
+  _ctx.setTransform(1, 0, 0, 1, 0, 0);
+  _ctx.globalAlpha = op;
+  _ctx.drawImage(_layerCv, 0, 0);
+  _ctx.restore();
+}
+
 function _show(el, sw, sh, c, gaps, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
@@ -935,13 +965,13 @@ function _paintFrame() {
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
       if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens (V23)
         const pic = _shooting ? null : _posterOf(c);
-        if (pic) _show(pic, pic.naturalWidth, pic.naturalHeight, c, gaps, main);
+        if (pic) _showAs(pic, pic.naturalWidth, pic.naturalHeight, c, gaps, main);
         continue;
       }
-      _show(el, el.videoWidth, el.videoHeight, c, gaps, main);
+      _showAs(el, el.videoWidth, el.videoHeight, c, gaps, main);
     } else {
       if (!el.naturalWidth) { missing++; continue; }
-      _show(el, el.naturalWidth, el.naturalHeight, c, gaps, main);
+      _showAs(el, el.naturalWidth, el.naturalHeight, c, gaps, main);
     }
   }
   // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
