@@ -121,4 +121,9 @@
 .au-pair{ flex:1 1 auto; min-width:0; min-height:0; display:flex }
 .gw-body.au-win .au-pair .au-mid{ flex:1 1 auto; min-width:0; min-height:0 }
 .gw-ov.is-sound .au-v2m{ flex:0 0 42%; min-width:300px }
+/* (fix (к), the owner 2026-11-01: "у video to music в попапе странно выглядит поле с деревом и папками. давай там просто папки
+   video будут без дерева справа") Only VIDEO's folders: the path, the folder tiles, the videos - the tree that walks them is
+   there, unseen (js/sound/sound-window.js _v2mOpen). */
+.gw-ov.is-sound .au-v2m-tree{ display:none }
+.gw-ov.is-sound .au-v2m-gal{ padding:10px 12px 16px }
 .au-made-box{ display:flex; flex-direction:column; gap:8px; margin-top:12px }
