@@ -1311,6 +1311,11 @@ export function initLibrary() {
   }
   _wireDrop();
   _wireTreeSash();
+  // (phase V64, fix (в), the owner 2026-10-31: "давай при отображении крошки scenarios в draft показывать дерево еще с правой
+  // стороны") The scenarios view (scen-pick.js, #mv3-sc) stands in the gallery's place of the row - the sash and the media tree
+  // stay on its right (css/merge-v3.css #mv3-library.is-scen); a folder pressed in the tree leaves it for that folder's gallery.
+  const scv = document.getElementById('mv3-sc'), row = document.getElementById('mv3-lib-row'), sash = document.getElementById('mv3-lib-sash');
+  if (scv && row && sash && scv.parentNode !== row) row.insertBefore(scv, sash);
   // Back from the pictures chat with something made or added: the shelf reads again (phase J).
   window.addEventListener('mv3:lib-reload', () => _reload());
 
@@ -1326,6 +1331,13 @@ export function initLibrary() {
   const host = document.getElementById('mv3-lib-tree');
   if (!host) return;
   host.addEventListener('click', (e) => e.stopPropagation());     // the folded column's press must not see it
+  // (phase V64, fix (в)) Beside the scenarios: a folder's row pressed is that folder in the gallery - the scenarios let go of
+  // first (its buttons - "generate", "create", ▸, ✕ - are their own).
+  host.addEventListener('click', (e) => {
+    const t = e.target;
+    if (Views.top() !== 'scenarios' || !t.closest || !t.closest('.mt-row') || t.closest('button')) return;
+    Views.toShelf();
+  }, true);
   // (phase V60.2, the owner's (дг1а)-(дг3а)) The panel has ROOTS - "Library" pressed leads there (lib-views.js) - with no word
   // in the path; Merge opened, reloaded or another project opened: the panel on the folder it was left on - or the roots, when
   // it was left there (`mv3_tree_sel_v1` '') - and the old shelf button's kind the first time ever.

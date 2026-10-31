@@ -1252,6 +1252,11 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    own tabs - wk-setup.js, wk-env.js, wk-voice.js.) */
 .mv3-scv{display:none; flex:1 1 auto; min-height:0; min-width:0; flex-direction:column; background:var(--bg)}
 #mv3-library.is-chat .mv3-scv.is-shown{display:flex}
+/* (phase V64, fix (в), the owner 2026-10-31: "давай при отображении крошки scenarios в draft показывать дерево еще с правой
+   стороны") The scenarios stand in the gallery's place of the row (merge-v3/library.js moves #mv3-sc there): the sash and the
+   media tree stay on their right; the gallery waits under them. */
+#mv3-library.is-chat.is-scen .mv3-lib-row{display:flex}
+#mv3-library.is-scen .mv3-lib-row > .mv3-panel-body{display:none}
 .mv3-col.is-collapsed .mv3-scv,
 #mv3-library.is-captions .mv3-scv{display:none !important}
 .mv3-scv-top{flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 9px 0}

@@ -209,6 +209,8 @@ function _paint() {
   if (panel) {
     panel.classList.toggle('is-chat', _chats.has(t));
     panel.classList.toggle('is-captions', t === 'captions');
+    // (phase V64, fix (в)) The scenarios with the media tree beside them (css/merge-v3.css, merge-v3/library.js).
+    panel.classList.toggle('is-scen', t === 'scenarios');
   }
   const title = $('mv3-lib-title');
   if (title) {
