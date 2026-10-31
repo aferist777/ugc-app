@@ -54,6 +54,7 @@ import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
 import * as Layers from '../layers.js';
+import { markField, markText } from './image-words.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -1541,7 +1542,7 @@ export function createChat(make) {
       if (!v || v === ' · ? · ') continue;
       const r = el('div', 'mv3-ig-more-row');
       r.appendChild(el('span', 'k', k));
-      r.appendChild(el('span', 'v', String(v)));
+      r.appendChild(S.markImages ? markText(el('span', 'v'), String(v)) : el('span', 'v', String(v)));
       body.appendChild(r);
     }
     btn.addEventListener('click', () => {
@@ -1690,10 +1691,12 @@ export function createChat(make) {
   function _grow() {
     const ta = _ui.ta;
     // Empty, it is one line - measured, the placeholder of a box not laid out yet would make it tall.
-    if (!ta.value) { ta.style.height = ''; return; }
+    if (!ta.value) { ta.style.height = ''; if (ta._imw) ta._imw.refresh(); return; }
     ta.style.height = 'auto';
     // scrollHeight is the words and the padding; the box's height takes its border too.
     ta.style.height = Math.min(SAY_MAX, ta.scrollHeight + 2) + 'px';
+    // (phase V26.6) The pictures' numbers marked over the box follow a value set by script too.
+    if (ta._imw) ta._imw.refresh();
   }
 
   // ── The right column ──────────────────────────────────────────────────────
@@ -2077,6 +2080,9 @@ export function createChat(make) {
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(...[ta, pen, nBtn, go].filter(Boolean));
+    // (phase V26.6, the owner's check 2026-10-31, (а)) A description with `markImages` (the frames chat) has the pictures'
+    // numbers - "image 1" - yellow in its box (js/merge-v3/image-words.js).
+    if (S.markImages) markField(ta);
     // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
     const foot = el('div', 'mv3-ig-foot');
     thread.appendChild(foot);

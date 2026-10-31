@@ -28,6 +28,7 @@ import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openFrame } from '../gen-window.js';
+import { markText, markField } from './image-words.js';
 
 const MAX_ATTS = 6;
 const LS_LAST = 'mv3-fc-last';           // the model choice of this chat
@@ -172,7 +173,7 @@ function FRAMES(ctx) {
   // What was asked: the words, and the pictures by number with the field each was in.
   function _askedHead(words, media) {
     const h = el('div', 'mv3-fc-asked');
-    if (words) h.appendChild(el('div', 'mv3-fc-asked-t', words));
+    if (words) h.appendChild(markText(el('div', 'mv3-fc-asked-t'), words));
     const list = (media || []).filter(a => a && a.path);
     if (list.length) {
       const row = el('div', 'mv3-ig-msg-refs');
@@ -298,7 +299,7 @@ function FRAMES(ctx) {
     if (g && g.prompt && g.prompt !== g.said) {
       const more = el('details', 'mv3-fc-sent');
       more.appendChild(el('summary', null, 'sent as'));
-      more.appendChild(el('div', 'mv3-fc-sent-t', g.prompt));
+      more.appendChild(markText(el('div', 'mv3-fc-sent-t'), g.prompt));
       left.appendChild(more);
     }
     if (g && (g.fell || g.writer)) left.appendChild(el('div', 'mv3-fc-note', g.fell || ('put into English by ' + g.writer)));
@@ -375,6 +376,7 @@ function FRAMES(ctx) {
     ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     l.left.appendChild(ta);
+    markField(ta);                           // (phase V26.6) "image 1" yellow in the prompt too
     Object.assign(l, { ta, save, patchKey: key });
     if (c.state === 'writing') {
       const strip = el('div', 'mv3-ig-prog');
@@ -515,27 +517,54 @@ function FRAMES(ctx) {
     ctx.reload(true);
   }
   // Six, in two columns (the owner); one a message went from wears gold and "used".
+  // (phase V26.6, the owner's check 2026-10-31, (в)) Each has ↻ in its corner on hover: that idea written again as a
+  // variation of itself, in its place (POST /api/scen3/fchat/ideas/again); while it is written the card waits.
+  const _againBusy = new Set();          // '<message id>:<i>' being written again
   function _ideasBubble(m) {
     const box = el('div', 'mv3-ig-msg is-agent mv3-fc-ideasmsg');
     box.appendChild(el('div', 'mv3-ig-text', m.text || 'Ideas for a frame'));
     const used = new Set((m.used || []).map(Number));
     const list = el('div', 'mv3-fc-ideaslist');
     m.ideas.forEach((idea, i) => {
+      const cell = el('div', 'mv3-fc-ideacell');
       const it = el('button', 'mv3-fc-idea' + (used.has(i) ? ' is-used' : ''));
       it.type = 'button';
-      it.appendChild(el('span', 't', idea));
+      it.appendChild(markText(el('span', 't'), idea));
       if (used.has(i)) it.appendChild(el('span', 'u', 'used'));
       it.title = (used.has(i) ? 'A frame was asked for from this one. ' : '') + 'Put it into the message box - change it as you like, then send';
       it.addEventListener('click', () => {
+        if (cell.classList.contains('is-again')) return;
         ctx.setText(idea);
         _armedIdea = { id: m.id, i };
         const ui = ctx.ui();
         if (ui) ui.ta.focus();
       });
-      list.appendChild(it);
+      const re = el('button', 'mv3-fc-idea-re', '↻');
+      re.type = 'button';
+      re.title = 'Another take on this idea - the same spot, another pose or angle - in its place. Fractions of a cent.';
+      re.addEventListener('click', (ev) => { ev.stopPropagation(); _ideaAgain(m, i, cell, re); });
+      if (_againBusy.has(m.id + ':' + i)) cell.classList.add('is-again');
+      cell.append(it, re);
+      list.appendChild(cell);
     });
     box.appendChild(list);
     return box;
+  }
+  async function _ideaAgain(m, i, cell, re) {
+    const k = ctx.key();
+    const lock = m.id + ':' + i;
+    if (!k || _againBusy.has(lock)) return;
+    _againBusy.add(lock);
+    cell.classList.add('is-again');
+    const d = await _post('/api/scen3/fchat/ideas/again', {
+      project: k, projectId: (_proj && _proj.id) || '', id: m.id, i, shot: _shot,
+    });
+    _againBusy.delete(lock);
+    cell.classList.remove('is-again');
+    if (!d || !d.success) { note(re.isConnected ? re : cell, 'Not written again.', (d && d.error) || 'the server did not answer'); return; }
+    // The box keeps its words; a send from them no longer marks the new idea used.
+    if (_armedIdea && _armedIdea.id === m.id && _armedIdea.i === i) _armedIdea = null;
+    ctx.reload();
   }
 
   // The sig of a card for the shell: what it IS - never the text being typed into it.
@@ -550,6 +579,8 @@ function FRAMES(ctx) {
     kind: 'fchat',
     host: true,
     noPeek: true,
+    // (phase V26.6, the owner's check 2026-10-31, (а)) "image 1", "image/2" yellow in the box and in read more.
+    markImages: true,
     ids: { root: 'mv3-fc' },
     keys: { draft: 'mv3_fc_draft_v1', write: 'mv3_fc_write_v1' },
     maxAtts: MAX_ATTS,
@@ -610,7 +641,7 @@ function FRAMES(ctx) {
     hidden: (m) => m.role === 'user',
     bubble: (m, progs, asked) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m)
       : (m.role !== 'user' && (m.gens || []).length ? _plainBubble(m, progs, asked) : null)),
-    msgSig: (m) => (Array.isArray(m.ideas) ? (m.used || []).join(',') : ''),
+    msgSig: (m) => (Array.isArray(m.ideas) ? (m.used || []).join(',') + '|' + m.ideas.join('|') : ''),
     attsSide: _ideasSide,
     // The idea a message went from is used now; the box is its own again.
     afterSend: () => { _armedIdea = null; },

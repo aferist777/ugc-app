@@ -380,6 +380,56 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
   }
 });
 
+// (phase V26.6, the owner's check 2026-10-31, (в): "на каждой идее можно нажать символ заново ... предлагается новая идея
+// выбранной карточки") ONE idea of an ideas message asked again: a VARIATION of it in its place - the agent shown the
+// pictures the ideas were made with (their numbers stay true), the other ideas so it repeats none. Its "used" goes.
+// { project, projectId, id, i, shot } -> { idea }. Fractions of a cent: no Alerts row; one at a time per idea (409).
+const _againNow = new Set();
+router.post('/scen3/fchat/ideas/again', async (req, res) => {
+  const b = req.body || {};
+  const i = parseInt(b.i, 10);
+  const lock = String(b.id || '') + ':' + i;
+  let mine = false;
+  try {
+    const { key, id, proj } = _projectOf(b);
+    if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const m = CHAT.get(b.id);
+    if (!m || !Array.isArray(m.ideas) || String(m.project || '') !== String(key)) return res.status(404).json({ success: false, error: 'those ideas are gone' });
+    if (!(i >= 0 && i < m.ideas.length)) return res.status(400).json({ success: false, error: 'no such idea' });
+    if (_againNow.has(lock)) return res.status(409).json({ success: false, error: 'this idea is being written again already' });
+    const media = (Array.isArray(m.media) ? m.media : []).filter(a => a && a.path);
+    const refs = media.map(a => String(a.path).split('?')[0]);
+    for (let k = 0; k < refs.length; k++) {
+      const abs = toDiskExisting(refs[k]);
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (k + 1) + ' of these ideas is not in the library any more - ask for new ideas' });
+    }
+    _againNow.add(lock);
+    mine = true;
+    const pr = _products(refs, media.map(a => _roleOf(a.role)));
+    const facts = await _factsRead(id, String(b.shot || ''));
+    let picUrls = [];
+    try { picUrls = await GENS.hostRefs(refs); } catch (e) { picUrls = []; }
+    const t = await AGENT.frameIdeas({ roles: pr.roles, notes: pr.notes, facts, picUrls,
+      again: { idea: m.ideas[i], others: m.ideas.filter((x, k) => k !== i) } });
+    if (!t.ideas || !t.ideas[0]) return res.status(502).json({ success: false, error: t.fail || 'no idea came back' });
+    const idea = String(t.ideas[0]).trim().slice(0, 600);
+    const now = CHAT.update(m.id, (x) => {
+      if (!Array.isArray(x.ideas) || i >= x.ideas.length) return false;
+      x.ideas[i] = idea;
+      x.used = (Array.isArray(x.used) ? x.used.map(Number) : []).filter(k => k !== i);
+      return undefined;
+    });
+    if (!now) return res.status(404).json({ success: false, error: 'those ideas are gone' });
+    res.json({ success: true, idea });
+  } catch (e) {
+    console.error('[fchat/ideas/again]', e.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+  } finally {
+    if (mine) _againNow.delete(lock);
+  }
+});
+
 // `to frames`: a frame of this chat into the project's set - it joins the pool like any frame.
 router.post('/scen3/fchat/to-set', async (req, res) => {
   try {

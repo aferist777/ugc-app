@@ -1186,3 +1186,27 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-fc-acts{ display:flex; flex-direction:column; gap:4px }
 .mv3-fc-acts .mv3-c-btn{ width:100% }
 .mv3-pc.is-narrow .mv3-fc-right{ flex-basis:118px }
+/* (phase V26.6, the owner's check 2026-10-31, (а)) The pictures' numbers - "image 1", "image/2" - yellow wherever the frames
+   chat shows words, brighter than the gold of what is chosen (js/merge-v3/image-words.js). In a field a layer over it draws
+   the same text in the same place, transparent but these words, over the field's own letters. */
+.imw{ color:oklch(.91 .17 102); background:oklch(.91 .17 102 / .14); border-radius:2px }
+.imw-wrap{ position:relative; display:block; min-width:0 }
+.imw-over{
+  position:absolute; inset:0; margin:0; overflow:hidden; pointer-events:none;
+  color:transparent; background:none; user-select:none;
+}
+.mv3-ig-bar > .imw-wrap{ flex:1 1 auto; display:flex }
+/* (phase V26.6, the owner's check 2026-10-31, (в)) An idea's ↻ in its top right corner, shown on hover: that idea written
+   again as a variation of itself, in its place (js/merge-v3/fchat.js _ideaAgain); the card waits while it is written. */
+.mv3-fc-ideacell{ position:relative; display:flex; min-width:0 }
+.mv3-fc-ideacell > .mv3-fc-idea{ flex:1 1 auto; min-width:0; padding-right:26px }
+.mv3-fc-idea-re{
+  position:absolute; top:4px; right:4px; width:19px; height:19px; padding:0; display:grid; place-items:center;
+  border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--muted);
+  font:700 12px/1 var(--font); cursor:pointer; opacity:0; transition:opacity .12s;
+}
+.mv3-fc-ideacell:hover .mv3-fc-idea-re, .mv3-fc-idea-re:focus-visible{ opacity:1 }
+.mv3-fc-idea-re:hover{ color:var(--gold); border-color:var(--gold) }
+.mv3-fc-ideacell.is-again .mv3-fc-idea-re{ opacity:1; color:var(--gold); border-color:var(--gold); cursor:default; animation:mv3-fc-spin 1s linear infinite }
+.mv3-fc-ideacell.is-again .mv3-fc-idea{ opacity:.5; cursor:default }
+@keyframes mv3-fc-spin{ to{ transform:rotate(360deg) } }
