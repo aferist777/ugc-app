@@ -10,11 +10,13 @@
      a press on empty space and a drag - a band: what it touches is picked; with Shift it adds
      a press on empty space, or Escape - nothing picked
      Delete              the page's question for all of them (`onDelete`) - not in a field, not under a window
+   Every press in the gallery - on a tile, a band, empty space - is told to the page (`onPress`, phase V64 block 0): the
+   gold outline of a tile ARRIVED AT (an Alerts row, "show", what a window just made) lives only until it.
 
    What is done with them is the page's: let go on a node of the tree or a folder tile (js/media-tree.js takes `many` -
    POST /api/library/batch/move), the right button ("Move to…", ★, "Delete N" - menuAt below), Delete.
 
-     createSelection({ host, tile, active(), onChange(keys), onDelete(keys) })
+     createSelection({ host, tile, active(), onChange(keys), onDelete(keys), onPress() })
        host      the element the gallery is drawn in (it stays; its tiles are drawn again)
        tile      the selector of a pickable tile - it carries `data-key` ("<kind>:<id>")
        -> { has(key), keys(), size(), clear(), refresh(), only(key) }
@@ -39,7 +41,7 @@ const _inField = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)
 const _hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
 export function createSelection(o) {
-  const opt = Object.assign({ active: () => true, onChange: () => {}, onDelete: () => {} }, o || {});
+  const opt = Object.assign({ active: () => true, onChange: () => {}, onDelete: () => {}, onPress: () => {} }, o || {});
   const host = opt.host;
   let picked = new Set();
   let anchor = '';
@@ -100,6 +102,7 @@ export function createSelection(o) {
     // A control on the tile (the star, the cross, a menu) is its own.
     const ctl = e.target.closest('button, select, input, a, label');
     if (ctl && t.contains(ctl)) return;
+    opt.onPress();
     const key = t.dataset.key;
     if (e.shiftKey) {
       e.preventDefault(); e.stopPropagation();
@@ -163,6 +166,7 @@ export function createSelection(o) {
     const b = band;
     band = null;
     if (b.el) b.el.remove();
+    opt.onPress();
     if (b.moved) opt.onChange([...picked]);
     else if (!b.base.length) clear();       // a press on empty space: nothing picked
   };

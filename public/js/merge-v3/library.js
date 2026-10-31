@@ -1346,6 +1346,8 @@ export function initLibrary() {
       host: body, tile: '.mv3-grid .mv3-tile[data-key]',
       active: () => !!body.querySelector('.mv3-grid') && body.offsetParent !== null,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+      // (phase V64 block 0) The tile an Alerts row led to (reveal, `is-found`) stays lit only until the first press here.
+      onPress: () => body.querySelectorAll('.mv3-tile.is-found').forEach(c => c.classList.remove('is-found')),
     });
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.

@@ -1243,6 +1243,14 @@ function _renderGrid() {
   if (_tsel) _tsel.refresh();
 }
 
+// (phase V64 block 0) Media's outline of what was arrived at, let go of - at the first press in the gallery.
+function _dropArrived() {
+  if (_shelf !== 'media' || (!_sel && !_selAlso.size)) return;
+  _sel = '';
+  _selAlso = new Set();
+  document.querySelectorAll('#lib-grid .lib-card.cur').forEach(c => c.classList.remove('cur'));
+}
+
 // ── The selected tile, and the right column about it (phase B) ──────────────
 function _paintSel() {
   document.querySelectorAll('#lib-grid .lib-card').forEach(c => c.classList.toggle('cur', c.dataset.id === _sel));
@@ -2074,6 +2082,10 @@ function boot() {
       host: grid, tile: '.lib-card[data-key]',
       active: () => _shelf === 'media' && !_makingOn,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+      // (phase V64 block 0, the owner 2026-10-31) The outline of a tile arrived at - an Alerts row, "show", the tracks the
+      // music window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
+      // on a tile only that one (its own pick). A track in the player still glows while it plays (js/sound/player.js).
+      onPress: _dropArrived,
     });
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
