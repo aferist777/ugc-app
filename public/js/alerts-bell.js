@@ -181,6 +181,15 @@ function _hrefOf(rec) {
   if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'pictures' || spot.view === 'videos')) {
     return '/library?shelf=media&reveal=' + encodeURIComponent(path) + '&open=' + spot.view;
   }
+  // (phase V64, fix (д), the owner 2026-11-01: "если сгенерировано что-то в merge, то вести в библиотеку merge и обвести золотом")
+  // Music and sounds of Merge's sound window, an environment or a lookbook made from Merge: once filed, Merge's Library panel -
+  // the folder it lies in, every file of the press outlined gold (?reveal=, several for Suno's two tracks).
+  if (rec.state === 'done' && path && w.page === 'merge' && ['audio', 'envmake', 'lbmake'].includes(spot.view)) {
+    let key = spot.key || '';
+    if (!key) { try { key = new URL(w.href || '', location.href).searchParams.get('p') || ''; } catch (e) { key = ''; } }
+    const all = ((rec.result || {}).variants || []).filter(Boolean);
+    return '/merge?' + (key ? 'p=' + encodeURIComponent(key) + '&' : '') + (all.length ? all : [path]).map(p => 'reveal=' + encodeURIComponent(p)).join('&');
+  }
   if (rec.state === 'done' && path && (spot.view === 'pictures' || spot.view === 'videos') && spot.key) {
     return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
   }

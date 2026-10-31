@@ -137,17 +137,21 @@ window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref,
 // reload after walking the shelf would jump back to the picture.
 async function _reveal(path) {
   await wkSettled();
-  // (phase V64) The chats are windows over the page: the file is shown in the Library panel behind them - they go first.
+  // (phase V64) The chats and the generators are windows over the page: the file is shown in the Library panel behind them -
+  // every window goes first (the sound window too, fix (д)).
   const { closeChatWindows } = await import('./chat-window.js');
   closeChatWindows();
+  const GW = await import('../gen-window.js');
+  for (const f of GW.frames()) f.close();
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   const L = await import('./library.js');
   return L.reveal(path);
 }
 (() => {
-  let path = '';
-  try { path = new URLSearchParams(location.search).get('reveal') || ''; } catch (e) { return; }
-  if (!path) return;
+  let path = [];
+  // (phase V64, fix (д)) Several (?reveal=a&reveal=b) - the two tracks of a press of Suno, all outlined.
+  try { path = new URLSearchParams(location.search).getAll('reveal').filter(Boolean); } catch (e) { return; }
+  if (!path.length) return;
   let done = false;
   Store.onChange(() => {
     if (done || !Store.key()) return;
@@ -166,8 +170,8 @@ window.addEventListener('ugc:goto', (e) => {
   let u;
   try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
   if (u.pathname !== location.pathname || u.searchParams.get('p') !== Store.key()) return;
-  const path = u.searchParams.get('reveal') || '';
-  if (path) {
+  const path = u.searchParams.getAll('reveal').filter(Boolean);
+  if (path.length) {
     e.preventDefault();
     _reveal(path).catch(err => console.warn('[merge-v3] reveal:', err.message));
     return;

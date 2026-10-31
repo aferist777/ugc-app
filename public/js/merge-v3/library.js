@@ -1144,7 +1144,10 @@ const _KIND_OF_PATH = [['/media/birols/', 'birols'], ['/media/uploads/', 'upload
   // (phase V55) IMAGES -> Environments / Lookbooks - their generators' own folders.
   ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks']];
 export async function reveal(path) {
-  const want = String(path || '').split('?')[0];
+  // (phase V64, fix (д), the owner 2026-11-01: "если сгенерировано что-то в merge, то вести в библиотеку merge и обвести золотом")
+  // One file or several of one press (Suno's two tracks): the folder of the first, every one of them lit there.
+  const all = (Array.isArray(path) ? path : [path]).map(p => String(p || '').split('?')[0]).filter(Boolean);
+  const want = all[0];
   if (!want || !_tree) return false;
   setOpenColumn('library');
   Views.toBase();
@@ -1157,21 +1160,26 @@ export async function reveal(path) {
     it = ((d && d.items) || []).find(x => String(x.media || '').split('?')[0] === want) || null;
   } catch (e) { it = null; }
   if (!it) {
-    _status(kind === 'images' ? 'That picture is no longer on the shelf' : 'That clip is no longer on the shelf', true);
+    _status(kind === 'images' ? 'That picture is no longer on the shelf' : ['music', 'sounds'].includes(kind) ? 'That sound is no longer in the Library'
+      : 'That clip is no longer on the shelf', true);
     setTimeout(() => _status(''), 5000);
     return false;
   }
   await _tree.load();
-  const cat = String((it.meta || {}).categoryId || '');
-  _tree.selectFor(kind, cat || '__uncat__', false);
+  const m = it.meta || {};
+  const cat = String(m.categoryId || '');
+  // A highlights mood's track lies in its mood's folder, Custom from a mood's folder in highlights' root (V34.F, V60.2).
+  if (kind === 'music' && m.mood && _tree.node('music:highlights:' + m.mood)) _tree.select('music:highlights:' + m.mood, false);
+  else if (kind === 'music' && m.folder === 'highlights' && _tree.node('music:highlights')) _tree.select('music:highlights', false);
+  else _tree.selectFor(kind, cat || '__uncat__', false);
   _node = _tree.selected();
   await _load();
-  const cell = [...document.querySelectorAll('#mv3-library .mv3-tile')].find(c => c.dataset.media === want);
-  if (!cell) return false;
-  cell.classList.add('is-found');
+  const cells = [...document.querySelectorAll('#mv3-library .mv3-tile')].filter(c => all.includes(c.dataset.media));
+  if (!cells.length) return false;
+  for (const c of cells) c.classList.add('is-found');
   // A frame later: the step a talking head was just switched to lays the page out again first
   // (js/merge-v3/layout.js, roomForTimeline), and the panel's height is part of where "centre" is.
-  requestAnimationFrame(() => cell.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  requestAnimationFrame(() => cells[0].scrollIntoView({ block: 'center', behavior: 'smooth' }));
   return true;
 }
 
