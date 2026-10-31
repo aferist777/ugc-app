@@ -16,6 +16,10 @@
    every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
    V55 the window with the tree), the hover peek, and the narrow layout.
 
+   (phase V64 block 3, the owner 2026-10-31) Every chat is HOSTED now - the frames chat since V26.5, the pictures chat and the
+   video chat since V64 - and lives in a generation's window (chat-window.js): no crumb, no room, no view remembered per
+   project; the window shows and hides it, and its conversation is still the open project's.
+
    ── What a description says ─────────────────────────────────────────────────
    Its name and kind, its element ids and storage keys, its words, the settings column (`settings`: load,
    paint, how many attachments fit, what goes into the send), how a finished result is drawn and opened, and

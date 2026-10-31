@@ -113,7 +113,7 @@ function _hasCut() {
 }
 // (phase V62, the owner's (во38)-(во40): "у talking head тоже. там будет появляться только когда все фрагменты имеют видео";
 // "показывать крошки только они не нажимаемы. при наведении показывать, что нужно сделать чтобы они стали активны") THE WAY ON
-// FROM SETUP is the crumbs in its head - "Library / generate image / generate video / generate audio / captions" - and they are
+// FROM SETUP is the crumbs in its head - "Library / captions" (V64: the chats are windows) - and they are
 // pressed once the script is done: a voiceover's lines all read, a talking head's fragments all with their video. Until then
 // they stand greyed, and the bubble over them says what is left. The Library's spine in setup went (css/merge-v3.css).
 // (phase V62, the owner 2026-10-31: "давай таймлайн становится доступен, после того как фрагменты разложены на таймлайне";
@@ -173,10 +173,13 @@ export function setStep(id) {
   requestAnimationFrame(() => { if (id === 'timeline') roomForTimeline(); else roomForWork(); });
 }
 
-// THE SPINES ARE THE SWITCH (phase L). A press on the folded Library, in a talking head, is the way
+// THE SPINES WERE THE SWITCH (phase L). A press on the folded Library, in a talking head, is the way
 // to the timeline - refused, and the spine says why, until there is something on it; a press on the
 // folded Setup is the way back. A press that asks for the step already open is an ordinary "open
-// this panel", and so is anything outside a talking head.
+// this panel", and so is anything outside a talking head. (phase V62 hid the Library spine in setup, and
+// phase V64 the Setup spine everywhere: the switch is the crumbs now - setup's way on (_paintOn) and the
+// Library panel's "setup /". No spine of a project with setup is seen; this answer stays for a folded
+// column pressed all the same.)
 onColumnAsk((col) => {
   if (!_pid) return false;
   const want = col === 'library' ? 'timeline' : col === 'inspector' ? 'setup' : '';
@@ -218,13 +221,16 @@ function _firstStep() {
 // What the two folded panels say, which in a talking head is what the steps say (phase L). The
 // Library spine is dead until the timeline has something on it - the first clip laid is enough (V61) -
 // and says how far the script has got; a blank project has no Setup spine at all (the body class
-// lets the stylesheet hide it).
+// lets the stylesheet hide it). (phase V64) No project shows either spine any more - the body classes, the
+// lock's softness and "setup /" are what is left of this paint that anybody sees.
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
-  // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back.
+  // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back -
+  // (phase V64, the owner 2026-10-31: "у talking head убираем вертикальную кнопку setup - делаем крошкой") and a talking
+  // head's: no project shows a spine any more (css/merge-v3.css).
   document.body.classList.toggle('mv3-vo', !!_pid && _isVo());
   const back = document.getElementById('mv3-lib-setup');
-  if (back) back.hidden = !(_pid && _isVo());
+  if (back) back.hidden = !_pid;
   softLock(_isVo() && _hasCut());
   const lib = document.getElementById('mv3-library');
   if (!lib) return;
@@ -236,8 +242,6 @@ function _paintSpines() {
       : _isVo() ? 'Read the lines first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
         : 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total)
       : _step === 'setup' ? 'The timeline and the Library · ' + (_isVo() ? n.read + '/' + n.total + ' read' : n.clips + '/' + n.total + ' with a clip') : '';
-  const ins = document.getElementById('mv3-inspector');
-  if (ins) ins.title = _pid && _step === 'timeline' && !_isVo() ? 'Back to setup - the script and its fields' : '';
 }
 
 // ── The route, in the panel's own header ────────────────────────────────────
@@ -294,12 +298,10 @@ function _paintRoute() {
 }
 
 // THE WAY ON (phase V62): after "setup", the Library panel's own crumbs - each one the timeline step with that view of the panel
-// (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left.
+// (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left. (phase V64
+// block 3) No "generate image / video / audio" - the chats are windows, opened by "generate" in the Library's tree.
 const ON = [
   ['Library', 'mv3-lib-title', 'The timeline and the Library'],
-  ['generate image', 'mv3-lib-gen', 'The pictures chat, beside the timeline'],
-  ['generate video', 'mv3-lib-vgen', 'The video chat, beside the timeline'],
-  ['generate audio', 'mv3-lib-agen', 'Music and sounds, beside the timeline'],
   ['captions', 'mv3-lib-cap', 'The captions of the timeline - their look and presets'],
 ];
 function _paintOn(wrap) {
@@ -421,11 +423,11 @@ export function initWorkshop() {
     was = now;
     _paintRoute();
   });
-  // (phase V62, fix (к)) A voiceover's "setup /", first in the Library panel's head: back to setup, as the spine was.
+  // (phase V62, fix (к); V64 a talking head's too) "setup /", first in the Library panel's head: back to setup, as the spine was.
   const back = document.getElementById('mv3-lib-setup');
   if (back) {
     back.title = 'Back to setup - the script and its fields';
-    back.addEventListener('click', (e) => { e.stopPropagation(); if (_pid && _isVo()) setStep('setup'); });
+    back.addEventListener('click', (e) => { e.stopPropagation(); if (_pid) setStep('setup'); });
   }
   // (во54) A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
   const tl = document.getElementById('mv3-timeline');

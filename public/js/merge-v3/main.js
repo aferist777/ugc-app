@@ -137,6 +137,9 @@ window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref,
 // reload after walking the shelf would jump back to the picture.
 async function _reveal(path) {
   await wkSettled();
+  // (phase V64) The chats are windows over the page: the file is shown in the Library panel behind them - they go first.
+  const { closeChatWindows } = await import('./chat-window.js');
+  closeChatWindows();
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   const L = await import('./library.js');
   return L.reveal(path);

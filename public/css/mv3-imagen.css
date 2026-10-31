@@ -384,7 +384,7 @@
 
 /* Hovering shows the picture larger, at one fixed place over the conversation. */
 .mv3-ig-peek{
-  position:fixed; z-index:8000; pointer-events:none;
+  position:fixed; z-index:9450; pointer-events:none;     /* (V64) over a chat's window (8900) */
   padding:4px; border:1px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface); box-shadow:var(--shadow);
 }
@@ -447,7 +447,7 @@
 
 /* (phase V7) The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). */
 .vtrim{
-  position:fixed; z-index:7900; display:flex; flex-direction:column; gap:7px; padding:9px 10px 10px;
+  position:fixed; z-index:9050; display:flex; flex-direction:column; gap:7px; padding:9px 10px 10px;  /* (V64) over a chat's window */
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface); box-shadow:0 10px 30px rgba(0,0,0,.45);
 }
 .vtrim-h{ display:flex; align-items:baseline; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
@@ -1114,6 +1114,10 @@ audio.vtrim-media{ background:none; height:32px }
    line hidden - the window's crumbs and ✕ say what it is. */
 .gw-body > #mv3-fc.is-shown{ position:relative; inset:auto; z-index:auto; flex:1 1 auto; min-height:0; width:100%; height:100% }
 .gw-body > #mv3-fc > .mv3-ig-top{ display:none }
+/* (phase V64 block 3) The pictures chat and the video chat in their windows (js/merge-v3/chat-window.js) - the same: the
+   window's whole body, their own head line hidden. */
+.gw-body > .mv3-pc.is-shown{ display:flex; flex-direction:column; position:relative; flex:1 1 auto; min-height:0; width:100%; height:100% }
+.gw-body > .mv3-pc > .mv3-ig-top{ display:none }
 .mv3-ig-top{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:4px 8px 4px 12px;
   border-bottom:1px solid var(--border-soft); background:var(--surface);

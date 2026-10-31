@@ -13,11 +13,15 @@
                    the pick does not survive a reload, and letting go of it puts the base back.
    What shows is the overlay over the base. This module alone writes what follows from that: the panel's
    class (is-chat / is-captions) and which chat's box and buttons show (is-shown), the header - the CRUMBS
-   "Library / generate image / generate video / captions", always there, the one showing lit, any other one press
-   away (phase V18.2, the owner 2026-10-08) - and THE ROOM - the corner of the sashes as far left and down
+   "Library / captions", always there, the one showing lit, any other one press away (phase V18.2, the owner
+   2026-10-08; "generate image / generate video / generate audio" went in phase V64) - and THE ROOM - the corner of the sashes as far left and down
    as it goes while a chat or the captions view can be SEEN, the arrangement there was before put back when
    neither is (layout.js panelRoom). There used to be two owners of the room, and leaving the chat while
    captions showed would have put the corner back under it.
+
+   (phase V64 block 3, the owner 2026-10-31) THE PICTURES CHAT AND THE VIDEO CHAT ARE WINDOWS (chat-window.js) - hosted chats
+   that register nothing here. What is still registered the way a chat is: the scenarios (scen-pick.js), a highlights
+   project's tiles (highlights.js), a voiceover's B-roll piece (broll-view.js) - and, until block 5, "generate audio".
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { panelRoom, onColumnOpen } from './layout.js';
@@ -106,8 +110,8 @@ export function noFragment() {
   } } });
 }
 
-/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library / generate image / generate video / generate
- *  audio" (phase V49, the owner's (пр4); css/mv3-highlights.css). */
+/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library / captions" (phase V49, the owner's (пр4); V64
+ *  without the chats'; css/mv3-highlights.css). */
 export function setHighlights(on) {
   const panel = $('mv3-library');
   if (panel) panel.classList.toggle('is-hl', !!on);

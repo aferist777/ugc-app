@@ -30,6 +30,7 @@
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome } from './chat-shell.js';
+import { chatWindow } from './chat-window.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openTrim, closeTrim } from './vtrim.js';
@@ -2911,7 +2912,9 @@ function VIDEOS(ctx) {
   return {
     name: 'videos',
     kind: 'clip',
-    ids: { root: 'mv3-vc', head: 'mv3-vc-head', headL: 'mv3-vc-headl', crumb: 'mv3-lib-vgen' },
+    // (phase V64 block 3) A WINDOW, no view of the Library panel (chat-window.js): its window is its owner.
+    host: true,
+    ids: { root: 'mv3-vc' },
     keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
     maxAtts: MAX_ATTS,
     counts: [1, 2],
@@ -3086,8 +3089,10 @@ function VIDEOS(ctx) {
 }
 
 const CHAT = createChat(VIDEOS);
+const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', name: 'video chat', title: 'generate video' });
 
-/** Every way in: the generate menu, the lane's right-click, ?open=videos, Alerts. */
-export const openVideos = () => CHAT.open();
+/** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window (phase V64 block 3). */
+export const openVideos = () => WIN.open();
+export const closeVideos = () => WIN.close();
 
 export function initVidChat() { CHAT.init(); }

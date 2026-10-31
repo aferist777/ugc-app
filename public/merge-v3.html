@@ -118,37 +118,31 @@
       <section class="mv3-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
         <div class="mv3-panel-head">
-          <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08): "Library / generate image / generate video /
-               captions", always there, the one showing lit, any other one press away - the generate menu of the
-               timeline went. "Library" is the shelf; the chats are js/merge-v3/picchat.js and vidchat.js; "captions"
-               picks the subtitle lane (js/merge-v3/lib-views.js). In a narrow panel the chats read "image" / "video".
+          <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08; since phase V64 "Library / captions" - the chats are
+               windows): always there, the one showing lit, any other one press away. "Library" is the shelf; "captions"
+               picks the subtitle lane (js/merge-v3/lib-views.js).
                "scenarios /" left of "Library" (phase V28.3, the owner 2026-10-12): the scenarios a talking head is made
                from, in the draft and a blank project only (js/merge-v3/scen-pick.js). -->
           <button class="mv3-lib-crumb" id="mv3-lib-scen" type="button" hidden>scenarios /</button>
           <!-- (phase V33.1) A highlights project's own view - its tiles and the card of a moment (js/merge-v3/highlights.js);
-               in such a project the crumbs are "highlights / Library / generate image / generate video / generate audio"
-               (phase V49, the owner's (пр4); css/mv3-highlights.css) - the chats talk in ONE conversation per project. -->
+               in such a project the crumbs are "highlights / Library / captions" (phase V49, the owner's (пр4); V64 without the
+               chats' crumbs; css/mv3-highlights.css) - the chats talk in ONE conversation per project. -->
           <button class="mv3-lib-crumb" id="mv3-lib-hl" type="button" hidden>highlights /</button>
           <!-- (phase V62, fix (к), the owner 2026-10-31: "давай уберем вертикальную кнопку setup. пускай кнопка setup будет в
-               крошках в режиме voiceover") A voiceover's way back to setup: the first crumb - its Setup spine is gone
-               (css/merge-v3.css body.mv3-vo; js/merge-v3/workshop.js). -->
+               крошках в режиме voiceover"; phase V64, the owner 2026-10-31: "у talking head убираем вертикальную кнопку setup -
+               делаем крошкой") A voiceover's and a talking head's way back to setup: the first crumb - no project has a
+               Setup spine any more (css/merge-v3.css; js/merge-v3/workshop.js). -->
           <button class="mv3-lib-crumb" id="mv3-lib-setup" type="button" hidden>setup /</button>
           <!-- (phase V62, block 2) A voiceover's B-roll piece: its sentence's batch (js/merge-v3/broll-view.js). Right of
                "setup /" (the owner 2026-10-31: "крошка b-rolls должна быть справа от setup в режиме voiceover"), as
                "highlights /" is first in a highlights project; in a voiceover only, pale until the B-roll is laid. -->
           <button class="mv3-lib-crumb" id="mv3-lib-br" type="button" hidden>b-roll /</button>
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
-          <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button">/ <span class="lg">generate </span>image</button>
-          <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button">/ <span class="lg">generate </span>video</button>
-          <!-- The video chat's catalog, right beside its crumb (phase V6, the owner 2026-10-06) - shown while it is. -->
-          <span class="mv3-pc-head" id="mv3-vc-headl" hidden></span>
-          <!-- (phase V34.E) Music and sounds for the open project - Suno and ElevenLabs (js/merge-v3/audchat.js). -->
-          <button class="mv3-lib-crumb" id="mv3-lib-agen" type="button" hidden>/ <span class="lg">generate </span>audio</button>
+          <!-- (phase V64 block 3, the owner 2026-10-31: "из крошек уберем generate image, generate video, generate audio") The
+               chats are WINDOWS now (js/merge-v3/chat-window.js), opened by "generate" of IMAGES / VIDEO / AUDIO in the tree,
+               the lane's right button and ?open=… - the crumbs went. -->
           <button class="mv3-lib-crumb" id="mv3-lib-cap" type="button">/ captions</button>
           <span class="sp"></span>
-          <!-- The chat's own buttons, while it shows. -->
-          <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
-          <span class="mv3-pc-head" id="mv3-vc-head" hidden></span>
         </div>
         <!-- Upload progress and refusals. Its own element, outside the body: the body
              is emptied and rebuilt on every load, which would wipe the message. -->
@@ -160,9 +154,8 @@
           <div class="mv3-lib-sash" id="mv3-lib-sash" title="Drag to resize the tree, double-click for the default width"></div>
           <div class="mv3-lib-tree" id="mv3-lib-tree"></div>
         </div>
-        <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
-        <div class="mv3-pc" id="mv3-pc"></div>
-        <div class="mv3-pc is-video" id="mv3-vc"></div>
+        <!-- (phase V64 block 3) The pictures chat and the video chat have no place here any more: their roots are made by
+             js/merge-v3/chat-window.js and live in their windows. -->
         <!-- (phase V34.E) "generate audio": the settings, the constructor, "Made here" (js/merge-v3/audchat.js). -->
         <div class="mv3-pc is-audio" id="mv3-ac"></div>
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->

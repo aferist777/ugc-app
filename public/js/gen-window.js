@@ -63,9 +63,10 @@ export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
 const _frames = [];                        // open, the top last
 
 /**
- * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size }.
- *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720); a
- *         smaller screen still makes it smaller
+ * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags }.
+ *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720; V64: a
+ *         generation's GEN_SIZE); a smaller screen still makes it smaller
+ *   passDrags  (phase V64) a thing of the app dragged out of it lays the windows aside until it is let go (_passing)
  * -> { box, head, crumbs, body, close(), alive(), isTop(), setCrumbs(list) }
  *    setCrumbs([{ label, on?, act?: { label, title, on } }]) - the last is where the window is; the others go back.
  */
@@ -118,8 +119,33 @@ export function openFrame(o) {
   const layer = Layers.open(ov, { name: o.name || 'window', onEsc: win.close });
   x.addEventListener('click', win.close);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) win.close(); });
+  if (o.passDrags) ov.addEventListener('dragstart', _passing);
   _frames.push(win);
   return win;
+}
+
+// (phase V64 block 3, the owner's (зг4): "окно отходит на время перетаскивания") A window with `passDrags` - the chats'
+// - lets a result dragged out of it reach the page: from the moment the drag starts (a tick later - the drag's picture is
+// taken first) every window and its darkening are see-through and catch nothing; let go anywhere, or Escape, and they come
+// back. Only a drag of this app's own things (`application/x-…`: a picture, a clip, a sound for a lane) - files and words
+// dragged inside a window stay the window's.
+function _passing(e) {
+  if (e.defaultPrevented || !e.dataTransfer) return;
+  if (![...e.dataTransfer.types].some(t => /^application\/x-/i.test(t))) return;
+  setTimeout(() => {
+    for (const ov of document.querySelectorAll('.gw-ov')) ov.classList.add('is-passing');
+    document.body.classList.add('gw-passing');
+  }, 0);
+  const back = () => {
+    document.removeEventListener('dragend', back, true);
+    document.removeEventListener('drop', later, true);
+    for (const ov of document.querySelectorAll('.gw-ov.is-passing')) ov.classList.remove('is-passing');
+    document.body.classList.remove('gw-passing');
+  };
+  // A drop elsewhere ends the drag too; its `dragend` comes after - the window back at the first of them.
+  const later = () => setTimeout(back, 0);
+  document.addEventListener('dragend', back, true);
+  document.addEventListener('drop', later, true);
 }
 
 function _crumbs(host, list) {

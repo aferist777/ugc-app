@@ -17,11 +17,16 @@
    0/N" (N - as many as the model takes) of small squares, its "+" opening the attachment window with the tree
    (chat-pick.js); its right column is the folder column (js/folder-column.js): a dropdown of the media tree - this
    project, REFERENCES (pictures), IMAGES with all its folders -, the open folder's folders as tiles, then its pictures.
+
+   (phase V64 block 3, the owner 2026-10-31) A WINDOW, no view of the Library panel any more (js/merge-v3/chat-window.js):
+   a hosted chat (`host`) opened by IMAGES' "generate" in the tree, the lane's right button, the gallery's "+" and
+   ?open=pictures; a picture dragged out of it lays the window aside until it is let go on a lane.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, thumbOf, almanacSoon, refuseHome } from './chat-shell.js';
+import { chatWindow } from './chat-window.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -36,7 +41,9 @@ function PICTURES(ctx) {
   return {
     name: 'pictures',
     kind: 'image',
-    ids: { root: 'mv3-pc', head: 'mv3-pc-head', crumb: 'mv3-lib-gen' },
+    // (phase V64 block 3) Its window is its owner (chat-window.js): no crumb, no head of the panel.
+    host: true,
+    ids: { root: 'mv3-pc' },
     keys: { draft: 'mv3_pc_draft_v1', write: 'mv3_pc_write_v1', strip: 'mv3-ig-strip-w' },
     maxAtts: MAX_ATTS,
     counts: [1, 2, 4],
@@ -162,8 +169,10 @@ function PICTURES(ctx) {
 }
 
 const CHAT = createChat(PICTURES);
+const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', name: 'pictures chat', title: 'generate image' });
 
-/** Every way in: the generate menu, "+" on the Images shelf, the lane's right-click, ?open=pictures. */
-export const openPictures = () => CHAT.open();
+/** Every way in - IMAGES' "generate", "+" on the Images shelf, the lane's right-click, ?open=pictures: its window. */
+export const openPictures = () => WIN.open();
+export const closePictures = () => WIN.close();
 
 export function initPicChat() { CHAT.init(); }

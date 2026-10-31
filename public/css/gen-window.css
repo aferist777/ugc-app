@@ -6,6 +6,10 @@
 /* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
 .gw-ov{ position:fixed; inset:0; z-index:8900; background:var(--ov-dim, oklch(0 0 0 / .45));
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px)) }
+/* (phase V64 block 3, (зг4)) A result dragged out of a chat's window: the windows and their darkening see-through, catching
+   nothing, until it is let go (js/gen-window.js _passing). */
+.gw-ov.is-passing{ opacity:0; pointer-events:none; transition:opacity .12s ease }
+.gw-ov.is-passing *{ pointer-events:none !important }
 .gw{
   position:absolute; display:flex; flex-direction:column; min-height:0; overflow:hidden;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
