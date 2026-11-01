@@ -676,6 +676,36 @@ async function _pickFrame(i, frameId) {
 let _cropOn = '';                         // the frame being reframed, by id
 let _cropBusy = false;
 
+// (phase V67, second round (в), the owner 2026-11-01: "при просмотре кадра в превью, клик в любом другом месте должен снимать с
+// кадра выделение и показывать Who/where"; (об10) "оба снимать", (об11) a crop under way goes as `cancel`) A PRESS AWAY lets go
+// of what the stage shows - the set's frame pressed in field 2, and the open fragment - and the stage has its halves, who and
+// where, again. Not a press on the stage itself (the frame, its crop, the clip that plays there), on a frame of the set (its own
+// press shows it), on a row of the script (its own press opens or shuts it), in the open fragment, on the sash or a scrollbar,
+// or with anything on top (a window, a menu, a question - Layers). On the click, after it has done its own work: a press that
+// repainted at once would lose the button it was on. A talking head's only - a voiceover's stage has no halves.
+const _isOpen = () => Number.isInteger(_open) && _open >= 0;
+function _awayFromPick(e) {
+  if (e.button !== 0 || !_ctx || !_ctx.project || _isVo(_ctx.project)) return;
+  if (!_setPick && !_isOpen()) return;
+  if (_cropBusy || Layers.blocked()) return;
+  const t = e.target;
+  const half = document.querySelector('.mv3-wk-half.is-frag');
+  if (!(t instanceof Element) || !half || !half.getClientRects().length) return;   // setup is not on screen
+  if (t.clientWidth && e.offsetX > t.clientWidth) return;            // the scrollbar of what was pressed
+  if (t.closest('#mv3-stage, .mv3-wk-fsetfr, .mv3-wk-frow, .mv3-wk-sash')) return;
+  if (_isOpen() && t.closest('.mv3-wk-half.is-frag')) return;
+  const key = _key;
+  setTimeout(() => {
+    if (_key !== key || !_ctx) return;
+    if (!_setPick && !_isOpen()) return;
+    _setPick = '';
+    _cropOn = '';
+    if (_isOpen()) { _open = -1; _picking = false; _pickView = ''; _stagePick = ''; _remember(); }
+    _ctx.repaint();
+  }, 0);
+}
+try { document.addEventListener('click', _awayFromPick, true); } catch (e) { /* no document */ }
+
 function _formatAspect(p) {
   const f = String((((p || {}).mix || {}).settings || {}).format || '9:16');
   const m = f.match(/^(\d+)\s*:\s*(\d+)$/);
