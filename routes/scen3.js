@@ -1923,6 +1923,7 @@ function _castMade(projectId, look) {
   });
   if (asked) console.log('[scen3] the look made is not put on ' + projectId + ': it would put work aside - the person decides');
   if (saved && moved) MIRROR.touch(projectId, { project: saved });
+  if (saved && !asked) _nameForCast(projectId);
   return saved;
 }
 // A character's name as the Characters shelf has it now.
@@ -3818,7 +3819,8 @@ router.post('/scen3/projects', async (req, res) => {
 /* ── A LOOK CAST (phase V67, the owner 2026-11-01: "при смене образа спрашивать, точно ли сменить. и если пользователь
    говорит да, то сбрасывать") - the ONE way "who" is written, the stage's ✕ too (js/merge-v3/wk-setup.js _cast) ──────────
    POST /api/scen3/projects/:id/cast  { characterId, characterName, obrazId, obrazImage, sure? } | { clear: true }
-        -> { success, project, moved }   cast; `moved` - work was put aside or came back, and the timeline was re-laid
+        -> { success, project, moved, title? }   cast; `moved` - work was put aside or came back, and the timeline was
+           re-laid; `title` - the timeline's new title, the character in it (_nameForCast)
         -> { success: false, ask: { reads, frames, clips, from, to, sameChar } }   it would put work aside: asked first,
            cast with `sure` after a yes
         -> 409 { success: false, error }  something of the project is being made - after it
@@ -3831,6 +3833,45 @@ function _castBusy(id) {
   const frame = ALERTS.list().some(r => r.state === 'running' && r.what === 'frame'
     && String((((r.job || {}).params || {}).request || {}).projectId || '') === String(id));
   return frame ? 'a frame is being drawn' : '';
+}
+
+// (phase V67, the owner 2026-11-01: "в имена проектов нужно вписывать имена используемых персонажей"; (об6)-(об8)) WHO IS IN
+// THE NAME: a talking head's name - and so its folder (lib/projects-store.js, lib/relocate.js) - and its timeline's title end
+// in the character cast: "<day> — <title> · <character>", "<day> - <title> · <character>" for the title (the picker's), a
+// " (N)" the app added kept. Only while each is still the one the app gave ((об7): a name typed by hand is left alone).
+// Given when a look is cast; a project from before V67 gets it at its next cast - nothing is renamed at start ((об8)).
+function _castName(name, sep, title, who) {
+  const s = String(name || '');
+  const t = String(title || '').trim();
+  const day = /^\d{4}-\d{2}-\d{2}/.exec(s);
+  if (!day || !t || !who) return '';
+  const head = day[0] + sep + t;
+  if (!s.startsWith(head)) return '';
+  const tail = /^( \(\d+\))?(?: · .*)?$/.exec(s.slice(head.length));
+  return tail ? head + (tail[1] || '') + ' · ' + who : '';
+}
+// After the cast is saved, and apart from it: a folder another program holds stays as it is (the name with it), the cast
+// stands. Returns what changed - { name, title }.
+function _nameForCast(id) {
+  const p = PROJECTS.get(id);
+  const who = p ? _normCasting(p.casting).characterName.trim() : '';
+  const out = {};
+  if (!p || !who || p.type === 'voiceover') return out;
+  const name = _castName(p.name, ' — ', p.title, who);
+  if (name && name !== p.name) {
+    try { PROJECTS.apply(id, (fresh) => { fresh.name = name; }); out.name = name; }
+    catch (e) { console.warn('[scen3/cast] ' + id + ' keeps its name - its folder could not be renamed now:', e.message); }
+  }
+  try {
+    require('../lib/merge-store').update('sv3_' + id, (t) => {
+      const want = _castName(t.title, ' - ', p.title, who);
+      if (!want || want === t.title) return false;
+      t.title = want;
+      out.title = want;
+      return true;
+    });
+  } catch (e) { console.warn('[scen3/cast] ' + id + ' - its timeline keeps its title:', e.message); }
+  return out;
 }
 
 router.post('/scen3/projects/:id/cast', async (req, res) => {
@@ -3858,8 +3899,11 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
       try { await MIRROR.rebuild(id, { project: saved }); }
       catch (e) { console.warn('[scen3/cast] the timeline was not re-laid:', e.message); }
     }
-    console.log('[scen3/cast] ' + id + (next ? ' cast ' + next.characterName + ' / ' + next.obrazId : ' cleared') + (moved ? ' - work moved' : ''));
-    res.json({ success: true, project: _projFull(PROJECTS.get(id) || saved), moved });
+    // (об6) Who is in the name - the folder and the timeline's title follow.
+    const named = next ? _nameForCast(id) : {};
+    console.log('[scen3/cast] ' + id + (next ? ' cast ' + next.characterName + ' / ' + next.obrazId : ' cleared') + (moved ? ' - work moved' : '')
+      + (named.name ? ' - named "' + named.name + '"' : ''));
+    res.json({ success: true, project: _projFull(PROJECTS.get(id) || saved), moved, ...(named.title ? { title: named.title } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

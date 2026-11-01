@@ -191,7 +191,10 @@ async function _cast(look, anchor, sure) {
   if (r.success) {
     // The record as the server has it now - the lines and the set too, not only the casting.
     if (_ctx.project && String(_ctx.project.id) === String(id)) Object.assign(_ctx.project, r.project);
-    if (r.moved) Store.refresh().catch(() => {});
+    // (V67 block 2) The character in the name: the picker and the strip show the timeline's new title at once.
+    if (r.title && Store.key() === 'sv3_' + id) Store.setTitle(r.title);
+    if (r.title) import('./projects.js').then(m => m.repaintPicker()).catch(() => {});
+    if (r.moved || r.title) Store.refresh().catch(() => {});
     _ctx.repaint();
     return true;
   }

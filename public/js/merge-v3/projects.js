@@ -98,6 +98,9 @@ async function _paint() {
   }
 }
 
+/** (phase V67) The list read again - a name the server gave (a talking head's character in its title, js/merge-v3/wk-setup.js). */
+export function repaintPicker() { return _paint(); }
+
 export function initProjects() {
   const sel = _sel();
   if (!sel) return;
