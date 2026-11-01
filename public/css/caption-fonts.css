@@ -26,3 +26,84 @@
 @font-face{ font-family:"PT Sans"; src:url("/fonts/captions/PT_Sans-Web-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
 @font-face{ font-family:"PT Serif"; src:url("/fonts/captions/PT_Serif-Web-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"PT Serif"; src:url("/fonts/captions/PT_Serif-Web-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
+/* The owner's 80 (phase V68 P4) - loaded only when something on the page is drawn in them (the fonts tab, the preview). */
+@font-face{ font-family:"Lacquer"; src:url("/fonts/captions/Lacquer-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Burned"; src:url("/fonts/captions/RubikBurned-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Dirt"; src:url("/fonts/captions/RubikDirt-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Spray Paint"; src:url("/fonts/captions/RubikSprayPaint-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Wet Paint"; src:url("/fonts/captions/RubikWetPaint-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Sedgwick Ave Display"; src:url("/fonts/captions/SedgwickAveDisplay-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Comforter Brush"; src:url("/fonts/captions/ComforterBrush-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Kaushan Script"; src:url("/fonts/captions/KaushanScript-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Knewave"; src:url("/fonts/captions/Knewave-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Splash"; src:url("/fonts/captions/Splash-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Yuji Boku"; src:url("/fonts/captions/YujiBoku-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Finger Paint"; src:url("/fonts/captions/FingerPaint-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Londrina Solid Black"; src:url("/fonts/captions/LondrinaSolid-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Marker Hatch"; src:url("/fonts/captions/RubikMarkerHatch-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Scribble"; src:url("/fonts/captions/RubikScribble-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Bungee"; src:url("/fonts/captions/Bungee-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Chewy"; src:url("/fonts/captions/Chewy-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Kablammo"; src:url("/fonts/captions/Kablammo-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Doodle Shadow"; src:url("/fonts/captions/RubikDoodleShadow-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Shantell Sans ExtraBold"; src:url("/fonts/captions/ShantellSans-ExtraBold.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Sigmar One"; src:url("/fonts/captions/SigmarOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Butcherman"; src:url("/fonts/captions/Butcherman-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Creepster"; src:url("/fonts/captions/Creepster-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Eater"; src:url("/fonts/captions/Eater-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Metal Mania"; src:url("/fonts/captions/MetalMania-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Nosifer"; src:url("/fonts/captions/Nosifer-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Beastly"; src:url("/fonts/captions/RubikBeastly-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Climate Crisis"; src:url("/fonts/captions/ClimateCrisis-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Faster One"; src:url("/fonts/captions/FasterOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Lobster"; src:url("/fonts/captions/Lobster-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Monoton"; src:url("/fonts/captions/Monoton-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik 80s Fade"; src:url("/fonts/captions/Rubik80sFade-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Vinyl"; src:url("/fonts/captions/RubikVinyl-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Ruslan Display"; src:url("/fonts/captions/RuslanDisplay-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"DotGothic16"; src:url("/fonts/captions/DotGothic16-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Jacquarda Bastarda 9"; src:url("/fonts/captions/JacquardaBastarda9-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Pixelify Sans"; src:url("/fonts/captions/PixelifySans-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
+@font-face{ font-family:"Press Start 2P"; src:url("/fonts/captions/PressStart2P-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Pixels"; src:url("/fonts/captions/RubikPixels-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Tiny5"; src:url("/fonts/captions/Tiny5-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Big Shoulders Stencil Black"; src:url("/fonts/captions/BigShouldersStencil-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Black Ops One"; src:url("/fonts/captions/BlackOpsOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Emblema One"; src:url("/fonts/captions/EmblemaOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Wallpoet"; src:url("/fonts/captions/Wallpoet-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Caveat"; src:url("/fonts/captions/Caveat-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
+@font-face{ font-family:"Hachi Maru Pop"; src:url("/fonts/captions/HachiMaruPop-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Marck Script"; src:url("/fonts/captions/MarckScript-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Neucha"; src:url("/fonts/captions/Neucha.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Special Elite"; src:url("/fonts/captions/SpecialElite-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Underdog"; src:url("/fonts/captions/Underdog-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Bagel Fat One"; src:url("/fonts/captions/BagelFatOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Cherry Bomb One"; src:url("/fonts/captions/CherryBombOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Coiny"; src:url("/fonts/captions/Coiny-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Modak"; src:url("/fonts/captions/Modak-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Bubbles"; src:url("/fonts/captions/RubikBubbles-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Moonrocks"; src:url("/fonts/captions/RubikMoonrocks-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Amatic SC"; src:url("/fonts/captions/AmaticSC-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
+@font-face{ font-family:"Big Shoulders Display Black"; src:url("/fonts/captions/BigShouldersDisplay-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Six Caps"; src:url("/fonts/captions/SixCaps.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Sofia Sans Extra Condensed Black"; src:url("/fonts/captions/SofiaSansExtraCondensed-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Yanone Kaffeesatz"; src:url("/fonts/captions/YanoneKaffeesatz-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
+@font-face{ font-family:"Fruktur"; src:url("/fonts/captions/Fruktur-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Grenze Gotisch ExtraBold"; src:url("/fonts/captions/GrenzeGotisch-ExtraBold.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"New Rocker"; src:url("/fonts/captions/NewRocker-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Pirata One"; src:url("/fonts/captions/PirataOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"UnifrakturMaguntia"; src:url("/fonts/captions/UnifrakturMaguntia-Book.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Audiowide"; src:url("/fonts/captions/Audiowide-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Orbitron Black"; src:url("/fonts/captions/Orbitron-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rubik Glitch"; src:url("/fonts/captions/RubikGlitch-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Stalinist One"; src:url("/fonts/captions/StalinistOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Tektur ExtraBold"; src:url("/fonts/captions/Tektur-ExtraBold.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Ewert"; src:url("/fonts/captions/Ewert-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rye"; src:url("/fonts/captions/Rye-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Smokum"; src:url("/fonts/captions/Smokum-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Ultra"; src:url("/fonts/captions/Ultra-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Dela Gothic One"; src:url("/fonts/captions/DelaGothicOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Rampart One"; src:url("/fonts/captions/RampartOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Reggae One"; src:url("/fonts/captions/ReggaeOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Seymour One"; src:url("/fonts/captions/SeymourOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Train One"; src:url("/fonts/captions/TrainOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
