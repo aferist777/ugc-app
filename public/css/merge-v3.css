@@ -51,6 +51,27 @@
   font:600 11px/22px var(--font);
 }
 
+/* (phase V67, second round (д)) The picker's own list: the kinds in a row over the projects (js/merge-v3/projects.js _openList). */
+.mv3-plist{
+  position:fixed; z-index:9300; display:flex; flex-direction:column; min-height:0; padding:4px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.mv3-plist-kinds{display:flex; gap:4px; flex:0 0 auto; padding:2px 2px 6px; border-bottom:1px solid var(--border-soft); margin-bottom:4px}
+.mv3-plist-kind{
+  height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
+  font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap;
+}
+.mv3-plist-kind:hover{background:var(--surface-2)}
+.mv3-plist-kind.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft); cursor:default}
+.mv3-plist-rows{display:flex; flex-direction:column; gap:1px; min-height:0; overflow-y:auto}
+.mv3-plist-row{
+  flex:0 0 auto; padding:5px 8px; border:0; border-radius:var(--r-xs); background:transparent; color:var(--ink); text-align:left;
+  font:600 11px/1.3 var(--font); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.mv3-plist-row:hover{background:var(--surface-2)}
+.mv3-plist-row.is-on{color:var(--primary)}
+.mv3-plist-none{padding:8px; color:var(--muted); font:400 11px/1.3 var(--font)}
+
 .mv3-bar-fld > span{
   font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }

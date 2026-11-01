@@ -78,6 +78,9 @@ async function _paint() {
       : p.vodraft ? 'draft · voiceover' + (p.clips ? ' · ' + p.clips : '')
       : projectIdOf(p.key) ? (p.voiceover ? 'voiceover · ' : 'talking head · ') + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
+    // (phase V67) Its kind, for the list's filter (_openList).
+    o.dataset.kind = p.draft ? 'draft' : p.highlights ? 'highlights' : p.vodraft ? 'voiceover'
+      : projectIdOf(p.key) ? (p.voiceover ? 'voiceover' : 'talking') : 'blank';
     sel.appendChild(o);
   }
   // With nothing open the picker must SAY so. Left alone it would show the first project in
@@ -101,6 +104,99 @@ async function _paint() {
 /** (phase V67) The list read again - a name the server gave (a talking head's character in its title, js/merge-v3/wk-setup.js). */
 export function repaintPicker() { return _paint(); }
 
+// ── THE LIST, WITH ITS FILTER (phase V67, second round (д), the owner 2026-11-01: "давай добавим еще в дропдаун выбора проекта
+// фильтр "all, talking head, voiceover, highlights", чтобы показывались проекты определенного типа"; "показывать в самом
+// дроплауне над списком проектов"; (об14) "только all - all стоит по умолчанию", (об15), (об16)) ─────────────────────────
+// A press on the picker opens THIS list instead of the select's own: the kinds in a row over the projects - "all" the first
+// time, the one chosen remembered (a per-window convenience, localStorage) -, then the projects of that kind. Merge's draft
+// heads every kind; the voiceover draft is a voiceover; a project of Merge's own is in "all" only; the open project, when it is
+// not of the kind, stays at the top. The select stays what holds the choice - its options (painted by _paint, each with its
+// `kind`), its value, its `change` -, so everything that reads the picker reads it as before.
+const KINDS = [['all', 'all'], ['talking', 'talking head'], ['voiceover', 'voiceover'], ['highlights', 'highlights']];
+const FILTER_KEY = 'mv3_proj_filter_v1';
+function _filter() {
+  let v = 'all';
+  try { v = localStorage.getItem(FILTER_KEY) || 'all'; } catch (e) { /* a private window */ }
+  return KINDS.some(k => k[0] === v) ? v : 'all';
+}
+function _setFilter(v) { try { localStorage.setItem(FILTER_KEY, v); } catch (e) { /* kept for this paint only */ } }
+let _plist = null;                         // { el, away, layer }
+function _closeList() {
+  if (!_plist) return;
+  _plist.el.remove();
+  document.removeEventListener('mousedown', _plist.away, true);
+  window.removeEventListener('resize', _closeList);
+  Layers.close(_plist.layer);
+  _plist = null;
+}
+async function _openList() {
+  const sel = _sel();
+  if (!sel || sel.disabled) return;
+  if (_plist) { _closeList(); return; }       // the same press closes it again
+  await _paint();
+  if (_plist) return;
+  const el = document.createElement('div');
+  el.className = 'mv3-plist';
+  const head = document.createElement('div');
+  head.className = 'mv3-plist-kinds';
+  const rows = document.createElement('div');
+  rows.className = 'mv3-plist-rows';
+  el.append(head, rows);
+  const fill = () => {
+    const f = _filter();
+    head.textContent = '';
+    for (const [k, label] of KINDS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mv3-plist-kind' + (k === f ? ' is-on' : '');
+      b.textContent = label;
+      b.addEventListener('click', (e) => { e.stopPropagation(); _setFilter(k); fill(); });
+      head.appendChild(b);
+    }
+    rows.textContent = '';
+    const opts = [...sel.options].filter(o => o.value);
+    const open = opts.find(o => o.value === sel.value) || null;
+    const drafts = opts.filter(o => o.dataset.kind === 'draft');
+    let shown = [...drafts, ...opts.filter(o => o.dataset.kind !== 'draft' && (f === 'all' || o.dataset.kind === f))];
+    if (open && !shown.includes(open)) shown = [open, ...shown];
+    for (const o of shown) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mv3-plist-row' + (o === open ? ' is-on' : '');
+      b.textContent = o.textContent;
+      b.title = o.textContent;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _closeList();
+        if (sel.value === o.value) return;
+        sel.value = o.value;
+        sel.dispatchEvent(new Event('change'));
+      });
+      rows.appendChild(b);
+    }
+    if (shown.length === drafts.length) {
+      const none = document.createElement('div');
+      none.className = 'mv3-plist-none';
+      none.textContent = 'No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.';
+      rows.appendChild(none);
+    }
+    const on = rows.querySelector('.is-on');
+    if (on) on.scrollIntoView({ block: 'nearest' });
+  };
+  document.body.appendChild(el);
+  const r = sel.getBoundingClientRect();
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - Math.max(r.width, 345) - 6, r.left))) + 'px';
+  el.style.top = Math.round(r.bottom + 4) + 'px';
+  el.style.width = Math.round(Math.max(r.width, 345)) + 'px';
+  el.style.maxHeight = Math.round(Math.max(160, window.innerHeight - r.bottom - 16)) + 'px';
+  fill();
+  const away = (e) => { if (!el.contains(e.target) && e.target !== sel) _closeList(); };
+  const layer = Layers.open(el, { modal: false, name: 'projects', onEsc: _closeList });
+  _plist = { el, away, layer };
+  document.addEventListener('mousedown', away, true);
+  window.addEventListener('resize', _closeList);
+}
+
 export function initProjects() {
   const sel = _sel();
   if (!sel) return;
@@ -119,8 +215,20 @@ export function initProjects() {
   // changes the store several times a second and none of those change which projects
   // exist. Opening the dropdown is also the moment a project imported from Scenarios has
   // to appear without reloading the page.
-  sel.addEventListener('mousedown', () => { _paint(); });
-  sel.addEventListener('focus', () => { _paint(); });
+  // (phase V67, second round (д)) The press opens the list with its filter (_openList), not the select's own - which is
+  // read again there first.
+  sel.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    _openList();
+  });
+  sel.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp'))) {
+      e.preventDefault();
+      _openList();
+    }
+  });
+  sel.addEventListener('focus', () => { if (!_plist) _paint(); });
 
   _wireNew();
   _wireRename();
