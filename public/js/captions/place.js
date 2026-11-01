@@ -20,8 +20,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { resolveStyle, withAuto, anchorOf, captionLanes, POSITIONS } from './style.js';
-import { meter, edgeOf } from './measure.js';
-import { fontOf, withTwin } from './fonts.js';
+import { meter, edgeOf, LINE_MAX } from './measure.js';
+import { fontOf, withTwin, drawnFamily } from './fonts.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
 import { spells, typedWords } from './words.js';
 
@@ -50,8 +50,11 @@ const _lines = (tokens, counts) => {
  * the subtitle lane with a spoken word - `subs` - timed by its letters, phase V30 block 1), where its lines
  * break (`brk`, word indices), the text as written into the .ass, the lines as drawn (for measuring), and the
  * smaller size it is drawn at when a word is wider than a line (`shrink`, else null). ass.js draws by it.
+ * (V68 P4) In a font dealt over its preset's (`st.fitTo`) the page is cut in the preset's font and `shrink` is the size that
+ * gives it the width it has there (_fitted) - larger as well as smaller.
  */
 export function drawnPage(c, st, subs, w, dur) {
+  if (st && st.fitTo) return _fitted(c, st, subs, w, dur);
   let words = spells(c.words, c.name) ? c.words : null;
   const typed = (!words && subs && st.effect !== 'none' && !(Array.isArray(c.words) && c.words.length))
     ? typedWords(c.name, dur) : null;
@@ -89,6 +92,34 @@ export function drawnPage(c, st, subs, w, dur) {
       }
     }
   }
+  return out;
+}
+
+// THE SIZE BY WIDTH (phase V68 P4, the owner's (хп11)): a page drawn in a font dealt over its preset's keeps the width it has in
+// the preset's font - cut there (the same words a line, so nothing about the cut changes), then drawn at the size that makes its
+// widest line as wide: between half and twice the size (a hair-thin Six Caps would grow threefold), and never wider than a
+// line of the frame. Both widths in the line's own drawn font - a Russian line in its twin.
+const FIT_MIN = 0.5, FIT_MAX = 2;
+function _fitted(c, st, subs, w, dur) {
+  const ref = Object.assign({}, st, { font: drawnFamily(st.fitTo, c && c.name) });
+  delete ref.fitTo;
+  const out = drawnPage(c, ref, subs, w, dur);
+  const own = Math.round(+st.size || 0);
+  const at = out.shrink || own;
+  // The widest line at a size: its letters alone (the outline does not grow with them), or as drawn, edges on.
+  const widest = (s, size, edges) => {
+    const z = Object.assign({}, s, { size });
+    const m = meter(z);
+    const around = edges ? 0 : 2 * edgeOf(z) + Math.max(0, +z.shadow || 0);
+    return Math.max(0, ...out.lines.map((l) => (String(l).length ? m.text(l) - around : 0)));
+  };
+  const wr = widest(ref, at), wc = widest(st, at);
+  if (!(wr > 0 && wc > 0)) return out;
+  const k = Math.max(FIT_MIN, Math.min(FIT_MAX, wr / wc));
+  let size = Math.max(8, Math.round(at * k));
+  const lim = LINE_MAX * w;
+  for (let guard = 0; guard < 200 && size > 8 && widest(st, size, true) > lim; guard++) size--;
+  out.shrink = size !== own ? size : null;
   return out;
 }
 

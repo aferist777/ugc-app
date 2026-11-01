@@ -29,7 +29,7 @@
    PURE, and shared: the page imports it, the server require()s it (lib/mv3b-subs.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { resolveStyle, withAuto, renderFrame, autoWordsPerLine } from './style.js';
+import { resolveStyle, withAuto, renderFrame, autoWordsPerLine, cutStyle } from './style.js';
 import { meter, LINE_MAX } from './measure.js';
 import { isHeard, soundPieces } from './heard.js';
 import { tokensOf, spells, retext } from './words.js';
@@ -367,14 +367,15 @@ export function paginate(words, opts) {
     const key = lookKey(look);
     if (!styleCache.has(key)) {
       // The `.srt` has no look: a player draws it in its own font, so its lines are measured in characters.
-      const st = srt ? null : withAuto(resolveStyle(o.lane, look && look.style), F.w, F.h);
+      // (V68 P4) A font dealt over the preset keeps the preset's widths (place.js drawnPage): cut in the preset's font.
+      const st = srt ? null : cutStyle(withAuto(resolveStyle(o.lane, look && look.style), F.w, F.h));
       const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(o.format);
       const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
       const m = st ? meter(st) : null;
       const lim = LINE_MAX * F.w;
       const own = look && look.style ? withoutRefs(look.style) : null;
       const alts = mixL ? mixL.map((_, k) => {
-        const a = withAuto(resolveStyle(o.lane, Object.assign({}, own || {}, { mixP: k })), F.w, F.h);
+        const a = cutStyle(withAuto(resolveStyle(o.lane, Object.assign({}, own || {}, { mixP: k })), F.w, F.h));
         return { st: a, m: meter(a) };
       }) : null;
       styleCache.set(key, { st, N, lines, m, lim, alts });
@@ -612,7 +613,7 @@ export function overPage(c, laneStyle, format) {
   const words = timedWords(c).filter((w) => w && String(w.w || '').trim());
   if (words.length < 2) return null;
   const F = renderFrame(format);
-  const st = withAuto(resolveStyle(laneStyle, c && c.style), F.w, F.h);
+  const st = cutStyle(withAuto(resolveStyle(laneStyle, c && c.style), F.w, F.h));
   // A lane cut in `sentences` (phase V30, block 4): any number of words, two lines, up to 7 s.
   const sent = st.cut === 'sentences';
   const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);

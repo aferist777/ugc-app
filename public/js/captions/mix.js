@@ -13,13 +13,17 @@
    dealt by a number made from the seed and its moment, so the same pages dealt again come out the same (a re-cut that changes
    nothing changes nothing). A lane with no mix any more takes the references away.
 
+   FONTS (phase V68 P4, the owner's (хп8)): the lane's `fonts` are dealt the same way - `mixF`, the page's font, two pages in a
+   row never the same - when there are two or more (one font is every page's and needs no reference); the same seed, so picking
+   fonts keeps the presets and animations dealt as they were.
+
    PURE, and shared: pages.js deals in its re-cuts, the server (lib/captions-job.js, lib/highlights-cut.js) when it lays a lane.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { mixOf, animsOf } from './style.js';
+import { mixOf, animsOf, fontsOf } from './style.js';
 
 /** The fields a deal puts on a page's own style. */
-export const REFS = ['mixP', 'mixA', 'mixS'];
+export const REFS = ['mixP', 'mixA', 'mixS', 'mixF'];
 
 /** A page's own style without what a deal put on it - its own look and place; null when nothing is left. */
 export function withoutRefs(st) {
@@ -41,10 +45,13 @@ export function refsOf(st) {
 /** A seed for a press: a deal unlike the last. */
 export const newSeed = () => Math.floor(Math.random() * 2147483646) + 1;
 
-/** Is there anything to deal on this lane - a mix, animations, or references left from one? */
+// Fonts are dealt when there are two or more (V68 P4).
+const _fontsDealt = (st) => { const f = fontsOf(st); return f && f.length >= 2 ? f : null; };
+
+/** Is there anything to deal on this lane - a mix, animations, fonts, or references left from one? */
 export function needsDeal(lane) {
   const st = (lane && lane.style) || {};
-  if (mixOf(st) || animsOf(st)) return true;
+  if (mixOf(st) || animsOf(st) || _fontsDealt(st)) return true;
   return ((lane && lane.clips) || []).some((c) => c && c.style && REFS.some((k) => c.style[k] !== undefined));
 }
 
@@ -58,14 +65,14 @@ function _rnd(seed, cs, salt) {
 
 /**
  * DEAL the lane's mix onto its pages (`clips` - the lane's, changed in place): every page with words, in time order, an entry of
- * `mix` and a pair of `anims` (see the header). `laneStyle` - the lane's style as it is now. Returns how many pages changed.
+ * `mix`, a pair of `anims` and one of `fonts` (see the header). `laneStyle` - the lane's style as it is now. Returns how many pages changed.
  */
 export function deal(clips, laneStyle) {
   const lane = laneStyle || {};
-  const mix = mixOf(lane), an = animsOf(lane);
+  const mix = mixOf(lane), an = animsOf(lane), fo = _fontsDealt(lane);
   const seed = Number.isInteger(lane.mixSeed) ? lane.mixSeed : 0;
   const list = (clips || []).filter((c) => c && c.name).sort((a, b) => (+a.start || 0) - (+b.start || 0));
-  let prevP = -1, prevA = -1, changed = 0;
+  let prevP = -1, prevA = -1, prevF = -1, changed = 0;
   for (const c of list) {
     const before = JSON.stringify(c.style || null);
     const st = Object.assign({}, c.style || {});
@@ -79,7 +86,8 @@ export function deal(clips, laneStyle) {
     };
     if (mix) { st.mixP = pick(mix.length, st.mixP, prevP, 1); prevP = st.mixP; } else delete st.mixP;
     if (an) { st.mixA = pick(an.length, st.mixA, prevA, 2); prevA = st.mixA; } else delete st.mixA;
-    if (mix || an) st.mixS = seed; else delete st.mixS;
+    if (fo) { st.mixF = pick(fo.length, st.mixF, prevF, 3); prevF = st.mixF; } else delete st.mixF;
+    if (mix || an || fo) st.mixS = seed; else delete st.mixS;
     if (Object.keys(st).length) c.style = st; else delete c.style;
     if (JSON.stringify(c.style || null) !== before) changed++;
   }

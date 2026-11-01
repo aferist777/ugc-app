@@ -17,7 +17,7 @@
    1920x1080) and `size` is the height of the font's LINE, the way the .ass format means it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { familyOf } from './fonts.js';
+import { familyOf, isShipped } from './fonts.js';
 
 // What the active word does (phase K3 draws all of them; K0 knows them):
 //   none     every word looks the same
@@ -63,7 +63,12 @@ export const LOOK_KEYS = ['font', 'bold', 'italic', 'casing', 'primary', 'second
   'shadowColor', 'backColor', 'backAlpha', 'shadowAlpha', 'outline', 'shadow', 'blur', 'scaleX', 'scaleY', 'spacing', 'borderStyle',
   'effect', 'appear'];
 export const MIX_MAX = 40;
-const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS'];
+// FONTS DEALT (phase V68 P4, the owner's (хп8), (хп10), (хп11), 2026-11-01): a lane's `fonts` - the families picked in the fonts
+// tab, any lane - draw its pages over the preset's own font (one: every page; several: each page the one it was dealt, `mixF`,
+// two in a row never the same - mix.js). Colours, edges and motion stay the preset's. A page dealt a font keeps the WIDTH it has
+// in the preset's font (`fitTo` of the resolved style - place.js drawnPage scales it); a page whose own style names a font is
+// the hand's and is left alone. None picked - the preset's font, the style stored and drawn exactly as before.
+const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -147,6 +152,17 @@ const RULES = {
   },
   mixSeed: NUM(0, 2147483647, true), mixS: NUM(0, 2147483647, true),
   mixP: NUM(0, MIX_MAX - 1, true), mixA: NUM(0, MIX_MAX - 1, true),
+  // (V68 P4) Shipped families only, each once; a name the app does not ship is dropped, not read as the fallback.
+  fonts: (v) => {
+    if (!Array.isArray(v)) return undefined;
+    const out = [];
+    for (const x of v.slice(0, MIX_MAX)) {
+      const f = isShipped(x) ? familyOf(x) : '';
+      if (f && !out.includes(f)) out.push(f);
+    }
+    return out.length ? out : undefined;
+  },
+  mixF: NUM(0, MIX_MAX - 1, true),
 };
 
 // ── A word marked to stand out ──────────────────────────────────────────────
@@ -212,9 +228,17 @@ export function resolveStyle(laneStyle, clipStyle) {
   const lane = _legacy(laneStyle || {});
   const own = clipStyle ? _legacy(clipStyle) : null;
   // A page dealt from its lane's mix (phase V49): the look and the animation it was dealt, under what it sets itself.
-  const st = Object.assign({}, DEF, lane, own ? dealtOf(lane, own) : null, own || {});
+  const dealt = own ? dealtOf(lane, own) : null;
+  // (V68 P4) A font dealt from the lane's `fonts` goes over the preset's (and the mix look's), under the page's own.
+  const fd = fontDealt(lane, own);
+  const st = Object.assign({}, DEF, lane, dealt, fd ? { font: fd } : null, own || {});
   delete st.karaoke;                       // read as `effect` above (_legacy)
   st.font = familyOf(st.font);             // a shipped font, whatever an old project named (K5)
+  if (fd && !(own && own.font != null)) {
+    // The font the page would have had - the one whose width it keeps (place.js drawnPage).
+    const before = familyOf(Object.assign({}, DEF, lane, dealt).font);
+    if (before !== st.font) st.fitTo = before;
+  }
   // The cut is the lane's (phase V30, block 4, (с43)): a Classic preset put on a line gives it the look only.
   st.cut = lane.cut === 'sentences' ? 'sentences' : 'pages';
   return st;
@@ -224,6 +248,26 @@ export function resolveStyle(laneStyle, clipStyle) {
 export const mixOf = (lane) => (lane && Array.isArray(lane.mix) && lane.mix.length >= 2 ? lane.mix : null);
 /** The lane's animations dealt - two pairs or more - else null. */
 export const animsOf = (lane) => (lane && Array.isArray(lane.anims) && lane.anims.length >= 2 ? lane.anims : null);
+/** The lane's fonts dealt (V68 P4) - one or more families - else null. */
+export const fontsOf = (lane) => (lane && Array.isArray(lane.fonts) && lane.fonts.length ? lane.fonts : null);
+
+/** The font a page wears from its lane's `fonts`: the one font, or the one it was dealt (`mixF`); null for none. */
+export function fontDealt(laneStyle, clipStyle) {
+  const fo = fontsOf(laneStyle);
+  if (!fo) return null;
+  if (fo.length === 1) return fo[0];
+  const k = clipStyle && clipStyle.mixF;
+  return Number.isInteger(k) && fo[k] ? fo[k] : null;
+}
+
+/** The style a page is CUT and measured by: the preset's font where a font is dealt over it (V68 P4) - else itself. */
+export function cutStyle(st) {
+  if (!st || !st.fitTo) return st;
+  const o = Object.assign({}, st, { font: st.fitTo });
+  delete o.fitTo;
+  return o;
+}
+
 /** A pair 'in|out' as { enter, leave }. */
 export const pairOf = (p) => { const [enter, leave] = String(p || '').split('|'); return { enter: enter || 'none', leave: leave || 'none' }; };
 

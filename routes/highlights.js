@@ -154,6 +154,11 @@ router.post('/highlights/:id/style', (req, res) => {
       const a = CUT.reanimate(keys, b.anims);
       return res.json({ success: true, n: a.keys.length, name: a.name });
     }
+    // (phase V68 P4) Fonts alone: put on the lanes as they are, not cut again (CUT.refont; [] - the presets' own fonts again).
+    if (!b.preset && Array.isArray(b.fonts)) {
+      const a = CUT.refont(keys, b.fonts);
+      return res.json({ success: true, n: a.keys.length });
+    }
     // (phase V49) Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.
     const out = CUT.restyle(keys, String(b.preset || ''), { mix: Array.isArray(b.mix) ? b.mix : undefined, anims: Array.isArray(b.anims) ? b.anims : undefined });
     res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });

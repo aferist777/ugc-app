@@ -187,6 +187,9 @@ export function fontOf(name) {
 /** The family a style's font is stored and drawn as. */
 export const familyOf = (name) => fontOf(name).family;
 
+/** Is this one of the shipped families itself (not an alias, not the fallback for an unknown name)? */
+export const isShipped = (name) => BY.has(String(name == null ? '' : name).trim().toLowerCase());
+
 // A letter of the Cyrillic alphabets (phase V42).
 const CYRILLIC = /[Ѐ-ӿ]/;
 
