@@ -2048,6 +2048,16 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-clear.is-bottom{top:calc(50% + 10px)}
 .mv3-wk-clear:hover{background:var(--danger); border-color:var(--danger)}
 .mv3-wk-clear[disabled]{opacity:.5; cursor:default}
+/* (phase V67 block 3) Back to the first look cast - a pill left of the upper half's cross (in its place when there is none). */
+.mv3-wk-back{
+  position:absolute; right:42px; top:10px; z-index:3; height:24px; max-width:60%; padding:0 10px; cursor:pointer;
+  border-radius:12px; border:1px solid rgba(255,255,255,.35); background:rgba(0,0,0,.55); color:#fff;
+  font:600 11px/22px var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  transition:background .12s var(--ease), border-color .12s var(--ease);
+}
+.mv3-wk-back.is-alone{right:10px}
+.mv3-wk-back:hover{background:var(--primary); border-color:var(--primary)}
+.mv3-wk-back[disabled]{opacity:.5; cursor:default}
 /* What can be done to the picture on the stage, in a row along its foot (V9): `crop` on a first
    frame, then `apply` and `cancel` while a selection is up. On the stage rather than in the panel,
    because the thing they act on is there. */

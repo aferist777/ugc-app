@@ -3706,6 +3706,8 @@ function _castVoiceOf(p) {
 
 const _projFull = p => ({
   ..._projSummary(p),
+  // (phase V67 block 3) The first look cast - the stage's way back to it (js/merge-v3/wk-setup.js _stageBack).
+  ...(_normLook(p.cast0) ? { cast0: _normLook(p.cast0) } : {}),
   castVoice: _castVoice(p),
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),

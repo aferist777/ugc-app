@@ -411,6 +411,30 @@ function _stage(chosen) {
   // the half, not of the picture: the picture moves under the zoom, the cross does not.
   const cast = _casting();
   _stageClears(!!(cast.characterId || cast.obrazImage), !!cast.locationImage);
+  _stageBack(!!(cast.characterId || cast.obrazImage));
+}
+
+// (phase V67 block 3, the owner 2026-11-01: "в поле превью на крошке сетап добавить кнопку сброса, чтобы вернуться к
+// изначальному персонажу"; (об9)) THE WAY BACK: the first look cast in this project (`cast0`, routes/scen3.js) - while another
+// look, or none, is cast and that look is still on its character's shelf. "↺ <name>" beside the upper half's cross; a press
+// is a cast like any (_cast): asked first when it would put work aside, and what was made for them comes back.
+function _backLook() {
+  const c0 = ((_ctx && _ctx.project) || {}).cast0;
+  if (!c0 || !c0.obrazId || String(_casting().obrazId || '') === String(c0.obrazId)) return null;
+  const ch = (_chars || []).find(c => String(c.id) === String(c0.characterId));
+  const look = ch && (ch.obrazy || []).find(o => String(o.id) === String(c0.obrazId));
+  return look ? { characterId: String(ch.id), characterName: ch.name, obrazId: String(look.id), obrazImage: look.image } : null;
+}
+function _stageBack(withCross) {
+  const back = _backLook();
+  const stage = document.getElementById('mv3-stage');
+  if (!back || !stage) return;
+  const b = _el('button', 'mv3-wk-back mv3-stage-ctl' + (withCross ? '' : ' is-alone'), '↺ ' + back.characterName);
+  b.type = 'button';
+  b.title = 'Back to ' + back.characterName + ' in the look this project began with - what was made for them comes back';
+  b.disabled = _saving;
+  b.addEventListener('click', (e) => { e.stopPropagation(); _cast(back, b); });
+  stage.appendChild(b);
 }
 
 // A half's cross: the choice is taken off the project; the frames and the reads already made stay what
