@@ -440,10 +440,18 @@ function _stageBack(withCross) {
 // A half's cross: the choice is taken off the project; the frames and the reads already made stay what
 // they are - they are files - and nothing else moves. (phase V67) "Who" through the cast route: nothing is put aside, and
 // the same look cast again finds the fields as they were.
-function _clearHalf(half) {
+function _clearHalf(half, anchor) {
   if (_saving) return;
-  if (half === 'top') _cast(null);
-  else _patch({ locationId: '', locationImage: '' });
+  if (half === 'top') {
+    // (phase V67, second round (а), the owner 2026-11-01: "при нажатии крестика, тоже давай предупреждение во всплывашке") Asked
+    // at the cross, as a change is; nothing is put aside, and the question says so.
+    const name = _casting().characterName || 'the character';
+    askChoice(anchor || document.querySelector('#mv3-stage') || document.body, 'Take ' + name + ' off this project?',
+      'Nothing is lost - the reads, frames and clips stay. Choose the same look again and everything is as it was.',
+      [{ label: 'take off', kind: 'yes', on: () => _cast(null) }, { label: 'cancel' }]);
+    return;
+  }
+  _patch({ locationId: '', locationImage: '' });
 }
 
 // THE BUTTONS THIS STEP LAYS OVER THE STAGE - a half's cross, the acts along a picture's foot - all
@@ -465,7 +473,7 @@ function _stageClears(top, bottom) {
     b.type = 'button';
     b.title = title;
     b.disabled = _saving;
-    b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half, b); });
     stage.appendChild(b);
   };
   if (top) mk('top', 'Take ' + (cast.characterName || 'the character') + ' off this project');
