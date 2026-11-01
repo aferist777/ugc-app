@@ -222,6 +222,3 @@ export function cssWeight(name, bold) {
   if (f.bold === 'style') return bold ? 700 : 400;
   return f.bold ? 700 : 400;
 }
-
-/** Every file, for a renderer that is handed fonts rather than a folder (JASSUB, K4). */
-export const fontFiles = () => FONTS.flatMap(f => Object.values(f.files)).map(x => FONT_DIR + x);

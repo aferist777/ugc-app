@@ -10,9 +10,9 @@
    STANDARD - what a kind starts with the first time and after "reset to standard" ((хп50); phase V69 P12 makes the table of
    every kind's own standards).
    MEMORY - ONE key, `mv3_hl_kinds_v1` (localStorage, mirrored to the library by storage-sync.js - Merge and Home alike):
-   { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims } } } - the kind chosen last and each kind's last
-   settings ((хп19), (хп46)). The popup's memory of before (mv3_hl_ask_v1, mv3_hl_caption_picks_v1, mv3_hl_kind_style_v1,
-   mv3_hl_music_v1) is carried over once into every kind - but not the kind itself, so the first opening of this popup shows
+   { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims, fonts } } } - the kind chosen last and each kind's last
+   settings ((хп19), (хп46); `fonts` since V68 P4 - a kind that has none yet takes its standard, no font: each style's own).
+   The popup's memory of before (mv3_hl_ask_v1, mv3_hl_caption_picks_v1, mv3_hl_kind_style_v1, mv3_hl_music_v1) is carried over once into every kind - but not the kind itself, so the first opening of this popup shows
    every kind's words ((хп49)); the old keys are left as they are.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -60,21 +60,21 @@ export const ABOUT = {
   },
 };
 
-// (хп50) Until phase V69 P12: every kind 30-60 s (fragmentation 1-2 min), 5 fragments, no music, no animations; the style the
+// (хп50) Until phase V69 P12: every kind 30-60 s (fragmentation 1-2 min), 5 fragments, no music, no animations, no fonts; the style the
 // app gives the kind today (hl-style.js FIRST) - podcast and fragmentation Podcast Viral, documentary Classic White, auto
 // "by the video".
 export const STANDARD = {
-  auto: { length: '30-60', count: 5, moods: [], styles: [BY_VIDEO], anims: [] },
-  podcast: { length: '30-60', count: 5, moods: [], styles: ['cp-podcast-viral'], anims: [] },
-  documentary: { length: '30-60', count: 5, moods: [], styles: ['cl-white'], anims: [] },
-  fragmentation: { length: 'p1-2', count: 5, moods: [], styles: ['cp-podcast-viral'], anims: [] },
+  auto: { length: '30-60', count: 5, moods: [], styles: [BY_VIDEO], anims: [], fonts: [] },
+  podcast: { length: '30-60', count: 5, moods: [], styles: ['cp-podcast-viral'], anims: [], fonts: [] },
+  documentary: { length: '30-60', count: 5, moods: [], styles: ['cl-white'], anims: [], fonts: [] },
+  fragmentation: { length: 'p1-2', count: 5, moods: [], styles: ['cp-podcast-viral'], anims: [], fonts: [] },
 };
 const FIRST_STYLE = { podcast: 'cp-podcast-viral', documentary: 'cl-white', fragmentation: 'cp-podcast-viral' };
 /** A kind's standard settings - a kind with none here (a new one before P12) the first length, 5, nothing else. */
 export function standardOf(kind, lengths) {
   const s = STANDARD[kind];
-  if (s) return { ...s, moods: s.moods.slice(), styles: s.styles.slice(), anims: s.anims.slice() };
-  return { length: Object.keys(lengths || {})[0] || '', count: 5, moods: [], styles: [], anims: [] };
+  if (s) return { ...s, moods: s.moods.slice(), styles: s.styles.slice(), anims: s.anims.slice(), fonts: s.fonts.slice() };
+  return { length: Object.keys(lengths || {})[0] || '', count: 5, moods: [], styles: [], anims: [], fonts: [] };
 }
 
 // ── The memory ──────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export function memory() {
 }
 function _write() { try { localStorage.setItem(LS, JSON.stringify(_mem)); } catch (e) { /* a private window */ } }
 
-/** What kind `kind` remembers, over its standards: { length, count, moods, styles, anims }. */
+/** What kind `kind` remembers, over its standards: { length, count, moods, styles, anims, fonts }. */
 export function settingsOf(kind, lengths, counts) {
   const std = standardOf(kind, lengths);
   const r = _obj(memory().kinds[kind]) || {};
@@ -129,13 +129,15 @@ export function settingsOf(kind, lengths, counts) {
     moods: Array.isArray(r.moods) ? r.moods.map(String) : std.moods,
     styles: Array.isArray(r.styles) ? r.styles.map(String) : std.styles,
     anims: Array.isArray(r.anims) ? r.anims.map(String) : std.anims,
+    fonts: Array.isArray(r.fonts) ? r.fonts.map(String) : std.fonts,
   };
 }
 /** Keep `kind` as the one chosen last, with its settings `s`. */
 export function keep(kind, s) {
   const m = memory();
   m.kind = String(kind || '');
-  if (kind && s) m.kinds[kind] = { length: s.length, count: s.count, moods: (s.moods || []).slice(), styles: (s.styles || []).slice(), anims: (s.anims || []).slice() };
+  if (kind && s) m.kinds[kind] = { length: s.length, count: s.count, moods: (s.moods || []).slice(), styles: (s.styles || []).slice(), anims: (s.anims || []).slice(),
+    fonts: (s.fonts || []).slice() };
   _write();
 }
 /** The kind chosen last ('' - none yet: the very first opening, (хп35), (хп49)). */

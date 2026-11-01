@@ -40,7 +40,7 @@ import { openPopup, closePopup } from './hl-popup.js';
 import * as Layers from '../layers.js';
 import { presetName, presetStyle, editedKeys, keepMotion } from '../captions/preset-use.js';
 import { LOOK_KEYS, mixOf, pairOf } from '../captions/style.js';
-import { deal, newSeed } from '../captions/mix.js';
+import { deal, newSeed, redealFonts } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
@@ -136,7 +136,7 @@ function _crumbs() {
   const sig = _multi ? _ticked().map((f) => f.n + ':' + ((_capOfFrag(f) || {}).preset || '')).join(',') : '';
   // (V49) Other fragments ticked: what was picked with Shift for the ones before is let go.
   const ticks = _ticked().map((f) => f.n).join(',');
-  if (ticks !== _tickSig) { _tickSig = ticks; _hlMix = []; _hlAnims = []; }
+  if (ticks !== _tickSig) { _tickSig = ticks; _hlMix = []; _hlAnims = []; _hlFonts = []; }
   if (sig !== _multiSig) { _multiSig = sig; Views.altChanged(); }
 }
 let _multiSig = '';
@@ -167,6 +167,7 @@ let _capShown = '';
 let _multi = false;
 let _hlMix = [];
 let _hlAnims = [];
+let _hlFonts = [];          // (V68 P4) the fonts put on them - the fonts tab, one or several with Shift
 const _toggle = (list, x, shift) => (!shift ? [x] : list.includes(x) ? list.filter((y) => y !== x) : list.concat([x]));
 const _ticked = () => _frags().filter((f) => _checked.has(f.n) && f.state === 'ready' && f.key);
 const _multiWanted = () => !!_pid && _ticked().length > 0 && !(_checked.size === 1 && _checked.has(_openN()));
@@ -193,7 +194,7 @@ Views.captionsAlt({
       + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
     const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
     return { preset: ps.size === 1 ? [...ps][0] : '', presets: _hlMix.length > 1 ? _hlMix.slice() : null, edited: false,
-      apply: _restyle, readOnly: _applying, anims: _hlAnims.slice(), anim: _reanimate };
+      apply: _restyle, readOnly: _applying, anims: _hlAnims.slice(), anim: _reanimate, fonts: _hlFonts.slice(), font: _refont };
   },
 });
 
@@ -253,6 +254,23 @@ async function _reanimate(pair, o) {
   }
   await _toServer(rest, open, { anims: _hlAnims.length ? _hlAnims.slice() : ['at-once|none'] },
     'animation: ' + (_hlAnims.length > 1 ? _hlAnims.length + ' pairs' : _hlAnims[0] || 'none'));
+}
+
+// (V68 P4, the owner's (хп12)) The fonts tab on the ticked fragments: one font, or several with Shift dealt anew - each its own deal;
+// none, the presets' own fonts again. The lanes are not cut again (a page keeps its preset's width).
+async function _refont(list) {
+  const ticked = _ticked();
+  if (!ticked.length || _applying) return;
+  _hlFonts = Array.isArray(list) ? list.slice() : [];
+  const open = ticked.find((f) => f.n === _openN());
+  const rest = ticked.filter((f) => f !== open);
+  if (open) {
+    const lane = _openLane();
+    const patch = { fonts: _hlFonts.slice() };
+    if (_hlFonts.length >= 2 && !Number.isInteger(lane && lane.style && lane.style.mixSeed)) patch.mixSeed = newSeed();
+    if (lane) setSubsStyle(lane.id, patch, false, (t) => redealFonts(t.clips, t.style));
+  }
+  await _toServer(rest, open, { fonts: _hlFonts.slice() }, 'fonts: ' + (_hlFonts.length > 1 ? _hlFonts.length + ' fonts' : _hlFonts[0] || 'the presets\' own'));
 }
 
 function _show(on) {

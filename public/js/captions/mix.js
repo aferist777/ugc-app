@@ -64,6 +64,20 @@ function _rnd(seed, cs, salt) {
 }
 
 /**
+ * (V68 P4) The fonts dealt ANEW - after a press on the fonts tab: every page's font picked again from the lane's `fonts` (by the
+ * seed and its moment, so the same press twice deals the same), its preset and animation kept as they were dealt.
+ */
+export function redealFonts(clips, laneStyle) {
+  for (const c of (clips || [])) {
+    if (!c || !c.style || c.style.mixF === undefined) continue;
+    const st = Object.assign({}, c.style);
+    delete st.mixF;
+    if (Object.keys(st).length) c.style = st; else delete c.style;
+  }
+  return deal(clips, laneStyle);
+}
+
+/**
  * DEAL the lane's mix onto its pages (`clips` - the lane's, changed in place): every page with words, in time order, an entry of
  * `mix`, a pair of `anims` and one of `fonts` (see the header). `laneStyle` - the lane's style as it is now. Returns how many pages changed.
  */

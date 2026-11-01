@@ -13,10 +13,11 @@
      (хп35), (хп48): everything under the kinds is blurred and "find moments" waits), the chosen one's longer words after;
      the length and the count as buttons ((хп18); fragmentation has no count); "reset to standard"; music - the moods as
      buttons (hl-music.js).
-   - RIGHT: the captions - the tabs presets · animation (P4 adds fonts), under them what is chosen OF THE OPEN TAB (the owner's
-     check: its presets, or its animations) - the set's name on top, a small button each with ✕ under it - a press shows the tile
-     in its group, outlined (hl-style.js reveal); the tiles under that.
-   EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations - hl-kinds.js; switching the kind
+   - RIGHT: the captions - the tabs presets · animation · fonts (P4), under them what is chosen OF THE OPEN TAB (the owner's
+     check: its presets, its animations, its fonts - merge-v3/font-tiles.js; none, each preset's own font, (хп10)) - the set's
+     name on top, a small button each with ✕ under it - a press shows the tile in its group, outlined (hl-style.js reveal); the
+     tiles under that.
+   EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations, fonts - hl-kinds.js; switching the kind
    brings its own back.
 
    THREE WAYS IN (х1): a link, a file of this computer - its path handed over by the app's own window (desktop/preload.js
@@ -33,6 +34,7 @@ import { openFrame, GEN_SIZE } from '../gen-window.js';
 import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } from './hl-style.js';
 import { moodPicker } from './hl-music.js';
 import * as KIND from './hl-kinds.js';
+import { fontPicker, fontLabel } from './font-tiles.js';
 
 const GEOM = Object.freeze({ key: 'highlights', resize: true, move: true, keepSize: true, keepPos: true });
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -74,7 +76,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     // (V68 P3) '' - no kind chosen yet: the very first opening (хп35), (хп48).
     kind: '', length: '', count: 5, moods: [],
     // (phase V49) The styles chosen - one, or several with Shift (пр25) - and the animations (пр26); `style` the first of them.
-    style: '', styles: [], anims: [], capTab: 'presets', price: null, busy: false, said: '', err: false,
+    style: '', styles: [], anims: [], fonts: [], capTab: 'presets', price: null, busy: false, said: '', err: false,
     // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
     tracks: [], audio: null, tracksFor: '',
   };
@@ -241,21 +243,28 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   };
   tabBtn('presets', 'presets', 'The style of the captions - one, or several with Shift: each page one of them');
   const animTab = tabBtn('anim', 'animation', 'How a page comes in and goes out - after a style is chosen');
+  // (V68 P4) The fonts over the presets' own: one, or several with Shift - each page one of them, as wide as in its preset's font.
+  const fontTab = tabBtn('fonts', 'fonts', 'The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen');
   R.appendChild(capTabs);
   // (V68 P3, the owner's second round: "писать выбранные, прям под открытой вкладкой") What is chosen, a row a tab.
   const chosen = _el('div', 'mv3-hlp-chosen');
   R.appendChild(chosen);
   const capBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap is-missing');
   const animBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap mv3-hlp-anim');
-  R.append(capBox, animBox);
+  const fontBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap mv3-hlp-fonts');
+  R.append(capBox, animBox, fontBox);
   const picker = stylePicker(capBox, { kind: '', onPick: (ids) => {
     st.styles = ids;
     st.style = ids[0] || '';
-    if (!ids.length && st.capTab === 'anim') st.capTab = 'presets';
+    if (!ids.length && st.capTab !== 'presets') st.capTab = 'presets';
     keep();
     paint();
   } });
   const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keep(); paint(); } });
+  const fonts = fontPicker(fontBox, {
+    note: 'The letters of the captions - one font for every page, or several with Shift: each page one of them. Colours, outline and motion stay the style\'s; a page keeps the width it has in the style\'s own font.',
+    onPick: (list) => { st.fonts = list; keep(); paint(); },
+  });
 
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
@@ -294,6 +303,9 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     st.style = st.styles[0] || '';
     anim.set(s.anims || []);
     st.anims = anim.getAll();
+    fonts.set(s.fonts || []);
+    st.fonts = fonts.getAll();
+    fonts.openFirst();
     if (!st.styles.length) st.capTab = 'presets';
     picker.recommend(st.kind);
     picker.openFirst();
@@ -307,7 +319,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   }
   function keep() {
     if (!st.kind) return;
-    KIND.keep(st.kind, { length: st.length, count: st.count, moods: st.moods, styles: st.styles, anims: st.anims });
+    KIND.keep(st.kind, { length: st.length, count: st.count, moods: st.moods, styles: st.styles, anims: st.anims, fonts: st.fonts });
   }
 
   function takeFile(f) {
@@ -419,6 +431,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   }
   function paintChosen() {
     chosen.textContent = '';
+    if (st.capTab === 'fonts') {
+      chosen.appendChild(chosenSet('fonts', st.fonts.map((f) => [f, fontLabel(f) || f]),
+        { text: 'none - each style\'s own font' },
+        (f) => fonts.reveal(f),
+        (f) => { fonts.set(st.fonts.filter((x) => x !== f)); st.fonts = fonts.getAll(); keep(); paint(); }));
+      return;
+    }
     if (st.capTab === 'anim') {
       chosen.appendChild(chosenSet('animations', st.anims.map((p) => [p, pairName(p) || p]),
         { text: 'none - pages come and go as the style has them' },
@@ -477,10 +496,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     // The captions: the animations' tab open once a style is chosen (V49).
     capBox.classList.toggle('is-missing', !st.style && !locked);
     animTab.disabled = !st.styles.length;
+    fontTab.disabled = !st.styles.length;
     if (!st.styles.length) st.capTab = 'presets';
     for (const b of capTabs.children) b.classList.toggle('is-on', b.dataset.tab === st.capTab);
     capBox.hidden = st.capTab !== 'presets';
     animBox.hidden = st.capTab !== 'anim';
+    fontBox.hidden = st.capTab !== 'fonts';
+    fonts.shown(!fontBox.hidden && !locked);
     paintChosen();
     // Who hears it, and what it costs.
     const p = st.price;
@@ -524,6 +546,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     }
     // (V49, (пр26)) The animations: one for every page, or several dealt.
     if (st.anims.length) spec.style.anims = st.anims.slice();
+    // (V68 P4, (хп8)) The fonts: one for every page, or several dealt; none - each style's own.
+    if (st.fonts.length) spec.style.fonts = st.fonts.slice();
     // (V43, (ё18)) The sound track chosen, when the video has more than one.
     if (st.audio != null && st.tracks.length > 1 && (st.from === 'file' || st.from === 'source')) {
       spec.audio = st.audio;

@@ -113,9 +113,15 @@ function _fitted(c, st, subs, w, dur) {
     const around = edges ? 0 : 2 * edgeOf(z) + Math.max(0, +z.shadow || 0);
     return Math.max(0, ...out.lines.map((l) => (String(l).length ? m.text(l) - around : 0)));
   };
-  const wr = widest(ref, at), wc = widest(st, at);
-  if (!(wr > 0 && wc > 0)) return out;
-  const k = Math.max(FIT_MIN, Math.min(FIT_MAX, wr / wc));
+  const wr = widest(ref, at);
+  if (!(wr > 0 && widest(st, at) > 0)) return out;
+  // The letters grow with the size, a style's spacing does not: the size found in a few steps, each from the width it gives.
+  let k = 1;
+  for (let step = 0; step < 4; step++) {
+    const wc = widest(st, at * k);
+    if (!(wc > 0) || Math.abs(wc - wr) < 0.5) break;
+    k = Math.max(FIT_MIN, Math.min(FIT_MAX, k * wr / wc));
+  }
   let size = Math.max(8, Math.round(at * k));
   const lim = LINE_MAX * w;
   for (let guard = 0; guard < 200 && size > 8 && widest(st, size, true) > lim; guard++) size--;

@@ -243,6 +243,10 @@
 .mv3-hlp-style.is-missing{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset}
 .mv3-hls-cats{flex:0 0 auto; margin-bottom:7px}
 .mv3-hlp-style .mv3-hls-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
+/* (V68 P4) The fonts tab: its line, the groups, the tiles (merge-v3/font-tiles.js) */
+.mv3-hlp-fonts .mv3-cap-note{flex:0 0 auto; margin-bottom:6px}
+.mv3-hlp-fonts .mv3-fnt-cats{flex:0 0 auto; margin-bottom:7px}
+.mv3-hlp-fonts .mv3-fnt-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
 /* (V68 P3) A chosen one pressed in its row: its tile outlined in gold */
 .mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold)}
 .mv3-hlp-foot{flex:0 0 auto}

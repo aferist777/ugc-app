@@ -82,6 +82,15 @@
 .mv3-cap-ed{ flex:0 0 auto; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--primary) }
 .mv3-cap-ed[hidden]{ display:none }
 .mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
+/* The fonts tab (phase V68 P4, merge-v3/font-tiles.js): the font drawn - two words, white with a black outline, each as wide
+   as the square allows. "lat" by the name: no Russian letters, a Russian line in its twin. */
+.mv3-fnt-box{ flex-direction:column; gap:3px; padding:0 4px }
+.mv3-fnt-w{
+  display:block; max-width:100%; white-space:nowrap; line-height:1.15; color:#fff;
+  -webkit-text-stroke:2px #000; paint-order:stroke fill;
+}
+.mv3-fnt-w.is-ru{ opacity:.92 }
+.mv3-fnt-tw{ flex:0 0 auto; font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); opacity:.8 }
 
 /* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
 .mv3-cap-head{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 6px }

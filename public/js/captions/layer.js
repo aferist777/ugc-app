@@ -11,11 +11,16 @@
    layer is a second canvas laid exactly over the FRAME inside the preview's stage, clicks passing
    through it, and the preview tells it the time (manualRender) whenever it paints. Until the worker is
    up, or if it cannot start, the preview's own painter (js/merge-v3/subs-b.js) draws instead.
+
+   ONLY THE FONTS IN USE (phase V68 P4): with 101 families shipped (33 MB) the worker is no longer handed every file at start.
+   It gets the fonts the .ass names in its Style rows (fontsOf below - ass.js writes no \fn, so the styles are all of them) and
+   PT Sans, which draws the letters a font lacks; a new .ass that names another font has its files added to the worker
+   (`addFonts`) before it is drawn. The render's libass reads the whole folder (fontsdir) - the same files either way.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { buildAss } from './ass.js';
 import { captionLanes, renderFrame } from './style.js';
-import { fontFiles } from './fonts.js';
+import { FONTS, FONT_DIR, fontOf } from './fonts.js';
 
 const BASE = '/vendor/jassub/';
 const abs = (u) => new URL(u, location.href).href;
@@ -23,6 +28,24 @@ const EMPTY = (w, h) => '[Script Info]\nScriptType: v4.00+\nPlayResX: ' + w + '\
   + 'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n'
   + 'Style: Default,Liberation Sans,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\n'
   + 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n';
+
+// The font files an .ass needs: its Style rows' families at their Bold flag - and PT Sans, the letters' fallback.
+const _fileOf = (family, bold) => {
+  const f = fontOf(family);
+  return FONT_DIR + (bold && f.files[700] ? f.files[700] : f.files[400] || Object.values(f.files)[0]);
+};
+export function fontsOf(ass) {
+  const out = new Set([FONT_DIR + 'PT_Sans-Web-Regular.ttf', FONT_DIR + 'PT_Sans-Web-Bold.ttf']);
+  for (const line of String(ass || '').split('\n')) {
+    if (!line.startsWith('Style: ')) continue;
+    const f = line.slice(7).split(',');
+    if (f.length > 7) out.add(_fileOf(f[1], f[7].trim() === '-1'));
+  }
+  return [...out];
+}
+const _known = new Set(FONTS.flatMap((f) => Object.values(f.files)).map((x) => FONT_DIR + x));
+const _given = new Set();       // the files the worker has been handed
+let _queue = Promise.resolve(); // tracks set one after another, each after its fonts
 
 let _jas = null;
 let _canvas = null;
@@ -65,7 +88,7 @@ async function _start() {
       subContent: _ass || EMPTY(_frame.w, _frame.h),
       workerUrl: abs(BASE + 'worker/worker.js'),
       wasmUrl: wasm, modernWasmUrl: wasm,
-      fonts: fontFiles().map(abs),
+      fonts: (() => { const f = fontsOf(_ass).filter((u) => _known.has(u)); f.forEach((u) => _given.add(u)); return f.map(abs); })(),
       queryFonts: false,
       // What a font lacks (Liberation Sans and Russo One have no ₽) is drawn in PT Sans, which has it -
       // the render's libass borrows it from Windows (Arial) for the same letters.
@@ -75,7 +98,7 @@ async function _start() {
     });
     await _jas.ready;
     _state = 'ready';
-    if (_ass) await _jas.renderer.setTrack(_ass);
+    if (_ass) await _setTrack(_ass);
     _draw(true);
     if (_onReady) _onReady();
   } catch (e) {
@@ -126,7 +149,21 @@ function _push(ass) {
   if (ass === _ass) return;
   _ass = ass;
   if (_state !== 'ready') return;
-  _jas.renderer.setTrack(ass).then(() => _draw(true)).catch(() => {});
+  _setTrack(ass).then(() => { if (ass === _ass) _draw(true); }).catch(() => {});
+}
+
+// The track set after the files it names are in the worker - in order: a later .ass never overtakes an earlier one.
+function _setTrack(ass) {
+  _queue = _queue.then(async () => {
+    if (ass !== _ass) return;
+    const need = fontsOf(ass).filter((u) => _known.has(u) && !_given.has(u));
+    if (need.length) {
+      need.forEach((u) => _given.add(u));
+      try { await _jas.renderer.addFonts(need.map(abs)); } catch (e) { need.forEach((u) => _given.delete(u)); }
+    }
+    if (ass === _ass) await _jas.renderer.setTrack(ass);
+  }).catch(() => {});
+  return _queue;
 }
 
 /** The frame at this moment of the film. */

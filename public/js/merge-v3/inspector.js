@@ -45,8 +45,8 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, LOOK_KEYS } from '../captions/style.js';
-import { deal, newSeed, withoutRefs, refsOf } from '../captions/mix.js';
+import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS } from '../captions/style.js';
+import { deal, needsDeal, redealFonts, newSeed, withoutRefs, refsOf } from '../captions/mix.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
@@ -904,6 +904,7 @@ function _behind(v, st) {
 // (V49): its pair 'in|out'.
 let _capApply = null;
 let _capAnim = null;
+let _capFont = null;
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
 // a place - and differ in exactly one way: where the words come from. So the style half is
@@ -1043,7 +1044,9 @@ function _blankWordsTrack(host, track) {
   // A subtitle lane's In and Out are above, under Lines.
   const marks = (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k));
   const rowsO = { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, motion: false, marks,
-    pages: () => (track.clips || []).map(c => ({ track, clip: c })) };
+    pages: () => (track.clips || []).map(c => ({ track, clip: c })), laneFonts: fontsOf(raw) };
+  // (V68 P4) The fonts chosen in the fonts tab, said with a ✕ that takes them all away - the preset's own font again.
+  if (fontsOf(raw)) _fontsRow(host, track, raw);
   if (mix) {
     // Several presets (пр22): the common rows - Where, Nudge, Size - and a section per preset, closed until opened.
     _placeRows(host, st, set, rowsO);
@@ -1070,7 +1073,30 @@ function _blankWordsTrack(host, track) {
   };
   return { preset: mix ? '' : (raw.preset || ''), edited: !mix && !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
     presets: mix ? mix.map(e => e.preset).filter(Boolean) : null, editedIds: mix ? mix.filter(_entryEdited).map(e => e.preset) : null,
-    kind: isSubs ? 'subs' : 'text', anims: anims ? anims.slice() : [pairNow(st)], anim };
+    kind: isSubs ? 'subs' : 'text', anims: anims ? anims.slice() : [pairNow(st)], anim,
+    fonts: fontsOf(raw) ? fontsOf(raw).slice() : [], font: (list) => _laneFonts(track, raw, list) };
+}
+
+// ── The fonts of a lane (phase V68 P4, the owner's (хп8), (хп12), (хп47)) ──
+// The fonts tab's choice on the lane - subtitles or text: one font, every page's; several (Shift), dealt - each page one of them,
+// two in a row never the same (captions/mix.js), its seed the lane's (a new one only when it has none); none, the preset's own.
+// The lane is not cut again: a page keeps the width it has in its preset's font (captions/place.js). One step to undo.
+// The row that says them: their names, the tab named, ✕ - none again.
+function _fontsRow(host, track, raw) {
+  const list = fontsOf(raw);
+  const names = list.map(f => (CAP_FONTS.find(x => x.family === f) || { label: f }).label);
+  const said = _el('span', 'mv3-c-fonts', names.join(', '));
+  said.title = list.length > 1 ? 'Each page one of them, two in a row never the same - the fonts tab; each page as wide as in the preset\'s font'
+    : 'Every page in it - the fonts tab; each page as wide as in the preset\'s font';
+  const x = C.button('✕', () => _laneFonts(track, raw, []), { title: 'Takes the fonts away - the preset\'s own font again' });
+  x.disabled = !Store.canEdit();
+  host.appendChild(C.row(list.length > 1 ? list.length + ' fonts' : 'Font tab', C.pair(said, x)));
+}
+function _laneFonts(track, raw, list) {
+  const fonts = Array.isArray(list) ? list.slice() : [];
+  const patch = { fonts };
+  if (fonts.length >= 2 && !Number.isInteger(raw.mixSeed)) patch.mixSeed = newSeed();
+  setSubsStyleB(track.id, patch, false, (t) => { if (needsDeal(t)) redealFonts(t.clips, t.style); });
 }
 
 // ── Several presets and animations on the subtitle lane (phase V49, point 8c; the owner's (пр17), (пр21)-(пр24)) ──
@@ -1260,7 +1286,10 @@ function _placeRows(host, st, set, o) {
 function _lookRows(host, st, set, o) {
   host.appendChild(_el('div', 'mv3-c-sep'));
   // Bold is a choice only where the family ships both weights; a Black or a Bold file is what it is.
-  const fontSel = C.select(FONTS, st.font, (v) => set({ font: v }));
+  // (V68 P4) Under the fonts of the fonts tab the row shows the preset's own font (the one a page keeps the width of); a font
+  // chosen here is the lane's one font again - the tab's go.
+  const dealt = !!o.laneFonts;
+  const fontSel = C.select(FONTS, dealt ? (st.fitTo || st.font) : st.font, (v) => set(dealt ? { font: v, fonts: [] } : { font: v }));
   const marks = [];
   if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'));
   marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), 'Italic'));
@@ -1437,7 +1466,9 @@ function _renderCaptions(host, items) {
   const pairs = new Set(items.map(x => pairNow(styleOf(x.track, fmt, x.clip))));
   return { preset: common, edited: anyEdited, apply: wear, readOnly: !Store.canEdit(),
     kind: items.every(x => x.track.kind === 'text') ? 'text' : 'subs',
-    anims: pairs.size === 1 ? [...pairs] : [], anim: (pair) => setCapStyleB(ids, pairOf(pair), { cut: false }) };
+    anims: pairs.size === 1 ? [...pairs] : [], anim: (pair) => setCapStyleB(ids, pairOf(pair), { cut: false }),
+    // (V68 P4) The fonts tab on lines: the font pressed is each line's own, as the Font row above puts it.
+    fonts: _ownFonts(items.map(x => x.clip)), font: (list, o) => { if (o && o.family) set({ font: o.family }); } };
 }
 
 // A caption: words and when. No length field, the same as every other clip here - the edges
@@ -1556,7 +1587,15 @@ function _blankCaption(host, track, clip) {
   const s = own ? clip.style : null;
   return { preset: s ? (s.preset || '') : (drawn.preset || ''), edited: !!(s && s.preset) && editedKeys(withoutRefs(s)).length > 0,
     apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs',
-    anims: [pairNow(styleOf(track, fmt, clip))], anim: (pair) => setCapStyleB([clip.id], pairOf(pair), { cut: false }) };
+    anims: [pairNow(styleOf(track, fmt, clip))], anim: (pair) => setCapStyleB([clip.id], pairOf(pair), { cut: false }),
+    fonts: _ownFonts([clip]),
+    font: (list, o) => { if (o && o.family) setCapStyleB([clip.id], { font: o.family }, { cut: heard }); } };
+}
+
+// (V68 P4) The font lines wear by their own style - lit on the fonts tab when they all wear the same one.
+function _ownFonts(clips) {
+  const f = new Set(clips.map(c => (c && c.style && c.style.font) || ''));
+  return f.size === 1 && !f.has('') ? [...f] : [];
 }
 
 // NO HEADER, and no description of the lane under it. Which lane is open is visible on the
@@ -1669,6 +1708,7 @@ function render(force) {
   const on = gestureB() ? was : (!!cap && !_narrow());
   _capApply = cap ? cap.apply : null;
   _capAnim = cap && cap.anim ? cap.anim : null;
+  _capFont = cap && cap.font ? cap.font : null;
   if (on && cap) CapView.show(cap); else if (!on) CapView.hide();
   Views.setCaptions(on);
   // The timeline has just shrunk under the pick: the picked lane back in view, the lit tile too.
@@ -1757,6 +1797,7 @@ export function initInspector() {
   CapView.onApply((id, o) => { if (_capApply) _capApply(id, o); });
   // A pair of In and Out pressed (V49) - on what is picked; with Shift, one more dealt.
   CapView.onAnim((pair, o) => { if (_capAnim) _capAnim(pair, o); });
+  CapView.onFonts((list, o) => { if (_capFont) _capFont(list, o); });
   // The person's own presets (phase V30, block 5): read once, and a change paints the strip - "based on" a preset of theirs
   // is said once the list is known, and goes when the preset is deleted.
   MyPresets.onChange(() => render());

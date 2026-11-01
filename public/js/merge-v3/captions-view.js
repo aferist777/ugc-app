@@ -40,6 +40,11 @@
    pair it wears is lit. With Shift a press picks several (the owner's (пр17), (пр21)): the inspector deals them out, and every
    preset and pair the pick wears is lit.
 
+   THE FONTS (phase V68 P4, the owner's (хп12), (хп47)): a tab `fonts` between `animation` and `text`, on both kinds of lane - the
+   fonts drawn as tiles (merge-v3/font-tiles.js, one module with the highlights popup). On a lane a press is its one font, Shift
+   several dealt over its preset's (each page as wide as in the preset's font); on lines a press is their own font. The fonts
+   the pick wears are lit (`fonts` of what show() is told).
+
    Which view shows, the header and the room are lib-views.js's; this only draws the tiles and the tabs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -48,6 +53,7 @@ import { TEXT_PRESETS, TEXT_CATEGORIES } from '../captions/presets-text.js';
 import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as Doc from './caption-doc.js';
+import { fontPicker } from './font-tiles.js';
 import * as MyPresets from './my-presets.js';
 import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
@@ -58,6 +64,7 @@ const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
 const LS_TAB = 'mv3_cap_tab_v1';
 const TABS = [['presets', 'presets', 'The preset styles - a press applies one to what is picked'],
   ['anim', 'animation', 'How a page comes in and goes out - a press puts a pair on what is picked'],
+  ['fonts', 'fonts', 'The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them'],
   ['text', 'text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
 const TAB_IDS = TABS.map((t) => t[0]);
 // The animations' tiles (V49): the pair's In -> Out on plain white letters; until the still is made, its name in these.
@@ -90,6 +97,8 @@ const _kindOf = (p) => (p && p.kind === 'text' ? 'text' : 'subs');
 let _tab = TAB_IDS.includes(_store(LS_TAB, 'presets')) ? _store(LS_TAB, 'presets') : 'presets';
 let _apply = null;
 let _applyAnim = null;
+let _applyFonts = null;
+let _fonts = null;                 // the fonts tab's picker (V68 P4)
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
 let _reading = false;
 
@@ -97,6 +106,8 @@ let _reading = false;
 export function onApply(fn) { _apply = typeof fn === 'function' ? fn : null; }
 /** What a press on an animation's tile does (V49): fn(pair 'in|out'). */
 export function onAnim(fn) { _applyAnim = typeof fn === 'function' ? fn : null; }
+/** What a press on a font's tile does (V68 P4): fn(families chosen, { shift, family }). */
+export function onFonts(fn) { _applyFonts = typeof fn === 'function' ? fn : null; }
 
 // Every tile of both kinds, and one by the id its files are named by.
 const _allTiles = () => [..._tiles.values(), ..._anims.values()];
@@ -165,10 +176,17 @@ function _build() {
     _anims.set(p.id, t);
   }
   anim.append(atop, agrid);
+  // The fonts (V68 P4): what a press does is the inspector's.
+  const fonts = _el('div', 'mv3-cap-pane mv3-cap-fonts');
+  const ftop = _el('div', 'mv3-cap-top');
+  fonts.appendChild(ftop);
+  _fonts = fontPicker(fonts, { onPick: (list, o) => { if (_applyFonts) _applyFonts(list, o); } });
+  ftop.appendChild(_el('div', 'mv3-cap-note', 'The letters over the preset\'s own: on a lane one font for every page, or several with '
+    + 'Shift - each page one of them, as wide as in the preset\'s font; colours, outline and motion stay the preset\'s.'));
   const text = _el('div', 'mv3-cap-pane');
-  host.append(tabs, presets, anim, text);
+  host.append(tabs, presets, anim, fonts, text);
   Doc.mount(text);
-  _ui = { host, tabs, presets, anim, agrid, text, top, chips, status, grid, empty, firstApp: grid.children[1] || null };
+  _ui = { host, tabs, presets, anim, agrid, fonts, text, top, chips, status, grid, empty, firstApp: grid.children[1] || null };
   _syncMine();
   _paintCat();
   _paintTab();
@@ -321,6 +339,7 @@ function _light() {
   }
   const pairs = new Set(t.anims || []);
   for (const [pair, x] of _anims) x.btn.classList.toggle('is-on', pairs.has(pair));
+  if (_fonts) _fonts.set(t.fonts || []);
 }
 
 // ── The person's tile's menu: Rename / Delete (с47 - at once) ───────────────
@@ -407,7 +426,9 @@ function _paintTab() {
   }
   _ui.presets.hidden = _tab !== 'presets';
   _ui.anim.hidden = _tab !== 'anim';
+  _ui.fonts.hidden = _tab !== 'fonts';
   _ui.text.hidden = _tab !== 'text';
+  if (_fonts) _fonts.shown(_shown && _tab === 'fonts');
 }
 
 function _setCat(id) {
@@ -499,6 +520,7 @@ export function show(target) {
   _light();
   _ui.host.classList.toggle('is-ro', !!t.readOnly);
   Doc.setShown(_tab === 'text');
+  if (_fonts) _fonts.shown(_tab === 'fonts');
   if (!_asked) { _asked = true; _read(true); }
   else if (_state && (_state.making || _incomplete(_state)) && !_timer && !_reading) _read(!_state.making);
 }
@@ -506,6 +528,7 @@ export function show(target) {
 export function hide() {
   _shown = false;
   _closeMenu();
+  if (_fonts) _fonts.shown(false);
   for (const t of _allTiles()) _stopNow(t);
   Doc.setShown(false);
   if (_timer) { clearTimeout(_timer); _timer = 0; }
