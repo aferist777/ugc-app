@@ -11,7 +11,8 @@
 
      hint(node, text, o)        the pointer resting on `node` opens its bubble; `text` a string (paragraphs by "\n") or a
                                 function giving one when it opens (nothing - no bubble). o.title - a gold heading;
-                                o.on - a class put on `node` while its bubble is open. `node` returned.
+                                o.on - a class put on `node` while its bubble is open; o.side 'below' - under it when
+                                there is room. `node` returned.
      showBubble(anchor, text, o)  opened now, over `anchor`
      closeBubble()              the bubble open, closed
      tipBox(o) / placeBubble(box, anchor, side)
@@ -79,7 +80,8 @@ export function showBubble(anchor, text, o) {
   if (opts.title) box.appendChild(_el('b', null, opts.title));
   for (const p of t.split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
   document.body.appendChild(box);
-  placeBubble(box, anchor);
+  // (phase V67) `side: 'below'` - under the thing when there is room (a question's answer: its words stay readable above).
+  placeBubble(box, anchor, opts.side);
   const layer = Layers.open(box, { modal: false, name: 'help', onEsc: closeBubble });
   _open = { box, anchor, layer, on: opts.on || '' };
   if (opts.on) anchor.classList.add(opts.on);

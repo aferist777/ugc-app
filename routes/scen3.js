@@ -3909,6 +3909,52 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── A NEW PROJECT FOR ANOTHER LOOK (phase V67, second round (г), the owner 2026-11-01: "давай еще вариант в предупреждении
+   "new project" с пояснением во всплывашке"; (об12), (об13)) ─────────────────────────────────────────────────────────────────
+   POST /api/scen3/projects/:id/fork  { characterId, characterName, obrazId, obrazImage }   -> { success, project }
+   A new talking head of THIS project's script as it is now - the lines' words and their [tags], the lines taken off and put in,
+   their numbers kept - with its place and its choices (the mood, stability and speed, the model, the quality, the shot size,
+   the spread, Seedance's settings, the frames' settings), the look given cast; no reads, frames or clips. This project is not
+   touched. Named "<day> — <title> · <character>"; the page makes its timeline (/mv3/timeline/new) and names it with the cast
+   route (js/merge-v3/scen-api.js forkHead), then opens it.
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/projects/:id/fork', (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const list = _loadProjects();
+    const src = list.find(p => String(p.id) === id);
+    if (!src) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(src, req.user)) return OWN.refuse(res, src);
+    if (src.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
+    const look = _normLook(req.body || {});
+    if (!(look && look.obrazId)) return res.status(400).json({ success: false, error: 'a look is needed' });
+    const now = new Date().toISOString();
+    const lines = (src.lines || []).map(_normLine).map(l => ({
+      text: l.text, tagged: l.tagged, removed: l.removed,
+      ...(Number.isInteger(l.slot) ? { slot: l.slot } : {}), ...(l.speed ? { speed: l.speed } : {}),
+    }));
+    const m = _normMix(src.mix);
+    const place = _normCasting(src.casting);
+    const rec = _normProject({
+      id: _newId(list),
+      owner: OWN.uidOf(req),
+      name: `${now.slice(0, 10)} — ${String(src.title || '').trim() || 'talking head'} · ${look.characterName}`,
+      scenarioId: src.scenarioId, gender: src.gender, title: src.title, lines,
+      vertical: src.vertical, product: src.product, roles: src.roles,
+      video: src.video,
+      voice: { ...((src.voice && typeof src.voice === 'object') ? src.voice : {}), pick: null },
+      mix: { settings: m.settings, camera: m.camera, framing: m.framing, poseId: m.poseId, distribution: m.distribution },
+      casting: { ...look, locationId: place.locationId, locationImage: place.locationImage },
+      workOf: look, cast0: look,
+      createdAt: now, updatedAt: now,
+    }, now);
+    list.unshift(rec);
+    _saveProjects(list);
+    console.log('[scen3/fork] ' + id + ' -> ' + rec.id + ' with ' + look.characterName);
+    res.json({ success: true, project: _projFull(rec) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 /* ── THE VOICEOVER DRAFT (phase V62, the owner 2026-10-30: (во29) "давай проект будет создаваться только когда пользователь
    сгенерировал голоса. до этого - это черновик voiceover"; (во30) "можно отменить выбраный сценарий и вернуться к списку
    сценариев и добавить свой текст"; (во35) one, as Merge's draft; (во36) a project from its first read; (во37) then its script

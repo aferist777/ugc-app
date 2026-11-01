@@ -170,8 +170,8 @@ async function _patch(casting) {
 // what moves: another character's look puts that character's reads, frames and clips aside in the project, another look of
 // the same character its frames and clips, and what the new one had put aside comes back. When something would be put aside
 // the server asks first, and so does this, at the look pressed (`anchor`): "change" casts it, anything else leaves it all.
-// Resolves true once cast.
-async function _cast(look, anchor, sure) {
+// Resolves true once cast. `opts.fork` (the "who" window's presses, not the way back): the question offers "new project" too.
+async function _cast(look, anchor, sure, opts) {
   if (!_ctx || !_ctx.project || _saving) return false;
   const id = _ctx.project.id;
   _saving = true;
@@ -208,15 +208,37 @@ async function _cast(look, anchor, sure) {
     const text = 'Change to ' + (a.sameChar ? 'another look of ' + (a.to || 'this character') : (a.to || 'this character')) + '?';
     const sub = 'The ' + what.replace(/^the /, '') + ' ' + whose + ' leave the fields - their files stay in this project and come back when ' + back + '.';
     const host = (anchor && anchor.isConnected) ? anchor : document.querySelector('#mv3-stage') || document.body;
+    // (phase V67, second round (г), (об12), (об13)) "new project": this script, place and choices in a new talking head with
+    // the look pressed - this project stays as it is. Not on the way back (↺): that one returns this project to its start.
+    const forkHint = a.sameChar
+      ? 'A new talking head of this script in the look pressed - this project keeps its look and everything made in it.'
+      : 'A new talking head of this script with ' + (a.to || 'them') + ' - this project stays with ' + (a.from || 'the one cast now') + ' as it is.';
     return new Promise((done) => {
       askChoice(host, text, sub, [
         { label: 'change', kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
+        ...((opts && opts.fork) ? [{ label: 'new project', hint: forkHint, on: () => { _fork(look).then(done); } }] : []),
         { label: 'cancel', on: () => done(false) },
       ], { stay: true });
     });
   }
   showError('The look was not changed: ' + (r.error || 'refused'));
   return false;
+}
+
+// "new project" (phase V67, second round (г)): made by the server from this project (js/merge-v3/scen-api.js forkHead) and
+// opened - its setup, the look cast, the fields to fill. Resolves true once open (the window of "who" goes with this project).
+async function _fork(look) {
+  if (!_ctx || !_ctx.project || _saving) return false;
+  _saving = true;
+  _ctx.repaint();
+  let key = '';
+  try { key = await API.forkHead(_ctx.project.id, look); }
+  catch (e) { showError('The new project was not made: ' + e.message); }
+  _saving = false;
+  if (!key) { _ctx.repaint(); return false; }
+  if (_who) _who.win.close();
+  await Store.open(key);
+  return true;
 }
 
 // ── The picture of a character ──────────────────────────────────────────────
@@ -736,7 +758,7 @@ function _paintCharacters(body) {
 // The one write of "who": the look with its character - it belongs to them (phase V67: through _cast).
 function _castLook(c, o, anchor) {
   if (!c || !o) return Promise.resolve(false);
-  return _cast({ characterId: String(c.id), characterName: c.name, obrazId: String(o.id), obrazImage: o.image }, anchor);
+  return _cast({ characterId: String(c.id), characterName: c.name, obrazId: String(o.id), obrazImage: o.image }, anchor, false, { fork: true });
 }
 
 // ── NEW LOOK: dress the character in a lookbook ─────────────────────────────

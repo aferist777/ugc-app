@@ -88,6 +88,19 @@ export async function talkingHead(scenarioId) {
   return d.key;
 }
 
+/**
+ * (phase V67, second round (г)) A NEW talking head of this project's script with another look cast (routes/scen3.js POST
+ * /scen3/projects/:id/fork), its timeline, and its name - the timeline's title too - with the character (the cast route of
+ * the same look moves nothing). Returns the new timeline's key.
+ */
+export async function forkHead(projectId, look) {
+  const d = await _post('/api/scen3/projects/' + encodeURIComponent(projectId) + '/fork', look);
+  const t = await _post('/api/mv3/timeline/new', { projectId: d.project.id });
+  if (!t.key) throw new Error('the timeline was refused');
+  try { await _post('/api/scen3/projects/' + encodeURIComponent(d.project.id) + '/cast', look); } catch (e) { /* named at its next cast */ }
+  return t.key;
+}
+
 /** (phase V62, (во27), (во28)) A voiceover's line, at most - ElevenLabs reads 5 000 characters at a time, the mood's tags
  *  included; the server keeps the same number (routes/scen3.js VO_MAX). */
 export const VO_MAX = 4500;

@@ -17,6 +17,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { hint } from '../bubble.js';
 
 let _ask = null;
 
@@ -75,6 +76,8 @@ function _panel(anchor, text, sub, buttons, opts) {
     el2.type = 'button';
     el2.className = 'mv3-ask-b' + (b.kind === 'yes' ? ' is-yes' : '');
     el2.textContent = b.label;
+    // (phase V67, second round (г)) What an answer does, in the app's bubble on hover - "new project" says what becomes of both.
+    if (b.hint) hint(el2, b.hint, { side: 'below' });
     // On mousedown, and swallowed: a click here must not reach the lane underneath, where it
     // would start a drag or a selection band on the way to answering a question.
     el2.addEventListener('mousedown', (e) => {
@@ -120,7 +123,8 @@ export function askDelete(anchor, text, sub, onYes) {
 
 /**
  * A question with more than two answers (phase C3: delete the timeline only, or its files too). `choices`:
- * [{ label, kind: 'yes' (the destructive one, in red) | undefined, on }]; a choice without `on` only closes.
+ * [{ label, kind: 'yes' (the destructive one, in red) | undefined, on, hint? }]; a choice without `on` only closes; `hint` -
+ * words in a bubble over it on hover (phase V67).
  * `opts.stay` - not closed by scrolling (an anchor that does not scroll: the project bar). `sub` may be a list of lines.
  */
 export function askChoice(anchor, text, sub, choices, opts) {
