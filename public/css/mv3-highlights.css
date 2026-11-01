@@ -155,17 +155,25 @@
 .mv3-hl-text{margin:0; font:400 11px/1.5 var(--font); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere}
 .mv3-hl-list{margin:4px 0 8px; padding-left:16px; font:400 11px/1.5 var(--font); color:var(--ink)}
 
-/* ── The popup ── */
-.mv3-x.mv3-hlp{width:min(760px, 96vw); max-height:94vh}
-.mv3-x.mv3-hlp.is-drop{outline:2px dashed var(--primary); outline-offset:-6px}
+/* ── The popup (phase V68 P3): a window of js/gen-window.js (openFrame, geom 'highlights') - two columns, 2/3 and 1/3, the foot
+   across both ── */
+.gw-body.mv3-hlp{flex-direction:column}
+.gw.is-drop{outline:2px dashed var(--primary); outline-offset:-6px}
+.mv3-hlp-cols{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 1fr)}
+.mv3-hlp-left{min-width:0; min-height:0; overflow-y:auto; padding:2px 16px 14px}
+.mv3-hlp-right{min-width:0; min-height:0; display:flex; flex-direction:column; padding:2px 12px 10px; border-left:1px solid var(--border-soft)}
+/* (хп48) No kind yet: what is under the kinds waits, blurred */
+.mv3-hlp .is-locked{filter:blur(2px); opacity:.45; pointer-events:none; user-select:none}
 .mv3-hlp-tabs{display:flex; gap:6px; margin-bottom:7px}
 .mv3-hlp-pane{display:flex; align-items:center; gap:8px; min-height:30px}
 .mv3-hlp-pane[hidden]{display:none}
 .mv3-hlp-url{width:100%}
 .mv3-hlp-file{font:500 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
-.mv3-hlp-srcs{flex-direction:column; align-items:stretch; gap:4px; max-height:190px; overflow-y:auto}
+/* The Library's list - its own box, scrolled inside */
+.mv3-hlp-srcs{flex-direction:column; align-items:stretch; gap:4px; height:196px; overflow-y:auto; padding:6px; box-sizing:border-box;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
 .mv3-hlp-src{
-  display:flex; align-items:center; gap:8px; padding:4px 6px; text-align:left;
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:4px 6px; text-align:left;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); cursor:pointer;
 }
 .mv3-hlp-src:hover{border-color:var(--muted)}
@@ -174,18 +182,69 @@
 .mv3-hlp-src-t{display:flex; flex-direction:column; min-width:0}
 .mv3-hlp-src-t b{font:600 11px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hlp-src-t small{font:400 9.5px/1.3 var(--font); color:var(--muted)}
-.mv3-hlp-row{display:flex; gap:14px; flex-wrap:wrap}
-.mv3-hlp-lab{display:flex; align-items:center; gap:7px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
+.mv3-hlp-lab{display:flex; align-items:center; gap:7px; margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
+.mv3-hlp-lab[hidden]{display:none}
 .mv3-hlp-sel{
   height:24px; padding:0 4px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 10.5px/22px var(--font); cursor:pointer;
 }
-.mv3-hlp-style{border:1px solid var(--border); border-radius:var(--r-xs); padding:7px; margin-top:5px}
+/* The kinds: square buttons, the owner's pixel icons (P1) three times their grid, gold */
+.mv3-hlp-kinds{display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap}
+.mv3-hlp-kind{
+  width:96px; height:96px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:6px 4px;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--gold); cursor:pointer;
+}
+.mv3-hlp-kind:hover{border-color:var(--gold)}
+.mv3-hlp-kind.is-on{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 14%, transparent); box-shadow:0 0 0 1px var(--gold)}
+.mv3-hlp-kind-ic{width:48px; height:48px; display:flex; align-items:center; justify-content:center; font:800 22px/1 var(--font)}
+.mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
+.mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}
+.mv3-hlp-kind.is-on .mv3-hlp-kind-nm{color:var(--ink)}
+.mv3-hlp-reset{margin-left:auto; padding:2px 0; border:0; background:none; color:var(--accent); font:600 10px/1.3 var(--font); cursor:pointer}
+.mv3-hlp-reset:hover{color:var(--ink)}
+.mv3-hlp-reset[disabled]{color:var(--muted); opacity:.5; cursor:default}
+/* (хп35) The kind's words - one height, whatever they say */
+.mv3-hlp-about{height:116px; overflow-y:auto; margin-top:8px; padding:8px 11px; box-sizing:border-box;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); font:400 10.5px/1.5 var(--font); color:var(--ink)}
+.mv3-hlp-about-h{margin-bottom:3px; font:600 10px/1.4 var(--font); color:var(--muted)}
+.mv3-hlp-about-l b{color:var(--gold); font-weight:700}
+.mv3-hlp-about-p{margin:0}
+/* The length, the count, the moods: buttons in a row */
+.mv3-hlp-opts{margin-top:10px; display:flex; flex-direction:column; gap:6px}
+.mv3-hlp-orow{display:flex; align-items:center; gap:10px}
+.mv3-hlp-orow[hidden]{display:none}
+.mv3-hlp-olab{flex:0 0 66px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
+.mv3-hlp-chips{display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0}
+.mv3-hlp-chip{height:24px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted);
+  font:700 10.5px/22px var(--font); cursor:pointer}
+.mv3-hlp-chip:hover{border-color:var(--muted); color:var(--ink)}
+.mv3-hlp-chip.is-on{border-color:var(--primary); background:var(--primary-soft); color:var(--ink)}
+.mv3-hlp-chip[disabled]{opacity:.4; cursor:default}
+.mv3-hlp-quiet{font:500 10px/1.4 var(--font); color:var(--muted)}
+.mv3-hlp-quiet.is-err{color:var(--danger)}
+/* The captions: the tabs, what is chosen in rows, the tiles filling the rest of the column */
+.mv3-hlp-captabs{padding:0}
+.mv3-hlp-chosen{flex:0 0 auto; max-height:34%; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 0;
+  border-bottom:1px solid var(--border-soft)}
+.mv3-hlp-crow{display:flex; align-items:flex-start; gap:8px}
+.mv3-hlp-crow .mv3-hlp-olab{flex:0 0 60px; line-height:22px}
+.mv3-hlp-crow .mv3-hlp-quiet{line-height:22px}
+.mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:22px; border:1px solid var(--primary); border-radius:999px;
+  background:var(--primary-soft); overflow:hidden}
+.mv3-hlp-pick-nm{min-width:0; padding:0 3px 0 9px; border:0; background:none; color:var(--ink); font:600 10px/20px var(--font);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
+.mv3-hlp-pick-nm:hover{color:var(--gold)}
+.mv3-hlp-pick-x{flex:0 0 auto; padding:0 8px 0 3px; border:0; background:none; color:var(--muted); font:600 9px/20px var(--font); cursor:pointer}
+.mv3-hlp-pick-x:hover{color:var(--danger)}
+.mv3-hlp-style{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:7px; padding:7px;
+  border:1px solid var(--border); border-radius:var(--r-xs)}
+.mv3-hlp-style[hidden]{display:none}
 .mv3-hlp-style.is-missing{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset}
-.mv3-hlp-style-said{font:400 10px/1.4 var(--font); color:var(--muted)}
-.mv3-hlp-style-said.is-missing{color:var(--danger)}
-.mv3-hls-cats{margin-bottom:7px}
-.mv3-hls-grid{max-height:min(34vh, 300px); overflow-y:auto}
+.mv3-hls-cats{flex:0 0 auto; margin-bottom:7px}
+.mv3-hlp-style .mv3-hls-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
+/* (V68 P3) A chosen one pressed in its row: its tile outlined in gold */
+.mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold)}
+.mv3-hlp-foot{flex:0 0 auto}
 .mv3-hlp-footl{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px}
 .mv3-hlp-hear{font:500 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlp-hear.is-err{color:var(--danger)}
@@ -201,37 +260,6 @@
 .mv3-hl-cap-ed{color:var(--accent)}
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
 
-/* ── (phase V33.8, H3) The popup's background music: a button and the list under it, by mood ── */
-.mv3-hlm{display:flex; flex-direction:column; gap:5px}
-.mv3-hlm-btn{
-  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:6px 9px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--muted);
-  font:600 10.5px/1.3 var(--font); text-align:left;
-}
-.mv3-hlm-btn:hover{border-color:var(--muted); color:var(--ink)}
-.mv3-hlm-btn.is-on{color:var(--ink); border-color:var(--primary)}
-.mv3-hlm-arrow{flex:0 0 auto; color:var(--muted)}
-.mv3-hlm-list{border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); max-height:min(36vh, 300px); overflow-y:auto; padding:4px 0}
-.mv3-hlm-list[hidden]{display:none}
-.mv3-hlm-head{display:flex; align-items:center; justify-content:space-between; padding:2px 9px 5px; font:500 10px/1.3 var(--font); color:var(--muted);
-  border-bottom:1px solid var(--border); margin-bottom:3px}
-.mv3-hlm-clear{border:0; background:none; color:var(--accent); font:600 10px/1.3 var(--font); cursor:pointer; padding:0}
-.mv3-hlm-clear[disabled]{color:var(--muted); opacity:.5; cursor:default}
-.mv3-hlm-group{padding:2px 0 4px}
-.mv3-hlm-gh{padding:4px 9px 2px; font:700 9.5px/1.3 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--gold)}
-.mv3-hlm-n{color:var(--muted); font-weight:500}
-.mv3-hlm-none{padding:1px 9px 2px 31px; font:400 9.5px/1.3 var(--font); color:var(--muted); opacity:.7}
-.mv3-hlm-row{display:flex; align-items:center; gap:7px; padding:3px 9px; cursor:pointer}
-.mv3-hlm-row:hover{background:var(--surface-2)}
-.mv3-hlm-row.is-on{background:var(--primary-soft)}
-.mv3-hlm-row.is-playing .mv3-hlm-name{color:var(--accent)}
-.mv3-hlm-play{flex:0 0 auto; width:20px; height:20px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2);
-  color:var(--ink); font:600 8px/1 var(--font); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0}
-.mv3-hlm-play:hover{border-color:var(--accent); color:var(--accent)}
-.mv3-hlm-name{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mv3-hlm-len{flex:0 0 auto; font:500 9.5px/1.3 var(--font); color:var(--muted)}
-.mv3-hlm-tick{flex:0 0 auto; margin:0; accent-color:var(--primary); cursor:pointer}
-.mv3-hlm-empty{padding:8px 10px; font:400 10px/1.45 var(--font); color:var(--muted)}
 /* (phase V33.8, H2) The captions recommended for the video's kind: their chip first, gold; their groups marked with a dot */
 .mv3-hls-cats .mv3-cap-cat.is-rec{border-color:var(--gold); color:var(--gold)}
 .mv3-hls-cats .mv3-cap-cat.is-rec.is-on{background:color-mix(in oklch, var(--gold) 16%, transparent); color:var(--ink)}

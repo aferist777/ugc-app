@@ -418,9 +418,10 @@ function _paintTop() {
   // (phase V33.8) Auto - what the agent found the video to be.
   const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label
     : (r.ask && r.agent && r.agent.kind ? ' · auto → ' + r.agent.kind : '');
-  // (phase V33.8, H3) And the background music asked for.
+  // (phase V33.8, H3) And the background music asked for - (V68 P3) its moods; a project of before, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
-  const musicSaid = nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '';
+  const moods = r.ask && Array.isArray(r.ask.moods) ? r.ask.moods.map((m) => (m && m.label) || m).filter(Boolean) : [];
+  const musicSaid = moods.length ? ' · music: ' + moods.join(', ') : (nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '');
   // (phase V43) fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
   const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
   const L = (K && K.whole && K.lengths) || r.lengths;

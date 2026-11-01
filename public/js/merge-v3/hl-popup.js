@@ -1,23 +1,39 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the HIGHLIGHTS POPUP: which video, how long and how many fragments, and the style of their captions
-   (phase V33.1; the owner 2026-10-20: "появляется попап для вставки ссылки, добавление файла с пк, дропдаун с выбором
-   длительности, дропдаун с выбором количества фрагментов", and (х1), (х4), (х13), (х16)).
+   MERGE v3 — the HIGHLIGHTS POPUP: which video, what kind of video, how long and how many fragments, their music and the
+   style of their captions (phase V33.1; the owner 2026-10-20: "появляется попап для вставки ссылки, добавление файла с пк,
+   дропдаун с выбором длительности, дропдаун с выбором количества фрагментов", and (х1), (х4), (х13), (х16)).
+
+   A WINDOW OF ITS OWN (phase V68 P3, the owner 2026-11-01, (хп3), (хп4): "этот попап тоже давай сделаем чтобы можно было менять
+   размеры и положение попапа и оно сохраняется; ... в два столбца ... слева 2/3 ... справа 1/3"): js/gen-window.js openFrame -
+   1280×800 the first time, moved by its head, stretched by its edges, its size and place kept (`geom` 'highlights'), a double
+   press on the head puts it back. TWO COLUMNS, 2/3 and 1/3, the foot across both:
+   - LEFT: the video - a link · from the Library · a file, from the Library open first, its list scrolled in a box of its own;
+     the fragments - the kind of video as square buttons with the pixel icons the owner chose (P1, merge-v3/hl-kinds.js), under
+     them a box of one height with the words: every kind's short line while none is chosen (only at the very first opening -
+     (хп35), (хп48): everything under the kinds is blurred and "find moments" waits), the chosen one's longer words after;
+     the length and the count as buttons ((хп18); fragmentation has no count); "reset to standard"; music - the moods as
+     buttons (hl-music.js).
+   - RIGHT: the captions - the tabs presets · animation (P4 adds fonts), under them what is chosen in rows, a button each with
+     ✕ - a press opens its tab and its group with the tile outlined (hl-style.js reveal); the tiles under that.
+   EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations - hl-kinds.js; switching the kind
+   brings its own back.
 
    THREE WAYS IN (х1): a link, a file of this computer - its path handed over by the app's own window (desktop/preload.js
-   pathOf; a browser tab cannot), pressed or let go of anywhere on the popup -, or a source already in the Library. The
+   pathOf; a browser tab cannot), pressed or let go of anywhere on the window -, or a source already in the Library. The
    lengths and counts are the server's (lib/highlights-store.js). The CAPTION STYLE IS A MUST (х16): "find moments" is not
    pressed until one is chosen, and the field says so in red, as a choice not made does in a talking head.
 
    ONE PRESS, NO "ARE YOU SURE" (х13): the price is on the button - the words (Groq's, by the length when it is known, or
    this computer's for nothing, or kept with the source) and the agent's few cents. The server writes the row and answers
-   at once; the popup closes and the tiles stand up in the field (highlights.js follows the record).
+   at once; the window closes and the tiles stand up in the field (highlights.js follows the record).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import * as Layers from '../layers.js';
-import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor, keepFor } from './hl-style.js';
-import { musicPicker } from './hl-music.js';
+import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } from './hl-style.js';
+import { moodPicker } from './hl-music.js';
+import * as KIND from './hl-kinds.js';
 
-const LS_ASK = 'mv3_hl_ask_v1';           // the length and the count chosen last
+const GEOM = Object.freeze({ key: 'highlights', resize: true, move: true, keepSize: true, keepPos: true });
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const _api = async (url, opt) => {
   let r = null, d = null;
@@ -32,95 +48,65 @@ const _clock = (s) => {
 };
 const _usd = (v) => (v == null ? '' : v < 0.01 ? '<1¢' : v < 1 ? Math.round(v * 100) + '¢' : '$' + v.toFixed(2));
 
-let _win = null;
-// (phase V49, the owner's (пр26)) What was chosen for the captions - the styles, the animations and the tab - kept for the next popup.
-const LS_PICKS = 'mv3_hl_caption_picks_v1';
-const _picks = () => { try { return JSON.parse(localStorage.getItem(LS_PICKS) || '{}') || {}; } catch (e) { return {}; } };
+let _win = null;                 // { frame, picker, anim }
 
 export function isOpen() { return !!_win; }
-export function closePopup() {
-  if (!_win) return;
-  const w = _win;
-  _win = null;
-  try { w.picker.stop(); } catch (e) { /* gone */ }
-  try { if (w.anim) w.anim.stop(); } catch (e) { /* gone */ }
-  try { if (w.music) w.music.stop(); } catch (e) { /* gone */ }
-  w.ov.remove();
-  Layers.close(w.layer);
-}
+export function closePopup() { if (_win) _win.frame.close(); }
 
 /**
- * Open it for project `id` (its record `rec`: the lengths and counts it offers). `onStarted(alertId)` once the server
+ * Open it for project `id` (its record `rec`: the lengths, counts and kinds it offers). `onStarted(alertId)` once the server
  * took the press. `url` (phase TG, block 5c) - a link written in already: a long video of REFERENCES sent "to highlights".
  * `sourceId` (block 6) - a source of the Library chosen already: a video of the media tree's YOUTUBE sent "to highlights".
  */
 export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   if (_win) return;
-  let remembered = {};
-  try { remembered = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {}; } catch (e) { remembered = {}; }
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
-  // (phase V33.6, the owner's (х54)-(х57)) What kind of video - where the frame looks when there is no face, and what the agent is told.
-  // (phase V33.8, (у6), (ф2)) auto, podcast · interview, documentary; a `facts` remembered from before is documentary.
+  // (phase V33.6, V33.8, V43) The kinds - the server's: auto, podcast · interview, documentary, fragmentation (its own lengths, no count).
   const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, documentary: { label: 'documentary' } };
-  const ask = rec && rec.ask ? rec.ask : {};
-  if (remembered.kind === 'facts') remembered.kind = 'documentary';
-  // (phase V43, (ё1), (ё8)) fragmentation - the whole video in parts: its own lengths (the server's), no count.
   const isWhole = (k) => !!(kinds[k] && kinds[k].whole);
   const lengthsOf = (k) => (isWhole(k) && kinds[k].lengths) || lengths;
-  const kind0 = kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto');
-  // The last length of each - the moments' and the parts' - so switching the kind back and forth brings each one's back.
-  const lastLen = {
-    whole: isWhole(ask.kind) ? ask.length : remembered.flength,
-    moments: isWhole(ask.kind) ? remembered.length : (ask.length || remembered.length),
-  };
-  const firstLen = (k) => {
-    const L = lengthsOf(k);
-    const want = isWhole(k) ? lastLen.whole : lastLen.moments;
-    return L[want] ? want : (L[isWhole(k) ? 'p1-2' : '30-60'] ? (isWhole(k) ? 'p1-2' : '30-60') : Object.keys(L)[0]);
-  };
   const st = {
-    from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
+    from: url ? 'link' : 'source', url: '', path: '', fileName: '', sourceId: '', source: null,
     // (after block 8) What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
     pick: null,
-    length: firstLen(kind0),
-    count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
-    // (phase V40, the owner's (о4)) No "title on top" box any more: a new fragment has no title, the card's "add title" puts one.
-    kind: kind0,
+    // (V68 P3) '' - no kind chosen yet: the very first opening (хп35), (хп48).
+    kind: '', length: '', count: 5, moods: [],
     // (phase V49) The styles chosen - one, or several with Shift (пр25) - and the animations (пр26); `style` the first of them.
     style: '', styles: [], anims: [], capTab: 'presets', price: null, busy: false, said: '', err: false,
-    // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
-    music: [],
     // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
     tracks: [], audio: null, tracksFor: '',
   };
 
-  const ov = _el('div', 'mv3-x-ov mv3-hlp-ov');
-  const box = _el('div', 'mv3-x mv3-hlp');
-  box.setAttribute('role', 'dialog');
-  box.setAttribute('aria-modal', 'true');
-  const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, 'Highlights - find the moments'));
-  const x = _el('button', 'mv3-x-close', '✕');
-  x.type = 'button';
-  x.title = 'Close (Esc)';
-  x.addEventListener('click', closePopup);
-  head.appendChild(x);
-  const body = _el('div', 'mv3-x-body');
-  const foot = _el('div', 'mv3-x-foot');
+  const frame = openFrame({ name: 'highlights', size: GEN_SIZE, geom: GEOM, onClose: () => {
+    if (!_win || _win.frame !== frame) return;
+    try { _win.picker.stop(); } catch (e) { /* gone */ }
+    try { _win.anim.stop(); } catch (e) { /* gone */ }
+    _win = null;
+  } });
+  frame.setCrumbs([{ label: 'highlights · find the moments' }]);
+  const box = frame.box;
+  frame.body.classList.add('mv3-hlp');
+  const cols = _el('div', 'mv3-hlp-cols');
+  const L = _el('div', 'mv3-hlp-left');
+  const R = _el('div', 'mv3-hlp-right');
+  cols.append(L, R);
+  const foot = _el('div', 'mv3-x-foot mv3-hlp-foot');
+  frame.body.append(cols, foot);
 
   // ── The video ──
-  body.appendChild(_el('div', 'mv3-x-hdr', 'the video'));
+  L.appendChild(_el('div', 'mv3-x-hdr', 'the video'));
   const tabs = _el('div', 'mv3-hlp-tabs');
   const panes = {};
-  for (const [k, label] of [['link', 'a link'], ['file', 'a file'], ['source', 'from the Library']]) {
+  // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
+  for (const [k, label] of [['link', 'a link'], ['source', 'from the Library'], ['file', 'a file']]) {
     const b = _el('button', 'mv3-sc-tab', label);
     b.type = 'button';
     b.dataset.from = k;
-    b.addEventListener('click', () => { st.from = k; paint(); price(); readTracks(); if (k === 'source') loadSources(); });
+    b.addEventListener('click', () => { st.from = k; paint(); price(); readTracks(); if (k === 'source') loadSources(); if (k === 'link') link.focus(); });
     tabs.appendChild(b);
   }
-  body.appendChild(tabs);
+  L.appendChild(tabs);
 
   const link = _el('input', 'mv3-sc-inp mv3-hlp-url');
   link.type = 'text';
@@ -131,20 +117,20 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   panes.link = _el('div', 'mv3-hlp-pane');
   panes.link.appendChild(link);
 
+  panes.source = _el('div', 'mv3-hlp-pane mv3-hlp-srcs');
+
   const fileIn = _el('input');
   fileIn.type = 'file';
   fileIn.accept = 'video/*';
   fileIn.hidden = true;
   fileIn.addEventListener('change', () => takeFile(fileIn.files && fileIn.files[0]));
-  const pick = _el('button', 'mv3-c-btn', 'choose a video file…');
-  pick.type = 'button';
-  pick.addEventListener('click', () => fileIn.click());
+  const pickBtn = _el('button', 'mv3-c-btn', 'choose a video file…');
+  pickBtn.type = 'button';
+  pickBtn.addEventListener('click', () => fileIn.click());
   const fileSaid = _el('span', 'mv3-hlp-file', 'or let a file go anywhere on this window');
   panes.file = _el('div', 'mv3-hlp-pane mv3-hlp-filepane');
-  panes.file.append(pick, fileSaid, fileIn);
-
-  panes.source = _el('div', 'mv3-hlp-pane mv3-hlp-srcs');
-  for (const k of Object.keys(panes)) body.appendChild(panes[k]);
+  panes.file.append(pickBtn, fileSaid, fileIn);
+  for (const k of Object.keys(panes)) L.appendChild(panes[k]);
   // (phase V43, the owner's (ё18): "давать выбор дорожки если есть выбор") A file with more than one sound track - a dub and the
   // original, say - says so here: the one chosen is heard and is the parts' sound.
   const trackSel = _el('select', 'mv3-hlp-sel');
@@ -153,7 +139,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';
   trackRow.appendChild(trackSel);
   trackRow.hidden = true;
-  body.appendChild(trackRow);
+  L.appendChild(trackRow);
   // The tracks of what is chosen now - asked once for each file or source.
   let trackSeq = 0;
   async function readTracks() {
@@ -178,109 +164,97 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     price();
   }
 
-  // ── How long and how many ──
-  const row = _el('div', 'mv3-hlp-row');
-  const lenSel = _el('select', 'mv3-hlp-sel');
-  const fillLengths = () => {
-    lenSel.textContent = '';
-    for (const [k, v] of Object.entries(lengthsOf(st.kind))) { const o = _el('option', null, v.label || k); o.value = k; lenSel.appendChild(o); }
-    lenSel.value = st.length;
-  };
-  fillLengths();
-  lenSel.addEventListener('change', () => { st.length = lenSel.value; lastLen[isWhole(st.kind) ? 'whole' : 'moments'] = st.length; remember(); price(); });
-  const cntSel = _el('select', 'mv3-hlp-sel');
-  for (const n of counts) { const o = _el('option', null, n + ' fragments'); o.value = String(n); cntSel.appendChild(o); }
-  cntSel.value = String(st.count);
-  cntSel.addEventListener('change', () => { st.count = +cntSel.value; remember(); price(); });
-  const lw = _el('label', 'mv3-hlp-lab', 'length');
-  lw.appendChild(lenSel);
-  const cw = _el('label', 'mv3-hlp-lab', 'how many');
-  cw.appendChild(cntSel);
-  const kindSel = _el('select', 'mv3-hlp-sel');
-  for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
-  kindSel.value = st.kind;
-  kindSel.addEventListener('change', () => {
-    const was = isWhole(st.kind);
-    st.kind = kindSel.value;
-    // (V43) fragmentation and the moments have lengths of their own: each kind's last one comes back.
-    if (was !== isWhole(st.kind)) { st.length = firstLen(st.kind); fillLengths(); }
-    remember();
-    paint();
-    price();
-    if (!_win || !_win.picker) return;
-    // (V33.8, (в1)) "By the video" is auto's: another kind takes the style kept for it.
-    if (st.style === BY_VIDEO && st.kind !== 'auto') { st.style = styleFor(st.kind); st.styles = [st.style]; _win.picker.set(st.styles); keepPicks(); paint(); }
-    _win.picker.recommend(st.kind);
-  });
-  const kw = _el('label', 'mv3-hlp-lab', 'video kind');
-  kw.appendChild(kindSel);
-  kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
-    + 'podcast · interview - the faces; no face: the whole frame; the agent looks for complete thoughts and strong opinions\n'
-    + 'documentary - the faces; no face: a 3:2 window from the middle over its blur (text, charts and screens stay nearly whole); the agent looks for a fact with its hook\n'
-    + 'fragmentation - the WHOLE video, start to end, in parts by meaning (the intro, ads and the outro cut out); the frame follows the most active in it and punches in on the key moments';
-  row.append(kw, lw, cw);
+  // ── The fragments: the kind, its words, the length and the count ──
   const fragHdr = _el('div', 'mv3-x-hdr', 'the fragments');
-  body.appendChild(fragHdr);
-  body.appendChild(row);
+  L.appendChild(fragHdr);
+  const kindRow = _el('div', 'mv3-hlp-kinds');
+  const kindBtns = {};
+  for (const [k, v] of Object.entries(kinds)) {
+    const b = _el('button', 'mv3-hlp-kind');
+    b.type = 'button';
+    b.dataset.kind = k;
+    const ic = _el('span', 'mv3-hlp-kind-ic');
+    if (KIND.ICONS[k]) ic.innerHTML = KIND.ICONS[k];
+    else ic.textContent = String(v.label || k).slice(0, 1).toUpperCase();
+    b.append(ic, _el('span', 'mv3-hlp-kind-nm', v.label || k));
+    b.title = (v.label || k) + (KIND.ABOUT[k] ? ' - ' + KIND.ABOUT[k].short : '');
+    b.addEventListener('click', () => { if (st.kind !== k) setKind(k); });
+    kindBtns[k] = b;
+    kindRow.appendChild(b);
+  }
+  // (хп19) The kind's standards back: its length, count, music, captions.
+  const reset = _el('button', 'mv3-hlp-reset', 'reset to standard');
+  reset.type = 'button';
+  reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
+  reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
+  kindRow.appendChild(reset);
+  L.appendChild(kindRow);
+  // (хп35) One height whatever it says: every kind's short line, or the chosen one's words.
+  const about = _el('div', 'mv3-hlp-about');
+  L.appendChild(about);
+
+  const opts = _el('div', 'mv3-hlp-opts');
+  const lenRow = _el('div', 'mv3-hlp-orow');
+  lenRow.appendChild(_el('span', 'mv3-hlp-olab', 'length'));
+  const lenChips = _el('div', 'mv3-hlp-chips');
+  lenRow.appendChild(lenChips);
+  const cntRow = _el('div', 'mv3-hlp-orow');
+  cntRow.appendChild(_el('span', 'mv3-hlp-olab', 'how many'));
+  const cntChips = _el('div', 'mv3-hlp-chips');
+  cntRow.appendChild(cntChips);
+  for (const n of counts) {
+    const b = _el('button', 'mv3-hlp-chip', String(n));
+    b.type = 'button';
+    b.dataset.n = String(n);
+    b.addEventListener('click', () => { st.count = n; keep(); paint(); price(); });
+    cntChips.appendChild(b);
+  }
   const fragNote = _el('p', 'mv3-x-note', '');
-  body.appendChild(fragNote);
+  opts.append(lenRow, cntRow, fragNote);
+  L.appendChild(opts);
 
-  // ── (phase V33.8, H3) The background music - Music → highlights, by mood ──
-  body.appendChild(_el('div', 'mv3-x-hdr', 'music'));
-  const musicBox = _el('div', 'mv3-hlp-music');
-  body.appendChild(musicBox);
-  const music = musicPicker(musicBox, { onChange: (ids) => { st.music = ids; } });
+  // ── (V68 P3) The background music - the moods of Music → highlights ──
+  const musicSec = _el('div', 'mv3-hlp-music');
+  musicSec.appendChild(_el('div', 'mv3-x-hdr', 'music'));
+  L.appendChild(musicSec);
+  const music = moodPicker(musicSec, {
+    onChange: (moods) => { st.moods = moods; keep(); },
+    // The ticked tracks of before as their moods, once (хп49) - then what the kind chosen remembers.
+    onReady: (moodOf) => {
+      KIND.settleOldMusic(moodOf);
+      if (st.kind) { music.set(st.moods.length ? st.moods : KIND.settingsOf(st.kind, lengthsOf(st.kind), counts).moods); st.moods = music.get(); }
+    },
+  });
 
-  // ── The caption style, a must ──
-  const capHdr = _el('div', 'mv3-x-hdr', 'captions - choose a style');
-  body.appendChild(capHdr);
-  const capBox = _el('div', 'mv3-hlp-style is-missing');
-  const capSaid = _el('div', 'mv3-hlp-style-said', 'Choose the style of the captions - every fragment gets it; Shift picks several, each page one of them. '
-    + 'One or several fragments can be given another later.');
-  body.appendChild(capSaid);
-  // (phase V49, the owner's (пр26)) TWO TABS: the presets and the animations - the second open once a style is chosen.
+  // ── The captions: presets · animation, what is chosen, the tiles ──
+  R.appendChild(_el('div', 'mv3-x-hdr', 'captions'));
   const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs');
-  const tabBtn = (id, label, title) => {
+  const tabBtn = (tab, label, title) => {
     const b = _el('button', 'mv3-cap-tab', label);
     b.type = 'button';
-    b.dataset.tab = id;
+    b.dataset.tab = tab;
     b.title = title;
-    b.addEventListener('click', () => { if (!b.disabled) { st.capTab = id; keepPicks(); paint(); } });
+    b.addEventListener('click', () => { if (!b.disabled) { st.capTab = tab; paint(); } });
     capTabs.appendChild(b);
     return b;
   };
-  tabBtn('presets', 'presets', 'The style of the captions');
+  tabBtn('presets', 'presets', 'The style of the captions - one, or several with Shift: each page one of them');
   const animTab = tabBtn('anim', 'animation', 'How a page comes in and goes out - after a style is chosen');
-  body.appendChild(capTabs);
-  body.appendChild(capBox);
-  const animBox = _el('div', 'mv3-hlp-style mv3-hlp-anim');
-  body.appendChild(animBox);
-  // (phase V33.8, H2) The kind's recommended groups first and open.
-  // (V33.8, (в1)) A style chosen while the kind is podcast or documentary is kept for it - "by the video" offers those two; several
-  // chosen (V49) are kept for no kind.
-  const picker = stylePicker(capBox, { kind: st.kind, onPick: (ids) => {
+  R.appendChild(capTabs);
+  // (V68 P3, the owner's second round: "писать выбранные, прям под открытой вкладкой") What is chosen, a row a tab.
+  const chosen = _el('div', 'mv3-hlp-chosen');
+  R.appendChild(chosen);
+  const capBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap is-missing');
+  const animBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap mv3-hlp-anim');
+  R.append(capBox, animBox);
+  const picker = stylePicker(capBox, { kind: '', onPick: (ids) => {
     st.styles = ids;
     st.style = ids[0] || '';
-    if (ids.length === 1 && ids[0] !== BY_VIDEO) keepFor(st.kind, ids[0]);
     if (!ids.length && st.capTab === 'anim') st.capTab = 'presets';
-    keepPicks();
+    keep();
     paint();
   } });
-  const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keepPicks(); paint(); } });
-  // What was chosen the last time (пр26) - what is still there of it.
-  {
-    const was = _picks();
-    picker.set(Array.isArray(was.styles) ? was.styles : []);
-    st.styles = picker.getAll();
-    if (st.styles.includes(BY_VIDEO) && st.kind !== 'auto') { st.styles = [styleFor(st.kind)]; picker.set(st.styles); }
-    st.style = st.styles[0] || '';
-    anim.set(Array.isArray(was.anims) ? was.anims : []);
-    st.anims = anim.getAll();
-    st.capTab = was.tab === 'anim' && st.styles.length ? 'anim' : 'presets';
-  }
-  function keepPicks() {
-    try { localStorage.setItem(LS_PICKS, JSON.stringify({ styles: st.styles, anims: st.anims, tab: st.capTab })); } catch (e) { /* private */ }
-  }
+  const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keep(); paint(); } });
 
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
@@ -288,18 +262,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
-  const left = _el('div', 'mv3-hlp-footl');
-  left.append(hear, said);
-  foot.append(left, goBtn);
+  const footL = _el('div', 'mv3-hlp-footl');
+  footL.append(hear, said);
+  foot.append(footL, goBtn);
 
-  box.append(head, body, foot);
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closePopup(); });
-  // A file let go anywhere on the popup.
-  ov.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); box.classList.add('is-drop'); } });
-  ov.addEventListener('dragleave', (e) => { if (e.target === ov || !box.contains(e.relatedTarget)) box.classList.remove('is-drop'); });
-  ov.addEventListener('drop', (e) => {
+  // A file let go anywhere on the window.
+  box.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); box.classList.add('is-drop'); } });
+  box.addEventListener('dragleave', (e) => { if (!box.contains(e.relatedTarget)) box.classList.remove('is-drop'); });
+  box.addEventListener('drop', (e) => {
     box.classList.remove('is-drop');
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f) return;
@@ -307,18 +277,36 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     st.from = 'file';
     takeFile(f);
   });
-  const layer = Layers.open(ov, { name: 'highlights', onEsc: closePopup });
-  _win = { ov, layer, picker, anim, music };
-  setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
+  _win = { frame, picker, anim };
 
-  // The moments' length and fragmentation's are kept apart: each kind's last one comes back (V43).
-  function remember() {
-    try {
-      const was = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {};
-      const out = { ...was, count: st.count, kind: st.kind };
-      if (isWhole(st.kind)) out.flength = st.length; else out.length = st.length;
-      localStorage.setItem(LS_ASK, JSON.stringify(out));
-    } catch (e) { /* private */ }
+  // ── The kind and what it remembers ──
+  // A style kept for a kind that is not auto cannot be "by the video": that kind's own takes its place.
+  const stylesFor = (k, ids) => (ids.includes(BY_VIDEO) && k !== 'auto' ? [styleFor(k)] : ids);
+  /** Settings `s` ({ length, count, moods, styles, anims }) put on the window for the kind chosen - and kept. */
+  function use(s) {
+    st.length = lengthsOf(st.kind)[s.length] ? s.length : Object.keys(lengthsOf(st.kind))[0];
+    st.count = counts.includes(+s.count) ? +s.count : (counts.includes(5) ? 5 : counts[0]);
+    music.set(s.moods || []);
+    st.moods = music.get();
+    picker.set(stylesFor(st.kind, s.styles || []));
+    st.styles = picker.getAll();
+    st.style = st.styles[0] || '';
+    anim.set(s.anims || []);
+    st.anims = anim.getAll();
+    if (!st.styles.length) st.capTab = 'presets';
+    picker.recommend(st.kind);
+    picker.openFirst();
+    keep();
+    paint();
+    price();
+  }
+  function setKind(k) {
+    st.kind = k;
+    use(KIND.settingsOf(k, lengthsOf(k), counts));
+  }
+  function keep() {
+    if (!st.kind) return;
+    KIND.keep(st.kind, { length: st.length, count: st.count, moods: st.moods, styles: st.styles, anims: st.anims });
   }
 
   function takeFile(f) {
@@ -342,15 +330,15 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   // скачивается") Downloaded videos (sources of the Library) and videos kept as tiles - one of those is downloaded by the
   // project first, by its link. Videos from elsewhere come by "a link" or "a file".
   let sources = null;
-  async function loadSources() {
-    if (sources) return;
-    panes.source.textContent = '';
-    panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading REFERENCES · YouTube · Videos…'));
-    try {
-      const d = await _api('/api/references/youtube');
-      sources = d.items || [];
-    } catch (e) { sources = []; panes.source.textContent = e.message; return; }
-    paintSources();
+  let sourcesP = null;
+  function loadSources() {
+    if (!sourcesP) {
+      panes.source.textContent = '';
+      panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading REFERENCES · YouTube · Videos…'));
+      sourcesP = _api('/api/references/youtube').then((d) => { sources = d.items || []; paintSources(); })
+        .catch((e) => { sources = []; panes.source.textContent = e.message; });
+    }
+    return sourcesP;
   }
   function paintSources() {
     panes.source.textContent = '';
@@ -383,7 +371,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     const q0 = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
       : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
     // (V43) fragmentation's agent writes every part of the video - its price is the kind's and the length's.
-    const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind) + '&length=' + encodeURIComponent(st.length)
+    const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind || 'auto') + '&length=' + encodeURIComponent(st.length)
       + (st.audio != null ? '&audio=' + st.audio : '');
     try {
       const d = await _api('/api/highlights/price' + q);
@@ -396,7 +384,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   function say(text, err) { st.said = text || ''; st.err = !!err; paint(); }
 
   function ready() {
-    if (st.busy) return false;
+    if (st.busy || !st.kind) return false;
     if (st.price && st.price.hear.by === 'none' && !(st.from === 'source' && st.source && st.source.words)) return false;
     if (!st.style) return false;
     if (st.from === 'link') return /^https?:\/\/\S+/i.test(st.url);
@@ -404,23 +392,90 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     return !!st.pick;
   }
 
+  // What is chosen, a row a tab: a press opens the tile's tab and group, ✕ lets it go.
+  function chosenRow(label, items, empty, onShow, onDrop) {
+    const r = _el('div', 'mv3-hlp-crow');
+    r.appendChild(_el('span', 'mv3-hlp-olab', label));
+    const list = _el('div', 'mv3-hlp-chips');
+    if (!items.length) list.appendChild(_el('span', 'mv3-hlp-quiet' + (empty.err ? ' is-err' : ''), empty.text));
+    for (const [key, name] of items) {
+      const c = _el('span', 'mv3-hlp-pick');
+      const nm = _el('button', 'mv3-hlp-pick-nm', name);
+      nm.type = 'button';
+      nm.title = 'Show it among the tiles';
+      nm.addEventListener('click', () => onShow(key));
+      const x = _el('button', 'mv3-hlp-pick-x', '✕');
+      x.type = 'button';
+      x.title = 'Take it away';
+      x.addEventListener('click', () => onDrop(key));
+      c.append(nm, x);
+      list.appendChild(c);
+    }
+    r.appendChild(list);
+    return r;
+  }
+  function paintChosen() {
+    chosen.textContent = '';
+    chosen.appendChild(chosenRow('presets', st.styles.map((idp) => [idp, presetName(idp) || idp]),
+      { text: 'choose a style - Shift picks several, each page one of them', err: true },
+      (idp) => { st.capTab = 'presets'; paint(); picker.reveal(idp); },
+      (idp) => { picker.set(st.styles.filter((x) => x !== idp)); st.styles = picker.getAll(); st.style = st.styles[0] || ''; keep(); paint(); }));
+    chosen.appendChild(chosenRow('animation', st.anims.map((p) => [p, pairName(p) || p]),
+      { text: 'none - pages come and go as the style has them' },
+      (p) => { if (!st.styles.length) return; st.capTab = 'anim'; paint(); anim.reveal(p); },
+      (p) => { anim.set(st.anims.filter((x) => x !== p)); st.anims = anim.getAll(); keep(); paint(); }));
+  }
+
+  function paintAbout() {
+    about.textContent = '';
+    if (!st.kind) {
+      about.appendChild(_el('div', 'mv3-hlp-about-h', 'Choose the kind of video - its settings open under it.'));
+      for (const [k, v] of Object.entries(kinds)) {
+        const l = _el('div', 'mv3-hlp-about-l');
+        l.appendChild(_el('b', null, v.label || k));
+        l.appendChild(document.createTextNode(' - ' + ((KIND.ABOUT[k] && KIND.ABOUT[k].short) || '')));
+        about.appendChild(l);
+      }
+      return;
+    }
+    about.appendChild(_el('p', 'mv3-hlp-about-p', (KIND.ABOUT[st.kind] && KIND.ABOUT[st.kind].long) || (kinds[st.kind].label || st.kind)));
+  }
+
   function paint() {
+    if (!_win) return;
     for (const b of tabs.children) b.classList.toggle('is-on', b.dataset.from === st.from);
     // (V43) The sound tracks of what is chosen - only when there is a choice.
     trackRow.hidden = !(st.tracks.length > 1 && st.tracksFor && (st.from === 'file' || st.from === 'source'));
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== st.from;
-    capBox.classList.toggle('is-missing', !st.style);
-    capSaid.classList.toggle('is-missing', !st.style);
-    // (V49) The two tabs: the animations' open once a style is chosen.
+    // (хп48) No kind yet: everything under the kinds waits for one.
+    const locked = !st.kind;
+    for (const el of [opts, musicSec, R]) { el.classList.toggle('is-locked', locked); el.inert = locked; }
+    reset.disabled = locked;
+    for (const [k, b] of Object.entries(kindBtns)) b.classList.toggle('is-on', k === st.kind);
+    paintAbout();
+    // The length and the count - fragmentation has its own lengths and no count (V43).
+    const whole = isWhole(st.kind);
+    lenChips.textContent = '';
+    for (const [k, v] of Object.entries(lengthsOf(st.kind))) {
+      const b = _el('button', 'mv3-hlp-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
+      b.type = 'button';
+      b.addEventListener('click', () => { st.length = k; keep(); paint(); price(); });
+      lenChips.appendChild(b);
+    }
+    for (const b of cntChips.children) b.classList.toggle('is-on', +b.dataset.n === st.count);
+    cntRow.hidden = whole;
+    fragHdr.textContent = whole ? 'the parts' : 'the fragments';
+    fragNote.textContent = !st.kind ? '' : whole
+      ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
+      : 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.';
+    // The captions: the animations' tab open once a style is chosen (V49).
+    capBox.classList.toggle('is-missing', !st.style && !locked);
     animTab.disabled = !st.styles.length;
     if (!st.styles.length) st.capTab = 'presets';
     for (const b of capTabs.children) b.classList.toggle('is-on', b.dataset.tab === st.capTab);
     capBox.hidden = st.capTab !== 'presets';
     animBox.hidden = st.capTab !== 'anim';
-    const many = st.styles.length > 1;
-    const anims = st.anims.length ? ' · ' + (st.anims.length === 1 ? pairName(st.anims[0]) : st.anims.length + ' animations, mixed') : '';
-    capHdr.textContent = !st.style ? 'captions - choose a style'
-      : 'captions - ' + (many ? st.styles.length + ' styles, mixed' : (presetName(st.style) || st.style)) + anims;
+    paintChosen();
     // Who hears it, and what it costs.
     const p = st.price;
     hear.textContent = '';
@@ -436,37 +491,31 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
       const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
       cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
-    // (V43) fragmentation: no count - as many parts as the video comes to.
-    const whole = isWhole(st.kind);
-    cw.hidden = whole;
-    fragHdr.textContent = whole ? 'the parts' : 'the fragments';
-    fragNote.textContent = whole
-      ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
-      : 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.';
-    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments') + (cost ? ' · ' + cost : '');
+    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments') + (cost && st.kind ? ' · ' + cost : '');
     goBtn.disabled = !ready();
-    goBtn.title = !st.style ? 'Choose the style of the captions first' : '';
+    goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';
     said.textContent = st.said;
     said.classList.toggle('is-err', st.err);
   }
 
   async function go() {
     if (!ready()) {
-      if (!st.style) say('Choose the style of the captions first.', true);
+      if (!st.kind) say('Choose the kind of video first.', true);
+      else if (!st.style) say('Choose the style of the captions first.', true);
       return;
     }
     st.busy = true;
     say('');
     const spec = { from: st.from, length: st.length, ...(isWhole(st.kind) ? {} : { count: st.count }), style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
-      music: st.music.slice() };
+      moods: music.get() };
     // (V33.8, (в1)) "By the video": the two styles it chooses between go with it.
     if (st.style === BY_VIDEO) {
       const of = (k) => ({ preset: styleFor(k), name: presetName(styleFor(k)) });
       spec.style.byKind = { podcast: of('podcast'), documentary: of('documentary') };
     } else if (st.styles.length > 1) {
       // (V49, (пр25)) Several: every fragment the same set, dealt page by page.
-      spec.style.mix = st.styles.map((id) => ({ preset: id, name: presetName(id) }));
-    } else keepFor(st.kind, st.style);
+      spec.style.mix = st.styles.map((idp) => ({ preset: idp, name: presetName(idp) }));
+    }
     // (V49, (пр26)) The animations: one for every page, or several dealt.
     if (st.anims.length) spec.style.anims = st.anims.slice();
     // (V43, (ё18)) The sound track chosen, when the video has more than one.
@@ -483,7 +532,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     try {
       const d = await _api('/api/highlights/' + encodeURIComponent(id) + '/start',
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
-      remember();
+      keep();
       closePopup();
       if (onStarted) onStarted(d.alertId);
     } catch (e) {
@@ -492,8 +541,28 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     }
   }
 
-  paint();
-  price();
+  // ── What it opens with ──
+  // A project stopped before its video was in keeps what it asked: that kind, its length, count and moods. Else the kind
+  // chosen last - none at the very first opening (хп35), (хп48), (хп49).
+  const ask = rec && rec.ask ? rec.ask : null;
+  const askKind = ask && kinds[ask.kind] ? ask.kind : (ask && ask.kind === 'facts' && kinds.documentary ? 'documentary' : '');
+  const k0 = askKind || (kinds[KIND.lastKind()] ? KIND.lastKind() : '');
+  if (k0) {
+    st.kind = k0;
+    const s = KIND.settingsOf(k0, lengthsOf(k0), counts);
+    if (askKind) {
+      if (lengthsOf(k0)[ask.length]) s.length = ask.length;
+      if (counts.includes(+ask.count)) s.count = +ask.count;
+      if (Array.isArray(ask.moods) && ask.moods.length) s.moods = ask.moods.map((m) => String((m && m.id) || m));
+    }
+    use(s);
+  } else {
+    st.length = Object.keys(lengths)[0];
+    picker.recommend('');
+    paint();
+    price();
+  }
+  if (st.from === 'link') setTimeout(() => { if (_win && _win.frame === frame) link.focus(); }, 0);
   if (sourceId) {
     st.from = 'source';
     st.sourceId = String(sourceId);
@@ -503,5 +572,5 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
       if (!st.source) st.sourceId = '';
       paintSources(); paint(); price(); readTracks();
     });
-  }
+  } else if (st.from === 'source') loadSources();
 }

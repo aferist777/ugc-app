@@ -13,16 +13,21 @@
    fragment gets the same set, dealt page by page (public/js/captions/mix.js); several replace "by the video". The popup's second
    tab is the animations (animPicker): the In -> Out pairs of the captions view's "animation" tab (captions/page-fx.js PAIRS), its
    tiles the same server's, one or several with Shift.
+
+   WHAT IS CHOSEN, SHOWN (phase V68 P3, the owner 2026-11-01, the second round: "клик на выбранный вариант списка открывает и
+   категорию по которому кликнули"): the popup writes the chosen ones in rows under its tabs; a press on one calls `reveal` -
+   its group opens, the tile is scrolled to and outlined in gold. A picker opens on the group of the first one chosen (`openFirst`)
+   - no longer on "recommended", which hid the chosen ones of other groups. What a kind remembers is merge-v3/hl-kinds.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as MyPresets from './my-presets.js';
 import { PAIRS, animTileId } from '../captions/page-fx.js';
+import { BY_VIDEO, styleFor as _styleFor } from './hl-kinds.js';
 
 const MINE = 'mine';
 const REC = 'rec';
-const LS_CAT = 'mv3_hl_cat_v1';
 
 // (phase V33.8, H2; the owner's (у7): "под подкасты - яркие, под документалку и факты - чуть сдержанней. типа рекомендованые, но
 // оставить выбор и других групп субтитров") The caption groups recommended for a kind of video - first among the chips, marked
@@ -37,25 +42,12 @@ export const RECOMMENDED = {
   fragmentation: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for people talking' },
 };
 
-// "By the video" (V33.8, (в1)): not a preset but a choice between two - the last style chosen for each kind, remembered here.
-export const BY_VIDEO = '@by-video';
-const LS_KIND = 'mv3_hl_kind_style_v1';
-const FIRST = { podcast: 'cp-podcast-viral', documentary: 'cl-white', fragmentation: 'cp-podcast-viral' };
+// "By the video" (V33.8, (в1)): not a preset but a choice between two - the style podcast remembers and the one documentary
+// remembers (V68 P3: their first style, hl-kinds.js styleFor).
+export { BY_VIDEO };
 const _known = (id) => !!(PRESETS.find((x) => x.id === id) || MyPresets.byId(id));
-/** The style kept for a kind - the one last chosen while it was the kind, or the first answer (Podcast Viral, Classic White). */
-export function styleFor(kind) {
-  let m = {};
-  try { m = JSON.parse(localStorage.getItem(LS_KIND) || '{}') || {}; } catch (e) { m = {}; }
-  return _known(m[kind]) ? m[kind] : FIRST[kind];
-}
-/** A style chosen while the kind was podcast or documentary is kept for it. */
-export function keepFor(kind, id) {
-  if (!FIRST[kind] || !_known(id)) return;
-  let m = {};
-  try { m = JSON.parse(localStorage.getItem(LS_KIND) || '{}') || {}; } catch (e) { m = {}; }
-  m[kind] = id;
-  try { localStorage.setItem(LS_KIND, JSON.stringify(m)); } catch (e) { /* private */ }
-}
+/** The style a kind gives "by the video" - the first it remembers, or the app's first answer (Podcast Viral, Classic White). */
+export const styleFor = (kind) => _styleFor(kind, _known);
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const _loops = new Map();          // a loop's address -> Promise<Blob>, kept for the page's life
 
@@ -165,14 +157,22 @@ function _press(chosen, id, shift) {
   return chosen.includes(id) ? chosen.filter((x) => x !== id) : chosen.concat([id]);
 }
 
+// (V68 P3) A tile shown on request: scrolled to inside its grid and outlined in gold until another press.
+function _spot(grid, btn) {
+  for (const b of grid.querySelectorAll('.is-spot')) b.classList.remove('is-spot');
+  if (!btn || btn.hidden) return;
+  btn.classList.add('is-spot');
+  const g = grid.getBoundingClientRect(), r = btn.getBoundingClientRect();
+  if (r.top < g.top || r.bottom > g.bottom) grid.scrollTop += r.top - g.top - (g.height - r.height) / 2;
+}
+
 /**
  * A picker in `host`. `onPick(ids)` on a press - the styles chosen, one or (V49, Shift) several; `kind` (V33.8) - the video's kind,
- * whose recommended groups come first. Returns { set(ids), get() - the first, getAll(), recommend(kind), stop() } - stop() puts every
- * loop back to its still (the popup closed).
+ * whose recommended groups come first. Returns { set(ids), get() - the first, getAll(), recommend(kind), openFirst(), reveal(id),
+ * stop() } - stop() puts every loop back to its still (the popup closed).
  */
 export function stylePicker(host, { onPick, kind } = {}) {
   let cat = '';
-  try { cat = JSON.parse(localStorage.getItem(LS_CAT) || '""') || ''; } catch (e) { cat = ''; }
   let chosen = [];
   const ctx = { state: null, alive: true };
   let rec = null;                  // (V33.8) RECOMMENDED[kind], or null
@@ -180,6 +180,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   const P = _player(tiles, ctx);
   // A tile pressed: "by the video" is one choice by itself, and several styles replace it (пр25).
   const pick = (id, shift) => {
+    _spot(grid, null);
     chosen = id === BY_VIDEO ? [BY_VIDEO] : _press(chosen.filter((x) => x !== BY_VIDEO), id, shift);
     paintChosen();
     if (onPick) onPick(chosen.slice());
@@ -207,7 +208,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
       if (id === REC) b.title = 'Recommended for this kind of video: ' + rec.said + (recCats.length ? ' - ' + recCats.map((c) => CATEGORIES.find((x) => x.id === c).label).join(', ') : '');
       else if (recCats.includes(id)) b.title = 'Recommended for this kind of video';
-      b.addEventListener('click', () => { cat = id; try { localStorage.setItem(LS_CAT, JSON.stringify(cat)); } catch (e) { /* private */ } paintCat(); });
+      b.addEventListener('click', () => { cat = id; _spot(grid, null); paintCat(); });
       top.appendChild(b);
     }
     // The tiles in the same order: the person's, the recommended groups', the rest.
@@ -286,13 +287,30 @@ export function stylePicker(host, { onPick, kind } = {}) {
     byBtn.hidden = !(cat === REC && rec && rec.byVideo);
   }
 
-  /** (V33.8) The video's kind changed: its recommended groups first, and open - the style chosen stays chosen. */
+  /** (V33.8) The video's kind changed: its recommended groups first among the chips - the style chosen stays chosen. */
   function recommend(k) {
     rec = RECOMMENDED[k] || null;
     if (rec && rec.byVideo) paintBy();
     paintChips();
-    if (rec) cat = REC;
     paintCat();
+  }
+  // The group a chosen tile is in: "by the video" under "recommended"; the person's under Mine; else its category.
+  const groupOf = (id) => (id === BY_VIDEO ? REC : (tiles.get(id) ? tiles.get(id).btn.dataset.cat : ''));
+  /** (V68 P3) Open on the group of the first one chosen - none chosen: "recommended" when the kind has it, else All. */
+  function openFirst() {
+    const g = chosen.length ? groupOf(chosen[0]) : (rec ? REC : '');
+    cat = g === REC && !rec ? '' : g;
+    _spot(grid, null);
+    paintCat();
+    grid.scrollTop = 0;
+    if (chosen.length) _spot(grid, chosen[0] === BY_VIDEO ? byBtn : tiles.get(chosen[0]).btn);
+  }
+  /** (V68 P3) Show tile `id`: its group open, the tile scrolled to and outlined in gold. */
+  function reveal(id) {
+    const g = groupOf(id);
+    cat = g === REC && !rec ? '' : g;
+    paintCat();
+    _spot(grid, id === BY_VIDEO ? byBtn : (tiles.get(id) && tiles.get(id).btn));
   }
 
   function paintChosen() {
@@ -309,7 +327,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   _follow(ctx, cat, P.paintStills);
   recommend(kind);
   return {
-    set, get: () => chosen[0] || '', getAll: () => chosen.slice(), recommend,
+    set, get: () => chosen[0] || '', getAll: () => chosen.slice(), recommend, openFirst, reveal,
     stop: () => { ctx.alive = false; for (const t of tiles.values()) P.stopNow(t); },
   };
 }
@@ -319,7 +337,7 @@ export const pairName = (pair) => { const p = PAIRS.find((x) => x.id === pair); 
 
 /**
  * THE ANIMATIONS (V49, the owner's (пр26)): the In -> Out pairs' tiles in `host`, one chosen - or several with Shift, dealt page by
- * page. `onPick(pairs)` on a press. Returns { set(pairs), getAll(), stop() }.
+ * page. `onPick(pairs)` on a press. Returns { set(pairs), getAll(), reveal(pair), stop() }.
  */
 export function animPicker(host, { onPick } = {}) {
   let chosen = [];
@@ -345,7 +363,7 @@ export function animPicker(host, { onPick } = {}) {
     name.appendChild(_el('span', 'mv3-cap-nm', p.name));
     btn.append(box, name);
     const t = { btn, box, ph, img: null, over: false, loop: null, starting: false, end: 0 };
-    btn.addEventListener('click', (e) => { chosen = _press(chosen, p.id, !!(e && e.shiftKey)); paint(); if (onPick) onPick(chosen.slice()); });
+    btn.addEventListener('click', (e) => { _spot(grid, null); chosen = _press(chosen, p.id, !!(e && e.shiftKey)); paint(); if (onPick) onPick(chosen.slice()); });
     btn.addEventListener('pointerenter', () => P.enter(t));
     btn.addEventListener('pointerleave', () => P.leave(t, ctx.state && ctx.state.animLoop));
     tiles.set(id, t);
@@ -356,6 +374,8 @@ export function animPicker(host, { onPick } = {}) {
   return {
     set: (pairs) => { chosen = [...new Set((Array.isArray(pairs) ? pairs : []).filter((x) => PAIRS.some((p) => p.id === x)))]; paint(); },
     getAll: () => chosen.slice(),
+    // (V68 P3) Show pair `pair`'s tile: scrolled to and outlined in gold.
+    reveal: (pair) => { const t = tiles.get(animTileId(pair)); _spot(grid, t && t.btn); },
     stop: () => { ctx.alive = false; for (const t of tiles.values()) P.stopNow(t); },
   };
 }
