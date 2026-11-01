@@ -224,17 +224,18 @@
 .mv3-hlp-quiet.is-err{color:var(--danger)}
 /* The captions: the tabs, what is chosen in rows, the tiles filling the rest of the column */
 .mv3-hlp-captabs{padding:0}
-.mv3-hlp-chosen{flex:0 0 auto; max-height:34%; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 0;
+.mv3-hlp-chosen{flex:0 0 auto; max-height:30%; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:6px 0;
   border-bottom:1px solid var(--border-soft)}
-.mv3-hlp-crow{display:flex; align-items:flex-start; gap:8px}
-.mv3-hlp-crow .mv3-hlp-olab{flex:0 0 60px; line-height:22px}
-.mv3-hlp-crow .mv3-hlp-quiet{line-height:22px}
-.mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:22px; border:1px solid var(--primary); border-radius:999px;
+/* (the owner's check of P3) The open tab's set only: its name on top, its buttons under it - one column, small */
+.mv3-hlp-cset{display:flex; flex-direction:column; gap:4px; min-width:0}
+.mv3-hlp-cset-h{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.mv3-hlp-cset .mv3-hlp-chips{gap:3px}
+.mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:19px; border:1px solid var(--primary); border-radius:999px;
   background:var(--primary-soft); overflow:hidden}
-.mv3-hlp-pick-nm{min-width:0; padding:0 3px 0 9px; border:0; background:none; color:var(--ink); font:600 10px/20px var(--font);
+.mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:600 9.5px/17px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
 .mv3-hlp-pick-nm:hover{color:var(--gold)}
-.mv3-hlp-pick-x{flex:0 0 auto; padding:0 8px 0 3px; border:0; background:none; color:var(--muted); font:600 9px/20px var(--font); cursor:pointer}
+.mv3-hlp-pick-x{flex:0 0 auto; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); font:600 8.5px/17px var(--font); cursor:pointer}
 .mv3-hlp-pick-x:hover{color:var(--danger)}
 .mv3-hlp-style{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:7px; padding:7px;
   border:1px solid var(--border); border-radius:var(--r-xs)}

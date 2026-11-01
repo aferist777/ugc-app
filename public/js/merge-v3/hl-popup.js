@@ -13,8 +13,9 @@
      (хп35), (хп48): everything under the kinds is blurred and "find moments" waits), the chosen one's longer words after;
      the length and the count as buttons ((хп18); fragmentation has no count); "reset to standard"; music - the moods as
      buttons (hl-music.js).
-   - RIGHT: the captions - the tabs presets · animation (P4 adds fonts), under them what is chosen in rows, a button each with
-     ✕ - a press opens its tab and its group with the tile outlined (hl-style.js reveal); the tiles under that.
+   - RIGHT: the captions - the tabs presets · animation (P4 adds fonts), under them what is chosen OF THE OPEN TAB (the owner's
+     check: its presets, or its animations) - the set's name on top, a small button each with ✕ under it - a press shows the tile
+     in its group, outlined (hl-style.js reveal); the tiles under that.
    EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations - hl-kinds.js; switching the kind
    brings its own back.
 
@@ -392,10 +393,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     return !!st.pick;
   }
 
-  // What is chosen, a row a tab: a press opens the tile's tab and group, ✕ lets it go.
-  function chosenRow(label, items, empty, onShow, onDrop) {
-    const r = _el('div', 'mv3-hlp-crow');
-    r.appendChild(_el('span', 'mv3-hlp-olab', label));
+  // What is chosen of the open tab (the owner's check of P3, 2026-11-01: "компактнее в один столбец. название набора сверху. и в
+  // пресетах показывай пресеты, в анимациях анимации"): the set's name and count on top, its buttons under it; a press shows the
+  // tile in its group, ✕ lets it go.
+  function chosenSet(label, items, empty, onShow, onDrop) {
+    const r = _el('div', 'mv3-hlp-cset');
+    r.appendChild(_el('div', 'mv3-hlp-cset-h', label + (items.length ? ' · ' + items.length : '')));
     const list = _el('div', 'mv3-hlp-chips');
     if (!items.length) list.appendChild(_el('span', 'mv3-hlp-quiet' + (empty.err ? ' is-err' : ''), empty.text));
     for (const [key, name] of items) {
@@ -416,14 +419,17 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   }
   function paintChosen() {
     chosen.textContent = '';
-    chosen.appendChild(chosenRow('presets', st.styles.map((idp) => [idp, presetName(idp) || idp]),
+    if (st.capTab === 'anim') {
+      chosen.appendChild(chosenSet('animations', st.anims.map((p) => [p, pairName(p) || p]),
+        { text: 'none - pages come and go as the style has them' },
+        (p) => anim.reveal(p),
+        (p) => { anim.set(st.anims.filter((x) => x !== p)); st.anims = anim.getAll(); keep(); paint(); }));
+      return;
+    }
+    chosen.appendChild(chosenSet('presets', st.styles.map((idp) => [idp, presetName(idp) || idp]),
       { text: 'choose a style - Shift picks several, each page one of them', err: true },
-      (idp) => { st.capTab = 'presets'; paint(); picker.reveal(idp); },
+      (idp) => picker.reveal(idp),
       (idp) => { picker.set(st.styles.filter((x) => x !== idp)); st.styles = picker.getAll(); st.style = st.styles[0] || ''; keep(); paint(); }));
-    chosen.appendChild(chosenRow('animation', st.anims.map((p) => [p, pairName(p) || p]),
-      { text: 'none - pages come and go as the style has them' },
-      (p) => { if (!st.styles.length) return; st.capTab = 'anim'; paint(); anim.reveal(p); },
-      (p) => { anim.set(st.anims.filter((x) => x !== p)); st.anims = anim.getAll(); keep(); paint(); }));
   }
 
   function paintAbout() {
