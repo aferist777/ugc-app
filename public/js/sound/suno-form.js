@@ -192,10 +192,20 @@ export function createSunoForm(o) {
     const id = String(call('mood') || '');
     return id ? moods().find(m => m.id === id) || null : null;
   };
-  // (phase V60.1) The edit of THIS mood's preset, when it is being edited; changed - it says other than the preset does.
+  // (phase V68, (хп41)) The style the NEXT press of a mood takes: a mood has four, press n takes styles[n % 4] - the server's
+  // rule, lib/audio-writer-rules.js fromPreset. { name, style, negative, k: 1-4, of: 4 }.
+  function styleOf(mood) {
+    const n = Math.max(0, Math.floor(+((S.f.simple.presetN || {})[mood.id]) || 0));
+    const l = Array.isArray(mood.styles) ? mood.styles.filter(s => s && String(s.style || '').trim()) : [];
+    if (!l.length) return { name: '', style: String(mood.style || ''), negative: String(mood.negative || ''), k: 1, of: 1 };
+    const s = l[n % l.length];
+    return { name: String(s.name || ''), style: String(s.style), negative: String(s.negative || ''), k: n % l.length + 1, of: l.length };
+  }
+  // (phase V60.1) The edit of THIS mood's preset, when it is being edited; changed - it says other than the press's style does.
   const editOf = (mood) => (_edit && mood && _edit.mood === mood.id ? _edit : null);
   const _t = (s) => String(s || '').replace(/\r\n/g, '\n').trim();
-  const editChanged = (mood, e) => !!e && (_t(e.style) !== _t(mood.style) || _t(e.negative) !== _t(mood.negative));
+  const editChanged = (mood, e) => { if (!e) return false; const s = styleOf(mood); return _t(e.style) !== _t(s.style) || _t(e.negative) !== _t(s.negative); };
+  const editStart = (mood) => { const s = styleOf(mood); return { mood: mood.id, style: s.style, negative: s.negative }; };
   function resetEdit() { _edit = null; }
 
   function chipGroups() {
@@ -245,7 +255,7 @@ export function createSunoForm(o) {
   // there. Like the edit, for ONE press.
   const moodHas = (mood, c) => { const e = editOf(mood); return !!e && !!c.style && String(e.style || '').includes(c.style); };
   function moodChip(mood, c) {
-    if (!editOf(mood)) _edit = { mood: mood.id, style: String(mood.style || ''), negative: String(mood.negative || '') };
+    if (!editOf(mood)) _edit = editStart(mood);
     _edit.style = moodHas(mood, c) ? _takeOut(_edit.style, c.style) : _join(_edit.style, c.style);
     call('paintCol');
     call('paintMake');
@@ -260,7 +270,7 @@ export function createSunoForm(o) {
     const c = S.f.custom;
     c.style = _t(e.style);
     c.negative = _t(e.negative);
-    if (!_t(c.title)) c.title = String(mood.title || mood.label || '').slice(0, 80);
+    if (!_t(c.title)) { const s = styleOf(mood); c.title = String((mood.title || mood.label || '') + (s.name ? ' · ' + s.name : '')).slice(0, 80); }
     c.instrumental = true;
     save();
     return true;
@@ -463,7 +473,7 @@ export function createSunoForm(o) {
    *  the mode's own (`into` - where its tracks go). null - not a mode of this form. */
   function helpText(into) {
     const p = preset();
-    if (p) return 'Background music for highlights in one mood: its preset goes to Suno as it is - no chips, no words - and Suno makes TWO tracks. They go to Music → highlights → ' + p.label + ', and the highlights popup offers them. Each press turns one colour of the mood, so the next tracks differ.';
+    if (p) return 'Background music for highlights in one mood: its preset goes to Suno as it is - no chips, no words - and Suno makes TWO tracks. They go to Music → highlights → ' + p.label + ', and the highlights popup offers them. The mood has four styles of different genres - each press takes the next one, so the next tracks sound different.';
     return ['simple', 'custom', 'lyrics'].includes(S.mode) ? modeHelp(S.mode, into) : null;
   }
 
@@ -474,15 +484,17 @@ export function createSunoForm(o) {
     if (mood) {
       // The preset says it all: what it is for, the style Suno is given (the rules add the bed's excludes and knobs).
       const n = (f.presetN || {})[mood.id] || 0;
+      // (phase V68) The style this press takes - one of the mood's four, by its name.
+      const st = styleOf(mood);
       const box = el('div', 'au-preset');
-      box.appendChild(el('b', null, mood.label + (mood.title ? ' · ' + mood.title : '')));
+      box.appendChild(el('b', null, mood.label + (mood.title ? ' · ' + mood.title : '') + (st.name ? ' · ' + st.name : '')));
       if (mood.about) box.appendChild(el('div', 'au-muted', mood.about));
       // (phase V60.1) "edit": the preset's style and excludes in two fields, filled with the mood's own, for this press only.
       const e = editOf(mood);
       const mark = el('span', 'au-edited', 'edited · this press only');
       const paintMark = () => { mark.hidden = !editChanged(mood, e); };
       if (!e) {
-        if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
+        if (st.style) box.appendChild(el('div', 'au-preset-style', st.style));
       } else {
         const area = (key, rows, ph) => {
           const t = el('textarea', 'au-ta');
@@ -498,15 +510,15 @@ export function createSunoForm(o) {
         box.appendChild(field('Exclude', area('negative', 2, 'what must not be there - bare words, by commas'),
           { max: 1000, help: 'What Suno should keep out - bare words by commas, never "no …". Voices, drops and risers are kept out of every bed by themselves. Up to 1000 characters.' }));
       }
-      box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
-        ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
-      const fl = field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ - an edited style too.\n"edit" - change its style and excludes for THIS press; a chip on the left adds its words to the style. After "generate", or when the window opens again, it is the mood\'s own preset. "standard" - back to it now.\nCustom chosen while editing takes this style and these excludes.' });
+      box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (st.of > 1 ? ' - style ' + st.k + ' of ' + st.of + (st.name ? ', ' + st.name : '') : '')
+        + ' · two tracks into Music → highlights → ' + mood.label));
+      const fl = field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nThe mood has four styles of different genres; each press takes the next one, so the next tracks sound different.\n"edit" - change this style and its excludes for THIS press; a chip on the left adds its words to the style. After "generate", or when the window opens again, it is the mood\'s own style. "standard" - back to it now.\nCustom chosen while editing takes this style and these excludes.' });
       const act = el('span', 'au-f-act');
       const btn = el('button', 'au-link au-edit', e ? 'standard' : 'edit');
       btn.type = 'button';
       btn.title = e ? 'Back to the mood\'s own preset' : 'Change the mood\'s style and excludes - for this press only';
       btn.addEventListener('click', () => {
-        _edit = e ? null : { mood: mood.id, style: String(mood.style || ''), negative: String(mood.negative || '') };
+        _edit = e ? null : editStart(mood);
         call('paintCol');
         call('paintMake');
       });
