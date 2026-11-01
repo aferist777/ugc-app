@@ -1909,15 +1909,28 @@ function _journal(type, kind, out, b) {
 }
 
 // The look a project asked for is written into that project's casting here, because by the time it
-// lands the page that asked may be closed. Merged into whatever the casting says by then.
-function _patchCasting(projectId, patch) {
-  const list = _loadProjects();
-  const i = list.findIndex(x => String(x.id) === String(projectId));
-  if (i < 0) return null;
-  const now = new Date().toISOString();
-  list[i] = _normProject({ ...list[i], casting: { ...(list[i].casting || {}), ...patch }, updatedAt: now }, now);
-  _saveProjects(list);
-  return list[i];
+// lands the page that asked may be closed. (phase V67) Through the cast route's own move (_applyCast) - its character with
+// it, which the old patch of the look alone left behind - and NOT when it would put work aside: that is asked of the person
+// (the look is there in "who" to press).
+function _castMade(projectId, look) {
+  const next = _normLook(look);
+  if (!next || !next.obrazId) return null;
+  let moved = false, asked = false;
+  const saved = PROJECTS.apply(projectId, (fresh) => {
+    const plan = _castPlan(fresh, next);
+    if (plan.ask) { asked = true; return; }
+    moved = _applyCast(fresh, next, plan, new Date().toISOString());
+  });
+  if (asked) console.log('[scen3] the look made is not put on ' + projectId + ': it would put work aside - the person decides');
+  if (saved && moved) MIRROR.touch(projectId, { project: saved });
+  return saved;
+}
+// A character's name as the Characters shelf has it now.
+function _charNameOf(id) {
+  const chars = _read(path.join(DATA_DIR, 'characters.json'));
+  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const ch = arr.find(c => String(c.id) === String(id || ''));
+  return ch ? String(ch.name || '') : '';
 }
 
 // The three kinds Merge starts, and what finishing each one means. The waiting is the same for all
@@ -1976,9 +1989,10 @@ JOBS.register('look', {
   file: async (rec, landed) => {
     const p = _fileParams(rec);
     const saved = await _saveObraz({ ...p, imagePath: landed.imagePath });
-    // Dressed for a project, so that project wears it - even with nobody looking.
+    // Dressed for a project, so that project wears it - even with nobody looking. (phase V67) As the cast route casts it,
+    // and only when that puts nothing aside: work to put aside is the person's question, at their press on the look.
     if (p.projectId) {
-      try { _patchCasting(p.projectId, { obrazId: String(saved.obrazId), obrazImage: saved.path }); }
+      try { _castMade(p.projectId, { characterId: p.charId, characterName: _charNameOf(p.charId) || p.charName, obrazId: String(saved.obrazId), obrazImage: saved.path }); }
       catch (e) { console.warn('[scen3] could not put the look on the project:', e.message); }
     }
     return { path: saved.path, preview: saved.preview, obrazId: saved.obrazId, media: 'image' };
@@ -3064,6 +3078,156 @@ function _normCasting(c) {
   };
 }
 
+/* ── WHOSE WORK IS IN THE FIELDS (phase V67, the owner 2026-11-01, (об2)-(об4), (об9)) ─────────────────────────────────────
+   A talking head's reads are its character's VOICE; its frames and its clips show its LOOK. A look of ANOTHER character cast
+   PUTS ASIDE what was made - the lines' reads (with their cut silence and merges) and the voice picked by hand under the
+   character, the set's frames and the lines' clips (with their prompts and the frames picked by hand) under the look - IN
+   THE PROJECT ITSELF (`shelf`): the files stay in its folder, nothing is deleted ((об2)), and it all comes back as it was
+   when that character in that look is cast again. Another look of the SAME character puts aside its frames and clips only
+   - the voice is the same ((об4)). The CHOICES stay ((об3)): the mood and the [tags] it marked, stability and speed, the
+   model, the quality, the shot size, the spread, Seedance's settings; the voice follows the character by itself
+   (_castVoiceOf). `workOf` - the look the fields' work was made for (the cast look before V67); `cast0` - the first look cast
+   (V67 block 3). Asked before it moves anything (POST /scen3/projects/:id/cast, below).
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+const SHELF_READ = ['audio', 'cuts', 'merge'];                              // a line's, kept by the character
+const SHELF_LOOK = ['video', 'pick', 'chosen', 'sd', 'shot', 'frameId'];    // a line's, kept by the look
+const SHELF_MIX = ['variants', 'order', 'approved', 'banned', 'activeId'];  // the set's, kept by the look
+// What a line holds when that part of it is put aside - a missing key is the line's own default (_normLine).
+const SHELF_EMPTY = {
+  audio: () => ({ plain: null, tagged: null }), video: () => ({ plain: [], tagged: [] }),
+  pick: () => ({ plain: '', tagged: '' }), chosen: () => ({ plain: '', tagged: '' }), shot: () => null, frameId: () => '',
+};
+const SHELF_MIX_EMPTY = { variants: () => [], order: () => [], approved: () => [], banned: () => [], activeId: () => '' };
+
+// A look cast, as `workOf` and `cast0` keep it - null without a character.
+function _normLook(c) {
+  const s = _normCasting(c);
+  if (!s.characterId) return null;
+  return { characterId: s.characterId, characterName: s.characterName, obrazId: s.obrazId, obrazImage: s.obrazImage };
+}
+const _lineBits = (arr) => (Array.isArray(arr) ? arr.map(x => ((x && typeof x === 'object') ? x : {})) : []);
+function _normShelf(sh) {
+  const src = (sh && typeof sh === 'object') ? sh : {};
+  const each = (m, fn) => {
+    const out = {};
+    for (const [k, v] of Object.entries((m && typeof m === 'object') ? m : {})) {
+      const x = (k && v && typeof v === 'object') ? fn(v) : null;
+      if (x) out[String(k)] = x;
+    }
+    return out;
+  };
+  return {
+    chars: each(src.chars, v => ({ name: String(v.name || ''), lines: _lineBits(v.lines), pick: (v.pick && typeof v.pick === 'object') ? v.pick : null, at: String(v.at || '') })),
+    looks: each(src.looks, (v) => {
+      const m = _normMix((v.mix && typeof v.mix === 'object') ? v.mix : {});
+      return {
+        characterId: String(v.characterId || ''), name: String(v.name || ''), image: String(v.image || ''),
+        lines: _lineBits(v.lines), mix: Object.fromEntries(SHELF_MIX.map(k => [k, m[k]])), at: String(v.at || ''),
+      };
+    }),
+  };
+}
+const _shelfAny = (sh) => !!(sh && (Object.keys(sh.chars || {}).length || Object.keys(sh.looks || {}).length));
+
+// What is in the fields now, counted the way the question says it ((об5)): the lines read, the frames of the set, the clips.
+function _workCount(p) {
+  const lines = (Array.isArray(p.lines) ? p.lines : []).map(_normLine);
+  return {
+    reads: lines.filter(l => (l.audio.plain && l.audio.plain.path) || (l.audio.tagged && l.audio.tagged.path)).length,
+    frames: _normMix(p.mix).variants.length,
+    clips: lines.reduce((n, l) => n + l.video.plain.length + l.video.tagged.length + ((l.sd && l.sd.clips) || []).length, 0),
+  };
+}
+
+// What casting `next` (a look, or null for none) would move: `work` - whose the fields are; `look` - its frames and clips go
+// aside and next's come back; `char` - its reads go aside and next's come back; `ask` - the counts to ask about, or null.
+function _castPlan(p, next) {
+  const now = _normLook(p.casting);
+  const work = _normLook(p.workOf) || now;
+  if (!next) return { work, look: false, char: false, ask: null };
+  const sameChar = !!work && work.characterId === next.characterId;
+  const sameLook = sameChar && work.obrazId === next.obrazId;
+  const plan = { work, look: !sameLook, char: !sameChar, ask: null };
+  if (work) {
+    const w = _workCount(p);
+    const n = { reads: plan.char ? w.reads : 0, frames: plan.look ? w.frames : 0, clips: plan.look ? w.clips : 0 };
+    if (n.reads || n.frames || n.clips) plan.ask = { ...n, from: work.characterName, to: next.characterName, sameChar };
+  }
+  return plan;
+}
+
+// The move itself, on a project's raw record inside PROJECTS.apply: what is put aside goes into `shelf`, what next had put
+// aside comes back, the casting is next. Synchronous - nothing slow is asked here. Returns whether any work moved.
+function _applyCast(p, next, plan, now) {
+  let moved = false;
+  const shelf = _normShelf(p.shelf);
+  const lines = (Array.isArray(p.lines) ? p.lines : []).map(_normLine);
+  const take = (l, keys) => Object.fromEntries(keys.filter(k => l[k] !== undefined).map(k => [k, l[k]]));
+  const clear = (l, keys) => { for (const k of keys) { if (SHELF_EMPTY[k]) l[k] = SHELF_EMPTY[k](); else delete l[k]; } };
+  const back = (from, keys) => lines.forEach((l, i) => {
+    const bit = (from.lines || [])[i] || {};
+    clear(l, keys);
+    for (const k of keys) if (bit[k] !== undefined && bit[k] !== null) l[k] = bit[k];
+  });
+  const mix = (p.mix && typeof p.mix === 'object') ? p.mix : {};
+  const work = plan.work;
+  if (next && work && plan.look && work.obrazId) {
+    const n = _normMix(mix);
+    const b = { characterId: work.characterId, name: work.characterName, image: work.obrazImage, at: now,
+      lines: lines.map(l => take(l, SHELF_LOOK)), mix: Object.fromEntries(SHELF_MIX.map(k => [k, n[k]])) };
+    const any = b.mix.variants.length || lines.some(l => l.video.plain.length || l.video.tagged.length || l.sd
+      || (l.shot && l.shot.motion) || l.frameId || l.pick.plain || l.pick.tagged || l.chosen.plain || l.chosen.tagged);
+    if (any) { shelf.looks[work.obrazId] = b; moved = true; }
+    lines.forEach(l => clear(l, SHELF_LOOK));
+    for (const k of SHELF_MIX) mix[k] = SHELF_MIX_EMPTY[k]();
+    mix.lastError = '';
+  }
+  if (next && work && plan.char) {
+    const pick = _normVoice(p.voice).pick;
+    const b = { name: work.characterName, at: now, pick, lines: lines.map(l => take(l, SHELF_READ)) };
+    if (pick || lines.some(l => l.audio.plain || l.audio.tagged || l.cuts || l.merge)) { shelf.chars[work.characterId] = b; moved = true; }
+    lines.forEach(l => clear(l, SHELF_READ));
+    p.voice = { ...((p.voice && typeof p.voice === 'object') ? p.voice : {}), pick: null };
+  }
+  // What next had put aside comes back - its reads with the character, its frames and clips with the look.
+  if (next && (plan.char || !work) && shelf.chars[next.characterId]) {
+    const b = shelf.chars[next.characterId];
+    back(b, SHELF_READ);
+    p.voice = { ...((p.voice && typeof p.voice === 'object') ? p.voice : {}), pick: b.pick || null };
+    delete shelf.chars[next.characterId];
+    moved = true;
+  }
+  if (next && (plan.look || !work) && next.obrazId && shelf.looks[next.obrazId]) {
+    const b = shelf.looks[next.obrazId];
+    back(b, SHELF_LOOK);
+    for (const k of SHELF_MIX) mix[k] = (b.mix && b.mix[k] !== undefined) ? b.mix[k] : SHELF_MIX_EMPTY[k]();
+    delete shelf.looks[next.obrazId];
+    moved = true;
+  }
+  p.lines = lines;
+  p.mix = mix;
+  if (_shelfAny(shelf)) p.shelf = shelf; else delete p.shelf;
+  // Whose the fields are: next's; with none cast, still the one whose work they hold (a ✕ on the stage takes nothing aside).
+  if (next) p.workOf = next;
+  else if (work) p.workOf = work;
+  // (об9) The first look cast - the one there was when the first change came, for a project from before V67.
+  if (!_normLook(p.cast0) && (work || next)) p.cast0 = work && work.obrazId ? work : next;
+  const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
+  p.casting = next ? { ...cast, ...next } : { ...cast, characterId: '', characterName: '', obrazId: '', obrazImage: '' };
+  p.updatedAt = now;
+  return moved;
+}
+
+// A line put in at `at` (/line/insert): the lines put aside keep their numbers - an empty place goes in there too.
+function _shelfSplice(p, at) {
+  if (!_shelfAny(p.shelf)) return;
+  for (const b of [...Object.values(p.shelf.chars || {}), ...Object.values(p.shelf.looks || {})]) {
+    if (!Array.isArray(b.lines)) continue;
+    while (b.lines.length < at) b.lines.push({});
+    b.lines.splice(at, 0, {});
+  }
+}
+
 // ── Mix workspace ───────────────────────────────────────────────────────────
 // The whole state of the Build-mix popup lives on the project, so closing it and
 // coming back — even in another session — restores exactly what was there. Each
@@ -3152,6 +3316,10 @@ function _normProject(p, now) {
     // own things: shared, read by everyone, the admin's to edit.
     owner:      src.owner ? String(src.owner) : null,
     casting:    _normCasting(src.casting),
+    // (phase V67) Whose work the fields hold, the first look cast, and the work of the others put aside (_applyCast).
+    ...(_normLook(src.workOf) ? { workOf: _normLook(src.workOf) } : {}),
+    ...(_normLook(src.cast0) ? { cast0: _normLook(src.cast0) } : {}),
+    ...(_shelfAny(_normShelf(src.shelf)) ? { shelf: _normShelf(src.shelf) } : {}),
     mix:        _normMix(src.mix),
     // How the look and the place read, for the frames of the fragments step: the person to keep,
     // the place, its light. Read once for a look and a place, and again only when either changes.
@@ -3562,6 +3730,8 @@ router.get('/scen3/projects/:id', (req, res) => {
 router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
+    // (phase V67) Whose the work is and what is put aside are the cast route's alone - never a page's copy written back.
+    delete b.workOf; delete b.cast0; delete b.shelf;
     // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
     // came in - gets them in English, and so does the scenario: what is spoken is English. (A voiceover is not made
     // here: it is THE voiceover draft, /scen3/voiceover/draft - phase V62.)
@@ -3642,6 +3812,54 @@ router.post('/scen3/projects', async (req, res) => {
     list.unshift(rec);
     _saveProjects(list);
     res.json({ success: true, project: _projFull(rec) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── A LOOK CAST (phase V67, the owner 2026-11-01: "при смене образа спрашивать, точно ли сменить. и если пользователь
+   говорит да, то сбрасывать") - the ONE way "who" is written, the stage's ✕ too (js/merge-v3/wk-setup.js _cast) ──────────
+   POST /api/scen3/projects/:id/cast  { characterId, characterName, obrazId, obrazImage, sure? } | { clear: true }
+        -> { success, project, moved }   cast; `moved` - work was put aside or came back, and the timeline was re-laid
+        -> { success: false, ask: { reads, frames, clips, from, to, sameChar } }   it would put work aside: asked first,
+           cast with `sure` after a yes
+        -> 409 { success: false, error }  something of the project is being made - after it
+   The ✕ (`clear`) takes the look off and puts nothing aside: the same look cast again finds everything as it was ((об1)).
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+function _castBusy(id) {
+  const busy = _scriptBusy(id);
+  if (busy) return busy;
+  // A set's frame (/scen3/frames/plan - old rows tried again) files itself into the set it was asked for.
+  const frame = ALERTS.list().some(r => r.state === 'running' && r.what === 'frame'
+    && String((((r.job || {}).params || {}).request || {}).projectId || '') === String(id));
+  return frame ? 'a frame is being drawn' : '';
+}
+
+router.post('/scen3/projects/:id/cast', async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    if (proj.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
+    const b = req.body || {};
+    const next = b.clear ? null : _normLook(b);
+    if (!b.clear && !(next && next.obrazId)) return res.status(400).json({ success: false, error: 'a look is needed' });
+    const plan = _castPlan(proj, next);
+    // A question, not a refusal: answered 200, so the page's console stays clean at every ask.
+    if (plan.ask && !b.sure) return res.json({ success: false, ask: plan.ask, error: 'asked' });
+    if (next && (plan.look || plan.char)) {
+      const busy = _castBusy(id);
+      if (busy) return res.status(409).json({ success: false, error: busy + ' - change the look when it is done' });
+    }
+    const now = new Date().toISOString();
+    let moved = false;
+    const saved = PROJECTS.apply(id, (fresh) => { moved = _applyCast(fresh, next, _castPlan(fresh, next), now); });
+    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    if (moved) {
+      try { await MIRROR.rebuild(id, { project: saved }); }
+      catch (e) { console.warn('[scen3/cast] the timeline was not re-laid:', e.message); }
+    }
+    console.log('[scen3/cast] ' + id + (next ? ' cast ' + next.characterName + ' / ' + next.obrazId : ' cleared') + (moved ? ' - work moved' : ''));
+    res.json({ success: true, project: _projFull(PROJECTS.get(id) || saved), moved });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -3937,6 +4155,7 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
         if (fr && !near.includes(fr.id)) { slot = base + k; break; }
       }
       fresh.lines.splice(after + 1, 0, _normLine({ text, slot }));
+      _shelfSplice(fresh, after + 1);        // (phase V67) the work put aside keeps its lines' numbers too
       fresh.updatedAt = new Date().toISOString();
     });
     if (!saved) return res.status(404).json({ success: false, error: 'not found' });

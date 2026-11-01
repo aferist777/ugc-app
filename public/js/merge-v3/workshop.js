@@ -240,7 +240,7 @@ function _paintSpines() {
   lib.title = !_pid ? ''
     : off ? (!_project ? 'Reading the project…'
       : _isVo() ? 'Read the lines first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
-        : 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total)
+        : 'Every fragment needs its video first · ' + n.clips + '/' + n.total)
       : _step === 'setup' ? 'The timeline and the Library · ' + (_isVo() ? n.read + '/' + n.total + ' read' : n.clips + '/' + n.total + ' with a clip') : '';
 }
 
@@ -323,10 +323,13 @@ function _paintOn(wrap) {
   }
   const ok = _ready();
   const n = _readCount();
+  // (phase V67, the owner's (об1): "во всплывашке при наведении на library писать почему нельзя нажать") Why it cannot be
+  // pressed, in so many words: what is missing, how much of it, and where it is made.
   const left = !_project ? 'Reading the project…'
     : !n.total ? (_isVo() ? 'Choose the script first - a scenario or your own text, on the right.' : 'This project has no lines.')
-      : _isVo() ? 'Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline, the Library and the chats open.'
-        : 'Make the video of every fragment first - field 3, video: ' + n.clips + ' of ' + n.total + ' with a video. Then the timeline, the Library and the chats open.';
+      : _isVo() ? 'Not yet - nothing is on the timeline. Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline and the Library open.'
+        : 'Not yet - the timeline and the Library open when EVERY fragment has its video, and ' + n.clips + ' of ' + n.total
+          + ' have one now. Make the rest in field 3, video.';
   for (const [label, id, what] of ON) {
     const c = document.createElement('button');
     c.type = 'button';

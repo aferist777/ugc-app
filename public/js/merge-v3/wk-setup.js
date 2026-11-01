@@ -61,6 +61,9 @@
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
 import * as API from './scen-api.js';
+import * as Store from './store.js';
+import { askChoice } from './ask.js';
+import { showError } from '../notice.js';
 import * as PV from './preview-b.js';
 import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
@@ -160,6 +163,57 @@ async function _patch(casting) {
   }
   _saving = false;
   _ctx.repaint();
+}
+
+// ── WHO IS CAST (phase V67, the owner 2026-11-01) ───────────────────────────
+// A look - or none, the stage's ✕ - goes up through ONE route (routes/scen3.js POST /scen3/projects/:id/cast), which decides
+// what moves: another character's look puts that character's reads, frames and clips aside in the project, another look of
+// the same character its frames and clips, and what the new one had put aside comes back. When something would be put aside
+// the server asks first, and so does this, at the look pressed (`anchor`): "change" casts it, anything else leaves it all.
+// Resolves true once cast.
+async function _cast(look, anchor, sure) {
+  if (!_ctx || !_ctx.project || _saving) return false;
+  const id = _ctx.project.id;
+  _saving = true;
+  _ctx.repaint();
+  let r = null;
+  try {
+    const res = await fetch('/api/scen3/projects/' + encodeURIComponent(id) + '/cast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(look ? { ...look, sure: !!sure } : { clear: true }),
+    });
+    try { r = await res.json(); } catch (e) { r = null; }
+    if (!r) throw new Error(res.status === 404 ? 'This is newer than the running app - close UGC Studio and open it again to finish the update.' : 'the server answered ' + res.status);
+  } catch (e) {
+    r = { success: false, error: e.message };
+  }
+  _saving = false;
+  if (r.success) {
+    // The record as the server has it now - the lines and the set too, not only the casting.
+    if (_ctx.project && String(_ctx.project.id) === String(id)) Object.assign(_ctx.project, r.project);
+    if (r.moved) Store.refresh().catch(() => {});
+    _ctx.repaint();
+    return true;
+  }
+  _ctx.repaint();
+  if (r.ask && look) {
+    const a = r.ask;
+    const parts = [a.reads && !a.sameChar ? 'the reads (' + a.reads + ')' : '', a.frames ? 'frames (' + a.frames + ')' : '', a.clips ? 'clips (' + a.clips + ')' : ''].filter(Boolean);
+    const what = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0];
+    const whose = a.sameChar ? 'of this look' : 'of ' + (a.from || 'the character cast now');
+    const back = a.sameChar ? 'that look is chosen again' : (a.from || 'they') + ' is chosen again';
+    const text = 'Change to ' + (a.sameChar ? 'another look of ' + (a.to || 'this character') : (a.to || 'this character')) + '?';
+    const sub = 'The ' + what.replace(/^the /, '') + ' ' + whose + ' leave the fields - their files stay in this project and come back when ' + back + '.';
+    const host = (anchor && anchor.isConnected) ? anchor : document.querySelector('#mv3-stage') || document.body;
+    return new Promise((done) => {
+      askChoice(host, text, sub, [
+        { label: 'change', kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
+        { label: 'cancel', on: () => done(false) },
+      ], { stay: true });
+    });
+  }
+  showError('The look was not changed: ' + (r.error || 'refused'));
+  return false;
 }
 
 // ── The picture of a character ──────────────────────────────────────────────
@@ -357,10 +411,11 @@ function _stage(chosen) {
 }
 
 // A half's cross: the choice is taken off the project; the frames and the reads already made stay what
-// they are - they are files - and nothing else moves.
+// they are - they are files - and nothing else moves. (phase V67) "Who" through the cast route: nothing is put aside, and
+// the same look cast again finds the fields as they were.
 function _clearHalf(half) {
   if (_saving) return;
-  if (half === 'top') _patch({ characterId: '', characterName: '', obrazId: '', obrazImage: '' });
+  if (half === 'top') _cast(null);
   else _patch({ locationId: '', locationImage: '' });
 }
 
@@ -619,10 +674,11 @@ function _paintCharacters(body) {
     // The crumb follows the character shown - "+ new look" stands by THAT name.
     onGroup: () => _whoCrumbs(),
     mark: (it) => (it.look && cast.obrazImage && it.path === cast.obrazImage ? 'cast' : ''),
-    press: (it) => {
+    // (phase V67) Asked first at the look pressed when it would put work aside; the window closes once it is cast.
+    press: (it, tile) => {
       if (!it.look) return;
-      _castLook(it.char, it.look);
-      if (_who) _who.win.close();
+      const win = _who && _who.win;
+      _castLook(it.char, it.look, tile).then((ok) => { if (ok && win && _who && _who.win === win) win.close(); });
     },
     del: (it) => (it.look ? {
       title: 'Delete this look of ' + it.char.name,
@@ -642,10 +698,10 @@ function _paintCharacters(body) {
   });
 }
 
-// The one write of "who": the look with its character - it belongs to them.
-function _castLook(c, o) {
-  if (!c || !o) return;
-  _patch({ characterId: c.id, characterName: c.name, obrazId: o.id, obrazImage: o.image });
+// The one write of "who": the look with its character - it belongs to them (phase V67: through _cast).
+function _castLook(c, o, anchor) {
+  if (!c || !o) return Promise.resolve(false);
+  return _cast({ characterId: String(c.id), characterName: c.name, obrazId: String(o.id), obrazImage: o.image }, anchor);
 }
 
 // ── NEW LOOK: dress the character in a lookbook ─────────────────────────────

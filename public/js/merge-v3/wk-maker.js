@@ -201,7 +201,7 @@ export function endHalf(place, error) {
 // what is shown (every group the filter passes, while words are typed) and the tiles: a press IS the choice (`press`), a
 // mark says what is chosen now, a ✕ pressed twice deletes (`del`), a thing with `say` is there to be seen and says why.
 //   o: { groups?: [{ key, label, n, sub, items }], items?, filter?: { label, test(g) }, state: { group, filterOn, q },
-//        onGroup(g), mark(it) -> words, press(it), del(it) -> null | { title, ask?, run, done }, empty, why }
+//        onGroup(g), mark(it) -> words, press(it, tile), del(it) -> null | { title, ask?, run, done }, empty, why }
 //   An item: { path, name, sub, thumb, aspect, say? }.
 export function paintChoose(host, o) {
   const st = o.state || (o.state = {});
@@ -303,7 +303,7 @@ export function paintChoose(host, o) {
     hit.addEventListener('click', () => {
       if (it.say) { said.textContent = it.say; return; }
       said.textContent = '';
-      o.press(it);
+      o.press(it, t);
     });
     const d = typeof o.del === 'function' ? o.del(it) : null;
     if (d) t.appendChild(delX(Object.assign({ host: t }, d)));
