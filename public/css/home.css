@@ -39,25 +39,53 @@
 .hm-empty{font-size:11.5px; color:var(--muted); padding:2px 2px}
 .hm-err{font-size:11.5px; color:var(--danger)}
 
-/* ── Continue ── */
-.hm-projects{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px}
-.hm-proj{display:block; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm); overflow:hidden; text-decoration:none; color:inherit}
-.hm-proj:hover{border-color:var(--border)}
-.hm-thumb{position:relative; width:100%; aspect-ratio:4/5; max-height:150px; background:linear-gradient(160deg, oklch(.3 .03 265), oklch(.21 .02 265)) center/cover no-repeat}
-.hm-kind{position:absolute; left:6px; top:6px; font:700 8.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; padding:3px 6px; border-radius:var(--pill); background:oklch(0 0 0 / .5); color:var(--ink)}
-.hm-proj-m{padding:6px 8px 8px}
-.hm-proj-t{font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.hm-proj-d{font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.hm-new{display:flex; gap:6px; flex-wrap:wrap}
+/* ── THE TILES (phase V70): New project, Generate, Library - a filled gold icon (js/home/icons.js, drawn in currentColor)
+   and its word under it; four places a row, so the three of Generate stand under the first three of the others ── */
+.hm-tiles{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px}
+.hm-tile{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-width:0; min-height:80px; padding:13px 6px 10px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--ink); text-decoration:none;
+  font:600 11.5px/1.2 var(--font); text-align:center; cursor:pointer; transition:border-color .12s, background .12s}
+.hm-tile:hover{border-color:var(--gold); background:var(--surface-2)}
+.hm-tile:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.hm-tile-ico{width:30px; height:30px; color:var(--gold)}
+.hm-tile-ico svg{display:block; width:100%; height:100%}
+.hm-tile-t{max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* ── PROJECTS (phase V70; what Continue was): the chips as Merge's open list has them (css/merge-v3.css .mv3-plist-kind), the
+   rows with a small picture, a card beside a row the pointer rests on ── */
+.hm-chips{display:flex; flex-wrap:wrap; gap:4px; padding-bottom:8px; border-bottom:1px solid var(--border-soft)}
+.hm-chip{height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
+  font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap}
+.hm-chip:hover{background:var(--surface-2)}
+.hm-chip.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft); cursor:default}
+.hm-plist{display:flex; flex-direction:column; gap:2px; min-height:40px}
+.hm-prow{display:flex; align-items:center; gap:10px; padding:4px 8px 4px 4px; border-radius:var(--r-xs); color:var(--ink); text-decoration:none}
+.hm-prow:hover{background:var(--surface-2)}
+.hm-pthumb{flex:0 0 34px; height:34px; border-radius:var(--r-xs); background:oklch(.27 .02 265) center/cover no-repeat;
+  display:flex; align-items:center; justify-content:center; color:var(--gold)}
+.hm-pthumb svg{width:16px; height:16px; opacity:.75}
+.hm-ptx{flex:1 1 auto; min-width:0}
+.hm-ptx b{display:block; font:600 12px/1.3 var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-ptx span{display:block; font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+/* The card on hover (the owner asked for it, (хп29)): the frame in the project's own shape, then the words. Not pressed - the
+   row under the pointer is. */
+.hm-peek{position:fixed; z-index:9000; display:flex; flex-direction:column; gap:3px; width:max-content; max-width:280px; padding:8px 8px 9px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow, 0 12px 32px oklch(0 0 0 / .45)); pointer-events:none}
+.hm-peek[hidden]{display:none}
+.hm-peek-pic{width:150px; aspect-ratio:9/16; margin-bottom:5px; border-radius:var(--r-xs); background:oklch(.27 .02 265) center/cover no-repeat}
+.hm-peek-pic.is-wide{width:260px; aspect-ratio:16/9}
+.hm-peek-pic.is-none{display:flex; align-items:center; justify-content:center; color:var(--gold)}
+.hm-peek-pic.is-none svg{width:40px; height:40px; opacity:.6}
+.hm-peek-t{font:600 12px/1.3 var(--font); max-width:260px; overflow-wrap:anywhere}
+.hm-peek-k{font:700 9px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
+.hm-peek-d{font-size:10.5px; color:var(--muted); max-width:260px}
+
+/* ── the buttons of First steps ── */
 .hm-btn{display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:var(--r-xs); border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font:600 11px var(--font); cursor:pointer; text-decoration:none}
 .hm-btn:hover{border-color:var(--muted)}
-.hm-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
 .hm-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
-/* A kind of project that is coming (phase V61: voiceover) - there, greyed, not pressable. */
-.hm-btn.is-off{opacity:.45; cursor:default}
-.hm-btn.is-off:hover{border-color:var(--border)}
 
-/* ── rows: Now, New since ── */
+/* ── rows: New since ── */
 .hm-rows{display:flex; flex-direction:column; gap:6px}
 .hm-row{display:flex; align-items:center; gap:10px; padding:7px 9px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs)}
 .hm-ico{flex:0 0 22px; height:22px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; background:var(--surface-2); font-size:12px}
@@ -69,8 +97,6 @@
 .hm-go:hover{color:var(--ink)}
 .hm-bar{height:4px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin-top:4px}
 .hm-bar i{display:block; height:100%; background:var(--gold); transition:width .4s var(--ease)}
-.hm-bar.is-wait i{width:30% !important; animation:hm-wait 1.6s ease-in-out infinite}
-@keyframes hm-wait{0%{transform:translateX(-100%)} 100%{transform:translateX(340%)}}
 
 /* ── First steps: a ring each, gold and ticked when done ── */
 .hm-progress{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}

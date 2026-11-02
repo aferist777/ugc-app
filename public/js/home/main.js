@@ -4,12 +4,17 @@
    Its own sub-header: the tabs on the left (Overview; the knowledge base comes later), what belongs to the open tab on the
    right ("reset layout"). The Overview is BLOCKS in two columns, each in the gold frame of a talking head's field, no
    numbers; a block is taken by its head and let go anywhere in either column, and where they stand is kept
-   (`ugc_home_layout_v1`, mirrored into the library by js/storage-sync.js).
+   (`ugc_home_layout_v2`, mirrored into the library by js/storage-sync.js).
 
-     Continue   the four projects changed last (GET /api/home/continue) and the ways to start a new one
-     Now        what is being made, rendered or downloaded: the journal, the render queue, the bot, the links
-     New        what came since the last visit (GET /api/home/news?since=) - "mark as seen"
-     The app    the keys and their balances (GET /api/keys/health), the bot, Cloudflare
+   (phase V70, P13, the owner 2026-11-01, (хп25)-(хп30), (хп42), (хп43)) The left column, top to bottom:
+     New project   blank · highlights · talking head · voiceover - a filled gold icon each (js/home/icons.js) and its word;
+                   a press is Merge's own "+ new project" by address (/merge?new=…; phase V63's popups come in P14)
+     Generate      the pictures chat, the video chat, music & sounds - their WINDOWS over Home (js/home/windows.js)
+     Library       character (New Character), prop (New prop), look (New lookbook), environment (New environment) - windows
+     Projects      (what Continue was) the chips and the five changed last of a kind, a card on hover (js/home/projects.js)
+     New           what came since the last visit (GET /api/home/news?since=) - "mark as seen" - where it stood ((хп42))
+   and the right one: First steps and The app, as they were. "Now" went ((хп30)).
+     The app       the keys and their balances (GET /api/keys/health), the bot, Cloudflare
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { initNav } from '../app-nav.js';
@@ -17,6 +22,10 @@ import { initNav } from '../app-nav.js';
 // (`lib_chmake_v1`, one for every page); its rows in Alerts still lead to the Library ((пк5б), chmake.js `_where`).
 import * as CM from '../library/chmake.js';
 import { showError, showToast } from '../notice.js';
+import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
+import { ICONS } from './icons.js';
+import * as WIN from './windows.js';
+import { projectsBlock } from './projects.js';
 
 initNav();
 
@@ -39,162 +48,62 @@ function _newCharacter(e) {
   try { CM.open(); } catch (err) { showError('New Character did not open: ' + ((err && err.message) || 'no reason was given')); }
 }
 
-const $ = (s, r) => (r || document).querySelector(s);
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
-const api = async (url) => {
-  const r = await fetch(url);
-  const d = await r.json().catch(() => null);
-  if (!d || d.success === false) throw new Error((d && d.error) || 'no answer');
-  return d;
-};
-const ls = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
-
-const when = (iso) => {
-  const t = Date.parse(iso);
-  if (!t) return '';
-  const d = new Date(t), now = new Date();
-  const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day(now) - day(d)) / 86400000);
-  if (diff === 0) return 'today, ' + hm;
-  if (diff === 1) return 'yesterday, ' + hm;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + hm;
-};
-
 // ── the blocks ───────────────────────────────────────────────────────────────
-// Each is a frame with a head (its name, what it says about itself, a link at the right) and a body the block paints.
+// Each is a frame (js/home/util.js) with a head and a body the block paints; `paint` reads what it shows, `every` paints it
+// again on its own beat while the page is looked at.
 const BLOCKS = {};
-function frame(id, name) {
-  const st = el('section', 'hm-st');
-  st.dataset.block = id;
-  const head = el('div', 'hm-head');
-  head.appendChild(el('span', 'hm-grip', '⠿'));
-  head.appendChild(document.createTextNode(name));
-  const what = el('span', 'hm-what');
-  head.appendChild(what);
-  head.appendChild(el('span', 'sp'));
-  const right = el('span', 'hm-right');
-  head.appendChild(right);
-  const body = el('div', 'hm-bodyx');
-  body.style.display = 'contents';
-  st.append(head, body);
-  return { st, head, what, right, body };
-}
+const _none = async () => {};
 
-// ── Continue ──
-BLOCKS.continue = () => {
-  const f = frame('continue', 'Continue');
-  f.what.textContent = '· the projects you changed last';
-  const all = el('a', null, 'all projects →');
-  all.href = '/merge';
-  f.right.appendChild(all);
-  const grid = el('div', 'hm-projects');
-  const news = el('div', 'hm-new');
-  for (const [label, href] of [
-    // The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`) - since phase V61 the kinds
-    // alone, blank first (the owner 2026-10-30, (т10), (т15): "кнопку new project со страницы home удаляем. только типа
-    // проектов", "только blank проект должен быть первым"); a voiceover (phase V62) - THE voiceover draft, on its setup. A
-    // character - New Character's window, here (phase V60.1, the owner's (пк4а); the address is the Library's window).
-    ['+ blank', '/merge?new=blank'], ['+ talking head', '/merge?new=talking'], ['+ highlights', '/merge?new=highlights'],
-    ['+ voiceover', '/merge?new=voiceover'],
-    ['+ new character', '/library?shelf=characters&make=1'],
-  ]) {
-    if (!href) {
-      const off = el('span', 'hm-btn is-off', label);
-      off.title = 'Coming: the script read in a voice, B-roll over it';
-      news.appendChild(off);
-      continue;
-    }
-    const a = el('a', 'hm-btn', label);
-    a.href = href;
-    if (label === '+ new character') a.addEventListener('click', _newCharacter);
-    news.appendChild(a);
-  }
-  f.body.append(grid, news);
-  const paint = async () => {
-    let items = [];
-    try { items = (await api('/api/home/continue')).items || []; }
-    catch (e) { grid.replaceChildren(el('div', 'hm-err', 'Could not read the projects: ' + e.message)); return; }
-    grid.replaceChildren();
-    if (!items.length) { grid.appendChild(el('div', 'hm-empty', 'No projects yet - start one below.')); return; }
-    for (const p of items) {
-      const a = el('a', 'hm-proj');
-      a.href = '/merge?p=' + encodeURIComponent(p.key);
-      a.title = 'Open ' + p.title + ' in Merge';
-      const th = el('div', 'hm-thumb');
-      if (p.thumb) th.style.backgroundImage = 'url("' + p.thumb.replace(/"/g, '%22') + '")';
-      th.appendChild(el('span', 'hm-kind', p.kind));
-      const m = el('div', 'hm-proj-m');
-      m.appendChild(el('div', 'hm-proj-t', p.title));
-      m.appendChild(el('div', 'hm-proj-d', [when(p.updatedAt), p.sub].filter(Boolean).join(' · ')));
-      a.append(th, m);
-      grid.appendChild(a);
-    }
-  };
-  return { el: f.st, paint };
+// ── New project (phase V70) ──
+// The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`): blank, highlights, talking
+// head, voiceover - in the owner's order (2026-11-01). A voiceover (phase V62) is THE voiceover draft, on its setup.
+// (phase V63, P14 - the quick-start popups - will open over Home instead.)
+BLOCKS.start = () => {
+  const f = frame('start', 'New project');
+  f.what.textContent = '· opens in Merge';
+  f.body.appendChild(tiles([
+    { icon: ICONS.blank, label: 'blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline' },
+    { icon: ICONS.highlights, label: 'highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts' },
+    { icon: ICONS.talking, label: 'talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines' },
+    { icon: ICONS.voiceover, label: 'voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it' },
+  ]));
+  return { el: f.st, paint: _none };
 };
 
-// ── Now ──
-BLOCKS.now = () => {
-  const f = frame('now', 'Now');
-  f.what.textContent = '· what is being made, rendered or downloaded';
-  const al = el('a', null, 'Alerts →');
-  al.href = '#';
-  al.addEventListener('click', (e) => { e.preventDefault(); const b = $('.sv3-alerts'); if (b) b.click(); });
-  f.right.appendChild(al);
-  const rows = el('div', 'hm-rows');
-  f.body.appendChild(rows);
-  const row = (ico, title, sub, pc, go, href) => {
-    const r = el('div', 'hm-row');
-    r.appendChild(el('span', 'hm-ico', ico));
-    const tx = el('div', 'hm-tx');
-    tx.appendChild(el('b', null, title));
-    if (sub) tx.appendChild(el('span', null, sub));
-    const bar = el('div', 'hm-bar' + (pc == null ? ' is-wait' : ''));
-    const i = el('i');
-    i.style.width = (pc == null ? 30 : Math.max(2, Math.min(100, pc))) + '%';
-    bar.appendChild(i);
-    tx.appendChild(bar);
-    r.appendChild(tx);
-    if (go) { const a = el('a', 'hm-go', go); a.href = href || '#'; r.appendChild(a); }
-    return r;
-  };
-  const paint = async () => {
-    const [alerts, queue, tg, links] = await Promise.all([
-      api('/api/alerts').catch(() => null), api('/api/mv3q').catch(() => null),
-      api('/api/telegram').catch(() => null), api('/api/links').catch(() => null),
-    ]);
-    const out = [];
-    for (const a of ((alerts && alerts.items) || []).filter((x) => x.state === 'running')) {
-      const start = Date.parse(a.startedAt) || 0, eta = Date.parse(a.etaAt) || 0;
-      const pc = eta > start ? ((Date.now() - start) / (eta - start)) * 100 : null;
-      const left = eta > Date.now() ? Math.ceil((eta - Date.now()) / 60000) : 0;
-      out.push(row(a.kind === 'video' ? '▶' : a.kind === 'music' ? '♪' : a.kind === 'image' ? '◆' : '…', a.title || a.kind,
-        [(a.where && a.where.label) || '', a.stage || '', left ? 'about ' + left + ' min left' : ''].filter(Boolean).join(' · '),
-        pc, 'open →', (a.where && a.where.href) || '#'));
-    }
-    const q = ((queue && queue.items) || []).filter((x) => x.status === 'running' || (x.status === 'queued' && x.armed));
-    for (const it of q) {
-      out.push(row('⎙', (it.status === 'running' ? 'Rendering · ' : 'Waiting to render · ') + (it.hlName || it.title || 'a project'),
-        it.status === 'running' ? (it.phase || '') + (it.remain ? ' · ' + Math.ceil(it.remain / 60) + ' min left' : '') : (it.ahead ? it.ahead + ' before it' : 'next'),
-        it.status === 'running' ? (it.percent || 0) : null, 'queue →', '/merge?p=' + encodeURIComponent(it.key || '')));
-    }
-    const tq = tg && tg.queue;
-    if (tq && tq.waiting) out.push(row('✈', 'Telegram · ' + tq.waiting + ' in the queue', 'downloading into REFERENCES one at a time', null, 'REFERENCES →', '/library?shelf=media'));
-    for (const j of ((links && links.jobs) || []).filter((x) => x.state === 'running' || x.state === 'waiting')) {
-      out.push(row('↓', (j.state === 'running' ? 'Downloading · ' : 'Waiting · ') + (j.title || j.url || 'a link'), j.step || '', null, 'Library →', '/library?shelf=media'));
-    }
-    rows.replaceChildren(...(out.length ? out : [el('div', 'hm-empty', 'Nothing is running.')]));
-    f.what.textContent = out.length ? '· ' + out.length + ' running' : '· what is being made, rendered or downloaded';
-  };
-  return { el: f.st, paint, every: 5000 };
+// ── Generate (phase V70, (хп27)) ──
+// The chats and the sound window, as windows over Home (js/home/windows.js) - the Library's own; what they make lies in
+// IMAGES → Generated, VIDEO → Generated → <model>, Music and SFX → My sounds → Generated, and their Alerts rows lead there.
+BLOCKS.generate = () => {
+  const f = frame('generate', 'Generate');
+  f.what.textContent = '· made into the Library';
+  f.body.appendChild(tiles([
+    { icon: ICONS.pictures, label: 'pictures', href: '/library?shelf=media&kind=images&open=pictures', title: 'The pictures chat', run: () => WIN.openChat('pictures') },
+    { icon: ICONS.video, label: 'video', href: '/library?shelf=media&kind=video&open=videos', title: 'The video chat', run: () => WIN.openChat('videos') },
+    { icon: ICONS.audio, label: 'music & sounds', href: '/library?shelf=media&kind=music&open=audio', title: 'Music and sounds - Suno and ElevenLabs', run: () => WIN.openSound() },
+  ]));
+  return { el: f.st, paint: _none };
 };
+
+// ── Library (phase V70, (хп27)) ──
+// What the Library keeps and makes: a character (New Character - here since phase V60.1), a prop (New prop), a look (New
+// lookbook), an environment (New environment) - each its window over Home.
+BLOCKS.library = () => {
+  const f = frame('library', 'Library');
+  f.what.textContent = '· characters, props, looks, places';
+  const lib = el('a', null, 'Library →');
+  lib.href = '/library';
+  f.right.appendChild(lib);
+  f.body.appendChild(tiles([
+    { icon: ICONS.character, label: 'character', href: '/library?shelf=characters&make=1', title: 'New Character - a portrait, then a 4K sheet', run: _newCharacter },
+    { icon: ICONS.prop, label: 'prop', href: '/library?shelf=media&kind=props&make=1', title: 'New prop - a product for the frames', run: () => WIN.openProp() },
+    { icon: ICONS.look, label: 'look', href: '/library?shelf=media&kind=lookbooks&make=1', title: 'New lookbook - what a character wears', run: () => WIN.openGen('lookbook') },
+    { icon: ICONS.environment, label: 'environment', href: '/library?shelf=media&kind=environments&make=1', title: 'New environment - a place to stand in', run: () => WIN.openGen('environment') },
+  ]));
+  return { el: f.st, paint: _none };
+};
+
+// ── Projects (phase V70: what Continue was) ──
+BLOCKS.projects = projectsBlock;
 
 // ── New since you were here ──
 // The last visit: kept as { prev, cur }; a visit more than half an hour after the last one moves `cur` into `prev`.
@@ -441,8 +350,11 @@ BLOCKS.app = () => {
 };
 
 // ── the layout: two columns, a block anywhere, kept ──────────────────────────
-const LAYOUT = 'ugc_home_layout_v1';
-const FIRST = [['continue', 'now', 'new'], ['steps', 'app']];
+// (phase V70) A new key: the places kept under the first one (`ugc_home_layout_v1` - Continue, Now) do not fit these blocks;
+// it is wiped once, the library's mirror with it (js/storage-sync.js).
+const LAYOUT = 'ugc_home_layout_v2';
+try { localStorage.removeItem('ugc_home_layout_v1'); } catch (e) { /* a private window */ }
+const FIRST = [['start', 'generate', 'library', 'projects', 'new'], ['steps', 'app']];
 const cols = [...document.querySelectorAll('#hm-cols .hm-col')];
 const made = {};
 for (const id of Object.keys(BLOCKS)) {
@@ -497,5 +409,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   for (const id of Object.keys(made)) made[id].paint().catch(() => {});
 });
-// A post the bot brought while this page is open (js/alerts-bell.js): what is new and what runs, at once.
-window.addEventListener('ugc-references', () => { made.new.paint().catch(() => {}); made.now.paint().catch(() => {}); });
+// A post the bot brought while this page is open (js/alerts-bell.js): what is new, at once.
+window.addEventListener('ugc-references', () => { made.new.paint().catch(() => {}); });
+// Something a window made landed (js/home/windows.js): what is new, at once.
+WIN.setOnMade(() => { made.new.paint().catch(() => {}); });

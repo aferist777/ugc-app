@@ -7,8 +7,10 @@
 // the key check (/api/keys/health - the balances of kie.ai, ElevenLabs and OpenRouter are in its words), /api/telegram,
 // /api/cloudflare.
 //
-//   GET /api/home/continue           -> { items: [{ key, title, kind, updatedAt, clips, thumb, sub }] }   four: the draft
-//                                       first when it has clips (phase V49), then newest first
+//   GET /api/home/projects           -> { kinds: { all, blank, talking, voiceover, highlights } }   (phase V70, P13) the
+//                                       block "projects": the five changed last of each kind, each { key, title, kind, format,
+//                                       updatedAt, createdAt, thumb, dur, clips, frags, fragsAll }; Merge's draft first in
+//                                       `all` and `blank` while something lies on it (the owner's (хп57))
 //   GET /api/home/news?since=<iso>   -> { since, refs, renders, made, failed }   what came since the last visit
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -24,6 +26,9 @@ const IMG_RE = /\.(png|jpe?g|webp|gif|bmp)(\?|$)/i;
 const VID_RE = /\.(mp4|mov|webm|mkv|m4v)(\?|$)/i;
 const onDisk = (u) => { const a = u && toDiskExisting(String(u).split('?')[0]); return !!(a && fs.existsSync(a)); };
 
+// A picture through the thumbnail door - `frame` (440 px) serves both the row's small square and the hover's larger frame.
+const _thumbSrc = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=frame';
+
 // The first picture of a timeline: a still clip as it is (through the thumbnail door), a clip by its poster beside it.
 function _thumbOf(t) {
   const VT = require('../lib/video-thumb');
@@ -32,51 +37,92 @@ function _thumbOf(t) {
     for (const c of (tr.clips || [])) {
       const src = c && c.src ? String(c.src).split('?')[0] : '';
       if (!src || !onDisk(src)) continue;
-      if (IMG_RE.test(src)) return '/api/thumb?src=' + encodeURIComponent(src) + '&v=card';
+      if (IMG_RE.test(src)) return _thumbSrc(src);
       if (VID_RE.test(src)) { const p = VT.thumbUrlFor(src); if (p && onDisk(p)) return p; }
     }
   }
   return null;
 }
 
-const _clipsOf = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []).reduce((n, tr) => n + ((tr && tr.clips) || []).length, 0);
+// What lies on the picture and sound lanes - the clips the person laid; a subtitle's or a text's pages are not counted.
+const _media = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []).filter((tr) => tr && (tr.kind === 'video' || tr.kind === 'audio'));
+const _clipsOf = (t) => _media(t).reduce((n, tr) => n + ((tr.clips) || []).length, 0);
+// How long it is: where its last clip ends, any lane (lib/mv3b-render.js duration - the render's own rule).
+function _durOf(t) {
+  let end = 0;
+  for (const tr of (Array.isArray(t && t.tracks) ? t.tracks : [])) {
+    for (const c of ((tr && tr.clips) || [])) end = Math.max(end, (+c.start || 0) + (+c.dur || 0));
+  }
+  return Math.round(end * 10) / 10;
+}
 
-router.get('/home/continue', (_req, res) => {
+// ── THE BLOCK "PROJECTS" (phase V70, P13, the owner 2026-11-01: "поле проектов - с видом как открытый дропдаун в merge.
+// только отображаться будут последние 5 строк проектов выбранного типа. при наведении на строку показывать"; (хп28)-(хп30),
+// (хп43), (хп57)) - it took the place of Continue. One read of the timelines answers every chip: the five changed last of
+// each kind. The kinds are Merge's list's (js/merge-v3/projects.js): a highlights project is ONE line - its own timeline (a
+// fragment opens from its tiles); a talking head is a `sv3_<id>` timeline of a scenarios project - its `sv3_<id>_<n>` too
+// (js/merge-v3/workshop.js projectIdOf) -, a voiceover the same kind of project whose record says so (THE voiceover draft is
+// not a project yet and is left out); every other timeline is a blank one. MERGE'S DRAFT is first in `all` and `blank` while
+// something lies on it ((хп57)); an empty draft is nothing to open.
+const KINDS = ['blank', 'talking', 'voiceover', 'highlights'];
+const PER_KIND = 5;
+
+router.get('/home/projects', (_req, res) => {
   try {
     const { timelines } = require('../lib/merge-store').read();
     const HLS = require('../lib/highlights-store');
     const PROJECTS = require('../lib/projects-store');
     const kindOfProject = new Map(PROJECTS.entries().map((e) => [String(e.id), e.kind]));
+    let draft = null;
     const items = [];
     for (const [key, t] of Object.entries(timelines || {})) {
       if (!t) continue;
       const hl = HLS.ofKey(key);
-      if (hl && hl.n > 0) continue;                       // a fragment opens from its project's tiles
-      const clips = _clipsOf(t);
-      if (t.draft && !clips) continue;                    // an empty draft is nothing to continue
-      let kind = 'project', sub = clips + ' clip' + (clips === 1 ? '' : 's'), thumb = _thumbOf(t);
-      if (t.draft) { kind = 'draft'; sub = clips + ' clip' + (clips === 1 ? '' : 's') + ', not saved'; }
-      else if (hl) {
-        kind = 'highlights';
-        const rec = HLS.get(hl.id);
-        const frs = ((rec && rec.fragments) || []).filter((f) => !f.deletedAt);
-        const ready = frs.filter((f) => f.state === 'ready');
-        sub = frs.length ? ready.length + ' of ' + frs.length + ' fragments made' : 'no fragments yet';
-        // Its own timeline is often empty - the first made fragment shows what it is.
-        if (!thumb) for (const f of ready) { const ft = timelines['hl_' + hl.id + '_' + f.n]; thumb = ft && _thumbOf(ft); if (thumb) break; }
-      } else if (kindOfProject.get((/^sv3_([^_]+)(?:_\d+)?$/.exec(key) || [])[1]) === 'scenarios') {
-        // (phase V56, (ги6)) A talking head - its second timeline (sv3_<project>_<n>) too: Merge's rule (js/merge-v3/workshop.js projectIdOf).
-        // (phase V62) Or a voiceover - the same kind of project, its record says which; THE voiceover draft is not a project
-        // yet (its voices are not read) and is not offered to continue - "+ voiceover" opens it.
-        const pr = PROJECTS.get((/^sv3_([^_]+)/.exec(key) || [])[1]) || {};
-        if (pr.type === 'voiceover' && pr.draft) continue;
-        kind = pr.type === 'voiceover' ? 'voiceover' : 'talking head';
+      if (hl && hl.n > 0) continue;
+      const it = {
+        key, title: t.title || 'Untitled', kind: 'blank', format: t.format === '16:9' ? '16:9' : '9:16',
+        updatedAt: t.updatedAt || t.createdAt || null, createdAt: t.createdAt || null,
+        thumb: _thumbOf(t), dur: _durOf(t), clips: _clipsOf(t), frags: null, fragsAll: null,
+      };
+      if (t.draft) {
+        if (!it.clips) continue;
+        it.kind = 'draft';
+        if (!draft || String(it.updatedAt || '') > String(draft.updatedAt || '')) draft = it;
+        continue;
       }
-      items.push({ key, title: t.title || 'Untitled', kind, updatedAt: t.updatedAt || t.createdAt || null, clips, thumb, sub });
+      const pid = (/^sv3_([^_]+)(?:_\d+)?$/.exec(key) || [])[1];
+      if (hl) {
+        it.kind = 'highlights';
+        const rec = HLS.get(hl.id) || {};
+        const frs = (rec.fragments || []).filter((f) => !f.deletedAt);
+        const ready = frs.filter((f) => f.state === 'ready');
+        it.frags = ready.length;
+        it.fragsAll = frs.length;
+        // Its length is the video's it was cut from; its own timeline is often empty - the first made fragment shows it.
+        if (rec.video && +rec.video.seconds > 0) it.dur = Math.round(+rec.video.seconds);
+        for (const f of ready) {
+          if (it.thumb) break;
+          if (f.thumb && onDisk(f.thumb)) { it.thumb = IMG_RE.test(f.thumb) ? _thumbSrc(String(f.thumb).split('?')[0]) : f.thumb; break; }
+          const ft = timelines['hl_' + hl.id + '_' + f.n];
+          it.thumb = ft ? _thumbOf(ft) : null;
+        }
+      } else if (pid && kindOfProject.get(pid) === 'scenarios') {
+        const pr = PROJECTS.get(pid) || {};
+        if (pr.type === 'voiceover' && pr.draft) continue;
+        it.kind = pr.type === 'voiceover' ? 'voiceover' : 'talking';
+        // A talking head's fragments are its lines (one taken off keeps its place but is not one any more).
+        if (it.kind === 'talking') it.frags = (Array.isArray(pr.lines) ? pr.lines : []).filter((l) => l && !l.removed).length;
+        // Nothing on its timeline yet: the look it is cast in shows whose it is.
+        const look = pr.casting && pr.casting.obrazImage ? String(pr.casting.obrazImage).split('?')[0] : '';
+        if (!it.thumb && look && IMG_RE.test(look) && onDisk(look)) it.thumb = _thumbSrc(look);
+      }
+      items.push(it);
     }
-    // (phase V49, the owner's (пр12)) The draft first, as in Merge's list - when there is something in it to continue.
-    items.sort((a, b) => ((b.kind === 'draft') - (a.kind === 'draft')) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-    res.json({ success: true, items: items.slice(0, 4) });
+    items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    const head = (list) => (draft ? [draft].concat(list) : list).slice(0, PER_KIND);
+    const kinds = { all: head(items) };
+    for (const k of KINDS) kinds[k] = k === 'blank' ? head(items.filter((x) => x.kind === k)) : items.filter((x) => x.kind === k).slice(0, PER_KIND);
+    res.json({ success: true, kinds });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
