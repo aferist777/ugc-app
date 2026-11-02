@@ -7,7 +7,7 @@
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
 //   GET    /api/highlights/offer            -> { lengths, counts, kinds }   (V63) what the popup offers, with no project
 //   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   (V63) made AND started by the press
-//   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio= -> { price }   what "find moments" is expected to cost
+//   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio=&count= -> { price }   what "find moments" is expected to cost
 //   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
@@ -105,7 +105,7 @@ router.post('/highlights/start', async (req, res) => {
 router.get('/highlights/price', (req, res) => {
   try { res.json({ success: true, price: JOB.price({ seconds: +req.query.seconds || 0, sourceId: String(req.query.source || ''),
     kind: String(req.query.kind || ''), length: String(req.query.length || ''),
-    audio: req.query.audio != null && req.query.audio !== '' ? Number(req.query.audio) : null }) }); }
+    audio: req.query.audio != null && req.query.audio !== '' ? Number(req.query.audio) : null, count: Number(req.query.count) || 0 }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
