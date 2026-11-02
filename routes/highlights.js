@@ -65,7 +65,9 @@ function view(rec, o) {
 // What the popup offers: the lengths, the counts and the kinds (fragmentation with its own lengths, no count).
 function offer() {
   return { lengths: HL.LENGTHS, counts: HL.COUNTS,
-    kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])) };
+    // (phase V69 P12) each kind its count buttons, and whether it is in development (its button grey).
+    kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, counts: HL.countsOf(k),
+      ...(v.inDev ? { inDev: true } : {}), ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])) };
 }
 
 router.get('/highlights', (_req, res) => {
