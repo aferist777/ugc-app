@@ -23,7 +23,7 @@
    (`mv3_hl_kinds_v1`, merge-v3/hl-kinds.js - one with Merge's). Merge's "+ new project" stays as it was ((бс2)).
    ════════════════════════════════════════════════════════════════════════════ */
 
-import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { openFrame, GEN_SIZE, POPUP_SIZE } from '../gen-window.js';
 import { showError } from '../notice.js';
 import { el, api, ls, lsSet } from './util.js';
 import { sheets } from './windows.js';
@@ -230,9 +230,11 @@ async function _talking() {
   const API = await import('../merge-v3/scen-api.js');
   const m = _mem('talking');
   const st = { text: m.text && typeof m.text === 'object' ? m.text : null, look: m.look && m.look.obrazId ? m.look : null, busy: false };
-  const frame = _frame('talking', 'talking head', { size: GEN_SIZE, geom: { key: 'start_talking', resize: true, move: true, keepSize: true, keepPos: true } });
-  const cols = el('div', 'hm-qs-cols');
-  const L = el('div', 'hm-qs-col');
+  // (the owner's check of P14: "попап talking head - тоже компактней. поле who под полем сценариев") The chats' size, ONE column:
+  // the text, who under it.
+  const frame = _frame('talking', 'talking head', { size: POPUP_SIZE, geom: { key: 'start_talking', resize: true, move: true, keepSize: true, keepPos: true } });
+  const cols = el('div', 'hm-qs-cols is-one');
+  const L = el('div', 'hm-qs-col is-text');
   const R = el('div', 'hm-qs-col is-who');
   cols.append(L, R);
   frame.body.appendChild(cols);

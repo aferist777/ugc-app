@@ -5,25 +5,28 @@
 
    A WINDOW OF ITS OWN (phase V68 P3, the owner 2026-11-01, (хп3), (хп4): "этот попап тоже давай сделаем чтобы можно было менять
    размеры и положение попапа и оно сохраняется; ... в два столбца ... слева 2/3 ... справа 1/3"): js/gen-window.js openFrame -
-   1280×800 the first time, moved by its head, stretched by its edges, its size and place kept (`geom` 'highlights'), a double
-   press on the head puts it back. TWO COLUMNS, 2/3 and 1/3, the foot across both:
-   - LEFT: the video - a link · from the Library · a file, from the Library open first, its list scrolled in a box of its own;
+   POPUP_SIZE (960×670, V63; 1280×800 until then) the first time, moved by its head, stretched by its edges, its size and place
+   kept (`geom` 'highlights'), a double press on the head puts it back. Its parts (until V63 two columns, 2/3 and 1/3; since V63
+   two steps in one column - below), the foot under them:
+   - the video - a link · from the Library · a file, from the Library open first, its list scrolled in a box of its own;
      the fragments - the kind of video as square buttons with the pixel icons the owner chose (P1, merge-v3/hl-kinds.js), under
      them a box of one height with the words: every kind's short line while none is chosen (only at the very first opening -
      (хп35), (хп48): everything under the kinds is blurred and "find moments" waits), the chosen one's longer words after;
      the length and the count as buttons ((хп18); fragmentation has no count); "reset to standard"; music - the moods as
      buttons (hl-music.js).
-   - RIGHT: the captions - the tabs presets · animation · fonts (P4), under them what is chosen OF THE OPEN TAB (the owner's
+   - the captions - the tabs presets · animation · fonts (P4), under them what is chosen OF THE OPEN TAB (the owner's
      check: its presets, its animations, its fonts - merge-v3/font-tiles.js; none, each preset's own font, (хп10)) - the set's
      name on top, a small button each with ✕ under it - a press shows the tile in its group, outlined (hl-style.js reveal); the
      tiles under that.
    EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations, fonts - hl-kinds.js; switching the kind
    brings its own back.
    TWO STEPS SINCE V63 (P14, the owner 2026-11-02: "давай сделаем его в два шага быстрый запуск. на первом шаге пользователь выбирает
-   the video, the parts, а на втором шаге music и caption зоны") - the same window on Home and in Merge: STEP 1 the video (left) and
-   the parts (right), "next →" once a video and a kind are chosen; STEP 2 the music (left, 1/3) and the captions (right, 2/3),
-   "‹ back" and the press. The crumbs say the step, the first one goes back. Each section is one element moved into its step's
-   column, so nothing is painted twice and every picker keeps what it holds. It always opens on step 1.
+   the video, the parts, а на втором шаге music и caption зоны") - the same window on Home and in Merge, ONE COLUMN and the
+   chats' size (gen-window.js POPUP_SIZE; the owner's check of P14: "сделай так же the parts под the video. просто сам попап будет
+   меньше по размеру"): STEP 1 the video with the parts under it, "next →" once a video and a kind are chosen; STEP 2 the music
+   with the captions under it, "‹ back" and the press. The crumbs say the step, the first one goes back. Each section is one
+   element moved into the step's column, so nothing is painted twice and every picker keeps what it holds. It always opens on
+   step 1.
    THE HOST'S PRESS (V63): `start(spec)` given - Home's quick start - the press hands the choice to the host, which MAKES the
    project and starts it (POST /api/highlights/start); with no project there is no `id` (`rec` is GET /api/highlights/offer).
 
@@ -37,7 +40,7 @@
    at once; the window closes and the tiles stand up in the field (highlights.js follows the record).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { openFrame, GEN_SIZE } from '../gen-window.js';
+import { openFrame, POPUP_SIZE } from '../gen-window.js';
 import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } from './hl-style.js';
 import { moodPicker } from './hl-music.js';
 import * as KIND from './hl-kinds.js';
@@ -91,7 +94,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     step: 1,
   };
 
-  const frame = openFrame({ name: 'highlights', size: GEN_SIZE, geom: GEOM, onClose: () => {
+  const frame = openFrame({ name: 'highlights', size: POPUP_SIZE, geom: GEOM, onClose: () => {
     if (!_win || _win.frame !== frame) return;
     try { _win.picker.stop(); } catch (e) { /* gone */ }
     try { _win.anim.stop(); } catch (e) { /* gone */ }
@@ -100,11 +103,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const box = frame.box;
   frame.body.classList.add('mv3-hlp');
   const cols = _el('div', 'mv3-hlp-cols');
-  // (V63) The two columns of a step, and the four sections that are moved into them: the video and the parts (step 1), the music
-  // and the captions (step 2).
+  // (V63) The column of a step, and the four sections that are moved into it: the video with the parts under it (step 1), the
+  // music with the captions under it (step 2) - one column since the owner's check of P14 ("сделай так же the parts под the video.
+  // просто сам попап будет меньше по размеру").
   const A = _el('div', 'mv3-hlp-left');
-  const B = _el('div', 'mv3-hlp-left mv3-hlp-b');
-  cols.append(A, B);
+  cols.append(A);
   const L = _el('div', 'mv3-hlp-sec');
   const P = _el('div', 'mv3-hlp-sec');
   const M = _el('div', 'mv3-hlp-sec');
@@ -438,12 +441,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     say('');
     toStep(2);
   }
-  // Each section moved into its step's column - the same elements, so every picker keeps what it holds.
+  // Each section moved into its step's column - the same elements, so every picker keeps what it holds. Step 1 scrolls as one
+  // column; step 2 is a column whose captions' tiles fill what the music leaves.
   function placeStep() {
     const two = st.step === 2;
-    A.replaceChildren(two ? M : L);
-    B.replaceChildren(two ? R : P);
-    B.className = two ? 'mv3-hlp-right' : 'mv3-hlp-left mv3-hlp-b';
+    A.replaceChildren(...(two ? [M, R] : [L, P]));
+    A.className = two ? 'mv3-hlp-right' : 'mv3-hlp-left';
     cols.classList.toggle('is-s2', two);
     frame.setCrumbs(two
       ? [{ label: 'highlights · video & parts', on: () => toStep(1) }, { label: 'music & captions' }]

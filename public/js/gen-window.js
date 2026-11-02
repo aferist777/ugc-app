@@ -63,6 +63,10 @@ const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vh
 // the almanac, the viewer and the "who" / "where" windows.
 // (fix (б)) And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
 export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
+// (phase V63, the owner 2026-11-02: "делаем компактней попапы highlights, talking head ... сделай размеры попапов highlights и
+// talking head примерно такого же размера" - as the chats he had set, 958×669) The highlights popup and Home's talking head quick
+// start open at this size, in one column; each keeps its own size and place once moved or stretched.
+export const POPUP_SIZE = Object.freeze({ w: 960, h: 670 });
 // (fix (л), (зг14)) The chats' windows - pictures, video, sound, frames - are ONE size in ONE place, both the person's and kept.
 export const GEOM_CHAT = Object.freeze({ key: 'chat', resize: true, move: true, keepSize: true, keepPos: true });
 const _frames = [];                        // open, the top last
