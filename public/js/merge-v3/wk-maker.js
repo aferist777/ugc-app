@@ -11,6 +11,7 @@ import * as Layers from '../layers.js';
 import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
 import { delX } from '../del-x.js';
+import { derived } from '../chars-store.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -330,6 +331,27 @@ export function paintChoose(host, o) {
   paintGrid();
   setTimeout(() => { if (q.isConnected && !q.value) q.focus(); }, 0);
   return { group };
+}
+
+// ── WHO TO CHOOSE FROM (phase V63: one list for the setup's "who" window - wk-setup.js - and Home's talking head quick start -
+// js/home/start.js) ──
+// A group a character - the most looks first is the caller's order (chars-store.js byLooks) -: its 4K sheet (or portrait) to be
+// seen only, with `say` (a person is cast in a look, never bare), then its looks. `o.say(c)` - what the sheet says when pressed.
+export function lookGroups(chars, o = {}) {
+  const nLooks = (n) => (n === 1 ? '1 look' : n ? n + ' looks' : 'no looks yet');
+  return (chars || []).map((c) => {
+    const sheet = c.sheet || c.face || '';
+    const items = [];
+    if (sheet) {
+      items.push({ path: sheet, name: c.name, sub: c.sheet ? '4K sheet' : 'portrait', aspect: c.sheet ? '16:9' : '',
+        thumb: derived(sheet, 'card'), char: c,
+        say: typeof o.say === 'function' ? o.say(c) : c.name + ' is cast in a look - press one of the looks.' });
+    }
+    for (const lk of c.obrazy) {
+      items.push({ path: lk.image, name: lk.name || 'look', sub: 'look', thumb: derived(lk.image, 'card'), char: c, look: lk });
+    }
+    return { key: c.id, label: c.name, n: c.obrazy.length, sub: nLooks(c.obrazy.length), items, char: c };
+  });
 }
 
 // ── The menu on a tile ──────────────────────────────────────────────────────

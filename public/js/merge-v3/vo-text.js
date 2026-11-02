@@ -10,6 +10,11 @@
    (a paste is cut there, and the counter says so), and `use` puts it into the draft and closes the window.
 
    Its frame and buttons are the scenario window's (css/dialog.css .mv3-x.is-scen).
+
+   (phase V63, P14, the owner's (хп32), (хп58): "По абзацам: каждый Enter — новая строка") A TALKING HEAD'S OWN TEXT too - Home's
+   quick start (`o.talking`): every paragraph is a line - its own frame and clip -, the count of lines said under the field; in
+   another language it is made English when the project is made (routes/scen3.js, V29). Where the text goes is the caller's
+   `put(body)` - the voiceover draft in Merge, the popup on Home.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
@@ -23,17 +28,23 @@ const _el = (tag, cls, text) => {
 };
 const _n = (v) => v.toLocaleString('en-US').replace(/,/g, ' ');
 
+/** (phase V63) A talking head's text cut into its lines: every paragraph - every Enter - a line. */
+export const paragraphs = (t) => String(t || '').split(/\r?\n/).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean);
+
 /**
- * @param projectId  the voiceover draft the text goes into
- * @param done(project)  the draft as it is now, with its one line; a refusal is said in the window, which stays
+ * @param put(body)  where the text goes - { text, name } (a voiceover: one line) or { lines, name } (a talking head) -, answering
+ *                   what `done` is given; a refusal is said in the window, which stays
+ * @param done(r)    what `put` answered (in Merge: the voiceover draft as it is now, with its one line)
+ * @param o          (phase V63) { talking, text, name } - a talking head's text; what the field and the name start with
  */
-export function openOwnText(projectId, done) {
+export function openOwnText(put, done, o = {}) {
+  const talking = !!o.talking;
   const ov = _el('div', 'mv3-x-ov');
   const box = _el('div', 'mv3-x is-scen is-votext');
   ov.appendChild(box);
 
   const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, 'Voiceover from your text'));
+  head.appendChild(_el('h3', null, talking ? 'Talking head from your text' : 'Voiceover from your text'));
   const close = _el('button', 'mv3-x-close', '✕');
   close.type = 'button';
   head.appendChild(close);
@@ -45,7 +56,8 @@ export function openOwnText(projectId, done) {
   row.appendChild(_el('label', null, 'Name'));
   const name = _el('input', 'mv3-sc-inp');
   name.type = 'text';
-  name.placeholder = 'what this voiceover is called - the first words when empty';
+  name.placeholder = 'what this ' + (talking ? 'talking head' : 'voiceover') + ' is called - the first words when empty';
+  name.value = String(o.name || '');
   row.appendChild(name);
   body.appendChild(row);
 
@@ -53,28 +65,35 @@ export function openOwnText(projectId, done) {
   const text = _el('textarea', 'mv3-sc-lines is-votext');
   text.spellcheck = false;
   text.maxLength = API.VO_MAX;
-  text.placeholder = 'Paste or type the whole text, in any language. It is read in one take, in the language it is written in.';
+  text.placeholder = talking
+    ? 'Paste or type the text. Every paragraph is a line of the talking head - its own frame and clip: Enter starts the next.'
+    : 'Paste or type the whole text, in any language. It is read in one take, in the language it is written in.';
+  text.value = String(o.text || '').slice(0, API.VO_MAX);
   body.appendChild(text);
   const count = _el('p', 'mv3-x-note mv3-vo-count');
   body.appendChild(count);
-  body.appendChild(_el('p', 'mv3-x-note',
-    'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5 000 at a time, '
-    + 'and the rest is left for the mood\'s tags.'));
+  body.appendChild(_el('p', 'mv3-x-note', talking
+    ? 'Every paragraph is one line - a fragment with its own frame and clip, read by itself. Written in another language, it is '
+      + 'made English when the project is made.'
+    : 'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5 000 at a time, '
+      + 'and the rest is left for the mood\'s tags.'));
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
   const go = _el('button', 'mv3-c-btn mv3-x-use', 'use');
   go.type = 'button';
-  go.title = 'Make this text the voiceover\'s script - one line';
+  go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
   foot.append(note, go);
   box.appendChild(foot);
 
-  // The counter: how many are in, of how many. A paste longer than the field is cut by the field itself (maxLength) - and
-  // said here, so nothing goes missing unseen.
+  // The counter: how many are in, of how many - and, for a talking head, how many lines they make. A paste longer than the field
+  // is cut by the field itself (maxLength) - and said here, so nothing goes missing unseen.
   let cut = false;
   const gate = () => {
     const n = text.value.length;
-    count.textContent = _n(n) + ' / ' + _n(API.VO_MAX) + (cut ? ' - the paste was longer and was cut at the limit' : '');
+    const lines = talking ? paragraphs(text.value).length : 0;
+    count.textContent = (talking ? lines + (lines === 1 ? ' line · ' : ' lines · ') : '') + _n(n) + ' / ' + _n(API.VO_MAX)
+      + (cut ? ' - the paste was longer and was cut at the limit' : '');
     count.classList.toggle('is-full', n >= API.VO_MAX);
     go.disabled = !text.value.trim();
   };
@@ -85,7 +104,7 @@ export function openOwnText(projectId, done) {
   });
   text.addEventListener('input', () => { if (text.value.length < API.VO_MAX) cut = false; gate(); });
 
-  const layer = Layers.open(ov, { name: 'voiceover text', onEsc: () => _close(ov, layer) });
+  const layer = Layers.open(ov, { name: talking ? 'talking head text' : 'voiceover text', onEsc: () => _close(ov, layer) });
   close.addEventListener('click', () => _close(ov, layer));
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) _close(ov, layer); });
   document.body.appendChild(ov);
@@ -97,9 +116,11 @@ export function openOwnText(projectId, done) {
     go.disabled = true;
     note.textContent = 'saving…';
     try {
-      const project = await API.voiceoverScript(projectId, { text: text.value, name: name.value.trim() });
+      const r = await put(talking
+        ? { lines: paragraphs(text.value), name: name.value.trim() }
+        : { text: text.value, name: name.value.trim() });
       _close(ov, layer);
-      done(project);
+      done(r);
     } catch (e) {
       note.textContent = e.message;
       go.disabled = false;

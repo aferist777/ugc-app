@@ -9,6 +9,11 @@
    the category, and the scenarios - a row opens its text, "use" puts its lines into the draft (POST /scen3/projects/:id/script,
    a snapshot, never translated). With its lines in, the column is the script again, and "other script" over it takes them off
    - back to this list - for as long as it is the draft: its first read makes it a project, and its script stays its own.
+
+   (phase V63, P14) THE SAME LIST IN HOME'S QUICK START - the voiceover's popup and the talking head's (js/home/start.js): `o.put`
+   says where a choice goes (here - into the draft, as above; there - into the popup, nothing written until its "create"), and
+   `o.talking` makes it a talking head's text: "+ your text" cut into lines by paragraphs (vo-text.js), a scenario written in the
+   scenario window made English (V29).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
@@ -27,24 +32,28 @@ let _busy = false;            // a script being put in
 /**
  * The chooser, into `host` (the script column), for the draft `project`.
  * @param adopt(project) the draft as the server has it now - the column repaints with its lines
+ * @param o  (phase V63) { put(body, summary) -> what adopt takes - where a choice goes (the draft by default), talking, hint,
+ *           isOn(summary) - the row chosen }
  */
-export function paintChooser(host, project, adopt) {
+export function paintChooser(host, project, adopt, o = {}) {
+  const put = typeof o.put === 'function' ? o.put : (body) => API.voiceoverScript(project.id, body);
   const root = el('div', 'mv3-vos');
   host.appendChild(root);
   // (the owner 2026-10-31) What to do here is said by the tip of step 1 over this column (js/merge-v3/vo-tips.js).
-  root.appendChild(el('div', 'mv3-wk-fhint', 'The script of this voiceover: a scenario, or your own text.'));
+  root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
   const own = el('button', 'mv3-sc-new', '+ your text');
   own.type = 'button';
-  own.title = 'Your own text, pasted or typed in any language - the whole of it one line';
+  own.title = o.talking ? 'Your own text, pasted or typed - every paragraph a line of the talking head'
+    : 'Your own text, pasted or typed in any language - the whole of it one line';
   own.disabled = _busy;
-  own.addEventListener('click', () => openOwnText(project.id, adopt));
+  own.addEventListener('click', () => openOwnText(put, adopt, { talking: !!o.talking, ...(o.ownText ? o.ownText() : {}) }));
   const add = el('button', 'mv3-sc-new', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario - it is kept in the library, and "use" puts it here';
   add.disabled = _busy;
-  add.addEventListener('click', () => _open(null, project, adopt));
+  add.addEventListener('click', () => _open(null, put, adopt, o));
   top.append(own, add);
   root.appendChild(top);
 
@@ -63,13 +72,13 @@ export function paintChooser(host, project, adopt) {
   search.placeholder = 'search by title, product, role';
   search.value = _q;
   const list = el('div', 'mv3-sc-list mv3-vos-list');
-  search.addEventListener('input', () => { _q = search.value; _paintRows(list, project, adopt); });
+  search.addEventListener('input', () => { _q = search.value; _paintRows(list, put, adopt, o); });
   bar.append(cat, search);
   root.appendChild(bar);
   root.appendChild(list);
 
   if (_rows === null && _state !== 'loading') _load(adopt.repaint);
-  _paintRows(list, project, adopt);
+  _paintRows(list, put, adopt, o);
 }
 
 /** "other script": the draft's lines taken off - back to the list. Only while it is the draft (the server says so too). */
@@ -111,7 +120,7 @@ function _matches(s) {
   return [s.title, s.vertical, s.product, role].join(' ').toLowerCase().includes(q);
 }
 
-function _paintRows(list, project, adopt) {
+function _paintRows(list, put, adopt, o) {
   list.textContent = '';
   const note = (t, bad) => list.appendChild(el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), t));
   if (_state === 'loading' || _rows === null) { note('reading the scenarios…'); return; }
@@ -119,14 +128,14 @@ function _paintRows(list, project, adopt) {
   const rows = _rows.filter(_matches);
   if (!rows.length) { note(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.'); return; }
   for (const s of rows) {
-    const row = el('div', 'mv3-sc-row');
+    const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
     row.title = 'Open the text';
     const acts = el('div', 'mv3-sc-acts');
     const go = el('button', 'mv3-sc-btn is-use', 'use');
     go.type = 'button';
-    go.title = 'Put its lines into this voiceover';
+    go.title = o.put ? 'Take this scenario' : 'Put its lines into this voiceover';
     go.disabled = _busy;
-    go.addEventListener('click', (e) => { e.stopPropagation(); _use(s.id, project, adopt, go); });
+    go.addEventListener('click', (e) => { e.stopPropagation(); _use(s, put, adopt, go); });
     acts.appendChild(go);
     row.appendChild(acts);
     const txt = el('div', 'mv3-sc-txt');
@@ -135,26 +144,26 @@ function _paintRows(list, project, adopt) {
     txt.appendChild(el('span', 'mv3-sc-meta', [n + (n === 1 ? ' line' : ' lines'), s.vertical, s.product,
       String(s.updatedAt || s.createdAt || '').slice(0, 10)].filter(Boolean).join(' · ')));
     row.appendChild(txt);
-    row.addEventListener('click', () => _open(s, project, adopt));
+    row.addEventListener('click', () => _open(s, put, adopt, o));
     list.appendChild(row);
   }
 }
 
-async function _use(scenarioId, project, adopt, btn) {
+async function _use(s, put, adopt, btn) {
   if (_busy) return;
   _busy = true;
   if (btn) btn.textContent = '…';
-  try { adopt(await API.voiceoverScript(project.id, { scenarioId })); }
+  try { adopt(await put({ scenarioId: s.id }, s)); }
   catch (e) { showError('Could not use it: ' + e.message); if (btn) btn.textContent = 'use'; }
   _busy = false;
 }
 
-// The scenario window - a row's text, or a new one: kept in the language it is typed in (a voiceover is read in it); its `use`
-// saves it and puts its lines into the draft.
-function _open(summary, project, adopt) {
+// The scenario window - a row's text, or a new one: kept in the language it is typed in (a voiceover is read in it; a talking
+// head's is made English, V29); its `use` saves it and puts its lines where the choice goes.
+function _open(summary, put, adopt, o) {
   openScenario(summary, {
-    voiceover: true,
+    voiceover: !o.talking,
     saved: () => { _rows = null; _load(adopt.repaint); },
-    use: async (rec) => { adopt(await API.voiceoverScript(project.id, { scenarioId: rec.id })); },
+    use: async (rec) => { adopt(await put({ scenarioId: rec.id }, rec)); },
   });
 }

@@ -162,6 +162,14 @@
 .mv3-hlp-cols{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 1fr)}
 .mv3-hlp-left{min-width:0; min-height:0; overflow-y:auto; padding:2px 16px 14px}
 .mv3-hlp-right{min-width:0; min-height:0; display:flex; flex-direction:column; padding:2px 12px 10px; border-left:1px solid var(--border-soft)}
+/* (phase V63) Two steps: the video | the parts, half and half; then the music (1/3) | the captions (2/3). A section is one element
+   moved into its step's column - it lays its children out as the column's own. */
+.mv3-hlp-cols:not(.is-s2){grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)}
+.mv3-hlp-cols.is-s2{grid-template-columns:minmax(0, 1fr) minmax(0, 2fr)}
+.mv3-hlp-b{border-left:1px solid var(--border-soft)}
+.mv3-hlp-sec{display:contents}
+.mv3-hlp-back[hidden], .mv3-hlp-go[hidden]{display:none}
+.mv3-hlp-back{margin-right:6px}
 /* (хп48) No kind yet: what is under the kinds waits, blurred */
 .mv3-hlp .is-locked{filter:blur(2px); opacity:.45; pointer-events:none; user-select:none}
 .mv3-hlp-tabs{display:flex; gap:6px; margin-bottom:7px}

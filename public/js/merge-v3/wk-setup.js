@@ -71,7 +71,7 @@ import * as FRAG from './wk-fragments.js';
 import * as GW from '../gen-window.js';
 import { delX } from '../del-x.js';
 import {
-  showPicture, tileMenu, onlyHere, heldPlace, softScroll, paintChoose,
+  showPicture, tileMenu, onlyHere, heldPlace, softScroll, paintChoose, lookGroups,
   holdHalf, endHalf, dropHalf, dropHalves, halfPlace,
 } from './wk-maker.js';
 
@@ -307,7 +307,7 @@ function _go(view) {
   if (WINDOWS.includes(view)) { _openAsked(view); return; }
   // (phase V62, (во17)) The voices open in a window over the setup - a talking head's and a voiceover's alike.
   if (view === 'voice') { _openVoices(); return; }
-  if (view === 'hub' && _voiceOpen()) { _voiceWin.close(); return; }
+  if (view === 'hub' && _voiceOpen()) { VOICE.closeVoices(); return; }
   _view = VIEWS.includes(view) ? view : 'hub';
   _ctx.repaint();
 }
@@ -327,45 +327,21 @@ function _openAsked(v) {
   else if (v === 'voice') _openVoices();            // (phase V62)
 }
 
-// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2): "нужен поиск по голосам в elevenlabs как в talking head но
-// поиск в попапе будет"; (во17) "в обоих") ──
-// What stood in the right column - the saved voices and the ElevenLabs library with its filters and its search
-// (js/merge-v3/wk-voice.js paintPicker) - in the window of js/gen-window.js, over the setup. Field 1's "change" opens it; it
-// stays open after a voice is taken, and is painted again with every repaint of the step, where it was scrolled to.
-let _voiceWin = null;
-const _voiceOpen = () => !!(_voiceWin && _voiceWin.alive());
+// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2), (во17)) ──
+// The saved voices and the ElevenLabs library in a window over the setup - js/merge-v3/wk-voice.js openVoices (phase V63: the
+// window moved there, one for the setup and Home's quick start). Field 1's menu opens it; it stays open after a voice is taken,
+// and is painted again with every repaint of the step.
+const _voiceOpen = () => VOICE.voicesOpen();
 function _openVoices() {
   if (!_ctx || !_ctx.project) return;
   if (_voiceOpen()) return;
-  // (phase V62, (во41) а) The library's language filter starts at the script's: Cyrillic - Russian, plain English letters - English,
-  // anything else - every language; a talking head is English (V29).
+  // (phase V62, (во41) а) The library's language filter starts at the script's (wk-voice.js scriptLang).
   const p = _ctx.project;
-  const text = (p.lines || []).map(l => String((l && l.text) || '')).join(' ').replace(/\s+/g, ' ');
-  const lang = p.type !== 'voiceover' ? 'en'
-    : /\p{Script=Cyrillic}/u.test(text) ? 'ru'
-      : !text.trim() || !/[^ -~‘’“”–—…]/.test(text) ? 'en' : '';
-  VOICE.languageFor(String(p.id), lang);
-  _voiceWin = GW.openFrame({
-    // (phase V64, fix (л)) Moved and stretched; its size kept.
-    name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
-    onClose: () => { _voiceWin = null; VOICE.leave(); },
-  });
-  _voiceWin.setCrumbs([{ label: 'voices' }]);
-  _paintVoices(_castChar());
+  const text = (p.lines || []).map(l => String((l && l.text) || '')).join(' ');
+  VOICE.openVoices(_voiceApi(_castChar()), { key: String(p.id), lang: VOICE.scriptLang(p.type === 'voiceover', text) });
 }
 function _paintVoices(chosen) {
-  if (!_voiceOpen()) return;
-  const body = _voiceWin.body;
-  // What scrolls is the list above the foot; the foot - the library's pages - stays at the window's bottom (the owner:
-  // "кнопки страниц показаны всегда снизу попапа").
-  const was = body.querySelector('.mv3-wk-vwin');
-  const at = was ? was.scrollTop : 0;
-  body.textContent = '';
-  const box = _el('div', 'mv3-wk-vwin');
-  const foot = _el('div', 'mv3-wk-vwinfoot');
-  body.append(box, foot);
-  VOICE.paintPicker(box, { ..._voiceApi(chosen), inWindow: true, pagerHost: foot });
-  if (at) box.scrollTop = at;
+  if (_voiceOpen()) VOICE.paintVoices(_voiceApi(chosen));
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
@@ -705,20 +681,8 @@ function _paintCharacters(body) {
   const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
   const cast = _casting();
   const castId = String(cast.characterId || '');
-  const nLooks = (n) => (n === 1 ? '1 look' : n ? n + ' looks' : 'no looks yet');
-  const groups = _chars.map((c) => {
-    const sheet = c.sheet || c.face || '';
-    const items = [];
-    if (sheet) {
-      items.push({ path: sheet, name: c.name, sub: c.sheet ? '4K sheet' : 'portrait', aspect: c.sheet ? '16:9' : '',
-        thumb: derived(sheet, 'card'), char: c,
-        say: c.name + ' is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.' });
-    }
-    for (const o of c.obrazy) {
-      items.push({ path: o.image, name: o.name || 'look', sub: 'look', thumb: derived(o.image, 'card'), char: c, look: o });
-    }
-    return { key: c.id, label: c.name, n: c.obrazy.length, sub: nLooks(c.obrazy.length), items, char: c };
-  });
+  // (phase V63) The groups are wk-maker.js lookGroups - the same list Home's talking head quick start chooses from.
+  const groups = lookGroups(_chars, { say: (c) => c.name + ' is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.' });
   paintChoose(body, {
     state: _whoState,
     groups,
@@ -993,8 +957,7 @@ function _note(text, bad) {
 export function leave() {
   _active = false;
   _savingWord();
-  if (_voiceOpen()) _voiceWin.close();
-  _voiceWin = null;
+  VOICE.closeVoices();
   VOICE.leave();
   FRAG.leave();
   if (_who && _who.win.alive()) _who.win.close();

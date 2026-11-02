@@ -19,6 +19,13 @@
      tiles under that.
    EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations, fonts - hl-kinds.js; switching the kind
    brings its own back.
+   TWO STEPS SINCE V63 (P14, the owner 2026-11-02: "давай сделаем его в два шага быстрый запуск. на первом шаге пользователь выбирает
+   the video, the parts, а на втором шаге music и caption зоны") - the same window on Home and in Merge: STEP 1 the video (left) and
+   the parts (right), "next →" once a video and a kind are chosen; STEP 2 the music (left, 1/3) and the captions (right, 2/3),
+   "‹ back" and the press. The crumbs say the step, the first one goes back. Each section is one element moved into its step's
+   column, so nothing is painted twice and every picker keeps what it holds. It always opens on step 1.
+   THE HOST'S PRESS (V63): `start(spec)` given - Home's quick start - the press hands the choice to the host, which MAKES the
+   project and starts it (POST /api/highlights/start); with no project there is no `id` (`rec` is GET /api/highlights/offer).
 
    THREE WAYS IN (х1): a link, a file of this computer - its path handed over by the app's own window (desktop/preload.js
    pathOf; a browser tab cannot), pressed or let go of anywhere on the window -, or a source already in the Library. The
@@ -60,8 +67,9 @@ export function closePopup() { if (_win) _win.frame.close(); }
  * Open it for project `id` (its record `rec`: the lengths, counts and kinds it offers). `onStarted(alertId)` once the server
  * took the press. `url` (phase TG, block 5c) - a link written in already: a long video of REFERENCES sent "to highlights".
  * `sourceId` (block 6) - a source of the Library chosen already: a video of the media tree's YOUTUBE sent "to highlights".
+ * `start(spec)` (phase V63) - the host's press: answers `{ alertId, … }` or throws its refusal; `id` is null then.
  */
-export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
+export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   if (_win) return;
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
@@ -79,6 +87,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     style: '', styles: [], anims: [], fonts: [], capTab: 'presets', price: null, busy: false, said: '', err: false,
     // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
     tracks: [], audio: null, tracksFor: '',
+    // (V63) 1 - the video and the parts, 2 - the music and the captions.
+    step: 1,
   };
 
   const frame = openFrame({ name: 'highlights', size: GEN_SIZE, geom: GEOM, onClose: () => {
@@ -87,13 +97,18 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     try { _win.anim.stop(); } catch (e) { /* gone */ }
     _win = null;
   } });
-  frame.setCrumbs([{ label: 'highlights · find the moments' }]);
   const box = frame.box;
   frame.body.classList.add('mv3-hlp');
   const cols = _el('div', 'mv3-hlp-cols');
-  const L = _el('div', 'mv3-hlp-left');
-  const R = _el('div', 'mv3-hlp-right');
-  cols.append(L, R);
+  // (V63) The two columns of a step, and the four sections that are moved into them: the video and the parts (step 1), the music
+  // and the captions (step 2).
+  const A = _el('div', 'mv3-hlp-left');
+  const B = _el('div', 'mv3-hlp-left mv3-hlp-b');
+  cols.append(A, B);
+  const L = _el('div', 'mv3-hlp-sec');
+  const P = _el('div', 'mv3-hlp-sec');
+  const M = _el('div', 'mv3-hlp-sec');
+  const R = _el('div', 'mv3-hlp-sec');
   const foot = _el('div', 'mv3-x-foot mv3-hlp-foot');
   frame.body.append(cols, foot);
 
@@ -116,7 +131,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   link.placeholder = 'https://www.youtube.com/watch?v=…  - one video';
   link.addEventListener('input', () => { st.url = link.value.trim(); paint(); });
   if (url) { st.url = String(url).trim(); link.value = st.url; }
-  link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (st.step === 1) next(); else go(); } });
   panes.link = _el('div', 'mv3-hlp-pane');
   panes.link.appendChild(link);
 
@@ -169,7 +184,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
 
   // ── The fragments: the kind, its words, the length and the count ──
   const fragHdr = _el('div', 'mv3-x-hdr', 'the fragments');
-  L.appendChild(fragHdr);
+  P.appendChild(fragHdr);
   const kindRow = _el('div', 'mv3-hlp-kinds');
   const kindBtns = {};
   for (const [k, v] of Object.entries(kinds)) {
@@ -191,10 +206,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
   kindRow.appendChild(reset);
-  L.appendChild(kindRow);
+  P.appendChild(kindRow);
   // (хп35) One height whatever it says: every kind's short line, or the chosen one's words.
   const about = _el('div', 'mv3-hlp-about');
-  L.appendChild(about);
+  P.appendChild(about);
 
   const opts = _el('div', 'mv3-hlp-opts');
   const lenRow = _el('div', 'mv3-hlp-orow');
@@ -214,12 +229,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   }
   const fragNote = _el('p', 'mv3-x-note', '');
   opts.append(lenRow, cntRow, fragNote);
-  L.appendChild(opts);
+  P.appendChild(opts);
 
   // ── (V68 P3) The background music - the moods of Music → highlights ──
   const musicSec = _el('div', 'mv3-hlp-music');
   musicSec.appendChild(_el('div', 'mv3-x-hdr', 'music'));
-  L.appendChild(musicSec);
+  M.appendChild(musicSec);
   const music = moodPicker(musicSec, {
     onChange: (moods) => { st.moods = moods; keep(); },
     // The ticked tracks of before as their moods, once (хп49) - then what the kind chosen remembers.
@@ -272,9 +287,17 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
+  // (V63) The steps: "next →" on the first, "‹ back" beside the press on the second.
+  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'next →');
+  nextBtn.type = 'button';
+  nextBtn.addEventListener('click', () => next());
+  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back', '‹ back');
+  backBtn.type = 'button';
+  backBtn.title = 'Back to the video and the parts';
+  backBtn.addEventListener('click', () => toStep(1));
   const footL = _el('div', 'mv3-hlp-footl');
   footL.append(hear, said);
-  foot.append(footL, goBtn);
+  foot.append(footL, backBtn, nextBtn, goBtn);
 
   // A file let go anywhere on the window.
   box.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); box.classList.add('is-drop'); } });
@@ -288,6 +311,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     takeFile(f);
   });
   _win = { frame, picker, anim };
+  placeStep();
 
   // ── The kind and what it remembers ──
   // A style kept for a kind that is not auto cannot be "by the video": that kind's own takes its place.
@@ -396,6 +420,42 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
 
   function say(text, err) { st.said = text || ''; st.err = !!err; paint(); }
 
+  // ── (V63) The two steps ──
+  // A video given: a link, a file handed over, or a video of the Library picked.
+  function hasVideo() {
+    if (st.from === 'link') return /^https?:\/\/\S+/i.test(st.url);
+    if (st.from === 'file') return !!st.path;
+    return !!st.pick;
+  }
+  // What the first step still waits for, in words ('' - nothing).
+  function stepWait() {
+    if (!hasVideo()) return st.from === 'link' ? 'Give a link to the video first' : st.from === 'file' ? 'Choose a video file first' : 'Choose a video of the Library first';
+    return st.kind ? '' : 'Choose the kind of video first';
+  }
+  function next() {
+    const why = stepWait();
+    if (why) { say(why + '.', true); return; }
+    say('');
+    toStep(2);
+  }
+  // Each section moved into its step's column - the same elements, so every picker keeps what it holds.
+  function placeStep() {
+    const two = st.step === 2;
+    A.replaceChildren(two ? M : L);
+    B.replaceChildren(two ? R : P);
+    B.className = two ? 'mv3-hlp-right' : 'mv3-hlp-left mv3-hlp-b';
+    cols.classList.toggle('is-s2', two);
+    frame.setCrumbs(two
+      ? [{ label: 'highlights · video & parts', on: () => toStep(1) }, { label: 'music & captions' }]
+      : [{ label: 'highlights · video & parts' }]);
+  }
+  function toStep(n) {
+    st.step = n === 2 ? 2 : 1;
+    placeStep();
+    paint();
+    if (st.step === 2) picker.openFirst();
+  }
+
   function ready() {
     if (st.busy || !st.kind) return false;
     if (st.price && st.price.hear.by === 'none' && !(st.from === 'source' && st.source && st.source.words)) return false;
@@ -502,7 +562,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     capBox.hidden = st.capTab !== 'presets';
     animBox.hidden = st.capTab !== 'anim';
     fontBox.hidden = st.capTab !== 'fonts';
-    fonts.shown(!fontBox.hidden && !locked);
+    fonts.shown(!fontBox.hidden && !locked && st.step === 2);
     paintChosen();
     // Who hears it, and what it costs.
     const p = st.price;
@@ -522,6 +582,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments') + (cost && st.kind ? ' · ' + cost : '');
     goBtn.disabled = !ready();
     goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';
+    // (V63) The steps' buttons: "next →" on the first, "‹ back" and the press on the second.
+    const wait = stepWait();
+    nextBtn.hidden = st.step !== 1;
+    nextBtn.disabled = !!wait || st.busy;
+    nextBtn.title = wait ? wait : 'The music and the captions';
+    backBtn.hidden = goBtn.hidden = st.step !== 2;
+    backBtn.disabled = st.busy;
     said.textContent = st.said;
     said.classList.toggle('is-err', st.err);
   }
@@ -560,11 +627,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     else if (st.pick && st.pick.type === 'remote') { spec.from = 'link'; spec.url = st.pick.link; }
     else spec.sourceId = st.sourceId;
     try {
-      const d = await _api('/api/highlights/' + encodeURIComponent(id) + '/start',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
+      // (V63) Home's quick start: the host makes the project and starts it; Merge's project starts as before.
+      const d = typeof start === 'function' ? await start(spec)
+        : await _api('/api/highlights/' + encodeURIComponent(id) + '/start',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
       keep();
       closePopup();
-      if (onStarted) onStarted(d.alertId);
+      if (onStarted) onStarted(d.alertId, d);
     } catch (e) {
       st.busy = false;
       say(e.message, true);

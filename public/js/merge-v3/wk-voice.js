@@ -42,6 +42,7 @@ import { el } from './wk-maker.js';
 import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
 import * as Layers from '../layers.js';
+import * as GW from '../gen-window.js';
 
 const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
@@ -197,6 +198,15 @@ export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 // the script - a voiceover in Russian looks among Russian voices, a talking head (always English, V29) among English ones. Set
 // when the window opens for another project than last time; a filter changed by hand stays for that project.
 let _langFor = '';
+/** (phase V62, (во41) а; one rule since V63 for the setup and Home's quick start) The library's language for a script: a talking
+ *  head - English (V29); a voiceover by its text - Cyrillic Russian, plain English letters (or no text yet) English, else every
+ *  language (''). */
+export function scriptLang(voiceover, text) {
+  const t = String(text || '').replace(/\s+/g, ' ');
+  if (!voiceover) return 'en';
+  if (/\p{Script=Cyrillic}/u.test(t)) return 'ru';
+  return !t.trim() || !/[^ -~‘’“”–—…]/.test(t) ? 'en' : '';
+}
 export function languageFor(key, lang) {
   if (_langFor === key) return;
   _langFor = key;
@@ -931,4 +941,46 @@ async function _watchRead(api) {
 /** Coming back to the hub leaves the search behind, but not what was said about the last take. */
 export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
+}
+
+// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2): "нужен поиск по голосам в elevenlabs как в talking head но
+// поиск в попапе будет"; (во17) "в обоих") ──
+// The saved voices and the ElevenLabs library with its filters and its search (paintPicker) in a window of js/gen-window.js -
+// field 1's menu opens it ("ElevenLabs library…"); it stays open after a voice is taken and is painted again when its host
+// repaints, where it was scrolled to. (phase V63, P14) ONE window for the setup (js/merge-v3/wk-setup.js) and Home's voiceover
+// quick start (js/home/start.js) - moved here from wk-setup.js. `o.key` - whose window it is (the project, the popup), `o.lang`
+// - the library's language for it (languageFor).
+let _vwin = null;                        // { win, api }
+export const voicesOpen = () => !!(_vwin && _vwin.win.alive());
+export function openVoices(api, o = {}) {
+  if (voicesOpen()) { paintVoices(api); return _vwin.win; }
+  languageFor(String(o.key || ''), o.lang);
+  // (phase V64, fix (л)) Moved and stretched; its size kept.
+  const win = GW.openFrame({
+    name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
+    onClose: () => { if (_vwin && _vwin.win === win) _vwin = null; leave(); },
+  });
+  win.setCrumbs([{ label: 'voices' }]);
+  _vwin = { win, api };
+  paintVoices();
+  return win;
+}
+/** Painted again - with the host's api now (`api`, when given). What scrolls is the list above the foot; the foot - the
+ *  library's pages - stays at the window's bottom (the owner: "кнопки страниц показаны всегда снизу попапа"). */
+export function paintVoices(api) {
+  if (!voicesOpen()) return;
+  if (api) _vwin.api = api;
+  const body = _vwin.win.body;
+  const was = body.querySelector('.mv3-wk-vwin');
+  const at = was ? was.scrollTop : 0;
+  body.textContent = '';
+  const box = el('div', 'mv3-wk-vwin');
+  const foot = el('div', 'mv3-wk-vwinfoot');
+  body.append(box, foot);
+  paintPicker(box, { ..._vwin.api, inWindow: true, pagerHost: foot });
+  if (at) box.scrollTop = at;
+}
+export function closeVoices() {
+  if (voicesOpen()) _vwin.win.close();
+  _vwin = null;
 }
