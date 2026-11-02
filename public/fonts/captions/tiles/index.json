@@ -1,0 +1,428 @@
+{
+ "tile": {
+  "px": 192,
+  "bg": "16181d",
+  "words": [
+   {
+    "text": "Captions",
+    "y": 78,
+    "width": 0.86,
+    "ink": 58
+   },
+   {
+    "text": "Субтитры",
+    "y": 136,
+    "width": 0.78,
+    "ink": 36
+   }
+  ],
+  "outline": 3,
+  "version": 1
+ },
+ "tiles": {
+  "Montserrat Black": {
+   "file": "montserrat-black.webp",
+   "made": "d0b7b26dc7c6adb41db85f1577c7e48417c68b8e"
+  },
+  "Montserrat ExtraBold": {
+   "file": "montserrat-extrabold.webp",
+   "made": "0e1be931007b8a6eea480faa8a52b962fc8ed766"
+  },
+  "Montserrat": {
+   "file": "montserrat.webp",
+   "made": "deb3fb9cf4b032fdf10b880fec604c11e6b912d7"
+  },
+  "Inter Black": {
+   "file": "inter-black.webp",
+   "made": "5aa876254c605db3526d3936249198a9d06ad653"
+  },
+  "Inter ExtraBold": {
+   "file": "inter-extrabold.webp",
+   "made": "6997946b8d3fae1274b80fae899e8f55ce096e4a"
+  },
+  "Inter": {
+   "file": "inter.webp",
+   "made": "003baeb4c5b9cbd73784e8e675849f80d763f285"
+  },
+  "Oswald": {
+   "file": "oswald.webp",
+   "made": "93feb58d5840f03ca53fe8b0d2962dd3b68615e6"
+  },
+  "Fira Sans Extra Condensed Black": {
+   "file": "fira-sans-extra-condensed-black.webp",
+   "made": "2645dc61daf8af915f754a58fa2815bcc9998bb7"
+  },
+  "Rubik Black": {
+   "file": "rubik-black.webp",
+   "made": "5c1d8f7ae78e81092b3e2a78368dbba56966c102"
+  },
+  "Rubik Mono One": {
+   "file": "rubik-mono-one.webp",
+   "made": "8cfa46885b6438bee9fedc9e5b1a374b33480962"
+  },
+  "Unbounded Black": {
+   "file": "unbounded-black.webp",
+   "made": "3f68077b27334292410399b56baa3396a4a49951"
+  },
+  "Russo One": {
+   "file": "russo-one.webp",
+   "made": "46f34f7cf3c431cc8dddc7a23786eae0bdf70a79"
+  },
+  "Exo 2 Black": {
+   "file": "exo-2-black.webp",
+   "made": "215e7a6f5c830bfb3274824ff10b66e8be008368"
+  },
+  "Anton": {
+   "file": "anton.webp",
+   "made": "3f9024c00d3fd48092cf17f6c913040c1bdaa331"
+  },
+  "Bebas Neue": {
+   "file": "bebas-neue.webp",
+   "made": "8ab6815664bff745a0dd8d88ea91b0d16721a5d2"
+  },
+  "Bangers": {
+   "file": "bangers.webp",
+   "made": "c556912a747e027c24384f271c6859be09c9d572"
+  },
+  "Luckiest Guy": {
+   "file": "luckiest-guy.webp",
+   "made": "3e7985d8c5600138d0087451288fee02dd6a34b4"
+  },
+  "Permanent Marker": {
+   "file": "permanent-marker.webp",
+   "made": "7179629034820de54d61c5a95453223196431d9c"
+  },
+  "Liberation Sans": {
+   "file": "liberation-sans.webp",
+   "made": "80c860876231172f035eb1d2e8601ce2c7206c62"
+  },
+  "PT Sans": {
+   "file": "pt-sans.webp",
+   "made": "8d3cfa765c5358a8f157de0954f2a8cd13e3cc44"
+  },
+  "PT Serif": {
+   "file": "pt-serif.webp",
+   "made": "48ced86664ef739a9fd42ad264c056365355509a"
+  },
+  "Lacquer": {
+   "file": "lacquer.webp",
+   "made": "e7ef45b01fc009e715c73fb146e283832c372280"
+  },
+  "Rubik Burned": {
+   "file": "rubik-burned.webp",
+   "made": "496272d743c80abf52d1a36459e34449cecc176e"
+  },
+  "Rubik Dirt": {
+   "file": "rubik-dirt.webp",
+   "made": "a44ec3702df8731868530c96e4cbb8d32df32fd6"
+  },
+  "Rubik Spray Paint": {
+   "file": "rubik-spray-paint.webp",
+   "made": "700a256f6de21d7dce7771d5e9a42d4c3c49a84c"
+  },
+  "Rubik Wet Paint": {
+   "file": "rubik-wet-paint.webp",
+   "made": "02dbf18ed7ad7b63a47d88f3273e094e1b653ce9"
+  },
+  "Sedgwick Ave Display": {
+   "file": "sedgwick-ave-display.webp",
+   "made": "7665da10133ebeb99938a2e75c6f1ce508eeadc7"
+  },
+  "Comforter Brush": {
+   "file": "comforter-brush.webp",
+   "made": "96ad5e6f0a0fc47eccf028ae0277459812e18a1e"
+  },
+  "Kaushan Script": {
+   "file": "kaushan-script.webp",
+   "made": "2c702d55acbf01ced94ba007b5433c828390d9f7"
+  },
+  "Knewave": {
+   "file": "knewave.webp",
+   "made": "07f40830ad0e9637ed116fa8e694da03011b6b8f"
+  },
+  "Splash": {
+   "file": "splash.webp",
+   "made": "dcc0fd32b37901ffaa085aeaa88df352e154caf0"
+  },
+  "Yuji Boku": {
+   "file": "yuji-boku.webp",
+   "made": "d46c36fb20173b09628dde5c9ba0be3fc375ec4c"
+  },
+  "Finger Paint": {
+   "file": "finger-paint.webp",
+   "made": "d386130c76d6e3b204be816d8873143ac4b16ac3"
+  },
+  "Londrina Solid Black": {
+   "file": "londrina-solid-black.webp",
+   "made": "f03cb76debcf1c6dff0e9ad50cf1adb5681f5dc8"
+  },
+  "Rubik Marker Hatch": {
+   "file": "rubik-marker-hatch.webp",
+   "made": "5d26423ebf9ce169e05b406cf27bc45fb49fec67"
+  },
+  "Rubik Scribble": {
+   "file": "rubik-scribble.webp",
+   "made": "bb2f2744a8dccdea926bb2393715f96ce45176e8"
+  },
+  "Bungee": {
+   "file": "bungee.webp",
+   "made": "5fb46652817e58edd668e49fb8ba4be734145701"
+  },
+  "Chewy": {
+   "file": "chewy.webp",
+   "made": "491846e3d15dc40fc3c362be4fc31031226e91af"
+  },
+  "Kablammo": {
+   "file": "kablammo.webp",
+   "made": "0423d172e89435cc3b0a5d067dae9e6c39caae97"
+  },
+  "Rubik Doodle Shadow": {
+   "file": "rubik-doodle-shadow.webp",
+   "made": "56ffd3c126a3e04b700356f6c1178155b9166d13"
+  },
+  "Shantell Sans ExtraBold": {
+   "file": "shantell-sans-extrabold.webp",
+   "made": "4314359aced5762d8853a2c6b4aa270a056a31b4"
+  },
+  "Sigmar One": {
+   "file": "sigmar-one.webp",
+   "made": "6ceea74618e7aa68e4adc4c85eadc71df1bf9237"
+  },
+  "Butcherman": {
+   "file": "butcherman.webp",
+   "made": "669524309bbd8952506595b343eaeab54c613ff6"
+  },
+  "Creepster": {
+   "file": "creepster.webp",
+   "made": "64a9f144e8334470e34de7ecd777ee67dbfe7d84"
+  },
+  "Eater": {
+   "file": "eater.webp",
+   "made": "bce1b20b129f211e1d888ac571984f4873c49b8d"
+  },
+  "Metal Mania": {
+   "file": "metal-mania.webp",
+   "made": "437ee2561c8fcefc3f70e2de4f3e719fbc01b676"
+  },
+  "Nosifer": {
+   "file": "nosifer.webp",
+   "made": "34f320c2fa215c05e84e95e1d3c555598338bdcf"
+  },
+  "Rubik Beastly": {
+   "file": "rubik-beastly.webp",
+   "made": "15b6ff63ef20cd7a4d22efc2cee2935abab27ace"
+  },
+  "Climate Crisis": {
+   "file": "climate-crisis.webp",
+   "made": "842d217dbde72b487f7b6c3474dc14c210f2d435"
+  },
+  "Faster One": {
+   "file": "faster-one.webp",
+   "made": "2a674b9cd435b337c57f615fb40be9fb99ffd238"
+  },
+  "Lobster": {
+   "file": "lobster.webp",
+   "made": "ba3092016653767786a110f164c2642336f2b3ed"
+  },
+  "Monoton": {
+   "file": "monoton.webp",
+   "made": "9ac4245765e968815d415af6cd24e4d6c3d50468"
+  },
+  "Rubik 80s Fade": {
+   "file": "rubik-80s-fade.webp",
+   "made": "c670325c576baa6012569bebf4b36549d359f239"
+  },
+  "Rubik Vinyl": {
+   "file": "rubik-vinyl.webp",
+   "made": "f2238527515ec4ed5586e9c959441ca59121086b"
+  },
+  "Ruslan Display": {
+   "file": "ruslan-display.webp",
+   "made": "f99a89e0fe09dd6d6382f4db07744faf4c49182d"
+  },
+  "DotGothic16": {
+   "file": "dotgothic16.webp",
+   "made": "2b62c45a1549e12e7aee518ba44d3dc32fc1a86c"
+  },
+  "Jacquarda Bastarda 9": {
+   "file": "jacquarda-bastarda-9.webp",
+   "made": "8a84b387ffd0cee5be56f511faa29a180eed4ea6"
+  },
+  "Pixelify Sans": {
+   "file": "pixelify-sans.webp",
+   "made": "274b570a1d98cd34826b2848417b3ed28a18b89d"
+  },
+  "Press Start 2P": {
+   "file": "press-start-2p.webp",
+   "made": "ca1fd6d8397b86a085e54c9253c81316012924e1"
+  },
+  "Rubik Pixels": {
+   "file": "rubik-pixels.webp",
+   "made": "4f3c289bcb809bdf4b80a9f2aaa280ed2757c1ab"
+  },
+  "Tiny5": {
+   "file": "tiny5.webp",
+   "made": "3793f87347c16d0bb0d408445e419faf1ba185fe"
+  },
+  "Big Shoulders Stencil Black": {
+   "file": "big-shoulders-stencil-black.webp",
+   "made": "39ee94b573b5dbf34ce53636ae94f611df26cc7c"
+  },
+  "Black Ops One": {
+   "file": "black-ops-one.webp",
+   "made": "bfa98cd2a3ec453f2d6674f37fc6c571c9e98565"
+  },
+  "Emblema One": {
+   "file": "emblema-one.webp",
+   "made": "12009be16098b7200fd2740c99389a0ddfe2c2bc"
+  },
+  "Wallpoet": {
+   "file": "wallpoet.webp",
+   "made": "186e206b10f0c3e6f9909d971cae3c41da095432"
+  },
+  "Caveat": {
+   "file": "caveat.webp",
+   "made": "2540a40d8405c30f1e92a5ce6e290ceba5b55972"
+  },
+  "Hachi Maru Pop": {
+   "file": "hachi-maru-pop.webp",
+   "made": "728d1ceb4f7866cf2c5ae647d6754903034860ee"
+  },
+  "Marck Script": {
+   "file": "marck-script.webp",
+   "made": "3e4777c503548c92d31601d150dd4a255e16ae33"
+  },
+  "Neucha": {
+   "file": "neucha.webp",
+   "made": "01d12858c583b1848c6013c869b59eb88613e6af"
+  },
+  "Special Elite": {
+   "file": "special-elite.webp",
+   "made": "0cac7c3ec45e8731888a986125a98d990f0f45dd"
+  },
+  "Underdog": {
+   "file": "underdog.webp",
+   "made": "8342db73bfd5a5b16105d1f41815231f0f4b63e3"
+  },
+  "Bagel Fat One": {
+   "file": "bagel-fat-one.webp",
+   "made": "7ba051ff0dfbed549abc0c8c9a18a0e68ac7b583"
+  },
+  "Cherry Bomb One": {
+   "file": "cherry-bomb-one.webp",
+   "made": "69ed265f93bcfffb4c3c247ead11c3965ef1edf4"
+  },
+  "Coiny": {
+   "file": "coiny.webp",
+   "made": "08a0d8ef8e48db6db297ca98477323560fe8dfec"
+  },
+  "Modak": {
+   "file": "modak.webp",
+   "made": "f43f576bb9912dcfc5e06e7670b90ce80c987882"
+  },
+  "Rubik Bubbles": {
+   "file": "rubik-bubbles.webp",
+   "made": "7e65f1fe8298ace7c87e32dde1c1f3333354b545"
+  },
+  "Rubik Moonrocks": {
+   "file": "rubik-moonrocks.webp",
+   "made": "063588b85010368ffa630984dbb8edcb64fece56"
+  },
+  "Amatic SC": {
+   "file": "amatic-sc.webp",
+   "made": "e82e349677a2e09b1dd82443ab15b667bd7da9ca"
+  },
+  "Big Shoulders Display Black": {
+   "file": "big-shoulders-display-black.webp",
+   "made": "24baa208b041332029eee79cbadb35e885b5b756"
+  },
+  "Six Caps": {
+   "file": "six-caps.webp",
+   "made": "21cd8115948f524c6488144c751e07e3b6d44bfe"
+  },
+  "Sofia Sans Extra Condensed Black": {
+   "file": "sofia-sans-extra-condensed-black.webp",
+   "made": "674b779cf54694dfea73123eaab08320380a3093"
+  },
+  "Yanone Kaffeesatz": {
+   "file": "yanone-kaffeesatz.webp",
+   "made": "c245b48f11344118d1d618a352dcbc09a7371845"
+  },
+  "Fruktur": {
+   "file": "fruktur.webp",
+   "made": "aba9c3361f4424426f61c703fd33d7caa2d5da17"
+  },
+  "Grenze Gotisch ExtraBold": {
+   "file": "grenze-gotisch-extrabold.webp",
+   "made": "0e8ccc3ddbfe40dce8abfb96b1a8bef1e608f5dc"
+  },
+  "New Rocker": {
+   "file": "new-rocker.webp",
+   "made": "2036f21da98bb08a166211d8316783197a95203c"
+  },
+  "Pirata One": {
+   "file": "pirata-one.webp",
+   "made": "30185c700a3400d7ce21bfa0cef2d445d764f39d"
+  },
+  "UnifrakturMaguntia": {
+   "file": "unifrakturmaguntia.webp",
+   "made": "e596bd4616b7341ea6ba42fb3f7f16c9d3e57042"
+  },
+  "Audiowide": {
+   "file": "audiowide.webp",
+   "made": "2244c6c951b5a04462434febb2ea2fd2e9000a53"
+  },
+  "Orbitron Black": {
+   "file": "orbitron-black.webp",
+   "made": "c733aecbf0515dce43aef2eac50b1644d9f6474c"
+  },
+  "Rubik Glitch": {
+   "file": "rubik-glitch.webp",
+   "made": "4b76e0a77ebd259b9bc03d1004c079fb9062b9c9"
+  },
+  "Stalinist One": {
+   "file": "stalinist-one.webp",
+   "made": "1805e588e435a6ff2bd7bd3178241cc8dba097fc"
+  },
+  "Tektur ExtraBold": {
+   "file": "tektur-extrabold.webp",
+   "made": "bcd0b513295b1ac87abb6ad5dc2c8563f8f4c4ed"
+  },
+  "Ewert": {
+   "file": "ewert.webp",
+   "made": "8d4ea918c2168e1aaba85f5fbb3a992806d98db1"
+  },
+  "Rye": {
+   "file": "rye.webp",
+   "made": "43abb84b28bd8e3f14ce4e80c5051d77dc82bab2"
+  },
+  "Smokum": {
+   "file": "smokum.webp",
+   "made": "8f74742f579b7855a2f41b943a7cb5722d9c6d07"
+  },
+  "Ultra": {
+   "file": "ultra.webp",
+   "made": "8e8f8de4a82f7de95d8a43787e16918483ad4cf7"
+  },
+  "Dela Gothic One": {
+   "file": "dela-gothic-one.webp",
+   "made": "fe44ab48054b62ade9ae56f40ae2d06321f0556b"
+  },
+  "Rampart One": {
+   "file": "rampart-one.webp",
+   "made": "8826d22865ec60824def1f084fe41b1c148950db"
+  },
+  "Reggae One": {
+   "file": "reggae-one.webp",
+   "made": "2d7c4e52e0582a51b38013fdb305c300b61e0107"
+  },
+  "Seymour One": {
+   "file": "seymour-one.webp",
+   "made": "8aa17fb4620ae4432cde3c87aeea81e13afc8e86"
+  },
+  "Train One": {
+   "file": "train-one.webp",
+   "made": "0783da709383c8ef09d250638c6e94153b23e2f2"
+  }
+ }
+}

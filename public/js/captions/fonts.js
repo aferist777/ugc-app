@@ -176,6 +176,12 @@ export const GROUPS = [['graffiti', 'graffiti'], ['brush', 'brush'], ['marker', 
 /** A font's group in the fonts tab. */
 export const groupOf = (f) => (f && f.group) || 'basic';
 
+// THE FONTS TAB'S PICTURES (V68 P4, the owner's check 2026-11-02: the tab drawn in live fonts loaded 33 MB and stuttered when
+// scrolled): each font's tile is a picture made by tools/font-tiles.js with the render's own libass, shipped beside the fonts.
+export const TILE_DIR = FONT_DIR + 'tiles/';
+/** The file name of a family's tile picture. */
+export const tileName = (family) => String(family || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.webp';
+
 const BY = new Map(FONTS.map(f => [f.family.toLowerCase(), f]));
 
 /** The shipped font a name stands for: itself, its alias, or the fallback. */

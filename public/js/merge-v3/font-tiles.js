@@ -3,39 +3,24 @@
    типа отрисовать"; (хп8), (хп12), (хп47)). ONE module for the highlights popup (hl-popup.js) and Merge's captions view
    (captions-view.js).
 
-   A tile is the font itself, drawn here: "Captions" and under it "Субтитры" in white with a black outline on the dark square -
-   the Russian word in the font's twin when it has no Cyrillic (fonts.js drawnFamily: how a Russian line is drawn), each word
-   scaled to the square's width, as a page in the font keeps its preset's width. The name under it; the chips over the grid are
-   All and the font groups (fonts.js GROUPS). A font's file is loaded only when its tile is shown (css/caption-fonts.css,
-   document.fonts.load) - All loads them all.
+   A tile is the font itself: "Captions" and under it "Субтитры" in white with a black outline on the dark square - the Russian
+   word in the font's twin when it has no Cyrillic (fonts.js drawnFamily: how a Russian line is drawn). A PICTURE, drawn with the
+   render's own libass by tools/font-tiles.js and shipped in public/fonts/captions/tiles/ (fonts.js tileName): the owner's check
+   2026-11-02 found the tab drawn in the live fonts slow to open and to scroll - All loaded 33 MB of fonts and repainted outlined
+   letters of thousands of contours; 101 pictures are 450 KB, asked for only once the tab is on screen, the ones in view first
+   (loading=lazy). The name under it; the chips over the grid are All and the font groups (fonts.js GROUPS).
 
    A press chooses ONE font; Shift adds one to those chosen or takes it away - each page one of them, two in a row never the
    same (captions/mix.js). What a choice does is the caller's (`onPick(families, { shift, family })`).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { FONTS, GROUPS, groupOf, drawnFamily, cssWeight } from '../captions/fonts.js';
+import { FONTS, GROUPS, groupOf, drawnFamily, TILE_DIR, tileName } from '../captions/fonts.js';
 
-const EN = 'Captions';
 const RU = 'Субтитры';
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 /** A font's label as the tab shows it ('' for one the app does not ship). */
 export const fontLabel = (family) => { const f = FONTS.find((x) => x.family === family); return f ? f.label : ''; };
-
-// One word of a tile in `family`, scaled to the box once its file is in (a font not loaded yet measures in the fallback).
-function _word(text, family, cls) {
-  const w = _el('span', 'mv3-fnt-w ' + cls, text);
-  w.style.fontFamily = '"' + family + '", "Liberation Sans", sans-serif';
-  w.style.fontWeight = String(cssWeight(family, true));
-  return w;
-}
-
-function _fit(box, w, base) {
-  w.style.fontSize = base + 'px';
-  const room = box.clientWidth * 0.86;
-  const have = w.scrollWidth;
-  if (room > 0 && have > 0) w.style.fontSize = Math.max(6, Math.min(base * 1.6, base * room / have)).toFixed(1) + 'px';
-}
 
 /**
  * The fonts tab in `host`. `onPick(families, { shift, family })` on a press (`family` the one pressed); `note` - a line over the
@@ -46,7 +31,7 @@ export function fontPicker(host, { onPick, note } = {}) {
   let cat = '';
   let chosen = [];
   let visible = false;
-  const tiles = new Map();         // family -> { btn, box, en, ru, fitted }
+  const tiles = new Map();         // family -> { btn, box, img }
   if (note) host.appendChild(_el('div', 'mv3-cap-note', note));
   const top = _el('div', 'mv3-cap-cats mv3-fnt-cats');
   const grid = _el('div', 'mv3-cap-grid mv3-fnt-grid');
@@ -73,9 +58,6 @@ export function fontPicker(host, { onPick, note } = {}) {
     btn.title = f.label + (twin !== f.family ? ' - no Russian letters: a Russian line is drawn in ' + twin : '')
       + '. A press - this font; Shift adds it to those chosen, each page one of them';
     const box = _el('div', 'mv3-cap-box mv3-fnt-box');
-    const en = _word(EN, f.family, 'is-en');
-    const ru = _word(RU, twin, 'is-ru');
-    box.append(en, ru);
     const name = _el('div', 'mv3-cap-name');
     name.appendChild(_el('span', 'mv3-cap-nm', f.label));
     if (twin !== f.family) name.appendChild(_el('span', 'mv3-fnt-tw', 'lat'));
@@ -87,28 +69,32 @@ export function fontPicker(host, { onPick, note } = {}) {
       paintChosen();
       if (onPick) onPick(chosen.slice(), { shift, family: f.family });
     });
-    tiles.set(f.family, { btn, box, en, ru, fitted: false, fam: f.family, twin });
+    tiles.set(f.family, { btn, box, img: null, fam: f.family });
     grid.appendChild(btn);
   }
 
-  // The files of the tiles shown are asked for, and each word fitted once its own is in.
+  // The pictures are put in once the tab is on screen; the browser asks for those in view first (loading=lazy).
   function fitShown() {
     if (!visible) return;
     for (const t of tiles.values()) {
-      if (t.btn.hidden || t.fitted || !t.box.clientWidth) continue;
-      t.fitted = true;
-      const fits = () => { _fit(t.box, t.en, 22); _fit(t.box, t.ru, 15); };
-      fits();
-      if (document.fonts && document.fonts.load) {
-        Promise.all([document.fonts.load('22px "' + t.fam + '"', EN), document.fonts.load('15px "' + t.twin + '"', RU)])
-          .then(fits, fits);
-      }
+      if (t.img) continue;
+      const img = new Image();
+      img.className = 'mv3-cap-img mv3-fnt-img';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.draggable = false;
+      img.width = 96;
+      img.height = 96;
+      img.src = TILE_DIR + tileName(t.fam);
+      t.box.appendChild(img);
+      t.img = img;
     }
   }
   function paintCat() {
     for (const b of top.children) b.classList.toggle('is-on', (b.dataset.cat || '') === cat);
     for (const t of tiles.values()) t.btn.hidden = !!cat && t.btn.dataset.cat !== cat;
-    requestAnimationFrame(fitShown);
+    fitShown();
   }
   function paintChosen() { for (const [fam, t] of tiles) t.btn.classList.toggle('is-on', chosen.includes(fam)); }
   function _spot(btn) {
@@ -138,7 +124,7 @@ export function fontPicker(host, { onPick, note } = {}) {
       grid.scrollTop = 0;
       if (t) requestAnimationFrame(() => _spot(t.btn));
     },
-    /** The tab is on screen (or not): only then are the files of its tiles asked for. */
-    shown(on) { visible = !!on; if (visible) requestAnimationFrame(fitShown); },
+    /** The tab is on screen (or not): only then are its pictures asked for. */
+    shown(on) { visible = !!on; fitShown(); },
   };
 }
