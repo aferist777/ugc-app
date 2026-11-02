@@ -27,8 +27,9 @@
      TWO, STANDING APART - two faces, or two people in a shot with no face, both there for half the shot or more, too far
      apart for one window - are two bands BY THEMSELVES in 'face' too (`autoBands`, on unless said off), one over the other;
      close enough for one window, the largest is followed, as before. A person's band shows the person from the top down.
-   - (phase V33.8, the owner 2026-10-23, (ф1): "давай не весь кадр, а как бы увелично немного, типа до 3:2") A documentary's
-     shot with no face is not the whole frame but a WIDER WINDOW from its middle - 3:2 of a 16:9 film - over the same blur:
+   - (phase V33.8, the owner 2026-10-23, (ф1): "давай не весь кадр, а как бы увелично немного, типа до 3:2"; since phase V69 P12,
+     (хп36), (хп70): a SQUARE, SQUARE below, for every kind and the inspector) A shot with no face is not the whole frame but a
+     WINDOW from its middle over the same blur:
      `wide` on the record, the window's shape (w/h); none - the whole frame, as before. wholeW() says how much of the
      width it shows; the preview and the render both draw by it.
 
@@ -51,6 +52,10 @@
 import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
 
 export const VERSION = 1;
+// (phase V69 P12, the owner's (хп36), (хп70)) "The whole frame over its blur" is a SQUARE from the film's middle: a wide film scaled up
+// until the square from its middle fills the frame's width, over its blur - `wide` 1 (w/h). The highlights kinds that show the whole
+// frame (lib/highlights-store.js FRAMES) and the inspector's "whole + blur" (merge-v3/framing-ui.js) put it on the record.
+export const SQUARE = 1;
 export const MODES = ['face', 'center', 'whole', 'bands'];
 
 const CUT_MERGE = 0.6;      // scdet's changes closer than this are one

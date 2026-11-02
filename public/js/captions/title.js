@@ -72,3 +72,30 @@ export function dropTitle(tl) {
   if (!lane.clips.length) tl.tracks.splice(tl.tracks.indexOf(lane), 1);
   return true;
 }
+
+// (phase V69 P10, the owner's (хп88)) fragmentation's title: "Часть 3 · Зоро против Михоука" - the word for "part" in the language the
+// video is spoken in (the hearing's name of it - lib/highlights-job.js languageOf), "Part" for one not here; the number - the part's
+// place among those kept.
+const PART_WORD = {
+  russian: 'Часть', ukrainian: 'Частина', belarusian: 'Частка', bulgarian: 'Част', serbian: 'Део', kazakh: 'Бөлім', english: 'Part',
+  german: 'Teil', french: 'Partie', spanish: 'Parte', italian: 'Parte', portuguese: 'Parte', polish: 'Część', czech: 'Část',
+  slovak: 'Časť', dutch: 'Deel', swedish: 'Del', norwegian: 'Del', danish: 'Del', finnish: 'Osa', turkish: 'Bölüm', romanian: 'Partea',
+  hungarian: 'Rész', greek: 'Μέρος', indonesian: 'Bagian', vietnamese: 'Phần', japanese: 'パート', korean: '파트', chinese: '第', arabic: 'الجزء',
+  hebrew: 'חלק', hindi: 'भाग', georgian: 'ნაწილი', armenian: 'Մաս', azerbaijani: 'Hissə', uzbek: 'Qism', lithuanian: 'Dalis',
+  latvian: 'Daļa', estonian: 'Osa', croatian: 'Dio',
+};
+/** "<part> N · <headline>" in the video's language - fragmentation's title on top. */
+export function partTitle(language, n, headline) {
+  const L = String(language || '').trim().toLowerCase();
+  const word = PART_WORD[L] || PART_WORD.english;
+  const num = L === 'chinese' ? word + n + '部分' : word + ' ' + n;
+  return String(num + ' · ' + String(headline || '').trim()).slice(0, TITLE_MAX);
+}
+/**
+ * The words a fragment's title on top says: its headline (its English title when the agent gave none) - a part of fragmentation with
+ * its number first (partTitle). `o.whole` - the project is fragmentation; `o.language` - the video's.
+ */
+export function topTitleOf(f, o) {
+  const head = (f && (f.headline || f.title)) || '';
+  return o && o.whole && f && f.rank ? partTitle(o.language, f.rank, head) : head;
+}

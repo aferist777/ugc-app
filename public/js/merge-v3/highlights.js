@@ -42,7 +42,7 @@ import { presetName, presetStyle, editedKeys, keepMotion } from '../captions/pre
 import { LOOK_KEYS, mixOf, pairOf } from '../captions/style.js';
 import { deal, newSeed, redealFonts } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
-import { putTitle, titleLaneOf, dropTitle } from '../captions/title.js';
+import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
@@ -892,7 +892,7 @@ function _paintCard() {
     } else {
       const add = _el('button', 'mv3-c-btn mv3-hl-addtitle', 'add title');
       add.type = 'button';
-      add.title = 'Its headline at the top for the first three seconds: «' + (f.headline || f.title) + '»';
+      add.title = 'Its headline at the top for the first three seconds: «' + topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' }) + '»';
       add.addEventListener('click', () => _addTitle(f));
       tl.appendChild(add);
     }
@@ -981,7 +981,8 @@ function _renderLine(f) {
 
 // ── The title on top added to a made fragment (phase V33.3) ────────────────
 async function _addTitle(f) {
-  const text = f.headline || f.title;
+  // (phase V69 P12) A part of fragmentation with its number, in the video's language ("Часть 3 · ...", (хп88)).
+  const text = topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' });
   if (f.n === _openN()) {
     // The open one is the page's: one step of its timeline's undo, its own save.
     let ok = false;

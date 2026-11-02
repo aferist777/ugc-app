@@ -206,7 +206,9 @@ router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
     const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
     if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
     if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
-    if (!CUT.addTitle(f.key, f.headline || f.title)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
+    // (phase V69 P12) A part of fragmentation with its number, in the video's language ("Часть 3 · ...", (хп88)).
+    const text = require('../public/js/captions/title.js').topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' });
+    if (!CUT.addTitle(f.key, text)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
     res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });

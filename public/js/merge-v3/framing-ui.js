@@ -13,7 +13,7 @@
    (public/js/captions/split.js). */
 
 import * as Store from './store.js';
-import { plan, normalize } from '../framing/path.js';
+import { SQUARE, plan, normalize } from '../framing/path.js';
 import { placeBySplit } from '../captions/split.js';
 
 export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['center', 'middle'],
@@ -113,7 +113,8 @@ export async function choose(c, mode) {
     const p = await _json('/api/media/probe?src=' + encodeURIComponent(c.src));
     if (!p || !(p.w > 0)) { _wait.set(c.id, { mode, error: 'the film could not be read' }); _say(); return; }
     const side = p.rotate === 90 || p.rotate === 270;
-    _setFrame(c, { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [] });
+    // (phase V69 P12, (хп36)) "whole + blur" is the square from the middle over the blur.
+    _setFrame(c, { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [], ...(mode === 'whole' ? { wide: SQUARE } : {}) });
     _say();
     return;
   }
@@ -129,7 +130,8 @@ export async function choose(c, mode) {
     if (_wait.get(c.id) !== mine) return;
     if (st && st.state === 'ready' && st.faces) {
       _wait.delete(c.id);
-      _setFrame(c, plan(st.faces, { aspect: aspectOf(), mode, shift }));
+      // (V69 P12) A shot with no face - the square from the middle over the blur.
+      _setFrame(c, plan(st.faces, { aspect: aspectOf(), mode, shift, wide: SQUARE }));
       _say();
       return;
     }
