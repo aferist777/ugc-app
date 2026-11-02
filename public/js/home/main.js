@@ -8,7 +8,8 @@
 
    (phase V70, P13, the owner 2026-11-01, (хп25)-(хп30), (хп42), (хп43)) The left column, top to bottom:
      New project   blank · highlights · talking head · voiceover - a filled gold icon each (js/home/icons.js) and its word;
-                   a press is Merge's own "+ new project" by address (/merge?new=…; phase V63's popups come in P14)
+                   a press opens the kind's QUICK-START POPUP over Home (js/home/start.js, phase V63) - its press makes the project
+                   and opens it in Merge; a press with a modifier follows Merge's own "+ new project" by address (/merge?new=…)
      Generate      the pictures chat, the video chat, music & sounds - their WINDOWS over Home (js/home/windows.js)
      Library       character (New Character), prop (New prop), look (New lookbook), environment (New environment) - windows
      Projects      (what Continue was) the chips and the five changed last of a kind, a card on hover (js/home/projects.js)
@@ -26,6 +27,7 @@ import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
 import { ICONS } from './icons.js';
 import * as WIN from './windows.js';
 import { projectsBlock } from './projects.js';
+import { openStart } from './start.js';
 
 initNav();
 
@@ -57,15 +59,15 @@ const _none = async () => {};
 // ── New project (phase V70) ──
 // The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`): blank, highlights, talking
 // head, voiceover - in the owner's order (2026-11-01). A voiceover (phase V62) is THE voiceover draft, on its setup.
-// (phase V63, P14 - the quick-start popups - will open over Home instead.)
+// (phase V63, P14) Each opens its QUICK-START POPUP over Home (js/home/start.js): what the project starts with, then Merge.
 BLOCKS.start = () => {
   const f = frame('start', 'New project');
-  f.what.textContent = '· opens in Merge';
+  f.what.textContent = '· a quick start, then Merge';
   f.body.appendChild(tiles([
-    { icon: ICONS.blank, label: 'blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline' },
-    { icon: ICONS.highlights, label: 'highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts' },
-    { icon: ICONS.talking, label: 'talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines' },
-    { icon: ICONS.voiceover, label: 'voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it' },
+    { icon: ICONS.blank, label: 'blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline', run: () => openStart('blank') },
+    { icon: ICONS.highlights, label: 'highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts', run: () => openStart('highlights') },
+    { icon: ICONS.talking, label: 'talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines', run: () => openStart('talking') },
+    { icon: ICONS.voiceover, label: 'voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it', run: () => openStart('voiceover') },
   ]));
   return { el: f.st, paint: _none };
 };
