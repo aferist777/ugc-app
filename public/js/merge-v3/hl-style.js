@@ -24,7 +24,8 @@ import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as MyPresets from './my-presets.js';
 import { PAIRS, animTileId } from '../captions/page-fx.js';
-import { BY_VIDEO, styleFor as _styleFor } from './hl-kinds.js';
+import { BY_VIDEO, styleFor as _styleFor, settingsOf, standardOf, BY_VIDEO_KINDS } from './hl-kinds.js';
+import { KINDS as TABLE } from '../highlights/kinds.js';
 
 const MINE = 'mine';
 const REC = 'rec';
@@ -32,15 +33,10 @@ const REC = 'rec';
 // (phase V33.8, H2; the owner's (у7): "под подкасты - яркие, под документалку и факты - чуть сдержанней. типа рекомендованые, но
 // оставить выбор и других групп субтитров") The caption groups recommended for a kind of video - first among the chips, marked
 // "recommended", and open when the kind is chosen; every other group stays beside them.
-export const RECOMMENDED = {
-  podcast: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for a podcast' },
-  documentary: { cats: ['classic', 'clean', 'cinema'], said: 'calm - for a documentary' },
-  // (the owner's (в1)) auto: one tile, "by the video" - the agent's finding chooses between the style kept for podcast and the
-  // one kept for documentary (lib/highlights-store.js styleOf).
-  auto: { cats: [], byVideo: true, said: 'by the video - a talk gets your podcast style, a story told your documentary style' },
-  // (phase V43) fragmentation - an episode or a show cut whole: people talking, as in a podcast.
-  fragmentation: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for people talking' },
-};
+// (phase V69 P12) The table's - public/js/highlights/kinds.js `presets.rec` and `said` (classic left documentary: it cuts by
+// sentences, and highlights cut by pages). auto: one tile, "by the video" - the kind it finds gives its own set.
+export const RECOMMENDED = Object.fromEntries(Object.entries(TABLE).filter(([, v]) => v.button !== false)
+  .map(([k, v]) => [k, { cats: v.presets.rec.slice(), said: v.presets.said, ...(k === 'auto' ? { byVideo: true } : {}) }]));
 
 // "By the video" (V33.8, (в1)): not a preset but a choice between two - the style podcast remembers and the one documentary
 // remembers (V68 P3: their first style, hl-kinds.js styleFor).
@@ -233,18 +229,22 @@ export function stylePicker(host, { onPick, kind } = {}) {
   byName.appendChild(_el('span', 'mv3-cap-nm', 'by the video'));
   byBtn.append(byBox, byName);
   byBtn.addEventListener('click', () => pick(BY_VIDEO, false));
+  // (phase V69 P12, (хп93)) Each kind auto may find, with the set it would wear - as that kind remembers its captions here.
   function paintBy() {
     byBox.textContent = '';
-    const line = (what, kind) => {
+    byBox.classList.add('is-kinds');
+    const said = [];
+    for (const k of BY_VIDEO_KINDS) {
+      const ids = (k === 'other' ? standardOf('other') : settingsOf(k, null, [])).styles.filter((id) => id !== BY_VIDEO && _known(id));
       const l = _el('span', 'mv3-hls-by-l');
-      l.appendChild(_el('small', null, what));
-      l.appendChild(_el('b', null, presetName(styleFor(kind)) || styleFor(kind)));
-      return l;
-    };
-    byBox.append(line('a talk →', 'podcast'), line('a story told →', 'documentary'));
-    byBtn.title = 'The agent decides what the video is: a talk (podcast, vlog, reaction, monologue, stream) gets «' + presetName(styleFor('podcast'))
-      + '», a story told (documentary, lecture, tutorial, sermon) gets «' + presetName(styleFor('documentary'))
-      + '» - the styles you last chose for podcast and for documentary';
+      const label = (TABLE[k] && TABLE[k].label) || k;
+      l.appendChild(_el('small', null, label.split(' · ')[0]));
+      const nm = ids.length ? (presetName(ids[0]) || ids[0]) + (ids.length > 1 ? ' +' + (ids.length - 1) : '') : 'its standard';
+      l.appendChild(_el('b', null, nm));
+      byBox.appendChild(l);
+      said.push(label + ' → ' + nm);
+    }
+    byBtn.title = 'The agent finds out what the video is, and the fragments get that kind\'s captions as you last chose them for it: ' + said.join('; ');
   }
 
   // The person's first, newest first (as in the captions view), then the app's.
@@ -371,7 +371,20 @@ export function animPicker(host, { onPick } = {}) {
   }
   function paint() { for (const t of tiles.values()) t.btn.classList.toggle('is-on', chosen.includes(t.btn.dataset.pair)); }
   _follow(ctx, 'anim', P.paintStills);
+  // (phase V69 P12) The kind's recommended pairs: marked and first.
+  let rec = [];
+  function recommend(pairs) {
+    rec = Array.isArray(pairs) ? pairs.slice() : [];
+    const rank = (btn) => { const i = rec.indexOf(btn.dataset.pair); return i >= 0 ? i : 100 + PAIRS.findIndex((x) => x.id === btn.dataset.pair); };
+    for (const t of tiles.values()) {
+      const on = rec.includes(t.btn.dataset.pair);
+      t.btn.classList.toggle('is-rec', on);
+      t.btn.title = (PAIRS.find((x) => x.id === t.btn.dataset.pair) || {}).name + (on ? ' - recommended for this kind of video' : '') + ' - every fragment\'s pages; Shift adds it to those chosen';
+    }
+    for (const el of [...grid.children].sort((a, b) => rank(a) - rank(b))) grid.appendChild(el);
+  }
   return {
+    recommend,
     set: (pairs) => { chosen = [...new Set((Array.isArray(pairs) ? pairs : []).filter((x) => PAIRS.some((p) => p.id === x)))]; paint(); },
     getAll: () => chosen.slice(),
     // (V68 P3) Show pair `pair`'s tile: scrolled to and outlined in gold.

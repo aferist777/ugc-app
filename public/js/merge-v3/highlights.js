@@ -42,7 +42,7 @@ import { presetName, presetStyle, editedKeys, keepMotion } from '../captions/pre
 import { LOOK_KEYS, mixOf, pairOf } from '../captions/style.js';
 import { deal, newSeed, redealFonts } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
-import { putTitle, titleLaneOf } from '../captions/title.js';
+import { putTitle, titleLaneOf, dropTitle } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
@@ -422,6 +422,14 @@ function _paint() {
 
 const STEP = { download: 'downloading', copy: 'copying', hear: 'hearing', find: 'finding the moments', fragments: 'cutting' };
 
+// (phase V69 P12) "auto → true crime · bodycam" - what auto found the video to be; a kind in development is cut as other.
+function _foundSaid(r) {
+  const k = String((r && r.agent && r.agent.kind) || '');
+  if (!k) return '';
+  const K = r.kinds && r.kinds[k];
+  return 'auto → ' + (K ? K.label + (K.inDev ? ' (in development - cut as other)' : '') : k);
+}
+
 function _paintTop() {
   if (!_ui) return;
   const top = _ui.top;
@@ -434,8 +442,9 @@ function _paintTop() {
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
   // (phase V33.8) Auto - what the agent found the video to be.
+  // (phase V69 P12) Auto - the kind its first call found, by that kind's name.
   const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label
-    : (r.ask && r.agent && r.agent.kind ? ' · auto → ' + r.agent.kind : '');
+    : (r.ask && r.agent && r.agent.kind ? ' · ' + _foundSaid(r) : '');
   // (phase V33.8, H3) And the background music asked for - (V68 P3) its moods; a project of before, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
   const moods = r.ask && Array.isArray(r.ask.moods) ? r.ask.moods.map((m) => (m && m.label) || m).filter(Boolean) : [];
@@ -833,6 +842,12 @@ function _paintCard() {
   // (phase V33.2) Its faces could not be counted (no app window): framed from the middle - the clip's Framing switch can do it later.
   if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', f.faceNote + ' - Framing on its clip can follow the face later.'));
   const facts = _el('div', 'mv3-hl-facts');
+  // (phase V69 P12) Auto: the kind it found - the rules it was cut by.
+  if (_rec && _rec.ask && _rec.ask.kind === 'auto' && _rec.agent && _rec.agent.kind) {
+    const kf = _el('span', 'mv3-hl-fact', _foundSaid(_rec));
+    if (_rec.agent.kindWhy) kf.title = _rec.agent.kindWhy;
+    facts.appendChild(kf);
+  }
   const score = _el('span', 'mv3-hl-fact');
   if (Number.isFinite(f.score)) {
     score.appendChild(_el('b', null, String(f.score)));
@@ -868,6 +883,12 @@ function _paintCard() {
       const said = lane ? String(((lane.clips || []).find((c) => (+c.start || 0) < 0.05) || {}).name || '') : '';
       tl.appendChild(_el('b', null, said || 'yes'));
       tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
+      // (phase V69 P12, the owner's (хп90)) Taken off this fragment with one press.
+      const x = _el('button', 'mv3-hl-title-x', '✕');
+      x.type = 'button';
+      x.title = 'Take the title off this fragment';
+      x.addEventListener('click', () => _dropTitle(f));
+      tl.appendChild(x);
     } else {
       const add = _el('button', 'mv3-c-btn mv3-hl-addtitle', 'add title');
       add.type = 'button';
@@ -974,6 +995,23 @@ async function _addTitle(f) {
   try {
     await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title-on-top', { method: 'POST' });
     _say('the title is on top of «' + f.title + '»');
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+// (phase V69 P12, (хп90)) The title on top taken off a made fragment - the open one by the page (one step of its undo).
+async function _dropTitle(f) {
+  if (f.n === _openN()) {
+    let ok = false;
+    Store.mutate((tl) => { ok = dropTitle(tl); });
+    if (ok) _inField = false;
+    _say(ok ? 'the title is off - Ctrl+Z puts it back' : 'it has no title on top', !ok);
+    _paintCard();
+    return;
+  }
+  try {
+    await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title-on-top/remove', { method: 'POST' });
+    _say('the title is off «' + f.title + '»');
   } catch (e) { _say(e.message, true); }
   _load();
 }

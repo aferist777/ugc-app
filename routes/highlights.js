@@ -18,6 +18,7 @@
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
+//   POST   /api/highlights/:id/fragments/:n/title-on-top/remove   (V69 P12) and taken off it
 //   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together (V33.4)
 //   POST   /api/highlights/:id/render/stop  all of the project's renders stopped (V33.4, the owner's (х43))
 // ════════════════════════════════════════════════════════════════════════════
@@ -206,6 +207,19 @@ router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
     if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
     if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
     if (!CUT.addTitle(f.key, f.headline || f.title)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
+    res.json({ success: true });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V69 P12, the owner's (хп90)) The title on top taken off a made fragment (the ✕ by "title on top" on its card). The one that
+// is OPEN loses it on the page instead (its own undo step).
+router.post('/highlights/:id/fragments/:n/title-on-top/remove', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
+    if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
+    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
+    if (!CUT.dropTitle(f.key)) return res.status(409).json({ success: false, error: 'it has no title on top' });
     res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });

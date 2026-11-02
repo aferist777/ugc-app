@@ -60,3 +60,15 @@ export function putTitle(tl, text, seconds, makeId) {
   tracks.splice(at, 0, lane);
   return true;
 }
+
+/**
+ * (phase V69 P12, the owner's (хп90)) The title on top taken off a timeline, inside its one mutation: its line - the one at the very
+ * beginning of the title lane - goes, and the lane with it when nothing else is on it. False when there is no title.
+ */
+export function dropTitle(tl) {
+  const lane = titleLaneOf(tl);
+  if (!lane) return false;
+  lane.clips = (lane.clips || []).filter((c) => !(c && (+c.start || 0) < 0.05));
+  if (!lane.clips.length) tl.tracks.splice(tl.tracks.indexOf(lane), 1);
+  return true;
+}

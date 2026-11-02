@@ -286,3 +286,21 @@
 .mv3-hls-by-l small{font:500 8.5px/1.2 var(--font); color:var(--muted)}
 .mv3-hls-by-l b{font:700 9.5px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hls-by.is-on .mv3-hls-by-box{border-style:solid}
+/* (phase V69 P12) A kind in development: grey, not pressed, its words under its name; the title's ✕ on a card; the recommended marks
+   of the moods, the animations and the font groups (a gold dot, as the preset groups have) */
+.mv3-hlp-kind.is-dev{opacity:.45; filter:grayscale(1); cursor:default; border-style:dashed}
+.mv3-hlp-kind.is-dev:hover{border-color:var(--border)}
+.mv3-hlp-kind-dev{font:600 8.5px/1.1 var(--font); color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+.mv3-hl-title-x{margin-left:6px; padding:0 4px; border:0; background:none; color:var(--muted); font:600 10px/1 var(--font); cursor:pointer}
+.mv3-hl-title-x:hover{color:var(--danger)}
+.mv3-hlp-moods .mv3-hlp-chip.is-rec::before,
+.mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
+.mv3-hlp-byvideo{border-style:dashed; border-color:var(--gold)}
+.mv3-hls-grid .mv3-cap-tile.is-rec::after{content:'●'; position:absolute; top:4px; right:5px; color:var(--gold); font-size:8px; line-height:1}
+.mv3-hlp-titlerow{margin:4px 0 2px}
+.mv3-hls-grid .mv3-cap-tile.is-rec{position:relative}
+/* (phase V69 P12) "by the video" lists each kind auto may find - one line each, the kind and the set it would wear */
+.mv3-hls-by-box.is-kinds{justify-content:flex-start; align-items:stretch; gap:2px; padding:5px 6px}
+.mv3-hls-by-box.is-kinds .mv3-hls-by-l{flex-direction:row; align-items:baseline; gap:4px; overflow:hidden}
+.mv3-hls-by-box.is-kinds .mv3-hls-by-l small{flex:0 0 auto; font-size:7.5px}
+.mv3-hls-by-box.is-kinds .mv3-hls-by-l b{min-width:0; font-size:8px}

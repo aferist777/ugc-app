@@ -25,7 +25,7 @@ export const fontLabel = (family) => { const f = FONTS.find((x) => x.family === 
 /**
  * The fonts tab in `host`. `onPick(families, { shift, family })` on a press (`family` the one pressed); `note` - a line over the
  * chips. Returns { set(families), getAll(), reveal(family) - its group open, the tile scrolled to and outlined in gold,
- * openFirst(), shown(on) }.
+ * openFirst(), shown(on), recommend(groups) - (phase V69 P12) the kind's recommended groups marked and first among the chips }.
  */
 export function fontPicker(host, { onPick, note } = {}) {
   let cat = '';
@@ -126,5 +126,15 @@ export function fontPicker(host, { onPick, note } = {}) {
     },
     /** The tab is on screen (or not): only then are its pictures asked for. */
     shown(on) { visible = !!on; fitShown(); },
+    recommend(groups) {
+      const rec = Array.isArray(groups) ? groups : [];
+      const rank = (b) => { const id = b.dataset.cat || ''; if (!id) return -1; const i = rec.indexOf(id); return i >= 0 ? i : 100 + order.indexOf(id); };
+      for (const b of top.children) {
+        const on = rec.includes(b.dataset.cat || '');
+        b.classList.toggle('is-rec-cat', on);
+        b.title = on ? 'Recommended for this kind of video' : '';
+      }
+      for (const b of [...top.children].sort((x, y) => rank(x) - rank(y))) top.appendChild(b);
+    },
   };
 }
