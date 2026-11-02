@@ -441,7 +441,7 @@ router.post('/mv3/render/discard', (req, res) => {
 // Delete one project's timeline. The confirmation is the page's job (the button turns into
 // "really?"), so this just does it - a second confirmation here would be theatre.
 /* ── A project that did not come from Scenarios ──────────────────────────────
-   POST /api/mv3/timeline/new { title } | { projectId } -> { success, key, version }
+   POST /api/mv3/timeline/new { title, format? } | { projectId } -> { success, key, version }
 
    Every project until now arrived with a cut behind it: Scenarios writes sv3_<projectId> and
    fills the Main track. This makes an empty one, and there are two ways to be empty:
@@ -456,7 +456,10 @@ router.post('/mv3/render/discard', (req, res) => {
    THE TITLE IS TAKEN, NOT DEFAULTED, and the reason is that nothing in this app can rename a
    project. An "Untitled" made here would stay Untitled forever, so a blank title is refused
    rather than quietly accepted. A talking head has a name already - the project's - so it
-   passes none. */
+   passes none.
+
+   `format` (phase V63, P14, the owner's (хп31)): '9:16' or '16:9' - Home's quick start of a blank project asks it; anything
+   else is 9:16, as before. */
 router.post('/mv3/timeline/new', (req, res) => {
   try {
     const b = req.body || {};
@@ -507,7 +510,7 @@ router.post('/mv3/timeline/new', (req, res) => {
       owner: OWN.uidOf(req),
       rev: 1,
       kind: BLANK_KIND,
-      format: '9:16',
+      format: b.format === '16:9' ? '16:9' : '9:16',
       tracks: _emptyBlank().tracks,
     };
     const version = cur.version + 1;

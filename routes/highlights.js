@@ -5,6 +5,8 @@
 //
 //   GET    /api/highlights                  -> { projects: [view] }
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
+//   GET    /api/highlights/offer            -> { lengths, counts, kinds }   (V63) what the popup offers, with no project
+//   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   (V63) made AND started by the press
 //   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio= -> { price }   what "find moments" is expected to cost
 //   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
@@ -43,7 +45,7 @@ function view(rec, o) {
   if (a) delete a.raw;
   // The video's poster - what a tile shows until its own first frame is made.
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
-  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])), poster: (src && src.thumbPath) || '' };
+  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), ...offer(), poster: (src && src.thumbPath) || '' };
   // (phase V33.8, (ф2)) The kind as it is read now: an old `facts` is documentary.
   if (rec.ask) out.ask = { ...rec.ask, kind: HL.kindOf(rec) };
   if (o && o.caps) {
@@ -60,6 +62,12 @@ function view(rec, o) {
   return out;
 }
 
+// What the popup offers: the lengths, the counts and the kinds (fragmentation with its own lengths, no count).
+function offer() {
+  return { lengths: HL.LENGTHS, counts: HL.COUNTS,
+    kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])) };
+}
+
 router.get('/highlights', (_req, res) => {
   try { res.json({ success: true, projects: HL.list().map(view) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -70,6 +78,28 @@ router.post('/highlights', (req, res) => {
     const rec = HL.create(String((req.body || {}).name || ''));
     res.json({ success: true, project: view(rec), key: HL.homeKey(rec.id) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// (phase V63, P14, the owner 2026-10-30, (бс3), (бс8)) HOME'S QUICK START: the popup opens with no project (`offer`), and its
+// "find moments" MAKES the project and starts it in one press - closed with ✕, nothing was made. A press refused before any
+// money (no style, a bad link, a file gone) leaves no project behind.
+router.get('/highlights/offer', (_req, res) => {
+  try { res.json({ success: true, ...offer() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/highlights/start', async (req, res) => {
+  let rec = null;
+  try {
+    const b = req.body || {};
+    if (b.from === 'link' && !(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
+    rec = HL.create(String(b.name || ''));
+    const out = JOB.start(rec.id, b);
+    res.json({ success: true, ...out, key: HL.homeKey(rec.id), id: rec.id });
+  } catch (e) {
+    if (rec) { try { HL.remove(rec.id); } catch (err) { console.warn('[highlights/start] the project made for a refused press stays:', err.message); } }
+    res.status(e.status || 500).json({ success: false, error: e.message, code: e.code || null });
+  }
 });
 
 router.get('/highlights/price', (req, res) => {

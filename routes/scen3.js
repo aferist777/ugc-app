@@ -3730,6 +3730,9 @@ router.get('/scen3/projects/:id', (req, res) => {
 
 // Create from a scenario ({ scenarioId }), or upsert an existing project by id
 // so later phases can persist casting / montage onto it.
+// (phase V63, P14, the owner's (хп32), (хп58)) Or a TALKING HEAD FROM ONE'S OWN TEXT ({ lines, name }) - Home's quick start:
+// the lines as the window cut them (by paragraphs - every Enter a line), never put on the scenarios shelf; another language is
+// made English first, as a scenario's is (V29). Named after `name`, else its first words.
 router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
@@ -3788,6 +3791,30 @@ router.post('/scen3/projects', async (req, res) => {
       const nowV = _normVideo(merged.video);
       if (video && (nowV.model !== was.model || nowV.sound !== was.sound)) MIRROR.touch(merged.id, { project: merged });
       return res.json({ success: true, project: _projFull(merged) });
+    }
+
+    if (b.scenarioId == null && Array.isArray(b.lines)) {
+      let texts = b.lines.map(l => String((l && typeof l === 'object' ? l.text : l) || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+      if (!texts.length) return res.status(400).json({ success: false, error: 'the text is empty' });
+      if (texts.length > 200) return res.status(400).json({ success: false, error: 'at most 200 lines' });
+      if (texts.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: 'a line is longer than ' + VO_MAX + ' characters' });
+      if (texts.some(t => !AGENT.english(t))) {
+        const t = await _englishLines(texts);
+        if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+        texts = t.texts;
+      }
+      const title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+        || texts[0].split(' ').slice(0, 6).join(' ').slice(0, 120) || 'talking head';
+      const rec = _normProject({
+        id: _newId(list), owner: OWN.uidOf(req), name: `${now.slice(0, 10)} — ${title}`,
+        scenarioId: '', gender: '', title, lines: texts.map(text => ({ text })),
+        // Its choices start at none and are made by the person (phase V24, _normVideo).
+        video: { v: 2 }, createdAt: now, updatedAt: now,
+      }, now);
+      list.unshift(rec);
+      _saveProjects(list);
+      console.log('[scen3/projects] ' + rec.id + ' - a talking head from its own text, ' + texts.length + ' line(s)');
+      return res.json({ success: true, project: _projFull(rec) });
     }
 
     const scen = _load().find(x => String(x.id) === String(b.scenarioId || ''));
