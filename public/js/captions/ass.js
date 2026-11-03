@@ -48,6 +48,10 @@
    events over its last moments, the words carried on from where they were (_shift). A page without them is drawn as before,
    byte for byte; `at-once` (an In chosen to be none) only takes the preset's `appear` away.
 
+   A SUBTITLE LANE IN TWO ROWS (phase V71, style.js `rows`) is drawn by its plan (place.js rowsPlan): each page from its In, played
+   before its first word, to the end of its Out, played after its end, whole in between for at least 0.8 s, every other page in
+   the second row - the same layers, the words' moments the page's. A lane without it is drawn as before, byte for byte.
+
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -55,9 +59,9 @@ import { resolveStyle, withAuto, anchorOf, cased, markedColour } from './style.j
 import { assFace, drawnFamily } from './fonts.js';
 import { padOf } from './measure.js';
 import { spells } from './words.js';
-import { drawnPage, boxOf, gapAfter as _gap } from './place.js';
+import { drawnPage, boxOf, gapAfter as _gap, rowsPlan, pageKey } from './place.js';
 import { textLine, usesFx } from './text-fx.js';
-import { pageMotion, placeTags, motionTags, popScale, axisOf } from './page-fx.js';
+import { pageMotion, placeTags, motionTags, popScale, axisOf, awayFrom } from './page-fx.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -146,9 +150,10 @@ function _sw(w, base, on, after) {
 }
 
 // The words as an event that starts `off` ms into the page sees them (an Out's, phase V49): their times from that event's
-// start, `t0` the start before it was cut at 0 (s), and what each was by then.
+// start, `t0` the start before it was cut at 0 (s), and what each was by then. (phase V71) `off` below 0 - an event starting
+// before the page (an In played before its first word): the words come that much later in it.
 function _shift(words, off) {
-  if (!words || !(off > 0)) return words;
+  if (!words || !off) return words;
   const o = off / 1000;
   return words.map((w) => {
     const s = +w.s || 0, e = +w.e || 0;
@@ -253,21 +258,29 @@ function _wordBoxBody(st, words, brk, head) {
  * last moments - each set in the layers a page of its style has (see the header). `dlg` writes an event.
  */
 function _movingPage(dlg, M, s, L, start, end, box, drawn) {
-  const st = s.st;
-  const words = drawn.words;
-  const page = { brk: drawn.brk, text: drawn.text };
-  // Where it is drawn at rest - as a page without motion (_place) - and the middle of its text block (place.js boxOf): the
-  // anchor less how far the block hangs from it, plus half of it.
-  const ax = s.a.x + box.dx, ay = s.a.y + box.dy;
-  const lift = box.an === 2 ? box.th : box.an === 5 ? box.th / 2 : 0;
-  const cx = box.ax, cy = box.ay - lift + box.th / 2;
-  const grows = box.an === 2 ? box.th / 2 : box.an === 8 ? -box.th / 2 : 0;
-  const base0 = { sx: +st.scaleX || 100, sy: +st.scaleY || 100, lh: (+st.size || 60) * ((+st.scaleY || 100) / 100), blur: +st.blur || 0, grows };
   const c0 = _cs(start), c1 = _cs(end);
   // The Out's events start where its length before the end falls - at a centisecond, as libass starts them.
   const cOut = M.leave ? Math.max(c0 + 1, Math.min(c1 - 1, _cs(end - M.leave.ms / 1000))) : c1;
   const sets = [{ part: M.enter, t0: start, t1: M.leave ? cOut / 100 : end, off: 0, ev: (cOut - c0) * 10 }];
   if (M.leave) sets.push({ part: M.leave, t0: cOut / 100, t1: end, off: (cOut - c0) * 10, ev: (c1 - cOut) * 10 });
+  _drawSets(dlg, s, L, box, drawn, sets, 0);
+}
+
+/**
+ * The events of a moving page: `sets` [{ part (page-fx.js, or null - at rest), t0, t1 (s), off (ms - the words' shift, _shift), ev
+ * (the event's length, ms) }], each in the layers a page of its style has (see the header), drawn `lift` px down (phase V71: its row).
+ */
+function _drawSets(dlg, s, L, box, drawn, sets, lift) {
+  const st = s.st;
+  const words = drawn.words;
+  const page = { brk: drawn.brk, text: drawn.text };
+  // Where it is drawn at rest - as a page without motion (_place) - and the middle of its text block (place.js boxOf): the
+  // anchor less how far the block hangs from it, plus half of it.
+  const ax = s.a.x + box.dx, ay = s.a.y + box.dy + lift;
+  const hang = box.an === 2 ? box.th : box.an === 5 ? box.th / 2 : 0;
+  const cx = box.ax, cy = box.ay - hang + box.th / 2 + lift;
+  const grows = box.an === 2 ? box.th / 2 : box.an === 8 ? -box.th / 2 : 0;
+  const base0 = { sx: +st.scaleX || 100, sy: +st.scaleY || 100, lh: (+st.size || 60) * ((+st.scaleY || 100) / 100), blur: +st.blur || 0, grows };
   for (const x of sets) {
     const ws = _shift(words, x.off);
     const axis = axisOf(x.part, s.a.an);
@@ -283,6 +296,34 @@ function _movingPage(dlg, M, s, L, start, end, box, drawn) {
       dlg(L + 3, x.t0, x.t1, s.name, place + _popBodyMoving(st, ws, page.brk, x.part, base, blur + motionTags(x.part, base, true)));
     }
   }
+}
+
+/**
+ * (phase V71) A PAGE OF A LANE IN TWO ROWS, drawn by its plan `R` (place.js rowsPlan): its In over [S - inL, S], whole until H, its
+ * Out over [H, H + outL], in its row; a move up or down turned away from the other row (page-fx.js awayFrom). Not moving at all (no
+ * In or Out, or no room for them) - one set of events over [S, H], arriving with nothing.
+ */
+function _rowPage(dlg, s, L, R, box, drawn, c) {
+  const M = pageMotion(s.st, 0, { enter: R.inL, leave: R.outL });
+  const enter = M ? awayFrom(M.enter, R.other) : null, leave = M ? awayFrom(M.leave, R.other) : null;
+  if (!enter && !leave) {
+    const st = s.st.appear !== 'none' ? Object.assign({}, s.st, { appear: 'none' }) : s.st;
+    const place = _place(st, { ...s.a, x: s.a.x + box.dx, y: s.a.y + box.dy + R.lift });
+    const words = drawn.words, page = { brk: drawn.brk, text: drawn.text };
+    if (s.layered && BOXY(st)) dlg(L, R.S, R.H, s.name + 'b', place + _lineBoxBody(st, page));
+    if (s.layered && st.effect === 'box' && words) dlg(L + 1, R.S, R.H, s.name + 'b', place + _wordBoxBody(st, words, page.brk));
+    dlg(L + 2, R.S, R.H, s.name, place + _textBody(c, st, words, page));
+    if (s.layered && (st.effect === 'pop' || st.effect === 'bounce') && words) dlg(L + 3, R.S, R.H, s.name, place + _popBody(st, words, page.brk));
+    return;
+  }
+  // The events start at centiseconds, as libass starts them (_cs); each written half a centisecond in, so assTime gives that one.
+  const c0 = _cs(R.S - (enter ? R.inL : 0));
+  const cH = Math.max(c0 + 1, _cs(R.H));
+  const cE = leave ? Math.max(cH + 1, _cs(R.H + R.outL)) : cH;
+  const at = (cs) => (cs + 0.5) / 100;
+  const sets = [{ part: enter, t0: at(c0), t1: at(cH), off: Math.round((c0 / 100 - R.S) * 1000), ev: (cH - c0) * 10 }];
+  if (leave) sets.push({ part: leave, t0: at(cH), t1: at(cE), off: Math.round((cH / 100 - R.S) * 1000), ev: (cE - cH) * 10 });
+  _drawSets(dlg, s, L, box, drawn, sets, R.lift);
 }
 
 // ── The [V4+ Styles] entries ────────────────────────────────────────────────
@@ -343,7 +384,7 @@ export function buildAss(lanes, w, h) {
     if (!clips.length) continue;
     const marks = clips.some(c => { const ws = _wordsOf(c); return !!ws && ws.some(x => x && x.k); });
     const s = make('S' + used.length, withAuto(resolveStyle(track.style), w, h), marks);
-    used.push({ ...s, clips, lane: track.style, subs: track.kind === 'subs' });
+    used.push({ ...s, clips, lane: track.style, subs: track.kind === 'subs', track });
   }
   if (!used.length) return '';
   const first = used[0].st;
@@ -395,7 +436,9 @@ export function buildAss(lanes, w, h) {
     + assTime(end) + ',' + style + ',,0,0,0,,' + text);
   used.forEach((u, lane) => {
     const L = lane * 4;
-    for (const c of u.clips) {
+    // (phase V71) A subtitle lane in two rows: every page by its plan.
+    const plan = u.subs ? rowsPlan(u.track, w, h) : null;
+    u.clips.forEach((c, i) => {
       let s = twinned(styleOf(u, lane, c), c.name);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
@@ -403,7 +446,7 @@ export function buildAss(lanes, w, h) {
         const fx = textLine({ text: c.name, start, end }, s.st, s.name + 'x' + fxStyles.length, L, w, h);
         fxStyles.push(...fx.styles);
         lines.push(...fx.events);
-        continue;
+        return;
       }
       // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
       // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
@@ -412,9 +455,11 @@ export function buildAss(lanes, w, h) {
       const drawn = drawnPage(c, s.st, u.subs, w, end - start);
       const box = boxOf(drawn, s.st, w, h);
       if (drawn.shrink) s = smaller(s, drawn.shrink);
+      const R = plan ? plan.get(pageKey(c, i)) : null;
+      if (R) { _rowPage(dlg, s, L, R, box, drawn, c); return; }
       // A subtitle page with an In or an Out moves (phase V49, page-fx.js); any other is drawn as it always was.
       const M = u.subs ? pageMotion(s.st, end - start) : null;
-      if (M) { _movingPage(dlg, M, s, L, start, end, box, drawn); continue; }
+      if (M) { _movingPage(dlg, M, s, L, start, end, box, drawn); return; }
       const words = drawn.words;
       const page = { brk: drawn.brk, text: drawn.text };
       // An In chosen to be none (`at-once`, V49) arrives with nothing - the preset's way of arriving goes.
@@ -425,7 +470,7 @@ export function buildAss(lanes, w, h) {
       if (s.layered && st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(st, words, page.brk));
       dlg(L + 2, start, end, s.name, place + _textBody(c, st, words, page));
       if (s.layered && (st.effect === 'pop' || st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(st, words, page.brk));
-    }
+    });
   });
 
   const styles = [];

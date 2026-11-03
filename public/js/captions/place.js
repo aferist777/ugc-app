@@ -16,14 +16,24 @@
    (subs-b.js) draws it there, so the screen, the render and the screenshot agree. A page that fits is
    written exactly as before.
 
+   TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29)-(хо31), 2026-11-03; style.js `rows`): rowsPlan says, for every page of such a
+   lane, WHEN it is on screen and in WHICH ROW - the one answer ass.js draws by and the preview picks, outlines and marks by (pagesAt,
+   pageBox). A page is whole while its words are spoken: its In before its first word, its Out after its end; it stays at least
+   0.8 s, but is gone before the next page of its row comes in, and for that time its Out and that In play shorter - never under half
+   their length while it can stay longer. Every other page is in the second row - over the lane's place by a usual page's height and
+   0.15 of a line (higher beside a taller page; UNDER it for a lane at the top of the frame, (хо31)); after a pause long enough for
+   one page to go and the next to come, the first row again. A page with a place of its own has its rows from its place. The pages
+   themselves - their times on the timeline - are not touched: it is how they are drawn.
+
    PURE, and shared: the page imports it, the server require()s it (lib/mv3b-subs.js, through ass.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { resolveStyle, withAuto, anchorOf, captionLanes, POSITIONS } from './style.js';
+import { resolveStyle, withAuto, anchorOf, captionLanes, POSITIONS, rowsOn } from './style.js';
 import { meter, edgeOf, LINE_MAX } from './measure.js';
 import { fontOf, withTwin, drawnFamily } from './fonts.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
 import { spells, typedWords } from './words.js';
+import { motionLens } from './page-fx.js';
 
 // What follows word i of n: a space, a line break, or nothing after the last.
 export const gapAfter = (i, n, brk) => (i < n - 1 ? (brk && brk.has(i) ? '\\N' : ' ') : '');
@@ -175,8 +185,10 @@ export function boxOf(drawn, st, W, H) {
 /**
  * A caption's page on the frame: its style resolved from its lane's (`laneStyle`) with its own on top, drawn as
  * ass.js draws it. `subs` - it is on the subtitle lane. See boxOf for what comes back; `st` - the style.
+ * (phase V71) `track` - its lane, given: a page of a lane in two rows comes back where its row draws it (`lift`, px down; the
+ * place it is measured from - `dx`, `dy`, `ax`, `ay` less the lift - stays the lane's or its own).
  */
-export function pageBox(c, laneStyle, subs, W, H) {
+export function pageBox(c, laneStyle, subs, W, H, track) {
   const own = c && c.style && typeof c.style === 'object' && Object.keys(c.style).length ? c.style : null;
   // In the font it is drawn in: a line with a Cyrillic letter in a font without them is drawn in the twin (V42).
   const st = withTwin(withAuto(resolveStyle(laneStyle, own), W, H), c && c.name);
@@ -184,23 +196,138 @@ export function pageBox(c, laneStyle, subs, W, H) {
   const dur = Math.max(0.05, +c.dur || 0);
   const b = boxOf(drawnPage(c, st, subs, W, (start + dur) - start), st, W, H);
   b.st = st;
-  return b;
+  const r = track ? rowOf(track, c, W, H) : null;
+  return r && r.lift ? lifted(b, r.lift) : b;
+}
+
+/** (phase V71) A page's rectangle moved `lift` pixels down (up when less than 0) - into its row; `lift` said on it. */
+export function lifted(b, lift) {
+  const out = Object.assign({}, b, { y: b.y + lift, ay: b.ay + lift, lift });
+  out.lines = (b.lines || []).map((l) => Object.assign({}, l, { y: l.y + lift }));
+  return out;
 }
 
 /**
  * Every page on screen at `t` (seconds), in the order they are drawn - the subtitles first, the text lanes over
  * them: [{ track, clip, lane, box }]. What is on top is LAST.
+ * (phase V71) On a lane in two rows a page is on screen from its In to the end of its Out, in its row (rowsPlan): `box` - where
+ * it is drawn, `box0` - where its place puts it (what a drag moves from).
  */
 export function pagesAt(tl, t, W, H) {
   const out = [];
   captionLanes(tl).forEach((tr, lane) => {
+    const plan = tr.kind === 'subs' ? rowsPlan(tr, W, H) : null;
+    let i = -1;
     for (const c of (tr.clips || [])) {
       if (!c || !c.name || !((+c.dur) > 0)) continue;
+      i++;
       const s = Math.max(0, +c.start || 0), e = s + Math.max(0.05, +c.dur || 0);
-      if (t < s || t >= e) continue;
-      out.push({ track: tr, clip: c, lane, box: pageBox(c, tr.style, tr.kind === 'subs', W, H) });
+      const r = plan ? plan.get(pageKey(c, i)) : null;
+      if (r ? (t < r.from || t >= r.to) : (t < s || t >= e)) continue;
+      const box0 = pageBox(c, tr.style, tr.kind === 'subs', W, H);
+      out.push({ track: tr, clip: c, lane, box: r && r.lift ? lifted(box0, r.lift) : box0, box0 });
     }
   });
+  return out;
+}
+
+// ── TWO ROWS (phase V71) ─────────────────────────────────────────────────────
+/** The rule's numbers: a page whole at least `minOn` s; rows `gap` of a line apart; an Out and an In kept at `share` of their length
+ *  at least while a page can stay longer; a pause `reset` s longer than an Out and an In - the first row again. Not settings. */
+export const ROWS = { minOn: 0.8, gap: 0.15, share: 0.5, reset: 0.05 };
+
+/** A page's key in its lane's plan: its id - or its place among the lane's drawn pages (`i`), for a page without one. */
+export const pageKey = (c, i) => (c && c.id) || '#' + i;
+
+const _plans = new Map();      // the last plans worked out, by what they were worked out from
+const PLANS_KEPT = 12;
+
+/**
+ * THE PLAN OF A SUBTITLE LANE IN TWO ROWS on a W x H frame: null for any other lane; else a Map from each drawn page's key (pageKey,
+ * among the pages with words and a length, in the lane's order) to { S, E - its time on the timeline; H - whole on screen until;
+ * inL, outL - its In before S and its Out after H, seconds (0 - none); from, to - on screen; row 0 | 1; lift - px down (up when
+ * less than 0) its row moves it; other - 'up' | 'down', where the other row is (page-fx.js awayFrom) }.
+ */
+export function rowsPlan(track, W, H) {
+  if (!track || track.kind !== 'subs' || !rowsOn(track.style)) return null;
+  const clips = (track.clips || []).filter((c) => c && c.name && (+c.dur) > 0);
+  const sig = W + 'x' + H + JSON.stringify([track.style, clips.map((c) => [c.id || '', c.start, c.dur, c.name, c.style || null,
+    Array.isArray(c.words) ? c.words.map((w) => w && w.w).join(' ') : null])]);
+  const had = _plans.get(sig);
+  if (had) { _plans.delete(sig); _plans.set(sig, had); return had; }
+  const plan = _rowsOf(track.style, clips, W, H);
+  _plans.set(sig, plan);
+  if (_plans.size > PLANS_KEPT) _plans.delete(_plans.keys().next().value);
+  return plan;
+}
+
+/** (phase V71) A page's row and times on its lane (rowsPlan) - null when the lane is in one row. */
+export function rowOf(track, c, W, H) {
+  const plan = rowsPlan(track, W, H);
+  if (!plan) return null;
+  const i = (track.clips || []).filter((x) => x && x.name && (+x.dur) > 0).indexOf(c);
+  return plan.get(pageKey(c, i)) || null;
+}
+
+function _rowsOf(laneStyle, clips, W, H) {
+  const laneSt = withAuto(resolveStyle(laneStyle), W, H);
+  const gap = ROWS.gap * (+laneSt.size || 60) * ((+laneSt.scaleY || 100) / 100);
+  // (хо31) A lane at the top of the frame has its second row under it; in the middle and at the bottom, over it.
+  const under = laneSt.pos === 'top';
+  const P = clips.map((c, i) => {
+    const box = pageBox(c, laneStyle, true, W, H);
+    const lens = motionLens(box.st);
+    const S = Math.max(0, +c.start || 0);
+    return { key: pageKey(c, i), i, S, E: S + Math.max(0.05, +c.dur || 0), box, inF: lens ? lens.enter : 0, outF: lens ? lens.leave : 0 };
+  }).sort((a, b) => a.S - b.S || a.i - b.i);
+  // The rows: every other page, the first row again after a pause the last one can leave and this one come in.
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], q = P[i - 1];
+    p.inL = Math.min(p.inF, p.S);
+    p.outL = p.outF;
+    p.H = p.E;
+    p.row = !q || p.S - q.E >= q.outF + p.inF + ROWS.reset ? 0 : 1 - q.row;
+  }
+  // How long each stays whole: at least minOn - but gone before the next page of its row comes in; the reading time first, the Out
+  // and that In playing shorter for it, down to `share` of their length; with no room even for that, shorter still.
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i];
+    let j = i + 1;
+    while (j < P.length && P[j].row !== p.row) j++;
+    const n = P[j];
+    const want = Math.max(p.E, p.S + ROWS.minOn);
+    if (!n) { p.H = want; continue; }
+    const need = p.outF + n.inF;
+    p.H = Math.max(p.E, Math.min(want, n.S - need * ROWS.share));
+    const room = Math.max(0, n.S - p.H);
+    if (room < need) {
+      const k = need > 0 ? room / need : 0;
+      p.outL = Math.min(p.outL, p.outF * k);
+      n.inL = Math.min(n.inL, n.inF * k);
+    }
+  }
+  // The second row: a usual page's height and the gap from the first - more beside a page of the first row that is taller -, and
+  // never out of the frame.
+  const hs = P.map((p) => p.box.h).sort((a, b) => a - b);
+  const L0 = (hs[hs.length >> 1] || 0) + gap;
+  const out = new Map();
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i];
+    let lift = 0;
+    if (p.row === 1) {
+      let L = L0;
+      for (const nb of [P[i - 1], P[i + 1]]) {
+        if (!nb || nb.row !== 0) continue;
+        const need = under
+          ? (nb.box.y + nb.box.h - nb.box.ay) + (p.box.ay - p.box.y)
+          : (nb.box.ay - nb.box.y) + (p.box.y + p.box.h - p.box.ay);
+        L = Math.max(L, need + gap);
+      }
+      lift = under ? Math.max(0, Math.min(L, H - p.box.y - p.box.h)) : -Math.max(0, Math.min(L, p.box.y));
+    }
+    const other = (p.row === 0) === under ? 'down' : 'up';
+    out.set(p.key, { S: p.S, E: p.E, H: p.H, inL: p.inL, outL: p.outL, from: p.S - p.inL, to: p.H + p.outL, row: p.row, lift, other });
+  }
   return out;
 }
 

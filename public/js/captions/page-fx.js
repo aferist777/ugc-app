@@ -24,6 +24,11 @@
    the preset's `appear` (pop, fade, slide) the old way. `at-once` is an In chosen to be none: the preset's `appear` goes too.
    With an Out and no In, the preset's `appear` is the page's In, drawn here (pop -> pop, fade -> fade, slide -> from below).
 
+   TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29)-(хо33), 2026-11-03): on a lane in two rows (style.js `rows`) a page's In
+   plays BEFORE its first word and its Out AFTER its end - the page is whole all the while its words are spoken. Their lengths are
+   then the lane's plan's (place.js rowsPlan - `cap`, shorter where the next page of the row comes soon), not a third of the page; the
+   preset's own `appear` is an In there too ((хо33)); and a move up or down never crosses the other row (awayFrom).
+
    Motions are our own, after ideas from pycaps and Video-Stuff (MIT; fade / pop / zoom / slide in and out, 0.2-0.4 s) - no
    code taken. PURE: numbers and tag strings.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -119,16 +124,20 @@ export function shownEnter(st) {
  * Out and no In of its own - the preset's `appear` included), else { enter, leave } - each { key, ms, pts, a, axis, keys } or
  * null: its length (ms), the curve sampled (pts [{ t ms, s, blur, rz, dx, dy }]), when it becomes seen or unseen (a [ms, ms]),
  * which way it travels ('v', 'h' or ''), and which of s, blur, rz, travel change at all.
+ * (phase V71) `cap` { enter, leave } - seconds, on a lane in two rows: each part at most that long (none under 0.02 s), `life` not
+ * asked; the preset's `appear` moves the page too.
  */
-export function pageMotion(st, life) {
+export function pageMotion(st, life, cap) {
   const s = st || {};
   const own = s.enter !== 'none' && s.enter !== 'at-once' && IN[s.enter] ? s.enter : '';
   const leave = OUT[s.leave] ? s.leave : '';
-  if (!own && !leave) return null;
   const enter = shownEnter(s);
+  if (cap ? !enter && !leave : !own && !leave) return null;
   const third = Math.max(0.02, (+life || 0) / 3);
   const part = (key, spec, entering) => {
-    const sec = Math.min(spec.len || (entering ? IN_LEN : OUT_LEN), third);
+    const most = cap ? (entering ? cap.enter : cap.leave) : third;
+    if (cap && !(most >= 0.02)) return null;
+    const sec = Math.min(spec.len || (entering ? IN_LEN : OUT_LEN), most);
     const ms = Math.max(20, R(sec * 100) * 10);
     const n = clamp(Math.ceil(ms / 40), 2, 10);
     const pts = [];
@@ -142,6 +151,29 @@ export function pageMotion(st, life) {
     return { key, ms, pts, a: [R(spec.a[0] * ms), R(spec.a[1] * ms)], axis, keys, entering };
   };
   return { enter: enter ? part(enter, IN[enter], true) : null, leave: leave ? part(leave, OUT[leave], false) : null };
+}
+
+/**
+ * (phase V71) A page's In and Out at their whole lengths, seconds - 0 for none -, on a lane in two rows (the preset's `appear` is
+ * an In there); null when it does not move at all. What place.js rowsPlan shares out.
+ */
+export function motionLens(st) {
+  const s = st || {};
+  const enter = shownEnter(s);
+  const leave = OUT[s.leave] ? s.leave : '';
+  if (!enter && !leave) return null;
+  return { enter: enter ? (IN[enter].len || IN_LEN) : 0, leave: leave ? (OUT[leave].len || OUT_LEN) : 0 };
+}
+
+/**
+ * (phase V71, (хо30)) A part's move up or down turned away from the other row - `other` 'up' or 'down', where the other row is: a
+ * page of the lower row comes from below and leaves downwards, of the upper one from above and upwards. Any other part as it is.
+ */
+export function awayFrom(part, other) {
+  if (!part || part.axis !== 'v') return part;
+  const d = part.entering ? part.pts[0].dy : part.pts[part.pts.length - 1].dy;
+  if (!(other === 'up' ? d < 0 : d > 0)) return part;
+  return Object.assign({}, part, { pts: part.pts.map((q) => Object.assign({}, q, { dy: -q.dy })) });
 }
 
 // The turn that travels a page `d` pixels along its axis (the point turned about FAR away: 'v' to its right, 'h' below it).

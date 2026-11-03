@@ -71,9 +71,14 @@ export const MIX_MAX = 40;
 // THE PLACE HELD (phase V66, the owner's (хо13), 2026-11-03): a subtitle lane whose place was set for several highlights fragments at
 // once (`hold: true`) keeps its place (pos, tx, ty) when a preset is put on it - the place on the screen is about the platform's
 // buttons, not about the look (preset-use.js keepMotion). Nothing is drawn by it: a style without it is stored as before.
-const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF', 'hold'];
+// TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29), 2026-11-03): a subtitle lane with `rows: 2` is drawn by place.js rowsPlan -
+// a page's In before its first word, its Out after its end, every other page in a second row, a page fully seen at least 0.8 s. The
+// lane's, never a preset's (preset-use.js); no field - one row, every page drawn exactly as before.
+const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF', 'hold', 'rows'];
 /** The fields a held place keeps over a preset (phase V66). */
 export const PLACE_KEYS = ['pos', 'tx', 'ty'];
+/** (phase V71) Is a subtitle lane's style in two rows? */
+export const rowsOn = (lane) => !!lane && +lane.rows === 2;
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -170,6 +175,8 @@ const RULES = {
   mixF: NUM(0, MIX_MAX - 1, true),
   // (V66) A lane's place held over presets - only ever true; false is no field at all.
   hold: (v) => (v === true ? true : undefined),
+  // (V71) Two rows - only ever 2; one row is no field at all.
+  rows: (v) => (+v === 2 ? 2 : undefined),
 };
 
 // ── A word marked to stand out ──────────────────────────────────────────────

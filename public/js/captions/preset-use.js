@@ -36,8 +36,9 @@ export function presetStyle(id) {
   const p = _find(id);
   if (!p) return null;
   const st = normalizeStyle(Object.assign({}, p.style, { preset: p.id }));
-  // (V66) A held place is a lane's (style.js `hold`), never a preset's.
+  // (V66) A held place is a lane's (style.js `hold`), never a preset's - nor two rows (V71, style.js `rows`).
   delete st.hold;
+  delete st.rows;
   return st;
 }
 
@@ -71,6 +72,8 @@ export function keepMotion(st, cur, line) {
   if (line && cur) for (const k of ['mixA', 'mixS']) if (cur[k] !== undefined) out[k] = cur[k];
   // (phase V66, the owner's (хо13)) A LANE whose place was set for several highlights fragments at once keeps it, and the mark.
   if (!line && cur && cur.hold) { for (const k of PLACE_KEYS) if (cur[k] !== undefined) out[k] = cur[k]; out.hold = true; }
+  // (phase V71) Two rows are the lane's: a preset leaves them as they were.
+  if (!line && cur && cur.rows) out.rows = cur.rows;
   return out;
 }
 
