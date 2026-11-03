@@ -108,6 +108,14 @@ function _measureFloor() {
   const tl = document.getElementById('mv3-tl');
   const inner = tl && tl.querySelector(':scope > .mv3b-inner');
   if (!panel || !tl || !inner) return _floor;
+  // (phase V66.1, the owner 2026-11-03: "при появлении кнопок вместо таймлайнов ... чтобы просто все кнопки вместились") A highlights
+  // group's buttons in place of the timeline (hl-group.js): as tall as they need - their padding and the buttons.
+  const btns = panel.classList.contains('is-hlg') ? panel.querySelector(':scope > .mv3-hlg-panel') : null;
+  if (btns && btns.lastElementChild) {
+    const cs = getComputedStyle(btns);
+    const last = btns.lastElementChild;
+    return Math.ceil(last.offsetTop + last.offsetHeight + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0));
+  }
   let h = 0;
   // Everything of the panel above the lanes' box: its header, and the notice about deleted files when it shows.
   // (V66.1) Not what lies OVER the panel (a highlights group's buttons, absolute): it would measure the panel by itself.
@@ -154,6 +162,9 @@ export function lanesChanged() {
   _applyTl(to, !_follows());
   _placeCross();
 }
+
+/** (phase V66.1) The timeline fitted to what it shows now - its lanes, or a highlights group's buttons - and following it again. */
+export function fitTimeline() { _fitLanes(); _placeCross(); }
 
 /** The timeline's floor now, in px - for a test. */
 export const timelineFloor = () => _clampTl(0);

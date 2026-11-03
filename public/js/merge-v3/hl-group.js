@@ -35,6 +35,7 @@ import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import * as C from './controls.js';
 import * as CapPlace from './cap-place.js';
+import { fitTimeline } from './layout.js';
 import { setSubsStyle, selectTrackById, onSelChange, newBedLane } from './timeline-b.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
@@ -506,13 +507,16 @@ function _backPaint() {
   }
   _back.textContent = '‹ all ' + _A.ticked().length;
 }
+let _panelWas = false;
 function _panelSync() {
   const tl = document.getElementById('mv3-timeline');
   const want = !!tl && isGroup() && !_ownNow();
   if (tl) tl.classList.toggle('is-hlg', want);
   if (!want) { if (_panel) { _panel.remove(); _panel = null; } }
-  else {
-    _panelPaint(tl);
+  else _panelPaint(tl);
+  // (V66.1, the owner: "чтобы просто все кнопки вместились") The buttons come: the panel as tall as they are; they go: as its lanes.
+  if (want !== _panelWas) { _panelWas = want; fitTimeline(); }
+  if (want) {
     // (хо24) A group with no fragment open: the first ticked opens under the buttons - its frame on the preview.
     if (_A.openN() <= 0 && !_opening) {
       const f = _A.ticked()[0];
