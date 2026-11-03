@@ -12,7 +12,9 @@
 
    A TALKING HEAD's lines merged (ю3): the merged pair is still the mirror's - it carries the first line's number (`frag`)
    and what it holds (`merge`: each line's take, place and pieces) - so the save writes the merge into the project and the
-   mirror lays it as one cell for as long as its lines keep their takes (lib/line-cuts.js, lib/frag-mirror.js).
+   mirror lays it as one cell for as long as its lines keep their takes (lib/line-cuts.js, lib/frag-mirror.js). Lines that
+   cannot be merged so - laid before they knew their takes, a picture picked without its sound - are refused in words, never
+   merged into the person's cell (phase V72: the mirror laid such lines again over it, and the voice sounded twice).
 
    timeline-b.js hands this its accessors (wireMerge): ids() the picked clip ids, newId(), select(id).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -75,9 +77,16 @@ export function mergeable(tl, ids) {
 
 // (ю3) What a talking head's merged cell holds, line by line - each line's take and its pieces: where in the line's own file,
 // how long, where in the merged file (lib/line-cuts.js). A merged cell merged again passes its lines on. Null - no lines.
+// (phase V72, the owner's (э2)) `why` - lines that cannot be merged AS LINES, in words: a merge of them would be laid as the
+// person's cell, the mirror would lay the same lines again over it and the voice would sound twice - so it is refused. A
+// sound cell laid before the voices were written (phase V30) does not say which take it speaks (opening the project tells
+// it - lib/frag-mirror.js catchUp); a line's picture without its sound is not a line.
+const OLD_CELLS = 'These lines were laid before they knew their takes - open the project again, then merge.';
 function _linesOf(m) {
   const ac = m.audio ? m.audio.clips : [];
-  if (!ac.some((c) => Number(c.frag) > 0)) return null;
+  const vc = m.video ? m.video.clips : [];
+  if (!ac.concat(vc).some((c) => Number(c.frag) > 0)) return null;
+  if (!ac.some((c) => Number(c.frag) > 0)) return { why: 'A talking head\'s lines merge with their sound - pick them on main audio too.' };
   const lines = [];
   const byVoice = new Map();
   for (const c of ac) {
@@ -86,7 +95,7 @@ function _linesOf(m) {
       for (const e of c.merge) lines.push({ n: e.n, voice: e.voice, pieces: e.pieces.map(([tin, d, o]) => [tin, d, r3(o + at)]) });
       continue;
     }
-    if (!c.voice) return null;
+    if (!c.voice) return { why: OLD_CELLS };
     let L = byVoice.get(c.voice);
     if (!L) { L = { n: +c.frag, voice: c.voice, pieces: [] }; byVoice.set(c.voice, L); lines.push(L); }
     L.pieces.push([r3(+c.trimIn || 0), r3(+c.dur || 0), r3(at)]);
@@ -110,6 +119,13 @@ export function offerMerge() {
   box.innerHTML = '<span class="mv3-mergeask-t"></span><button type="button" class="mv3-mergeask-go">merge</button>'
     + '<button type="button" class="mv3-mergeask-x" title="Close (Esc)">✕</button>';
   box.querySelector('.mv3-mergeask-t').textContent = 'Merge ' + m.n + ' clips into one?';
+  // (phase V72) Lines that cannot be merged as lines: the words in place of the offer, nothing to press.
+  const why = (_linesOf(m) || {}).why;
+  if (why) {
+    box.querySelector('.mv3-mergeask-t').textContent = why;
+    box.querySelector('.mv3-mergeask-t').classList.add('is-bad');
+    box.querySelector('.mv3-mergeask-go').remove();
+  }
   document.body.appendChild(box);
   const r = anchor.getBoundingClientRect();
   const w = box.offsetWidth, h = box.offsetHeight;
@@ -118,7 +134,8 @@ export function offerMerge() {
   const away = (e) => { if (_win && !_win.job && !box.contains(e.target)) closeMerge(); };
   _win = { box, m, ids: _acc.ids().slice().sort().join(','), away, job: null, timer: 0,
     layer: Layers.open(box, { modal: false, name: 'merge clips', onEsc: () => { if (!_win || !_win.job) closeMerge(); } }) };
-  box.querySelector('.mv3-mergeask-go').addEventListener('click', _go);
+  const goBtn = box.querySelector('.mv3-mergeask-go');
+  if (goBtn) goBtn.addEventListener('click', _go);
   box.querySelector('.mv3-mergeask-x').addEventListener('click', () => { if (_win && _win.job) _cancel(); else closeMerge(); });
   // On the next turn: the press that made the pick is not "elsewhere".
   setTimeout(() => { if (_win && _win.box === box) document.addEventListener('mousedown', away, true); }, 0);
@@ -151,6 +168,9 @@ async function _go() {
   const w = _win;
   if (!w || w.job) return;
   const go = w.box.querySelector('.mv3-mergeask-go');
+  if (!go) return;
+  const why = (_linesOf(w.m) || {}).why;           // (phase V72) never merged into the person's cell
+  if (why) { go.remove(); _say(why, true); return; }
   go.disabled = true;
   go.style.display = 'none';
   w.box.querySelector('.mv3-mergeask-x').title = 'Stop merging';
@@ -205,6 +225,8 @@ function _lay(w, j) {
   const dur = r3(m.s1 - m.s0);
   const name = 'merged · ' + m.n + ' clips';
   const mergeOf = _linesOf(m);                                // a talking head's lines inside (ю3)
+  // (phase V72) Lines that cannot be merged as lines are never laid as the person's cell.
+  if (mergeOf && mergeOf.why) { w.job = null; _say(mergeOf.why + ' The file is in the project\'s folder, nothing was laid.', true); return; }
   let newVideo = null, newAudio = null;
   const ok = Store.mutate((tl) => {
     for (const set of sets) {
