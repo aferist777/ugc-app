@@ -68,7 +68,12 @@ export const MIX_MAX = 40;
 // two in a row never the same - mix.js). Colours, edges and motion stay the preset's. A page dealt a font keeps the WIDTH it has
 // in the preset's font (`fitTo` of the resolved style - place.js drawnPage scales it); a page whose own style names a font is
 // the hand's and is left alone. None picked - the preset's font, the style stored and drawn exactly as before.
-const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF'];
+// THE PLACE HELD (phase V66, the owner's (хо13), 2026-11-03): a subtitle lane whose place was set for several highlights fragments at
+// once (`hold: true`) keeps its place (pos, tx, ty) when a preset is put on it - the place on the screen is about the platform's
+// buttons, not about the look (preset-use.js keepMotion). Nothing is drawn by it: a style without it is stored as before.
+const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF', 'hold'];
+/** The fields a held place keeps over a preset (phase V66). */
+export const PLACE_KEYS = ['pos', 'tx', 'ty'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -163,6 +168,8 @@ const RULES = {
     return out.length ? out : undefined;
   },
   mixF: NUM(0, MIX_MAX - 1, true),
+  // (V66) A lane's place held over presets - only ever true; false is no field at all.
+  hold: (v) => (v === true ? true : undefined),
 };
 
 // ── A word marked to stand out ──────────────────────────────────────────────

@@ -21,7 +21,7 @@
 
 import { presetOf } from './presets.js';
 import { textPresetOf, TEXT_KEEP } from './presets-text.js';
-import { normalizeStyle, DEF } from './style.js';
+import { normalizeStyle, DEF, PLACE_KEYS } from './style.js';
 
 let _mine = [];
 /** The person's own presets ({id, name, style}), as the page last heard them. */
@@ -34,7 +34,11 @@ export const isTextPreset = (id) => { const p = _find(id); return !!p && p.kind 
 /** The whole style a preset gives, marked with its id - or null for an id that is neither the app's nor the person's. */
 export function presetStyle(id) {
   const p = _find(id);
-  return p ? normalizeStyle(Object.assign({}, p.style, { preset: p.id })) : null;
+  if (!p) return null;
+  const st = normalizeStyle(Object.assign({}, p.style, { preset: p.id }));
+  // (V66) A held place is a lane's (style.js `hold`), never a preset's.
+  delete st.hold;
+  return st;
 }
 
 /**
@@ -65,6 +69,8 @@ export function keepMotion(st, cur, line) {
     else if (line) delete out[k];
   }
   if (line && cur) for (const k of ['mixA', 'mixS']) if (cur[k] !== undefined) out[k] = cur[k];
+  // (phase V66, the owner's (хо13)) A LANE whose place was set for several highlights fragments at once keeps it, and the mark.
+  if (!line && cur && cur.hold) { for (const k of PLACE_KEYS) if (cur[k] !== undefined) out[k] = cur[k]; out.hold = true; }
   return out;
 }
 
@@ -76,6 +82,7 @@ export function editedKeys(style) {
   const s = normalizeStyle(style || {});
   const base = s.preset ? presetStyle(s.preset) : null;
   if (!base) return [];
-  const keep = isTextPreset(s.preset) ? TEXT_KEEP : MOTION_KEYS;
+  // (V66) A held place is no edit of the preset either.
+  const keep = (isTextPreset(s.preset) ? TEXT_KEEP : MOTION_KEYS).concat(s.hold ? PLACE_KEYS : []);
   return Object.keys(DEF).filter((k) => k !== 'preset' && !keep.includes(k) && JSON.stringify(s[k]) !== JSON.stringify(base[k]));
 }

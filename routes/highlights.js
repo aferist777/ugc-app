@@ -17,6 +17,8 @@
 //   POST   /api/highlights/:id/fragments/restore     { n? } -> { n } the last deleted (or n) back, 0 when none
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
+//                                                 (V66) or { ns, place: { pos, ty }, size: n | 'auto', wordsPerLine, lines } -> { n }
+//   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   (V66) the title on top on / off for several
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
 //   POST   /api/highlights/:id/fragments/:n/title-on-top/remove   (V69 P12) and taken off it
 //   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together (V33.4)
@@ -55,7 +57,8 @@ function view(rec, o) {
     out.fragments = (rec.fragments || []).map((f) => {
       const tl = f.state === 'ready' && f.key ? MSTORE.one(f.key) : null;
       const r = rv.byN[f.n] || {};
-      return { ...f, ...(tl ? { cap: CUT.capOf(tl) } : {}), rq: r.line || null, rendered: r.render || null };
+      // (phase V66) `lanes`: what the common settings of several show of each - its subtitles' place and shape, its sound lanes.
+      return { ...f, ...(tl ? { cap: CUT.capOf(tl), lanes: CUT.lanesOf(tl) } : {}), rq: r.line || null, rendered: r.render || null };
     });
     out.rendering = rv.rendering;
     out.renderTrouble = { interrupted: rv.interrupted, failed: rv.failed };
@@ -192,9 +195,39 @@ router.post('/highlights/:id/style', (req, res) => {
       const a = CUT.refont(keys, b.fonts);
       return res.json({ success: true, n: a.keys.length });
     }
+    // (phase V66) The place (held over presets), the size, the words in a line, the lines - on the lanes as they are.
+    if (!b.preset && (b.place || b.size != null || b.wordsPerLine != null || b.lines != null)) {
+      const a = CUT.relayout(keys, { place: b.place || null, size: b.size, wordsPerLine: b.wordsPerLine, lines: b.lines });
+      return res.json({ success: true, n: a.keys.length });
+    }
     // (phase V49) Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.
     const out = CUT.restyle(keys, String(b.preset || ''), { mix: Array.isArray(b.mix) ? b.mix : undefined, anims: Array.isArray(b.anims) ? b.anims : undefined });
     res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// The made fragments of `ns` (numbers) - deleted ones and ones not made left out.
+function _made(rec, ns) {
+  const want = new Set((Array.isArray(ns) ? ns : []).map(Number).filter((n) => n > 0));
+  return (rec.fragments || []).filter((f) => want.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key);
+}
+
+// (phase V66, the owner's (хо12)) The title on top put on, or taken off, several made fragments at once - "title on top: on / off" of
+// their common subtitle settings. The OPEN one is the page's (its own undo step), as with one fragment.
+router.post('/highlights/:id/title-on-top', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    const TT = require('../public/js/captions/title.js');
+    let n = 0;
+    for (const f of frags) {
+      if (b.on) n += CUT.addTitle(f.key, TT.topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' })) ? 1 : 0;
+      else n += CUT.dropTitle(f.key) ? 1 : 0;
+    }
+    res.json({ success: true, n });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
