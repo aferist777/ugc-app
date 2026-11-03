@@ -30,6 +30,7 @@
 import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import * as C from './controls.js';
+import * as Layers from '../layers.js';
 import * as CapPlace from './cap-place.js';
 import { setSubsStyle, selectTrackById, onSelChange, selectedTrack, newBedLane } from './timeline-b.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS } from '../captions/style.js';
@@ -205,6 +206,15 @@ async function _readMoods() {
 // ── Painting ────────────────────────────────────────────────────────────────
 function _head(host, what, n) {
   host.appendChild(_el('div', 'mv3-ins-title', what + ' · for all ' + n));
+  // The three lanes' common settings one press apart - also once the bubbles are closed.
+  const row = _el('div', 'mv3-hlg-lanes');
+  for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', openMusicLane() ? 'music' : '+ music']]) {
+    const b = _el('button', 'mv3-hlg-lane' + (label === what || (k === 'speech' && what === 'Main audio') || (k === 'music' && what === 'Music') ? ' is-on' : ''), label);
+    b.type = 'button';
+    b.addEventListener('click', () => pickLane(k));
+    row.appendChild(b);
+  }
+  host.appendChild(row);
 }
 function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'each fragment')); }
 const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
@@ -433,6 +443,92 @@ function _checkSample() {
   });
 }
 
+// ── The bubbles over the timeline ((хо1), (хо14)) ───────────────────────────
+// While a group is ticked, a bubble on each of the three lanes, right of its name, its tail pointing at it: a press on it gives
+// that lane's common settings. The music's - "+ music" where its lane will stand - when the open fragment has none. ✕ closes
+// them for this group of ticks; "don't show again" for good. The names stay gold while a group is ticked.
+const LS_TIPS = 'mv3_hlg_tips_v1';
+let _tips = null;               // { subs, speech, music } - the bubbles on the screen
+let _tipsClosed = '';           // the group (its project and ticks) whose bubbles were closed
+const _tipsOff = () => { try { return !!(JSON.parse(localStorage.getItem(LS_TIPS) || '{}') || {}).off; } catch (e) { return false; } };
+function _tipsNever(on) { try { localStorage.setItem(LS_TIPS, JSON.stringify(on ? { off: true } : {})); } catch (e) { /* shown again next time */ } }
+const _groupSig = () => (_A ? _A.pid() + ':' + _A.ticked().map((f) => f.n).join(',') : '');
+
+function _tipsHide() {
+  if (!_tips) return;
+  for (const b of Object.values(_tips)) b.remove();
+  _tips = null;
+}
+function _tipBox(kind, text) {
+  const box = _el('div', 'bub is-tip is-lane');
+  box.setAttribute('role', 'note');
+  const t = _el('span', 'bub-go', text);
+  t.title = 'Press: the common settings of the ticked fragments';
+  t.addEventListener('click', () => pickLane(kind));
+  box.appendChild(t);
+  if (kind === 'subs') {
+    const never = _el('label', 'bub-never');
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.checked = _tipsOff();
+    tick.addEventListener('change', () => { _tipsNever(tick.checked); if (tick.checked) _tipsHide(); });
+    never.append(tick, document.createTextNode(' don\'t show again'));
+    box.appendChild(never);
+  }
+  const x = _el('button', 'bub-x', '✕');
+  x.type = 'button';
+  x.setAttribute('aria-label', 'Close');
+  x.addEventListener('click', () => { _tipsClosed = _groupSig(); _tipsHide(); });
+  box.appendChild(x);
+  document.body.appendChild(box);
+  return box;
+}
+// A lane's name on the screen, inside the timeline's view - else null.
+function _label(id) {
+  const tl = document.getElementById('mv3-timeline');
+  const e = id && document.querySelector('#mv3-timeline .mv3b-row[data-track="' + id + '"] .mv3b-lbl');
+  if (!tl || !e) return null;
+  const r = e.getBoundingClientRect(), v = tl.getBoundingClientRect();
+  const mid = r.top + r.height / 2;
+  return r.width > 0 && r.height > 0 && mid > v.top && mid < v.bottom ? r : null;
+}
+function _place(box, r, dy) {
+  const H = window.innerHeight;
+  const bh = box.offsetHeight;
+  box.style.left = Math.round(r.right + 10) + 'px';
+  box.style.top = Math.round(Math.max(6, Math.min(H - bh - 6, r.top + r.height / 2 + (dy || 0) - bh / 2))) + 'px';
+  box.style.visibility = '';
+}
+function _gold(on, musicId) {
+  let st = document.getElementById('mv3-hlg-gold');
+  if (!st) { st = document.createElement('style'); st.id = 'mv3-hlg-gold'; document.head.appendChild(st); }
+  const ids = on ? ['subs', 'a1'].concat(musicId ? [musicId] : []) : [];
+  const css = ids.length ? ids.map((id) => '#mv3-timeline .mv3b-row[data-track="' + id + '"] .mv3b-lbl').join(',') + '{color:var(--gold)}' : '';
+  if (st.textContent !== css) st.textContent = css;
+}
+function _tipsTick() {
+  const group = isGroup() && _A.openN() >= 0 && !!document.getElementById('mv3-timeline');
+  const music = group ? openMusicLane() : null;
+  _gold(group, music && music.id);
+  if (_tipsClosed && _tipsClosed !== _groupSig()) _tipsClosed = '';
+  const show = group && !_tipsOff() && !_tipsClosed && !Layers.blocked() && document.visibilityState !== 'hidden';
+  if (!show) { _tipsHide(); return; }
+  const n = _A.ticked().length;
+  const rs = _label('subs'), ra = _label('a1'), rm = music ? _label(music.id) : null;
+  const want = { subs: rs && 'Subtitles of all ' + n, speech: ra && 'Main audio of all ' + n, music: (rm || ra) && (rm ? 'Music of all ' + n : '+ music for all ' + n) };
+  if (_tips && _tips.music && !!_tips.music.dataset.add !== !rm) _tipsHide();
+  if (!_tips) _tips = {};
+  for (const k of ['subs', 'speech', 'music']) {
+    if (!want[k]) { if (_tips[k]) { _tips[k].remove(); delete _tips[k]; } continue; }
+    if (!_tips[k]) { _tips[k] = _tipBox(k, want[k]); if (k === 'music' && !rm) _tips[k].dataset.add = '1'; }
+    else if (_tips[k].firstChild.textContent !== want[k]) _tips[k].firstChild.textContent = want[k];
+  }
+  if (_tips.subs) _place(_tips.subs, rs);
+  if (_tips.speech) _place(_tips.speech, ra, rm ? 0 : -6);
+  // No music lane yet: where it will stand - under main audio.
+  if (_tips.music) _place(_tips.music, rm || ra, rm ? 0 : ra.height / 2 + 8);
+}
+
 // ── Wiring ──────────────────────────────────────────────────────────────────
 /** highlights.js lends what it knows of the project; the lanes' names are taken over while a group is ticked. */
 export function initGroup(api) {
@@ -465,6 +561,9 @@ export function initGroup(api) {
   });
   Store.onChange(() => { if (_own && Store.key() !== _own) _own = ''; _checkSample(); });
   Views.onAltShown(() => _checkSample());
+  // The bubbles follow the lanes as they scroll, grow and are drawn again.
+  setInterval(_tipsTick, 250);
+  window.addEventListener('resize', _tipsTick);
 }
 
 /** The group's state changed (ticks, a read of the record): what shows follows. */

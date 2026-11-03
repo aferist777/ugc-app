@@ -318,3 +318,17 @@
 .mv3-hlg-moods{gap:4px}
 .mv3-hlg-moods .mv3-hlp-chip{height:22px; padding:0 8px; line-height:20px}
 .mv3-hlg-track{max-width:100%; min-width:0}
+/* The three lanes' blocks one press apart, at the top of each */
+.mv3-hlg-lanes{display:flex; gap:4px; flex-wrap:wrap}
+.mv3-hlg-lane{height:22px; padding:0 9px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted);
+  font:700 10.5px/20px var(--font); cursor:pointer}
+.mv3-hlg-lane:hover{border-color:var(--gold); color:var(--ink)}
+.mv3-hlg-lane.is-on{border-color:var(--gold); color:var(--gold)}
+/* The bubbles over the timeline: one line, right of the lane's name, the tail pointing left at it */
+.bub.is-tip.is-lane{display:flex; align-items:center; gap:10px; padding:3px 28px 3px 11px; border-radius:10px; font:600 11px/1.35 var(--font);
+  max-width:none; white-space:nowrap}
+.bub.is-tip.is-lane::after{left:-7px; top:50%; bottom:auto; margin:-6px 0 0 0; border-width:0 0 1.5px 1.5px}
+.bub.is-tip.is-lane .bub-go{cursor:pointer; color:var(--gold)}
+.bub.is-tip.is-lane .bub-go:hover{text-decoration:underline}
+.bub.is-tip.is-lane .bub-x{top:50%; margin-top:-10px}
+.bub.is-tip.is-lane .bub-never{margin-top:0}
