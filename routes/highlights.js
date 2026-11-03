@@ -19,6 +19,9 @@
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
 //                                                 (V66) or { ns, place: { pos, ty }, size: n | 'auto', wordsPerLine, lines } -> { n }
 //   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   (V66) the title on top on / off for several
+//   POST   /api/highlights/:id/volume            { ns, lane: speech | music, volume } -> { n }   (V66) a lane's volume on several
+//   POST   /api/highlights/:id/music             { ns, moods | none, open } -> { n, open, missed }   (V66) their music dealt again / off
+//   POST   /api/highlights/:id/fragments/:n/music  { how: another | <mood> | none, taken, open } -> { music, clips? }   (V66) one's music
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
 //   POST   /api/highlights/:id/fragments/:n/title-on-top/remove   (V69 P12) and taken off it
 //   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together (V33.4)
@@ -228,6 +231,105 @@ router.post('/highlights/:id/title-on-top', (req, res) => {
       else n += CUT.dropTitle(f.key) ? 1 : 0;
     }
     res.json({ success: true, n });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V66, the owner's (хо3), (хо4)) A lane's volume on several made fragments - `lane` 'speech' (main audio) or 'music'; the
+// OPEN one is the page's.
+router.post('/highlights/:id/volume', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    const out = CUT.laneVolume(frags.map((f) => f.key), b.lane === 'music' ? 'music' : 'speech', b.volume);
+    res.json({ success: true, n: out.keys.length });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// The track a fragment's record keeps (as lib/highlights-job.js deals it), and its music written: on its timeline - or, for the OPEN
+// one (`open`), handed back for the page to lay (one undo step; a server's write under an open timeline reads as another's edit).
+const _trackOf = (t) => (t ? { id: t.id, title: t.title, path: t.path, dur: t.dur, mood: t.mood || '' } : null);
+async function _music(rec, f, track, open) {
+  const HLM = require('../lib/highlights-music');
+  const tl = MSTORE.one(f.key);
+  if (!tl) throw Object.assign(new Error('its timeline is not there'), { status: 409 });
+  let clips = [];
+  if (track) {
+    clips = await HLM.clipsForMade(track, tl, f.loud || null);
+    if (!clips.length) throw Object.assign(new Error('"' + track.title + '" is not in Music any more'), { status: 409 });
+  }
+  const loud = clips.loud || null;
+  const laid = open ? CUT.bedClips(clips, CUT.filmEnd(tl)) : null;
+  if (!open) CUT.setMusic(f.key, clips);
+  return { track: _trackOf(track), loud, laid };
+}
+function _keepMusic(id, results) {
+  HL.apply(id, (r) => {
+    for (const x of (r.fragments || [])) {
+      const m = results.get(x.n);
+      if (!m) continue;
+      x.music = m.track;
+      x.musicNote = '';
+      if (m.loud) x.loud = m.loud;
+    }
+  });
+}
+
+// (phase V66, the owner's (хо9)-(хо11)) ONE made fragment's music: `how` 'another' (of its mood), a mood id ('yours' - Music ->
+// highlights' root) or 'none'; `taken` - the tracks the other ticked ones wear, not given while the mood has others; `open` - it is the
+// open one: its clips come back for the page to lay. -> { music, clips? }
+router.post('/highlights/:id/fragments/:n/music', async (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    const f = rec && _made(rec, [Number(req.params.n)])[0];
+    if (!f) return res.status(404).json({ success: false, error: 'no such made fragment' });
+    const b = req.body || {};
+    const how = String(b.how || 'another');
+    let track = null;
+    if (how !== 'none') {
+      const HLM = require('../lib/highlights-music');
+      track = HLM.pickOne(how, f.music || null, Array.isArray(b.taken) ? b.taken : [], (rec.ask && rec.ask.music) || []);
+      if (!track) return res.status(409).json({ success: false, error: how === 'another' ? 'no other track in this mood' : 'no tracks in this mood' });
+    }
+    const m = await _music(rec, f, track, !!b.open);
+    _keepMusic(rec.id, new Map([[f.n, m]]));
+    res.json({ success: true, music: m.track, ...(m.laid ? { clips: m.laid } : {}) });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V66, (хо4)) The music of several made fragments dealt again from `moods` (each its own track, none twice while there are
+// tracks left - lib/highlights-music.js deal), or taken off (`none`). `open` - the number of the open one: its clips come back.
+// -> { n, open: { n, clips } | null, missed }
+router.post('/highlights/:id/music', async (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    const HLM = require('../lib/highlights-music');
+    let dealt = frags.map(() => null);
+    if (!b.none) {
+      const tracks = HLM.ofMoods(Array.isArray(b.moods) ? b.moods : []).tracks;
+      if (!tracks.length) return res.status(400).json({ success: false, error: 'no tracks in these moods' });
+      dealt = HLM.deal(tracks, frags.length);
+    }
+    const results = new Map();
+    let open = null;
+    let missed = 0;
+    for (let k = 0; k < frags.length; k++) {
+      const f = frags[k];
+      const isOpen = Number(b.open) === f.n;
+      try {
+        const m = await _music(rec, f, dealt[k], isOpen);
+        results.set(f.n, m);
+        if (isOpen) open = { n: f.n, clips: m.laid || [] };
+      } catch (e) { missed++; }
+    }
+    _keepMusic(rec.id, results);
+    res.json({ success: true, n: results.size, open, missed });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
