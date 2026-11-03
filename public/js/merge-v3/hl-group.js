@@ -22,6 +22,10 @@
    a slider brought back gives back the same pages and place. Nothing ticked open and a lane's name pressed on the project's own
    timeline: the first ticked opens ((хо1)).
 
+   CHANGED (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)): while a group is ticked the TIMELINE'S PANEL IS COVERED BY THREE
+   BUTTONS - Subtitles, main audio, music - for all N (no lanes, no transport; the bubbles and gold names went); a fragment's row in
+   the strip shows its own timeline until "‹ all N".
+
    THE SAMPLE ((хо7)): while the Subtitles block is in the strip, the preview draws a whole page of «example» - as many words in a
    line as the lanes have, in as many lines - in the open fragment's look, instead of its subtitles (captions/layer.js setLive),
    and it is dragged up and down there (cap-place.js setSample); let go, the place is written for all.
@@ -30,9 +34,8 @@
 import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import * as C from './controls.js';
-import * as Layers from '../layers.js';
 import * as CapPlace from './cap-place.js';
-import { setSubsStyle, selectTrackById, onSelChange, selectedTrack, newBedLane } from './timeline-b.js';
+import { setSubsStyle, selectTrackById, onSelChange, newBedLane } from './timeline-b.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
 import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.js';
@@ -43,7 +46,6 @@ let _busy = '';             // 'subs' | 'speech' | 'music' while a write for all
 let _moods = null;          // Music -> highlights: [{ id, label, n }] (the root as 'yours' when it has tracks)
 let _dealMoods = [];        // the moods "deal again" takes
 let _sample = false;        // the «example» is on the preview
-let _sampleRaf = 0;
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const _enc = encodeURIComponent;
@@ -55,7 +57,7 @@ async function _post(url, body) {
 }
 
 // ── Who is in the group ─────────────────────────────────────────────────────
-/** Two fragments or more ticked (made) - the lanes' names lead to the common settings, and the bubbles show ((хо1)). */
+/** Two fragments or more ticked (made) - the buttons over the timeline lead to the common settings ((хо1), V66.1 (хо24)). */
 export const isGroup = () => !!(_A && _A.pid() && _A.ticked().length >= 2);
 const _tl = () => Store.timeline() || {};
 const _openSubs = () => ((_tl().tracks) || []).find((t) => t && t.kind === 'subs') || null;
@@ -206,15 +208,6 @@ async function _readMoods() {
 // ── Painting ────────────────────────────────────────────────────────────────
 function _head(host, what, n) {
   host.appendChild(_el('div', 'mv3-ins-title', what + ' · for all ' + n));
-  // The three lanes' common settings one press apart - also once the bubbles are closed.
-  const row = _el('div', 'mv3-hlg-lanes');
-  for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', openMusicLane() ? 'music' : '+ music']]) {
-    const b = _el('button', 'mv3-hlg-lane' + (label === what || (k === 'speech' && what === 'Main audio') || (k === 'music' && what === 'Music') ? ' is-on' : ''), label);
-    b.type = 'button';
-    b.addEventListener('click', () => pickLane(k));
-    row.appendChild(b);
-  }
-  host.appendChild(row);
 }
 function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'each fragment')); }
 const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
@@ -359,12 +352,14 @@ function _mixedVolume(vols, onChange) {
 }
 
 // ── A lane's name pressed ───────────────────────────────────────────────────
-// (хо15) A fragment opened from its row with its own lane picked - the one lane's strip, as with one fragment.
+// (хо15), (хо26) A fragment opened from its row with its own lane picked - its timeline shown, lanes and all, the one lane's
+// strip - until "‹ all N" in the timeline's head (or another fragment opened, or the group gone).
 async function _openOwn(f, lane) {
   if (!f.key) return;
   if (Store.key() !== f.key) { try { await Store.open(f.key); } catch (e) { _A.say(e.message, true); return; } }
   _own = f.key;
   selectTrackById(lane);
+  _sync();
 }
 
 // (хо1) Nothing ticked is open: the first ticked opens, and the same lane is picked there (the music's - its lane, made when missing).
@@ -376,7 +371,7 @@ async function _openFirst(laneKind) {
   selectTrackById(laneKind === 'subs' ? 'subs' : 'a1');
 }
 
-/** "+ music" and the music bubble: the open fragment's music lane picked - "audio 2" made when it has none. */
+/** "+ music": the open fragment's music lane picked - "audio 2" made when it has none. */
 export function pickMusic() {
   if (!isGroup()) return;
   const openIn = _A.ticked().some((f) => f.n === _A.openN()) || _A.openN() > 0;
@@ -390,7 +385,7 @@ export function pickMusic() {
   }
   selectTrackById(lane.id);
 }
-/** A bubble's press: that lane's common settings (the first ticked opened when none is). */
+/** A button over the timeline: that lane's common settings (the first ticked opened when none is). */
 export function pickLane(kind) {
   if (!isGroup()) return;
   if (kind === 'music') { pickMusic(); return; }
@@ -426,145 +421,125 @@ function _sampleTl(over) {
   return { format: fmt, tracks: [{ id: 'subs', kind: 'subs', name: 'Subtitles', style,
     clips: [{ id: 'hlg-sample', start: 0, dur: 36000, name: words.map((w) => w.w).join(' '), words, src: null }] }] };
 }
-function _checkSample() {
-  if (_sampleRaf) cancelAnimationFrame(_sampleRaf);
-  _sampleRaf = requestAnimationFrame(() => {
-    _sampleRaf = 0;
-    const over = document.getElementById('mv3-over');
-    const want = isGroup() && !!(over && over.classList.contains('is-open') && over.querySelector('[data-hl-group="subs"]')) && !!_openSubs();
-    if (want) {
-      const tl = _sampleTl();
-      _sample = true;
-      CapPlace.setSample({ tl, onDrop: (place) => _subsPatch({ place }) });
-    } else if (_sample) {
-      _sample = false;
-      CapPlace.setSample(null);
-    }
-  });
-}
-
-// ── The bubbles over the timeline ((хо1), (хо14)) ───────────────────────────
-// While a group is ticked, a bubble on each of the three lanes, right of its name, its tail pointing at it: a press on it gives
-// that lane's common settings. The music's - "+ music" where its lane will stand - when the open fragment has none. ✕ closes
-// them for this group of ticks; "don't show again" for good. The names stay gold while a group is ticked.
-const LS_TIPS = 'mv3_hlg_tips_v1';
-let _tips = null;               // { subs, speech, music } - the bubbles on the screen
-let _tipsClosed = '';           // the group (its project and ticks) whose bubbles were closed
-const _tipsOff = () => { try { return !!(JSON.parse(localStorage.getItem(LS_TIPS) || '{}') || {}).off; } catch (e) { return false; } };
-function _tipsNever(on) { try { localStorage.setItem(LS_TIPS, JSON.stringify(on ? { off: true } : {})); } catch (e) { /* shown again next time */ } }
-const _groupSig = () => (_A ? _A.pid() + ':' + _A.ticked().map((f) => f.n).join(',') : '');
-
-function _tipsHide() {
-  if (!_tips) return;
-  for (const b of Object.values(_tips)) b.remove();
-  _tips = null;
-}
-function _tipBox(kind, text) {
-  const box = _el('div', 'bub is-tip is-lane');
-  box.setAttribute('role', 'note');
-  const t = _el('span', 'bub-go', text);
-  t.title = 'Press: the common settings of the ticked fragments';
-  t.addEventListener('click', () => pickLane(kind));
-  box.appendChild(t);
-  if (kind === 'subs') {
-    const never = _el('label', 'bub-never');
-    const tick = document.createElement('input');
-    tick.type = 'checkbox';
-    tick.checked = _tipsOff();
-    tick.addEventListener('change', () => { _tipsNever(tick.checked); if (tick.checked) _tipsHide(); });
-    never.append(tick, document.createTextNode(' don\'t show again'));
-    box.appendChild(never);
+function _checkSampleNow() {
+  const want = _shownBlock() === 'subs' && !!_openSubs();
+  if (want) {
+    _sample = true;
+    CapPlace.setSample({ tl: _sampleTl(), onDrop: (place) => _subsPatch({ place }) });
+  } else if (_sample) {
+    _sample = false;
+    CapPlace.setSample(null);
   }
-  const x = _el('button', 'bub-x', '✕');
-  x.type = 'button';
-  x.setAttribute('aria-label', 'Close');
-  x.addEventListener('click', () => { _tipsClosed = _groupSig(); _tipsHide(); });
-  box.appendChild(x);
-  document.body.appendChild(box);
-  return box;
 }
-// A lane's name on the screen, inside the timeline's view - else null.
-function _label(id) {
-  const tl = document.getElementById('mv3-timeline');
-  const e = id && document.querySelector('#mv3-timeline .mv3b-row[data-track="' + id + '"] .mv3b-lbl');
-  if (!tl || !e) return null;
-  const r = e.getBoundingClientRect(), v = tl.getBoundingClientRect();
-  const mid = r.top + r.height / 2;
-  return r.width > 0 && r.height > 0 && mid > v.top && mid < v.bottom ? r : null;
+const _checkSample = () => _sync();
+
+// ── The buttons in place of the timeline (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)) ───────────────────────────────
+// "когда выбрано несколько фрагментов нарезки, то на таймлайне просто отображать эти кнопки для массового редактирования. без элементов
+// таймлайна". While a group is ticked the timeline's panel - its head with the transport and its lanes - is covered by the buttons
+// of the common settings: "N fragments ticked" and three wide buttons, Subtitles, main audio, music ("+ music" while the open
+// fragment has none); the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
+// frame and «example» (a group with none open opens the first ticked, quietly - (хо24)). A fragment's row in the strip shows ITS
+// timeline, lanes and all, with "‹ all N" in the timeline's head back to the buttons ((хо26)); fewer than two ticked - the timeline as
+// it was ((хо28)). No bubbles, no gold names ((хо27)).
+let _panel = null;             // the buttons over the timeline
+let _back = null;              // "‹ all N" in the timeline's head while a fragment is shown on its own
+let _opening = false;          // the first ticked being opened under the buttons
+const _ownNow = () => !!(_own && _own === Store.key());
+
+function _shownBlock() {
+  const over = document.getElementById('mv3-over');
+  const b = over && over.classList.contains('is-open') && over.querySelector('[data-hl-group]');
+  return b ? b.dataset.hlGroup : '';
 }
-function _place(box, r, dy) {
-  const H = window.innerHeight;
-  const bh = box.offsetHeight;
-  box.style.left = Math.round(r.right + 10) + 'px';
-  box.style.top = Math.round(Math.max(6, Math.min(H - bh - 6, r.top + r.height / 2 + (dy || 0) - bh / 2))) + 'px';
-  box.style.visibility = '';
-}
-function _gold(on, musicId) {
-  let st = document.getElementById('mv3-hlg-gold');
-  if (!st) { st = document.createElement('style'); st.id = 'mv3-hlg-gold'; document.head.appendChild(st); }
-  const ids = on ? ['subs', 'a1'].concat(musicId ? [musicId] : []) : [];
-  const css = ids.length ? ids.map((id) => '#mv3-timeline .mv3b-row[data-track="' + id + '"] .mv3b-lbl').join(',') + '{color:var(--gold)}' : '';
-  if (st.textContent !== css) st.textContent = css;
-}
-function _tipsTick() {
-  const group = isGroup() && _A.openN() >= 0 && !!document.getElementById('mv3-timeline');
-  const music = group ? openMusicLane() : null;
-  _gold(group, music && music.id);
-  if (_tipsClosed && _tipsClosed !== _groupSig()) _tipsClosed = '';
-  const show = group && !_tipsOff() && !_tipsClosed && !Layers.blocked() && document.visibilityState !== 'hidden';
-  if (!show) { _tipsHide(); return; }
+function _panelPaint(tl) {
+  if (!_panel || !tl.contains(_panel)) {
+    _panel = _el('div', 'mv3-hlg-panel');
+    tl.appendChild(_panel);
+  }
   const n = _A.ticked().length;
-  const rs = _label('subs'), ra = _label('a1'), rm = music ? _label(music.id) : null;
-  const want = { subs: rs && 'Subtitles of all ' + n, speech: ra && 'Main audio of all ' + n, music: (rm || ra) && (rm ? 'Music of all ' + n : '+ music for all ' + n) };
-  if (_tips && _tips.music && !!_tips.music.dataset.add !== !rm) _tipsHide();
-  if (!_tips) _tips = {};
-  for (const k of ['subs', 'speech', 'music']) {
-    if (!want[k]) { if (_tips[k]) { _tips[k].remove(); delete _tips[k]; } continue; }
-    if (!_tips[k]) { _tips[k] = _tipBox(k, want[k]); if (k === 'music' && !rm) _tips[k].dataset.add = '1'; }
-    else if (_tips[k].firstChild.textContent !== want[k]) _tips[k].firstChild.textContent = want[k];
+  const on = _shownBlock();
+  const music = openMusicLane();
+  const sig = [n, on, !!music, _busy].join('|');
+  if (_panel.dataset.sig === sig) return;
+  _panel.dataset.sig = sig;
+  _panel.textContent = '';
+  _panel.appendChild(_el('div', 'mv3-hlg-ticked', n + ' fragments ticked'));
+  for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', music ? 'music' : '+ music']]) {
+    const b = _el('button', 'mv3-hlg-pbtn' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
+    b.type = 'button';
+    b.disabled = !!_busy;
+    b.addEventListener('click', () => pickLane(k));
+    _panel.appendChild(b);
   }
-  if (_tips.subs) _place(_tips.subs, rs);
-  if (_tips.speech) _place(_tips.speech, ra, rm ? 0 : -6);
-  // No music lane yet: where it will stand - under main audio.
-  if (_tips.music) _place(_tips.music, rm || ra, rm ? 0 : ra.height / 2 + 8);
+}
+function _backPaint() {
+  const head = document.querySelector('#mv3-timeline > .mv3-panel-head');
+  const want = isGroup() && _ownNow() && !!head;
+  if (!want) { if (_back) { _back.remove(); _back = null; } return; }
+  if (!_back || !head.contains(_back)) {
+    _back = _el('button', 'mv3-iconbtn is-text mv3-hlg-back');
+    _back.type = 'button';
+    _back.title = 'Back to the buttons of the ticked fragments';
+    _back.addEventListener('click', () => { _own = ''; pickLane('subs'); _sync(); });
+    const title = head.querySelector('.mv3-panel-title');
+    if (title && title.nextSibling) head.insertBefore(_back, title.nextSibling); else head.appendChild(_back);
+  }
+  _back.textContent = '‹ all ' + _A.ticked().length;
+}
+function _panelSync() {
+  const tl = document.getElementById('mv3-timeline');
+  const want = !!tl && isGroup() && !_ownNow();
+  if (tl) tl.classList.toggle('is-hlg', want);
+  if (!want) { if (_panel) { _panel.remove(); _panel = null; } }
+  else {
+    _panelPaint(tl);
+    // (хо24) A group with no fragment open: the first ticked opens under the buttons - its frame on the preview.
+    if (_A.openN() <= 0 && !_opening) {
+      const f = _A.ticked()[0];
+      if (f && f.key) { _opening = true; Store.open(f.key).catch((e) => _A.say(e.message, true)).finally(() => { _opening = false; }); }
+    }
+  }
+  _backPaint();
+}
+
+// What shows follows the ticks, the pick, the store and the strip - a frame later, when the strip has been drawn.
+let _syncRaf = 0;
+function _sync() {
+  if (_syncRaf) cancelAnimationFrame(_syncRaf);
+  _syncRaf = requestAnimationFrame(() => { _syncRaf = 0; _panelSync(); _checkSampleNow(); });
 }
 
 // ── Wiring ──────────────────────────────────────────────────────────────────
 /** highlights.js lends what it knows of the project; the lanes' names are taken over while a group is ticked. */
 export function initGroup(api) {
   _A = api;
+  // The bubbles of V66 are gone (V66.1, (хо27)): what they remembered goes too.
+  try { localStorage.removeItem('mv3_hlg_tips_v1'); } catch (e) { /* nothing kept */ }
   Views.laneAlt({
-    // A lane's name while a group is ticked - unless it is the open fragment's own Subtitles opened from its row ((хо15)).
+    // A lane's name - a button of the panel - while a group is ticked; not on a fragment shown on its own from its row ((хо26)).
     wants: (track) => {
-      if (!isGroup()) return false;
-      const k = _kindOf(track);
-      if (!k) return false;
-      if (k === 'subs' && _own && _own === Store.key()) return false;
-      return true;
+      if (!isGroup() || _ownNow()) return false;
+      return !!_kindOf(track);
     },
     render: (host, track) => {
       const k = _kindOf(track);
-      // (хо1) The project's own timeline: the first ticked opens, the lane picked there.
+      // (хо24) The project's own timeline: the first ticked opens, the lane picked there.
       if (_A.openN() <= 0) { host.appendChild(_el('p', 'mv3-ins-note', 'Opening the first ticked fragment…')); _openFirst(k); return null; }
-      if (k === 'subs') return renderSubs(host, (box) => _A.tiles(box));
-      if (k === 'speech') renderSpeech(host);
+      let out = null;
+      if (k === 'subs') out = renderSubs(host, (box) => _A.tiles(box));
+      else if (k === 'speech') renderSpeech(host);
       else renderMusic(host);
-      _checkSample();
-      return null;
+      _sync();
+      return out;
     },
   });
-  // The pick moved off the open fragment's own Subtitles: the group's again at the next press of a name.
-  onSelChange(() => {
-    const t = selectedTrack();
-    if (_own && !(t && t.kind === 'subs' && Store.key() === _own)) _own = '';
-    _checkSample();
-  });
-  Store.onChange(() => { if (_own && Store.key() !== _own) _own = ''; _checkSample(); });
-  Views.onAltShown(() => _checkSample());
-  // The bubbles follow the lanes as they scroll, grow and are drawn again.
-  setInterval(_tipsTick, 250);
-  window.addEventListener('resize', _tipsTick);
+  onSelChange(() => _sync());
+  Store.onChange(() => { if (_own && Store.key() !== _own) _own = ''; _sync(); });
+  Views.onAltShown(() => _sync());
 }
 
 /** The group's state changed (ticks, a read of the record): what shows follows. */
-export function changed() { _checkSample(); }
+export function changed() {
+  if (_own && !isGroup()) _own = '';
+  _sync();
+}

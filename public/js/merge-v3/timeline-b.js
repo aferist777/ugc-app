@@ -474,7 +474,8 @@ function _awayFromLane(e) {
   // Library's "captions" crumb that picked it (phase V18.2: a press on a category let go of the lane, and the panel went
   // back to the chat under it).
   // (phase V49.1) Nor in the corner of popups: closing one changes nothing on the timeline.
-  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip, .sv3-toasts')) return;
+  // (phase V66.1) Nor on the buttons of a highlights project's ticked fragments over the timeline - they pick the lanes.
+  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip, .sv3-toasts, .mv3-hlg-panel')) return;
   // Nor, while the captions view is up, on "Library" or a chat's crumb: their own click lets the pick go (lib-views.js
   // toBase). Let go here, at the mousedown, the panel jumped back from the corner under the pointer and the click never
   // landed - "generate video" pressed over the captions showed the shelf (phase V23.5).

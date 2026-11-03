@@ -318,17 +318,14 @@
 .mv3-hlg-moods{gap:4px}
 .mv3-hlg-moods .mv3-hlp-chip{height:22px; padding:0 8px; line-height:20px}
 .mv3-hlg-track{max-width:100%; min-width:0}
-/* The three lanes' blocks one press apart, at the top of each */
-.mv3-hlg-lanes{display:flex; gap:4px; flex-wrap:wrap}
-.mv3-hlg-lane{height:22px; padding:0 9px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted);
-  font:700 10.5px/20px var(--font); cursor:pointer}
-.mv3-hlg-lane:hover{border-color:var(--gold); color:var(--ink)}
-.mv3-hlg-lane.is-on{border-color:var(--gold); color:var(--gold)}
-/* The bubbles over the timeline: one line, right of the lane's name, the tail pointing left at it */
-.bub.is-tip.is-lane{display:flex; align-items:center; gap:10px; padding:3px 28px 3px 11px; border-radius:10px; font:600 11px/1.35 var(--font);
-  max-width:none; white-space:nowrap}
-.bub.is-tip.is-lane::after{left:-7px; top:50%; bottom:auto; margin:-6px 0 0 0; border-width:0 0 1.5px 1.5px}
-.bub.is-tip.is-lane .bub-go{cursor:pointer; color:var(--gold)}
-.bub.is-tip.is-lane .bub-go:hover{text-decoration:underline}
-.bub.is-tip.is-lane .bub-x{top:50%; margin-top:-10px}
-.bub.is-tip.is-lane .bub-never{margin-top:0}
+/* (phase V66.1) While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
+#mv3-timeline.is-hlg{position:relative}
+.mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  padding:12px; background:var(--bg); border-top:1px solid var(--border-soft)}
+.mv3-hlg-ticked{font:700 10px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.mv3-hlg-pbtn{width:min(460px, 90%); height:34px; flex:0 0 auto; border:1.5px solid var(--border); border-radius:10px; background:var(--surface-2);
+  color:var(--ink); font:700 12px/1 var(--font); cursor:pointer}
+.mv3-hlg-pbtn:hover{border-color:var(--gold)}
+.mv3-hlg-pbtn.is-on{border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, var(--surface-2))}
+.mv3-hlg-pbtn[disabled]{opacity:.5; cursor:default}
+.mv3-iconbtn.mv3-hlg-back{color:var(--gold)}
