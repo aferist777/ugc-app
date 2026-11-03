@@ -28,6 +28,11 @@
    The picked captions' pages are outlined in yellow dashes, as a picked band is; with a platform's screen over
    the frame (platforms.js), what a page lies under is outlined in red, and the part of the page under it too
    (с36 - a mark, nothing refused).
+
+   TWO ROWS (phase V71): a page of a lane in two rows is pressed, outlined and marked where its row draws it, from its In to the
+   end of its Out (captions/place.js pagesAt); a drag moves its place - the lane's, or its own - from where that place puts it
+   (`box0`), so it snaps as a page of the first row does and its row stays over it. While a move is in hand such a lane is drawn
+   whole: which row a page is in depends on every page before it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -36,7 +41,7 @@ import * as Platforms from './platforms.js';
 import { selectedIds, selectedTrack, selectedCaptions, selectClipById, selectTrackById, setSubsStyle, setCaptionStyle, keepPickOn }
   from './timeline-b.js';
 import { pagesAt, inBox, ownPlace, dragPlace, anchorY } from '../captions/place.js';
-import { renderFrame, resolveStyle, POSITIONS } from '../captions/style.js';
+import { renderFrame, resolveStyle, POSITIONS, rowsOn } from '../captions/style.js';
 
 const MARK = '#ffd400';       // the picked outline - place-b.js's yellow
 const RED = '#ff3b30';
@@ -160,7 +165,9 @@ function _liveOf(pt) {
   return {
     format: tl.format,
     tracks: (tl.tracks || []).filter((t) => t.kind === 'subs' || t.kind === 'text').map((t) => {
-      const clips = (t.clips || []).filter(on).map((c) => (pt.lines && pt.lines.has(c.id)
+      // (phase V71) A lane in two rows whole: a page's row is counted from the first page.
+      const all = t.kind === 'subs' && rowsOn(t.style);
+      const clips = (t.clips || []).filter((c) => (all ? !!c : on(c))).map((c) => (pt.lines && pt.lines.has(c.id)
         ? { ...c, style: { ...(c.style || {}), ...pt.lines.get(c.id) } } : c));
       const style = pt.lane && t.id === d.what.track ? { ...(t.style || {}), ...pt.lane } : t.style;
       return { ...t, style, clips };
@@ -179,7 +186,8 @@ function _move(e) {
   // Page pixels -> canvas pixels -> render-frame pixels.
   const dx = (e.clientX - _drag.pg0.x) * sc * k, dy = (e.clientY - _drag.pg0.y) * sc * k;
   const sample = _drag.what.kind === 'sample';
-  _drag.r = dragPlace(_drag.from, _drag.hit.box, dx, dy, F.w, F.h, { vertical: sample || e.shiftKey, free: e.altKey, near: NEAR * sc * k });
+  // (phase V71) From where its place puts it - a page of the second row is drawn over that.
+  _drag.r = dragPlace(_drag.from, _drag.hit.box0 || _drag.hit.box, dx, dy, F.w, F.h, { vertical: sample || e.shiftKey, free: e.altKey, near: NEAR * sc * k });
   if (sample) {
     const s = _sample.tl;
     _live = { ...s, tracks: s.tracks.map((x) => ({ ...x, style: { ...(x.style || {}), pos: _drag.r.pos, ty: _drag.r.ty } })) };

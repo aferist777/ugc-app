@@ -12,7 +12,7 @@ import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, r
 import { cssWeight, fontOf } from '../captions/fonts.js';
 import { fitText, tokensOf } from '../captions/pages.js';
 import { spells, typedWords } from '../captions/words.js';
-import { pageBox } from '../captions/place.js';
+import { pageBox, rowsPlan, pageKey } from '../captions/place.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -109,13 +109,16 @@ function _faceOf(ctx, st) {
 
 function _paintLane(ctx, tr, at, W, H, fmt) {
   if (!tr || !(tr.clips || []).length) return;
-  const live = tr.clips.filter(c => c && c.name && at >= (+c.start || 0)
-                                 && at < (+c.start || 0) + (+c.dur || 0));
-  if (!live.length) return;
-
   // The style speaks in frame pixels; the canvas is a smaller frame of the same shape.
   const frame = renderFrame(fmt);
   const scale = H / frame.h;
+  // (phase V71) A lane in two rows: a page from its In to the end of its Out, standing still in its row (captions/place.js rowsPlan).
+  const plan = tr.kind === 'subs' ? rowsPlan(tr, frame.w, frame.h) : null;
+  let n = -1;
+  const live = plan
+    ? tr.clips.filter(c => { if (!c || !c.name || !((+c.dur) > 0)) return false; n++; const r = plan.get(pageKey(c, n)); return !!r && at >= r.from && at < r.to; })
+    : tr.clips.filter(c => c && c.name && at >= (+c.start || 0) && at < (+c.start || 0) + (+c.dur || 0));
+  if (!live.length) return;
 
   for (const c of live) {
     // The lane's style, or this caption's own on top of it (phase K0).
@@ -147,8 +150,8 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     const px = lh / face.line;
     const a = anchorOf(st, W, H);
     // Never off the frame (phase V30, block 3, (с34)): moved back inside by what the .ass moves it by.
-    const pb = pageBox(c, tr.style, tr.kind === 'subs', frame.w, frame.h);
-    a.x += pb.dx * scale; a.y += pb.dy * scale;
+    const pb = pageBox(c, tr.style, tr.kind === 'subs', frame.w, frame.h, plan ? tr : null);
+    a.x += pb.dx * scale; a.y += (pb.dy + (pb.lift || 0)) * scale;
     ctx.save();
     ctx.font = _css(st, px.toFixed(1));
     ctx.textAlign = 'center';

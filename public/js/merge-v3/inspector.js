@@ -45,7 +45,7 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS } from '../captions/style.js';
+import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS, rowsOn } from '../captions/style.js';
 import { deal, needsDeal, redealFonts, newSeed, withoutRefs, refsOf } from '../captions/mix.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
@@ -1025,8 +1025,9 @@ function _blankWordsTrack(host, track) {
     const counted = heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
       + '; changing this cuts them again straight away, lines you typed stay as they are.';
     if (sent) {
-      // One rule, no Words or Lines (с42); In and Out under Cut (V49, (пр17)).
+      // One rule, no Words or Lines (с42); In and Out under Cut (V49, (пр17)); Rows under them (V71).
       _pageMotionRows(host, st, set, anims);
+      _rowsRow(host, raw, set);
       host.appendChild(C.hint(heard
         ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
           + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
@@ -1041,8 +1042,9 @@ function _blankWordsTrack(host, track) {
       const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
       const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
       host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
-      // In and Out right under Lines; the hint that stood here went (V49, the owner's (пр17)).
+      // In and Out right under Lines; the hint that stood here went (V49, the owner's (пр17)). Rows under them (V71).
       _pageMotionRows(host, st, set, anims);
+      _rowsRow(host, raw, set);
     }
   }
 
@@ -1390,6 +1392,16 @@ function _lookRows(host, st, set, o) {
 // while none is (style.js `appear`, (пр20)); "at once" chosen takes that away too. Their lengths are the app's.
 // With several animations dealt (`anims`, V49): a side the pairs do not share says "mixed", and choosing one puts it on every pair -
 // the other side stays dealt.
+// TWO ROWS (phase V71, the owner's (хо21), (хо29), (хо34)): the lane's (captions/style.js `rows`) - one undo step; one row is no field.
+const ROWS_OPTS = [['1', 'one'], ['2', 'two']];
+function _rowsRow(host, raw, set) {
+  const sel = C.select(ROWS_OPTS, rowsOn(raw) ? '2' : '1', (v) => set({ rows: v === '2' ? 2 : undefined }));
+  sel.title = 'Two: a page is whole while its words are spoken - its In before the first word, its Out after its end, '
+    + 'at least 0.8 s - and every other page stands in a second row, so the next one does not flash in its place';
+  sel.disabled = !Store.canEdit();
+  host.appendChild(C.row('Rows', sel));
+}
+
 function _pageMotionRows(host, st, set, anims) {
   if (anims) {
     const side = (k) => [...new Set(anims.map(p => pairOf(p)[k]))];
@@ -1416,7 +1428,8 @@ function _crossHint(host, items) {
   const groups = new Set();
   for (const x of items) {
     if (!x.clip || !x.clip.name || !((+x.clip.dur) > 0)) continue;
-    const b = pageBox(x.clip, x.track.style, x.track.kind === 'subs', F.w, F.h);
+    // (phase V71) Where its row draws it.
+    const b = pageBox(x.clip, x.track.style, x.track.kind === 'subs', F.w, F.h, x.track);
     const hit = Platforms.crossed(b.lines, F.w, F.h);
     if (!hit.length) continue;
     n++;
