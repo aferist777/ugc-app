@@ -24,6 +24,13 @@
    little above it), the window scaled by `zoom` about that point in IN s, held to the phrase's end and never past HOLD_MAX,
    back in OUT s; at most PER_MIN a minute and GAP s apart; none in a shot of bands. Kept on the record as `zooms`:
    [{ t0, t1 (the hold's end), z, ax, ay (the anchor, fractions of the window) }] - path.js zoomAt() / exprZoom() read them.
+
+   THE SPEAKER (phase V69 P12b, the owner's (хп63), (хп97), (хп98); docs/local-app/plan/ "Фаза V69", П12б) - podcast · interview
+   and true crime · bodycam: `speaker` set. The same planner with the kind's rules: NO ACTION (a hand at a bodycam's lens, a door,
+   a car going by never take the window); while words sound and no mouth on the screen moves - the officer behind the camera, the
+   host off the screen - the window goes to the face that changes most in that stretch (it listens and reacts), the largest face
+   when none does; a shot with a face in fewer than NO_FACE of its frames is a 'whole' shot - the square from the middle over its
+   blur (`wide`, path.js SQUARE) - and no punch-in lands on it. The record says `speaker: 1` (the inspector's "the speaker").
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const CUT_MERGE = 0.6;      // scdet's changes closer than this are one
@@ -53,8 +60,11 @@ const APART = 0.95;
 const TALK_SHARE = 0.2;     // two speak in a shot when the second has this share of its speech
 export const ZOOM_IN = 0.25, ZOOM_OUT = 0.3;  // (ё6) seconds in and out
 const HOLD_MAX = 3;         // (ё6) a punch-in held no longer than this
+const HOLD_MIN = 0.8;       // (P12b, `speaker`) ... and no shorter than this: a short reply ("Yes.", "A few of them") is the key line
 const GAP = 3;              // two punch-ins at least this far apart
 const PER_MIN = 4;          // (ё6) and at most this many a minute
+const NO_FACE = 0.1;        // (P12b, `speaker`) a shot with a face in fewer of its frames than this has none - the square
+const HEAR_MIN = 1;         // (P12b, (хп98)) a listener's change that makes 1 while a voice off the screen speaks
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -250,14 +260,38 @@ function lerpKeys(keys, t) {
   return keys[keys.length - 1][1];
 }
 
+// (P12b, (хп98)) While a voice off the screen speaks (a stretch of speech no face on the screen speaks): the face that changes
+// most over it - its mouth and eyes, its look - the one who listens and reacts; null when none changes enough.
+function listenerOf(tracks, a, b) {
+  let best = null, bs = 0;
+  for (const t of tracks) {
+    const at0 = t.pts.find((p) => p.i >= a) || null;
+    const vals = [];
+    for (let i = a; i < b; i++) {
+      const p = t.at.get(i);
+      if (!p || p.m == null) continue;
+      const pix = (p.m + p.e) / 2 / REACT_PIX;
+      const look = p.look && at0 && at0.look ? p.look.reduce((z, v, j) => z + Math.abs(v - at0.look[j]), 0) * 4 : 0;
+      vals.push(Math.max(pix, look));
+    }
+    if (vals.length >= Math.max(3, 0.4 * (b - a)) && mean(vals) > bs) { bs = mean(vals); best = t; }
+  }
+  return best && bs >= HEAR_MIN ? best : null;
+}
+
 /**
  * The record of the most active (mode 'face', `active: 1` - the preview and the render read its shots as any face path), from
  * a film counted with `active` (lib/faces.js). `speech` [[a, b]] or [{ start, end }] - when words sound; `keys` [{ t0, t1 }] -
  * the key phrases; `zoom` (> 1) the punch-ins' strength, 0 or 1 for none. Times are the FILE's seconds.
+ * (phase V69 P12b) `speaker` - podcast's and true crime's rules (above): no action, the listener while a voice off the screen
+ * speaks, a shot with no face the square (`wide`, w/h - path.js SQUARE) with no punch-in on it.
  */
-export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = [], zoom = 0 } = {}) {
+export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = [], zoom = 0, speaker = false, wide = 0 } = {}) {
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: 1, mode: 'face', active: 1, shift: r3(cl(+shift || 0, -1, 1)), src, shots: [] };
+  if (speaker) rec.speaker = 1;
+  // (P12b) The square a shot with no face shows - kept only where it is less than the whole frame (path.js wholeW).
+  if (speaker && +wide > 0 && src.w > 0 && src.h > 0 && (src.h * +wide) / src.w < 0.999) rec.wide = r3(cl(+wide, 0.5, 4));
   const fps = +f.fps || 10;
   const frames = Array.isArray(f.frames) ? f.frames : [];
   const seconds = +f.seconds || frames.length / fps;
@@ -272,6 +306,12 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
   for (const s of shotsOf(f.cuts, seconds)) {
     const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
     const n = i1 - i0;
+    // (P12b) The speaker's kinds: a shot with no face is the square over its blur.
+    if (speaker) {
+      let seen = 0;
+      for (let i = i0; i < i1; i++) if ((frames[i] || []).some((b) => b[2] >= MIN_FACE)) seen++;
+      if (seen < Math.max(2, NO_FACE * n)) { rec.shots.push({ t0: r3(s.t0), t1: r3(s.t1), kind: 'whole' }); continue; }
+    }
     const tracks = faceTracks(fd, i0, i1);
     const spk = speakers(fd, tracks, stretches.filter(([a, b]) => b > s.t0 && a < s.t1), i0, i1);
     shotTracks.set(s.t0, { tracks, i0, i1 });
@@ -315,19 +355,30 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
       }
       if (best && bs >= REACT_MIN) for (let i = te + Math.round(REACT_FROM * fps); i < Math.min(i1, te + Math.round(REACT_TO * fps)); i++) reactAt[i - i0] = best;
     }
-    const mtr = movers(fd, i0, i1);
+    // (P12b, (хп98)) The speaker's kinds: while a voice off the screen speaks, the one who listens and reacts.
+    const hearAt = new Array(n).fill(null);
+    if (speaker) {
+      for (const x of spk) {
+        if (x.track) continue;
+        const who = listenerOf(tracks, x.a, x.b);
+        if (who) for (let i = x.a; i < x.b; i++) hearAt[i - i0] = who;
+      }
+    }
+    // (P12b, (хп97)) No action for the speaker's kinds: what moves near a bodycam's lens is not what the short is about.
+    const mtr = speaker ? [] : movers(fd, i0, i1);
     const tx = new Array(n).fill(0.5), why = new Array(n).fill('');
     let last = null;
     for (let i = i0; i < i1; i++) {
       const k = i - i0;
-      let x = actionAt(mtr, i, fps), w = x != null ? 'action' : '';
+      let x = speaker ? null : actionAt(mtr, i, fps), w = x != null ? 'action' : '';
       if (x == null && reactAt[k]) { const p = reactAt[k].at.get(i); if (p) { x = p.cx; w = 'reacts'; } }
       if (x == null && speakerAt[k]) { const p = speakerAt[k].at.get(i) || speakerAt[k].pts[0]; x = p.cx; w = 'speaks'; }
+      if (x == null && hearAt[k]) { const p = hearAt[k].at.get(i); if (p) { x = p.cx; w = 'listens'; } }
       if (x == null) {
         const big = tracks.filter((t) => t.at.has(i)).sort((a, b) => b.at.get(i).w - a.at.get(i).w)[0];
         if (big) { x = big.at.get(i).cx; w = 'face'; }
       }
-      if (x == null) { const p = personAt(fd, i); if (p != null) { x = p; w = 'person'; } }
+      if (x == null && !speaker) { const p = personAt(fd, i); if (p != null) { x = p; w = 'person'; } }
       if (x == null && last != null) { x = last; w = 'hold'; }
       if (x == null) { x = 0.5; w = 'middle'; }
       tx[k] = x; why[k] = w; last = x;
@@ -366,10 +417,12 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
     const zooms = [];
     for (const k of phrases) {
       const shot = rec.shots.find((x) => k.t0 >= x.t0 && k.t0 < x.t1);
-      if (!shot || shot.kind === 'bands') continue;
+      // None on two bands, and (P12b) none on the square of a shot with no face.
+      if (!shot || shot.kind === 'bands' || shot.kind === 'whole') continue;
       if (zooms.length && k.t0 - zooms[zooms.length - 1].t1 - ZOOM_OUT < GAP) continue;
       if (zooms.filter((o) => o.t0 > k.t0 - 60).length >= PER_MIN) continue;
-      const t1 = Math.min(k.t1, k.t0 + ZOOM_IN + HOLD_MAX, shot.t1 - ZOOM_OUT);
+      // (P12b) The speaker's kinds hold a punch-in at least HOLD_MIN - an interrogation's key line is often one short word.
+      const t1 = Math.min(speaker ? Math.max(k.t1, k.t0 + ZOOM_IN + HOLD_MIN) : k.t1, k.t0 + ZOOM_IN + HOLD_MAX, shot.t1 - ZOOM_OUT);
       if (t1 - k.t0 < 0.6) continue;
       const st = [...shotTracks.values()].find((v) => v.i0 <= Math.round(k.t0 * fps) && Math.round(k.t0 * fps) < v.i1);
       let ax = 0.5, ay = 0.4;

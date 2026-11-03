@@ -47,6 +47,9 @@
      may carry PUNCH-INS: `zooms` [{ t0, t1, z, ax, ay }] - the window scaled by z about the point (ax, ay) of it, in ZOOM_IN s
      from t0, held to t1, back in ZOOM_OUT s; `noZoom` - the clip's switch says none ((ё7а)). zoomAt() is the preview's answer,
      exprZoom() the render's; the bands are never zoomed.
+   - (phase V69 P12b, the owner's (хп63), (хп97), (хп98)) THE SPEAKER, podcast's and true crime's: the same planner with
+     `active.speaker` - no action, the one who listens while a voice off the screen speaks, a shot with no face the square over
+     its blur (a 'whole' shot, `wide` on the record) with no punch-in on it; the record says `speaker: 1`.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
@@ -463,8 +466,9 @@ export function normalize(frame) {
   if (+frame.band > 0) out.band = r3(clamp(+frame.band, 0.2, 1));
   if (Number.isFinite(+frame.found)) out.found = r2(clamp(+frame.found, 0, 1));
   if (+frame.wide > 0) out.wide = r3(clamp(+frame.wide, 0.5, 4));
-  // (V43) The most active, its punch-ins and the clip's switch for them.
+  // (V43) The most active, its punch-ins and the clip's switch for them; (V69 P12b) planned by the speaker's rules.
   if (frame.active) out.active = 1;
+  if (frame.active && frame.speaker) out.speaker = 1;
   if (Array.isArray(frame.zooms)) {
     const zs = frame.zooms.filter((k) => k && [k.t0, k.t1, k.z, k.ax, k.ay].every((v) => Number.isFinite(+v)) && +k.t1 > +k.t0)
       .slice(0, 1000).map((k) => ({ t0: r3(+k.t0), t1: r3(+k.t1), z: r3(clamp(+k.z, 1, 2)), ax: r3(clamp(+k.ax, 0, 1)), ay: r3(clamp(+k.ay, 0, 1)) }))

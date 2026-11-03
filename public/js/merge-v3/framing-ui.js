@@ -24,10 +24,13 @@ export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['cent
 // own choice while the clip has it (another choice replaces it; Ctrl+Z brings it back); and its punch-ins have a switch of their
 // own - on or off, nothing to edit by hand.
 const ACTIVE = ['active', 'the most active'];
+// (phase V69 P12b) A podcast's or a true crime fragment's clip follows THE SPEAKER - the same planner by its kind's rules
+// (public/js/framing/active.js `speaker`): its switch says so.
+const SPEAKER = ['active', 'the speaker'];
 /** The switch's value for the clip: 'active' for a part of fragmentation, else its record's mode, or fixed. */
 export const modeOf = (c) => (c && c.frame && c.frame.active ? 'active' : (c && c.frame && c.frame.mode) || 'fixed');
 /** The choices the switch offers this clip - the most active only on a clip that has it. */
-export const framingsOf = (c) => (c && c.frame && c.frame.active ? [ACTIVE, ...FRAMINGS] : FRAMINGS);
+export const framingsOf = (c) => (c && c.frame && c.frame.active ? [c.frame.speaker ? SPEAKER : ACTIVE, ...FRAMINGS] : FRAMINGS);
 /** (V43) The punch-ins' row - on / off - for a clip whose record has them, or null. `C` the inspector's controls. */
 export function zoomRow(c, C) {
   const f = c && c.frame;
@@ -66,7 +69,10 @@ export function noteOf(c) {
     const shots = (f.shots || []).length;
     const bands = (f.shots || []).filter((s) => s.kind === 'bands').length;
     const z = (f.zooms || []).length;
-    return `the most active · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
+    // (V69 P12b) The speaker's: its shots with no face shown as the square.
+    const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
+    return `${f.speaker ? 'the speaker' : 'the most active'} · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
+      + (none ? ` · ${none} with no face as a square` : '')
       + (z ? ` · ${z} punch-in${z === 1 ? '' : 's'}${f.noZoom ? ' (off)' : ''}` : '');
   }
   if (f.mode === 'face' || f.mode === 'bands') {
