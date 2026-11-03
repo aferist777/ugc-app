@@ -315,16 +315,16 @@
 .mv3-hlg-item:hover{background:var(--surface-2)}
 .mv3-hlg-name{font:600 11px/1.35 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-hlg-what{font:500 10px/1.35 var(--font); color:var(--muted)}
+.mv3-hlg-sub{font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlg-moods{gap:4px}
 .mv3-hlg-moods .mv3-hlp-chip{height:22px; padding:0 8px; line-height:20px}
 .mv3-hlg-track{max-width:100%; min-width:0}
 /* (phase V66.1) While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
 #mv3-timeline.is-hlg{position:relative}
-.mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-  padding:12px; background:var(--bg); border-top:1px solid var(--border-soft)}
-.mv3-hlg-ticked{font:700 10px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
-.mv3-hlg-pbtn{width:min(460px, 90%); height:34px; flex:0 0 auto; border:1.5px solid var(--border); border-radius:10px; background:var(--surface-2);
-  color:var(--ink); font:700 12px/1 var(--font); cursor:pointer}
+.mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start;
+  gap:5px; padding:10px 12px; background:var(--bg); border-top:1px solid var(--border-soft)}
+.mv3-hlg-pbtn{height:24px; padding:0 12px; flex:0 0 auto; border:1px solid var(--border); border-radius:7px; background:var(--surface-2);
+  color:var(--ink); font:700 11px/1 var(--font); cursor:pointer; white-space:nowrap}
 .mv3-hlg-pbtn:hover{border-color:var(--gold)}
 .mv3-hlg-pbtn.is-on{border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, var(--surface-2))}
 .mv3-hlg-pbtn[disabled]{opacity:.5; cursor:default}

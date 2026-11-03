@@ -160,6 +160,13 @@ function _altTell() { for (const fn of _altSeen) { try { fn(); } catch (e) { /* 
 let _laneAlt = null;
 export function laneAlt(p) { _laneAlt = p || null; }
 export const laneAltFor = (track) => (_laneAlt && track && _laneAlt.wants(track) ? _laneAlt : null);
+// (phase V66.1, the owner 2026-11-03: "при клике на дорожку с музыкой, в правом поле нужно показывать, что пользователь может выбрать
+// другую дорожку из стандартных") A block of a view's ON TOP of a lane's own strip, or of a clip's on it - a highlights fragment's music:
+//   wants(track, clip)        that block now (clip - the clip picked on the lane, or none for the lane's name)
+//   render(host, track, clip)
+let _laneExtra = null;
+export function laneExtra(p) { _laneExtra = p || null; }
+export const laneExtraFor = (track, clip) => (_laneExtra && track && _laneExtra.wants(track, clip || null) ? _laneExtra : null);
 
 // ── The view each project was left on ──────────────────────────────────────
 function _views() {

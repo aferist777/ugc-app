@@ -731,6 +731,9 @@ function _soundSection(host, sounds, alone) {
 // A sound. Its level is the whole of it - and a birol lands here silent, which is what this
 // panel is most often opened to undo.
 function _blankSound(host, track, c, set, pair) {
+  // (phase V66.1) The music the app laid on a highlights fragment: its track and the choice of another on top.
+  const ex = Views.laneExtraFor(track, c);
+  if (ex) ex.render(host, track, c);
   host.appendChild(C.row('Volume', C.volume(c.volume == null ? 1 : +c.volume,
     (v) => set('volume', v))));
   host.appendChild(C.hint((+c.volume || 0) > 0
@@ -834,6 +837,9 @@ function _blankVideoTrack(host, track) {
 }
 
 function _blankAudioTrack(host, track) {
+  // (phase V66.1) A highlights fragment's music lane: its track and the choice of another on top (lib-views.js laneExtra).
+  const ex = Views.laneExtraFor(track);
+  if (ex) ex.render(host, track, null);
   // THE MUSIC PANEL, on this lane: the lane's master volume and the generator (js/merge-v3/music.js). The tracks
   // themselves are in the Library panel, Audio -> Music, dragged onto a lane from there (phase V28.4).
   M.setMusicDest(track.id);

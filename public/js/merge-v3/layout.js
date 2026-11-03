@@ -110,7 +110,8 @@ function _measureFloor() {
   if (!panel || !tl || !inner) return _floor;
   let h = 0;
   // Everything of the panel above the lanes' box: its header, and the notice about deleted files when it shows.
-  for (const ch of panel.children) if (ch !== tl) h += ch.offsetHeight;
+  // (V66.1) Not what lies OVER the panel (a highlights group's buttons, absolute): it would measure the panel by itself.
+  for (const ch of panel.children) if (ch !== tl && getComputedStyle(ch).position !== 'absolute') h += ch.offsetHeight;
   // The lanes as drawn: the ruler, the blocks and the seam - not the playhead or a drawn stretch, which lie over them.
   for (const ch of inner.children) {
     if (getComputedStyle(ch).position === 'absolute') continue;
@@ -166,6 +167,16 @@ function _keptIn() {
 }
 // The person takes the height: it stops following the lanes, the chat's floor included.
 function _byHand() { _atFloor = false; _panelFloor = false; }
+// (phase V66.1, the owner 2026-11-03: "при двойном клике на sash между таймлайном и верхней частью нужно делать таймлайн такой высоты,
+// чтобы просто вместились все дорожки, на которых есть элементы. сейчас расширяется сильно высоко") A double click on the timeline's
+// sash (or the crossing) fits it to the open project's lanes - the head, the ruler and the lanes as drawn, an empty timeline its
+// minimum - and it follows them again, as when a project is opened; it gave the default 290 px before.
+function _fitLanes() {
+  _atFloor = true;
+  _panelFloor = false;
+  _floor = _measureFloor();
+  _applyTl(_clampTl(0));
+}
 function _tlNow() {
   const el = document.getElementById('mv3-timeline');
   return el ? el.getBoundingClientRect().height : DEF_TL_H;
@@ -322,7 +333,7 @@ function _wireCross() {
     e.stopPropagation();
     _byHand();
     _applyLeft(_defLeft());
-    _applyTl(DEF_TL_H, true);
+    _fitLanes();
     _save();
     _placeCross();
   });
@@ -465,7 +476,7 @@ export function initLayout() {
   _wireSash(document.getElementById('mv3-sash-h'), {
     axis: 'y', sign: -1,
     get: _tlNow, set: (px) => { _applyTl(px, true); _placeCross(); },
-    reset: () => { _applyTl(DEF_TL_H, true); _placeCross(); },
+    reset: () => { _fitLanes(); _placeCross(); },
     save: () => { if (_panelOn) return; try { _keepTl(); } catch (e) {} },
   });
 

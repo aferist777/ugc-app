@@ -302,7 +302,6 @@ function renderMusic(host) {
     return f.lanes && f.lanes.music && f.lanes.music.volume != null ? +f.lanes.music.volume : 1;
   };
   box.appendChild(C.row('Volume', _mixedVolume(list.map(vol), (v) => _volume('music', v))));
-  box.appendChild(_el('p', 'mv3-ins-note', 'Louder or quieter by the same for all - each stays ~10 dB under its own speech before that.'));
   // Deal again ((хо4)): the moods as chips, then the press.
   if (!_moods) { _readMoods(); box.appendChild(_el('p', 'mv3-ins-note', 'reading Music → highlights…')); }
   else {
@@ -318,7 +317,8 @@ function renderMusic(host) {
       });
       chips.appendChild(b);
     }
-    box.appendChild(C.row('Moods', chips));
+    box.appendChild(_el('div', 'mv3-hlg-sub', 'Moods'));
+    box.appendChild(chips);
     const deal = C.button(_busy === 'music' ? 'dealing…' : 'deal again', () => _musicAll(false),
       { title: 'Each ticked fragment a new track of these moods - none twice while there are tracks' });
     deal.disabled = !!_busy || !_dealMoods.length;
@@ -327,21 +327,42 @@ function renderMusic(host) {
     box.appendChild(C.row('', C.pair(deal, none)));
   }
   _each(box);
-  for (const f of list) {
-    const m = f.music;
-    const opts = [['', m ? m.title + (m.mood ? ' · ' + m.mood : '') : 'no music']];
-    if (m) opts.push(['another', 'another track of ' + (m.mood || 'its tracks')]);
-    for (const x of (_moods || [])) if (x.n) opts.push(['mood:' + x.id, 'a track of ' + x.label]);
-    if (m) opts.push(['none', 'no music']);
-    const sel = C.select(opts, '', (v) => {
-      sel.value = '';
-      if (!v) return;
-      _musicOne(f, v === 'another' ? 'another' : v === 'none' ? 'none' : v.slice(5));
-    });
-    sel.disabled = !!_busy;
-    sel.classList.add('mv3-hlg-track');
-    box.appendChild(C.row(f.title, sel));
-  }
+  for (const f of list) box.appendChild(C.row(f.title, _trackChoice(f)));
+}
+
+// (phase V66.1) ONE fragment's music, on top of its music lane's strip or of the app's clip on it: its track, and the choice of
+// another of the standard ones - of its mood, of a mood, or none (the same as its row among the ticked).
+const _openFrag = () => {
+  const rec = _A && _A.rec();
+  const n = _A ? _A.openN() : 0;
+  return n > 0 ? ((rec && rec.fragments) || []).find((x) => x.n === n && x.state === 'ready' && !x.deletedAt && x.key) || null : null;
+};
+function _trackChoice(f) {
+  const m = f.music;
+  const opts = [['', m ? m.title + (m.mood ? ' · ' + m.mood : '') : 'no music']];
+  if (m) opts.push(['another', 'another track of ' + (m.mood || 'its tracks')]);
+  for (const x of (_moods || [])) if (x.n) opts.push(['mood:' + x.id, 'a track of ' + x.label]);
+  if (m) opts.push(['none', 'no music']);
+  const sel = C.select(opts, '', (v) => {
+    sel.value = '';
+    if (!v) return;
+    _musicOne(f, v === 'another' ? 'another' : v === 'none' ? 'none' : v.slice(5));
+  });
+  sel.disabled = !!_busy;
+  sel.classList.add('mv3-hlg-track');
+  return sel;
+}
+function renderOneMusic(host) {
+  const f = _openFrag();
+  if (!f) return;
+  if (!_moods) _readMoods();
+  const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
+  box.appendChild(_el('div', 'mv3-ins-title', 'Music of this fragment'));
+  box.appendChild(C.row('Track', _trackChoice(f)));
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'music' ? 'Laying the track…'
+    : 'Another of the standard tracks of Music → highlights - it goes in place of this one, ~10 dB under the speech. What you put on this lane yourself stays.'));
+  box.appendChild(_el('div', 'mv3-c-sep'));
+  host.appendChild(box);
 }
 
 // A volume control for several: "mixed" until moved.
@@ -436,7 +457,7 @@ const _checkSample = () => _sync();
 // ── The buttons in place of the timeline (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)) ───────────────────────────────
 // "когда выбрано несколько фрагментов нарезки, то на таймлайне просто отображать эти кнопки для массового редактирования. без элементов
 // таймлайна". While a group is ticked the timeline's panel - its head with the transport and its lanes - is covered by the buttons
-// of the common settings: "N fragments ticked" and three wide buttons, Subtitles, main audio, music ("+ music" while the open
+// of the common settings: three compact buttons at its left edge, Subtitles, main audio, music ("+ music" while the open
 // fragment has none); the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
 // frame and «example» (a group with none open opens the first ticked, quietly - (хо24)). A fragment's row in the strip shows ITS
 // timeline, lanes and all, with "‹ all N" in the timeline's head back to the buttons ((хо26)); fewer than two ticked - the timeline as
@@ -463,7 +484,6 @@ function _panelPaint(tl) {
   if (_panel.dataset.sig === sig) return;
   _panel.dataset.sig = sig;
   _panel.textContent = '';
-  _panel.appendChild(_el('div', 'mv3-hlg-ticked', n + ' fragments ticked'));
   for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', music ? 'music' : '+ music']]) {
     const b = _el('button', 'mv3-hlg-pbtn' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
     b.type = 'button';
@@ -502,11 +522,12 @@ function _panelSync() {
   _backPaint();
 }
 
-// What shows follows the ticks, the pick, the store and the strip - a frame later, when the strip has been drawn.
-let _syncRaf = 0;
+// What shows follows the ticks, the pick, the store and the strip - once the strip has been drawn (a timer, not a frame: a
+// window that paints nothing still follows).
+let _syncT = 0;
 function _sync() {
-  if (_syncRaf) cancelAnimationFrame(_syncRaf);
-  _syncRaf = requestAnimationFrame(() => { _syncRaf = 0; _panelSync(); _checkSampleNow(); });
+  if (_syncT) clearTimeout(_syncT);
+  _syncT = setTimeout(() => { _syncT = 0; _panelSync(); _checkSampleNow(); }, 0);
 }
 
 // ── Wiring ──────────────────────────────────────────────────────────────────
@@ -532,6 +553,15 @@ export function initGroup(api) {
       _sync();
       return out;
     },
+  });
+  // (V66.1) One fragment's music lane - not while the group's buttons stand for the lanes.
+  Views.laneExtra({
+    wants: (track, clip) => {
+      if (!_A.pid() || (isGroup() && !_ownNow()) || !_openFrag()) return false;
+      const m = openMusicLane();
+      return !!(m && track && track.id === m.id && (!clip || _isBed(clip)));
+    },
+    render: (host) => renderOneMusic(host),
   });
   onSelChange(() => _sync());
   Store.onChange(() => { if (_own && Store.key() !== _own) _own = ''; _sync(); });
