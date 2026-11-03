@@ -143,11 +143,23 @@ let _altPaint = null;
 export function captionsAlt(p) { _alt = p || null; }
 export const altCaptions = () => (_alt && _alt.active() ? _alt : null);
 export const altWants = () => !!(_alt && _alt.wants());
-export function altOpen() { if (_alt) _alt.open(); if (_altPaint) _altPaint(); }
-export function altRelease() { if (_alt) _alt.release(); }
+export function altOpen() { if (_alt) _alt.open(); if (_altPaint) _altPaint(); _altTell(); }
+export function altRelease() { if (_alt) _alt.release(); _altTell(); }
 /** The inspector says how to paint again when the alternative target changes (its fragments ticked or not). */
 export function onAltChange(fn) { _altPaint = fn; }
-export function altChanged() { if (_altPaint) _altPaint(); }
+export function altChanged() { if (_altPaint) _altPaint(); _altTell(); }
+// (phase V66) Whoever wants to know that the alternative was opened, let go of or painted again (hl-group.js: «example» on the preview).
+const _altSeen = new Set();
+export function onAltShown(fn) { if (typeof fn === 'function') _altSeen.add(fn); }
+function _altTell() { for (const fn of _altSeen) { try { fn(); } catch (e) { /* the next one still hears */ } } }
+
+// (phase V66, the owner's (хо1)-(хо16)) A LANE'S NAME pressed may lead to another strip than the lane's own - a highlights project's
+// ticked fragments: Subtitles, main audio and the music lane give the common settings of all of them (hl-group.js).
+//   wants(track)         that strip instead of the lane's own now
+//   render(host, track)  drawn into the inspector's strip; returns the captions tiles' target, or null
+let _laneAlt = null;
+export function laneAlt(p) { _laneAlt = p || null; }
+export const laneAltFor = (track) => (_laneAlt && track && _laneAlt.wants(track) ? _laneAlt : null);
 
 // ── The view each project was left on ──────────────────────────────────────
 function _views() {

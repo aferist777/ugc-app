@@ -46,6 +46,7 @@ import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
+import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -138,6 +139,8 @@ function _crumbs() {
   const ticks = _ticked().map((f) => f.n).join(',');
   if (ticks !== _tickSig) { _tickSig = ticks; _hlMix = []; _hlAnims = []; _hlFonts = []; }
   if (sig !== _multiSig) { _multiSig = sig; Views.altChanged(); }
+  // (phase V66) The group's strip and «example» follow the ticks.
+  groupChanged();
 }
 let _multiSig = '';
 let _tickSig = '';
@@ -178,25 +181,22 @@ Views.captionsAlt({
   open: () => { _multi = true; },
   active: () => _multi && _multiWanted(),
   release: () => { _multi = false; },
-  render: (host) => {
-    const list = _ticked();
-    host.appendChild(_el('div', 'mv3-ins-title', 'Captions of ' + list.length + (list.length === 1 ? ' fragment' : ' fragments')));
-    const ul = _el('ul', 'mv3-hl-list');
-    for (const f of list) {
-      const c = _capOfFrag(f);
-      const li = _el('li', null, f.title);
-      if (c && c.name) li.appendChild(_el('span', 'mv3-hl-cap-of', ' · ' + c.name + (c.edited ? ' (edited)' : '')));
-      ul.appendChild(li);
-    }
-    host.appendChild(ul);
-    host.appendChild(_el('p', 'mv3-ins-note', _applying ? 'Putting the style on them…'
-      : 'A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. '
-      + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
-    const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
-    return { preset: ps.size === 1 ? [...ps][0] : '', presets: _hlMix.length > 1 ? _hlMix.slice() : null, edited: false,
-      apply: _restyle, readOnly: _applying, anims: _hlAnims.slice(), anim: _reanimate, fonts: _hlFonts.slice(), font: _refont };
-  },
+  // (phase V66, (хо16)) The same strip as the Subtitles lane's name with a group ticked: the common settings on top (hl-group.js), the
+  // tiles' part under them.
+  render: (host) => renderGroupSubs(host, _tiles),
 });
+
+// The tiles' part of the captions of several: what a preset, an animation or a font pressed does - and the target the captions view
+// lights its tiles by.
+function _tiles(host) {
+  host.appendChild(_el('p', 'mv3-ins-note', _applying ? 'Putting the style on them…'
+    : 'A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. '
+    + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
+  const list = _ticked();
+  const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
+  return { preset: ps.size === 1 ? [...ps][0] : '', presets: _hlMix.length > 1 ? _hlMix.slice() : null, edited: false,
+    apply: _restyle, readOnly: _applying, anims: _hlAnims.slice(), anim: _reanimate, fonts: _hlFonts.slice(), font: _refont };
+}
 
 // The open fragment's subtitle lane, and the ticked ones that are not open - the page's and the server's (see _restyle).
 const _openLane = () => (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs') || null;
@@ -288,6 +288,9 @@ export function initHighlights() {
     onCrumb: () => { Views.toBase(); setOpenColumn('library'); _show(true); _load(); },
   });
   Store.onChange(_onStore);
+  // (phase V66) The common settings of the ticked fragments - what this view lends them of the project.
+  initGroup({ pid: () => _pid, rec: () => _rec, ticked: _ticked, openN: _openN, load: _load, say: _say, whole: _whole,
+    capOpen: _capOpen, tiles: _tiles });
   _onStore();
   // A row retried in Alerts: read again at once (alerts-bell.js).
   window.addEventListener('ugc:alert-retried', () => { if (_pid) _load(); });

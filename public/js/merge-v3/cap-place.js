@@ -17,6 +17,10 @@
    It SNAPS (с33) to the frame's vertical middle and to the three anchors - near one, Where becomes it and the
    offset nothing - with a thin line saying to what. The page never leaves the frame (с34, captions/place.js).
 
+   THE SAMPLE (phase V66, the owner's (хо7)): while a highlights project's common Subtitles settings are in the strip (hl-group.js), a
+   page of «example» is drawn in place of the captions (setSample) - it alone is pressed, moved only up and down, and let go its place
+   goes to the owner of the sample (written for all the ticked fragments); nothing on the timeline is picked or written here.
+
    NOTHING IS WRITTEN UNTIL THE MOUSE COMES UP: while it moves, the captions on screen are drawn with the place in
    hand (captions/layer.js setLive, or the painter), and the release writes it once - one Ctrl+Z. A press that
    does not move writes nothing.
@@ -43,6 +47,7 @@ let _api = null;              // { canvas, on(), at(), pad(), frame(), repaint()
 let _drag = null;
 let _live = null;             // the timeline drawn while a move is in hand
 let _raf = 0;
+let _sample = null;           // (V66) { tl, onDrop(place) } - the «example» of several fragments' common place
 
 const _fmt = () => { const tl = Store.timeline(); return (tl && tl.format) === '16:9' ? '16:9' : '9:16'; };
 // Render-frame pixels per canvas-frame pixel, and per pixel of the page.
@@ -54,7 +59,7 @@ export const liveTimeline = () => _live;
 
 // Every page on screen now, in render-frame pixels; the gesture's place when one is in hand.
 function _pages() {
-  const tl = _live || Store.timeline();
+  const tl = _live || (_sample ? _sample.tl : Store.timeline());
   const F = renderFrame(_fmt());
   return pagesAt(tl, _api.at(), F.w, F.h);
 }
@@ -84,6 +89,12 @@ export function down(e, p) {
   const hit = _hit(p);
   if (!hit) return false;
   e.preventDefault();
+  // (V66) The sample: moved up and down, nothing picked.
+  if (_sample) {
+    if (!Store.canEdit()) return true;
+    _drag = { what: { kind: 'sample' }, hit, from: _placeOf(resolveStyle(hit.track.style)), p0: p, pg0: { x: e.clientX, y: e.clientY }, moved: false, r: null };
+    return true;
+  }
   const id = hit.clip.id;
   const picked = new Set(selectedIds());
   let what;
@@ -111,6 +122,7 @@ export function hover(p) {
   if (_drag) return 'move';
   const hit = _hit(p);
   if (!hit) return '';
+  if (_sample) return 'move';
   const picked = new Set(selectedIds());
   const lane = selectedTrack();
   return picked.has(hit.clip.id) || (lane && lane.id === hit.track.id && !ownPlace(hit.clip)) ? 'move' : 'pointer';
@@ -166,9 +178,15 @@ function _move(e) {
   const F = renderFrame(_fmt());
   // Page pixels -> canvas pixels -> render-frame pixels.
   const dx = (e.clientX - _drag.pg0.x) * sc * k, dy = (e.clientY - _drag.pg0.y) * sc * k;
-  _drag.r = dragPlace(_drag.from, _drag.hit.box, dx, dy, F.w, F.h, { vertical: e.shiftKey, free: e.altKey, near: NEAR * sc * k });
-  _drag.pt = _patches(_drag.r);
-  _live = _liveOf(_drag.pt);
+  const sample = _drag.what.kind === 'sample';
+  _drag.r = dragPlace(_drag.from, _drag.hit.box, dx, dy, F.w, F.h, { vertical: sample || e.shiftKey, free: e.altKey, near: NEAR * sc * k });
+  if (sample) {
+    const s = _sample.tl;
+    _live = { ...s, tracks: s.tracks.map((x) => ({ ...x, style: { ...(x.style || {}), pos: _drag.r.pos, ty: _drag.r.ty } })) };
+  } else {
+    _drag.pt = _patches(_drag.r);
+    _live = _liveOf(_drag.pt);
+  }
   // At most once a frame: the layer builds an .ass and libass lays it out.
   if (_raf) return;
   _raf = requestAnimationFrame(() => {
@@ -184,6 +202,17 @@ function _up() {
   const d = _drag;
   _drag = null;
   if (_raf) { cancelAnimationFrame(_raf); _raf = 0; }
+  // (V66) The sample let go: its place to its owner, the sample drawn where it was let go until the owner draws it again.
+  if (d.what.kind === 'sample') {
+    if (d.moved && d.r && _sample) {
+      if (_live) _sample.tl = _live;
+      if (_sample.onDrop) _sample.onDrop({ pos: d.r.pos, ty: d.r.ty });
+    }
+    _live = null;
+    CapLayer.setLive(_sample ? _sample.tl : null);
+    if (_api && _api.repaint) _api.repaint();
+    return;
+  }
   const pt = d.moved ? d.pt : null;
   _live = null;
   if (pt && pt.lane) setSubsStyle(d.what.track, pt.lane, false);
@@ -209,7 +238,7 @@ export function paint(ctx) {
   const picked = new Set(selectedIds());
   const zones = Platforms.current();
   const wordsLane = lane && (lane.kind === 'subs' || lane.kind === 'text');
-  if (!wordsLane && !picked.size && !zones && !_drag) return;
+  if (!wordsLane && !picked.size && !zones && !_drag && !_sample) return;
   const pages = _pages();
   if (!pages.length && !_drag) return;
   const s = 1 / _k();
@@ -232,7 +261,7 @@ export function paint(ctx) {
     }
   }
   for (const pg of pages) {
-    const on = (lane && lane.id === pg.track.id) || picked.has(pg.clip.id);
+    const on = !!_sample || (lane && lane.id === pg.track.id) || picked.has(pg.clip.id);
     if (!on) continue;
     const b = pg.box;
     _dash(ctx, b.x * s, b.y * s, b.w * s, b.h * s);
@@ -248,6 +277,20 @@ export function paint(ctx) {
     ctx.setLineDash([]);
   }
   ctx.restore();
+}
+
+/**
+ * (phase V66) The «example» of several highlights fragments' common place: `o` { tl - the timeline drawn in place of the captions,
+ * onDrop(place { pos, ty }) } - or null, the captions back. While it is set, only it is pressed and moved.
+ */
+export function setSample(o) {
+  const was = !!_sample;
+  _sample = o && o.tl ? { tl: o.tl, onDrop: o.onDrop || null } : null;
+  if (_drag && _drag.what.kind === 'sample' && !_sample) { _drag = null; _live = null; }
+  if (!_sample && !was) return;
+  // A sample's own gesture in hand keeps drawing itself.
+  if (!(_drag && _drag.what.kind === 'sample')) CapLayer.setLive(_sample ? _sample.tl : null);
+  if (_api && _api.repaint) _api.repaint();
 }
 
 /**

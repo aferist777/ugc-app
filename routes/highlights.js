@@ -315,6 +315,17 @@ router.post('/highlights/:id/music', async (req, res) => {
       const tracks = HLM.ofMoods(Array.isArray(b.moods) ? b.moods : []).tracks;
       if (!tracks.length) return res.status(400).json({ success: false, error: 'no tracks in these moods' });
       dealt = HLM.deal(tracks, frags.length);
+      // "Dealt AGAIN": a fragment does not get back the track it wears while a swap with another gives both something new.
+      const was = (k) => (frags[k].music && frags[k].music.id) || '';
+      for (let k = 0; k < dealt.length; k++) {
+        if (!dealt[k] || dealt[k].id !== was(k)) continue;
+        const j = dealt.findIndex((d, i) => i !== k && d && d.id !== was(k) && dealt[k].id !== was(i));
+        if (j >= 0) [dealt[k], dealt[j]] = [dealt[j], dealt[k]];
+        else {
+          const other = tracks.find((t) => t.id !== was(k) && !dealt.some((d) => d && d.id === t.id));
+          if (other) dealt[k] = { ...other };
+        }
+      }
     }
     const results = new Map();
     let open = null;

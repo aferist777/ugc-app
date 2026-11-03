@@ -172,6 +172,9 @@ function _newAudioLane(t) {
   return a;
 }
 
+/** (phase V66) Inside a mutation: a bed lane at the far end of the audio block (a highlights fragment's music) - null at the ceiling. */
+export function newBedLane(tracks) { return _newAudioLane(tracks); }
+
 export function addAudioTrack() {
   Store.mutate(tl => { _newAudioLane(tl.tracks); });
 }

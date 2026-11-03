@@ -1766,7 +1766,13 @@ function _render() {
   const one = oneB();
   if (one) { _over(true); return _renderBlankClip(over, one); }
   const tr = trackB();
-  if (tr) { _over(true); return _renderBlankTrack(over, tr); }
+  if (tr) {
+    _over(true);
+    // (phase V66) A highlights project's ticked fragments: the lane's name gives their common settings (lib-views.js laneAlt).
+    const la = Views.laneAltFor(tr);
+    if (la) return la.render(over, tr) || undefined;
+    return _renderBlankTrack(over, tr);
+  }
   // (phase V33.3) Nothing picked, and a view's own captions up (a highlights project's ticked fragments): its strip and target.
   const alt = Views.altCaptions();
   if (alt) { _over(true); return alt.render(over); }
