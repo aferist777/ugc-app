@@ -198,9 +198,9 @@ router.post('/highlights/:id/style', (req, res) => {
       const a = CUT.refont(keys, b.fonts);
       return res.json({ success: true, n: a.keys.length });
     }
-    // (phase V66) The place (held over presets), the size, the words in a line, the lines - on the lanes as they are.
-    if (!b.preset && (b.place || b.size != null || b.wordsPerLine != null || b.lines != null)) {
-      const a = CUT.relayout(keys, { place: b.place || null, size: b.size, wordsPerLine: b.wordsPerLine, lines: b.lines });
+    // (phase V66) The place (held over presets), the size, the words in a line, the lines - on the lanes as they are. (V71) Two rows or one.
+    if (!b.preset && (b.place || b.size != null || b.wordsPerLine != null || b.lines != null || b.rows != null)) {
+      const a = CUT.relayout(keys, { place: b.place || null, size: b.size, wordsPerLine: b.wordsPerLine, lines: b.lines, rows: b.rows });
       return res.json({ success: true, n: a.keys.length });
     }
     // (phase V49) Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.

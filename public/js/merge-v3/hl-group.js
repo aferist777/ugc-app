@@ -37,7 +37,7 @@ import * as C from './controls.js';
 import * as CapPlace from './cap-place.js';
 import { fitTimeline } from './layout.js';
 import { setSubsStyle, selectTrackById, onSelChange, newBedLane } from './timeline-b.js';
-import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS } from '../captions/style.js';
+import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
 import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.js';
 
@@ -83,7 +83,8 @@ function _subsOf(f) {
     const lane = _openSubs();
     const st = normalizeStyle((lane && lane.style) || {});
     const own = ((lane && lane.clips) || []).filter((c) => c && c.style && ['pos', 'tx', 'ty'].some((k) => c.style[k] != null)).length;
-    return { pos: st.pos, ty: st.ty, size: st.size, sizeAuto: st.sizeAuto !== false, wordsPerLine: st.wordsPerLine, lines: st.lines, hold: !!st.hold, own };
+    return { pos: st.pos, ty: st.ty, size: st.size, sizeAuto: st.sizeAuto !== false, wordsPerLine: st.wordsPerLine, lines: st.lines, hold: !!st.hold, own,
+      rows: rowsOn(st) ? 2 : 1 };
   }
   return (f.lanes && f.lanes.subs) || null;
 }
@@ -116,6 +117,8 @@ function _subsPatch(patch, said) {
     else if (patch.size != null) Object.assign(p, { size: patch.size, sizeAuto: false });
     if (patch.wordsPerLine != null) p.wordsPerLine = patch.wordsPerLine;
     if (patch.lines != null) p.lines = patch.lines;
+    // (phase V71) Two rows, or one - no field.
+    if (patch.rows != null) p.rows = +patch.rows === 2 ? 2 : undefined;
     setSubsStyle(lane.id, p, patch.size != null || patch.wordsPerLine != null || patch.lines != null);
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/style', { ns, ...patch }), said);
 }
@@ -246,6 +249,10 @@ export function renderSubs(host, target) {
   const ls = C.select(LINES, String(lines), (v) => _subsPatch({ lines: +v }));
   if (mixed('lines')) ls.title = 'Not the same on all of them now - a choice gives them one';
   box.appendChild(C.row('Lines', ls));
+  // (phase V71, the owner's (хо34)) Two rows for all of them - each page whole while it is spoken, every other one in a second row.
+  const rows = C.select([['1', 'one'], ['2', 'two']], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
+  if (mixed('rows')) rows.title = 'Not the same on all of them now - a choice gives them one';
+  box.appendChild(C.row('Rows', rows));
   // (хо12) The title on top.
   const titled = list.filter(_titled).length;
   const tOn = C.button('on', () => _titleAll(true), { title: 'Its headline at the top for the first three seconds - on every ticked fragment' });
@@ -440,8 +447,10 @@ function _sampleTl(over) {
   const said = Array.from({ length: n }, (_, i) => ({ text: 'example', start: i * 0.3, end: i * 0.3 + 0.25 }));
   const first = (paginate(said, { lane: style, format: fmt })[0] || {}).words || [];
   const words = (first.length ? first : said.slice(0, 1).map(() => ({ w: 'example' }))).map((w) => ({ w: w.w || 'example', s: 0, e: 0 }));
-  return { format: fmt, tracks: [{ id: 'subs', kind: 'subs', name: 'Subtitles', style,
-    clips: [{ id: 'hlg-sample', start: 0, dur: 36000, name: words.map((w) => w.w).join(' '), words, src: null }] }] };
+  const clips = [{ id: 'hlg-sample', start: 0, dur: 36000, name: words.map((w) => w.w).join(' '), words, src: null }];
+  // (phase V71, the owner's (хо32)) In two rows: a second page of the sample, where the second row stands - the two move together.
+  if (rowsOn(style)) clips.push({ ...clips[0], id: 'hlg-sample2' });
+  return { format: fmt, tracks: [{ id: 'subs', kind: 'subs', name: 'Subtitles', style, clips }] };
 }
 function _checkSampleNow() {
   const want = _shownBlock() === 'subs' && !!_openSubs();
