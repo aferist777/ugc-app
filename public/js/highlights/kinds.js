@@ -14,6 +14,8 @@
      hook             'twice' - the moment's strongest line opens it and is heard again in its place (podcast, true crime, (хп37));
                       '' - the pieces in the video's order
      keys             the agent answers each moment's key lines (where the frame punches in - P12b)
+     pauses           (P12b, (хп76)) its pauses longer than 0.8 s shortened to 0.3 s when it is cut - and the agent measures a moment
+                      on the clock of the speech (lib/highlights-pauses.js); lecture's only
      title            the title on top by default: true / false / 'by-video' (auto - the kind it finds)
      moods            { std, rec } - Music -> highlights moods (lib/highlights-music.js): the standard ticked, the recommended marked
      presets          { std, rec, said } - caption presets' ids the standard, their groups (presets.js CATEGORIES) recommended
@@ -92,7 +94,7 @@ export const KINDS = {
       + 'explains it, a paradox, a quote unpacked, an answer to a question from the room. Each starts on the claim or the question and ends '
       + 'on the takeaway, never mid-explanation; housekeeping, dictation and recaps are skipped, pauses are shortened. The speaker in a '
       + 'square from the middle, a slide whole, over the blur, with a title on top for 3 s. Moments up to 30 s, 30-60 s or 60-90 s; 3 to 30.',
-    lengths: 'moments', length: '30-60', counts: STD_COUNTS, count: 20, hook: '', keys: false, title: true,
+    lengths: 'moments', length: '30-60', counts: STD_COUNTS, count: 20, hook: '', keys: false, title: true, pauses: true,
     moods: { std: ['calm', 'inspiring'], rec: ['calm', 'inspiring', 'lofi', 'confident'] },
     presets: { std: ['cs-yellow-highlight', 'cs-red-highlight', 'cs-highlighter-yellow-sweep'], rec: ['clean', 'karaoke', 'viral'], said: 'clear, a word marked - for a lecture' },
     anims: { std: ['rise|rise'], rec: ['rise|rise', 'fade|fade', 'grow|fade', 'pop|shrink'] },

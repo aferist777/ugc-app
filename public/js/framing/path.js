@@ -50,6 +50,11 @@
    - (phase V69 P12b, the owner's (хп63), (хп97), (хп98)) THE SPEAKER, podcast's and true crime's: the same planner with
      `active.speaker` - no action, the one who listens while a voice off the screen speaks, a shot with no face the square over
      its blur (a 'whole' shot, `wide` on the record) with no punch-in on it; the record says `speaker: 1`.
+   - (phase V69 P12b, the owner's (хп75)) A WIDTH OF ITS OWN on a 'whole' shot - `wide` on the shot, 0 for the whole frame by its
+     full width: a lecture BY ITS SHOTS (plan(..., { mode: 'whole', byFace })) - the lecturer's face wider than `byFace` of the
+     frame, the record's square; small or none (a slide, a webcam's window), the full width. wholeW() of the shot, windowAt(),
+     kindsOf() ('whole', 'whole1'... - one render branch for each width) and spansOfKind() read it - the preview, the render and
+     the tile's picture by one rule.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
@@ -91,10 +96,33 @@ export function windowW(srcW, srcH, aspect) {
  * frame; less when the record has `wide` (a documentary's 3:2 of a 16:9 film is 0.84). The preview and the render both cut
  * by it, so the two cannot differ.
  */
-export function wholeW(frame, srcW, srcH) {
-  const a = +(frame && frame.wide) || 0;
+export function wholeW(frame, srcW, srcH, shot) {
+  const a = _wideOf(frame, shot);
   if (!(a > 0) || !(srcW > 0) || !(srcH > 0)) return 1;
   return Math.min(1, (srcH * a) / srcW);
+}
+
+// (phase V69 P12b) A 'whole' shot's own width (`wide` on it - 0 the whole frame), else the record's.
+function _wideOf(frame, shot) {
+  if (shot && shot.wide != null && Number.isFinite(+shot.wide)) return Math.max(0, +shot.wide);
+  return +(frame && frame.wide) || 0;
+}
+// The widths the 'whole' shots show, the record's own first - their kinds for the render are 'whole', 'whole1', 'whole2'...
+function _wholes(frame) {
+  const out = [+(frame && frame.wide) || 0];
+  for (const s of (frame && frame.shots) || []) if (s && s.kind === 'whole' && !out.includes(_wideOf(frame, s))) out.push(_wideOf(frame, s));
+  return out;
+}
+const _kindOfShot = (frame, s) => {
+  if (!s || s.kind !== 'whole') return s ? s.kind : 'face';
+  const i = _wholes(frame).indexOf(_wideOf(frame, s));
+  return i > 0 ? 'whole' + i : 'whole';
+};
+/** (phase V69 P12b) What a 'whole' kind of kindsOf() shows of the film's width - the render's branch for it. */
+export function wholeWOf(frame, kind, srcW, srcH) {
+  const i = kind === 'whole' ? 0 : +String(kind).slice(5);
+  const a = _wholes(frame)[i] != null ? _wholes(frame)[i] : (+(frame && frame.wide) || 0);
+  return wholeW({ wide: a }, srcW, srcH);
 }
 
 // ── From the faces to a path ────────────────────────────────────────────────
@@ -217,7 +245,7 @@ function _apart(a, b, width) {
  * w/h): a shot with no face shows a window of this shape from the middle over the blur, not the whole frame. Pure: the same
  * faces always give the same path.
  */
-export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0, active = null } = {}) {
+export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0, active = null, byFace = 0 } = {}) {
   // (V43) The most active: its own planner, on a film counted ten a second with its mouths, lips and things.
   if (active && faces && faces.active) return planActive(faces, { aspect, shift, ...active });
   const md = MODES.includes(mode) ? mode : 'face';
@@ -238,6 +266,19 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
   const seconds = +f.seconds || frames.length / fps;
   const width = windowW(src.w, src.h, aspect);
   rec.found = frames.length ? r2(frames.filter((x) => _dedupe(x).length).length / frames.length) : 0;
+  // (phase V69 P12b, (хп75)) 'whole' BY ITS SHOTS: the record's width where the largest face of a shot is wider than `byFace` of the
+  // frame (its middle half of the shot's frames), the whole frame by its full width where it is smaller or there is none.
+  if (md === 'whole' && +byFace > 0 && frames.length && width < 0.999) {
+    for (const s of _shots(f.cuts, seconds)) {
+      const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
+      const n = i1 - i0;
+      const t = _tracks(frames, i0, i1, fps).sort((a, b) => b.weight - a.weight)[0];
+      const ws = t ? t.pts.map((p) => p[3]).sort((a, b) => a - b) : [];
+      const big = t && t.pts.length >= Math.max(2, NO_FACE * n) && ws[Math.floor(ws.length / 2)] >= +byFace;
+      rec.shots.push({ t0: r3(s.t0), t1: r3(s.t1), kind: 'whole', ...(big ? {} : { wide: 0 }) });
+    }
+    return rec;
+  }
   if (md === 'center' || md === 'whole' || !frames.length || width >= 0.999) return rec;
   const lo = width / 2, hi = 1 - width / 2;
   const bandW = (bh) => Math.min(1, (bh * src.h * 2 * aspect) / src.w);
@@ -335,12 +376,13 @@ export function windowAt(frame, t, sw, sh, aspect) {
   const shift = clamp(+(frame && frame.shift) || 0, -1, 1) * room;
   const mid = (x) => clamp(x + shift, width / 2, 1 - width / 2);
   const mode = frame && frame.mode;
-  const whole = () => ({ kind: 'whole', w: wholeW(frame, sw, sh) });
-  if (mode === 'whole') return whole();
+  // (V69 P12b) A 'whole' shot shows its own width; a 'whole' record with shots (a lecture by its shots) reads them.
+  const whole = (s) => ({ kind: 'whole', w: wholeW(frame, sw, sh, s) });
+  if (mode === 'whole') return whole((frame.shots || []).length ? _shotAt(frame, t) : null);
   if (mode !== 'face' && mode !== 'bands') return { kind: 'face', x: mid(0.5) };
   const s = _shotAt(frame, t);
   if (!s) return { kind: 'face', x: mid(0.5) };
-  if (s.kind === 'whole') return whole();
+  if (s.kind === 'whole') return whole(s);
   if (s.kind === 'bands' && frame.band > 0) {
     const bh = clamp(+frame.band, 0.2, 1);
     const bw = Math.min(1, (bh * sh * 2 * (aspect > 0 ? aspect : 9 / 16)) / sw);
@@ -406,16 +448,19 @@ function _spansOf(frame, kind, keysOf, k) {
 /** Which kinds of shot the clip shows ('face', 'whole', 'bands') - the render builds a branch for each. */
 export function kindsOf(frame) {
   if (!isFramed(frame)) return [];
-  if (frame.mode === 'whole') return ['whole'];
+  if (frame.mode === 'whole' && !(frame.shots || []).length) return ['whole'];
   if (frame.mode === 'center' || !(frame.shots || []).length) return ['face'];
-  const ks = new Set(frame.shots.map((s) => s.kind));
+  // (V69 P12b) Each width of a 'whole' shot its own kind: 'whole' (the record's), 'whole1', ...
+  const ks = new Set(frame.shots.map((s) => (frame.mode === 'whole' ? _kindOfShot(frame, { ...s, kind: 'whole' }) : _kindOfShot(frame, s))));
   if (ks.has('bands') && !(frame.band > 0)) ks.delete('bands');
-  return ['face', 'whole', 'bands'].filter((k) => ks.has(k) || (k === 'face' && !ks.size));
+  const wholes = _wholes(frame).map((_, i) => (i ? 'whole' + i : 'whole'));
+  return ['face', ...wholes, 'bands'].filter((k) => ks.has(k) || (k === 'face' && !ks.size));
 }
 
 /** The FILE's stretches a kind of shot covers, [[a, b], ...] - the render's switch between its branches. */
 export function spansOfKind(frame, kind) {
-  return ((frame && frame.shots) || []).filter((s) => s.kind === kind).map((s) => [s.t0, s.t1]);
+  const of = (s) => _kindOfShot(frame, frame.mode === 'whole' ? { ...s, kind: 'whole' } : s);
+  return ((frame && frame.shots) || []).filter((s) => of(s) === kind).map((s) => [s.t0, s.t1]);
 }
 
 /** An ffmpeg expression in `T` (the file's time) for the face window's middle, a share of the width - shift and edges included. */
@@ -481,6 +526,8 @@ export function normalize(frame) {
     const kind = ['face', 'whole', 'bands'].includes(s.kind) ? s.kind : 'face';
     const shot = { t0: r3(+s.t0), t1: r3(+s.t1), kind };
     if (s.by === 'person' && kind !== 'whole') shot.by = 'person';
+    // (V69 P12b) A 'whole' shot's own width - 0 the whole frame.
+    if (kind === 'whole' && s.wide != null && Number.isFinite(+s.wide)) shot.wide = r3(clamp(+s.wide, 0, 4));
     if (kind === 'face') shot.keys = _keys(s.keys, 2);
     if (kind === 'bands') { shot.b1 = _keys(s.b1, 3); shot.b2 = _keys(s.b2, 3); }
     out.shots.push(shot);
