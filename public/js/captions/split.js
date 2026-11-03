@@ -19,6 +19,9 @@
    whenever a clip's Framing switch changes on the page (merge-v3/framing-ui.js) - in the same step as the frame; (phase V51)
    and whenever its fit, frame, crop, PiP or size is written (merge-v3/timeline-b.js SPLIT_KEYS) - in that same step.
 
+   (phase V69 P12b, the owner's (хп102)) CAMERA + GAME - a stream's webcam on top, a third of the frame, the game below (framing/path.js
+   'cam' shots): a page on it for more than half its time goes onto THAT seam, a third down the frame (`ty` CAM_TY - the mark too).
+
    PURE, and shared: the page imports it, the server require()s it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -30,6 +33,8 @@ import { active as cropActive } from '../framing/crop.js';
 export const MARK = 0.0001;
 /** A page goes to the middle when more than this share of its time lies on a split frame ((о6а) А). */
 export const SHARE = 0.5;
+/** (V69 P12b) The rule's place on the camera + game seam: a third down the frame (the middle less a sixth), marked as MARK is. */
+export const CAM_TY = MARK - 1 / 6;
 
 const _video = (tl) => ((tl && tl.tracks) || []).filter((t) => t && t.kind === 'video');
 // An insert on the frame (PiP): covers nothing. (phase V51) Nor does a cropped clip, placed or not: it is drawn as its piece -
@@ -38,25 +43,26 @@ const _video = (tl) => ((tl && tl.tracks) || []).filter((t) => t && t.kind === '
 const _placed = (c) => !!(c && ((c.tw != null && +c.tw > 0) || cropActive(c)));
 
 /** Is this clip one whose picture follows a framing record that can split it (as the render frames it: mv3b-render.js isFramedClip)? */
-function _canSplit(c, aspect) {
+function _canSplit(c, aspect, kind = 'bands') {
   if (!c || String(c.fit || 'fit') !== 'fill' || _placed(c) || !isFramed(c.frame)) return false;
   const f = c.frame;
-  if ((f.mode !== 'face' && f.mode !== 'bands') || !(+f.band > 0) || !f.src) return false;
-  return windowW(+f.src.w, +f.src.h, aspect) < 0.999 && (f.shots || []).some((s) => s && s.kind === 'bands');
+  if ((f.mode !== 'face' && f.mode !== 'bands' && f.mode !== 'cam') || !f.src) return false;
+  if (!(+(kind === 'cam' ? f.cam : f.band) > 0)) return false;
+  return windowW(+f.src.w, +f.src.h, aspect) < 0.999 && (f.shots || []).some((s) => s && s.kind === kind);
 }
 
 // A clip's stretches of the TIMELINE on which its picture is split, [[a, b], ...]: its 'bands' shots (FILE seconds) put
 // where the clip lies - its trim, speed and direction as the preview reads them (preview-b.js _srcTime). Before its first
 // shot and after its last the nearest shot holds, as windowAt holds it.
-function _clipSplit(c, aspect) {
-  if (!_canSplit(c, aspect)) return [];
+function _clipSplit(c, aspect, kind = 'bands') {
+  if (!_canSplit(c, aspect, kind)) return [];
   const shots = c.frame.shots;
   const start = +c.start || 0, dur = Math.max(0, +c.dur || 0), sp = +c.speed || 1, tin = +c.trimIn || 0;
   const rev = !!c.reversed;
   const toTl = (f) => (rev ? start + dur - (f - tin) / sp : start + (f - tin) / sp);
   const out = [];
   shots.forEach((s, k) => {
-    if (!s || s.kind !== 'bands') return;
+    if (!s || s.kind !== kind) return;
     const f0 = k === 0 ? -Infinity : +s.t0, f1 = k === shots.length - 1 ? Infinity : +s.t1;
     let a = toTl(f0), b = toTl(f1);
     if (a > b) [a, b] = [b, a];
@@ -91,14 +97,14 @@ const _minus = (xs, cut) => {
  * topmost video lane's clip there (the lanes are held top first) - an insert placed on the frame covers nothing; a lane's
  * clip that is not framed covers the lanes under it.
  */
-export function splitSpans(tl) {
+export function splitSpans(tl, kind = 'bands') {
   const fmt = String((tl && tl.format) || '9:16').split(':');
   const aspect = +fmt[0] > 0 && +fmt[1] > 0 ? +fmt[0] / +fmt[1] : 9 / 16;
   let cover = [];
   let split = [];
   for (const t of _video(tl)) {
     const clips = (t.clips || []).filter((c) => c && !_placed(c) && !c.halfer && (+c.dur || 0) > 0);
-    split = split.concat(_minus(_merge(clips.flatMap((c) => _clipSplit(c, aspect))), cover));
+    split = split.concat(_minus(_merge(clips.flatMap((c) => _clipSplit(c, aspect, kind))), cover));
     cover = _merge(cover.concat(clips.map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)])));
   }
   return _merge(split);
@@ -108,7 +114,7 @@ export function splitSpans(tl) {
 const _over = (spans, a, b) => spans.reduce((n, [x, y]) => n + Math.max(0, Math.min(b, y) - Math.max(a, x)), 0);
 
 /** Was this page put in the middle by the rule (its own style: the middle, offset by the MARK)? */
-export const isRulePlaced = (c) => !!(c && c.style && c.style.pos === 'center' && +c.style.ty === MARK);
+export const isRulePlaced = (c) => !!(c && c.style && c.style.pos === 'center' && (+c.style.ty === MARK || +c.style.ty === CAM_TY));
 
 /**
  * THE RULE, on a timeline in hand (changed in place): each page of the subtitle lane in the middle when more than SHARE of
@@ -117,6 +123,7 @@ export const isRulePlaced = (c) => !!(c && c.style && c.style.pos === 'center' &
  */
 export function placeBySplit(tl) {
   const spans = splitSpans(tl);
+  const cams = splitSpans(tl, 'cam');
   let moved = 0;
   for (const t of ((tl && tl.tracks) || [])) {
     if (!t || t.kind !== 'subs') continue;
@@ -125,9 +132,12 @@ export function placeBySplit(tl) {
       const mine = isRulePlaced(c);
       if (!mine && ownPlace(c)) continue;                    // the person's place
       const a = +c.start || 0, d = Math.max(0, +c.dur || 0);
-      const want = d > 0 && spans.length > 0 && _over(spans, a, a + d) > SHARE * d;
-      if (want && !mine) {
-        c.style = Object.assign({}, c.style || {}, { pos: 'center', tx: 0, ty: MARK });
+      // The middle of two bands, or (V69 P12b) the seam of camera + game - none when neither holds the page for more than SHARE.
+      const ty = d > 0 && spans.length > 0 && _over(spans, a, a + d) > SHARE * d ? MARK
+        : d > 0 && cams.length > 0 && _over(cams, a, a + d) > SHARE * d ? CAM_TY : null;
+      const want = ty != null;
+      if (want && (!mine || +c.style.ty !== ty)) {
+        c.style = Object.assign({}, c.style || {}, { pos: 'center', tx: 0, ty });
         moved++;
       } else if (!want && mine) {
         const st = Object.assign({}, c.style);

@@ -55,16 +55,24 @@
      frame, the record's square; small or none (a slide, a webcam's window), the full width. wholeW() of the shot, windowAt(),
      kindsOf() ('whole', 'whole1'... - one render branch for each width) and spansOfKind() read it - the preview, the render and
      the tile's picture by one rule.
+   - (phase V69 P12b, the owner's (хп82), (хп101)) CAMERA + GAME, a stream's: a shot whose small face stands still (the streamer's
+     webcam - cam.js camOf) is a 'cam' shot, `c` [x, y] the camera's middle: on top a band a third of the frame's height around it
+     (`cam` on the record - its height, a share of the film's, one for the clip), below - two thirds - the game from the film's
+     middle at its full height; both stand still. mode 'cam' (the inspector's "camera + game") looks for it in every shot, the rest
+     framed as 'face'; active.js planActive with `cam` (the stream kind) too. windowAt() answers { kind: 'cam', ... }, exprCam() the
+     render's; no punch-in lands on it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
+import { camOf, camW, gameW } from './cam.js';
 
 export const VERSION = 1;
 // (phase V69 P12, the owner's (хп36), (хп70)) "The whole frame over its blur" is a SQUARE from the film's middle: a wide film scaled up
 // until the square from its middle fills the frame's width, over its blur - `wide` 1 (w/h). The highlights kinds that show the whole
 // frame (lib/highlights-store.js FRAMES) and the inspector's "whole + blur" (merge-v3/framing-ui.js) put it on the record.
 export const SQUARE = 1;
-export const MODES = ['face', 'center', 'whole', 'bands'];
+// (phase V69 P12b) 'cam' - "camera + game": a stream's webcam on top, the game below (cam.js).
+export const MODES = ['face', 'center', 'whole', 'bands', 'cam'];
 
 const CUT_MERGE = 0.6;      // scdet's changes closer than this are one
 const HOLD = 2;             // a face lost for less than this keeps its place ((х7))
@@ -283,10 +291,14 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
   const lo = width / 2, hi = 1 - width / 2;
   const bandW = (bh) => Math.min(1, (bh * src.h * 2 * aspect) / src.w);
   const bandHs = [];
+  const camHs = [];
   for (const s of _shots(f.cuts, seconds)) {
     const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
     const shot = { t0: r3(s.t0), t1: r3(s.t1), kind: 'face' };
     const n = i1 - i0;
+    // (V69 P12b) "camera + game": the streamer's webcam in this shot - the two bands.
+    const cm = md === 'cam' ? camOf(frames, i0, i1) : null;
+    if (cm) { shot.kind = 'cam'; shot.c = [r3(cm.x), r3(cm.y)]; camHs.push(cm.band); rec.shots.push(shot); continue; }
     let tracks = _tracks(frames, i0, i1, fps).sort((a, b) => b.weight - a.weight);
     const seen = new Set();
     for (const t of tracks) for (const p of t.pts) seen.add(p[0]);
@@ -303,7 +315,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     // Two, each there for half the shot or more: the bands - asked for, or by themselves when they stand too far apart for
     // one window (V33.6, (х60а)).
     const both = tracks.length >= 2 && tracks[1].pts.length >= BOTH * n && tracks[0].pts.length >= BOTH * n;
-    const two = both && (md === 'bands' || (md === 'face' && autoBands !== false && _apart(tracks[0], tracks[1], width)));
+    const two = both && (md === 'bands' || ((md === 'face' || md === 'cam') && autoBands !== false && _apart(tracks[0], tracks[1], width)));
     if (two) {
       const pair = [tracks[0], tracks[1]].sort((a, b) => a.pts.reduce((s2, p) => s2 + p[1], 0) / a.pts.length - b.pts.reduce((s2, p) => s2 + p[1], 0) / b.pts.length);
       const tallH = Math.max(...pair.map((t) => { const hs = t.pts.map((p) => p[4]).sort((a, b) => a - b); return hs[Math.floor(hs.length / 2)]; }));
@@ -318,6 +330,8 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     shot.keys = _simplify(cam.map((x, k) => [tAt(k), x]), TOL).map(([t, x]) => [t, r3(x)]);
     rec.shots.push(shot);
   }
+  // (V69 P12b) The camera's band: one height for the clip, the middle of what its shots wanted.
+  if (camHs.length) rec.cam = r3(camHs.slice().sort((a, b) => a - b)[Math.floor(camHs.length / 2)]);
   // The bands share one height (the render's crop is one size for the clip): the middle of what the shots wanted.
   if (bandHs.length) {
     const bh = bandHs.slice().sort((a, b) => a - b)[Math.floor(bandHs.length / 2)];
@@ -379,10 +393,15 @@ export function windowAt(frame, t, sw, sh, aspect) {
   // (V69 P12b) A 'whole' shot shows its own width; a 'whole' record with shots (a lecture by its shots) reads them.
   const whole = (s) => ({ kind: 'whole', w: wholeW(frame, sw, sh, s) });
   if (mode === 'whole') return whole((frame.shots || []).length ? _shotAt(frame, t) : null);
-  if (mode !== 'face' && mode !== 'bands') return { kind: 'face', x: mid(0.5) };
+  if (mode !== 'face' && mode !== 'bands' && mode !== 'cam') return { kind: 'face', x: mid(0.5) };
   const s = _shotAt(frame, t);
   if (!s) return { kind: 'face', x: mid(0.5) };
   if (s.kind === 'whole') return whole(s);
+  // (V69 P12b) camera + game: the camera's window on top (cw x ch about cx, cy), the game's below (gw wide from the middle).
+  if (s.kind === 'cam' && frame.cam > 0 && Array.isArray(s.c)) {
+    const ch = clamp(+frame.cam, 0.1, 1), cw = camW(ch, sw, sh, aspect);
+    return { kind: 'cam', cw, ch, cx: clamp(+s.c[0], cw / 2, 1 - cw / 2), cy: clamp(+s.c[1], ch / 2, 1 - ch / 2), gw: gameW(sw, sh, aspect) };
+  }
   if (s.kind === 'bands' && frame.band > 0) {
     const bh = clamp(+frame.band, 0.2, 1);
     const bw = Math.min(1, (bh * sh * 2 * (aspect > 0 ? aspect : 9 / 16)) / sw);
@@ -453,8 +472,9 @@ export function kindsOf(frame) {
   // (V69 P12b) Each width of a 'whole' shot its own kind: 'whole' (the record's), 'whole1', ...
   const ks = new Set(frame.shots.map((s) => (frame.mode === 'whole' ? _kindOfShot(frame, { ...s, kind: 'whole' }) : _kindOfShot(frame, s))));
   if (ks.has('bands') && !(frame.band > 0)) ks.delete('bands');
+  if (ks.has('cam') && !(frame.cam > 0)) ks.delete('cam');
   const wholes = _wholes(frame).map((_, i) => (i ? 'whole' + i : 'whole'));
-  return ['face', ...wholes, 'bands'].filter((k) => ks.has(k) || (k === 'face' && !ks.size));
+  return ['face', ...wholes, 'bands', 'cam'].filter((k) => ks.has(k) || (k === 'face' && !ks.size));
 }
 
 /** The FILE's stretches a kind of shot covers, [[a, b], ...] - the render's switch between its branches. */
@@ -499,6 +519,20 @@ export function exprBand(frame, which, T, sw, sh, aspect) {
   };
 }
 
+/**
+ * (phase V69 P12b) camera + game for the render: the camera window's middle { x, y } as expressions in `T` (each 'cam' shot its own,
+ * standing still), its size cw x ch and the game window's width gw - shares of the film (edges included).
+ */
+export function exprCam(frame, T, sw, sh, aspect) {
+  const ch = clamp(+(frame && frame.cam) || 0.3, 0.1, 1), cw = camW(ch, sw, sh, aspect);
+  const keysOf = (s) => (Array.isArray(s.c) ? [[s.t0, +s.c[0], +s.c[1]]] : null);
+  return {
+    x: `clip(${_sumOf(_spansOf(frame, 'cam', keysOf, 1), T)},${n4(cw / 2)},${n4(1 - cw / 2)})`,
+    y: `clip(${_sumOf(_spansOf(frame, 'cam', keysOf, 2), T)},${n4(ch / 2)},${n4(1 - ch / 2)})`,
+    cw, ch, gw: gameW(sw, sh, aspect),
+  };
+}
+
 // ── Kept as it is given ─────────────────────────────────────────────────────
 const _keys = (ks, n) => (Array.isArray(ks) ? ks : []).filter((p) => Array.isArray(p) && p.length >= n && p.every(Number.isFinite))
   .slice(0, 4000).map((p) => p.slice(0, n).map(r3)).sort((a, b) => a[0] - b[0]);
@@ -509,6 +543,7 @@ export function normalize(frame) {
   const out = { v: VERSION, mode: frame.mode, shift: r3(clamp(+frame.shift || 0, -1, 1)),
     src: { w: Math.max(0, Math.round(+(frame.src && frame.src.w) || 0)), h: Math.max(0, Math.round(+(frame.src && frame.src.h) || 0)) }, shots: [] };
   if (+frame.band > 0) out.band = r3(clamp(+frame.band, 0.2, 1));
+  if (+frame.cam > 0) out.cam = r3(clamp(+frame.cam, 0.1, 1));
   if (Number.isFinite(+frame.found)) out.found = r2(clamp(+frame.found, 0, 1));
   if (+frame.wide > 0) out.wide = r3(clamp(+frame.wide, 0.5, 4));
   // (V43) The most active, its punch-ins and the clip's switch for them; (V69 P12b) planned by the speaker's rules.
@@ -523,13 +558,14 @@ export function normalize(frame) {
   if (frame.noZoom) out.noZoom = true;
   for (const s of (Array.isArray(frame.shots) ? frame.shots : []).slice(0, 2000)) {
     if (!s || !Number.isFinite(+s.t0) || !Number.isFinite(+s.t1) || !(+s.t1 > +s.t0)) continue;
-    const kind = ['face', 'whole', 'bands'].includes(s.kind) ? s.kind : 'face';
+    const kind = ['face', 'whole', 'bands', 'cam'].includes(s.kind) ? s.kind : 'face';
     const shot = { t0: r3(+s.t0), t1: r3(+s.t1), kind };
     if (s.by === 'person' && kind !== 'whole') shot.by = 'person';
     // (V69 P12b) A 'whole' shot's own width - 0 the whole frame.
     if (kind === 'whole' && s.wide != null && Number.isFinite(+s.wide)) shot.wide = r3(clamp(+s.wide, 0, 4));
     if (kind === 'face') shot.keys = _keys(s.keys, 2);
     if (kind === 'bands') { shot.b1 = _keys(s.b1, 3); shot.b2 = _keys(s.b2, 3); }
+    if (kind === 'cam') shot.c = Array.isArray(s.c) && s.c.length >= 2 ? [r3(clamp(+s.c[0] || 0.5, 0, 1)), r3(clamp(+s.c[1] || 0.5, 0, 1))] : [0.5, 0.5];
     out.shots.push(shot);
   }
   out.shots.sort((a, b) => a.t0 - b.t0);

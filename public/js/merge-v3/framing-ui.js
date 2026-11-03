@@ -16,8 +16,10 @@ import * as Store from './store.js';
 import { SQUARE, plan, normalize } from '../framing/path.js';
 import { placeBySplit } from '../captions/split.js';
 
+// (phase V69 P12b, (хп82)) 'camera + game' - a stream's webcam on top, the game below (public/js/framing/cam.js); on any clip, so a
+// stream's frame can be seen while the stream kind is in development.
 export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['center', 'middle'],
-                         ['whole', 'whole + blur'], ['bands', 'two faces']];
+                         ['whole', 'whole + blur'], ['bands', 'two faces'], ['cam', 'camera + game']];
 
 // (phase V43, (ё13), (ё7а)) A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
 // marked `active`, planned on the server from the counted source, the words and the key moments. The switch shows it as its
@@ -71,13 +73,17 @@ export function noteOf(c) {
     const z = (f.zooms || []).length;
     // (V69 P12b) The speaker's: its shots with no face shown as the square.
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
+    const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
     return `${f.speaker ? 'the speaker' : 'the most active'} · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
-      + (none ? ` · ${none} with no face as a square` : '')
+      + (none ? ` · ${none} with no face as a square` : '') + (cams ? ` · ${cams} camera + game` : '')
       + (z ? ` · ${z} punch-in${z === 1 ? '' : 's'}${f.noZoom ? ' (off)' : ''}` : '');
   }
-  if (f.mode === 'face' || f.mode === 'bands') {
+  if (f.mode === 'face' || f.mode === 'bands' || f.mode === 'cam') {
     const shots = (f.shots || []).length;
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
+    // (V69 P12b) camera + game: how many shots show the streamer's webcam.
+    const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
+    if (f.mode === 'cam') return `camera + game in ${cams} of ${shots} shot${shots === 1 ? '' : 's'}` + (none ? ` · ${none} with no face as a square` : '');
     return `a face in ${Math.round((+f.found || 0) * 100)}% of the frames · ${shots} shot${shots === 1 ? '' : 's'}`
       + (none ? ` · ${none} with no face shown whole` : '');
   }

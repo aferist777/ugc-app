@@ -31,7 +31,11 @@
    host off the screen - the window goes to the face that changes most in that stretch (it listens and reacts), the largest face
    when none does; a shot with a face in fewer than NO_FACE of its frames is a 'whole' shot - the square from the middle over its
    blur (`wide`, path.js SQUARE) - and no punch-in lands on it. The record says `speaker: 1` (the inspector's "the speaker").
+   (phase V69 P12b, (хп82)) THE STREAM: `cam` too - a shot with the streamer's webcam (a small face standing still - cam.js camOf) is
+   a 'cam' shot, camera on top and game below, standing still, never punched in; a full-screen camera follows the speaker as above.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import { camOf } from './cam.js';
 
 const CUT_MERGE = 0.6;      // scdet's changes closer than this are one
 const MIN_FACE = 0.015;     // a box narrower than this share of the width is noise
@@ -286,7 +290,7 @@ function listenerOf(tracks, a, b) {
  * (phase V69 P12b) `speaker` - podcast's and true crime's rules (above): no action, the listener while a voice off the screen
  * speaks, a shot with no face the square (`wide`, w/h - path.js SQUARE) with no punch-in on it.
  */
-export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = [], zoom = 0, speaker = false, wide = 0 } = {}) {
+export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = [], zoom = 0, speaker = false, wide = 0, cam: withCam = false } = {}) {
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: 1, mode: 'face', active: 1, shift: r3(cl(+shift || 0, -1, 1)), src, shots: [] };
   if (speaker) rec.speaker = 1;
@@ -302,10 +306,14 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
   const stretches = stretchesOf(speech);
   const phrases = (Array.isArray(keys) ? keys : []).map((k) => ({ t0: +k.t0, t1: +k.t1 })).filter((k) => k.t1 > k.t0).sort((a, b) => a.t0 - b.t0);
   const bandHs = [];
+  const camHs = [];
   const shotTracks = new Map();
   for (const s of shotsOf(f.cuts, seconds)) {
     const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
     const n = i1 - i0;
+    // (P12b, (хп82)) The stream: the streamer's webcam in the shot - camera on top, the game below.
+    const cm = withCam ? camOf(frames, i0, i1) : null;
+    if (cm) { rec.shots.push({ t0: r3(s.t0), t1: r3(s.t1), kind: 'cam', c: [r3(cm.x), r3(cm.y)] }); camHs.push(cm.band); continue; }
     // (P12b) The speaker's kinds: a shot with no face is the square over its blur.
     if (speaker) {
       let seen = 0;
@@ -395,6 +403,7 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
     const shot = { t0: r3(s.t0), t1: r3(s.t1), kind: 'face', keys: simplify(cam.map((x, k) => [r3((i0 + k) / fps), x]), TOL).map(([t, x]) => [t, r3(x)]) };
     rec.shots.push(shot);
   }
+  if (camHs.length) rec.cam = r3(median(camHs));
   if (bandHs.length) {
     const bh = median(bandHs);
     rec.band = r3(bh);
@@ -418,7 +427,7 @@ export function planActive(f, { aspect = 9 / 16, shift = 0, speech = [], keys = 
     for (const k of phrases) {
       const shot = rec.shots.find((x) => k.t0 >= x.t0 && k.t0 < x.t1);
       // None on two bands, and (P12b) none on the square of a shot with no face.
-      if (!shot || shot.kind === 'bands' || shot.kind === 'whole') continue;
+      if (!shot || shot.kind === 'bands' || shot.kind === 'whole' || shot.kind === 'cam') continue;
       if (zooms.length && k.t0 - zooms[zooms.length - 1].t1 - ZOOM_OUT < GAP) continue;
       if (zooms.filter((o) => o.t0 > k.t0 - 60).length >= PER_MIN) continue;
       // (P12b) The speaker's kinds hold a punch-in at least HOLD_MIN - an interrogation's key line is often one short word.

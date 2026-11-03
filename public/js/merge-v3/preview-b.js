@@ -407,6 +407,15 @@ function _place(sw, sh, c, tFile, raw) {
         { sx: (sw - fw) / 2, sy: 0, sw: fw, sh, dx: 0, dy: (H - fh) / 2, dw: W, dh: fh },
       ] };
     }
+    // (phase V69 P12b, (хп82)) camera + game: the camera's window on top, a third of the frame; the game's from the middle below.
+    if (win.kind === 'cam') {
+      const top = Math.round(H / 3);
+      const cw = win.cw * sw, ch = win.ch * sh, gw = win.gw * sw;
+      return { ...base, sx: 0, sy: 0, sw, sh, parts: [
+        { sx: Math.max(0, Math.min(sw - cw, win.cx * sw - cw / 2)), sy: Math.max(0, Math.min(sh - ch, win.cy * sh - ch / 2)), sw: cw, sh: ch, dx: 0, dy: 0, dw: W, dh: top },
+        { sx: (sw - gw) / 2, sy: 0, sw: gw, sh, dx: 0, dy: top, dw: W, dh: H - top },
+      ] };
+    }
     if (win.kind === 'bands') {
       const half = Math.round(H / 2);
       const bw = win.bw * sw, bh = win.bh * sh;
