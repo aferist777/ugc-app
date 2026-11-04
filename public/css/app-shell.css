@@ -330,35 +330,40 @@ body{
 *::-webkit-scrollbar-corner{background:transparent}
 
 /* ── The name box (js/name-box.js) ─────────────────────────────────────────────
-   A name asked for in the page, because window.prompt() does not exist in the app's window.
-   Above the viewers and windows it can be opened over (they sit at 9000-9470). */
-.nm-box{
+   A name asked for in the page, because window.prompt() does not exist in the app's window. Since phase V73 block 2 the
+   shared question (`.u-ask.is-float`, over the viewers and windows it can be opened over - they sit at 9000-9470) with the
+   shared field and buttons, Cancel left (б2-8). The 3D Studio's page keeps its old look - the rules scoped to it below. */
+.nm-err{ margin-top:var(--sp-1); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--danger) }
+.nm-err:empty{ display:none }
+:root:has(link[href="css/studio3d.css"]) .nm-box{
   position:fixed; z-index:9700; width:240px; padding:10px;
   display:flex; flex-direction:column; gap:6px;
   background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   box-shadow:var(--shadow);
 }
-.nm-t{ font:700 10px/1 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--muted) }
-.nm-in{
+:root:has(link[href="css/studio3d.css"]) .nm-t{ font:700 10px/1 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--muted) }
+:root:has(link[href="css/studio3d.css"]) .nm-in{
   height:28px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 12px/1 var(--font);
 }
-.nm-in:focus{ outline:none; border-color:var(--focus) }
-.nm-err{ font:600 10px/1.3 var(--font); color:var(--danger) }
-.nm-err:empty{ display:none }
-.nm-r{ display:flex; justify-content:flex-end; gap:6px }
-.nm-b{
+:root:has(link[href="css/studio3d.css"]) .nm-in:focus{ outline:none; border-color:var(--focus) }
+:root:has(link[href="css/studio3d.css"]) .nm-err{ margin-top:0; font:600 10px/1.3 var(--font) }
+:root:has(link[href="css/studio3d.css"]) .nm-r{ display:flex; justify-content:flex-end; gap:6px }
+:root:has(link[href="css/studio3d.css"]) .nm-b{
   padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:transparent; color:var(--ink); font:600 11px/1 var(--font); cursor:pointer;
 }
-.nm-b.is-ok{ border-color:var(--main); background:var(--main); color:var(--on-main) }
-.nm-b[disabled]{ opacity:.55; cursor:default }
-/* The draft's question (js/draft-ask.js, phase V20) - the name box's look, in the middle of the window over a dimmed page. */
+:root:has(link[href="css/studio3d.css"]) .nm-b.is-ok{ border-color:var(--main); background:var(--main); color:var(--on-main) }
+:root:has(link[href="css/studio3d.css"]) .nm-b[disabled]{ opacity:.55; cursor:default }
+/* A question in the middle of the window over a dimmed page (the update, the speech model) - the name box's look. */
 .dr-back{ position:fixed; inset:0; z-index:9690; background:var(--ov-dim, oklch(0 0 0 / .45));
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px)) }
-.nm-box.dr-box{ left:50%; top:32%; transform:translate(-50%, -50%); width:min(380px, calc(100vw - 32px)); gap:8px; padding:14px }
-.dr-holds{ font:500 11.5px/1.45 var(--font); color:var(--ink) }
-.dr-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
+.nm-box.dr-box{ left:50%; top:32%; translate:-50% -50%; width:min(380px, calc(100vw - 32px)) }
+.dr-holds{ margin-top:var(--sp-2); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
+.dr-note{ margin-top:var(--sp-2); color:var(--faint); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font) }
+:root:has(link[href="css/studio3d.css"]) .nm-box.dr-box{ gap:8px; padding:14px }
+:root:has(link[href="css/studio3d.css"]) .dr-holds{ margin-top:0; font:500 11.5px/1.45 var(--font) }
+:root:has(link[href="css/studio3d.css"]) .dr-note{ margin-top:0; color:var(--muted); font:500 10px/1.4 var(--font) }
 
 /* ── Menus ────────────────────────────────────────────────────────────────────
    A right-click menu or a "+" menu, on the layer stack (js/layers.js). Merge's and the Library's

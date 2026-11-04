@@ -322,37 +322,11 @@ body.mv3-noproject .mv3-tl::after{
   object-fit:contain; border-radius:4px;
 }
 
-/* The question a Main clip's X opens. Fixed, because it is anchored to the button in
-   viewport coordinates from JS - the lane it belongs to scrolls and would clip it. */
-.mv3-ask{
-  position:fixed; z-index:9460;     /* (V64) over a chat's window (8900) - the chats ask here too */
-  display:flex; align-items:center; gap:6px;
-  padding:5px 7px; border-radius:6px;
-  border:1px solid var(--border); background:var(--surface);
-  box-shadow:0 6px 18px oklch(0 0 0 / .3);
-}
-.mv3-ask-t{font:600 11px/1 var(--font); color:var(--ink); white-space:nowrap}
-.mv3-ask-b{
-  padding:3px 9px; border-radius:4px; cursor:pointer;
-  border:1px solid var(--border); background:var(--surface-2);
-  font:600 11px/1 var(--font); color:var(--ink);
-}
-.mv3-ask-b:hover{border-color:var(--muted)}
-/* Yes is the destructive one and is coloured as such - the safe answer must not be the
-   one that looks like the button you are meant to press. */
-.mv3-ask-b.is-yes{border-color:var(--danger-fill); background:var(--danger-fill); color:var(--on-danger)}
-.mv3-ask-b.is-yes:hover{filter:brightness(1.1)}
-/* With a consequence to state - "its sound goes with it" - the strip becomes a small block:
-   the question, what else it takes, then the two answers. Without one the wrapper collapses
-   and the layout is the strip above, unchanged. */
-.mv3-ask-r{display:contents}
-.mv3-ask.has-sub{display:block; width:220px}
-.mv3-ask.has-sub .mv3-ask-t{display:block; white-space:normal; margin-bottom:3px}
-.mv3-ask-s{display:block; font:400 11px/1.4 var(--font); color:var(--muted); margin-bottom:8px}
-/* (phase V23) A list, one thing per line - the window grows to hold it. */
-.mv3-ask.has-sub:has(.mv3-ask-s.is-lines){width:auto; min-width:220px; max-width:360px}
-.mv3-ask-s.is-lines{white-space:pre-line; color:var(--ink)}
-.mv3-ask.has-sub .mv3-ask-r{display:flex; gap:6px; justify-content:flex-end}
+/* The question a clip's X opens (js/merge-v3/ask.js) - since phase V73 block 2 the shared part `.u-ask.is-float`
+   (css/app-shell.css): fixed, anchored to the button in viewport coordinates from JS, over the chats' windows. */
+/* (phase V23) A list, one thing per line - the question grows to hold it. */
+.mv3-ask:has(.mv3-ask-s.is-lines){width:auto; min-width:288px; max-width:360px}
+.mv3-ask-s.is-lines{color:var(--ink)}
 
 /* ── Drop target on a lane ─────────────────────────────────────────────────── */
 
@@ -1121,12 +1095,8 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qgrp:last-child .mv3-qgrp-kids, .mv3-qgrp:last-child > .mv3-qgrp-row:last-child{border-bottom:0}
 /* The clear question sits INSIDE the panel rather than over it: it is about this list, and a
    dialogue that covered the list would hide the very thing being asked about. */
-.mv3-qask{
-  margin:6px; padding:9px 10px;
-  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
-}
-.mv3-qask-t{font:11px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
-.mv3-qask-r{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
+.mv3-qask{ width:auto; margin:6px }   /* the shared question (.u-ask), in the list */
+.mv3-qask-r{ flex-wrap:wrap }
 
 /* ── The render window (blank projects) ─────────────────────────────────────── */
 .mv3-rhead{font:700 11px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px}

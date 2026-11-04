@@ -522,7 +522,7 @@ function _wireDelete() {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
         'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, in Uncategorized.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
-          { label: 'And its files', kind: 'yes', on: () => _askHeads(b, key) },
+          { label: 'And its files', kind: 'danger', on: () => _askHeads(b, key) },
           { label: 'Cancel' },
         ], { stay: true });   // the bar does not scroll; a project still opening scrolls the page under it
       return;
@@ -558,7 +558,7 @@ async function _askHeads(anchor, key) {
     'Every take made in this project. Kept, they stay in the Library - Generated · Talking heads · «' + (Store.title() || 'this project')
       + '» - until you delete them there; a timeline of another project that uses one keeps it.', [
       { label: 'Keep in the Library', kind: 'yes', on: () => _delete(key, true, 'keep') },
-      { label: 'Delete them too', on: () => _delete(key, true, 'delete') },
+      { label: 'Delete them too', kind: 'danger', on: () => _delete(key, true, 'delete') },
       { label: 'Cancel' },
     ], { stay: true });
 }

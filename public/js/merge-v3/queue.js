@@ -191,18 +191,18 @@ function _askClear(head, waiting, onDone) {
   if (_asking) return;
   _asking = true;
   const box = document.createElement('div');
-  box.className = 'mv3-qask';
-  const t = document.createElement('div');
+  box.className = 'mv3-qask u-ask';                // (phase V73 block 2) the shared question, in the list
+  const t = document.createElement('b');
   t.className = 'mv3-qask-t';
   t.textContent = waiting + (waiting === 1 ? ' project has' : ' projects have') + ' not been rendered yet.';
   box.appendChild(t);
 
   const row = document.createElement('div');
-  row.className = 'mv3-qask-r';
+  row.className = 'mv3-qask-r u-ask-r';
   const mk = (label, cls, mode) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-c-btn u-btn is-s' + (cls ? ' ' + cls : '') + (cls === 'danger' ? ' is-danger' : '');
+    b.className = 'mv3-c-btn u-btn is-s' + (cls ? ' ' + cls : '') + (cls === 'danger' ? ' is-danger is-armed' : '');
     b.textContent = label;
     b.addEventListener('click', async (e) => {
       e.stopPropagation();

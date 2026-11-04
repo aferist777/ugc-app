@@ -153,8 +153,8 @@ export async function soundMenu(it, ev, opts) {
 
 /** What a sound is: its length, where it lies, where it came from, its licence, what it was asked, its tags. */
 export function about(it, ev) {
-  const pop = el('div', 'mt-pop snd-about');
-  pop.appendChild(el('div', 'mt-pop-head', it.name));
+  const pop = el('div', 'mt-pop snd-about u-ask is-float');
+  pop.appendChild(el('b', 'mt-pop-head', it.name));
   const row = (k, v, href) => {
     if (!v) return;
     const r = el('div', 'snd-about-row');
@@ -179,8 +179,8 @@ export function about(it, ev) {
   row('style', i.style || m.style);
   if (m.original) row('cut from', (m.original.name || '') + ' · ' + m.original.in + '–' + m.original.out + ' s');
   if (Array.isArray(m.tags) && m.tags.length) row('tags', m.tags.join(', '));
-  const btns = el('div', 'mt-pop-btns');
-  const ok = el('button', 'mt-pop-btn', 'Close');
+  const btns = el('div', 'mt-pop-btns u-ask-r');
+  const ok = el('button', 'mt-pop-btn u-btn is-s', 'Close');
   ok.type = 'button';
   btns.appendChild(ok);
   pop.appendChild(btns);

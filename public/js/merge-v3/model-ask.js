@@ -36,17 +36,17 @@ export async function askModelOnce() {
   const mb = Math.round((+st.model.bytes || 574041195) / 1e6);
 
   const back = _el('div', 'dr-back');
-  const box = _el('div', 'nm-box dr-box');
+  const box = _el('div', 'nm-box dr-box u-ask is-float');   // (phase V73 block 2) the shared question, in the middle
   box.setAttribute('role', 'dialog');
-  box.appendChild(_el('div', 'nm-t', 'Subtitles on this computer'));
+  box.appendChild(_el('b', 'nm-t', 'Subtitles on this computer'));
   box.appendChild(_el('div', 'dr-holds', 'Speech can be heard right here, with no key and no cost - the captions of a talking head '
     + 'are then laid by themselves even without a Groq key. Download the speech model now? ' + mb + ' MB, once.'));
   const err = _el('div', 'nm-err');
-  const row = _el('div', 'nm-r');
-  const yes = _el('button', 'nm-b is-ok', 'Download');
-  const no = _el('button', 'nm-b', 'Not now');
+  const row = _el('div', 'nm-r u-ask-r');
+  const yes = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Download');
+  const no = _el('button', 'nm-b u-btn is-s', 'Not now');
   for (const b of [yes, no]) b.type = 'button';
-  row.append(yes, no);
+  row.append(no, yes);                                  // "Not now" left, the verb right (б2-8)
   box.append(err, row, _el('div', 'dr-note', 'From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> '
     + 'This computer offer it later.'));
   document.body.append(back, box);

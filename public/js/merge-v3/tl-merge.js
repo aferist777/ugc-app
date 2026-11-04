@@ -115,7 +115,7 @@ export function offerMerge() {
   const anchor = document.querySelector(`.mv3b-clip[data-clip="${CSS.escape(last.id)}"]`);
   if (!anchor) return;
   const box = document.createElement('div');
-  box.className = 'mv3-mergeask';
+  box.className = 'mv3-mergeask u-ask';              // (phase V73 block 2) the shared question's look, a strip of its own
   box.innerHTML = '<span class="mv3-mergeask-t"></span><button type="button" class="mv3-mergeask-go u-btn is-s is-main">merge</button>'
     + '<button type="button" class="mv3-mergeask-x u-btn is-s is-icon is-quiet u-x" title="Close (Esc)"></button>';
   box.querySelector('.mv3-mergeask-t').textContent = 'Merge ' + m.n + ' clips into one?';

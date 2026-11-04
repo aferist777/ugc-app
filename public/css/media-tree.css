@@ -71,12 +71,8 @@
 .mv3-plus-menu.mt-menu{min-width:190px; z-index:9450}
 
 /* Deleting a category: where its media go, and the projects that use them. */
-.mt-pop{
-  position:fixed; z-index:9450; width:300px; padding:10px 11px; box-sizing:border-box;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
-  font:400 12px/1.4 var(--font); color:var(--ink);
-}
-.mt-pop-head{font-weight:700; margin-bottom:7px; overflow-wrap:anywhere}
+.mt-pop{ width:300px; }
+.mt-pop-head{ margin-bottom:6px; overflow-wrap:anywhere }
 .mt-pop-row{display:flex; gap:7px; align-items:flex-start; cursor:pointer}
 .mt-pop-row input{margin:2px 0 0}
 .mt-pop-note{margin-top:6px; color:var(--muted); font-size:11px}
@@ -84,14 +80,6 @@
 .mt-pop-used[hidden]{display:none}
 .mt-pop-used-head{color:var(--ink); margin-bottom:3px}
 .mt-pop-used-row{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mt-pop-btns{display:flex; justify-content:flex-end; gap:6px; margin-top:9px}
-.mt-pop-btn{
-  padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--ink); font:600 11px/1 var(--font); cursor:pointer;
-}
-.mt-pop-btn:hover{border-color:var(--sel-line)}
-.mt-pop-btn.is-danger{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
-.mt-pop-btn[disabled]{opacity:.5; cursor:default}
 
 /* (phase TG, the owner 2026-10-21) A node holding something new since it was last opened: its name and count green, and a
    dot before the count. Opening it sees it (js/media-tree.js). */

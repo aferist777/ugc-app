@@ -1005,7 +1005,7 @@ export function createTree(host, o) {
   function _askDelete(n, anchor) {
     _closePop();
     _closeMenu();
-    const box = _el('div', 'mt-pop');
+    const box = _el('div', 'mt-pop u-ask is-float');      // (phase V73 block 2) the shared question
     const count = n.count || 0;
     const noun = NOUN[n.kind] || 'item';
     // Its folders, all the way down.
@@ -1017,7 +1017,7 @@ export function createTree(host, o) {
     const up = byKey.get(parentOf.get(n.key));
     const home = up && up.cat ? '"' + up.label + '"'
       : n.kind === 'references' ? 'their sources\' folders' : n.kind === 'music' ? 'Music' : homeName(n.kind);
-    box.appendChild(_el('div', 'mt-pop-head', 'Delete "' + n.label + '"?'));
+    box.appendChild(_el('b', 'mt-pop-head', 'Delete "' + n.label + '"?'));
     if (count || folders) box.appendChild(_el('div', 'mt-pop-note', 'Inside: ' + [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' and ') + '.'));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
@@ -1030,10 +1030,10 @@ export function createTree(host, o) {
     box.appendChild(note);
     const used = _el('div', 'mt-pop-used');
     box.appendChild(used);
-    const btns = _el('div', 'mt-pop-btns');
-    const cancel = _el('button', 'mt-pop-btn', 'Cancel');
+    const btns = _el('div', 'mt-pop-btns u-ask-r');
+    const cancel = _el('button', 'mt-pop-btn u-btn is-s', 'Cancel');
     cancel.type = 'button';
-    const go = _el('button', 'mt-pop-btn', '');
+    const go = _el('button', 'mt-pop-btn u-btn is-s', '');
     go.type = 'button';
     btns.appendChild(cancel);
     btns.appendChild(go);
@@ -1046,7 +1046,8 @@ export function createTree(host, o) {
         : count ? 'Its ' + _plural(count, noun) + (folders ? ' - in it and in every folder under it -' : '') + ' will be deleted from the disk. This cannot be undone.'
         : 'Its folders go with it.';
       go.textContent = keep ? 'Delete folder' : count ? 'Delete folder and ' + _plural(count, noun) : 'Delete folder and its folders';
-      go.classList.toggle('is-danger', !keep);
+      go.classList.toggle('is-danger', !keep);           // red only when files go (б2-5)
+      go.classList.toggle('is-armed', !keep);
       used.textContent = '';
       used.hidden = keep || !projects || !projects.length;
       if (!used.hidden) {
