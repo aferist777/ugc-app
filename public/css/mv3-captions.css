@@ -112,10 +112,9 @@
    at the playhead underlined while the preview plays; one after the line's end pale. */
 .mv3-wd{ margin:6px 0 2px }
 .mv3-wd-list{
-  display:flex; flex-wrap:wrap; gap:4px; padding:5px; outline:none;
+  display:flex; flex-wrap:wrap; gap:4px; padding:5px;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface);
 }
-.mv3-wd-list:focus-visible, .mv3-wd-list:focus{ border-color:var(--focus) }
 .mv3-wd-chip{
   position:relative; display:inline-flex; align-items:baseline; gap:4px; padding:3px 7px 3px 7px; cursor:pointer;
   border:1px solid var(--border); border-radius:11px; background:var(--bg); user-select:none;

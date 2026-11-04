@@ -118,8 +118,6 @@
 .vc-box img, .vc-vid{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
 .vc-tile:hover .vc-box{border-color:var(--muted)}
 .vc-tile.is-picked .vc-box{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}
-.vc-tile:focus-visible{outline:none}
-.vc-tile:focus-visible .vc-box{box-shadow:0 0 0 2px var(--focus)}
 .vc-box.is-text{padding:24px 9px 9px}
 .vc-lead{
   display:-webkit-box; -webkit-line-clamp:11; -webkit-box-orient:vertical; overflow:hidden;
@@ -232,7 +230,6 @@
   display:block; width:100%; margin:5px 0 2px; padding:3px 6px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--bg); color:var(--ink); font:700 14px/1.3 var(--font);
 }
-.vc-title-in:focus{outline:none; border-color:var(--focus)}
 .vc-hint-line{margin-top:4px; font:500 10px/1.4 var(--font); color:var(--gold)}
 .vc-preset{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding:8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
 .vc-preset-row{display:flex; gap:6px; flex-wrap:wrap}

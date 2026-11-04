@@ -427,7 +427,6 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 /* The selected scenario (phase D5): the border and a ring inside it, which on a row with no picture nothing covers -
    since phase V73 the selected look, not gold. */
 .lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* (б1-17) a step and a light line */
-.lib-srow:focus-visible{ outline:none; border-color:var(--focus); box-shadow:0 0 0 2px var(--sel-bg); }
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .lib-srow-t{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
 /* One line, clipped: the tail is for recognising a scenario, and a wrapped tail turns a list
@@ -582,7 +581,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   padding:3px 5px; margin:-3px 0 -3px -5px;
 }
 .mk-title-in:hover{ border-color:var(--border); }
-.mk-title-in:focus{ outline:none; background:var(--bg); border-color:var(--focus); }
+.mk-title-in:focus{ background:var(--bg); border-color:var(--border); }
 .mk-body{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 12px 16px;
   /* (V38.6) Room for the scrollbar kept, so a form that grows past the window does not shift sideways. */
@@ -710,7 +709,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:transparent; border:1px solid transparent; border-radius:var(--r-xs); padding:2px 5px;
 }
 .mk-hook-t:hover{ border-color:var(--border); }
-.mk-hook-t:focus{ outline:none; border-color:var(--focus); background:var(--bg); }
+.mk-hook-t:focus{ border-color:var(--border); background:var(--bg); }
 .mk-hook-k{
   flex:0 0 auto; padding:1px 6px; border-radius:var(--pill);
   background:var(--sel-bg); color:var(--ink);
@@ -806,11 +805,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 
 /* (phase V27) "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
 .lk-panel{ width:min(520px, 96vw); }
-.lk-ta{
-  font:12px/1.5 var(--font); color:var(--ink); resize:vertical; min-height:96px;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
-}
-.lk-ta:focus{ outline:none; border-color:var(--focus); }
+.lk-ta{ resize:vertical; min-height:96px; }
 .lk-row{ display:flex; align-items:center; gap:8px; }
 .lk-row .sp{ flex:1; }
 .lk-said{ font-size:11px; color:var(--danger); }
@@ -845,7 +840,6 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .nr-row:hover{ border-color:var(--sel-line); }
 /* The selected narrator: the selected look, as a selected scenario - a step and a light line (phase V73, (б1-21)). */
 .nr-row.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }
-.nr-row:focus-visible{ outline:none; border-color:var(--focus); }
 .nr-row-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .nr-row-t{ font-size:12px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
 .nr-row-s{ font-size:10px; color:var(--muted); }
@@ -905,7 +899,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   text-transform:uppercase; color:var(--success); background:var(--success-soft);
 }
 /* Text corrected in place: a quiet frame under the cursor, the hint while empty. */
-.nr-ed{ border-radius:3px; padding:1px 3px; margin:-1px -3px; cursor:text; outline:none; overflow-wrap:anywhere; }
+.nr-ed{ border-radius:3px; padding:1px 3px; margin:-1px -3px; cursor:text; overflow-wrap:anywhere; }
 .nr-ed:hover{ background:var(--surface-2); }
 .nr-ed[contenteditable="plaintext-only"]{ background:var(--bg); box-shadow:0 0 0 1px var(--sel-line); }
 .nr-ed.saving{ opacity:.55; }
@@ -937,13 +931,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   display:flex; flex-wrap:wrap; gap:4px; align-items:center;
   background:var(--bg); border-bottom:1px solid var(--border-soft);
 }
-.lib-sc-filter{
-  height:24px; max-width:150px; padding:0 4px;
-  font:600 10.5px var(--font); color:var(--muted);
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--pill);
-}
-.lib-sc-filter.is-on{ color:var(--ink); border-color:var(--sel-line); background:var(--sel-bg); }
-.lib-sc-filter:focus{ outline:none; border-color:var(--focus); }
+.lib-sc-filter{ max-width:150px; }
+.lib-sc-filter.is-on{ color:var(--ink); border-color:var(--sel-line); background-color:var(--sel-bg); }
 
 /* A scenario kept in the list though the filters would hide it (it was opened on purpose). */
 .lib-srow.is-outside:not(.cur){ border-style:dashed; opacity:.8; }

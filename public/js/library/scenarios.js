@@ -107,7 +107,7 @@ function _filterRow() {
     const counts = new Map();
     let none = 0;
     for (const it of _items) { const v = _val(it, f.key); if (v) counts.set(v, (counts.get(v) || 0) + 1); else none++; }
-    const sel = _el('select', 'lib-sc-filter' + (_filters[f.key] ? ' is-on' : ''));
+    const sel = _el('select', 'lib-sc-filter u-in is-s' + (_filters[f.key] ? ' is-on' : ''));
     sel.title = 'Show only the scenarios with this ' + f.label;
     const add = (value, text) => { const o = _el('option', null, text); o.value = value; sel.appendChild(o); };
     add('', 'any ' + f.label);

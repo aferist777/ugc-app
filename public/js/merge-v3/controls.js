@@ -164,7 +164,7 @@ export function number({ value, min, max, step, suffix, onChange }) {
   if (max != null) inp.max = String(max);
   inp.step = String(step == null ? 1 : step);
   inp.value = String(value);
-  inp.className = 'mv3-c-inp';
+  inp.className = 'mv3-c-inp u-in is-s';
   inp.addEventListener('change', () => {
     let v = parseFloat(inp.value);
     if (isNaN(v)) { inp.value = String(value); return; }

@@ -276,7 +276,7 @@
   border:1px solid var(--border); border-radius:50%;
   font:700 9px var(--font); color:var(--muted); cursor:help; user-select:none;
 }
-.cv2-help:hover, .cv2-help:focus{ color:var(--ink); border-color:var(--focus); outline:none; }
+.cv2-help:hover{ color:var(--ink); border-color:var(--focus); }
 .cv2-tip{
   position:absolute; left:50%; bottom:calc(100% + 7px); transform:translateX(-50%);
   width:210px; padding:6px 8px; z-index:9100;

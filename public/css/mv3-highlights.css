@@ -77,7 +77,6 @@
   background:var(--bg); font:700 12.5px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
 }
 .mv3-hl-card-name:hover{border-color:var(--muted)}
-.mv3-hl-card-name:focus{outline:none; border-color:var(--focus)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
   background:linear-gradient(to top, var(--scrim-strong), oklch(0 0 0 / 0));

@@ -776,7 +776,6 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden; background:var(--surface-2);
 }
 .pk-hit:hover .pk-box, .pk-hit:focus-visible .pk-box{ border-color:var(--muted) }
-.pk-hit:focus-visible{ outline:none }
 .pk-box img, .pk-vid{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block }
 .pk-box.is-blank{
   background:repeating-linear-gradient(45deg,
