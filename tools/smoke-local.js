@@ -64,7 +64,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // Admin -> Thanks: the repositories the app is built on
                  '/js/admin-thanks.js',
                  // the interface showcase /lab/ui of phase V73: the new look's sheet, its icons and its fonts
-                 '/css/ui-v73.css', '/js/lab-ui.js', '/js/icons.js', '/js/ui-range.js', '/icons/LICENSE-lucide.txt',
+                 '/css/ui-v73.css', '/js/lab-ui.js', '/js/icons.js', '/js/ui-range.js', '/js/really.js', '/icons/LICENSE-lucide.txt',
                  '/fonts/ui/Inter-Regular.woff2', '/fonts/ui/JetBrainsMono-Regular.woff2',
                  // the 3D Studio (PLAN "3D Studio"): its modules, three.js, a mannequin, a motion library, a piece of furniture
                  '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',

@@ -111,15 +111,11 @@
 /* (phase V31) The cross that takes a message away: on the message's top right corner, over its border so it never covers
    what the message says; faint, brighter under the pointer; the first press turns it into "really?". */
 .mv3-ig-msg.has-del{ position:relative }
-.mv3-ig-del{
-  position:absolute; top:-7px; right:-7px; z-index:2;
-  min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
-  border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--muted);
-  font:700 9px/16px var(--font); text-align:center; cursor:pointer; opacity:.55;
-}
-.mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible{ opacity:1 }
-.mv3-ig-del:hover{ color:var(--ink); border-color:var(--muted) }
-.mv3-ig-del.is-ask{ opacity:1; padding:0 7px; color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); font-size:10px }
+.mv3-ig-del{ position:absolute; top:-7px; right:-7px; z-index:2; opacity:.55 }
+/* the shared cross on the message's corner, at its 18 px over the border; armed - the part's red fill (js/really.js) */
+.mv3-ig-del.u-btn{ width:18px; height:18px; border-radius:9px; background:var(--surface); border-color:var(--border); --x-size:11px }
+.mv3-ig-del.u-btn.is-armed{ width:auto; padding:0 7px; border-color:transparent; background:var(--danger-fill); font-size:var(--fs-10) }
+.mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible, .mv3-ig-del.is-armed{ opacity:1 }
 .mv3-ig-del[hidden]{ display:none }
 .mv3-ig-text{ font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .mv3-ig-note{ font:600 10px/1.4 var(--font); color:var(--muted) }

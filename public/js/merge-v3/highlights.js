@@ -46,6 +46,7 @@ import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
+import { REALLY, MS } from '../really.js';
 import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
 
 const NAME = 'highlights';
@@ -409,7 +410,7 @@ const _partsFound = () => (_rec && _rec.agent && +_rec.agent.found) || ((_rec &&
 function _arm(what) {
   _armed = what;
   if (_armT) clearTimeout(_armT);
-  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paint(); }, 3000);
+  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paint(); }, MS);
   _paint();
 }
 
@@ -468,7 +469,7 @@ function _paintTop() {
     const panel = !_frags().length;
     state.appendChild(_el('span', 'mv3-hl-words', _prog && !panel ? _prog.words
       : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
-    const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? 'really?' : '✕ stop');
+    const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : '✕ stop');
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
     x.addEventListener('click', () => { if (_armed !== 'stop') { _arm('stop'); return; } _armed = ''; _stop(); });
@@ -546,7 +547,7 @@ const TARGET = {
   state() {
     if (_rec && _rec.rendering) {
       const armed = _armed === 'rstop';
-      return { label: armed ? 'really?' : '✕ stop', stop: true, armed, enabled: true,
+      return { label: armed ? REALLY : '✕ stop', stop: true, armed, enabled: true,
         title: 'Stop rendering this project\'s fragments - all of them; the ones made stay' };
     }
     const n = _checked.size;
@@ -689,7 +690,7 @@ function _paintField() {
     // The cross in the corner, twice ("really?"): the fragment goes - Ctrl+Z in the field brings it back until the app
     // is started again (the owner's (х19), (х19а)).
     const armed = _armed === 'del' + f.n;
-    const x = _el('button', 'mv3-hl-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+    const x = _el('button', 'mv3-hl-x u-onpic is-del' + (armed ? ' is-armed' : ' u-x'), armed ? REALLY : '');
     x.type = 'button';
     x.title = 'Delete this fragment - Ctrl+Z here brings it back';
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });

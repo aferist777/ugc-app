@@ -1265,9 +1265,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 /* The row's cross into the archive (phase I1): as quiet as its neighbour until pointed at, red when
    pointed at, and filled red while armed - "really?" for three seconds - so the second press is never
    a surprise. An armed row keeps its buttons at full strength even when the pointer has left it. */
-.mv3-sc-btn.is-x{min-width:22px; text-align:center}
-.mv3-sc-btn.is-x:not(.is-armed):hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
-.mv3-sc-btn.is-x.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
+/* the row's cross is the shared one (.u-x.is-del); armed - "Really?" in the part's red fill */
 .mv3-sc-acts:has(.is-armed){opacity:1}
 /* ── The route inside setup ──────────────────────────────────────────────────
    In the Setup panel's own header, beside its title (js/merge-v3/workshop.js): a second header

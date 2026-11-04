@@ -27,6 +27,7 @@ import { createHighlights, homeOf } from './highlights.js';
 // (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
+import { REALLY, MS } from '../really.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -500,11 +501,11 @@ function _wireDelete() {
   b.addEventListener('click', async () => {
     if (!_armed) {
       _armed = true;
-      b.textContent = 'really?';
+      b.textContent = REALLY;
       b.classList.add('is-armed');
       // Disarms itself. An armed delete left sitting there is a trap for the next click
-      // that happens to land on it.
-      _armTimer = setTimeout(_disarm, 4000);
+      // that happens to land on it. (phase V73 block 2: one "Really?", 3 s - js/really.js)
+      _armTimer = setTimeout(_disarm, MS);
       return;
     }
     _disarm();

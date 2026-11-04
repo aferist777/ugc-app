@@ -168,6 +168,9 @@
   .u-onpic[disabled]{ opacity:.45; cursor:default }
   .u-onpic.is-fav .u-ico, .u-onpic.is-on .u-ico{ fill:currentColor }      /* (б1-9): light and filled */
   .u-onpic.is-del:hover:where(:not([disabled])){ background:var(--danger-fill); color:var(--on-danger) }
+  /* "Really?" on a picture (js/really.js): the cross grows into the red fill with the word */
+  .u-onpic.is-armed, .u-onpic.is-armed:hover{ width:auto; padding:0 var(--sp-2); background:var(--danger-fill); color:var(--on-danger);
+    font:var(--fw-medium) var(--fs-11)/1 var(--font); white-space:nowrap }
 
   /* ── Tabs ── */
   .u-tabs{ display:flex; align-items:flex-end; gap:var(--sp-1); border-bottom:1px solid var(--border-soft) }

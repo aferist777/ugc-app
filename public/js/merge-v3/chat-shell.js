@@ -59,7 +59,7 @@ import { createFolderColumn } from '../folder-column.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
-import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
 import { markField, markText } from './image-words.js';
 
 const POLL_MS = 4000;
@@ -1401,30 +1401,13 @@ export function createChat(make) {
   // and the records of what it made; the clips and pictures stay on their shelves and on the timeline (ч6, the server's
   // lib/mv3-chat.js remove). It goes back to ✕ after 3 s, when the pointer leaves the message, or on Escape.
   function _delOn(b, m) {
-    const x = el('button', 'mv3-ig-del', '✕');
+    // (phase V73 block 2) the shared cross, "Really?" by js/really.js (3 s, Escape and the pointer leaving the message let go)
+    const x = el('button', 'mv3-ig-del u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Delete this message - what it made stays on its shelf and on the timeline';
-    let t = 0;
-    let layer = null;
-    const back = () => {
-      clearTimeout(t);
-      t = 0;
-      if (layer) { Layers.close(layer); layer = null; }
-      x.classList.remove('is-ask');
-      x.textContent = '✕';
-    };
-    x.addEventListener('click', async (e) => {
+    twoPress(x, { host: b, go: async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (x.disabled) return;
-      if (!x.classList.contains('is-ask')) {
-        x.classList.add('is-ask');
-        x.textContent = 'really?';
-        t = setTimeout(back, 3000);
-        layer = Layers.open(x, { modal: false, onEsc: back, name: 'delete a message' });
-        return;
-      }
-      back();
       x.disabled = true;
       const d = await json('/api/mv3/chat/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }),
@@ -1438,8 +1421,7 @@ export function createChat(make) {
       _thread = _thread.filter(y => y.id !== m.id);
       _paintThread();
       _reload();
-    });
-    b.addEventListener('pointerleave', () => { if (x.classList.contains('is-ask')) back(); });
+    } });
     b.classList.add('has-del');
     b.appendChild(x);
     return x;

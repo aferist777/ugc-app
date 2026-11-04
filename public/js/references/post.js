@@ -22,6 +22,7 @@ import * as Cut from '../cut.js';
 import { wireInfoSash } from '../library/viewer.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+import { twoPress } from '../really.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -409,7 +410,8 @@ function _paintActs(it) {
     const src = el('button', 'u-btn is-s', 'To scenario sources');
     src.type = 'button';
     src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
-    src.addEventListener('click', () => _toSources(it, src));
+    // (phase V73 block 2) paid: asked on the button itself by js/really.js - a light step, not a red fill (б2-10)
+    twoPress(src, { paid: true, text: 'paid: hearing + topics - press again', go: () => _toSources(it, src) });
     box.appendChild(src);
     const hl = el('button', 'u-btn is-s', 'To highlights');
     hl.type = 'button';
@@ -426,20 +428,15 @@ function _paintActs(it) {
   const del = el('button', 'u-btn is-s is-danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
-  del.addEventListener('click', async () => {
-    // "really?" on the button itself (the owner's way): a second press within a few seconds deletes.
-    if (!_v.armed) {
-      del.textContent = 'really? delete the post';
-      _v.armed = setTimeout(() => { if (_v) { _v.armed = null; del.textContent = 'Delete'; } }, 6000);
-      // (block 5d) Its files on a timeline: said before the second press - there its clips turn red.
-      deleteQuestion(it).then((q) => {
-        const m = /It is used in (d+ projects?)/.exec(q);
-        if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
-      });
-      return;
-    }
-    clearTimeout(_v.armed);
-    _v.armed = null;
+  // "Really?" on the button itself (the owner's way), by js/really.js (phase V73 block 2): a second press within 3 s deletes.
+  twoPress(del, {
+    // (block 5d) Its files on a timeline: said before the second press - there its clips turn red. (V73 block 2, (б2-26):
+    // the pattern read `d+` and never matched - it is `\d+`.)
+    armed: () => deleteQuestion(it).then((q) => {
+      const m = /It is used in (\d+ projects?)/.exec(q);
+      if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
+    }),
+    go: async () => {
     del.disabled = true;
     try {
       const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
@@ -452,7 +449,7 @@ function _paintActs(it) {
     _v.file = 0;
     _v.sel = new Set();
     _paint();
-  });
+  } });
   box.appendChild(del);
 }
 
@@ -462,13 +459,6 @@ function _paintActs(it) {
 // vertical or square video is asked about there - from here it was chosen as a source. Once it is a source (or was one
 // already) the post leaves REFERENCES.
 async function _toSources(it, btn) {
-  if (!btn.dataset.armed) {
-    btn.dataset.armed = '1';
-    btn.textContent = 'paid: hearing + topics - press again';
-    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'To scenario sources'; } }, 5000);
-    return;
-  }
-  delete btn.dataset.armed;
   btn.disabled = true;
   const said = _v.ov.querySelector('.ref-said');
   const say = (t) => { if (_v && said.isConnected) said.textContent = t; btn.textContent = t.length < 40 ? t : 'To scenario sources'; };

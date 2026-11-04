@@ -38,6 +38,7 @@ import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+import { REALLY } from '../really.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -339,7 +340,7 @@ function _paintList() {
     // make a row vanish under a stray click; the archive filter's `restore` brings it back.
     if (!s.archived) {
       const armed = !!_armed && _armed.id === s.id;
-      const x = _el('button', 'mv3-sc-btn is-x u-btn is-s is-quiet' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+      const x = _el('button', 'mv3-sc-btn is-x u-btn is-s' + (armed ? ' is-danger is-armed' : ' is-icon is-quiet is-del u-x'), armed ? REALLY : '');
       x.type = 'button';
       x.title = 'Move to the archive - press twice';
       if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed

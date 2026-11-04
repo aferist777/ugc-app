@@ -30,6 +30,7 @@
 import * as J from './jobs.js';
 import * as HT from './hook-types.js';
 import * as Layers from '../layers.js';
+import { REALLY, MS } from '../really.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
 
 const $ = (id) => document.getElementById(id);
@@ -491,7 +492,8 @@ function _srcLine(it) {
     main.appendChild(acts);
   }
   row.appendChild(main);
-  const x = el('button', 'mk-x' + (p && _stopArmed === id ? ' armed' : ''), p && _stopArmed === id ? 'really?' : '✕');
+  // (phase V73 block 2) the shared cross on the row; armed - "Really?" in the part's red fill
+  const x = el('button', 'mk-x u-onpic is-del' + (p && _stopArmed === id ? ' is-armed' : ' u-x'), p && _stopArmed === id ? REALLY : '');
   x.type = 'button';
   if (p) {
     x.title = p.step === 'topics'
@@ -517,7 +519,7 @@ async function _stopAdding(it) {
   if (_stopArmed !== id) {
     _stopArmed = id;
     _paintSources();
-    setTimeout(() => { if (_stopArmed === id) { _stopArmed = ''; _paintSources(); } }, 3000);
+    setTimeout(() => { if (_stopArmed === id) { _stopArmed = ''; _paintSources(); } }, MS);
     return;
   }
   _stopArmed = '';
@@ -2348,7 +2350,7 @@ function _addLine(r) {
   if (acts.childNodes.length) line.appendChild(acts);
   // A line that has ended is let go of by its cross; a question is let go of too (nothing was downloaded).
   if (r.state === 'ask' || _addSettled(r)) {
-    const x = el('button', 'mk-x', '✕');
+    const x = el('button', 'mk-x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = r.state === 'ask' ? 'Let go of it - nothing was downloaded' : 'Take this line away';
     x.addEventListener('click', () => { if (r.state === 'ask') _answer(r, 'drop'); else { _adds.delete(r.id); _paintAdds(); } });

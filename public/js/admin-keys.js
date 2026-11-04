@@ -541,12 +541,15 @@ async function save(btn) {
   }
   if (!Object.keys(payload).length) { setStatus('Nothing to change — type a key to replace it, or × to remove one.', 'ok'); return; }
   // Removing is asked about once: an empty key is a feature that stops working.
+  // (phase V73 block 2) one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
   if (removals && !_armed) {
-    _armed = setTimeout(() => { _armed = null; btn.textContent = '💾 Save'; }, 5000);
-    btn.textContent = `really? remove ${removals} key${removals === 1 ? '' : 's'}`;
+    _armed = setTimeout(() => { _armed = null; btn.textContent = '💾 Save'; btn.classList.remove('is-danger', 'is-armed'); }, 3000);
+    btn.textContent = 'Really? · ' + removals + (removals === 1 ? ' key' : ' keys');
+    btn.classList.add('is-danger', 'is-armed');
     return;
   }
   if (_armed) { clearTimeout(_armed); _armed = null; }
+  btn.classList.remove('is-danger', 'is-armed');
   btn.disabled = true;
   btn.textContent = '⏳ Saving…';
   try {

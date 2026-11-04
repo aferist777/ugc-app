@@ -27,6 +27,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
 import { hoverPlayer } from './hover-play.js';
 
@@ -824,15 +825,7 @@ function _presetTools(it, ed) {
   dup.addEventListener('click', () => _presetOp(p.id, 'duplicate', null, dup));
   const del = b('delete', p.seed ? 'Delete it - a sample can be brought back from under the tiles' : 'Delete it with its versions');
   del.classList.add('is-danger');
-  del.addEventListener('click', () => {
-    if (!del.dataset.really) {
-      del.dataset.really = '1';
-      del.textContent = 'really?';
-      setTimeout(() => { if (del.isConnected) { delete del.dataset.really; del.textContent = 'delete'; } }, 3000);
-      return;
-    }
-    _presetOp(p.id, 'delete', null, del);
-  });
+  twoPress(del, { go: () => _presetOp(p.id, 'delete', null, del) });   // (phase V73 block 2) one "Really?"
   row.append(save, dup, del);
   box.appendChild(row);
   const said = el('div', 'vc-preset-said', _st.said || '');

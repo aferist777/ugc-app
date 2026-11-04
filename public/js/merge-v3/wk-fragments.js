@@ -1150,6 +1150,8 @@ function _genButton(foot, spec) {
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.disabled;
+  // (phase V73 block 2) a paid press armed for its second press: the light step (б2-10) - no time limit here, as before
+  if (spec.armed) b.classList.add('is-armed');
   if (spec.on) b.addEventListener('click', spec.on);
   foot.appendChild(b);
   return b;
@@ -1734,6 +1736,7 @@ function _stageVideo(host, p, lines) {
       label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + _standing(p).n + '…'
           : armed ? (sample ? 'go?' : _money(clipCost) + ' · go?') : done ? 'again' : 'generate',
+        armed,
       cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
         sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : '',
         _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
@@ -1760,6 +1763,7 @@ function _stageVideo(host, p, lines) {
       : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+        armed,
     // What this press will SPEND and how long the video is - and nothing else (the owner,
     // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
     // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
@@ -2840,6 +2844,7 @@ function _clipCol(p, l, i, rs, take) {
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
+  if (_armedClip === i && !busy) make.classList.add('is-armed');   // (phase V73 block 2) paid, armed: the light step
   // What the press will actually do: with nothing written yet it is two analyses and then the
   // clip, and that is worth saying before it takes half a minute (phase U4).
   const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));

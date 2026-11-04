@@ -43,12 +43,14 @@
   function btn(label, fn, go) { var b = el('button', 'u-btn is-s' + (go ? ' adm-go is-main' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
   // Two presses for a delete: the first arms it for three seconds.
   function del(what) {
-    var b = btn(armed === what ? 'Really delete?' : 'Delete', function () {
+    // (phase V73 block 2) one "Really?" (js/really.js's words, 3 s); a delete - the danger button, armed - its red fill
+    var b = btn(armed === what ? 'Really?' : 'Delete', function () {
       if (armed !== what) { armed = what; paint(); setTimeout(function () { if (armed === what) { armed = null; paint(); } }, 3000); return; }
       armed = null;
       post('/api/speech/local/remove', what);
     });
-    if (armed === what) b.classList.add('loc-armed');
+    b.classList.add('is-danger');
+    if (armed === what) b.classList.add('is-armed');
     return b;
   }
 

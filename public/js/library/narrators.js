@@ -24,6 +24,7 @@
 
 import * as J from './jobs.js';
 import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
 
 const el = J.el;
 
@@ -188,7 +189,7 @@ function _paintList() {
     row.appendChild(main);
     const [kind, text] = _tag(it);
     row.appendChild(el('span', 'mk-tag ' + (kind === 'run' ? 'wait' : kind), text));
-    const x = el('button', 'nr-x', '✕');
+    const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Delete this narrator';
     x.disabled = _running(it.id);
@@ -359,7 +360,7 @@ function _paintSamples() {
     const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'read' : 'not read');
     tag.title = s.readAt ? 'Read into the voice - it is not read again' : 'Not read yet - "Read new samples" reads it';
     h.appendChild(tag);
-    const x = el('button', 'nr-x', '✕');
+    const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Remove this sample';
     x.addEventListener('click', () => _removeSample(owner, i, s));
@@ -462,16 +463,9 @@ function _paintRight() {
   _paintVoice(box);
 }
 
-// A press arms a ✕ ("really?" for three seconds); the second press within them does it.
+// A press arms a ✕ ("Really?" for three seconds); the second press within them does it - js/really.js (phase V73 block 2).
 function _twice(btn, act) {
-  const label = btn.textContent;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (btn.classList.contains('armed')) { btn.classList.remove('armed'); clearTimeout(btn._t); btn.textContent = label; act(); return; }
-    btn.classList.add('armed');
-    btn.textContent = 'really?';
-    btn._t = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3000);
-  });
+  twoPress(btn, { go: (e) => { e.stopPropagation(); act(); } });
 }
 
 // A text corrected in place: pressed, it takes the cursor; Enter or leaving it saves, Escape puts it back. `save(text)`
@@ -543,7 +537,7 @@ function _paintVoice(box) {
       line.appendChild(t);
       // What the last reading added - when it was not the first.
       if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', 'new'));
-      const x = el('button', 'nr-x', '✕');
+      const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Delete this line of the voice';
       _twice(x, async () => {

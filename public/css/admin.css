@@ -111,7 +111,7 @@
 .loc-state.ok{ color:var(--success); }
 .loc-state.bad{ color:var(--danger); }
 .loc-prog{ flex:0 0 200px; }
-.loc-armed{ color:var(--danger); border-color:var(--danger); }
+
 .dio-sec{
   font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase;
   color:var(--muted); margin:14px 0 6px;

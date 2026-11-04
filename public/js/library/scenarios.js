@@ -451,7 +451,7 @@ function _fieldMenu(anchor, m) {
     it.addEventListener('click', (e) => { e.stopPropagation(); if (row.classList.contains('is-asking')) return; pick(r.value); });
     row.appendChild(it);
     if (m.removable && m.removable(r.value)) {
-      const x = _el('button', 'lib-sc-mx', '✕');
+      const x = _el('button', 'lib-sc-mx u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Remove "' + r.label + '" - from the list and from every scenario that has it';
       x.setAttribute('aria-label', 'Remove ' + r.label);

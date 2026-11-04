@@ -170,7 +170,7 @@ function _paintActions(it) {
   for (const a of (_actionsFor(it) || [])) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'u-btn is-s' + (a.danger ? ' danger is-danger' : '');
+    b.className = 'u-btn is-s' + (a.danger ? ' danger is-danger' : '') + (a.armed ? ' is-armed' : '');
     b.textContent = a.label;
     if (a.title) b.title = a.title;
     b.addEventListener('click', async () => {

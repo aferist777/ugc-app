@@ -19,6 +19,7 @@
 
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
+import { MS } from './really.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
@@ -352,7 +353,7 @@ function _row(rec) {
       if (!rec.retryFree && _armed !== rec.id) {
         _armed = rec.id;
         _paintMenu();
-        setTimeout(() => { if (_armed === rec.id) { _armed = null; _paintMenu(); } }, 4000);
+        setTimeout(() => { if (_armed === rec.id) { _armed = null; _paintMenu(); } }, MS);
         return;
       }
       _armed = null;
