@@ -273,7 +273,7 @@
 
   /* ── The question at a button: a title, a quiet line, the answers at the right - Cancel first, the dangerous one red ── */
   .u-ask{ width:288px; max-width:calc(100vw - 12px); padding:var(--sp-3); display:block; background:var(--surface-2); border:1px solid var(--border);
-    border-radius:10px; box-shadow:var(--shadow); color:var(--ink) }
+    border-radius:10px; box-shadow:var(--shadow); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
   .u-ask.is-float{ position:fixed; z-index:9700; animation:u-pop var(--dur-2) var(--ease) }
   .u-ask > b{ display:block; color:var(--ink); font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); letter-spacing:0; text-transform:none; white-space:normal }
   .u-ask > p{ margin:var(--sp-1) 0 0; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); white-space:pre-line }
