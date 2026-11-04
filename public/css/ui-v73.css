@@ -10,7 +10,10 @@
    polish mode: a 4 px grid, three text roles, hairlines, weights 400-600, sentence case, one shadow, one easing curve.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* The interface's fonts "UGC Inter" / "UGC Mono" are declared in css/app-shell.css (stage C2), which this page loads first. */
+/* The interface's fonts "UGC Inter" / "UGC Mono" are declared in css/app-shell.css (stage C2), which this page loads first.
+   Since block 2 (step 2a) the PARTS - button, link, key, count, tabs, chips, fields, switch, check, slider, menu, the question
+   at a button, the on-picture button, the focus ring - live there too, for every page; what stays here is the showcase's own
+   layout and the parts of later blocks (panels, the window frame, empty / loading / error, the stage, the timeline). */
 
 /* ── Tokens ─────────────────────────────────────────────────────────────────── */
 .ui-v73{
@@ -52,13 +55,8 @@
   font:var(--fw-regular) var(--fs-13)/var(--lh-13) var(--font);
 }
 /* buttons and fields take the page's font; :where keeps this weaker than every part's own class below */
-.ui-v73 :where(button, input, select, textarea){ font:inherit; color:inherit }
-.ui-v73 :focus-visible{ outline:2px solid var(--focus); outline-offset:2px }
+:where(.ui-v73) :where(button, input, select, textarea){ font:inherit; color:inherit }   /* weight 0: every part keeps its own type */
 .ui-v73 *::-webkit-scrollbar-thumb:active{ background:var(--muted); background-clip:padding-box }
-.ui-v73 .u-ico{ flex:0 0 auto; display:block }
-
-/* Every figure in monospace (к21а) */
-.ui-v73 .u-mono{ font-family:var(--mono); font-variant-numeric:tabular-nums }
 
 /* ── The top strip, in the new look on this page only ───────────────────────── */
 .ui-v73 .sv3-nav{ background:var(--surface); border-bottom-color:var(--border-soft) }
@@ -69,52 +67,6 @@
 /* (к13) the 3D Studio: blurred and not pressed while it is being built; /3d still opens by its address */
 .ui-v73 .sv3-nav a[href="/3d"], .u-strip a.is-soon{ filter:blur(1.2px); opacity:.5; pointer-events:none; cursor:default }
 
-/* ── Buttons: main (gold), normal, quiet, danger, icon; 24 / 28 / 32 ─────────── */
-.u-btn{
-  display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:0 0 auto;
-  height:28px; padding:0 var(--sp-3); border:1px solid var(--border); border-radius:var(--r-sm);
-  background:var(--surface-2); color:var(--ink); cursor:pointer; white-space:nowrap;
-  font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font);
-  transition:background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
-}
-.u-btn:hover, .u-btn.is-hover{ background:var(--surface-3) }
-.u-btn:active, .u-btn.is-press{ transform:scale(.98) }
-.u-btn[disabled], .u-btn.is-off{ opacity:.45; cursor:default; transform:none }
-.u-btn.is-main{ background:var(--gold); border-color:transparent; color:var(--on-fill) }
-.u-btn.is-main:hover, .u-btn.is-main.is-hover{ background:var(--gold-hover) }
-.u-btn.is-main .u-mono{ font-weight:var(--fw-medium) }
-.u-btn.is-quiet{ background:transparent; border-color:transparent; color:var(--muted) }
-.u-btn.is-quiet:hover, .u-btn.is-quiet.is-hover{ background:var(--hover); color:var(--ink) }
-.u-btn.is-danger{ background:transparent; border-color:oklch(from var(--danger) l c h / .45); color:var(--danger) }
-.u-btn.is-danger:hover, .u-btn.is-danger.is-hover{ background:var(--danger-soft) }
-.u-btn.is-danger.is-armed{ background:var(--danger-fill); border-color:transparent; color:#fff }
-/* a generator's place (the tree's "Generate" / "Create"): a gold line, not a fill - the fill is the window's main button */
-.u-btn.is-gen{ background:transparent; border-color:var(--gold-line); color:var(--gold) }
-.u-btn.is-gen:hover, .u-btn.is-gen.is-hover{ background:var(--gold-soft) }
-.u-btn.is-icon{ width:28px; padding:0 }
-.u-btn.is-s{ height:24px; padding:0 var(--sp-2); border-radius:var(--r-xs); font-size:var(--fs-11) }
-.u-btn.is-s.is-icon{ width:24px; padding:0 }
-.u-btn.is-l{ height:32px; padding:0 var(--sp-4); font-size:var(--fs-13) }
-.u-btn.is-l.is-icon{ width:32px; padding:0 }
-.u-btn.is-busy .u-ico{ animation:u-spin 1s linear infinite }   /* moves only while work goes */
-@keyframes u-spin{ to{ transform:rotate(360deg) } }
-
-/* a link (б1-6): the main text with a thin underline */
-.u-link{ color:var(--ink); text-decoration:underline; text-decoration-color:rgb(237 237 237 / .35); text-decoration-thickness:1px;
-  text-underline-offset:3px; cursor:pointer; transition:text-decoration-color var(--dur-1) var(--ease) }
-.u-link:hover{ text-decoration-color:var(--ink) }
-
-/* a keycap */
-.u-key{ display:inline-flex; align-items:center; height:16px; padding:0 var(--sp-1); border:1px solid var(--border); border-radius:var(--r-2xs);
-  color:var(--muted); font:var(--fw-regular) var(--fs-10)/1 var(--mono) }
-
-/* ── Tabs: a panel's, and the top strip's ───────────────────────────────────── */
-.u-tabs{ display:flex; align-items:flex-end; gap:var(--sp-1); border-bottom:1px solid var(--border-soft) }
-.u-tab{ height:32px; padding:0 var(--sp-3); border:0; border-radius:var(--r-xs) var(--r-xs) 0 0; background:none; color:var(--muted);
-  font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); cursor:pointer;
-  transition:color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease) }
-.u-tab:hover{ color:var(--ink); background:var(--hover) }
-.u-tab.is-cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
 .u-strip{ display:flex; align-items:center; gap:var(--sp-1); height:44px; padding:0 var(--sp-3); background:var(--surface);
   border:1px solid var(--border-soft); border-radius:var(--r) }
 .u-strip a{ display:flex; align-items:center; height:28px; padding:0 var(--sp-3); border-radius:var(--r-xs); color:var(--muted);
@@ -124,61 +76,9 @@
 .u-strip .u-strip-b{ display:inline-flex; align-items:center; gap:6px }
 .u-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--faint); flex:0 0 auto }
 .u-dot.ok{ background:var(--success) } .u-dot.warn{ background:var(--warn) } .u-dot.err{ background:var(--danger) }
-.u-count{ display:inline-flex; align-items:center; height:16px; padding:0 5px; border-radius:var(--r-2xs); background:var(--surface-3);
-  color:var(--ink); font:var(--fw-medium) var(--fs-10)/1 var(--mono) }
 
-/* ── Fields ──────────────────────────────────────────────────────────────────── */
-.u-label{ display:block; margin-bottom:var(--sp-1); color:var(--muted); font:var(--fw-medium) var(--fs-10)/var(--lh-10) var(--font) }
-.u-in, .u-sel select, .u-area{
-  width:100%; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:var(--r-sm);
-  background:var(--surface-2); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font);
-  transition:border-color var(--dur-1) var(--ease);
-}
-.u-in::placeholder, .u-area::placeholder{ color:var(--faint) }
-.u-in:hover, .u-sel select:hover, .u-area:hover{ border-color:rgb(237 237 237 / .18) }
-.u-area{ height:auto; min-height:64px; padding:6px 10px; resize:vertical; line-height:var(--lh-12) }
-.u-sel{ position:relative; display:block }
-.u-sel select{ appearance:none; padding-right:28px; cursor:pointer }
-.u-sel .u-ico{ position:absolute; right:8px; top:6px; color:var(--muted); pointer-events:none }
-.u-with{ position:relative; display:block }
-.u-with > .u-ico{ position:absolute; left:8px; top:6px; color:var(--faint); pointer-events:none }
-.u-with > .u-in{ padding-left:30px }
-.u-with > .u-unit{ position:absolute; right:10px; top:0; height:28px; display:flex; align-items:center; color:var(--faint); font:var(--fs-11)/1 var(--mono); pointer-events:none }
-.u-with > .u-in.is-unit{ padding-left:10px; padding-right:34px; font-family:var(--mono) }
 .u-in.is-focus{ outline:2px solid var(--focus); outline-offset:2px }
 
-/* a toggle (б1-7: on is green) */
-.u-switch{ position:relative; width:28px; height:16px; flex:0 0 auto; padding:0; border:1px solid var(--border); border-radius:var(--pill);
-  background:var(--surface-3); cursor:pointer; transition:background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease) }
-.u-switch::after{ content:''; position:absolute; left:1px; top:1px; width:12px; height:12px; border-radius:50%; background:var(--muted);
-  transition:transform var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease) }
-.u-switch[aria-checked="true"]{ background:var(--success); border-color:transparent }
-.u-switch[aria-checked="true"]::after{ transform:translateX(12px); background:var(--on-fill) }
-/* a check (on is green) */
-.u-check{ appearance:none; position:relative; width:16px; height:16px; margin:0; flex:0 0 auto; border:1px solid var(--border);
-  border-radius:var(--r-2xs); background:var(--surface-2); cursor:pointer; transition:background-color var(--dur-1) var(--ease) }
-.u-check:checked{ background:var(--success); border-color:transparent }
-.u-check:checked::after{ content:''; position:absolute; left:5px; top:2px; width:4px; height:8px; border:solid var(--on-fill);
-  border-width:0 1.5px 1.5px 0; transform:rotate(45deg) }
-.u-opt{ display:inline-flex; align-items:center; gap:var(--sp-2); color:var(--ink); font-size:var(--fs-12); cursor:pointer }
-
-/* a slider with its units */
-.u-slide{ display:grid; grid-template-columns:72px 1fr 64px; align-items:center; gap:var(--sp-3); height:28px }
-.u-slide > span:first-child{ color:var(--muted); font-size:var(--fs-12) }
-.u-slide output{ justify-self:end; color:var(--ink); font:var(--fw-regular) var(--fs-12)/1 var(--mono) }
-.u-range{ --p:50%; appearance:none; width:100%; height:4px; margin:0; border-radius:var(--pill); cursor:pointer;
-  background:linear-gradient(to right, var(--muted) 0 var(--p), var(--surface-3) var(--p) 100%) }
-.u-range::-webkit-slider-thumb{ appearance:none; width:12px; height:12px; border-radius:50%; background:var(--ink);
-  box-shadow:0 0 0 3px var(--surface); transition:transform var(--dur-1) var(--ease) }
-.u-range:hover::-webkit-slider-thumb{ transform:scale(1.15) }
-
-/* chips */
-.u-chips{ display:flex; flex-wrap:wrap; gap:var(--sp-1) }
-.u-chip{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border:1px solid var(--border); border-radius:var(--pill);
-  background:none; color:var(--muted); font:var(--fw-medium) var(--fs-11)/1 var(--font); cursor:pointer;
-  transition:background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease) }
-.u-chip:hover{ background:var(--hover); color:var(--ink) }
-.u-chip.is-on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
 
 /* ── Zones (к15): panels on the dark base, a 6 px gap, a hairline ───────────── */
 .u-base{ display:grid; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); border-radius:var(--r-lg) }
@@ -236,28 +136,6 @@
 @keyframes u-fade{ from{ opacity:0 } }
 @keyframes u-rise{ from{ opacity:0; transform:translateY(8px) } }
 
-/* ── A menu: 32 px rows, one icon column ────────────────────────────────────── */
-.u-menu{ width:248px; padding:var(--sp-1); background:var(--surface-2); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow) }
-.u-menu.is-float{ position:fixed; z-index:9300; animation:u-pop var(--dur-2) var(--ease) }
-@keyframes u-pop{ from{ opacity:0; transform:translateY(-4px) } }
-.u-mi{ display:grid; grid-template-columns:16px 1fr auto; align-items:center; column-gap:var(--sp-2); width:100%; min-height:32px;
-  padding:0 var(--sp-2); border:0; border-radius:var(--r-xs); background:none; color:var(--ink); text-align:left; cursor:pointer;
-  font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); transition:background-color var(--dur-1) var(--ease) }
-.u-mi:hover, .u-mi.is-hover{ background:var(--hover) }
-.u-mi .u-ico{ color:var(--muted) }
-.u-mi.is-two{ min-height:44px; padding-top:var(--sp-1); padding-bottom:var(--sp-1) }
-.u-mi small{ display:block; color:var(--faint); font-size:var(--fs-11); line-height:var(--lh-11) }
-.u-mi.is-danger, .u-mi.is-danger .u-ico{ color:var(--danger) }
-.u-mi.is-danger:hover{ background:var(--danger-soft) }
-.u-mi .u-mono{ color:var(--faint); font-size:var(--fs-11) }
-.u-menu hr{ height:1px; margin:var(--sp-1) 0; border:0; background:var(--border-soft) }
-
-/* ── The question at a button ───────────────────────────────────────────────── */
-.u-ask{ width:288px; padding:var(--sp-3); background:var(--surface-2); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow) }
-.u-ask.is-float{ position:fixed; z-index:9300; animation:u-pop var(--dur-2) var(--ease) }
-.u-ask b{ display:block; color:var(--ink); font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font) }
-.u-ask p{ margin:var(--sp-1) 0 var(--sp-3); color:var(--muted); font-size:var(--fs-11); line-height:var(--lh-11) }
-.u-ask-r{ display:flex; justify-content:flex-end; gap:var(--sp-2) }
 
 /* ── Empty, loading, error ──────────────────────────────────────────────────── */
 .u-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-2); min-height:136px; padding:var(--sp-4);
@@ -296,12 +174,10 @@
 .u-tile.is-picked .u-tile-pic{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--sel-ring) }
 .u-tile-name{ margin-top:6px; color:var(--muted); font-size:var(--fs-11); line-height:var(--lh-11); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .u-tile.is-picked .u-tile-name{ color:var(--ink) }
-.u-onpic{ position:absolute; display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:0;
-  border-radius:var(--r-xs); background:var(--scrim); color:var(--on-media); cursor:pointer; transition:background-color var(--dur-1) var(--ease) }
-.u-onpic:hover{ background:var(--scrim-strong) }
+/* the showcase places its on-picture buttons; the part (css/app-shell.css) carries no place */
+.u-tile .u-onpic{ position:absolute }
 .u-onpic.is-star{ top:6px; left:6px }
 .u-onpic.is-x{ top:6px; right:6px }
-.u-onpic.is-star.is-fav .u-ico{ fill:currentColor }          /* (б1-9): light and filled, the text's colour */
 .u-dur{ position:absolute; right:6px; bottom:6px; padding:2px 4px; border-radius:var(--r-2xs); background:var(--scrim); color:var(--on-media);
   font:var(--fs-10)/1 var(--mono) }
 
@@ -375,3 +251,8 @@
 .lab-status{ display:grid; grid-template-columns:max-content 1fr max-content; align-items:center; gap:var(--sp-2) var(--sp-3); font-size:var(--fs-12) }
 .lab-status > span:nth-child(3n+2){ color:var(--muted) }
 .lab-status > .u-mono{ color:var(--faint); font-size:var(--fs-11) }
+
+/* The showcase gives the parts their room (a part carries no width - css/app-shell.css) */
+.lab .u-in, .lab .u-sel > select, .lab .u-area, .lab .u-range{ width:100% }
+.lab .u-area{ min-height:64px; resize:vertical }
+.lab .u-menu{ width:248px }
