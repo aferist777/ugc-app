@@ -321,7 +321,7 @@ function renderPattern(host) {
   host.appendChild(box);
   _head(box, 'Patterns', list.length);
   renderPatterns(box, {
-    list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(), noTitle: true,
+    list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(),
     note: _busy === 'pattern' ? 'Putting them on them…' : 'Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.',
   });
   _each(box);

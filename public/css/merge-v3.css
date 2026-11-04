@@ -841,8 +841,15 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* (phase V65, block 5) A pattern's direction buttons in a row (js/merge-v3/patterns-ui.js since V74). */
 .mv3-pat-dirs{display:flex; flex-wrap:wrap; gap:3px}
 .mv3-pat-dirs .mv3-c-sw{min-width:26px; padding:0 5px}
-/* (phase V74) Main video's patterns in its strip (js/merge-v3/patterns-ui.js): the set as tiles with a tick, the grid always
-   open; then the layers ticked, the top one first - a row each (tile, name, its look, ↑ ↓), one open with its settings. */
+/* (phase V74) Main video's patterns in its strip (js/merge-v3/patterns-ui.js): the set as tiles with a tick (under the fold
+   «Patterns · N ▸» since V74.1); then the layers ticked, the top one first - a row each (tile, name, its look, ↑ ↓), one open with its settings. */
+/* (phase V74.1) The fold over the tiles - «Patterns · N ▸»: a press opens them under it, another folds them. */
+.mv3-patf{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin:4px 0 2px; padding:5px 8px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1.3 var(--font); text-align:left;
+}
+.mv3-patf:hover, .mv3-patf.is-open{border-color:var(--border-soft)}
+.mv3-patf-arrow{color:var(--muted)}
 .mv3-patg{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:4px; margin:6px 0 8px}
 .mv3-patg-tile{
   position:relative; aspect-ratio:1; padding:0; overflow:hidden; cursor:pointer;

@@ -6,8 +6,8 @@
    In the strip of the MAIN VIDEO lane (inspector.js _blankVideoTrack) - and in the common settings of a highlights project's
    ticked fragments, "pattern · for all N" (hl-group.js) - under the lane's own rows:
      the set     every pattern of the app (GET /api/patterns - vendor/patterns/, lib/patterns-builtin.js) as a tile WITH A TICK,
-                 the grid always open; a tick lays the pattern over the ones ticked already (70 %, no blend mode - look.js
-                 PATTERN_OPACITY), untick takes it off;
+                 under the fold «Patterns · N ▸» (phase V74.1: opened in the strip, kept as it was left); a tick lays the pattern
+                 over the ones ticked already (70 %, no blend mode - look.js PATTERN_OPACITY), untick takes it off;
      the layers  the ticked ones, the top layer first: the tile, the name, ↑ ↓ for the order; a press on a row opens its own
                  settings - scale, colour, angle, movement, speed, direction (overlay/pattern.js), opacity and blend mode
                  (overlay/look.js, the list js/merge-v3/blend-menu.js) -, one open at a time.
@@ -15,7 +15,7 @@
    (place-b.js setLive, by the layer's id - overlay/pattern.js layerId) and written on release. No limit of how many.
 
    renderPatterns(host, io) - io: { list() -> the list now, write(next), repaint(), empty (main video has nothing yet),
-   note (a line under the title), noTitle (the caller has its own head) }.
+   note (a line over the fold) }.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as C from './controls.js';
@@ -60,20 +60,46 @@ function _keep(fn) {
   if (now) now.scrollTop = top;
 }
 
-/** The patterns' block: the set with ticks, then the layers ticked with their settings. */
+// (phase V74.1, the owner's (пт10) а, (пт11) а) THE TILES UNDER THE FOLD «Patterns · N ▸»: a press opens them in the strip itself,
+// under it - the layers ticked move down -, another folds them; shut until opened, then kept as the person left it, across lanes,
+// fragments and restarts (localStorage - this window's convenience; shut when it cannot be read).
+const GRID_KEY = 'mv3_pat_grid_v1';
+let _gridOpen = (() => { try { return localStorage.getItem(GRID_KEY) === '1'; } catch (e) { return false; } })();
+function _setGrid(on) {
+  _gridOpen = !!on;
+  try { localStorage.setItem(GRID_KEY, _gridOpen ? '1' : '0'); } catch (e) { /* kept while the window is open */ }
+}
+
+/** The patterns' block: the fold with the set's tiles under it, then the layers ticked with their settings. */
 export function renderPatterns(host, io) {
   const list = io.list();
-  if (!io.noTitle) host.appendChild(_el('div', 'mv3-ins-sub', 'Patterns' + (list.length ? ' · ' + list.length : '')));
   if (io.note) host.appendChild(C.hint(io.note));
+  const fold = _el('button', 'mv3-patf' + (_gridOpen ? ' is-open' : ''));
+  fold.type = 'button';
+  fold.title = _gridOpen ? 'Fold the patterns' : 'The app\'s patterns - tick one to lay it over main video';
+  fold.appendChild(_el('span', 'mv3-patf-name', 'Patterns' + (list.length ? ' · ' + list.length : '')));
+  fold.appendChild(_el('span', 'mv3-patf-arrow', _gridOpen ? '▾' : '▸'));
+  fold.addEventListener('click', () => { _setGrid(!_gridOpen); _keep(() => io.repaint()); });
+  host.appendChild(fold);
   if (!_set) {
+    // Read whether open or not: the layers' rows take their names and tiles from the set.
     const failed = !_asking && Date.now() - _failedAt < 5000;
-    host.appendChild(_el('p', 'mv3-ins-note', failed ? 'The patterns could not be read - pick the lane again in a moment.' : 'reading the patterns…'));
+    if (_gridOpen) host.appendChild(_el('p', 'mv3-ins-note', failed ? 'The patterns could not be read - pick the lane again in a moment.' : 'reading the patterns…'));
     if (!failed) _readSet(io.repaint);
+  } else if (!_set.length) {
+    if (_gridOpen) host.appendChild(C.hint('The app\'s patterns are not installed.'));
+  } else if (_gridOpen) _grid(host, io, list);
+  if (io.empty) host.appendChild(C.hint('Nothing on main video yet - the patterns show over it once it has something.'));
+  if (!list.length) {
+    host.appendChild(C.hint((_gridOpen ? 'Tick a pattern' : 'Open «Patterns» and tick one')
+      + ': it lies over the whole of main video and every lane on it, under the words.'));
     return;
   }
-  if (!_set.length) { host.appendChild(C.hint('The app\'s patterns are not installed.')); return; }
+  _layers(host, io, list);
+}
 
-  // The set: a tick lays one on top, untick takes it off.
+// The set: a tick lays one on top, untick takes it off.
+function _grid(host, io, list) {
   const grid = _el('div', 'mv3-patg');
   for (const p of _set) {
     const on = list.some((x) => x.src === p.path);
@@ -99,13 +125,10 @@ export function renderPatterns(host, io) {
     grid.appendChild(b);
   }
   host.appendChild(grid);
-  if (io.empty) host.appendChild(C.hint('Nothing on main video yet - the patterns show over it once it has something.'));
-  if (!list.length) {
-    host.appendChild(C.hint('Tick a pattern: it lies over the whole of main video and every lane on it, under the words.'));
-    return;
-  }
+}
 
-  // The layers ticked, the top one first.
+// The layers ticked, the top one first.
+function _layers(host, io, list) {
   const box = _el('div', 'mv3-patl');
   list.forEach((e, i) => {
     const open = _open === e.src;
