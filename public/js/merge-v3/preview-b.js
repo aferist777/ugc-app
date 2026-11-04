@@ -840,6 +840,8 @@ function _drawPattern(el, sw, c) {
 }
 
 function _show(el, sw, sh, c, gaps, main) {
+  // (phase V74) A pattern of main video is no picture placed: its tiles cover the frame.
+  if (c.layer) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
   // (phase V65, block 5) A pattern is no picture placed: its tiles cover the frame.
   if (isPattern(c.src)) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
@@ -1030,6 +1032,17 @@ function _paintFrame() {
       if (!el.naturalWidth) { missing++; continue; }
       _showAs(el, el.naturalWidth, el.naturalHeight, c, gaps, main);
     }
+  }
+  // (phase V74, the owner's (пт1)-(пт3)) THE PATTERNS OF MAIN VIDEO - over every video lane, under the words: the bottom layer
+  // first, each over the whole of main video, its own seconds the timeline's (overlay/pattern.js layersOf), its opacity and
+  // blend mode as a clip's above main (_showAs). The render lays them so (lib/mv3b-render.js).
+  for (const p of PAT.layersOf(tl)) {
+    if (_at < p.start - 0.0001 || _at >= p.start + p.dur) continue;
+    alive.add(_keyOf(p));
+    shown.add(_keyOf(p));
+    const el = _el(p.src, false, 0);
+    if (!el.naturalWidth) { missing++; continue; }
+    _showAs(el, el.naturalWidth, el.naturalHeight, p, gaps, false);
   }
   // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
   // frame, the nearest piece first; an element on screen, or waiting for a nearer piece, is left alone.
