@@ -70,6 +70,9 @@
    right edge, worn exactly like save. A button that cannot be pressed now looks it, and does not light
    up under the pointer. */
 .mv3-x.is-scen .mv3-x-use{margin-left:auto}
+/* (phase V73) "use" - the scenario window's and the voiceover's own text's - is the window's main button: a gold fill */
+.mv3-c-btn.mv3-x-use{color:var(--on-main); background:var(--main); border-color:var(--main)}
+.mv3-c-btn.mv3-x-use:hover:not([disabled]){color:var(--on-main); background:var(--main-hover); border-color:var(--main-hover)}
 .mv3-x.is-scen .mv3-x-foot .mv3-c-btn[disabled]{opacity:.45; cursor:default; color:var(--muted); border-color:var(--border); background:var(--surface-2)}
 
 /* ── The scenario itself, read or written ────────────────────────────────────

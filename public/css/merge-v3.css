@@ -158,8 +158,10 @@ select.mv3-rr-rf{cursor:pointer}
    Deliberately tiny: while a render runs there is nothing to decide except whether to
    stop it, so the window carries a bar, the time left, and that one button. */
 
-.mv3-x-go{font-weight:700; color:var(--on-main); background:var(--main); border-color:var(--main)}
-.mv3-x-go:hover:not([disabled]){background:var(--main-hover); color:var(--on-main); filter:brightness(1.1)}
+/* (phase V73) the window's main button - Render, Render N, Render all, Save & download: one gold fill. Weighed as
+   `.mv3-c-btn.mv3-x-go`, because css/dialog.css (loaded after this sheet) gives every `.mv3-c-btn` its plain look. */
+.mv3-x-go, .mv3-c-btn.mv3-x-go{font-weight:700; color:var(--on-main); background:var(--main); border-color:var(--main)}
+.mv3-x-go:hover:not([disabled]), .mv3-c-btn.mv3-x-go:hover:not([disabled]){background:var(--main-hover); color:var(--on-main); border-color:var(--main-hover)}
 
 /* ── Enlarged preview ─────────────────────────────────────────────────────────
    The stage itself is moved in here, so this is a frame around it and nothing more. */
