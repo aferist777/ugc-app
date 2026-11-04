@@ -73,6 +73,11 @@
    under the pointer. The 3D Studio's page keeps its links as they were. */
 :root:not(:has(link[href="css/studio3d.css"])) a{ text-decoration-color:color-mix(in oklch, currentColor 40%, transparent) }
 :root:not(:has(link[href="css/studio3d.css"])) a:hover{ text-decoration-color:currentColor }
+/* (phase V73, (б1-7)) A check or a choice that is on is green, a native slider grey - for the controls that set no colour of
+   their own, which the browser drew in the system's blue. :where keeps this weaker than any sheet's own rule. */
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=checkbox],
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=radio]{ accent-color:var(--success) }
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=range]{ accent-color:var(--muted) }
 
 *{box-sizing:border-box}
 /* The `hidden` attribute must actually hide. Any `display` set by a class beats the
