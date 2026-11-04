@@ -92,8 +92,7 @@ const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 // (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - pictures, opened, laid and deleted, never moved.
 // (phase V26.6) And IMAGES -> Props: the products, added by New prop.
 const MADE = new Set(['environments', 'lookbooks', 'props']);
-// (phase V65) IMAGES -> Patterns: the app's own, read only - pictures to lay over the video.
-const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : (it.kind === 'images' || MADE.has(it.kind) || it.kind === 'patterns') ? 'image' : 'video');
+const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : (it.kind === 'images' || MADE.has(it.kind)) ? 'image' : 'video');
 
 function _body() { return document.querySelector('#mv3-library .mv3-panel-body'); }
 
@@ -146,8 +145,7 @@ const _mmss = (s) => {
 // (second round) A talking head is its project's while the project lives: no star, no cross, no category - looked at, and
 // dragged onto a lane of any project. One kept from a deleted project (`meta.kept`) is the library's, and goes like any.
 // (phase TG, block 6) A video of YOUTUBE is a source of the scenarios - onto a lane and to highlights, never deleted here.
-// (phase V65) A built-in pattern is the app's: looked at and laid on a lane, nothing else.
-const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept)) || it.kind === 'youtube' || it.kind === 'patterns';
+const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept)) || it.kind === 'youtube';
 
 // (phase V59.1, (мз6а)) A saved text of Music -> Lyrics: its title and first lines; a press opens it whole in the viewer
 // (js/sound/lyrics.js - Copy, Use in Custom, Rename, Delete). Never laid on a lane - it carries nothing a lane takes -,
@@ -317,7 +315,7 @@ function _tile(it, list) {
     cell.draggable = true;
     cell.addEventListener('dragstart', (e) => {
       e.dataTransfer.effectAllowed = 'copy';
-      // A talking head or a YouTube video is a film; (phase V65) a pattern is a picture.
+      // A talking head or a YouTube video is a film.
       const media = _mediaOf(it);
       e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ libId: it.id, src: it.media, thumb: it.thumb || null, name: it.name || '',
         group: it.kind, dur: +it.dur || 0, media, bed: false }));
@@ -606,12 +604,6 @@ function _plusTile() {
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
     return b;
   }
-  // (phase V65) IMAGES -> Patterns: the app's own set - nothing is added to it.
-  if (_kind() === 'patterns') {
-    b.disabled = true;
-    b.title = 'Patterns are built into the app - drag one onto a lane to lay it over the video';
-    return b;
-  }
   // (phase V55, the owner's (гн11); phase V58, (лк7)) IMAGES -> Environments / Lookbooks: "+" opens their generator's window.
   if (_node && _node.make && MADE.has(_node.make)) {
     b.title = _node.makeLabel + ' - opens the generator in a window';
@@ -868,9 +860,7 @@ function _paint() {
   const grid = document.createElement('div');
   // (phase V35, the owner's (т3), (у4)) A folder of horizontal videos (YouTube -> Videos) has 16:9 tiles.
   // (phase V26.6) IMAGES -> Props: a product shown whole in its square tile.
-  // (phase V65) IMAGES -> Patterns: white on transparent, on a dark ground.
-  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : _node && _node.tiles === 'whole' ? ' is-whole'
-    : _node && _node.tiles === 'pattern' ? ' is-pattern' : '')
+  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : _node && _node.tiles === 'whole' ? ' is-whole' : '')
     // (phase V59.1) Music -> Lyrics: wider tiles of text.
     + (_kind() === 'lyrics' ? ' is-text' : '');
   grid.appendChild(_plusTile());
@@ -932,7 +922,7 @@ function _manyMenu(items, e) {
 }
 async function _deleteMany(all) {
   const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube' && !_fixed(x));
-  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds, patterns and a project\'s talking heads stay', true); return; }
+  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds and a project\'s talking heads stay', true); return; }
   if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', true); return; }
   const q = items.length === 1 ? await deleteQuestion(items[0]) : await TS.deleteQuestion(items);
   if (!confirm(q)) return;

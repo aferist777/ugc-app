@@ -61,21 +61,6 @@ function _meta(it) {
     a.textContent = String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60) + (String(m.link).length > 70 ? '…' : '');
     rows.push(['link', a]);
   }
-  // (phase V65) A built-in pattern: where it came from and on what terms (vendor/patterns/patterns.json).
-  if (it.kind === 'patterns' && m.info) {
-    const i = m.info;
-    const link = (href, text) => {
-      if (!href) return text;
-      const a = document.createElement('a');
-      a.href = href; a.target = '_blank'; a.rel = 'noreferrer'; a.title = href; a.textContent = text;
-      return a;
-    };
-    rows.push(['pattern', 'built into the app · a ' + (m.size || 2160) + ' px tile']);
-    if (i.from) rows.push(['from', link(i.url, i.original ? i.from + ' · ' + i.original : i.from)]);
-    if (i.author && i.author !== i.from) rows.push(['author', i.author]);
-    if (i.license) rows.push(['licence', link(i.licenseUrl, i.license)]);
-    if (i.changed) rows.push(['changed', i.changed]);
-  }
   rows.push(['file', String(it.media || '').split('/').pop()]);
   return rows;
 }

@@ -88,7 +88,8 @@
    itself) - `onMake`; the roots IMAGES / VIDEO / AUDIO
    have their names gold and "generate" always there, gold in a gold frame (all gold, dark text, under the pointer) -
    `onGenerate`: the pictures chat, the video chat, the sound. IMAGES' "New folder" is then in its menu only. Music has
-   neither gold nor a button since V64: its "Generate music" and "New folder" are in its menu. Patterns stay as they are.
+   neither gold nor a button since V64: its "Generate music" and "New folder" are in its menu. (Phase V74: IMAGES -> Patterns
+   is gone - a pattern is picked in Merge, in the strip of main video.)
 
    THE ROOTS (phase V60, the owner 2026-10-29, (пп1а), (пп2а): "при нажатии полки media показывать в основном поле корневые
    папки (references, video, images, audio)"). With `home` - the Library's Media shelf only, never Merge's panel - the tree
@@ -113,7 +114,7 @@ const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'refe
 const FOLDER_DRAG = 'application/x-ugc-folder';
 const FOLDER_KIND = 'application/x-ugc-folder-kind-';
 let _dragging = null;       // { kind, id, key, label } while a folder of this page is dragged
-const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound', patterns: 'pattern' };
+const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
 // (phase V55) What the generators of IMAGES -> Environments / Lookbooks made: their own kinds, never moved.
 // (phase V26.6) And IMAGES -> Props: the products, added by New prop.
 const MADE = { environments: 'Environments', lookbooks: 'Lookbooks', props: 'Props' };
@@ -129,9 +130,6 @@ const MADE_SAYS = {
 // (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - nothing goes in by hand, nothing of it goes out.
 const LYRICS_STAY = 'A text stays in Music → Lyrics - a press opens it; "Use in Custom" takes it into Generate music';
 const LYRICS_TAKE = 'Music → Lyrics holds only texts - saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics)';
-// (phase V65) IMAGES -> Patterns: the app's own set, read only - nothing goes in, nothing of it goes out.
-const PATTERNS_STAY = 'A pattern is part of the app - it stays in Patterns; drag it onto a lane in Merge to lay it over the video';
-const PATTERNS_TAKE = 'Patterns holds only the app\'s own patterns - nothing is put there';
 // (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
@@ -172,8 +170,6 @@ function _target(n) {
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
   // (phase V59.1) Music -> Lyrics: only Generate music saves there - what is let go is refused in words.
   if (n.lyrics) return { kind: 'lyrics', cat: '', lyrics: true };
-  // (phase V65) Patterns: the app's own - what is let go there is refused in words.
-  if (n.patterns) return { kind: 'patterns', cat: '', patterns: true };
   // (phase V55) Environments / Lookbooks: only their generator files there - what is let go is refused in words.
   if (MADE[n.kind]) return { kind: n.kind, cat: '', made: true };
   // (phase V57) Their references and the folders in them: closed to the hand - refused in words too.
@@ -197,9 +193,6 @@ function _dropAction(n, from, refType) {
   if (!t || !from) return '';
   // (phase V59.1) A saved text goes nowhere; nothing goes into Lyrics - both refused in words (on Lyrics itself, nothing).
   if (from === 'lyrics' || t.lyrics) return from === 'lyrics' && t.lyrics ? '' : 'refuse';
-  // (phase V65) A pattern goes nowhere; a picture let go on Patterns is refused - both in words.
-  if (from === 'patterns') return t.patterns ? '' : 'refuse';
-  if (t.patterns) return (from === 'images' || MADE[from] || (from === 'references' && refType === 'photo')) ? 'refuse' : '';
   // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
   if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
   // (phase V55, (гн9)) A made environment or lookbook goes nowhere - refused in words wherever it is let go but its own
@@ -308,8 +301,8 @@ export function createTree(host, o) {
   // in them too - but not where it already is, nor on itself.
   const refusesFolder = (n) => !!_dragging && !!n && ((_dragging.kind === 'images' && ((!!MADE[n.kind] && !!n.make)
     || (!!n.closed && n.key !== _dragging.key && parentOf.get(_dragging.key) !== n.key && !isUnderKey(n.key, _dragging.key))))
-    // (phase V59.1) Music -> Lyrics holds no folder - any folder let go on it is refused in words. (phase V65) Nor Patterns.
-    || !!n.lyrics || !!n.patterns);
+    // (phase V59.1) Music -> Lyrics holds no folder - any folder let go on it is refused in words.
+    || !!n.lyrics);
   // (phase V57) Why nothing goes into a closed node by hand, in words - the server's (lib/library-cats.js closedWhy); '' for
   // any other node.
   function closedSays(node) {
@@ -643,7 +636,7 @@ export function createTree(host, o) {
       // (phase V57) Files from Explorer over a closed node: taken here (not lit), to be refused in words - so the page under
       // it does not upload them either.
       // (phase V59.1) Music -> Lyrics the same: it takes no file.
-      if ((n.closed || n.lyrics || n.patterns) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; return; }
+      if ((n.closed || n.lyrics) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; return; }
       // (phase V54) A folder dragged onto a folder of its kind, or the kind's row.
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         // (phase V55) An IMAGES folder over Environments / Lookbooks: taken, to be refused in words (not lit).
@@ -671,13 +664,13 @@ export function createTree(host, o) {
     target.addEventListener('dragleave', () => target.classList.remove('is-drop'));
     target.addEventListener('drop', (e) => {
       target.classList.remove('is-drop');
-      if ((n.closed || n.lyrics || n.patterns) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); opt.status(n.lyrics ? LYRICS_TAKE : n.patterns ? PATTERNS_TAKE : closedSays(n), true); return; }
+      if ((n.closed || n.lyrics) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); opt.status(n.lyrics ? LYRICS_TAKE : closedSays(n), true); return; }
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         if (refusesFolder(n)) {
           e.preventDefault();
           e.stopPropagation();
           _dragging = null;
-          opt.status(n.lyrics ? LYRICS_TAKE : n.patterns ? PATTERNS_TAKE : n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
+          opt.status(n.lyrics ? LYRICS_TAKE : n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
           return;
         }
         if (!takesFolder(n)) return;
@@ -857,7 +850,6 @@ export function createTree(host, o) {
       // (phase V57) A picture let go on the closed folder it already lies in: nothing to say.
       if (t.closed && !MADE[it.kind] && !(Array.isArray(it.many) && it.many.length > 1) && (it.cat || '') === t.cat) return;
       opt.status(it.kind === 'lyrics' ? LYRICS_STAY : t.lyrics ? LYRICS_TAKE
-        : it.kind === 'patterns' ? PATTERNS_STAY : t.patterns ? PATTERNS_TAKE
         : MADE[it.kind] ? MADE_SAYS[it.kind]
         : t.made ? 'Only ' + MADE_BY[t.kind] + ' puts pictures into ' + MADE[t.kind]
           + ' (+ on it)'

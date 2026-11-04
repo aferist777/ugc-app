@@ -704,9 +704,7 @@ const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept))
   // (phase TG, block 6; after block 8 in REFERENCES -> YouTube -> Videos) A downloaded YouTube video is a source of the
   // scenarios: no star, no cross, not moved - watched, sent to highlights and deleted (twice) in its viewer.
-  || it.kind === 'youtube'
-  // (phase V65) A built-in pattern (IMAGES -> Patterns) is the app's: looked at and laid on a lane in Merge, nothing else.
-  || it.kind === 'patterns';
+  || it.kind === 'youtube';
 
 function _actionsFor(it) {
   const out = [];
@@ -1159,7 +1157,7 @@ async function _deleteMany(all) {
   // The app's own sounds, a project's talking head and a YouTube source (two presses on its tile) are not deleted here -
   // the question names only what will go (as in Merge).
   const items = all.filter(x => x.kind !== 'sfx' && !_fixed(x));
-  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds and patterns, a project\'s talking heads and YouTube sources stay', 'err'); return; }
+  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds, a project\'s talking heads and YouTube sources stay', 'err'); return; }
   if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', 'err'); return; }
   // One alone: the question it always had.
   if (items.length === 1) {
@@ -1274,8 +1272,6 @@ function _renderGrid() {
     grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
     // (phase V26.6) IMAGES -> Props: a product is shown whole in its square, never cut to fill it.
     grid.classList.toggle('is-whole', !!(_node && _node.tiles === 'whole'));
-    // (phase V65) IMAGES -> Patterns: white on transparent, on a dark ground.
-    grid.classList.toggle('is-pattern', !!(_node && _node.tiles === 'pattern'));
   }
   // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
   // directly in it. A search over SFX shows what it found in all of SFX, with no folders. (phase V60) At the roots: the four
@@ -1814,13 +1810,6 @@ function _paintUpload() {
     btn.textContent = 'Upload';
     btn.disabled = true;
     btn.title = 'Talking heads come from the talking-head projects - nothing is uploaded here';
-    return;
-  }
-  // (phase V65) IMAGES -> Patterns: the app's own set - nothing is brought in.
-  if (kind === 'patterns') {
-    btn.textContent = 'Upload';
-    btn.disabled = true;
-    btn.title = 'Patterns are built into the app - read only; drag one onto a lane in Merge';
     return;
   }
   // (phase V59.1) Music -> Lyrics: texts saved by Generate music - no file.
