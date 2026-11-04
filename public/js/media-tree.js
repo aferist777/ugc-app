@@ -105,6 +105,7 @@ import * as A from './library/actions.js';
 import * as Layers from './layers.js';
 import { askName } from './name-box.js';
 import { menuIcons, iconEl } from './icons.js';
+import { since as newsSince } from './references/news.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -219,6 +220,11 @@ function _dropAction(n, from, refType) {
 // is NEW - green - while that is later than when it was last opened. Opening a node sees it and everything under it; a
 // branch is green while any node under it is. Kept for the whole app (the Library and Merge alike): seen in one, seen in
 // both. The first time ever, everything there is counts as seen.
+// (phase V73 block 2, the owner 2026-11-05, (н1) а, (н3) б) REFERENCES - what comes from outside: a post of the bot, and a
+// source downloaded by a link that came after the moment this first ran (js/references/news.js `since`, sent as ?srcFrom=)
+// - is new DOWN TO THE INNER FOLDER: a node there is new while what lies DIRECTLY in it (`own`) is newer than when IT was
+// opened, as a folder tile of the gallery too; opening a parent sees nothing under it, so a branch stays lit while a folder
+// under it holds something unseen and the lit path leads to it. The other roots keep the rule above.
 const LS_SEEN = 'ugc_tree_seen_v1';
 
 function _ls(key, fallback) {
@@ -347,21 +353,30 @@ export function createTree(host, o) {
     const walk = (n) => {
       let g = false;
       if (n.children && n.children.length) { for (const c of n.children) if (walk(c)) g = true; }
-      else g = (n.newest || 0) > (seen[n.key] || 0);
+      // REFERENCES: what lies directly in the node, against when the node itself was opened
+      if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) g = true; }
+      else if (!(n.children && n.children.length)) g = (n.newest || 0) > (seen[n.key] || 0);
       if (g) fresh.add(n.key);
       return g;
     };
     for (const n of nodes) walk(n);
   }
+  // A node of REFERENCES or under it (phase V73 block 2, (н3)) - its own rule of what is new.
+  const _isRef = (key) => isUnderKey(key, 'references');
+  // Opened: under REFERENCES the node alone sees what lies in it (its folders keep theirs, (н1)); elsewhere it and
+  // everything under it.
   function _seeAll(n, save = true) {
-    const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
-    go(n);
+    if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) seen[n.key] = n.own || 0; }
+    else {
+      const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
+      go(n);
+    }
     if (save) _lsSet(LS_SEEN, seen);
   }
 
   async function load() {
     let d;
-    try { d = await fetch('/api/library/tree').then(r => r.json()); }
+    try { d = await fetch('/api/library/tree?srcFrom=' + newsSince()).then(r => r.json()); }
     catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
     if (!d || !d.success) { opt.status((d && d.error) || 'Could not read the media tree', true); return nodes; }
     nodes = d.nodes || [];
@@ -798,7 +813,8 @@ export function createTree(host, o) {
     const h = how || {};
     sel = key;
     _lsSet(K_SEL, sel);
-    // Opened: it and everything under it are seen - and its branch is green only while something else in it is new.
+    // Opened: it is seen (under REFERENCES only what lies in it, (н1); elsewhere everything under it too) - and its branch
+    // is lit only while something else in it is new.
     _seeAll(byKey.get(key));
     _computeNew();
     const changed = h.path || h.open ? _setOpen(key, !!h.open) : false;

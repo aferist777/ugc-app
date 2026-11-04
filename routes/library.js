@@ -609,7 +609,7 @@ function _lyricItems() {
 // folders, shown first as folder tiles (js/media-tree.js). There is no Uncategorized node any more; a node that only holds
 // folders (VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES) has no `q`. `count` is still all under it.
 // Nothing moves on the disk: what has no category stays in its `nocat/` folder.
-function _tree() {
+function _tree(opts) {
   const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
@@ -739,7 +739,7 @@ function _tree() {
   const images = kindNode('images', 'images', 'IMAGES');
   _madeFolders(images);
   const roots = [references, video, images, audio];
-  _stampNewest(roots, items);
+  _stampNewest(roots, items, (opts && opts.srcFrom) || 0);
   return roots;
 }
 
@@ -863,18 +863,28 @@ function _inNode(i, q) {
 // давай подсвечивать новое только в references") Only what the Telegram bot BROUGHT counts: a clip or a picture moved
 // (which stamps its date anew), a piece cut here, a source downloaded - none of them is news. Every other node says 0.
 // A post moved by hand (`handled`) is seen - it does not light the place it was moved to.
-const _isNews = (i) => i.kind === 'references' && (i.meta || {}).from === 'telegram' && !(i.meta || {}).handled;
-function _stampNewest(nodes, items) {
+// (phase V73 block 2, the owner's (н3) б, 2026-11-05) And a source downloaded by a link (REFERENCES -> YouTube -> Videos,
+// kind `youtube`, its `date` the moment it landed) - but only one that came after `srcFrom`, the moment the page first ran
+// this rule (js/references/news.js `since`, sent as ?srcFrom=): nothing already there lights. Without it - the other trees,
+// which light nothing - a source is never news.
+const _isNews = (i, srcFrom) => (i.kind === 'references' && (i.meta || {}).from === 'telegram' && !(i.meta || {}).handled)
+  || (i.kind === 'youtube' && srcFrom > 0 && _ts(i.meta && i.meta.date) > srcFrom);
+// (phase V73 block 2, the owner's (н1) а) `own` - the newest news lying DIRECTLY in the node (its `q` matches only that);
+// `newest` - in it or under it. The page lights a REFERENCES node while its own news is newer than when IT was opened, and
+// a branch while any node under it is lit: the lit path leads down to the inner folder. Read-only, nothing kept.
+function _stampNewest(nodes, items, srcFrom) {
   for (const n of nodes) {
     let best = 0;
-    for (const i of items) { if (_isNews(i) && _inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
-    if (n.children) { _stampNewest(n.children, items); for (const c of n.children) if (c.newest > best) best = c.newest; }
+    for (const i of items) { if (_isNews(i, srcFrom) && _inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
+    n.own = best;
+    if (n.children) { _stampNewest(n.children, items, srcFrom); for (const c of n.children) if (c.newest > best) best = c.newest; }
     n.newest = best;
   }
 }
 
-router.get('/library/tree', (_req, res) => {
-  try { res.json({ success: true, nodes: _tree() }); }
+router.get('/library/tree', (req, res) => {
+  // ?srcFrom=<ms> - from when a source downloaded by a link counts as news (the page's moment; absent - never)
+  try { res.json({ success: true, nodes: _tree({ srcFrom: Math.max(0, Math.floor(+req.query.srcFrom || 0)) }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

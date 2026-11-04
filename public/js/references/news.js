@@ -2,7 +2,8 @@
    REFERENCES - A NEW FILE'S TILE (phase V73 block 2; the owner 2026-11-05, (н2) б and (н3) б).
 
    What comes from OUTSIDE - a post the Telegram bot brought (not moved by hand since), a source downloaded by a link
-   (REFERENCES -> YouTube -> Videos) - is marked on its tile with a gold dot until it is OPENED (pressed into the viewer:
+   (REFERENCES -> YouTube -> Videos; only one that came after `since`, as in the tree) - is marked on its tile with a
+   gold dot until it is OPENED (pressed into the viewer:
    the post viewer, js/references/post.js, or the media viewer, js/library/viewer.js). Generations, uploads and stock
    are never marked here (н3).
 
@@ -14,6 +15,7 @@
      mark(tile, it)   the dot on a new tile (`.ref-new`, top left; a post's badge moves aside), `data-new` to find it
      opened(it)       it was opened: kept, and the dot taken off every tile that shows it
      isNew(it)        whether its tile has the dot
+     since()          the moment - the media tree counts sources as news only after it
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const KEY = 'ugc_ref_opened_v1';
@@ -36,6 +38,10 @@ function _read() {
   _write(s);
   return s;
 }
+
+/** The moment this was first kept - also the moment from which a source downloaded by a link is news in the media tree
+ *  (js/media-tree.js sends it as ?srcFrom=, routes/library.js `_isNews`): nothing already there lights. */
+export function since() { return _read().since; }
 
 export function isNew(it) {
   if (!fromOutside(it)) return false;
