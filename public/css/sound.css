@@ -114,7 +114,7 @@
 .snd-on-gal{display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:11px}
 .snd-on-credit{font-size:10.5px; color:var(--muted)}
 .snd-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
-.snd-play.on{border-color:var(--gold); color:var(--gold)}
+.snd-play.on{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
 
 /* (phase V59.1) Music -> Lyrics: a saved text's tile - its title, its first lines, where it came from (js/sound/lyrics.js);
    on the Library's Media a card of text, in Merge's panel a wider tile. A press opens it whole in the viewer. */

@@ -206,7 +206,7 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--gold); cursor:pointer;
 }
 .mv3-hlp-kind:hover{border-color:var(--gold)}
-.mv3-hlp-kind.is-on{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 14%, transparent); box-shadow:0 0 0 1px var(--gold)}
+.mv3-hlp-kind.is-on{border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 1px var(--sel-line)}   /* (б1-17) the picked kind: a step and a light line */
 .mv3-hlp-kind-ic{width:48px; height:48px; display:flex; align-items:center; justify-content:center; font:800 22px/1 var(--font)}
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
 .mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}

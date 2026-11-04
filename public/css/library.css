@@ -289,7 +289,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   position:absolute; left:5px; bottom:4px; font-size:9px; color:var(--muted);
   font-variant-numeric:tabular-nums; pointer-events:none;
 }
-.lib-card.is-playing{ border-color:var(--border); }
+.lib-card.is-playing{ border-color:var(--sel-line); }   /* (б1-17) the playing sound: the selected look */
 .lib-card.is-playing .lib-snd{ color:var(--ink); animation:lib-hear 1s ease-in-out infinite alternate; }
 @keyframes lib-hear{ from{ transform:scale(1); } to{ transform:scale(1.15); } }
 /* (second round) A talking head whose take is on a timeline: a small mark beside its name (it was the hooks' number tag
@@ -310,10 +310,10 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
    the border and a ring inside it. The old one was a 1px border and an inset shadow that the
    picture covered, which is why it read as thin. Gold marks a choice in Merge too. Under the star
    and the cross, which sit on top of everything on a tile. */
-.lib-card.cur{ border-color:var(--gold); }
+.lib-card.cur{ border-color:var(--sel-ring); }   /* (phase V73, (б1-17)) the current one: the white ring of the selected thing */
 .lib-card.cur::after{
   content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
-  border:2px solid var(--gold); border-radius:inherit;
+  border:2px solid var(--sel-ring); border-radius:inherit;
 }
 .lib-card.cur .lib-name{ color:var(--ink); }
 /* A character card carries its own counts: looks, and whether a voice is set. */
@@ -459,7 +459,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-srow:hover{ border-color:var(--sel-line); }
 /* The selected scenario (phase D5): gold, three pixels in all, as a selected tile - the border and a
    ring inside it, which on a row with no picture nothing covers. */
-.lib-srow.cur{ border-color:var(--gold); box-shadow:inset 0 0 0 2px var(--gold); }
+.lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* (б1-17) a step and a light line */
 .lib-srow:focus-visible{ outline:none; border-color:var(--focus); box-shadow:0 0 0 2px var(--sel-bg); }
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .lib-srow-t{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
