@@ -42,6 +42,6 @@ export function renderMusicTrack(host, track) {
   )));
   host.appendChild(_el('div', 'mv3-c-sep'));
   const hint = C.hint('The tracks and sounds are in the Library panel - AUDIO: a press on a tile plays it, drag it onto this lane. '
-    + 'Two tracks overlapping cross into each other by themselves. New music and sounds: "generate audio" at the top of the Library panel.');
+    + 'Two tracks overlapping cross into each other by themselves. New music and sounds: "generate" by AUDIO in the Library panel\'s tree opens the sound window.');
   host.appendChild(hint);
 }

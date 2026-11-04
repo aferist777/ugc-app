@@ -1492,8 +1492,33 @@ async function _load(opts) {
     _paintSndHead();
     _renderGrid();
     _showSelected();
-    _status(e.message, 'err');
+    _shelfFailed();
+    _status((SHELVES[_shelf] || 'The shelf') + ' did not load: ' + e.message, 'err');
   }
+}
+
+// (phase V73 block 0) A shelf whose read FAILED is not an empty shelf. The grid and the column drew what they draw for a
+// shelf with nothing on it ("Nothing on this shelf yet.", "No voices with a demo yet." …); those words are replaced by
+// "<shelf> did not load." - the grid's with "Try again", which reads it again. The reason is the popup in the corner.
+// Media's folder tiles stay: the tree, not this read, draws them.
+function _shelfFailed() {
+  const said = (SHELVES[_shelf] || 'The shelf') + ' did not load.';
+  const grid = $('lib-grid');
+  if (grid) {
+    for (const e of grid.querySelectorAll(':scope > .lib-empty')) e.remove();
+    const box = document.createElement('div');
+    box.className = 'lib-empty is-failed';
+    box.appendChild(document.createTextNode(said + ' '));
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.className = 'lib-btn';
+    again.textContent = 'Try again';
+    again.addEventListener('click', () => { _load(); });
+    box.appendChild(again);
+    grid.appendChild(box);
+  }
+  const body = $('lib-info-body');
+  if (body) for (const e of body.querySelectorAll('.lib-empty, .lib-info-note')) e.textContent = said;
 }
 
 async function _counts() {

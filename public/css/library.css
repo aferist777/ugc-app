@@ -324,6 +324,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   grid-column:1 / -1; padding:28px 12px; text-align:center;
   font-size:12px; color:var(--muted);
 }
+/* (phase V73 block 0) A shelf that did not load - its words and "Try again" (js/library/main.js _shelfFailed). */
+.lib-empty.is-failed .lib-btn{ margin-left:6px; }
 
 /* The viewer (.lib-view-*) and .lib-btn now live in css/lib-viewer.css, which this
    page loads too. They moved because Merge v3 opens the same popup through the same

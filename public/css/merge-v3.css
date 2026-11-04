@@ -325,7 +325,7 @@ body.mv3-noproject .mv3-tl::after{
   content:'Choose a project above to open its timeline';
   position:sticky; left:0; top:40%; display:block; width:max-content;
   margin:0 auto; padding:7px 12px; pointer-events:none;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-1);
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
   font:600 11px/1 var(--font); color:var(--muted);
 }
 
@@ -371,13 +371,13 @@ body.mv3-noproject .mv3-tl::after{
   position:fixed; z-index:9460;     /* (V64) over a chat's window (8900) - the chats ask here too */
   display:flex; align-items:center; gap:6px;
   padding:5px 7px; border-radius:6px;
-  border:1px solid var(--line); background:var(--surface);
+  border:1px solid var(--border); background:var(--surface);
   box-shadow:0 6px 18px oklch(0 0 0 / .3);
 }
 .mv3-ask-t{font:600 11px/1 var(--font); color:var(--ink); white-space:nowrap}
 .mv3-ask-b{
   padding:3px 9px; border-radius:4px; cursor:pointer;
-  border:1px solid var(--line); background:var(--surface-2);
+  border:1px solid var(--border); background:var(--surface-2);
   font:600 11px/1 var(--font); color:var(--ink);
 }
 .mv3-ask-b:hover{border-color:var(--muted)}
