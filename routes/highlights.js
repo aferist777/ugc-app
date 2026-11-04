@@ -20,6 +20,7 @@
 //                                                 (V66) or { ns, place: { pos, ty }, size: n | 'auto', wordsPerLine, lines } -> { n }
 //   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   (V66) the title on top on / off for several
 //   POST   /api/highlights/:id/volume            { ns, lane: speech | music, volume } -> { n }   (V66) a lane's volume on several
+//   POST   /api/highlights/:id/patterns          { ns, patterns } -> { n }   (V74) main video's patterns on several
 //   POST   /api/highlights/:id/music             { ns, moods | none, open } -> { n, open, missed }   (V66) their music dealt again / off
 //   POST   /api/highlights/:id/fragments/:n/music  { how: another | <mood> | none, taken, open } -> { music, clips? }   (V66) one's music
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
@@ -244,6 +245,21 @@ router.post('/highlights/:id/volume', (req, res) => {
     const frags = _made(rec, b.ns);
     if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
     const out = CUT.laneVolume(frags.map((f) => f.key), b.lane === 'music' ? 'music' : 'speech', b.volume);
+    res.json({ success: true, n: out.keys.length });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V74, the owner's (пт7)) Main video's patterns - the whole list, top layer first - on several made fragments; the OPEN
+// one is the page's (its own undo step), as the other common settings of V66.
+router.post('/highlights/:id/patterns', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!Array.isArray(b.patterns)) return res.status(400).json({ success: false, error: 'which patterns?' });
+    const out = CUT.setPatterns(frags.map((f) => f.key), b.patterns);
     res.json({ success: true, n: out.keys.length });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });

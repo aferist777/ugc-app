@@ -15,7 +15,7 @@
    (place-b.js setLive, by the layer's id - overlay/pattern.js layerId) and written on release. No limit of how many.
 
    renderPatterns(host, io) - io: { list() -> the list now, write(next), repaint(), empty (main video has nothing yet),
-   note (a line under the title) }.
+   note (a line under the title), noTitle (the caller has its own head) }.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as C from './controls.js';
@@ -48,6 +48,8 @@ function _readSet(repaint) {
 
 const _of = (src) => (_set || []).find((p) => p.path === src) || null;
 const _name = (src) => { const p = _of(src); return p ? p.name : String(src || '').split('/').pop().replace(/\.[a-z0-9]+$/i, ''); };
+/** A pattern's name by its address - the set's, or its file's while the set is not read. */
+export const nameOf = (src) => _name(src);
 
 // The strip is painted anew on every change (inspector.js render): where it was scrolled is kept across the write.
 function _keep(fn) {
@@ -61,7 +63,7 @@ function _keep(fn) {
 /** The patterns' block: the set with ticks, then the layers ticked with their settings. */
 export function renderPatterns(host, io) {
   const list = io.list();
-  host.appendChild(_el('div', 'mv3-ins-sub', 'Patterns' + (list.length ? ' · ' + list.length : '')));
+  if (!io.noTitle) host.appendChild(_el('div', 'mv3-ins-sub', 'Patterns' + (list.length ? ' · ' + list.length : '')));
   if (io.note) host.appendChild(C.hint(io.note));
   if (!_set) {
     const failed = !_asking && Date.now() - _failedAt < 5000;
