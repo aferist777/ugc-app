@@ -643,7 +643,7 @@ async function _dropRow(alertId, what) {
 
 // The cross itself, for the corner of whatever is being made.
 function _dropX(alertId, what) {
-  const b = el('button', 'mv3-wk-letgo', '✕');
+  const b = el('button', 'mv3-wk-letgo u-onpic is-del u-x', '');
   b.type = 'button';
   b.title = 'Stop waiting for ' + what + '. It was paid for when it was asked for - this does not'
     + ' get that back; it takes the row out of Alerts and stops the app expecting a picture.';
@@ -1586,7 +1586,7 @@ function _stageFrames(host, p) {
     b.appendChild(img);
     // The ✕ in the corner takes a frame out of the rotation; the ✓ in the same corner brings it
     // back (the owner, 2026-09-21). A switched-off frame is dimmed and stands first, out of the way.
-    const sw = el('button', 'mv3-wk-fsetx' + (gone ? ' is-back' : ''), gone ? '✓' : '✕');
+    const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' is-del'), gone ? '✓' : '✕');
     sw.type = 'button';
     sw.title = gone ? 'Use this frame again' : 'Do not use this frame in any fragment';
     sw.addEventListener('click', (e) => { e.stopPropagation(); _banFrame(p, fr.id, !gone); });
@@ -2231,7 +2231,7 @@ function _clipWindow(p, l, i, n) {
   const box = el('div', 'mv3-wk-cwin-box');
   const head = el('div', 'mv3-wk-cwin-head');
   head.appendChild(el('span', '', 'fragment ' + n + ' · its clips'));
-  const x = el('button', 'mv3-wk-cwin-x', '✕');
+  const x = el('button', 'mv3-wk-cwin-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   x.addEventListener('click', _closeClipWindow);

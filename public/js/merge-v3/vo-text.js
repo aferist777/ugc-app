@@ -45,7 +45,7 @@ export function openOwnText(put, done, o = {}) {
 
   const head = _el('div', 'mv3-x-head');
   head.appendChild(_el('h3', null, talking ? 'Talking head from your text' : 'Voiceover from your text'));
-  const close = _el('button', 'mv3-x-close', '✕');
+  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   head.appendChild(close);
   box.appendChild(head);

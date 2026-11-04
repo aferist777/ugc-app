@@ -858,7 +858,7 @@ export function createChat(make) {
       });
     }
     cell.appendChild(el('span', 'n', String(n)));
-    const x = el('button', 'x', '✕');
+    const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = swap ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
     x.addEventListener('click', (ev) => { ev.stopPropagation(); _detach(a.path); });
@@ -923,7 +923,7 @@ export function createChat(make) {
     });
     box.appendChild(go);
     box.appendChild(el('span', 'n', String(n)));
-    const x = el('button', 'x', '✕');
+    const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = 'Close this place - the numbers after it move up';
     x.addEventListener('click', () => _closeHole(h));

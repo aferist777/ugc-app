@@ -410,7 +410,7 @@ function _attachment(f) {
     });
     att.appendChild(up);
     if (f.video || f.clip) {
-      const x = el('button', 'au-x', '✕');
+      const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'no video';
       x.addEventListener('click', () => { Object.assign(f, { video: '', name: '', thumb: '', dur: 0, clip: null }); F.save(); paintMake(); paintFoot(); });
@@ -749,7 +749,7 @@ function _genCard(g) {
   h.appendChild(el('span', 'sp'));
   h.appendChild(el('span', null, (g.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + _modeName(g.mode) + (g.fake ? ' · FAKE' : '') + ' · ' + _ago(g.at)));
   if (g.state !== 'pending') {
-    const x = el('button', 'au-x', '✕');
+    const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Off this list - the files stay where they are';
     x.addEventListener('click', async () => {

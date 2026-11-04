@@ -26,11 +26,7 @@
 }
 .vc-head h3{margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink)}
 .vc-head-sub{flex:1; font:600 11px/1.2 var(--font); color:var(--muted)}
-.vc-close{
-  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.vc-close:hover{color:var(--ink)}
+.vc-close{flex:0 0 auto}
 .vc-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:240px minmax(0, 1fr) 360px}
 .vc-foot{
   flex:0 0 auto; padding:6px 13px; border-top:1px solid var(--border); background:var(--surface-2);
@@ -190,11 +186,7 @@
 .vc-slot input[type=number]{width:38px}
 .vc-slot label{display:inline-flex; align-items:center; gap:3px; font:600 9.5px/1 var(--font); color:var(--muted)}
 .vc-slot input[type=checkbox]{margin:0; accent-color:var(--success)}
-.vc-x{
-  justify-self:end; width:20px; height:20px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.vc-x:hover{color:var(--danger); border-color:var(--danger)}
+.vc-x{justify-self:end}
 .vc-hint{grid-column:1 / -1; width:100%; font-weight:500}
 .vc-adds{display:flex; gap:12px}
 .vc-skill{

@@ -163,8 +163,8 @@ function _lyricTile(it) {
   });
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'mv3-tile-btn mv3-tile-del';
-  del.textContent = '✕';
+  del.className = 'mv3-tile-btn mv3-tile-del u-onpic is-del u-x';
+  del.textContent = '';
   del.title = 'Delete these lyrics';
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -283,8 +283,8 @@ function _tile(it, list) {
     RP.decorate(cell, it, open, { dragFile: toLane });
     const del = document.createElement('button');
     del.type = 'button';
-    del.className = 'mv3-tile-btn mv3-tile-del';
-    del.textContent = '✕';
+    del.className = 'mv3-tile-btn mv3-tile-del u-onpic is-del u-x';
+    del.textContent = '';
     del.title = 'Delete this post and its files';
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -331,7 +331,7 @@ function _tile(it, list) {
   // A kept talking head, (phase V55) a made environment or lookbook: no favourite to set.
   if (it.kind === 'heads' || MADE.has(it.kind)) star.hidden = true;
   star.type = 'button';
-  star.className = 'mv3-tile-btn mv3-tile-star';
+  star.className = 'mv3-tile-btn mv3-tile-star u-onpic';
   star.textContent = '★';
   star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
   star.addEventListener('click', async (e) => {
@@ -349,8 +349,8 @@ function _tile(it, list) {
   // (phase V34.E) A built-in sound is the app's: a star, never a cross.
   if (it.kind === 'sfx') del.hidden = true;
   del.type = 'button';
-  del.className = 'mv3-tile-btn mv3-tile-del';
-  del.textContent = '✕';
+  del.className = 'mv3-tile-btn mv3-tile-del u-onpic is-del u-x';
+  del.textContent = '';
   del.title = 'Delete from the library';
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -777,8 +777,7 @@ function _linkStatus(text, runId) {
   if (!el || !runId) return;
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'mv3-lib-stop';
-  x.textContent = '✕';
+  x.className = 'mv3-lib-stop u-btn is-s is-icon is-quiet u-x';
   x.title = 'Stop this download';
   x.addEventListener('click', () => LK.stopLink(runId));
   el.appendChild(x);

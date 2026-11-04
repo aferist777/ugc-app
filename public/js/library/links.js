@@ -95,7 +95,7 @@ export function openLinkWindow({ where, prefill, onAdd }) {
   ov.innerHTML = `
     <div class="mk-panel lk-panel" role="dialog" aria-modal="true">
       <div class="mk-panel-head"><span class="mk-panel-t">Add by a link</span><span class="sp"></span>
-        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button></div>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
       <div class="mk-panel-body">
         <textarea class="lk-ta" rows="5" placeholder="One link per line - YouTube, TikTok, Instagram and the other sites yt-dlp reads"></textarea>
         <p class="mk-pnote"></p>

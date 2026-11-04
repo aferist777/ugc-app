@@ -165,7 +165,7 @@ export async function showResult(o) {
   const box = el('div', 'mv3-x is-result is-wide');
   const head = el('div', 'mv3-x-head');
   head.appendChild(el('h3', null, o.fresh ? 'Render finished' : (o.title || 'Render')));
-  const x = el('button', 'mv3-x-close', '✕'); x.type = 'button'; x.title = 'Close (Esc)';
+  const x = el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', ''); x.type = 'button'; x.title = 'Close (Esc)';
   head.appendChild(x);
   box.appendChild(head);
 

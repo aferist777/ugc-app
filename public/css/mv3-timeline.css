@@ -27,8 +27,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 }
 .mv3-silence-h{display:flex; align-items:center; gap:6px; margin-bottom:6px}
 .mv3-silence-h b{flex:1 1 auto; font-weight:700; font-size:11.5px}
-.mv3-silence-x{border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
-.mv3-silence-x:hover{color:var(--ink)}
+.mv3-silence-x{flex:0 0 auto}
 .mv3-silence-row{display:flex; align-items:center; gap:7px}
 .mv3-silence-row + .mv3-silence-row{margin-top:4px}
 .mv3-silence-row > span:first-child{flex:0 0 96px; color:var(--muted); white-space:nowrap}
@@ -51,8 +50,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-mergeask-t{white-space:normal; font-variant-numeric:tabular-nums}
 .mv3-mergeask-t.is-bad{color:var(--danger)}
 .mv3-mergeask-go{flex:0 0 auto}
-.mv3-mergeask-x{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
-.mv3-mergeask-x:hover{color:var(--ink)}
+.mv3-mergeask-x{flex:0 0 auto}
 .mv3b-quiet{
   position:absolute; top:0; bottom:0; z-index:1; pointer-events:none;
   background:oklch(from var(--danger) l c h / .32);

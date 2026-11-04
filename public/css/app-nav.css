@@ -157,12 +157,14 @@
 .sv3-toast-n[hidden]{ display:none; }
 .sv3-toast-detail{ font:400 10.5px/1.35 var(--font); color:var(--muted); white-space:normal; overflow-wrap:anywhere; }
 .sv3-toast.is-error .sv3-al-act{ align-self:center; }
-.sv3-toast-x{
-  flex:0 0 auto; align-self:flex-start; width:18px; height:18px; padding:0; margin-left:-2px; cursor:pointer;
+.sv3-toast-x{ flex:0 0 auto; align-self:flex-start; margin-left:-2px; }
+/* the shared ✕ (.u-x); the 3D Studio's page keeps its look (б1-13а) */
+:root:has(link[href="css/studio3d.css"]) .sv3-toast-x{
+  width:18px; height:18px; padding:0; cursor:pointer;
   display:grid; place-items:center; border:0; border-radius:var(--r-xs); background:none;
   color:var(--muted); font:400 11px/1 var(--font);
 }
-.sv3-toast-x:hover{ color:var(--ink); background:var(--surface-2); }
+:root:has(link[href="css/studio3d.css"]) .sv3-toast-x:hover{ color:var(--ink); background:var(--surface-2); }
 
 /* A track has nothing to look at: the viewer gives it a player instead of a picture. */
 .lib-view-audio{ width:min(560px, 80%); }

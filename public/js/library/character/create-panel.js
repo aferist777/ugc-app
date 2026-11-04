@@ -394,9 +394,8 @@ export function build(host, hooks) {
   // way out of one choice deserves to be one press beside it.
   const pclr = document.createElement('button');
   pclr.type = 'button';
-  pclr.className = 'cv2-preset-clear';
+  pclr.className = 'cv2-preset-clear u-btn is-icon is-quiet is-del u-x';
   pclr.id = 'cv2-preset-clear';
-  pclr.textContent = '✕';
   pclr.title = 'Clear the preset and go back to the parameters';
   pclr.addEventListener('click', () => clearPreset());
   prow.appendChild(pclr);

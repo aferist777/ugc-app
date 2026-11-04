@@ -47,7 +47,7 @@ export function openOnline(opts) {
   head.appendChild(el('b', null, 'Find sounds online'));
   const sub = el('span', 'snd-muted', 'free to use in any video, sold or not (CC0)');
   head.appendChild(sub);
-  const x = el('button', 'hp-x', '✕');
+  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   head.appendChild(x);
   win.appendChild(head);

@@ -710,7 +710,7 @@ function VIDEOS(ctx) {
     if (!seed) box.appendChild(el('span', 'why', 'two steps are made by Seedance - pick a Seedance model'));
     else if (tooMuch) box.appendChild(el('span', 'why', 'it does not fit ' + ((model() || {}).label || 'this model') + ': ' + tooMuch));
     else if (isMC()) box.appendChild(el('span', 'why', 'under Kling a recipe only lays out what to attach'));
-    const x = el('button', 'x', '×');
+    const x = el('button', 'x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Stop using this recipe';
     x.addEventListener('click', () => { _skill = null; _wantRecipe = false; ctx.reslot(); ctx.saveDraft(); _paintRecipe(); _paintFoot(); });

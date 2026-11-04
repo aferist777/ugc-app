@@ -793,7 +793,7 @@ export function createSunoForm(o) {
     const head = el('div', 'aal-head');
     head.appendChild(el('b', null, 'Almanac'));
     head.appendChild(el('span', 'aal-sub', 'music and sounds · press a chip to read it, "+ add" gathers it into your prompt' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
-    const x = el('button', 'aal-x', '✕');
+    const x = el('button', 'aal-x u-btn is-s is-icon is-quiet u-x', '');
     x.type = 'button';
     x.title = 'Close (Esc)';
     head.appendChild(x);
@@ -927,7 +927,7 @@ export function createSunoForm(o) {
     bh.appendChild(withQ(el('span', 'aal-lbl', 'Your prompt'), 'The notes you add with "+ add" gather here - change the words by hand if you like.\n"into …" puts it after what the open mode\'s field holds, by a comma: Simple - In your words, Custom - Style (a note of Exclude into Exclude, of the lyrics into Lyrics), Lyrics - the idea, ElevenLabs - its description, Sounds - the sound; what the field holds already is not added twice.\nIt stays here until ✕ empties it.'));
     const said = el('span', 'aal-said');
     const sp = el('span', 'sp');
-    const clear = el('button', 'aal-x aal-clear', '✕');
+    const clear = el('button', 'aal-x aal-clear u-btn is-s is-icon is-quiet u-x', '');
     clear.type = 'button';
     clear.title = 'Empty your prompt';
     const into = el('button', 'aal-btn is-primary aal-into u-btn is-main');

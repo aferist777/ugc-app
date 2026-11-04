@@ -1682,8 +1682,7 @@ function _clipEl(t, c, over) {
   // saying out loud before it happens rather than after.
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'mv3b-clipx';
-  x.textContent = '×';
+  x.className = 'mv3b-clipx u-onpic is-del u-x';
   x.title = 'Remove this clip';
   x.addEventListener('mousedown', (e) => e.stopPropagation());   // not a drag
   x.addEventListener('click', (e) => {
@@ -2067,8 +2066,7 @@ function _paintGone() {
   el.appendChild(t);
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'mv3-tl-gone-x';
-  x.textContent = '✕';
+  x.className = 'mv3-tl-gone-x u-btn is-s is-icon is-quiet u-x';
   x.title = 'Close - the clips stay red';
   x.addEventListener('click', () => { _goneShut = key; _paintGone(); });
   el.appendChild(x);

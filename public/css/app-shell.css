@@ -152,12 +152,22 @@
   .u-count{ display:inline-flex; align-items:center; height:16px; padding:0 5px; border-radius:var(--r-2xs); background:var(--surface-3);
     color:var(--ink); font:var(--fw-medium) var(--fs-10)/1 var(--mono) }
 
+  /* ── THE ONE ✕ (б2-11): Lucide's "x" in the text's colour, drawn by the part (a mask) - a cross only says `u-x`. Three roles,
+     one cross: close (a quiet icon button), take out of a row (.is-del: red under the pointer), delete on a picture
+     (.u-onpic.is-del) ── */
+  .u-x::before{ content:''; display:block; flex:0 0 auto; width:var(--x-size, 16px); height:var(--x-size, 16px); background:currentColor;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E") center / contain no-repeat }
+  .u-btn.is-s.u-x, .u-onpic.u-x{ --x-size:14px }
+  .u-btn.is-del:hover:where(:not([disabled], .is-off)){ background:var(--danger-soft); color:var(--danger) }
+
   /* ── On a picture: a 24 px icon on a dark backing ── */
   .u-onpic{ display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:0;
     border-radius:var(--r-xs); background:var(--scrim); color:var(--on-media); cursor:pointer; transition:background-color var(--dur-1) var(--ease) }
   .u-onpic:hover:where(:not([disabled])){ background:var(--scrim-strong) }
   .u-onpic[disabled]{ opacity:.45; cursor:default }
   .u-onpic.is-fav .u-ico, .u-onpic.is-on .u-ico{ fill:currentColor }      /* (б1-9): light and filled */
+  .u-onpic.is-del:hover:where(:not([disabled])){ background:var(--danger-fill); color:var(--on-danger) }
 
   /* ── Tabs ── */
   .u-tabs{ display:flex; align-items:flex-end; gap:var(--sp-1); border-bottom:1px solid var(--border-soft) }
@@ -380,12 +390,8 @@ body{
 }
 .mv3-link-row input:focus{ outline:none; border-color:var(--focus); }
 .mv3-link-go{ flex:0 0 auto; }
-/* The cross in the panel's status line that stops the link coming in. */
-.mv3-lib-stop{
-  margin-left:6px; padding:0 5px; font:600 10px/1.5 var(--font); color:var(--muted); cursor:pointer;
-  background:transparent; border:1px solid var(--border-soft); border-radius:var(--r-xs);
-}
-.mv3-lib-stop:hover{ color:var(--ink); border-color:var(--sel-line); }
+/* The cross in the panel's status line that stops the link coming in (the shared ✕). */
+.mv3-lib-stop{ margin-left:6px; }
 
 /* ── THE BUBBLE (phase V61, the owner's (т4), (т4а); js/bubble.js) ─────────────────────────────────────────────────
    A hint as a speech bubble, as in a comic: over what it is about, its tail pointing down at it (`is-below` - under it,

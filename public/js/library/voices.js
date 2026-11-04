@@ -93,7 +93,7 @@ function _row(it) {
   }
 
   const x = document.createElement('button');
-  x.type = 'button'; x.className = 'lib-vx'; x.textContent = '✕';
+  x.type = 'button'; x.className = 'lib-vx u-btn is-s is-icon is-quiet is-del u-x';
   x.title = 'Forget this voice and delete its demo';
   x.addEventListener('click', (e) => { e.stopPropagation(); _del(it); });
   row.appendChild(x);

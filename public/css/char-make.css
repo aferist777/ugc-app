@@ -153,13 +153,8 @@
    at z-index 3, and the next one covers this exact corner. The cross had no z-index at all,
    so from the second take onwards - which is when the arrows appear - every click on it went
    to the arrow instead, and the button looked broken while being perfectly wired. */
-.cv2-drop-del{
-  position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0; z-index:4;
-  border:1px solid var(--border); border-radius:50%;
-  background:var(--scrim); color:var(--on-media);
-  font-size:12px; line-height:1; cursor:pointer;
-}
-.cv2-drop-del:hover{ background:var(--danger); border-color:var(--danger); }
+.cv2-drop-del{ position:absolute; top:8px; right:8px; z-index:4; }
+.cv2-drop-del.u-onpic{ border-radius:50%; }   /* round over the portrait, as before */
 
 /* ── Save character ── */
 .cv2-savemodel{ flex:0 0 auto; }
@@ -259,13 +254,7 @@
 .cv2-preset-use{ flex:0 0 auto; }
 /* The way back out, beside the way in. Square and quiet: it undoes a choice rather than
    making one, and it is only on screen while there is a choice to undo. */
-.cv2-preset-clear{
-  flex:0 0 auto; width:26px; height:26px; padding:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:400 11px/24px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-preset-clear:hover{ color:var(--danger); border-color:var(--danger); }
+.cv2-preset-clear{ flex:0 0 auto; }
 
 /* Sticky foot - TPDNE only, now that the preset row moved up. */
 .cv2-crfoot{

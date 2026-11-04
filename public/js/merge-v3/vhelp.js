@@ -76,7 +76,7 @@ function _build(o) {
   box.setAttribute('aria-label', 'Almanac');
   const head = el('div', 'hp-head');
   head.append(el('b', null, 'Almanac'), el('span', 'hp-sub', 'press a tip to copy it'));
-  const x = el('button', 'hp-x', '✕');
+  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.appendChild(x);

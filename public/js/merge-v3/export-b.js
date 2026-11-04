@@ -214,7 +214,7 @@ function _window(o) {
   const box = _el('div', 'mv3-x');
   const head = _el('div', 'mv3-x-head');
   head.appendChild(_el('h3', null, many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
-  const x = _el('button', 'mv3-x-close', '✕');
+  const x = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => { if (!_busy) _close(); });
   head.appendChild(x);

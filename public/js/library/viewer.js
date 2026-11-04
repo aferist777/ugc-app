@@ -294,7 +294,7 @@ export function openViewer(items, index, opts) {
         <span class="lib-view-count"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
       </div>
       <div class="lib-view-body">
         <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>

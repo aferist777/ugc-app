@@ -43,7 +43,7 @@ export async function openCut(it, opts) {
   const head = el('div', 'snd-win-head');
   head.appendChild(el('b', null, 'Cut a piece'));
   head.appendChild(el('span', 'snd-muted', it.name));
-  const x = el('button', 'hp-x', '✕');
+  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   head.appendChild(x);
   win.appendChild(head);

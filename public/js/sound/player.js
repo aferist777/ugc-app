@@ -62,7 +62,7 @@ export function createPlayer(host, opts) {
   const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', '▶ the piece');
   piece.type = 'button';
   piece.title = 'Play only the piece between the gold handles';
-  const x = el('button', 'snd-btn snd-pl-x snd-pl-tool u-btn is-s is-icon is-quiet', '✕');
+  const x = el('button', 'snd-btn snd-pl-x snd-pl-tool u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Take the track off the player';
   host.append(play, time, mid, piece, x);

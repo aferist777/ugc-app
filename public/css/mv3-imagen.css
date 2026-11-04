@@ -222,12 +222,7 @@
   border:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
-.mv3-ig-att .x{
-  position:absolute; top:2px; right:2px; width:15px; height:15px; padding:0;
-  border:0; border-radius:2px; background:var(--scrim); color:var(--on-media);
-  font:600 8px/15px var(--font); cursor:pointer;
-}
-.mv3-ig-att .x:hover{ background:var(--danger) }
+.mv3-ig-att .x{ position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:2px; --x-size:10px }   /* the cells' sizes stay (b5) */
 .mv3-ig-att-note{ font:600 9.5px/1.4 var(--font); color:var(--muted) }
 
 /* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
@@ -280,14 +275,14 @@
 .mv3-ig-atts.is-zone .mv3-ig-cell .lab{ font-size:7.5px; line-height:1 }
 .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:29px; height:29px; line-height:27px; font-size:12px }
-.mv3-ig-atts.is-zone .mv3-ig-att .x{ top:1px; right:1px; width:11px; height:11px; font:600 7px/11px var(--font) }
+.mv3-ig-atts.is-zone .mv3-ig-att .x{ top:1px; right:1px; width:11px; height:11px; --x-size:8px }
 .mv3-ig-atts.is-zone .mv3-ig-att .n{ top:1px; left:1px; min-width:10px; padding:0 2px; font:700 7px/10px var(--font) }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:3px 10px 2px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-cell{ width:auto; min-width:20px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:20px; height:20px; line-height:18px; font-size:10px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .n{ min-width:8px; padding:0 1px; font-size:6.5px; line-height:8px }
-.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; font-size:6px; line-height:9px }
+.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; --x-size:7px }
 
 /* ── the input ──
    (phase V55, the owner 2026-10-28, (гн5): "текстовое поле ... сделай меньше по высоте ... и кнопки и поле компактней")
@@ -423,8 +418,7 @@
 }
 .vtrim-h{ display:flex; align-items:baseline; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vtrim-h b{ font:700 11px/1.3 var(--font); color:var(--ink) }
-.vtrim-x{ margin-left:auto; border:0; background:none; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font) }
-.vtrim-x:hover{ color:var(--ink) }
+.vtrim-x{ margin-left:auto }
 .vtrim-why{ font:600 10px/1.4 var(--font); color:var(--gold) }
 .vtrim-media{ display:block; width:100%; max-height:200px; background:var(--media-bg); border-radius:var(--r-xs) }
 audio.vtrim-media{ background:none; height:32px }
@@ -733,11 +727,13 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-head h3{ margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink); white-space:nowrap }
 .pk-hint{ flex:1 1 auto; min-width:0; font:500 11px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .pk-room{ flex:0 0 auto; font:600 11px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.pk-close{
-  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+.pk-close{ flex:0 0 auto }
+/* the shared ✕; the 3D Studio's page keeps its look (б1-13а) */
+:root:has(link[href="css/studio3d.css"]) .pk-close{
+  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
 }
-.pk-close:hover{ color:var(--ink) }
+:root:has(link[href="css/studio3d.css"]) .pk-close:hover{ color:var(--ink) }
 .pk-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:220px minmax(0, 1fr) }
 .pk-side{
   min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px;
@@ -972,11 +968,7 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .hp-head b{ font:700 12px/1.2 var(--font); color:var(--ink); white-space:nowrap }
 .hp-sub{ flex:1 1 auto; min-width:0; font:500 10.5px/1.2 var(--font); color:var(--muted) }
-.hp-x{
-  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.hp-x:hover{ color:var(--ink) }
+.hp-x{ flex:0 0 auto }
 .hp-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr) }
 .hp-side{
   min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px;
@@ -1079,7 +1071,6 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-top .sp{ flex:1 1 auto }
 .mv3-ig-top-t{ font:700 9.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold) }
 .mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
-.mv3-fc-close{ color:var(--gold); border-color:color-mix(in oklch, var(--gold) 60%, transparent) }
 /* The shape, said rather than chosen: always the project's. */
 .mv3-ig-shape{ display:flex; align-items:baseline; gap:6px; padding:6px 0 2px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-ig-shape .k{ font-size:9.5px; letter-spacing:.03em }

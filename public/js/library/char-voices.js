@@ -150,7 +150,7 @@ export function paint(body, it, voices, hooks) {
         }));
         row.appendChild(star);
       }
-      const x = _el('button', 'lib-cv-x', '✕');
+      const x = _el('button', 'lib-cv-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Unbind this voice: it stays on the Voices shelf with its demo, its ElevenLabs slot is freed';
       x.addEventListener('click', () => {

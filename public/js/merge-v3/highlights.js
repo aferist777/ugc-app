@@ -888,7 +888,7 @@ function _paintCard() {
       tl.appendChild(_el('b', null, said || 'yes'));
       tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
       // (phase V69 P12, the owner's (хп90)) Taken off this fragment with one press.
-      const x = _el('button', 'mv3-hl-title-x', '✕');
+      const x = _el('button', 'mv3-hl-title-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Take the title off this fragment';
       x.addEventListener('click', () => _dropTitle(f));

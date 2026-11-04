@@ -38,7 +38,7 @@ export async function openScenario(summary, hooks = {}) {
   const h3 = document.createElement('h3');
   h3.textContent = isNew ? 'New scenario' : 'Scenario';
   head.appendChild(h3);
-  const close = _el('button', 'mv3-x-close', '✕');
+  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   head.appendChild(close);
   box.appendChild(head);

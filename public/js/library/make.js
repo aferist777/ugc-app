@@ -71,7 +71,7 @@ const HTML = `
         <span class="mk-note" id="mk-title-saved"></span>
         <span class="sp"></span>
         <button class="u-btn is-s" type="button" id="mk-mine">Find topics</button>
-        <button class="lib-btn" type="button" id="mk-src-off" title="Let go of this source and write without one">✕</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" id="mk-src-off" title="Let go of this source and write without one"></button>
       </div>
       <div class="mk-body">
         <div class="mk-summary" id="mk-summary"></div>
@@ -892,7 +892,7 @@ function _openSourceWin(it, play) {
       <div class="mk-panel-head">
         <span class="mk-panel-t" data-f="head"></span>
         <span class="sp"></span>
-        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button>
       </div>
       <div class="src-body">
         <div class="src-stage" data-f="stage"></div>
@@ -2058,7 +2058,7 @@ function _say(text, kind, scenarioId) {
     a.addEventListener('click', () => _hooks.openScenario(scenarioId));
     box.appendChild(a);
   }
-  const x = el('button', 'mk-said-x', '✕');
+  const x = el('button', 'mk-said-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => _say(''));
   box.appendChild(x);
@@ -2096,7 +2096,7 @@ function _openAddSource() {
   ov.innerHTML = `
     <div class="mk-panel" role="dialog" aria-modal="true">
       <div class="mk-panel-head"><span class="mk-panel-t">Add a source</span><span class="sp"></span>
-        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button></div>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
       <div class="mk-panel-body">
         <div class="mk-choice u-tabs">
           <button class="mk-choice-btn u-tab cur" type="button" data-route="link">From a link</button>

@@ -48,7 +48,7 @@ export function openTrim(opts) {
   const box = _el('div', 'vtrim');
   const head = _el('div', 'vtrim-h');
   head.append(_el('b', null, o.title || (o.kind === 'audio' ? 'the sound' : 'the clip')), _el('span', null, _t(dur) + ' in all'));
-  const x = _el('button', 'vtrim-x', '✕');
+  const x = _el('button', 'vtrim-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.appendChild(x);

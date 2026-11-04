@@ -313,7 +313,7 @@ function _build() {
   const head = el('div', 'vc-head');
   const h = el('h3', null, 'Catalog');
   const sub = el('span', 'vc-head-sub', '');
-  const close = el('button', 'vc-close', '✕');
+  const close = el('button', 'vc-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   close.title = 'Close (Esc)';
   head.append(h, sub, close);
@@ -1052,7 +1052,7 @@ function _slotsBox(it, ed) {
       const req = document.createElement('input');
       req.type = 'checkbox'; req.checked = !!s.required; req.title = 'it must be attached';
       req.addEventListener('change', () => { s.required = req.checked; });
-      const x = el('button', 'vc-x', '×');
+      const x = el('button', 'vc-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button'; x.title = 'take this slot away';
       x.addEventListener('click', () => { ed.slots.splice(i, 1); paint(); });
       const hint = document.createElement('input');

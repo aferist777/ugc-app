@@ -215,8 +215,7 @@ function buildRow(r) {
   // Remove on Save. Where the eye used to be; the opposite of a reveal.
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'bk-x';
-  x.textContent = '×';
+  x.className = 'bk-x u-btn is-icon is-quiet is-del u-x';
   x.title = 'Remove this key (on Save)';
   frow.appendChild(x);
 

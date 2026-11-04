@@ -360,7 +360,7 @@ function _bar(host, api) {
   tab.disabled = true;
   tab.title = 'The voices of this character, and the library';
   acts.appendChild(tab);
-  const x = el('button', 'mv3-iconbtn', '✕');
+  const x = el('button', 'u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Back to the script';
   x.addEventListener('click', () => api.go('hub'));

@@ -182,13 +182,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-cv-row{ position:relative; }
 .lib-cv-star{ flex:0 0 auto; }
 .lib-cv-star.u-btn{ width:20px; height:20px; font-size:13px; line-height:1; color:var(--faint); }   /* not the main voice: a dim star */
-.lib-cv-x{
-  flex:0 0 auto; width:19px; height:19px; padding:0; line-height:1;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
-  color:var(--muted); font-size:10px; cursor:pointer; opacity:0; transition:.12s var(--ease);
-}
+.lib-cv-x{ flex:0 0 auto; opacity:0; transition:opacity var(--dur-1) var(--ease); }   /* the shared ✕ that takes out, on the row's hover */
 .lib-cv-row:hover .lib-cv-x, .lib-cv-x:focus-visible{ opacity:1; }
-.lib-cv-x:hover:not([disabled]){ color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }
 /* The status line is also the host of a countdown row, which lies over it. */
 .lib-cv-stat{ position:relative; min-height:26px; display:flex; align-items:center; padding:4px 12px; }
 .lib-cv-stat-t{ font:600 10px var(--font); color:var(--muted); }
@@ -372,15 +367,9 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 /* Top right and only on hover, the same cross the frames gallery uses. The row reserves
    its width on the right so it never sits on top of the text. */
-.lib-vx{
-  position:absolute; top:3px; right:3px; display:none;
-  width:19px; height:19px; padding:0; line-height:1;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:oklch(from var(--surface) l c h / 0.9); color:var(--muted);
-  font-size:10px; cursor:pointer;
-}
-.lib-vrow:hover .lib-vx{ display:block; }
-.lib-vx:hover{ color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }
+.lib-vx{ position:absolute; top:3px; right:3px; display:none; }
+.lib-vx.u-btn{ background:var(--surface); }   /* over the row's words */
+.lib-vrow:hover .lib-vx{ display:flex; }
 
 /* The info column: tags at the top, the characters using the voice underneath. One
    scroller - the pane itself - so the two halves read as one column. */
@@ -585,8 +574,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-said > span{ flex:1 1 auto; min-width:0; }
 .mk-said.ok > span{ color:var(--success); }
 .mk-said.err > span{ color:var(--danger); }
-.mk-said-x{ background:none; border:0; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px; }
-.mk-said-x:hover{ color:var(--ink); }
+.mk-said-x{ flex:0 0 auto; }
 .mk-view{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
 .mk-head{
   display:flex; align-items:center; gap:8px; flex:0 0 auto; min-height:38px;
@@ -854,8 +842,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lk-row{ display:flex; align-items:center; gap:8px; }
 .lk-row .sp{ flex:1; }
 .lk-said{ font-size:11px; color:var(--danger); }
-/* The download under way can be stopped from the status line it is told in. */
-.lib-link-stop{ padding:1px 7px; font-size:11px; line-height:1.4; }
+/* The download under way can be stopped from the status line it is told in (the shared ✕). */
 
 /* ── The narrators (phase E6; an area since V28.2, js/library/narrators.js) ──────────────────
    In place of the scenario list or the generator, three columns: the narrators (one always selected), the

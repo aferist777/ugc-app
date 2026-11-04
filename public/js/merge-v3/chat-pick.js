@@ -68,6 +68,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
 import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../folder-column.js';
@@ -244,7 +246,7 @@ function _build() {
   const h = el('h3', null, '');
   const hint = el('span', 'pk-hint', '');
   const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close', '✕');
+  const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
@@ -735,7 +737,7 @@ function _buildTree() {
   const h = el('h3', null, '');
   const hint = el('span', 'pk-hint', '');
   const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close', '✕');
+  const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);

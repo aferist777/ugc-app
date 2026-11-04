@@ -18,6 +18,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 const MAX = 5;
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 const GOING_MS = 300;
 
 const _list = [];            // newest first: { el, key, n, stays, timer, nEl }
@@ -83,7 +85,7 @@ function _putOnTop(it) {
 }
 
 function _cross(it, title) {
-  const x = _el('button', 'sv3-toast-x', '✕');
+  const x = _el('button', 'sv3-toast-x u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = title || 'Close';
   x.setAttribute('aria-label', x.title);

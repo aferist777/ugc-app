@@ -52,12 +52,7 @@
 .bk-col{ flex:0 0 330px; width:330px; min-width:0; display:flex; flex-direction:column; }
 .bk-frow{ display:flex; align-items:flex-start; gap:6px; }
 .bk-frow .bk-field{ flex:1 1 auto; }
-.bk-x{
-  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
-  color:var(--muted); font-size:12px; line-height:1; padding:3px 7px; cursor:pointer;
-}
-.bk-x:hover:not(:disabled){ color:var(--danger); border-color:var(--danger); }
-.bk-x:disabled{ opacity:.35; cursor:default; }
+.bk-x{ flex:0 0 auto; }   /* the shared ✕ that takes out (.u-x.is-del) */
 /* The mask is a reading, not a value: muted, and it goes the moment the field is focused. */
 .bk-field.is-mask{ color:var(--muted); letter-spacing:.03em; }
 /* Whether the key is there and whether it works, in the border: green, amber, red. */

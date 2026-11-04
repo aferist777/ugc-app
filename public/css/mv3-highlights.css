@@ -234,7 +234,7 @@
 .mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:600 9.5px/17px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
 .mv3-hlp-pick-nm:hover{color:var(--gold)}
-.mv3-hlp-pick-x{flex:0 0 auto; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); font:600 8.5px/17px var(--font); cursor:pointer}
+.mv3-hlp-pick-x{flex:0 0 auto; display:flex; align-items:center; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); cursor:pointer; --x-size:10px}
 .mv3-hlp-pick-x:hover{color:var(--danger)}
 .mv3-hlp-style{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:7px; padding:7px;
   border:1px solid var(--border); border-radius:var(--r-xs)}
@@ -277,8 +277,7 @@
 .mv3-hlp-kind.is-dev{opacity:.45; filter:grayscale(1); cursor:default; border-style:dashed}
 .mv3-hlp-kind.is-dev:hover{border-color:var(--border)}
 .mv3-hlp-kind-dev{font:600 8.5px/1.1 var(--font); color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
-.mv3-hl-title-x{margin-left:6px; padding:0 4px; border:0; background:none; color:var(--muted); font:600 10px/1 var(--font); cursor:pointer}
-.mv3-hl-title-x:hover{color:var(--danger)}
+.mv3-hl-title-x{margin-left:6px}
 .mv3-hlp-moods .mv3-hlp-chip.is-rec::before,
 .mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
 .mv3-hlp-byvideo{border-style:dashed; border-color:var(--gold)}

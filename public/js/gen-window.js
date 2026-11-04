@@ -105,7 +105,7 @@ export function openFrame(o) {
   box.setAttribute('role', 'dialog');
   const head = el('div', 'gw-head');
   const crumbs = el('div', 'gw-crumbs');
-  const x = el('button', 'gw-x', '✕');
+  const x = el('button', 'gw-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(crumbs, x);
@@ -506,7 +506,7 @@ function _field(kind) {
     img.alt = '';
     img.src = src;
     box.appendChild(img);
-    const clear = el('button', 'gw-dropx', '✕');
+    const clear = el('button', 'gw-dropx u-onpic is-del u-x', '');
     clear.type = 'button';
     clear.title = 'Take it off';
     clear.addEventListener('click', (e) => { e.stopPropagation(); s.ref = null; s.base = ''; _forget(s); _render(kind); });

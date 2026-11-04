@@ -169,14 +169,7 @@ select.mv3-rr-rf{cursor:pointer}
   /* The stage moved in here fits this box whole, as it fits its own field (container units). */
   container-type:size;
 }
-.mv3-big-x{
-  position:absolute; top:14px; right:16px;
-  width:28px; height:28px; padding:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted);
-  font:600 12px/1 var(--font); cursor:pointer;
-}
-.mv3-big-x:hover{color:var(--ink); border-color:var(--border-soft)}
+.mv3-big-x{position:absolute; top:14px; right:16px}
 
 /* ── The stack - two panels, one open, and the timeline under them ────────────
    The column is a flex column: the pair takes what the timeline leaves, and the
@@ -411,14 +404,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    part (`.u-btn`) and keep their 20 px - the timeline head is laid out again in block 5 (б2-2). */
 .mv3-iconbtn.u-btn{width:20px; height:20px; padding:0; border-radius:var(--r-xs); font-size:12px; line-height:1}
 .mv3-iconbtn.u-btn.is-text{width:auto; padding:0 7px; font-size:var(--fs-10)}
-.mv3-iconbtn:not(.u-btn){
-  flex:0 0 auto; width:20px; height:20px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:600 12px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-iconbtn:not(.u-btn):hover:not([disabled]){color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
+.mv3-iconbtn{flex:0 0 auto}
 
 /* Shown only when a save was refused or failed. Red, because the message it carries
    is "an edit of yours is not on the server". */
@@ -560,8 +546,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-tl-gone[hidden]{display:none}
 .mv3-tl-gone span{flex:1 1 auto; min-width:0}
-.mv3-tl-gone-x{flex:0 0 auto; width:20px; height:20px; padding:0; border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer}
-.mv3-tl-gone-x:hover{background:var(--surface-2); color:var(--ink)}
+.mv3-tl-gone-x{flex:0 0 auto}
 .mv3-ins-gone{
   margin-bottom:10px; padding:8px 9px; border:1px solid var(--danger); border-radius:var(--r-xs);
   background:color-mix(in oklch, var(--danger) 14%, transparent); font:500 11px/1.4 var(--font); color:var(--ink);
@@ -623,20 +608,16 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    so each carries its own shadowed backdrop - a bare glyph is unreadable over a
    thumbnail that happens to be pale there. */
 .mv3-tile-btn{
-  position:absolute; top:2px; width:17px; height:17px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--scrim); color:var(--on-media);
-  font:700 10px/1 var(--font);
-  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+  position:absolute; top:2px;
+  opacity:0; transition:opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
 }
+/* the shared on-picture part (.u-onpic) at the tile's 17 px (block 6 sizes the tiles) */
+.mv3-tile-btn.u-onpic{width:17px; height:17px; border-radius:var(--r-xs); font:700 10px/1 var(--font); --x-size:11px}
 .mv3-tile:hover .mv3-tile-btn{opacity:1}
-.mv3-tile-btn:focus-visible{opacity:1; outline:1px solid var(--focus)}
+.mv3-tile-btn:focus-visible{opacity:1}
 .mv3-tile-btn[disabled]{opacity:.4; cursor:default}
 .mv3-tile-star{left:2px}
 .mv3-tile-del{right:2px}
-.mv3-tile-star:hover{background:var(--scrim-strong); color:var(--on-media)}
-.mv3-tile-del:hover{background:var(--danger-fill); color:var(--on-danger)}
 /* A favourite shows its star WITHOUT hovering - that is how the mark is read at a
    glance, and the same reason the Library page marks its cards. */
 .mv3-tile.is-fav .mv3-tile-star{opacity:1; color:var(--on-media)}
@@ -1190,14 +1171,9 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 
 /* The cross on a clip. Only on hover: a lane of clips each wearing a permanent delete button
    is a row of invitations to lose work. */
-.mv3b-clipx{
-  position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; z-index:1;
-  display:grid; place-items:center; cursor:pointer; opacity:0;
-  background:var(--scrim); border:0; border-radius:var(--r-xs);
-  color:var(--on-media); font:11px/1 var(--font); transition:opacity .12s var(--ease);
-}
+.mv3b-clipx{position:absolute; top:1px; right:1px; z-index:1; opacity:0; transition:opacity var(--dur-1) var(--ease)}
+.mv3b-clipx.u-onpic{width:13px; height:13px; border-radius:var(--r-2xs); --x-size:10px}   /* a clip's 20 px (block 5) */
 .mv3b-clip:hover .mv3b-clipx{opacity:1}
-.mv3b-clipx:hover{background:var(--danger)}
 .mv3-qrow:last-child{border-bottom:0}
 .mv3-qrow-t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
 .mv3-qrow-s{flex:0 0 auto; font-size:10px; color:var(--muted)}
@@ -1966,15 +1942,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* The cross in the corner of a stage half that holds something written - the character, the
    environment - takes it off the project (js/merge-v3/wk-setup.js, _stageClears). In the corner
    of the HALF, not of the picture: the picture moves under the zoom, the cross does not. */
-.mv3-wk-clear{
-  position:absolute; right:10px; top:10px; z-index:3; width:24px; height:24px; padding:0; cursor:pointer;
-  display:flex; align-items:center; justify-content:center; border-radius:50%;
-  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 12px/1 var(--font);
-  transition:background .12s var(--ease), border-color .12s var(--ease);
-}
+.mv3-wk-clear{position:absolute; right:10px; top:10px; z-index:3}
+.mv3-wk-clear.u-onpic{border-radius:50%; border:1px solid var(--on-media-line)}   /* round on the stage, as before */
 .mv3-wk-clear.is-bottom{top:calc(50% + 10px)}
-.mv3-wk-clear:hover{background:var(--danger); border-color:var(--danger)}
-.mv3-wk-clear[disabled]{opacity:.5; cursor:default}
 /* (phase V67 block 3) Back to the first look cast - a pill left of the upper half's cross (in its place when there is none). */
 .mv3-wk-back{
   position:absolute; right:42px; top:10px; z-index:3; height:24px; max-width:60%; padding:0 10px; cursor:pointer;
@@ -2061,14 +2031,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    The ✕ in its corner is what switched it off; the ✓ in the same corner brings it back. */
 .mv3-wk-fsetfr.is-off img{filter:brightness(.32) saturate(.5)}
 .mv3-wk-fsetfr.is-off{border-style:dashed}
-.mv3-wk-fsetx{
-  position:absolute; top:2px; right:2px; width:16px; height:16px; padding:0; z-index:2;
-  display:flex; align-items:center; justify-content:center; border-radius:var(--r-xs); cursor:pointer;
-  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 8.5px/1 var(--font);
-  opacity:0; transition:opacity .12s var(--ease);
-}
+.mv3-wk-fsetx{position:absolute; top:2px; right:2px; z-index:2; opacity:0; transition:opacity var(--dur-1) var(--ease)}
+.mv3-wk-fsetx.u-onpic{width:16px; height:16px; border-radius:var(--r-xs); font:600 8.5px/1 var(--font)}   /* the 76-px frames */
 .mv3-wk-fsetfr:hover .mv3-wk-fsetx, .mv3-wk-fsetx.is-back{opacity:1}
-.mv3-wk-fsetx:hover{background:var(--danger); border-color:var(--danger)}
 .mv3-wk-fsetx.is-back{color:var(--success)}
 .mv3-wk-fsetx.is-back:hover{background:var(--success); border-color:var(--success); color:var(--on-media)}
 .mv3-wk-fsetfr img{width:100%; height:100%; object-fit:cover; display:block}
@@ -2093,14 +2058,8 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    because it is the one control here that ends something, and small, because it is not the thing
    you are meant to press. Its own class (phase I0): it was .mv3-wk-drop, the name the makers' photo
    field already had, and coming later in the file it turned that field into this cross. */
-.mv3-wk-letgo{
-  position:absolute; right:3px; top:3px; z-index:3; width:16px; height:16px; padding:0; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid transparent; border-radius:var(--r-xs);
-  background:var(--scrim); color:var(--on-media); font:700 9px/1 var(--font);
-}
-.mv3-wk-letgo:hover{background:var(--danger); border-color:var(--danger)}
-.mv3-wk-letgo[disabled]{opacity:.4; cursor:default}
+.mv3-wk-letgo{position:absolute; right:3px; top:3px; z-index:3}
+.mv3-wk-letgo.u-onpic{width:16px; height:16px; border-radius:var(--r-xs); --x-size:11px}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
 .mv3-wk-flabel.is-row > span:first-child{flex:1 1 auto}
 .mv3-wk-vsel.is-small.is-col{flex:0 0 auto; width:100%}
@@ -2244,8 +2203,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
 .mv3-wk-cwin-box{display:flex; flex-direction:column; gap:10px; max-width:min(920px, 94vw); max-height:92vh; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r)}
 .mv3-wk-cwin-head{display:flex; align-items:center; gap:8px; font:700 10px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold)}
-.mv3-wk-cwin-x{margin-left:auto; padding:2px 6px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 12px/1 var(--font)}
-.mv3-wk-cwin-x:hover{color:var(--ink)}
+.mv3-wk-cwin-x{margin-left:auto}
 .mv3-wk-cwin-grid{display:flex; flex-wrap:wrap; gap:10px; overflow:auto}
 .mv3-wk-cwin-card{display:flex; flex-direction:column; gap:5px; width:170px; padding:5px; border:1px solid var(--border); border-radius:var(--r-sm)}
 .mv3-wk-cwin-card.is-on{border-color:var(--sel-line)}

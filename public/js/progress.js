@@ -208,8 +208,7 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
   if (typeof onCancel === 'function') {
     const x = document.createElement('button');
     x.type = 'button';
-    x.className = 'sv3-inline-x';
-    x.textContent = '✕';
+    x.className = 'sv3-inline-x u-btn is-s is-icon is-quiet is-del u-x';
     x.title = 'Cancel - what was already sent is paid for';
     x.setAttribute('aria-label', 'Cancel');
     x.addEventListener('click', (e) => {

@@ -89,7 +89,7 @@ export function openSilence() {
   const box = document.createElement('div');
   box.className = 'mv3-silence';
   box.innerHTML =
-    '<div class="mv3-silence-h"><b>Cut silence</b><button type="button" class="mv3-silence-x" title="Close (Esc)">✕</button></div>' +
+    '<div class="mv3-silence-h"><b>Cut silence</b><button type="button" class="mv3-silence-x u-btn is-s is-icon is-quiet u-x" title="Close (Esc)"></button></div>' +
     '<label class="mv3-silence-row" title="A pause longer than this is shortened to it - half after the sound before, half before the sound after">' +
     '<span>keep pauses up to</span>' +
     `<input type="range" min="${KEEP_MIN}" max="${KEEP_MAX}" step="0.01" class="mv3-silence-k">` +

@@ -759,7 +759,7 @@ function FRAMES(ctx) {
     },
     // Its own head line: the cross back to the fields.
     headButtons() {
-      const x = el('button', 'mv3-iconbtn mv3-fc-close', '✕');
+      const x = el('button', 'mv3-fc-close u-btn is-s is-icon is-quiet u-x', '');
       x.type = 'button';
       x.title = 'Close the frames chat - back to the fields. What is written stays.';
       x.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });

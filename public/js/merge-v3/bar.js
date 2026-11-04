@@ -162,8 +162,7 @@ function _openBig() {
   box.className = 'mv3-big-box';
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'mv3-big-x';
-  close.textContent = '✕';
+  close.className = 'mv3-big-x u-btn is-icon is-quiet u-x';
   close.title = 'Close (Esc)';
   close.addEventListener('click', _closeBig);
   ov.append(box, close);

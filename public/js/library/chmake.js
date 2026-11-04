@@ -304,8 +304,7 @@ function _paintDrop(src) {
   if (src !== _face.src || _saving || (_root && _root.dataset.stage === 'save')) return;
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'cv2-drop-del';
-  del.textContent = '✕';
+  del.className = 'cv2-drop-del u-onpic is-del u-x';
   del.title = _vars.length > 1 ? 'Delete this take' : 'Delete this image and go back to the parameters';
   del.addEventListener('click', (e) => { e.stopPropagation(); if (!_busy) _deleteVar(); });
   drop.appendChild(del);

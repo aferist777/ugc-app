@@ -142,7 +142,7 @@ function _say(text, isError) {
   if (!text) return;
   box.className = 'nr-said' + (isError ? ' err' : '');
   box.appendChild(el('span', null, text));
-  const x = el('button', 'mk-said-x', '✕');
+  const x = el('button', 'mk-said-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => _say(''));
   box.appendChild(x);

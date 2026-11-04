@@ -467,7 +467,7 @@ function _stageClears(top, bottom) {
   _dropStageCtl();
   const cast = _casting();
   const mk = (half, title) => {
-    const b = _el('button', 'mv3-wk-clear mv3-stage-ctl' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
+    const b = _el('button', 'mv3-wk-clear mv3-stage-ctl u-onpic is-del u-x' + (half === 'bottom' ? ' is-bottom' : ''), '');
     b.type = 'button';
     b.title = title;
     b.disabled = _saving;

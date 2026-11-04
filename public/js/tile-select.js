@@ -63,7 +63,7 @@ export function createSelection(o) {
   const chipText = document.createElement('span');
   const chipX = document.createElement('button');
   chipX.type = 'button';
-  chipX.textContent = '✕';
+  chipX.className = 'u-btn is-s is-icon is-quiet u-x';
   chipX.title = 'Pick nothing (Escape)';
   chipX.addEventListener('click', (e) => { e.stopPropagation(); clear(); });
   chip.append(chipText, chipX);

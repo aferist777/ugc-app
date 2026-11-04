@@ -135,7 +135,7 @@ function _left() {
     img.src = src;
     box.appendChild(img);
     if (!done) {
-      const x = el('button', 'gw-dropx', '✕');
+      const x = el('button', 'gw-dropx u-onpic is-del u-x', '');
       x.type = 'button';
       x.title = 'Take it off';
       x.addEventListener('click', (e) => { e.stopPropagation(); _s.photo = null; _render(); });

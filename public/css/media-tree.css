@@ -171,7 +171,6 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .ts-chip.u-chip{ padding:0 2px 0 10px; background:var(--surface-2); cursor:default; }
 .ts-chip[hidden]{display:none}
 .ts-chip span{overflow:hidden; text-overflow:ellipsis}
-.ts-chip button{border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:11px; padding:1px 5px}
-.ts-chip button:hover{color:var(--ink)}
+
 .ts-menu{z-index:9310}
 .ts-anchor{position:fixed; width:1px; height:1px; pointer-events:none}
