@@ -165,3 +165,37 @@
 
 /* A track has nothing to look at: the viewer gives it a player instead of a picture. */
 .lib-view-audio{ width:min(560px, 80%); }
+
+/* ── The look of phase V73 (block 1 stage C1) ───────────────────────────────────────────────────────────────────────
+   The strip's new colours on every page but the 3D Studio's, which keeps its whole look ((б1-13а)): the rules above are
+   what the 3D Studio's strip shows, these are guarded by `:root:not(:has(link[href="css/studio3d.css"]))`. The lit entry is
+   a step with a line under it (к16); the 3D Studio's entry, while it is built, is blurred and not pressed (к13, js/app-nav.js
+   marks it .is-soon on every page but /3d, which still opens by its address). */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon{ filter:blur(1.2px); opacity:.5; cursor:default }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon:hover{ color:var(--muted); background:none }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts.is-caught{ animation-name:sv3-al-caught-v73 }
+@keyframes sv3-al-caught-v73{
+  0%{ transform:scale(1); }
+  18%{ transform:scale(1.22); color:var(--ink); background:var(--sel-line); }
+  36%{ transform:scale(1.12); background:transparent; }
+  54%{ transform:scale(1.12); color:var(--ink); background:var(--sel-line); }
+  72%{ background:transparent; }
+  100%{ transform:scale(1); }
+}
+/* the count of work in flight is not an error: a quiet mark; what finished is the one green */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-running .sv3-al-count{ background:var(--surface-3); color:var(--ink) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-done::after{ background:var(--success) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-mark{ color:var(--muted) }
+/* a new version waiting: "look here" - gold (б1-8) */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd{ border-color:var(--warn); color:var(--warn) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd:hover{ background:var(--warn); color:var(--on-fill) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-win-b.is-close:hover{ color:var(--on-danger); background:var(--danger-fill) }
+/* news in a quiet frame, an error in red */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast{ border-color:var(--border) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-failed,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-error{ border-color:var(--danger) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast-mark{ color:var(--muted) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-failed .sv3-toast-mark{ color:var(--danger) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-error .sv3-toast-mark{ color:var(--on-danger); background:var(--danger-fill) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-toast-n{ color:var(--on-danger); background:var(--danger-fill) }

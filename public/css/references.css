@@ -7,7 +7,7 @@
 .ref-badge{
   position:absolute; left:5px; top:5px; z-index:2; pointer-events:none;
   padding:1px 6px; border-radius:var(--pill, 99px);
-  background:oklch(0 0 0 / .62); color:#fff; font:600 10px/1.5 var(--font); font-variant-numeric:tabular-nums;
+  background:var(--scrim); color:var(--on-media); font:600 10px/1.5 var(--font); font-variant-numeric:tabular-nums;
 }
 
 /* The hover: every miniature of a post of several. */
@@ -21,11 +21,11 @@
   position:relative; aspect-ratio:1; padding:0; border:1px solid var(--border); border-radius:4px;
   background:var(--bg); overflow:hidden; cursor:pointer;
 }
-.ref-hover-cell:hover{ border-color:var(--primary); }
+.ref-hover-cell:hover{ border-color:var(--sel-line); }
 .ref-hover-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
 .ref-hover-v{
   position:absolute; right:3px; bottom:3px; padding:0 4px; border-radius:3px;
-  background:oklch(0 0 0 / .6); color:#fff; font-size:9px; line-height:1.5;
+  background:var(--scrim); color:var(--on-media); font-size:9px; line-height:1.5;
 }
 .ref-hover-cap{ margin-top:5px; font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
@@ -54,34 +54,34 @@
   background:var(--bg); overflow:hidden; cursor:pointer;
 }
 .ref-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
-.ref-cell.is-cur{ border-color:var(--primary); }
-.ref-cell.is-sel{ box-shadow:inset 0 0 0 2px var(--accent); }
+.ref-cell.is-cur{ border-color:var(--sel-line); }
+.ref-cell.is-sel{ box-shadow:inset 0 0 0 2px var(--sel-ring); }
 .ref-cell-none{ display:flex; align-items:center; justify-content:center; height:100%; font-size:10px; color:var(--muted); }
 .ref-cell-dur{
   position:absolute; left:4px; bottom:4px; padding:0 4px; border-radius:3px;
-  background:oklch(0 0 0 / .6); color:#fff; font-size:9.5px; line-height:1.5; font-variant-numeric:tabular-nums;
+  background:var(--scrim); color:var(--on-media); font-size:9.5px; line-height:1.5; font-variant-numeric:tabular-nums;
 }
 /* The tick in the top right corner - selects, never opens. */
 .ref-tick{
   position:absolute; right:4px; top:4px; width:20px; height:20px; padding:0;
-  border:1.5px solid #fff; border-radius:50%; background:oklch(0 0 0 / .38);
+  border:1.5px solid var(--on-media); border-radius:50%; background:var(--scrim);
   color:transparent; font:700 11px/1 var(--font); cursor:pointer;
 }
-.ref-tick:hover{ background:oklch(0 0 0 / .6); }
-.ref-cell.is-sel .ref-tick{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.ref-tick:hover{ background:var(--scrim-strong); }
+.ref-cell.is-sel .ref-tick{ background:var(--sel-ring); border-color:var(--sel-ring); color:var(--on-fill); }
 
 /* A long video kept as a tile: its poster, its length, the way to it. */
 .ref-remote{ display:flex; flex-direction:column; align-items:center; gap:8px; max-width:100%; max-height:100%; }
 .ref-remote img{ min-height:0; }
 .ref-remote{ width:100%; height:100%; justify-content:center; }
-.ref-player{ width:100%; flex:1 1 auto; min-height:0; max-height:calc(100% - 26px); aspect-ratio:16/9; border:0; background:#000; }
+.ref-player{ width:100%; flex:1 1 auto; min-height:0; max-height:calc(100% - 26px); aspect-ratio:16/9; border:0; background:var(--media-bg); }
 .ref-remote-cap{ font-size:11.5px; color:var(--muted); }
-.ref-remote-cap a, .lib-view-v a{ color:var(--primary); }
+.ref-remote-cap a, .lib-view-v a{ color:var(--ink); }
 .ref-none{ font-size:12px; color:var(--muted); }
 
 /* (block 5b) Where the chosen files go - the window of the place picker (js/place-tree.js, phase V39: a folded tree of
    the media tree's places, its rows in css/media-tree.css), grey where they cannot go. Also "save the piece to". */
-.ref-said{ font-size:10.5px; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50%; }
+.ref-said{ font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50%; }
 .ref-move{
   position:fixed; z-index:9200; width:290px; max-height:min(460px, 70vh); display:flex; flex-direction:column;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs); box-shadow:var(--shadow);

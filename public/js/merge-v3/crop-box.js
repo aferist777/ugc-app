@@ -266,13 +266,17 @@ function _draw() {
   g.stroke();
   g.lineWidth = 3 * s; g.strokeStyle = 'rgba(0,0,0,.55)';
   g.strokeRect(x, y, w, h);
-  g.lineWidth = 1.5 * s; g.strokeStyle = '#ffd400';
+  // (phase V73, the owner's (б1-10)) the frame and its grips white - the selected thing's colour - each over a dark line
+  const mark = getComputedStyle(document.documentElement).getPropertyValue('--sel-ring').trim() || '#ededed';
+  g.lineWidth = 1.5 * s; g.strokeStyle = mark;
   g.strokeRect(x, y, w, h);
-  g.fillStyle = '#ffd400';
+  g.fillStyle = mark;
+  g.lineWidth = 1 * s; g.strokeStyle = 'rgba(0,0,0,.55)';
+  const grip = (gx, gy, gw, gh) => { g.fillRect(gx, gy, gw, gh); g.strokeRect(gx, gy, gw, gh); };
   const sq = 7 * s, bar = 14 * s, th = 4 * s;
-  for (const [gx, gy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) g.fillRect(gx - sq / 2, gy - sq / 2, sq, sq);
-  if (w > bar * 2.2) { g.fillRect(x + w / 2 - bar / 2, y - th / 2, bar, th); g.fillRect(x + w / 2 - bar / 2, y + h - th / 2, bar, th); }
-  if (h > bar * 2.2) { g.fillRect(x - th / 2, y + h / 2 - bar / 2, th, bar); g.fillRect(x + w - th / 2, y + h / 2 - bar / 2, th, bar); }
+  for (const [gx, gy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) grip(gx - sq / 2, gy - sq / 2, sq, sq);
+  if (w > bar * 2.2) { grip(x + w / 2 - bar / 2, y - th / 2, bar, th); grip(x + w / 2 - bar / 2, y + h - th / 2, bar, th); }
+  if (h > bar * 2.2) { grip(x - th / 2, y + h / 2 - bar / 2, th, bar); grip(x + w - th / 2, y + h / 2 - bar / 2, th, bar); }
 }
 
 // The pointer in shares of the file (the picture sits PAD inside the field's edges).

@@ -16,18 +16,18 @@
 .snd-wave rect.snd-wave-flat{opacity:.35}
 /* on Merge's square sound tile: under its name, over its length */
 .mv3-tile.is-sound .snd-twave{position:absolute; left:6px; bottom:15px; width:calc(100% - 12px); height:15px}
-.mv3-tile.is-sound.is-playing .snd-wave rect{fill:var(--accent); opacity:.95}
+.mv3-tile.is-sound.is-playing .snd-wave rect{fill:var(--ink); opacity:.95}
 /* on the Library's card: the lower part of the box */
 .lib-thumb-sound .snd-twave{position:absolute; left:8%; bottom:16%; width:84%; height:22%}
-.lib-card.is-playing .snd-wave rect{fill:var(--accent); opacity:.95}
+.lib-card.is-playing .snd-wave rect{fill:var(--ink); opacity:.95}
 
 /* the search over SFX, and "find online…" (the panel's body; the Library's shelf header) */
 .snd-shelf-head{display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap}
 .snd-search{flex:1 1 180px; min-width:140px; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 8px}
-.snd-search:focus{outline:none; border-color:var(--primary)}
+.snd-search:focus{outline:none; border-color:var(--focus)}
 .snd-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
 .snd-btn:hover{border-color:var(--muted)}
-.snd-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.snd-btn.is-primary{background:var(--main); border-color:var(--main); color:var(--on-main)}
 .snd-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
 .snd-btn[disabled]{opacity:.5; cursor:default}
 .snd-sel{background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 6px}
@@ -38,14 +38,14 @@
 .snd-sites-sub{font-size:11px; color:var(--muted); margin:-3px 0 6px}
 .snd-sites-row{display:flex; flex-direction:column; gap:1px; padding:5px 7px; border-radius:var(--r-xs); color:var(--ink); text-decoration:none}
 .snd-sites-row:hover{background:var(--surface-2)}
-.snd-sites-row b{font-size:12px; font-weight:600; color:var(--primary)}
+.snd-sites-row b{font-size:12px; font-weight:600; color:var(--ink)}
 .snd-sites-row span{font-size:10.5px}
 
 /* the menu under the right button, and "About" */
 .snd-menu{z-index:9310}
 .snd-about{width:340px; z-index:9310}
 .snd-about-row{display:grid; grid-template-columns:70px 1fr; gap:8px; font-size:11.5px; padding:2px 0; overflow-wrap:anywhere}
-.snd-about-row a{color:var(--primary)}
+.snd-about-row a{color:var(--ink)}
 
 /* windows: the cut and the online search */
 /* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
@@ -72,8 +72,8 @@
 .snd-scrub{position:relative; width:100%; min-width:0}
 .snd-scrub-cv{display:block; width:100%; touch-action:none; user-select:none}
 /* (phase V59) "Cut" on the ruler by the right flag, while a piece is marked - its place set by scrub.js */
-.snd-scrub-cut{position:absolute; top:0; left:0; z-index:1; box-sizing:border-box; margin:0; padding:0 8px; border:1px solid var(--primary); border-radius:3px;
-  background:var(--primary); color:var(--primary-ink); font:700 10px/1 var(--font); white-space:nowrap; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.snd-scrub-cut{position:absolute; top:0; left:0; z-index:1; box-sizing:border-box; margin:0; padding:0 8px; border:1px solid var(--main); border-radius:3px;
+  background:var(--main); color:var(--on-main); font:700 10px/1 var(--font); white-space:nowrap; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .snd-scrub-cut[hidden]{display:none}
 .snd-scrub-cut:hover{filter:brightness(1.12)}
 .snd-scrub-cut[disabled]{opacity:.6; cursor:default}
@@ -107,7 +107,7 @@
 .snd-on-tx span{font-size:10.5px}
 .snd-on-tags{color:var(--muted); opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .snd-on-wave{width:150px; height:28px}
-.snd-on-link{font-size:11px; color:var(--primary); text-decoration:none}
+.snd-on-link{font-size:11px; color:var(--ink); text-decoration:none}
 .snd-on-link:hover{text-decoration:underline}
 .snd-on-pager{display:flex; align-items:center; justify-content:center; gap:10px; font-size:11px}
 .snd-on-foot{display:flex; flex-direction:column; gap:6px; padding-top:8px; border-top:1px solid var(--border-soft)}

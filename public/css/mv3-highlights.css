@@ -24,11 +24,11 @@
 .mv3-hl-title{font:700 12px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .mv3-hl-meta{flex:0 0 auto; font:500 10px/1.3 var(--font); color:var(--muted); white-space:nowrap}
 .mv3-hl-state{flex:0 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
-.mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
+.mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
 .mv3-hl-words.is-err{color:var(--danger); white-space:normal}
-.mv3-hl-add{color:var(--primary); border-color:var(--primary)}
+.mv3-hl-add{color:var(--ink); border-color:var(--sel-line)}
 .mv3-hl-add.is-big{padding:8px 16px; font-size:12px}
-.mv3-c-btn.is-armed:not(.danger){background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.mv3-c-btn.is-armed:not(.danger){background:var(--warn); border-color:var(--warn); color:var(--on-fill)}
 .mv3-hl-note{margin:0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
 .mv3-hl-note.is-err{color:var(--danger)}
 
@@ -49,31 +49,31 @@
   overflow:hidden; background:var(--surface-2); cursor:pointer; transition:border-color .12s var(--ease);
 }
 .mv3-hl-tile:hover{border-color:var(--muted)}
-.mv3-hl-tile.is-sel{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary)}
-.mv3-hl-tile.is-checked{border-color:var(--accent)}
+.mv3-hl-tile.is-sel{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}
+.mv3-hl-tile.is-checked{border-color:var(--sel-line)}
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
-.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--primary); cursor:pointer}
+.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--success); cursor:pointer}
 .mv3-hl-score{
   position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
-  background:oklch(0 0 0 / .65); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;
+  background:var(--scrim); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;
 }
 .mv3-hl-pieces{
   position:absolute; top:49px; right:5px; z-index:2; padding:1px 5px; border-radius:999px;
-  background:oklch(0 0 0 / .55); color:var(--accent); font:600 8.5px/1.3 var(--font);
+  background:var(--scrim); color:var(--on-media); font:600 8.5px/1.3 var(--font);
 }
 /* The cross in the corner (х19): pale until the tile is pointed at; armed - "really?" - filled red. */
 .mv3-hl-x{
   position:absolute; top:5px; right:5px; z-index:3; min-width:20px; height:20px; padding:0 5px;
-  border:1px solid oklch(1 0 0 / .25); border-radius:var(--r-xs); background:oklch(0 0 0 / .6);
-  color:oklch(.9 0 0); font:700 10px/18px var(--font); cursor:pointer; opacity:.35; transition:opacity .12s var(--ease);
+  border:1px solid var(--on-media-line); border-radius:var(--r-xs); background:var(--scrim);
+  color:var(--on-media); font:700 10px/18px var(--font); cursor:pointer; opacity:.35; transition:opacity .12s var(--ease);
 }
 .mv3-hl-tile:hover .mv3-hl-x, .mv3-hl-x.is-armed{opacity:1}
 .mv3-hl-x:hover{border-color:var(--danger); color:var(--danger)}
-.mv3-hl-x.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
+.mv3-hl-x.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
 /* Being made: the poster dimmed under its own bar; made: its own first frame; its timeline open: lit. */
 .mv3-hl-tile.is-making .mv3-hl-frame{filter:grayscale(.5) brightness(.5)}
-.mv3-hl-tile.is-open{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary), 0 0 14px oklch(from var(--primary) l c h / .45)}
+.mv3-hl-tile.is-open{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}
 .mv3-hl-step.is-err{color:var(--danger)}
 .mv3-hl-said{font:600 10px/1.3 var(--font); color:var(--muted); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hl-said.is-err{color:var(--danger)}
@@ -84,19 +84,19 @@
   background:var(--bg); font:700 12.5px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
 }
 .mv3-hl-card-name:hover{border-color:var(--muted)}
-.mv3-hl-card-name:focus{outline:none; border-color:var(--primary)}
+.mv3-hl-card-name:focus{outline:none; border-color:var(--focus)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
-  background:linear-gradient(to top, oklch(0 0 0 / .85), oklch(0 0 0 / 0));
+  background:linear-gradient(to top, var(--scrim-strong), oklch(0 0 0 / 0));
   display:flex; flex-direction:column; gap:3px;
 }
 .mv3-hl-name{
-  font:700 10.5px/1.25 var(--font); color:oklch(.98 0 0);
+  font:700 10.5px/1.25 var(--font); color:var(--on-media);
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
 }
-.mv3-hl-step{font:600 9px/1.3 var(--font); color:oklch(.85 0 0); overflow-wrap:anywhere}
-.mv3-hl-bar{height:4px; border-radius:2px; background:oklch(1 0 0 / .18); overflow:hidden}
-.mv3-hl-fill{height:100%; background:var(--accent); transition:width .4s linear}
+.mv3-hl-step{font:600 9px/1.3 var(--font); color:var(--ink); overflow-wrap:anywhere}
+.mv3-hl-bar{height:4px; border-radius:2px; background:var(--on-media-line); overflow:hidden}
+.mv3-hl-fill{height:100%; background:var(--muted); transition:width .4s linear}
 /* (phase V40, the owner's (о5)) Until the moments are found: ONE panel the field's width - the way's steps as rows, one bar for
    the whole of it, "0:48 · ~3:10 left" - popping up once. */
 .mv3-hl-prep{
@@ -111,27 +111,27 @@
 .mv3-hl-stage-w{flex:1 1 auto; min-width:0; overflow-wrap:anywhere}
 .mv3-hl-stage-t{flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--muted)}
 .mv3-hl-stage.is-done{color:var(--ink)}
-.mv3-hl-stage.is-done .mv3-hl-stage-m{color:var(--accent)}
+.mv3-hl-stage.is-done .mv3-hl-stage-m{color:var(--success)}
 .mv3-hl-stage.is-now{color:var(--ink); font-weight:600}
-.mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--accent); animation:mv3-hl-beat 1.2s ease-in-out infinite}
+.mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--ink); animation:mv3-hl-beat 1.2s ease-in-out infinite}
 @keyframes mv3-hl-beat{50%{opacity:.35}}
 .mv3-hl-stage.is-next{opacity:.7}
 .mv3-hl-stage.is-failed, .mv3-hl-stage.is-failed .mv3-hl-stage-m{color:var(--danger)}
 .mv3-hl-prep-bar{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}
-.mv3-hl-prep-bar > i{display:block; height:100%; width:0; background:var(--accent); border-radius:3px; transition:width .6s linear}
+.mv3-hl-prep-bar > i{display:block; height:100%; width:0; background:var(--muted); border-radius:3px; transition:width .6s linear}
 .mv3-hl-prep-t{margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
 
 /* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
-.mv3-hl-fill.is-render{background:var(--primary)}
-.mv3-hl-step.is-warn{color:var(--warn, oklch(.8 .14 75))}
+.mv3-hl-fill.is-render{background:var(--muted)}
+.mv3-hl-step.is-warn{color:var(--warn)}
 .mv3-hl-rendered{
   position:absolute; top:28px; left:5px; z-index:2; padding:2px 6px; border-radius:999px;
-  background:var(--primary); color:var(--primary-ink); font:700 8.5px/1.3 var(--font); white-space:nowrap;
+  background:var(--success); color:var(--on-fill); font:700 8.5px/1.3 var(--font); white-space:nowrap;
 }
-.mv3-hl-rendered.is-changed{background:oklch(0 0 0 / .6); color:oklch(.85 0 0); border:1px dashed oklch(1 0 0 / .4)}
+.mv3-hl-rendered.is-changed{background:var(--scrim); color:var(--ink); border:1px dashed var(--on-media-line)}
 .mv3-hl-again{
   align-self:flex-start; padding:2px 7px; border:1px solid var(--danger); border-radius:var(--r-xs);
-  background:oklch(0 0 0 / .5); color:oklch(.98 0 0); font:600 9px/1.3 var(--font); cursor:pointer;
+  background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); cursor:pointer;
 }
 .mv3-hl-again:hover{background:var(--danger)}
 .mv3-hl-rline b{overflow-wrap:anywhere}
@@ -139,26 +139,26 @@
 .mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
 /* The render button in a highlights project while its renders go: "✕ stop", armed - "really?" - filled red (export-b.js) */
 #mv3-export.is-stop{background:transparent; border-color:var(--danger); color:var(--danger)}
-#mv3-export.is-stop.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
+#mv3-export.is-stop.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
 
 /* The card of the moment pressed */
 .mv3-hl-card-h{font:700 12.5px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}
 .mv3-hl-facts{display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom:6px}
 .mv3-hl-fact{font:500 10px/1.3 var(--font); color:var(--muted)}
-.mv3-hl-fact b{color:var(--accent); font-size:12px}
+.mv3-hl-fact b{color:var(--muted); font-size:12px}
 .mv3-hl-pcs{display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px}
 .mv3-hl-pc{
   padding:2px 7px; border:1px solid var(--border); border-radius:999px;
   font:600 9.5px/1.4 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
 }
-.mv3-hl-pc.is-hook{border-color:var(--accent); color:var(--accent)}
+.mv3-hl-pc.is-hook{border-color:var(--border); color:var(--muted)}
 .mv3-hl-text{margin:0; font:400 11px/1.5 var(--font); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere}
 .mv3-hl-list{margin:4px 0 8px; padding-left:16px; font:400 11px/1.5 var(--font); color:var(--ink)}
 
 /* ── The popup (phase V68 P3): a window of js/gen-window.js (openFrame, geom 'highlights') - two columns, 2/3 and 1/3, the foot
    across both ── */
 .gw-body.mv3-hlp{flex-direction:column}
-.gw.is-drop{outline:2px dashed var(--primary); outline-offset:-6px}
+.gw.is-drop{outline:2px dashed var(--sel-line); outline-offset:-6px}
 .mv3-hlp-cols{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 1fr)}
 .mv3-hlp-left{min-width:0; min-height:0; overflow-y:auto; padding:2px 16px 14px}
 .mv3-hlp-right{min-width:0; min-height:0; display:flex; flex-direction:column; padding:2px 12px 10px; border-left:1px solid var(--border-soft)}
@@ -188,7 +188,7 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); cursor:pointer;
 }
 .mv3-hlp-src:hover{border-color:var(--muted)}
-.mv3-hlp-src.is-on{border-color:var(--primary); background:var(--primary-soft)}
+.mv3-hlp-src.is-on{border-color:var(--sel-line); background:var(--sel-bg)}
 .mv3-hlp-src-img{width:54px; height:30px; object-fit:cover; border-radius:2px; flex:0 0 auto}
 .mv3-hlp-src-t{display:flex; flex-direction:column; min-width:0}
 .mv3-hlp-src-t b{font:600 11px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -211,7 +211,7 @@
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
 .mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}
 .mv3-hlp-kind.is-on .mv3-hlp-kind-nm{color:var(--ink)}
-.mv3-hlp-reset{margin-left:auto; padding:2px 0; border:0; background:none; color:var(--accent); font:600 10px/1.3 var(--font); cursor:pointer}
+.mv3-hlp-reset{margin-left:auto; padding:2px 0; border:0; background:none; color:var(--muted); font:600 10px/1.3 var(--font); cursor:pointer}
 .mv3-hlp-reset:hover{color:var(--ink)}
 .mv3-hlp-reset[disabled]{color:var(--muted); opacity:.5; cursor:default}
 /* (хп35) The kind's words - one height, whatever they say */
@@ -229,7 +229,7 @@
 .mv3-hlp-chip{height:24px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted);
   font:700 10.5px/22px var(--font); cursor:pointer}
 .mv3-hlp-chip:hover{border-color:var(--muted); color:var(--ink)}
-.mv3-hlp-chip.is-on{border-color:var(--primary); background:var(--primary-soft); color:var(--ink)}
+.mv3-hlp-chip.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
 .mv3-hlp-chip[disabled]{opacity:.4; cursor:default}
 .mv3-hlp-quiet{font:500 10px/1.4 var(--font); color:var(--muted)}
 .mv3-hlp-quiet.is-err{color:var(--danger)}
@@ -241,8 +241,8 @@
 .mv3-hlp-cset{display:flex; flex-direction:column; gap:4px; min-width:0}
 .mv3-hlp-cset-h{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-hlp-cset .mv3-hlp-chips{gap:3px}
-.mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:19px; border:1px solid var(--primary); border-radius:999px;
-  background:var(--primary-soft); overflow:hidden}
+.mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:19px; border:1px solid var(--sel-line); border-radius:999px;
+  background:var(--sel-bg); overflow:hidden}
 .mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:600 9.5px/17px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
 .mv3-hlp-pick-nm:hover{color:var(--gold)}
@@ -266,14 +266,14 @@
 .mv3-hlp-hear.is-err{color:var(--danger)}
 .mv3-hlp-said{font:600 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlp-said.is-err{color:var(--danger)}
-.mv3-c-btn.mv3-hlp-go{flex:0 0 auto; padding:6px 14px; border-color:var(--primary); background:var(--primary); color:var(--primary-ink); font-size:11px}
-.mv3-c-btn.mv3-hlp-go:hover{background:var(--primary); color:var(--primary-ink); filter:brightness(1.1)}
+.mv3-c-btn.mv3-hlp-go{flex:0 0 auto; padding:6px 14px; border-color:var(--main); background:var(--main); color:var(--on-main); font-size:11px}
+.mv3-c-btn.mv3-hlp-go:hover{background:var(--main-hover); color:var(--on-main); filter:brightness(1.1)}
 .mv3-c-btn.mv3-hlp-go[disabled]{opacity:.45; cursor:default; filter:none}
 
 /* ── The card's line of the captions' style (phase V33.3) ── */
 .mv3-hl-cap{font:500 10px/1.4 var(--font); color:var(--muted); margin:0 0 6px}
 .mv3-hl-cap b{color:var(--ink); font-weight:700}
-.mv3-hl-cap-ed{color:var(--accent)}
+.mv3-hl-cap-ed{color:var(--muted)}
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
 
 /* (phase V33.8, H2) The captions recommended for the video's kind: their chip first, gold; their groups marked with a dot */
@@ -308,7 +308,7 @@
 /* (phase V66) The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
 .mv3-hlg{display:flex; flex-direction:column; gap:6px}
 .mv3-hlg.is-busy{opacity:.6; pointer-events:none}
-.mv3-hlg .mv3-c-btn.is-on{border-color:var(--primary); background:var(--primary-soft); color:var(--ink)}
+.mv3-hlg .mv3-c-btn.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
 .mv3-hlg-each{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-hlg-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
 .mv3-hlg-item{display:flex; flex-direction:column; gap:1px; padding:4px 6px; border-radius:6px; cursor:pointer}

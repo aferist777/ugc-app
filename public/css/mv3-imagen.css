@@ -35,7 +35,7 @@
 .mv3-ig-row.is-arsel{ display:none }
 .mv3-ig-sep{
   margin:11px 0 6px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase;
-  color:var(--accent); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
+  color:var(--muted); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
 }
 .mv3-ig-ar-row{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px }
 .mv3-ig-ar-b{
@@ -44,14 +44,14 @@
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-ar-b:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft); background:var(--surface) }
-.mv3-ig-ar-b.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
-.mv3-ig-ar-b .dot{ color:var(--primary) }
-.mv3-ig-ar-b.on .dot{ color:var(--primary-ink); opacity:.7 }
+.mv3-ig-ar-b.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
+.mv3-ig-ar-b .dot{ color:var(--ink) }
+.mv3-ig-ar-b.on .dot{ color:var(--ink); opacity:.7 }
 /* What this will cost, under the choice that decides it - the price of the aggregator that will be
    asked, not the cheapest, which is a price nobody pays. */
 .mv3-ig-cost{
   display:flex; align-items:baseline; gap:6px; margin:9px 0 0; padding:6px 8px;
-  border:1px solid var(--border); border-left:2px solid var(--accent); border-radius:var(--r-xs);
+  border:1px solid var(--border); border-left:2px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2);
 }
 .mv3-ig-cost b{ font:700 13px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
@@ -125,7 +125,7 @@
 }
 .mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible{ opacity:1 }
 .mv3-ig-del:hover{ color:var(--ink); border-color:var(--muted) }
-.mv3-ig-del.is-ask{ opacity:1; padding:0 7px; color:#fff; background:var(--danger); border-color:var(--danger); font-size:10px }
+.mv3-ig-del.is-ask{ opacity:1; padding:0 7px; color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); font-size:10px }
 .mv3-ig-del[hidden]{ display:none }
 .mv3-ig-text{ font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .mv3-ig-note{ font:600 10px/1.4 var(--font); color:var(--muted) }
@@ -143,15 +143,15 @@
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;
   font:600 13px/1 var(--font); color:var(--muted);
 }
-.mv3-ig-msg-ref img + .ic{ color:#fff; text-shadow:0 0 4px rgba(0,0,0,.8) }
+.mv3-ig-msg-ref img + .ic{ color:var(--on-media); text-shadow:0 0 4px rgba(0,0,0,.8) }
 .mv3-ig-msg-ref .dur{
-  position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:rgba(0,0,0,.62); color:#fff;
+  position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
   font:600 8px/12px var(--font); text-align:center; pointer-events:none;
 }
 .mv3-ig-msg-ref .n,
 .mv3-ig-att .n{
   position:absolute; top:2px; left:2px; min-width:13px; padding:0 3px; border-radius:2px;
-  background:var(--primary); color:var(--primary-ink);
+  background:var(--scrim); color:var(--on-media);
   font:700 8.5px/13px var(--font); text-align:center;
 }
 
@@ -166,7 +166,7 @@
   border:1px solid var(--border); border-radius:var(--r-xs);
   cursor:zoom-in;
 }
-.mv3-ig-shot:hover{ border-color:var(--primary) }
+.mv3-ig-shot:hover{ border-color:var(--sel-line) }
 /* A picture taken off the shelf since: the place it stood in, said in words. */
 .mv3-ig-gone{
   width:132px; display:flex; align-items:center; justify-content:center; padding:6px;
@@ -184,7 +184,7 @@
 }
 .mv3-ig-shot.is-busy, .vc-board.is-frame.is-waiting{
   background:repeating-linear-gradient(135deg,
-    oklch(.27 .02 265) 0 10px, oklch(.24 .02 265) 10px 20px);
+    var(--surface-3) 0 10px, var(--surface-2) 10px 20px);
 }
 /* What can be done with a picture, under it, a column of full-width buttons. */
 .mv3-ig-acts{ display:flex; flex-direction:column; gap:4px; width:100% }
@@ -199,7 +199,7 @@
 .mv3-ig-more-b:hover{ color:var(--ink) }
 .mv3-ig-more-body{
   display:flex; flex-direction:column; gap:2px; padding:6px 8px;
-  border-left:2px solid var(--accent); background:var(--surface-2); border-radius:var(--r-xs);
+  border-left:2px solid var(--border); background:var(--surface-2); border-radius:var(--r-xs);
 }
 .mv3-ig-more-row{ display:flex; gap:8px; font:600 9.5px/1.45 var(--font) }
 .mv3-ig-more-row .k{ flex:0 0 68px; color:var(--muted) }
@@ -222,15 +222,15 @@
   background:transparent; color:var(--border);
   font:400 18px/56px var(--font); cursor:pointer; transition:.12s var(--ease);
 }
-.mv3-ig-att-slot:hover:not([disabled]){ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-att-slot:hover:not([disabled]){ border-color:var(--sel-line); color:var(--ink) }
 .mv3-ig-att{
   position:relative; width:58px; height:58px; border-radius:var(--r-xs); overflow:hidden;
-  border:1px solid var(--primary); background:var(--surface-2);
+  border:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
 .mv3-ig-att .x{
   position:absolute; top:2px; right:2px; width:15px; height:15px; padding:0;
-  border:0; border-radius:2px; background:oklch(0 0 0 / .6); color:oklch(.98 0 0);
+  border:0; border-radius:2px; background:var(--scrim); color:var(--on-media);
   font:600 8px/15px var(--font); cursor:pointer;
 }
 .mv3-ig-att .x:hover{ background:var(--danger) }
@@ -268,11 +268,11 @@
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 /* A slot that must be filled, still empty. */
-.mv3-ig-cell.is-req .mv3-ig-att-slot{ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-cell.is-req .mv3-ig-att-slot{ border-color:var(--gold); color:var(--gold) }
 .mv3-ig-cell.is-req .lab{ color:var(--ink) }
 .mv3-ig-cell.is-off .mv3-ig-att-slot{ opacity:.35; cursor:default }
 .mv3-ig-cell.is-flash .mv3-ig-att-slot{ animation:mv3-ig-flash .3s ease-in-out 3 }
-@keyframes mv3-ig-flash{ 50%{ border-color:var(--danger); color:var(--danger); background:oklch(.65 .2 25 / .18) } }
+@keyframes mv3-ig-flash{ 50%{ border-color:var(--danger); color:var(--danger); background:var(--danger-soft) } }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:6px 10px 5px }
 .mv3-pc.is-narrow .mv3-ig-cell{ width:40px }
 /* HALF THE HEIGHT (the owner, 2026-10-06): the zone's places and what is in them half the size - the pictures chat's
@@ -317,7 +317,7 @@
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .pen:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
-.mv3-ig-bar .pen.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.mv3-ig-bar .pen.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
 .mv3-ig-bar .n{
   flex:0 0 auto; height:24px; margin-bottom:1px; padding:0 7px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); font:600 10.5px/22px var(--font);
@@ -327,8 +327,8 @@
 /* The one action here. */
 .mv3-ig-bar .b{
   flex:0 0 auto; height:24px; min-width:30px; margin-bottom:1px; padding:0 9px;
-  border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary); color:var(--primary-ink); font:700 12px/1 var(--font);
+  border:1px solid var(--main); border-radius:var(--r-xs);
+  background:var(--main); color:var(--on-main); font:700 12px/1 var(--font);
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .b:hover:not([disabled]){ filter:brightness(1.1) }
@@ -351,12 +351,12 @@
   background:var(--surface-2); cursor:pointer; overflow:hidden;
 }
 .mv3-ig-card img{ width:100%; height:100%; object-fit:cover; display:block }
-.mv3-ig-card.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset }
+.mv3-ig-card.on{ border-color:var(--sel-line); box-shadow:0 0 0 1px var(--sel-line) inset }
 .mv3-ig-card.is-plus{
   min-height:44px; border-style:dashed; background:transparent; color:var(--muted);
   font:400 18px/1 var(--font);
 }
-.mv3-ig-card.is-plus:hover{ border-color:var(--primary); color:var(--ink); border-style:solid }
+.mv3-ig-card.is-plus:hover{ border-color:var(--sel-line); color:var(--ink); border-style:solid }
 .mv3-ig-card.is-busy, .mv3-ig-card.is-fail{ display:flex; align-items:center; justify-content:center }
 .mv3-ig-card.is-busy .sp{ font:600 9px/1 var(--font); color:var(--muted) }
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
@@ -367,9 +367,9 @@
 .mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
 .mv3-ig-cplay{
   position:absolute; left:4px; top:4px; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
-  background:rgba(0,0,0,.55); color:#fff; font:600 9px/22px var(--font); cursor:pointer; opacity:.85;
+  background:var(--scrim); color:var(--on-media); font:600 9px/22px var(--font); cursor:pointer; opacity:.85;
 }
-.mv3-ig-cplay:hover{ background:var(--primary); color:var(--primary-ink); opacity:1 }
+.mv3-ig-cplay:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
 .mv3-ig-card.is-sound{
   display:flex; align-items:center; gap:6px; min-height:0; height:30px; padding:0 7px 0 4px; box-sizing:border-box;
 }
@@ -379,7 +379,7 @@
   flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:50%;
   background:var(--surface); color:var(--ink); font:600 8px/20px var(--font); cursor:pointer;
 }
-.mv3-ig-splay:hover{ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-splay:hover{ border-color:var(--sel-line); color:var(--ink) }
 .mv3-ig-card.is-short{ opacity:.45 }
 
 /* Hovering shows the picture larger, at one fixed place over the conversation. */
@@ -403,16 +403,16 @@
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
   background:var(--surface-2); cursor:pointer;
 }
-.mv3-vc-shot:hover{ border-color:var(--primary) }
+.mv3-vc-shot:hover{ border-color:var(--sel-line) }
 .mv3-vc-shot .mv3-ig-shot{ width:100%; height:100%; min-width:0; max-height:none; object-fit:cover; border:0; border-radius:0 }
 .mv3-ig-play{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
   width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.55); color:#fff; font:600 12px/1 var(--font); pointer-events:none;
+  background:var(--scrim); color:var(--on-media); font:600 12px/1 var(--font); pointer-events:none;
 }
 .mv3-ig-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
-  background:rgba(0,0,0,.6); color:#fff; font:600 9px/1.3 var(--font); pointer-events:none;
+  background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); pointer-events:none;
 }
 /* Dragged onto a lane (phase V13). */
 .mv3-vc-shot.is-dragging{ opacity:.5 }
@@ -420,7 +420,7 @@
 .mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ cursor:pointer; display:flex; align-items:center; justify-content:center }
 .mv3-ig-att .ic{ font:600 11px/1 var(--font); color:var(--muted) }
 .mv3-ig-att .dur{
-  position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:rgba(0,0,0,.62); color:#fff;
+  position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
   font:600 7px/10px var(--font); text-align:center; pointer-events:none;
 }
 .mv3-ig-att.is-bad{ border-color:var(--danger) }
@@ -432,18 +432,18 @@
 /* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
 .mv3-ig-att.is-swap{ cursor:pointer }
 .mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
-.mv3-ig-att button.dur:hover{ background:var(--primary); color:var(--primary-ink) }
+.mv3-ig-att button.dur:hover{ background:var(--scrim-strong); color:var(--on-media) }
 /* An empty NUMBERED place - a thing taken out keeps its number: dashed, "+" to fill it, the cross to close it. */
 .mv3-ig-att.is-hole{ border-style:dashed; background:transparent }
 .mv3-ig-att.is-hole .go{
   position:absolute; inset:0; width:100%; height:100%; padding:0; border:0; background:transparent;
-  color:var(--primary); font:400 12px/1 var(--font); cursor:pointer;
+  color:var(--ink); font:400 12px/1 var(--font); cursor:pointer;
 }
-.mv3-ig-att.is-hole .go:hover{ background:var(--primary-soft) }
-.mv3-ig-att.is-hole .n{ background:var(--primary-soft); color:var(--primary); pointer-events:none }
+.mv3-ig-att.is-hole .go:hover{ background:var(--hover) }
+.mv3-ig-att.is-hole .n{ background:var(--sel-bg); color:var(--ink); pointer-events:none }
 .mv3-ig-cell.is-flash .mv3-ig-att.is-hole{ animation:mv3-ig-flash .3s ease-in-out 3 }
 /* A clip from the timeline held over the part that takes it (timeline-b.js). */
-.mv3-ig-part.is-drop{ background:var(--primary-soft); border-radius:var(--r-xs); outline:1px dashed var(--primary); outline-offset:-1px }
+.mv3-ig-part.is-drop{ background:var(--sel-bg); border-radius:var(--r-xs); outline:1px dashed var(--sel-line); outline-offset:-1px }
 
 /* (phase V7) The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). */
 .vtrim{
@@ -455,23 +455,23 @@
 .vtrim-x{ margin-left:auto; border:0; background:none; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font) }
 .vtrim-x:hover{ color:var(--ink) }
 .vtrim-why{ font:600 10px/1.4 var(--font); color:var(--gold) }
-.vtrim-media{ display:block; width:100%; max-height:200px; background:#000; border-radius:var(--r-xs) }
+.vtrim-media{ display:block; width:100%; max-height:200px; background:var(--media-bg); border-radius:var(--r-xs) }
 audio.vtrim-media{ background:none; height:32px }
 .vtrim-bar{ position:relative; height:26px; border-radius:var(--r-xs); background:var(--surface-2); border:1px solid var(--border-soft); touch-action:none }
 .vtrim-bar.is-film{ height:40px }
 .vtrim-film{ position:absolute; inset:0; width:100%; height:100%; border-radius:var(--r-xs); opacity:.85; pointer-events:none }
 .vtrim-win{
-  position:absolute; top:-1px; bottom:-1px; border:2px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary-soft); cursor:grab; box-sizing:border-box;
+  position:absolute; top:-1px; bottom:-1px; border:2px solid var(--sel-ring); border-radius:var(--r-xs);
+  background:var(--sel-bg); cursor:grab; box-sizing:border-box;
 }
 .vtrim-win:active{ cursor:grabbing }
-.vtrim-edge{ position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; background:var(--primary) }
+.vtrim-edge{ position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; background:var(--sel-ring) }
 .vtrim-edge.is-l{ left:-5px; border-radius:3px 0 0 3px }
 .vtrim-edge.is-r{ right:-5px; border-radius:0 3px 3px 0 }
 .vtrim-at{ position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--ink); pointer-events:none }
 .vtrim-foot{ display:flex; align-items:center; gap:8px }
 .vtrim-span{ flex:1 1 auto; font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
-.vtrim-done{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary) }
+.vtrim-done{ color:var(--on-main); background:var(--main); border-color:var(--main) }
 /* (phase V17) Kling motion control's first frame: its moment on a slider - the part goes from there. */
 .vtrim-still{ display:flex; align-items:center; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vtrim-still .k{ flex:0 0 auto; font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
@@ -497,20 +497,20 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-foot{ display:flex; flex-direction:column }
 .vc-card{ max-width:min(640px, 100%); width:100% }
 .vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
-.vc-card-h .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--accent) }
+.vc-card-h .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
 .vc-card-h .t{ flex:0 1 auto; min-width:0; font:700 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
 .vc-card-h i{ font:600 10px/1 var(--font); font-style:normal; color:var(--gold) }
 .vc-req{ font:500 12px/1.75 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .vc-place{
   padding:1px 5px; margin:0 1px; border-radius:var(--r-xs);
-  border:1px dashed var(--gold); background:oklch(.8 .12 85 / .07); outline:none;
+  border:1px dashed var(--gold); background:var(--gold-soft); outline:none;
   -webkit-box-decoration-break:clone; box-decoration-break:clone;
 }
 .vc-place.is-example{ color:var(--muted) }
-.vc-place.is-changed{ border-style:solid; color:var(--ink); background:oklch(.8 .12 85 / .13) }
+.vc-place.is-changed{ border-style:solid; color:var(--ink); background:var(--gold-soft) }
 .vc-place[contenteditable]{ cursor:text }
-.vc-place[contenteditable]:focus{ border-style:solid; box-shadow:0 0 0 2px oklch(.8 .12 85 / .25); color:var(--ink) }
+.vc-place[contenteditable]:focus{ border-style:solid; box-shadow:0 0 0 2px var(--gold-soft); color:var(--ink) }
 /* The length and the shape - the column's, filled in by the code: grey, not a place to write in. */
 .vc-place.is-auto{ border:1px solid var(--border); background:var(--surface-2); color:var(--muted) }
 .vc-card-note{ font:500 10px/1.45 var(--font); color:var(--muted) }
@@ -526,12 +526,12 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
   font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.vc-req-body:focus{ outline:none; border-color:var(--primary) }
+.vc-req-body:focus{ outline:none; border-color:var(--focus) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
 .vc-go{ font-weight:700 }
-.vc-go.is-make{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); padding:4px 14px }
-.vc-go.is-make:hover:not([disabled]){ background:var(--primary); color:var(--primary-ink); filter:brightness(1.1) }
+.vc-go.is-make{ color:var(--on-main); background:var(--main); border-color:var(--main); padding:4px 14px }
+.vc-go.is-make:hover:not([disabled]){ background:var(--main-hover); color:var(--on-main); filter:brightness(1.1) }
 .vc-go[disabled]{ opacity:.45; cursor:default }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
 .vc-n{
@@ -544,7 +544,7 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
   font:500 11.5px/1.55 var(--font);
 }
-.vc-prompt-ta:focus{ outline:none; border-color:var(--primary) }
+.vc-prompt-ta:focus{ outline:none; border-color:var(--focus) }
 .vc-card.is-sent .vc-req{ opacity:.92 }
 /* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
    the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
@@ -573,7 +573,7 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
 .mv3-vc-switches:empty{ display:none }
 .mv3-vc-check{ display:flex; align-items:center; gap:7px; padding:2px 2px; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none }
-.mv3-vc-check input{ margin:0; accent-color:var(--primary); cursor:pointer }
+.mv3-vc-check input{ margin:0; accent-color:var(--success); cursor:pointer }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
 .mv3-vc-check.is-off input{ cursor:default }
 /* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
@@ -583,10 +583,10 @@ audio.vtrim-media{ background:none; height:32px }
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
 .mv3-vc-almanac{
   flex:0 0 auto; display:block; width:auto; height:30px; margin:8px 10px 10px; padding:0 12px;
-  border:1px solid var(--gold); border-radius:var(--r-xs); background:transparent; color:var(--gold);
+  border:1px solid var(--border); border-radius:var(--r-xs); background:transparent; color:var(--ink);
   font:700 10.5px/28px var(--font); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:.12s var(--ease);
 }
-.mv3-vc-almanac:hover{ background:color-mix(in oklch, var(--gold) 16%, transparent) }
+.mv3-vc-almanac:hover{ background:var(--hover) }
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
 .mv3-pc.is-narrow .mv3-vc-almanac{ height:24px; margin:4px 10px 6px; line-height:22px }
 
@@ -594,7 +594,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-prompt-ta.is-board{ min-height:70px }
 /* Kling's first frame (V7.6; the chat's own since V17): the clip's frame at the moment, and the slider over the clip. */
 .vc-moment{ display:flex; gap:10px; align-items:flex-start; margin:2px 0 4px }
-.vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:#000; object-fit:contain }
+.vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:var(--media-bg); object-fit:contain }
 .vc-moment-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
 .vc-moment-side input[type=range]{ width:100%; margin:0 }
 .vc-moment-at{ font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
@@ -610,7 +610,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-board.is-gone{ opacity:.45; border-style:dashed; cursor:default }
 /* An attempt's line on the message's video step: which one, when, from which variant. */
 .vc-try-h{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.vc-try-h .k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vc-try-h .k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
 .vc-try-h .is-mine{ color:var(--gold) }
 /* (phase V48) What the agent saw of each clip - the message's first step: the clip's part, who watched it, the description. */
 .vc-watch{ display:flex; flex-direction:column; gap:5px; min-width:0 }
@@ -625,13 +625,13 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-steps{ padding-bottom:6px; border-bottom:1px solid var(--border-soft) }
 .vc-vars{ padding-top:6px; border-top:1px solid var(--border-soft) }
 .vc-steps-t, .vc-vars-t{ flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.vc-steps-t{ font:700 9.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vc-steps-t{ font:700 9.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
 .vc-vars-t{ font:600 10px/1.2 var(--font); color:var(--muted) }
 .vc-nav{
   flex:0 0 auto; width:24px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--ink); font:700 13px/20px var(--font); cursor:pointer; transition:.12s var(--ease);
 }
-.vc-nav:hover:not([disabled]){ border-color:var(--primary); color:var(--primary) }
+.vc-nav:hover:not([disabled]){ border-color:var(--sel-line); color:var(--ink) }
 .vc-nav[disabled]{ opacity:.35; cursor:default }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
@@ -666,7 +666,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* Being made: the field striped as a picture waiting, its countdown at its foot. */
 .vm-vid-box.is-busy{
   align-items:flex-end; padding:6px; border-style:solid;
-  background:repeating-linear-gradient(135deg, oklch(.27 .02 265) 0 10px, oklch(.24 .02 265) 10px 20px);
+  background:repeating-linear-gradient(135deg, var(--surface-3) 0 10px, var(--surface-2) 10px 20px);
 }
 .vm-vid-box.is-busy .mv3-ig-prog{ min-width:0; width:100%; background:var(--surface) }
 .vm-vid-box.is-bad{ border:1px solid var(--danger); background:color-mix(in oklch, var(--danger) 8%, var(--surface-2)) }
@@ -688,9 +688,9 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
   font:500 11px/24px var(--font); text-align:left; cursor:pointer;
 }
-.vm-fold-b:hover{ border-color:var(--primary) }
+.vm-fold-b:hover{ border-color:var(--sel-line) }
 .vm-fold.is-open .vm-fold-b{ border-color:var(--border-soft) }
-.vm-fold-b .k{ flex:0 0 auto; font:700 9px/24px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vm-fold-b .k{ flex:0 0 auto; font:700 9px/24px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
 .vm-fold-b .tw{ flex:0 0 auto; width:9px; color:var(--muted); font-size:9px }
 .vm-fold-b .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted) }
 .vm-fold-b .n{ flex:0 0 auto; font:500 9.5px/24px var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
@@ -707,7 +707,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fh .vc-steps{ flex:0 1 auto; min-width:0; padding:0; border:0; gap:4px }
 .vm-fh .vc-steps-t{ flex:0 1 auto; text-align:left }
 .vm-fh .vc-nav{ width:20px; height:20px; font-size:12px; line-height:18px }
-.vm-fh .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); white-space:nowrap }
+.vm-fh .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); white-space:nowrap }
 .vm-fh .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10px/1.3 var(--font); color:var(--muted) }
 .vm-fh .n{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
 .vc-prompt-ta.vm-ta{ flex:1 1 0; min-height:120px; resize:none; overflow-y:auto }
@@ -790,16 +790,16 @@ audio.vtrim-media{ background:none; height:32px }
   min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px;
   padding:10px 12px 14px; border-right:1px solid var(--border);
 }
-.pk-lab{ margin:10px 0 2px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--accent) }
+.pk-lab{ margin:10px 0 2px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
 .pk-lab:first-child{ margin-top:2px }
 .pk-src{
   display:block; width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/1.3 var(--font); text-align:left; cursor:pointer;
 }
 .pk-src:hover{ border-color:var(--muted) }
-.pk-src.on{ border-color:var(--primary); background:var(--primary-soft) }
+.pk-src.on{ border-color:var(--sel-line); background:var(--sel-bg) }
 .pk-src.is-up{ border-style:dashed; background:transparent; color:var(--muted) }
-.pk-src.is-up:hover{ border-style:solid; border-color:var(--primary); color:var(--ink) }
+.pk-src.is-up:hover{ border-style:solid; border-color:var(--sel-line); color:var(--ink) }
 .pk-up-note{ padding:2px 2px 0; font:500 10px/1.45 var(--font); color:var(--muted) }
 /* (phase V27) "from a link" under "from this computer": the field and "add" (js/merge-v3/chat-pick.js). */
 .pk-link{ display:flex; gap:4px }
@@ -807,16 +807,16 @@ audio.vtrim-media{ background:none; height:32px }
   flex:1; min-width:0; font:500 11px/1.3 var(--font); color:var(--ink);
   background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
 }
-.pk-link input:focus{ outline:none; border-color:var(--primary) }
+.pk-link input:focus{ outline:none; border-color:var(--focus) }
 .pk-link-go{
   font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:0 10px;
 }
-.pk-link-go:hover{ border-color:var(--primary) }
+.pk-link-go:hover{ border-color:var(--sel-line) }
 .pk-link-go[disabled]{ opacity:.5; cursor:default }
 /* The place a clip by a link goes into says how far it is (js/merge-v3/chat-shell.js _linkIn). */
 .mv3-ig-cell.is-linking .mv3-ig-att-slot, .mv3-ig-cell.is-linking .go{
-  font:600 9.5px/1.2 var(--font); color:var(--accent); border-style:solid; border-color:var(--accent);
+  font:600 9.5px/1.2 var(--font); color:var(--muted); border-style:solid; border-color:var(--border);
 }
 .pk-main{ min-height:0; display:flex; flex-direction:column }
 .pk-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-soft) }
@@ -824,7 +824,7 @@ audio.vtrim-media{ background:none; height:32px }
   flex:0 1 280px; min-width:120px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
 }
-.pk-q:focus{ outline:none; border-color:var(--primary) }
+.pk-q:focus{ outline:none; border-color:var(--focus) }
 .pk-cat{
   flex:0 1 260px; min-width:0; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
@@ -849,20 +849,20 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-box img, .pk-vid{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block }
 .pk-box.is-blank{
   background:repeating-linear-gradient(45deg,
-    oklch(.23 .018 265), oklch(.23 .018 265) 6px, oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
+    var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 12px);
 }
 .pk-tile.is-on .pk-box{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset }
 /* (phase V15) The thing the picker was opened on, shown once. */
 .pk-tile.is-sel .pk-box{ animation:pk-sel .45s ease-in-out 3 }
-@keyframes pk-sel{ 50%{ box-shadow:0 0 0 3px var(--primary) } }
+@keyframes pk-sel{ 50%{ box-shadow:0 0 0 3px var(--sel-line) } }
 .pk-mark{
   position:absolute; top:4px; left:4px; max-width:calc(100% - 8px); padding:0 5px; border-radius:var(--r-xs);
-  background:var(--gold); color:oklch(.2 .03 85); font:700 9.5px/15px var(--font);
+  background:var(--gold); color:var(--on-fill); font:700 9.5px/15px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;
 }
 .pk-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
-  background:rgba(0,0,0,.62); color:#fff; font:600 9px/1.3 var(--font); pointer-events:none;
+  background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); pointer-events:none;
 }
 .pk-cap{ max-width:100%; font:600 10px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .pk-sub{ max-width:100%; font:500 9.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
@@ -873,9 +873,9 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-play{
   position:absolute; top:calc(var(--pk-h) / 2 - 14px); left:50%; transform:translateX(-50%);
   width:28px; height:28px; padding:0; border:0; border-radius:50%;
-  background:rgba(0,0,0,.55); color:#fff; font:600 11px/28px var(--font); cursor:pointer;
+  background:var(--scrim); color:var(--on-media); font:600 11px/28px var(--font); cursor:pointer;
 }
-.pk-play:hover{ background:var(--primary); color:var(--primary-ink) }
+.pk-play:hover{ background:var(--scrim-strong); color:var(--on-media) }
 /* Sounds: rows in columns. */
 .pk-grid.is-rows{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px; align-items:start }
 .pk-tile.is-sound{ width:auto }
@@ -895,7 +895,7 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-drop{
   display:none; position:absolute; inset:0; z-index:5; pointer-events:none;
   align-items:center; justify-content:center; padding:20px; text-align:center;
-  background:oklch(0 0 0 / .55); border:2px dashed var(--primary); border-radius:var(--r);
+  background:var(--scrim); border:2px dashed var(--sel-line); border-radius:var(--r);
   font:700 13px/1.4 var(--font); color:var(--ink);
 }
 .pk.is-drop .pk-drop{ display:flex }
@@ -936,12 +936,12 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-side.is-people .pk-tree, .pk-side:not(.is-people) .pk-people{ display:none }
 .pk-person{
   position:relative; display:flex; align-items:center; gap:6px; flex:0 0 auto; padding:5px 8px;
-  border:0; border-radius:var(--r-xs); background:none; color:var(--ink-2, var(--ink));
+  border:0; border-radius:var(--r-xs); background:none; color:var(--ink);
   font:500 11px/1.25 var(--font); text-align:left; cursor:pointer;
 }
 .pk-person:hover{ background:var(--surface-2) }
-.pk-person.on{ background:var(--primary-soft); color:var(--ink); font-weight:600 }
-.pk-person.on::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:2px; background:var(--primary) }
+.pk-person.on{ background:var(--sel-bg); color:var(--ink); font-weight:600 }
+.pk-person.on::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:2px; background:var(--sel-line) }
 .pk-person-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .pk-person-n{ flex:0 0 auto; color:var(--muted); font-size:10px; font-weight:500 }
 .pk.is-tree .pk-bar{ gap:8px; padding:6px 10px }
@@ -959,7 +959,7 @@ audio.vtrim-media{ background:none; height:32px }
   flex:0 0 auto; padding:4px 10px; border:1px dashed var(--border); border-radius:var(--r-xs);
   background:transparent; color:var(--muted); font:600 10.5px/1.3 var(--font); cursor:pointer;
 }
-.pk-up:hover{ border-style:solid; border-color:var(--primary); color:var(--ink) }
+.pk-up:hover{ border-style:solid; border-color:var(--sel-line); color:var(--ink) }
 /* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop". */
 .pk-up.is-make{ border-style:solid; border-color:var(--gold); color:var(--gold) }
 .pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
@@ -1036,7 +1036,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-sec .nm, .hp-cat .nm{ flex:1 1 auto; min-width:0 }
 .hp-sec small, .hp-cat small{ flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .hp-sec:hover{ background:var(--surface-2) }
-.hp-sec.on{ border-color:var(--primary); background:var(--primary-soft) }
+.hp-sec.on{ border-color:var(--sel-line); background:var(--sel-bg) }
 .hp-sec.is-soon{ color:var(--muted) }
 .hp-sec.is-soon i{
   flex:0 0 auto; font:600 8px/1.2 var(--font); font-style:normal; letter-spacing:.04em; text-transform:uppercase;
@@ -1051,7 +1051,7 @@ audio.vtrim-media{ background:none; height:32px }
   flex:1 1 auto; min-width:0; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
 }
-.hp-q:focus{ outline:none; border-color:var(--primary) }
+.hp-q:focus{ outline:none; border-color:var(--focus) }
 .hp-count{ flex:0 0 auto; font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .hp-note{ flex:0 0 auto; padding:6px 10px; border-bottom:1px solid var(--border-soft); font:600 10.5px/1.4 var(--font); color:var(--gold) }
 .hp-note[hidden]{ display:none }
@@ -1062,11 +1062,11 @@ audio.vtrim-media{ background:none; height:32px }
   text-align:left; cursor:copy;
 }
 .hp-tile:hover{ border-color:var(--muted); background:var(--surface-2) }
-.hp-pv{ flex:0 0 auto; width:160px; height:90px; border-radius:3px; overflow:hidden; background:#000 }
+.hp-pv{ flex:0 0 auto; width:160px; height:90px; border-radius:3px; overflow:hidden; background:var(--media-bg) }
 .hp-pv img{ display:block; width:100%; height:100%; object-fit:cover }
 .hp-words{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px }
 .hp-name{ display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 7px; font:700 11.5px/1.3 var(--font); color:var(--ink) }
-.hp-name i{ font:600 9px/1.2 var(--font); font-style:normal; letter-spacing:.05em; text-transform:uppercase; color:var(--accent) }
+.hp-name i{ font:600 9px/1.2 var(--font); font-style:normal; letter-spacing:.05em; text-transform:uppercase; color:var(--muted) }
 .hp-text{
   font:500 10.5px/1.45 var(--font); color:var(--muted);
   display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
@@ -1079,7 +1079,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-tile:hover .hp-copy{ color:var(--ink); border-color:var(--muted) }
 /* Copied: the tip blinks (the owner's answer 3). */
 .hp-tile.is-blink{ animation:hp-blink .24s ease-in-out 3 }
-@keyframes hp-blink{ 50%{ border-color:var(--primary); background:var(--primary-soft); box-shadow:0 0 0 2px var(--primary) } }
+@keyframes hp-blink{ 50%{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 2px var(--sel-line) } }
 .hp-tile.is-fail{ border-color:var(--danger) }
 .hp-none{ padding:30px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
 .hp-soon{ margin:auto; max-width:420px; padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center }
@@ -1090,16 +1090,16 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .hp-soon p{ margin:0; font:500 11px/1.55 var(--font); color:var(--muted) }
 .hp-src{ padding:6px 2px 2px; font:500 9.5px/1.4 var(--font); color:var(--muted) }
-.hp-src a{ color:var(--accent); text-decoration:none }
+.hp-src a{ color:var(--ink); text-decoration:none }
 .hp-src a:hover{ text-decoration:underline }
 /* The note on the prompt field: copied - or not, and the words are selected. */
 .hp-toast{
   position:fixed; z-index:9450; max-width:min(520px, calc(100vw - 16px)); padding:6px 11px;
-  border-radius:var(--r-xs); background:var(--primary); color:var(--primary-ink); box-shadow:var(--shadow);
+  border-radius:var(--r-xs); background:var(--surface-3); color:var(--ink); box-shadow:var(--shadow);
   font:600 11px/1.35 var(--font); pointer-events:none; opacity:0; transform:translateY(4px); transition:opacity .18s, transform .18s;
 }
 .hp-toast.on{ opacity:1; transform:none }
-.hp-toast.is-bad{ background:var(--danger); color:oklch(.99 0 0) }
+.hp-toast.is-bad{ background:var(--danger-fill); color:var(--on-danger) }
 @media (max-width:640px){
   .hp-body{ grid-template-columns:140px minmax(0, 1fr) }
   .hp-pv{ width:112px; height:63px }
@@ -1193,7 +1193,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V26.6, the owner's check 2026-10-31, (а)) The pictures' numbers - "image 1", "image/2" - yellow wherever the frames
    chat shows words, brighter than the gold of what is chosen (js/merge-v3/image-words.js). In a field a layer over it draws
    the same text in the same place, transparent but these words, over the field's own letters. */
-.imw{ color:oklch(.91 .17 102); background:oklch(.91 .17 102 / .14); border-radius:2px }
+.imw{ color:var(--warn); background:var(--gold-soft); border-radius:2px }
 .imw-wrap{ position:relative; display:block; min-width:0 }
 .imw-over{
   position:absolute; inset:0; margin:0; overflow:hidden; pointer-events:none;
