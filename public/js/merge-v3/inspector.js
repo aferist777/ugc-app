@@ -30,7 +30,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB,
          setCaptionStyle as setCapStyleB, selectedCaptions as capsB, clearSelection as clearSelB,
          revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB,
-         selectTrackById as selectTrackB } from './timeline-b.js';
+         selectTrackById as selectTrackB, patternsOf as patternsB, setPatterns as setPatternsB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
 import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
@@ -63,11 +63,13 @@ import { cropRows, pipOffCrop } from './crop-box.js';
 import { active as cropActive } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen and how it mixes; held on the preview while the slider moves or the pointer rests
 // on a mode (place-b.js setLive).
-import { opacityOf, blendOf, BLENDS, isPattern } from '../overlay/look.js';
+import { opacityOf, blendOf, isPattern } from '../overlay/look.js';
 // (phase V65, block 5) A pattern's own settings (overlay/pattern.js).
 import * as PAT from '../overlay/pattern.js';
 import { setLive as setLivePlace } from './place-b.js';
-import * as Layers from '../layers.js';
+// (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
+import { blendButton } from './blend-menu.js';
+import { renderPatterns } from './patterns-ui.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -223,55 +225,17 @@ function _opacitySlider(items) {
 function _blendRow(host, items) {
   host.appendChild(C.row(items.length > 1 ? 'Blend · ' + items.length : 'Blend', _blendButton(items)));
 }
+// (phase V74) The list itself is js/merge-v3/blend-menu.js - the patterns of main video take it too.
 function _blendButton(items) {
   const ids = items.map(x => blendOf(x.clip).id);
   const mixed = ids.some(v => v !== ids[0]);
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'mv3-c-sel mv3-blend-btn';
-  b.textContent = (mixed ? 'mixed' : blendOf(items[0].clip).label) + ' ▾';
-  b.title = 'How ' + (items.length > 1 ? 'these clips mix' : 'this clip mixes') + ' with what is under it'
-    + ' - rest the pointer on a mode to see it';
-  b.addEventListener('click', (e) => { e.stopPropagation(); _openBlendMenu(b, items, mixed ? '' : ids[0]); });
-  return b;
-}
-let _blendMenu = null;     // { el, layer, away } while the list is open
-function _closeBlendMenu() {
-  if (!_blendMenu) return;
-  const m = _blendMenu;
-  _blendMenu = null;
-  setLivePlace(null);
-  document.removeEventListener('mousedown', m.away, true);
-  Layers.close(m.layer);
-  m.el.remove();
-}
-function _openBlendMenu(anchor, items, current) {
-  _closeBlendMenu();
-  const el = _el('div', 'mv3-blend-menu');
-  const live = (id) => setLivePlace(new Map(items.map(x => [x.clip.id, { blend: id }])));
-  for (const m of BLENDS) {
-    const it = _el('button', 'mv3-blend-item' + (m.id === current ? ' is-on' : ''), m.label);
-    it.type = 'button';
-    it.title = m.tip;
-    it.addEventListener('mouseenter', () => live(m.id));
-    it.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _closeBlendMenu();
-      setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { blend: m.id } })));
-    });
-    el.appendChild(it);
-  }
-  el.addEventListener('mouseleave', () => setLivePlace(null));
-  document.body.appendChild(el);
-  const r = anchor.getBoundingClientRect();
-  el.style.minWidth = Math.round(r.width) + 'px';
-  const h = el.offsetHeight;
-  // Kept on the screen: in a narrow window the button may stand at its right edge.
-  el.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8))) + 'px';
-  el.style.top = Math.round(r.bottom + 2 + h > window.innerHeight - 8 ? Math.max(8, r.top - 2 - h) : r.bottom + 2) + 'px';
-  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeBlendMenu(); };
-  document.addEventListener('mousedown', away, true);
-  _blendMenu = { el, away, layer: Layers.open(el, { modal: false, name: 'blend', onEsc: _closeBlendMenu }) };
+  return blendButton({
+    current: mixed ? '' : ids[0],
+    title: 'How ' + (items.length > 1 ? 'these clips mix' : 'this clip mixes') + ' with what is under it'
+      + ' - rest the pointer on a mode to see it',
+    live: (id) => setLivePlace(id ? new Map(items.map(x => [x.clip.id, { blend: id }])) : null),
+    write: (id) => setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { blend: id } }))),
+  });
 }
 
 // (phase V65, block 5, the owner's (пз8), (пз14)-(пз17), (пз19)) A PATTERN'S OWN SETTINGS - for one pattern, or for every
@@ -830,6 +794,12 @@ function _blankVideoTrack(host, track) {
       title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
            + 'placement and levels are left alone.',
     })));
+  }
+  // (phase V74, the owner's (\u043f\u04421)-(\u043f\u04429)) MAIN VIDEO'S PATTERNS - the set with ticks, the layers ticked with their settings
+  // (patterns-ui.js): over the whole of main video and every lane above it, under the words; each change one undo step.
+  if (isMainVideo(track)) {
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    renderPatterns(host, { list: () => patternsB(), write: (next) => setPatternsB(next), repaint: () => render(), empty: !clips });
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));

@@ -832,6 +832,14 @@ function _patternsFolder(images) {
   images.children = kids;
   images.count += n;
 }
+// (phase V74) The app's patterns, for the strip of main video in Merge (js/merge-v3/patterns-ui.js): where each is and its
+// picture - the tiles to tick. `GET /api/patterns` -> { patterns: [{ id, name, path, thumb, size }] }.
+router.get('/patterns', (_req, res) => {
+  try {
+    const list = require('../lib/patterns-builtin').read().patterns.map((p) => ({ id: p.id, name: p.name, path: p.path, thumb: p.thumb, size: p.size }));
+    res.json({ success: true, patterns: list });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
 // What the media shelf gives for them (`filter=environments|lookbooks`) - a picture's shape, as Images' are: `thumb` a
 // thumbnail door address (of the shelf's own 600px copy when there is one), and what is known about it for the viewer.
 function _madeItems(kind) {
