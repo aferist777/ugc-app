@@ -165,7 +165,8 @@
     font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); letter-spacing:0; text-transform:none; cursor:pointer;
     transition:color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease) }
   .u-tab:hover:where(:not([disabled])){ color:var(--ink); background:var(--hover) }
-  .u-tab.is-cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
+  /* the lit one: `.is-cur` - and `.is-on` / `.cur`, the names the pages already toggle */
+  .u-tab.is-cur, .u-tab.is-on, .u-tab.cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
   .u-tab[disabled]{ opacity:.45; cursor:default }
 
   /* ── Chips: one or several lit ── */
@@ -175,7 +176,7 @@
     text-transform:none; white-space:nowrap; cursor:pointer;
     transition:background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease) }
   .u-chip:hover:where(:not([disabled])){ background:var(--hover); color:var(--ink) }
-  .u-chip.is-on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
+  .u-chip.is-on, .u-chip.on, .u-chip.cur{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
   .u-chip[disabled]{ opacity:.45; cursor:default }
 
   /* ── Fields ── */

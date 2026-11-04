@@ -122,11 +122,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── The video ──
   L.appendChild(_el('div', 'mv3-x-hdr', 'the video'));
-  const tabs = _el('div', 'mv3-hlp-tabs');
+  const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
   // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
   for (const [k, label] of [['link', 'a link'], ['source', 'from the Library'], ['file', 'a file']]) {
-    const b = _el('button', 'mv3-sc-tab', label);
+    const b = _el('button', 'mv3-sc-tab u-tab', label);
     b.type = 'button';
     b.dataset.from = k;
     b.addEventListener('click', () => { st.from = k; paint(); price(); readTracks(); if (k === 'source') loadSources(); if (k === 'link') link.focus(); });
@@ -262,9 +262,9 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const titleChips = _el('div', 'mv3-hlp-chips');
   titleRow.appendChild(titleChips);
   R.appendChild(titleRow);
-  const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs');
+  const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs u-tabs');
   const tabBtn = (tab, label, title) => {
-    const b = _el('button', 'mv3-cap-tab', label);
+    const b = _el('button', 'mv3-cap-tab u-tab', label);
     b.type = 'button';
     b.dataset.tab = tab;
     b.title = title;
@@ -567,14 +567,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const whole = isWhole(st.kind);
     lenChips.textContent = '';
     for (const [k, v] of Object.entries(lengthsOf(st.kind))) {
-      const b = _el('button', 'mv3-hlp-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
       b.type = 'button';
       b.addEventListener('click', () => { st.length = k; keep(); paint(); price(); });
       lenChips.appendChild(b);
     }
     cntChips.textContent = '';
     for (const n of countsOf(st.kind)) {
-      const b = _el('button', 'mv3-hlp-chip' + (n === st.count ? ' is-on' : ''), String(n));
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (n === st.count ? ' is-on' : ''), String(n));
       b.type = 'button';
       b.addEventListener('click', () => { st.count = n; keep(); paint(); price(); });
       cntChips.appendChild(b);
@@ -584,7 +584,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     titleChips.textContent = '';
     for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, 'by the video', 'As the kind auto finds has it']] : []).concat([
       [true, 'on', 'The fragment\'s headline at the top for its first 3 s'], [false, 'off', 'No title - "add title" on a fragment\'s card puts one']])) {
-      const b = _el('button', 'mv3-hlp-chip' + (st.title === v ? ' is-on' : ''), label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (st.title === v ? ' is-on' : ''), label);
       b.type = 'button';
       b.title = tip;
       b.addEventListener('click', () => { st.title = v; keep(); paint(); });

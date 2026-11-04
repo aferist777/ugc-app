@@ -238,9 +238,9 @@ export function paintChoose(host, o) {
     people.textContent = '';
     if (!groups) return;
     if (f) {
-      const tabs = el('div', 'pk-ftabs');
+      const tabs = el('div', 'pk-ftabs u-tabs');
       const tab = (label, on, set) => {
-        const b = el('button', 'mv3-sc-tab' + (on ? ' is-on' : ''), label);
+        const b = el('button', 'mv3-sc-tab u-tab' + (on ? ' is-on' : ''), label);
         b.type = 'button';
         b.addEventListener('click', () => {
           if (st.filterOn === set) return;

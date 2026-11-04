@@ -369,7 +369,7 @@ function renderMusic(host) {
   else {
     const chips = _el('div', 'mv3-hlp-chips mv3-hlg-moods');
     for (const m of _moods) {
-      const b = _el('button', 'mv3-hlp-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), m.label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), m.label);
       b.type = 'button';
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + m.n));
       b.disabled = !m.n;

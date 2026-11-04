@@ -140,10 +140,10 @@ function _build() {
   const status = _el('div', 'mv3-cap-status');
   top.appendChild(chips);
   top.appendChild(status);
-  const tabs = _el('div', 'mv3-cap-tabs');
+  const tabs = _el('div', 'mv3-cap-tabs u-tabs');
   tabs.setAttribute('role', 'tablist');
   for (const [id, label, title] of TABS) {
-    const b = _el('button', 'mv3-cap-tab', label);
+    const b = _el('button', 'mv3-cap-tab u-tab', label);
     b.type = 'button';
     b.dataset.tab = id;
     b.title = title;

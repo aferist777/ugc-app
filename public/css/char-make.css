@@ -361,12 +361,7 @@
   flex:0 0 auto; margin-right:3px;
   font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); opacity:.7;
 }
-.cv2-pop-opt{
-  padding:3px 7px; border:1px solid var(--border); border-radius:var(--pill);
-  background:var(--surface-2); color:var(--ink); font:500 10.5px var(--font); cursor:pointer;
-}
-.cv2-pop-opt:hover{ border-color:var(--sel-line); }
-.cv2-pop-opt.cur{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink); }
+/* .cv2-pop-opt and .cv2-chip are the shared chip (.u-chip, phase V73 block 2) */
 /* The second row reads as a step outside the rules, not as an equal option. */
 .cv2-pop-row.is-other .cv2-pop-opt{ opacity:.72; }
 .cv2-pop-row.is-other .cv2-pop-opt:hover{ opacity:1; }
@@ -382,17 +377,7 @@
   flex:0 0 100%; font:700 9px var(--font); text-transform:uppercase;
   letter-spacing:.06em; color:var(--muted);
 }
-.cv2-chip{
-  height:21px; padding:0 8px; border:1px solid var(--border); border-radius:var(--pill);
-  background:var(--surface-2); color:var(--muted);
-  font:600 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-chip:hover{ color:var(--ink); border-color:var(--border-soft); }
-/* Lit means it is in the field. Yellow, like every other chosen value on this page. */
-.cv2-chip.is-on{
-  color:var(--ink); border-color:var(--sel-line);
-  background:var(--sel-bg);
-}
+/* Lit means it is in the field: the chip's selected look. */
 .cv2-edit-txt{
   flex:0 0 auto; margin:0 10px; padding:7px 8px; min-height:58px; resize:vertical;
   border:1px solid var(--border); border-radius:var(--r-sm);

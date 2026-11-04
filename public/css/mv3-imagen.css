@@ -38,13 +38,7 @@
   color:var(--muted); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
 }
 .mv3-ig-ar-row{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px }
-.mv3-ig-ar-b{
-  flex:0 0 auto; padding:4px 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); font:600 10px/1 var(--font);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-ig-ar-b:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft); background:var(--surface) }
-.mv3-ig-ar-b.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
+.mv3-ig-ar-b{ flex:0 0 auto }   /* the shared chip (.u-chip) */
 .mv3-ig-ar-b .dot{ color:var(--ink) }
 .mv3-ig-ar-b.on .dot{ color:var(--ink); opacity:.7 }
 /* What this will cost, under the choice that decides it - the price of the aggregator that will be

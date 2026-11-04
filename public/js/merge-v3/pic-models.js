@@ -224,7 +224,7 @@ export function modelColumn(ctx, o) {
     _set.arWrap.textContent = '';
     _set.arSel.textContent = '';
     for (const a of _table.aspects) {
-      const b = el('button', 'mv3-ig-ar-b' + (a === _set.ar ? ' on' : ''));
+      const b = el('button', 'mv3-ig-ar-b u-chip' + (a === _set.ar ? ' on' : ''));
       b.type = 'button';
       b.textContent = a;
       if (a === _set.fmt) {

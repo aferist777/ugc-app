@@ -355,7 +355,7 @@ async function _useSaved(api, it) {
 // ── The sub-level ───────────────────────────────────────────────────────────
 function _bar(host, api) {
   const acts = el('div', 'mv3-wk-bar is-own');
-  const tab = el('button', 'mv3-sc-tab is-on', 'voice');
+  const tab = el('button', 'mv3-sc-tab u-tab is-on', 'voice');
   tab.type = 'button';
   tab.disabled = true;
   tab.title = 'The voices of this character, and the library';

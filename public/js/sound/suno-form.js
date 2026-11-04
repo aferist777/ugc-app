@@ -367,7 +367,7 @@ export function createSunoForm(o) {
       const wrap = el('div', 'mv3-chips au-chips-open');
       for (const c of g.chips) {
         const on = lit(g, c);
-        const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
+        const b = el('button', 'mv3-chip u-chip' + (on ? ' on' : ''), c.label);
         b.type = 'button';
         b.title = c.style;
         b.addEventListener('click', () => {

@@ -148,7 +148,7 @@ async function _openList() {
     for (const [k, label] of KINDS) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'mv3-plist-kind' + (k === f ? ' is-on' : '');
+      b.className = 'mv3-plist-kind u-chip' + (k === f ? ' is-on' : '');
       b.textContent = label;
       b.addEventListener('click', (e) => { e.stopPropagation(); _setFilter(k); fill(); });
       head.appendChild(b);

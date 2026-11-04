@@ -43,13 +43,13 @@ export function moodPicker(host, { onChange, onReady } = {}) {
     row.textContent = '';
     if (!data) { row.appendChild(_el('span', 'mv3-hlp-quiet', err || 'reading Music → highlights…')); return; }
     if (byVideoOn) {
-      const by = _el('button', 'mv3-hlp-chip mv3-hlp-byvideo' + (chosen.includes(BY_VIDEO) ? ' is-on' : ''), 'by the video');
+      const by = _el('button', 'mv3-hlp-chip u-chip mv3-hlp-byvideo' + (chosen.includes(BY_VIDEO) ? ' is-on' : ''), 'by the video');
       by.type = 'button';
       by.title = 'The kind of video auto finds gives its own moods - as you last chose them for that kind (its standard at first)';
       by.addEventListener('click', () => { chosen = [BY_VIDEO]; paint(); if (onChange) onChange(chosen.slice()); });
       row.appendChild(by);
     }
-    const none = _el('button', 'mv3-hlp-chip' + (chosen.length ? '' : ' is-on'), 'no music');
+    const none = _el('button', 'mv3-hlp-chip u-chip' + (chosen.length ? '' : ' is-on'), 'no music');
     none.type = 'button';
     none.title = 'No background music';
     none.addEventListener('click', () => { chosen = []; paint(); if (onChange) onChange([]); });
@@ -59,7 +59,7 @@ export function moodPicker(host, { onChange, onReady } = {}) {
     for (const m of list) {
       const n = count(m.id);
       const r = rec.includes(m.id);
-      const b = _el('button', 'mv3-hlp-chip' + (chosen.includes(m.id) ? ' is-on' : '') + (r ? ' is-rec' : ''), m.label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (chosen.includes(m.id) ? ' is-on' : '') + (r ? ' is-rec' : ''), m.label);
       b.type = 'button';
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
       b.disabled = !n;

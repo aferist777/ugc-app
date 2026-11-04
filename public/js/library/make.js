@@ -2098,10 +2098,10 @@ function _openAddSource() {
       <div class="mk-panel-head"><span class="mk-panel-t">Add a source</span><span class="sp"></span>
         <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button></div>
       <div class="mk-panel-body">
-        <div class="mk-choice">
-          <button class="mk-choice-btn cur" type="button" data-route="link">From a link</button>
-          <button class="mk-choice-btn" type="button" data-route="file">From a file</button>
-          <button class="mk-choice-btn" type="button" data-route="lib">From the Library</button>
+        <div class="mk-choice u-tabs">
+          <button class="mk-choice-btn u-tab cur" type="button" data-route="link">From a link</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="file">From a file</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="lib">From the Library</button>
         </div>
         <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>

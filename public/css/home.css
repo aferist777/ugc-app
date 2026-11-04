@@ -55,10 +55,7 @@
 /* ── PROJECTS (phase V70; what Continue was): the chips as Merge's open list has them (css/merge-v3.css .mv3-plist-kind), the
    rows with a small picture, a card beside a row the pointer rests on ── */
 .hm-chips{display:flex; flex-wrap:wrap; gap:4px; padding-bottom:8px; border-bottom:1px solid var(--border-soft)}
-.hm-chip{height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
-  font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap}
-.hm-chip:hover{background:var(--surface-2)}
-.hm-chip.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); cursor:default}
+.hm-chip.is-on{cursor:default}   /* the shared chip (.u-chip) */
 .hm-plist{display:flex; flex-direction:column; gap:2px; min-height:40px}
 .hm-prow{display:flex; align-items:center; gap:10px; padding:4px 8px 4px 4px; border-radius:var(--r-xs); color:var(--ink); text-decoration:none}
 .hm-prow:hover{background:var(--surface-2)}

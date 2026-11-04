@@ -150,15 +150,8 @@
 /* ── The two tabs over the tiles (phase V30, block 2): presets | text ─────────
    `text` puts the words of the subtitle and text lanes, as one document, in the tiles' place (caption-doc.js); the
    strip on the right stays as it is. */
-.mv3-cap-tabs{ flex:0 0 auto; display:flex; gap:2px; padding:6px 10px 0; border-bottom:1px solid var(--border-soft) }
-.mv3-cap-tab{
-  height:24px; margin-bottom:-1px; padding:0 12px; cursor:pointer;
-  border:1px solid transparent; border-bottom:0; border-radius:var(--r-xs) var(--r-xs) 0 0; background:none;
-  font:700 10px/22px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
-}
-.mv3-cap-tab:hover{ color:var(--ink) }
-.mv3-cap-tab.is-on{ color:var(--ink); background:var(--bg); border-color:var(--border-soft) }
-.mv3-cap-tab:disabled{ opacity:.4; cursor:default }
+.mv3-cap-tabs{ flex:0 0 auto; padding:6px 10px 0 }   /* the shared tabs (.u-tabs / .u-tab, phase V73 block 2) */
+.mv3-cap-tab.u-tab{ text-transform:uppercase; letter-spacing:.06em; font-size:var(--fs-11) }   /* the capitals stay until block 7 (words) */
 /* The highlights popup's two tabs over its pickers (phase V49, (пр26)). */
 .mv3-hlp-captabs{ padding:6px 0 0; margin-top:5px }
 .mv3-hlp-captabs + .mv3-hlp-style, .mv3-hlp-anim{ margin-top:0 }

@@ -98,7 +98,7 @@ export function projectsBlock() {
 
   const paintChips = () => {
     chips.replaceChildren(...CHIPS.map(([k, label]) => {
-      const b = el('button', 'hm-chip' + (k === chip ? ' is-on' : ''), label);
+      const b = el('button', 'hm-chip u-chip' + (k === chip ? ' is-on' : ''), label);
       b.type = 'button';
       b.addEventListener('click', () => {
         if (k === chip) return;

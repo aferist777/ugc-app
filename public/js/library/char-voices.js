@@ -84,7 +84,7 @@ export function paint(body, it, voices, hooks) {
   const gRow = _el('div', 'lib-cv-gender');
   gRow.appendChild(_el('span', 'lib-cv-l', 'gender'));
   const gBtns = GENDERS.map(g => {
-    const b = _el('button', 'lib-cv-g', g);
+    const b = _el('button', 'lib-cv-g u-chip', g);
     b.type = 'button';
     b.addEventListener('click', () => {
       if (String((it.meta || {}).gender || '') === g) return;

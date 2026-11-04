@@ -35,12 +35,8 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-silence-k, .mv3-silence-d{flex:1 1 auto; min-width:0; accent-color:var(--muted)}
 .mv3-silence-d:disabled{opacity:.45}
 /* (phase V44, (ы12)) The threshold's "auto": lit while the sound's own threshold is in use, a press goes back to it. */
-.mv3-silence-auto{
-  flex:0 0 auto; padding:1px 5px; border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
-  background:none; color:var(--muted); font:600 9.5px/1.3 var(--font);
-}
-.mv3-silence-auto:hover:not(:disabled){color:var(--ink); border-color:var(--ink)}
-.mv3-silence-auto.is-on{color:var(--ink); border-color:var(--success); cursor:default}
+.mv3-silence-auto{flex:0 0 auto}
+.mv3-silence-auto.is-on{cursor:default}   /* the shared chip; on - the selected look (б2-13) */
 .mv3-silence-v{flex:0 0 auto; min-width:40px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot{margin-top:8px; justify-content:space-between}
 .mv3-silence-row.is-foot > .mv3-silence-n{color:var(--ink); white-space:normal; font-variant-numeric:tabular-nums}

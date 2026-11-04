@@ -98,7 +98,7 @@ export function openSilence() {
     '<span>silent below</span>' +
     `<input type="range" min="${DB_MIN}" max="${DB_MAX}" step="1" class="mv3-silence-d" disabled>` +
     '<span class="mv3-silence-v is-db"></span>' +
-    '<button type="button" class="mv3-silence-auto is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
+    '<button type="button" class="mv3-silence-auto u-chip is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
     '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n">listening to main audio…</span>' +
     '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>cut</button></div>';
   const k = box.querySelector('.mv3-silence-k');

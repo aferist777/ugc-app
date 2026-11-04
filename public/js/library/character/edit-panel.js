@@ -101,7 +101,7 @@ export function build(host, hooks) {
         const b = document.createElement('button');
         b.type = 'button';
         const on = pairs.get(g.key) === o;
-        b.className = 'cv2-chip' + (on ? ' is-on' : '');
+        b.className = 'cv2-chip u-chip' + (on ? ' is-on' : '');
         b.textContent = o;
         b.addEventListener('click', () => {
           const cur = parse(ta.value);

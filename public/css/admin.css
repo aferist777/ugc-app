@@ -9,14 +9,8 @@
 .adm-body{ padding:14px; display:flex; flex-direction:column; gap:10px; flex:1 1 auto; min-height:0; overflow-y:auto; }
 
 /* ── the tab strip ─────────────────────────────────────────────────────── */
-.adm-tabs{ display:flex; gap:4px; position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
-.adm-tab{
-  padding:6px 14px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11.5px/1.2 var(--font); cursor:pointer;
-  transition:.12s var(--ease);
-}
-.adm-tab:hover{ color:var(--ink); }
-.adm-tab.cur{ color:var(--ink); background:var(--surface-2); border-color:var(--sel-line); }
+.adm-tabs{ position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
+/* the tabs are the shared part (.u-tabs / .u-tab, phase V73 block 2); the row keeps its sticky place */
 
 .adm-panel{
   flex:0 0 auto;

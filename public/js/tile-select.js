@@ -58,7 +58,7 @@ export function createSelection(o) {
 
   // The chip that says how many are picked - over the gallery's top left corner.
   const chip = document.createElement('div');
-  chip.className = 'ts-chip';
+  chip.className = 'ts-chip u-chip is-on';
   chip.hidden = true;
   const chipText = document.createElement('span');
   const chipX = document.createElement('button');

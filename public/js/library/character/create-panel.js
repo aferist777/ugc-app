@@ -261,7 +261,7 @@ function openTokenPicker(anchor, k) {
     for (const o of list) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'cv2-pop-opt' + (values[k] === o ? ' cur' : '');
+      b.className = 'cv2-pop-opt u-chip' + (values[k] === o ? ' cur' : '');
       b.textContent = o;
       b.addEventListener('click', () => {
         const el = document.getElementById(SEL_ID(k));

@@ -67,7 +67,7 @@ function _genderRow(it, m) {
   let cur = GENDERS.includes(m.gender) ? m.gender : '';
   const paint = () => row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === cur));
   for (const g of GENDERS.concat([''])) {
-    const b = el('button', 'made-ed-chip', g || '—');
+    const b = el('button', 'made-ed-chip u-chip', g || '—');
     b.type = 'button';
     b.dataset.g = g;
     b.title = g ? 'Worn by ' + (g === 'unisex' ? 'either' : 'a ' + g + ' character') : 'Not said';
