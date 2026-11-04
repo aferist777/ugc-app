@@ -253,9 +253,12 @@ function _paint() {
   _svg.style.display = id ? '' : 'none';
   if (id === _drawn) return;
   _drawn = id;
+  // (phase V73 block 0) The screen's words are in the INTERFACE's font - the page's --font, as the stage's own words
+  // (preview-b.js `_uiFont`). This drawing is in the page, so CSS gives it the token as it is; it named "Inter", which on
+  // these pages is the bold caption file of css/caption-fonts.css.
   _svg.innerHTML = id ? '<defs><filter id="mv3-pf-sh" x="-10%" y="-10%" width="120%" height="120%">'
     + '<feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity=".6"/></filter></defs>'
-    + _edges() + '<g fill="#fff" font-family="Inter, \'Segoe UI\', Arial, sans-serif" filter="url(#mv3-pf-sh)" opacity=".92">' + DRAW[id]() + '</g>' : '';
+    + _edges() + '<g fill="#fff" style="font-family:var(--font)" filter="url(#mv3-pf-sh)" opacity=".92">' + DRAW[id]() + '</g>' : '';
 }
 
 // ── The check ───────────────────────────────────────────────────────────────

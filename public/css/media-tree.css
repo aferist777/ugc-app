@@ -64,12 +64,15 @@
 /* A tile hanging over a node that takes it. */
 .mt-row.is-drop{outline:1px dashed var(--primary); outline-offset:-1px; background:var(--primary-soft)}
 
-/* The menu under the right button wears the shared menu's look (css/app-shell.css .mv3-plus-menu). */
-.mt-menu{min-width:190px}
+/* The menu under the right button wears the shared menu's look (css/app-shell.css .mv3-plus-menu).
+   (phase V73 block 0) The tree is also in windows over the page - the chats' attachment window (.pk-ov, 9400) -, so its
+   menu and the question of deleting a folder stand over every such window (9450), under the question at a button (9460)
+   and the name box (9700). They were 9300 and 60: opened under the attachment window, they could not be seen or pressed. */
+.mv3-plus-menu.mt-menu{min-width:190px; z-index:9450}
 
 /* Deleting a category: where its media go, and the projects that use them. */
 .mt-pop{
-  position:fixed; z-index:60; width:300px; padding:10px 11px; box-sizing:border-box;
+  position:fixed; z-index:9450; width:300px; padding:10px 11px; box-sizing:border-box;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
   font:400 12px/1.4 var(--font); color:var(--ink);
 }

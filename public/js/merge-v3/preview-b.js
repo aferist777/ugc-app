@@ -740,12 +740,24 @@ function _blit(el, r, c, gaps) {
   if (r.angle) _ctx.restore();
 }
 
+// (phase V73 block 0) The words the stage draws for itself - a note, a picture's size, a half's caption or what it waits
+// for - are in the INTERFACE's font, the page's --font (css/app-shell.css), asked for once. They named "Inter", and "Inter"
+// on these pages is the bold caption file of css/caption-fonts.css - the stage spoke in a caption's face.
+let _uiFontName = '';
+function _uiFont() {
+  if (!_uiFontName) {
+    try { _uiFontName = getComputedStyle(document.documentElement).getPropertyValue('--font').trim(); } catch (e) { _uiFontName = ''; }
+    if (!_uiFontName) _uiFontName = '"Segoe UI", system-ui, sans-serif';
+  }
+  return _uiFontName;
+}
+
 // What is chosen but cannot be drawn. Named on the canvas rather than left to be discovered
 // in the export - the same thing the other preview does for a reverse it cannot show.
 function _note(text) {
   if (!text) return;
   _ctx.save();
-  _ctx.font = '600 11px Inter, system-ui, sans-serif';
+  _ctx.font = '600 11px ' + _uiFont();
   const w = _ctx.measureText(text).width;
   _ctx.fillStyle = 'rgba(0,0,0,.55)';
   _ctx.fillRect(8, H - 26, w + 16, 18);
@@ -2008,7 +2020,7 @@ function _drawCrop() {
   if (img && img.naturalWidth) {
     const size = Math.round(r.w * img.naturalWidth) + ' x ' + Math.round(r.h * img.naturalHeight);
     const fs = Math.max(10, Math.round(11 / _view.z));
-    _ctx.font = '600 ' + fs + 'px Inter, Segoe UI, system-ui, sans-serif';
+    _ctx.font = '600 ' + fs + 'px ' + _uiFont();
     _ctx.fillStyle = 'rgba(0,0,0,.6)';
     const tw = _ctx.measureText(size).width;
     _ctx.fillRect(x + w / 2 - tw / 2 - 6 / _view.z, y + h - fs * 2, tw + 12 / _view.z, fs * 1.6);
@@ -2135,7 +2147,7 @@ function _drawPair() {
     _ctx.strokeStyle = _goldNow();
     _ctx.strokeRect(PAD + inset, top + inset, W - 2 * inset, hh - 2 * inset);
     _ctx.restore();
-    _ctx.font = '600 ' + Math.round(Math.min(W, H) * 0.045) + 'px Inter, Segoe UI, system-ui, sans-serif';
+    _ctx.font = '600 ' + Math.round(Math.min(W, H) * 0.045) + 'px ' + _uiFont();
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillStyle = _goldNow();
@@ -2149,7 +2161,7 @@ function _drawPair() {
 // the frame, a half's under its picture. Sized by the frame, so the two read alike.
 function _caption(cap, bottom, hh) {
   const size = Math.round(Math.min(H * 0.022, hh * 0.05));
-  _ctx.font = '600 ' + size + 'px Inter, Segoe UI, system-ui, sans-serif';
+  _ctx.font = '600 ' + size + 'px ' + _uiFont();
   _ctx.textAlign = 'center';
   _ctx.fillStyle = 'rgba(0,0,0,.55)';
   const y = bottom - Math.round(size * 2);

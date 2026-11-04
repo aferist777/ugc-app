@@ -1353,7 +1353,8 @@ export function createChat(make) {
     const footed = !!(_ui.foot && _ui.foot.childNodes.length);
     if (!_thread.length && !footed && !_pend) {
       if (!empty) { empty = el('div', 'mv3-ig-empty'); host.insertBefore(empty, _ui.foot); }
-      empty.textContent = _key ? T.empty : T.emptyNoProject;
+      // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
+      empty.textContent = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
     } else if (empty) empty.remove();
 
     let prev = null;

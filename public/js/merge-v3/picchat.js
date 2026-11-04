@@ -57,6 +57,9 @@ function PICTURES(ctx) {
     text: {
       placeholder: 'Describe a picture, or say what to change.',
       empty: 'Describe a picture. What comes back stays in this project — and in the Library.',
+      // (phase V73 block 0) Opened from Home or the Library the chat is on THE draft's conversation (chat-owner.js unbound):
+      // no project to stay in - what it makes lies in IMAGES → Generated.
+      emptyDraft: 'Describe a picture. What comes back lies in the Library, in IMAGES → Generated.',
       emptyNoProject: 'Describe a picture. A project is started for it with the first message.',
       onlyFiles: 'Only pictures can be attached here.',
       slot: 'A picture to work from - from the Library or this computer',

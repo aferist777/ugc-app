@@ -2927,6 +2927,9 @@ function VIDEOS(ctx) {
     text: {
       placeholder: 'Describe a clip, or say what to change.',
       empty: 'Describe a clip. What comes back stays in this project — and on the B-roll shelf.',
+      // (phase V73 block 0) From Home or the Library - THE draft's conversation (chat-owner.js unbound): VIDEO → Generated →
+      // the model's folder (phase V60.2).
+      emptyDraft: 'Describe a clip. What comes back lies in the Library, in VIDEO → Generated → its model.',
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
       slot: 'From the Library or this computer',

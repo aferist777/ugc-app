@@ -54,9 +54,11 @@ export function frame(id, name) {
  * A row of TILES (phase V70): a filled gold icon and its word under it, each a link - a plain press runs `run` when it is
  * given (a window over Home), a press with a modifier follows the link as any link.
  *   tiles([{ icon, label, href, title, run }]) -> the row
+ * (phase V73 block 0) As many places a row as it has tiles (css/home.css --hm-cols): Generate's three fill their row.
  */
 export function tiles(list) {
   const row = el('div', 'hm-tiles');
+  row.style.setProperty('--hm-cols', String(Math.max(1, list.length)));
   for (const t of list) {
     const a = el('a', 'hm-tile');
     a.href = t.href;

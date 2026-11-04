@@ -361,8 +361,9 @@ function _window(o) {
     const a = await save();
     const d = await addCurrent(a);
     _close();
+    // (phase V73 block 0) News in the line's calm colour (is-info): with no kind the line is red, the colour of a refused save.
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
-         d && d.success ? '' : 'err');
+         d && d.success ? 'info' : 'err');
   });
   const go = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
   go.type = 'button';
