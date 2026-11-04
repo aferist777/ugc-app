@@ -1,14 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A PATTERN ON THE TIMELINE (phase V65 block 5, the owner 2026-10-31, (пз8), (пз14)-(пз19); docs/local-app/plan/,
-   "Фаза V65") - ONE module for the page and the server: js/merge-v3/preview-b.js draws by it, lib/pattern-bake.js and
-   lib/mv3b-render.js render by it, js/merge-v3/inspector.js offers its settings, timeline-b.js and lib/timeline-shape.js
-   keep them.
+   THE PATTERNS OF MAIN VIDEO (phase V65 block 5, the owner 2026-10-31, (пз8), (пз14)-(пз19); phase V74, the owner
+   2026-11-03/04, (пт1)-(пт9); docs/local-app/plan/, "Фаза V65", "Фаза V74") - ONE module for the page and the server:
+   js/merge-v3/preview-b.js draws by it, lib/pattern-bake.js and lib/mv3b-render.js render by it, js/merge-v3/patterns-ui.js
+   offers its tiles and settings, timeline-b.js and lib/timeline-shape.js keep them.
 
-   A pattern clip (IMAGES -> Patterns: an address under /patterns/, overlay/look.js isPattern) is never placed, fitted or
-   cropped: its file - a SEAMLESS tile, white on transparent - is laid over the WHOLE frame, repeated. One corner of the
-   tiles sits at the frame's middle; they turn about it.
+   A pattern (the app's set, lib/patterns-builtin.js: an address under /patterns/, overlay/look.js isPattern) is never placed,
+   fitted or cropped: its file - a SEAMLESS tile, white on transparent - is laid over the WHOLE frame, repeated. One corner of
+   the tiles sits at the frame's middle; they turn about it.
 
-   `pattern: { scale, color, angle, move, speed, dir }` on the clip, every field optional (absent = the default):
+   Since V74 a pattern is no clip: it is a LAYER of main video - a list `patterns` on the MAIN VIDEO LANE (the bottom video lane,
+   mainLane), TOP LAYER FIRST as the lanes are listed, each { src, pattern?, opacity?, blend? } - its address, the settings
+   below, its opacity and blend mode by overlay/look.js's rules, only what differs from the defaults kept (normalizeLayer); one
+   entry per pattern of the set, with no limit of how many. It covers the WHOLE main video, from 0 to its end (mainEnd),
+   following it, OVER EVERY VIDEO LANE and under the text and the subtitles: the preview and the render both draw layersOf() -
+   the bottom layer first, each as a clip of that stretch, known by its layer id. No lane of its own. (A pattern clip of V65 was
+   made one of these at start, lib/timeline-patterns.js.)
+
+   `pattern: { scale, color, angle, move, speed, dir }`, every field optional (absent = the default):
      scale  0.25..4 (25-400 %, (пз14)), 1: a 2160 px file then covers the frame's long side; a 1080 px tile (noise,
             film grain) is laid at the same density - it repeats twice there.
      color  '#rrggbb', white: the white of the file becomes this colour, its transparency kept ((пз15)).
@@ -16,15 +24,7 @@
      move   'none' | 'rotate' | 'drift' ((пз16)): a turn about the middle, or a slide one way; a pattern lands still.
      speed  rotate: 0.5..20 degrees a second (2); drift: 5..200 px a second of a frame 1080 px across its short side (20).
      dir    rotate: 'cw' | 'ccw'; drift: 'e' 'ne' 'n' 'nw' 'w' 'sw' 's' 'se' (the eight arrows; 'e' to the right).
-   `t` everywhere is the clip's own seconds (0 at its start).
-
-   THE PATTERNS OF MAIN VIDEO (phase V74, the owner 2026-11-03/04, (пт1)-(пт9); docs/local-app/plan/, "Фаза V74") - a list
-   `patterns` on the MAIN VIDEO LANE (the bottom video lane, mainLane), TOP LAYER FIRST as the lanes are listed, each
-   { src, pattern?, opacity?, blend? } - its address under /patterns/ and the settings above, its opacity and blend mode by
-   overlay/look.js's rules, only what differs from the defaults kept (normalizeLayer); one entry per pattern of the set, with
-   no limit of how many. It covers the WHOLE main video, from 0 to its end (mainEnd), following it, OVER EVERY VIDEO LANE and
-   under the text and the subtitles: the preview and the render both draw layersOf() - the bottom layer first, each as a clip
-   of that stretch, its own seconds the timeline's. No lane of its own.
+   `t` everywhere is the layer's own seconds - the timeline's (it starts at 0).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { normalizeOpacity, normalizeBlend, isPattern } from './look.js';
@@ -42,7 +42,7 @@ const DIR_IDS = new Set(DIRS.map(d => d[0]));
 const _num = (v, lo, hi, dflt) => { const n = +v; return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt; };
 const _hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : '#ffffff');
 
-/** A clip's pattern settings, every field filled in. */
+/** A pattern's settings (`c.pattern` of an entry of main video's `patterns`), every field filled in. */
 export function of(c) {
   const p = (c && c.pattern) || {};
   const move = ['rotate', 'drift'].includes(p.move) ? p.move : 'none';

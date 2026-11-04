@@ -40,10 +40,10 @@ import { isHeard } from '../captions/heard.js';
 // (phase V33.2) A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
 import { normalize as normalizeCrop } from '../framing/crop.js';
-// (phase V65) A clip's opacity - one rule for the page and the server; a pattern lands at 0.7.
-import { normalizeOpacity, normalizeBlend, isPattern, PATTERN_OPACITY } from '../overlay/look.js';
-// (phase V65, block 5) A pattern's own settings - scale, colour, angle, movement (overlay/pattern.js).
-import { normalize as normalizePattern, normalizeLayers } from '../overlay/pattern.js';
+// (phase V65) A clip's opacity and blend mode - one rule for the page and the server.
+import { normalizeOpacity, normalizeBlend } from '../overlay/look.js';
+// (phase V74) Main video's patterns - a list on its lane (overlay/pattern.js).
+import { normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
@@ -133,9 +133,8 @@ export function addVideoTrack() {
   Store.mutate(tl => { _newVideoLane(tl.tracks); });
 }
 
-// Inside a mutation. Returns the new video lane, or null at the ceiling. `silent` (phase V65) - no sound lane with it: a
-// pattern has none to give.
-function _newVideoLane(t, silent) {
+// Inside a mutation. Returns the new video lane, or null at the ceiling.
+function _newVideoLane(t) {
   if (_count(t, 'video') >= MAX_PER_SIDE) return null;
   const v = { id: _freshId(t, 'v'), kind: 'video', name: '', linkId: null, main: false,
               volume: null, speed: null, clips: [] };
@@ -145,7 +144,7 @@ function _newVideoLane(t, silent) {
   // Its sound goes at the far end of the audio block, which is the mirror of the same place - unless the audio side is full
   // already (beds of music): then the lane is silent, as one whose sound lane was deleted (phase V41: a fifth audio lane was
   // made here, and the server's ceiling dropped one of them on the save).
-  if (!silent && _count(t, 'audio') < MAX_PER_SIDE) {
+  if (_count(t, 'audio') < MAX_PER_SIDE) {
     const a = { id: _freshId(t, 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
                 volume: null, speed: null, clips: [] };
     v.linkId = a.id;
@@ -328,28 +327,19 @@ function _drop(trackId, want, data, make) {
   // Made up here so the clips can be found again by the measurement below.
   const vidId = _id(), audId = _id();
   let laid = false;
-  // (phase V65, the owner's (пз9), (пз11), (пз18)) A PATTERN goes OVER the video: let go on main video it lands on a NEW lane
-  // above it, at the same second (a lane with no sound lane - it has no sound); wherever it lands it lasts to the end of
-  // main video from there - a picture's 10 s where main video has nothing after it.
-  const pattern = isPattern(data.src);
-  let laidDur = dur;
+  // (phase V74) A pattern is no clip any more - it is picked in the strip of main video (patterns-ui.js), and nothing offers
+  // one to be let go here.
 
   const ok = Store.mutate(tl => {
     const t = tl.tracks;
     let track = null;
     if (make) {
       if (!_laneTakes(make, data.media)) return;
-      track = make === 'video' ? _newVideoLane(t, pattern) : _newAudioLane(t);
+      track = make === 'video' ? _newVideoLane(t) : _newAudioLane(t);
     } else track = t.find(x => x.id === trackId);
     // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
     if (!track || track.kind === 'subs' || track.kind === 'text') return;
     if (!_laneTakes(track.kind, data.media)) return;
-    const main = mainVideo(tl);
-    if (pattern && track === main) track = _newVideoLane(t, true) || t.find(x => x.kind === 'video' && x !== main) || track;
-    if (pattern) {
-      const end = Math.max(0, ...((main && main.clips) || []).map(c => (+c.start || 0) + (+c.dur || 0)));
-      laidDur = end - at > 0.05 ? Math.round((end - at) * 100) / 100 : STILL_DUR;
-    }
     laid = track.id;
 
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
@@ -361,7 +351,7 @@ function _drop(trackId, want, data, make) {
     const base = {
       src: data.src, thumb: data.thumb || null, name: data.name || '',
       libId: data.libId || null,
-      start: at, dur: Math.round(laidDur * 100) / 100,
+      start: at, dur: Math.round(dur * 100) / 100,
       srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
       trimIn: 0, trimOut: 0, speed: 1, reversed: false,
       transition: null, animation: null, filter: null,
@@ -380,9 +370,7 @@ function _drop(trackId, want, data, make) {
     }
 
     const mate = still ? null : (track.linkId ? t.find(x => x.id === track.linkId) : null);
-    const vid = { ...base, id: vidId, volume: 0, pairId: mate ? pairId : null,
-      // (phase V65, the owner's (пз7)) A pattern lands seen at 70 %.
-      ...(isPattern(data.src) ? { opacity: PATTERN_OPACITY } : {}) };
+    const vid = { ...base, id: vidId, volume: 0, pairId: mate ? pairId : null };
     track.clips.push(vid);
     if (mate) {
       mate.clips.push({
@@ -396,7 +384,7 @@ function _drop(trackId, want, data, make) {
 
   if (!ok) laid = false;
   if (laid && !still && !(known > 0)) _measure([vidId, audId], data.src);
-  return laid ? { dur: Math.round(laidDur * 100) / 100, lane: laid } : null;
+  return laid ? { dur: Math.round(dur * 100) / 100, lane: laid } : null;
 }
 
 // Deleting is asymmetric for the same reason it is asymmetric for lanes: the picture owns the
@@ -2267,9 +2255,7 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'fadeIn', 'fadeOut',
                              // (phase V65, (пз5)) How much of a clip of a video lane is seen, and (пз7) how it mixes with
                              // what is under it (overlay/look.js).
-                             'opacity', 'blend',
-                             // (phase V65, block 5, (пз8)) A pattern's scale, colour, angle and movement (overlay/pattern.js).
-                             'pattern']);
+                             'opacity', 'blend']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2310,8 +2296,6 @@ function _write(c, key, value) {
   if (key === 'opacity') { const v = normalizeOpacity(value); if (v == null) delete c.opacity; else c.opacity = v; return; }
   // (phase V65) A blend mode's id; none takes the field off.
   if (key === 'blend') { const v = normalizeBlend(value); if (v == null) delete c.blend; else c.blend = v; return; }
-  // (phase V65, block 5) Only what differs from the defaults is kept; all defaults take the field off.
-  if (key === 'pattern') { const v = normalizePattern(value); if (v) c.pattern = v; else delete c.pattern; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
   // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which

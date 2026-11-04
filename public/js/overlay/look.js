@@ -8,7 +8,8 @@
    and lays the layer at this opacity (preview-b.js _showAs); the render scales the clip's alpha last, just before it
    is overlaid (mv3b-render.js) - the same picture.
 
-   A PATTERN (IMAGES -> Patterns, lib/patterns-builtin.js - an address under /patterns/) lands at 0.7 (the owner's (пз7)).
+   A PATTERN (an address under /patterns/, lib/patterns-builtin.js) ticked in the strip of main video lands at 0.7 (the owner's
+   (пз7); since phase V74 a layer of main video - overlay/pattern.js layersOf - with the same opacity and blend mode).
 
    `blend` - how a clip of a lane ABOVE main mixes with what is under it (the owner's (пз7), (пз10)); none (the field
    absent) = laid over it as ever. On main video it means nothing: under main is black. The preview lays the clip's layer

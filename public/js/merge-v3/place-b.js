@@ -120,7 +120,8 @@ function _pick(p) {
   const all = [...rects.entries()];
   for (let i = all.length - 1; i >= 0; i--) {
     const [id, r] = all[i];
-    // (phase V65) A pattern covers the whole frame: a press goes through it to what is under it (it is picked on the lane).
+    // (phase V65; V74) A pattern covers the whole frame: a press goes through it to what is under it (it is chosen in the strip
+    // of main video).
     if (r.nopick) continue;
     const l = _local(p, r);
     if (Math.abs(l.x) <= r.dw / 2 && Math.abs(l.y) <= r.dh / 2) return id;

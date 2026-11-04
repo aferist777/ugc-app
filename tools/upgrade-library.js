@@ -33,7 +33,7 @@ console.log(`library: ${LIB}\nlayout:  ${layout === 0 ? 'empty' : layout}`);
 if (APPLY) {
   const r = U.upgrade(LIB, { log: (s) => console.log(s) });
   if (!r.upgraded && !(r.timelines && r.timelines.converted) && !(r.twins && r.twins.dropped)
-    && !(r.language && r.language.records)) console.log('nothing to upgrade');
+    && !(r.language && r.language.records) && !(r.patterns && r.patterns.moved)) console.log('nothing to upgrade');
   process.exit(r.newlyMissing && r.newlyMissing.length ? 2 : 0);
 }
 // The timelines' step reads projects/*/merge/, which a layout 5 library does not have yet: counted
@@ -56,6 +56,10 @@ if (layout === 6) {
   const lg = require('../lib/drop-language').dropLibrary(LIB, { dry: true });
   console.log(lg.records ? `scenario language to take out: ${lg.records} record(s) in ${lg.stores} store(s)` : 'no scenario language');
   for (const w of lg.which) console.log(`  ${w}`);
+  // (V74) The pattern clips of V65 (lib/timeline-patterns.js), counted without writing.
+  const pt = require('../lib/timeline-patterns').convertLibrary(LIB, { dry: true });
+  console.log(pt.moved ? `pattern clips to make patterns of main video: ${pt.moved} in ${pt.timelines} timeline(s)` : 'no pattern clips');
+  for (const w of pt.which) console.log(`  ${w}`);
 }
 if (layout !== 5) { console.log('nothing to upgrade'); process.exit(0); }
 

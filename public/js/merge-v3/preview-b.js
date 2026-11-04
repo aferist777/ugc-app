@@ -33,7 +33,7 @@ import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
 import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen - one rule with the render (overlay/look.js).
-import { opacityOf, blendOf, isPattern } from '../overlay/look.js';
+import { opacityOf, blendOf } from '../overlay/look.js';
 // (phase V65, block 5) A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
 import * as PAT from '../overlay/pattern.js';
 
@@ -801,10 +801,11 @@ function _showAs(el, sw, sh, c, gaps, main) {
   _ctx.restore();
 }
 
-// (phase V65, block 5, (пз8), (пз14)-(пз17)) A PATTERN: its file - a seamless tile - repeated over the whole frame by
-// overlay/pattern.js's rule: a tile corner at the frame's middle, the tiles sized (tileSize), turned about the middle
-// (angleAt) and slid (driftAt) at the clip's own second; its white made the clip's colour (the file's transparency kept). The
-// tile is drawn once per colour and size (_patTile) and laid as a canvas pattern. No grips: nothing to place.
+// (phase V65, block 5, (пз8), (пз14)-(пз17); phase V74 - a layer of main video, overlay/pattern.js layersOf) A PATTERN: its
+// file - a seamless tile - repeated over the whole frame by overlay/pattern.js's rule: a tile corner at the frame's middle, the
+// tiles sized (tileSize), turned about the middle (angleAt) and slid (driftAt) at the layer's own second - the timeline's; its
+// white made its colour (the file's transparency kept). The tile is drawn once per colour and size (_patTile) and laid as a
+// canvas pattern. No grips, never picked by a press: nothing to place.
 const _patTiles = new Map();      // src|colour|size -> a canvas of one tile
 function _patTile(el, f, n) {
   const key = el.src + '|' + f.color + '|' + n;
@@ -842,8 +843,6 @@ function _drawPattern(el, sw, c) {
 function _show(el, sw, sh, c, gaps, main) {
   // (phase V74) A pattern of main video is no picture placed: its tiles cover the frame.
   if (c.layer) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
-  // (phase V65, block 5) A pattern is no picture placed: its tiles cover the frame.
-  if (isPattern(c.src)) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
   // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.
