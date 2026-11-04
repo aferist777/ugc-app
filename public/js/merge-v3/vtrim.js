@@ -16,6 +16,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { wire as wireRange, fill as fillRange } from '../ui-range.js';
 
 let _open = null;
 
@@ -71,7 +72,8 @@ export function openTrim(opts) {
     range.max = String(Math.max(0, dur - min));
     range.step = '0.04';
     range.title = 'The first frame: the moment the character is seen best - the moves go from here';
-    const at = _el('span', 'vtrim-still-at');
+    wireRange(range);                               // (phase V73 block 2) the shared slider, in the trimmer's gold
+    const at = _el('span', 'vtrim-still-at u-range-v');
     still.append(_el('span', 'k', 'first frame'), range, at);
     box.appendChild(still);
     still.range = range;
@@ -104,7 +106,7 @@ export function openTrim(opts) {
     win.style.left = (from / dur * 100) + '%';
     win.style.width = ((to - from) / dur * 100) + '%';
     span.textContent = _t(from) + ' – ' + _t(to) + ' · ' + (to - from).toFixed(1) + ' s go';
-    if (still) { still.range.value = String(from); still.at.textContent = _t(from); }
+    if (still) { still.range.value = String(from); fillRange(still.range); still.at.textContent = _t(from); }
   };
   const show = (t) => { try { media.currentTime = Math.max(0, Math.min(dur - 0.05, t)); } catch (e) { /* not loaded yet */ } };
   // (phase V17) The first frame, taken once the clip stands on it: a small JPEG for the zone's cell.

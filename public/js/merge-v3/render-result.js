@@ -193,12 +193,12 @@ export async function showResult(o) {
     let f;
     if (p.select) {
       f = document.createElement('select');
-      f.className = 'mv3-rr-rf';
+      f.className = 'mv3-rr-rf u-in is-s';
       const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; f.appendChild(o0);
       for (const v of p.select) { const oo = document.createElement('option'); oo.value = v; oo.textContent = v; f.appendChild(oo); }
     } else {
       f = document.createElement('input');
-      f.type = 'text'; f.className = 'mv3-rr-rf'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
+      f.type = 'text'; f.className = 'mv3-rr-rf u-in is-s'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
     }
     row.appendChild(f);
     row.appendChild(el('div', 'mv3-rr-rd', p.desc));
@@ -211,7 +211,7 @@ export async function showResult(o) {
   // ── the foot: the full name along the left, the buttons on the right ──
   const foot = el('div', 'mv3-x-foot is-rr');
   const name = document.createElement('input');
-  name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
+  name.type = 'text'; name.className = 'mv3-rr-name u-in'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
   name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
   const hint = el('span', 'mv3-rr-hint');

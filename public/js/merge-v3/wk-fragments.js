@@ -1239,7 +1239,7 @@ function _stageMoodVoice(host, p, lines) {
   body.appendChild(row);
   const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', word), tip);
   // The mood. What it means is said in the bubble of its name (the owner's (т12)).
-  const mood = el('select', 'mv3-wk-vsel is-small is-mood');
+  const mood = el('select', 'u-in is-s mv3-wk-vsel is-small is-mood');
   if (!now) _noneOption(mood, 'none');
   for (const m of (_kit && _kit.moods) || []) {
     const o = el('option', '', m.label);
@@ -1323,7 +1323,7 @@ const SPEED_TIP = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED
 // The two controls, for the second line of field 1 (their names stand over them, with STAB_TIP and SPEED_TIP).
 function _voiceSettings(p, busy) {
   const now = VOICE.params(p);
-  const stab = el('select', 'mv3-wk-vsel is-small is-stab');
+  const stab = el('select', 'u-in is-s mv3-wk-vsel is-small is-stab');
   for (const s of STABILITY) {
     const o = el('option', '', s.label);
     o.value = String(s.v);
@@ -1333,7 +1333,7 @@ function _voiceSettings(p, busy) {
   }
   stab.disabled = busy || _saving;
   stab.addEventListener('change', () => _saveVoice({ stability: +stab.value, speed: VOICE.params(p).speed }));
-  const speed = el('input', 'mv3-wk-vnum');
+  const speed = el('input', 'mv3-wk-vnum u-in is-s');
   speed.type = 'number';
   speed.min = String(SPEED.min);
   speed.max = String(SPEED.max);
@@ -1500,7 +1500,7 @@ function _stageBroll(host, p, lines) {
       + 'free; the keywords are written by the agent (a fraction of a cent).'));
   }
   // What is laid, and laid again when changed.
-  const mode = el('select', 'mv3-wk-vsel is-small mv3-wk-bmode');
+  const mode = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-wk-bmode');
   for (const [v, label] of BROLL_MODES) {
     const o = el('option', '', label);
     o.value = v;
@@ -1661,7 +1661,7 @@ function _stageVideo(host, p, lines) {
   // Neither is chosen for a new project (V24): both say none, and the field is red until they are.
   const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
-  const model = el('select', 'mv3-wk-vsel is-small is-model');
+  const model = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   model.title = 'What films the clips - for the whole video';
   if (!v.model) _noneOption(model);
   for (const m of models) {
@@ -1678,7 +1678,7 @@ function _stageVideo(host, p, lines) {
     const keep = !!(next && (next.qualities || []).some(q => q.id === v.quality));
     _saveVideo({ model: model.value, quality: keep ? v.quality : '' });
   });
-  const tier = el('select', 'mv3-wk-vsel is-small is-tier');
+  const tier = el('select', 'u-in is-s mv3-wk-vsel is-small is-tier');
   tier.title = 'How sharp the clips are, and what a second of them costs';
   if (!v.quality || !v.model) _noneOption(tier);
   for (const q of v.model ? _qualities() : []) {
@@ -1799,7 +1799,7 @@ function _seedanceSettings(body, p) {
   // sample. Not chosen, it is the read (the owner's answer (я13)).
   const sounds = (_kit && _kit.sounds) || [];
   const cur = v.sound || 'read';
-  const sound = el('select', 'mv3-wk-vsel is-small is-model');
+  const sound = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   for (const s of sounds) {
     const o = el('option', '', s.label);
     o.value = s.id;
@@ -1816,7 +1816,7 @@ function _seedanceSettings(body, p) {
   // GESTURES - how the head, the hands and the body move (the owner's answer (ц)): one way per mood, the project's mood
   // until another is picked; the face follows the mood always (answer (щ)). Picking the mood itself follows it again.
   const moods = (_kit && _kit.moods) || [];
-  const gest = el('select', 'mv3-wk-vsel is-small is-model');
+  const gest = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const curG = v.gestures || v.mood || '';
   if (!curG) _noneOption(gest, 'as the mood');
   for (const md of moods) {
@@ -1832,7 +1832,7 @@ function _seedanceSettings(body, p) {
     + ' the face always follows the mood.');
 
   // THE CAMERA - one continuous shot (the owner's answer (е)); several shots in one clip are in development.
-  const cam = el('select', 'mv3-wk-vsel is-small is-model');
+  const cam = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const one = el('option', '', 'one continuous shot');
   one.value = 'one';
   const more = el('option', '', 'several shots · soon');
@@ -2080,7 +2080,7 @@ function _insertEditor(host, p, lines) {
   host.appendChild(shut);
   host.appendChild(el('div', 'mv3-wk-flabel', 'a new line after fragment ' + _no(lines, after)));
   host.appendChild(el('div', 'mv3-wk-fwhy', 'After: “' + (_words(lines[after]) || '').slice(0, 160) + '”'));
-  const box = el('textarea', 'mv3-wk-ledit is-frag');
+  const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
   box.rows = 3;
   box.placeholder = 'The words of the new line';
   box.value = _insDraft;
@@ -2199,7 +2199,7 @@ function _lineSpeed(p, l, i) {
   const box = el('label', 'mv3-wk-vlab is-line' + (own ? ' is-own' : ''));
   box.title = own ? "This line's own speed - the project's (" + proj + ') does not touch it. The read is retimed at once, free.'
     : "The speed of this line's read - the project's, " + proj + ". Changed here, it becomes this line's own; the read is retimed at once, free.";
-  const inp = el('input', 'mv3-wk-vnum');
+  const inp = el('input', 'mv3-wk-vnum u-in is-s');
   inp.type = 'number';
   inp.min = String(SPEED.min);
   inp.max = String(SPEED.max);
@@ -2373,7 +2373,7 @@ function _fragment(host, p, l, i) {
   // the cheap way.
   const shown = String(l.tagged || '').trim() || _words(l);
   if (_editWords === i) {
-    const box = el('textarea', 'mv3-wk-ledit is-frag');
+    const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
     box.value = _wordsDraft;
     box.rows = _isVo(p) ? 12 : 3;
     const count = _voCount(p, box);
@@ -2546,7 +2546,7 @@ function _framePromptCol(p, l, i) {
 
 // A field that is only there to say what will be in it: same box, same height, no typing.
 function _dead(rows, placeholder) {
-  const box = el('textarea', 'mv3-wk-ftext-in');
+  const box = el('textarea', 'mv3-wk-ftext-in u-area is-s');
   box.rows = rows;
   box.placeholder = placeholder;
   box.value = '';
@@ -2881,7 +2881,7 @@ async function _saveWords(va, i) {
 // person leaves it, not on every key.
 function _textField(i, field, value, rows, placeholder, save) {
   const k = i + ':' + field;
-  const box = el('textarea', 'mv3-wk-ftext-in');
+  const box = el('textarea', 'mv3-wk-ftext-in u-area is-s');
   box.rows = rows;
   box.placeholder = placeholder;
   box.value = k in _drafts ? _drafts[k] : value;

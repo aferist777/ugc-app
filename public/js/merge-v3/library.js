@@ -454,7 +454,7 @@ function _viewerRows(item) {
 // Moving a clip to another kind moves it off this shelf, so the viewer closes and the grid is read again.
 function _kindSelect(item) {
   const sel = document.createElement('select');
-  sel.className = 'lib-view-sel';
+  sel.className = 'lib-view-sel u-in is-s';
   sel.title = 'Which kind of clip this is';
   for (const k of KINDS) {
     const o = document.createElement('option');
@@ -487,7 +487,7 @@ function _kindSelect(item) {
 // a new one, named in a small box and given to this clip in the same breath.
 function _categorySelect(item) {
   const sel = document.createElement('select');
-  sel.className = 'lib-view-sel';
+  sel.className = 'lib-view-sel u-in is-s';
   sel.title = 'Which folder it is in';
   let current = (item.meta && item.meta.categoryId) || '';
   // (phase V60.2, the owner's (дг10а)) A B-roll lies in its model's folder: offered that model's folders, a new one made in it.
@@ -732,6 +732,7 @@ function _linkBox(anchor) {
   el.className = 'mv3-plus-menu mv3-link-box';
   const inp = document.createElement('input');
   inp.type = 'text';
+  inp.className = 'u-in is-s';
   inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
   const go = document.createElement('button');
   go.type = 'button';

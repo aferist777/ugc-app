@@ -29,6 +29,7 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { note } from './ask.js';
 import { cutsOfPauses } from './tl-cut.js';
+import { wire as wireRange, fill as fillRange } from '../ui-range.js';
 
 const KEEP_DEFAULT = 0.30;
 const KEEP_MIN = 0.01, KEEP_MAX = 1.00;
@@ -93,17 +94,19 @@ export function openSilence() {
     '<label class="mv3-silence-row" title="A pause longer than this is shortened to it - half after the sound before, half before the sound after">' +
     '<span>keep pauses up to</span>' +
     `<input type="range" min="${KEEP_MIN}" max="${KEEP_MAX}" step="0.01" class="mv3-silence-k">` +
-    '<span class="mv3-silence-v"></span></label>' +
+    '<span class="mv3-silence-v u-range-v"></span></label>' +
     '<label class="mv3-silence-row" title="Quieter than this is silence. auto - this sound\'s own noise floor + 6 dB, never above −36 dB">' +
     '<span>silent below</span>' +
     `<input type="range" min="${DB_MIN}" max="${DB_MAX}" step="1" class="mv3-silence-d" disabled>` +
-    '<span class="mv3-silence-v is-db"></span>' +
+    '<span class="mv3-silence-v u-range-v is-db"></span>' +
     '<button type="button" class="mv3-silence-auto u-chip is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
     '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n">listening to main audio…</span>' +
     '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>cut</button></div>';
   const k = box.querySelector('.mv3-silence-k');
   const d = box.querySelector('.mv3-silence-d');
   k.value = String(_keep);
+  wireRange(k);                                     // (phase V73 block 2) the shared slider
+  wireRange(d);
   box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
   document.body.appendChild(box);
   const away = (e) => { if (!box.contains(e.target) && !_btn.contains(e.target)) closeSilence(); };
@@ -239,7 +242,7 @@ function _find() {
   d.disabled = !w.asks.length;
   btn.disabled = auto;
   btn.classList.toggle('is-on', auto);
-  if (shown != null) d.value = String(Math.max(DB_MIN, Math.min(DB_MAX, Math.round(shown))));
+  if (shown != null) { d.value = String(Math.max(DB_MIN, Math.min(DB_MAX, Math.round(shown)))); fillRange(d); }
   w.box.querySelector('.mv3-silence-v.is-db').textContent = shown == null ? '—' : _dbText(shown);
   const all = [];
   for (const q of w.asks) {

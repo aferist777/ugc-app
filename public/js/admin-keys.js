@@ -196,7 +196,7 @@ function buildRow(r) {
   line.appendChild(lbl);
 
   const field = document.createElement('input');
-  field.className = 'bk-field';
+  field.className = 'bk-field u-in';
   field.type = 'text';
   field.placeholder = r.placeholder || '';
   field.autocomplete = 'off';

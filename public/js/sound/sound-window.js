@@ -319,12 +319,12 @@ function paintMake() {
     card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }),
       { max: 500, help: 'What the sound is, as a sound designer says it - the source, the action, the material; a loop with its tempo and key. Up to 500 characters.' }));
     const r2 = el('div', 'au-row2');
-    const tempo = el('input', 'au-in');
+    const tempo = el('input', 'au-in u-in');
     tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = 'auto';
     tempo.value = f.tempo ? String(f.tempo) : '';
     tempo.addEventListener('change', () => { f.tempo = Math.max(0, Math.min(300, Math.round(+tempo.value || 0))); F.save(); });
     r2.appendChild(_field('Tempo', tempo, { help: 'Beats per minute, for a loop. Empty - Suno\'s own.' }));
-    const key = el('select', 'au-sel');
+    const key = el('select', 'au-sel u-in');
     for (const k of (_cat().soundKeys || ['Any'])) { const op = el('option', null, k); op.value = k; key.appendChild(op); }
     key.value = f.key || 'Any';
     key.addEventListener('change', () => { f.key = key.value; F.save(); });

@@ -90,13 +90,13 @@ const HTML = `
       </div>
       <div class="mk-body">
         <label class="mk-field"><span>Topic</span>
-          <input type="text" id="mk-topic" placeholder="What the video is about"></label>
+          <input type="text" id="mk-topic" class="u-in" placeholder="What the video is about"></label>
         <div class="mk-note-line" id="mk-nar-note" hidden></div>
         <div class="mk-step1">
         <div class="mk-box" id="mk-box1">
           <div class="mk-ctls" id="mk-controls"></div>
           <label class="mk-ctl" for="mk-hook-n"><span>Hooks</span>
-            <select id="mk-hook-n" title="How many hooks to write - each of a type picked at random"></select></label>
+            <select id="mk-hook-n" class="u-in" title="How many hooks to write - each of a type picked at random"></select></label>
           <span class="sp"></span>
           <span class="mk-ctl"><span>&nbsp;</span><span class="mk-btns">
             <button class="u-btn is-main" type="button" id="mk-go">Write hooks</button>
@@ -113,12 +113,12 @@ const HTML = `
         <div class="mk-box mk-box2" id="mk-box2" hidden>
           <div class="mk-box-row">
             <label class="mk-ctl mk-ctl-hook" for="mk-hook"><span>Hook</span>
-              <textarea id="mk-hook" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
-            <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes"></select></label>
+              <textarea id="mk-hook" class="u-area" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
+            <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes" class="u-in"></select></label>
             <span class="mk-ctl"><span>&nbsp;</span>
               <button class="u-btn is-main" type="button" id="mk-write">Write scenario</button></span>
           </div>
-          <textarea class="mk-ad-t" id="mk-ad" rows="2" spellcheck="false"
+          <textarea class="mk-ad-t u-area" id="mk-ad" rows="2" spellcheck="false"
             placeholder="Advertise - optional. What to advertise and what to say about it: worked into 2 paragraphs, natively; a call to buy or a link only if you write it here. Empty - no ad."></textarea>
         </div>
         <div class="mk-stage" id="mk-save-stage" hidden>
@@ -128,11 +128,11 @@ const HTML = `
             <button class="u-btn is-main" type="button" id="mk-save">Save to Scenarios</button>
           </div>
           <div class="mk-save-row">
-            <label class="mk-field"><span>Title</span><input type="text" id="mk-title"></label>
+            <label class="mk-field"><span>Title</span><input type="text" id="mk-title" class="u-in"></label>
             <label class="mk-field"><span>Narrator gender <em>— the store requires it</em></span>
-              <select id="mk-gender"><option value="male">male</option><option value="female">female</option></select></label>
-            <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" placeholder="e.g. history"></label>
-            <label class="mk-field"><span>Product</span><input type="text" id="mk-product" placeholder="what it sells, if anything"></label>
+              <select id="mk-gender" class="u-in"><option value="male">male</option><option value="female">female</option></select></label>
+            <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" class="u-in" placeholder="e.g. history"></label>
+            <label class="mk-field"><span>Product</span><input type="text" id="mk-product" class="u-in" placeholder="what it sells, if anything"></label>
           </div>
           <div class="mk-stage-h">
             <span class="lib-status" id="mk-save-status"></span>
@@ -1144,7 +1144,7 @@ function _narratorsGear() {
 }
 
 function _select(id, values, current) {
-  const s = el('select');
+  const s = el('select', 'u-in');
   s.id = id;
   for (const v of values) {
     const o = el('option', null, typeof v === 'string' ? v : v.label);
@@ -1886,7 +1886,7 @@ function _renderScenes() {
     const row = el('div', 'mk-scene' + (i === 0 ? ' hook' : ''));
     // Paragraph one is the hook, and says so instead of saying "1".
     row.appendChild(el('div', 'mk-scene-n' + (i === 0 ? ' is-hook' : ''), i === 0 ? 'hook' : String(i + 1)));
-    const ta = el('textarea', 'mk-scene-t');
+    const ta = el('textarea', 'mk-scene-t u-area is-dark');
     ta.rows = 2;
     ta.value = text;
     const acts = el('div', 'mk-scene-a');

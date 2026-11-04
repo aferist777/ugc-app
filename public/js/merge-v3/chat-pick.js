@@ -256,7 +256,7 @@ function _build() {
   const bar = el('div', 'pk-bar');
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'pk-q';
+  q.className = 'pk-q u-in is-s';
   q.placeholder = 'search by name';
   q.spellcheck = false;
   const cat = document.createElement('select');
@@ -419,6 +419,7 @@ function _paintSources() {
   const row = el('div', 'pk-link');
   const inp = document.createElement('input');
   inp.type = 'text';
+  inp.className = 'u-in is-s';
   inp.placeholder = 'YouTube, TikTok, Instagram…';
   const b = el('button', 'pk-link-go u-btn is-s', 'add');
   b.type = 'button';
@@ -754,7 +755,7 @@ function _buildTree() {
   const path = el('div', 'pk-path');
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'pk-q';
+  q.className = 'pk-q u-in is-s';
   q.placeholder = 'search here and deeper';
   q.title = 'By name - in the open folder and every folder under it';
   q.spellcheck = false;
@@ -792,6 +793,7 @@ function _buildTree() {
     const row = el('div', 'pk-link');
     const inp = document.createElement('input');
     inp.type = 'text';
+    inp.className = 'u-in is-s';
     inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
     inp.title = L.hint || '';
     const b = el('button', 'pk-link-go u-btn is-s', 'add');

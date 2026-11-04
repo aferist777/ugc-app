@@ -22,6 +22,7 @@ import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
 import { showError } from '../notice.js';
+import { wire as wireRange } from '../ui-range.js';
 
 let _busy = false;
 
@@ -65,6 +66,7 @@ function _row(label, control) {
 
 function _select(opts, value) {
   const s = document.createElement('select');
+  s.className = 'u-in is-s';                         // (phase V73 block 2) the shared field, at the rows' 24
   for (const [v, l] of opts) {
     const o = document.createElement('option');
     o.value = String(v); o.textContent = l;
@@ -79,7 +81,8 @@ function _slider(min, max, step, value, fmt) {
   const wrap = _el('span', 'mv3-x-sl');
   const i = document.createElement('input');
   i.type = 'range'; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(value);
-  const out = _el('span', 'mv3-x-slv', fmt(+value));
+  wireRange(i);                                     // (phase V73 block 2) the shared slider; its value in mono (.u-range-v)
+  const out = _el('span', 'mv3-x-slv u-range-v', fmt(+value));
   i.addEventListener('input', () => { out.textContent = fmt(+i.value); });
   wrap.appendChild(i); wrap.appendChild(out);
   wrap._input = i;

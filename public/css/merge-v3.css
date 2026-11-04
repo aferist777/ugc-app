@@ -45,12 +45,7 @@
 .mv3-bar-fld{display:flex; align-items:center; gap:6px; min-width:0}
 /* The rename field takes the picker's slot, so it borrows the picker's look. */
 /* (phase V67, second round (б), the owner 2026-11-01: "сделай строку с названием проекта шире в 1.5 раза") 230-430 -> 345-645. */
-.mv3-bar-fld input#mv3-project-name{
-  min-width:345px; max-width:645px; height:24px; padding:0 5px;
-  border:1px solid var(--focus); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font);
-}
+.mv3-bar-fld input#mv3-project-name{ min-width:345px; max-width:645px }
 
 /* (phase V67, second round (д)) The picker's own list: the kinds in a row over the projects (js/merge-v3/projects.js _openList). */
 .mv3-plist{
@@ -73,12 +68,7 @@
 }
 /* Wide enough for a real title: an imported project is named by date plus product, and a
    picker that only shows the date cannot be used to pick. */
-.mv3-bar-fld select{
-  min-width:345px; max-width:645px; height:24px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font); cursor:pointer;
-}
+.mv3-bar-fld select{ min-width:345px; max-width:645px }
 .mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
 
 /* ── Export dialog ────────────────────────────────────────────────────────────
@@ -98,11 +88,8 @@
   font:600 10px/1.4 var(--font); font-variant-numeric:tabular-nums;
 }
 .mv3-x-sl{flex:1 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
-.mv3-x-sl input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--muted); cursor:pointer}
-.mv3-x-slv{
-  flex:0 0 auto; min-width:34px; text-align:right;
-  font:600 10px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
-}
+.mv3-x-sl input[type=range]{flex:1 1 auto; min-width:0}
+.mv3-x-slv{flex:0 0 auto; min-width:34px; text-align:right}   /* the value in mono - .u-range-v */
 /* The result view: the video is the content, so the body gives it everything. */
 .mv3-x.is-result{width:min(520px, 94vw)}
 /* The result window: the video on the left, narrow - it is a vertical - with the send tick
@@ -119,11 +106,7 @@
 /* The name takes the room the buttons leave: sixty monospace characters is the longest a name
    in the pattern gets, and the field never ellipsises one. */
 .mv3-x-foot.is-rr{gap:9px}
-.mv3-rr-name{
-  flex:1 1 auto; min-width:420px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.mv3-rr-name:focus{outline:none; border-color:var(--focus)}
+.mv3-rr-name{ flex:1 1 auto; min-width:420px; font-family:var(--mono) }
 /* The reading of the name against the pattern, and the word on what saving did - the same
    line, beside the field. Gives way before the field does. */
 .mv3-rr-hint{
@@ -138,12 +121,7 @@
 /* One row per part: its number and name, the field, the description beside it. */
 .mv3-rr-row{display:grid; grid-template-columns:112px 168px minmax(0, 1fr); gap:8px; align-items:center; padding:2px 0}
 .mv3-rr-rl{font:600 10.5px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--ink); white-space:nowrap}
-.mv3-rr-rf{
-  height:24px; padding:0 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width:0;
-}
-.mv3-rr-rf:focus{outline:none; border-color:var(--focus)}
-select.mv3-rr-rf{cursor:pointer}
+.mv3-rr-rf{ min-width:0; font-family:var(--mono) }
 .mv3-rr-rd{font:10.5px/1.35 var(--font); color:var(--muted); min-width:0}
 @media (max-width:820px){ .mv3-rr{grid-template-columns:1fr} .mv3-rr-left{border-right:0; border-bottom:1px solid var(--border)} .mv3-rr-row{grid-template-columns:100px 1fr} .mv3-rr-rd{grid-column:1 / -1} }
 .mv3-x-body.is-video{padding:0; background:var(--media-bg); display:flex; align-items:center; justify-content:center}
@@ -419,9 +397,9 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
 .mv3-tl-zoom > span:first-child{
   font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
-.mv3-tl-zoom input[type=range]{width:110px; height:14px; accent-color:var(--muted); cursor:pointer}
+.mv3-tl-zoom input[type=range]{width:110px}
 .mv3-tl-pps{
-  font:600 10px/1 var(--font); font-variant-numeric:tabular-nums;
+  font:400 10px/1 var(--mono); font-variant-numeric:tabular-nums;
   color:var(--muted); min-width:22px; text-align:right;
 }
 
@@ -494,12 +472,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-pv-q > span{
   font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
-.mv3-pv-q select, #mv3-pvb-fmt{
-  height:21px; padding:0 3px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10px/19px var(--font); cursor:pointer;
-}
+/* the shared field (.u-in.is-s), at the preview bar's own 21 px */
+.mv3-pv-q select.u-in, #mv3-pvb-fmt.u-in{ height:21px; font-size:var(--fs-10) }
 
 /* ── The gallery and the media tree (phase V28.4) ─────────────────────────────
    One row under the status line: the gallery (.mv3-panel-body, scrolling itself), a sash, the tree on the right
@@ -765,24 +739,19 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 
 .mv3-c-slider{display:flex; align-items:center; gap:7px; width:100%; min-width:0}
-.mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0; height:14px; accent-color:var(--muted); cursor:pointer}
+.mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0}
+/* (phase V73 block 2) a number of the strip in mono, at the strip's own size */
 .mv3-c-num{
   flex:0 0 auto; min-width:36px; text-align:right;
-  font:600 10px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
+  font:400 10.5px/1 var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap;
 }
 
 /* Full height, not a squeezed one: a select whose text is clipped is worse than a
    slightly taller row. */
-.mv3-c-sel{
-  width:100%; min-width:0; height:23px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10.5px/21px var(--font); cursor:pointer;
-}
-.mv3-c-sel:hover{border-color:var(--border-soft)}
+.mv3-c-sel{ width:100%; min-width:0 }
 /* (phase V65) The blend mode's own list (js/merge-v3/blend-menu.js): a mode under the pointer is shown on the
    preview at once, a press chooses it. Over the page, under no dimmer - a menu. */
-.mv3-blend-btn{text-align:left}
+.mv3-blend-btn{ text-align:left }
 .mv3-blend-menu{
   position:fixed; z-index:9500; display:flex; flex-direction:column; padding:3px;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs); box-shadow:var(--shadow);
@@ -834,13 +803,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* (phase V73 block 2) C.toggle is the shared switch (.u-switch), C.toggleNamed a pressed button (.u-btn.is-on) */
 
 /* The one control here that holds prose. */
-.mv3-c-area{
-  width:100%; min-width:0; resize:vertical; padding:5px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-c-area:focus{outline:none; border-color:var(--focus)}
+.mv3-c-area{ width:100%; min-width:0; resize:vertical }
 
 /* A typed number plus its unit. */
 .mv3-c-numrow{display:flex; align-items:center; gap:5px; min-width:0}
@@ -1240,11 +1203,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-sc-menu-sep.is-end{padding:0; margin:3px 0; border-top:1px solid var(--border-soft)}
 .mv3-sc-new{flex:0 0 auto}
-.mv3-sc-search{
-  display:block; flex:1 1 auto; min-width:0; padding:4px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:400 11px/1.3 var(--font);
-}
+.mv3-sc-search{ display:block; flex:1 1 auto; min-width:0 }
 .mv3-sc-list{display:flex; flex-direction:column; gap:3px; padding:7px 9px 11px}
 /* The buttons sit at the START of the row, the cross first - ✕ · use · the title (the owner, V28.3) - and are pale
    until the row is pointed at: two words beside every title is a wall of "use use use" to read past. */
@@ -1597,12 +1556,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vsub{font:400 9.5px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* The dropdown IS the choice: the voices a character has are few, and a list of two with a
    button each would say less than the one line this is. */
-.mv3-wk-vsel{
-  flex:1 1 auto; min-width:0; padding:4px 6px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:600 11px/1.3 var(--font);
-}
-.mv3-wk-vsel[disabled]{opacity:.6; cursor:default}
+.mv3-wk-vsel{ flex:1 1 auto; min-width:0 }
 .mv3-wk-vtag{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--ink)}
 .mv3-wk-vuse, .mv3-wk-vmore, .mv3-wk-vsearchbtn{flex:0 0 auto}
 .mv3-wk-vfoot{display:flex; justify-content:flex-start; margin:6px 0 2px}
@@ -1615,16 +1569,11 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vwinfoot .mv3-wk-vpager{margin:0; justify-content:center}
 /* (phase V62) Each ElevenLabs filter with its name over it. */
 .mv3-wk-vfcell{flex:1 1 92px; min-width:0; max-width:150px; display:flex; flex-direction:column; gap:2px}
-.mv3-wk-vfcell .mv3-wk-vfilter{flex:0 0 auto; max-width:none; width:100%}
+.mv3-wk-vfcell .mv3-wk-vfilter{ flex:0 0 auto; max-width:none; width:100% }
 .mv3-wk-vfname{font:700 8.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 /* (phase V62) Field 1's voice: its name with ▾ - the menu of the saved voices and the ElevenLabs library (wk-voice.js). */
-.mv3-wk-vpickbtn{
-  flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; padding:4px 7px; cursor:pointer; text-align:left;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/1.3 var(--font);
-}
-.mv3-wk-vpickbtn:hover{border-color:var(--sel-line)}
+.mv3-wk-vpickbtn{ flex:1 1 auto; min-width:0; display:flex; gap:6px; text-align:left }
 .mv3-wk-vpickbtn.is-need{border-color:var(--gold); color:var(--gold)}
-.mv3-wk-vpickbtn[disabled]{opacity:.6; cursor:default}
 .mv3-wk-vpickname{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-wk-vpickarrow{flex:0 0 auto; color:var(--muted)}
 .mv3-wk-vmenu{width:min(420px, 92vw); overflow-y:auto}
@@ -1654,7 +1603,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* (phase V62) The voiceover draft's script column while it has no script (js/merge-v3/vo-script.js), and its bar over the lines. */
 .mv3-vos{display:flex; flex-direction:column; min-height:0; flex:1 1 auto}
 .mv3-vos-top{display:flex; align-items:center; gap:6px; padding:6px 2px 0}
-.mv3-vos-cat{flex:0 1 auto; max-width:45%}
+.mv3-vos-cat{ flex:0 1 auto; max-width:45% }
 .mv3-vos-list{flex:1 1 auto; min-height:0; overflow-y:auto; padding-left:0; padding-right:0}
 .mv3-vos-bar{display:flex; align-items:center; gap:7px; margin:0 0 6px}
 /* (the owner 2026-10-31: "давай поле с b-roll медиа будет рядом вместе со столбцом настроек фрагмента выезжающим. потому что сейчас
@@ -1697,28 +1646,14 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* Six vocabularies and a search box. They wrap: the panel is narrow when the sash is left
    alone and wide when it is not, and a fixed grid would be wrong in both. */
 .mv3-wk-vfilters{display:flex; flex-wrap:wrap; gap:4px; margin:0 0 6px}
-.mv3-wk-vsearch{
-  flex:1 1 100%; min-width:0; padding:4px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.3 var(--font);
-}
-.mv3-wk-vsearch:focus{outline:none; border-color:var(--focus)}
-.mv3-wk-vfilter{
-  flex:1 1 92px; min-width:0; max-width:150px; padding:3px 5px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 10px/1.3 var(--font);
-}
+.mv3-wk-vsearch{ flex:1 1 100%; min-width:0 }
+.mv3-wk-vfilter{ flex:1 1 92px; min-width:0; max-width:150px }
 .mv3-wk-vpager{display:flex; align-items:center; gap:7px; margin:7px 0 2px}
 .mv3-wk-vcount{font:400 9.5px/1.3 var(--font); color:var(--muted)}
 
 /* The words of the open line, put back or edited (js/merge-v3/wk-fragments.js, the right column). */
 .mv3-wk-lback{margin:2px 0 8px; align-self:flex-start}
-.mv3-wk-ledit{
-  width:100%; margin:0 0 4px; padding:5px 6px; resize:vertical;
-  border:1px solid var(--sel-line); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-wk-ledit:focus{outline:none}
+.mv3-wk-ledit{ width:100%; margin:0 0 4px; resize:vertical }
 .mv3-wk-fwords.is-edit{cursor:text}
 .mv3-wk-fwords.is-edit:hover{color:var(--ink)}
 .mv3-wk-vfoot.is-tight{margin:0 0 8px; gap:6px}
@@ -1850,7 +1785,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */
 .mv3-wk-frow .mv3-wk-vplay.u-btn{width:20px; height:20px; font-size:8px}
 .mv3-wk-fsets{display:flex; flex-wrap:wrap; gap:4px}
-.mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
+.mv3-wk-vsel.is-small{flex:1 1 110px}
 /* How the two columns work, over the script it is about (V7): a gold band, not grey italics at the
    foot of a zone nobody scrolls to. */
 .mv3-wk-fhint{
@@ -1958,13 +1893,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-flabel.is-row{display:flex; align-items:center; gap:8px}
 .mv3-wk-flabel .mv3-wk-flink{margin-left:0; text-transform:none; letter-spacing:0}
 .mv3-wk-fedited{color:var(--warn); text-transform:none; letter-spacing:0; font-weight:600}
-.mv3-wk-ftext-in{
-  width:100%; padding:5px 7px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-wk-ftext-in:focus{outline:none; border-color:var(--focus)}
-.mv3-wk-ftext-in[disabled]{opacity:.6}
+.mv3-wk-ftext-in{ width:100%; resize:vertical }
 .mv3-wk-fwhy{margin:4px 0 2px; font:400 10px/1.45 var(--font); color:var(--muted); font-style:italic}
 .mv3-wk-vmore.is-busy{border-color:var(--sel-line); color:var(--ink)}
 
@@ -2163,11 +2092,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vctl .mv3-wk-gen{margin-left:auto}
 .mv3-wk-vlab{flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 .mv3-wk-vlab .mv3-wk-vsel.is-small{flex:0 0 auto; width:auto}
-.mv3-wk-vnum{
-  width:52px; padding:3px 4px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 10px/1.3 var(--font);
-}
-.mv3-wk-vnum[disabled]{opacity:.6}
+.mv3-wk-vnum{ width:52px }
 
 /* The line's own speed in its fragment, between `read` and play (V26.1): gold while it is the line's own,
    with the way back to the project's beside it. */

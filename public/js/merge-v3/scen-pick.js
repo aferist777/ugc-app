@@ -292,7 +292,7 @@ function _build() {
   filter.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
   top.appendChild(filter);
 
-  const search = _el('input', 'mv3-sc-search');
+  const search = _el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
   search.placeholder = 'search by title, product, role';
   search.addEventListener('input', () => { _q = search.value; _paintList(); });

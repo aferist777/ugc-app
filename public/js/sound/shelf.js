@@ -47,7 +47,7 @@ let _caret = 0;
 
 export function searchHead(o) {
   const head = el('div', 'snd-shelf-head');
-  const s = el('input', 'snd-search');
+  const s = el('input', 'snd-search u-in');
   s.type = 'search';
   s.placeholder = 'search SFX - name or tag (whoosh, click, pop…)';
   s.value = o.q || '';

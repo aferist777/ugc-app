@@ -64,7 +64,7 @@ export function build(host, hooks) {
   wrap.appendChild(chipBox);
 
   const ta = document.createElement('textarea');
-  ta.className = 'cv2-edit-txt';
+  ta.className = 'cv2-edit-txt u-area';
   ta.id = 'cv2-edit-txt';
   ta.rows = 3;
   ta.placeholder = 'e.g. age: 40; hair color: red; longer nose, a scar across the brow';

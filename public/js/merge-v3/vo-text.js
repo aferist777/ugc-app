@@ -54,7 +54,7 @@ export function openOwnText(put, done, o = {}) {
   box.appendChild(body);
   const row = _el('div', 'mv3-x-row');
   row.appendChild(_el('label', null, 'Name'));
-  const name = _el('input', 'mv3-sc-inp');
+  const name = _el('input', 'mv3-sc-inp u-in');
   name.type = 'text';
   name.placeholder = 'what this ' + (talking ? 'talking head' : 'voiceover') + ' is called - the first words when empty';
   name.value = String(o.name || '');
@@ -62,7 +62,7 @@ export function openOwnText(put, done, o = {}) {
   body.appendChild(row);
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'The text'));
-  const text = _el('textarea', 'mv3-sc-lines is-votext');
+  const text = _el('textarea', 'mv3-sc-lines is-votext u-area is-dark');
   text.spellcheck = false;
   text.maxLength = API.VO_MAX;
   text.placeholder = talking

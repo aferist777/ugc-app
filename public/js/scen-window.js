@@ -55,7 +55,7 @@ export async function openScenario(summary, hooks = {}) {
     return node;
   };
   const input = (placeholder, listId) => {
-    const i = _el('input', 'mv3-sc-inp');
+    const i = _el('input', 'mv3-sc-inp u-in');
     i.type = 'text';
     if (placeholder) i.placeholder = placeholder;
     if (listId) i.setAttribute('list', listId);
@@ -88,7 +88,7 @@ export async function openScenario(summary, hooks = {}) {
   }
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'The lines'));
-  const lines = _el('textarea', 'mv3-sc-lines');
+  const lines = _el('textarea', 'mv3-sc-lines u-area is-dark');
   lines.spellcheck = false;
   lines.placeholder = 'One line per row. Each line becomes one fragment: it is spoken in one take and animated as one clip.';
   body.appendChild(lines);

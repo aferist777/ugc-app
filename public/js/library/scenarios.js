@@ -362,7 +362,7 @@ const _uniq = (arr) => { const seen = new Set(); return arr.filter(v => { const 
 function _fieldRow(box, label, current, values, onPick, o = {}) {
   const cell = _el('div', 'lib-sc-cell');
   cell.appendChild(_el('span', 'lib-sc-cl', label));
-  const btn = _el('button', 'lib-sc-fbtn');
+  const btn = _el('button', 'lib-sc-fbtn u-btn is-s is-field');
   btn.type = 'button';
   const f = { value: current || '' };
   const labelOf = (v) => {
@@ -716,7 +716,7 @@ const _valueOf = (a) => a.cards.map(c => c.ta.value.replace(/\s*\n\s*/g, ' ')).j
 function _card(a, text) {
   const row = _el('div', 'mk-scene lib-sc-line');
   const n = _el('div', 'mk-scene-n');
-  const ta = _el('textarea', 'mk-scene-t lib-sc-lt');
+  const ta = _el('textarea', 'mk-scene-t lib-sc-lt u-area is-dark');
   ta.rows = 1;
   ta.spellcheck = false;
   ta.value = text;

@@ -832,11 +832,11 @@ function _open(it, list, follow) {
     extraRows: (item) => {
       const rows = [];
       if (_KINDABLE.has(item.kind)) {
-        rows.push(['kind', _picker('lib-view-sel', item.kind, () => A.KINDS,
+        rows.push(['kind', _picker('lib-view-sel u-in is-s', item.kind, () => A.KINDS,
           (k) => _setKind(item, k), 'Which kind of clip this is')]);
       }
       if (_CATABLE.has(item.kind)) {
-        rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
+        rows.push(['category', _picker('lib-view-sel u-in is-s', (item.meta && item.meta.categoryId) || '',
           () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
           (id) => _setCat(item, id), 'Folder')]);
       }

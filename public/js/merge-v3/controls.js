@@ -16,6 +16,8 @@
    destructive or expensive actions, and none of these are either.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { wire as wireRange } from '../ui-range.js';
+
 // A labelled row. The label column is fixed so every control on the panel lines up
 // down the left edge, which is what makes a stack of them readable at 240px.
 export function row(label, control) {
@@ -65,6 +67,7 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   inp.type = 'range';
   inp.min = String(min); inp.max = String(max); inp.step = String(step);
   inp.value = String(value);
+  wireRange(inp);                                   // (phase V73 block 2) the shared slider, its track filled to the thumb
   const out = document.createElement('span');
   out.className = 'mv3-c-num';
   let moved = false;
@@ -111,7 +114,7 @@ export function volume(value, onChange) {
 // opts: [[value, label], ...]
 export function select(opts, value, onChange) {
   const sel = document.createElement('select');
-  sel.className = 'mv3-c-sel';
+  sel.className = 'mv3-c-sel u-in is-s';
   for (const [v, l] of opts) {
     const o = document.createElement('option');
     o.value = v; o.textContent = l;
@@ -196,7 +199,7 @@ export function color(value, onChange) {
 // rather than per keystroke - a store write per letter would bury the undo history.
 export function textarea(value, onChange, rows) {
   const t = document.createElement('textarea');
-  t.className = 'mv3-c-area';
+  t.className = 'mv3-c-area u-area is-s';
   t.rows = rows || 2;
   t.value = String(value == null ? '' : value);
   t.addEventListener('change', () => { if (onChange) onChange(t.value); });

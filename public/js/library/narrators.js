@@ -70,7 +70,7 @@ const HTML = `
         <div class="nr-col-h">Samples <em>— writing by this author</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
         <div class="nr-samples" data-f="samples"></div>
         <div class="nr-add">
-          <textarea data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
+          <textarea class="u-area" data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
           <div class="nr-add-row">
             <button class="u-btn is-s" type="button" data-f="addtext">Add text</button>
             <span class="sp"></span>
@@ -78,11 +78,11 @@ const HTML = `
             <button class="u-btn is-s" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
           </div>
           <div class="nr-add-row">
-            <input type="text" class="nr-url" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
+            <input type="text" class="nr-url u-in" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
             <button class="u-btn is-s" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
           </div>
           <div class="nr-add-row">
-            <select class="nr-url nr-src-pick" data-f="src"><option value="">…or a source of the Library</option></select>
+            <select class="nr-url nr-src-pick u-in" data-f="src"><option value="">…or a source of the Library</option></select>
             <button class="u-btn is-s" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
           </div>
           <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
@@ -210,7 +210,7 @@ function _askName() {
   if (!_win) return;
   if (_nameBox) { _nameBox.input.focus(); return; }
   const row = el('div', 'nr-name');
-  const input = el('input');
+  const input = el('input', 'u-in');
   input.type = 'text';
   input.placeholder = 'Name, then Enter';
   input.maxLength = 80;

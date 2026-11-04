@@ -86,7 +86,7 @@ function row(p) {
   lab.textContent = p.label;
   lab.htmlFor = SEL_ID(p.k);
   const sel = document.createElement('select');
-  sel.className = 'cv2-row-sel';
+  sel.className = 'cv2-row-sel u-in is-s';
   sel.id = SEL_ID(p.k);
   sel.addEventListener('change', () => { _markEdited(); refreshOptions(); });
   r.appendChild(lab); r.appendChild(sel);
@@ -308,7 +308,7 @@ export function buildHead(host, hooks) {
   const head = document.createElement('div');
   head.className = 'cv2-crhead';
   const name = document.createElement('input');
-  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name'; name.placeholder = 'Name (auto)';
+  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name u-in'; name.placeholder = 'Name (auto)';
   const rnd = document.createElement('button');
   rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'rnd';
   rnd.title = 'Randomise every parameter except marks, and the name';
@@ -357,7 +357,7 @@ export function build(host, hooks) {
   const prow = document.createElement('div');
   prow.className = 'cv2-presetrow';
   const psel = document.createElement('select');
-  psel.className = 'cv2-preset'; psel.id = 'cv2-preset';
+  psel.className = 'cv2-preset u-in'; psel.id = 'cv2-preset';
   psel.title = 'A preset fills every parameter and names the character';
   const none = document.createElement('option');
   none.value = ''; none.textContent = '— no preset: build by hand —';
@@ -524,7 +524,7 @@ export function buildRef(host, hooks) {
   wrap.appendChild(head);
 
   const ta = document.createElement('textarea');
-  ta.className = 'cv2-refine';
+  ta.className = 'cv2-refine u-area';
   ta.id = 'cv2-refine';
   ta.rows = 4;
   ta.placeholder = REFINE_PLACEHOLDER;

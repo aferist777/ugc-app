@@ -95,7 +95,7 @@ function _blank() {
   const form = el('div', 'hm-qs-form');
   frame.body.appendChild(form);
   form.appendChild(el('div', 'mv3-x-hdr', 'name'));
-  const name = el('input', 'mv3-sc-inp hm-qs-name');
+  const name = el('input', 'mv3-sc-inp hm-qs-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.value = _today() + ' - ';
@@ -340,7 +340,7 @@ async function _voiceover() {
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
   R.appendChild(el('div', 'mv3-x-hdr', 'mood'));
-  const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood');
+  const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood u-in');
   moodSel.title = 'The emotion of the whole voiceover: the text is marked up by it, and read by its [tags]';
   R.appendChild(moodSel);
   const moodAbout = el('p', 'mv3-x-note');

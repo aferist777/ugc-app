@@ -225,7 +225,7 @@ function _paintPick() {
   const w = S.words[S.sel];
   const n = S.words.length;
   const row = _el('div', 'mv3-wd-row');
-  const f = _el('input', 'mv3-wd-in');
+  const f = _el('input', 'mv3-wd-in u-in is-s');
   f.type = 'text';
   f.maxLength = LIMITS.word;
   f.spellcheck = false;

@@ -37,6 +37,7 @@
 import * as Layers from '../layers.js';
 import { secs } from './wave.js';
 import { qmark, withQ, closeQ } from './qmark.js';
+import { wire as wireRange } from '../ui-range.js';
 
 export { qmark, withQ, closeQ };
 
@@ -314,7 +315,7 @@ export function createSunoForm(o) {
     const mood = !!preset();
     const key = mood ? 'pSeconds' : 'seconds';
     if (mood) { lo = 30; note = 'a highlight plays a window from its middle - 90-180 s leaves room'; if (f.pSeconds == null) f.pSeconds = 120; }
-    const n = el('input', 'au-in');
+    const n = el('input', 'au-in u-in');
     n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
     n.value = f[key] ? String(f[key]) : '';
     n.placeholder = 'auto';
@@ -437,7 +438,7 @@ export function createSunoForm(o) {
   }
   function text(obj, key, opts) {
     const op = opts || {};
-    const t = el(op.area ? 'textarea' : 'input', op.area ? 'au-ta' : 'au-in');
+    const t = el(op.area ? 'textarea' : 'input', op.area ? 'au-ta u-area' : 'au-in u-in');
     if (!op.area) t.type = 'text';
     if (op.rows) t.rows = op.rows;
     t.placeholder = op.placeholder || '';
@@ -461,8 +462,9 @@ export function createSunoForm(o) {
     row.appendChild(withQ(el('span', null, label), (hint ? hint + '\n' : '') + 'A double press on the value gives it back to the engine.'));
     const r = el('input');
     r.type = 'range'; r.min = String(min); r.max = String(max); r.step = String(step);
-    const v = el('span', null, obj[key] === '' || obj[key] == null ? 'auto' : String(obj[key]));
+    const v = el('span', 'u-range-v', obj[key] === '' || obj[key] == null ? 'auto' : String(obj[key]));
     r.value = obj[key] === '' || obj[key] == null ? String((min + max) / 2) : String(obj[key]);
+    wireRange(r);                                   // (phase V73 block 2) the shared slider; its value in mono
     r.addEventListener('input', () => { obj[key] = +r.value; v.textContent = String(obj[key]); save(); });
     v.addEventListener('dblclick', () => { obj[key] = ''; v.textContent = 'auto'; save(); });
     row.append(r, v);
@@ -497,7 +499,7 @@ export function createSunoForm(o) {
         if (st.style) box.appendChild(el('div', 'au-preset-style', st.style));
       } else {
         const area = (key, rows, ph) => {
-          const t = el('textarea', 'au-ta');
+          const t = el('textarea', 'au-ta u-area');
           t.rows = rows;
           t.placeholder = ph;
           t.value = e[key] == null ? '' : String(e[key]);
@@ -559,7 +561,7 @@ export function createSunoForm(o) {
         if (call('lyricsOff')) links.append(saveOwn(f, ly)); else links.append(wr, saveOwn(f, ly));
         fl.appendChild(links);
         card.appendChild(fl);
-        const vs = el('select', 'au-sel');
+        const vs = el('select', 'au-sel u-in');
         for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
         vs.value = f.vocal || '';
         vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
@@ -584,7 +586,7 @@ export function createSunoForm(o) {
   // ── saved lyrics (phase V59.1) ────────────────────────────────────────────
   /** Custom's dropdown of the texts in Music -> Lyrics. */
   function savedPick(f) {
-    const sel = el('select', 'au-sel au-saved');
+    const sel = el('select', 'au-sel au-saved u-in');
     const head = el('option', null, SAVED.length ? 'saved lyrics (' + SAVED.length + ') - pick one to put it below'
       : 'no saved lyrics yet - "save" keeps one in Music → Lyrics');
     head.value = '';
@@ -933,7 +935,7 @@ export function createSunoForm(o) {
     const into = el('button', 'aal-btn is-primary aal-into u-btn is-main');
     into.type = 'button';
     bh.append(said, sp, clear, into);
-    const ta = el('textarea', 'aal-ta');
+    const ta = el('textarea', 'aal-ta u-area');
     ta.rows = 3;
     ta.placeholder = 'Empty - press a chip, then "+ add".';
     build.append(bh, ta);

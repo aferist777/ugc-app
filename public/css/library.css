@@ -190,10 +190,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-cv-stat-t.ok{ color:var(--success); }
 .lib-cv-stat-t.err{ color:var(--danger); }
 .lib-cv-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; padding:8px 12px; }
-.lib-cv-sel{
-  flex:0 1 84px; min-width:0; height:24px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:500 10.5px var(--font);
-}
+.lib-cv-sel{ flex:0 1 84px; min-width:0 }
 .lib-cv-sel.is-wide{ flex-basis:120px; }
 .lib-cv-go{ margin-left:auto; }
 .lib-cv-take{ flex:0 0 auto; }
@@ -461,7 +458,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-sc-bar .sp{ flex:1; }
 .lib-sc-cards{ display:flex; flex-direction:column; gap:4px; padding:8px 12px 12px; }
 .lib-sc-cards > .mk-scene{ padding:5px 8px; }
-.lib-sc-lt{ field-sizing:content; contain:inline-size; min-height:20px; }
+.lib-sc-lt{ field-sizing:content; contain:inline-size; min-height:20px }
 /* (V38.7) The title with its line count and date beside it. */
 .lib-sc-top{ display:flex; align-items:baseline; gap:10px; padding:8px 12px 2px; }
 .lib-sc-top > .lib-sc-title{ flex:1 1 auto; min-width:0; padding:0; }
@@ -634,11 +631,6 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-field{ display:flex; flex-direction:column; gap:4px; }
 .mk-field > span{ font-size:10.5px; font-weight:600; color:var(--muted); }
 .mk-field em{ font-style:normal; font-weight:400; opacity:.8; }
-.mk-field input[type=text], .mk-field select{
-  font:12px/1.45 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 8px;
-}
-.mk-field input[type=text]:focus, .mk-field select:focus{ outline:none; border-color:var(--focus); }
 .mk-field input[type=file]{ font:11px var(--font); color:var(--muted); }
 /* (V38.5) Two boxes alike: box 1 - Tone, Narrator, Hooks, "Write hooks" and the AI settings gear at its right; box 2 -
    the chosen hook, Lines, "Write scenario", and the ad under them. A button stands under an empty label, level with the
@@ -664,13 +656,9 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 #mk-hook{ min-height:40px; }
 /* (V38.6) "Write / scenario" on two lines, in a taller button. */
 #mk-write{ height:40px; white-space:pre-line; line-height:1.2; text-align:center; }   /* two lines (V38.6) */
-.mk-ctl textarea, .mk-ad-t{
-  font:12px/1.45 var(--font); color:var(--ink); resize:none; field-sizing:content;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:4px 8px;
-}
-.mk-ctl textarea{ min-height:26px; }
+.mk-ctl textarea, .mk-ad-t{ resize:none; field-sizing:content; }
+.mk-ctl textarea{ min-height:28px; }
 .mk-ad-t{ min-height:44px; }
-.mk-ctl textarea:focus, .mk-ad-t:focus{ outline:none; border-color:var(--focus); }
 .mk-ctl textarea[readonly]{ opacity:.7; }
 .mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .mk-ctl > span:first-child{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
@@ -680,13 +668,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-gear{ flex:0 0 auto; margin:-3px 0; }
 .mk-gear.u-btn{ width:16px; height:16px; border-radius:var(--r-xs); }   /* it sits in a label's line */
 .mk-gear svg{ width:11px; height:11px; }
-.mk-ctl select, .mk-ctl input{
-  font:600 11px var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
-  height:26px; padding:0 6px; min-width:96px;
-}
+.mk-ctl select, .mk-ctl input{ min-width:96px; }
 .mk-ctl input[type=number]{ width:66px; min-width:0; }
-.mk-ctl select:focus, .mk-ctl input:focus{ outline:none; border-color:var(--focus); }
 .mk-stage{ display:flex; flex-direction:column; gap:7px; padding:10px 0 0; border-top:1px solid var(--border); }
 .mk-stage-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .mk-stage-h .sp{ flex:1; }
@@ -743,7 +726,6 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-tip b{ font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--ink); }
 .mk-save-row{ display:flex; flex-wrap:wrap; gap:8px; }
 .mk-save-row .mk-field{ flex:1 1 150px; }
-.mk-save-row input, .mk-save-row select{ height:28px; }
 /* One card per beat: the rewrite button acts on THIS paragraph, and "rewrite 4" needs a visible 4. */
 .mk-scenes{ display:flex; flex-direction:column; gap:6px; }
 .mk-scene{
@@ -759,13 +741,9 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-scene-n.is-hook{ font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink); }
 /* (V38.8, the owner: "сделай редактируемые строки сценария в темное поле. так будет видно что строки можно редактировать")
    A line's words in a dark field, as every field that takes typing - in the generator and on the shelf alike. */
-.mk-scene-t{
-  flex:1 1 auto; min-width:0; font:12px/1.55 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); resize:none; padding:3px 8px;
-  cursor:text; transition:border-color .12s var(--ease);
-}
-.mk-scene-t:hover{ border-color:var(--border-soft); }
-.mk-scene-t:focus{ outline:none; border-color:var(--focus); }
+/* (phase V73 block 2) the shared dark field (.u-area.is-dark, (б2-14)); the lines keep their own height and spacing */
+.mk-scene-t{ flex:1 1 auto; min-width:0; resize:none }
+.mk-scene-t.u-area{ padding:3px 8px; line-height:1.55 }
 .mk-scene-a{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; }
 
 /* (V38) "rewrite fragment" beside words selected in a paragraph (js/library/make.js _fragFrom). */
@@ -880,11 +858,6 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .nr-row:hover > .nr-x, .nr-row > .nr-x:focus-visible{ opacity:1; }
 /* The new narrator's name, typed into the list. */
 .nr-name{ display:flex; flex-direction:column; gap:3px; }
-.nr-name input{
-  font:12px/1.4 var(--font); color:var(--ink); padding:6px 8px;
-  background:var(--bg); border:1px solid var(--sel-line); border-radius:var(--r-xs);
-}
-.nr-name input:focus{ outline:none; }
 .nr-name-err{ font-size:10.5px; color:var(--danger); }
 .nr-name-err:empty{ display:none; }
 .nr-col{ min-width:0; min-height:0; overflow-y:auto; padding:10px 12px 0; display:flex; flex-direction:column; gap:8px; }
@@ -909,20 +882,12 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   display:flex; flex-direction:column; gap:6px;
   background:var(--surface); border-top:1px solid var(--border);
 }
-.nr-add textarea{
-  font:12px/1.45 var(--font); color:var(--ink); resize:vertical;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 8px;
-}
-.nr-add textarea:focus{ outline:none; border-color:var(--focus); }
+.nr-add textarea{ resize:vertical; }
 .nr-add-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .nr-add-row .sp{ flex:1; }
 .nr-add-row input[type=file]{ font:11px var(--font); color:var(--muted); max-width:190px; }
 /* (phase V27) The link beside its button: the field takes what the row has left. */
-.nr-add-row .nr-url{
-  flex:1; min-width:160px; font:12px var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:5px 8px;
-}
-.nr-add-row .nr-url:focus{ outline:none; border-color:var(--focus); }
+.nr-add-row .nr-url{ flex:1; min-width:160px; }
 /* (V38) A sample not read yet is lit a little: "Read new samples" reads it. */
 .nr-sample.unread{ border-color:var(--warn); }
 .nr-view{ display:flex; flex-direction:column; gap:8px; }
@@ -991,19 +956,12 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-fields{ grid-template-columns:repeat(3, minmax(0,1fr)); gap:5px 12px; padding:4px 12px 8px; }
 .lib-sc-fields > .lib-sc-cell{ flex-direction:row; align-items:center; gap:6px; }
 .lib-sc-fields .lib-sc-cl{ flex:0 0 52px; }
-.lib-sc-fields .lib-sc-fbtn{ flex:1 1 auto; }
+.lib-sc-fields .lib-sc-fbtn{ flex:1 1 auto }
 .lib-sc-cell{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .lib-sc-cell.is-wide{ grid-column:1 / -1; }
 .lib-sc-cl{ font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
 .lib-sc-cv{ font-size:10.5px; color:var(--ink); overflow-wrap:anywhere; }
-.lib-sc-fbtn{
-  display:flex; align-items:center; gap:6px; width:100%; min-width:0; height:24px; padding:0 6px 0 8px;
-  font:11px var(--font); color:var(--ink); text-align:left; cursor:pointer;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
-}
-.lib-sc-fbtn:hover{ border-color:var(--border-soft); }
-.lib-sc-fbtn:focus-visible{ outline:none; border-color:var(--focus); }
-.lib-sc-fbtn[disabled]{ opacity:.6; cursor:default; }
+.lib-sc-fbtn{ display:flex; gap:6px; width:100%; min-width:0; text-align:left }
 .lib-sc-fbtn-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lib-sc-fbtn.is-none .lib-sc-fbtn-t{ color:var(--muted); }
 .lib-sc-fbtn-c{ flex:0 0 auto; font-size:9px; color:var(--muted); }

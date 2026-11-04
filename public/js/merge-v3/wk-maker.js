@@ -217,7 +217,7 @@ export function paintChoose(host, o) {
   side.appendChild(people);
   const main = el('div', 'pk-main');
   const bar = el('div', 'pk-bar');
-  const q = el('input', 'pk-q');
+  const q = el('input', 'pk-q u-in is-s');
   q.type = 'search';
   q.placeholder = 'search by name';
   q.spellcheck = false;

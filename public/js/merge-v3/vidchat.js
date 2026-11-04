@@ -39,6 +39,7 @@ import { openHelp, closeHelp } from './vhelp.js';
 import { stepCard } from './vsteps.js';
 import { note, askDelete } from './ask.js';
 import { startInlineProgress } from '../progress.js';
+import { wire as wireRange } from '../ui-range.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
 const SHOW_ATTS = 9;                       // the old row's places at most (the zone grows instead - phase V6)
@@ -373,6 +374,7 @@ function VIDEOS(ctx) {
 
   function _row(host, label, ctl, cls) {
     const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
+    if (ctl.tagName === 'SELECT') ctl.classList.add('u-in');     // (phase V73 block 2) the shared field
     const l = el('label', null, label);
     if (ctl.id) l.htmlFor = ctl.id;
     r.append(l, ctl);
@@ -1225,7 +1227,7 @@ function VIDEOS(ctx) {
       const fold = el('button', 'vc-fold', 'the whole recipe ▸');
       fold.type = 'button';
       bodyTa = document.createElement('textarea');
-      bodyTa.className = 'vc-req-body';
+      bodyTa.className = 'vc-req-body u-area';
       bodyTa.hidden = true;
       bodyTa.spellcheck = false;
       bodyTa.value = body;
@@ -1597,7 +1599,7 @@ function VIDEOS(ctx) {
   // prompt is being written from it.
   function _watchTa(m, w, locked, saves) {
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta vc-watch-ta';
+    ta.className = 'vc-prompt-ta vc-watch-ta u-area';
     ta.spellcheck = true;
     ta.maxLength = 40000;
     ta.value = w.text || '';
@@ -2019,7 +2021,7 @@ function VIDEOS(ctx) {
     }
     if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board';
+    bta.className = 'vc-prompt-ta is-board u-area';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = x.v.prompt || '';
@@ -2070,6 +2072,7 @@ function VIDEOS(ctx) {
     range.type = 'range';
     range.min = String(lo); range.max = String(hi); range.step = '0.04';
     range.value = String(Math.max(lo, Math.min(hi, whole ? (+clip.in || 0) : (+B.at || lo))));
+    wireRange(range);                               // (phase V73 block 2) the shared slider
     range.title = whole ? 'The first frame: the moment your character is seen best - the moves go from here'
       : 'The moment of the clip the picture is drawn from - its first frame unless you pick another';
     const said = el('span', 'vc-moment-at');
@@ -2088,7 +2091,7 @@ function VIDEOS(ctx) {
       : 'Pick a moment where the dancer is seen whole - the picture keeps that pose, room, light and angle.'));
     mo.append(v, side);
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board';
+    bta.className = 'vc-prompt-ta is-board u-area';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = toShown(x.v.prompt || '');
@@ -2246,7 +2249,7 @@ function VIDEOS(ctx) {
     const v = x.v;
     if (c.error && c.writing !== 'board') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
     ta.title = 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
@@ -2781,7 +2784,7 @@ function VIDEOS(ctx) {
     const v = x.v;
     if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
     ta.title = 'The prompt the model gets - edit it before the video is made. [picture 1], [clip 1] name what is attached, by its number in its part.';

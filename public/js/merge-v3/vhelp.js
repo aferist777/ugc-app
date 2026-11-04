@@ -85,7 +85,7 @@ function _build(o) {
   const bar = el('div', 'hp-bar');
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'hp-q';
+  q.className = 'hp-q u-in is-s';
   q.placeholder = 'search';
   q.spellcheck = false;
   const count = el('span', 'hp-count', '');

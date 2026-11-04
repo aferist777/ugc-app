@@ -387,11 +387,7 @@ body{
 .mv3-link-box small{ font:400 9.5px/1.3 var(--font); color:var(--muted); padding:0 2px; }
 .mv3-link-box small.is-bad{ color:var(--danger); }
 .mv3-link-row{ display:flex; gap:4px; }
-.mv3-link-row input{
-  flex:1; min-width:0; font:500 11px/1.3 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
-}
-.mv3-link-row input:focus{ outline:none; border-color:var(--focus); }
+.mv3-link-row input{ flex:1; min-width:0 }
 .mv3-link-go{ flex:0 0 auto; }
 /* The cross in the panel's status line that stops the link coming in (the shared ✕). */
 .mv3-lib-stop{ margin-left:6px; }

@@ -82,6 +82,7 @@ function FRAMES(ctx) {
       const r = el('div', 'mv3-ig-row');
       const l = el('label', null, 'shot');
       const s = document.createElement('select');
+      s.className = 'u-in';
       s.id = 'mv3-fc-shot';
       l.htmlFor = s.id;
       s.title = 'Where the frame\'s edge is. none - your words decide how much of the person is in it; the pose is always your words.';
@@ -361,7 +362,7 @@ function FRAMES(ctx) {
     l.left.appendChild(head);
     if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = v.prompt || '';
     ta.title = 'The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.';

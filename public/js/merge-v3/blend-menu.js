@@ -61,7 +61,7 @@ function _open(anchor, current, live, write) {
 export function blendButton({ current, title, live, write }) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sel mv3-blend-btn';
+  b.className = 'mv3-blend-btn u-btn is-s is-field';
   const now = BLENDS.find((m) => m.id === current);
   b.textContent = (now ? now.label : 'mixed') + ' ▾';
   if (title) b.title = title;

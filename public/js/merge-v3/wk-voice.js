@@ -163,7 +163,7 @@ export function paintRow(host, api, o) {
 
   const row = el('div', 'mv3-wk-vrow is-now');
   row.appendChild(_playBtn((cur && cur.sample) || '', 'our own demo'));
-  const btn = el('button', 'mv3-wk-vpickbtn' + (cur ? '' : ' is-need'));
+  const btn = el('button', 'mv3-wk-vpickbtn u-btn is-s is-field' + (cur ? '' : ' is-need'));
   btn.type = 'button';
   btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
   btn.appendChild(el('span', 'mv3-wk-vpickarrow', '▾'));
@@ -426,7 +426,7 @@ export function paintPicker(host, api) {
   // ── the library ──
   host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'The ElevenLabs library'));
   const f = el('div', 'mv3-wk-vfilters');
-  const search = el('input', 'mv3-wk-vsearch');
+  const search = el('input', 'mv3-wk-vsearch u-in is-s');
   search.type = 'search';
   search.placeholder = 'a name, or a word from the description';
   search.value = _q.search;
@@ -440,7 +440,7 @@ export function paintPicker(host, api) {
   const pick = (key, label, list) => {
     const cell = el('label', 'mv3-wk-vfcell');
     cell.appendChild(el('span', 'mv3-wk-vfname', NAMES[key] || key));
-    const s = el('select', 'mv3-wk-vfilter');
+    const s = el('select', 'mv3-wk-vfilter u-in is-s');
     s.title = label;
     const any = el('option', '', label);
     any.value = '';

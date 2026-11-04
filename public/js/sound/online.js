@@ -53,7 +53,7 @@ export function openOnline(opts) {
   win.appendChild(head);
 
   const bar = el('form', 'snd-on-bar');
-  const q = el('input', 'snd-search');
+  const q = el('input', 'snd-search u-in');
   q.type = 'search';
   q.placeholder = 'whoosh, camera shutter, crowd laugh, pop…';
   q.value = o.q ? String(o.q) : _last.q;
@@ -62,7 +62,7 @@ export function openOnline(opts) {
   bar.append(q, go);
   bar.appendChild(el('span', 'sp'));
   bar.appendChild(el('span', 'snd-muted', 'add into'));
-  const into = el('select', 'snd-sel');
+  const into = el('select', 'snd-sel u-in');
   const dl = el('option', null, 'Downloaded');
   dl.value = '';
   into.appendChild(dl);

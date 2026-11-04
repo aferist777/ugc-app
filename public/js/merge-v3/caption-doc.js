@@ -66,7 +66,7 @@ export function mount(host) {
   // Find and replace.
   const find = _el('div', 'mv3-doc-find');
   const r1 = _el('div', 'mv3-doc-fr');
-  const q = _el('input', 'mv3-doc-q');
+  const q = _el('input', 'mv3-doc-q u-in is-s');
   q.type = 'text';
   q.placeholder = 'find';
   q.spellcheck = false;
@@ -88,7 +88,7 @@ export function mount(host) {
   };
   r1.append(q, count, opt('Aa', 'Match case', 'cased'), opt('W', 'Whole words only', 'whole'));
   const r2 = _el('div', 'mv3-doc-fr');
-  const rep = _el('input', 'mv3-doc-r');
+  const rep = _el('input', 'mv3-doc-r u-in is-s');
   rep.type = 'text';
   rep.placeholder = 'replace with';
   rep.spellcheck = false;

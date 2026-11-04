@@ -17,6 +17,7 @@ import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timel
 import { grabFrame } from './preview-b.js';
 import { showError } from '../notice.js';
 import { icon } from '../icons.js';
+import { wire as wireRange } from '../ui-range.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -77,6 +78,8 @@ function _zoom() {
   let saved = null;
   try { saved = parseInt(localStorage.getItem(LS_ZOOM) || '', 10); } catch (e) { /* no storage */ }
   if (saved && !isNaN(saved)) z.value = String(Math.max(+z.min || 1, Math.min(+z.max || 240, saved)));
+  // (phase V73 block 2) the shared slider: its fill follows every move - the wheel and the fit set the value and fire input
+  wireRange(z);
   const pill = $('mv3-tl-pps');
   const paint = () => { if (pill) pill.textContent = String(parseInt(z.value, 10) || 60); };
   paint();

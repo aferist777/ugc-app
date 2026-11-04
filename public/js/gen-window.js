@@ -461,7 +461,7 @@ function _render(kind) {
     ask.appendChild(chips);
     foot.appendChild(ask);
   }
-  const note = el('textarea', 'gw-say');
+  const note = el('textarea', 'gw-say u-area');
   note.placeholder = K.say;
   note.value = s.note;
   note.addEventListener('input', () => {

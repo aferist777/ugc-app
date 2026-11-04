@@ -91,7 +91,7 @@ export function build(host, hooks) {
   nameLab.className = 'cv2-save-lab';
   nameLab.textContent = 'Name';
   const name = document.createElement('input');
-  name.type = 'text'; name.id = 'cv2-save-name'; name.className = 'cv2-save-in';
+  name.type = 'text'; name.id = 'cv2-save-name'; name.className = 'cv2-save-in u-in';
   name.placeholder = 'Required';
   name.addEventListener('input', () => {
     _syncFoot();
@@ -114,7 +114,7 @@ export function build(host, hooks) {
   genLab.className = 'cv2-save-lab';
   genLab.textContent = 'Gender';
   const gender = document.createElement('select');
-  gender.id = 'cv2-save-gender'; gender.className = 'cv2-save-in';
+  gender.id = 'cv2-save-gender'; gender.className = 'cv2-save-in u-in';
   for (const g of GENDERS) {
     const o = document.createElement('option');
     o.value = g; o.textContent = g;

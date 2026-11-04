@@ -40,10 +40,7 @@
 .vc-left-in{flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 12px 14px}
 .vc-lab{margin:10px 0 4px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .vc-lab:first-child{margin-top:2px}
-.vc-model, .vc-sort{
-  width:100%; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.vc-model, .vc-sort{ width:100% }
 .vc-facts{display:flex; flex-wrap:wrap; gap:4px; margin-top:6px}
 .vc-agg{
   padding:1px 6px; border:1px solid var(--border); border-radius:var(--pill);
@@ -51,16 +48,9 @@
 }
 .vc-agg.is-ok{color:var(--success); border-color:var(--success-soft)}
 .vc-fact{flex:1 0 100%; font:600 10px/1.4 var(--font); color:var(--muted)}
-.vc-q{
-  width:100%; height:26px; margin-top:12px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.vc-q:focus{outline:none; border-color:var(--focus)}
+.vc-q{ width:100%; margin-top:12px }
 /* The category - one, or all - and the filters: each a dropdown of several values that stays open (phase V6). */
-.vc-catsel{
-  width:100%; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.vc-catsel{ width:100% }
 .vc-has-tip{cursor:help}
 .vc-dd{margin-top:5px}
 .vc-dd-b{ width:100%; padding:0 8px }
@@ -179,22 +169,14 @@
   display:grid; grid-template-columns:auto auto auto auto auto 1fr; align-items:center; gap:4px 6px;
   padding:5px 6px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg);
 }
-.vc-slot select, .vc-slot input[type=number], .vc-hint{
-  height:22px; padding:0 4px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10px/20px var(--font); min-width:0;
-}
-.vc-slot input[type=number]{width:38px}
+.vc-slot select, .vc-slot input[type=number], .vc-hint{ min-width:0 }
+.vc-slot input[type=number]{ width:52px }
 .vc-slot label{display:inline-flex; align-items:center; gap:3px; font:600 9.5px/1 var(--font); color:var(--muted)}
 .vc-slot input[type=checkbox]{margin:0}
 .vc-x{justify-self:end}
-.vc-hint{grid-column:1 / -1; width:100%; font-weight:500}
+.vc-hint{ grid-column:1 / -1; width:100% }
 .vc-adds{display:flex; gap:12px}
-.vc-skill{
-  display:block; width:100%; min-height:240px; padding:8px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.vc-skill:focus{outline:none; border-color:var(--focus)}
+.vc-skill{ display:block; width:100%; min-height:240px; resize:vertical; font-family:var(--mono) }
 .vc-prompt{margin-top:14px}
 .vc-prompt summary{font:600 10.5px/1.4 var(--font); color:var(--muted); cursor:pointer}
 .vc-prompt pre{

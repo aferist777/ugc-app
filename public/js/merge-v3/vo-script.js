@@ -58,7 +58,7 @@ export function paintChooser(host, project, adopt, o = {}) {
   root.appendChild(top);
 
   const bar = el('div', 'mv3-vos-top');
-  const cat = el('select', 'mv3-wk-vsel is-small mv3-vos-cat');
+  const cat = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-vos-cat');
   cat.title = 'Which scenarios';
   for (const c of _choices()) {
     const o = el('option', '', c.label + ' · ' + c.n);
@@ -67,7 +67,7 @@ export function paintChooser(host, project, adopt, o = {}) {
     cat.appendChild(o);
   }
   cat.addEventListener('change', () => { _lib = cat.value; _rows = null; _load(adopt.repaint); });
-  const search = el('input', 'mv3-sc-search');
+  const search = el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
   search.placeholder = 'search by title, product, role';
   search.value = _q;

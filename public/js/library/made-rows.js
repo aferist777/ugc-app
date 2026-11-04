@@ -33,7 +33,7 @@ const _patchMeta = (it, body) => json('/api/library/meta/' + encodeURIComponent(
 // and answers with what is kept now; the item's meta follows, so the viewer opened again shows it.
 function _textRow(value, placeholder, rows, store) {
   const box = el('div', 'made-ed');
-  const ta = el('textarea', 'made-ed-ta');
+  const ta = el('textarea', 'made-ed-ta u-area is-s');
   ta.value = value || '';
   ta.placeholder = placeholder;
   ta.rows = rows;

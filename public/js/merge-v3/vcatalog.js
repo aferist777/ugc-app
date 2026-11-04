@@ -379,7 +379,7 @@ function _paintLeft() {
 
   // The model: the chat's own dropdown.
   const sel = document.createElement('select');
-  sel.className = 'vc-model';
+  sel.className = 'vc-model u-in';
   sel.title = 'The model - the catalog shows only what fits it';
   for (const x of _models()) {
     const op = document.createElement('option');
@@ -405,7 +405,7 @@ function _paintLeft() {
   // The search.
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'vc-q';
+  q.className = 'vc-q u-in';
   q.placeholder = 'search';
   q.value = _st.q;
   q.addEventListener('input', () => { _st.q = q.value; _paintGrid(false); _paintCounts(); });
@@ -419,7 +419,7 @@ function _paintLeft() {
     const cat = groups.find(g => g.key === 'cat');
     if ((_st.filters.cat || []).length > 1) _st.filters.cat = _st.filters.cat.slice(0, 1);
     const cs = document.createElement('select');
-    cs.className = 'vc-catsel';
+    cs.className = 'vc-catsel u-in';
     const all = document.createElement('option');
     all.value = ''; all.textContent = 'all categories';
     cs.appendChild(all);
@@ -449,7 +449,7 @@ function _paintLeft() {
   }
 
   const sort = document.createElement('select');
-  sort.className = 'vc-sort';
+  sort.className = 'vc-sort u-in';
   for (const [v, t] of [['heat', 'hottest first'], ['steady', 'steadiest first'], ['new', 'newest first']]) {
     const op = document.createElement('option'); op.value = v; op.textContent = t; sort.appendChild(op);
   }
@@ -952,7 +952,7 @@ async function _paintRight() {
       : 'skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');
-  ta.className = 'vc-skill';
+  ta.className = 'vc-skill u-area';
   ta.spellcheck = false;
   ta.value = ed.text;
   const orig = (d.skill && d.skill.text) || '';
@@ -1032,14 +1032,16 @@ function _slotsBox(it, ed) {
     ed.slots.forEach((s, i) => {
       const row = el('div', 'vc-slot');
       const kind = document.createElement('select');
+      kind.className = 'u-in is-s';
       for (const k of KINDS) { const o = document.createElement('option'); o.value = k; o.textContent = k.replace('-', ' '); kind.appendChild(o); }
       kind.value = s.kind;
       kind.addEventListener('change', () => { s.kind = kind.value; });
       const role = document.createElement('select');
+      role.className = 'u-in is-s';
       for (const r of ROLES) { const o = document.createElement('option'); o.value = r; o.textContent = r; role.appendChild(o); }
       role.value = ROLES.includes(s.role) ? s.role : 'person';
       role.addEventListener('change', () => { s.role = role.value; });
-      const num = (v, on) => { const n = document.createElement('input'); n.type = 'number'; n.min = '0'; n.max = '50'; n.value = String(v); n.addEventListener('change', () => on(_clamp(Math.round(+n.value || 0), 0, 50))); return n; };
+      const num = (v, on) => { const n = document.createElement('input'); n.className = 'u-in is-s'; n.type = 'number'; n.min = '0'; n.max = '50'; n.value = String(v); n.addEventListener('change', () => on(_clamp(Math.round(+n.value || 0), 0, 50))); return n; };
       const min = num(s.min, (v) => { s.min = v; if (s.max < v) { s.max = v; paint(); } });
       const max = num(s.max, (v) => { s.max = Math.max(v, s.min); paint(); });
       const req = document.createElement('input');
@@ -1049,7 +1051,7 @@ function _slotsBox(it, ed) {
       x.type = 'button'; x.title = 'take this slot away';
       x.addEventListener('click', () => { ed.slots.splice(i, 1); paint(); });
       const hint = document.createElement('input');
-      hint.type = 'text'; hint.className = 'vc-hint'; hint.value = s.hint || ''; hint.placeholder = 'a hint for what to attach';
+      hint.type = 'text'; hint.className = 'vc-hint u-in is-s'; hint.value = s.hint || ''; hint.placeholder = 'a hint for what to attach';
       hint.addEventListener('input', () => { s.hint = hint.value; });
       const lab = (t, n) => { const l = el('label', null, t); l.appendChild(n); return l; };
       row.append(kind, role, lab('from', min), lab('to', max), lab('must', req), x, hint);

@@ -178,7 +178,7 @@ function _form() {
   const right = el('div', 'gw-half is-make pw-right');
   const body = el('div', 'pw-fields');
   body.appendChild(el('label', 'pw-lab', 'name'));
-  const name = el('input', 'pw-name');
+  const name = el('input', 'pw-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.placeholder = 'Optional - the agent names it from the picture';
@@ -186,7 +186,7 @@ function _form() {
   name.addEventListener('input', () => { _s.name = name.value; });
   body.appendChild(name);
   body.appendChild(el('label', 'pw-lab', 'what you know about the product'));
-  const words = el('textarea', 'gw-say pw-words');
+  const words = el('textarea', 'gw-say pw-words u-area');
   words.placeholder = 'What it is, its size, what it does, what matters to show - in any language. What the photo does not show comes from here.';
   words.value = _s.words;
   words.addEventListener('input', () => { _s.words = words.value; });

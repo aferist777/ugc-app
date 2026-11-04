@@ -293,7 +293,7 @@ export function createFolderColumn(host, o) {
   const head = el('div', 'fc-head');
   const up = el('button', 'fc-up u-btn is-s is-icon', '‹');
   up.type = 'button';
-  const pick = el('button', 'fc-pick');
+  const pick = el('button', 'fc-pick u-btn is-s is-field');
   pick.type = 'button';
   pick.setAttribute('aria-haspopup', 'tree');
   const pickName = el('span', 'fc-pick-t', '');

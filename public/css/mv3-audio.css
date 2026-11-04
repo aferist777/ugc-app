@@ -42,12 +42,12 @@
 .au-empty{padding:16px 4px; font-size:12px; color:var(--muted); grid-column:1/-1}
 .au-note{font:600 9.5px/1.4 var(--font); color:var(--muted); margin-top:3px}
 .au-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
-.au-len .au-in{width:74px; height:26px; padding:0 6px}
+.au-len .au-in{ width:74px }
 .au-len-auto{font-size:10px; color:var(--muted)}
 /* "Length ? [46] s · by the video (46 s)" in one line (phase V59.1 in the Library, V60 in Merge) */
 .au-len-one{flex-wrap:nowrap; margin-top:6px; min-width:0}
 .au-len-one > label{flex:0 0 auto; display:inline-flex; align-items:center; margin-right:2px; font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted)}
-.au-len-one .au-in{flex:0 0 56px; width:56px}
+.au-len-one .au-in{ flex:0 0 56px; width:56px }
 .au-len-one .au-link{flex:0 1 auto; min-width:0; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* a value with nothing to choose (ElevenLabs' model) */
 .au-val{font:600 10.5px/1.4 var(--font); color:var(--ink); opacity:.8}
@@ -60,10 +60,8 @@
 /* its popup is the app's bubble since phase V61 - css/app-shell.css .bub, js/bubble.js */
 .au-set .mv3-ig-row > label, .au-chips-h b, .au-f-n{display:inline-flex; align-items:center}
 .au-set .mv3-ig-row > label{align-self:flex-start}
-.au-sel, .au-in, .au-ta{width:100%; box-sizing:border-box; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:6px 8px}
-.au-sel{padding:5px 6px}
-.au-sel:focus, .au-in:focus, .au-ta:focus{outline:none; border-color:var(--focus)}
-.au-ta{resize:vertical; min-height:64px}
+.au-sel, .au-in, .au-ta{ width:100%; box-sizing:border-box }
+.au-ta{ resize:vertical; min-height:64px }
 .au-chip{padding:3px 8px; border:1px solid var(--border); border-radius:var(--pill); background:transparent; color:var(--ink); font:500 11px/1.3 var(--font)}
 .au-chip.on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
 .au-link{border:0; background:none; padding:0; cursor:pointer; color:var(--ink); font:500 11.5px var(--font)}
@@ -102,7 +100,7 @@
 .au-knob > span:first-child{display:inline-flex; align-items:center}
 .au-knob{display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:8px; font-size:11.5px; margin-top:6px}
 .au-knob input[type=range]{width:100%}
-.au-knob span:last-child{text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
+.au-knob span:last-child{text-align:right}   /* the value in mono - .u-range-v */
 .au-go-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
 
 .au-go-row .au-muted{font-size:11px}
@@ -118,7 +116,7 @@
 .au-edited[hidden]{display:none}
 .au-preset .au-f{margin-top:4px}
 .au-preset .au-f-h{font-size:10.5px}
-.au-preset .au-ta{min-height:44px; background:var(--bg)}
+.au-preset .au-ta{ min-height:44px }
 
 /* the video of Video to Music - a clip of the timeline (its lane, from-to, length, price) or a file (phase V54) */
 .au-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
@@ -246,6 +244,4 @@
 .aal-build-h{display:flex; align-items:center; gap:8px; min-width:0}
 .aal-lbl{display:inline-flex; align-items:center; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
 .aal-said{font:600 10.5px/1.2 var(--font); color:var(--success); white-space:nowrap}
-.aal-ta{width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical; background:var(--bg); color:var(--ink);
-  border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.45 var(--font); padding:6px 8px}
-.aal-ta:focus{outline:none; border-color:var(--gold)}
+.aal-ta{ width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical }

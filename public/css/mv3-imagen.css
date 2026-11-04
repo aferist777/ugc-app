@@ -26,11 +26,7 @@
 /* The label sits ABOVE its control: a model name does not fit beside a label in 232px. */
 .mv3-ig-row{ display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:3px 0 }
 .mv3-ig-row > label{ font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted) }
-.mv3-ig-row select{
-  width:100%; min-width:0; height:26px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.mv3-ig-row select{ width:100%; min-width:0 }
 /* The shape as a dropdown is the folded row's; the wide column has its buttons. */
 .mv3-ig-row.is-arsel{ display:none }
 .mv3-ig-sep{
@@ -435,7 +431,8 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V17) Kling motion control's first frame: its moment on a slider - the part goes from there. */
 .vtrim-still{ display:flex; align-items:center; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vtrim-still .k{ flex:0 0 auto; font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
-.vtrim-still input{ flex:1 1 auto; min-width:0; margin:0; accent-color:var(--gold) }
+.vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
+.vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
 /* What the chosen model does, under its dropdown (phase V6 - the line above the thread is the recipe's). */
 .mv3-vc-brief{ margin:1px 0 6px; font:500 10px/1.45 var(--font); color:var(--muted) }
@@ -481,22 +478,12 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .vc-fold:hover{ color:var(--ink) }
 .vc-back{ font-size:10px }
-.vc-req-body{
-  display:block; width:100%; min-height:160px; padding:8px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.vc-req-body:focus{ outline:none; border-color:var(--focus) }
+.vc-req-body{ display:block; width:100%; min-height:160px; resize:vertical; font-family:var(--mono) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
 
-.vc-prompt-ta{
-  display:block; width:100%; min-height:90px; padding:8px 9px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 11.5px/1.55 var(--font);
-}
-.vc-prompt-ta:focus{ outline:none; border-color:var(--focus) }
+.vc-prompt-ta{ display:block; width:100%; min-height:90px; resize:vertical }
 .vc-card.is-sent .vc-req{ opacity:.92 }
 /* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
    the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
@@ -748,11 +735,9 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-up-note{ padding:2px 2px 0; font:500 10px/1.45 var(--font); color:var(--muted) }
 /* (phase V27) "from a link" under "from this computer": the field and "add" (js/merge-v3/chat-pick.js). */
 .pk-link{ display:flex; gap:4px }
-.pk-link input{
-  flex:1; min-width:0; font:500 11px/1.3 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
-}
-.pk-link input:focus{ outline:none; border-color:var(--focus) }
+.pk-link input{ flex:1; min-width:0 }
+:root:has(link[href="css/studio3d.css"]) .pk-link input{ font:500 11px/1.3 var(--font); color:var(--ink); background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px; }
+:root:has(link[href="css/studio3d.css"]) .pk-link input:focus{ outline:none; border-color:var(--focus) }
 /* the 3D Studio's page keeps its look (б1-13а); everywhere else this is the shared part */
 :root:has(link[href="css/studio3d.css"]) .pk-link-go{
   font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
@@ -766,11 +751,11 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .pk-main{ min-height:0; display:flex; flex-direction:column }
 .pk-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-soft) }
-.pk-q{
-  flex:0 1 280px; min-width:120px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.pk-q:focus{ outline:none; border-color:var(--focus) }
+/* (phase V73 block 2) the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+.pk-q{ flex:0 1 280px; min-width:120px }
+:root:has(link[href="css/studio3d.css"]) .pk-q{ height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/24px var(--font); }
+:root:has(link[href="css/studio3d.css"]) .pk-q:focus{ outline:none; border-color:var(--focus) }
+:root:has(link[href="css/studio3d.css"]) .pk.is-tree .pk-q, :root:has(link[href="css/studio3d.css"]) .wkc .pk-q{ height:24px }
 .pk-cat{
   flex:0 1 260px; min-width:0; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
@@ -898,7 +883,7 @@ audio.vtrim-media{ background:none; height:32px }
 .pk.is-tree .pk-bar{ gap:8px; padding:6px 10px }
 .pk-path{ flex:1 1 auto; min-width:0; overflow:hidden; font:600 11px/1.2 var(--font) }
 .pk-path .mt-crumbs{ margin:0; flex-wrap:nowrap; overflow:hidden }
-.pk.is-tree .pk-q{ flex:0 1 210px; min-width:110px; height:24px }
+.pk.is-tree .pk-q{ flex:0 1 210px; min-width:110px }
 .pk.is-tree .pk-count{ margin-left:0; flex:0 0 auto }
 .pk.is-tree .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .pk.is-tree .pk-grid.is-rows{ grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)) }
@@ -909,7 +894,6 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-up{ flex:0 0 auto }
 /* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop" (.u-btn.is-gen). */
 .pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
-.pk.is-tree .pk-link input{ padding:3px 7px; font-size:10.5px }
 .pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
 /* ── Talking head's windows (phase V57; V58 - js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
@@ -921,7 +905,7 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc.is-flat .pk-side{ display:none }
 .wkc .pk-side{ overflow:hidden; gap:0; padding:6px 4px 4px 6px }
 .wkc .pk-bar{ gap:8px; padding:6px 10px }
-.wkc .pk-q{ flex:0 1 240px; min-width:110px; height:24px }
+.wkc .pk-q{ flex:0 1 240px; min-width:110px }
 .wkc .pk-count{ margin-left:auto }
 .wkc .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .wkc.is-flat .pk-grid{ --pk-h:150px }
@@ -989,11 +973,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-main{ min-height:0; display:flex; flex-direction:column }
 .hp-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border-soft) }
 .hp-bar[hidden]{ display:none }
-.hp-q{
-  flex:1 1 auto; min-width:0; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.hp-q:focus{ outline:none; border-color:var(--focus) }
+.hp-q{ flex:1 1 auto; min-width:0 }
 .hp-count{ flex:0 0 auto; font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .hp-note{ flex:0 0 auto; padding:6px 10px; border-bottom:1px solid var(--border-soft); font:600 10.5px/1.4 var(--font); color:var(--gold) }
 .hp-note[hidden]{ display:none }

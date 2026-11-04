@@ -134,7 +134,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
   L.appendChild(tabs);
 
-  const link = _el('input', 'mv3-sc-inp mv3-hlp-url');
+  const link = _el('input', 'mv3-sc-inp mv3-hlp-url u-in');
   link.type = 'text';
   link.placeholder = 'https://www.youtube.com/watch?v=…  - one video';
   link.addEventListener('input', () => { st.url = link.value.trim(); paint(); });
@@ -159,7 +159,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   for (const k of Object.keys(panes)) L.appendChild(panes[k]);
   // (phase V43, the owner's (ё18): "давать выбор дорожки если есть выбор") A file with more than one sound track - a dub and the
   // original, say - says so here: the one chosen is heard and is the parts' sound.
-  const trackSel = _el('select', 'mv3-hlp-sel');
+  const trackSel = _el('select', 'mv3-hlp-sel u-in is-s');
   trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
   const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'sound');
   trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';

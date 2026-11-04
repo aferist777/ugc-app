@@ -23,10 +23,8 @@
 
 /* the search over SFX, and "find online…" (the panel's body; the Library's shelf header) */
 .snd-shelf-head{display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap}
-.snd-search{flex:1 1 180px; min-width:140px; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 8px}
-.snd-search:focus{outline:none; border-color:var(--focus)}
+.snd-search{ flex:1 1 180px; min-width:140px }
 /* (phase V73 block 2) Every .snd-btn is the shared part (.u-btn): search the gold fill, "find online" the gold line. */
-.snd-sel{background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 6px}
 
 /* (phase V54) "?" right of the search, and its popup of sites (js/sound/sites.js) */
 
@@ -93,7 +91,7 @@
 .snd-online{width:min(860px, calc(100vw - 40px)); height:84vh}
 .snd-on-bar{display:flex; align-items:center; gap:8px}
 .snd-on-bar .sp{flex:1}
-.snd-on-bar .snd-sel{width:auto; min-width:150px}
+.snd-on-bar .snd-sel{ width:auto; min-width:150px }
 .snd-on-list{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px}
 .snd-on-row{display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg); flex-wrap:wrap}
 .snd-on-tx{flex:1 1 260px; min-width:0; display:flex; flex-direction:column; gap:1px}

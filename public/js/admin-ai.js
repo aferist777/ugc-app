@@ -78,7 +78,7 @@
     // step being changed would vanish.
     const used = new Set(st.ladder.filter((_, k) => k !== i).map(s => s.provider + '|' + s.model));
 
-    const ps = el('select', 'ai-sel ai-prov');
+    const ps = el('select', 'ai-sel ai-prov u-in is-s');
     ps.title = 'The aggregator this step asks';
     for (const q of st.providers) {
       const o = el('option', null, q.label + (q.off ? ' - ' + offWord(q.off) : '') + (q.unproven ? ' (not tried yet)' : ''));
@@ -99,7 +99,7 @@
     });
     row.appendChild(ps);
 
-    const ms = el('select', 'ai-sel ai-model');
+    const ms = el('select', 'ai-sel ai-model u-in is-s');
     ms.title = 'The model - every one of them sees pictures';
     for (const m of ((p && p.models) || [{ id: step.model, label: step.model }])) {
       const o = el('option', null, m.label + (used.has(step.provider + '|' + m.id) ? ' - on another step' : ''));

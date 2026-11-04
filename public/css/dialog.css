@@ -30,12 +30,8 @@
 }
 .mv3-x-row{display:flex; align-items:center; gap:9px; padding:3px 0; min-height:26px}
 .mv3-x-row > label{flex:0 0 118px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
-.mv3-x-row select, .mv3-x-row input[type=color]{
-  flex:1 1 auto; min-width:0; height:23px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10.5px/21px var(--font); cursor:pointer;
-}
-.mv3-x-row input[type=color]{padding:1px; height:23px}
+.mv3-x-row select, .mv3-x-row input[type=color]{ flex:1 1 auto; min-width:0 }
+.mv3-x-row input[type=color]{ height:24px; padding:1px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); cursor:pointer }
 .mv3-x-note{margin:3px 0 0; font:400 9.5px/1.4 var(--font); color:var(--muted)}
 /* A box with its words, in a row or a foot (phase V30, block 4: the .srt in Export and beside Save & download). */
 .mv3-x-check{display:inline-flex; align-items:center; min-width:0}
@@ -59,17 +55,9 @@
    The same window for both, in the render window's frame (.mv3-x): one dialog look on
    this page, and a form is a form. */
 .mv3-x.is-scen{width:min(620px, 94vw)}
-.mv3-sc-inp{
-  flex:1 1 auto; min-width:0; padding:3px 6px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:400 11px/1.4 var(--font);
-}
-.mv3-sc-lines{
-  display:block; width:100%; min-height:210px; margin-top:5px; padding:7px 9px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:400 11.5px/1.7 var(--font);
-}
-.mv3-sc-lines:focus{outline:1px solid var(--focus); outline-offset:-1px}
+.mv3-sc-inp{ flex:1 1 auto; min-width:0 }
+.mv3-sc-lines{ display:block; width:100%; min-height:210px; margin-top:5px; resize:vertical }
+.mv3-sc-lines.u-area{ line-height:1.7 }
 /* (phase V62) A voiceover from one's own text (js/merge-v3/vo-text.js): a taller field, and its counter red at the limit. */
 .mv3-sc-lines.is-votext{min-height:300px}
 .mv3-vo-count.is-full{color:var(--danger)}

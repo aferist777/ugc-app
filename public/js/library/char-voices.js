@@ -183,7 +183,7 @@ export function paint(body, it, voices, hooks) {
   const find = _el('div', 'lib-cv-find');
   find.appendChild(_el('div', 'lib-info-sec', 'Find a voice'));
   const bar = _el('div', 'lib-cv-bar');
-  const sel = (cls) => { const s = _el('select', 'lib-cv-sel' + (cls ? ' ' + cls : '')); return s; };
+  const sel = (cls) => { const s = _el('select', 'lib-cv-sel u-in is-s' + (cls ? ' ' + cls : '')); return s; };
   const fill = (s, values, anyLabel, def) => {
     s.textContent = '';
     const any = _el('option', null, anyLabel); any.value = ''; s.appendChild(any);
