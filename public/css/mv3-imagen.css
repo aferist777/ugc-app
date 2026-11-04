@@ -860,6 +860,10 @@ audio.vtrim-media{ background:none; height:32px }
   background:var(--gold); color:var(--on-fill); font:700 9.5px/15px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;
 }
+/* (phase V73, (б1-17)) A picked tile - in who / where and in the attachment window - in the selected thing's white ring, its
+   mark white with a dark word. The 3D Studio's page, which opens this window too, keeps its gold (the two rules above). */
+:root:not(:has(link[href="css/studio3d.css"])) .pk-tile.is-on .pk-box{ border-color:var(--sel-ring); box-shadow:0 0 0 1px var(--sel-ring) inset }
+:root:not(:has(link[href="css/studio3d.css"])) .pk-mark{ background:var(--sel-ring) }
 .pk-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
   background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); pointer-events:none;

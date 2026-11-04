@@ -10,14 +10,7 @@
    polish mode: a 4 px grid, three text roles, hairlines, weights 400-600, sentence case, one shadow, one easing curve.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* The interface's fonts (б1-3): the authors' own web files as they come - Inter 4.1 (rsms/inter) and JetBrains Mono 2.304
-   (JetBrains/JetBrainsMono), SIL OFL 1.1, public/fonts/ui/. Named "UGC Inter" / "UGC Mono" so they never meet the caption
-   fonts of css/caption-fonts.css, where "Inter" is the BOLD caption file. */
-@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap }
-@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Medium.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap }
-@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-SemiBold.woff2") format("woff2"); font-weight:600; font-style:normal; font-display:swap }
-@font-face{ font-family:"UGC Mono"; src:url("/fonts/ui/JetBrainsMono-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap }
-@font-face{ font-family:"UGC Mono"; src:url("/fonts/ui/JetBrainsMono-Medium.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap }
+/* The interface's fonts "UGC Inter" / "UGC Mono" are declared in css/app-shell.css (stage C2), which this page loads first. */
 
 /* ── Tokens ─────────────────────────────────────────────────────────────────── */
 .ui-v73{

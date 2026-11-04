@@ -144,7 +144,7 @@
 .au-v2m-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:6px}
 .au-v2m-it{position:relative; display:flex; flex-direction:column; gap:2px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
 .au-v2m-it:hover{border-color:var(--sel-line)}
-.au-v2m-it.is-on{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, transparent)}
+.au-v2m-it.is-on{border-color:var(--sel-ring); background:var(--sel-bg)}   /* (б1-21) the white ring of the selected clip */
 .au-v2m-it.is-long{opacity:.45}
 .au-v2m-it img, .au-v2m-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
 .au-v2m-it .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -180,7 +180,7 @@
 .au-res-n{flex:0 1 210px; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-res .au-muted{font-size:10.5px; white-space:nowrap}
 .au-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
-.au-res.is-playing .au-play{border-color:var(--gold); color:var(--gold)}
+.au-res.is-playing .au-play{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
 .au-star{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px}
 .au-star.on{color:var(--ink)}   /* (phase V73, (б1-9)) a favourite: light, the text's colour */
 .au-lyr{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:8px 10px; background:var(--bg)}
