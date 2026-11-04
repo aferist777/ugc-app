@@ -3,14 +3,25 @@
    BEFORE the page's own stylesheet; the top nav is css/app-nav.css.
    ════════════════════════════════════════════════════════════════════════════ */
 
+/* ── The interface's fonts (phase V73 block 1 stage C2; the owner's (к19), (б1-2), (б1-3)) ─────────────────────────────
+   The authors' own web files as they come, public/fonts/ui/: Inter 4.1 (400 / 500 / 600) and JetBrains Mono 2.304 (400 / 500),
+   SIL OFL 1.1. Named "UGC Inter" / "UGC Mono" so they never meet the caption fonts of css/caption-fonts.css, where "Inter" is
+   the BOLD caption file (phase S6: Merge, which loads that file, was once drawn bold and wide everywhere through that name). A
+   weight above 600 is drawn in the 600 file. */
+@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Medium.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap }
+@font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-SemiBold.woff2") format("woff2"); font-weight:600; font-style:normal; font-display:swap }
+@font-face{ font-family:"UGC Mono"; src:url("/fonts/ui/JetBrainsMono-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"UGC Mono"; src:url("/fonts/ui/JetBrainsMono-Medium.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap }
+
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root{
   --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
   --ease:cubic-bezier(.22,1,.36,1);
-  /* No "Inter" here (phase S6, the owner 2026-10-05): no computer has it, so it only ever meant the BOLD caption
-     file css/caption-fonts.css declares under that name - Merge, which loads that file, was drawn bold and wide
-     everywhere while Library and Admin were Segoe UI. */
-  --font:"Segoe UI",system-ui,-apple-system,sans-serif;
+  /* The interface font - Inter as "UGC Inter", Segoe UI where it is not loaded yet; --mono for figures, taken by the pages in
+     blocks 5-6 (б1-15). The 3D Studio's page keeps Segoe UI (its block below). */
+  --font:"UGC Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"UGC Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
   /* THE LOOK OF PHASE V73 (block 1 stage C1; the owner 2026-11-03/04, (к15)-(к21а), (б1-1)-(б1-14); the rules of unslop by
      Damir Sokolovsky, CC BY 4.0): graphite of the old steps' lightness with no blue; three text roles; hairlines - the text at
      8 % and, for a control's edge, 12 %. The blue (--primary) and the cyan (--accent) are gone: every place took its role. */
