@@ -87,7 +87,7 @@
   font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none;
 }
 .vc-dd-row:hover{background:var(--surface-2)}
-.vc-dd-row input{margin:0; accent-color:var(--success); cursor:pointer}
+.vc-dd-row input{margin:0}
 .vc-dd-row span{flex:1 1 auto; min-width:0}
 .vc-dd-row b{font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums}
 .vc-dd-row.is-none{opacity:.42}
@@ -185,7 +185,7 @@
 }
 .vc-slot input[type=number]{width:38px}
 .vc-slot label{display:inline-flex; align-items:center; gap:3px; font:600 9.5px/1 var(--font); color:var(--muted)}
-.vc-slot input[type=checkbox]{margin:0; accent-color:var(--success)}
+.vc-slot input[type=checkbox]{margin:0}
 .vc-x{justify-self:end}
 .vc-hint{grid-column:1 / -1; width:100%; font-weight:500}
 .vc-adds{display:flex; gap:12px}

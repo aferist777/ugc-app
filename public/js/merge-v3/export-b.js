@@ -269,7 +269,7 @@ function _window(o) {
   // subtitles beside the video (lib/mv3b-job.js, public/js/captions/srt.js).
   body.appendChild(_el('div', 'mv3-x-hdr', 'Subtitles'));
   const srt = document.createElement('input');
-  srt.type = 'checkbox';
+  srt.type = 'checkbox'; srt.classList.add('u-check');
   srt.checked = adv.srt !== false;
   // A label inside a span: a row's own direct label is its name column (dialog.css).
   const srtBox = _el('span', 'mv3-x-check');

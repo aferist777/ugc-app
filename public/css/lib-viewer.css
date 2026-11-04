@@ -117,7 +117,7 @@
 .mv3-trimbox-save{ flex:0 0 auto }
 /* A piece's "original": the tick in the right column. */
 .cut-orig{ display:flex; align-items:flex-start; gap:7px; cursor:pointer; font:600 11.5px/1.3 var(--font); color:var(--ink) }
-.cut-orig input{ margin:2px 0 0; accent-color:var(--success) }
+.cut-orig input{ margin:2px 0 0 }
 .cut-orig-txt{ display:flex; flex-direction:column; gap:2px; min-width:0 }
 .cut-orig-txt small{ font-weight:500; color:var(--muted); overflow-wrap:anywhere }
 /* The window "save the piece to" is the place picker (js/place-tree.js, phase V39): the post viewer's move menu

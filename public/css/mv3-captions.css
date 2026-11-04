@@ -174,8 +174,8 @@
 .mv3-doc-q:focus, .mv3-doc-r:focus{ border-color:var(--focus) }
 .mv3-doc-n{ flex:0 0 auto; min-width:46px; text-align:right; font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-doc-n.is-none{ color:var(--muted) }
-.mv3-doc-opt{ min-width:28px; padding:0 7px; text-transform:none; letter-spacing:0 }
-.mv3-doc-opt.is-on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
+.mv3-doc-opt{ min-width:28px }
+.mv3-doc-opt.u-btn{ padding:0 7px }   /* .is-on - the part's pressed look */
 .mv3-doc-fr .mv3-c-btn{ flex:0 0 auto }
 
 .mv3-doc-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 0 10px; outline:none }

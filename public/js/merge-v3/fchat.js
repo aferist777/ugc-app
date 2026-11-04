@@ -98,7 +98,7 @@ function FRAMES(ctx) {
       // The writer, a switch of the column (as in the video chat, V15/V16).
       const wr = el('label', 'mv3-vc-check');
       const cb = document.createElement('input');
-      cb.type = 'checkbox';
+      cb.type = 'checkbox'; cb.classList.add('u-check');
       cb.checked = ctx.writing();
       cb.addEventListener('change', () => ctx.setWriting(cb.checked));
       wr.append(cb, el('span', null, 'writer'));

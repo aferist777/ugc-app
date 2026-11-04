@@ -415,4 +415,4 @@ body{
 .bub.is-tip .bub-x:hover{background:color-mix(in oklch, var(--danger) 18%, transparent)}
 .bub.is-tip .bub-never{display:flex; align-items:center; gap:5px; margin-top:8px; color:var(--muted); font:500 10.5px/1.3 var(--font);
   cursor:pointer; user-select:none}
-.bub.is-tip .bub-never input{margin:0; accent-color:var(--gold)}
+.bub.is-tip .bub-never input{margin:0}

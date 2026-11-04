@@ -64,7 +64,7 @@ export function originalTick(o, on, onToggle) {
   const lab = el('label', 'cut-orig');
   lab.title = 'Show the whole video this piece was cut from - and cut another piece from it (a new clip again)';
   const box = el('input');
-  box.type = 'checkbox';
+  box.type = 'checkbox'; box.classList.add('u-check');
   box.checked = !!on;
   box.addEventListener('change', () => onToggle(box.checked));
   const txt = el('span', 'cut-orig-txt');

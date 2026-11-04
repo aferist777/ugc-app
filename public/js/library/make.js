@@ -654,7 +654,7 @@ function _deleteMissing(it) {
   body.appendChild(el('p', 'mv3-x-note', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
   const lab = el('label', 'mv3-x-check');
   const cb = document.createElement('input');
-  cb.type = 'checkbox';
+  cb.type = 'checkbox'; cb.classList.add('u-check');
   lab.append(cb, document.createTextNode(' and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
   body.appendChild(lab);
   const foot = el('div', 'mv3-x-foot');

@@ -1020,7 +1020,7 @@ export function createTree(host, o) {
     if (count || folders) box.appendChild(_el('div', 'mt-pop-note', 'Inside: ' + [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' and ') + '.'));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = true;                       // the safe branch is the default
     lab.appendChild(cb);
     lab.appendChild(_el('span', null, (count || folders) ? 'Move what is in it up into ' + home + (folders ? ' - its folders stay folders' : '') : 'Nothing in it to move'));

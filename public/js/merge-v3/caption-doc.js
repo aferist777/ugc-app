@@ -73,7 +73,7 @@ export function mount(host) {
   q.setAttribute('aria-label', 'Find in the subtitles and the text lanes');
   const count = _el('span', 'mv3-doc-n');
   const opt = (label, title, key) => {
-    const b = _el('button', 'mv3-c-sw mv3-doc-opt', label);
+    const b = _el('button', 'mv3-doc-opt u-btn is-s', label);
     b.type = 'button';
     b.title = title;
     b.setAttribute('aria-pressed', 'false');

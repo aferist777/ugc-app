@@ -680,7 +680,7 @@ function _paintField() {
     if (pic) fr.style.backgroundImage = 'url("' + pic + '")';
     t.appendChild(fr);
     const cb = _el('input', 'mv3-hl-check');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = _checked.has(f.n);
     cb.title = 'Tick it - for the captions of several and for rendering them together';
     cb.addEventListener('click', (e) => e.stopPropagation());

@@ -459,7 +459,7 @@ function VIDEOS(ctx) {
     // (phase V16, the owner) The writer is a checkbox like the storyboard - on by default.
     const wr = el('label', 'mv3-vc-check' + (held ? ' is-held' : ''));
     const wcb = document.createElement('input');
-    wcb.type = 'checkbox';
+    wcb.type = 'checkbox'; wcb.classList.add('u-check');
     wcb.checked = ctx.writing();
     wcb.disabled = held;
     wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
@@ -471,7 +471,7 @@ function VIDEOS(ctx) {
     box.appendChild(wr);
     const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
     const scb = document.createElement('input');
-    scb.type = 'checkbox';
+    scb.type = 'checkbox'; scb.classList.add('u-check');
     scb.checked = !bWhy && _boardOn();
     scb.disabled = !!bWhy;
     scb.addEventListener('change', () => {

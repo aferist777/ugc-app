@@ -182,7 +182,7 @@ export function mountButtons() {
   for (const id of ORDER) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-pf-btn';
+    b.className = 'mv3-pf-btn u-btn is-s is-icon';
     b.dataset.platform = id;
     b.appendChild(_svgIcon(ICON[id]));
     b.addEventListener('click', () => { if (_fmt === '9:16') _set(_on === id ? '' : id); });

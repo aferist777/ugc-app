@@ -502,7 +502,7 @@ function _ddOpen(g, btn) {
   for (const [v, t] of g.values) {
     const row = el('label', 'vc-dd-row');
     const cb = document.createElement('input');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.addEventListener('change', () => {
       const cur = new Set(_st.filters[g.key] || []);
       if (cb.checked) cur.add(v); else cur.delete(v);
@@ -1050,7 +1050,7 @@ function _slotsBox(it, ed) {
       const min = num(s.min, (v) => { s.min = v; if (s.max < v) { s.max = v; paint(); } });
       const max = num(s.max, (v) => { s.max = Math.max(v, s.min); paint(); });
       const req = document.createElement('input');
-      req.type = 'checkbox'; req.checked = !!s.required; req.title = 'it must be attached';
+      req.type = 'checkbox'; req.classList.add('u-check'); req.checked = !!s.required; req.title = 'it must be attached';
       req.addEventListener('change', () => { s.required = req.checked; });
       const x = el('button', 'vc-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button'; x.title = 'take this slot away';

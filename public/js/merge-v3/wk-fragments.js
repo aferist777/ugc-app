@@ -1606,7 +1606,7 @@ function _stageFrames(host, p) {
   foot.classList.add('is-frames');
   const tick = el('label', 'mv3-wk-ftick');
   const box = el('input');
-  box.type = 'checkbox';
+  box.type = 'checkbox'; box.classList.add('u-check');
   box.checked = v.spread === 'random';
   box.disabled = _saving;
   box.addEventListener('change', () => _saveVideo({ spread: box.checked ? 'random' : 'cycle' }));

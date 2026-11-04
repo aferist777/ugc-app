@@ -125,9 +125,11 @@ export function select(opts, value, onChange) {
 export function toggle(on, onChange) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sw' + (on ? ' is-on' : '');
-  b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  b.textContent = on ? 'on' : 'off';
+  // (phase V73 block 2) The shared switch (.u-switch): on is green (б1-7) - no "on / off" words in a pill any more.
+  b.className = 'mv3-c-sw u-switch' + (on ? ' is-on' : '');
+  b.setAttribute('role', 'switch');
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
+  b.title = on ? 'On' : 'Off';
   b.addEventListener('click', () => { if (onChange) onChange(!on); });
   return b;
 }
@@ -138,7 +140,8 @@ export function toggle(on, onChange) {
 export function toggleNamed(label, on, onChange, title) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sw' + (on ? ' is-on' : '');
+  // (phase V73 block 2) a pressed button - the selected look (б2-13), never the switch's green
+  b.className = 'mv3-c-sw u-btn is-s' + (on ? ' is-on' : '');
   b.setAttribute('aria-pressed', on ? 'true' : 'false');
   b.textContent = label;
   if (title) b.title = title;

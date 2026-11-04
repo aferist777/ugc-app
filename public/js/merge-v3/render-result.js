@@ -223,7 +223,7 @@ export async function showResult(o) {
   const srtBox = el('span', 'mv3-x-check');
   const srtLbl = document.createElement('label');
   const srtOn = document.createElement('input');
-  srtOn.type = 'checkbox';
+  srtOn.type = 'checkbox'; srtOn.classList.add('u-check');
   srtOn.checked = _srtWanted();
   srtOn.addEventListener('change', () => { try { localStorage.setItem(LS_SRT, srtOn.checked ? '1' : '0'); } catch (e) { /* a private window */ } });
   srtLbl.append(srtOn, el('span', null, '.srt too'));

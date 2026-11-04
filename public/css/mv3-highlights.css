@@ -50,7 +50,7 @@
 .mv3-hl-tile.is-checked{border-color:var(--sel-line)}
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
-.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--success); cursor:pointer}
+.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; margin:0}
 .mv3-hl-score{
   position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
   background:var(--scrim); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;

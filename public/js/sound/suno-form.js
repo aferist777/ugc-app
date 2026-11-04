@@ -449,7 +449,7 @@ export function createSunoForm(o) {
   function check(obj, key, label, after, help) {
     const lab = el('label', 'au-check');
     const c = el('input');
-    c.type = 'checkbox';
+    c.type = 'checkbox'; c.classList.add('u-check');
     c.checked = !!obj[key];
     c.addEventListener('change', () => { obj[key] = c.checked; save(); if (after) after(); });
     lab.append(c, withQ(el('span', null, label), help));
