@@ -17,9 +17,19 @@
      speed  rotate: 0.5..20 degrees a second (2); drift: 5..200 px a second of a frame 1080 px across its short side (20).
      dir    rotate: 'cw' | 'ccw'; drift: 'e' 'ne' 'n' 'nw' 'w' 'sw' 's' 'se' (the eight arrows; 'e' to the right).
    `t` everywhere is the clip's own seconds (0 at its start).
+
+   THE PATTERNS OF MAIN VIDEO (phase V74, the owner 2026-11-03/04, (пт1)-(пт9); docs/local-app/plan/, "Фаза V74") - a list
+   `patterns` on the MAIN VIDEO LANE (the bottom video lane, mainLane), TOP LAYER FIRST as the lanes are listed, each
+   { src, pattern?, opacity?, blend? } - its address under /patterns/ and the settings above, its opacity and blend mode by
+   overlay/look.js's rules, only what differs from the defaults kept (normalizeLayer); one entry per pattern of the set, with
+   no limit of how many. It covers the WHOLE main video, from 0 to its end (mainEnd), following it, OVER EVERY VIDEO LANE and
+   under the text and the subtitles: the preview and the render both draw layersOf() - the bottom layer first, each as a clip
+   of that stretch, its own seconds the timeline's. No lane of its own.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export const REF = 2160;          // the file size whose pixel, at 100 %, is a frame's long side / 2160
+import { normalizeOpacity, normalizeBlend, isPattern } from './look.js';
+
+export const REF = 2160;         // the file size whose pixel, at 100 %, is a frame's long side / 2160
 export const SCALE = { min: 0.25, max: 4, step: 0.05 };
 export const ROTATE = { min: 0.5, max: 20, step: 0.5, def: 2 };
 export const DRIFT = { min: 5, max: 200, step: 5, def: 20 };
@@ -90,4 +100,58 @@ export function driftAt(f, t, W, H) {
 export function coverSide(tile, W, H) {
   const n = Math.ceil(Math.hypot(W, H) / tile);
   return (n + (n % 2)) * tile;
+}
+
+// ── The patterns of main video (phase V74) ──────────────────────────────────
+
+/** One entry of main video's `patterns` as stored: { src, pattern?, opacity?, blend? }, or null when it is no pattern. */
+export function normalizeLayer(p) {
+  if (!p || typeof p !== 'object' || !isPattern(p.src)) return null;
+  const out = { src: String(p.src).split(/[?#]/)[0] };
+  const pt = normalize(p.pattern);
+  if (pt) out.pattern = pt;
+  const op = normalizeOpacity(p.opacity);
+  if (op != null) out.opacity = op;
+  const bl = normalizeBlend(p.blend);
+  if (bl) out.blend = bl;
+  return out;
+}
+
+/** The whole list as stored - top layer first, each pattern once (the first kept), no limit of how many. */
+export function normalizeLayers(list) {
+  const out = [];
+  const seen = new Set();
+  for (const p of (Array.isArray(list) ? list : [])) {
+    const x = normalizeLayer(p);
+    if (!x || seen.has(x.src)) continue;
+    seen.add(x.src);
+    out.push(x);
+  }
+  return out;
+}
+
+/** The main video lane - the bottom video lane (tracks are listed top first) - or null. */
+export function mainLane(tl) {
+  const vids = ((tl && tl.tracks) || []).filter((t) => t && t.kind === 'video');
+  return vids.length ? vids[vids.length - 1] : null;
+}
+
+/** Where main video ends, in seconds of the timeline - 0 when nothing is on it. */
+export function mainEnd(tl) {
+  const m = mainLane(tl);
+  let end = 0;
+  for (const c of ((m && m.clips) || [])) if (c && c.src) end = Math.max(end, (+c.start || 0) + (+c.dur || 0));
+  return end;
+}
+
+/** The id a layer is known by while it is drawn (the preview's live patches, the render's baked tiles). */
+export const layerId = (src) => 'pattern:' + String(src || '');
+
+/** What is drawn over the video lanes: main video's patterns as clips of 0..its end, the BOTTOM layer first; [] for none. */
+export function layersOf(tl) {
+  const m = mainLane(tl);
+  const list = normalizeLayers(m && m.patterns);
+  const end = mainEnd(tl);
+  if (!list.length || !(end > 0)) return [];
+  return list.slice().reverse().map((p) => ({ ...p, id: layerId(p.src), start: 0, dur: end, layer: true }));
 }

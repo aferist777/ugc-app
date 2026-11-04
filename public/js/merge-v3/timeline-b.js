@@ -43,7 +43,7 @@ import { normalize as normalizeCrop } from '../framing/crop.js';
 // (phase V65) A clip's opacity - one rule for the page and the server; a pattern lands at 0.7.
 import { normalizeOpacity, normalizeBlend, isPattern, PATTERN_OPACITY } from '../overlay/look.js';
 // (phase V65, block 5) A pattern's own settings - scale, colour, angle, movement (overlay/pattern.js).
-import { normalize as normalizePattern } from '../overlay/pattern.js';
+import { normalize as normalizePattern, normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
@@ -2531,6 +2531,25 @@ export function selectedClips() {
 export function mainVideo(tl) {
   const vids = (((tl || Store.timeline()) || {}).tracks || []).filter(t => t.kind === 'video');
   return vids.length ? vids[vids.length - 1] : null;
+}
+
+/** (phase V74) The patterns of main video - top layer first (overlay/pattern.js normalizeLayers); [] when none. */
+export function patternsOf(tl) {
+  const m = mainVideo(tl);
+  return normalizeLayers(m && m.patterns);
+}
+
+/**
+ * (phase V74) Main video's patterns become `list` - ONE undo step. Emptied, the field stays as [] when it was there (a lane's
+ * field the page took off would lose to the server's copy in a merge, store.js _mergeTrack) - the server keeps none then.
+ */
+export function setPatterns(list) {
+  return Store.mutate(tl => {
+    const m = mainVideo(tl);
+    if (!m) return;
+    const next = normalizeLayers(list);
+    if (next.length || m.patterns) m.patterns = next;
+  });
 }
 
 export function setClipField(trackId, clipId, key, value) {
