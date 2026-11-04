@@ -96,6 +96,13 @@
         paint();
       }) : el('span', 'loc-state', 'shown')));
   }
+  // (phase V73 block 1, the owner 2026-11-04, (б1-5)) The interface showcase /lab/ui: every part in the new look before it
+  // goes onto the pages. It is in no top strip; this is the way to it in the app's window, which has no address bar.
+  function paintLook() {
+    body.appendChild(el('div', 'dio-sec', 'Interface'));
+    body.appendChild(row('Interface showcase', 'Every part of the new look, before it goes onto the pages (phase V73).',
+      btn('Open', function () { location.href = '/lab/ui'; })));
+  }
 
   function paintYt() {
     body.appendChild(el('div', 'dio-sec', 'Links (yt-dlp)'));
@@ -136,10 +143,10 @@
 
   function paint() {
     body.textContent = '';
-    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); paintHome(); return; }
+    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); paintHome(); paintLook(); return; }
     if (!state.platform) {
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
-      paintYt(); paintHome();
+      paintYt(); paintHome(); paintLook();
       return;
     }
     var p = state.program, m = state.model;
@@ -166,7 +173,7 @@
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status' + (msgErr ? ' err' : ''), msg);
     body.appendChild(s);
-    paintYt(); paintHome();
+    paintYt(); paintHome(); paintLook();
   }
 
   function load() {

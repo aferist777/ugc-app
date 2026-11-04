@@ -6,7 +6,7 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
   color:var(--ink); font:500 11px/1.45 var(--font);
 }
-.made-ed-ta:focus{ outline:none; border-color:var(--primary); }
+.made-ed-ta:focus{ outline:none; border-color:var(--focus); }
 .made-ed-ta::placeholder{ color:var(--muted); }
 .made-ed-foot{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:0; }
 .made-ed-foot:has(.made-ed-save:not([hidden])), .made-ed-foot:has(.made-ed-said:not(:empty)){ min-height:22px; }
@@ -17,6 +17,6 @@
   color:var(--muted); font:600 10px/1.2 var(--font); cursor:pointer;
 }
 .made-ed-chip:hover{ color:var(--ink); }
-.made-ed-chip.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+.made-ed-chip.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink); }
 /* (phase V26.6) A product's name: one line. */
 .made-ed.is-line .made-ed-ta{ min-height:0; resize:none; white-space:nowrap; overflow:hidden; }

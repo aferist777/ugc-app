@@ -28,9 +28,11 @@ import { selectedOne, selectClipById, setClipFields, setClipsFields, selectedCli
 
 const HANDLE = 9;      // half-width of a corner grip, in canvas pixels
 const KNOB = 22;       // how far above the top edge the turning knob sits
-// Yellow, because it has to be found instantly over a photograph and nothing else in this
-// editor is yellow. White was lost in a bright shot and the accent blue in a cold one.
-const MARK = '#ffd400';
+// (phase V73, the owner's (б1-10)) White, the selected thing's colour (--sel-ring: no colour of its own, (к16)), over the
+// dark line drawn under it, so a bright shot does not swallow it. It was yellow until then. Read at the first drawing, when
+// the page's sheets are surely there.
+let _mark = '';
+const mark = () => _mark || (_mark = getComputedStyle(document.documentElement).getPropertyValue('--sel-ring').trim() || '#ededed');
 
 let _api = null;       // { rectOf, rects, pad, frame, repaint }
 let _cv = null;
@@ -277,7 +279,7 @@ export function paintHandles(ctx) {
     ctx.save();
     ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)';
     ctx.strokeRect(br.dx + 1, br.dy + 1, br.dw - 2, br.dh - 2);
-    ctx.lineWidth = 1.75; ctx.strokeStyle = MARK; ctx.setLineDash([7, 5]);
+    ctx.lineWidth = 1.75; ctx.strokeStyle = mark(); ctx.setLineDash([7, 5]);
     ctx.strokeRect(br.dx + 1, br.dy + 1, br.dw - 2, br.dh - 2);
     ctx.restore();
     return;
@@ -298,7 +300,7 @@ export function paintHandles(ctx) {
   // a dark one without borrowing a colour from either.
   ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)';
   ctx.strokeRect(-hw, -hh, r.dw, r.dh);
-  ctx.lineWidth = 1.75; ctx.strokeStyle = MARK;
+  ctx.lineWidth = 1.75; ctx.strokeStyle = mark();
   ctx.strokeRect(-hw, -hh, r.dw, r.dh);
 
   ctx.beginPath();
@@ -310,7 +312,7 @@ export function paintHandles(ctx) {
     ctx.beginPath();
     if (round) ctx.arc(x, y, HANDLE * 0.62, 0, Math.PI * 2);
     else ctx.rect(x - HANDLE / 2, y - HANDLE / 2, HANDLE, HANDLE);
-    ctx.fillStyle = MARK;
+    ctx.fillStyle = mark();
     ctx.fill();
     ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(0,0,0,.6)';
     ctx.stroke();

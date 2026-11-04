@@ -78,9 +78,12 @@ const PAD_FRAC = 0.08;
 let PAD = 43, CW = 626, CH = 1046;
 
 // The surround, and the veil that says it is not the film. Dark enough to read as outside,
-// light enough that what hangs over the edge can still be seen.
-const SURROUND = '#0b0c10';
-const OUTSIDE = 'rgba(8,9,12,.55)';
+// light enough that what hangs over the edge can still be seen. (phase V73) The page's own tokens, graphite with no blue:
+// --bg-deep round the frame, --scrim over what hangs over its edge; read at the first drawing.
+const _toks = {};
+const _tok = (name, fb) => _toks[name] || (_toks[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb);
+const surround = () => _tok('--bg-deep', '#0a0a0b');
+const outside = () => _tok('--scrim', 'rgb(0 0 0 / .6)');
 
 // ── What is on screen at a moment ───────────────────────────────────────────
 // Bottom layer first, which is the video lanes read backwards: the list is held top
@@ -973,7 +976,7 @@ function _paintFrame() {
   // Layers under the playhead that had nothing decoded to draw yet - what a screenshot waits on.
   let missing = 0;
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
-  _ctx.fillStyle = SURROUND;
+  _ctx.fillStyle = surround();
   _ctx.fillRect(0, 0, CW, CH);
   // From here on the origin is the FRAME's corner, and every number below is a frame number.
   _ctx.setTransform(1, 0, 0, 1, PAD, PAD);
@@ -1091,7 +1094,7 @@ function _paintFrame() {
   // A screenshot is the film and nothing of the editor: no margin, no grips, no notes.
   if (_shooting) { _sweep(alive); return missing; }
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
-  _ctx.fillStyle = OUTSIDE;
+  _ctx.fillStyle = outside();
   _ctx.fillRect(0, 0, CW, PAD);
   _ctx.fillRect(0, CH - PAD, CW, PAD);
   _ctx.fillRect(0, PAD, PAD, H);

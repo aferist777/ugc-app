@@ -15,11 +15,11 @@ import { showError } from './notice.js';
 
 const CSS = `
 .dx{position:absolute; top:4px; right:4px; z-index:3; min-width:20px; height:20px; padding:0 5px; border-radius:10px;
-  border:1px solid rgba(255,255,255,.18); background:rgba(0,0,0,.55); color:#fff; font:600 11px/18px var(--font, system-ui);
+  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 11px/18px var(--font, system-ui);
   cursor:pointer; opacity:0; transition:opacity .12s; white-space:nowrap}
 .dx-host:hover > .dx, .dx:focus-visible, .dx.is-ask{opacity:1}
-.dx:hover{background:var(--danger, #c0392b); border-color:var(--danger, #c0392b)}
-.dx.is-ask{background:var(--danger, #c0392b); border-color:var(--danger, #c0392b); padding:0 8px}
+.dx:hover{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
+.dx.is-ask{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger); padding:0 8px}
 .dx[disabled]{opacity:.5; cursor:default}
 .dx-host{position:relative}
 `;

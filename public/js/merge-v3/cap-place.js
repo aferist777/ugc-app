@@ -43,8 +43,12 @@ import { selectedIds, selectedTrack, selectedCaptions, selectClipById, selectTra
 import { pagesAt, inBox, ownPlace, dragPlace, anchorY } from '../captions/place.js';
 import { renderFrame, resolveStyle, POSITIONS, rowsOn } from '../captions/style.js';
 
-const MARK = '#ffd400';       // the picked outline - place-b.js's yellow
-const RED = '#ff3b30';
+// the picked outline - place-b.js's white over a dark line (phase V73, (б1-10)); the red of what a platform's screen hides.
+// Read at the first drawing, when the page's sheets are surely there.
+const _toks = {};
+const _tok = (name, fb) => _toks[name] || (_toks[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb);
+const mark = () => _tok('--sel-ring', '#ededed');
+const red = () => _tok('--danger', '#df6862');
 const SLACK = 8;              // a press this close to a page (screen pixels) is on it
 const NEAR = 9;               // snapping distance, screen pixels
 
@@ -234,7 +238,7 @@ function _up() {
 function _dash(ctx, x, y, w, h) {
   ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.setLineDash([]);
   ctx.strokeRect(x, y, w, h);
-  ctx.lineWidth = 1.75; ctx.strokeStyle = MARK; ctx.setLineDash([7, 5]);
+  ctx.lineWidth = 1.75; ctx.strokeStyle = mark(); ctx.setLineDash([7, 5]);
   ctx.strokeRect(x, y, w, h);
   ctx.setLineDash([]);
 }
@@ -258,12 +262,14 @@ export function paint(ctx) {
     for (const pg of pages) {
       for (const c of Platforms.crossed(pg.box.lines, F.w, F.h)) {
         const kx = F.w / 1080 * s, ky = F.h / 1920 * s;
-        ctx.fillStyle = 'rgba(255,59,48,.38)';
+        ctx.fillStyle = red();
+        ctx.globalAlpha = .38;
         ctx.fillRect(c.hit[0] * kx, c.hit[1] * ky, (c.hit[2] - c.hit[0]) * kx, (c.hit[3] - c.hit[1]) * ky);
+        ctx.globalAlpha = 1;
         const key = c.r.join(',');
         if (seen.has(key)) continue;
         seen.add(key);
-        ctx.lineWidth = 2; ctx.strokeStyle = RED;
+        ctx.lineWidth = 2; ctx.strokeStyle = red();
         ctx.strokeRect(c.r[0] * kx, c.r[1] * ky, (c.r[2] - c.r[0]) * kx, (c.r[3] - c.r[1]) * ky);
       }
     }
@@ -277,7 +283,7 @@ export function paint(ctx) {
   // What it snapped to.
   const r = _drag && _drag.moved ? _drag.r : null;
   if (r && (r.snapX || r.snapY)) {
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,212,0,.85)'; ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1; ctx.strokeStyle = mark(); ctx.globalAlpha = .85; ctx.setLineDash([4, 4]);
     ctx.beginPath();
     if (r.snapX) { ctx.moveTo(F.w / 2 * s, 0); ctx.lineTo(F.w / 2 * s, F.h * s); }
     if (r.snapY) { const y = anchorY(r.snapY, F.h) * s; ctx.moveTo(0, y); ctx.lineTo(F.w * s, y); }

@@ -24,22 +24,22 @@
 .sv3-gen-card{
   position:relative; display:flex; flex-direction:column; align-items:center; gap:7px;
   padding:12px 14px; min-width:150px; max-width:92%;
-  background:oklch(.21 .018 265 / .92); border:1px solid var(--border); border-radius:var(--r-sm);
+  background:oklch(from var(--surface) l c h / 0.92); border:1px solid var(--border); border-radius:var(--r-sm);
 }
 .sv3-gen-spin{
   width:22px; height:22px; border-radius:50%;
-  border:3px solid var(--border); border-top-color:var(--primary);
+  border:3px solid var(--border); border-top-color:var(--ink);
   animation:gp-spin .8s linear infinite;
 }
 .sv3-gen-label{font:600 11.5px var(--font); color:var(--ink); text-align:center; line-height:1.4}
 .sv3-gen-label.err{color:var(--danger)}
 .sv3-gen-bar{width:130px; height:4px; background:var(--surface-2); border-radius:var(--pill); overflow:hidden}
-.sv3-gen-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .45s var(--ease)}
+.sv3-gen-bar > i{display:block; height:100%; width:0; background:var(--muted); transition:width .45s var(--ease)}
 .sv3-gen-eta{font:600 10px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
 /* Only present once the wait is past what this kind of job usually takes - so it never
    competes with the countdown while the countdown still means something. */
 .sv3-gen-note{
-  max-width:210px; font:500 9.5px/1.35 var(--font); color:#e8b93a;
+  max-width:210px; font:500 9.5px/1.35 var(--font); color:var(--warn);
   text-align:center; text-wrap:balance;
 }
 .sv3-gen-cancel{
@@ -48,7 +48,7 @@
   background:var(--surface-2); color:var(--muted);
   font:700 10px var(--font); cursor:pointer; transition:.12s var(--ease);
 }
-.sv3-gen-cancel:hover{ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+.sv3-gen-cancel:hover{ color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }
 .sv3-gen-cancel:disabled{ opacity:.6; cursor:default; }
 
 /* ── the countdown as one row, for a strip too short for the overlay card ──── */
@@ -58,7 +58,7 @@
 }
 .sv3-inline-spin{
   flex:0 0 auto; width:14px; height:14px; border-radius:50%;
-  border:2px solid var(--border); border-top-color:var(--primary);
+  border:2px solid var(--border); border-top-color:var(--ink);
   animation:gp-spin .8s linear infinite;
 }
 .sv3-inline-label{flex:0 1 auto; min-width:0; font:11px var(--font); color:var(--ink);
@@ -68,7 +68,7 @@
   flex:1 1 auto; min-width:60px; height:5px; overflow:hidden;
   background:var(--bg); border-radius:var(--pill);
 }
-.sv3-inline-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .3s linear}
+.sv3-inline-bar > i{display:block; height:100%; width:0; background:var(--muted); transition:width .3s linear}
 .sv3-inline-eta{flex:0 0 auto; font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
 /* The cross that cancels the job, right of the countdown - only on rows that were given onCancel. */
 .sv3-inline-x{
@@ -76,6 +76,6 @@
   border:1px solid transparent; border-radius:var(--r-xs); background:none;
   color:var(--muted); font:600 10px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
 }
-.sv3-inline-x:hover{color:var(--primary-ink, #fff); background:var(--danger); border-color:var(--danger)}
-.sv3-inline-x:focus-visible{outline:none; border-color:var(--primary); color:var(--ink)}
+.sv3-inline-x:hover{color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill)}
+.sv3-inline-x:focus-visible{outline:none; border-color:var(--focus); color:var(--ink)}
 .sv3-inline-x[disabled]{opacity:.4; cursor:default; background:none; border-color:transparent; color:var(--muted)}

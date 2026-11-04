@@ -5,12 +5,12 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* ── the sub-header: the lit tab wears the frames' gold line ── */
-.hm-sub{flex:0 0 auto; display:flex; align-items:stretch; gap:2px; padding:0 18px; background:oklch(.19 .016 265); border-bottom:1px solid var(--border-soft)}
+.hm-sub{flex:0 0 auto; display:flex; align-items:stretch; gap:2px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--border-soft)}
 .hm-tab{position:relative; display:flex; align-items:center; gap:6px; padding:9px 12px 8px; border:0; background:none; cursor:pointer;
   color:var(--muted); font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase}
 .hm-tab:hover{color:var(--ink)}
-.hm-tab.cur{color:var(--gold)}
-.hm-tab.cur::after{content:''; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; border-radius:2px; background:var(--gold)}
+.hm-tab.cur{color:var(--ink)}
+.hm-tab.cur::after{content:''; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; border-radius:2px; background:var(--ink)}
 .hm-sub .sp{flex:1}
 .hm-side{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted)}
 .hm-link{border:0; background:none; padding:0; cursor:pointer; color:var(--muted); font:11px var(--font)}
@@ -35,7 +35,7 @@
 .hm-head a, .hm-head button{font:600 11px var(--font); text-transform:none; letter-spacing:0; color:var(--muted); text-decoration:none; border:0; background:none; padding:0; cursor:pointer}
 .hm-head a:hover, .hm-head button:hover{color:var(--ink)}
 .hm-st.is-dragging{opacity:.35}
-.hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px oklch(.78 .12 85 / .2)}
+.hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
 .hm-empty{font-size:11.5px; color:var(--muted); padding:2px 2px}
 .hm-err{font-size:11.5px; color:var(--danger)}
 
@@ -58,11 +58,11 @@
 .hm-chip{height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
   font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap}
 .hm-chip:hover{background:var(--surface-2)}
-.hm-chip.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft); cursor:default}
+.hm-chip.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); cursor:default}
 .hm-plist{display:flex; flex-direction:column; gap:2px; min-height:40px}
 .hm-prow{display:flex; align-items:center; gap:10px; padding:4px 8px 4px 4px; border-radius:var(--r-xs); color:var(--ink); text-decoration:none}
 .hm-prow:hover{background:var(--surface-2)}
-.hm-pthumb{flex:0 0 34px; height:34px; border-radius:var(--r-xs); background:oklch(.27 .02 265) center/cover no-repeat;
+.hm-pthumb{flex:0 0 34px; height:34px; border-radius:var(--r-xs); background:var(--surface-3) center/cover no-repeat;
   display:flex; align-items:center; justify-content:center; color:var(--gold)}
 .hm-pthumb svg{width:16px; height:16px; opacity:.75}
 .hm-ptx{flex:1 1 auto; min-width:0}
@@ -71,9 +71,9 @@
 /* The card on hover (the owner asked for it, (хп29)): the frame in the project's own shape, then the words. Not pressed - the
    row under the pointer is. */
 .hm-peek{position:fixed; z-index:9000; display:flex; flex-direction:column; gap:3px; width:max-content; max-width:280px; padding:8px 8px 9px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow, 0 12px 32px oklch(0 0 0 / .45)); pointer-events:none}
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow); pointer-events:none}
 .hm-peek[hidden]{display:none}
-.hm-peek-pic{width:150px; aspect-ratio:9/16; margin-bottom:5px; border-radius:var(--r-xs); background:oklch(.27 .02 265) center/cover no-repeat}
+.hm-peek-pic{width:150px; aspect-ratio:9/16; margin-bottom:5px; border-radius:var(--r-xs); background:var(--surface-3) center/cover no-repeat}
 .hm-peek-pic.is-wide{width:260px; aspect-ratio:16/9}
 .hm-peek-pic.is-none{display:flex; align-items:center; justify-content:center; color:var(--gold)}
 .hm-peek-pic.is-none svg{width:40px; height:40px; opacity:.6}
@@ -119,9 +119,9 @@
 .hm-tbl tr:first-child td{border-top:0}
 .hm-tbl td.k{width:140px; font-weight:600; white-space:nowrap}
 .hm-tbl td.r{text-align:right; white-space:nowrap; color:var(--muted); font-size:11px}
-.hm-tbl a{color:var(--primary)}
+.hm-tbl a{color:var(--ink)}
 .hm-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--border)}
-.hm-dot.ok{background:var(--success)} .hm-dot.down{background:var(--warn, oklch(.72 .15 75))} .hm-dot.no{background:var(--danger)}
+.hm-dot.ok{background:var(--success)} .hm-dot.down{background:var(--warn)} .hm-dot.no{background:var(--danger)}
 .hm-muted{color:var(--muted)}
 
 /* ── THE QUICK-START POPUPS (phase V63, P14; js/home/start.js) - windows of js/gen-window.js over Home: a form (blank) or two
@@ -172,6 +172,7 @@
 .hm-qs-vnote.is-bad{color:var(--danger)}
 .hm-qs-foot .hm-qs-said{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--muted)}
 .hm-qs-said.is-bad{color:var(--danger)}
-.hm-qs .hm-qs-go{padding:6px 18px; border-color:var(--gold); color:var(--gold); font-weight:700}
-.hm-qs .hm-qs-go:hover{background:color-mix(in oklch, var(--gold) 14%, transparent); color:var(--ink)}
+/* (phase V73) the quick start's "create" is its window's main button: a gold fill, not a gold outline */
+.hm-qs .hm-qs-go{padding:6px 18px; border-color:var(--main); background:var(--main); color:var(--on-main); font-weight:700}
+.hm-qs .hm-qs-go:hover{background:var(--main-hover); border-color:var(--main-hover); color:var(--on-main)}
 .hm-qs .hm-qs-go[disabled]{opacity:.45; cursor:default; border-color:var(--border); color:var(--muted); background:var(--surface-2)}

@@ -25,7 +25,7 @@
   font:700 10px/20px var(--font); letter-spacing:.03em;
 }
 .mv3-cap-cat:hover{ color:var(--ink) }
-.mv3-cap-cat.is-on{ border-color:var(--primary); color:var(--ink); background:var(--primary-soft) }
+.mv3-cap-cat.is-on{ border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg) }
 .mv3-cap-n{ font-weight:600; opacity:.6 }
 .mv3-cap-status{ margin-top:6px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-cap-status[hidden]{ display:none }
@@ -35,11 +35,11 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
 }
 .mv3-cap-sec:hover{ border-color:var(--muted) }
-.mv3-cap-sec.is-open{ border-color:var(--primary); border-bottom-left-radius:0; border-bottom-right-radius:0 }
+.mv3-cap-sec.is-open{ border-color:var(--sel-line); border-bottom-left-radius:0; border-bottom-right-radius:0 }
 .mv3-cap-sec-c{ flex:0 0 auto; width:10px; font-size:10px; color:var(--muted) }
 .mv3-cap-sec-n{ font:700 11px/1.3 var(--font) }
 .mv3-cap-sec-k{ margin-left:auto; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
-.mv3-cap-sec-body{ padding:4px 0 6px 10px; border-left:2px solid var(--primary-soft); margin:0 0 4px 0 }
+.mv3-cap-sec-body{ padding:4px 0 6px 10px; border-left:2px solid var(--sel-bg); margin:0 0 4px 0 }
 /* The animations' tab (phase V49): one line on what a press does, over the pairs' tiles. */
 .mv3-cap-note{ font:600 10.5px/1.4 var(--font); color:var(--muted); max-width:520px }
 
@@ -57,11 +57,11 @@
 .mv3-cap-tile[hidden]{ display:none }
 .mv3-cap-box{
   position:relative; aspect-ratio:1; overflow:hidden; border-radius:var(--r-xs);
-  border:1px solid var(--border); background:#16181d;
+  border:1px solid var(--border); background:var(--bg-deep);
   display:flex; align-items:center; justify-content:center;
 }
 .mv3-cap-tile:hover .mv3-cap-box{ border-color:var(--muted) }
-.mv3-cap-tile.is-on .mv3-cap-box{ border-color:var(--primary); box-shadow:0 0 0 2px var(--primary) }
+.mv3-cap-tile.is-on .mv3-cap-box{ border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring) }
 .mv3-cap-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none }
 /* Until the loop is made: the preset's name in its own font and colour, in the middle like the loop. */
 .mv3-cap-ph{
@@ -79,7 +79,7 @@
   overflow-wrap:anywhere;
 }
 .mv3-cap-tile.is-on .mv3-cap-nm{ color:var(--ink) }
-.mv3-cap-ed{ flex:0 0 auto; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--primary) }
+.mv3-cap-ed{ flex:0 0 auto; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink) }
 .mv3-cap-ed[hidden]{ display:none }
 .mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
 /* The fonts tab (phase V68 P4, merge-v3/font-tiles.js): each font's picture (public/fonts/captions/tiles/, drawn by
@@ -92,7 +92,7 @@
 .mv3-cap-sub{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
 .mv3-cap-preset{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:5px 7px;
-  border:1px solid var(--border); border-left:2px solid var(--primary); border-radius:var(--r-xs);
+  border:1px solid var(--border); border-left:2px solid var(--sel-line); border-radius:var(--r-xs);
   background:var(--surface);
 }
 .mv3-cap-based{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
@@ -103,7 +103,7 @@
 .mv3-cap-preset.is-plain .mv3-cap-save{ margin-left:0 }
 .mv3-cap-empty{ grid-column:1 / -1; max-width:380px; padding:2px; font:600 10.5px/1.45 var(--font); color:var(--muted) }
 .mv3-cap-empty[hidden]{ display:none }
-.mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft) }
+.mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft) }
 .mv3-c-marks{ display:inline-flex; gap:4px }
 
 /* ── A heard line's words, one by one (K10b, word-edit.js) ───────────────────
@@ -115,7 +115,7 @@
   display:flex; flex-wrap:wrap; gap:4px; padding:5px; outline:none;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface);
 }
-.mv3-wd-list:focus-visible, .mv3-wd-list:focus{ border-color:var(--primary) }
+.mv3-wd-list:focus-visible, .mv3-wd-list:focus{ border-color:var(--focus) }
 .mv3-wd-chip{
   position:relative; display:inline-flex; align-items:baseline; gap:4px; padding:3px 7px 3px 7px; cursor:pointer;
   border:1px solid var(--border); border-radius:11px; background:var(--bg); user-select:none;
@@ -123,15 +123,15 @@
 }
 .mv3-wd-chip:hover{ border-color:var(--muted) }
 .mv3-wd-t{ font:500 8.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.mv3-wd-chip.is-sel{ background:var(--primary-soft); border-color:var(--primary) }
-.mv3-wd-list:focus .mv3-wd-chip.is-sel{ background:var(--primary); color:var(--primary-ink) }
-.mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:oklch(.99 0 0 / .75) }
+.mv3-wd-chip.is-sel{ background:var(--sel-bg); border-color:var(--sel-line) }
+.mv3-wd-list:focus .mv3-wd-chip.is-sel{ background:var(--sel-line); color:var(--ink) }
+.mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:var(--ink) }
 .mv3-wd-chip.is-now .mv3-wd-w{ text-decoration:underline; text-underline-offset:3px }
 .mv3-wd-chip.is-after{ opacity:.45 }
-.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--mark, #ffe14d) }
-.mv3-wd-chip.is-k::before{ content:'A'; font:800 8.5px/1 var(--font); color:var(--mark, #ffe14d) }
+.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--gold) }
+.mv3-wd-chip.is-k::before{ content:'A'; font:800 8.5px/1 var(--font); color:var(--gold) }
 .mv3-wd-chip.is-h::after{
-  content:''; position:absolute; top:2px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--accent);
+  content:''; position:absolute; top:2px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--muted);
 }
 .mv3-wd-row{ display:flex; align-items:center; gap:4px; margin-top:6px }
 .mv3-wd-in{
@@ -139,7 +139,7 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
   font:500 11.5px var(--font);
 }
-.mv3-wd-in:focus{ border-color:var(--primary) }
+.mv3-wd-in:focus{ border-color:var(--focus) }
 .mv3-wd-in.is-insert{ border-style:dashed }
 .mv3-wd-btn{
   flex:0 0 auto; width:24px; height:24px; padding:0; display:grid; place-items:center; cursor:pointer;
@@ -148,7 +148,7 @@
 }
 .mv3-wd-btn:hover:not(:disabled){ border-color:var(--muted) }
 .mv3-wd-btn:disabled{ opacity:.4; cursor:default }
-.mv3-wd-btn.is-on{ color:var(--mark, #ffe14d); border-color:var(--mark, #ffe14d) }
+.mv3-wd-btn.is-on{ color:var(--gold); border-color:var(--gold) }
 .mv3-wd-time{ margin-top:4px; font:500 10px/1.3 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-msg{ margin-top:4px; font:500 10px/1.4 var(--font); color:var(--danger) }
 .mv3-wd-msg[hidden]{ display:none }
@@ -185,11 +185,11 @@
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
   font:500 11.5px var(--font);
 }
-.mv3-doc-q:focus, .mv3-doc-r:focus{ border-color:var(--primary) }
+.mv3-doc-q:focus, .mv3-doc-r:focus{ border-color:var(--focus) }
 .mv3-doc-n{ flex:0 0 auto; min-width:46px; text-align:right; font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.mv3-doc-n.is-none{ color:var(--danger) }
+.mv3-doc-n.is-none{ color:var(--muted) }
 .mv3-doc-opt{ min-width:28px; padding:0 7px; text-transform:none; letter-spacing:0 }
-.mv3-doc-opt.is-on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.mv3-doc-opt.is-on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
 .mv3-doc-fr .mv3-c-btn{ flex:0 0 auto; height:24px; white-space:nowrap }
 .mv3-doc-fr .mv3-c-btn:disabled{ opacity:.45; cursor:default }
 
@@ -202,8 +202,8 @@
 .mv3-doc-sec + .mv3-doc-sec{ margin-top:6px; border-top:1px solid var(--border-soft) }
 .mv3-doc-none{ padding:2px 10px 4px 62px; font:400 10.5px/1.4 var(--font); color:var(--muted) }
 .mv3-doc-row{ display:flex; align-items:flex-start; gap:6px; padding:0 8px 0 10px; border-left:2px solid transparent }
-.mv3-doc-row:hover{ background:oklch(1 0 0 / .025) }
-.mv3-doc-row.is-sel{ background:var(--primary-soft); border-left-color:var(--primary) }
+.mv3-doc-row:hover{ background:var(--hover) }
+.mv3-doc-row.is-sel{ background:var(--sel-bg); border-left-color:var(--sel-line) }
 /* Where one line of a talking head's script gives way to the next - its captions never join across. */
 .mv3-doc-row.is-seam{ box-shadow:inset 0 1px 0 var(--border) }
 .mv3-doc-t{
@@ -211,7 +211,7 @@
   font:500 9.5px/16px var(--font); color:var(--muted); opacity:.75; font-variant-numeric:tabular-nums;
 }
 .mv3-doc-row.is-fix .mv3-doc-t::after{
-  content:''; position:absolute; top:10px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--accent);
+  content:''; position:absolute; top:10px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--muted);
 }
 .mv3-doc-x{ position:relative; flex:1 1 auto; min-width:0 }
 .mv3-doc-in, .mv3-doc-bd{
@@ -219,15 +219,15 @@
   font:500 12px/18px var(--font); letter-spacing:normal; white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
 }
 .mv3-doc-bd{ position:absolute; inset:0; color:transparent; pointer-events:none; overflow:hidden }
-.mv3-doc-bd mark{ color:transparent; background:oklch(.80 .13 85 / .28); border-radius:2px }
-.mv3-doc-bd mark.is-cur{ background:oklch(.80 .13 85 / .62) }
+.mv3-doc-bd mark{ color:transparent; background:var(--gold-soft); border-radius:2px }
+.mv3-doc-bd mark.is-cur{ background:var(--gold-line) }
 .mv3-doc-in{
   position:relative; display:block; width:100%; min-height:26px; resize:none; overflow:hidden; outline:none;
   field-sizing:content; background:transparent; color:var(--ink);
 }
-.mv3-doc-row.is-typed .mv3-doc-in{ color:oklch(.90 .01 265) }
+.mv3-doc-row.is-typed .mv3-doc-in{ color:var(--ink) }
 .mv3-doc-in:hover{ border-color:var(--border-soft) }
-.mv3-doc-in:focus{ border-color:var(--primary); background:oklch(0 0 0 / .18) }
+.mv3-doc-in:focus{ border-color:var(--focus); background:oklch(0 0 0 / .18) }
 .mv3-doc-in[readonly]{ cursor:default }
 .mv3-doc-msg{ flex:0 0 auto; padding:6px 10px; border-top:1px solid var(--border-soft); font:500 10.5px/1.4 var(--font); color:var(--danger) }
 .mv3-doc-msg[hidden]{ display:none }

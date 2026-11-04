@@ -10,7 +10,7 @@
 .mv3-tl-transport{display:flex; align-items:center; gap:4px; flex:0 0 auto}
 .mv3-tl-transport .mv3-iconbtn{font-size:10px}
 .mv3-tl-transport .mv3-iconbtn.is-play{width:28px; color:var(--ink); background:var(--surface); font-size:10.5px}
-.mv3-tl-transport .mv3-iconbtn.is-play:hover{border-color:var(--primary); color:var(--primary)}
+.mv3-tl-transport .mv3-iconbtn.is-play:hover{border-color:var(--sel-line); color:var(--ink)}
 /* While a build step of a talking head holds the stage there is no cut to drive: dimmed and dead, as the preview's bar. */
 body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 
@@ -20,7 +20,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-tl-transport .mv3-iconbtn.is-silence{display:inline-flex; align-items:center; justify-content:center; padding:0 3px}
 .mv3-tl-transport .mv3-iconbtn.is-silence svg{display:block}
 .mv3-tl-transport .mv3-iconbtn.is-silence.is-dim{opacity:.45}
-.mv3-tl-transport .mv3-iconbtn.is-silence.is-open{border-color:var(--danger); color:var(--danger)}
+.mv3-tl-transport .mv3-iconbtn.is-silence.is-open{border-color:var(--sel-line); color:var(--ink)}
 .mv3-silence{
   position:fixed; z-index:60; width:300px; padding:8px 10px 9px; box-sizing:border-box;
   background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--r-sm);
@@ -33,7 +33,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-silence-row{display:flex; align-items:center; gap:7px}
 .mv3-silence-row + .mv3-silence-row{margin-top:4px}
 .mv3-silence-row > span:first-child{flex:0 0 96px; color:var(--muted); white-space:nowrap}
-.mv3-silence-k, .mv3-silence-d{flex:1 1 auto; min-width:0; accent-color:var(--danger)}
+.mv3-silence-k, .mv3-silence-d{flex:1 1 auto; min-width:0; accent-color:var(--muted)}
 .mv3-silence-d:disabled{opacity:.45}
 /* (phase V44, (ы12)) The threshold's "auto": lit while the sound's own threshold is in use, a press goes back to it. */
 .mv3-silence-auto{
@@ -41,14 +41,14 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
   background:none; color:var(--muted); font:600 9.5px/1.3 var(--font);
 }
 .mv3-silence-auto:hover:not(:disabled){color:var(--ink); border-color:var(--ink)}
-.mv3-silence-auto.is-on{color:var(--ink); border-color:var(--danger); cursor:default}
+.mv3-silence-auto.is-on{color:var(--ink); border-color:var(--success); cursor:default}
 .mv3-silence-v{flex:0 0 auto; min-width:40px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot{margin-top:8px; justify-content:space-between}
 .mv3-silence-row.is-foot > .mv3-silence-n{color:var(--ink); white-space:normal; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot > .mv3-silence-n.is-bad{color:var(--danger)}
 .mv3-silence-cut{
   flex:0 0 auto; padding:3px 12px; border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--danger); color:#fff; font:700 11px/1.3 var(--font);
+  background:var(--main); color:var(--on-main); font:700 11px/1.3 var(--font);
 }
 .mv3-silence-cut:hover:not(:disabled){filter:brightness(1.12)}
 .mv3-silence-cut:disabled{opacity:.4; cursor:default}
@@ -62,7 +62,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-mergeask-t.is-bad{color:var(--danger)}
 .mv3-mergeask-go{
   flex:0 0 auto; padding:3px 11px; border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--primary); color:#fff; font:700 11px/1.3 var(--font);
+  background:var(--main); color:var(--on-main); font:700 11px/1.3 var(--font);
 }
 .mv3-mergeask-go:hover:not(:disabled){filter:brightness(1.12)}
 .mv3-mergeask-x{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
@@ -79,14 +79,14 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3b-row.is-audio{height:40px}
 .mv3b-clip.is-audio::before{
   content:''; position:absolute; left:0; right:0; top:0; height:11px; pointer-events:none;
-  background:oklch(0 0 0 / .28); border-bottom:1px solid oklch(1 0 0 / .06);
+  background:oklch(0 0 0 / .28); border-bottom:1px solid var(--border-soft);
 }
 .mv3b-clip.is-audio .mv3b-clip-t{top:1px; bottom:auto; font-size:7.5px; line-height:10px}
 .mv3b-wave{
   position:absolute; left:0; top:12px; height:calc(100% - 13px); display:block; pointer-events:none;
-  color:oklch(.76 .11 160);
+  color:var(--muted);
 }
-.mv3b-clip.is-audio.is-sel .mv3b-wave{color:oklch(.84 .12 160)}
+.mv3b-clip.is-audio.is-sel .mv3b-wave{color:var(--ink)}
 
 /* ── The stretch to cut out (T5) ──────────────────────────────────────────────
    Drawn over a wave, laid across every lane - it goes from all of them. Red: Delete takes it away. Under the frozen names
@@ -100,7 +100,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
    in the ruler, which stays on top while the lanes scroll (merge-v3.css); `left` is set where the stretch begins. */
 .mv3b-range-t{
   position:absolute; top:2px; left:2px; z-index:1; padding:1px 4px; border:0; border-radius:var(--r-xs);
-  background:var(--danger); color:#fff; font:700 8.5px/1.25 var(--font); white-space:nowrap;
+  background:var(--danger-fill); color:var(--on-danger); font:700 8.5px/1.25 var(--font); white-space:nowrap;
   pointer-events:auto; cursor:pointer;
 }
 .mv3b-range-t:hover{filter:brightness(1.15)}
@@ -109,14 +109,14 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 /* ── The ghost of a lane a drop will make (phase V41, the owner's (о12)) ──────────
    A tile held over the ruler: a new pair at the top of the video block and the far end of the audio block; held below the
    bottom audio lane: a new audio lane. Dashed, in the accent - not a lane yet; the clip's place on it. Only while dragged. */
-.mv3b-row.is-ghost .mv3b-box{color:var(--primary); font:700 12px/1 var(--font)}
-.mv3b-row.is-ghost .mv3b-lbl{color:var(--primary); cursor:copy}
-.mv3b-row.is-ghost .mv3b-lbl::before{border-style:dashed; border-color:var(--primary)}
-.mv3b-row.is-ghost .mv3b-lane{background:oklch(from var(--primary) l c h / .07); box-shadow:inset 0 0 0 1px oklch(from var(--primary) l c h / .35)}
+.mv3b-row.is-ghost .mv3b-box{color:var(--ink); font:700 12px/1 var(--font)}
+.mv3b-row.is-ghost .mv3b-lbl{color:var(--ink); cursor:copy}
+.mv3b-row.is-ghost .mv3b-lbl::before{border-style:dashed; border-color:var(--sel-line)}
+.mv3b-row.is-ghost .mv3b-lane{background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line)}
 .mv3b-row.is-ghost-audio{height:40px}
 .mv3b-ghost-clip{
   position:absolute; top:2px; bottom:2px; pointer-events:none;
-  border:1px dashed var(--primary); border-radius:var(--r-xs); background:oklch(from var(--primary) l c h / .22);
+  border:1px dashed var(--sel-line); border-radius:var(--r-xs); background:var(--sel-bg);
 }
 /* Files from Explorer going into the library, and what came of it - one line over the timeline's top right (phase V41). A
    refusal or a failure is a popup in the corner instead (phase V49.1, js/notice.js). */

@@ -172,7 +172,8 @@ export function scrubber(opts) {
       g.fillStyle = 'rgba(255,255,255,0.06)';
       g.fillRect(xa, top, Math.max(0, xb - xa), hh);
     }
-    const lit = css.getPropertyValue('--primary').trim() || '#6d8cff';
+    // (phase V73) the marked piece in the selected thing's light (--sel-ring); blue went with the old look
+    const lit = css.getPropertyValue('--sel-ring').trim() || '#ededed';
     const xp0 = xOf(t);
     const bar = Math.max(1, Math.min(3, w / 300));
     for (let x = 0; x < w; x += bar + 1) {

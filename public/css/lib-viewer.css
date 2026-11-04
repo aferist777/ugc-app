@@ -44,7 +44,7 @@
 }
 .lib-btn:hover{ color:var(--ink); border-color:var(--border-soft); background:var(--surface-2); }
 .lib-btn.danger{ color:var(--danger); }
-.lib-btn.danger:hover{ color:var(--danger); border-color:var(--danger); background:oklch(.42 .16 22 / .14); }
+.lib-btn.danger:hover{ color:var(--danger); border-color:var(--danger); background:var(--danger-soft); }
 .lib-btn[disabled]{ opacity:.45; cursor:default; }
 
 .lib-view-body{ display:flex; align-items:stretch; flex:1 1 auto; min-height:0; }
@@ -104,26 +104,26 @@
 }
 .mv3-trim-lit{
   position:absolute; top:0; bottom:0;
-  background:oklch(.80 .13 205 / .22); border-left:2px solid var(--primary); border-right:2px solid var(--primary);
+  background:var(--sel-bg); border-left:2px solid var(--sel-ring); border-right:2px solid var(--sel-ring);
 }
 .mv3-trim-now{ position:absolute; top:-2px; bottom:-2px; width:1px; background:var(--ink); opacity:.55; pointer-events:none }
 .mv3-trim-h{
   position:absolute; top:-3px; bottom:-3px; width:12px; margin-left:-6px; padding:0;
-  border:0; border-radius:3px; background:var(--primary); cursor:ew-resize;
+  border:0; border-radius:3px; background:var(--sel-ring); cursor:ew-resize;
 }
 .mv3-trim-h::after{
   content:''; position:absolute; left:5px; top:8px; bottom:8px; width:2px;
-  background:oklch(.15 0 0 / .45); border-radius:1px;
+  background:var(--scrim); border-radius:1px;
 }
 .mv3-trim-say{ font:600 10.5px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-trimbox-save{
-  flex:0 0 auto; padding:7px 12px; border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary); color:var(--primary-ink, oklch(.15 0 0)); font:700 11px/1 var(--font); cursor:pointer;
+  flex:0 0 auto; padding:7px 12px; border:1px solid var(--main); border-radius:var(--r-xs);
+  background:var(--main); color:var(--on-main); font:700 11px/1 var(--font); cursor:pointer;
 }
 .mv3-trimbox-save[disabled]{ opacity:.55; cursor:default }
 /* A piece's "original": the tick in the right column. */
 .cut-orig{ display:flex; align-items:flex-start; gap:7px; cursor:pointer; font:600 11.5px/1.3 var(--font); color:var(--ink) }
-.cut-orig input{ margin:2px 0 0; accent-color:var(--primary) }
+.cut-orig input{ margin:2px 0 0; accent-color:var(--success) }
 .cut-orig-txt{ display:flex; flex-direction:column; gap:2px; min-width:0 }
 .cut-orig-txt small{ font-weight:500; color:var(--muted); overflow-wrap:anywhere }
 /* The window "save the piece to" is the place picker (js/place-tree.js, phase V39): the post viewer's move menu
@@ -140,7 +140,7 @@
   content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
   border-radius:2px; background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
 }
-.lib-view-sash:hover{ background:oklch(1 0 0 / .12); }
+.lib-view-sash:hover{ background:var(--border); }
 .lib-view-sash:hover::after{ opacity:1; }
 .lib-view-sash + .lib-view-info{ border-left:0; }
 body.lib-view-resizing, body.lib-view-resizing *{ cursor:col-resize !important; user-select:none; }

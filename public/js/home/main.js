@@ -300,7 +300,7 @@ BLOCKS.app = () => {
       else if (p.state !== 'ok') v = td('', el('span', null, 'not working · ' + (p.detail || 'no answer')));
       else {
         const b = balanceOf(p);
-        if (b) { const s = el('span', null, b.text); if (b.low) s.style.color = 'var(--warn, oklch(.72 .15 75))'; v = td('', s); }
+        if (b) { const s = el('span', null, b.text); if (b.low) s.style.color = 'var(--warn)'; v = td('', s); }
         else v = td('hm-muted', 'active' + (BILLING[id] ? ' · no balance in its API - ' : ''), ...(BILLING[id] ? [link('billing ↗', BILLING[id])] : []));
       }
       tr.append(k, v, td('r', ROLE[id] || ''));

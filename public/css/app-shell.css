@@ -11,17 +11,33 @@
      file css/caption-fonts.css declares under that name - Merge, which loads that file, was drawn bold and wide
      everywhere while Library and Admin were Segoe UI. */
   --font:"Segoe UI",system-ui,-apple-system,sans-serif;
-  --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
-  --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
-  --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
-  --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
-  --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
-  /* Gold marks the one thing that is singled out: the voice a character actually speaks
-     with, a rescue waiting in the nav, an empty casting frame asking to be filled. Used
-     sparingly and never twice on the same surface, so it always means "look here". The one
-     exception, asked for by the owner (phase S4): the frames round the timeline's lane names,
-     which say "these are buttons". */
-  --gold:oklch(.78 .12 85);
+  /* THE LOOK OF PHASE V73 (block 1 stage C1; the owner 2026-11-03/04, (к15)-(к21а), (б1-1)-(б1-14); the rules of unslop by
+     Damir Sokolovsky, CC BY 4.0): graphite of the old steps' lightness with no blue; three text roles; hairlines - the text at
+     8 % and, for a control's edge, 12 %. The blue (--primary) and the cyan (--accent) are gone: every place took its role. */
+  --bg-deep:#0a0a0b; --bg:#0f0f10; --surface:#19191b; --surface-2:#232325; --surface-3:#2c2c2f;
+  --ink:#ededed; --muted:#a1a1a6; --faint:#85858b;
+  --border-soft:rgb(237 237 237 / .08); --border:rgb(237 237 237 / .12);
+  /* ONE gold (к15): the main button of a window or a page (as --main, a FILL with dark text), the generators' places (a gold
+     name, a gold line), the "your move" field (gold dashes); Home keeps its gold frames (к4). A warning is gold too (б1-8). */
+  --gold:oklch(.78 .12 85); --gold-hover:oklch(.83 .12 85); --on-fill:#0f0f10;
+  --gold-soft:oklch(.78 .12 85 / .14); --gold-line:oklch(.78 .12 85 / .5);
+  --warn:var(--gold);
+  --main:var(--gold); --main-hover:var(--gold-hover); --on-main:var(--on-fill);
+  /* red only for delete and error, toned down; one green for done and on (б1-7) */
+  --danger:oklch(.66 .15 25); --danger-soft:oklch(.66 .15 25 / .14); --danger-fill:oklch(.55 .17 25); --on-danger:#fff;
+  --success:oklch(.74 .13 158); --success-soft:oklch(.74 .13 158 / .16);
+  /* the selected thing has no colour of its own (к16): a step and a light line; over a picture a white ring */
+  --hover:rgb(237 237 237 / .05); --sel-bg:rgb(237 237 237 / .09); --sel-line:rgb(237 237 237 / .24); --sel-ring:#ededed;
+  --focus:rgb(237 237 237 / .7);
+  /* over pictures and video */
+  --media-bg:#000; --scrim:rgb(0 0 0 / .6); --scrim-strong:rgb(0 0 0 / .8); --on-media:#fff; --on-media-line:rgb(255 255 255 / .3);
+  /* sizes, weights, spacing, radii and times of the new look - taken by the parts block by block (blocks 2-7) */
+  --fs-8:8px; --fs-9:9px; --fs-10:10px; --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-15:15px; --fs-20:20px;
+  --lh-8:12px; --lh-9:12px; --lh-10:14px; --lh-11:16px; --lh-12:16px; --lh-13:20px; --lh-15:20px; --lh-20:24px;
+  --fw-regular:400; --fw-medium:500; --fw-strong:600;
+  --sp-half:2px; --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
+  --gap-zone:6px; --r-2xs:4px;
+  --dur-1:140ms; --dur-2:180ms; --dur-3:320ms;
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
   /* THE PAGE UNDER A WINDOW (phase V60.1, the owner 2026-10-29, (пк1а), (пк2а): "нужно затемнение и блёр на фон. давай это
      правило делаем для всех попапов") - ONE rule for every window over the page (the generators', the dialogs, the
@@ -35,6 +51,33 @@
   --ov-dim-deepest:oklch(0 0 0 / .86);
   --ov-blur:blur(3px);
 }
+/* THE 3D STUDIO'S PAGE KEEPS ITS WHOLE LOOK (the owner's (б1-13), (б1-13а), 2026-11-04: "не трогаем 3d studio"): its files are
+   its session's, so the shared tokens are set back to what they were on the one page that loads css/studio3d.css - the old
+   blue-tinted greys, its blue and cyan - and the new role tokens, which the shared sheets it loads now take, to what those
+   places looked like there. Its top strip keeps its old rules (css/app-nav.css guards the new ones). */
+:root:has(link[href="css/studio3d.css"]){
+  --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
+  --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
+  --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
+  --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
+  --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
+  --font:"Segoe UI",system-ui,-apple-system,sans-serif;
+  --bg-deep:oklch(.13 .012 265); --surface-3:oklch(.29 .02 265); --faint:oklch(.71 .012 265);
+  --warn:oklch(.72 .15 75);
+  --main:var(--primary); --main-hover:var(--primary); --on-main:var(--primary-ink);
+  --danger-soft:oklch(.62 .19 25 / .14); --danger-fill:var(--danger); --success-soft:oklch(.76 .15 152 / .18);
+  --hover:var(--surface-2); --sel-bg:var(--primary-soft); --sel-line:var(--primary); --sel-ring:var(--primary);
+  --focus:var(--primary);
+}
+/* (phase V73, the owner's (б1-6)) A link is the main text with a thin underline: the line the text's own colour at 40 %, whole
+   under the pointer. The 3D Studio's page keeps its links as they were. */
+:root:not(:has(link[href="css/studio3d.css"])) a{ text-decoration-color:color-mix(in oklch, currentColor 40%, transparent) }
+:root:not(:has(link[href="css/studio3d.css"])) a:hover{ text-decoration-color:currentColor }
+/* (phase V73, (б1-7)) A check or a choice that is on is green, a native slider grey - for the controls that set no colour of
+   their own, which the browser drew in the system's blue. :where keeps this weaker than any sheet's own rule. */
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=checkbox],
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=radio]{ accent-color:var(--success) }
+:where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=range]{ accent-color:var(--muted) }
 
 *{box-sizing:border-box}
 /* The `hidden` attribute must actually hide. Any `display` set by a class beats the
@@ -77,7 +120,7 @@ body{
 *::-webkit-scrollbar-thumb:hover{background:var(--muted); background-clip:padding-box}
 /* Being dragged is the one moment the bar is the thing being used, so it takes the
    colour everything else on this page uses for "this is what you are doing". */
-*::-webkit-scrollbar-thumb:active{background:var(--primary); background-clip:padding-box}
+*::-webkit-scrollbar-thumb:active{background:var(--sel-ring); background-clip:padding-box}
 /* Where a vertical and a horizontal bar meet. Left as the page, not as a grey square. */
 *::-webkit-scrollbar-corner{background:transparent}
 
@@ -95,7 +138,7 @@ body{
   height:28px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 12px/1 var(--font);
 }
-.nm-in:focus{ outline:none; border-color:var(--primary) }
+.nm-in:focus{ outline:none; border-color:var(--focus) }
 .nm-err{ font:600 10px/1.3 var(--font); color:var(--danger) }
 .nm-err:empty{ display:none }
 .nm-r{ display:flex; justify-content:flex-end; gap:6px }
@@ -103,7 +146,7 @@ body{
   padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:transparent; color:var(--ink); font:600 11px/1 var(--font); cursor:pointer;
 }
-.nm-b.is-ok{ border-color:var(--primary); background:var(--primary); color:var(--primary-ink) }
+.nm-b.is-ok{ border-color:var(--main); background:var(--main); color:var(--on-main) }
 .nm-b[disabled]{ opacity:.55; cursor:default }
 /* The draft's question (js/draft-ask.js, phase V20) - the name box's look, in the middle of the window over a dimmed page. */
 .dr-back{ position:fixed; inset:0; z-index:9690; background:var(--ov-dim, oklch(0 0 0 / .45));
@@ -133,29 +176,29 @@ body{
 .mv3-plus-item[disabled]{opacity:.5; cursor:default}
 .mv3-plus-item[disabled]:hover{background:transparent}
 /* The one item on a menu that cannot be taken back. */
-.mv3-plus-item.is-danger span{color:var(--danger, oklch(.62 .19 25))}
-.mv3-plus-item.is-danger:hover{background:oklch(.62 .19 25 / .14)}
+.mv3-plus-item.is-danger span{color:var(--danger)}
+.mv3-plus-item.is-danger:hover{background:var(--danger-soft)}
 /* (phase V27) The plus's "from a link": a field and "add" where its menu was (js/merge-v3/library.js _linkBox). */
 .mv3-link-box{ width:280px; gap:5px; padding:6px; }
 .mv3-link-box small{ font:400 9.5px/1.3 var(--font); color:var(--muted); padding:0 2px; }
-.mv3-link-box small.is-bad{ color:var(--danger, oklch(.62 .19 25)); }
+.mv3-link-box small.is-bad{ color:var(--danger); }
 .mv3-link-row{ display:flex; gap:4px; }
 .mv3-link-row input{
   flex:1; min-width:0; font:500 11px/1.3 var(--font); color:var(--ink);
   background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
 }
-.mv3-link-row input:focus{ outline:none; border-color:var(--primary); }
+.mv3-link-row input:focus{ outline:none; border-color:var(--focus); }
 .mv3-link-go{
   font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:0 10px;
 }
-.mv3-link-go:hover{ border-color:var(--primary); }
+.mv3-link-go:hover{ border-color:var(--sel-line); }
 /* The cross in the panel's status line that stops the link coming in. */
 .mv3-lib-stop{
   margin-left:6px; padding:0 5px; font:600 10px/1.5 var(--font); color:var(--muted); cursor:pointer;
   background:transparent; border:1px solid var(--border-soft); border-radius:var(--r-xs);
 }
-.mv3-lib-stop:hover{ color:var(--ink); border-color:var(--primary); }
+.mv3-lib-stop:hover{ color:var(--ink); border-color:var(--sel-line); }
 
 /* ── THE BUBBLE (phase V61, the owner's (т4), (т4а); js/bubble.js) ─────────────────────────────────────────────────
    A hint as a speech bubble, as in a comic: over what it is about, its tail pointing down at it (`is-below` - under it,

@@ -28,6 +28,19 @@ function _lightCurrent(nav) {
   if (best) best.classList.add('cur');
 }
 
+// (phase V73 block 1, the owner 2026-11-03, (к13)) The 3D Studio is being built: its entry is blurred and not pressed on every
+// other page (css/app-nav.css .is-soon), with "In development" under the pointer. /3d itself still opens by its address - the
+// 3D Studio's session checks its page there - and its own strip lights the entry as before.
+function _soon3d(nav) {
+  const a = nav.querySelector('a[href="/3d"]');
+  if (!a || a.classList.contains('cur')) return;
+  a.classList.add('is-soon');
+  a.title = 'In development';
+  a.setAttribute('aria-disabled', 'true');
+  a.tabIndex = -1;
+  a.addEventListener('click', (e) => e.preventDefault());
+}
+
 // The Admin entry - API keys, AI settings - on a page whose strip does not carry one already.
 // There is one person and no sign-in, so there is nobody to hide it from.
 // (the owner 2026-10-22) HOME first in every strip, left of Merge - put in here, so no page's markup has to carry it.
@@ -89,6 +102,7 @@ export function initNav() {
   _homeLink(nav);
   _adminLink(nav);
   _lightCurrent(nav);
+  _soon3d(nav);
   // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
   // the list is the same wherever you are standing.
   mountAlerts(nav);
