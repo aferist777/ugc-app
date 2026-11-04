@@ -218,6 +218,12 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content;
   gap:8px; padding:10px 12px; align-content:start; justify-content:start;
 }
+/* A look's whole name (phase V73, (б1-22)): two lines, so the date of "Rachel - look 2026-10-09" shows - the looks of one
+   character differ by it. Balanced, so the date is not broken at its hyphens. Only a longer name is cut. */
+.lib-info-looks .lib-name{
+  white-space:normal; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; text-wrap:balance;
+}
 /* What is known about a place, as text: the label over it, the words under. */
 .lib-info-text{ padding:8px 12px 2px; font-size:11px; line-height:1.5; color:var(--ink); }
 .lib-info-text b{
