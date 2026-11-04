@@ -144,7 +144,7 @@
 .au-v2m-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:6px}
 .au-v2m-it{position:relative; display:flex; flex-direction:column; gap:2px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
 .au-v2m-it:hover{border-color:var(--sel-line)}
-.au-v2m-it.is-on{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, transparent)}
+.au-v2m-it.is-on{border-color:var(--sel-ring); background:var(--sel-bg)}   /* (б1-21) the white ring of the selected clip */
 .au-v2m-it.is-long{opacity:.45}
 .au-v2m-it img, .au-v2m-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
 .au-v2m-it .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}

@@ -457,8 +457,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   transition:.12s var(--ease);
 }
 .lib-srow:hover{ border-color:var(--sel-line); }
-/* The selected scenario (phase D5): gold, three pixels in all, as a selected tile - the border and a
-   ring inside it, which on a row with no picture nothing covers. */
+/* The selected scenario (phase D5): the border and a ring inside it, which on a row with no picture nothing covers -
+   since phase V73 the selected look, not gold. */
 .lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* (б1-17) a step and a light line */
 .lib-srow:focus-visible{ outline:none; border-color:var(--focus); box-shadow:0 0 0 2px var(--sel-bg); }
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
@@ -576,8 +576,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   cursor:pointer; transition:border-color .12s var(--ease), box-shadow .12s var(--ease);
 }
 .mk-srow:hover{ border-color:var(--sel-line); }
-/* The chosen source: gold, two pixels in all. */
-.mk-srow.cur{ border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
+/* The chosen source: the selected look - a step and a light line (phase V73, (б1-21)). */
+.mk-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }
 /* Being added, or waiting for a decision: not pressed - only its cross and its buttons are. */
 .mk-srow.adding, .mk-srow.offer{ cursor:default; }
 .mk-srow.adding:hover, .mk-srow.offer:hover{ border-color:var(--border-soft); }
@@ -938,8 +938,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   transition:.12s var(--ease);
 }
 .nr-row:hover{ border-color:var(--sel-line); }
-/* The selected narrator: gold, three pixels in all, as a selected tile or scenario. */
-.nr-row.cur{ border-color:var(--gold); box-shadow:inset 0 0 0 2px var(--gold); }
+/* The selected narrator: the selected look, as a selected scenario - a step and a light line (phase V73, (б1-21)). */
+.nr-row.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }
 .nr-row:focus-visible{ outline:none; border-color:var(--focus); }
 .nr-row-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .nr-row-t{ font-size:12px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
