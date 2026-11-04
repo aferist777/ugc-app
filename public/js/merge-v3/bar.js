@@ -16,6 +16,7 @@ import * as History from './history.js';
 import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timeline-b.js';
 import { grabFrame } from './preview-b.js';
 import { showError } from '../notice.js';
+import { icon } from '../icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -186,7 +187,7 @@ const _clock = (t) => {
 async function _shoot() {
   const btn = $('mv3-pv-shot');
   if (!btn || btn.disabled) return;
-  const was = btn.textContent;
+  const was = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = '…';
   try {
@@ -214,7 +215,7 @@ async function _shoot() {
     btn.title = 'Could not save the frame: ' + e.message;
   } finally {
     setTimeout(() => {
-      btn.textContent = was;
+      btn.innerHTML = was;
       btn.title = 'Save this frame to the library (Images / Screenshots)';
       btn.disabled = false;
     }, 1400);
@@ -227,8 +228,9 @@ export function initBar() {
   _zoom();
   _split();
   _quality();
+  // (phase V73 block 2) the shared part's icon button, Lucide's icons in place of the glyph and the emoji
   const big = $('mv3-pv-big');
-  if (big) big.addEventListener('click', _openBig);
+  if (big) { big.innerHTML = icon('maximize'); big.addEventListener('click', _openBig); }
   const shot = $('mv3-pv-shot');
-  if (shot) shot.addEventListener('click', _shoot);
+  if (shot) { shot.innerHTML = icon('camera'); shot.addEventListener('click', _shoot); }
 }

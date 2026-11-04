@@ -80,7 +80,7 @@ export function openOwnText(put, done, o = {}) {
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
-  const go = _el('button', 'mv3-c-btn mv3-x-use', 'use');
+  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'use');
   go.type = 'button';
   go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
   foot.append(note, go);

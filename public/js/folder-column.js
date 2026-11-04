@@ -291,7 +291,7 @@ export function createFolderColumn(host, o) {
   host.textContent = '';
   const root = el('div', 'fc');
   const head = el('div', 'fc-head');
-  const up = el('button', 'fc-up', '‹');
+  const up = el('button', 'fc-up u-btn is-s is-icon', '‹');
   up.type = 'button';
   const pick = el('button', 'fc-pick');
   pick.type = 'button';

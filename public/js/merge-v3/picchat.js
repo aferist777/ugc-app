@@ -129,7 +129,7 @@ function PICTURES(ctx) {
       });
       cell.appendChild(img);
       const acts = el('div', 'mv3-ig-acts');
-      const use = el('button', 'mv3-c-btn', 'to reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
       use.type = 'button';
       use.title = 'Put it in the row above the message box and carry on from it';
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));

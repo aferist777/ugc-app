@@ -111,7 +111,7 @@ export function refCell(a, k, n, peek) {
 export const money = (v) => '$' + (+(+v).toFixed(4));
 /** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
 export function almanacSoon() {
-  const b = el('button', 'mv3-vc-almanac is-soon', 'almanac');
+  const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'almanac');
   b.type = 'button';
   b.disabled = true;
   b.title = 'In development: how to ask for pictures, and references to place the person by';
@@ -1679,6 +1679,7 @@ export function createChat(make) {
     const pen = _ui && _ui.pen;
     if (!pen) return;
     pen.classList.toggle('on', _write);
+    pen.classList.toggle('is-on', _write);   // (phase V73 block 2) pressed: the selected look (б2-13)
     pen.title = _write
       ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
       : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
@@ -1899,7 +1900,7 @@ export function createChat(make) {
   function _soundTile(it) {
     const t = el('div', 'mv3-ig-card is-sound' + (_atts.some(a => a.path === it.path) ? ' on' : ''));
     t.title = it.name || '';
-    const play = el('button', 'mv3-ig-splay', _hear && _hear.path === it.path ? '❚❚' : '▶');
+    const play = el('button', 'mv3-ig-splay u-btn is-s is-icon', _hear && _hear.path === it.path ? '❚❚' : '▶');
     play.type = 'button';
     play.title = 'Listen';
     play.draggable = false;
@@ -2075,12 +2076,12 @@ export function createChat(make) {
     ta.placeholder = T.placeholder;
     // THE WRITER: on, the message is rewritten into the shape the chosen model wants; off, the words go
     // exactly as typed. (phase V15) A description that keeps its own switch for it in its column has no pen here.
-    const pen = S.penInBar === false ? null : el('button', 'pen', '✎');
+    const pen = S.penInBar === false ? null : el('button', 'pen u-btn is-s is-icon', '✎');
     if (pen) pen.type = 'button';
-    const nBtn = el('button', 'n', '×1');
+    const nBtn = el('button', 'n u-btn is-s', '×1');
     nBtn.type = 'button';
     nBtn.title = 'How many to make at once. Each is its own attempt.';
-    const go = el('button', 'b', '>');
+    const go = el('button', 'b u-btn is-s is-main', '>');
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(...[ta, pen, nBtn, go].filter(Boolean));

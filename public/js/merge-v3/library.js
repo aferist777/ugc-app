@@ -735,7 +735,7 @@ function _linkBox(anchor) {
   inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
   const go = document.createElement('button');
   go.type = 'button';
-  go.className = 'mv3-link-go';
+  go.className = 'mv3-link-go u-btn is-s';
   go.textContent = 'add';
   const row = document.createElement('div');
   row.className = 'mv3-link-row';

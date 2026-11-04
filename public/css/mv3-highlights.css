@@ -26,9 +26,6 @@
 .mv3-hl-state{flex:0 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
 .mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
 .mv3-hl-words.is-err{color:var(--danger); white-space:normal}
-.mv3-hl-add{color:var(--ink); border-color:var(--sel-line)}
-.mv3-hl-add.is-big{padding:8px 16px; font-size:12px}
-.mv3-c-btn.is-armed:not(.danger){background:var(--warn); border-color:var(--warn); color:var(--on-fill)}
 .mv3-hl-note{margin:0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
 .mv3-hl-note.is-err{color:var(--danger)}
 
@@ -137,9 +134,6 @@
 .mv3-hl-rline b{overflow-wrap:anywhere}
 .mv3-hl-meta.is-err{color:var(--danger)}
 .mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
-/* The render button in a highlights project while its renders go: "✕ stop", armed - "really?" - filled red (export-b.js) */
-#mv3-export.is-stop{background:transparent; border-color:var(--danger); color:var(--danger)}
-#mv3-export.is-stop.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
 
 /* The card of the moment pressed */
 .mv3-hl-card-h{font:700 12.5px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}
@@ -211,9 +205,7 @@
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
 .mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}
 .mv3-hlp-kind.is-on .mv3-hlp-kind-nm{color:var(--ink)}
-.mv3-hlp-reset{margin-left:auto; padding:2px 0; border:0; background:none; color:var(--muted); font:600 10px/1.3 var(--font); cursor:pointer}
-.mv3-hlp-reset:hover{color:var(--ink)}
-.mv3-hlp-reset[disabled]{color:var(--muted); opacity:.5; cursor:default}
+.mv3-hlp-reset{margin-left:auto}
 /* (хп35) The kind's words - one height, whatever they say */
 .mv3-hlp-about{height:116px; overflow-y:auto; margin-top:8px; padding:8px 11px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); font:400 10.5px/1.5 var(--font); color:var(--ink)}
@@ -266,9 +258,7 @@
 .mv3-hlp-hear.is-err{color:var(--danger)}
 .mv3-hlp-said{font:600 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlp-said.is-err{color:var(--danger)}
-.mv3-c-btn.mv3-hlp-go{flex:0 0 auto; padding:6px 14px; border-color:var(--main); background:var(--main); color:var(--on-main); font-size:11px}
-.mv3-c-btn.mv3-hlp-go:hover{background:var(--main-hover); color:var(--on-main); filter:brightness(1.1)}
-.mv3-c-btn.mv3-hlp-go[disabled]{opacity:.45; cursor:default; filter:none}
+.mv3-c-btn.mv3-hlp-go{flex:0 0 auto}
 
 /* ── The card's line of the captions' style (phase V33.3) ── */
 .mv3-hl-cap{font:500 10px/1.4 var(--font); color:var(--muted); margin:0 0 6px}
@@ -308,7 +298,6 @@
 /* (phase V66) The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
 .mv3-hlg{display:flex; flex-direction:column; gap:6px}
 .mv3-hlg.is-busy{opacity:.6; pointer-events:none}
-.mv3-hlg .mv3-c-btn.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
 .mv3-hlg-each{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-hlg-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
 .mv3-hlg-item{display:flex; flex-direction:column; gap:1px; padding:4px 6px; border-radius:6px; cursor:pointer}
@@ -323,9 +312,4 @@
 #mv3-timeline.is-hlg{position:relative}
 .mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start;
   gap:5px; padding:10px 12px; background:var(--bg); border-top:1px solid var(--border-soft)}
-.mv3-hlg-pbtn{height:24px; padding:0 12px; flex:0 0 auto; border:1px solid var(--border); border-radius:7px; background:var(--surface-2);
-  color:var(--ink); font:700 11px/1 var(--font); cursor:pointer; white-space:nowrap}
-.mv3-hlg-pbtn:hover{border-color:var(--sel-line)}   /* (б1-26) a light line, as the picked one */
-.mv3-hlg-pbtn.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line)}   /* (б1-21) the selected look */
-.mv3-hlg-pbtn[disabled]{opacity:.5; cursor:default}
-.mv3-iconbtn.mv3-hlg-back{color:var(--gold)}
+.mv3-hlg-pbtn{flex:0 0 auto}   /* the shared part; .is-on its pressed look (б1-21, б2-13) */

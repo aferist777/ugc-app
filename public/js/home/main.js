@@ -235,7 +235,7 @@ BLOCKS.steps = () => {
       tx.appendChild(el('div', 'hm-step-d', s.sub));
       li.appendChild(tx);
       if (!done[s.id]) {
-        const a = el('a', 'hm-btn is-gold', s.go);
+        const a = el('a', 'hm-btn is-gold u-btn is-s is-gen', s.go);
         a.href = s.href;
         // (phase V60.1) The first character is made here, in New Character's window.
         if (s.id === 'char') a.addEventListener('click', _newCharacter);

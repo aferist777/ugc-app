@@ -378,11 +378,7 @@ body{
   background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
 }
 .mv3-link-row input:focus{ outline:none; border-color:var(--focus); }
-.mv3-link-go{
-  font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
-  border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:0 10px;
-}
-.mv3-link-go:hover{ border-color:var(--sel-line); }
+.mv3-link-go{ flex:0 0 auto; }
 /* The cross in the panel's status line that stops the link coming in. */
 .mv3-lib-stop{
   margin-left:6px; padding:0 5px; font:600 10px/1.5 var(--font); color:var(--muted); cursor:pointer;

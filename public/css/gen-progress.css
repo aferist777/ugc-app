@@ -42,14 +42,7 @@
   max-width:210px; font:500 9.5px/1.35 var(--font); color:var(--warn);
   text-align:center; text-wrap:balance;
 }
-.sv3-gen-cancel{
-  height:22px; padding:0 10px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:700 10px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.sv3-gen-cancel:hover{ color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }
-.sv3-gen-cancel:disabled{ opacity:.6; cursor:default; }
+.sv3-gen-cancel:hover:not(:disabled){ color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }   /* the shared part, red under the pointer as before */
 
 /* ── the countdown as one row, for a strip too short for the overlay card ──── */
 .sv3-inline-prog{

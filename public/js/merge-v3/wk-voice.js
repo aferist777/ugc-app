@@ -107,7 +107,7 @@ function _mark() {
 }
 
 function _playBtn(src, what) {
-  const b = el('button', 'mv3-wk-vplay', '▶');
+  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -411,7 +411,7 @@ export function paintPicker(host, api) {
     if (String(v.voiceId) === now) {
       row.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
     } else {
-      const use = el('button', 'mv3-wk-vuse', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
       use.type = 'button';
       use.title = 'Read every line in this one';
       use.disabled = !!_busy;
@@ -464,7 +464,7 @@ export function paintPicker(host, api) {
   pick('language', 'any language', _filters.languages || []);
   host.appendChild(f);
 
-  const go = el('button', 'mv3-wk-vsearchbtn', _busy === 'search' ? 'searching…' : 'search');
+  const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? 'searching…' : 'search');
   go.type = 'button';
   go.disabled = !!_busy;
   go.addEventListener('click', () => _search(api, 1));
@@ -497,7 +497,7 @@ export function paintPicker(host, api) {
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voice_id));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
     row.appendChild(txt);
-    const take = el('button', 'mv3-wk-vuse', _busy === 'take:' + v.voice_id ? '…' : 'take');
+    const take = el('button', 'mv3-wk-vuse u-btn is-s', _busy === 'take:' + v.voice_id ? '…' : 'take');
     take.type = 'button';
     take.title = !rec ? 'Add it to the account and make it the project’s voice'
       : have.has(String(v.voice_id))
@@ -519,7 +519,7 @@ function _pager(host, api) {
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const pager = el('div', 'mv3-wk-vpager');
   const step = (label, to, can) => {
-    const b = el('button', 'mv3-wk-vpage', label);
+    const b = el('button', 'mv3-wk-vpage u-btn is-s is-icon', label);
     b.type = 'button';
     b.disabled = !can || !!_busy;
     b.addEventListener('click', () => _search(api, to));

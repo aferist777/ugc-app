@@ -554,7 +554,7 @@ function _panelPaint(tl) {
   _panel.dataset.sig = sig;
   _panel.textContent = '';
   for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', music ? 'music' : '+ music'], ['pattern', 'pattern']]) {
-    const b = _el('button', 'mv3-hlg-pbtn' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
+    const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
     b.type = 'button';
     b.disabled = !!_busy;
     b.addEventListener('click', () => pickLane(k));
@@ -566,7 +566,7 @@ function _backPaint() {
   const want = isGroup() && _ownNow() && !!head;
   if (!want) { if (_back) { _back.remove(); _back = null; } return; }
   if (!_back || !head.contains(_back)) {
-    _back = _el('button', 'mv3-iconbtn is-text mv3-hlg-back');
+    _back = _el('button', 'u-btn is-s is-quiet mv3-hlg-back');
     _back.type = 'button';
     _back.title = 'Back to the buttons of the ticked fragments';
     _back.addEventListener('click', () => { _own = ''; pickLane('subs'); _sync(); });

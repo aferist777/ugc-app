@@ -249,7 +249,7 @@ function buildRow(r) {
     steps.className = 'bk-steps';
     again = document.createElement('button');
     again.type = 'button';
-    again.className = 'bk-mini';
+    again.className = 'bk-mini u-btn is-s';
     again.textContent = 'check';
     again.title = 'Check the key again: the key, the account, the bucket, an upload';
     sr.append(steps, again);
@@ -475,7 +475,7 @@ function _tgLine(cls, ...parts) {
       e.appendChild(a);
     } else if (p && typeof p === 'object' && p.button) {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'bk-mini'; b.textContent = p.button; b.title = p.title || '';
+      b.type = 'button'; b.className = 'bk-mini u-btn is-s'; b.textContent = p.button; b.title = p.title || '';
       b.addEventListener('click', p.click);
       e.appendChild(document.createTextNode(' '));
       e.appendChild(b);

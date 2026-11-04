@@ -1511,7 +1511,7 @@ function _shelfFailed() {
     box.appendChild(document.createTextNode(said + ' '));
     const again = document.createElement('button');
     again.type = 'button';
-    again.className = 'lib-btn';
+    again.className = 'u-btn is-s';
     again.textContent = 'Try again';
     again.addEventListener('click', () => { _load(); });
     box.appendChild(again);

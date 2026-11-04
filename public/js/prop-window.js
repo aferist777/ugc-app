@@ -164,7 +164,7 @@ function _left() {
   wrap.append(box, _input);
   left.appendChild(wrap);
   if (!done) {
-    const lib = el('button', 'pw-lib', 'from IMAGES…');
+    const lib = el('button', 'pw-lib u-btn is-s', 'from IMAGES…');
     lib.type = 'button';
     lib.title = 'A picture of the Library - it is copied into Props, and stays where it is';
     lib.addEventListener('click', () => _fromLibrary(lib));
@@ -197,7 +197,7 @@ function _form() {
   const row = el('div', 'gw-row');
   const hint = el('span', 'gw-hint' + (_s.photo ? '' : ' is-why'),
     _s.photo ? 'An agent describes it for the frames chat - fractions of a cent, nothing is drawn' : 'a photo of the product first');
-  const go = el('button', 'gw-create', _s.busy ? 'adding…' : 'add');
+  const go = el('button', 'gw-create u-btn is-main', _s.busy ? 'adding…' : 'add');
   go.type = 'button';
   go.disabled = !_s.photo || _s.busy;
   go.title = _s.photo ? 'Into IMAGES → Props' : 'a photo of the product first';
@@ -255,7 +255,7 @@ function _result() {
   else if (i.description) body.appendChild(el('div', 'pw-desc', i.description));
   else {
     body.appendChild(el('div', 'pw-desc is-fail', 'Not described: ' + (i.fail || 'the agent did not answer') + '.'));
-    const again = el('button', 'pw-again', 'read again');
+    const again = el('button', 'pw-again u-btn is-s', 'read again');
     again.type = 'button';
     again.title = 'The agent looks at the picture and reads your words again';
     again.addEventListener('click', async () => {
@@ -271,7 +271,7 @@ function _result() {
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
   row.appendChild(el('span', 'gw-hint'));
-  const more = el('button', 'gw-create', 'add another');
+  const more = el('button', 'gw-create u-btn is-main', 'add another');
   more.type = 'button';
   more.title = 'A new product - the window empties';
   more.addEventListener('click', () => { clearTimeout(_poll); _s = _blank(); _render(); });

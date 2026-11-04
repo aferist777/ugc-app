@@ -85,11 +85,12 @@
 .sv3-al-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border); }
 .sv3-al-head .sp{ flex:1; }
 .sv3-al-h{ font:700 11px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-.sv3-al-clear{
+/* (phase V73 block 2) "clear" and a row's "open" / "retry" are the shared part; the 3D Studio's page keeps its look. */
+:root:has(link[href="css/studio3d.css"]) .sv3-al-clear{
   padding:3px 8px; cursor:pointer; background:none; border:1px solid var(--border);
   border-radius:var(--pill); color:var(--muted); font:600 10px/1.3 var(--font);
 }
-.sv3-al-clear:hover{ color:var(--ink); border-color:var(--ink); }
+:root:has(link[href="css/studio3d.css"]) .sv3-al-clear:hover{ color:var(--ink); border-color:var(--ink); }
 .sv3-al-list{ display:flex; flex-direction:column; }
 .sv3-al-empty{ padding:14px 12px; color:var(--muted); font:400 11px/1.5 var(--font); }
 
@@ -121,13 +122,13 @@
 .sv3-al-where.is-stage{ color:var(--gold, #d8b45a); }
 .sv3-al-state{ flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); }
 .sv3-al-acts{ flex:0 0 auto; display:flex; gap:4px; }
-.sv3-al-act{
+:root:has(link[href="css/studio3d.css"]) .sv3-al-act{
   padding:3px 8px; cursor:pointer; background:none; border:1px solid var(--border);
   border-radius:var(--pill); color:var(--muted); font:600 10px/1.3 var(--font); white-space:nowrap;
 }
-.sv3-al-act:hover{ color:var(--ink); border-color:var(--ink); }
-/* Asked before it spends: the second press on the same button is the answer. */
-.sv3-al-act.is-armed{ color:var(--gold); border-color:var(--gold); }
+:root:has(link[href="css/studio3d.css"]) .sv3-al-act:hover{ color:var(--ink); border-color:var(--ink); }
+/* Asked before it spends: the second press on the same button is the answer (a paid press armed: the part's light step). */
+:root:has(link[href="css/studio3d.css"]) .sv3-al-act.is-armed{ color:var(--gold); border-color:var(--gold); }
 
 /* THE CORNER OF POPUPS (js/notice.js; phase V49.1, the owner's (пр28)-(пр32)): a finished generation says so once, wherever
    you are, and goes by itself; an error stays until its ✕ or its button. Newest on top, five at most, below the page's top

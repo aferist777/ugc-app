@@ -170,7 +170,7 @@ function _paintActions(it) {
   for (const a of (_actionsFor(it) || [])) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'lib-btn' + (a.danger ? ' danger' : '');
+    b.className = 'u-btn is-s' + (a.danger ? ' danger is-danger' : '');
     b.textContent = a.label;
     if (a.title) b.title = a.title;
     b.addEventListener('click', async () => {
@@ -297,9 +297,9 @@ export function openViewer(items, index, opts) {
         <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>
         <div class="lib-view-stage"></div>
-        <button class="lib-view-arrow" data-x="next" type="button" title="Next (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="Next (right arrow)">&#8250;</button>
         <aside class="lib-view-info"></aside>
       </div>
     </div>`;

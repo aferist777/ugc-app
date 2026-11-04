@@ -61,7 +61,7 @@ export function scrubber(opts) {
   if (o.handles && o.cut && typeof o.cut.onCut === 'function') {
     cutBtn = document.createElement('button');
     cutBtn.type = 'button';
-    cutBtn.className = 'snd-scrub-cut';
+    cutBtn.className = 'snd-scrub-cut u-btn is-main';
     cutBtn.textContent = 'Cut';
     cutBtn.title = o.cut.title || 'The piece between the gold flags becomes a new sound - this one stays as it is';
     cutBtn.style.height = RULER + 'px';

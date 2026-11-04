@@ -45,7 +45,7 @@ function _row(it) {
   audio.src = it.media; audio.preload = 'none';
 
   const play = document.createElement('button');
-  play.type = 'button'; play.className = 'lib-vplay'; play.textContent = '▶';
+  play.type = 'button'; play.className = 'lib-vplay u-btn is-s is-icon'; play.textContent = '▶';
   play.title = 'Play our demo';
   play.addEventListener('click', (e) => {
     e.stopPropagation();

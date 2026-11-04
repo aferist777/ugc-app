@@ -238,6 +238,7 @@ function _paintPresetCancel() {
   if (!b) return;
   const undo = _isPresetFace();
   b.classList.toggle('is-drop', undo);
+  b.classList.toggle('is-danger', undo);
   b.textContent = undo ? 'Cancel selection' : 'Cancel';
   b.title = undo ? 'Drop this preset and go back to the parameters' : 'Leave the portrait as it is and go back to the parameters';
 }
@@ -621,7 +622,7 @@ function _build() {
         <div class="chm-spine">Create model</div>
         <div class="chm-head">
           <span class="chm-t">Create model</span><span class="sp"></span>
-          <button class="lib-btn chm-over" type="button" id="chm-over" title="Empty the bench: the portrait and its takes go (their files stay in media/work)">start over</button>
+          <button class="u-btn is-s chm-over" type="button" id="chm-over" title="Empty the bench: the portrait and its takes go (their files stay in media/work)">start over</button>
         </div>
         <div class="chm-body">
           <div id="chm-head-host"></div>
@@ -642,7 +643,7 @@ function _build() {
           <div class="cv2-mid-bar">
             <div class="cv2-vars" id="chm-vars" hidden></div>
             <div class="cv2-mid-foot">
-              <button class="cv2-savemodel" type="button" id="chm-savemodel" disabled title="Name this character and draw its 4K reference sheet">Save character</button>
+              <button class="cv2-savemodel u-btn is-l is-main" type="button" id="chm-savemodel" disabled title="Name this character and draw its 4K reference sheet">Save character</button>
             </div>
           </div>
           <div class="cv2-err" id="chm-err" hidden></div>

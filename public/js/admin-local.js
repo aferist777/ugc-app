@@ -40,7 +40,7 @@
     w.appendChild(el('div', 'dio-now', Math.floor(100 * dl.got / Math.max(1, dl.total)) + '% of ' + mb(dl.total)));
     return w;
   }
-  function btn(label, fn, go) { var b = el('button', 'lib-btn' + (go ? ' adm-go' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
+  function btn(label, fn, go) { var b = el('button', 'u-btn is-s' + (go ? ' adm-go is-main' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
   // Two presses for a delete: the first arms it for three seconds.
   function del(what) {
     var b = btn(armed === what ? 'Really delete?' : 'Delete', function () {

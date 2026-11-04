@@ -58,7 +58,7 @@ function _play(src, btn) {
   a.play().catch(done);
 }
 function _playBtn(src, title) {
-  const b = _el('button', 'lib-vplay', '▶');
+  const b = _el('button', 'lib-vplay u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.title = src ? title : 'There is nothing to play for this voice';
@@ -140,7 +140,7 @@ export function paint(body, it, voices, hooks) {
       row.appendChild(txt);
       if (v.main) row.appendChild(_el('span', 'lib-info-main', 'main'));
       else {
-        const star = _el('button', 'lib-cv-star', '★');
+        const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet', '★');
         star.type = 'button';
         star.title = 'Make this the voice every read uses';
         star.addEventListener('click', () => run('Setting the main voice…', async () => {
@@ -200,7 +200,7 @@ export function paint(body, it, voices, hooks) {
     fill(fLang, d.languages, 'any language', 'en');
     fill(fAccent, d.accents, 'any accent');
   }).catch(() => { /* the lists stay "any" */ });
-  const go = _el('button', 'lib-btn lib-cv-go', 'Search');
+  const go = _el('button', 'u-btn is-s lib-cv-go', 'Search');
   go.type = 'button';
   go.title = 'Search the ElevenLabs voice library';
   bar.appendChild(fGender); bar.appendChild(fLang); bar.appendChild(fAccent); bar.appendChild(go);
@@ -234,7 +234,7 @@ export function paint(body, it, voices, hooks) {
       txt.appendChild(_el('div', 'lib-vname', v.name || v.voice_id));
       txt.appendChild(_el('div', 'lib-vsub', [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).map(_pretty).join(' · ')));
       row.appendChild(txt);
-      const take = _el('button', 'lib-btn lib-cv-take', 'Save');
+      const take = _el('button', 'u-btn is-s lib-cv-take', 'Save');
       take.type = 'button';
       take.title = 'Add it to the account and make it this character’s main voice';
       take.addEventListener('click', () => run('Saving the voice…', async () => {
@@ -260,7 +260,7 @@ export function paint(body, it, voices, hooks) {
     if (pages > 1) {
       const pager = _el('div', 'lib-cv-pager');
       const step = (label, to, on) => {
-        const b = _el('button', 'lib-btn', label);
+        const b = _el('button', 'u-btn is-s', label);
         b.type = 'button';
         b.disabled = !on;
         b.addEventListener('click', () => { page = to; search(); });

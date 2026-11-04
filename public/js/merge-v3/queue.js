@@ -144,7 +144,7 @@ function _row(it, refresh) {
   if (it.status === 'done' && it.url) {
     const a = document.createElement('button');
     a.type = 'button';
-    a.className = 'mv3-c-btn mv3-qrow-a';
+    a.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
     a.textContent = 'open';
     a.title = 'Play it, name it, save and download it, send it';
     a.addEventListener('click', (e) => {
@@ -158,7 +158,7 @@ function _row(it, refresh) {
   // name: rebuilding it from the project would render something else.
   if (it.status === 'failed') {
     const r = document.createElement('button');
-    r.type = 'button'; r.className = 'mv3-qx'; r.textContent = '↻';
+    r.type = 'button'; r.className = 'mv3-qx u-btn is-s is-icon is-quiet'; r.textContent = '↻';
     r.title = 'Try this one again';
     r.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -169,7 +169,7 @@ function _row(it, refresh) {
   }
   if (it.status !== 'running') {
     const x = document.createElement('button');
-    x.type = 'button'; x.className = 'mv3-qx'; x.textContent = '×';
+    x.type = 'button'; x.className = 'mv3-qx u-btn is-s is-icon is-quiet'; x.textContent = '×';
     x.title = 'Remove from the queue';
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -202,7 +202,7 @@ function _askClear(head, waiting, onDone) {
   const mk = (label, cls, mode) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-c-btn' + (cls ? ' ' + cls : '');
+    b.className = 'mv3-c-btn u-btn is-s' + (cls ? ' ' + cls : '') + (cls === 'danger' ? ' is-danger' : '');
     b.textContent = label;
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -238,7 +238,7 @@ async function _paintList() {
   const all = document.createElement('button');
   all.type = 'button';
   // (phase V33.4, the owner) The app's own buttons - `mv3-btn` has no look in Merge, and they drew as the browser's.
-  all.className = 'mv3-c-btn mv3-x-go';
+  all.className = 'mv3-c-btn mv3-x-go u-btn is-s is-main';
   all.textContent = 'Render all';
   // Yours that have not been started. Once started they are in line whatever the encoder is
   // doing, so the button has nothing left to do for them.
@@ -256,7 +256,7 @@ async function _paintList() {
 
   const clr = document.createElement('button');
   clr.type = 'button';
-  clr.className = 'mv3-c-btn';
+  clr.className = 'mv3-c-btn u-btn is-s';
   clr.textContent = 'Clear';
   clr.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -387,7 +387,7 @@ function _group(id, items, refresh) {
   if (cut || failed) {
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = 'mv3-c-btn mv3-qrow-a';
+    go.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
     go.textContent = '▶ go on';
     go.title = 'Render this project\'s interrupted and failed fragments - nothing else in the queue starts';
     go.addEventListener('click', async (e) => {

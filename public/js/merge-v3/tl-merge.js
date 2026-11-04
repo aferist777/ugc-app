@@ -116,7 +116,7 @@ export function offerMerge() {
   if (!anchor) return;
   const box = document.createElement('div');
   box.className = 'mv3-mergeask';
-  box.innerHTML = '<span class="mv3-mergeask-t"></span><button type="button" class="mv3-mergeask-go">merge</button>'
+  box.innerHTML = '<span class="mv3-mergeask-t"></span><button type="button" class="mv3-mergeask-go u-btn is-s is-main">merge</button>'
     + '<button type="button" class="mv3-mergeask-x" title="Close (Esc)">✕</button>';
   box.querySelector('.mv3-mergeask-t').textContent = 'Merge ' + m.n + ' clips into one?';
   // (phase V72) Lines that cannot be merged as lines: the words in place of the offer, nothing to press.

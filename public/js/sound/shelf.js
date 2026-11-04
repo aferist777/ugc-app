@@ -62,14 +62,14 @@ export function searchHead(o) {
   });
   head.appendChild(s);
   // (phase V54) "?" - the sites to download from by hand, with the words as typed now.
-  const help = el('button', 'snd-btn snd-help', '?');
+  const help = el('button', 'snd-btn snd-help u-btn is-icon', '?');
   help.type = 'button';
   help.title = 'Where else to find free sounds - the sites open in your browser';
   help.addEventListener('click', () => openSites(help, s.value));
   head.appendChild(help);
   // One button: found nothing - it turns gold with the words in it.
   const missed = !!(o.q && !o.found);
-  const on = el('button', 'snd-btn' + (missed ? ' is-gold' : ''),
+  const on = el('button', 'snd-btn u-btn' + (missed ? ' is-gold is-gen' : ''),
     missed ? 'find «' + (o.q.length > 28 ? o.q.slice(0, 26) + '…' : o.q) + '» online' : 'find online…');
   on.type = 'button';
   on.title = missed ? 'Nothing here - search the free (CC0) libraries with these words'

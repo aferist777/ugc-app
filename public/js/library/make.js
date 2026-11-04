@@ -58,7 +58,7 @@ let _embedded = false;         // (V38.6) the form stands on the Scenarios shelf
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
   <aside class="mk-src" id="mk-src">
-    <button class="mk-add" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
+    <button class="mk-add u-btn is-s" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
     <div class="mk-src-list" id="mk-src-list"></div>
   </aside>
   <div class="mk-sash" id="mk-sash" title="Drag to resize, double-click for the usual width"></div>
@@ -70,7 +70,7 @@ const HTML = `
                title="The name of this source - click to rename" placeholder="Untitled source">
         <span class="mk-note" id="mk-title-saved"></span>
         <span class="sp"></span>
-        <button class="lib-btn" type="button" id="mk-mine">Find topics</button>
+        <button class="u-btn is-s" type="button" id="mk-mine">Find topics</button>
         <button class="lib-btn" type="button" id="mk-src-off" title="Let go of this source and write without one">✕</button>
       </div>
       <div class="mk-body">
@@ -81,11 +81,11 @@ const HTML = `
     </div>
     <div class="mk-view" id="mk-form">
       <div class="mk-head">
-        <button class="lib-btn" type="button" id="mk-to-topics" hidden title="Back to this source's topics">← topics</button>
+        <button class="u-btn is-s" type="button" id="mk-to-topics" hidden title="Back to this source's topics">← topics</button>
         <span class="mk-col-title">Generate script</span>
         <span class="mk-note" id="mk-from"></span>
         <span class="sp"></span>
-        <button class="lib-btn danger" type="button" id="mk-discard" hidden>Discard draft</button>
+        <button class="u-btn is-s is-danger" type="button" id="mk-discard" hidden>Discard draft</button>
       </div>
       <div class="mk-body">
         <label class="mk-field"><span>Topic</span>
@@ -98,8 +98,8 @@ const HTML = `
             <select id="mk-hook-n" title="How many hooks to write - each of a type picked at random"></select></label>
           <span class="sp"></span>
           <span class="mk-ctl"><span>&nbsp;</span><span class="mk-btns">
-            <button class="lib-btn primary" type="button" id="mk-go">Write hooks</button>
-            <button class="lib-btn mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
+            <button class="u-btn is-main" type="button" id="mk-go">Write hooks</button>
+            <button class="u-btn is-icon mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
           </span></span>
         </div>
         <!-- (V38.6) The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
@@ -115,7 +115,7 @@ const HTML = `
               <textarea id="mk-hook" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
             <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes"></select></label>
             <span class="mk-ctl"><span>&nbsp;</span>
-              <button class="lib-btn primary" type="button" id="mk-write">Write scenario</button></span>
+              <button class="u-btn is-main" type="button" id="mk-write">Write scenario</button></span>
           </div>
           <textarea class="mk-ad-t" id="mk-ad" rows="2" spellcheck="false"
             placeholder="Advertise - optional. What to advertise and what to say about it: worked into 2 paragraphs, natively; a call to buy or a link only if you write it here. Empty - no ad."></textarea>
@@ -124,7 +124,7 @@ const HTML = `
           <div class="mk-stage-h">
             <span>Save as a scenario</span>
             <span class="sp"></span>
-            <button class="lib-btn primary" type="button" id="mk-save">Save to Scenarios</button>
+            <button class="u-btn is-main" type="button" id="mk-save">Save to Scenarios</button>
           </div>
           <div class="mk-save-row">
             <label class="mk-field"><span>Title</span><input type="text" id="mk-title"></label>
@@ -470,11 +470,11 @@ function _srcLine(it) {
     where.style.color = 'var(--danger)';
     main.appendChild(where);
     const acts = el('div', 'mk-srow-acts');
-    const re = el('button', 'lib-btn', 'Point at the file…');
+    const re = el('button', 'u-btn is-s', 'Point at the file…');
     re.type = 'button';
     re.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
     re.addEventListener('click', (e) => { e.stopPropagation(); _relinkSource(it); });
-    const del = el('button', 'lib-btn', 'Delete…');
+    const del = el('button', 'u-btn is-s', 'Delete…');
     del.type = 'button';
     del.title = 'Delete this source - your files on the disk are not touched';
     del.addEventListener('click', (e) => { e.stopPropagation(); _deleteMissing(it); });
@@ -483,7 +483,7 @@ function _srcLine(it) {
   }
   if (offer) {
     const acts = el('div', 'mk-srow-acts');
-    const up = el('button', 'lib-btn', 'Put on Uploads');
+    const up = el('button', 'u-btn is-s', 'Put on Uploads');
     up.type = 'button';
     up.title = 'The video goes onto Uploads in Media, and is not kept as a source';
     up.addEventListener('click', (e) => { e.stopPropagation(); _sourceToUploads(it, up); });
@@ -658,9 +658,9 @@ function _deleteMissing(it) {
   lab.append(cb, document.createTextNode(' and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
   body.appendChild(lab);
   const foot = el('div', 'mv3-x-foot');
-  const cancel = el('button', 'mv3-c-btn', 'Cancel');
+  const cancel = el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
-  const go = el('button', 'mv3-c-btn danger', 'Delete');
+  const go = el('button', 'mv3-c-btn danger u-btn is-danger', 'Delete');
   go.type = 'button';
   foot.append(cancel, go);
   box.append(head, body, foot);
@@ -742,7 +742,7 @@ function _paintTopics(rec) {
     if (rec.videoPath && !_srcJobs.has(String(rec.id))) {
       // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
       // again. Paid - it is the same speech-to-text call.
-      const again = el('button', 'lib-btn', 'Transcribe again');
+      const again = el('button', 'u-btn is-s', 'Transcribe again');
       again.type = 'button';
       again.title = 'Read the words out of this source again - a paid transcription';
       again.addEventListener('click', () => _transcribeAgain(rec));
@@ -774,7 +774,7 @@ function _paintTopics(rec) {
     const f = el('div', 'mk-topic-f');
     f.appendChild(el('span', 'mk-topic-name', `${tp.projectName || ''} · ${String(tp.text || '').length} chars of transcript`));
     f.appendChild(el('span', 'sp'));
-    const write = el('button', 'lib-btn primary', draft ? 'Continue the draft' : 'Write a script');
+    const write = el('button', 'u-btn is-main', draft ? 'Continue the draft' : 'Write a script');
     write.type = 'button';
     f.appendChild(write);
     card.appendChild(f);
@@ -899,7 +899,7 @@ function _openSourceWin(it, play) {
         <aside class="src-side">
           <label class="mk-field"><span>Name</span><input type="text" data-f="name" maxlength="200" spellcheck="false"></label>
           <div class="src-save">
-            <button class="lib-btn primary" type="button" data-f="save">Save name</button>
+            <button class="u-btn is-main" type="button" data-f="save">Save name</button>
             <span class="lib-status" data-f="st"></span>
           </div>
           <div class="lib-vi" data-f="facts"></div>
@@ -1131,7 +1131,7 @@ function _ctl(label, node, extra) {
 // narrators AREA since phase V28.2, in place of the generator, with "← Generate script" back to it as it was.
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 function _narratorsGear() {
-  const b = el('button', 'mk-gear');
+  const b = el('button', 'mk-gear u-btn is-icon is-quiet');
   b.type = 'button';
   b.id = 'mk-narrators';
   b.title = 'The narrators - how a script is written';
@@ -1263,6 +1263,7 @@ function _paintGo() {
   go.textContent = _stage === 'hooks' ? 'Writing hooks…' : hooks ? 'Write again' : 'Write hooks';
   go.disabled = busy;
   go.classList.toggle('primary', !hooks);
+  go.classList.toggle('is-main', !hooks);
   const wr = $('mk-write');
   // (V38.6) On two lines, in a taller button: "Write / scenario".
   wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
@@ -1271,6 +1272,7 @@ function _paintGo() {
   // кнопкой") Blue while there is no script - and again when box 2 holds another hook than the script's first line.
   const other = written && String((_gen && _gen.hook) || '').trim() !== String(_gen.paragraphs[0] || '').trim();
   wr.classList.toggle('primary', !written || other);
+  wr.classList.toggle('is-main', !written || other);
   $('mk-box2').hidden = !(_gen && _gen.box2);
   $('mk-hook').readOnly = busy;
   $('mk-hook-stage').hidden = !hooks && _stage !== 'hooks';
@@ -1549,7 +1551,7 @@ function _renderHooks(hooks) {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
     // (V38.6, the owner: "кнопка use hooks сделай более видимой") Blue, as the main buttons are.
-    const use = el('button', 'lib-btn primary mk-hook-use', 'use hook');
+    const use = el('button', 'u-btn is-s is-main mk-hook-use', 'use hook');
     use.type = 'button';
     use.title = 'Put this hook into the box below - the script is written from it there';
     use.disabled = _busy();
@@ -1577,7 +1579,7 @@ function _renderHooks(hooks) {
       // (V38.7) Saved at once, so the draft's row in the list says "hook chosen".
       _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
-    const remake = el('button', 'lib-btn mk-hook-remake', 'remake');
+    const remake = el('button', 'u-btn is-s mk-hook-remake', 'remake');
     remake.type = 'button';
     remake.dataset.type = type ? type.id : '';
     remake.title = type ? `Write this hook again - another ${type.name.toLowerCase()} on the same topic`
@@ -1899,7 +1901,7 @@ function _renderScenes() {
     });
     setTimeout(fit, 0);
     if (i > 0) {
-      const rw = el('button', 'mk-scene-rw', 'rewrite');
+      const rw = el('button', 'mk-scene-rw u-btn is-s', 'rewrite');
       rw.type = 'button';
       rw.title = 'Rewrite this paragraph from a different angle - or select some of its words to rewrite only them';
       rw.addEventListener('click', () => _rewrite(i, rw));
@@ -1959,7 +1961,7 @@ function _fragFrom(ta, index, ev) {
   const text = ta.value.slice(start, end);
   if (end <= start || text.trim().length < 2 || text.trim() === ta.value.trim()) { _hideFragBtn(); return; }
   _hideFragBtn();
-  const btn = el('button', 'lib-btn mk-frag-btn', 'rewrite fragment');
+  const btn = el('button', 'u-btn is-s mk-frag-btn', 'rewrite fragment');
   btn.type = 'button';
   btn.title = 'Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is';
   // Pressed without taking the focus: the selection - and the textarea's own blur - stay as they are.
@@ -2051,7 +2053,7 @@ function _say(text, kind, scenarioId) {
   box.className = 'mk-said' + (kind ? ' ' + kind : '');
   box.appendChild(el('span', null, text));
   if (scenarioId && _hooks.openScenario) {
-    const a = el('button', 'lib-btn', 'open');
+    const a = el('button', 'u-btn is-s', 'open');
     a.type = 'button';
     a.addEventListener('click', () => _hooks.openScenario(scenarioId));
     box.appendChild(a);
@@ -2104,13 +2106,13 @@ function _openAddSource() {
         <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>
             <input type="text" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
-          <button class="lib-btn primary" type="button" data-go="link">Add</button>
+          <button class="u-btn is-main" type="button" data-go="link">Add</button>
         </section>
         <section class="mk-route" data-r="file" hidden>
           <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
           <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
             <input type="text" data-f="title" placeholder="What this source is"></label>
-          <button class="lib-btn primary" type="button" data-go="file">Add</button>
+          <button class="u-btn is-main" type="button" data-go="file">Add</button>
         </section>
         <section class="mk-route" data-r="lib" hidden>
           <span class="mk-lib-head">REFERENCES · YouTube · Videos</span>
@@ -2171,7 +2173,7 @@ async function _paintLib() {
       ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
     row.appendChild(t);
     if (it.type === 'remote') {
-      const b = el('button', 'lib-btn primary', 'Add');
+      const b = el('button', 'u-btn is-s is-main', 'Add');
       b.type = 'button';
       b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
       b.addEventListener('click', async () => {
@@ -2312,7 +2314,7 @@ function _addLine(r) {
   const say = (text, err) => { const s = el('div', 'mk-addl-s', text); if (err) line.classList.add('err'); line.appendChild(s); };
   const acts = el('div', 'mk-addl-acts');
   const btn = (label, title, on, cls) => {
-    const b = el('button', 'lib-btn' + (cls ? ' ' + cls : ''), label);
+    const b = el('button', 'u-btn is-s' + (cls === 'primary' ? ' primary is-main' : cls ? ' ' + cls : ''), label);
     b.type = 'button';
     if (title) b.title = title;
     if (on) b.addEventListener('click', on); else b.disabled = true;

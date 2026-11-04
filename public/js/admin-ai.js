@@ -119,7 +119,7 @@
     row.appendChild(el('span', 'ai-off', off ? 'stepped over: ' + off : ''));
 
     const move = (to, sym, title) => {
-      const b = el('button', 'lib-btn ai-mini', sym);
+      const b = el('button', 'u-btn is-s is-icon is-quiet ai-mini', sym);
       b.type = 'button';
       b.title = title;
       b.disabled = to < 0 || to >= n;
@@ -132,7 +132,7 @@
     };
     row.appendChild(move(i - 1, '▲', 'Ask this one earlier'));
     row.appendChild(move(i + 1, '▼', 'Ask this one later'));
-    const del = el('button', 'lib-btn ai-mini', '−');
+    const del = el('button', 'u-btn is-s is-icon is-quiet ai-mini', '−');
     del.type = 'button';
     del.title = n < 2 ? 'The ladder needs one step at least' : 'Remove this step';
     del.disabled = n < 2;
@@ -163,7 +163,7 @@
     body.appendChild(list);
     const free = nextFree();
     const full = st.ladder.length >= st.max;
-    const add = el('button', 'lib-btn ai-add', '+ add a step');
+    const add = el('button', 'u-btn ai-add', '+ add a step');
     add.type = 'button';
     add.disabled = full || !free || busy;
     add.title = full ? 'Five is the cap - more steps buy waiting, not reliability'

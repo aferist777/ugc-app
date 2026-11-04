@@ -432,7 +432,7 @@ function _render(kind) {
   const foot = el('div', 'gw-foot');
   const said = s.said ? el('div', 'gw-said', s.said) : null;
   if (said) foot.appendChild(said);
-  const go = el('button', 'gw-create', 'create');
+  const go = el('button', 'gw-create u-btn is-main', 'create');
   go.type = 'button';
   const hint = el('span', 'gw-hint');
   const sync = () => {

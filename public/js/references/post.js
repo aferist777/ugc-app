@@ -163,18 +163,18 @@ export function openPost(list, at, o) {
         <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
         <div class="ref-view-mid">
           <div class="lib-view-stage"></div>
           <div class="ref-strip-bar">
             <span class="ref-strip-n"></span>
-            <button class="lib-btn" data-x="all" type="button"></button>
+            <button class="u-btn is-s" data-x="all" type="button"></button>
             <span class="sp"></span>
-            <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
+            <button class="u-btn is-s" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
           </div>
           <div class="ref-strip"></div>
         </div>
-        <button class="lib-view-arrow" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
         <aside class="lib-view-info"></aside>
       </div>
     </div>`;
@@ -399,19 +399,19 @@ function _paintActs(it) {
   box.textContent = '';
   // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
   // picture, into VIDEO or IMAGES (the owner: one of several goes by its files, from the strip).
-  const mv = el('button', 'lib-btn', 'Move to…');
+  const mv = el('button', 'u-btn is-s', 'Move to…');
   mv.type = 'button';
   mv.title = 'Move the whole post';
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
   box.appendChild(mv);
   // (block 5c) A long video kept as a tile goes on from here - and leaves REFERENCES (the owner's answer (о)).
   if (it.meta && it.meta.remote && it.meta.link) {
-    const src = el('button', 'lib-btn', 'To scenario sources');
+    const src = el('button', 'u-btn is-s', 'To scenario sources');
     src.type = 'button';
     src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
     src.addEventListener('click', () => _toSources(it, src));
     box.appendChild(src);
-    const hl = el('button', 'lib-btn', 'To highlights');
+    const hl = el('button', 'u-btn is-s', 'To highlights');
     hl.type = 'button';
     hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.';
     hl.addEventListener('click', () => {
@@ -423,7 +423,7 @@ function _paintActs(it) {
     });
     box.appendChild(hl);
   }
-  const del = el('button', 'lib-btn danger', 'Delete');
+  const del = el('button', 'u-btn is-s is-danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
   del.addEventListener('click', async () => {

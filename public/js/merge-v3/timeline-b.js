@@ -1495,7 +1495,7 @@ function _lane(t) {
   if (t.kind === 'subs' || t.kind === 'text') {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3b-sq';
+    btn.className = 'mv3b-sq u-btn is-icon is-quiet';
     const all = ((Store.timeline() || {}).tracks) || [];
     if (t.kind === 'subs') {
       const full = _count(all, 'text') >= MAX_TEXT;
@@ -1519,7 +1519,7 @@ function _lane(t) {
   } else if (t.kind !== 'subs') {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3b-sq';
+    btn.className = 'mv3b-sq u-btn is-icon is-quiet';
     const tl = Store.timeline();
     const all = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];
     if (t.main) {

@@ -98,7 +98,7 @@ export function cutBox(video, piece, o) {
   const wrap = el('div', 'mv3-trimbox cut-box');
   const t = trimmer(video, { start: piece.start || null, onChange: () => paint() });
   wrap.appendChild(t.el);
-  const btn = el('button', 'mv3-trimbox-save', 'Cut…');
+  const btn = el('button', 'mv3-trimbox-save u-btn is-s is-main', 'Cut…');
   btn.type = 'button';
   wrap.appendChild(btn);
   const paint = () => {

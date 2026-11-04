@@ -469,7 +469,7 @@ function _paintLeft() {
 // One filter: a button with its name and what is chosen; pressed, its list opens under it.
 function _dd(g) {
   const box = el('div', 'vc-dd');
-  const b = el('button', 'vc-dd-b');
+  const b = el('button', 'vc-dd-b u-btn is-field');
   b.type = 'button';
   b.dataset.g = g.key;
   const val = el('span', 'vc-dd-v', 'any');
@@ -700,7 +700,7 @@ function _section(G, title, list, total, hint, full) {
   for (const it of list) wrap.appendChild(_tile(it));
   G.appendChild(wrap);
   if (full && full > list.length) {
-    const more = el('button', 'vc-more', 'show ' + (full - list.length) + ' more');
+    const more = el('button', 'vc-more u-btn', 'show ' + (full - list.length) + ' more');
     more.type = 'button';
     more.addEventListener('click', () => { _st.more = true; _paintGrid(); });
     G.appendChild(more);
@@ -817,7 +817,7 @@ function _presetTools(it, ed) {
   const p = it.preset;
   const box = el('div', 'vc-preset');
   const row = el('div', 'vc-preset-row');
-  const b = (text, title) => { const x = el('button', 'mv3-c-btn', text); x.type = 'button'; x.title = title; return x; };
+  const b = (text, title) => { const x = el('button', 'mv3-c-btn u-btn is-s', text); x.type = 'button'; x.title = title; return x; };
   const save = b('save', 'Save the title, what it needs and its skill as they are here - a new version; the one before is kept');
   save.addEventListener('click', () => _presetOp(p.id, '', { fields: { title: ed.title, skill: ed.text, slots: ed.slots } }, save));
   const dup = b('duplicate', 'A copy of it as it is saved now - the way to change a sample and keep the sample as it is');
@@ -988,7 +988,7 @@ async function _paintRight() {
 
   // use
   const foot = el('div', 'vc-right-foot');
-  const use = el('button', 'mv3-c-btn vc-use', 'use');
+  const use = el('button', 'mv3-c-btn vc-use u-btn is-main', 'use');
   use.type = 'button';
   const fits = !!m && _fits(it, m);
   use.disabled = !m || !m.usable || !fits;

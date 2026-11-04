@@ -214,7 +214,7 @@ export function button(label, onClick, opts) {
   const o = opts || {};
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-btn' + (o.danger ? ' danger' : '');
+  b.className = 'mv3-c-btn u-btn is-s' + (o.danger ? ' danger is-danger' : '');
   b.textContent = label;
   if (o.title) b.title = o.title;
   b.addEventListener('click', onClick);

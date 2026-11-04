@@ -344,7 +344,7 @@ function _mark() {
 // a way of saying "this one" (Y5). The press does NOT reach the row - it would close an open
 // fragment - so the opening is done here instead.
 function _playBtn(src, what, then) {
-  const b = el('button', 'mv3-wk-vplay is-read', '▶');
+  const b = el('button', 'mv3-wk-vplay is-read u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -1146,7 +1146,7 @@ function _stage(host, id, spec) {
 
 function _genButton(foot, spec) {
   if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub', spec.cap));
-  const b = el('button', 'mv3-wk-gen', spec.label || 'generate');
+  const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || 'generate');
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.disabled;
@@ -1296,7 +1296,7 @@ function _stageMoodVoice(host, p, lines) {
     if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
     else if (_demoMissing(p)) {
       notes.appendChild(_note(_demoErr || 'This voice has no demo yet - Seedance takes its timbre from it.', !!_demoErr));
-      const mk = el('button', 'mv3-wk-vuse', 'make the demo');
+      const mk = el('button', 'mv3-wk-vuse u-btn is-s', 'make the demo');
       mk.type = 'button';
       mk.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
       mk.addEventListener('click', () => _askDemo(p));
@@ -1850,7 +1850,7 @@ function _list(host, p, lines) {
     if (!lines.length) { VOS.paintChooser(host, p, adopt); return; }
     const bar = el('div', 'mv3-vos-bar');
     bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? 'the scenario «' + (p.title || 'untitled') + '»' : 'your own text'));
-    const other = el('button', 'mv3-wk-vmore', 'other script');
+    const other = el('button', 'mv3-wk-vmore u-btn is-s', 'other script');
     other.type = 'button';
     other.title = 'Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.';
     other.disabled = VOICE.reading().busy;
@@ -2047,7 +2047,7 @@ const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.s
   : _writing ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
-  const plus = el('span', 'mv3-wk-fins' + (why ? ' is-off' : ''), '+');
+  const plus = el('span', 'mv3-wk-fins u-btn is-icon is-gen' + (why ? ' is-off' : ''), '+');
   plus.setAttribute('role', 'button');
   plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
   plus.addEventListener('click', (e) => {
@@ -2089,12 +2089,12 @@ function _insertEditor(host, p, lines) {
   });
   host.appendChild(box);
   const acts = el('div', 'mv3-wk-vfoot is-tight');
-  const save = el('button', 'mv3-wk-vuse', _insSaving ? 'putting it in…' : 'put it in');
+  const save = el('button', 'mv3-wk-vuse u-btn is-s', _insSaving ? 'putting it in…' : 'put it in');
   save.type = 'button';
   save.title = 'Put the line in (Ctrl+Enter)';
   save.disabled = _insSaving || !_insDraft.trim();
   save.addEventListener('click', () => _insertLine(p, after));
-  const drop = el('button', 'mv3-wk-vuse', 'cancel');
+  const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
   drop.type = 'button';
   drop.disabled = _insSaving;
   drop.addEventListener('click', cancel);
@@ -2132,7 +2132,7 @@ async function _insertLine(p, after) {
 function _offRow(l, i) {
   const row = el('div', 'mv3-wk-frow is-off');
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
-  const back = el('button', 'mv3-wk-vuse', 'restore');
+  const back = el('button', 'mv3-wk-vuse u-btn is-s', 'restore');
   back.type = 'button';
   back.title = 'Put this line back where it was in the script';
   back.disabled = _offing;
@@ -2172,7 +2172,7 @@ function _rowRead(p, l, i) {
   const ra = _readAct(p, l, i);
   const reading = (VOICE.reading().lines || []).includes(i);
   const has = isRead(l);
-  const b = el('button', 'mv3-wk-vplay is-send' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
+  const b = el('button', 'mv3-wk-vplay is-send u-btn is-s is-icon' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
   b.type = 'button';
   b.disabled = !ra.on || reading;
   b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2205,7 +2205,7 @@ function _lineSpeed(p, l, i) {
   _speedLater(inp, 'line' + i, () => VOICE.speedOf(_ctx.project, (_ctx.project.lines || [])[i]), v => ({ line: i, lineSpeed: v }));
   box.append(el('span', '', 'speed'), inp);
   if (own) {
-    const back = el('button', 'mv3-wk-vback', '↺');
+    const back = el('button', 'mv3-wk-vback u-btn is-s is-icon is-quiet', '↺');
     back.type = 'button';
     back.title = "Back to the project's speed (" + proj + ')';
     back.disabled = inp.disabled;
@@ -2257,7 +2257,7 @@ function _clipWindow(p, l, i, n) {
     if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
     if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
     else {
-      const use = el('button', 'mv3-wk-vuse', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
       use.type = 'button';
       use.title = "Make this the fragment's clip - on the timeline too" + (stale ? ', stale as it is' : '');
       use.addEventListener('click', async () => { use.disabled = true; await _pickClip(i, c.id); _closeClipWindow(); });
@@ -2380,11 +2380,11 @@ function _fragment(host, p, l, i) {
     });
     host.appendChild(box);
     const acts = el('div', 'mv3-wk-vfoot is-tight');
-    const save = el('button', 'mv3-wk-vuse', 'save');
+    const save = el('button', 'mv3-wk-vuse u-btn is-s', 'save');
     save.type = 'button';
     save.title = 'Save the words (Ctrl+Enter)';
     save.addEventListener('click', () => _saveWords(va, i));
-    const drop = el('button', 'mv3-wk-vuse', 'cancel');
+    const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
     drop.type = 'button';
     drop.addEventListener('click', () => { _editWords = -1; _ctx.repaint(); });
     acts.append(save, drop);
@@ -2398,7 +2398,7 @@ function _fragment(host, p, l, i) {
     // spoken from them, and the voice will not start without them.
     const g = VOICE.reading();
     const marked = !!String(l.tagged || '').trim();
-    const mb = el('button', 'mv3-wk-fread' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
+    const mb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
     mb.type = 'button';
     mb.disabled = g.busy || !_video().mood;
     mb.title = !_video().mood ? 'Choose the mood first (field 1)' : g.busy ? 'The voice is busy'
@@ -2410,7 +2410,7 @@ function _fragment(host, p, l, i) {
     if (!_bySample()) {
       const ra = _readAct(p, l, i);
       const reading = (VOICE.reading().lines || []).includes(i);
-      const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+      const rb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
       rb.type = 'button';
       rb.disabled = !ra.on || reading;
       rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2440,7 +2440,7 @@ function _fragment(host, p, l, i) {
   }
   if (rs === 'stale' && !_bySample()) {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
-    const back = el('button', 'mv3-wk-lback is-frag', 'put the words back');
+    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'put the words back');
     back.type = 'button';
     back.title = 'Restore the line to what the take says';
     back.disabled = busyRead;
@@ -2627,7 +2627,7 @@ function _pickRow(host, p, l, i) {
     shot.addEventListener('click', () => { _pickView = _pickView === v.id ? '' : v.id; _ctx.repaint(); });
     row.appendChild(shot);
     if (v.id === _pickView) {
-      const sel = el('button', 'mv3-wk-tileact is-pick', fr && v.id === fr.id ? 'this one' : 'select');
+      const sel = el('button', 'mv3-wk-tileact is-pick u-btn is-s is-main', fr && v.id === fr.id ? 'this one' : 'select');
       sel.type = 'button';
       sel.title = 'Open this fragment on this frame';
       sel.disabled = !!(fr && v.id === fr.id && !auto);
@@ -2836,7 +2836,7 @@ function _clipCol(p, l, i, rs, take) {
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
   if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
-  const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
+  const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go is-gen' : ''),
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;

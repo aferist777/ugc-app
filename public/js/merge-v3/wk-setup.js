@@ -767,7 +767,7 @@ function _paintDress(body, c) {
     pair.appendChild(fit);
   } else pair.appendChild(_el('span', 'mk-pair-img is-empty', 'outfit'));
   const said = _el('span', 'gw-hint' + (_dressing ? ' is-on' : ''), _dressSaid || (_lbPick ? '' : 'pick an outfit'));
-  const go = _el('button', 'gw-create', _dressing ? 'dressing…' : 'apply');
+  const go = _el('button', 'gw-create u-btn is-main', _dressing ? 'dressing…' : 'apply');
   go.type = 'button';
   go.disabled = _dressing || !_lbPick;
   go.title = 'Dress ' + c.name + ' in this outfit and save it as a look - this spends credits';

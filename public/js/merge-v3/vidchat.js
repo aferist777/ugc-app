@@ -900,7 +900,7 @@ function VIDEOS(ctx) {
     return cards[cards.length - 1] || null;
   }
   function _almanacBtn() {
-    const b = el('button', 'mv3-vc-almanac', 'almanac');
+    const b = el('button', 'mv3-vc-almanac u-btn is-l', 'almanac');
     b.type = 'button';
     b.title = 'The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt';
     b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, note: _helpNote }); });
@@ -1260,7 +1260,7 @@ function VIDEOS(ctx) {
       box.append(row, bodyTa);
     }
     const acts = el('div', 'vc-card-acts');
-    const go = el('button', 'mv3-c-btn vc-go', _skill.twoStep ? 'write the prompts' : 'write the prompt');
+    const go = el('button', 'mv3-c-btn vc-go u-btn is-s', _skill.twoStep ? 'write the prompts' : 'write the prompt');
     go.type = 'button';
     const why = el('span', 'vc-card-why');
     go.addEventListener('click', () => _write(go));
@@ -1648,7 +1648,7 @@ function VIDEOS(ctx) {
   function _watchActs(m, a) {
     const c = m.card;
     if (c.state === 'writing') return;
-    const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+    const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'write it again');
     again.type = 'button';
     again.title = 'Another variant of the prompt, written from these descriptions as they stand - a clip not watched is watched again';
     again.addEventListener('click', () => _rewrite(m, again));
@@ -1832,7 +1832,7 @@ function VIDEOS(ctx) {
       }
       hd.left.appendChild(_waitField({ word, bad: true, words: c.error || 'it was not written' }));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'write it again');
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -1975,7 +1975,7 @@ function VIDEOS(ctx) {
     const sx = nav.shown('board');
     const ok = !!(sx && _boardOk(sx.g));
     if (l.kind === 'column') {
-      const write = el('button', 'mv3-c-btn vc-go' + (ok ? ' is-make' : ''), 'write the video');
+      const write = el('button', 'mv3-c-btn vc-go u-btn is-s' + (ok ? ' is-make is-main' : ''), 'write the video');
       write.type = 'button';
       write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
       write.addEventListener('click', () => _writeVideo(l.m, l, write));
@@ -1983,7 +1983,7 @@ function VIDEOS(ctx) {
       a.appendChild(write);
     }
     const drawn = (l.m.boards || []).length > 0;
-    const go = el('button', 'mv3-c-btn vc-go' + (drawn && l.kind === 'column' ? '' : ' is-make'), drawn ? 'draw again' : 'draw the ' + l.W);
+    const go = el('button', 'mv3-c-btn vc-go u-btn is-s' + (drawn && l.kind === 'column' ? '' : ' is-make is-main'), drawn ? 'draw again' : 'draw the ' + l.W);
     go.type = 'button';
     go.title = 'A sheet from the storyboard prompt shown - as you edited it';
     const two = { bta: l.bta, range: null, frame: false, busy: false };
@@ -2114,7 +2114,7 @@ function VIDEOS(ctx) {
   function _boardPromptActs(m, l, x, a) {
     l.drawGo = null; l.drawPrice = null;
     if (!x || x.writing) return;
-    const go = el('button', 'mv3-c-btn vc-go is-make', 'draw the ' + l.W);
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'draw the ' + l.W);
     go.type = 'button';
     const two = { bta: l.bta, range: l.range, frame: l.kind === 'swap', busy: false };
     go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
@@ -2164,7 +2164,7 @@ function VIDEOS(ctx) {
     if (l.kind === 'swap') {
       l.go = null; l.price = null;
       if (x && _boardOk(x.g)) {
-        const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+        const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
         nBtn.type = 'button';
         nBtn.title = 'How many to make from it - each clip is its own variant of the video';
         nBtn.addEventListener('click', () => {
@@ -2172,7 +2172,7 @@ function VIDEOS(ctx) {
           nBtn.textContent = '×' + _cardN.get(m.id);
           _freshenStory(m.id, l);
         });
-        const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+        const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'make the video');
         go.type = 'button';
         go.addEventListener('click', () => _make(l.m, go));
         const price = el('span', 'vc-card-why');
@@ -2181,7 +2181,7 @@ function VIDEOS(ctx) {
         l.go = go;
         l.price = price;
       }
-      const redo = el('button', 'mv3-c-btn vc-go' + (x && _boardOk(x.g) ? '' : ' is-make'), x ? 'draw again' : 'draw the picture');
+      const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (x && _boardOk(x.g) ? '' : ' is-make is-main'), x ? 'draw again' : 'draw the picture');
       redo.type = 'button';
       redo.title = 'Another picture from the prompt chosen on the step before';
       redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: true, busy: false }, redo, e));
@@ -2194,14 +2194,14 @@ function VIDEOS(ctx) {
     }
     // The column's storyboard: the video's prompt is written now, with this sheet among the pictures.
     if (l.kind === 'column') {
-      const write = el('button', 'mv3-c-btn vc-go is-make', 'write the video');
+      const write = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'write the video');
       write.type = 'button';
       write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
       write.addEventListener('click', () => _writeVideo(l.m, l, write));
       write.disabled = !(x && _boardOk(x.g));
       a.appendChild(write);
     }
-    const redo = el('button', 'mv3-c-btn vc-go' + (l.kind === 'column' ? '' : ' is-make'), x ? 'draw again' : 'draw the ' + l.W);
+    const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (l.kind === 'column' ? '' : ' is-make is-main'), x ? 'draw again' : 'draw the ' + l.W);
     redo.type = 'button';
     redo.title = 'Another sheet from the prompt chosen on the step before';
     redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: false, busy: false }, redo, e));
@@ -2277,7 +2277,7 @@ function VIDEOS(ctx) {
   function _videoPromptActs(m, l, x, a) {
     l.go = null; l.price = null;
     if (!x || x.writing) return;
-    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
     nBtn.title = 'How many to make from it - each clip is its own variant of the video';
     nBtn.addEventListener('click', () => {
@@ -2285,7 +2285,7 @@ function VIDEOS(ctx) {
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshenStory(m.id, l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'make the video');
     go.type = 'button';
     go.addEventListener('click', () => _make(l.m, go));
     const price = el('span', 'vc-card-why');
@@ -2317,7 +2317,7 @@ function VIDEOS(ctx) {
       _freshenReview(id, l);
       if (!fits) {
         l.go.disabled = true;
-        l.go.classList.add('is-make');
+        l.go.classList.add('is-make', 'is-main');
         l.go.textContent = 'make the video';
         l.price.textContent = 'this video is made by ' + (l.kind === 'swap' ? 'Kling motion control' : 'Seedance') + ' - pick it on the left';
         l.price.title = l.price.textContent;
@@ -2644,9 +2644,9 @@ function VIDEOS(ctx) {
       if (face && said) face.title = (face.title ? face.title + ' · ' : '') + said;
       if (clips.length > 1) {
         const pg = el('span', 'vm-pg is-vid');
-        const p = el('button', 'vc-nav is-prev', '‹');
+        const p = el('button', 'vc-nav is-prev u-btn is-s is-icon', '‹');
         const t = el('span', 'vm-pg-t', (i + 1) + ' of ' + clips.length);
-        const nx = el('button', 'vc-nav is-next', '›');
+        const nx = el('button', 'vc-nav is-next u-btn is-s is-icon', '›');
         p.type = 'button'; nx.type = 'button';
         p.disabled = i <= 0;
         nx.disabled = i >= clips.length - 1;
@@ -2725,7 +2725,7 @@ function VIDEOS(ctx) {
       }
       hd.left.appendChild(_waitField({ word: 'prompt', bad: true, words: c.error || 'it was not written' }));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'write it again');
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -2804,7 +2804,7 @@ function VIDEOS(ctx) {
     l.go = null; l.price = null;
     if (!x || x.writing) return;
     const c = l.m.card;
-    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
     nBtn.title = 'How many to make from it - each clip is its own variant of the video';
     nBtn.addEventListener('click', () => {
@@ -2812,7 +2812,7 @@ function VIDEOS(ctx) {
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshenReview(m.id, l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'make the video');
     go.type = 'button';
     go.addEventListener('click', () => _make(l.m, go));
     const price = el('span', 'vc-card-why');
@@ -2844,6 +2844,7 @@ function VIDEOS(ctx) {
     const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
     l.go.textContent = other ? 'write it again for ' + mm.label : (made ? 'make the video again' : 'make the video') + (n > 1 ? ' ×' + n : '');
     l.go.classList.toggle('is-make', !other);
+    l.go.classList.toggle('is-main', !other);
     l.go.disabled = c.state === 'writing';
     const pr = priceOf(rec(), l.m.media || []);
     l.price.textContent = other ? 'this variant was written for ' + _labelOf(vm)

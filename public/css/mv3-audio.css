@@ -75,8 +75,6 @@
 .au-f-links{display:flex; align-items:baseline; gap:16px; flex-wrap:wrap}
 .au-sel.au-saved{margin-bottom:2px}
 .au-sel.au-saved[disabled]{color:var(--muted); cursor:default}
-.au-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
-.au-btn:hover{border-color:var(--muted)}
 .au-btn.is-primary{background:var(--main); border-color:var(--main); color:var(--on-main)}
 .au-x{border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
 .au-x:hover{color:var(--ink)}
@@ -107,9 +105,7 @@
 .au-knob input[type=range]{width:100%}
 .au-knob span:last-child{text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
 .au-go-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-.au-go{padding:8px 16px; border:1px solid var(--main); border-radius:var(--r-xs); background:var(--main); color:var(--on-main); font:700 12px/1 var(--font); cursor:pointer}
-.au-go:hover{filter:brightness(1.08)}
-.au-go[disabled]{opacity:.5; cursor:default; filter:none}
+
 .au-go-row .au-muted{font-size:11px}
 .au-picked{display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted)}
 /* (V34.F) a highlights mood in Simple: its preset, read only */
@@ -179,9 +175,11 @@
 .au-res.is-playing .snd-wave rect{fill:var(--ink); opacity:.95}
 .au-res-n{flex:0 1 210px; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-res .au-muted{font-size:10.5px; white-space:nowrap}
-.au-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
+.au-play{flex:0 0 auto}
+.au-play.u-btn{border-radius:50%; font-size:10px}   /* round, as before */
 .au-res.is-playing .au-play{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
-.au-star{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px}
+.au-star{flex:0 0 auto}
+.au-star.u-btn{font-size:13px}
 .au-star.on{color:var(--ink)}   /* (phase V73, (б1-9)) a favourite: light, the text's colour */
 .au-lyr{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:8px 10px; background:var(--bg)}
 .au-lyr-h{display:flex; align-items:baseline; gap:8px; font-weight:600; font-size:12px; margin-bottom:4px}
@@ -247,11 +245,7 @@
 .aal-text{font-size:12.5px; line-height:1.5; color:var(--ink); white-space:pre-wrap}
 .aal-why{margin-top:5px; font-size:11px; line-height:1.45; color:var(--muted)}
 .aal-try{margin-top:4px; font-size:10.5px; color:var(--muted)}
-.aal-btn{flex:0 0 auto; padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
-  font:600 11px/1.1 var(--font); cursor:pointer; white-space:nowrap}
-.aal-btn:hover{border-color:var(--muted)}
-.aal-btn.is-primary{background:var(--main); border-color:var(--main); color:var(--on-main)}
-.aal-btn[disabled]{opacity:.45; cursor:default}
+.aal-btn{flex:0 0 auto}
 .aal-build{flex:0 0 auto; display:flex; flex-direction:column; gap:5px; padding:8px 14px 12px; border-top:1px solid var(--border); background:var(--surface)}
 .aal-build-h{display:flex; align-items:center; gap:8px; min-width:0}
 .aal-lbl{display:inline-flex; align-items:center; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}

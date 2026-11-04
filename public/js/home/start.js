@@ -80,7 +80,7 @@ function _frame(kind, label, o) {
 function _foot(frame, label, title) {
   const foot = el('div', 'mv3-x-foot hm-qs-foot');
   const said = el('span', 'hm-qs-said');
-  const go = el('button', 'mv3-c-btn hm-qs-go', label);
+  const go = el('button', 'mv3-c-btn hm-qs-go u-btn is-main', label);
   go.type = 'button';
   if (title) go.title = title;
   foot.append(said, go);
@@ -190,13 +190,13 @@ async function _textCard(host, st, o) {
     head.appendChild(sub);
     head.appendChild(el('span', 'sp'));
     if (t.from === 'text') {
-      const ed = el('button', 'mv3-sc-new', 'edit');
+      const ed = el('button', 'mv3-sc-new u-btn is-s', 'edit');
       ed.type = 'button';
       ed.title = 'Change the text';
       ed.addEventListener('click', () => VT.openOwnText((b) => put(b), adopt, { talking: !!o.talking, ...own() }));
       head.appendChild(ed);
     }
-    const other = el('button', 'mv3-sc-new', 'other text');
+    const other = el('button', 'mv3-sc-new u-btn is-s', 'other text');
     other.type = 'button';
     other.title = 'Back to the scenarios and your own text';
     other.addEventListener('click', () => { st.text = null; o.changed(); paint(); });
@@ -261,7 +261,7 @@ async function _talking() {
     whoLine.textContent = '';
     if (st.look) {
       whoLine.appendChild(el('span', null, st.look.characterName + ' · in this look'));
-      const x = el('button', 'mv3-sc-new', '✕ none');
+      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ none');
       x.type = 'button';
       x.title = 'Choose nobody here - the character and the place are chosen in the project';
       x.addEventListener('click', () => { st.look = null; keep(); paintWho(); });

@@ -100,7 +100,7 @@ export function openLinkWindow({ where, prefill, onAdd }) {
         <textarea class="lk-ta" rows="5" placeholder="One link per line - YouTube, TikTok, Instagram and the other sites yt-dlp reads"></textarea>
         <p class="mk-pnote"></p>
         <div class="lk-row"><span class="lk-said"></span><span class="sp"></span>
-          <button class="lib-btn primary" type="button" data-go="add">Add</button></div>
+          <button class="u-btn is-main" type="button" data-go="add">Add</button></div>
       </div>
     </div>`;
   document.body.appendChild(ov);

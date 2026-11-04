@@ -61,8 +61,7 @@
 .chm[data-stage="save"] .cv2-mid-foot{ display:none; }
 
 /* Start over: empties the bench. Quiet until hovered - it throws work away. */
-.chm-over{ height:22px; padding:0 9px; font-size:10.5px; }
-.chm-over:hover{ color:var(--danger); border-color:var(--danger); }
+.chm-over:hover{ color:var(--danger); border-color:var(--danger); }   /* start over: red under the pointer, as before */
 /* The picture field in this layout: square corners, the Library's dashed edge. */
 .chm .cv2-drop{ border-radius:var(--r-xs); }
 
@@ -163,14 +162,7 @@
 .cv2-drop-del:hover{ background:var(--danger); border-color:var(--danger); }
 
 /* ── Save character ── */
-.cv2-savemodel{
-  flex:0 0 auto; height:32px; padding:0 16px;
-  border:1px solid var(--main); border-radius:var(--r-xs);
-  background:var(--main); color:var(--on-main);
-  font:700 12px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-savemodel:hover:not([disabled]){ filter:brightness(1.08); }
-.cv2-savemodel[disabled]{ opacity:.4; cursor:default; filter:none; }
+.cv2-savemodel{ flex:0 0 auto; }
 
 /* ── the save form ── */
 /* ── The save form ───────────────────────────────────────────────────────────── */
@@ -199,26 +191,14 @@
 /* ── the save form footer ── */
 /* Cancel sits to the LEFT of Save character, as asked. */
 .cv2-save-foot{ margin-top:auto; flex:0 0 auto; display:flex; gap:7px; padding-top:12px; }
-.cv2-save-btn{
-  flex:1 1 auto; min-width:0; height:32px; padding:0 10px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:700 11.5px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-save-btn:hover:not([disabled]){ border-color:var(--border-soft); }
-.cv2-save-btn.is-go{ background:var(--main); border-color:var(--main); color:var(--on-main); }
-.cv2-save-btn.is-go:hover:not([disabled]){ filter:brightness(1.08); }
+.cv2-save-btn{ flex:1 1 auto; min-width:0; display:block; overflow:hidden; text-overflow:ellipsis; }
 /* Regenerate hugs its label like Delete does, rather than taking a third of the row: it is
    the least likely of the three to be pressed, and stretching it says the opposite. */
 #cv2-save-retry{ flex:0 0 auto; }
 /* The sheet gear and its drawer sat between the form and this footer, and took the spare
    space so the drawer could not float. With both gone the footer keeps its own margin-top:auto
    above, which is what holds it at the floor of the form. */
-/* After a failure it stops being a second thought and becomes the way on. */
-#cv2-save-retry.is-retry{ color:var(--danger); border-color:var(--danger); }
-#cv2-save-retry.is-retry:hover:not([disabled]){ background:var(--danger-fill); color:var(--on-danger); }
-.cv2-save-btn[disabled]{ opacity:.45; cursor:default; filter:none; }
+/* After a failure it stops being a second thought and becomes the way on: red (.is-danger, save-panel.js). */
 
 /* ── the parameters, the preset, the prompt, the picker, the edit and ref states ── */
 .cv2-create-main{ flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -234,15 +214,7 @@
   background:var(--surface-2); color:var(--ink); font:600 11.5px var(--font);
 }
 .cv2-name:focus{ outline:none; border-color:var(--focus); }
-.cv2-rnd, .cv2-gen, .cv2-tpdne{
-  flex:0 0 auto; height:26px; padding:0 10px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:700 11px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-rnd:hover, .cv2-tpdne:hover{ color:var(--ink); border-color:var(--border-soft); }
-.cv2-gen{ background:var(--main); border-color:var(--main); color:var(--on-main); }
-.cv2-gen:hover{ filter:brightness(1.08); }
+.cv2-rnd, .cv2-gen, .cv2-tpdne{ flex:0 0 auto; }
 
 /* Every parameter, two columns - what the old "advanced" mode used to reveal. There is no
    simple mode any more: it showed four of eighteen and hid the rest behind a toggle that
@@ -284,14 +256,7 @@
 }
 /* Beside the picker, because it acts on what the picker chose. Off until there is a preset:
    with none selected there is no face to take. */
-.cv2-preset-use{
-  flex:0 0 auto; height:26px; padding:0 11px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:transparent; color:var(--muted);
-  font:700 10.5px/24px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-preset-use:hover:not(:disabled){ background:var(--muted); color:var(--surface); }
-.cv2-preset-use:disabled{ opacity:.35; cursor:default; border-color:var(--border); color:var(--muted); }
+.cv2-preset-use{ flex:0 0 auto; }
 /* The way back out, beside the way in. Square and quiet: it undoes a choice rather than
    making one, and it is only on screen while there is a choice to undo. */
 .cv2-preset-clear{
@@ -446,20 +411,10 @@
   flex:0 0 auto; display:flex; gap:7px; padding:9px 10px;
   border-top:1px solid var(--border-soft); background:var(--surface);
 }
-.cv2-edit-btn{
-  flex:1 1 auto; min-width:0; height:30px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:700 11.5px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-edit-btn:hover:not([disabled]){ border-color:var(--border-soft); }
-.cv2-edit-btn.is-go{ background:var(--main); border-color:var(--main); color:var(--on-main); }
-.cv2-edit-btn.is-go:hover:not([disabled]){ filter:brightness(1.08); }
-.cv2-edit-btn[disabled]{ opacity:.45; cursor:default; filter:none; }
+.cv2-edit-btn{ flex:1 1 auto; min-width:0; }
 /* Cancel over an untouched preset does not step back from a result - there is no result
    yet - it throws the choice away and empties the bench. Red says which of the two it is. */
-.cv2-edit-btn.is-drop{ color:var(--danger); border-color:var(--danger); }
-.cv2-edit-btn.is-drop:hover:not([disabled]){ background:var(--danger-fill); color:var(--on-danger); }
+/* red (.is-danger, chmake.js) */
 
 /* ── Create: the ref state, where a face from outside is steered ───────────── */
 .cv2-textpanel{ flex:1; min-height:0; display:flex; flex-direction:column; padding-top:8px; }
@@ -489,14 +444,7 @@
 .cv2-refine:focus{ outline:none; border-color:var(--focus); }
 .cv2-refine::placeholder{ color:var(--muted); opacity:.65; }
 /* Its own action: this edits the face that is already there, rather than making a new one. */
-.cv2-apply{
-  flex:0 0 auto; margin:8px 10px 0; height:30px;
-  border:1px solid var(--main); border-radius:var(--r-xs);
-  background:var(--main); color:var(--on-main);
-  font:700 12px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-apply:hover:not([disabled]){ filter:brightness(1.08); }
-.cv2-apply[disabled]{ opacity:.45; cursor:default; filter:none; }
+.cv2-apply{ flex:0 0 auto; margin:8px 10px 0; }
 .cv2-textpanel-note{
   flex:0 0 auto; padding:8px 10px; font-size:9.5px; line-height:1.5;
   color:var(--muted); opacity:.75;

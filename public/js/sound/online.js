@@ -57,7 +57,7 @@ export function openOnline(opts) {
   q.type = 'search';
   q.placeholder = 'whoosh, camera shutter, crowd laugh, pop…';
   q.value = o.q ? String(o.q) : _last.q;
-  const go = el('button', 'snd-btn is-primary', 'search');
+  const go = el('button', 'snd-btn is-primary u-btn is-main', 'search');
   go.type = 'submit';
   bar.append(q, go);
   bar.appendChild(el('span', 'sp'));
@@ -126,7 +126,7 @@ export function openOnline(opts) {
     if (!d.results.length) { list.appendChild(el('div', 'snd-empty', 'Nothing CC0 for "' + _last.q + '" - other words?')); return; }
     for (const r of d.results) {
       const row = el('div', 'snd-on-row');
-      const pb = el('button', 'snd-play', '▶');
+      const pb = el('button', 'snd-play u-btn is-s is-icon', '▶');
       pb.type = 'button';
       pb.title = 'Listen';
       pb.addEventListener('click', () => {
@@ -147,7 +147,7 @@ export function openOnline(opts) {
       const page = el('a', 'snd-on-link', 'page');
       page.href = r.landing || r.url; page.target = '_blank'; page.rel = 'noopener';
       row.appendChild(page);
-      const add = el('button', 'snd-btn', 'add');
+      const add = el('button', 'snd-btn u-btn is-s', 'add');
       add.type = 'button';
       add.addEventListener('click', async () => {
         add.disabled = true;
@@ -173,8 +173,8 @@ export function openOnline(opts) {
       list.appendChild(row);
     }
     if (d.pageCount > 1) {
-      const prev = el('button', 'snd-btn', '‹ back');
-      const next = el('button', 'snd-btn', 'more ›');
+      const prev = el('button', 'snd-btn u-btn is-s', '‹ back');
+      const next = el('button', 'snd-btn u-btn is-s', 'more ›');
       prev.type = next.type = 'button';
       prev.disabled = d.page <= 1;
       next.disabled = d.page >= Math.min(12, d.pageCount);

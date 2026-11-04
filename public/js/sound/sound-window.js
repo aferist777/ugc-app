@@ -394,7 +394,7 @@ function _attachment(f) {
       att.appendChild(el('div', 'au-att-ph'));
       att.appendChild(el('div', 'au-att-tx', 'Press a video in the VIDEO folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
     }
-    const up = el('button', 'au-btn', 'from this computer…');
+    const up = el('button', 'au-btn u-btn is-s', 'from this computer…');
     up.type = 'button';
     up.title = 'A video from this computer - it is copied into VIDEO → Uploads first';
     up.addEventListener('click', () => {
@@ -827,7 +827,7 @@ function _result(r) {
   const it = LIBIDX.get(r.path);
   const row = el('div', 'au-res' + (_hear && _hear.path === r.path ? ' is-playing' : ''));
   row.dataset.path = r.path;
-  const pb = el('button', 'au-play', '▶');
+  const pb = el('button', 'au-play u-btn is-s is-icon', '▶');
   pb.type = 'button';
   row.appendChild(pb);
   row.appendChild(el('span', 'au-res-n', (it && it.name) || r.title));
@@ -835,7 +835,7 @@ function _result(r) {
   row.appendChild(el('span', 'au-muted', secs(r.dur)));
   if (it) {
     const fav = !!(it.meta && it.meta.favorite);
-    const star = el('button', 'au-star' + (fav ? ' on' : ''), fav ? '★' : '☆');
+    const star = el('button', 'au-star u-btn is-s is-icon is-quiet' + (fav ? ' on' : ''), fav ? '★' : '☆');
     star.type = 'button';
     star.title = fav ? 'Take it out of Favorites' : 'Into Favorites';
     star.addEventListener('click', async (e) => {
@@ -1031,7 +1031,7 @@ export async function open(o) {
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
   const price = el('div', 'au-price');
-  const go = el('button', 'au-go', 'generate');
+  const go = el('button', 'au-go u-btn is-main', 'generate');
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
   foot.append(alm, line, into, price, go);

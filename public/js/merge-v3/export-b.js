@@ -325,13 +325,13 @@ function _window(o) {
   };
 
   const foot = _el('div', 'mv3-x-foot');
-  const cancel = _el('button', 'mv3-c-btn', 'Cancel');
+  const cancel = _el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });
   // (phase V33.4) Several fragments: one Render, at once - the settings go up with them (the server keeps them on each
   // one and on the project), and the window closes; their tiles show the way along.
   if (many) {
-    const all = _el('button', 'mv3-c-btn mv3-x-go', 'Render ' + many.count);
+    const all = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render ' + many.count);
     all.type = 'button';
     all.disabled = !s.end || !many.count;
     all.title = 'Into the render queue at once, one after another, with these settings';
@@ -352,7 +352,7 @@ function _window(o) {
   }
   // Left of Render, because it is the calmer of the two and the one to reach for when several
   // projects are being set up in a row.
-  const queue = _el('button', 'mv3-c-btn', 'Add to queue');
+  const queue = _el('button', 'mv3-c-btn u-btn', 'Add to queue');
   queue.type = 'button';
   queue.disabled = !s.end;
   queue.title = 'Leave it for later - the queue renders them one after another, with these settings';
@@ -365,7 +365,7 @@ function _window(o) {
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
          d && d.success ? 'info' : 'err');
   });
-  const go = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
+  const go = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render');
   go.type = 'button';
   go.disabled = !s.end;
   // The window STAYS. It becomes the progress and then the result: throwing the file at a new
@@ -408,6 +408,9 @@ export function paintExportButton() {
   b.title = st ? st.title : 'Render this timeline with FFmpeg';
   b.disabled = !can || (st ? !st.enabled : _busy);
   b.classList.toggle('is-stop', !!(st && st.stop));
+  // (phase V73 block 2) "✕ stop" is the part's danger button; Export / Render N its gold one
+  b.classList.toggle('is-danger', !!(st && st.stop));
+  b.classList.toggle('is-main', !(st && st.stop));
   b.classList.toggle('is-armed', !!(st && st.armed));
 }
 

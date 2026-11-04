@@ -100,14 +100,14 @@ export async function openScenario(summary, hooks = {}) {
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
-  const save = _el('button', 'mv3-c-btn', 'save');
+  const save = _el('button', 'mv3-c-btn u-btn', 'save');
   save.type = 'button';
   save.title = 'Keep it in the library';
   // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
   // 2026-10-01). For a scenario in the archive the same place says `restore`: the row and its menu
   // offer nothing to build with until it is back, and neither does this window.
   let archived = !!(summary && summary.archived);
-  const use = _el('button', 'mv3-c-btn mv3-x-use');
+  const use = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main');
   use.type = 'button';
   const dressUse = () => {
     use.textContent = archived ? 'restore' : 'use';

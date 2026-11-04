@@ -334,14 +334,14 @@ function _row(rec) {
 
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act', 'open');
+    const open = _el('button', 'sv3-al-act u-btn is-s', 'open');
     open.type = 'button';
     open.title = 'Look at what came out';
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
     acts.appendChild(open);
   }
   if (rec.state === 'failed' && rec.retryable) {
-    const again = _el('button', 'sv3-al-act' + (_armed === rec.id ? ' is-armed' : ''),
+    const again = _el('button', 'sv3-al-act u-btn is-s' + (_armed === rec.id ? ' is-armed' : ''),
       _armed === rec.id ? 'spend again?' : 'retry');
     again.type = 'button';
     again.title = rec.retryFree ? 'Go on from where it stopped - this costs nothing' : 'Ask for it again - this spends credits';
@@ -383,7 +383,7 @@ function _paintMenu() {
   const head = _el('div', 'sv3-al-head');
   head.appendChild(_el('span', 'sv3-al-h', 'Alerts'));
   head.appendChild(_el('span', 'sp'));
-  const clear = _el('button', 'sv3-al-clear', 'clear');
+  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', 'clear');
   clear.type = 'button';
   clear.title = 'Forget the finished ones. What is still running stays.';
   clear.addEventListener('click', () => { _json('/api/alerts/clear', { method: 'POST' }).then(_poll); });

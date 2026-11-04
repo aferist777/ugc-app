@@ -215,9 +215,9 @@ export async function showResult(o) {
   name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
   const hint = el('span', 'mv3-rr-hint');
-  const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
+  const cancel = el('button', 'mv3-c-btn u-btn' + (o.fresh ? ' danger is-danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
   if (o.fresh) cancel.title = 'Delete this render';
-  const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
+  const save = el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Save & download'); save.type = 'button';
   // THE SUBTITLES FILE beside the render (phase V30, block 4): shown when it has one; downloaded with the video only
   // when this is ticked - off unless the person ticked it last time (the owner's (с38)).
   const srtBox = el('span', 'mv3-x-check');
@@ -316,7 +316,7 @@ export async function showResult(o) {
       srtBox.hidden = !state.srt;
       if (state.srt && srtOn.checked) download(state.srt);
       say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-good');
-      cancel.textContent = 'Close'; cancel.classList.remove('danger'); cancel.title = '';
+      cancel.textContent = 'Close'; cancel.classList.remove('danger', 'is-danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');
     } finally {

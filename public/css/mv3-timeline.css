@@ -9,18 +9,17 @@
    Four buttons in the header's own shell (.mv3-iconbtn); play a little wider - the one reached for without looking. */
 .mv3-tl-transport{display:flex; align-items:center; gap:4px; flex:0 0 auto}
 .mv3-tl-transport .mv3-iconbtn{font-size:10px}
-.mv3-tl-transport .mv3-iconbtn.is-play{width:28px; color:var(--ink); background:var(--surface); font-size:10.5px}
-.mv3-tl-transport .mv3-iconbtn.is-play:hover{border-color:var(--sel-line); color:var(--ink)}
+.mv3-tl-transport .mv3-iconbtn.is-play.u-btn{width:28px; font-size:10.5px}
 /* While a build step of a talking head holds the stage there is no cut to drive: dimmed and dead, as the preview's bar. */
 body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 
 /* ── Cut silence (phase V44) ─────────────────────────────────────────────────
    The button right of ⏩ (dim with nothing picked - a press then says what to pick), its window above it (fixed to the
    viewport, as the timeline's questions open - js/merge-v3/ask.js), and the glow of what will go over every lane. */
-.mv3-tl-transport .mv3-iconbtn.is-silence{display:inline-flex; align-items:center; justify-content:center; padding:0 3px}
+.mv3-tl-transport .mv3-iconbtn.is-silence.u-btn{width:auto; padding:0 3px}
 .mv3-tl-transport .mv3-iconbtn.is-silence svg{display:block}
 .mv3-tl-transport .mv3-iconbtn.is-silence.is-dim{opacity:.45}
-.mv3-tl-transport .mv3-iconbtn.is-silence.is-open{border-color:var(--sel-line); color:var(--ink)}
+.mv3-tl-transport .mv3-iconbtn.is-silence.is-open{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}   /* pressed - the selected look (б2-13) */
 .mv3-silence{
   position:fixed; z-index:60; width:300px; padding:8px 10px 9px; box-sizing:border-box;
   background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--r-sm);
@@ -46,12 +45,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-silence-row.is-foot{margin-top:8px; justify-content:space-between}
 .mv3-silence-row.is-foot > .mv3-silence-n{color:var(--ink); white-space:normal; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot > .mv3-silence-n.is-bad{color:var(--danger)}
-.mv3-silence-cut{
-  flex:0 0 auto; padding:3px 12px; border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--main); color:var(--on-main); font:700 11px/1.3 var(--font);
-}
-.mv3-silence-cut:hover:not(:disabled){filter:brightness(1.12)}
-.mv3-silence-cut:disabled{opacity:.4; cursor:default}
+.mv3-silence-cut{flex:0 0 auto}
 /* (phase V45) "Merge 5 clips into one?" over the last clip picked - the timeline's question chrome (merge-v3.css .mv3-ask). */
 .mv3-mergeask{
   position:fixed; z-index:60; display:flex; align-items:center; gap:7px; padding:5px 7px 5px 9px; box-sizing:border-box;
@@ -60,11 +54,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 }
 .mv3-mergeask-t{white-space:normal; font-variant-numeric:tabular-nums}
 .mv3-mergeask-t.is-bad{color:var(--danger)}
-.mv3-mergeask-go{
-  flex:0 0 auto; padding:3px 11px; border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--main); color:var(--on-main); font:700 11px/1.3 var(--font);
-}
-.mv3-mergeask-go:hover:not(:disabled){filter:brightness(1.12)}
+.mv3-mergeask-go{flex:0 0 auto}
 .mv3-mergeask-x{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
 .mv3-mergeask-x:hover{color:var(--ink)}
 .mv3b-quiet{

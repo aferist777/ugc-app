@@ -152,7 +152,7 @@ function _layers(host, io, list) {
       _keep(() => io.write(next));
     };
     for (const [d, label, title] of [[-1, '↑', 'One layer up'], [1, '↓', 'One layer down']]) {
-      const a = _el('button', 'mv3-patl-arrow', label);
+      const a = _el('button', 'mv3-patl-arrow u-btn is-s is-icon', label);
       a.type = 'button';
       a.title = title;
       a.disabled = d < 0 ? i === 0 : i === list.length - 1;

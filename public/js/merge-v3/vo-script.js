@@ -43,13 +43,13 @@ export function paintChooser(host, project, adopt, o = {}) {
   root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
-  const own = el('button', 'mv3-sc-new', '+ your text');
+  const own = el('button', 'mv3-sc-new u-btn is-s', '+ your text');
   own.type = 'button';
   own.title = o.talking ? 'Your own text, pasted or typed - every paragraph a line of the talking head'
     : 'Your own text, pasted or typed in any language - the whole of it one line';
   own.disabled = _busy;
   own.addEventListener('click', () => openOwnText(put, adopt, { talking: !!o.talking, ...(o.ownText ? o.ownText() : {}) }));
-  const add = el('button', 'mv3-sc-new', '+ scenario');
+  const add = el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario - it is kept in the library, and "use" puts it here';
   add.disabled = _busy;
@@ -131,7 +131,7 @@ function _paintRows(list, put, adopt, o) {
     const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
     row.title = 'Open the text';
     const acts = el('div', 'mv3-sc-acts');
-    const go = el('button', 'mv3-sc-btn is-use', 'use');
+    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', 'use');
     go.type = 'button';
     go.title = o.put ? 'Take this scenario' : 'Put its lines into this voiceover';
     go.disabled = _busy;

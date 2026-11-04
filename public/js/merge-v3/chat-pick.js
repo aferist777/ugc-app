@@ -272,7 +272,7 @@ function _build() {
 
   const foot = el('div', 'pk-foot');
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
   done.type = 'button';
   foot.append(said, done);
 
@@ -418,7 +418,7 @@ function _paintSources() {
   const inp = document.createElement('input');
   inp.type = 'text';
   inp.placeholder = 'YouTube, TikTok, Instagram…';
-  const b = el('button', 'pk-link-go', 'add');
+  const b = el('button', 'pk-link-go u-btn is-s', 'add');
   b.type = 'button';
   row.appendChild(inp);
   row.appendChild(b);
@@ -771,7 +771,7 @@ function _buildTree() {
   // The foot: this computer (and a clip by a link), what the chat says, done.
   const foot = el('div', 'pk-foot');
   const c = _o.computer;
-  const up = el('button', 'pk-up', '+ from this computer…');
+  const up = el('button', 'pk-up u-btn is-s', '+ from this computer…');
   up.type = 'button';
   up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
   up.addEventListener('click', () => c.open());
@@ -779,7 +779,7 @@ function _buildTree() {
   // (phase V26.6, the owner's (пр3)) The place's own way to make what goes into it: the product place's "+ new prop".
   const M = _o.make;
   if (M && typeof M.on === 'function') {
-    const mk = el('button', 'pk-up is-make', M.label || '+ new');
+    const mk = el('button', 'pk-up is-make u-btn is-s is-gen', M.label || '+ new');
     mk.type = 'button';
     if (M.title) mk.title = M.title;
     mk.addEventListener('click', () => M.on());
@@ -792,7 +792,7 @@ function _buildTree() {
     inp.type = 'text';
     inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
     inp.title = L.hint || '';
-    const b = el('button', 'pk-link-go', 'add');
+    const b = el('button', 'pk-link-go u-btn is-s', 'add');
     b.type = 'button';
     row.append(inp, b);
     foot.appendChild(row);
@@ -811,7 +811,7 @@ function _buildTree() {
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   }
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
   done.type = 'button';
   foot.append(said, done);
 

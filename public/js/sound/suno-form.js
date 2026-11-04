@@ -773,7 +773,7 @@ export function createSunoForm(o) {
 
   /** The almanac's gold button, into the column's foot. */
   function almanacButton(foot) {
-    const alm = el('button', 'mv3-vc-almanac' + (almSections().length ? '' : ' is-soon'), 'almanac');
+    const alm = el('button', 'mv3-vc-almanac u-btn is-l' + (almSections().length ? '' : ' is-soon'), 'almanac');
     alm.type = 'button';
     alm.title = almSections().length ? 'Notes on styles and sounds - gather them into a prompt' : 'The almanac of music and sounds is being written - soon';
     alm.addEventListener('click', () => { if (almSections().length) openAlmanac(); else say('The almanac is being written (V34.A) - soon.'); });
@@ -895,7 +895,7 @@ export function createSunoForm(o) {
       h.appendChild(el('span', 'sp'));
       if (to.length) {
         const has = inBuilt(n);
-        const add = el('button', 'aal-btn' + (has ? '' : ' is-primary'), has ? '− take out' : '+ add');
+        const add = el('button', 'aal-btn u-btn is-s' + (has ? '' : ' is-primary is-main'), has ? '− take out' : '+ add');
         add.type = 'button';
         add.title = has ? 'Take its words out of your prompt' : 'Add its words to your prompt below';
         add.addEventListener('click', () => {
@@ -904,7 +904,7 @@ export function createSunoForm(o) {
         });
         h.appendChild(add);
       }
-      const cp = el('button', 'aal-btn', 'copy');
+      const cp = el('button', 'aal-btn u-btn is-s', 'copy');
       cp.type = 'button';
       cp.addEventListener('click', async () => {
         const ok = await copyText(n.text);
@@ -930,7 +930,7 @@ export function createSunoForm(o) {
     const clear = el('button', 'aal-x aal-clear', '✕');
     clear.type = 'button';
     clear.title = 'Empty your prompt';
-    const into = el('button', 'aal-btn is-primary aal-into');
+    const into = el('button', 'aal-btn is-primary aal-into u-btn is-main');
     into.type = 'button';
     bh.append(said, sp, clear, into);
     const ta = el('textarea', 'aal-ta');

@@ -72,12 +72,12 @@ export function build(host, hooks) {
   const foot = document.createElement('div');
   foot.className = 'cv2-edit-foot';
   const cancel = document.createElement('button');
-  cancel.type = 'button'; cancel.id = 'cv2-edit-cancel'; cancel.className = 'cv2-edit-btn';
+  cancel.type = 'button'; cancel.id = 'cv2-edit-cancel'; cancel.className = 'cv2-edit-btn u-btn is-l';
   cancel.textContent = 'Cancel';
   cancel.title = 'Leave the portrait as it is and go back to the parameters';
   cancel.addEventListener('click', () => { if (onCancel) onCancel(); });
   const go = document.createElement('button');
-  go.type = 'button'; go.id = 'cv2-edit-go'; go.className = 'cv2-edit-btn is-go';
+  go.type = 'button'; go.id = 'cv2-edit-go'; go.className = 'cv2-edit-btn is-go u-btn is-l is-main';
   go.textContent = 'Edit';
   go.title = 'Apply these changes to the portrait';
   go.addEventListener('click', () => {

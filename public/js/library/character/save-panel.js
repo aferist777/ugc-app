@@ -56,6 +56,7 @@ function _syncFoot() {
   retry.hidden = _state !== 'saved';
   const failed = _lastKind === 'err';
   retry.classList.toggle('is-retry', failed);
+  retry.classList.toggle('is-danger', failed);
   retry.textContent = failed ? 'Try again' : 'Regenerate';
   retry.title = failed ? 'The sheet did not generate — submit it again' : 'Submit the 4K sheet again';
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
@@ -161,18 +162,18 @@ export function build(host, hooks) {
   const foot = document.createElement('div');
   foot.className = 'cv2-save-foot';
   const cancel = document.createElement('button');
-  cancel.type = 'button'; cancel.id = 'cv2-save-cancel'; cancel.className = 'cv2-save-btn';
+  cancel.type = 'button'; cancel.id = 'cv2-save-cancel'; cancel.className = 'cv2-save-btn u-btn is-l';
   cancel.textContent = 'Cancel';
   cancel.title = 'Back to building, and nothing is saved';
   cancel.addEventListener('click', () => { if (_hooks.onCancel) _hooks.onCancel(); });
   const retry = document.createElement('button');
-  retry.type = 'button'; retry.id = 'cv2-save-retry'; retry.className = 'cv2-save-btn';
+  retry.type = 'button'; retry.id = 'cv2-save-retry'; retry.className = 'cv2-save-btn u-btn is-l';
   retry.textContent = 'Regenerate sheet';
   retry.title = 'Submit the 4K sheet again';
   retry.hidden = true;
   retry.addEventListener('click', () => { if (_hooks.onRetrySheet) _hooks.onRetrySheet(); });
   const go = document.createElement('button');
-  go.type = 'button'; go.id = 'cv2-save-go'; go.className = 'cv2-save-btn is-go';
+  go.type = 'button'; go.id = 'cv2-save-go'; go.className = 'cv2-save-btn is-go u-btn is-l is-main';
   go.textContent = 'Save character';
   go.addEventListener('click', () => {
     if (_state === 'sheet') return;              // disabled anyway; belt as well as braces

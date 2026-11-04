@@ -279,7 +279,7 @@ function _build() {
   const root = $('mv3-sc');
   if (!root) return;
   const top = _el('div', 'mv3-scv-top');
-  const add = _el('button', 'mv3-sc-new', '+ scenario');
+  const add = _el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
@@ -339,7 +339,7 @@ function _paintList() {
     // make a row vanish under a stray click; the archive filter's `restore` brings it back.
     if (!s.archived) {
       const armed = !!_armed && _armed.id === s.id;
-      const x = _el('button', 'mv3-sc-btn is-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+      const x = _el('button', 'mv3-sc-btn is-x u-btn is-s is-quiet' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
       x.type = 'button';
       x.title = 'Move to the archive - press twice';
       if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
@@ -352,7 +352,7 @@ function _paintList() {
       });
       acts.appendChild(x);
     }
-    const go = _el('button', 'mv3-sc-btn is-use', s.archived ? 'restore' : 'use');
+    const go = _el('button', 'mv3-sc-btn is-use u-btn is-s', s.archived ? 'restore' : 'use');
     go.type = 'button';
     go.title = s.archived
       ? 'Put it back in the library'

@@ -310,11 +310,11 @@ export function buildHead(host, hooks) {
   const name = document.createElement('input');
   name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name'; name.placeholder = 'Name (auto)';
   const rnd = document.createElement('button');
-  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd'; rnd.textContent = 'rnd';
+  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'rnd';
   rnd.title = 'Randomise every parameter except marks, and the name';
   rnd.addEventListener('click', randomize);
   const gen = document.createElement('button');
-  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen'; gen.textContent = '▶ Create';
+  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen u-btn is-l is-main'; gen.textContent = '▶ Create';
   gen.title = 'Generate the character from the values below';
   gen.addEventListener('click', () => { if (_onGenerate) _onGenerate(currentValues(), name.value.trim(), _preset); });
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);
@@ -333,7 +333,7 @@ export function buildFoot(host, hooks) {
   const tprow = document.createElement('div');
   tprow.className = 'cv2-crfoot-row';
   const tp = document.createElement('button');
-  tp.type = 'button'; tp.className = 'cv2-tpdne'; tp.textContent = 'TPDNE';
+  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = 'TPDNE';
   tp.title = 'Take a random synthetic face from thispersondoesnotexist.com - press again for another';
   tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
   const tpnote = document.createElement('div');
@@ -379,7 +379,7 @@ export function build(host, hooks) {
   // chose. Disabled with no preset, since there would be nothing to take.
   const puse = document.createElement('button');
   puse.type = 'button';
-  puse.className = 'cv2-preset-use';
+  puse.className = 'cv2-preset-use u-btn';
   puse.id = 'cv2-preset-use';
   puse.textContent = 'use';
   puse.title = 'Put this preset\u2019s face in the middle column and start editing it - no generation';
@@ -539,7 +539,7 @@ export function buildRef(host, hooks) {
   let src = '';
   const apply = document.createElement('button');
   apply.type = 'button';
-  apply.className = 'cv2-apply';
+  apply.className = 'cv2-apply u-btn is-l is-main';
   apply.id = 'cv2-apply';
   const sync = () => {
     const typed = !!ta.value.trim();

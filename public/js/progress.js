@@ -96,7 +96,7 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
     elNote.className = 'sv3-gen-note';
     elCancel = document.createElement('button');
     elCancel.type = 'button';
-    elCancel.className = 'sv3-gen-cancel';
+    elCancel.className = 'sv3-gen-cancel u-btn is-s';
     elCancel.textContent = 'Cancel';
     elCancel.hidden = true;
     elCancel.addEventListener('click', (e) => {

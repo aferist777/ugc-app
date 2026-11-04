@@ -93,9 +93,9 @@ export function openTrim(opts) {
 
   const foot = _el('div', 'vtrim-foot');
   const span = _el('span', 'vtrim-span');
-  const play = _el('button', 'mv3-c-btn', '▶ play the part');
+  const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ play the part');
   play.type = 'button';
-  const done = _el('button', 'mv3-c-btn vtrim-done', 'done');
+  const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', 'done');
   done.type = 'button';
   foot.append(span, play, done);
   box.appendChild(foot);

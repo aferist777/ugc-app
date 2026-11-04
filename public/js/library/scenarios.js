@@ -127,7 +127,7 @@ function _filterRow() {
     row.appendChild(sel);
   }
   if (Object.keys(_filters).length) {
-    const x = _el('button', 'lib-sc-filter-x', 'clear');
+    const x = _el('button', 'lib-sc-filter-x u-btn is-s is-quiet', 'clear');
     x.type = 'button';
     x.title = 'Show every scenario again';
     x.addEventListener('click', () => {
@@ -271,7 +271,7 @@ function _row(it, archived) {
 
 // "▸ Archive · N" - pressed, the archived ones open under it; pressed again, they fold. Remembered.
 function _archHead() {
-  const b = _el('button', 'lib-sc-arch' + (_archOpen ? ' is-open' : ''));
+  const b = _el('button', 'lib-sc-arch u-btn is-quiet' + (_archOpen ? ' is-open' : ''));
   b.type = 'button';
   b.setAttribute('aria-expanded', _archOpen ? 'true' : 'false');
   b.title = _archOpen ? 'Fold the archive' : 'The archived scenarios';
@@ -665,12 +665,12 @@ async function _show(it) {
   // (phase V60, the owner's (пп8а)) An archived one: "Restore" where "Make video" stands - no video from the archive.
   const foot = _el('div', 'lib-sc-bar');
   const archived = !!s.archived;
-  const make = _el('button', 'lib-btn primary', archived ? 'Restore' : 'Make video');
+  const make = _el('button', 'u-btn is-main', archived ? 'Restore' : 'Make video');
   make.type = 'button';
   make.title = archived ? 'Archived - put it back into the list of scenarios (a video is made from the list)'
     : 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
-  const del = _el('button', 'lib-btn danger', 'Delete');
+  const del = _el('button', 'u-btn is-danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this scenario';
   foot.append(make, st, _el('span', 'sp'), del);

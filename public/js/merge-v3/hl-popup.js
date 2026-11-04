@@ -150,7 +150,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   fileIn.accept = 'video/*';
   fileIn.hidden = true;
   fileIn.addEventListener('change', () => takeFile(fileIn.files && fileIn.files[0]));
-  const pickBtn = _el('button', 'mv3-c-btn', 'choose a video file…');
+  const pickBtn = _el('button', 'mv3-c-btn u-btn', 'choose a video file…');
   pickBtn.type = 'button';
   pickBtn.addEventListener('click', () => fileIn.click());
   const fileSaid = _el('span', 'mv3-hlp-file', 'or let a file go anywhere on this window');
@@ -216,7 +216,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     kindRow.appendChild(b);
   }
   // (хп19) The kind's standards back: its length, count, music, captions.
-  const reset = _el('button', 'mv3-hlp-reset', 'reset to standard');
+  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'reset to standard');
   reset.type = 'button';
   reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
@@ -300,14 +300,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
   const said = _el('div', 'mv3-hlp-said');
-  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'find moments');
+  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
   // (V63) The steps: "next →" on the first, "‹ back" beside the press on the second.
-  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'next →');
+  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'next →');
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => next());
-  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back', '‹ back');
+  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', '‹ back');
   backBtn.type = 'button';
   backBtn.title = 'Back to the video and the parts';
   backBtn.addEventListener('click', () => toStep(1));

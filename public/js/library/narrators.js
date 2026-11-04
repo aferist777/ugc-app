@@ -62,7 +62,7 @@ const HTML = `
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
       <aside class="nr-list-col">
-        <button class="mk-add nr-new" type="button" data-f="new" title="Make a narrator - a name first, samples after">+ New narrator</button>
+        <button class="mk-add nr-new u-btn is-s" type="button" data-f="new" title="Make a narrator - a name first, samples after">+ New narrator</button>
         <div class="nr-list" data-f="list"></div>
       </aside>
       <section class="nr-col">
@@ -71,18 +71,18 @@ const HTML = `
         <div class="nr-add">
           <textarea data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
           <div class="nr-add-row">
-            <button class="lib-btn" type="button" data-f="addtext">Add text</button>
+            <button class="u-btn is-s" type="button" data-f="addtext">Add text</button>
             <span class="sp"></span>
             <input type="file" data-f="file" accept="video/*,audio/*">
-            <button class="lib-btn" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
+            <button class="u-btn is-s" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
           </div>
           <div class="nr-add-row">
             <input type="text" class="nr-url" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
-            <button class="lib-btn" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
+            <button class="u-btn is-s" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
           </div>
           <div class="nr-add-row">
             <select class="nr-url nr-src-pick" data-f="src"><option value="">…or a source of the Library</option></select>
-            <button class="lib-btn" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
+            <button class="u-btn is-s" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
           </div>
           <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
             transcribed (a paid call), and its words become the sample. A source of the Library was heard when it came in:
@@ -97,7 +97,7 @@ const HTML = `
           <div class="mk-job" data-f="vjob" hidden></div>
           <div class="nr-foot-row">
             <span class="nr-foot-note" data-f="readnote"></span>
-            <button class="lib-btn primary" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
+            <button class="u-btn is-main" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
           </div>
         </div>
       </section>
