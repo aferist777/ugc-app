@@ -481,8 +481,9 @@ export function createFolderColumn(host, o) {
       }
       b.appendChild(tw);
       b.appendChild(el('span', 'mt-name', ownRow ? opt.own.label : n.label));
+      // (phase V73 block 2, (б2-22)) the count in brackets right after the name, the lock at the right edge - the media tree's way
+      b.appendChild(el('span', 'mt-n', '(' + (ownRow ? ownItems.length : (n.count || 0)) + ')'));
       if (!ownRow && n.locked) { const l = el('span', 'mt-lock'); l.innerHTML = LOCK_SVG; b.appendChild(l); }
-      b.appendChild(el('span', 'mt-n', String(ownRow ? ownItems.length : (n.count || 0))));
       b.title = ownRow ? opt.own.label : pathOf(key).join(' / ');
       b.addEventListener('click', () => { _closeMenu(); select(key); });
       return b;

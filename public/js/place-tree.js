@@ -106,12 +106,13 @@ export function openPlaces(anchor, o) {
     }
     b.appendChild(tw);
     b.appendChild(el('span', 'mt-name', top ? p.to.text : p.label));
+    // (phase V73 block 2, (б2-22)) The count in brackets right after the name, the lock at the right edge - the media tree's way.
+    if (!top && !p.newIn && p.count != null) b.appendChild(el('span', 'mt-n', '(' + p.count + ')'));
     if (p.locked && !top) {
       const lock = el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
       b.appendChild(lock);
     }
-    if (!top && !p.newIn && p.count != null) b.appendChild(el('span', 'mt-n', String(p.count)));
     b.title = no || (p.newIn ? 'Make a new folder in ' + (p.newIn.label || KIND_WORD[p.newIn.kind] || p.newIn.kind) + ' - and that is the place'
       : p.to ? p.to.text : (open.has(p.key) ? 'Fold ' : 'Open ') + p.label);
     // The second press of a double one (the media tree's way to open a branch) does nothing: it would fold what the first

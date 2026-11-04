@@ -1,5 +1,7 @@
 /* THE MEDIA TREE (phase V28.4 + V28.5) - js/media-tree.js, in Merge's Library panel and on the Library's Media shelf.
-   Rows of one line: the twisty, the name, a lock for a required category, the "+" and the ✕ on hover, the count.
+   Rows of one line (28 px since phase V73 block 2): the twisty, the name with its count in brackets, and at the right edge
+   two columns of one width - a lock for a required category, then the button ("generate" / "create" always, the "+" and
+   the ✕ on hover).
    An empty category is pale (and last - the server's order); the selected node is lit; a node a tile can be let go
    on is outlined while it hangs over it. */
 .mt{
@@ -7,7 +9,7 @@
   font:500 11.5px/1.25 var(--font); color:var(--ink); user-select:none;
 }
 .mt-row{
-  position:relative; display:flex; align-items:center; gap:3px; min-height:23px; padding-right:5px;
+  position:relative; display:flex; align-items:center; gap:3px; min-height:28px; padding-right:4px;
   border-radius:var(--r-xs); cursor:pointer; transition:background .1s var(--ease);
 }
 .mt-row:hover{background:var(--surface-2)}
@@ -26,19 +28,20 @@
 .mt-tw.is-open{transform:rotate(90deg)}
 .mt-tw:hover{color:var(--ink)}
 .mt-tw[disabled]{cursor:default}
-.mt-name{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+/* (phase V73 block 2, (б2-21)-(б2-24)) The name is cut, its count in brackets never; the columns at the right edge one width
+   on every row, so locks and buttons stand one under another. The other two trees ("Move to…", the folder column's
+   dropdown) have the count after the name too and the lock at the right edge (.mtp-row). */
+.mt-name{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mt-n{flex:0 0 auto; color:var(--faint); font:var(--fw-regular) var(--fs-11)/1 var(--font); font-variant-numeric:tabular-nums; white-space:nowrap}
+.mt-side{flex:0 0 auto; margin-left:auto; display:flex; align-items:center; gap:2px}
+.mt-lk{flex:0 0 16px; width:16px; display:flex; align-items:center; justify-content:center}
+.mt-bt{flex:0 0 64px; width:64px; display:flex; align-items:center; justify-content:flex-end}
 .mt-lock{flex:0 0 auto; display:inline-flex; color:var(--muted); opacity:.85}
-.mt-n{flex:0 0 auto; min-width:16px; text-align:right; color:var(--muted); font:500 10.5px/1 var(--font); font-variant-numeric:tabular-nums}
+.mtp-row .mt-lock{margin-left:auto}
 
-/* "+" (a new category of the kind) and ✕ (delete the category): only under the pointer. */
-.mt-act{
-  flex:0 0 auto; width:16px; height:16px; padding:0; display:none; align-items:center; justify-content:center;
-  border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font);
-}
+/* "+" (a new folder of the kind) and ✕ (delete the folder) - the shared buttons, only under the pointer. */
+.mt-act{display:none}
 .mt-row:hover .mt-act{display:inline-flex}
-.mt-add:hover{background:var(--surface-3); color:var(--ink)}
-.mt-x{font-size:9px}
-.mt-x:hover{background:var(--danger-fill); color:var(--on-danger)}
 
 /* (phase V64 block 1, the owner 2026-10-31: "дерево с золотым цветом папок - environment, lookbooks, props. и вместо кнопки
    "+" при наведении будет написано "create" в синей рамке с круглыми краями. при наведении на кнопку заливка золотым ...
@@ -46,20 +49,8 @@
    цветом с золотой обводкой, при наведении кнопка становится полностью золотой с контрастным текстом на ней") GOLD IS WHERE A
    GENERATOR'S BUTTON IS - in both trees (js/media-tree.js .is-made, .is-gen); Music has none. */
 .mt .mt-row.is-made .mt-name, .mt .mt-row.is-group.is-gen .mt-name{color:var(--gold)}
-.mt-act.mt-make{
-  width:auto; height:17px; padding:0 8px; border:1px solid var(--gold); border-radius:var(--pill);
-  color:var(--gold); font:600 10px/1 var(--font); letter-spacing:.02em;
-}
-.mt-act.mt-make:hover{background:var(--gold); border-color:var(--gold); color:var(--on-fill)}
-/* (fix (н), the owner 2026-11-01: "кнопки create нужно сделать видимыми всегда, а не только при наведении") Always there. */
-.mt-row .mt-act.mt-make{display:inline-flex}
-.mt-gen{
-  flex:0 0 auto; display:inline-flex; align-items:center; height:17px; padding:0 7px; margin-left:2px;
-  border:1px solid var(--gold); border-radius:var(--r-xs); background:none; color:var(--gold);
-  font:700 10px/1 var(--font); letter-spacing:.03em; cursor:pointer;
-  transition:background .1s var(--ease), color .1s var(--ease);
-}
-.mt-gen:hover{background:var(--gold); color:var(--bg)}
+/* "create" (fix (н): always there) and "generate" are the shared generator's button (.u-btn.is-s.is-gen): a gold line, solid
+   gold with dark words under the pointer (V64, (б2-24)), in the button column. */
 
 /* A tile hanging over a node that takes it. */
 .mt-row.is-drop{outline:1px dashed var(--sel-line); outline-offset:-1px; background:var(--sel-bg)}
@@ -84,7 +75,7 @@
 /* (phase TG, the owner 2026-10-21) A node holding something new since it was last opened: its name and count green, and a
    dot before the count. Opening it sees it (js/media-tree.js). */
 .mt-row.is-new .mt-name, .mt-row.is-group.is-new .mt-name{ color:var(--gold); }
-.mt-row.is-new .mt-n{ color:var(--gold); font-weight:700; }
+.mt-row.is-new .mt-n{ color:var(--gold); font-weight:var(--fw-medium); }   /* «Generated ● (12)» (б2-23) */
 .mt-row.is-new .mt-n::before{ content:'● '; font-size:8px; vertical-align:1px; }
 
 /* ── FOLDERS IN THE GALLERY (phase V35, the owner 2026-10-23, (т2), (у2)) ─────────────────────────────────────────────

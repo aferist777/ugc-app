@@ -104,7 +104,7 @@
 import * as A from './library/actions.js';
 import * as Layers from './layers.js';
 import { askName } from './name-box.js';
-import { menuIcons } from './icons.js';
+import { menuIcons, iconEl } from './icons.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -498,54 +498,63 @@ export function createTree(host, o) {
     const name = _el('span', 'mt-name', n.label);
     name.title = _tipOf(n);
     row.appendChild(name);
+    // (phase V73 block 2, (б2-21)-(б2-24)) The count in brackets right after the name - the name is cut, the count never -,
+    // and at the right edge two columns of one width on every row: the lock, then the button (a generator's "generate" /
+    // "create", or "+" / ✕ under the pointer): locks and buttons one under another whatever the count is.
+    row.appendChild(_el('span', 'mt-n', '(' + (n.count || 0) + ')'));
+    const side = _el('span', 'mt-side');
+    const lockCol = _el('span', 'mt-lk');
+    const btnCol = _el('span', 'mt-bt');
+    side.append(lockCol, btnCol);
+    row.appendChild(side);
     if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
       lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
-      row.appendChild(lock);
+      lockCol.appendChild(lock);
     }
     // A kind that can have folders: "+" makes one at its top - unless a generator has the row (V64: a root's "generate";
     // Music, whose generator is in its menu - (phase V59, (мг3б)) - as its "New folder" is): then "New folder" is in the
     // menu under the right button and on the gallery's empty space.
     if (holds(n) && !n.cat && !(n.make && typeof opt.onMake === 'function') && !gens) {
-      const add = _el('button', 'mt-act mt-add', '+');
+      const add = _el('button', 'mt-act mt-add u-btn is-s is-icon is-quiet');
+      add.appendChild(iconEl('plus', 14));
       add.type = 'button';
       add.tabIndex = -1;
       add.title = 'New folder in ' + (n.label || n.kind);
       add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
-      row.appendChild(add);
+      btnCol.appendChild(add);
     }
     // (phase V55, (гн10), (гн11); V64 (зг3)) Environments / Lookbooks / Props: "create" under the pointer, in a blue frame
     // (gold under the pointer itself), opens their generator - where, the page says (`onMake`).
     if (creates) {
-      const mk = _el('button', 'mt-act mt-make', 'create');
+      const mk = _el('button', 'mt-make u-btn is-s is-gen', 'create');
       mk.type = 'button';
       mk.tabIndex = -1;
       mk.title = n.makeLabel + ' - opens the generator';
       mk.addEventListener('click', (e) => { e.stopPropagation(); opt.onMake(n, mk); });
       mk.addEventListener('dblclick', (e) => e.stopPropagation());
-      row.appendChild(mk);
+      btnCol.appendChild(mk);
     }
     // (phase V64 (зг6)) A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
     if (gens) {
-      const g = _el('button', 'mt-gen', 'generate');
+      const g = _el('button', 'mt-gen u-btn is-s is-gen', 'generate');
       g.type = 'button';
       g.tabIndex = -1;
       g.title = GEN_TIP[n.key];
       g.addEventListener('click', (e) => { e.stopPropagation(); opt.onGenerate(n, g); });
       g.addEventListener('dblclick', (e) => e.stopPropagation());
-      row.appendChild(g);
+      btnCol.appendChild(g);
     }
     if (isCat && n.own && !n.locked) {
-      const x = _el('button', 'mt-act mt-x', '✕');
+      const x = _el('button', 'mt-act mt-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.tabIndex = -1;
       x.title = 'Delete this folder';
       x.addEventListener('mousedown', (e) => e.stopPropagation());
       x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(n, row); });
-      row.appendChild(x);
+      btnCol.appendChild(x);
     }
-    row.appendChild(_el('span', 'mt-n', String(n.count || 0)));
 
     // A press selects; the second press of a double one does not read the gallery again.
     row.addEventListener('click', () => {
