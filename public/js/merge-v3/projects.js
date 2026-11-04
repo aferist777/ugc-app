@@ -137,7 +137,7 @@ async function _openList() {
   await _paint();
   if (_plist) return;
   const el = document.createElement('div');
-  el.className = 'mv3-plist';
+  el.className = 'mv3-plist u-menu is-float';
   const head = document.createElement('div');
   head.className = 'mv3-plist-kinds';
   const rows = document.createElement('div');
@@ -163,8 +163,8 @@ async function _openList() {
     for (const o of shown) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'mv3-plist-row' + (o === open ? ' is-on' : '');
-      b.textContent = o.textContent;
+      b.className = 'mv3-plist-row u-mi' + (o === open ? ' is-on' : '');
+      b.appendChild(Object.assign(document.createElement('span'), { textContent: o.textContent }));
       b.title = o.textContent;
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -356,11 +356,11 @@ function _closeKind() {
 function _kindMenu(anchor) {
   if (_kindPop) { _closeKind(); return; }             // the same press closes it again
   const el = document.createElement('div');
-  el.className = 'mv3-plus-menu';
+  el.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, on) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3-plus-item';
+    btn.className = 'mv3-plus-item u-mi';
     // A kind that is coming (phase V61): there, greyed, and nothing happens on a press (css/app-shell.css [disabled]).
     if (!on) btn.disabled = true;
     const t = document.createElement('span');

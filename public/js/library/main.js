@@ -488,11 +488,11 @@ function _closeNewMenu() {
 function _newMenu(anchor) {
   if (_newPop) { _closeNewMenu(); return; }
   const menu = document.createElement('div');
-  menu.className = 'mv3-plus-menu';
+  menu.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, on) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item';
+    b.className = 'mv3-plus-item u-mi';
     const t = document.createElement('span');
     t.textContent = label;
     const s = document.createElement('small');

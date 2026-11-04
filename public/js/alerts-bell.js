@@ -436,7 +436,7 @@ function _goTo(href) {
 
 function _toggle() {
   if (_menu) return _close();
-  _menu = _el('div', 'sv3-al-menu');
+  _menu = _el('div', 'sv3-al-menu u-menu');
   document.body.appendChild(_menu);
   _paintMenu();
   _place();

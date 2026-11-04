@@ -459,7 +459,7 @@ export function createFolderColumn(host, o) {
     if (!tree && !opt.own) return;
     const open = new Set();
     for (let k = parentKey(sel); k; k = parentKey(k)) open.add(k);
-    const box = el('div', 'ref-move mtp-box fc-menu');
+    const box = el('div', 'ref-move mtp-box fc-menu u-menu is-float');
     box.appendChild(el('div', 'ref-move-title', opt.title));
     const lst = el('div', 'ref-move-list mt mtp');
     lst.setAttribute('role', 'tree');

@@ -80,7 +80,7 @@ export function openPlaces(anchor, o) {
   roots.forEach(mark);
 
   const open = new Set();
-  const box = el('div', 'ref-move mtp-box' + (opt.cls ? ' ' + opt.cls : ''));
+  const box = el('div', 'ref-move mtp-box u-menu is-float' + (opt.cls ? ' ' + opt.cls : ''));
   box.appendChild(el('div', 'ref-move-title', opt.title || 'Where to?'));
   const list = el('div', 'ref-move-list mt mtp');
   list.setAttribute('role', 'tree');

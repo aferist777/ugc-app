@@ -3029,11 +3029,11 @@ function _laneMenu(e) {
   _seekTo((e.clientX - lane.getBoundingClientRect().left) / _zoom());
 
   const box = document.createElement('div');
-  box.className = 'mv3-plus-menu';
+  box.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, title, on) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item';
+    b.className = 'mv3-plus-item u-mi';
     b.title = title;
     const s = document.createElement('span');
     s.textContent = label;
@@ -3090,10 +3090,10 @@ function _clipMenu(e) {
   e.preventDefault();
   _closeCtx();
   const box = document.createElement('div');
-  box.className = 'mv3-plus-menu';
+  box.className = 'mv3-plus-menu u-menu is-float';
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-plus-item';
+  b.className = 'mv3-plus-item u-mi';
   const usd = 0.15 * (+c.dur || 0) / 60;
   b.title = 'Music made for this clip by ElevenLabs - laid under it on "audio 2" (or the next free sound lane) when it comes';
   const s = document.createElement('span');

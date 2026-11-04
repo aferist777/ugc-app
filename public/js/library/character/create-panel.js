@@ -245,7 +245,7 @@ function openTokenPicker(anchor, k) {
   const rest = p.opts.filter(o => !allowed.includes(o));
 
   const pop = document.createElement('div');
-  pop.className = 'cv2-pop';
+  pop.className = 'cv2-pop u-menu is-float';
   pop.addEventListener('click', (e) => e.stopPropagation());
 
   const title = document.createElement('div');

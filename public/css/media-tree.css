@@ -172,5 +172,5 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .ts-chip[hidden]{display:none}
 .ts-chip span{overflow:hidden; text-overflow:ellipsis}
 
-.ts-menu{z-index:9310}
+.ts-menu.u-menu{z-index:9310}
 .ts-anchor{position:fixed; width:1px; height:1px; pointer-events:none}

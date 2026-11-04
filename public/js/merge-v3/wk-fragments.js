@@ -2304,9 +2304,9 @@ function _readAct(p, l, i) {
 
 function _rowMenu(ev, row, p, l, i, n) {
   _closeMenu();
-  const box = el('div', 'mv3-plus-menu');
+  const box = el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, danger) => {
-    const b = el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', '', label));
     if (sub) b.appendChild(el('small', '', sub));

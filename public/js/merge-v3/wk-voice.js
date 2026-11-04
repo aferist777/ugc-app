@@ -246,14 +246,14 @@ const _labelsSub = (L) => _sub({ descriptive: L.descriptive, gender: L.gender, a
 
 async function _voiceMenu(anchor, api) {
   if (_menu) { _closeMenu(); return; }
-  const box = el('div', 'mv3-plus-menu mv3-wk-vmenu');
+  const box = el('div', 'mv3-plus-menu mv3-wk-vmenu u-menu is-float');
   const rec = api.char();
   const mine = _mine(rec);
   const now = _active(rec);
   const pick = api.pick();
   const curId = String((now && now.voiceId) || (!mine.length && pick ? pick.voiceId : '') || '');
 
-  const lib = el('button', 'mv3-plus-item is-lib');
+  const lib = el('button', 'mv3-plus-item u-mi is-lib');
   lib.type = 'button';
   lib.appendChild(el('span', '', 'ElevenLabs library…'));
   lib.appendChild(el('small', '', 'thousands of voices - search and listen free, take one'));

@@ -259,6 +259,7 @@
     font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); letter-spacing:0; text-transform:none;
     transition:background-color var(--dur-1) var(--ease) }
   .u-menu.has-icons .u-mi{ grid-template-columns:16px minmax(0, 1fr) auto }
+  .u-menu.has-icons .u-mi > span:first-of-type{ grid-column:2 }   /* a row without an icon keeps its words in the words' column */
   .u-mi:hover:where(:not([disabled])){ background:var(--hover) }
   .u-mi .u-ico{ color:var(--muted) }
   .u-mi > small, .u-mi span > small{ display:block; grid-column:1; color:var(--faint); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font) }
@@ -361,30 +362,12 @@ body{
 
 /* ── Menus ────────────────────────────────────────────────────────────────────
    A right-click menu or a "+" menu, on the layer stack (js/layers.js). Merge's and the Library's
-   (the source menu, phase F2). Fixed to the viewport, because what it opens out of may scroll and
-   clip its own children. */
-.mv3-plus-menu{
-  position:fixed; z-index:9300; min-width:190px; padding:4px;
-  display:flex; flex-direction:column; gap:2px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.mv3-plus-item{
-  display:flex; flex-direction:column; gap:2px; padding:6px 8px;
-  border:0; border-radius:var(--r-xs); background:transparent; color:var(--ink);
-  font:600 11px/1.2 var(--font); text-align:left; cursor:pointer; transition:.1s var(--ease);
-}
-.mv3-plus-item:hover{background:var(--surface-2)}
-.mv3-plus-item small{font:400 9.5px/1.2 var(--font); color:var(--muted)}
-/* A row that is there but not now: greyed, and no hover to suggest it can be pressed. */
-.mv3-plus-item[disabled]{opacity:.5; cursor:default}
-.mv3-plus-item[disabled]:hover{background:transparent}
-/* The one item on a menu that cannot be taken back. */
-.mv3-plus-item.is-danger span{color:var(--danger)}
-.mv3-plus-item.is-danger:hover{background:var(--danger-soft)}
+   (the source menu, phase F2). Since phase V73 block 2 every one is the shared menu: `.mv3-plus-menu u-menu is-float`
+   (fixed to the viewport, because what it opens out of may scroll and clip its own children) with `.mv3-plus-item u-mi`
+   rows; the icons of the obvious rows are js/icons.js menuIcons. Nothing of their own look is left here. */
 /* (phase V27) The plus's "from a link": a field and "add" where its menu was (js/merge-v3/library.js _linkBox). */
 .mv3-link-box{ width:280px; gap:5px; padding:6px; }
-.mv3-link-box small{ font:400 9.5px/1.3 var(--font); color:var(--muted); padding:0 2px; }
+.mv3-link-box small{ font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); color:var(--faint); padding:0 2px; }
 .mv3-link-box small.is-bad{ color:var(--danger); }
 .mv3-link-row{ display:flex; gap:4px; }
 .mv3-link-row input{ flex:1; min-width:0 }

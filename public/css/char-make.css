@@ -311,11 +311,8 @@
 .cv2-tok.is-off:hover{ color:var(--ink); opacity:1; }
 
 /* ── The value picker, above the token it belongs to ──────────────────────── */
-.cv2-pop{
-  position:fixed; z-index:9000; max-width:330px; padding:7px 8px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
+/* (phase V73 block 2) the shared menu's frame */
+.cv2-pop.u-menu{ z-index:9000; max-width:330px; padding:7px 8px; }
 .cv2-pop-t{
   font:700 9px var(--font); text-transform:uppercase; letter-spacing:.07em;
   color:var(--muted); margin-bottom:5px;

@@ -39,6 +39,7 @@ import { openScenario } from '../scen-window.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
 import { REALLY } from '../really.js';
+import { menuIcons } from '../icons.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -224,14 +225,14 @@ async function _filterMenu() {
   _paintList();
   const anchor = _ui && _ui.filter;
   if (!_shown || !anchor) return;
-  const el = _el('div', 'mv3-plus-menu mv3-sc-menu');
+  const el = _el('div', 'mv3-plus-menu mv3-sc-menu u-menu is-float');
   let srcHead = false;
   for (const t of _choices()) {
     if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'written from')); srcHead = true; }
     if (!t.src && srcHead && (t.id === 'nosrc' || t.id === 'archive') && !el.querySelector('.mv3-sc-menu-sep.is-end')) {
       el.appendChild(_el('div', 'mv3-sc-menu-sep is-end'));
     }
-    const b = _el('button', 'mv3-plus-item' + (t.id === _lib ? ' is-on' : ''));
+    const b = _el('button', 'mv3-plus-item u-mi' + (t.id === _lib ? ' is-on' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, t.label));
     b.appendChild(_el('small', null, t.n + (t.n === 1 ? ' scenario' : ' scenarios') + (t.gone ? ' · source deleted' : '')));
@@ -401,9 +402,9 @@ function _closeMenu() {
 
 function _rowMenu(ev, s, row) {
   _closeMenu();
-  const el = _el('div', 'mv3-plus-menu');
+  const el = _el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, danger) => {
-    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = _el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, label));
     if (sub) b.appendChild(_el('small', null, sub));
@@ -429,6 +430,7 @@ function _rowMenu(ev, s, row) {
       });
   }, true);
 
+  menuIcons(el);
   document.body.appendChild(el);
   const w = el.offsetWidth, h = el.offsetHeight;
   el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';

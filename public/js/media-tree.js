@@ -104,6 +104,7 @@
 import * as A from './library/actions.js';
 import * as Layers from './layers.js';
 import { askName } from './name-box.js';
+import { menuIcons } from './icons.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -1121,9 +1122,9 @@ export function createTree(host, o) {
       }
     }
     if (!items.length) return;
-    const m = _el('div', 'mv3-plus-menu mt-menu');
+    const m = _el('div', 'mv3-plus-menu mt-menu u-menu is-float');
     for (const [label, sub, on] of items) {
-      const b = _el('button', 'mv3-plus-item');
+      const b = _el('button', 'mv3-plus-item u-mi');
       b.type = 'button';
       b.appendChild(_el('span', null, label));
       if (sub) b.appendChild(_el('small', null, sub));
@@ -1131,6 +1132,7 @@ export function createTree(host, o) {
       else b.disabled = true;
       m.appendChild(b);
     }
+    menuIcons(m);
     document.body.appendChild(m);
     const w = m.offsetWidth, h = m.offsetHeight;
     m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, x))) + 'px';

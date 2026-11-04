@@ -27,6 +27,7 @@ import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
 import { openCut } from './cut-window.js';
 import { secs } from './wave.js';
+import { menuIcons } from '../icons.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -74,9 +75,9 @@ export async function soundMenu(it, ev, opts) {
   _close();
   const own = it.kind === 'sounds';
   const builtin = it.kind === 'sfx';
-  const m = el('div', 'mv3-plus-menu snd-menu');
+  const m = el('div', 'mv3-plus-menu snd-menu u-menu is-float');
   const item = (label, sub, fn, danger) => {
-    const b = el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', null, label));
     if (sub) b.appendChild(el('small', null, sub));
@@ -140,6 +141,7 @@ export async function soundMenu(it, ev, opts) {
   item('About', builtin ? 'the built-in set: its author and licence' : 'where it came from', () => about(it, ev));
   if (!builtin && typeof o.del === 'function') item('Delete', it.kind === 'music' ? 'the track and its file' : 'the sound and its file', () => o.del(it), true);
 
+  menuIcons(m);
   document.body.appendChild(m);
   _place(m, ev.clientX, ev.clientY);
   const away = (e) => { if (!m.contains(e.target)) _close(); };

@@ -436,13 +436,13 @@ function _closeFieldMenu() {
 // removes it, and moving off the row takes the question back.
 function _fieldMenu(anchor, m) {
   _closeFieldMenu();
-  const menu = _el('div', 'mv3-plus-menu lib-sc-menu');
+  const menu = _el('div', 'mv3-plus-menu lib-sc-menu u-menu is-float');
   menu.setAttribute('role', 'listbox');
   menu.setAttribute('aria-label', m.label);
   const pick = (v) => { _closeFieldMenu(); m.onChoose(v); };
   for (const r of m.rows) {
     const row = _el('div', 'lib-sc-mrow');
-    const it = _el('button', 'mv3-plus-item' + (r.value === m.current ? ' is-cur' : ''));
+    const it = _el('button', 'mv3-plus-item u-mi' + (r.value === m.current ? ' is-cur' : ''));
     it.type = 'button';
     it.setAttribute('role', 'option');
     it.setAttribute('aria-selected', r.value === m.current ? 'true' : 'false');
@@ -488,7 +488,7 @@ function _fieldMenu(anchor, m) {
   }
   if (m.newItem) {
     const row = _el('div', 'lib-sc-mrow');
-    const it = _el('button', 'mv3-plus-item is-new');
+    const it = _el('button', 'mv3-plus-item u-mi is-new');
     it.type = 'button';
     it.appendChild(_el('span', null, 'new…'));
     it.addEventListener('click', (e) => { e.stopPropagation(); pick('__new__'); });

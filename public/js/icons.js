@@ -80,3 +80,28 @@ export function iconEl(name, size = 16) {
   t.innerHTML = icon(name, size);
   return t.content.firstChild;
 }
+
+// ── The one menu's icons (phase V73 block 2, (б2-16)) ──
+// Only a row whose action is obvious gets one: ★ - star, Delete - trash-2, Rename - pencil, Cut… - scissors, Move to - folder,
+// New folder - folder-plus. A menu with such a row gets the icon column (`.u-menu.has-icons`, css/app-shell.css) and its
+// other rows keep their words in the second column; a menu with none has no empty column. A leading ★ in the words goes -
+// the icon says it. Called once the rows are in, before the menu is measured.
+const MENU_ICONS = [[/^★/, 'star'], [/^(un)?favou?rite\b/i, 'star'], [/^delete\b/i, 'trash-2'], [/^rename\b/i, 'pencil'],
+  [/^cut…/i, 'scissors'], [/^move to\b/i, 'folder'], [/^new folder\b/i, 'folder-plus']];
+
+export function menuIcons(menu) {
+  if (!menu) return menu;
+  let any = false;
+  for (const row of menu.querySelectorAll('.u-mi')) {
+    const words = row.querySelector(':scope > span');
+    if (!words || row.querySelector(':scope > .u-ico')) continue;
+    const text = words.textContent.trim();
+    const hit = MENU_ICONS.find(([re]) => re.test(text));
+    if (!hit) continue;
+    if (text.startsWith('★')) words.textContent = text.replace(/^★\s*/, '');
+    row.insertBefore(iconEl(hit[1]), row.firstChild);
+    any = true;
+  }
+  menu.classList.toggle('has-icons', any);
+  return menu;
+}

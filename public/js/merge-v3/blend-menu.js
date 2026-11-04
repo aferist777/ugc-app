@@ -28,9 +28,9 @@ export function closeBlendMenu() {
 
 function _open(anchor, current, live, write) {
   closeBlendMenu();
-  const el = _el('div', 'mv3-blend-menu');
+  const el = _el('div', 'mv3-blend-menu u-menu is-float');
   for (const m of BLENDS) {
-    const it = _el('button', 'mv3-blend-item' + (m.id === current ? ' is-on' : ''), m.label);
+    const it = _el('button', 'mv3-blend-item u-mi' + (m.id === current ? ' is-on' : ''), m.label);
     it.type = 'button';
     it.title = m.tip;
     it.addEventListener('mouseenter', () => live(m.id));

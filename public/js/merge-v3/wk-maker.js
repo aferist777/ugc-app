@@ -12,6 +12,7 @@ import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
 import { delX } from '../del-x.js';
 import { derived } from '../chars-store.js';
+import { menuIcons } from '../icons.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -370,15 +371,16 @@ export function closeMenu() {
 /** @param items [{ label, sub, on, danger }] */
 export function tileMenu(ev, items, name) {
   closeMenu();
-  const box = el('div', 'mv3-plus-menu');
+  const box = el('div', 'mv3-plus-menu u-menu is-float');
   for (const it of items) {
-    const b = el('button', 'mv3-plus-item' + (it.danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (it.danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', null, it.label));
     if (it.sub) b.appendChild(el('small', null, it.sub));
     b.addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); it.on(); });
     box.appendChild(b);
   }
+  menuIcons(box);
   document.body.appendChild(box);
   const w = box.offsetWidth, h = box.offsetHeight;
   box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';

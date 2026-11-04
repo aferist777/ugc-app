@@ -673,12 +673,12 @@ function _plusMenu(anchor) {
   if (_plus) { _closePlus(); return; }               // the same press closes it again
 
   const el = document.createElement('div');
-  el.className = 'mv3-plus-menu';
+  el.className = 'mv3-plus-menu u-menu is-float';
 
   const item = (label, sub, on) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item';
+    b.className = 'mv3-plus-item u-mi';
     const t = document.createElement('span');
     t.textContent = label;
     b.appendChild(t);
@@ -729,7 +729,7 @@ function _linkBox(anchor) {
   const kind = _videoKind();
   if (!kind) return;
   const el = document.createElement('div');
-  el.className = 'mv3-plus-menu mv3-link-box';
+  el.className = 'mv3-plus-menu mv3-link-box u-menu is-float';
   const inp = document.createElement('input');
   inp.type = 'text';
   inp.className = 'u-in is-s';

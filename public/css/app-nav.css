@@ -76,12 +76,10 @@
   border-radius:50%; background:var(--ok, #3fbf7f);
 }
 
-.sv3-al-menu{
-  position:fixed; z-index:120; width:360px; max-height:min(70vh, 520px); overflow:auto;
-  display:flex; flex-direction:column;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
+.sv3-al-menu{ position:fixed; z-index:120; width:360px; max-height:min(70vh, 520px); overflow:auto; display:flex; flex-direction:column; }
+/* (phase V73 block 2) the shared menu's frame (.u-menu), its own place; the 3D Studio's page keeps its look */
+.sv3-al-menu.u-menu{ padding:0; max-width:none; }
+:root:has(link[href="css/studio3d.css"]) .sv3-al-menu{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow); }
 .sv3-al-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border); }
 .sv3-al-head .sp{ flex:1; }
 .sv3-al-h{ font:700 11px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }

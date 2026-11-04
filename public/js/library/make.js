@@ -850,9 +850,9 @@ function _closeMenu() {
 
 function _sourceMenu(ev, it) {
   _closeMenu();
-  const m = el('div', 'mv3-plus-menu');
+  const m = el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, off) => {
-    const b = el('button', 'mv3-plus-item');
+    const b = el('button', 'mv3-plus-item u-mi');
     b.type = 'button';
     b.appendChild(el('span', null, label));
     if (sub) b.appendChild(el('small', null, sub));
