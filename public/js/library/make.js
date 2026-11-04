@@ -899,7 +899,7 @@ function _openSourceWin(it, play) {
       <div class="src-body">
         <div class="src-stage" data-f="stage"></div>
         <aside class="src-side">
-          <label class="mk-field"><span>Name</span><input type="text" data-f="name" maxlength="200" spellcheck="false"></label>
+          <label class="mk-field"><span>Name</span><input type="text" class="u-in" data-f="name" maxlength="200" spellcheck="false"></label>
           <div class="src-save">
             <button class="u-btn is-main" type="button" data-f="save">Save name</button>
             <span class="lib-status" data-f="st"></span>
@@ -2107,13 +2107,13 @@ function _openAddSource() {
         </div>
         <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>
-            <input type="text" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
+            <input type="text" class="u-in" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
           <button class="u-btn is-main" type="button" data-go="link">Add</button>
         </section>
         <section class="mk-route" data-r="file" hidden>
           <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
           <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
-            <input type="text" data-f="title" placeholder="What this source is"></label>
+            <input type="text" class="u-in" data-f="title" placeholder="What this source is"></label>
           <button class="u-btn is-main" type="button" data-go="file">Add</button>
         </section>
         <section class="mk-route" data-r="lib" hidden>

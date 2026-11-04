@@ -756,8 +756,9 @@ audio.vtrim-media{ background:none; height:32px }
 :root:has(link[href="css/studio3d.css"]) .pk-q{ height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/24px var(--font); }
 :root:has(link[href="css/studio3d.css"]) .pk-q:focus{ outline:none; border-color:var(--focus) }
 :root:has(link[href="css/studio3d.css"]) .pk.is-tree .pk-q, :root:has(link[href="css/studio3d.css"]) .wkc .pk-q{ height:24px }
-.pk-cat{
-  flex:0 1 260px; min-width:0; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
+.pk-cat{ flex:0 1 260px; min-width:0 }   /* the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+:root:has(link[href="css/studio3d.css"]) .pk-cat{
+  height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
 }
 .pk-cat[hidden]{ display:none }

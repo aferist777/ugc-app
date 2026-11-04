@@ -70,6 +70,7 @@ export async function openScenario(summary, hooks = {}) {
   // voice a script is WRITTEN in, a field of its own).
   const gender = field('Gender', (() => {
     const s = document.createElement('select');
+    s.className = 'u-in';                             // (phase V73 block 2) the shared field, as the window's others
     for (const [v, t] of [['', 'any - every character is offered'], ['female', 'female'], ['male', 'male']]) {
       const o = document.createElement('option');
       o.value = v; o.textContent = t;

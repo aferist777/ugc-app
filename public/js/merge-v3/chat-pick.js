@@ -260,7 +260,7 @@ function _build() {
   q.placeholder = 'search by name';
   q.spellcheck = false;
   const cat = document.createElement('select');
-  cat.className = 'pk-cat';
+  cat.className = 'pk-cat u-in is-s';
   cat.title = 'A folder of this shelf';
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
@@ -761,7 +761,7 @@ function _buildTree() {
   q.spellcheck = false;
   // Kept for the code the rows share with the window above: rows have no categories, so it stays hidden.
   const cat = document.createElement('select');
-  cat.className = 'pk-cat';
+  cat.className = 'pk-cat u-in is-s';
   cat.hidden = true;
   const count = el('span', 'pk-count', '');
   bar.append(path, q, count);

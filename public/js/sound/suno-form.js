@@ -280,7 +280,7 @@ export function createSunoForm(o) {
   // ── the settings column's rows ────────────────────────────────────────────
   /** The mode's dropdown, of `modes` (the catalog's records). A choice here is the person's: setMode(id, 'pick'). */
   function modeSelect(modes) {
-    const ms = el('select');
+    const ms = el('select', 'u-in');                // (phase V73 block 2) the shared field
     for (const m of modes || []) {
       const op = el('option', null, m.label);
       op.value = m.id;
@@ -292,7 +292,7 @@ export function createSunoForm(o) {
   }
   /** Suno's model - one price for all three; the choice is remembered. */
   function modelSelect() {
-    const mo = el('select');
+    const mo = el('select', 'u-in');
     for (const id of (CAT ? CAT.sunoModels : ['V6'])) {
       const op = el('option', null, id + ' - ' + (MODEL_HELP[id] || ''));
       op.value = id;
