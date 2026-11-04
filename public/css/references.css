@@ -3,6 +3,14 @@
    Loaded by the Library and by Merge; the viewer's frame is lib-viewer.css's, these are what a post adds to it.
    ════════════════════════════════════════════════════════════════════════════ */
 
+/* (phase V73 block 2, the owner's (н2) б) A new tile of what came from outside - a post of the bot, a source downloaded by
+   a link - wears a gold dot, the tree's "new" gold, until it is opened (js/references/news.js); a post's badge moves aside. */
+.ref-new{
+  position:absolute; left:7px; top:8px; z-index:3; width:8px; height:8px; border-radius:50%; pointer-events:none;
+  background:var(--gold); box-shadow:0 0 0 2px var(--scrim);
+}
+.is-new-file > .ref-badge{ left:21px }
+
 /* How many files a post holds, or ▶ and its length - over the tile's corner. */
 .ref-badge{
   position:absolute; left:5px; top:5px; z-index:2; pointer-events:none;

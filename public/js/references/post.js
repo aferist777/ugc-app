@@ -23,6 +23,8 @@ import { wireInfoSash } from '../library/viewer.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
 import { twoPress } from '../really.js';
+// (phase V73 block 2, (н2)) a new post's gold dot until it is opened - one module with the YouTube sources' tiles
+import * as News from './news.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -85,6 +87,7 @@ export function decorate(tile, it, open, opts) {
   else badge.textContent = '';
   if (badge.textContent) tile.appendChild(badge);
   tile.title = [it.name, m.author, whereOf(it)].filter(Boolean).join('\n');
+  News.mark(tile, it);
   if (files.length > 1) {
     tile.addEventListener('mouseenter', () => _hoverIn(tile, it, open, opts));
     tile.addEventListener('mouseleave', () => _hoverOut());
@@ -235,6 +238,7 @@ function _paint() {
   ov.querySelector('.lib-view-title').textContent = it.name || '';
   ov.querySelector('.ref-view-where').textContent = whereOf(it);
   ov.querySelector('.lib-view-count').textContent = 'post ' + (_v.at + 1) + ' / ' + _v.list.length;
+  News.opened(it);                                  // (phase V73 block 2, (н2)) looked at - no longer new
   _paintStage();
   _paintStrip();
   _paintInfo(it);

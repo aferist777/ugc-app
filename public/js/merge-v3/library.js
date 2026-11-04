@@ -33,6 +33,7 @@
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
 // (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
+import * as News from '../references/news.js';
 // (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
 import * as YT from '../references/yt.js';
 import * as Layers from '../layers.js';
@@ -264,6 +265,8 @@ function _tile(it, list) {
     tag.textContent = (it.meta || {}).line ? 'L' + it.meta.line : '';
     if (tag.textContent) cell.appendChild(tag);
   }
+  // (phase V73 block 2, (н2)) a source downloaded by a link: its gold dot until it is opened, as a new post's
+  if (it.kind === 'youtube') News.mark(cell, it);
 
   // (phase TG, block 5) A post of REFERENCES: its count and its hover of miniatures; a press opens the post viewer; the
   // cross deletes the post ("really?" on the cross itself). Onto a lane - block 5d.

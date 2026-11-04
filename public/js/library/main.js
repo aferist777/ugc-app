@@ -47,6 +47,7 @@ import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
 // (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
+import * as News from '../references/news.js';
 // (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
 import * as YT from '../references/yt.js';
 import { showError } from '../notice.js';
@@ -1081,6 +1082,8 @@ function _card(it, extra) {
   if (extra) card.appendChild(extra);
   // (phase TG) A post of REFERENCES: how many files, and its miniatures on hover - a press on one opens the post on it.
   if (it.kind === 'references') RP.decorate(card, it, (post, file) => _openPost(post, file));
+  // (phase V73 block 2, (н2)) a source downloaded by a link: its gold dot until it is opened, as a new post's
+  else if (it.kind === 'youtube') News.mark(card, it);
   // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
   // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
   // miniature, not the file. What the old menu offered is in the viewer and on the tile.

@@ -11,6 +11,8 @@
 import * as Layers from '../layers.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+// (phase V73 block 2, (н2)) a source downloaded by a link is new until it is looked at here
+import { opened as openedNew } from '../references/news.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 
@@ -69,6 +71,7 @@ function _paint() {
   if (!_ov) return;
   const it = _list[_at];
   if (!it) return closeViewer();
+  if (it.kind === 'youtube') openedNew(it);
 
   const stage = $('.lib-view-stage', _ov);
   stage.textContent = '';                     // replace, never reuse (see the note above)
