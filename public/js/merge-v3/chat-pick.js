@@ -988,8 +988,9 @@ async function _freshIndex() {
   const t = _t;
   if (!t || t.shapeOn) return;
   const nodes = (_o.tree.roots || []).map(k => t.tree.node(k)).filter(Boolean);
-  const idx = nodes.length ? await folderIndex(nodes, _o.tree.type, null, _o.tree.fit || null).catch(() => null) : null;
-  if (_t === t) t.index = idx;
+  let why = '';
+  const idx = nodes.length ? await folderIndex(nodes, _o.tree.type, null, _o.tree.fit || null).catch((e) => { why = (e && e.message) || ''; return null; }) : null;
+  if (_t === t) { t.index = idx; t.indexError = idx ? '' : why; if (idx) t.indexSaid = false; }
 }
 
 // Where the window opens: on the thing it was opened on - its row, else its folder -, else the first of `start` that is
@@ -1143,6 +1144,26 @@ function _searchTree(now) {
     ++_seq;
     _st.loading = false;
     _st.failed = null;
+    // (phase V73 block 2, the owner's (2b-2) а) The folders not read in one go - a search needs them all: "The folders did not
+    // load" with Try again (which reads them again), the reason a popup once - not at every letter typed (б2-19).
+    if (!_t.index && !OLD_LOOK()) {
+      const t = _t;
+      if (!t.indexSaid) { t.indexSaid = true; showError('The folders did not load', { detail: t.indexError || 'they could not be read in one go' }); }
+      _st.items = [];
+      _st.why = '';
+      _st.failed = { what: 'The folders', retry: async () => {
+        t.indexSaid = false;
+        _st.failed = null;
+        _st.loading = true;
+        _paintGrid();
+        await _freshIndex();
+        if (_t !== t || !_w) return;
+        _st.loading = false;
+        _searchTree(true);
+      } };
+      _paintGrid();
+      return;
+    }
     _st.items = _t.index ? filesUnder(n, _t.index).map(_itemOf).filter(Boolean) : [];
     _st.why = _t.index ? '' : 'the folders could not be read';
     _paintGrid();

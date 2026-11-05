@@ -877,12 +877,18 @@ function _presetTools(it, ed) {
   det.appendChild(sum);
   const list = el('div', 'vc-versions-list');
   det.appendChild(list);
-  det.addEventListener('toggle', async () => {
-    if (!det.open || list.childNodes.length) return;
-    list.appendChild(loadingEl('reading…', { line: true }));
+  // (phase V73 block 2, the owner's (2b-2) а) Not read is not "no versions": a popup with the reason, and "did not load" with
+  // Try again in the list (б2-19).
+  const readVersions = async () => {
+    list.replaceChildren(loadingEl('reading…', { line: true }));
     const d = await json('/api/mv3/video/presets/' + encodeURIComponent(p.id));
     list.textContent = '';
-    for (const v of ((d && d.success && d.versions) || []).slice().reverse()) {
+    if (!d || !d.success) {
+      showError('Could not read the versions', { detail: (d && d.error) || 'the app did not answer' });
+      list.appendChild(failedEl('The versions', readVersions, { line: true }));
+      return;
+    }
+    for (const v of (d.versions || []).slice().reverse()) {
       const r = el('div', 'vc-version' + (v.current ? ' is-current' : ''));
       r.append(el('b', null, 'v' + v.v), el('span', 'at', String(v.at || '').slice(0, 16).replace('T', ' ')),
         el('span', 'what', (v.what || '') + (v.first && p.seed ? ' · the original' : '')));
@@ -896,6 +902,10 @@ function _presetTools(it, ed) {
       }
       list.appendChild(r);
     }
+  };
+  det.addEventListener('toggle', () => {
+    if (!det.open || list.childNodes.length) return;
+    readVersions();
   });
   box.appendChild(det);
   return box;

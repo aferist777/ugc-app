@@ -45,7 +45,8 @@ import * as Layers from '../layers.js';
 import * as GW from '../gen-window.js';
 // (phase V73 block 2, step 2b) Being read, nothing found - the shared parts (rows in the voice menu; the library window's list
 // in the big form, the same on Home's quick start).
-import { emptyEl, loadingEl } from '../ui-state.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
@@ -56,6 +57,11 @@ let _busy = '';                        // 'search' | 'take:<voice id>' | 'star' 
 let _said = '';                        // what the panel says under the bar
 let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
+// (phase V73 block 2, the owner's (2b-2) а) A read that failed is said - a popup with the reason, and in its place "did not
+// load" with Try again; what was shown stays (б2-19). The filters, the search and the saved voices.
+let _filtersFailed = false;
+let _searchFailed = false;
+let _shelfFailed = false;
 // English by default (phase V29, the owner 2026-10-14): every script is English, so is the voice that reads it.
 let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: 'en' };
 
@@ -239,10 +245,16 @@ function _closeMenu() {
 async function _loadShelf() {
   if (_shelfLoading) return;
   _shelfLoading = true;
+  _shelfFailed = false;
   try {
     const d = await (await fetch('/api/library/shelf/voices')).json();
-    _shelf = (d && d.success && Array.isArray(d.items)) ? d.items : [];
-  } catch (e) { _shelf = []; }
+    if (!d || !d.success || !Array.isArray(d.items)) throw new Error((d && d.error) || 'the app did not answer');
+    _shelf = d.items;
+  } catch (e) {
+    // Not read is not "No saved voices yet": the menu says it did not load, read again next time (`_shelf` stays null).
+    _shelfFailed = true;
+    showError('Could not read the saved voices', { detail: e.message });
+  }
   _shelfLoading = false;
 }
 const _labelsSub = (L) => _sub({ descriptive: L.descriptive, gender: L.gender, age: L.age, accent: L.accent, language: L.language });
@@ -280,8 +292,18 @@ async function _voiceMenu(anchor, api) {
   }
   box.appendChild(el('div', 'mv3-sc-menu-sep', 'saved voices'));
   const savedAt = box.childNodes.length;
+  if (_shelf === null) _shelfFailed = false;      // read again now: "Reading…" until its answer
   const paintSaved = () => {
     while (box.childNodes.length > savedAt) box.lastChild.remove();
+    if (_shelf === null && _shelfFailed) {
+      box.appendChild(failedEl('The saved voices', async () => {
+        _shelfFailed = false;
+        paintSaved();
+        await _loadShelf();
+        if (_menu && _menu.el === box) { paintSaved(); place(); _mark(); }
+      }, { line: true, cls: 'mv3-wk-vmnote' }));
+      return;
+    }
     if (_shelf === null) { box.appendChild(loadingEl('reading the saved voices…', { line: true, cls: 'mv3-wk-vmnote' })); return; }
     const have = new Set(mine.map(v => String(v.voiceId)));
     const list = _shelf.filter(it => !have.has(String(it.id)));
@@ -466,6 +488,8 @@ export function paintPicker(host, api) {
   pick('accent', 'any accent', _filters.accents || []);
   pick('language', 'any language', _filters.languages || []);
   host.appendChild(f);
+  // (2b-2) the filters not read: their menus are empty, and the window says so - with Try again
+  if (_filtersFailed) host.appendChild(failedEl('The filters', () => { _filters = null; _filtersFailed = false; api.repaint(); }, { line: true }));
 
   const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? 'searching…' : 'search');
   go.type = 'button';
@@ -488,7 +512,9 @@ export function paintPicker(host, api) {
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
-    host.appendChild(_busy === 'search' || !_res ? loadingEl('searching…') : emptyEl('Nothing matches all of those. Drop a filter.', { icon: 'search' }));
+    host.appendChild(_busy === 'search' || (!_res && !_searchFailed) ? loadingEl('searching…')
+      : _searchFailed ? failedEl('The search', () => _search(api, _page))
+        : emptyEl('Nothing matches all of those. Drop a filter.', { icon: 'search' }));
     if (pagerHost) _pager(pagerHost, api);
     return;
   }
@@ -539,10 +565,11 @@ function _pager(host, api) {
 function _loadFilters(api) {
   if (_filters !== null) return;
   _filters = {};                                  // once, even if it fails: no retry storm
+  _filtersFailed = false;
   fetch('/api/scen3/voices/filters').then(r => r.json()).then((d) => {
     _filters = (d && d.success) ? d : {};
-    if (!d || !d.success) { _said = 'Could not read the filters: ' + ((d && d.error) || 'refused'); _bad = true; }
-  }).catch((e) => { _said = 'Could not read the filters: ' + e.message; _bad = true; })
+    if (!d || !d.success) { _filtersFailed = true; showError('Could not read the filters', { detail: (d && d.error) || 'refused' }); }
+  }).catch((e) => { _filtersFailed = true; showError('Could not read the filters', { detail: e.message }); })
     .finally(() => api.repaint());
 }
 
@@ -550,6 +577,7 @@ async function _search(api, page) {
   if (_busy) return;
   _busy = 'search';
   _asked = true;
+  const was = _page;
   _page = Math.max(1, page || 1);
   _said = ''; _bad = false;
   _repaint(api);
@@ -561,10 +589,11 @@ async function _search(api, page) {
     const d = await (await fetch('/api/scen3/voices/library?' + p)).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'the library did not answer');
     _res = { voices: d.voices || [], total: d.total || 0, hasMore: !!d.hasMore };
+    _searchFailed = false;
   } catch (e) {
-    _res = { voices: [], total: 0, hasMore: false };
-    _said = 'The search failed: ' + e.message;
-    _bad = true;
+    // (2b-2) said in the corner; the voices found before stay, with none the list says it did not load
+    showError('The search failed', { detail: e.message });
+    if (!(_res && _res.voices && _res.voices.length)) { _res = null; _searchFailed = true; } else _page = was;   // the page shown stays
   }
   _busy = '';
   _repaint(api);
