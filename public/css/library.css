@@ -1011,7 +1011,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
    is-sound): the note, the wave and the length in a square, the name under it (and an own sound's category). */
 .lib-grid.is-sound{ --card-w:132px; --card-h:130px; }  /* the box inside the 1px border: a square card (phase V73 block 6: one square size) */
 /* (phase V35, the owner's (т3)) REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
-.lib-grid.is-wide{ --card-w:132px; --card-h:130px; }   /* (phase V73 block 6) the square - the middle of the frame */
+.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }   /* (phase V73 block 6, the owner's (b6-2) a) still 16:9, as (т3) - the whole frame */
 /* (phase V26.6) IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
 .lib-grid.is-whole{ --card-w:132px; --card-h:130px; }
 .lib-grid.is-whole .lib-thumb{ object-fit:contain; padding:4px; box-sizing:border-box; }
