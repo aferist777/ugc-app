@@ -128,7 +128,7 @@ function _paint() {
   // (phase V62, block 3, (во45)) Pixabay's terms: where the results come from, linked.
   if (d.items.some(i => i.site === 'pixabay')) {
     meta.appendChild(document.createTextNode(' · '));
-    const a = _el('a', 'mv3-brv-src', 'from Pixabay');
+    const a = _el('a', 'mv3-brv-src', 'From Pixabay');
     a.href = 'https://pixabay.com/';
     a.target = '_blank';
     a.rel = 'noopener';

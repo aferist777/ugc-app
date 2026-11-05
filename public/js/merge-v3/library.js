@@ -343,13 +343,13 @@ function _tile(it, list) {
   // (phase V73 block 5, 5a) ★ and ✕ one form: the shared picture button, both Lucide's (the star filled when it is one)
   star.className = 'mv3-tile-btn mv3-tile-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
   star.innerHTML = icon('star', 12);
-  star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
+  star.title = (it.meta && it.meta.favorite) ? 'Remove from favorites' : 'Add to favorites';
   star.addEventListener('click', async (e) => {
     e.stopPropagation();
     star.disabled = true;
     try {
       await toggleFavorite(it);
-      // Reload rather than re-sorting here: favourites-first is the SERVER's ordering.
+      // Reload rather than re-sorting here: favorites-first is the SERVER's ordering.
       await _load();
     } catch (err) { showError(err.message); star.disabled = false; }
   });
@@ -507,10 +507,10 @@ function _categorySelect(item) {
   const fill = (list) => {
     sel.textContent = '';
     const make = document.createElement('option');
-    make.value = NEW_CAT; make.textContent = '+ folder';
+    make.value = NEW_CAT; make.textContent = '+ Folder';
     sel.appendChild(make);
     const none = document.createElement('option');
-    none.value = ''; none.textContent = '— no folder —';
+    none.value = ''; none.textContent = 'No folder';
     sel.appendChild(none);
     for (const c of (list || [])) {
       // (phase V57) The references of Environments / Lookbooks take nothing by hand: only where it already is, not chosen.
@@ -747,7 +747,7 @@ function _linkBox(anchor) {
   const go = document.createElement('button');
   go.type = 'button';
   go.className = 'mv3-link-go u-btn is-s';
-  go.textContent = 'add';
+  go.textContent = 'Add';
   const row = document.createElement('div');
   row.className = 'mv3-link-row';
   row.appendChild(inp);
@@ -928,9 +928,9 @@ function _manyMenu(items, e) {
       : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
         done: () => _reload(), status: (t, bad) => _status(t, bad),
       })],
-    [allFav ? '★ Remove from favourites' : '★ Add to favourites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
+    [allFav ? '★ Remove from favorites' : '★ Add to favorites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
       starable.length ? async () => {
-        try { await _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
+        try { await _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favorites' : 'in favorites'); }
         catch (err) { _status(err.message, true); }
       } : null],
     ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, at), true],

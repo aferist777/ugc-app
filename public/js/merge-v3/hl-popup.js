@@ -82,10 +82,10 @@ export function closePopup() { if (_win) _win.frame.close(); }
  */
 export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   if (_win) return;
-  const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
+  const lengths = (rec && rec.lengths) || { 'up30': { label: 'Up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
   // (phase V33.6, V33.8, V43) The kinds - the server's: auto, podcast · interview, documentary, fragmentation (its own lengths, no count).
-  const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, documentary: { label: 'documentary' } };
+  const kinds = (rec && rec.kinds) || { auto: { label: 'Auto' }, podcast: { label: 'Podcast · interview' }, documentary: { label: 'Documentary' } };
   const isWhole = (k) => !!(kinds[k] && kinds[k].whole);
   const lengthsOf = (k) => (isWhole(k) && kinds[k].lengths) || lengths;
   const st = {
@@ -130,7 +130,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
   // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
-  for (const [k, label] of [['link', 'a link'], ['source', 'from the Library'], ['file', 'a file']]) {
+  for (const [k, label] of [['link', 'A link'], ['source', 'From the Library'], ['file', 'A file']]) {
     const b = _el('button', 'mv3-sc-tab u-tab', label);
     b.type = 'button';
     b.dataset.from = k;
@@ -155,7 +155,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   fileIn.accept = 'video/*';
   fileIn.hidden = true;
   fileIn.addEventListener('change', () => takeFile(fileIn.files && fileIn.files[0]));
-  const pickBtn = _el('button', 'mv3-c-btn u-btn', 'choose a video file…');
+  const pickBtn = _el('button', 'mv3-c-btn u-btn', 'Choose a video file…');
   pickBtn.type = 'button';
   pickBtn.addEventListener('click', () => fileIn.click());
   const fileSaid = _el('span', 'mv3-hlp-file', 'or let a file go anywhere on this window');
@@ -166,7 +166,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   // original, say - says so here: the one chosen is heard and is the parts' sound.
   const trackSel = _el('select', 'mv3-hlp-sel u-in is-s');
   trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
-  const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'sound');
+  const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'Sound');
   trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';
   trackRow.appendChild(trackSel);
   trackRow.hidden = true;
@@ -221,7 +221,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     kindRow.appendChild(b);
   }
   // (хп19) The kind's standards back: its length, count, music, captions.
-  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'reset to standard');
+  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'Reset to standard');
   reset.type = 'button';
   reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
@@ -233,11 +233,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   const opts = _el('div', 'mv3-hlp-opts');
   const lenRow = _el('div', 'mv3-hlp-orow');
-  lenRow.appendChild(_el('span', 'mv3-hlp-olab', 'length'));
+  lenRow.appendChild(_el('span', 'mv3-hlp-olab', 'Length'));
   const lenChips = _el('div', 'mv3-hlp-chips');
   lenRow.appendChild(lenChips);
   const cntRow = _el('div', 'mv3-hlp-orow');
-  cntRow.appendChild(_el('span', 'mv3-hlp-olab', 'how many'));
+  cntRow.appendChild(_el('span', 'mv3-hlp-olab', 'How many'));
   const cntChips = _el('div', 'mv3-hlp-chips');
   cntRow.appendChild(cntChips);
   // (V69 P12) Each kind its own count buttons (30 for most, 50 for stream) - the server's.
@@ -263,7 +263,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   R.appendChild(_el('div', 'mv3-x-hdr', 'Captions'));
   // (V69 P12, (хп90)) The title on top: on / off - auto's "by the video" too; each kind remembers its own.
   const titleRow = _el('div', 'mv3-hlp-orow mv3-hlp-titlerow');
-  titleRow.appendChild(_el('span', 'mv3-hlp-olab', 'title on top'));
+  titleRow.appendChild(_el('span', 'mv3-hlp-olab', 'Title on top'));
   const titleChips = _el('div', 'mv3-hlp-chips');
   titleRow.appendChild(titleChips);
   R.appendChild(titleRow);
@@ -277,10 +277,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     capTabs.appendChild(b);
     return b;
   };
-  tabBtn('presets', 'presets', 'The style of the captions - one, or several with Shift: each page one of them');
-  const animTab = tabBtn('anim', 'animation', 'How a page comes in and goes out - after a style is chosen');
+  tabBtn('presets', 'Presets', 'The style of the captions - one, or several with Shift: each page one of them');
+  const animTab = tabBtn('anim', 'Animation', 'How a page comes in and goes out - after a style is chosen');
   // (V68 P4) The fonts over the presets' own: one, or several with Shift - each page one of them, as wide as in its preset's font.
-  const fontTab = tabBtn('fonts', 'fonts', 'The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen');
+  const fontTab = tabBtn('fonts', 'Fonts', 'The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen');
   R.appendChild(capTabs);
   // (V68 P3, the owner's second round: "писать выбранные, прям под открытой вкладкой") What is chosen, a row a tab.
   const chosen = _el('div', 'mv3-hlp-chosen');
@@ -298,7 +298,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   } });
   const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keep(); paint(); } });
   const fonts = fontPicker(fontBox, {
-    note: 'The letters of the captions - one font for every page, or several with Shift: each page one of them. Colours, outline and motion stay the style\'s; a page keeps the width it has in the style\'s own font.',
+    note: 'The letters of the captions - one font for every page, or several with Shift: each page one of them. Colors, outline and motion stay the style\'s; a page keeps the width it has in the style\'s own font.',
     onPick: (list) => { st.fonts = list; keep(); paint(); },
   });
 
@@ -306,14 +306,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const hear = _el('div', 'mv3-hlp-hear u-status is-line');
   const said = _el('div', 'mv3-hlp-said u-status is-line');
   const priceEl = _el('span', 'mv3-hlp-price u-price');
-  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'find moments');
+  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
   // (V63) The steps: "next →" on the first, "‹ back" beside the press on the second.
-  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'next →');
+  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Next →');
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => next());
-  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', '‹ back');
+  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', '‹ Back');
   backBtn.type = 'button';
   backBtn.title = 'Back to the video and the parts';
   backBtn.addEventListener('click', () => toStep(1));
@@ -482,8 +482,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     A.className = two ? 'mv3-hlp-right' : 'mv3-hlp-left';
     cols.classList.toggle('is-s2', two);
     frame.setCrumbs(two
-      ? [{ label: 'highlights · video & parts', on: () => toStep(1) }, { label: 'music & captions' }]
-      : [{ label: 'highlights · video & parts' }]);
+      ? [{ label: 'Highlights · video & parts', on: () => toStep(1) }, { label: 'Music & captions' }]
+      : [{ label: 'Highlights · video & parts' }]);
   }
   function toStep(n) {
     st.step = n === 2 ? 2 : 1;
@@ -529,20 +529,20 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     chosen.textContent = '';
     if (st.capTab === 'fonts') {
       chosen.appendChild(chosenSet('fonts', st.fonts.map((f) => [f, fontLabel(f) || f]),
-        { text: 'none - each style\'s own font' },
+        { text: 'None - each style\'s own font' },
         (f) => fonts.reveal(f),
         (f) => { fonts.set(st.fonts.filter((x) => x !== f)); st.fonts = fonts.getAll(); keep(); paint(); }));
       return;
     }
     if (st.capTab === 'anim') {
       chosen.appendChild(chosenSet('animations', st.anims.map((p) => [p, pairName(p) || p]),
-        { text: 'none - pages come and go as the style has them' },
+        { text: 'None - pages come and go as the style has them' },
         (p) => anim.reveal(p),
         (p) => { anim.set(st.anims.filter((x) => x !== p)); st.anims = anim.getAll(); keep(); paint(); }));
       return;
     }
     chosen.appendChild(chosenSet('presets', st.styles.map((idp) => [idp, presetName(idp) || idp]),
-      { text: 'choose a style - Shift picks several, each page one of them', err: true },
+      { text: 'Choose a style - Shift picks several, each page one of them', err: true },
       (idp) => picker.reveal(idp),
       (idp) => { picker.set(st.styles.filter((x) => x !== idp)); st.styles = picker.getAll(); st.style = st.styles[0] || ''; keep(); paint(); }));
   }
@@ -632,7 +632,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
     // (phase V73 block 4) the price stands by the press, in mono - not inside its words
-    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments');
+    goBtn.textContent = st.busy ? 'Starting…' : (whole ? 'Split into parts' : 'Find moments');
     priceEl.textContent = cost && st.kind ? cost : '';
     goBtn.disabled = !ready();
     goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';

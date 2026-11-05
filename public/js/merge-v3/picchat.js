@@ -56,7 +56,7 @@ function PICTURES(ctx) {
     sendUrl: '/api/mv3/img/send',
     text: {
       placeholder: 'Describe a picture, or say what to change.',
-      empty: 'Describe a picture. What comes back stays in this project — and in the Library.',
+      empty: 'Describe a picture. What comes back stays in this project - and in the Library.',
       // (phase V73 block 0) Opened from Home or the Library the chat is on THE draft's conversation (chat-owner.js unbound):
       // no project to stay in - what it makes lies in IMAGES → Generated.
       emptyDraft: 'Describe a picture. What comes back lies in the Library, in IMAGES → Generated.',
@@ -129,7 +129,7 @@ function PICTURES(ctx) {
       });
       cell.appendChild(img);
       const acts = el('div', 'mv3-ig-acts');
-      const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
       use.type = 'button';
       use.title = 'Put it in the row above the message box and carry on from it';
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));

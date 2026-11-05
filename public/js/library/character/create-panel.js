@@ -192,7 +192,7 @@ function paintPresetState() {
   const rnd = document.getElementById('cv2-rnd');
   if (rnd) rnd.title = p
     ? 'Show a different preset'
-    : 'Randomise every parameter except marks, and the name';
+    : 'Randomize every parameter except marks, and the name';
 }
 
 // A token changed, so the values have left the preset behind. The example still shows - it is
@@ -217,7 +217,7 @@ function renderPrompt() {
     tok.type = 'button';
     tok.className = 'cv2-tok' + (!seg.value || seg.value === 'none' ? ' is-off' : '');
     tok.dataset.k = seg.k;
-    tok.title = (p ? p.label : seg.k) + ' — click to change';
+    tok.title = (p ? p.label : seg.k) + ' - click to change';
     tok.textContent = '[' + (seg.value || '—') + ']';
     tok.addEventListener('click', (e) => { e.stopPropagation(); openTokenPicker(tok, seg.k); });
     box.appendChild(tok);
@@ -310,8 +310,8 @@ export function buildHead(host, hooks) {
   const name = document.createElement('input');
   name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name u-in'; name.placeholder = 'Name (auto)';
   const rnd = document.createElement('button');
-  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'rnd';
-  rnd.title = 'Randomise every parameter except marks, and the name';
+  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'Randomize';
+  rnd.title = 'Randomize every parameter except marks, and the name';
   rnd.addEventListener('click', randomize);
   const gen = document.createElement('button');
   gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen u-btn is-l is-main'; gen.textContent = '▶ Create';
@@ -333,7 +333,7 @@ export function buildFoot(host, hooks) {
   const tprow = document.createElement('div');
   tprow.className = 'cv2-crfoot-row';
   const tp = document.createElement('button');
-  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = 'TPDNE';
+  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = 'Random face';
   tp.title = 'Take a random synthetic face from thispersondoesnotexist.com - press again for another';
   tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
   const tpnote = document.createElement('div');
@@ -360,7 +360,7 @@ export function build(host, hooks) {
   psel.className = 'cv2-preset u-in'; psel.id = 'cv2-preset';
   psel.title = 'A preset fills every parameter and names the character';
   const none = document.createElement('option');
-  none.value = ''; none.textContent = '— no preset: build by hand —';
+  none.value = ''; none.textContent = 'No preset - build by hand';
   psel.appendChild(none);
   for (const p of PRESETS) {
     const o = document.createElement('option');
@@ -381,7 +381,7 @@ export function build(host, hooks) {
   puse.type = 'button';
   puse.className = 'cv2-preset-use u-btn';
   puse.id = 'cv2-preset-use';
-  puse.textContent = 'use';
+  puse.textContent = 'Use';
   puse.title = 'Put this preset\u2019s face in the middle column and start editing it - no generation';
   puse.addEventListener('click', () => {
     const p2 = presetById(_preset);
@@ -560,7 +560,7 @@ export function buildRef(host, hooks) {
 
   const note = document.createElement('div');
   note.className = 'cv2-textpanel-note';
-  note.textContent = 'TPDNE below swaps the face. The arrow above, or the cross on the image, goes back to the parameters.';
+  note.textContent = 'Random face below swaps the face. The arrow above, or the cross on the image, goes back to the parameters.';
   wrap.appendChild(note);
 
   host.appendChild(wrap);

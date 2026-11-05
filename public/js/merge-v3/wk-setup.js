@@ -221,9 +221,9 @@ async function _cast(look, anchor, sure, opts) {
       : 'A new talking head of this script with ' + (a.to || 'them') + ' - this project stays with ' + (a.from || 'the one cast now') + ' as it is.';
     return new Promise((done) => {
       askChoice(host, text, sub, [
-        { label: 'change', kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
-        ...((opts && opts.fork) ? [{ label: 'new project', hint: forkHint, on: () => { _fork(look).then(done); } }] : []),
-        { label: 'cancel', on: () => done(false) },
+        { label: 'Change', kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
+        ...((opts && opts.fork) ? [{ label: 'New project', hint: forkHint, on: () => { _fork(look).then(done); } }] : []),
+        { label: 'Cancel', on: () => done(false) },
       ], { stay: true });
     });
   }
@@ -454,7 +454,7 @@ function _clearHalf(half, anchor) {
     const name = _casting().characterName || 'the character';
     askChoice(anchor || document.querySelector('#mv3-stage') || document.body, 'Take ' + name + ' off this project?',
       'Nothing is lost - the reads, frames and clips stay. Choose the same look again and everything is as it was.',
-      [{ label: 'take off', kind: 'yes', on: () => _cast(null) }, { label: 'cancel' }]);
+      [{ label: 'Take off', kind: 'yes', on: () => _cast(null) }, { label: 'Cancel' }]);
     return;
   }
   _patch({ locationId: '', locationImage: '' });
@@ -513,7 +513,7 @@ function _pick(half, ev) {
   if (ev && ev.type === 'contextmenu') {
     const src = half === 'top' ? _whoHalf(_castChar()).src : _whereHalf().src;
     if (!src) return;
-    tileMenu(ev, [{ label: 'open', sub: 'look at it, full size', on: () => showPicture({ src, name: src.split('/').pop() }) }],
+    tileMenu(ev, [{ label: 'Open', sub: 'look at it, full size', on: () => showPicture({ src, name: src.split('/').pop() }) }],
       half === 'top' ? 'character menu' : 'environment menu');
     return;
   }
@@ -658,17 +658,17 @@ const _shownChar = () => (_chars || []).find(c => c.id === _whoState.group) || (
 function _whoCrumbs() {
   const win = _who.win;
   const c = _shownChar();
-  const list = { label: 'characters', on: () => _whoGo('list') };
+  const list = { label: 'Characters', on: () => _whoGo('list') };
   if (_who.page === 'list') {
-    win.setCrumbs([{ label: 'characters' }].concat(c ? [{
+    win.setCrumbs([{ label: 'Characters' }].concat(c ? [{
       label: c.name,
       act: { label: '+ new look', title: 'Dress ' + c.name + ' in a lookbook - or make a lookbook first', on: () => { _who.char = c; _whoGo('look'); } },
     }] : []));
     return;
   }
   const name = { label: c ? c.name : 'character', on: () => _whoGo('list') };
-  if (_who.page === 'look') win.setCrumbs([list, name, { label: 'new look' }]);
-  else win.setCrumbs([list, name, { label: 'new look', on: () => _whoGo('look') }, { label: 'create lookbook' }]);
+  if (_who.page === 'look') win.setCrumbs([list, name, { label: 'New look' }]);
+  else win.setCrumbs([list, name, { label: 'New look', on: () => _whoGo('look') }, { label: 'Create lookbook' }]);
 }
 
 function _paintWho() {
@@ -815,7 +815,7 @@ function _lbTile(path) {
   tile.addEventListener('click', () => { _lbPick = on ? '' : path; _dressSaid = _dressing ? _dressSaid : ''; _paintWho(); });
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    tileMenu(e, [{ label: 'open', sub: 'look at it, full size', on: () => _openLb(path) }], 'lookbook menu');
+    tileMenu(e, [{ label: 'Open', sub: 'look at it, full size', on: () => _openLb(path) }], 'lookbook menu');
   });
   return tile;
 }

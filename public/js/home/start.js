@@ -72,7 +72,7 @@ function _frame(kind, label, o) {
     name: label, size: o.size, geom: o.geom, foot: true,
     onClose: () => { if (_cur && _cur.frame === frame) _cur = null; if (o.onClose) o.onClose(); },
   });
-  frame.setCrumbs([{ label: 'new project · ' + label }]);
+  frame.setCrumbs([{ label: 'New project · ' + label }]);
   frame.body.classList.add('hm-qs');
   _cur = { kind, frame };
   return frame;
@@ -107,7 +107,7 @@ function _blank() {
   const fmts = el('div', 'hm-qs-fmts');
   form.appendChild(fmts);
   const btns = {};
-  for (const [f, word] of [['9:16', 'vertical'], ['16:9', 'horizontal']]) {
+  for (const [f, word] of [['9:16', 'Vertical'], ['16:9', 'Horizontal']]) {
     const b = el('button', 'hm-qs-fmt');
     b.type = 'button';
     b.append(el('span', 'hm-qs-shape ' + (f === '9:16' ? 'is-v' : 'is-h')), el('b', null, f), el('small', null, word));
@@ -120,7 +120,7 @@ function _blank() {
   const paint = () => {
     for (const [f, b] of Object.entries(btns)) b.classList.toggle('is-on', f === st.format);
     F.go.disabled = st.busy || !name.value.trim();
-    F.go.textContent = st.busy ? 'creating…' : 'create';
+    F.go.textContent = st.busy ? 'Creating…' : 'Create';
   };
   const go = async () => {
     const title = name.value.trim();
@@ -192,13 +192,13 @@ async function _textCard(host, st, o) {
     head.appendChild(sub);
     head.appendChild(el('span', 'sp'));
     if (t.from === 'text') {
-      const ed = el('button', 'mv3-sc-new u-btn is-s', 'edit');
+      const ed = el('button', 'mv3-sc-new u-btn is-s', 'Edit');
       ed.type = 'button';
       ed.title = 'Change the text';
       ed.addEventListener('click', () => VT.openOwnText((b) => put(b), adopt, { talking: !!o.talking, ...own() }));
       head.appendChild(ed);
     }
-    const other = el('button', 'mv3-sc-new u-btn is-s', 'other text');
+    const other = el('button', 'mv3-sc-new u-btn is-s', 'Other text');
     other.type = 'button';
     other.title = 'Back to the scenarios and your own text';
     other.addEventListener('click', () => { st.text = null; o.changed(); paint(); });
@@ -256,14 +256,14 @@ async function _talking() {
   const paintFoot = () => {
     const t = st.text;
     F.go.disabled = st.busy || !t;
-    F.go.textContent = st.busy ? 'creating…' : 'create';
+    F.go.textContent = st.busy ? 'Creating…' : 'Create';
     if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '');   // a hint, not red (V73 block 2)
   };
   const paintWho = () => {
     whoLine.textContent = '';
     if (st.look) {
       whoLine.appendChild(el('span', null, st.look.characterName + ' · in this look'));
-      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ none');
+      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ None');
       x.type = 'button';
       x.title = 'Choose nobody here - the character and the place are chosen in the project';
       x.addEventListener('click', () => { st.look = null; keep(); paintWho(); });
@@ -394,7 +394,7 @@ async function _voiceover() {
   moodSel.addEventListener('change', () => { st.mood = moodSel.value; keep(); paintMood(); });
   const paintFoot = () => {
     F.go.disabled = st.busy;
-    F.go.textContent = st.busy ? 'creating…' : 'create';
+    F.go.textContent = st.busy ? 'Creating…' : 'Create';
   };
   await _textCard(textHost, st, { talking: false, changed: () => keep() });
   paintMood();

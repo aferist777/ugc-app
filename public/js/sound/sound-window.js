@@ -400,7 +400,7 @@ function _attachment(f) {
       att.appendChild(el('div', 'au-att-ph'));
       att.appendChild(el('div', 'au-att-tx', 'Press a video in the VIDEO folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
     }
-    const up = el('button', 'au-btn u-btn is-s', 'from this computer…');
+    const up = el('button', 'au-btn u-btn is-s', 'From this computer…');
     up.type = 'button';
     up.title = 'A video from this computer - it is copied into VIDEO → Uploads first';
     up.addEventListener('click', () => {
@@ -547,7 +547,7 @@ function paintFoot() {
     _ui.price.appendChild(el('span', null, p.small + (_cat() && _cat().fake ? ' · FAKE' : '')));
   }
   _ui.price.title = p.big ? 'per press · ' + p.big + ' · ' + p.small : '';
-  _ui.go.textContent = lyr ? 'write the lyrics' : 'generate';
+  _ui.go.textContent = lyr ? 'Write the lyrics' : 'Generate';
   _paintLine();
 }
 // The line of the last press: where it is in Alerts, what came of it - or why it did not start.
@@ -703,16 +703,16 @@ function _lyricRow(l, g, latest, key) {
   t.type = 'button';
   t.title = 'Open or fold the text';
   const peek = String(l.text || '').split('\n').map(s => s.trim()).filter(s => s && !/^\[[^\]]*\]$/.test(s)).slice(0, 2).join(' / ');
-  t.append(el('span', 'au-chips-tw', '▸'), el('b', null, l.title || titleOf(l.text)), el('span', 'au-lr-peek', peek ? '— ' + peek : ''));
+  t.append(el('span', 'au-chips-tw', '▸'), el('b', null, l.title || titleOf(l.text)), el('span', 'au-lr-peek', peek ? '- ' + peek : ''));
   t.addEventListener('click', () => {
     const now = !row.classList.contains('is-open');
     _rowOpen.set(key, now);
     row.classList.toggle('is-open', now);
   });
-  const use = el('button', 'au-link', 'use in custom');
+  const use = el('button', 'au-link', 'Use in custom');
   use.type = 'button';
   use.addEventListener('click', () => F.useLyric(l));
-  const copy = el('button', 'au-link', 'copy');
+  const copy = el('button', 'au-link', 'Copy');
   copy.type = 'button';
   copy.addEventListener('click', async () => { const ok = await copyText(l.text); _say(ok ? 'Copied.' : 'Not copied - the clipboard refused it.', !ok); });
   h.append(t, F.saveButton(l, g), use, copy);
@@ -775,7 +775,7 @@ function _genCard(g) {
   if (g.mode === 'simple' && g.written && g.written.style) {
     const w = el('div', 'au-said');
     w.appendChild(el('b', null, (g.written.by === 'as picked' ? 'Sent as picked' : g.written.by === 'preset' ? 'The mood\'s preset' : 'The writer wrote') + ': '));
-    w.appendChild(document.createTextNode(g.written.title + ' — ' + g.written.style));
+    w.appendChild(document.createTextNode(g.written.title + ' - ' + g.written.style));
     if (g.fell) w.appendChild(el('div', 'au-muted', g.fell));
     card.appendChild(w);
   }
@@ -787,7 +787,7 @@ function _genCard(g) {
     row.appendChild(el('span', null, (g.stage || (g.taskId ? (g.engine === 'eleven' ? 'ElevenLabs is making it' : 'Suno is making it') : 'starting')) + ' · ' + _ago(g.at).replace(' ago', '')));
     row.appendChild(el('span', 'sp'));
     if (g.alertId) {
-      const st = el('button', 'au-link', 'stop waiting');
+      const st = el('button', 'au-link', 'Stop waiting');
       st.type = 'button';
       st.title = 'It stops being waited for and is not filed - the money is not given back';
       st.addEventListener('click', async () => {
@@ -799,7 +799,7 @@ function _genCard(g) {
   } else if (g.state === 'failed') {
     card.appendChild(el('div', 'au-err', g.error || 'it did not come'));
     if (g.alertId && !g.refused) {
-      const again = el('button', 'au-link', 'try again (pays again)');
+      const again = el('button', 'au-link', 'Try again (pays again)');
       again.type = 'button';
       again.addEventListener('click', async () => {
         // (phase V73 block 2) the question at the button, a plain answer - it is paid (б2-5)
@@ -864,7 +864,7 @@ function _result(r) {
     });
     row.appendChild(star);
     if (H && typeof H.showFile === 'function') {
-      const show = el('button', 'au-link', 'show');
+      const show = el('button', 'au-link', 'Show');
       show.type = 'button';
       show.title = 'Where it lies - on the shelf, in its place in the tree';
       show.addEventListener('click', (e) => { e.stopPropagation(); _stopHearing(); H.showFile(r.path); });
@@ -1048,7 +1048,7 @@ export async function open(o) {
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
   const price = el('div', 'au-price');
-  const go = el('button', 'au-go u-btn is-main', 'generate');
+  const go = el('button', 'au-go u-btn is-main', 'Generate');
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
   foot.append(alm, line, el('span', 'sp'), into, price, go);

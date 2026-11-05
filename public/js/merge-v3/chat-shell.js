@@ -134,7 +134,7 @@ export function switchRow(word, on, off, onChange) {
 }
 /** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
 export function almanacSoon() {
-  const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'almanac');
+  const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'Almanac');
   b.type = 'button';
   b.disabled = true;
   b.title = 'In development: how to ask for pictures, and references to place the person by';
@@ -1288,7 +1288,7 @@ export function createChat(make) {
 
   // ── The thread ────────────────────────────────────────────────────────────
   function _stageWords(g) {
-    if (g.error && !g.stage) return g.error.slice(0, 60) + ' — trying the next…';
+    if (g.error && !g.stage) return g.error.slice(0, 60) + ' - trying the next…';
     return g.stage ? g.stage + '…' : S.busyWord + '…';
   }
 
@@ -1555,7 +1555,7 @@ export function createChat(make) {
   // that came out wrong can be argued with.
   function _facts(g) {
     const wrap = el('div', 'mv3-ig-more');
-    const btn = el('button', 'mv3-ig-more-b', 'read more');
+    const btn = el('button', 'mv3-ig-more-b', 'Read more');
     btn.type = 'button';
     const body = el('div', 'mv3-ig-more-body');
     body.hidden = true;
@@ -1568,7 +1568,7 @@ export function createChat(make) {
     }
     btn.addEventListener('click', () => {
       body.hidden = !body.hidden;
-      btn.textContent = body.hidden ? 'read more' : 'less';
+      btn.textContent = body.hidden ? 'Read more' : 'Less';
     });
     wrap.append(btn, body);
     return wrap;
@@ -2169,7 +2169,7 @@ export function createChat(make) {
       _col = createFolderColumn(stripBox, {
         roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
         // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
-        own: Store.unbound() ? null : { label: 'this project', empty: 'Nothing made in this project yet.' },
+        own: Store.unbound() ? null : { label: 'This project', empty: 'Nothing made in this project yet.' },
         tile: _tile, lead: _plusTile,
         // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
         onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },

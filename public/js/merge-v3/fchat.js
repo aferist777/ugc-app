@@ -98,7 +98,7 @@ function FRAMES(ctx) {
       _shotSel = s;
       // The writer, a switch of the column (as in the video chat, V15/V16).
       // (phase V73 block 4) the shared switch (.u-switch), its word beside it
-      const wr = switchRow('writer', ctx.writing(), false, (v) => ctx.setWriting(v));
+      const wr = switchRow('Writer', ctx.writing(), false, (v) => ctx.setWriting(v));
       wr.title = 'On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. '
         + 'Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.';
       const sw = el('div', 'mv3-vc-switches');
@@ -144,7 +144,7 @@ function FRAMES(ctx) {
   }
   // (phase V55) The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
   const SOURCES = [
-    { id: 'frames', label: 'this project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
+    { id: 'frames', label: 'This project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
     Src.PEOPLE_ROW,
   ];
   const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'],
@@ -259,10 +259,10 @@ function FRAMES(ctx) {
       add.disabled = true;
       const d = await _post('/api/scen3/fchat/to-set', { genId: g.id });
       if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
-      add.textContent = 'in frames';
+      add.textContent = 'In frames';
       if (_hooks.added) _hooks.added(d.project);
     });
-    const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
+    const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
     use.type = 'button';
     use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the products and the extra pictures stay';
     use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
@@ -324,7 +324,7 @@ function FRAMES(ctx) {
       }
       box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'Write it again');
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -354,7 +354,7 @@ function FRAMES(ctx) {
     const v = vs[vi];
     l.left.textContent = '';
     l.ta = null; l.ver = v.id;
-    const head = el('div', 'mv3-fc-k', 'prompt' + (c.model ? ' · written for ' + c.model : ''));
+    const head = el('div', 'mv3-fc-k', 'Prompt' + (c.model ? ' · written for ' + c.model : ''));
     l.left.appendChild(head);
     if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
@@ -416,11 +416,11 @@ function FRAMES(ctx) {
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshen(l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'draw');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Draw');
     go.type = 'button';
     go.addEventListener('click', () => _draw(l, go));
     const price = el('span', 'vc-card-why');
-    const again = el('button', 'vc-link', 'write it again');
+    const again = el('button', 'vc-link', 'Write it again');
     again.type = 'button';
     again.title = 'Another variant of the prompt from the same words and pictures - this one stays';
     again.addEventListener('click', () => _rewrite(m, again));
@@ -452,7 +452,7 @@ function FRAMES(ctx) {
     const c = l.m.card;
     const n = _cardN.get(l.m.id) || 1;
     const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
-    l.go.textContent = (made ? 'draw again' : 'draw') + (n > 1 ? ' ×' + n : '');
+    l.go.textContent = (made ? 'Draw again' : 'Draw') + (n > 1 ? ' ×' + n : '');
     l.go.disabled = c.state === 'writing';
     const p = M.price();
     l.price.textContent = p ? (p.approx ? '≈' : '') + money(p.usd * n) + ' · ' + p.model + ' · ' + p.agg : '';
@@ -492,7 +492,7 @@ function FRAMES(ctx) {
   // message of the thread; a press on one puts it into the box. In English (the owner's answer (e)).
   let _ideasBtn = null;
   function _ideasSide() {
-    const b = el('button', 'mv3-fc-ideas u-btn is-gen', 'ideas');
+    const b = el('button', 'mv3-fc-ideas u-btn is-gen', 'Ideas');
     b.type = 'button';
     b.title = 'The agent looks at the pictures above the box - the person, the place, the products, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
     b.addEventListener('click', () => _askIdeas(b));
@@ -504,12 +504,12 @@ function FRAMES(ctx) {
     const atts = ctx.atts();
     if (!atts.some(a => a.slot === 'character' || a.slot === 'place' || a.slot === 'frame')) { note(b, 'Nothing to look at.', 'Put the person or the place above the box first.'); return; }
     b.disabled = true;
-    b.textContent = 'thinking…';
+    b.textContent = 'Thinking…';
     const d = await _post('/api/scen3/fchat/ideas', {
       project: k, projectId: (_proj && _proj.id) || '', refs: atts.map(a => a.path), roles: atts.map(a => a.slot || ''), shot: _shot,
     });
     b.disabled = false;
-    b.textContent = 'ideas';
+    b.textContent = 'Ideas';
     if (!d || !d.success) { note(b, 'No ideas.', (d && d.error) || 'the server did not answer'); return; }
     ctx.reload(true);
   }
@@ -723,10 +723,10 @@ function FRAMES(ctx) {
         add.disabled = true;
         const d = await json('/api/scen3/fchat/to-set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ genId: g.id }) });
         if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
-        add.textContent = 'in frames';
+        add.textContent = 'In frames';
         if (_hooks.added) _hooks.added(d.project);
       });
-      const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
       use.type = 'button';
       use.title = 'Put it into the "frame" place above the message box, to change it with the next message';
       use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
@@ -829,7 +829,7 @@ export function open(p, hooks) {
   if (!isOpen()) {
     // (phase V64, fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
     _win = openFrame({ name: 'frames chat', size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-fchat', onClose: _park });
-    _win.setCrumbs([{ label: 'frames chat' }]);
+    _win.setCrumbs([{ label: 'Frames chat' }]);
     root.removeAttribute('style');        // the place the old overlay measured for it
     _win.body.appendChild(root);
     if (!_ro && window.ResizeObserver) _ro = new ResizeObserver(() => { if (isOpen()) CHAT.fit(); });

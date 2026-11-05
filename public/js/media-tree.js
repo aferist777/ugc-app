@@ -546,7 +546,7 @@ export function createTree(host, o) {
     // (phase V55, (гн10), (гн11); V64 (зг3)) Environments / Lookbooks / Props: "create" under the pointer, in a blue frame
     // (gold under the pointer itself), opens their generator - where, the page says (`onMake`).
     if (creates) {
-      const mk = _el('button', 'mt-make u-btn is-s is-gen', 'create');
+      const mk = _el('button', 'mt-make u-btn is-s is-gen', 'Create');
       mk.type = 'button';
       mk.tabIndex = -1;
       mk.title = n.makeLabel + ' - opens the generator';
@@ -556,7 +556,7 @@ export function createTree(host, o) {
     }
     // (phase V64 (зг6)) A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
     if (gens) {
-      const g = _el('button', 'mt-gen u-btn is-s is-gen', 'generate');
+      const g = _el('button', 'mt-gen u-btn is-s is-gen', 'Generate');
       g.type = 'button';
       g.tabIndex = -1;
       g.title = GEN_TIP[n.key];

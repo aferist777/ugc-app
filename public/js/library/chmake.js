@@ -614,7 +614,7 @@ function _build() {
         <div class="chm-spine">Create model</div>
         <div class="chm-head">
           <span class="chm-t">Create model</span><span class="sp"></span>
-          <button class="u-btn is-s chm-over" type="button" id="chm-over" title="Empty the bench: the portrait and its takes go (their files stay in media/work)">start over</button>
+          <button class="u-btn is-s chm-over" type="button" id="chm-over" title="Empty the bench: the portrait and its takes go (their files stay in media/work)">Start over</button>
         </div>
         <div class="chm-body">
           <div id="chm-head-host"></div>
@@ -630,7 +630,7 @@ function _build() {
           <div class="cv2-drop" id="chm-drop">
             <button class="cv2-page is-prev" type="button" id="chm-prev" title="Previous take"></button>
             <button class="cv2-page is-next" type="button" id="chm-next" title="Next take"></button>
-            <div class="cv2-drop-hint" id="chm-drop-hint">Nothing here yet.<br>Set the parameters and press Create, take a preset as it is with “use”, or a random face with TPDNE.<br>You can also drop your own picture here, or click to pick one.</div>
+            <div class="cv2-drop-hint" id="chm-drop-hint">Nothing here yet.<br>Set the parameters and press Create, take a preset as it is with “Use”, or a random face with Random face.<br>You can also drop your own picture here, or click to pick one.</div>
           </div>
           <div class="cv2-mid-bar">
             <div class="cv2-vars" id="chm-vars" hidden></div>
@@ -679,7 +679,7 @@ function _build() {
   CreatePanel.buildFoot($('chm-foot-host'), {
     onTpdne: () => _run('Fetching a face…', async () => {
       const d = await (await fetch('/api/random-face')).json();
-      if (!d || !d.success) throw new Error((d && d.error) || 'TPDNE did not answer with a face');
+      if (!d || !d.success) throw new Error((d && d.error) || 'The random face service did not answer with a face');
       _showFace(d.dataUrl, 'tpdne');
     }),
   });

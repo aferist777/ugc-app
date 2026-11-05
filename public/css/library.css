@@ -596,7 +596,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   padding:6px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
 }
 .mk-head .sp{ flex:1; }
-.mk-col-title{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.mk-col-title{ font-size:11px; font-weight:500; color:var(--muted); }
 .mk-note{ font-size:10.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* The source's name, editable in place: a heading you can fix, not a form field. */
 .mk-title-in{
@@ -645,7 +645,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-topic-name{ font-size:10.5px; color:var(--muted); }
 .mk-tag{
   flex:0 0 auto; padding:2px 7px; border-radius:var(--pill);
-  font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  font-size:10px; font-weight:500;
 }
 .mk-tag.ready{ color:var(--success); background:var(--success-soft); }
 .mk-tag.wait{ color:var(--muted); background:var(--surface-2); }
@@ -685,7 +685,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-ad-t{ min-height:44px; }
 .mk-ctl textarea[readonly]{ opacity:.7; }
 .mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
-.mk-ctl > span:first-child{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.mk-ctl > span:first-child{ font-size:11px; font-weight:500; color:var(--muted); }
 /* The narrators' gear beside the Narrator field's name (phase G2): as tall as the name, no taller, so the
    fields of the row stay level. */
 .mk-ctl > span:has(.mk-gear){ display:flex; align-items:center; gap:4px; }
@@ -738,7 +738,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-hook-k{
   flex:0 0 auto; padding:1px 6px; border-radius:var(--pill);
   background:var(--sel-bg); color:var(--ink);
-  font-size:9px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  font-size:10px; font-weight:500;
 }
 .mk-hook-k.typed{ cursor:help; }
 .mk-tip{
@@ -747,7 +747,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--r-xs);
   box-shadow:0 6px 18px rgba(0,0,0,.28); font:11px/1.4 var(--font);
 }
-.mk-tip b{ font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--ink); }
+.mk-tip b{ font-size:11px; font-weight:500; color:var(--ink); }
 .mk-save-row{ display:flex; flex-wrap:wrap; gap:8px; }
 .mk-save-row .mk-field{ flex:1 1 150px; }
 /* One card per beat: the rewrite button acts on THIS paragraph, and "rewrite 4" needs a visible 4. */
@@ -886,7 +886,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .nr-col + .nr-col{ border-left:1px solid var(--border); }
 .nr-col-h{
   display:flex; align-items:baseline; gap:6px;
-  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  font-size:11px; font-weight:500; color:var(--muted);
 }
 .nr-col-h em{ font-style:normal; font-weight:500; letter-spacing:0; text-transform:none; }
 .nr-col-h .sp{ flex:1; }
@@ -917,14 +917,14 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .nr-voice-h{ display:flex; gap:8px; align-items:baseline; font-size:10px; color:var(--muted); }
 .nr-voice-at{ font-variant-numeric:tabular-nums; }
 .nr-prof-row{ display:flex; flex-direction:column; gap:2px; }
-.nr-prof-k{ font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.nr-prof-k{ font-size:11px; font-weight:500; color:var(--muted); }
 .nr-vline{ display:flex; align-items:flex-start; gap:6px; }
 .nr-vline-t{ flex:1 1 auto; min-width:0; font-size:11.5px; line-height:1.5; color:var(--ink); }
 .nr-vline > .nr-x{ opacity:0; }
 .nr-vline:hover > .nr-x, .nr-vline > .nr-x:focus-visible, .nr-vline > .nr-x.is-armed{ opacity:1; }
 .nr-new-tag{
-  flex:0 0 auto; margin-top:2px; padding:1px 5px; border-radius:3px; font-size:8.5px; font-weight:700; letter-spacing:.05em;
-  text-transform:uppercase; color:var(--success); background:var(--success-soft);
+  flex:0 0 auto; margin-top:2px; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:500;
+  color:var(--success); background:var(--success-soft);
 }
 /* Text corrected in place: a quiet frame under the cursor, the hint while empty. */
 .nr-ed{ border-radius:3px; padding:1px 3px; margin:-1px -3px; cursor:text; overflow-wrap:anywhere; }

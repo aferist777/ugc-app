@@ -56,10 +56,10 @@ export function createPlayer(host, opts) {
   const time = el('span', 'snd-clock', '');
   // (phase V59) The name over the wave, in one column with it.
   const mid = el('div', 'snd-pl-mid');
-  const name = el('span', 'snd-pl-name', 'choose a track');
+  const name = el('span', 'snd-pl-name', 'Choose a track');
   const wave = el('div', 'snd-pl-wave');
   mid.append(name, wave);
-  const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', '▶ the piece');
+  const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', '▶ The piece');
   piece.type = 'button';
   piece.title = 'Play only the piece between the gold handles';
   const x = el('button', 'snd-btn snd-pl-x snd-pl-tool u-btn is-s is-icon is-quiet u-x', '');

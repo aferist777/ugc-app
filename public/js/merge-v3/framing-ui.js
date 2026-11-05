@@ -18,17 +18,17 @@ import { placeBySplit } from '../captions/split.js';
 
 // (phase V69 P12b, (хп82)) 'camera + game' - a stream's webcam on top, the game below (public/js/framing/cam.js); on any clip, so a
 // stream's frame can be seen while the stream kind is in development.
-export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['center', 'middle'],
-                         ['whole', 'whole + blur'], ['bands', 'two faces'], ['cam', 'camera + game']];
+export const FRAMINGS = [['fixed', 'Fixed'], ['face', 'Follow the face'], ['center', 'Middle'],
+                         ['whole', 'Whole + blur'], ['bands', 'Two faces'], ['cam', 'Camera + game']];
 
 // (phase V43, (ё13), (ё7а)) A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
 // marked `active`, planned on the server from the counted source, the words and the key moments. The switch shows it as its
 // own choice while the clip has it (another choice replaces it; Ctrl+Z brings it back); and its punch-ins have a switch of their
 // own - on or off, nothing to edit by hand.
-const ACTIVE = ['active', 'the most active'];
+const ACTIVE = ['active', 'The most active'];
 // (phase V69 P12b) A podcast's or a true crime fragment's clip follows THE SPEAKER - the same planner by its kind's rules
 // (public/js/framing/active.js `speaker`): its switch says so.
-const SPEAKER = ['active', 'the speaker'];
+const SPEAKER = ['active', 'The speaker'];
 /** The switch's value for the clip: 'active' for a part of fragmentation, else its record's mode, or fixed. */
 export const modeOf = (c) => (c && c.frame && c.frame.active ? 'active' : (c && c.frame && c.frame.mode) || 'fixed');
 /** The choices the switch offers this clip - the most active only on a clip that has it. */

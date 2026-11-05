@@ -112,7 +112,7 @@ const ROWS = [
   {
     label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true, optional: true, r2: true,
     placeholder: 'https://pub-••••.r2.dev  (optional)',
-    desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
+    desc: 'The bucket\'s own public address. Left empty, links are presigned instead - longer, and they expire, but nothing has to be switched on in the dashboard.',
   },
 ];
 
@@ -256,7 +256,7 @@ function buildRow(r) {
     again = document.createElement('button');
     again.type = 'button';
     again.className = 'bk-mini u-btn is-s';
-    again.textContent = 'check';
+    again.textContent = 'Check';
     again.title = 'Check the key again: the key, the account, the bucket, an upload';
     sr.append(steps, again);
     side.appendChild(sr);
@@ -389,7 +389,7 @@ async function load() {
     await tgLoad();
   } catch (e) {
     setStatus('');
-    sayError('Could not read the current settings — saving is disabled so nothing gets overwritten.', e.message);
+    sayError('Could not read the current settings - saving is disabled so nothing gets overwritten.', e.message);
   }
 }
 
@@ -570,7 +570,7 @@ async function save(btn) {
     if (row.mode === 'typed' && row.field.value.trim()) payload[key] = row.field.value.trim();
     else if (row.mode === 'cleared') { payload[key] = ''; removals++; }
   }
-  if (!Object.keys(payload).length) { setStatus('Nothing to change — type a key to replace it, or × to remove one.', 'ok'); return; }
+  if (!Object.keys(payload).length) { setStatus('Nothing to change - type a key to replace it, or × to remove one.', 'ok'); return; }
   // Removing is asked about once: an empty key is a feature that stops working.
   // (phase V73 block 2) one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
   if (removals && !_armed) {

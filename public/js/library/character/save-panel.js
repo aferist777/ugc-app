@@ -58,7 +58,7 @@ function _syncFoot() {
   retry.classList.toggle('is-retry', failed);
   retry.classList.toggle('is-danger', failed);
   retry.textContent = failed ? 'Try again' : 'Regenerate';
-  retry.title = failed ? 'The sheet did not generate — submit it again' : 'Submit the 4K sheet again';
+  retry.title = failed ? 'The sheet did not generate - submit it again' : 'Submit the 4K sheet again';
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
   go.disabled = busy || (_state === 'form' && !name.value.trim());
   // The button says what pressing it does NOW, not what the stage is called. From the form it

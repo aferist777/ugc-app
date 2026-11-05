@@ -375,7 +375,7 @@ function _loadKit(repaint) {
       // (phase V26.8) The models of the clips, each with its qualities - Kling avatar and the Seedances - and
       // Seedance's ways of voicing a clip (lib/th-video.js). A server started before V26.8 answers Kling's qualities
       // alone: they are Kling's model, so the field still works until the app is restarted.
-      models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'kling avatar', family: 'kling', qualities: m.qualities }] : []),
+      models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'Kling avatar', family: 'kling', qualities: m.qualities }] : []),
       sounds: (m && m.sounds) || [],
       moods: (m && m.moods) || [],
     };
@@ -1327,7 +1327,7 @@ function _stageMoodVoice(host, p, lines) {
     if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
     else if (_demoMissing(p)) {
       notes.appendChild(_note(_demoErr || 'This voice has no demo yet - Seedance takes its timbre from it.', !!_demoErr));
-      const mk = el('button', 'mv3-wk-vuse u-btn is-s', 'make the demo');
+      const mk = el('button', 'mv3-wk-vuse u-btn is-s', 'Make the demo');
       mk.type = 'button';
       mk.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
       mk.addEventListener('click', () => _askDemo(p));
@@ -1340,9 +1340,9 @@ function _stageMoodVoice(host, p, lines) {
 // whole video, kept on the project. Changing either touches no read: the lines read before stay read,
 // and the field's `generate` redoes them - a read again for the stability, a retiming for the speed.
 const STABILITY = [
-  { v: 0, label: 'creative', tip: 'More emotional and expressive - and more likely to stray from the words' },
-  { v: 0.5, label: 'natural', tip: 'Balanced - the closest to the voice as it was recorded' },
-  { v: 1, label: 'robust', tip: 'Very even - follows the tags less' },
+  { v: 0, label: 'Creative', tip: 'More emotional and expressive - and more likely to stray from the words' },
+  { v: 0.5, label: 'Natural', tip: 'Balanced - the closest to the voice as it was recorded' },
+  { v: 1, label: 'Robust', tip: 'Very even - follows the tags less' },
 ];
 const SPEED = { min: 0.7, max: 1.2, step: 0.05 };
 // What the two are, said in the bubbles of their names in field 1 (phase V61).
@@ -1479,7 +1479,7 @@ function _voCount(p, box) {
 // videos and pictures mixed, videos only, pictures only - and lays it again when changed (the pieces chosen by hand stay).
 let _broll = null;            // { key, state } - the server's word on this project's B-roll
 let _brollT = 0;
-const BROLL_MODES = [['mixed', 'videos and pictures'], ['video', 'only videos'], ['image', 'only pictures']];
+const BROLL_MODES = [['mixed', 'Videos and pictures'], ['video', 'Only videos'], ['image', 'Only pictures']];
 function _brollWatch(p, now) {
   clearTimeout(_brollT);
   const id = String(p.id);
@@ -1649,7 +1649,7 @@ function _stageFrames(host, p) {
     + 'A frame picked by hand in a fragment stays that line\'s either way.');
   foot.appendChild(tick);
   _genButton(foot, {
-    label: 'frames chat',
+    label: 'Frames chat',
     disabled: _missing(p).length > 0,
     title: 'Ask for a frame in words - the person and the place go with it; a frame you like goes into this set with "to frames"',
     on: () => { _setPick = ''; openChat(); },
@@ -1851,7 +1851,7 @@ function _seedanceSettings(body, p) {
   const curG = v.gestures || v.mood || '';
   if (!curG) _noneOption(gest, 'as the mood');
   for (const md of moods) {
-    const o = el('option', '', md.label + (md.gloss ? ' — ' + md.gloss : '') + (md.id === v.mood ? ' (the mood)' : ''));
+    const o = el('option', '', md.label + (md.gloss ? ' - ' + md.gloss : '') + (md.id === v.mood ? ' (the mood)' : ''));
     o.value = md.id;
     if (md.id === curG) o.selected = true;
     gest.appendChild(o);
@@ -1864,9 +1864,9 @@ function _seedanceSettings(body, p) {
 
   // THE CAMERA - one continuous shot (the owner's answer (е)); several shots in one clip are in development.
   const cam = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
-  const one = el('option', '', 'one continuous shot');
+  const one = el('option', '', 'One continuous shot');
   one.value = 'one';
-  const more = el('option', '', 'several shots · soon');
+  const more = el('option', '', 'Several shots · soon');
   more.value = 'more';
   more.disabled = true;
   cam.append(one, more);
@@ -1885,7 +1885,7 @@ function _list(host, p, lines) {
     if (!lines.length) { VOS.paintChooser(host, p, adopt); return; }
     const bar = el('div', 'mv3-vos-bar');
     bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? 'the scenario «' + (p.title || 'untitled') + '»' : 'your own text'));
-    const other = el('button', 'mv3-wk-vmore u-btn is-s', 'other script');
+    const other = el('button', 'mv3-wk-vmore u-btn is-s', 'Other script');
     other.type = 'button';
     other.title = 'Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.';
     other.disabled = VOICE.reading().busy;
@@ -1974,7 +1974,7 @@ function _sdPromptCol(p, f) {
     act.appendChild(s);
   }
   if (f.edited && f.hasAgent) {
-    const back = el('button', 'mv3-wk-flink', 'use the writer’s');
+    const back = el('button', 'mv3-wk-flink', 'Use the writer’s');
     back.type = 'button';
     back.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _saveSdPrompt(p, f.line, { useAgent: true }); });
     act.appendChild(back);
@@ -2130,7 +2130,7 @@ function _insertEditor(host, p, lines) {
   save.title = 'Put the line in (Ctrl+Enter)';
   save.disabled = _insSaving || !_insDraft.trim();
   save.addEventListener('click', () => _insertLine(p, after));
-  const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
+  const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'Cancel');
   drop.type = 'button';
   drop.disabled = _insSaving;
   drop.addEventListener('click', cancel);
@@ -2168,7 +2168,7 @@ async function _insertLine(p, after) {
 function _offRow(l, i) {
   const row = el('div', 'mv3-wk-frow is-off');
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
-  const back = el('button', 'mv3-wk-vuse u-btn is-s', 'restore');
+  const back = el('button', 'mv3-wk-vuse u-btn is-s', 'Restore');
   back.type = 'button';
   back.title = 'Put this line back where it was in the script';
   back.disabled = _offing;
@@ -2296,7 +2296,7 @@ function _clipWindow(p, l, i, n) {
     if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
     if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
     else {
-      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'Use');
       use.type = 'button';
       use.title = "Make this the fragment's clip - on the timeline too" + (stale ? ', stale as it is' : '');
       use.addEventListener('click', async () => { use.disabled = true; await _pickClip(i, c.id); _closeClipWindow(); });
@@ -2334,7 +2334,7 @@ function _readAct(p, l, i) {
     : !VOICE.canSpeak(p) ? 'mark the script up first - field 1'
       : busy ? 'the voice is busy' : '';
   const va = _api.voiceApi();
-  return { label: rs === 'none' ? 'read' : 'read again', why, on: why ? null : () => VOICE.readLine(va, i) };
+  return { label: rs === 'none' ? 'Read' : 'Read again', why, on: why ? null : () => VOICE.readLine(va, i) };
 }
 
 function _rowMenu(ev, row, p, l, i, n) {
@@ -2419,11 +2419,11 @@ function _fragment(host, p, l, i) {
     });
     host.appendChild(box);
     const acts = el('div', 'mv3-wk-vfoot is-tight');
-    const save = el('button', 'mv3-wk-vuse u-btn is-s', 'save');
+    const save = el('button', 'mv3-wk-vuse u-btn is-s', 'Save');
     save.type = 'button';
     save.title = 'Save the words (Ctrl+Enter)';
     save.addEventListener('click', () => _saveWords(va, i));
-    const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
+    const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'Cancel');
     drop.type = 'button';
     drop.addEventListener('click', () => { _editWords = -1; _ctx.repaint(); });
     acts.append(save, drop);
@@ -2453,7 +2453,7 @@ function _fragment(host, p, l, i) {
       rb.type = 'button';
       rb.disabled = !ra.on || reading;
       rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
-        : (ra.label === 'read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
+        : (ra.label === 'Read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
       if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
       row.appendChild(rb);
       // THE LINE'S OWN SPEED and its play, between the read and the words (the owner, 2026-10-10): a new
@@ -2479,7 +2479,7 @@ function _fragment(host, p, l, i) {
   }
   if (rs === 'stale' && !_bySample()) {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
-    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'put the words back');
+    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'Put the words back');
     back.type = 'button';
     back.title = 'Restore the line to what the take says';
     back.disabled = busyRead;
@@ -2649,7 +2649,7 @@ function _pickRow(host, p, l, i) {
   if (!auto) {
     const back = el('button', 'mv3-wk-fpickrule');
     back.type = 'button';
-    back.textContent = 'back to the rule - the set in turn';
+    back.textContent = 'Back to the rule - the set in turn';
     back.addEventListener('click', () => _pickFrame(i, ''));
     list.appendChild(back);
   }
@@ -2706,7 +2706,7 @@ function _motionCol(l, i, hasFrame) {
       action.appendChild(s);
     }
     if (sh && sh.motionEdited && sh.motionAgent) {
-      const back = el('button', 'mv3-wk-flink', 'use the agent’s');
+      const back = el('button', 'mv3-wk-flink', 'Use the agent’s');
       back.type = 'button';
       back.title = sh.motionAgent;
       back.addEventListener('click', () => { delete _drafts[i + ':motion']; _saveShot(i, { useAgentMotion: true }); });
@@ -2957,12 +2957,12 @@ export function openPicture(p) {
       crop: cut ? { aspect: _formatAspect(p) } : null,
       actions: cut
         ? [
-          { label: _cropBusy ? 'cutting…' : 'apply', go: true, busy: _cropBusy,
+          { label: _cropBusy ? 'Cutting…' : 'Apply', go: true, busy: _cropBusy,
             title: 'Cut the picture to the selection. The cut joins the set, beside this frame, and is saved in the project.',
             on: (rect) => _cropApply(p, fr, rect) },
-          { label: 'cancel', busy: _cropBusy, title: 'Leave the frame as it is', on: () => { _cropOn = ''; _ctx.repaint(); } },
+          { label: 'Cancel', busy: _cropBusy, title: 'Leave the frame as it is', on: () => { _cropOn = ''; _ctx.repaint(); } },
         ]
-        : [{ label: 'crop', title: 'Reframe this picture - drag a selection, and the cut joins the set as a frame of its own. It keeps the format of the project.',
+        : [{ label: 'Crop', title: 'Reframe this picture - drag a selection, and the cut joins the set as a frame of its own. It keeps the format of the project.',
           on: () => { _cropOn = fr.id; _ctx.repaint(); } }],
     };
   }

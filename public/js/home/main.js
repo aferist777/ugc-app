@@ -42,7 +42,7 @@ CM.init({
   onSaved: (id, name) => {
     showToast({
       mark: '✓', title: 'Saved · ' + (name || 'the character'), where: 'Library · Characters - its voices are chosen there',
-      ms: 9000, act: { label: 'open in Library', run: () => { location.href = '/library?shelf=characters&sel=' + encodeURIComponent(id || ''); } },
+      ms: 9000, act: { label: 'Open in Library', run: () => { location.href = '/library?shelf=characters&sel=' + encodeURIComponent(id || ''); } },
     });
     for (const k of Object.keys(made)) made[k].paint().catch(() => { /* the block says so itself */ });
   },
@@ -69,10 +69,10 @@ BLOCKS.start = () => {
   const f = frame('start', 'New project');
   f.what.textContent = '· a quick start, then Merge';
   f.body.appendChild(tiles([
-    { icon: ICONS.blank, label: 'blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline', run: () => openStart('blank') },
-    { icon: ICONS.highlights, label: 'highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts', run: () => openStart('highlights') },
-    { icon: ICONS.talking, label: 'talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines', run: () => openStart('talking') },
-    { icon: ICONS.voiceover, label: 'voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it', run: () => openStart('voiceover') },
+    { icon: ICONS.blank, label: 'Blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline', run: () => openStart('blank') },
+    { icon: ICONS.highlights, label: 'Highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts', run: () => openStart('highlights') },
+    { icon: ICONS.talking, label: 'Talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines', run: () => openStart('talking') },
+    { icon: ICONS.voiceover, label: 'Voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it', run: () => openStart('voiceover') },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -84,9 +84,9 @@ BLOCKS.generate = () => {
   const f = frame('generate', 'Generate');
   f.what.textContent = '· made into the Library';
   f.body.appendChild(tiles([
-    { icon: ICONS.pictures, label: 'pictures', href: '/library?shelf=media&kind=images&open=pictures', title: 'The pictures chat', run: () => WIN.openChat('pictures') },
-    { icon: ICONS.video, label: 'video', href: '/library?shelf=media&kind=video&open=videos', title: 'The video chat', run: () => WIN.openChat('videos') },
-    { icon: ICONS.audio, label: 'music & sounds', href: '/library?shelf=media&kind=music&open=audio', title: 'Music and sounds - Suno and ElevenLabs', run: () => WIN.openSound() },
+    { icon: ICONS.pictures, label: 'Pictures', href: '/library?shelf=media&kind=images&open=pictures', title: 'The pictures chat', run: () => WIN.openChat('pictures') },
+    { icon: ICONS.video, label: 'Video', href: '/library?shelf=media&kind=video&open=videos', title: 'The video chat', run: () => WIN.openChat('videos') },
+    { icon: ICONS.audio, label: 'Music & sounds', href: '/library?shelf=media&kind=music&open=audio', title: 'Music and sounds - Suno and ElevenLabs', run: () => WIN.openSound() },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -101,10 +101,10 @@ BLOCKS.library = () => {
   lib.href = '/library';
   f.right.appendChild(lib);
   f.body.appendChild(tiles([
-    { icon: ICONS.character, label: 'character', href: '/library?shelf=characters&make=1', title: 'New Character - a portrait, then a 4K sheet', run: _newCharacter },
-    { icon: ICONS.prop, label: 'prop', href: '/library?shelf=media&kind=props&make=1', title: 'New prop - a product for the frames', run: () => WIN.openProp() },
-    { icon: ICONS.look, label: 'look', href: '/library?shelf=media&kind=lookbooks&make=1', title: 'New lookbook - what a character wears', run: () => WIN.openGen('lookbook') },
-    { icon: ICONS.environment, label: 'environment', href: '/library?shelf=media&kind=environments&make=1', title: 'New environment - a place to stand in', run: () => WIN.openGen('environment') },
+    { icon: ICONS.character, label: 'Character', href: '/library?shelf=characters&make=1', title: 'New Character - a portrait, then a 4K sheet', run: _newCharacter },
+    { icon: ICONS.prop, label: 'Prop', href: '/library?shelf=media&kind=props&make=1', title: 'New prop - a product for the frames', run: () => WIN.openProp() },
+    { icon: ICONS.look, label: 'Look', href: '/library?shelf=media&kind=lookbooks&make=1', title: 'New lookbook - what a character wears', run: () => WIN.openGen('lookbook') },
+    { icon: ICONS.environment, label: 'Environment', href: '/library?shelf=media&kind=environments&make=1', title: 'New environment - a place to stand in', run: () => WIN.openGen('environment') },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -392,7 +392,7 @@ BLOCKS.app = () => {
       const acc = c.account || cf.account, bkt = c.bucket || cf.bucket;
       const failed = (c.steps || []).find((s) => !s.ok);
       const v = td('');
-      if (cf.inUse && acc && bkt) v.append('bucket ', el('b', null, bkt), ' — ', link('open it ↗', 'https://dash.cloudflare.com/' + encodeURIComponent(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt)));
+      if (cf.inUse && acc && bkt) v.append('bucket ', el('b', null, bkt), ' - ', link('open it ↗', 'https://dash.cloudflare.com/' + encodeURIComponent(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt)));
       else if (failed) v.append(failed.id + ' · ' + String(failed.words || '').slice(0, 90));
       else v.append(cf.checking ? '' : 'see Admin');
       tr3.append(td('k', 'key · R2'), dot(cf.inUse ? 'ok' : failed ? 'down' : 'unset', cf.inUse ? 'works' : failed ? 'not working' : cf.checking ? 'checking' : 'not checked'),

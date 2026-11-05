@@ -537,19 +537,19 @@ export function createSunoForm(o) {
       else row.appendChild(el('span', null, 'No chips yet - pick the genre, the mood and the sound on the left.'));
       card.appendChild(field('The feel', row, { help: 'The chips picked on the left - the genre, the mood and the sound. None - the writer chooses.' }));
       card.appendChild(field('In your words', text(f, 'words', { area: true, rows: 3, placeholder: 'e.g. soft and warm under a skincare review, nothing that pulls the ear away from the voice' }), { max: 1000, help: 'More about the feel, in any language - optional. The writer reads it with the chips. Up to 1000 characters.' }));
-      card.appendChild(check(f, 'writer', 'the writer makes Suno\'s style', null, 'The writer turns the chips and your words into Suno\'s style - what it wrote shows on the press.\nOff - the chips go to Suno as they are.'));
+      card.appendChild(check(f, 'writer', 'The writer makes Suno\'s style', null, 'The writer turns the chips and your words into Suno\'s style - what it wrote shows on the press.\nOff - the chips go to Suno as they are.'));
       return true;
     }
     if (S.mode === 'custom') {
       card.appendChild(field('Title', text(f, 'title', { placeholder: 'the track\'s name' }), { max: 80, help: 'The track\'s name - both tracks are called by it. Up to 80 characters.' }));
       card.appendChild(field('Style', text(f, 'style', { area: true, rows: 3, placeholder: 'genre, mood, instruments, tempo, production - e.g. indie pop, bright clean guitars, 110 BPM, warm female vocal' }), { max: 1000, help: 'Genre, mood, instruments, tempo, production - the most important first, by commas. A chip on the left adds its words here. Up to 1000 characters.' }));
-      card.appendChild(check(f, 'instrumental', 'instrumental', () => call('paintMake'), 'Only the music: no voice and no lyrics.'));
+      card.appendChild(check(f, 'instrumental', 'Instrumental', () => call('paintMake'), 'Only the music: no voice and no lyrics.'));
       if (!f.instrumental) {
         const ly = text(f, 'lyrics', { area: true, rows: 7, placeholder: '[Verse]\n...\n[Chorus]\n...' });
         const fl = field('Lyrics', ly, { max: 5000, help: 'What is sung, in parts: [Verse], [Chorus]… Up to 5000 characters. Empty - Suno sings what it makes up.\nThe list over it - the texts kept in Music → Lyrics: a choice replaces the text, the title is taken only when it is empty. "save" keeps this text there; "write lyrics from an idea…" opens Lyrics.' });
         // (phase V59.1, (мз8)) The saved texts over the field: a choice replaces the text, the title only when it is empty.
         fl.insertBefore(savedPick(f), ly);
-        const wr = el('button', 'au-link', 'write lyrics from an idea…');
+        const wr = el('button', 'au-link', 'Write lyrics from an idea…');
         wr.type = 'button';
         wr.addEventListener('click', () => {
           if (!S.f.lyrics.idea) S.f.lyrics.idea = [f.title, f.style].filter(Boolean).join(' - ').slice(0, 200);
@@ -562,7 +562,7 @@ export function createSunoForm(o) {
         fl.appendChild(links);
         card.appendChild(fl);
         const vs = el('select', 'au-sel u-in');
-        for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
+        for (const [v, t] of [['', 'Any voice'], ['f', 'A woman\'s voice (likelier)'], ['m', 'A man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
         vs.value = f.vocal || '';
         vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
         card.appendChild(field('Voice', vs, { help: 'Whose voice Suno is asked for - it only makes it likelier. Saying it in the style ("warm female vocal") holds better.' }));
@@ -614,7 +614,7 @@ export function createSunoForm(o) {
     b.title = 'Keep this text in Music → Lyrics - named by the title, else by its first line';
     const upd = () => {
       const on = isSaved(f.lyrics);
-      b.textContent = on ? 'saved ✓' : 'save';
+      b.textContent = on ? 'Saved ✓' : 'Save';
       b.disabled = on || !_norm(f.lyrics);
       b.classList.toggle('is-saved', on);
     };
@@ -637,7 +637,7 @@ export function createSunoForm(o) {
     const b = el('button', 'au-link au-save');
     b.type = 'button';
     b.title = 'Keep this text in Music → Lyrics';
-    const upd = () => { const on = isSaved(l.text); b.textContent = on ? 'saved ✓' : 'save'; b.disabled = on; b.classList.toggle('is-saved', on); };
+    const upd = () => { const on = isSaved(l.text); b.textContent = on ? 'Saved ✓' : 'Save'; b.disabled = on; b.classList.toggle('is-saved', on); };
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (isSaved(l.text)) return;
@@ -718,13 +718,13 @@ export function createSunoForm(o) {
     const h = el('div', 'au-lyr-h');
     h.appendChild(el('span', null, l.title || 'Lyrics'));
     h.appendChild(el('span', 'sp'));
-    const use = el('button', 'au-link', 'use in custom');
+    const use = el('button', 'au-link', 'Use in custom');
     use.type = 'button';
     use.addEventListener('click', () => useLyric(l));
-    const copy = el('button', 'au-link', 'copy');
+    const copy = el('button', 'au-link', 'Copy');
     copy.type = 'button';
     copy.addEventListener('click', async () => { const ok = await copyText(l.text); say(ok ? 'Copied.' : 'Not copied.', !ok); });
-    const more = el('button', 'au-link', 'all');
+    const more = el('button', 'au-link', 'All');
     more.type = 'button';
     more.addEventListener('click', () => box.classList.toggle('open'));
     h.append(use, saveButton(l, gen), copy, more);
@@ -777,7 +777,7 @@ export function createSunoForm(o) {
   /** The almanac's gold button, into the column's foot. */
   function almanacButton(foot) {
     // (phase V73 block 4) in the frame's foot: a quiet button at the left, as the showcase's window has it
-    const alm = el('button', 'mv3-vc-almanac u-btn is-quiet' + (almSections().length ? '' : ' is-soon'), 'almanac');
+    const alm = el('button', 'mv3-vc-almanac u-btn is-quiet' + (almSections().length ? '' : ' is-soon'), 'Almanac');
     alm.type = 'button';
     alm.title = almSections().length ? 'Notes on styles and sounds - gather them into a prompt' : 'The almanac of music and sounds is being written - soon';
     alm.addEventListener('click', () => { if (almSections().length) openAlmanac(); else say('The almanac is being written (V34.A) - soon.'); });
@@ -911,12 +911,12 @@ export function createSunoForm(o) {
         });
         h.appendChild(add);
       }
-      const cp = el('button', 'aal-btn u-btn is-s', 'copy');
+      const cp = el('button', 'aal-btn u-btn is-s', 'Copy');
       cp.type = 'button';
       cp.addEventListener('click', async () => {
         const ok = await copyText(n.text);
-        cp.textContent = ok ? 'copied ✓' : 'not copied';
-        setTimeout(() => { if (cp.isConnected) cp.textContent = 'copy'; }, 1400);
+        cp.textContent = ok ? 'Copied ✓' : 'Not copied';
+        setTimeout(() => { if (cp.isConnected) cp.textContent = 'Copy'; }, 1400);
       });
       h.appendChild(cp);
       desc.appendChild(h);

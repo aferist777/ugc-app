@@ -161,7 +161,7 @@ function _row(it, refresh) {
     const a = document.createElement('button');
     a.type = 'button';
     a.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
-    a.textContent = 'open';
+    a.textContent = 'Open';
     a.title = 'Watch it in the Library\'s viewer - Rename and Delete are there';
     a.addEventListener('click', (e) => {
       e.stopPropagation();

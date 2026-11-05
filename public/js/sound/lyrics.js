@@ -91,7 +91,7 @@ function _rows(it) {
   const m = it.meta || {};
   const t = textOf(it);
   const lines = t ? t.split('\n').filter(s => s.trim()).length : 0;
-  return [['kind', 'lyrics · Music → Lyrics'], ['from', FROM[m.from] || ''], ['length', lines + (lines === 1 ? ' line' : ' lines') + ' · ' + t.length + ' characters']];
+  return [['Kind', 'lyrics · Music → Lyrics'], ['From', FROM[m.from] || ''], ['Length', lines + (lines === 1 ? ' line' : ' lines') + ' · ' + t.length + ' characters']];
 }
 
 /**

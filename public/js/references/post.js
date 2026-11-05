@@ -357,7 +357,7 @@ function _paintStrip() {
   });
   const n = _v.sel.size;
   bar.querySelector('.ref-strip-n').textContent = n ? n + ' of ' + files.length + ' selected' : files.length + ' files · none selected';
-  bar.querySelector('[data-x="all"]').textContent = n === files.length ? 'select none' : 'select all';
+  bar.querySelector('[data-x="all"]').textContent = n === files.length ? 'Select none' : 'Select all';
   const mv = bar.querySelector('[data-x="move"]');
   mv.textContent = n ? `move ${n} to…` : 'move to…';
   mv.disabled = !n;

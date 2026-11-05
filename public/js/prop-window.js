@@ -56,7 +56,7 @@ export function openNewProp(o) {
   _s = _blank();
   // (phase V64, fix (е)) The almanac's size again, over its place - not a generation's 1280×800.
   _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', onClose: _closed });
-  _win.setCrumbs([{ label: 'new prop' }]);
+  _win.setCrumbs([{ label: 'New prop' }]);
   document.addEventListener('paste', _onPaste, true);
   _render();
   return _win;
@@ -165,7 +165,7 @@ function _left() {
   wrap.append(box, _input);
   left.appendChild(wrap);
   if (!done) {
-    const lib = el('button', 'pw-lib u-btn is-s', 'from IMAGES…');
+    const lib = el('button', 'pw-lib u-btn is-s', 'From IMAGES…');
     lib.type = 'button';
     lib.title = 'A picture of the Library - it is copied into Props, and stays where it is';
     lib.addEventListener('click', () => _fromLibrary(lib));
@@ -254,7 +254,7 @@ function _result() {
   else if (i.description) body.appendChild(el('div', 'pw-desc', i.description));
   else {
     body.appendChild(el('div', 'pw-desc is-fail', 'Not described: ' + (i.fail || 'the agent did not answer') + '.'));
-    const again = el('button', 'pw-again u-btn is-s', 'read again');
+    const again = el('button', 'pw-again u-btn is-s', 'Read again');
     again.type = 'button';
     again.title = 'The agent looks at the picture and reads your words again';
     again.addEventListener('click', async () => {
@@ -271,7 +271,7 @@ function _result() {
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
   row.appendChild(el('span', 'gw-hint u-status'));
-  const more = el('button', 'gw-create u-btn is-main', 'add another');
+  const more = el('button', 'gw-create u-btn is-main', 'Add another');
   more.type = 'button';
   more.title = 'A new product - the window empties';
   more.addEventListener('click', () => { clearTimeout(_poll); _s = _blank(); _render(); });

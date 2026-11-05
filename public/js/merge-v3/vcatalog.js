@@ -235,22 +235,22 @@ const _len = (d) => (d == null ? 'none' : d <= 5 ? '5' : d <= 10 ? '10' : d <= 1
 function _groups(m) {
   const cats = (_data.cat.categories || []).map(c => [c.id, (c.title && c.title.en) || c.id]);
   const g = [
-    { key: 'src', label: 'what', values: [['template', 'templates'], ['case', 'cases'], ['example', 'examples'], ['preset', 'presets']], of: it => [it.kind] },
-    { key: 'needs', label: 'needs attached', values: [['none', 'nothing'], ['img1', '1 picture'], ['img2', '2+ pictures'], ['video', 'a clip'], ['audio', 'a sound'], ['unsure', 'unsure']], of: it => it.needs },
-    { key: 'shape', label: 'shape', values: [['9:16', '9:16'], ['16:9', '16:9'], ['1:1', '1:1'], ['other', 'other'], ['none', 'not said']],
+    { key: 'src', label: 'What', values: [['template', 'Templates'], ['case', 'Cases'], ['example', 'Examples'], ['preset', 'Presets']], of: it => [it.kind] },
+    { key: 'needs', label: 'Needs attached', values: [['none', 'Nothing'], ['img1', '1 picture'], ['img2', '2+ pictures'], ['video', 'A clip'], ['audio', 'A sound'], ['unsure', 'Unsure']], of: it => it.needs },
+    { key: 'shape', label: 'Shape', values: [['9:16', '9:16'], ['16:9', '16:9'], ['1:1', '1:1'], ['other', 'Other'], ['none', 'Not said']],
       of: it => [it.a ? (['9:16', '16:9', '1:1'].includes(it.a) ? it.a : 'other') : 'none'] },
-    { key: 'len', label: 'length', values: [['5', 'up to 5 s'], ['10', '6-10 s'], ['15', '11-15 s'], ['30', '16-30 s'], ['more', 'over 30 s'], ['none', 'not said']], of: it => [_len(it.d)] },
-    { key: 'speech', label: 'speech', values: [['yes', 'someone speaks'], ['no', 'no speech']], of: it => [it.sp ? 'yes' : 'no'] },
-    { key: 'two', label: 'steps', values: [['two', 'two-step'], ['one', 'one step']], of: it => [it.ts ? 'two' : 'one'] },
+    { key: 'len', label: 'Length', values: [['5', 'Up to 5 s'], ['10', '6-10 s'], ['15', '11-15 s'], ['30', '16-30 s'], ['more', 'Over 30 s'], ['none', 'Not said']], of: it => [_len(it.d)] },
+    { key: 'speech', label: 'Speech', values: [['yes', 'Someone speaks'], ['no', 'No speech']], of: it => [it.sp ? 'yes' : 'no'] },
+    { key: 'two', label: 'Steps', values: [['two', 'two-step'], ['one', 'One step']], of: it => [it.ts ? 'two' : 'one'] },
   ];
-  if (m && m.family === 'seedance') g.push({ key: 'ver', label: 'written for Seedance', values: [['2.5', '2.5'], ['2.0', '2.0']], of: it => (it.v ? [it.v] : []) });
-  g.push({ key: 'lang', label: 'language of the case', values: [['en', 'English'], ['zh', 'Chinese']], of: it => (it.lc ? [it.lc] : []) });
-  g.push({ key: 'cat', label: 'category', values: cats.concat([['none', 'no template']]), of: it => [it.cat || 'none'] });
+  if (m && m.family === 'seedance') g.push({ key: 'ver', label: 'Written for Seedance', values: [['2.5', '2.5'], ['2.0', '2.0']], of: it => (it.v ? [it.v] : []) });
+  g.push({ key: 'lang', label: 'Language of the case', values: [['en', 'English'], ['zh', 'Chinese']], of: it => (it.lc ? [it.lc] : []) });
+  g.push({ key: 'cat', label: 'Category', values: cats.concat([['none', 'No template']]), of: it => [it.cat || 'none'] });
   // A category picked: its templates, one by one.
   const one = (_st.filters.cat || []);
   if (one.length === 1 && one[0] !== 'none') {
     const tpls = (_data.cat.templates || []).filter(t => t.category === one[0]).map(t => [t.id, (t.title && t.title.en) || t.id]);
-    g.push({ key: 'tpl', label: 'template', values: tpls, of: it => (it.tp ? [it.tp] : []) });
+    g.push({ key: 'tpl', label: 'Template', values: tpls, of: it => (it.tp ? [it.tp] : []) });
   }
   return g;
 }
@@ -443,7 +443,7 @@ function _paintLeft() {
     const cs = document.createElement('select');
     cs.className = 'vc-catsel u-in';
     const all = document.createElement('option');
-    all.value = ''; all.textContent = 'all categories';
+    all.value = ''; all.textContent = 'All categories';
     cs.appendChild(all);
     for (const [v, t] of cat.values) {
       const op = document.createElement('option');
@@ -472,7 +472,7 @@ function _paintLeft() {
 
   const sort = document.createElement('select');
   sort.className = 'vc-sort u-in';
-  for (const [v, t] of [['heat', 'hottest first'], ['steady', 'steadiest first'], ['new', 'newest first']]) {
+  for (const [v, t] of [['heat', 'Hottest first'], ['steady', 'Steadiest first'], ['new', 'Newest first']]) {
     const op = document.createElement('option'); op.value = v; op.textContent = t; sort.appendChild(op);
   }
   sort.value = _st.sort;
@@ -481,7 +481,7 @@ function _paintLeft() {
   _tipOn(sl, HINTS.sort);
   inner.append(sl, sort);
 
-  const clear = el('button', 'vc-clear', 'clear the filters');
+  const clear = el('button', 'vc-clear', 'Clear the filters');
   clear.type = 'button';
   clear.addEventListener('click', () => { _st.filters = {}; _st.q = ''; _st.more = false; _paintLeft(); _paintGrid(false); });
   inner.appendChild(clear);
@@ -517,7 +517,7 @@ function _ddOpen(g, btn) {
   const list = el('div', 'vc-dd-list');
   list.setAttribute('role', 'listbox');
   list.setAttribute('aria-multiselectable', 'true');
-  const any = el('button', 'vc-dd-any', 'any - let go of them all');
+  const any = el('button', 'vc-dd-any', 'Any - let go of them all');
   any.type = 'button';
   any.addEventListener('click', () => { delete _st.filters[g.key]; _afterFilter(); });
   list.appendChild(any);
@@ -655,7 +655,7 @@ function _paintGrid(keep = true) {
       if (!_fits(used, m)) n.textContent = 'The recipe in use - ' + used.title + ' - does not fit ' + (m ? m.label : 'this model') + '.';
       else {
         n.append('The recipe in use - ' + used.title + ' - is hidden by the filters. ');
-        const c = el('button', 'vc-link', 'clear them');
+        const c = el('button', 'vc-link', 'Clear them');
         c.type = 'button';
         c.addEventListener('click', () => { _st.filters = {}; _st.q = ''; _paintLeft(); _paintGrid(false); });
         n.appendChild(c);
@@ -672,7 +672,7 @@ function _paintGrid(keep = true) {
       if (_st.fetching) note.textContent = 'Fetching the cookbook\'s cases - ' + Math.round((st.size || 3300000) / 100000) / 10 + ' MB from GitHub, once…';
       else if (_st.error) {
         note.append('The cases could not be fetched: ' + _st.error + ' ');
-        const again = el('button', 'vc-link', 'try again');
+        const again = el('button', 'vc-link', 'Try again');
         again.type = 'button';
         again.addEventListener('click', _fetch);
         note.appendChild(again);
@@ -857,7 +857,7 @@ function _presetTools(it, ed) {
   if (p.newer) {
     const n = el('div', 'vc-preset-line');
     n.append('A newer version of this sample came with the program. ');
-    const take = el('button', 'vc-link', 'take it');
+    const take = el('button', 'vc-link', 'Take it');
     take.type = 'button';
     take.title = 'It becomes a new version - what you changed stays in its versions';
     take.addEventListener('click', () => _presetOp(p.id, 'newer', null, take));
@@ -865,7 +865,7 @@ function _presetTools(it, ed) {
     box.appendChild(n);
   }
   if (p.seed && p.versionCount) {
-    const o = el('button', 'vc-link', 'back to the original');
+    const o = el('button', 'vc-link', 'Back to the original');
     o.type = 'button';
     o.title = 'The sample as it came with the program - as a new version, so this too can be undone';
     o.addEventListener('click', () => _presetOp(p.id, 'original', null, o));
@@ -896,7 +896,7 @@ function _presetTools(it, ed) {
         el('span', 'what', (v.what || '') + (v.first && p.seed ? ' · the original' : '')));
       if (v.current) r.appendChild(el('span', 'cur', 'current'));
       else {
-        const re = el('button', 'vc-link', 'restore');
+        const re = el('button', 'vc-link', 'Restore');
         re.type = 'button';
         re.title = 'Make this one current again - as a new version';
         re.addEventListener('click', () => _presetOp(p.id, 'restore', { v: v.v }, re));
@@ -1019,7 +1019,7 @@ async function _paintRight() {
 
   // use
   const foot = el('div', 'vc-right-foot');
-  const use = el('button', 'mv3-c-btn vc-use u-btn is-main', 'use');
+  const use = el('button', 'mv3-c-btn vc-use u-btn is-main', 'Use');
   use.type = 'button';
   const fits = !!m && _fits(it, m);
   use.disabled = !m || !m.usable || !fits;

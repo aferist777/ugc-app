@@ -19,7 +19,7 @@ import { el, api, ls, lsSet, when, frame } from './util.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
-const CHIPS = [['all', 'all'], ['blank', 'blank'], ['talking', 'talking head'], ['voiceover', 'voiceover'], ['highlights', 'highlights']];
+const CHIPS = [['all', 'All'], ['blank', 'Blank'], ['talking', 'Talking head'], ['voiceover', 'Voiceover'], ['highlights', 'Highlights']];
 const WORD = { draft: 'draft · not saved', blank: 'blank', talking: 'talking head', voiceover: 'voiceover', highlights: 'highlights' };
 const ICON_OF = { draft: 'blank', blank: 'blank', talking: 'talking', voiceover: 'voiceover', highlights: 'highlights' };
 const CHIP_KEY = 'ugc_home_proj_kind_v1';

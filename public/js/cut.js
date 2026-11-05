@@ -113,7 +113,7 @@ export function cutBox(video, piece, o) {
     if (!piece.start && g.in <= 0.05 && g.out >= g.dur - 0.05) { say('Move a handle first - that is the whole video.', true); return; }
     _menu(btn, piece, g, async (to) => {
       btn.disabled = true;
-      btn.textContent = 'cutting…';
+      btn.textContent = 'Cutting…';
       say('Cutting ' + mmss(g.in) + '–' + mmss(g.out) + '…');
       try {
         const r = await fetch('/api/library/cut', {

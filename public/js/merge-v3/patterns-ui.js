@@ -9,7 +9,7 @@
                  under the fold «Patterns · N ▸» (phase V74.1: opened in the strip, kept as it was left); a tick lays the pattern
                  over the ones ticked already (70 %, no blend mode - look.js PATTERN_OPACITY), untick takes it off;
      the layers  the ticked ones, the top layer first: the tile, the name, ↑ ↓ for the order; a press on a row opens its own
-                 settings - scale, colour, angle, movement, speed, direction (overlay/pattern.js), opacity and blend mode
+                 settings - scale, color, angle, movement, speed, direction (overlay/pattern.js), opacity and blend mode
                  (overlay/look.js, the list js/merge-v3/blend-menu.js) -, one open at a time.
    Every change is ONE undo step (`io.write`, timeline-b.js setPatterns); a slider is shown on the preview while it moves
    (place-b.js setLive, by the layer's id - overlay/pattern.js layerId) and written on release. No limit of how many.
@@ -201,7 +201,7 @@ function _lookOf(e) {
   return bits.join(' · ');
 }
 
-// ONE LAYER'S SETTINGS (phase V65's rows of a pattern clip, the owner's (пз8), (пз14)-(пз17)): Scale 25-400 %, Colour, Angle
+// ONE LAYER'S SETTINGS (phase V65's rows of a pattern clip, the owner's (пз8), (пз14)-(пз17)): Scale 25-400 %, Color, Angle
 // 0-359°, Movement - still, rotate (0.5-20°/s, ↻ or ↺), drift (5-200 px/s, eight arrows) -, Opacity, Blend.
 function _rows(host, e, io) {
   const id = PAT.layerId(e.src);
@@ -218,8 +218,8 @@ function _rows(host, e, io) {
   slider('Scale', 'scale', { min: PAT.SCALE.min * 100, max: PAT.SCALE.max * 100, step: PAT.SCALE.step * 100 }, pct,
     (s) => Math.round(s * 100), (v) => v / 100);
   const col = C.color(f0.color, (v) => setPat({ color: v }));
-  col.title = 'The colour its white becomes';
-  host.appendChild(C.row('Colour', col));
+  col.title = 'The color its white becomes';
+  host.appendChild(C.row('Color', col));
   slider('Angle', 'angle', { min: 0, max: 359, step: 1 }, (v) => Math.round(v) + '°', (a) => a, (v) => v);
   host.appendChild(C.row('Movement', C.select(PAT.MOVES, f0.move, (m) => setPat({
     move: m, speed: m === 'drift' ? PAT.DRIFT.def : PAT.ROTATE.def, dir: m === 'drift' ? 'e' : 'cw',

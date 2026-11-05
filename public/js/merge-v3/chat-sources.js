@@ -31,7 +31,7 @@ export async function people() {
   // The most looks first; one count keeps the shelf's order.
   groups.sort((a, b) => b.n - a.n);
   const loose = looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId)).map(lk => pic(lk.media, lk.name, 'look')).filter(x => x.path);
-  if (loose.length) groups.push({ key: 'loose', label: 'looks of no character', n: loose.length, sub: nLooks(loose.length), items: loose });
+  if (loose.length) groups.push({ key: 'loose', label: 'Looks of no character', n: loose.length, sub: nLooks(loose.length), items: loose });
   return { items: groups.flatMap(g => g.items), groups };
 }
 
@@ -57,7 +57,7 @@ export const TREE = {
 };
 
 /** The row of the characters and their looks - in every chat that attaches pictures. */
-export const PEOPLE_ROW = { id: 'people', label: 'characters & looks', load: people, empty: 'No characters yet - New Character makes one in the Library.' };
+export const PEOPLE_ROW = { id: 'people', label: 'Characters & looks', load: people, empty: 'No characters yet - New Character makes one in the Library.' };
 
 /** Where the window opens for a picture's slot by what it is for: a person on characters & looks, a place on IMAGES ->
  *  Environments, clothes on IMAGES -> Lookbooks (IMAGES when that folder holds no pictures), anything else on IMAGES. */

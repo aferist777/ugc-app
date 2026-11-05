@@ -107,7 +107,7 @@ export function openSilence() {
     '<span class="mv3-silence-v u-range-v is-db"></span>' +
     '<button type="button" class="mv3-silence-auto u-chip is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
     '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n u-status">listening to main audio…</span>' +
-    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>cut</button></div>' +
+    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>Cut</button></div>' +
     '</div>';
   const k = box.querySelector('.mv3-silence-k');
   const d = box.querySelector('.mv3-silence-d');

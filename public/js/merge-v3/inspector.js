@@ -218,8 +218,8 @@ const FITS = [['fit', 'Fit'], ['fill', 'Fill']];
 // wider than the frame loses its sides, a taller one loses its top and bottom - so the five
 // answers are one list rather than two controls, and whichever axis is not being cut ignores
 // its own answer and stays centred.
-const CROPS = [['left', 'left'], ['center', 'center'], ['right', 'right'],
-               ['top', 'top'], ['bottom', 'bottom']];
+const CROPS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right'],
+               ['top', 'Top'], ['bottom', 'Bottom']];
 
 // ── An insert on the frame ──────────────────────────────────────────────────
 // PLACED BY HAND, ON THE PREVIEW. There is nothing here for where it sits, how big it is or
@@ -339,14 +339,14 @@ function _edgeRows(host, c0, write) {
     onChange: (v) => write({ feather: v }),
   })));
   // ((пр11)) Rounded corners - a share of the shorter side, half of it round ends - and an outline inside the edge, its
-  // thickness a share of the frame's width (said in the pixels of a 1080-wide film) and its colour.
+  // thickness a share of the frame's width (said in the pixels of a 1080-wide film) and its color.
   host.appendChild(C.row('Corners', C.slider({
     min: 0, max: 0.5, step: 0.01, value: +c0.radius || 0,
     fmt: (v) => (v <= 0.005 ? 'square' : v >= 0.495 ? 'round' : Math.round(v * 200) + '%'),
     onChange: (v) => write({ radius: v }),
   })));
   const col = C.color(c0.outlineColor || '#ffffff', (v) => write({ outlineColor: v }));
-  col.title = 'The outline’s colour';
+  col.title = 'The outline’s color';
   host.appendChild(C.row('Outline', C.pair(C.slider({
     min: 0, max: 0.03, step: 0.001, value: +c0.outline || 0,
     fmt: (v) => (v <= 0.0005 ? 'none' : Math.round(v * 1080) + ' px'),
@@ -370,20 +370,20 @@ function _cutRows(host, track, c) {
 // the face, the middle, the whole frame over its blur, two faces as bands - and a shift for the whole clip
 // (public/js/merge-v3/framing-ui.js; the path itself is public/js/framing/path.js, which the render reads too).
 function _frameRows(host, c, set) {
-  host.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
+  host.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
     (v) => set('fit', v))));
   if (c.fit !== 'fill') return;
   // (phase V43) A part of fragmentation follows the most active - its own choice while it has it - with punch-ins on or off.
   const mode = FRAMING.modeOf(c);
   const pickFraming = C.select(FRAMING.framingsOf(c), mode, (v) => { FRAMING.choose(c, v, set); });
-  host.appendChild(C.row('Framing', pickFraming));
+  host.appendChild(C.row('Tracking', pickFraming));
   const zoomRow = FRAMING.zoomRow(c, C);
   if (zoomRow) host.appendChild(zoomRow);
   if (mode === 'fixed') {
-    host.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center',
+    host.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center',
       (v) => set('cropAlign', v))));
   } else if (mode !== 'whole') {
-    host.appendChild(C.row('Shift', C.slider({
+    host.appendChild(C.row('Offset', C.slider({
       min: -1, max: 1, step: 0.05, value: +c.frame.shift || 0,
       fmt: (v) => (Math.abs(v) < 0.01 ? 'none' : (v < 0 ? 'left ' : 'right ') + Math.round(Math.abs(v) * 100) + '%'),
       onChange: (v) => set('frame', { ...c.frame, shift: v }),
@@ -436,7 +436,7 @@ function _halferRows(host, c, set) {
     String(rot), (v) => set('rotation', +v))));
   // The band is covered, never stretched, so there is always a slice to choose - and WHICH WAY it
   // slides depends on the turn: upright, the spare is above and below; on its side, to the sides.
-  host.appendChild(C.row('Keep', C.slider({
+  host.appendChild(C.row('Slice', C.slider({
     min: 0, max: 100, step: 1, value: num(c.halferKeep, 100),
     fmt: (v) => (v >= 99 ? (sideways ? 'right' : 'top')
                : v <= 1 ? (sideways ? 'left' : 'bottom')
@@ -549,8 +549,8 @@ function _blankStill(host, track, c, set) {
       _pipRows(fr, track, c);
     } else {
       _bsep(fr);
-      fr.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
-      if (c.fit === 'fill') fr.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
+      fr.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
+      if (c.fit === 'fill') fr.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
     }
     if (main) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
   }
@@ -752,10 +752,10 @@ function _blankVideoTrack(host, track) {
   } else {
     // (phase V73 block 5, 5b, (б5-8) а) The lane's rows - its one group.
     const g = _group(host, 'lane', 'Frame');
-    g.appendChild(C.row('Frame', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
+    g.appendChild(C.row('Fit', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
       (v) => stampB(track.id, { fit: v }))));
     if (_commonOf(track, 'fit') === 'fill') {
-      g.appendChild(C.row('Keep', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
+      g.appendChild(C.row('Align', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
         (v) => stampB(track.id, { cropAlign: v }))));
     }
     // THE WARNING IS GONE FROM THE PANEL, and the behaviour is not: choosing one of these
@@ -792,46 +792,46 @@ function _blankAudioTrack(host, track) {
 // The SERVER listens to the project and lays the lines (lib/captions-job.js, phase K1); the strip
 // presses the button and says what the job of THIS project is doing (listen.js).
 // The key decides (phase V30, the owner's (с22)): Groq when there is one, this computer when not - or this computer always.
-const ENGINES = [['cloud', 'Groq when there is a key, else this computer'], ['local', 'this computer']];
+const ENGINES = [['cloud', 'Groq when there is a key, else this computer'], ['local', 'This computer']];
 // What the subtitle strip was last built for: while only the words of its status line change (a percent),
 // the line is rewritten in place - rebuilding the strip every 1.5 s tore down an open menu (review K1b).
 let _listenShape = null;
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
-const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
+const POS = [['top', 'Top'], ['center', 'Middle'], ['bottom', 'Bottom']];
 // How a heard lane is cut (phase V30, block 4): style.js CUTS.
-const CUT_OPTS = [['pages', 'pages - a few words at a time'], ['sentences', 'sentences - classic subtitles']];
+const CUT_OPTS = [['pages', 'Pages - a few words at a time'], ['sentences', 'Sentences - classic subtitles']];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
 // step (K2, the owner's answer 3): a page cut for one font is not a page in another. The list is pages.js's.
 const CUTS = CUT_KEYS;
 const _cuts = (patch) => Object.keys(patch || {}).some(k => CUTS.includes(k));
 
 // What a word does while it is spoken, how it is cased, what stands behind it (K0's fields, given controls in K6).
-const EFFECTS = [['none', 'none'], ['color', 'colour'], ['box', 'a box'], ['pop', 'pop'], ['bounce', 'jump'],
-  ['sweep', 'sweep'], ['karaoke', 'karaoke']];
+const EFFECTS = [['none', 'None'], ['color', 'Color'], ['box', 'A box'], ['pop', 'Pop'], ['bounce', 'Jump'],
+  ['sweep', 'Sweep'], ['karaoke', 'Karaoke']];
 // HOW A SUBTITLE PAGE COMES IN AND GOES OUT (phase V49, the owner's (пр16)-(пр18)): motions of the whole page, their lengths the
 // app's (captions/page-fx.js). "Arrives" went: a preset's own way of arriving shows as its In until one is chosen ((пр17)).
-const PAGE_IN = [['at-once', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['grow', 'grow'], ['from-top', 'from the top'],
-  ['rise', 'from below'], ['from-left', 'from the left'], ['from-right', 'from the right'], ['drop', 'drop'], ['blur', 'blur'],
-  ['swing', 'swing']];
-const PAGE_OUT = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['shrink', 'shrink'], ['zoom', 'zoom'], ['rise', 'up'],
-  ['sink', 'down'], ['to-left', 'to the left'], ['to-right', 'to the right'], ['fall', 'fall'], ['blur', 'blur']];
-const CASINGS = [['none', 'as typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
-const BEHIND = [['outline', 'nothing'], ['box', 'a box'], ['boxline', 'box + outline']];
-// A TEXT line's (phase V42; the owner's (ц4)): what stands behind it besides a box - a plate in the box's colour - and how it
+const PAGE_IN = [['at-once', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['grow', 'Grow'], ['from-top', 'From the top'],
+  ['rise', 'From below'], ['from-left', 'From the left'], ['from-right', 'From the right'], ['drop', 'Drop'], ['blur', 'Blur'],
+  ['swing', 'Swing']];
+const PAGE_OUT = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['shrink', 'Shrink'], ['zoom', 'Zoom'], ['rise', 'Up'],
+  ['sink', 'Down'], ['to-left', 'To the left'], ['to-right', 'To the right'], ['fall', 'Fall'], ['blur', 'Blur']];
+const CASINGS = [['none', 'As typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
+const BEHIND = [['outline', 'Nothing'], ['box', 'A box'], ['boxline', 'Box + outline']];
+// A TEXT line's (phase V42; the owner's (ц4)): what stands behind it besides a box - a plate in the box's color - and how it
 // comes in and goes out (style.js ENTERS / LEAVES, drawn by captions/text-fx.js).
-const BEHIND_TEXT = BEHIND.concat([['round', 'a rounded box'], ['pill', 'a pill'], ['marker', 'a marker stroke'],
-  ['underline', 'an underline'], ['circle', 'a circle'], ['tag', 'a tag with a stripe'], ['sticker', 'a sticker']]);
-const ENTER_OPTS = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['grow', 'grow'], ['rise', 'rise'],
-  ['from-left', 'from the left'], ['from-right', 'from the right'], ['drop', 'drop'], ['blur', 'blur'], ['stretch', 'stretch'],
-  ['swing', 'swing'], ['wipe', 'wipe'], ['mask-rise', 'slot'], ['rows', 'line by line'], ['words', 'word by word'],
-  ['words-pop', 'words pop'], ['letters', 'letter by letter'], ['letters-pop', 'letters pop'], ['letters-drop', 'letters drop'],
-  ['typewriter', 'typewriter'], ['glitch', 'glitch'], ['flicker', 'flicker']];
-const LEAVE_OPTS = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['shrink', 'shrink'], ['rise', 'rise'],
-  ['sink', 'sink'], ['to-left', 'to the left'], ['to-right', 'to the right'], ['fall', 'fall'], ['blur', 'blur'], ['stretch', 'stretch'],
-  ['wipe', 'wipe'], ['mask-sink', 'slot'], ['rows', 'line by line'], ['words', 'word by word'], ['letters', 'letter by letter'],
-  ['letters-fall', 'letters fall'], ['backspace', 'backspace'], ['glitch', 'glitch'], ['flicker', 'flicker']];
+const BEHIND_TEXT = BEHIND.concat([['round', 'A rounded box'], ['pill', 'A pill'], ['marker', 'A marker stroke'],
+  ['underline', 'An underline'], ['circle', 'A circle'], ['tag', 'A tag with a stripe'], ['sticker', 'A sticker']]);
+const ENTER_OPTS = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['grow', 'Grow'], ['rise', 'Rise'],
+  ['from-left', 'From the left'], ['from-right', 'From the right'], ['drop', 'Drop'], ['blur', 'Blur'], ['stretch', 'Stretch'],
+  ['swing', 'Swing'], ['wipe', 'Wipe'], ['mask-rise', 'Slot'], ['rows', 'Line by line'], ['words', 'Word by word'],
+  ['words-pop', 'Words pop'], ['letters', 'Letter by letter'], ['letters-pop', 'Letters pop'], ['letters-drop', 'Letters drop'],
+  ['typewriter', 'Typewriter'], ['glitch', 'Glitch'], ['flicker', 'Flicker']];
+const LEAVE_OPTS = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['shrink', 'Shrink'], ['rise', 'Rise'],
+  ['sink', 'Sink'], ['to-left', 'To the left'], ['to-right', 'To the right'], ['fall', 'Fall'], ['blur', 'Blur'], ['stretch', 'Stretch'],
+  ['wipe', 'Wipe'], ['mask-sink', 'Slot'], ['rows', 'Line by line'], ['words', 'Word by word'], ['letters', 'Letter by letter'],
+  ['letters-fall', 'Letters fall'], ['backspace', 'Backspace'], ['glitch', 'Glitch'], ['flicker', 'Flicker']];
 // The old way a text line arrived, shown as its entrance (text-fx.js reads it so).
 const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
 const _secs = (v) => (Math.round(v * 100) / 100) + ' s';
@@ -939,8 +939,8 @@ function _blankWordsTrack(host, track) {
     _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, again: v.again, heard: v.heard, local: L };
     // A run that fell over here with no model asks once (the owner, K1b answer 4).
     if (v.ask && L) {
-      tx.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
-        + ' MB) and listen on this computer', () => Listen.start({ download: true }))));
+      tx.appendChild(C.row('', C.button('Download the model (' + Math.round(L.model.bytes / 1e6)
+        + ' MB)', () => Listen.start({ download: true }), { title: 'Download the speech model and listen on this computer' })));
     }
   } else {
     tx.appendChild(C.acts([add]));
@@ -981,7 +981,7 @@ function _blankWordsTrack(host, track) {
       }), recut)));
       // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
       const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
-      const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
+      const LINES = [['1', 'One'], ['2', 'Two']].concat(lines === 3 ? [['3', 'Three']] : []);
       tx.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
       // Rows under Lines (V71); In and Out in the group Motion (V73 block 5).
       _rowsRow(tx, raw, set);
@@ -1111,7 +1111,7 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     const edited = _entryEdited(e);
     const head = _el('button', 'mv3-cap-sec' + (open ? ' is-open' : ''));
     head.type = 'button';
-    head.title = open ? 'Fold it' : 'The look of these pages - font, colours, the spoken word, outline, shadow, box';
+    head.title = open ? 'Fold it' : 'The look of these pages - font, colors, the spoken word, outline, shadow, box';
     const c = _el('span', 'mv3-cap-sec-c');
     c.appendChild(iconEl(open ? 'chevron-down' : 'chevron-right', 14));   // (phase V73 block 5, 5b) Lucide's, not ▾ ▸
     head.appendChild(c);
@@ -1131,7 +1131,7 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     };
     if (edited) {
       const base = presetStyle(e.preset);
-      const b = C.button('back to the preset', () => put(_lookEntry(base), true), { title: 'Takes away what was changed in this look' });
+      const b = C.button('Back to the preset', () => put(_lookEntry(base), true), { title: 'Takes away what was changed in this look' });
       b.disabled = !Store.canEdit();
       body.appendChild(C.row('', b));
     }
@@ -1161,7 +1161,7 @@ function _presetLine(host, style, back, editedAny, save, kind) {
     const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
     row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
     if (edited) {
-      const b = C.button('back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
+      const b = C.button('Back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
       b.disabled = !Store.canEdit();
       row.appendChild(b);
     }
@@ -1174,12 +1174,12 @@ function _presetLine(host, style, back, editedAny, save, kind) {
 // "My preset 2"…, (с48)); a taken name - one of the person's or of the app's - is refused in it, in the server's words, and
 // it stays open (с45). The lane or line it is saved from stays as it was (с46); the new tile is shown in `Mine`.
 function _saveMine(lookOf, kind) {
-  const b = C.button('save as my preset', () => {
+  const b = C.button('Save as my preset', () => {
     askName({
       anchor: b.isConnected ? b : null, title: 'Save as my preset', value: MyPresets.freeName(), okLabel: 'Save', maxLength: 60,
       submit: (name) => MyPresets.save(name, lookOf(), kind),
     }).then((p) => { if (p && p.id) CapView.showMine(p.id); });
-  }, { title: 'Keeps this look - font, colours, place, effects - as a preset of your own: its tile goes into Mine, to put on any lane or line' });
+  }, { title: 'Keeps this look - font, colors, place, effects - as a preset of your own: its tile goes into Mine, to put on any lane or line' });
   b.classList.add('mv3-cap-save');
   return b;
 }
@@ -1209,7 +1209,7 @@ function _placeRows(host, st, set, o) {
   const side = +st.tx || 0;
   const across = Math.abs(side) < 0.005 ? '' : (side < 0 ? 'left ' : 'right ') + Math.abs(Math.round(side * 100)) + '%';
   // Across, it is moved on the preview only; here it is said, and taken back to the middle.
-  const centre = C.button('centre', () => set({ tx: 0 }), {
+  const centre = C.button('Center', () => set({ tx: 0 }), {
     title: across ? 'Moved ' + across + ' on the preview - back to the middle across' : 'In the middle across - drag it on the preview to move it sideways',
   });
   centre.disabled = !across || !Store.canEdit();
@@ -1229,7 +1229,7 @@ function _placeRows(host, st, set, o) {
   const size = C.slider({ min: 20, max: 200, step: 1, value: st.size, fmt: (v) => v + (autoS ? ' (auto)' : ''),
     onChange: (v) => set({ size: v, sizeAuto: false }) });
   host.appendChild(C.row('Size', o.autoS === undefined ? size : C.pair(size,
-    C.toggleNamed('auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
+    C.toggleNamed('Auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
       'Let the format choose the size'))));
 }
 
@@ -1248,22 +1248,22 @@ function _lookRows(host, st, set, o) {
   const twin = fontOf(st.font).twin;
   if (twin) host.appendChild(C.hint(fontOf(st.font).label + ' has no Russian letters - a line with them is drawn in ' + twin + '.'));
   host.appendChild(C.row('Casing', C.select(CASINGS, st.casing, (v) => set({ casing: v }))));
-  host.appendChild(C.row('Colour', C.color(st.primary, (v) => set({ primary: v }))));
-  // What the spoken word does - and the colour it is done in.
+  host.appendChild(C.row('Color', C.color(st.primary, (v) => set({ primary: v }))));
+  // What the spoken word does - and the color it is done in.
   host.appendChild(C.row('Spoken', C.select(EFFECTS, st.effect, (v) => set({ effect: v }))));
   if (['color', 'box', 'pop', 'bounce'].includes(st.effect)) {
-    host.appendChild(C.row('Its colour', C.color(st.highlight, (v) => set({ highlight: v }))));
+    host.appendChild(C.row('Its color', C.color(st.highlight, (v) => set({ highlight: v }))));
   } else if (st.effect === 'karaoke' || st.effect === 'sweep') {
     host.appendChild(C.row('Not yet', C.color(st.secondary, (v) => set({ secondary: v }))));
   }
-  // A WORD MADE TO STAND OUT (K10b) wears this colour for its whole page. Shown where a line has one, or once
-  // it was set by hand; "auto" is the spoken word's colour - or, where that is the text's own (23 presets),
+  // A WORD MADE TO STAND OUT (K10b) wears this color for its whole page. Shown where a line has one, or once
+  // it was set by hand; "auto" is the spoken word's color - or, where that is the text's own (23 presets),
   // yellow, red or blue, whichever stands out (style.js markedColour).
   if (o.marks || st.marked) {
     host.appendChild(C.row('Marked', C.pair(
       C.color(markedColour(st), (v) => set({ marked: v })),
-      C.toggleNamed('auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
-        'The colour that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
+      C.toggleNamed('Auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
+        'The color that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
   }
   // A typed line of the subtitle lane plays the spoken word by its letters (phase V30, block 1); a text lane holds titles.
   if (o.textLane && st.effect !== 'none') {
@@ -1334,7 +1334,7 @@ function _motionRows(host, st, set, o, anims) {
 // With several animations dealt (`anims`, V49): a side the pairs do not share says "mixed", and choosing one puts it on every pair -
 // the other side stays dealt.
 // TWO ROWS (phase V71, the owner's (хо21), (хо29), (хо34)): the lane's (captions/style.js `rows`) - one undo step; one row is no field.
-const ROWS_OPTS = [['1', 'one'], ['2', 'two']];
+const ROWS_OPTS = [['1', 'One'], ['2', 'Two']];
 function _rowsRow(host, raw, set) {
   const sel = C.select(ROWS_OPTS, rowsOn(raw) ? '2' : '1', (v) => set({ rows: v === '2' ? 2 : undefined }));
   sel.title = 'Two: a page is whole while its words are spoken - its In before the first word, its Out after its end, '
@@ -1414,7 +1414,7 @@ function _renderCaptions(host, items) {
   _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
     pages: () => items });
   if (items.some(x => x.clip.style)) {
-    _actRow(host, C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
+    _actRow(host, C.button('Back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
       { title: 'These lines wear their lane\'s style again' }));
   }
   _presetsHint(host);
@@ -1508,13 +1508,13 @@ function _blankCaption(host, track, clip) {
       const over = isCorrected(clip) ? overPage(clip, track.style, fmt) : null;
       if (over) {
         tx.appendChild(C.hint('Longer than a page of this lane: ' + over + '.'));
-        tx.appendChild(C.row('', C.button('re-cut this line', () => recutLinesB(track.id, [clip.id]),
+        tx.appendChild(C.row('', C.button('Re-cut this line', () => recutLinesB(track.id, [clip.id]),
           { title: 'Cuts this line into pages by the lane\'s rules, keeping its words and corrections' })));
       }
     } else {
       // Rewritten before K10: its words still say what was heard, and it is drawn as one piece until timed.
       tx.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
-      tx.appendChild(C.row('', C.button('time the text', () => {
+      tx.appendChild(C.row('', C.button('Time the text', () => {
         const r = setCapTextB(track.id, clip.id, clip.name || '');
         if (r && r.why) note(area, 'Not timed.', r.why);
       }, { title: 'Gives the words of the text the moments of the words heard there' })));
@@ -1533,7 +1533,7 @@ function _blankCaption(host, track, clip) {
     { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
       pages: () => [{ track, clip }] });
   if (own) {
-    _actRow(host, C.button('back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
+    _actRow(host, C.button('Back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
       { title: 'This line wears its lane\'s style again' }));
   }
   _presetsHint(host);

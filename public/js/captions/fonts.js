@@ -170,9 +170,9 @@ export const ALIASES = {
 export const FALLBACK = 'Liberation Sans';
 
 // The fonts tab's groups, in their order (V68 P4: the owner's 15 of P1, then the app's own 21).
-export const GROUPS = [['graffiti', 'graffiti'], ['brush', 'brush'], ['marker', 'marker'], ['comic', 'comic'], ['horror', 'horror'],
-  ['retro', 'retro'], ['pixel', 'pixel'], ['stencil', 'stencil'], ['hand', 'handwritten'], ['bubble', 'bubble'],
-  ['condensed', 'condensed'], ['gothic', 'gothic'], ['techno', 'techno'], ['western', 'western'], ['heavy', 'heavy'], ['basic', 'basic']];
+export const GROUPS = [['graffiti', 'Graffiti'], ['brush', 'Brush'], ['marker', 'Marker'], ['comic', 'Comic'], ['horror', 'Horror'],
+  ['retro', 'Retro'], ['pixel', 'Pixel'], ['stencil', 'Stencil'], ['hand', 'Handwritten'], ['bubble', 'Bubble'],
+  ['condensed', 'Condensed'], ['gothic', 'Gothic'], ['techno', 'Techno'], ['western', 'Western'], ['heavy', 'Heavy'], ['basic', 'Basic']];
 /** A font's group in the fonts tab. */
 export const groupOf = (f) => (f && f.group) || 'basic';
 

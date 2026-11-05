@@ -33,7 +33,7 @@ export const REF = 2160;         // the file size whose pixel, at 100 %, is a fr
 export const SCALE = { min: 0.25, max: 4, step: 0.05 };
 export const ROTATE = { min: 0.5, max: 20, step: 0.5, def: 2 };
 export const DRIFT = { min: 5, max: 200, step: 5, def: 20 };
-export const MOVES = [['none', 'still'], ['rotate', 'rotate'], ['drift', 'drift']];
+export const MOVES = [['none', 'Still'], ['rotate', 'Rotate'], ['drift', 'Drift']];
 // The eight ways of a drift: id, arrow, the angle on the screen (0 = to the right, counter-clockwise as on a map).
 export const DIRS = [['e', '→', 0], ['ne', '↗', 45], ['n', '↑', 90], ['nw', '↖', 135],
   ['w', '←', 180], ['sw', '↙', 225], ['s', '↓', 270], ['se', '↘', 315]];
@@ -45,7 +45,7 @@ const _hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLower
 /** A pattern's settings (`c.pattern` of an entry of main video's `patterns`), every field filled in. */
 export function of(c) {
   const p = (c && c.pattern) || {};
-  const move = ['rotate', 'drift'].includes(p.move) ? p.move : 'none';
+  const move = ['rotate', 'Drift'].includes(p.move) ? p.move : 'none';
   const lim = move === 'drift' ? DRIFT : ROTATE;
   return {
     scale: Math.round(_num(p.scale, SCALE.min, SCALE.max, 1) * 100) / 100,

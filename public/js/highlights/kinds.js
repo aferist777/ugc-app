@@ -31,7 +31,7 @@ const STD_COUNTS = [3, 5, 10, 15, 20, 30];
 
 export const KINDS = {
   auto: {
-    label: 'auto',
+    label: 'Auto',
     short: 'finds out what the video is, then cuts it by that kind\'s rules',
     long: 'Reads the words first and decides what the video is - a podcast or an interview, true crime, a documentary, a lecture - then '
       + 'cuts it exactly as that kind does: its rules, its frame, its punch-ins, its pauses; "by the video" gives it that kind\'s captions, '
@@ -45,7 +45,7 @@ export const KINDS = {
     fonts: { std: [], rec: [] },
   },
   podcast: {
-    label: 'podcast · interview',
+    label: 'Podcast · interview',
     short: 'people talking: opinions, stories, answers, exchanges',
     long: 'Two or more people talking - a podcast, an interview, a talk show. The agent finds as many moments as you ask for: a strong '
       + 'opinion with its reason, a story that reaches its point, a confession, a disagreement, a direct answer, a funny exchange. Each '
@@ -59,7 +59,7 @@ export const KINDS = {
     fonts: { std: ['Rubik Black', 'Unbounded Black', 'Sofia Sans Extra Condensed Black'], rec: ['basic', 'condensed', 'heavy', 'comic'] },
   },
   truecrime: {
-    label: 'true crime · bodycam',
+    label: 'True crime · bodycam',
     short: 'bodycam, interrogations, arrests: confessions, lies, turns',
     long: 'Bodycam footage of an interrogation or an arrest, often with a host. The agent finds as many moments as you ask for: a '
       + 'confession, a lie and the moment it falls apart, a turn, the arrest, a shocking detail, the officer\'s verdict. Each opens on its '
@@ -73,7 +73,7 @@ export const KINDS = {
     fonts: { std: ['Russo One', 'Sofia Sans Extra Condensed Black', 'Special Elite'], rec: ['stencil', 'condensed', 'heavy', 'basic'] },
   },
   documentary: {
-    label: 'documentary',
+    label: 'Documentary',
     short: 'a narrator over footage: facts, mysteries, reveals',
     long: 'One narrator over footage, archive and graphics - a documentary, an explainer, a video essay, a history or lore video. The agent '
       + 'finds as many moments as you ask for: a striking fact with its why, a question and its answer, a belief and its correction, a '
@@ -87,7 +87,7 @@ export const KINDS = {
     fonts: { std: ['PT Serif', 'Oswald', 'Inter ExtraBold'], rec: ['basic', 'condensed', 'hand'] },
   },
   lecture: {
-    label: 'lecture',
+    label: 'Lecture',
     short: 'one speaker explains: ideas, examples, stories',
     long: 'One person explains a subject - a lecture at the board, a talk on stage, a lesson with slides. The agent finds as many moments as '
       + 'you ask for: one idea told whole - a definition with its example and takeaway, a surprising fact with its why, a story that '
@@ -101,7 +101,7 @@ export const KINDS = {
     fonts: { std: ['Montserrat ExtraBold', 'Caveat', 'Yanone Kaffeesatz'], rec: ['basic', 'hand', 'condensed', 'marker'] },
   },
   stream: {
-    label: 'stream',
+    label: 'Stream',
     short: 'a live stream: game peaks, reactions, donations, chat',
     long: 'A live stream recording - a game with the streamer\'s camera, just chatting, reactions, IRL. The agent finds as many moments as '
       + 'you ask for across the whole stream: an epic play or a fail with its lead-up and the streamer\'s reaction, a scare, a laugh, rage, '
@@ -115,7 +115,7 @@ export const KINDS = {
     fonts: { std: ['Russo One', 'Press Start 2P', 'Rubik Glitch'], rec: ['pixel', 'techno', 'comic', 'heavy'] },
   },
   fragmentation: {
-    label: 'fragmentation',
+    label: 'Fragmentation',
     short: 'the whole video, start to end, in parts by meaning',
     long: 'The whole video, start to end, cut into parts by meaning - an episode of a series, a show or a long talk published as a run of '
       + 'shorts. Each part is a scene, a topic or a whole exchange: it opens where one begins and ends where it ends, never mid-scene; the '
@@ -131,7 +131,7 @@ export const KINDS = {
   // (P11) What auto cuts a video of none of the kinds by - not a button: the general rules with the target, the pieces in order, no
   // key lines; "by the video" gives it podcast's captions, no music, no title.
   other: {
-    label: 'other', button: false,
+    label: 'Other', button: false,
     short: 'none of the kinds - the general rules',
     long: '',
     lengths: 'moments', length: '30-60', counts: STD_COUNTS, count: 20, hook: '', keys: false, title: false,

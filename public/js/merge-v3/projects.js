@@ -97,7 +97,7 @@ async function _paint() {
   } else {
     const o = document.createElement('option');
     o.value = '';
-    o.textContent = '— choose a project —';
+    o.textContent = 'Choose a project';
     sel.insertBefore(o, sel.firstChild);
     sel.value = '';
     _note(_after || (shown.length ? 'nothing open yet' : 'no projects yet'));
@@ -116,7 +116,7 @@ export function repaintPicker() { return _paint(); }
 // heads every kind; the voiceover draft is a voiceover; a project of Merge's own is in "all" only; the open project, when it is
 // not of the kind, stays at the top. The select stays what holds the choice - its options (painted by _paint, each with its
 // `kind`), its value, its `change` -, so everything that reads the picker reads it as before.
-const KINDS = [['all', 'all'], ['talking', 'talking head'], ['voiceover', 'voiceover'], ['highlights', 'highlights']];
+const KINDS = [['all', 'All'], ['talking', 'Talking head'], ['voiceover', 'Voiceover'], ['highlights', 'Highlights']];
 const FILTER_KEY = 'mv3_proj_filter_v1';
 function _filter() {
   let v = 'all';
@@ -258,11 +258,11 @@ function _paintDraft() {
   const e = document.getElementById('mv3-project-edit');
   const x = document.getElementById('mv3-project-del');
   if (e && !_editing) {
-    e.textContent = d ? 'save' : 'edit';
+    e.textContent = d ? 'Save' : 'Edit';
     e.title = d ? 'Save this draft under a name - what it made goes into the name\'s folder' : 'Rename this project';
   }
   if (x && !_armed) {
-    x.textContent = d ? 'clear' : 'delete';
+    x.textContent = d ? 'Clear' : 'Delete';
     x.title = d ? 'Empty the lanes of this draft - it stays the draft, with its chats; Ctrl+Z brings the clips back' : 'Delete this project';
   }
   _delLook(x, d);
@@ -288,7 +288,7 @@ function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
   // (phase V73 block 5, 5a) the "+" is Lucide's plus, the words stay (their case is block 7's)
-  b.innerHTML = icon('plus', 14) + '<span>new project</span>';
+  b.innerHTML = icon('plus', 14) + '<span>New project</span>';
   // Two kinds of project, so the button asks which. A blank project is an empty timeline and
   // is made here; a talking head starts from a scenario: the Library's "scenarios" view opens in the
   // project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is made when one
@@ -421,7 +421,7 @@ function _cancelRename() {
   _editing = false;
   if (box) { box.hidden = true; box.value = ''; }
   if (sel) sel.hidden = false;
-  if (b) b.textContent = Store.isDraft() ? 'save' : 'edit';
+  if (b) b.textContent = Store.isDraft() ? 'Save' : 'Edit';
   _note('');
 }
 
@@ -472,7 +472,7 @@ function _wireRename() {
     box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (_projKey() === key ? (Store.title() || '') : (_titles.get(_projKey()) || ''));
     box.hidden = false;
     sel.hidden = true;
-    b.textContent = 'save';
+    b.textContent = 'Save';
     box.focus();
     if (draft) box.setSelectionRange(box.value.length, box.value.length); else box.select();
   });
@@ -502,7 +502,7 @@ function _disarm() {
   const b = document.getElementById('mv3-project-del');
   _armed = false;
   if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-  if (b) { b.textContent = Store.isDraft() ? 'clear' : 'delete'; b.classList.remove('is-armed'); _delLook(b, Store.isDraft()); }
+  if (b) { b.textContent = Store.isDraft() ? 'Clear' : 'Delete'; b.classList.remove('is-armed'); _delLook(b, Store.isDraft()); }
 }
 
 function _wireDelete() {
@@ -530,7 +530,7 @@ function _wireDelete() {
     try { rec = (await Store.list()).find(p => p.key === key) || null; } catch (e) { rec = null; }
     if (rec && rec.ownFiles) {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
-        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, in Uncategorized.', [
+        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, at the top of their kind.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
           { label: 'And its files', kind: 'danger', on: () => _askHeads(b, key) },
           { label: 'Cancel' },
@@ -590,7 +590,7 @@ async function _delete(key, files, heads) {
     // same name in this block made that read throw before the request ("Cannot access 'heads' before initialization").
     const keptHeads = d.files && d.files.heads;
     _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
-      loose ? 'what it filed is in the Library, in Uncategorized' : '',
+      loose ? 'what it filed is in the Library, at the top of its kind' : '',
       keptHeads ? keptHeads + (keptHeads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _fail(e.message); }

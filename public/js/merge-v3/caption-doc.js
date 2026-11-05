@@ -95,10 +95,10 @@ export function mount(host) {
   rep.type = 'text';
   rep.placeholder = 'replace with';
   rep.spellcheck = false;
-  const one = _el('button', 'mv3-c-btn u-btn is-s', 'replace');
+  const one = _el('button', 'mv3-c-btn u-btn is-s', 'Replace');
   one.type = 'button';
   one.title = 'Replace the lit match and go on to the next';
-  const all = _el('button', 'mv3-c-btn u-btn is-s', 'replace all');
+  const all = _el('button', 'mv3-c-btn u-btn is-s', 'Replace all');
   all.type = 'button';
   all.title = 'Replace every match - one step to undo';
   r2.append(rep, one, all);

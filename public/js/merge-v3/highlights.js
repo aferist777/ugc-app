@@ -438,7 +438,7 @@ function _foundSaid(r) {
   const k = String((r && r.agent && r.agent.kind) || '');
   if (!k) return '';
   const K = r.kinds && r.kinds[k];
-  return 'auto → ' + (K ? K.label + (K.inDev ? ' (in development - cut as other)' : '') : k);
+  return 'auto → ' + (K ? K.label.toLowerCase() + (K.inDev ? ' (in development - cut as other)' : '') : k);
 }
 
 function _paintTop() {
@@ -460,7 +460,7 @@ function _paintTop() {
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
   // (phase V33.8) Auto - what the agent found the video to be.
   // (phase V69 P12) Auto - the kind its first call found, by that kind's name.
-  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label
+  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label.toLowerCase()
     : (r.ask && r.agent && r.agent.kind ? ' · ' + _foundSaid(r) : '');
   // (phase V33.8, H3) And the background music asked for - (V68 P3) its moods; a project of before, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
@@ -469,7 +469,7 @@ function _paintTop() {
   // (phase V43) fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
   const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
   const L = (K && K.whole && K.lengths) || r.lengths;
-  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label : (r.ask ? r.ask.length : '');
+  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label.toLowerCase() : (r.ask ? r.ask.length : '');
   const cut = K && K.whole && r.agent && Array.isArray(r.agent.skipped) && r.agent.skipped.length
     ? ' · cut out: ' + [...new Set(r.agent.skipped.map((x) => x.skip))].join(', ') : '';
   if (r.ask) what.appendChild(_fig('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
@@ -533,7 +533,7 @@ function _paintTop() {
   if (gone) state.appendChild(_fig('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
   if (_said) state.appendChild(_el('span', 'mv3-hl-said', _said.text));
   if (!v && !_live) {
-    const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', '+ add video');
+    const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', '+ Add video');
     add.type = 'button';
     add.title = 'A link, a file, or a source of the Library - and how long and how many';
     add.addEventListener('click', _popup);
@@ -549,7 +549,7 @@ function _paintBar() {
     const frags = _pid ? _frags() : [];
     all.hidden = !_pid;
     const every = frags.length > 0 && frags.every((f) => _checked.has(f.n));
-    all.textContent = every ? 'select none' : 'select all';
+    all.textContent = every ? 'Select none' : 'Select all';
     all.title = every ? 'Untick every fragment' : 'Tick every fragment - for the render beside, and for their captions';
     all.disabled = !frags.length;
   }
@@ -749,7 +749,7 @@ function _paintField() {
       const st = _fig('div', 'mv3-hl-step is-err', 'render failed');
       st.title = rq.error || '';
       foot.appendChild(st);
-      const again = _el('button', 'mv3-hl-again u-btn is-s', 'render again');   // (V73 block 5, 5d) the shared button, not red
+      const again = _el('button', 'mv3-hl-again u-btn is-s', 'Render again');   // (V73 block 5, 5d) the shared button, not red
       again.type = 'button';
       again.title = (rq.error ? rq.error + '\n' : '') + 'Put it back in line with the same settings';
       again.addEventListener('click', (e) => { e.stopPropagation(); _renderAgain(f); });
@@ -913,7 +913,7 @@ function _paintCard() {
       x.addEventListener('click', () => _dropTitle(f));
       tl.appendChild(x);
     } else {
-      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle u-btn is-s', 'add title');
+      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle u-btn is-s', 'Add title');
       add.type = 'button';
       add.title = 'Its headline at the top for the first three seconds: «' + topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' }) + '»';
       add.addEventListener('click', () => _addTitle(f));
@@ -954,7 +954,7 @@ function _paintCard() {
 function _showInFolder(url, title) {
   const w = window.ugcWindow;
   if (!url || !w || typeof w.reveal !== 'function') return null;
-  const b = _el('button', 'mv3-c-btn u-btn is-s', 'show in folder');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', 'Show in folder');
   b.type = 'button';
   b.title = title;
   b.addEventListener('click', async () => {
@@ -1102,7 +1102,7 @@ async function _retryNow() {
 // (phase V43, (ё17а)) "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
 // file's path over (desktop/preload.js pathOf), the server checks it is the same video (its print) and the work goes on.
 function _relinkButton(sourceId) {
-  const b = _el('button', 'mv3-c-btn u-btn is-s', 'point at the file…');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', 'Point at the file…');
   b.type = 'button';
   b.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
   const inp = document.createElement('input');

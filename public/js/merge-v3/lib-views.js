@@ -105,7 +105,7 @@ export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile 
  * (the highlights view's own crumb, highlights.js) and lets the popup go.
  */
 export function noFragment() {
-  showError(NO_FRAGMENT[0], { detail: NO_FRAGMENT[1], action: { label: 'to highlights', run: () => {
+  showError(NO_FRAGMENT[0], { detail: NO_FRAGMENT[1], action: { label: 'To highlights', run: () => {
     const c = _chats.get('highlights');
     if (c && c.onCrumb) c.onCrumb();
   } } });
