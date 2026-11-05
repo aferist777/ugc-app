@@ -305,6 +305,11 @@ function setStatus(text, kind) {
   el.textContent = text || '';
   el.className = 'adm-status' + (kind ? ' ' + kind : '');
 }
+// (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js) - this is a classic script, so the module
+// comes with import(); the status line keeps progress and calm news, a field keeps its own state.
+function sayError(text, detail) {
+  import('/js/notice.js').then((m) => m.showError(text, detail ? { detail } : {})).catch(() => {});
+}
 
 // ── how a row looks ───────────────────────────────────────────────────────
 // Colour says whether the key is there and whether it works; the line under the field says why.
@@ -372,7 +377,8 @@ async function load() {
     await cfLoad();
     await tgLoad();
   } catch (e) {
-    setStatus('Could not read the current settings — saving is disabled so nothing gets overwritten. ' + e.message, 'err');
+    setStatus('');
+    sayError('Could not read the current settings — saving is disabled so nothing gets overwritten.', e.message);
   }
 }
 
@@ -394,7 +400,8 @@ async function health(force) {
     }
     if (line) line.textContent = `checked ${ago(d.ageMs || 0)} · ${ok} ok · ${down} refused · ${unset} missing`;
   } catch (e) {
-    if (line) line.textContent = 'check failed: ' + e.message;
+    if (line) line.textContent = '';
+    sayError('The keys could not be checked', e.message);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -440,9 +447,10 @@ function cfPaint(v) {
 async function cfLoad() {
   try {
     const v = await fetch('/api/cloudflare').then(r => r.json());
+    if (!v || !v.success) sayError('Could not read the Cloudflare key', (v && v.error) || 'no answer');   // (б2-19) said, not silent
     cfPaint(v && v.success ? v : null);
     return v;
-  } catch (e) { cfPaint(null); return null; }
+  } catch (e) { sayError('Could not read the Cloudflare key', e.message); cfPaint(null); return null; }
 }
 
 async function cfCheck() {
@@ -455,7 +463,8 @@ async function cfCheck() {
     cfPaint(v);
     return v;
   } catch (e) {
-    if (row && row.steps) { row.steps.textContent = 'the check failed: ' + e.message; row.again.disabled = false; }
+    if (row && row.steps) { row.steps.textContent = ''; row.again.disabled = false; }
+    sayError('The Cloudflare key could not be checked', e.message);
     return null;
   }
 }
@@ -515,24 +524,35 @@ function tgPaint(v) {
 }
 
 async function tgLoad() {
-  try { const v = await fetch('/api/telegram').then(r => r.json()); tgPaint(v && v.success ? v : null); return v; }
-  catch (e) { tgPaint(null); return null; }
+  try {
+    const v = await fetch('/api/telegram').then(r => r.json());
+    if (!v || !v.success) sayError('Could not read the bot', (v && v.error) || 'no answer');   // (б2-19) said, not silent
+    tgPaint(v && v.success ? v : null);
+    return v;
+  } catch (e) { sayError('Could not read the bot', e.message); tgPaint(null); return null; }
 }
 async function tgConnect() {
   const row = byKey.get('telegramBotToken');
   if (row && row.tg) { row.tg.textContent = ''; row.tg.appendChild(_tgLine('', 'connecting the bot…')); }
-  try { const v = await fetch('/api/telegram/connect', { method: 'POST' }).then(r => r.json()); tgPaint(v && v.success ? v : null); return v; }
-  catch (e) { tgPaint(null); return null; }
+  try {
+    const v = await fetch('/api/telegram/connect', { method: 'POST' }).then(r => r.json());
+    if (!v || !v.success) sayError('The bot was not connected', (v && v.error) || 'no answer');
+    tgPaint(v && v.success ? v : null);
+    return v;
+  } catch (e) { sayError('The bot was not connected', e.message); tgPaint(null); return null; }
 }
 async function tgUnpair() {
-  try { const v = await fetch('/api/telegram/unpair', { method: 'POST' }).then(r => r.json()); tgPaint(v && v.success ? v : null); }
-  catch (e) { /* the line stays as it was */ }
+  try {
+    const v = await fetch('/api/telegram/unpair', { method: 'POST' }).then(r => r.json());
+    if (!v || !v.success) { sayError('The bot was not unpaired', (v && v.error) || 'no answer'); return; }
+    tgPaint(v);
+  } catch (e) { sayError('The bot was not unpaired', e.message); /* the line stays as it was */ }
 }
 
 // ── saving ────────────────────────────────────────────────────────────────
 let _armed = null;
 async function save(btn) {
-  if (!_loaded) { setStatus('Not saving: the current settings never loaded.', 'err'); return; }
+  if (!_loaded) { sayError('Not saving: the current settings never loaded.'); return; }
   const payload = {};
   let removals = 0;
   for (const [key, row] of byKey) {
@@ -570,7 +590,8 @@ async function save(btn) {
       + (cf && cf.check ? (cf.check.ok ? ' · the Cloudflare key works for R2' : ' · the Cloudflare key did not pass - see its steps') : ''),
       cf && cf.check && !cf.check.ok ? 'err' : 'ok');
   } catch (e) {
-    setStatus('Not saved: ' + e.message, 'err');
+    setStatus('');
+    sayError('Not saved', e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = '💾 Save';
