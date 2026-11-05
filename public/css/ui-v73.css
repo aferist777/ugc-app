@@ -137,17 +137,7 @@
 @keyframes u-rise{ from{ opacity:0; transform:translateY(8px) } }
 
 
-/* ── Empty, loading, error ──────────────────────────────────────────────────── */
-.u-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-2); min-height:136px; padding:var(--sp-4);
-  border:1px dashed var(--border); border-radius:var(--r); color:var(--muted); font-size:var(--fs-12); text-align:center }
-.u-empty .u-ico{ color:var(--faint) }
-.u-loading{ display:flex; align-items:center; justify-content:center; gap:var(--sp-2); min-height:136px; border:1px solid var(--border-soft);
-  border-radius:var(--r); color:var(--muted); font-size:var(--fs-12) }
-.u-loading .u-ico{ animation:u-spin 1s linear infinite }
-.u-failed{ display:flex; align-items:center; gap:var(--sp-2); min-height:40px; padding:0 var(--sp-2) 0 var(--sp-3); border:1px solid var(--border-soft);
-  border-radius:var(--r-sm); color:var(--ink); font-size:var(--fs-12) }
-.u-failed > .u-ico{ color:var(--danger) }
-.u-failed .sp{ flex:1 }
+/* ── Empty, loading, error: .u-empty / .u-loading / .u-failed live in css/app-shell.css since phase V73 block 2 (2b) ── */
 .u-note{ display:flex; align-items:flex-start; gap:var(--sp-2); width:320px; padding:10px var(--sp-1) 10px var(--sp-3); background:var(--surface-2);
   border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); color:var(--ink); font-size:var(--fs-12); line-height:var(--lh-12) }
 .u-note > .u-ico{ margin-top:0; color:var(--muted) }

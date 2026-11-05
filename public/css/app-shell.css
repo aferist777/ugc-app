@@ -279,6 +279,27 @@
   .u-ask > p{ margin:var(--sp-1) 0 0; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); white-space:pre-line }
   .u-ask > .u-in{ width:100%; margin-top:var(--sp-2) }
   .u-ask-r{ display:flex; justify-content:flex-end; gap:var(--sp-2); margin-top:var(--sp-3) }
+  /* (б2-7) a list under the question - the projects a file is used in, the names to delete: wider, scrolling inside */
+  .u-ask.is-wide{ width:auto; min-width:288px; max-width:min(360px, calc(100vw - 12px)) }
+  .u-ask > p.is-lines{ max-height:50vh; overflow-y:auto; color:var(--ink) }
+
+  /* ── Empty, loading, did not load (б2-17): in a big body - a gallery, a list - the dashed frame with an icon and the
+     place's own words; in a row, a strip or a menu `.is-line` - the same words with no frame (empty: no icon either).
+     js/ui-state.js builds them. A grid gives them the whole row. ── */
+  .u-empty, .u-loading, .u-failed{ grid-column:1 / -1; box-sizing:border-box }
+  .u-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-2); min-height:136px; padding:var(--sp-4);
+    border:1px dashed var(--border); border-radius:var(--r); color:var(--muted); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); text-align:center }
+  .u-empty .u-ico{ color:var(--faint) }
+  .u-loading{ display:flex; align-items:center; justify-content:center; gap:var(--sp-2); min-height:136px; padding:var(--sp-4);
+    border:1px solid var(--border-soft); border-radius:var(--r); color:var(--muted); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
+  .u-loading .u-ico{ animation:u-spin 1s linear infinite }
+  .u-failed{ display:flex; align-items:center; gap:var(--sp-2); min-height:40px; padding:0 var(--sp-2) 0 var(--sp-3); border:1px solid var(--border-soft);
+    border-radius:var(--r-sm); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
+  .u-failed > .u-ico{ color:var(--danger) }
+  .u-failed > .sp{ flex:1 }
+  .u-empty.is-line, .u-loading.is-line, .u-failed.is-line{ min-height:0; padding:var(--sp-1) 0; border:0; border-radius:0;
+    flex-direction:row; justify-content:flex-start; text-align:left; font-size:var(--fs-11); line-height:var(--lh-11) }
+  .u-failed.is-line > .sp{ flex:0 0 var(--sp-1) }
 
   /* ── One focus ring, from the keyboard only (fields show it whenever they hold the caret) ── */
   :focus-visible{ outline:2px solid var(--focus); outline-offset:2px }
