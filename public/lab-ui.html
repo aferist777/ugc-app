@@ -148,6 +148,13 @@
           <button class="u-tab" type="button">Text</button>
         </div>
       </div>
+      <div class="u-sec">
+        <div class="u-sec-t">A window’s view switch - the segment</div>
+        <div class="u-seg" data-seg>
+          <button class="is-on" type="button" aria-pressed="true">Music</button>
+          <button type="button" aria-pressed="false">Sounds</button>
+        </div>
+      </div>
     </div></div>
   </section>
 
@@ -274,7 +281,7 @@
       <div class="u-win" id="lab-win" style="width:720px">
         <div class="u-win-head">
           <span class="u-crumbs"><span>Characters</span><i>/</i><span>Mute</span><i>/</i><span class="is-cur">New look</span></span>
-          <button class="u-btn is-icon is-quiet" type="button" title="Close (Esc)" data-ico="x" data-close></button>
+          <button class="u-btn is-icon is-quiet u-x" type="button" title="Close (Esc)" data-close></button>
         </div>
         <div class="u-win-body">
           <div class="lab-grid2" style="gap:var(--sp-3)">
@@ -285,7 +292,7 @@
         </div>
         <div class="u-win-foot">
           <button class="u-btn is-quiet" type="button">Almanac</button>
-          <span class="u-win-note">Lands in Images → Lookbooks</span>
+          <span class="u-status">Lands in Images → Lookbooks</span>
           <span class="sp"></span>
           <span class="u-price">≈ $0.42</span>
           <button class="u-btn" type="button" data-close>Cancel</button>
@@ -295,6 +302,14 @@
       <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
         <button class="u-btn" type="button" id="lab-open-win">Open as a window</button>
         <span style="color:var(--faint);font-size:var(--fs-11);max-width:180px">Over the dimmed page with the one shadow; Esc, the cross or Cancel closes it</span>
+        <div class="u-sec" style="margin-top:var(--sp-3)">
+          <div class="u-sec-t">The one status line</div>
+          <div style="display:flex;flex-direction:column;gap:var(--sp-1)">
+            <span class="u-status">Reading the photo…</span>
+            <span class="u-status is-ok">Saved</span>
+            <span class="u-status is-bad">Not saved: the disk is full</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>

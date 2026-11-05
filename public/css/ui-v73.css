@@ -114,21 +114,8 @@
 .u-home-head b{ color:var(--gold); font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font) }
 .u-home-head span{ color:var(--muted); font-size:var(--fs-11) }
 
-/* ── One window frame: head 40, body, foot 52 ──────────────────────────────── */
-.u-win{ display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-lg); overflow:hidden }
-.u-win.is-float{ box-shadow:var(--shadow) }
-.u-win-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-1) 0 var(--sp-4);
-  background:var(--surface-2); border-bottom:1px solid var(--border-soft) }
-.u-win-title{ flex:1; min-width:0; color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.u-crumbs{ flex:1; min-width:0; display:flex; align-items:center; gap:6px; font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); color:var(--muted) }
-.u-crumbs .is-cur{ color:var(--ink) }
-.u-crumbs i{ font-style:normal; color:var(--faint) }
-.u-win-body{ flex:1; min-height:0; padding:var(--sp-4) }
-.u-win-foot{ display:flex; align-items:center; gap:var(--sp-2); height:52px; flex:0 0 auto; padding:0 var(--sp-3);
-  border-top:1px solid var(--border-soft); background:var(--surface) }
-.u-win-foot .sp{ flex:1 }
-.u-win-note{ color:var(--faint); font-size:var(--fs-11) }
-.u-price{ color:var(--muted); font:var(--fw-regular) var(--fs-12)/1 var(--mono) }
+/* ── The window frame (.u-win, its head, body and foot, .u-price, .u-status) and the segment (.u-seg) live in css/app-shell.css
+   since phase V73 block 4; the showcase keeps only its backdrop to open the frame as a window ── */
 .u-ov{ position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center;
   background:var(--ov-dim, oklch(0 0 0 / .45)); backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
   animation:u-fade var(--dur-3) var(--ease) }

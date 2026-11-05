@@ -273,7 +273,7 @@
 
   /* ── The question at a button: a title, a quiet line, the answers at the right - Cancel first, the dangerous one red ── */
   .u-ask{ width:288px; max-width:calc(100vw - 12px); padding:var(--sp-3); display:block; background:var(--surface-2); border:1px solid var(--border);
-    border-radius:10px; box-shadow:var(--shadow); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
+    border-radius:var(--r); box-shadow:var(--shadow); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
   .u-ask.is-float{ position:fixed; z-index:9700; animation:u-pop var(--dur-2) var(--ease) }
   .u-ask > b{ display:block; color:var(--ink); font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); letter-spacing:0; text-transform:none; white-space:normal }
   .u-ask > p{ margin:var(--sp-1) 0 0; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); white-space:pre-line }
@@ -282,6 +282,47 @@
   /* (б2-7) a list under the question - the projects a file is used in, the names to delete: wider, scrolling inside */
   .u-ask.is-wide{ width:auto; min-width:288px; max-width:min(360px, calc(100vw - 12px)) }
   .u-ask > p.is-lines{ max-height:50vh; overflow-y:auto; color:var(--ink) }
+
+  /* ── THE ONE WINDOW FRAME (phase V73 block 4, rule 5; the showcase's frame, moved here from css/ui-v73.css): one radius,
+     one hairline, one shadow; a head of 40 px one step lighter - the name (`.u-win-title`) or the crumbs (`.u-crumbs`) at
+     13 px, a quiet note right of the name (`.u-win-sub`), the window's own buttons, and the ✕ of 28 px last (the shared
+     `u-btn is-icon is-quiet u-x`, "Close (Esc)"); the body is each window's own; a foot of 52 px - what is secondary at the
+     left (the almanac, the one status line), the price in mono and ONE gold button at the right, Cancel left of it. A
+     window's own class sits next to these and only places; its own look of the frame is gone. Backdrops and the order of
+     the windows one over another stay each window's. ── */
+  .u-win{ display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-lg); overflow:hidden }
+  .u-win.is-float{ box-shadow:var(--shadow) }
+  .u-win-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-1) 0 var(--sp-4);
+    background:var(--surface-2); border-bottom:1px solid var(--border-soft) }
+  .u-win-title{ flex:0 1 auto; min-width:0; color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .u-win-sub{ flex:0 1 auto; min-width:0; color:var(--faint); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .u-win-head > .sp{ flex:1 1 auto }
+  .u-crumbs{ flex:1; min-width:0; display:flex; align-items:center; gap:6px; color:var(--muted); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font);
+    white-space:nowrap; overflow:hidden }
+  .u-crumbs .is-cur{ color:var(--ink) }
+  .u-crumbs i{ font-style:normal; color:var(--faint) }
+  .u-win-body{ flex:1; min-height:0; padding:var(--sp-4) }
+  .u-win-foot{ display:flex; align-items:center; gap:var(--sp-2); height:52px; flex:0 0 auto; padding:0 var(--sp-3);
+    border-top:1px solid var(--border-soft); background:var(--surface) }
+  .u-win-foot > .sp{ flex:1 1 auto }
+  .u-price{ color:var(--muted); font:var(--fw-regular) var(--fs-12)/1 var(--mono); white-space:nowrap }
+  /* THE ONE STATUS LINE of a window (б2-25): 11 px in the quiet colour; red only for an error, green only for "done" - under
+     the names the windows already toggle (`.is-bad` / `.is-err` / `.err`, `.is-ok` / `.ok`). `.is-line`: one line, cut. */
+  .u-status{ min-width:0; color:var(--faint); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); letter-spacing:0; text-transform:none }
+  .u-status:is(.is-bad, .is-err, .err){ color:var(--danger) }
+  .u-status:is(.is-ok, .ok){ color:var(--success) }
+  .u-status.is-line{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  /* ── THE SEGMENT (б2-12): one of two or three views of a window lit (the sound window's Music | Sounds). The lit one is
+     the selected look - a step and a light line (к16). ── */
+  .u-seg{ display:inline-flex; align-items:center; gap:2px; height:28px; padding:2px; border:1px solid var(--border); border-radius:var(--r-sm);
+    background:var(--bg) }
+  .u-seg > button{ height:22px; padding:0 var(--sp-3); border:0; border-radius:var(--r-2xs); background:none; color:var(--muted); cursor:pointer;
+    font:var(--fw-medium) var(--fs-12)/1 var(--font); letter-spacing:0; text-transform:none; white-space:nowrap;
+    transition:background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease) }
+  .u-seg > button:hover:where(:not([disabled], .is-on, [aria-pressed="true"])){ color:var(--ink); background:var(--hover) }
+  .u-seg > button:is(.is-on, [aria-pressed="true"]){ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); cursor:default }
+  .u-seg > button[disabled]{ opacity:.45; cursor:default }
 
   /* ── Empty, loading, did not load (б2-17): in a big body - a gallery, a list - the dashed frame with an icon and the
      place's own words; in a row, a strip or a menu `.is-line` - the same words with no frame (empty: no icon either).
