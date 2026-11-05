@@ -85,7 +85,7 @@ export function openOwnText(put, done, o = {}) {
   // the foot: the window's one status line (u-status) at the left, use at the right
   const foot = _el('div', 'mv3-x-foot u-win-foot');
   const note = _el('span', 'u-status');
-  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'use');
+  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'Use');
   go.type = 'button';
   go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
   foot.append(note, go);

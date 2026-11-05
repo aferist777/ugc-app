@@ -66,25 +66,25 @@ function _fmtDate(s) {
 
 function _meta(it) {
   const rows = [];
-  rows.push(['kind', it.kind || '']);
+  rows.push(['Kind', it.kind || '']);
   const m = it.meta || {};
-  if (m.character) rows.push(['character', m.character]);
-  if (m.gender) rows.push(['gender', m.gender]);
-  if (m.looks != null) rows.push(['looks', String(m.looks)]);
-  if (m.voices) rows.push(['voices', String(m.voices)]);
-  if (m.variations) rows.push(['variations', String(m.variations)]);
-  if (m.categoryId) rows.push(['category', m.categoryId]);
-  if (m.favorite) rows.push(['favourite', 'yes']);
-  if (m.date) rows.push(['date', _fmtDate(m.date)]);
+  if (m.character) rows.push(['Character', m.character]);
+  if (m.gender) rows.push(['Gender', m.gender]);
+  if (m.looks != null) rows.push(['Looks', String(m.looks)]);
+  if (m.voices) rows.push(['Voices', String(m.voices)]);
+  if (m.variations) rows.push(['Variations', String(m.variations)]);
+  if (m.categoryId) rows.push(['Category', m.categoryId]);
+  if (m.favorite) rows.push(['Favorite', 'yes']);
+  if (m.date) rows.push(['Date', _fmtDate(m.date)]);
   // (phase V27) A clip that came by a link: where from, opened in the browser.
   if (m.link) {
     const a = document.createElement('a');
     a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer';
     a.title = m.link;
     a.textContent = String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60) + (String(m.link).length > 70 ? '…' : '');
-    rows.push(['link', a]);
+    rows.push(['Link', a]);
   }
-  rows.push(['file', String(it.media || '').split('/').pop()]);
+  rows.push(['File', String(it.media || '').split('/').pop()]);
   return rows;
 }
 
@@ -165,7 +165,7 @@ function _paint() {
   if (ref) {
     const row = document.createElement('div');
     row.className = 'lib-view-row lib-view-ref';
-    const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = 'from';
+    const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = 'From';
     const val = document.createElement('span'); val.className = 'lib-view-v';
     const a = document.createElement('a');
     a.href = ref; a.target = '_blank'; a.rel = 'noreferrer';

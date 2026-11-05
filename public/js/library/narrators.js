@@ -48,7 +48,7 @@ const _jobs = new Map();
 const VOICE_ROWS = [
   ['summary', 'Who this voice is'], ['sentences', 'Sentences'], ['rhythm', 'Rhythm'],
   ['address', 'Address'], ['register', 'Register'], ['imagery', 'Imagery'],
-  ['humour', 'Humour'], ['openings', 'Openings'], ['endings', 'Endings'], ['stance', 'Stance'],
+  ['humour', 'Humor'], ['openings', 'Openings'], ['endings', 'Endings'], ['stance', 'Stance'],
   ['signature_moves', 'Signature moves'], ['never_does', 'Never does'],
 ];
 
@@ -62,7 +62,7 @@ const _nurl = (id, rest) => `/api/narrators/${encodeURIComponent(id)}${rest || '
 const HTML = `
     <div class="mk-panel-head">
       <span class="mk-panel-t">Narrators</span>
-      <span class="mk-note">how a script is written — writing by an author in, a voice out</span>
+      <span class="mk-note">how a script is written - writing by an author in, a voice out</span>
     </div>
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
@@ -71,7 +71,7 @@ const HTML = `
         <div class="nr-list" data-f="list"></div>
       </aside>
       <section class="nr-col">
-        <div class="nr-col-h">Samples <em>— writing by this author</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
+        <div class="nr-col-h">Samples <em>- writing by this author</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
         <div class="nr-samples" data-f="samples"></div>
         <div class="nr-add">
           <textarea class="u-area" data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
@@ -96,7 +96,7 @@ const HTML = `
         </div>
       </section>
       <section class="nr-col nr-right">
-        <div class="nr-col-h">The voice <em>— as a model will be told it</em></div>
+        <div class="nr-col-h">The voice <em>- as a model will be told it</em></div>
         <div class="nr-view" data-f="view"></div>
         <div class="nr-foot">
           <div class="mk-job" data-f="vjob" hidden></div>
@@ -163,10 +163,10 @@ async function _readList() {
 }
 
 function _tag(it) {
-  if (_running(it.id)) return ['run', _jobs.get(String(it.id)).kind === 'read' ? 'reading…' : 'transcribing…'];
-  if (!it.ready) return ['wait', it.enough ? 'not read yet' : `needs ${_minWords}+ words`];
+  if (_running(it.id)) return ['run', _jobs.get(String(it.id)).kind === 'read' ? 'Reading…' : 'Transcribing…'];
+  if (!it.ready) return ['wait', it.enough ? 'Not read yet' : `Needs ${_minWords}+ words`];
   if (it.unread) return ['wait', it.unread === 1 ? '1 new sample' : `${it.unread} new samples`];
-  return ['ready', 'voice read'];
+  return ['ready', 'Voice read'];
 }
 
 function _paintList() {
@@ -363,7 +363,7 @@ function _paintSamples() {
     h.appendChild(name);
     h.appendChild(el('span', null, `${s.words} words`));
     // (V38) Read or not: "Read new samples" reads only the ones that are not, so none is paid for twice.
-    const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'read' : 'not read');
+    const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'Read' : 'Not read');
     tag.title = s.readAt ? 'Read into the voice - it is not read again' : 'Not read yet - "Read new samples" reads it';
     h.appendChild(tag);
     const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
@@ -544,7 +544,7 @@ function _paintVoice(box) {
       _editable(t, l.text, async (text) => (await _post(_nurl(owner, `/voice/${encodeURIComponent(l.id)}`), { text }, 'PATCH')).narrator, { multiline: true });
       line.appendChild(t);
       // What the last reading added - when it was not the first.
-      if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', 'new'));
+      if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', 'New'));
       const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Delete this line of the voice';

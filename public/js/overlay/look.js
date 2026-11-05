@@ -16,22 +16,22 @@
    with the canvas's own blend mode (`canvas`, the W3C compositing formulas); the render blends the clip, laid on a
    transparent frame, with what is under it by ffmpeg's `blend` in RGB - the backdrop as its first input, as the W3C
    formulas read the backdrop (overlay's light/dark test is the backdrop's) - and lays the result by the clip's alpha
-   (its opacity in it). `add` adds the clip's colour times its alpha straight (canvas 'lighter'): mixed by the alpha
+   (its opacity in it). `add` adds the clip's color times its alpha straight (canvas 'lighter'): mixed by the alpha
    afterwards it would not clip as the canvas does. Measured on a stand (a frame of the preview against a frame of the
    render, 2026-10-31): every mode within about 1 of 255 on average; soft light - ffmpeg's formula is close to, not the
    same as, the W3C one - within 1.5-2.8 on average, 16 at most.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const BLENDS = [
-  { id: 'none', label: 'none', canvas: 'source-over', ff: '', tip: 'laid over what is under it' },
-  { id: 'screen', label: 'screen', canvas: 'screen', ff: 'screen', tip: 'lightens - black vanishes, a glow or a light leak' },
-  { id: 'multiply', label: 'multiply', canvas: 'multiply', ff: 'multiply', tip: 'darkens - white vanishes, ink or a shadow' },
-  { id: 'overlay', label: 'overlay', canvas: 'overlay', ff: 'overlay', tip: 'more contrast - light over light, dark over dark' },
-  { id: 'soft-light', label: 'soft light', canvas: 'soft-light', ff: 'softlight', tip: 'gentle contrast - a soft glow or a tint' },
-  { id: 'lighten', label: 'lighten', canvas: 'lighten', ff: 'lighten', tip: 'the lighter of the two, pixel by pixel' },
-  { id: 'darken', label: 'darken', canvas: 'darken', ff: 'darken', tip: 'the darker of the two, pixel by pixel' },
-  { id: 'add', label: 'add', canvas: 'lighter', ff: 'addition', premultiplied: true, tip: 'adds the light - brighter than screen' },
-  { id: 'difference', label: 'difference', canvas: 'difference', ff: 'difference', tip: 'the difference - white turns colours inside out' },
+  { id: 'none', label: 'None', canvas: 'source-over', ff: '', tip: 'laid over what is under it' },
+  { id: 'screen', label: 'Screen', canvas: 'screen', ff: 'screen', tip: 'lightens - black vanishes, a glow or a light leak' },
+  { id: 'multiply', label: 'Multiply', canvas: 'multiply', ff: 'multiply', tip: 'darkens - white vanishes, ink or a shadow' },
+  { id: 'overlay', label: 'Overlay', canvas: 'overlay', ff: 'overlay', tip: 'more contrast - light over light, dark over dark' },
+  { id: 'soft-light', label: 'Soft light', canvas: 'soft-light', ff: 'softlight', tip: 'gentle contrast - a soft glow or a tint' },
+  { id: 'lighten', label: 'Lighten', canvas: 'lighten', ff: 'lighten', tip: 'the lighter of the two, pixel by pixel' },
+  { id: 'darken', label: 'Darken', canvas: 'darken', ff: 'darken', tip: 'the darker of the two, pixel by pixel' },
+  { id: 'add', label: 'Add', canvas: 'lighter', ff: 'addition', premultiplied: true, tip: 'adds the light - brighter than screen' },
+  { id: 'difference', label: 'Difference', canvas: 'difference', ff: 'difference', tip: 'the difference - white turns colors inside out' },
 ];
 const _BY = new Map(BLENDS.map(b => [b.id, b]));
 

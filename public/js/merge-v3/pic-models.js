@@ -160,7 +160,7 @@ export function modelColumn(ctx, o) {
     if (want && !list.some(e => e.id === want)) {
       const was = (_table.engines.find(e => e.id === want) || {}).label || want;
       _set.eng.value = (list[0] || {}).id || '';
-      if (had) ctx.say(was + ' cannot take ' + n + (n === 1 ? ' reference' : ' references') + ' — using ' + ((list[0] || {}).label || 'nothing'));
+      if (had) ctx.say(was + ' cannot take ' + n + (n === 1 ? ' reference' : ' references') + ' - using ' + ((list[0] || {}).label || 'nothing'));
     }
     _paintProviders();
     _paintQuality();
@@ -227,7 +227,7 @@ export function modelColumn(ctx, o) {
     if (!opts.shapes) {
       if (_set.shape) {
         _set.shape.textContent = '';
-        _set.shape.append(el('span', 'k', 'shape'), el('b', null, _aspect()), el('span', null, "the project's own"));
+        _set.shape.append(el('span', 'k', 'Shape'), el('b', null, _aspect()), el('span', null, "the project's own"));
         _set.shape.title = 'Every frame is drawn in the project\'s shape - a frame of another shape would go to the clip with bars';
       }
       return;

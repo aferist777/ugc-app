@@ -83,7 +83,7 @@ export async function openCut(it, opts) {
   const row = el('div', 'snd-cut-row');
   const play = el('button', 'snd-btn snd-cut-play u-btn is-s is-icon', '▶');
   play.title = 'Play from the playhead (Space) - a press on the wave moves it';
-  const piece = el('button', 'snd-btn u-btn is-s', '▶ the piece');
+  const piece = el('button', 'snd-btn u-btn is-s', '▶ The piece');
   piece.title = 'Play only the piece between the gold handles';
   play.type = piece.type = 'button';
   const time = el('span', 'snd-clock', '');
@@ -91,7 +91,7 @@ export async function openCut(it, opts) {
   row.appendChild(el('span', 'sp'));
   let lay = null;
   if (typeof o.toTimeline === 'function') {
-    lay = el('button', 'snd-btn u-btn is-s', 'to timeline');
+    lay = el('button', 'snd-btn u-btn is-s', 'To timeline');
     lay.type = 'button';
     lay.title = 'Lay the piece at the playhead of the timeline - the same file, cut to the piece';
     row.appendChild(lay);

@@ -757,8 +757,8 @@ async function _runAction(id, it, anchor) {
     const fav = await A.toggleFavorite(it);
     it.meta = it.meta || {}; it.meta.favorite = fav;
     // reload, not repaint: the card has to jump to the front, and that order is the
-    // server's (favourites first, then date). A local repaint would leave it where it was.
-    return { reload: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
+    // server's (favorites first, then date). A local repaint would leave it where it was.
+    return { reload: true, msg: fav ? 'Added to favorites' : 'Removed from favorites' };
   }
   // (block 6) A video of YOUTUBE into a new highlights project, chosen in its popup already.
   if (id === 'hl') { location.href = '/merge?source=' + encodeURIComponent((it.meta && it.meta.source) || it.id); return { changed: false }; }
@@ -860,7 +860,7 @@ function _open(it, list, follow) {
       }
       if (_CATABLE.has(item.kind)) {
         rows.push(['category', _picker('lib-view-sel u-in is-s', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
+          () => [{ id: '', label: 'No folder' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
           (id) => _setCat(item, id), 'Folder')]);
       }
       const orig = Cut.originalRow(item, repaintViewer);
@@ -939,7 +939,7 @@ function _picker(cls, current, options, onPick, title) {
   // one option to start with, so the closed control still reads correctly
   const shown = document.createElement('option');
   shown.value = current;
-  shown.textContent = (options().find(o => o.id === current) || { label: '— none —' }).label;
+  shown.textContent = (options().find(o => o.id === current) || { label: 'None' }).label;
   sel.appendChild(shown);
   sel.addEventListener('mousedown', fill);
   sel.addEventListener('focus', fill);
@@ -1062,7 +1062,7 @@ function _card(it, extra) {
     // (phase V73 block 6) ★ and ✕ as Merge's gallery has them: the shared on-picture part, Lucide's icons
     star.className = 'lib-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
     star.innerHTML = icon('star', 12);
-    star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
+    star.title = (it.meta && it.meta.favorite) ? 'Remove from favorites' : 'Add to favorites';
     star.addEventListener('click', async (e) => {
       e.stopPropagation();
       star.disabled = true;
@@ -1121,7 +1121,7 @@ function _card(it, extra) {
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
     card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
+      () => [{ id: '', label: 'No folder' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
       (id) => _setCat(it, id), 'Folder'));
   }
 
@@ -1197,9 +1197,9 @@ function _manyMenu(items, e) {
         done: (d) => _afterMany(null, '', false).then(() => d),
         status: (t, bad) => _status(t, bad ? 'err' : ''),
       })],
-    [allFav ? '★ Remove from favourites' : '★ Add to favourites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
+    [allFav ? '★ Remove from favorites' : '★ Add to favorites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
       starable.length ? async () => {
-        try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
+        try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favorites' : 'in favorites'); }
         catch (err) { _status(err.message, 'err'); }
       } : null],
     ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, tile), true],
@@ -1779,13 +1779,13 @@ async function _cleanDupes() {
   const lines = [
     _dupes.total + ' record' + (_dupes.total === 1 ? '' : 's') + ' share a file with another record.',
     '',
-    'The extra records are removed. NO file is deleted — the copy that stays uses',
+    'The extra records are removed. NO file is deleted - the copy that stays uses',
     'the same video and the same thumbnail.',
     '',
     'Keeping the record that knows more (a prompt first, then the earlier one):',
   ];
   for (const x of g.slice(0, 6)) {
-    lines.push('  keep ' + x.keep.name + '   —   drop ' + x.drop.map(d => d.name).join(', '));
+    lines.push('  keep ' + x.keep.name + '   -   drop ' + x.drop.map(d => d.name).join(', '));
   }
   if (g.length > 6) lines.push('  … and ' + (g.length - 6) + ' more');
   if (moves) {
@@ -2085,7 +2085,7 @@ async function _upload(files) {
   // Video they go to Uploads, which is what a file brought in from outside is. They arrive with no category - filed
   // afterwards, on the tree or in the viewer - and the kind is shown so they are seen.
   const target = _linkKind() || 'uploads';
-  const r = await A.uploadVideos(list, target, (i, n, name) => _status('Uploading ' + i + '/' + n + ' — ' + name));
+  const r = await A.uploadVideos(list, target, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
   if (btn) btn.disabled = false;
   if (r.ok) await landed(target);
   // After the reload, never before: _load() signs off with _status('') and would wipe this.

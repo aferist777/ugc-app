@@ -75,7 +75,7 @@ export async function openScenario(summary, hooks = {}) {
   const gender = field('Gender', (() => {
     const s = document.createElement('select');
     s.className = 'u-in';                             // (phase V73 block 2) the shared field, as the window's others
-    for (const [v, t] of [['', 'any - every character is offered'], ['female', 'female'], ['male', 'male']]) {
+    for (const [v, t] of [['', 'Any - every character is offered'], ['female', 'Female'], ['male', 'Male']]) {
       const o = document.createElement('option');
       o.value = v; o.textContent = t;
       s.appendChild(o);
@@ -106,7 +106,7 @@ export async function openScenario(summary, hooks = {}) {
   // the foot: save and the window's one status line (u-status) at the left, use alone at the right
   const foot = _el('div', 'mv3-x-foot u-win-foot');
   const note = _el('span', 'u-status');
-  const save = _el('button', 'mv3-c-btn u-btn', 'save');
+  const save = _el('button', 'mv3-c-btn u-btn', 'Save');
   save.type = 'button';
   save.title = 'Keep it in the library';
   // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
@@ -116,7 +116,7 @@ export async function openScenario(summary, hooks = {}) {
   const use = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main');
   use.type = 'button';
   const dressUse = () => {
-    use.textContent = archived ? 'restore' : 'use';
+    use.textContent = archived ? 'Restore' : 'Use';
     use.title = archived ? 'Put it back in the library'
       : 'Save it and make a ' + (hooks.voiceover ? 'voiceover' : 'talking-head') + ' project from it';
   };
@@ -175,7 +175,7 @@ export async function openScenario(summary, hooks = {}) {
       product.value = rec.product || '';
       const r0 = (rec.roles || [])[0] || {};
       role.value = r0.name || '';
-      gender.value = ['male', 'female'].includes(String(r0.gender || '')) ? r0.gender : '';
+      gender.value = ['male', 'Female'].includes(String(r0.gender || '')) ? r0.gender : '';
       lines.value = (rec.lines || []).map(l => l.text || '').join('\n');
       archived = !!rec.archived;
       dressUse();

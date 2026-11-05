@@ -384,7 +384,7 @@ async function _useSaved(api, it) {
 // ── The sub-level ───────────────────────────────────────────────────────────
 function _bar(host, api) {
   const acts = el('div', 'mv3-wk-bar is-own');
-  const tab = el('button', 'mv3-sc-tab u-tab is-on', 'voice');
+  const tab = el('button', 'mv3-sc-tab u-tab is-on', 'Voice');
   tab.type = 'button';
   tab.disabled = true;
   tab.title = 'The voices of this character, and the library';
@@ -996,7 +996,7 @@ export function openVoices(api, o = {}) {
     name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
     onClose: () => { if (_vwin && _vwin.win === win) _vwin = null; leave(); },
   });
-  win.setCrumbs([{ label: 'voices' }]);
+  win.setCrumbs([{ label: 'Voices' }]);
   _vwin = { win, api };
   paintVoices();
   return win;

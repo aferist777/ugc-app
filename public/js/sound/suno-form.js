@@ -549,7 +549,7 @@ export function createSunoForm(o) {
         const fl = field('Lyrics', ly, { max: 5000, help: 'What is sung, in parts: [Verse], [Chorus]… Up to 5000 characters. Empty - Suno sings what it makes up.\nThe list over it - the texts kept in Music → Lyrics: a choice replaces the text, the title is taken only when it is empty. "save" keeps this text there; "write lyrics from an idea…" opens Lyrics.' });
         // (phase V59.1, (мз8)) The saved texts over the field: a choice replaces the text, the title only when it is empty.
         fl.insertBefore(savedPick(f), ly);
-        const wr = el('button', 'au-link', 'write lyrics from an idea…');
+        const wr = el('button', 'au-link', 'Write lyrics from an idea…');
         wr.type = 'button';
         wr.addEventListener('click', () => {
           if (!S.f.lyrics.idea) S.f.lyrics.idea = [f.title, f.style].filter(Boolean).join(' - ').slice(0, 200);
@@ -562,7 +562,7 @@ export function createSunoForm(o) {
         fl.appendChild(links);
         card.appendChild(fl);
         const vs = el('select', 'au-sel u-in');
-        for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
+        for (const [v, t] of [['', 'Any voice'], ['f', 'A woman\'s voice (likelier)'], ['m', 'A man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
         vs.value = f.vocal || '';
         vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
         card.appendChild(field('Voice', vs, { help: 'Whose voice Suno is asked for - it only makes it likelier. Saying it in the style ("warm female vocal") holds better.' }));
@@ -614,7 +614,7 @@ export function createSunoForm(o) {
     b.title = 'Keep this text in Music → Lyrics - named by the title, else by its first line';
     const upd = () => {
       const on = isSaved(f.lyrics);
-      b.textContent = on ? 'saved ✓' : 'save';
+      b.textContent = on ? 'Saved ✓' : 'Save';
       b.disabled = on || !_norm(f.lyrics);
       b.classList.toggle('is-saved', on);
     };
@@ -637,7 +637,7 @@ export function createSunoForm(o) {
     const b = el('button', 'au-link au-save');
     b.type = 'button';
     b.title = 'Keep this text in Music → Lyrics';
-    const upd = () => { const on = isSaved(l.text); b.textContent = on ? 'saved ✓' : 'save'; b.disabled = on; b.classList.toggle('is-saved', on); };
+    const upd = () => { const on = isSaved(l.text); b.textContent = on ? 'Saved ✓' : 'Save'; b.disabled = on; b.classList.toggle('is-saved', on); };
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (isSaved(l.text)) return;
@@ -718,13 +718,13 @@ export function createSunoForm(o) {
     const h = el('div', 'au-lyr-h');
     h.appendChild(el('span', null, l.title || 'Lyrics'));
     h.appendChild(el('span', 'sp'));
-    const use = el('button', 'au-link', 'use in custom');
+    const use = el('button', 'au-link', 'Use in custom');
     use.type = 'button';
     use.addEventListener('click', () => useLyric(l));
-    const copy = el('button', 'au-link', 'copy');
+    const copy = el('button', 'au-link', 'Copy');
     copy.type = 'button';
     copy.addEventListener('click', async () => { const ok = await copyText(l.text); say(ok ? 'Copied.' : 'Not copied.', !ok); });
-    const more = el('button', 'au-link', 'all');
+    const more = el('button', 'au-link', 'All');
     more.type = 'button';
     more.addEventListener('click', () => box.classList.toggle('open'));
     h.append(use, saveButton(l, gen), copy, more);
@@ -911,12 +911,12 @@ export function createSunoForm(o) {
         });
         h.appendChild(add);
       }
-      const cp = el('button', 'aal-btn u-btn is-s', 'copy');
+      const cp = el('button', 'aal-btn u-btn is-s', 'Copy');
       cp.type = 'button';
       cp.addEventListener('click', async () => {
         const ok = await copyText(n.text);
-        cp.textContent = ok ? 'copied ✓' : 'not copied';
-        setTimeout(() => { if (cp.isConnected) cp.textContent = 'copy'; }, 1400);
+        cp.textContent = ok ? 'Copied ✓' : 'Not copied';
+        setTimeout(() => { if (cp.isConnected) cp.textContent = 'Copy'; }, 1400);
       });
       h.appendChild(cp);
       desc.appendChild(h);

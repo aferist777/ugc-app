@@ -120,7 +120,7 @@ export function offerMerge() {
   // button (`u-win is-float`) holding its head row alone (`u-win-head`), the 28-px ✕ at its right end
   box.className = 'mv3-mergeask u-win is-float';
   box.innerHTML = '<div class="mv3-mergeask-r u-win-head"><span class="mv3-mergeask-t"></span>'
-    + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main">merge</button>'
+    + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main">Merge</button>'
     + '<button type="button" class="mv3-mergeask-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>';
   setFigures(box.querySelector('.mv3-mergeask-t'), 'Merge ' + m.n + ' clips into one?');
   // (phase V72) Lines that cannot be merged as lines: the words in place of the offer, nothing to press.

@@ -357,7 +357,7 @@ function _row(rec) {
   // (phase V73 block 6) "open" and "retry" are quiet buttons: the row itself is the way to the work
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', 'open');
+    const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', 'Open');
     open.type = 'button';
     open.title = 'Look at what came out';
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
@@ -498,7 +498,7 @@ function _announce(rec) {
     mark: KIND_MARK[rec.kind] || '▣', failed: rec.state === 'failed',
     title: rec.title || rec.what || 'generation',
     where: rec.state === 'failed' ? (rec.error || 'it did not come') : 'ready',
-    act: _canOpen(rec) ? { label: 'open', run: () => _open(rec) } : null,
+    act: _canOpen(rec) ? { label: 'Open', run: () => _open(rec) } : null,
     onClick: href ? () => _goTo(href) : null,
     ms: TOAST_MS,
   });

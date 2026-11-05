@@ -276,7 +276,7 @@ function _tile(it, catLabel) {
   if (catLabel) nm.appendChild(el('i', null, catLabel));
   words.append(nm, el('span', 'hp-text', it.prompt));
   // (phase V73 block 4) "copy" wears the quiet button - the whole tip is still what is pressed
-  t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', 'copy'));
+  t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', 'Copy'));
   t.addEventListener('click', () => _copy(it, t));
   return t;
 }

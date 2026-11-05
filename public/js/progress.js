@@ -54,7 +54,7 @@ const OVER_NOTE  = 'Longer than usual - it may still be rendering.';
 // within seconds with its own reason, so a job still going at three times its estimate is stuck
 // rather than rejected - and saying otherwise would send the user editing text that is fine.
 const STUCK_NOTE = 'Well past normal. A refusal would have been reported by now, so this looks '
-  + 'stuck rather than rejected - cancelling and rendering again is safe.';
+  + 'stuck rather than rejected - canceling and rendering again is safe.';
 
 export function startProgress(host, { label, total = 1, startedAt = 0, estimateMs = 0, onCancel = null } = {}) {
   if (!host) return { tick() {}, step() {}, finish() {}, fail() {}, detach() {} };
@@ -89,7 +89,7 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
   elLabel.textContent = label || 'Working…';
 
   // Built only when the caller has something for it to do, and hidden until the wait is
-  // actually unusual - a cancel button offered at second three invites cancelling a healthy job.
+  // actually unusual - a cancel button offered at second three invites canceling a healthy job.
   let elNote = null, elCancel = null;
   if (onCancel) {
     elNote = document.createElement('div');
@@ -102,7 +102,7 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
     elCancel.addEventListener('click', (e) => {
       e.stopPropagation();
       elCancel.disabled = true;
-      elCancel.textContent = 'Cancelling…';
+      elCancel.textContent = 'Canceling…';
       try { onCancel(); } catch (err) { console.error('[sv3] cancel', err); }
     });
     card.appendChild(elNote);
@@ -188,7 +188,7 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
 // `startedAt` re-attaches the row to a job already running, as startProgress does: the bar and the
 // countdown start from its real age, and finish() times the whole job, not the part watched.
 // `onCancel`, when given, puts a ✕ at the right end of the row (phase G1, the Library's generator):
-// pressing it calls onCancel once, and the row says "cancelling…" until its owner closes it. Rows
+// pressing it calls onCancel once, and the row says "canceling…" until its owner closes it. Rows
 // without it are as they always were.
 export function startInlineProgress(host, { label, key, estimateMs = 0, startedAt = 0, onCancel = null } = {}) {
   if (!host) return { finish() {}, fail() {}, detach() {}, say() {} };
@@ -215,7 +215,7 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
       e.stopPropagation();
       if (closed || x.disabled) return;
       x.disabled = true;
-      row.querySelector('.sv3-inline-label').textContent = 'cancelling…';
+      row.querySelector('.sv3-inline-label').textContent = 'canceling…';
       try { onCancel(); } catch (err) { /* the owner says what happened */ }
     });
     row.appendChild(x);

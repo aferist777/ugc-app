@@ -5,8 +5,8 @@
    codecs in our FFmpeg build), what is fetched at install (yt-dlp, JASSUB, whisper.cpp) or on demand
    (the Whisper model), the caption fonts and presets, the projects whose rules our captions follow, and
    the video chat's cookbook (awesome-seedance, goodcase.ai, YouMind's Grok prompts - phase V4) -
-   each with its licence, what it is, and what it does HERE. Checked against the files themselves (the
-   packages' package.json and LICENSE, the vendor pins, the font licences) on 2026-10-03.
+   each with its license, what it is, and what it does HERE. Checked against the files themselves (the
+   packages' package.json and LICENSE, the vendor pins, the font licenses) on 2026-10-03.
 
    A dependency added to package.json without a line here fails the smoke check (tools/smoke-local.js
    reads the `npm` names below) - a new library gets its thanks in the same change.
@@ -184,7 +184,7 @@
     { group: "Captions", name: "JavascriptSubtitlesOctopus",
       url: "https://github.com/libass/JavascriptSubtitlesOctopus", license: "MIT",
       what: "The original project that put libass in the browser through WebAssembly.",
-      how: "JASSUB grew out of it and still carries its code, so its contributors are named in the licence that ships with the preview's caption renderer (vendor/jassub/LICENSE)." },
+      how: "JASSUB grew out of it and still carries its code, so its contributors are named in the license that ships with the preview's caption renderer (vendor/jassub/LICENSE)." },
     { group: "Captions", name: "FreeType",
       url: "https://gitlab.freedesktop.org/freetype/freetype", license: "FTL OR GPL-2.0-or-later",
       what: "The library that reads font files and draws their letters.",
@@ -224,7 +224,7 @@
     { group: "Interface", name: "Lucide",
       url: "https://github.com/lucide-icons/lucide", license: "ISC",
       what: "A set of line icons, a fork of Feather (some of its icons are Feather's, MIT).",
-      how: "The interface's icons: 51 of them copied as SVG from lucide-static 1.60.0 into public/js/icons.js, 16 px with a 1.5 stroke in the colour of their text; the licence is public/icons/LICENSE-lucide.txt (phase V73)." },
+      how: "The interface's icons: 51 of them copied as SVG from lucide-static 1.60.0 into public/js/icons.js, 16 px with a 1.5 stroke in the colour of their text; the license is public/icons/LICENSE-lucide.txt (phase V73)." },
     { group: "Fonts", name: "Liberation Sans",
       url: "https://github.com/liberationfonts/liberation-fonts", license: "OFL-1.1",
       what: "Red Hat's font with the same letter widths as Arial.",
@@ -630,7 +630,7 @@
       what: "An open collection of animated interface components.",
       how: "The idea of the highlighter stroke and the underline drawn behind a phrase - the Highlighter, Underline and Step presets (public/js/captions/text-fx.js)." },
     { group: "Text presets", name: "RVE remotion-templates",
-      url: "https://github.com/reactvideoeditor/remotion-templates", license: "MIT per its README - no licence file, so ideas only",
+      url: "https://github.com/reactvideoeditor/remotion-templates", license: "MIT per its README - no license file, so ideas only",
       what: "Twelve animated title templates for Remotion by React Video Editor.",
       how: "Looked at for ideas only - the popping scale, the floating text chip, the chapter title; nothing copied." },
     { group: "Text presets", name: "lyger Aegisub automation scripts",
@@ -646,7 +646,7 @@
       what: "The site that collects, retests and hosts the cases of awesome-seedance.",
       how: "A case's poster is fetched once from goodcase into the library's cache and its video plays from goodcase when you point at it; each case links to its goodcase page (lib/video-catalog.js)." },
     { group: "Video cookbook", name: "AI Camera Movements",
-      url: "https://aicameramovements.com", license: "a free reference - no licence stated · prompts and previews © their author",
+      url: "https://aicameramovements.com", license: "a free reference - no license stated · prompts and previews © their author",
       what: "A free visual library of camera movement prompts for AI filmmakers: 46 moves in 7 categories, each with a prompt and a looping example.",
       how: "The first section of the video chat's prompt reference (\"/\", phase V14): the 46 moves with their categories and prompts as the site writes them, and each example made small - a still and a looping WebP (public/presets/helper/, tools/fetch-camera.js). Credited here and in the reference; any one is removed at its author's request." },
     { group: "Video cookbook", name: "YouMind awesome-grok-imagine-prompts",
@@ -675,19 +675,19 @@
       how: "162 of the built-in sounds of AUDIO -> SFX come from these eight packs: clicks, toggles, notifications, impacts, glitches, chips and coins, doors, footsteps, pages and short jingles - trimmed, levelled and re-encoded by us (vendor/sfx/, tools/build-sfx.js, tools/fetch-sfx.js)." },
     { group: "Sound effects", name: "Freesound",
       url: "https://freesound.org", license: "CC0 (each sound we took)",
-      what: "A collaborative library of sounds shared by their recordists, run by the Music Technology Group of Universitat Pompeu Fabra, Barcelona; every sound carries its own licence.",
+      what: "A collaborative library of sounds shared by their recordists, run by the Music Technology Group of Universitat Pompeu Fabra, Barcelona; every sound carries its own license.",
       how: "283 of the built-in sounds of AUDIO -> SFX are Freesound sounds released under CC0, found through Openverse and taken from their public previews: whooshes, risers and drops, cinematic impacts, mouth pops, dings, cash registers and coins, camera shutters, typing, cartoon sounds, crowds, product handling (sprays, cans, jars, tape, boxes) and ambiences - trimmed, levelled and re-encoded by us. Each sound keeps its author and its page in the details (vendor/sfx/sfx.json, vendor/sfx/LICENSE.txt). Thank you to its 212 authors: -Andreas, 3bagbrew, 5ro4, adh.dreaming, aidansamuel, AlaskaRobotics, Alcappuccino, aldenroth2, Alexsani, anagar, Andre_Desartistes, Anthousai, athenspublic, AudioPapkin, baidonovan, BenjaminNelan, BianCakes92, blukotek, BMacZero, Breviceps, burnttoys, cabled_mess, CADSoundDesignEmporium, ch_ase, collierhs_colinlib, ConarB13, cookies+policy, Coral_Island_Studios, craigscottuk, D4XX, Dalesome, DaniloSFX, DaveJf, david_werecat, Davidsraba, Daybreaker64, dazza007, DBS_Sounds, disman, dotY21, drewtait, editor_adp, Eelke, Eirikr, el_boss, eldiariosonoro_, escritor1, esperri, euanmj, Ev-Dawg, eZZin, fennelliott, FenrirFangs, FlatHill, fleurescence, florianreichelt, FunWithSound, Fupicat, G_M_D_THREE, GabrielAraujo, GameAudio, Gee-Jay, GnoteSoundz, greenlinker, greenvwbeetle, hermengarde, hmilleo, holidayparade, hollandm, hopflog, HoseNoseSounds, husky70, hypocore, hz37, ihitokage, jackmichaelking, jankisjes, JapanYoshiTheGamer, JarredGibb, jawbutch, jayfrosting, jcallison, jcookvoice, jim-ph, Joao_Janz, Jofae, JoMungus, jordivburgel, josefpres, josheb_policarpio, jvdicke, kalisemorrison, kangaroovindaloo, KenRT, Khrinx, Kinoton, kirbydx, Krizin, kyles, LaurenPonder, Leonardmedia.nl, LizerdSFX, lmr9, Lucas_Schacht, lunchmoney, Mafon2, Magnesus, magnuswaker, MaoDin204, maqsim, mario1298, martian, Masgame, MasterEngine, MATRIXXX_, mattwasser, mccreery, michorvath, mixtus, mobaudio, moogy73, mpaol2023, Mrguff, mrickey13, musicvision31, nebulasnails, neezen., NeoSpica, newagesoup, NicholasJudy567, Nightflame, Nolkaloid, nomiqbomi, OBXJohn, ondrosik, opticaillusions, OwlStorm, paespedro, pan14, Paul368, PaulMorek, pbimal, PetervH, phmiller42, plasterbrain, Plonkapple, Poligonstudio, Professor-Syntax, prueslove, Psykophobia, qubodup, ramsamba, reelworldstudio, Reitanna, richwise, ristooooo1, Rizzard, roachpowder, RossBell, Rudmer_Rotteveel, RuidosoSoundFX, RutgerMuller, Sajmund, SamsterBirdies, Sassaby, Sclolex, se2001, seth-m, sgrowe, Skjor1, SlavicMagic, snakebarney, soapybubl, soneproject, SoundsExciting, spongemas765, squidge316, stair, Stereo Surgeon, StevenMyat_, tadaizm, Talitha5, TaranP, TechGeekMusic, Terry93D, tgfcoder, TheBuilder15, TheEndOfACycle, thepodcastdoctor, Timmeh515, tlwmdbt, ToxicFilmzSRsounds, uEffects, unfa, uzerx, vacuumfan7072, vcspran, VishwaJay, visionear, vmgraw, Wakerone, WannyManny, Wax_vibe, Werra, XDWX, XHALE303, xkeril, XxChr0nosxX, zazz.sound.design, ZenithInfinitiveStudios, Zeraora, zharvill." },
     { group: "Sound effects", name: "Openverse",
       url: "https://openverse.org", license: "API terms of use · MIT code",
       what: "A search engine for openly licensed media by the WordPress community; its API searches Freesound, Wikimedia Commons and other collections at once.",
-      how: "Made using Openverse: the built-in set's Freesound sounds were found through its audio API - once, slowly, CC0 only - and each keeps its source and licence (tools/sfx-list.json; the build itself asks Openverse nothing). The CC0 photos and pictures of IMAGES -> Patterns were found through its image search too." },
+      how: "Made using Openverse: the built-in set's Freesound sounds were found through its audio API - once, slowly, CC0 only - and each keeps its source and license (tools/sfx-list.json; the build itself asks Openverse nothing). The CC0 photos and pictures of IMAGES -> Patterns were found through its image search too." },
     { group: "Patterns", name: "Hero Patterns",
       url: "https://heropatterns.com/", license: "CC BY 4.0",
       what: "A collection of repeatable SVG background patterns by Steve Schoger.",
       how: "14 of the built-in patterns of IMAGES -> Patterns are Steve Schoger's Hero Patterns, coloured white and laid as larger seamless tiles by us: Hexagons, Scales (Endless Clouds), Polka dots, Grid and Graph paper (Graph Paper - Grid without its fine lines), Diagonal lines, Diamonds (Overlapping Diamonds), Triangles (Falling Triangles), Waves (Bank Note), Checkers (Tiny Checkers), Plus, Topography, Diagonal stripes and Triangles 2 (Boxes). Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/) - thank you, Steve (vendor/patterns/, tools/build-patterns.js, tools/fetch-patterns.js)." },
     { group: "Patterns", name: "Wikimedia Commons (patterns)",
       url: "https://commons.wikimedia.org", license: "CC0 (each file we took)",
-      what: "The free media repository of the Wikimedia projects; every file carries its own licence.",
+      what: "The free media repository of the Wikimedia projects; every file carries its own license.",
       how: "Two CC0 files became built-in patterns: Spamrakuen's \"2k Dissolve Noise Texture\" - Noise, and Film grain made from it - and Blackcat's \"White concentric circles\" - Concentric circles, its background and frame taken away. Each keeps its author and page in the pattern's details (vendor/patterns/patterns.json)." },
     { group: "Patterns", name: "Flickr (patterns)",
       url: "https://www.flickr.com", license: "CC0 (each photo we took)",
@@ -731,7 +731,7 @@
     var count = document.getElementById('thx-count');
     if (count) count.textContent = 'The open-source work this app is built on - ' + THANKS.length + ' repositories';
     body.appendChild(el('p', 'thx-intro', 'UGC Studio stands on the work of these projects and the people behind them. '
-      + 'Each is listed with its licence, what it is, and what it does in this app. Thank you.'));
+      + 'Each is listed with its license, what it is, and what it does in this app. Thank you.'));
     var coll = null;
     try { coll = new Intl.Collator('en', { sensitivity: 'base', numeric: true }); } catch (e) { /* plain compare then */ }
     var list = THANKS.slice().sort(function (a, b) {

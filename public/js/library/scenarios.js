@@ -85,9 +85,9 @@ function _tail(m) {
 
 // ── Filters (phase F7) ──────────────────────────────────────────────────────
 const FIELDS = [
-  { key: 'type', label: 'type' }, { key: 'role', label: 'role' }, { key: 'gender', label: 'gender' },
-  { key: 'vertical', label: 'vertical' }, { key: 'product', label: 'product' },
-  { key: 'narrator', label: 'narrator' },
+  { key: 'type', label: 'Type' }, { key: 'role', label: 'Role' }, { key: 'gender', label: 'Gender' },
+  { key: 'vertical', label: 'Vertical' }, { key: 'product', label: 'Product' },
+  { key: 'narrator', label: 'Narrator' },
 ];
 const NONE = '__none__';
 const LS_FILTERS = 'library_sc_filters_v1';
@@ -133,7 +133,7 @@ function _filterRow() {
     row.appendChild(sel);
   }
   if (Object.keys(_filters).length) {
-    const x = _el('button', 'lib-sc-filter-x u-btn is-s is-quiet', 'clear');
+    const x = _el('button', 'lib-sc-filter-x u-btn is-s is-quiet', 'Clear');
     x.type = 'button';
     x.title = 'Show every scenario again';
     x.addEventListener('click', () => {
@@ -186,7 +186,7 @@ function _draftRow(dr) {
   main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
   const tail = [dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
     dr.paragraphs ? dr.paragraphs + (dr.paragraphs === 1 ? ' paragraph' : ' paragraphs') : '',
-    String(dr.narratorName || '').replace(/ — .*$/, '')].filter(Boolean).join(' · ');
+    String(dr.narratorName || '').replace(/ - (?:not read|deleted)$/, '')].filter(Boolean).join(' · ');
   main.appendChild(_el('div', 'lib-srow-s', tail));
   row.appendChild(_el('span', 'lib-sc-tag' + (dr.running ? ' run' : ''),
     'draft · ' + (dr.running ? 'writing…' : (dr.stageLabel || dr.stage || ''))));
@@ -614,7 +614,7 @@ async function _paintFields(box, s) {
     v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true, remove: rm('type', 'talking_head') });
   const roleF = _fieldRow(box, 'role', role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
     v => _patch(s, { roles: roleOf(v, genderF.value) }, 'role'), { none: true, newItem: true, remove: rm('role', '') });
-  const genderF = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'female' }, { value: 'male', label: 'male' }],
+  const genderF = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }],
     v => _patch(s, { roles: roleOf(roleF.value, v) }, 'gender'), { none: true });
   _fieldRow(box, 'vertical', s.vertical, opt(_uniq([..._inUse('vertical'), ...L.verticals])),
     v => _patch(s, { vertical: v }, 'vertical'), { none: true, newItem: true, remove: rm('vertical', '') });
@@ -630,7 +630,7 @@ async function _paintFields(box, s) {
     if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator');
     // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
     return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
-  }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
+  }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' - deleted' });
 }
 
 const _linesSay = (n) => n + (n === 1 ? ' line' : ' lines');

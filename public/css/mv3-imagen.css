@@ -519,7 +519,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V25, the owner 2026-10-13: "в золотой обводке с закругленными краями и золотым шрифтом чтобы было видно что это
    кнопка") The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
-.mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px; text-transform:uppercase }   /* the shared part at 32; its capitals go in block 7 */
+.mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px }   /* the shared part at 32; its capitals go in block 7 */
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
 .mv3-pc.is-narrow .mv3-vc-almanac{ height:24px; margin:4px 10px 6px; line-height:22px }
 
@@ -1052,7 +1052,7 @@ audio.vtrim-media{ background:none; height:32px }
    saying "in development" (V25: no longer dimmed into the column, the owner wants it seen as a button). */
 .mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ cursor:not-allowed; background:transparent }
 /* The frames chat's `ideas` (phase V26.5): right of the places above the box, in gold; its answer a list to press. */
-.mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px; text-transform:uppercase }   /* a gold line (.u-btn.is-gen); capitals - block 7 */
+.mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px }   /* a gold line (.u-btn.is-gen); capitals - block 7 */
 .mv3-fc-ideaslist{ display:flex; flex-direction:column; gap:5px; margin-top:6px }
 .mv3-fc-idea{
   display:block; width:100%; text-align:left; padding:6px 9px; cursor:pointer;

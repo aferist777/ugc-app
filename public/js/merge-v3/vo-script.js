@@ -45,13 +45,13 @@ export function paintChooser(host, project, adopt, o = {}) {
   root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
-  const own = el('button', 'mv3-sc-new u-btn is-s', '+ your text');
+  const own = el('button', 'mv3-sc-new u-btn is-s', '+ Your text');
   own.type = 'button';
   own.title = o.talking ? 'Your own text, pasted or typed - every paragraph a line of the talking head'
     : 'Your own text, pasted or typed in any language - the whole of it one line';
   own.disabled = _busy;
   own.addEventListener('click', () => openOwnText(put, adopt, { talking: !!o.talking, ...(o.ownText ? o.ownText() : {}) }));
-  const add = el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
+  const add = el('button', 'mv3-sc-new u-btn is-s', '+ Scenario');
   add.type = 'button';
   add.title = 'Write a new scenario - it is kept in the library, and "use" puts it here';
   add.disabled = _busy;
@@ -110,9 +110,9 @@ async function _load(repaint) {
 
 function _choices() {
   const c = _counts || {};
-  const out = [{ id: '', label: 'all', n: c.all || 0 }, { id: 'library1', label: 'saved', n: c.library1 || 0 }];
+  const out = [{ id: '', label: 'All', n: c.all || 0 }, { id: 'library1', label: 'Saved', n: c.library1 || 0 }];
   for (const s of (Array.isArray(c.sources) ? c.sources : [])) out.push({ id: 'src:' + s.id, label: String(s.title || 'untitled source'), n: s.n || 0 });
-  if (c.noSource) out.push({ id: 'nosrc', label: 'no source', n: c.noSource });
+  if (c.noSource) out.push({ id: 'nosrc', label: 'No source', n: c.noSource });
   if (_lib && !out.some(x => x.id === _lib)) _lib = '';
   return out;
 }
@@ -141,7 +141,7 @@ function _paintRows(list, put, adopt, o) {
     const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
     row.title = 'Open the text';
     const acts = el('div', 'mv3-sc-acts');
-    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', 'use');
+    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', 'Use');
     go.type = 'button';
     go.title = o.put ? 'Take this scenario' : 'Put its lines into this voiceover';
     go.disabled = _busy;
@@ -164,7 +164,7 @@ async function _use(s, put, adopt, btn) {
   _busy = true;
   if (btn) btn.textContent = '…';
   try { adopt(await put({ scenarioId: s.id }, s)); }
-  catch (e) { showError('Could not use it: ' + e.message); if (btn) btn.textContent = 'use'; }
+  catch (e) { showError('Could not use it: ' + e.message); if (btn) btn.textContent = 'Use'; }
   _busy = false;
 }
 

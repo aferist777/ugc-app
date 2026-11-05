@@ -4,7 +4,7 @@
    The third piece of the editor, after its timeline and its preview. What the window is for:
    saying what is about to be made before it is made - shape, length, how many pieces - and the
    export settings the owner renders with (docs/local-app/PLAN.md, phase 3; they came from the
-   talking-head editor's Export): the size and quality of the file, a colour correction, a playback speed, and the two
+   talking-head editor's Export): the size and quality of the file, a color correction, a playback speed, and the two
    extras, minutes of black after the end and a quiet noise under the sound. What each of them does
    is lib/render-finish.js.
 
@@ -325,8 +325,8 @@ function _window(o) {
   body.appendChild(_row('FPS', fps));
   const crf = _slider(14, 35, 1, adv.crf, v => v.toFixed(0) + (v <= 18 ? ' · large' : v >= 28 ? ' · small' : ''));
   body.appendChild(_row('Quality (CRF)', crf));
-  const preset = _select([['ultrafast', 'ultrafast (fast, large file)'], ['veryfast', 'veryfast'], ['fast', 'fast (balanced)'],
-    ['medium', 'medium'], ['slow', 'slow (slow, small file)']], adv.preset);
+  const preset = _select([['ultrafast', 'Ultrafast (fast, large file)'], ['veryfast', 'Veryfast'], ['fast', 'Fast (balanced)'],
+    ['medium', 'Medium'], ['slow', 'Slow (slow, small file)']], adv.preset);
   body.appendChild(_row('Encoding preset', preset));
 
   // A LAST pass over the finished file: by then the captions are part of the picture and keep pace
@@ -347,7 +347,7 @@ function _window(o) {
   const ab = _select([['128k', '128 kbps'], ['192k', '192 kbps'], ['320k', '320 kbps']], adv.audioBitrate);
   body.appendChild(_row('Audio bitrate', ab));
 
-  body.appendChild(_el('div', 'mv3-x-hdr', 'Colour correction'));
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Color correction'));
   const br = _slider(-0.5, 0.5, 0.02, adv.eqBrightness, v => v.toFixed(2));
   body.appendChild(_row('Brightness', br));
   const ct = _slider(0.5, 1.5, 0.05, adv.eqContrast, v => v.toFixed(2));
@@ -455,7 +455,7 @@ function _window(o) {
     const a = await save();
     const d = await addCurrent(a);
     _close();
-    // (phase V73 block 0) News in the line's calm colour (is-info): with no kind the line is red, the colour of a refused save.
+    // (phase V73 block 0) News in the line's calm color (is-info): with no kind the line is red, the color of a refused save.
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
          d && d.success ? 'info' : 'err');
   });

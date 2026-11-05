@@ -10,7 +10,7 @@
 
    A tile is a 2.5 s loop made by the SERVER with the render's own builder and ffmpeg
    (lib/caption-tiles.js) - what it shows is what the render draws: a dark square with the words in its
-   middle (phase S1). Until it is made, the tile shows the preset's name in its own font and colour. The
+   middle (phase S1). Until it is made, the tile shows the preset's name in its own font and color. The
    tiles are built ONCE and live outside the strip, which is rebuilt on every change: 127 animations
    rebuilt per press would be the page's whole evening.
 
@@ -65,10 +65,10 @@ import { emptyEl } from '../ui-state.js';
 const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
 const LS_TAB = 'mv3_cap_tab_v1';
-const TABS = [['presets', 'presets', 'The preset styles - a press applies one to what is picked'],
-  ['anim', 'animation', 'How a page comes in and goes out - a press puts a pair on what is picked'],
-  ['fonts', 'fonts', 'The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them'],
-  ['text', 'text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
+const TABS = [['presets', 'Presets', 'The preset styles - a press applies one to what is picked'],
+  ['anim', 'Animation', 'How a page comes in and goes out - a press puts a pair on what is picked'],
+  ['fonts', 'Fonts', 'The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them'],
+  ['text', 'Text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
 const TAB_IDS = TABS.map((t) => t[0]);
 // The animations' tiles (V49): the pair's In -> Out on plain white letters; until the still is made, its name in these.
 const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
@@ -186,7 +186,7 @@ function _build() {
   fonts.appendChild(ftop);
   _fonts = fontPicker(fonts, { onPick: (list, o) => { if (_applyFonts) _applyFonts(list, o); } });
   ftop.appendChild(_el('div', 'mv3-cap-note', 'The letters over the preset\'s own: on a lane one font for every page, or several with '
-    + 'Shift - each page one of them, as wide as in the preset\'s font; colours, outline and motion stay the preset\'s.'));
+    + 'Shift - each page one of them, as wide as in the preset\'s font; colors, outline and motion stay the preset\'s.'));
   const text = _el('div', 'mv3-cap-pane');
   host.append(tabs, presets, anim, fonts, text);
   Doc.mount(text);
@@ -196,7 +196,7 @@ function _build() {
   _paintTab();
 }
 
-// One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and colour.
+// One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and color.
 function _tile(p, mine) {
   const btn = _el('button', 'mv3-cap-tile');
   const anim = p.kind === 'anim';

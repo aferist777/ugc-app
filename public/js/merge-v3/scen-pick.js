@@ -193,11 +193,11 @@ function _choices() {
       title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title };
   });
   const out = [
-    { id: '', label: 'all', n: c.all || 0 },
-    { id: 'library1', label: 'saved', n: c.library1 || 0, title: 'Written or pasted by hand' },
+    { id: '', label: 'All', n: c.all || 0 },
+    { id: 'library1', label: 'Saved', n: c.library1 || 0, title: 'Written or pasted by hand' },
   ].concat(sources);
-  if (c.noSource) out.push({ id: 'nosrc', label: 'no source', n: c.noSource, title: 'Generated from a topic alone' });
-  out.push({ id: 'archive', label: 'archive', n: c.archive || 0 });
+  if (c.noSource) out.push({ id: 'nosrc', label: 'No source', n: c.noSource, title: 'Generated from a topic alone' });
+  out.push({ id: 'archive', label: 'Archive', n: c.archive || 0 });
   return out;
 }
 
@@ -314,7 +314,7 @@ function _build() {
 
 function _paintFilter() {
   if (!_ui) return;
-  const cur = _choices().find(t => t.id === _lib) || { label: 'all', n: _counts.all || 0 };
+  const cur = _choices().find(t => t.id === _lib) || { label: 'All', n: _counts.all || 0 };
   const b = _ui.filter;
   b.classList.toggle('is-on', !!_lib);
   b.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
@@ -377,7 +377,7 @@ function _paintList() {
         await _use(s.id);
       } catch (err) {
         for (const b of acts.children) b.disabled = false;
-        go.textContent = 'use';
+        go.textContent = 'Use';
         showError('Could not make the project: ' + err.message);
       }
     });

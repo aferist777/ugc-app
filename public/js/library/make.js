@@ -134,8 +134,8 @@ const HTML = `
           </div>
           <div class="mk-save-row">
             <label class="mk-field"><span>Title</span><input type="text" id="mk-title" class="u-in"></label>
-            <label class="mk-field"><span>Narrator gender <em>— the store requires it</em></span>
-              <select id="mk-gender" class="u-in"><option value="male">male</option><option value="female">female</option></select></label>
+            <label class="mk-field"><span>Narrator gender <em>- the store requires it</em></span>
+              <select id="mk-gender" class="u-in"><option value="male">Male</option><option value="female">Female</option></select></label>
             <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" class="u-in" placeholder="e.g. history"></label>
             <label class="mk-field"><span>Product</span><input type="text" id="mk-product" class="u-in" placeholder="what it sells, if anything"></label>
           </div>
@@ -767,12 +767,12 @@ function _paintTopics(rec) {
     const used = Array.isArray(tp.usedBy) ? tp.usedBy : [];
     if (used.length) {
       card.classList.add('used');
-      const tag = el('span', 'mk-tag ready', used.length === 1 ? 'written' : `written ×${used.length}`);
+      const tag = el('span', 'mk-tag ready', used.length === 1 ? 'Written' : `Written ×${used.length}`);
       tag.title = used.map(u => u.title).join('\n');
       h.appendChild(tag);
     }
     const draft = _draftFor(rec.id, tp.id);
-    if (draft) h.appendChild(el('span', 'mk-tag wait', draft.running ? 'draft · writing…' : 'draft · ' + (draft.stageLabel || '')));
+    if (draft) h.appendChild(el('span', 'mk-tag wait', draft.running ? 'Draft · writing…' : 'Draft · ' + (draft.stageLabel || '')));
     card.appendChild(h);
     card.appendChild(el('p', 'mk-topic-s', tp.summary));
     const f = el('div', 'mk-topic-f');
@@ -1200,13 +1200,13 @@ async function _paintNarrators(want, wantName) {
   let list = [];
   try { list = (await J.api('/api/narrators')).narrators || []; } catch (e) { list = []; }
   const values = [{ value: 'neutral', label: 'Neutral' }];
-  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
+  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' - not read') });
   let pick = String(cur || 'neutral').split('#')[0];
   const note = $('mk-nar-note');
   note.hidden = true;
   if (!values.some(v => v.value === pick) && pick !== 'neutral') {
-    const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
-    values.push({ value: pick, label: name + ' — deleted' });
+    const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ - (?:not read|deleted)$/, '')) || 'the narrator';
+    values.push({ value: pick, label: name + ' - deleted' });
     note.hidden = false;
     note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
   }
@@ -1242,7 +1242,7 @@ function _opts() {
     narratorId,
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
-    narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
+    narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ - (?:not read|deleted)$/, '') : '',
     // (V38.1) What to advertise in two paragraphs - empty, no ad.
     advertise: $('mk-ad') ? $('mk-ad').value.trim() : '',
     // (V38.4) How many hooks a press writes.
@@ -1559,7 +1559,7 @@ function _renderHooks(hooks) {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
     // (V38.6, the owner: "кнопка use hooks сделай более видимой") Blue, as the main buttons are.
-    const use = el('button', 'u-btn is-s is-main mk-hook-use', 'use hook');
+    const use = el('button', 'u-btn is-s is-main mk-hook-use', 'Use hook');
     use.type = 'button';
     use.title = 'Put this hook into the box below - the script is written from it there';
     use.disabled = _busy();
@@ -1587,7 +1587,7 @@ function _renderHooks(hooks) {
       // (V38.7) Saved at once, so the draft's row in the list says "hook chosen".
       _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
-    const remake = el('button', 'u-btn is-s mk-hook-remake', 'remake');
+    const remake = el('button', 'u-btn is-s mk-hook-remake', 'Remake');
     remake.type = 'button';
     remake.dataset.type = type ? type.id : '';
     remake.title = type ? `Write this hook again - another ${type.name.toLowerCase()} on the same topic`
@@ -1617,7 +1617,7 @@ async function _remakeHook(i, type, ta, row, btn) {
   const gen = _gen;
   _setStage('working');
   row.classList.add('remaking');
-  btn.textContent = 'remaking…';
+  btn.textContent = 'Remaking…';
   ta.readOnly = true;
   const o = _opts();
   const others = (_gen.hooks || []).filter((_, j) => j !== i).map(x => x.text);
@@ -1728,7 +1728,7 @@ async function _followStage(jobId, run, gen, onResult) {
       // and a reload would put the draft's copy over edits still waiting out their pause.
       rec.rows.forEach(r => r.detach());
       if (here()) {
-        _sayBriefly('cancelled - what was already sent is paid for');
+        _sayBriefly('canceled - what was already sent is paid for');
         if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
         if ((_gen.paragraphs || []).length) _renderScenes();
         // A stage this form did not start has no caller to set the stage back.
@@ -1789,7 +1789,7 @@ function _stageRow(rec) {
 }
 
 // The ✕ beside the countdown (phase G1, the owner 2026-09-30): the server stops the job and frees the
-// draft; the poll sees it cancelled and _followStage puts the form back. A job that ended meanwhile
+// draft; the poll sees it canceled and _followStage puts the form back. A job that ended meanwhile
 // lands as usual - the cross came too late, and says nothing.
 async function _cancelStage(rec) {
   if (rec.cancelling) return;
@@ -1909,7 +1909,7 @@ function _renderScenes() {
     });
     setTimeout(fit, 0);
     if (i > 0) {
-      const rw = el('button', 'mk-scene-rw u-btn is-s', 'rewrite');
+      const rw = el('button', 'mk-scene-rw u-btn is-s', 'Rewrite');
       rw.type = 'button';
       rw.title = 'Rewrite this paragraph from a different angle - or select some of its words to rewrite only them';
       rw.addEventListener('click', () => _rewrite(i, rw));
@@ -1969,7 +1969,7 @@ function _fragFrom(ta, index, ev) {
   const text = ta.value.slice(start, end);
   if (end <= start || text.trim().length < 2 || text.trim() === ta.value.trim()) { _hideFragBtn(); return; }
   _hideFragBtn();
-  const btn = el('button', 'u-btn is-s mk-frag-btn', 'rewrite fragment');
+  const btn = el('button', 'u-btn is-s mk-frag-btn', 'Rewrite fragment');
   btn.type = 'button';
   btn.title = 'Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is';
   // Pressed without taking the focus: the selection - and the textarea's own blur - stay as they are.
@@ -2032,14 +2032,14 @@ async function _saveScript() {
     if (_embedded) {
       const n0 = (d.scenario.lines || []).length;
       if (_hooks.counts) _hooks.counts();
-      if (_hooks.saved) await _hooks.saved(d.scenario.id, `Saved “${d.scenario.title}” — ${n0} lines.`);
+      if (_hooks.saved) await _hooks.saved(d.scenario.id, `Saved “${d.scenario.title}” - ${n0} lines.`);
       return;
     }
     await Promise.all([_readDrafts(), _readSources()]);
     _paintSources();
     if (_src) { await _refreshSource(); _showTopics(); } else await _enterScript({});
     const n = (d.scenario.lines || []).length;
-    _say(`Saved “${d.scenario.title}” — ${n} lines, on the Scenarios shelf.`, 'ok', d.scenario.id);
+    _say(`Saved “${d.scenario.title}” - ${n} lines, on the Scenarios shelf.`, 'ok', d.scenario.id);
     if (_hooks.counts) _hooks.counts();
   } catch (e) {
     st.textContent = e.message;
@@ -2061,7 +2061,7 @@ function _say(text, kind, scenarioId) {
   box.className = 'mk-said' + (kind ? ' ' + kind : '');
   box.appendChild(el('span', null, text));
   if (scenarioId && _hooks.openScenario) {
-    const a = el('button', 'u-btn is-s', 'open');
+    const a = el('button', 'u-btn is-s', 'Open');
     a.type = 'button';
     a.addEventListener('click', () => _hooks.openScenario(scenarioId));
     box.appendChild(a);
@@ -2120,7 +2120,7 @@ function _openAddSource() {
         </section>
         <section class="mk-route" data-r="file" hidden>
           <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
-          <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
+          <label class="mk-field"><span>Title <em>optional - the file name is used otherwise</em></span>
             <input type="text" class="u-in" data-f="title" placeholder="What this source is"></label>
           <button class="u-btn is-main" type="button" data-go="file">Add</button>
         </section>
@@ -2359,7 +2359,7 @@ function _addLine(r) {
     else if (lj && lj.state === 'stopped') say('stopped');
     else if ((lj && lj.state === 'done') || r.landed) {
       say('On Uploads in Media.');
-      if (item && item.id) btn('show', 'The clip on the Media shelf', () => _showOnMedia(item.id));
+      if (item && item.id) btn('Show', 'The clip on the Media shelf', () => _showOnMedia(item.id));
     } else say((lj ? lj.step : r.step) || 'onto Uploads…');
   } else if (r.state === 'audio') say(r.step || 'Audio only - in development.');
   else if (r.state === 'error') say(r.error || 'it failed', true);

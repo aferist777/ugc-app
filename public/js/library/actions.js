@@ -207,7 +207,7 @@ export function deleteWarning(it) {
   if (it.kind === 'obrazy') {
     const v = (it.meta && it.meta.variations) || 0;
     return 'Delete the look "' + (it.name || '') + '"?\n\n'
-      + 'Its folder goes with it' + (v ? ' — the look image and ' + v + ' pose variation' + (v === 1 ? '' : 's') : '') + '.';
+      + 'Its folder goes with it' + (v ? ' - the look image and ' + v + ' pose variation' + (v === 1 ? '' : 's') : '') + '.';
   }
   if (it.kind === 'lookbooks' || it.kind === 'environments') {
     return 'Delete the file "' + (it.name || '') + '"?\n\nThe image and its thumbnail are removed from disk.';
@@ -227,7 +227,7 @@ export function deleteWarning(it) {
   if (it.kind === 'music') return 'Delete the track "' + (it.name || '') + '"?\n\nThe music file is removed from disk.';
   // (phase V59.1) A saved text of Music -> Lyrics - no file goes with it.
   if (it.kind === 'lyrics') return 'Delete the lyrics "' + (it.name || '') + '"?\n\nThe text is removed from Music → Lyrics.';
-  return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
+  return 'Delete "' + (it.name || '') + '"?\n\nThe file and its thumbnail are removed from disk.';
 }
 
 // (phase V28.4, the owner 2026-10-12: "при удалении файла обязательно уведомление, что файл используется в проектах и

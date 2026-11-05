@@ -292,18 +292,18 @@ export function renderSubs(host, target) {
   box.appendChild(C.row('Words', C.slider({ min: 0, max: 12, step: 1, value: +ref.wordsPerLine || 0, mixed: mixed('wordsPerLine'),
     fmt: _wordsSaid, onChange: (v) => _subsPatch({ wordsPerLine: v }) })));
   const lines = Math.max(1, Math.min(3, Math.round(+ref.lines || 2)));
-  const LINES = [['1', 'one'], ['2', 'two']].concat(subs.some((s) => +s.lines === 3) ? [['3', 'three']] : []);
+  const LINES = [['1', 'One'], ['2', 'Two']].concat(subs.some((s) => +s.lines === 3) ? [['3', 'Three']] : []);
   const ls = C.select(LINES, String(lines), (v) => _subsPatch({ lines: +v }));
   if (mixed('lines')) ls.title = 'Not the same on all of them now - a choice gives them one';
   box.appendChild(C.row('Lines', ls));
   // (phase V71, the owner's (хо34)) Two rows for all of them - each page whole while it is spoken, every other one in a second row.
-  const rows = C.select([['1', 'one'], ['2', 'two']], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
+  const rows = C.select([['1', 'One'], ['2', 'Two']], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
   if (mixed('rows')) rows.title = 'Not the same on all of them now - a choice gives them one';
   box.appendChild(C.row('Rows', rows));
   // (хо12) The title on top.
   const titled = list.filter(_titled).length;
-  const tOn = C.button('on', () => _titleAll(true), { title: 'Its headline at the top for the first three seconds - on every ticked fragment' });
-  const tOff = C.button('off', () => _titleAll(false), { title: 'The title on top taken off every ticked fragment' });
+  const tOn = C.button('On', () => _titleAll(true), { title: 'Its headline at the top for the first three seconds - on every ticked fragment' });
+  const tOff = C.button('Off', () => _titleAll(false), { title: 'The title on top taken off every ticked fragment' });
   tOn.classList.toggle('is-on', titled === list.length);
   tOff.classList.toggle('is-on', titled === 0);
   box.appendChild(C.row('Title on top', C.pair(tOn, C.pair(tOff, titled && titled < list.length ? _el('span', 'mv3-c-num', titled + ' of ' + list.length) : null))));
@@ -574,7 +574,7 @@ function _panelPaint(tl) {
   _panel.dataset.sig = sig;
   _panel.textContent = '';
   // (phase V73 block 5, 5c) ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
-  for (const [k, label, plus] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', 'music', !music], ['pattern', 'pattern']]) {
+  for (const [k, label, plus] of [['subs', 'Subtitles'], ['speech', 'Main audio'], ['music', 'Music', !music], ['pattern', 'Pattern']]) {
     const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''));
     if (plus) b.appendChild(iconEl('plus', 14));
     b.appendChild(_el('span')).appendChild(figures(label + ' · for all ' + n));

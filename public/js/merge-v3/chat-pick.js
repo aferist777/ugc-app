@@ -278,7 +278,7 @@ function _build() {
 
   const foot = el('div', 'pk-foot');
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', 'Done');
   done.type = 'button';
   foot.append(said, done);
 
@@ -394,7 +394,7 @@ function _paintSources() {
   if (_t) { _paintRows(); return; }
   const S = _w.side;
   S.textContent = '';
-  S.appendChild(el('div', 'pk-lab', 'from the library'));
+  S.appendChild(el('div', 'pk-lab', 'From the library'));
   for (const s of _o.sources) {
     const b = el('button', 'pk-src' + (s.id === _st.src ? ' on' : ''), s.label);
     b.type = 'button';
@@ -410,8 +410,8 @@ function _paintSources() {
     S.appendChild(b);
   }
   const c = _o.computer;
-  S.appendChild(el('div', 'pk-lab', 'from this computer'));
-  const up = el('button', 'pk-src is-up', '+ choose ' + (c.word || 'files') + '…');
+  S.appendChild(el('div', 'pk-lab', 'From this computer'));
+  const up = el('button', 'pk-src is-up', '+ Choose ' + (c.word || 'files') + '…');
   up.type = 'button';
   up.addEventListener('click', () => c.open());
   S.appendChild(up);
@@ -420,13 +420,13 @@ function _paintSources() {
   // this place - the place says how far meanwhile.
   const L = _o.link;
   if (!L) return;
-  S.appendChild(el('div', 'pk-lab', 'from a link'));
+  S.appendChild(el('div', 'pk-lab', 'From a link'));
   const row = el('div', 'pk-link');
   const inp = document.createElement('input');
   inp.type = 'text';
   inp.className = 'u-in is-s';
   inp.placeholder = 'YouTube, TikTok, Instagram…';
-  const b = el('button', 'pk-link-go u-btn is-s', 'add');
+  const b = el('button', 'pk-link-go u-btn is-s', 'Add');
   b.type = 'button';
   row.appendChild(inp);
   row.appendChild(b);
@@ -795,7 +795,7 @@ function _buildTree() {
   // The foot: this computer (and a clip by a link), what the chat says, done.
   const foot = el('div', 'pk-foot u-win-foot');
   const c = _o.computer;
-  const up = el('button', 'pk-up u-btn is-s', '+ from this computer…');
+  const up = el('button', 'pk-up u-btn is-s', '+ From this computer…');
   up.type = 'button';
   up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
   up.addEventListener('click', () => c.open());
@@ -817,7 +817,7 @@ function _buildTree() {
     inp.className = 'u-in is-s';
     inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
     inp.title = L.hint || '';
-    const b = el('button', 'pk-link-go u-btn is-s', 'add');
+    const b = el('button', 'pk-link-go u-btn is-s', 'Add');
     b.type = 'button';
     row.append(inp, b);
     foot.appendChild(row);
@@ -836,7 +836,7 @@ function _buildTree() {
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   }
   const said = el('span', 'pk-said u-status is-line', '');
-  const done = el('button', 'mv3-c-btn pk-done u-btn is-main', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn is-main', 'Done');
   done.type = 'button';
   foot.append(said, done);
 

@@ -87,11 +87,11 @@ function _paint() {
   win.body.textContent = '';
   win.body.className = 'gw-body';
   if (page === 'make') {
-    win.setCrumbs([{ label: 'environments', on: () => _go('list') }, { label: 'new environment' }]);
+    win.setCrumbs([{ label: 'Environments', on: () => _go('list') }, { label: 'New environment' }]);
     paintBench(win.body, benchOpts(api));
     return;
   }
-  win.setCrumbs([{ label: 'environments', act: { label: '+ new environment', title: 'Make one from a photo or a sentence', on: () => _go('make') } }]);
+  win.setCrumbs([{ label: 'Environments', act: { label: '+ new environment', title: 'Make one from a photo or a sentence', on: () => _go('make') } }]);
   if (_envs === null) {
     win.body.appendChild(loadingEl('reading the environments…'));
     API.environments().then((files) => { _envs = files || []; _paint(); })

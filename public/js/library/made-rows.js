@@ -40,7 +40,7 @@ function _textRow(value, placeholder, rows, store) {
   ta.spellcheck = true;
   const foot = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const save = el('button', 'u-btn is-s made-ed-save', 'save');
+  const save = el('button', 'u-btn is-s made-ed-save', 'Save');
   save.type = 'button';
   save.hidden = true;
   let kept = ta.value;
@@ -136,7 +136,7 @@ function _propRows(it, m) {
 function _readAgain(it, m, desc) {
   const box = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const b = el('button', 'u-btn is-s made-ed-save', 'read again');
+  const b = el('button', 'u-btn is-s made-ed-save', 'Read again');
   b.type = 'button';
   b.title = 'The agent writes the description anew from the picture and your words (saved) - it replaces the one here';
   const ta = desc.querySelector('textarea');

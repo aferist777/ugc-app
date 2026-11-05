@@ -11,7 +11,7 @@
      highlights  a track into Music -> highlights (its root), out of it, or back into
                  the mood its preset made it for (V34.F: a mood folder takes nothing
                  else - routes/music.js, lib/music-store.js `place`)                   tracks
-     About       where it came from: its author, licence and page, what it was asked,
+     About       where it came from: its author, license and page, what it was asked,
                  the sound a piece was cut from, its tags                               every one
      Delete      the page's own delete - it asks with the projects that use it          own sounds, tracks
 
@@ -138,7 +138,7 @@ export async function soundMenu(it, ev, opts) {
       });
     }
   }
-  item('About', builtin ? 'the built-in set: its author and licence' : 'where it came from', () => about(it, ev));
+  item('About', builtin ? 'the built-in set: its author and license' : 'where it came from', () => about(it, ev));
   if (!builtin && typeof o.del === 'function') item('Delete', it.kind === 'music' ? 'the track and its file' : 'the sound and its file', () => o.del(it), true);
 
   menuIcons(m);
@@ -151,7 +151,7 @@ export async function soundMenu(it, ev, opts) {
   window.addEventListener('scroll', _close, true);
 }
 
-/** What a sound is: its length, where it lies, where it came from, its licence, what it was asked, its tags. */
+/** What a sound is: its length, where it lies, where it came from, its license, what it was asked, its tags. */
 export function about(it, ev) {
   const pop = el('div', 'mt-pop snd-about u-ask is-float');
   pop.appendChild(el('b', 'mt-pop-head', it.name));
@@ -170,7 +170,7 @@ export function about(it, ev) {
   row('file', it.media, it.media);
   row('from', i.from);
   row('author', i.author, i.authorUrl || '');
-  row('licence', i.license, i.licenseUrl || '');
+  row('license', i.license, i.licenseUrl || '');
   row('page', i.url, i.url);
   if (i.preview) row('note', 'Freesound\'s preview (~128 kbit/s) - the original needs a Freesound sign-in');
   row('credit', i.attribution);

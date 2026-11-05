@@ -450,13 +450,13 @@ function _render(kind) {
   const foot = el('div', 'gw-foot');
   const said = s.said ? el('div', 'gw-said u-status is-bad', s.said) : null;
   if (said) foot.appendChild(said);
-  const go = el('button', 'gw-create u-btn is-main', 'create');
+  const go = el('button', 'gw-create u-btn is-main', 'Create');
   go.type = 'button';
   const hint = el('span', 'gw-hint u-status');
   const sync = () => {
     const why = _why(kind);
     go.disabled = !!why || s.making;
-    go.textContent = s.making ? 'making…' : 'create';
+    go.textContent = s.making ? 'Making…' : 'Create';
     go.title = why || 'Make it - this spends credits';
     hint.textContent = s.making ? '' : (why || MODE_WORDS[kind][_mode(kind)] || '');
     hint.classList.toggle('is-why', !!why && !s.making);
@@ -569,7 +569,7 @@ function _shelfTile(kind, path, on, pick) {
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    tileMenu(e, [{ label: 'open', sub: 'look at it, full size', on: () => _open(kind, path) }], KINDS[kind].noun + ' menu');
+    tileMenu(e, [{ label: 'Open', sub: 'look at it, full size', on: () => _open(kind, path) }], KINDS[kind].noun + ' menu');
   });
   return tile;
 }

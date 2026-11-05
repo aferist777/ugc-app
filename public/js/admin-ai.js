@@ -173,7 +173,7 @@
     body.appendChild(list);
     const free = nextFree();
     const full = st.ladder.length >= st.max;
-    const add = el('button', 'u-btn ai-add', '+ add a step');
+    const add = el('button', 'u-btn ai-add', '+ Add a step');
     add.type = 'button';
     add.disabled = full || !free || busy;
     add.title = full ? 'Five is the cap - more steps buy waiting, not reliability'

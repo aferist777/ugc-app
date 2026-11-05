@@ -99,9 +99,9 @@ export function openTrim(opts) {
 
   const foot = _el('div', 'vtrim-foot');
   const span = _el('span', 'vtrim-span');
-  const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ play the part');
+  const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ Play the part');
   play.type = 'button';
-  const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', 'done');
+  const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', 'Done');
   done.type = 'button';
   foot.append(span, play, done);
   body.appendChild(foot);
@@ -189,13 +189,13 @@ export function openTrim(opts) {
   });
   media.addEventListener('timeupdate', () => {
     head2.style.left = (media.currentTime / dur * 100) + '%';
-    if (!media.paused && media.currentTime >= to) { media.pause(); play.textContent = '▶ play the part'; }
+    if (!media.paused && media.currentTime >= to) { media.pause(); play.textContent = '▶ Play the part'; }
   });
-  media.addEventListener('pause', () => { play.textContent = '▶ play the part'; });
+  media.addEventListener('pause', () => { play.textContent = '▶ Play the part'; });
   play.addEventListener('click', () => {
     if (!media.paused) { media.pause(); return; }
     show(from);
-    media.play().then(() => { play.textContent = '■ stop'; }).catch(() => { /* it could not play */ });
+    media.play().then(() => { play.textContent = '■ Stop'; }).catch(() => { /* it could not play */ });
   });
   media.addEventListener('loadedmetadata', () => show(from), { once: true });
 

@@ -64,11 +64,11 @@ export function openOnline(opts) {
   q.type = 'search';
   q.placeholder = 'whoosh, camera shutter, crowd laugh, pop…';
   q.value = o.q ? String(o.q) : _last.q;
-  const go = el('button', 'snd-btn is-primary u-btn is-main', 'search');
+  const go = el('button', 'snd-btn is-primary u-btn is-main', 'Search');
   go.type = 'submit';
   bar.append(q, go);
   bar.appendChild(el('span', 'sp'));
-  bar.appendChild(el('span', 'snd-muted', 'add into'));
+  bar.appendChild(el('span', 'snd-muted', 'Add into'));
   const into = el('select', 'snd-sel u-in');
   const dl = el('option', null, 'Downloaded');
   dl.value = '';
@@ -105,7 +105,7 @@ export function openOnline(opts) {
     credit.textContent = (via === 'freesound'
       ? 'Search made using the Freesound API (freesound.org).'
       : 'Search made using Openverse (openverse.org) - not endorsed or certified by Openverse.')
-      + ' Each sound keeps its author, licence and page.';
+      + ' Each sound keeps its author, license and page.';
     sub.textContent = 'free to use in any video, sold or not (CC0) - ' + (via === 'freesound' ? 'Freesound' : 'Freesound and Wikimedia Commons through Openverse')
       + (note ? ' · ' + note : '');
     sub.title = sub.textContent;
@@ -152,14 +152,14 @@ export function openOnline(opts) {
       if (r.tags.length) tx.appendChild(el('span', 'snd-on-tags', r.tags.slice(0, 8).join(', ')));
       row.appendChild(tx);
       row.appendChild(waveEl(r.wave, 'snd-on-wave'));
-      const page = el('a', 'snd-on-link', 'page');
+      const page = el('a', 'snd-on-link', 'Page');
       page.href = r.landing || r.url; page.target = '_blank'; page.rel = 'noopener';
       row.appendChild(page);
-      const add = el('button', 'snd-btn u-btn is-s', 'add');
+      const add = el('button', 'snd-btn u-btn is-s', 'Add');
       add.type = 'button';
       add.addEventListener('click', async () => {
         add.disabled = true;
-        add.textContent = 'adding…';
+        add.textContent = 'Adding…';
         try {
           const cat = into.value;
           const res = await fetch('/api/audio/online/add', {
@@ -168,11 +168,11 @@ export function openOnline(opts) {
           });
           const j = await res.json();
           if (!j.success) throw new Error(j.error || 'not added');
-          add.textContent = j.added ? 'added ✓' : 'already yours ✓';
+          add.textContent = j.added ? 'Added ✓' : 'Already yours ✓';
           if (o.added) o.added(j.item);
         } catch (e) {
           add.disabled = false;
-          add.textContent = 'add';
+          add.textContent = 'Add';
           add.title = e.message;
           showError(e.message);                 // (phase V73 block 2) in the corner (js/notice.js), not under the row
         }
@@ -181,8 +181,8 @@ export function openOnline(opts) {
       list.appendChild(row);
     }
     if (d.pageCount > 1) {
-      const prev = el('button', 'snd-btn u-btn is-s', '‹ back');
-      const next = el('button', 'snd-btn u-btn is-s', 'more ›');
+      const prev = el('button', 'snd-btn u-btn is-s', '‹ Back');
+      const next = el('button', 'snd-btn u-btn is-s', 'More ›');
       prev.type = next.type = 'button';
       prev.disabled = d.page <= 1;
       next.disabled = d.page >= Math.min(12, d.pageCount);
