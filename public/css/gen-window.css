@@ -45,7 +45,10 @@ button.gw-crumb:hover{ color:var(--ink); text-decoration:underline }
 body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-x{ flex:0 0 auto }
 .gw-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden }
-.gw-note{ padding:14px 12px; color:var(--muted); font:600 11px/1.5 var(--font) }
+/* (phase V73 block 2) Reading / empty / did not load of the bench's shelf are the shared parts (js/ui-state.js, css/app-shell.css
+   .u-empty, .u-loading, .u-failed) - `gw-note` only their place; a note not made by them (talking head's who / where) keeps its look. */
+.gw-note:is(.u-empty, .u-loading, .u-failed){ margin:10px }
+.gw-note:not(.u-empty, .u-loading, .u-failed){ padding:14px 12px; color:var(--muted); font:600 11px/1.5 var(--font) }
 
 /* The bench: the shelf on the left, what is being made on the right. */
 .gw-body.gw-bench{ flex-direction:row }

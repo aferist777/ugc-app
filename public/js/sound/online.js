@@ -17,6 +17,8 @@
 
 import * as Layers from '../layers.js';
 import { waveEl, secs } from './wave.js';
+import { showError } from '../notice.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -123,7 +125,8 @@ export function openOnline(opts) {
   const paint = (d) => {
     list.textContent = '';
     pager.textContent = '';
-    if (!d.results.length) { list.appendChild(el('div', 'snd-empty', 'Nothing CC0 for "' + _last.q + '" - other words?')); return; }
+    // (phase V73 block 2) empty, searching and did not load are the shared parts (js/ui-state.js)
+    if (!d.results.length) { list.appendChild(emptyEl('Nothing CC0 for "' + _last.q + '" - other words?', { icon: 'music' })); return; }
     for (const r of d.results) {
       const row = el('div', 'snd-on-row');
       const pb = el('button', 'snd-play u-btn is-s is-icon', '▶');
@@ -166,7 +169,7 @@ export function openOnline(opts) {
           add.disabled = false;
           add.textContent = 'add';
           add.title = e.message;
-          row.appendChild(el('div', 'snd-err', e.message));
+          showError(e.message);                 // (phase V73 block 2) in the corner (js/notice.js), not under the row
         }
       });
       row.appendChild(add);
@@ -190,7 +193,7 @@ export function openOnline(opts) {
     _last = { q: words, page };
     stopPreview();
     list.textContent = '';
-    list.appendChild(el('div', 'snd-empty', 'searching…'));
+    list.appendChild(loadingEl('searching…'));
     go.disabled = true;
     try {
       const r = await fetch('/api/audio/online?q=' + encodeURIComponent(words) + '&page=' + page);
@@ -199,8 +202,10 @@ export function openOnline(opts) {
       credited(d.via, d.note ? d.note + ' - searched Openverse' : '');
       paint(d);
     } catch (e) {
+      // (phase V73 block 2, (б2-19)) the search not answered: "did not load" and Try again in the list, the reason in the corner
       list.textContent = '';
-      list.appendChild(el('div', 'snd-err', e.message));
+      list.appendChild(failedEl('the results', () => run(page)));
+      showError(e.message);
     } finally { go.disabled = false; }
   };
   bar.addEventListener('submit', (e) => { e.preventDefault(); run(1); });

@@ -20,6 +20,7 @@
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
 import { MS } from './really.js';
+import { emptyEl } from './ui-state.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
@@ -44,6 +45,8 @@ const _el = (tag, cls, text) => {
 };
 
 const _json = (url, opt) => fetch(url, opt).then(r => r.json()).catch(() => null);
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): there the empty list keeps its own line.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
 // ── the bell ────────────────────────────────────────────────────────────────
 // Made here rather than shipped as a file: two short tones and a decay are a smaller thing to
@@ -392,7 +395,9 @@ function _paintMenu() {
   _menu.appendChild(head);
 
   const list = _el('div', 'sv3-al-list');
-  if (!_items.length) list.appendChild(_el('div', 'sv3-al-empty', 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.'));
+  // (phase V73 block 2) the shared empty part (js/ui-state.js); `sv3-al-empty` its place in the menu
+  const none = 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.';
+  if (!_items.length) list.appendChild(OLD_LOOK() ? _el('div', 'sv3-al-empty', none) : emptyEl(none, { icon: 'bell', cls: 'sv3-al-empty' }));
   for (const rec of _items) list.appendChild(_row(rec));
   _menu.appendChild(list);
 }

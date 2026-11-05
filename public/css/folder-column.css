@@ -30,7 +30,8 @@
 /* Columns rather than a grid: every tile keeps its OWN shape. */
 .fc-list{ display:flex; gap:7px; align-items:flex-start }
 .fc-col{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:7px }
-.fc-none{ flex:1 1 100%; font:600 10px/1.5 var(--font); color:var(--muted); padding:10px 4px; text-align:center }
+/* (phase V73 block 2) reading / empty / did not load are the shared parts (js/ui-state.js, css/app-shell.css) - here only their place */
+.fc-none{ flex:1 1 100% }
 .fc-list:has(> .fc-none){ flex-direction:column; align-items:stretch }
 /* The dropdown: the place picker's window, under the column's button. */
 .ref-move.fc-menu.u-menu{ z-index:9250 }

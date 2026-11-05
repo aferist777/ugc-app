@@ -127,7 +127,7 @@ export function titleOf(text) {
  *   o.base             more of the state's top (Merge: the engine, the mode it opens on, lastMode, of)
  *   o.fields           the fields of the caller's other modes (Merge: sounds, compose, video, sfx)
  *   o.persist(S)       what is written under the key (default: the mode, the model and the fields)
- *   o.say(text, bad)   the caller's line
+ *   o.say(text, bad)   the caller's line (`bad` - an error: the caller makes it a popup in the corner, js/notice.js)
  *   o.title            the generator's name in a failure to start ("Generate audio" - Merge's)
  *   o.paintCol() / o.paintMake() / o.paintMakePrice()   paint the settings column / the constructor / the price beside
  *                      "generate" again
@@ -676,7 +676,8 @@ export function createSunoForm(o) {
       // (phase V60.1) The preset as the person changed it, for this press - only when it says other than the preset.
       const e = editOf(mood);
       if (editChanged(mood, e)) {
-        if (!_t(e.style)) throw new Error('The mood\'s style is empty - write it, or press "standard".');
+        // (phase V73 block 2) a field left empty at the press: `hint` - the caller says it at its press, not as an error popup
+        if (!_t(e.style)) throw Object.assign(new Error('The mood\'s style is empty - write it, or press "standard".'), { hint: true });
         b.presetEdit = { style: _t(e.style), negative: _t(e.negative) };
       }
       b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);

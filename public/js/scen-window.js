@@ -10,12 +10,13 @@
 //   openScenario(summary, { saved, use, closeOnSave })
 //     summary      a row of a list ({ id, archived }), or null for a new scenario
 //     saved(rec)   after every save and restore - the list behind the window reads itself again
-//     use(rec)     makes the project and opens it; a throw is said in the window, which stays
+//     use(rec)     makes the project and opens it; a throw is said in the corner (js/notice.js), the window stays
 //     closeOnSave  the window goes after a save (the Library: the shelf shows it, selected)
 //     voiceover    (phase V62) `use` makes a voiceover, and the lines are kept in the language they are typed in
 
 import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
+import { showError } from './notice.js';
 
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
@@ -118,6 +119,9 @@ export async function openScenario(summary, hooks = {}) {
   dressUse();
   foot.append(save, note, use);
   box.appendChild(foot);
+  // (phase V73 block 2) The foot's line says how the work goes ("reading…", "saving…", "saved"); an error is a popup in the
+  // corner (js/notice.js) and the line goes quiet.
+  const fail = (text) => { note.textContent = ''; showError(text); };
 
   const linesOf = () => lines.value.split('\n').map(s => s.trim()).filter(Boolean);
   const gate = () => {
@@ -173,7 +177,7 @@ export async function openScenario(summary, hooks = {}) {
       dressUse();
       note.textContent = '';
     } catch (e) {
-      note.textContent = 'Could not read it: ' + e.message;
+      fail('Could not read it: ' + e.message);
     }
   }
   gate();
@@ -210,7 +214,7 @@ export async function openScenario(summary, hooks = {}) {
     try {
       await store();
       if (hooks.closeOnSave) { _close(ov, layer); return; }
-    } catch (e) { note.textContent = e.message; }
+    } catch (e) { fail(e.message); }
     save.disabled = false;
   });
   use.addEventListener('click', async () => {
@@ -225,7 +229,7 @@ export async function openScenario(summary, hooks = {}) {
         note.textContent = 'back in the library';
         saved(rec);
       } catch (e) {
-        note.textContent = e.message;
+        fail(e.message);
       }
       gate();
       return;
@@ -239,7 +243,7 @@ export async function openScenario(summary, hooks = {}) {
       // a modal layer holds them.
       _close(ov, layer);
     } catch (e) {
-      note.textContent = e.message;
+      fail(e.message);
       use.disabled = false;
     }
   });

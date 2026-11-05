@@ -39,7 +39,8 @@
 .au-muted{color:var(--muted)}
 .au-err{color:var(--danger); font-size:11.5px; margin-top:4px}
 .au-err:empty{display:none}
-.au-empty{padding:16px 4px; font-size:12px; color:var(--muted); grid-column:1/-1}
+/* (phase V73 block 2) Video to Music's gallery empty / reading / did not load, the settings column reading and Lyrics' empty list
+   are the shared parts (js/ui-state.js, css/app-shell.css) - .au-empty went; .au-note stays for a mode's note ("No kie.ai key") */
 .au-note{font:600 9.5px/1.4 var(--font); color:var(--muted); margin-top:3px}
 .au-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
 .au-len .au-in{ width:74px }
@@ -80,7 +81,7 @@
 .au-mid{flex:1 1 auto; min-width:300px; min-height:0; overflow-y:auto; padding:12px 16px 24px; display:flex; flex-direction:column; gap:12px}
 .au-status{flex:0 0 auto; padding:5px 9px; border-radius:var(--r-xs); background:var(--surface-2);
   font:600 10.5px/1.35 var(--font); color:var(--muted); overflow-wrap:anywhere}
-.au-status.is-bad{color:var(--danger)}
+/* (phase V73 block 2) an error is a popup in the corner (js/notice.js) - the line says only how the work goes */
 .au-make{flex:0 0 auto}
 .au-card{position:relative; padding:12px 14px 14px; border:1px solid var(--gold); border-radius:var(--r-sm); background:var(--bg); display:flex; flex-direction:column; gap:10px}
 .au-card-h{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}

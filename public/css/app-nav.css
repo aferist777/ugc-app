@@ -90,7 +90,10 @@
 }
 :root:has(link[href="css/studio3d.css"]) .sv3-al-clear:hover{ color:var(--ink); border-color:var(--ink); }
 .sv3-al-list{ display:flex; flex-direction:column; }
-.sv3-al-empty{ padding:14px 12px; color:var(--muted); font:400 11px/1.5 var(--font); }
+/* (phase V73 block 2) the empty list is the shared part (.u-empty, js/ui-state.js) - here only its place; the 3D Studio's page
+   keeps its own line (js/alerts-bell.js OLD_LOOK) */
+.sv3-al-empty.u-empty{ margin:10px; }
+:root:has(link[href="css/studio3d.css"]) .sv3-al-empty{ padding:14px 12px; color:var(--muted); font:400 11px/1.5 var(--font); }
 
 .sv3-al-row{
   display:flex; align-items:center; gap:8px; padding:7px 10px;
