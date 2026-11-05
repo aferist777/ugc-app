@@ -2136,8 +2136,8 @@ function _openAddSource() {
   document.body.appendChild(ov);
   const q = (s) => ov.querySelector(s);
   const f = (name) => q(`[data-f="${name}"]`);
-  // (phase V73 block 4) The long note is ONE line: its first sentence shown, the whole under the pointer.
-  f('note').textContent = ADD_NOTE[0];
+  // (phase V73 block 4) The long note is ONE line - the one about money ((4а-14) а), the whole under the pointer.
+  f('note').textContent = 'The transcription and the topics are paid calls.';
   f('note').title = ADD_NOTE.join(' ');
   const route = (r) => {
     ov.querySelectorAll('.mk-choice-btn').forEach(b => b.classList.toggle('cur', b.dataset.route === r));

@@ -466,7 +466,8 @@ function _render(kind) {
     ask.appendChild(el('div', 'gw-choice-why', s.optionsWhy || 'There is no place in this picture. What should it become?'));
     const chips = el('div', 'gw-chips');
     for (const opt of s.options) {
-      const c = el('button', 'gw-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
+      // (phase V73 block 4, (4а-10) а) the shared chip (.u-chip): several may be lit
+      const c = el('button', 'gw-chip u-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
       c.type = 'button';
       c.title = 'Pick any number of them - they are made into one place';
       c.addEventListener('click', () => {
