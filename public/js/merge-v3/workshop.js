@@ -249,6 +249,8 @@ function _paintSpines() {
 // page, and a second line here would cost the list below it the same height on a column
 // that is already narrow.
 function _head() { return document.querySelector('#mv3-inspector .mv3-panel-head'); }
+// (phase V73 block 5, 5a, (к17), (б5-4) а) A crumb's word in sentence case; its "/" is drawn by css/merge-v3.css outside it.
+const _cap = (w) => { const t = String(w || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 function _paintRoute() {
   _paintSpines();
@@ -281,8 +283,8 @@ function _paintRoute() {
   for (const c of crumbs) {
     const sb = document.createElement('button');
     sb.type = 'button';
-    sb.className = 'mv3-lib-crumb' + (c.here ? ' is-on is-here' : '');
-    sb.textContent = '/ ' + c.label;
+    sb.className = 'mv3-lib-crumb is-post' + (c.here ? ' is-on is-here' : '');
+    sb.textContent = _cap(c.label);
     sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
     if (!c.here) sb.addEventListener('click', (e) => { e.stopPropagation(); mod.goCrumb(c.id); });
     wrap.appendChild(sb);
@@ -314,8 +316,8 @@ function _paintOn(wrap) {
     const on = _brollLaid();
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-lib-crumb mv3-wk-on' + (on ? '' : ' is-off');
-    b.textContent = '/ b-roll';
+    b.className = 'mv3-lib-crumb is-post mv3-wk-on' + (on ? '' : ' is-off');
+    b.textContent = 'B-roll';
     b.addEventListener('click', (e) => { e.stopPropagation(); if (on) _goOn('mv3-lib-br'); });
     if (on) b.title = 'The B-roll of a piece - what else was found for its sentence';
     else { b.setAttribute('aria-disabled', 'true'); hint(b, 'Find the B-roll first - field 2, B-roll.'); }
@@ -333,8 +335,8 @@ function _paintOn(wrap) {
   for (const [label, id, what] of ON) {
     const c = document.createElement('button');
     c.type = 'button';
-    c.className = 'mv3-lib-crumb mv3-wk-on' + (ok ? '' : ' is-off');
-    c.textContent = '/ ' + label;
+    c.className = 'mv3-lib-crumb is-post mv3-wk-on' + (ok ? '' : ' is-off');
+    c.textContent = _cap(label);
     // Never reaching the panel's head: a press there is the column's (it would ask for the setup step back).
     c.addEventListener('click', (e) => { e.stopPropagation(); if (ok) _goOn(id); });
     if (ok) c.title = what;

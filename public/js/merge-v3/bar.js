@@ -191,7 +191,9 @@ async function _shoot() {
   if (!btn || btn.disabled) return;
   const was = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = '…';
+  // (phase V73 block 5, 5a) its states as Lucide's icons, not "…", "✓", "✕": turning while it saves, a tick, a cross
+  btn.innerHTML = icon('loader-circle');
+  btn.classList.add('is-busy');
   try {
     const r = await grabFrame();
     if (!r || !r.ok) throw new Error('the frame could not be read');
@@ -208,15 +210,18 @@ async function _shoot() {
       tracks: ((tl && tl.tracks) || []).filter(t => t && (t.kind === 'subs' || t.kind === 'text')) }));
     const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'the server would not take it');
-    btn.textContent = '✓';
+    btn.classList.remove('is-busy');
+    btn.innerHTML = icon('check');
     // Show where it landed rather than saying it.
     try { const L = await import('./library.js'); await L.showGroup('images', 'Screenshots'); } catch (e) { /* the shelf is optional */ }
     if (!r.full) btn.title = 'Saved at preview size (' + r.w + '×' + r.h + ') - the original files did not load in time';
   } catch (e) {
-    btn.textContent = '✕';
+    btn.classList.remove('is-busy');
+    btn.innerHTML = icon('x');
     btn.title = 'Could not save the frame: ' + e.message;
   } finally {
     setTimeout(() => {
+      btn.classList.remove('is-busy');
       btn.innerHTML = was;
       btn.title = 'Save this frame to the library (Images / Screenshots)';
       btn.disabled = false;

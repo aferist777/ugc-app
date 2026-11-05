@@ -31,15 +31,18 @@
    without it, and one long file name in the library would push the timeline off
    the bottom of the screen. */
 .mv3-app{display:flex; flex-direction:column; flex:1; min-height:0}
-.mv3-work{display:flex; flex:1; min-height:0}
+/* (phase V73 block 5, 5a; (к15), the owner's (б5-1) а) THE PANELS STAND ON THE DARK BASE with a 6 px gap of it around and
+   between them - the gaps ARE the sashes (below). */
+.mv3-work{display:flex; flex:1; min-height:0; padding:0 var(--gap-zone) var(--gap-zone)}
 
 /* ── Project bar ──────────────────────────────────────────────────────────────
    One row above the workspace. It exists again because the project selector belongs to
    the whole page - putting it inside Library or Timeline would claim it was theirs. */
 .mv3-bar{
-  display:flex; align-items:center; gap:9px; flex:0 0 auto; min-height:36px;
-  /* (phase V73 block 2) 2 px above, 1 below: the 32-px Export (б2-2) keeps the bar at 36 with its line */
-  padding:2px 12px 1px; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:var(--sp-2); flex:0 0 auto; min-height:36px;
+  /* (phase V73 block 5, 5a) QUIETER THAN THE TOP STRIP: no fill and no line of its own - it stands on the page's base, its
+     edges at the panels' edges (the 6 px gap); 2 px above and below the 32-px Export keep it at 36. */
+  padding:2px var(--gap-zone);
 }
 .mv3-bar .sp{flex:1}
 .mv3-bar-fld{display:flex; align-items:center; gap:6px; min-width:0}
@@ -59,12 +62,12 @@
 .mv3-plist-none{margin:0 var(--sp-2)}
 
 .mv3-bar-fld > span{
-  font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/1 var(--font); color:var(--muted);   /* (б5, к17) "Project", sentence case */
 }
 /* Wide enough for a real title: an imported project is named by date plus product, and a
    picker that only shows the date cannot be used to pick. */
 .mv3-bar-fld select{ min-width:345px; max-width:645px }
-.mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
+.mv3-bar-note{flex:0 1 auto}   /* the one status line (.u-status.is-line) */
 
 /* ── Export dialog ────────────────────────────────────────────────────────────
    The old editor's sections in the same order, in this page's clothes. One column: the
@@ -155,13 +158,20 @@
 .mv3-left{display:flex; flex-direction:column; flex:0 0 auto; min-width:0; width:300px; order:3}
 .mv3-pair{display:flex; flex:1 1 0; min-height:0; min-width:0}
 
-.mv3-panel{display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg)}
-/* overflow:hidden so a header that runs out of room clips instead of spilling its
-   buttons over the panel below. */
-.mv3-panel-head{
-  display:flex; align-items:center; gap:9px; flex:0 0 auto; overflow:hidden;
-  padding:7px 11px; background:var(--surface); border-bottom:1px solid var(--border-soft);
-}
+/* (phase V73 block 5, 5a; (к15), the owner's (б5-1) а) EVERY COLUMN IS A PANEL - the shared `.u-panel` (css/app-shell.css): a
+   hairline, the large radius, one step lighter than the base. EVERYTHING IN IT IS ONE STEP LIGHTER TOO: the grey ladder is
+   shifted one step inside a panel, so the gallery, the lanes, the strip on the right and every card, field and tile in them
+   keep the steps they had against each other. The ladder's values are taken at the root (below) - a custom property
+   naming itself on one element would loop. `--bg-deep` (the stage's surround) is not on the ladder and stays deep. */
+:root{ --mv3-s1:var(--surface); --mv3-s2:var(--surface-2); --mv3-s3:var(--surface-3); --mv3-s4:#363639 }
+.mv3-panel{display:flex; flex-direction:column; min-width:0; min-height:0;
+  --bg:var(--mv3-s1); --surface:var(--mv3-s2); --surface-2:var(--mv3-s3); --surface-3:var(--mv3-s4);
+  background:var(--bg)}
+/* The head is the shared 40-px `.u-panel-head` (the timeline's keeps its height - below). overflow:hidden so a header that
+   runs out of room clips instead of spilling its buttons over the panel below. */
+.mv3-panel-head{overflow:hidden}
+/* (the owner's (б5-15) б) The timeline's head keeps its height and its 20-px buttons (block 5, part 5c groups them). */
+#mv3-timeline > .mv3-panel-head{height:35px}
 /* The Setup panel's header carries, when setup has places inside it, the route to where you are
    in the SAME row. One line, so the header is the height it has always been. */
 #mv3-inspector .mv3-panel-head{align-items:center}
@@ -170,13 +180,9 @@
 /* The title gives way first: it is a label, and the crumbs and buttons beside it are
    controls. min-width:0 is what actually lets a flex item shrink far enough to
    ellipsise - without it the text sets its own floor and pushes the buttons out. */
-.mv3-panel-title{
-  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-  color:var(--ink);
-  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
+.mv3-panel-title{min-width:0}   /* the shared `.u-panel-name`: 13 px 500, sentence case (к17) */
 .mv3-panel-head .sp{flex:1}
-.mv3-panel-body{flex:1; min-width:0; min-height:0; overflow:auto; padding:10px}
+.mv3-panel-body{flex:1; min-width:0; min-height:0; overflow:auto; padding:var(--sp-2)}
 
 /* ── A switchable column ────────────────────────────────────────────────────
    Same idiom as the Scenarios columns: collapsed is a narrow clickable spine with
@@ -227,17 +233,17 @@ body.mv3-talking #mv3-library.is-collapsed{display:none}
    band of its own. It IS the border, so the panels either side draw none.
 
    The grabber pill only appears on hover: furniture, not a control to hunt for. */
+/* (phase V73 block 5, 5a; (к15)) THE SASH IS THE GAP: 6 px of the base between two panels, nothing drawn in it until the
+   pointer is over it - then its grip shows. */
 .mv3-sash{
-  flex:0 0 auto; position:relative; background:var(--border);
-  transition:background .12s var(--ease);
+  flex:0 0 auto; position:relative; background:none;
 }
 .mv3-sash::after{
   content:''; position:absolute; border-radius:2px;
-  background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
+  background:var(--muted); opacity:0; transition:opacity var(--dur-1) var(--ease);
 }
-.mv3-sash:hover{background:var(--border)}
 .mv3-sash:hover::after{opacity:1}
-.mv3-sash.is-v{width:5px; cursor:col-resize; order:2}
+.mv3-sash.is-v{width:6px; cursor:col-resize; order:2}
 /* WHERE THE TWO SASHES MEET. Each one moves a single edge; this moves both at once, which
    is the gesture you actually want when the timeline is too short AND the preview too
    narrow. It rides the vertical sash and is put at the horizontal one's height by
@@ -250,9 +256,9 @@ body.mv3-talking #mv3-library.is-collapsed{display:none}
 }
 .mv3-sash-x:hover{background:var(--surface-3); transform:translate(-50%, -50%) scale(1.15)}
 body.mv3-resize-xy, body.mv3-resize-xy *{cursor:move !important; user-select:none}
-.mv3-sash.is-v::after{top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px}
-.mv3-sash.is-h{height:5px; cursor:row-resize}
-.mv3-sash.is-h::after{left:50%; top:1.5px; transform:translateX(-50%); height:2px; width:36px}
+.mv3-sash.is-v::after{top:50%; left:2px; transform:translateY(-50%); width:2px; height:36px}
+.mv3-sash.is-h{height:6px; cursor:row-resize}
+.mv3-sash.is-h::after{left:50%; top:2px; transform:translateX(-50%); height:2px; width:36px}
 
 /* While dragging, the cursor must not flicker into a text caret over whatever it
    crosses, and nothing must select. */
@@ -377,7 +383,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
 .mv3-preview-body{
   --mv3-around:var(--bg-deep);
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
-  padding:26px 18px; background:var(--mv3-around);
+  padding:var(--sp-6) var(--sp-4); background:var(--mv3-around);
   /* Its size is the stage's measure (container units below). */
   container-type:size;
 }
@@ -390,7 +396,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
   position:relative;
   background:var(--media-bg); border:1px solid var(--border); border-radius:var(--r-sm);
   color:var(--muted); font-size:11px;
-  box-shadow:var(--shadow);
+  /* (phase V73 block 5, 5a) no shadow - depth on the dark is the steps and the hairline (unslop) */
 }
 
 /* The canvas fills the stage regardless of its backing resolution: quality changes how
@@ -417,25 +423,26 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* ── Transport ────────────────────────────────────────────────────────────────
    Bottom left, with the resolution picker immediately right of the buttons. */
 .mv3-pv-bar{
-  display:flex; align-items:center; gap:5px; flex:0 0 auto;
-  padding:6px 10px; background:var(--surface); border-top:1px solid var(--border);
+  display:flex; align-items:center; gap:var(--sp-1); flex:0 0 auto;
+  padding:var(--sp-1) var(--sp-2); background:var(--surface); border-top:1px solid var(--border-soft);
 }
 .mv3-pv-bar .sp{flex:1}
 .mv3-pv-btn{flex:0 0 auto}
 /* Play is the one you reach for without looking. */
 .mv3-pv-btn.is-main{width:30px; color:var(--ink); background:var(--surface); font-size:11px}
 .mv3-pv-btn.is-main:hover{border-color:var(--main); color:var(--main)}
+/* (phase V73 block 5, 5a) the time in mono (`.u-mono`, (к21а)); "Quality" in full, sentence case; the two lists the strips'
+   24-px fields, their values in mono */
 .mv3-pv-time{
-  flex:0 0 auto; margin-left:4px;
-  font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums;
+  flex:0 0 auto; margin-left:var(--sp-1);
+  font-size:var(--fs-11); line-height:1; color:var(--muted);
   white-space:nowrap;
 }
-.mv3-pv-q{flex:0 0 auto; display:flex; align-items:center; gap:4px; margin-left:6px}
+.mv3-pv-q{flex:0 0 auto; display:flex; align-items:center; gap:var(--sp-1); margin-left:var(--sp-2)}
 .mv3-pv-q > span{
-  font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/1 var(--font); color:var(--muted);
 }
-/* the shared field (.u-in.is-s), at the preview bar's own 21 px */
-.mv3-pv-q select.u-in, #mv3-pvb-fmt.u-in{ height:21px; font-size:var(--fs-10) }
+.mv3-pv-q select.u-in, #mv3-pvb-fmt.u-in{ font-family:var(--mono) }
 
 /* ── The gallery and the media tree (phase V28.4) ─────────────────────────────
    One row under the status line: the gallery (.mv3-panel-body, scrolling itself), a sash, the tree on the right
@@ -443,15 +450,16 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    the right edge as before - over the tree, while something is picked (the owner). */
 .mv3-lib-row{flex:1 1 auto; min-height:0; min-width:0; display:flex}
 .mv3-lib-row > .mv3-panel-body{flex:1 1 auto}
+/* (phase V73 block 5, 5a) The tree's sash has the columns' form inside its panel: 6 px to take hold of, a hairline between the
+   gallery and the tree, the same grip under the pointer. */
 .mv3-lib-sash{
-  flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:var(--border-soft);
-  transition:background .12s var(--ease);
+  flex:0 0 6px; width:6px; cursor:col-resize; position:relative; background:none;
 }
+.mv3-lib-sash::before{content:''; position:absolute; top:0; bottom:0; left:2px; width:1px; background:var(--border-soft)}
 .mv3-lib-sash::after{
-  content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
-  border-radius:2px; background:var(--border); opacity:0; transition:opacity .12s var(--ease);
+  content:''; position:absolute; top:50%; left:2px; transform:translateY(-50%); width:2px; height:36px;
+  border-radius:2px; background:var(--muted); opacity:0; transition:opacity var(--dur-1) var(--ease);
 }
-.mv3-lib-sash:hover{background:var(--border)}
 .mv3-lib-sash:hover::after{opacity:1}
 .mv3-lib-tree{flex:0 0 180px; min-width:0; min-height:0; overflow:hidden; background:var(--bg)}
 .mv3-lib-tree.is-locked{pointer-events:none; opacity:.6}
@@ -482,10 +490,10 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 
 /* A sound or a track: no picture - a note, its name and its length; a press plays it (and lights it). */
 .mv3-tile.is-sound{flex-direction:column; gap:2px; padding:4px; background:color-mix(in oklch, var(--muted) 7%, var(--surface-2))}
-.mv3-tile-note{font:400 20px/1 var(--font); color:var(--muted)}
-.mv3-tile-sname{max-width:100%; font:500 9.5px/1.2 var(--font); color:var(--ink); text-align:center;
+.mv3-tile-note{display:flex; color:var(--muted)}   /* (phase V73 block 5, 5a) Lucide's music, 20 px (library.js) */
+.mv3-tile-sname{max-width:100%; font:500 var(--fs-10)/1.2 var(--font); color:var(--ink); text-align:center;
   overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere}
-.mv3-tile-dur{position:absolute; right:3px; bottom:3px; font:600 9px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.mv3-tile-dur{position:absolute; right:4px; bottom:4px; font-size:var(--fs-9); line-height:1; color:var(--muted)}   /* `.u-mono` */
 .mv3-tile.is-sound.is-playing{border-color:var(--sel-line); background:var(--surface-3)}   /* (б1-17) the playing sound: the selected look */
 .mv3-tile.is-sound.is-playing .mv3-tile-note{color:var(--ink); animation:mv3-hear 1s ease-in-out infinite alternate}
 @keyframes mv3-hear{from{transform:scale(1)} to{transform:scale(1.15)}}
@@ -520,11 +528,11 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* A talking head's line number on its tile (the hooks' numbers that shared it are gone, V54 block 8). Bottom left,
    because the star and the cross own the top corners; readable over any frame, so it carries its own ground. */
 .mv3-tile-hid{
-  position:absolute; left:3px; bottom:3px; z-index:2;
-  padding:1px 4px; border-radius:3px;
+  position:absolute; left:4px; bottom:4px; z-index:2;
+  padding:1px 4px; border-radius:var(--r-2xs);
   background:var(--scrim); color:var(--on-media);
-  font:700 9px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing:.03em; pointer-events:none;
+  font:var(--fw-medium) var(--fs-9)/1.35 var(--mono);   /* (phase V73 block 5, 5a) the page's mono, not a stack of its own */
+  pointer-events:none;
 }
 .mv3-tile-none{font-size:9px; color:var(--muted); text-align:center; padding:2px}
 /* (second round) A talking head's line - lit when this take is the one on a timeline. */
@@ -538,8 +546,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   position:absolute; top:2px;
   opacity:0; transition:opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
 }
-/* the shared on-picture part (.u-onpic) at the tile's 17 px (block 6 sizes the tiles) */
-.mv3-tile-btn.u-onpic{width:17px; height:17px; border-radius:var(--r-xs); font:700 10px/1 var(--font); --x-size:11px}
+/* (phase V73 block 5, 5a) ★ and ✕ ONE FORM: the shared on-picture part (.u-onpic) at 20 px, both Lucide's icons at 12 */
+.mv3-tile-btn.u-onpic{width:20px; height:20px; border-radius:var(--r-xs); --x-size:12px}
 .mv3-tile:hover .mv3-tile-btn{opacity:1}
 .mv3-tile-btn:focus-visible{opacity:1}
 .mv3-tile-btn[disabled]{opacity:.4; cursor:default}
@@ -548,18 +556,19 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* A favourite shows its star WITHOUT hovering - that is how the mark is read at a
    glance, and the same reason the Library page marks its cards. */
 .mv3-tile.is-fav .mv3-tile-star{opacity:1; color:var(--on-media)}
-/* THE FILE AN ALERT LED HERE (phase L4, js/merge-v3/library.js reveal): ringed in the theme's gold,
+/* THE FILE AN ALERT LED HERE (phase L4, js/merge-v3/library.js reveal): ringed (since phase V73 block 5 in the selected
+   look's white ring, (к16) - gold is not a mark of "this one"),
    drawn in twice so the eye finds it, and lit until the shelf is painted again. Outside the tile,
    because the picture covers everything inside it; the grid's gap and the panel's padding are the
    room it is drawn in. */
-.mv3-tile.is-found{border-color:var(--gold); outline:2px solid var(--gold); outline-offset:2px; animation:mv3-found .6s var(--ease) 2}
-@keyframes mv3-found{from{outline-offset:8px; outline-color:transparent} to{outline-offset:2px; outline-color:var(--gold)}}
+.mv3-tile.is-found{border-color:transparent; outline:2px solid var(--sel-ring); outline-offset:2px; animation:mv3-found .6s var(--ease) 2}
+@keyframes mv3-found{from{outline-offset:8px; outline-color:transparent} to{outline-offset:2px; outline-color:var(--sel-ring)}}
 
 /* The upload cell. Dashed like the empty-region marker, because that is what it is:
    a slot with nothing in it yet. */
 .mv3-tile.mv3-plus{
   border:1px dashed var(--border); background:transparent; color:var(--muted);
-  font:300 22px/1 var(--font); align-items:center; justify-content:center;
+  align-items:center; justify-content:center;   /* Lucide's plus at 20 px (library.js) */
 }
 .mv3-tile.mv3-plus:hover{border-color:var(--sel-line); color:var(--ink); border-style:solid}
 .mv3-tile.mv3-plus[disabled]{opacity:.4; cursor:default; border-color:var(--border)}
@@ -575,11 +584,10 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 #mv3-library.is-drop .mv3-tile{pointer-events:none}
 
 /* Upload progress / refusals, between the header and the grid. */
+/* (phase V73 block 5, 5a) the one status line (.u-status.is-line), its figures in mono (js/num.js) - here only its band */
 .mv3-libstatus{
-  flex:0 0 auto; padding:5px 11px;
+  flex:0 0 auto; padding:var(--sp-1) var(--sp-2);
   background:var(--surface-2); border-bottom:1px solid var(--border-soft);
-  font:600 10.5px/1.35 var(--font); color:var(--muted);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
 /* ── Inspector ────────────────────────────────────────────────────────────────
@@ -646,21 +654,34 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    media tree give way to the chat. On the shelf the crumb stays, pale, while the
    project has a conversation: one press back to it. */
 /* (phase V64, fix (ж), the owner 2026-11-01: "сделай чтобы выделеная крошка была синей, а не выделенная белой. сейчас library не
-   выделяется синим") The crumb of what shows - blue; every other one - white (a pale one is still waiting, .is-off). "Library"
-   is blue while the gallery shows (lib-views.js), SETUP while setup is where you are (workshop.js). */
+   выделяется синим") The crumb of what shows stands out from the rest (a pale one is still waiting, .is-off). "Library" is lit
+   while the gallery shows (lib-views.js), "Setup" while setup is where you are (workshop.js). Since phase V73 (к16) there is no
+   blue: the lit one is the light word, the rest quiet (block 5, (б5-4) а). */
 .mv3-lib-crumb{
-  flex:0 1 auto; min-width:0; padding:0; border:0; background:none; cursor:pointer;
-  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-  color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  flex:0 0 auto; position:relative; padding:0; border:0; background:none; cursor:pointer; white-space:nowrap;
+  /* (phase V73 block 5, 5a, the owner's (б5-4) а) the windows' crumbs (`.u-crumbs`): 13 px 500, sentence case, quiet; the
+     one showing light. Its own font - a button does not take the page's by itself. */
+  font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none; color:var(--muted);
 }
-.mv3-lib-crumb:hover{text-decoration:underline dotted; text-underline-offset:3px}
+.mv3-lib-crumb:hover{color:var(--ink); text-decoration:underline; text-underline-offset:3px}
 .mv3-lib-crumb.is-on{color:var(--ink); cursor:default; text-decoration:none}
-#mv3-library .mv3-panel-title.is-link{cursor:pointer; color:var(--ink)}
-#mv3-library .mv3-panel-title.is-link:hover{text-decoration:underline dotted; text-underline-offset:3px}
+/* THE "/" BETWEEN TWO WORDS - drawn by the word beside it, outside its box and never pressed (pointer-events:none): after the
+   words before "Library" (`.is-pre`), before the ones after it (`.is-post` - captions, and every crumb after "Setup"). A word
+   hidden takes its "/" with it. */
+.mv3-lib-crumb.is-pre{margin-right:17px}
+.mv3-lib-crumb.is-post{margin-left:17px}
+.mv3-lib-crumb.is-pre::after, .mv3-lib-crumb.is-post::before{
+  content:'/'; position:absolute; top:0; color:var(--faint); pointer-events:none; text-decoration:none;
+}
+.mv3-lib-crumb.is-pre::after{left:calc(100% + 6px)}
+.mv3-lib-crumb.is-post::before{right:calc(100% + 6px)}
+#mv3-library .mv3-panel-title.is-link{cursor:pointer; color:var(--muted)}
+#mv3-library .mv3-panel-title.is-link:hover{color:var(--ink); text-decoration:underline; text-underline-offset:3px}
 #mv3-library .mv3-panel-title.is-link.is-on{color:var(--ink)}
 #mv3-library .mv3-panel-title.is-link.is-on:hover{text-decoration:none}
-#mv3-inspector .mv3-panel-title.is-on{color:var(--ink)}
-#mv3-library .mv3-panel-head{gap:6px; container:libhead / inline-size}
+/* "Setup" with a place inside it lit: quiet, as a word of the route that is not where you are */
+#mv3-inspector .mv3-panel-head:has(.mv3-wk-crumbs) .mv3-panel-title:not(.is-on){color:var(--muted)}
+#mv3-library .mv3-panel-head{gap:0; container:libhead / inline-size}
 /* (phase V18.2) The crumbs are always there: in a narrow panel the chats' read "image" / "video". */
 @container libhead (max-width: 620px){ .mv3-lib-crumb .lg{display:none} }
 .mv3-pc-head{display:flex; align-items:center; gap:5px; flex:0 0 auto}
@@ -1178,17 +1199,17 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
    frame of the film, so the reference being judged gets the whole panel, and the gestures
    that move it (js/merge-v3/preview-b.js) have room to move in. */
 body.mv3-workshop .mv3-stage{aspect-ratio:auto !important; width:100%; height:100%; border-radius:var(--r-sm)}
-body.mv3-workshop .mv3-preview-body{padding:10px}
+body.mv3-workshop .mv3-preview-body{padding:var(--sp-2)}
 /* THE STAGE IS THE FIRST STEP while it holds the casting - who says it and where (the owner,
    2026-09-22). A gold frame five pixels thick, with the words sewn into its top line: the person
    starts here, though the mood and the voice can be done from the start and say so themselves.
    The frame goes when the stage turns to a fragment's frame or its clip - that is not a step, it
    is work being looked at. */
-.mv3-stage.is-first{border:5px solid var(--gold)}
+.mv3-stage.is-first{border:5px solid var(--gold)}   /* (б5-5) а - only while who or where is still to choose (preview-b.js) */
 .mv3-stage-step{
   position:absolute; top:-8px; left:16px; z-index:3; pointer-events:none;
-  padding:0 7px; background:var(--mv3-around); color:var(--gold);
-  font:700 10px/1.6 var(--font); letter-spacing:.14em; text-transform:uppercase; white-space:nowrap;
+  padding:0 var(--sp-2); background:var(--mv3-around); color:var(--gold);
+  font:var(--fw-medium) var(--fs-11)/1.5 var(--font); letter-spacing:0; text-transform:none; white-space:nowrap;
 }
 /* THE LOCK. While setup is open the timeline is not where the work is (js/merge-v3/layout.js,
    lock): blurred and dimmed, and inert - it takes no pointer and no keyboard. The Library is
@@ -1300,8 +1321,8 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* (phase V62, (во39), (во40); the owner 2026-10-31: "как у проектов типа highlights") The crumbs after SETUP - the Library panel's
    own look (.mv3-lib-crumb): words in capitals after a "/", no pill; the way on pale until the script is done, then as any
    crumb, the bubble over a pale one saying what is left. */
-.mv3-wk-steps.is-crumbs{margin-left:6px}
-.mv3-wk-crumbs{display:flex; align-items:center; gap:6px; flex:0 0 auto}
+.mv3-wk-steps.is-crumbs{margin-left:0}
+.mv3-wk-crumbs{display:flex; align-items:center; gap:0; flex:0 0 auto}   /* each crumb's "/" and its margin are its own (above) */
 .mv3-wk-crumbs .mv3-lib-crumb{flex:0 0 auto; overflow:visible}
 .mv3-lib-crumb.mv3-wk-on.is-off{opacity:.35; cursor:default}
 .mv3-lib-crumb.mv3-wk-on.is-off:hover{opacity:.35; text-decoration:none}

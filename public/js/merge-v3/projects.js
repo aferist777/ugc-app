@@ -30,6 +30,7 @@ import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) A kind with no projects - the shared "nothing here", a row of the list.
 import { emptyEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
+import { icon } from '../icons.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -264,6 +265,14 @@ function _paintDraft() {
     x.textContent = d ? 'clear' : 'delete';
     x.title = d ? 'Empty the lanes of this draft - it stays the draft, with its chats; Ctrl+Z brings the clips back' : 'Delete this project';
   }
+  _delLook(x, d);
+}
+// (phase V73 block 5, 5a, the owner's (б5-3) а) "clear" deletes nothing - Ctrl+Z brings the clips back: a quiet button, its
+// "Really?" the light step (as a paid press); "delete" the part's quiet red, its "Really?" the red fill.
+function _delLook(x, draft) {
+  if (!x) return;
+  x.classList.toggle('is-danger', !draft);
+  x.classList.toggle('is-quiet', !!draft);
 }
 
 // ── New: an empty project, made here rather than sent from Scenarios ────────
@@ -278,6 +287,8 @@ function _paintDraft() {
 function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
+  // (phase V73 block 5, 5a) the "+" is Lucide's plus, the words stay (their case is block 7's)
+  b.innerHTML = icon('plus', 14) + '<span>new project</span>';
   // Two kinds of project, so the button asks which. A blank project is an empty timeline and
   // is made here; a talking head starts from a scenario: the Library's "scenarios" view opens in the
   // project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is made when one
@@ -491,7 +502,7 @@ function _disarm() {
   const b = document.getElementById('mv3-project-del');
   _armed = false;
   if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-  if (b) { b.textContent = Store.isDraft() ? 'clear' : 'delete'; b.classList.remove('is-armed'); }
+  if (b) { b.textContent = Store.isDraft() ? 'clear' : 'delete'; b.classList.remove('is-armed'); _delLook(b, Store.isDraft()); }
 }
 
 function _wireDelete() {

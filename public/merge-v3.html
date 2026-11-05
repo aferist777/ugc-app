@@ -73,7 +73,9 @@
   <div class="mv3-bar">
     <!-- Left of the picker on purpose: making one and choosing one are the same decision, and
          the new project is what the picker will be showing a second later. -->
-    <button class="mv3-c-btn u-btn is-s" id="mv3-project-new" type="button"
+    <!-- (phase V73 block 5, 5a) The bar is quieter than the top strip: no fill of its own, quiet buttons, Export the one gold
+         button of the page. The "+" is Lucide's, put in by js/merge-v3/projects.js (_wireNew). -->
+    <button class="mv3-c-btn u-btn is-s is-quiet" id="mv3-project-new" type="button"
             title="Start an empty project and open it">+ new project</button>
     <label class="mv3-bar-fld">
       <span>Project</span>
@@ -85,18 +87,18 @@
     </label>
     <!-- Between the picker and the delete: it acts on the project the picker is showing, and
          reads as the milder of the two things that can be done to it. -->
-    <button class="mv3-c-btn u-btn is-s" id="mv3-project-edit" type="button"
+    <button class="mv3-c-btn u-btn is-s is-quiet" id="mv3-project-edit" type="button"
             title="Rename this project">edit</button>
     <!-- Two clicks, not a dialog: the first turns the button into "really?", the second
          does it. A modal for this is heavier than the action deserves, and the button
          showing its own armed state is impossible to miss. -->
     <button class="mv3-c-btn danger u-btn is-s is-danger" id="mv3-project-del" type="button"
             title="Delete this project's timeline">delete</button>
-    <span class="mv3-bar-note" id="mv3-project-note"></span>
+    <span class="mv3-bar-note u-status is-line" id="mv3-project-note"></span>
     <span class="sp"></span>
     <!-- (phase V33.4) In a highlights project only: every fragment ticked, or none - for the render beside it
          (js/merge-v3/highlights.js). -->
-    <button class="mv3-c-btn u-btn is-s" id="mv3-hl-all" type="button" hidden>select all</button>
+    <button class="mv3-c-btn u-btn is-s is-quiet" id="mv3-hl-all" type="button" hidden>select all</button>
     <!-- The render window, with the export settings: js/merge-v3/export-b.js. (The queue button
          that stood here moved into the top strip, beside Alerts - phase R.) In a highlights project it renders the
          ticked fragments, and stops them while they render (phase V33.4). -->
@@ -117,38 +119,41 @@
            and it is yellow, the way the Character page marks the same kind of button. -->
       <div class="mv3-pair" id="mv3-pair">
 
-      <section class="mv3-panel mv3-col" id="mv3-library" data-col="library">
+      <section class="mv3-panel u-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
-        <div class="mv3-panel-head">
+        <!-- (phase V73 block 5, 5a, the owner's (б5-4) а) THE CRUMBS ARE THE WINDOWS' FORM (`.u-crumbs` of block 4): words in
+             sentence case, the one showing light, the rest quiet; the "/" between two words is drawn by css/merge-v3.css
+             OUTSIDE the buttons (`.is-pre` - after the word, before "Library"; `.is-post` - before it), never pressed. -->
+        <div class="mv3-panel-head u-panel-head">
           <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08; since phase V64 "Library / captions" - the chats are
                windows): always there, the one showing lit, any other one press away. "Library" is the shelf; "captions"
                picks the subtitle lane (js/merge-v3/lib-views.js).
                "scenarios /" left of "Library" (phase V28.3, the owner 2026-10-12): the scenarios a talking head is made
                from, in the draft and a blank project only (js/merge-v3/scen-pick.js). -->
-          <button class="mv3-lib-crumb" id="mv3-lib-scen" type="button" hidden>scenarios /</button>
+          <button class="mv3-lib-crumb is-pre" id="mv3-lib-scen" type="button" hidden>Scenarios</button>
           <!-- (phase V33.1) A highlights project's own view - its tiles and the card of a moment (js/merge-v3/highlights.js);
                in such a project the crumbs are "highlights / Library / captions" (phase V49, the owner's (пр4); V64 without the
                chats' crumbs; css/mv3-highlights.css) - the chats talk in ONE conversation per project. -->
-          <button class="mv3-lib-crumb" id="mv3-lib-hl" type="button" hidden>highlights /</button>
+          <button class="mv3-lib-crumb is-pre" id="mv3-lib-hl" type="button" hidden>Highlights</button>
           <!-- (phase V62, fix (к), the owner 2026-10-31: "давай уберем вертикальную кнопку setup. пускай кнопка setup будет в
                крошках в режиме voiceover"; phase V64, the owner 2026-10-31: "у talking head убираем вертикальную кнопку setup -
                делаем крошкой") A voiceover's and a talking head's way back to setup: the first crumb - no project has a
                Setup spine any more (css/merge-v3.css; js/merge-v3/workshop.js). -->
-          <button class="mv3-lib-crumb" id="mv3-lib-setup" type="button" hidden>setup /</button>
+          <button class="mv3-lib-crumb is-pre" id="mv3-lib-setup" type="button" hidden>Setup</button>
           <!-- (phase V62, block 2) A voiceover's B-roll piece: its sentence's batch (js/merge-v3/broll-view.js). Right of
                "setup /" (the owner 2026-10-31: "крошка b-rolls должна быть справа от setup в режиме voiceover"), as
                "highlights /" is first in a highlights project; in a voiceover only, pale until the B-roll is laid. -->
-          <button class="mv3-lib-crumb" id="mv3-lib-br" type="button" hidden>b-roll /</button>
-          <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
+          <button class="mv3-lib-crumb is-pre" id="mv3-lib-br" type="button" hidden>B-roll</button>
+          <span class="mv3-panel-title u-panel-name" id="mv3-lib-title">Library</span>
           <!-- (phase V64 block 3, the owner 2026-10-31: "из крошек уберем generate image, generate video, generate audio") The
                chats are WINDOWS now (js/merge-v3/chat-window.js), opened by "generate" of IMAGES / VIDEO / AUDIO in the tree,
                the lane's right button and ?open=… - the crumbs went. -->
-          <button class="mv3-lib-crumb" id="mv3-lib-cap" type="button">/ captions</button>
+          <button class="mv3-lib-crumb is-post" id="mv3-lib-cap" type="button">Captions</button>
           <span class="sp"></span>
         </div>
         <!-- Upload progress and refusals. Its own element, outside the body: the body
              is emptied and rebuilt on every load, which would wipe the message. -->
-        <div class="mv3-libstatus" id="mv3-lib-status" hidden></div>
+        <div class="mv3-libstatus u-status is-line" id="mv3-lib-status" hidden></div>
         <!-- THE GALLERY AND THE MEDIA TREE (phase V28.4, the owner 2026-10-12): what the tree has selected is what the
              gallery shows (js/merge-v3/library.js, js/media-tree.js); the sash between them sets the tree's width. -->
         <div class="mv3-lib-row" id="mv3-lib-row">
@@ -182,10 +187,10 @@
       <!-- SETUP (phase L, the owner 2026-09-23). What this panel holds now is the build of a
            talking head and the scenario picker that starts one; the settings of whatever is picked
            on the timeline slide over the Library instead. Its id stays: four modules find it. -->
-      <section class="mv3-panel mv3-col" id="mv3-inspector" data-col="inspector">
+      <section class="mv3-panel u-panel mv3-col" id="mv3-inspector" data-col="inspector">
         <div class="mv3-spine">Setup</div>
-        <div class="mv3-panel-head">
-          <span class="mv3-panel-title">Setup</span>
+        <div class="mv3-panel-head u-panel-head">
+          <span class="mv3-panel-title u-panel-name">Setup</span>
           <span class="sp"></span>
         </div>
         <!-- Filled by js/merge-v3/inspector.js: the picker, or the build (js/merge-v3/workshop.js). -->
@@ -199,9 +204,9 @@
 
       <div class="mv3-sash is-h" id="mv3-sash-h" title="Drag to resize · double-click to reset"></div>
 
-      <section class="mv3-panel" id="mv3-timeline">
-        <div class="mv3-panel-head">
-          <span class="mv3-panel-title">Timeline</span>
+      <section class="mv3-panel u-panel" id="mv3-timeline">
+        <div class="mv3-panel-head u-panel-head">
+          <span class="mv3-panel-title u-panel-name">Timeline</span>
           <!-- Undo / redo as buttons rather than a shortcut: applying an effect from a
                track stamps it onto every clip in it, and the report on the old editor is
                that its Ctrl+Z never actually worked. A visible control also shows whether
@@ -247,9 +252,9 @@
 
     <div class="mv3-sash is-v" id="mv3-sash-v" title="Drag to resize · double-click to reset"></div>
 
-    <section class="mv3-panel" id="mv3-preview">
-      <div class="mv3-panel-head">
-        <span class="mv3-panel-title">Preview</span>
+    <section class="mv3-panel u-panel" id="mv3-preview">
+      <div class="mv3-panel-head u-panel-head">
+        <span class="mv3-panel-title u-panel-name">Preview</span>
         <span class="sp"></span>
       </div>
       <!-- Its own body class: this one centres the stage instead of scrolling a list.
@@ -261,17 +266,18 @@
            header, right of split - phase V36, T3). Quality changes only how many pixels the canvas composites into - it
            never touches the project or the eventual export. -->
       <div class="mv3-pv-bar">
-        <span class="mv3-pv-time" id="mv3-pv-time">0:00.0 / 0:00.0</span>
+        <!-- (phase V73 block 5, 5a) the time in mono, like every figure of the page (к21а); "q" said in full - Quality -->
+        <span class="mv3-pv-time u-mono" id="mv3-pv-time">0:00.0 / 0:00.0</span>
         <label class="mv3-pv-q" title="Preview resolution - not the export">
-          <span>q</span>
+          <span>Quality</span>
           <select id="mv3-pv-q" class="u-in is-s"></select>
         </label>
         <!-- The same stage, shown big. Not a second canvas - see js/merge-v3/bar.js. -->
-        <button class="mv3-pv-btn u-btn is-s is-icon" id="mv3-pv-big" type="button" title="Enlarge the preview">&#9974;</button>
+        <button class="mv3-pv-btn u-btn is-s is-icon" id="mv3-pv-big" type="button" title="Enlarge the preview"></button>
         <!-- Saves the frame under the playhead into the library at the film's own size, drawn off
              the original files (js/merge-v3/preview-b.js grabFrame). -->
         <button class="mv3-pv-btn u-btn is-s is-icon" id="mv3-pv-shot" type="button"
-                title="Save this frame to the library (Images / Screenshots)">&#128247;</button>
+                title="Save this frame to the library (Images / Screenshots)"></button>
         <span class="sp"></span>
       </div>
     </section>

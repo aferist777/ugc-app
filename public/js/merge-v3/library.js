@@ -62,6 +62,8 @@ import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V34.E) Sound on the shelf: the waveform, the menu under the right button, the search and the online libraries.
 import { waveEl } from '../sound/wave.js';
+import { icon } from '../icons.js';
+import { setFigures } from '../num.js';
 import { soundMenu, myCats } from '../sound/menu.js';
 import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
@@ -223,7 +225,7 @@ function _tile(it, list) {
   if (audio) {
     const note = document.createElement('span');
     note.className = 'mv3-tile-note';
-    note.textContent = '♪';
+    note.innerHTML = icon('music', 20);   // (phase V73 block 5, 5a) Lucide's, not "♪"
     cell.appendChild(note);
     const nm = document.createElement('span');
     nm.className = 'mv3-tile-sname';
@@ -233,7 +235,7 @@ function _tile(it, list) {
     cell.appendChild(waveEl((it.meta || {}).wave, 'snd-twave'));
     if (it.dur) {
       const d = document.createElement('span');
-      d.className = 'mv3-tile-dur';
+      d.className = 'mv3-tile-dur u-mono';
       d.textContent = _mmss(it.dur);
       cell.appendChild(d);
     }
@@ -338,8 +340,9 @@ function _tile(it, list) {
   // A kept talking head, (phase V55) a made environment or lookbook: no favourite to set.
   if (it.kind === 'heads' || MADE.has(it.kind)) star.hidden = true;
   star.type = 'button';
-  star.className = 'mv3-tile-btn mv3-tile-star u-onpic';
-  star.textContent = '★';
+  // (phase V73 block 5, 5a) ★ and ✕ one form: the shared picture button, both Lucide's (the star filled when it is one)
+  star.className = 'mv3-tile-btn mv3-tile-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
+  star.innerHTML = icon('star', 12);
   star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
   star.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -605,7 +608,7 @@ function _plusTile() {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
-  b.textContent = '+';
+  b.innerHTML = icon('plus', 20);   // (phase V73 block 5, 5a) Lucide's plus, not a 22-px "+"
   if (_isHeads()) {
     b.disabled = true;
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
@@ -968,7 +971,7 @@ function _status(text, bad) {
   if (text && bad) { showError(text); text = ''; }
   const el = document.getElementById('mv3-lib-status');
   if (!el) return;
-  el.textContent = text || '';
+  setFigures(el, text || '');   // (phase V73 block 5, 5a) "uploading 2/5" - its figures in mono (js/num.js)
   el.hidden = !text;
 }
 

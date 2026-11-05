@@ -2061,8 +2061,10 @@ export function showPair(top, bottom, onPick) {
   _still = null;
   _crop = null;
   _filmStop();
-  _firstStep(true);
   const a = _halfSpec(top), b = _halfSpec(bottom);
+  // (phase V73 block 5, 5a, the owner's (б5-5) а) THE FIRST STEP IS "YOUR MOVE": the gold frame stays while who or where is
+  // still to choose; with both on the stage it goes, and the field that waits takes the gold.
+  _firstStep(!a.src || !b.src);
   const want = a.src + '|' + b.src;
   if (_pair && _pair.key === want && !_film) {
     // The same pictures again - a panel repaints after every save. The words on them and the
@@ -2094,7 +2096,7 @@ export function showPair(top, bottom, onPick) {
 // nothing else; a frame or a clip on the stage is work being judged, not a step to take. The
 // label is an element rather than something drawn on the canvas, because it sits ON the border,
 // which the canvas is inside.
-const STEP_WORDS = 'First Step';
+const STEP_WORDS = 'First step';   // (phase V73 block 5, (к17)) sentence case
 function _firstStep(on) {
   const stage = document.getElementById(STAGE);
   if (!stage) return;
