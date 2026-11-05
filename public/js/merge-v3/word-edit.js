@@ -31,6 +31,7 @@ import { seek } from './preview-b.js';
 import { replaceAt, insertAt, removeAt, joinAt, cutAt, markAt, edgeAt, LIMITS } from '../captions/words.js';
 import { timedWords } from '../captions/pages.js';
 import { note } from './ask.js';
+import { icon } from '../icons.js';
 
 const S = {
   clip: null, track: null,   // the caption whose words are shown
@@ -244,8 +245,10 @@ function _paintPick() {
   // inside the page, and taking it away there left nothing focused, where Delete takes the whole line.
   f.addEventListener('blur', () => { if (!_painting && S.edit && f.__edit === S.edit && document.activeElement !== f) _commit('none'); });
   row.appendChild(f);
-  const btn = (label, title, fn, off, cls) => {
-    const b = _el('button', 'mv3-wd-btn u-btn is-s is-icon' + (cls ? ' ' + cls : ''), label);
+  // (phase V73 block 5, 5b) ✂ ⇥ ✕ + as Lucide's icons (`ico`); "A" - the mark's own letter - stays a letter
+  const btn = (label, title, fn, off, cls, ico) => {
+    const b = _el('button', 'mv3-wd-btn u-btn is-s is-icon' + (cls ? ' ' + cls : ''), ico ? null : label);
+    if (ico) { b.innerHTML = icon(ico, 14); b.setAttribute('aria-label', title); }
     b.type = 'button';
     b.title = title;
     b.tabIndex = -1;
@@ -261,10 +264,10 @@ function _paintPick() {
     return b;
   };
   btn('A', w.k ? 'Stands out - press to make it an ordinary word (K)' : 'Make this word stand out, for the whole page (K)', _mark, false, w.k ? 'is-on' : '');
-  btn('✂', 'Cut it in two at the playhead (S) - or type a space in it where it splits', _cut);
-  btn('⇥', 'Join it with the next word (M)', _join, S.sel >= n - 1);
-  btn('✕', n > 1 ? 'Take this word out - its time becomes a pause (Delete)' : ONLY, _remove, n <= 1);
-  btn('+', 'Put a word after it (Insert)', () => _open('insert'));
+  btn('✂', 'Cut it in two at the playhead (S) - or type a space in it where it splits', _cut, false, '', 'scissors');
+  btn('⇥', 'Join it with the next word (M)', _join, S.sel >= n - 1, '', 'arrow-right-to-line');
+  btn('✕', n > 1 ? 'Take this word out - its time becomes a pause (Delete)' : ONLY, _remove, n <= 1, '', 'x');
+  btn('+', 'Put a word after it (Insert)', () => _open('insert'), false, '', 'plus');
   _box.querySelector('.mv3-wd-pick').appendChild(row);
   const s = S.start + (+w.s || 0), e = S.start + (+w.e || 0);
   const time = _el('div', 'mv3-wd-time', _fmt(s) + ' → ' + _fmt(e) + ' · ' + Math.max(0, (+w.e || 0) - (+w.s || 0)).toFixed(2) + ' s'

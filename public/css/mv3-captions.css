@@ -36,9 +36,9 @@
 }
 .mv3-cap-sec:hover{ border-color:var(--muted) }
 .mv3-cap-sec.is-open{ border-color:var(--sel-line); border-bottom-left-radius:0; border-bottom-right-radius:0 }
-.mv3-cap-sec-c{ flex:0 0 auto; width:10px; font-size:10px; color:var(--muted) }
-.mv3-cap-sec-n{ font:700 11px/1.3 var(--font) }
-.mv3-cap-sec-k{ margin-left:auto; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
+.mv3-cap-sec-c{ flex:0 0 auto; display:flex; align-self:center; color:var(--muted) }   /* Lucide's chevron (V73 block 5) */
+.mv3-cap-sec-n{ font:var(--fw-strong) var(--fs-11)/1.3 var(--font) }
+.mv3-cap-sec-k{ margin-left:auto; font:500 var(--fs-10)/1.3 var(--font); color:var(--muted); white-space:nowrap }
 .mv3-cap-sec-body{ padding:4px 0 6px 10px; border-left:2px solid var(--sel-bg); margin:0 0 4px 0 }
 /* The animations' tab (phase V49): one line on what a press does, over the pairs' tiles. */
 .mv3-cap-note{ font:600 10.5px/1.4 var(--font); color:var(--muted); max-width:520px }
@@ -89,13 +89,14 @@
 /* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
 .mv3-cap-head{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 6px }
 .mv3-cap-what{ font:800 11px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink) }
-.mv3-cap-sub{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+/* (phase V73 block 5, 5b) what the settings apply to, under the strip's head (its title is the head's); figures in mono */
+.mv3-cap-sub{ margin:0 0 6px; font:500 var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
 .mv3-cap-preset{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:5px 7px;
   border:1px solid var(--border); border-left:2px solid var(--sel-line); border-radius:var(--r-xs);
   background:var(--surface);
 }
-.mv3-cap-based{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+.mv3-cap-based{ font:500 var(--fs-11)/1.3 var(--font); color:var(--muted) }
 /* The person's own presets (phase V30, block 5): "save as my preset" at the right of the row (alone on a look made from no
    preset), the hint of an empty Mine, and a tile just saved, marked for a moment. */
 .mv3-cap-preset.is-plain{ border-left-color:var(--border) }
@@ -122,14 +123,16 @@
   font:500 11px/1.25 var(--font); color:var(--ink);
 }
 .mv3-wd-chip:hover{ border-color:var(--muted) }
-.mv3-wd-t{ font:500 8.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-t{ font:400 var(--fs-9)/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-chip.is-sel{ background:var(--sel-bg); border-color:var(--sel-line) }
 .mv3-wd-list:focus .mv3-wd-chip.is-sel{ background:var(--sel-line); color:var(--ink) }
 .mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:var(--ink) }
 .mv3-wd-chip.is-now .mv3-wd-w{ text-decoration:underline; text-underline-offset:3px }
 .mv3-wd-chip.is-after{ opacity:.45 }
-.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--gold) }
-.mv3-wd-chip.is-k::before{ content:'A'; font:800 8.5px/1 var(--font); color:var(--gold) }
+/* (phase V73 block 5, 5b, (б1-18) а) a word that stands out in ITS colour - the one it wears on the frame (`--mark`, word-edit.js) -,
+   not the interface's gold */
+.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--mark, var(--ink)) }
+.mv3-wd-chip.is-k::before{ content:'A'; font:var(--fw-strong) var(--fs-9)/1 var(--font); color:var(--mark, var(--ink)) }
 .mv3-wd-chip.is-h::after{
   content:''; position:absolute; top:2px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--muted);
 }
@@ -137,10 +140,10 @@
 .mv3-wd-in{ flex:1 1 auto; min-width:0 }
 .mv3-wd-in.is-insert{ border-style:dashed }
 .mv3-wd-btn{ flex:0 0 auto }   /* .is-on - the part's pressed look (б2-13) */
-.mv3-wd-time{ margin-top:4px; font:500 10px/1.3 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-time{ margin-top:4px; font:400 var(--fs-10)/1.3 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-msg{ margin-top:4px; font:500 10px/1.4 var(--font); color:var(--danger) }
 .mv3-wd-msg[hidden]{ display:none }
-.mv3-wd-help{ margin-top:5px; font:400 9.5px/1.45 var(--font); color:var(--muted) }
+.mv3-wd-help{ margin-top:4px; font:400 var(--fs-10)/1.45 var(--font); color:var(--muted) }
 
 /* ── The two tabs over the tiles (phase V30, block 2): presets | text ─────────
    `text` puts the words of the subtitle and text lanes, as one document, in the tiles' place (caption-doc.js); the

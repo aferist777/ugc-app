@@ -310,8 +310,9 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-c-still-stack{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .mv3-c-still-stack > .mv3-ins-fx3-cell{ min-width:0; }
 
+/* (phase V73 block 5, 5b, (б5-10) а) small, at the top of the group Picture */
 .mv3-c-still{
-  margin:0 0 8px; padding:6px; border-radius:8px;
+  margin:0 0 8px; padding:4px; border-radius:var(--r-sm);
   border:1px solid var(--border);
   background-color:var(--surface-3);
   background-image:
@@ -321,8 +322,8 @@ body.mv3-noproject .mv3-tl::after{
   background-position:0 0, 7px 7px;
 }
 .mv3-c-still img{
-  display:block; width:100%; max-height:190px;
-  object-fit:contain; border-radius:4px;
+  display:block; width:100%; max-height:120px;
+  object-fit:contain; border-radius:var(--r-2xs);
 }
 
 /* The question a clip's X opens (js/ask.js) - since phase V73 block 2 the shared part `.u-ask.is-float` (css/app-shell.css),
@@ -601,8 +602,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-ins-head-txt{flex:1 1 auto; min-width:0}
 .mv3-ins-head-act{flex:0 0 auto; display:flex; align-items:center}
 .mv3-ins-head-act .mv3-c-btn{padding:3px 8px; font-size:9.5px; white-space:nowrap}
+/* (phase V73 block 5, 5b) a section's title in the strip ("Music of this fragment"); the strip's own title is its head */
 .mv3-ins-title{
-  font:700 11.5px/1.35 var(--font); color:var(--ink);
+  font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); color:var(--ink);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .mv3-ins-sub{
@@ -619,16 +621,16 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
   color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.mv3-ins-row{display:flex; gap:8px; padding:3px 0; font-size:10.5px; line-height:1.4}
+.mv3-ins-row{display:flex; gap:8px; padding:4px 0; font-size:var(--fs-11); line-height:1.4}
 .mv3-ins-k{flex:0 0 76px; color:var(--muted)}
 .mv3-ins-v{flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; font-variant-numeric:tabular-nums}
 
 /* Said out loud because a track setting overwrites every clip on the track. */
 .mv3-ins-note{
-  margin:0 0 9px; padding:6px 8px;
+  margin:0 0 8px; padding:8px;
   border:1px solid var(--border); border-left:2px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted);
-  font:600 10px/1.45 var(--font);
+  font:400 var(--fs-11)/1.45 var(--font);
 }
 
 /* WHAT IS PICKED ON THE TIMELINE, over the Library (phase L5, the owner 2026-09-23): a strip
@@ -644,10 +646,28 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   position:absolute; top:0; right:0; bottom:0; z-index:5; width:min(350px, 100%);
   display:flex; flex-direction:column;
   background:var(--bg); border-left:1px solid var(--border); box-shadow:-10px 0 24px oklch(0 0 0 / .35);
-  transform:translateX(102%); transition:transform .18s var(--ease); pointer-events:none;
+  transform:translateX(102%); transition:transform var(--dur-2) var(--ease); pointer-events:none;
 }
 .mv3-over.is-open{transform:none; pointer-events:auto}
-.mv3-over-body{flex:1; min-height:0; overflow:auto; padding:10px}
+/* (phase V73 block 5, part 5b, the owner's (к24-4)) ITS HEAD: the panel's 40-px head - the name of what is picked and the ✕ that
+   lets it go (merge-v3.html, inspector.js _paintHead) */
+.mv3-over-head{flex:0 0 auto}
+.mv3-over-body{flex:1; min-height:0; overflow:auto; padding:var(--sp-1) var(--sp-3) var(--sp-4)}
+/* THE GROUPS (inspector.js _group, the owner's (б5-8) а, (б5-9) а): a title that folds - a chevron and the quiet 11-px words -,
+   then its rows; a hairline between two groups. Folded: the chevron turned, the rows gone. */
+.mv3-ins-grp + .mv3-ins-grp{border-top:1px solid var(--border-soft)}
+.mv3-ins-grp-h{
+  display:flex; align-items:center; gap:6px; width:100%; height:32px; padding:0; border:0; background:none; cursor:pointer;
+  color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); text-align:left;
+}
+.mv3-ins-grp-h:hover{color:var(--ink)}
+.mv3-ins-grp-h .u-ico{flex:0 0 auto; transition:transform var(--dur-1) var(--ease)}
+.mv3-ins-grp.is-shut .mv3-ins-grp-h .u-ico{transform:rotate(-90deg)}
+.mv3-ins-grp-b{padding-bottom:var(--sp-2)}
+.mv3-ins-grp.is-shut > .mv3-ins-grp-b{display:none}
+/* Under the groups: what puts lines back on their lane's style; the last row - Remove / Delete N, its own width, the quiet red */
+.mv3-ins-act{padding:var(--sp-2) 0 0}
+.mv3-ins-remove{margin-top:var(--sp-3); padding-top:var(--sp-3); border-top:1px solid var(--border-soft)}
 /* ── The Library's two views (phase J, the owner 2026-10-02) ──────────────────
    The shelf, and the pictures chat (css/mv3-imagen.css, js/merge-v3/picchat.js). In the chat the
    header reads "LIBRARY / generate image" - "Library" is the way back - and the gallery and the
@@ -698,18 +718,20 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-c-row{display:flex; align-items:center; gap:8px; padding:3px 0; min-height:24px}
 .mv3-c-lbl{
   flex:0 0 68px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:600 10px/1.3 var(--font); color:var(--muted);
+  font:var(--fw-medium) var(--fs-10)/1.3 var(--font); color:var(--muted);   /* (V73 block 5) 500 - the scale's weights */
 }
 .mv3-c-ctl{flex:1 1 auto; min-width:0; display:flex; align-items:center}
-.mv3-c-sep{height:1px; margin:9px 0; background:var(--border-soft)}
+.mv3-c-sep{height:1px; margin:var(--sp-2) 0; background:var(--border-soft)}
 /* A section that opens when it is switched on (the Halfer band on a picture): the caret says
    whether there is more under the switch. */
 .mv3-c-fold .mv3-c-lbl{color:var(--ink)}
-.mv3-c-fold .mv3-c-lbl::before{content:'\25b8  '; color:var(--muted)}
-.mv3-c-fold.is-open .mv3-c-lbl::before{content:'\25be  '}
+/* (phase V73 block 5, 5b) the caret is Lucide's chevron, turned when the section is open - not "▸ ▾" */
+.mv3-c-fold .mv3-c-lbl::before{content:''; display:inline-block; width:12px; height:12px; margin-right:2px; vertical-align:-2px;
+  background:var(--muted); -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center/12px no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center/12px no-repeat}
+.mv3-c-fold.is-open .mv3-c-lbl::before{transform:rotate(90deg)}
 .mv3-c-hint{
   margin:1px 0 6px; padding-left:76px;
-  font:400 9.5px/1.4 var(--font); color:var(--muted);
+  font:400 var(--fs-10)/1.4 var(--font); color:var(--muted);
 }
 .mv3-c-hint.is-flush{padding-left:0}
 /* Pages under a platform's buttons or text (phase V30, block 3): the red of their marks on the preview. */
@@ -722,12 +744,12 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
-.mv3-c-slider{display:flex; align-items:center; gap:7px; width:100%; min-width:0}
+.mv3-c-slider{display:flex; align-items:center; gap:var(--sp-2); width:100%; min-width:0}
 .mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0}
 /* (phase V73 block 2) a number of the strip in mono, at the strip's own size */
 .mv3-c-num{
   flex:0 0 auto; min-width:36px; text-align:right;
-  font:400 10.5px/1 var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap;
+  font:400 var(--fs-11)/1 var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap;
 }
 
 /* Full height, not a squeezed one: a select whose text is clipped is worse than a
@@ -739,17 +761,17 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* (phase V73 block 2) the shared menu, over the windows it opens on */
 .mv3-blend-menu.u-menu{ z-index:9500; min-width:150px }
 /* (phase V65, block 5) A pattern's direction buttons in a row (js/merge-v3/patterns-ui.js since V74). */
-.mv3-pat-dirs{display:flex; flex-wrap:wrap; gap:3px}
-.mv3-pat-dirs .mv3-c-sw{min-width:26px; padding:0 5px}
+.mv3-pat-dirs{display:flex; flex-wrap:wrap; gap:4px}   /* Lucide's arrows, 24-px icon buttons (V73 block 5) */
 /* (phase V74) Main video's patterns in its strip (js/merge-v3/patterns-ui.js): the set as tiles with a tick (under the fold
    «Patterns · N ▸» since V74.1); then the layers ticked, the top one first - a row each (tile, name, its look, ↑ ↓), one open with its settings. */
 /* (phase V74.1) The fold over the tiles - «Patterns · N ▸»: a press opens them under it, another folds them. */
+/* (phase V73 block 5, 5b) in the strip's one fold form - the groups': a chevron and the quiet title, a hairline over it */
 .mv3-patf{
-  display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin:4px 0 2px; padding:5px 8px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1.3 var(--font); text-align:left;
+  display:flex; align-items:center; gap:6px; width:100%; height:32px; margin:0; padding:0; cursor:pointer;
+  border:0; border-top:1px solid var(--border-soft); background:none; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); text-align:left;
 }
-.mv3-patf:hover, .mv3-patf.is-open{border-color:var(--border-soft)}
-.mv3-patf-arrow{color:var(--muted)}
+.mv3-patf:hover{color:var(--ink)}
 .mv3-patg{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:4px; margin:6px 0 8px}
 .mv3-patg-tile{
   position:relative; aspect-ratio:1; padding:0; overflow:hidden; cursor:pointer;
@@ -759,16 +781,16 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-patg-tile:hover{border-color:var(--border-soft)}
 .mv3-patg-tile.is-on{border-color:var(--sel-line); box-shadow:inset 0 0 0 1px var(--sel-line)}
 .mv3-patg-tick{
-  position:absolute; top:3px; right:3px; width:14px; height:14px; border-radius:3px;
-  border:1px solid var(--on-media-line); background:var(--scrim);
-  color:var(--ink); font:700 10px/12px var(--font); text-align:center;
+  position:absolute; top:4px; right:4px; width:14px; height:14px; border-radius:var(--r-2xs);
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--ink);   /* Lucide's check (V73 block 5) */
 }
 .mv3-patg-tile.is-on .mv3-patg-tick{background:var(--sel-bg); border-color:var(--sel-line)}
 .mv3-patl{display:flex; flex-direction:column; gap:4px; margin:2px 0 6px}
 .mv3-patl-row{border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2)}
 .mv3-patl-row.is-open{border-color:var(--border-soft)}
 .mv3-patl-head{display:flex; align-items:center; gap:6px; padding:4px; cursor:pointer}
-.mv3-patl-head img{flex:none; width:28px; height:28px; border-radius:3px; background:var(--surface-2); object-fit:cover}
+.mv3-patl-head img{flex:none; width:28px; height:28px; border-radius:var(--r-2xs); background:var(--surface-2); object-fit:cover}
 .mv3-patl-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 11px/1.3 var(--font); color:var(--ink)}
 .mv3-patl-look{flex:none; font:500 10px/1.3 var(--font); color:var(--muted)}
 .mv3-patl-arrow{flex:none}
@@ -796,7 +818,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* A colour swatch that reads as a swatch: the browser's default colour input is a fat grey
    button with a stripe, which looks like nothing else in this panel. */
 .mv3-c-color{
-  flex:1 1 auto; min-width:0; height:22px; padding:1px;
+  flex:1 1 auto; min-width:0; height:24px; padding:1px;
   border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); cursor:pointer;
 }

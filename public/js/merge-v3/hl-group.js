@@ -250,10 +250,14 @@ async function _readMoods() {
 }
 
 // ── Painting ────────────────────────────────────────────────────────────────
+// (phase V73 block 5, part 5b) The strip's head takes this title (inspector.js _paintHead, `data-strip-title`).
 function _head(host, what, n) {
-  host.appendChild(_el('div', 'mv3-ins-title', what + ' · for all ' + n));
+  const h = _el('div', 'mv3-ins-title', what + ' · for all ' + n);
+  h.dataset.stripTitle = '1';
+  host.appendChild(h);
 }
-function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'each fragment')); }
+// (phase V73 block 5, 5b, (к17)) a section title in sentence case
+function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'Each fragment')); }
 const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
 
 /**

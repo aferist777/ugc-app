@@ -70,6 +70,9 @@ import { blendButton } from './blend-menu.js';
 import { renderPatterns } from './patterns-ui.js';
 // (phase V73 block 2, step 2b) A lane with nothing on it - the shared "nothing here", a row of the strip.
 import { emptyEl } from '../ui-state.js';
+// (phase V73 block 5, part 5b) The groups' chevrons, and the strip's figures in mono (js/num.js).
+import { iconEl } from '../icons.js';
+import { setFigures } from '../num.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -90,8 +93,73 @@ function _el(tag, cls, text) {
 function _fact(k, v) {
   const row = _el('div', 'mv3-ins-row');
   row.appendChild(_el('span', 'mv3-ins-k', k));
-  row.appendChild(_el('span', 'mv3-ins-v', v));
+  row.appendChild(setFigures(_el('span', 'mv3-ins-v'), v));
   return row;
+}
+
+// ── THE STRIP'S HEAD AND ITS GROUPS (phase V73 block 5, part 5b; the owner's (к24-4), (б5-8) а, (б5-9) а) ─────────────────
+// THE HEAD says what is picked - "Clip · <name>", "Main video", "Subtitles", "3 lines" - and its ✕ lets it go, as Escape does
+// (merge-v3.html #mv3-over-x). The branch that paints sets `_title`; a block that paints its own title - the highlights
+// group's "· for all N" (hl-group.js) - marks it `data-strip-title`, and the head takes it from there (_paintHead).
+let _title = '';
+// THE GROUPS: the rows of a pick under titles that fold - a clip Picture · Sound · Frame, a sound clip Sound, words Text · Look ·
+// Motion · Place, a lane its own. All open at first; one folded stays folded for that KIND of pick (`_kind`, set by the branch),
+// kept in localStorage (`mv3_ins_folds_v1` - the viewer's own convenience) - outside the strip, which every paint rebuilds.
+let _kind = '';
+const FOLDS_KEY = 'mv3_ins_folds_v1';
+let _folds = null;
+function _foldsNow() {
+  if (!_folds) {
+    try { _folds = JSON.parse(localStorage.getItem(FOLDS_KEY) || '{}') || {}; } catch (e) { _folds = {}; }
+  }
+  return _folds;
+}
+/** A group of the strip: its title (a press folds or opens it) and the box its rows go into - returned. */
+function _group(host, id, title) {
+  const kind = _kind;
+  const shut = !!((_foldsNow()[kind] || {})[id]);
+  const g = _el('section', 'mv3-ins-grp' + (shut ? ' is-shut' : ''));
+  const h = _el('button', 'mv3-ins-grp-h');
+  h.type = 'button';
+  h.setAttribute('aria-expanded', shut ? 'false' : 'true');
+  h.appendChild(iconEl('chevron-down', 14));
+  h.appendChild(setFigures(_el('span'), title));
+  h.addEventListener('click', () => {
+    const now = g.classList.toggle('is-shut');
+    h.setAttribute('aria-expanded', now ? 'false' : 'true');
+    const f = _foldsNow();
+    const k = f[kind] || (f[kind] = {});
+    if (now) k[id] = 1; else delete k[id];
+    if (!Object.keys(k).length) delete f[kind];
+    try { localStorage.setItem(FOLDS_KEY, JSON.stringify(f)); } catch (e) { /* a private window: kept for this page only */ }
+  });
+  g.appendChild(h);
+  const body = _el('div', 'mv3-ins-grp-b');
+  g.appendChild(body);
+  host.appendChild(g);
+  return body;
+}
+// A ROW UNDER THE GROUPS: what puts lines back on their lane's style.
+function _actRow(host, btn) {
+  const r = _el('div', 'mv3-ins-act');
+  r.appendChild(btn);
+  host.appendChild(r);
+}
+// THE STRIP'S LAST ROW - Remove, Delete N: at the bottom, its own width, the part's quiet red (`is-danger`).
+function _removeRow(host, btn) {
+  const r = _el('div', 'mv3-ins-remove');
+  r.appendChild(btn);
+  host.appendChild(r);
+}
+const _cap1 = (s) => { const t = String(s || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+function _paintHead(over) {
+  let t = _title;
+  const own = over && over.querySelector('[data-strip-title]');
+  if (own) { if (!t) t = own.textContent; own.remove(); }
+  const el = document.getElementById('mv3-over-title');
+  if (!el) return;
+  setFigures(el, t);
+  el.title = t;
 }
 
 // THE THREE EFFECTS ARE NOT OFFERED (phase V49, point 5, the owner's (пр14) а: "убираем эти параметры (transition, animation
@@ -391,17 +459,26 @@ function _halferRows(host, c, set) {
 // A film. Speed retimes it, reverse runs it backwards, and the level belongs to the sound
 // half rather than to this clip - so that is where the slider writes.
 function _blankFilm(host, track, c, set, pair) {
+  // (phase V73 block 5, 5b, (б5-8) а) THREE GROUPS: Picture - how it runs, how much of it is seen, how it mixes, the band;
+  // Sound - its sound's level; Frame - the crop, how it meets the frame, the PiP. The rows in each as they were.
+  const main = isMainVideo(track);
+  const pic = _group(host, 'picture', 'Picture');
   // Reverse rides beside the speed slider rather than taking a row of its own: the two are
   // one question about how the clip runs, and a row apiece spent a fifth of the panel saying
   // it twice.
-  host.appendChild(C.row('Speed', C.pair(
+  pic.appendChild(C.row('Speed', C.pair(
     C.slider({
       min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
       onChange: (v) => set('speed', v),
     }),
-    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards'),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards', 'rotate-ccw'),
   )));
+  _opacityRow(pic, [{ track, clip: c }]);
+  if (!main) _blendRow(pic, [{ track, clip: c }]);
+  // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
+  if (!main || c.halfer) _halferRows(pic, c, set);
 
+  const snd = _group(host, 'sound', 'Sound');
   if (pair) {
     // THE LEVEL LIVES ON THE OTHER HALF. A video clip's own volume is read by nothing - the
     // graph mixes audio lanes - so a slider writing it here would be a dial connected to
@@ -409,40 +486,30 @@ function _blankFilm(host, track, c, set, pair) {
     const vol = C.volume(pair.clip.volume == null ? 1 : +pair.clip.volume,
       (v) => setB(pair.track.id, pair.clip.id, 'volume', v));
     vol.title = 'This clip\u2019s own sound, on ' + pair.track.name;
-    host.appendChild(C.row('Sound', vol));
+    snd.appendChild(C.row('Volume', vol));
   } else {
-    host.appendChild(C.hint('No sound attached to this clip.'));
-  }
-  _opacityRow(host, [{ track, clip: c }]);
-  if (!isMainVideo(track)) _blendRow(host, [{ track, clip: c }]);
-
-  // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
-  const main = isMainVideo(track);
-  if (!main || c.halfer) {
-    _bsep(host);
-    _halferRows(host, c, set);
+    snd.appendChild(C.hint('No sound attached to this clip.'));
   }
 
   if (!c.halfer) {
-    _bsep(host);
+    const fr = _group(host, 'frame', 'Frame');
     // (phase V51, point 1) The crop first: while it is on, the piece is the picture - no Fit / Fill, Framing or Keep.
-    const cropped = cropRows(host, [{ track, clip: c }]);
-    _bsep(host);
+    const cropped = cropRows(fr, [{ track, clip: c }]);
+    _bsep(fr);
     // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
     // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
-    if (main) { if (!cropped) { _frameRows(host, c, set); _bsep(host); } _pipSection(host, [{ track, clip: c }]); }
-    else if (cropped) _cutRows(host, track, c);
-    else if (_isPlaced(c)) _pipRows(host, track, c);
-    else _frameRows(host, c, set);
+    if (main) { if (!cropped) { _frameRows(fr, c, set); _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
+    else if (cropped) _cutRows(fr, track, c);
+    else if (_isPlaced(c)) _pipRows(fr, track, c);
+    else _frameRows(fr, c, set);
   }
 
-  _bsep(host);
-  host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
+  _removeRow(host, C.button('Remove from timeline', () => removeB(track.id, c.id), {
     danger: true,
     title: pair ? 'Takes the clip off the timeline, and its sound with it. The library keeps the file.'
                 : 'Takes the clip off the timeline. The library keeps the file.',
-  })));
+  }));
 }
 
 // A picture: one frame and a length the timeline gave it. No speed, no reverse, no level -
@@ -450,8 +517,15 @@ function _blankFilm(host, track, c, set, pair) {
 // Laid out like the other workflow's still panel, because it answers the same question
 // first: which picture is this.
 function _blankStill(host, track, c, set) {
-  const top = _el('div', 'mv3-c-still-top');
-  const left = _el('div', 'mv3-c-still-left');
+  // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture · Frame, the picture itself small at the top
+  // of Picture, Remove at the bottom - no columns of its own any more.
+  // (phase V49) On main video a picture is framed as ever and may be a PiP; it has no Halfer.
+  const main = isMainVideo(track);
+  const placed = _isPlaced(c) && !main;
+  // (phase V51) A cropped picture: the piece is the picture - its settings are the crop's.
+  const cropped = !c.halfer && !!cropActive(c);
+
+  const pic = _group(host, 'picture', 'Picture');
   const fig = _el('div', 'mv3-c-still');
   if (c.thumb || c.src) {
     const img = document.createElement('img');
@@ -459,72 +533,31 @@ function _blankStill(host, track, c, set) {
     img.alt = c.name || '';
     fig.appendChild(img);
   }
-  left.appendChild(fig);
-  top.appendChild(left);
+  pic.appendChild(fig);
+  _opacityRow(pic, [{ track, clip: c }]);
+  if (!main) _blendRow(pic, [{ track, clip: c }]);
+  if (!main || c.halfer) _halferRows(pic, c, set);
 
-  // EVERYTHING ELSE BESIDE THE PICTURE, in one column. Half the panel is not wide enough for
-  // two settings side by side once the labels are on them, and stacked under the picture they
-  // fell off the fold on any portrait still.
-  const side = _el('div', 'mv3-c-still-side');
-  const stack = _el('div', 'mv3-c-still-stack');
-  const cell = (label, control) => {
-    const box = _el('div', 'mv3-ins-fx3-cell');
-    if (label) box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
-    if (control) { control.title = control.title || label; box.appendChild(control); }
-    stack.appendChild(box);
-  };
-  // (phase V49) On main video a picture is framed as ever and may be a PiP (below); it has no Halfer.
-  const main = isMainVideo(track);
-  const placed = _isPlaced(c) && !main;
-  // (phase V51) A cropped picture: the piece is the picture - its settings are the crop's, below.
-  const cropped = !c.halfer && !!cropActive(c);
-
-  if (c.halfer) {
-    // A band takes none of these: its settings are the section under the picture. No placement or framing on a band.
-    stack.appendChild(C.hint('A halfer band - its settings are below.'));
-  } else if (cropped) {
-    stack.appendChild(C.hint('Cropped - its frame is below.'));
-  } else if (placed) {
-    cell('soft edge', C.slider({
-      min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
-      fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
-      onChange: (v) => set('feather', v),
-    }));
-    cell('', C.button('Full frame', () => setManyB(track.id, c.id, {
-      tx: null, ty: null, tw: null, angle: null, feather: null,
-    }), { title: 'Drop the placement and cover the whole frame again' }));
-  } else {
-    cell('frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v)));
-    if (c.fit === 'fill') {
-      cell('keep', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v)));
+  // A band takes none of these: no crop, placement or framing on a band.
+  if (!c.halfer) {
+    const fr = _group(host, 'frame', 'Frame');
+    cropRows(fr, [{ track, clip: c }]);
+    if (cropped) {
+      if (!main) { _bsep(fr); _cutRows(fr, track, c); }
+    } else if (placed) {
+      _bsep(fr);
+      _pipRows(fr, track, c);
+    } else {
+      _bsep(fr);
+      fr.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
+      if (c.fit === 'fill') fr.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
     }
+    if (main) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
   }
 
-  cell('opacity', _opacitySlider([{ track, clip: c }]));
-  if (!main) cell('blend', _blendButton([{ track, clip: c }]));
-  cell('', C.button('Remove', () => removeB(track.id, c.id), {
+  _removeRow(host, C.button('Remove', () => removeB(track.id, c.id), {
     danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
   }));
-
-  side.appendChild(stack);
-  top.appendChild(side);
-  host.appendChild(top);
-
-  if (!c.halfer) {
-    _bsep(host);
-    cropRows(host, [{ track, clip: c }]);
-  }
-  if (main && !c.halfer) {
-    _bsep(host);
-    _pipSection(host, [{ track, clip: c }]);
-  } else if (cropped) {
-    _bsep(host);
-    _cutRows(host, track, c);
-  }
-  if (!main || c.halfer) {
-    _bsep(host);
-    _halferRows(host, c, set);
-  }
 }
 
 // A fade's length: seconds, the 15 ms of a seam (cut silence) in milliseconds, none "off".
@@ -589,9 +622,10 @@ function _shifted(vol, db) {
 // The strip's rows for the sound of several: the shift of the level (live while it is held, one step when let go, back to 0),
 // Fade in and Fade out (one value for all, "mixed" while they differ). No Speed: lengths would change without moving the
 // neighbours - overlaps and holes. `alone` - every clip picked is a sound, so the rows need no "for N".
-function _soundSection(host, sounds, alone) {
-  host.appendChild(_el('div', 'mv3-ins-sub', alone ? 'Sound'
-    : 'Sound · for ' + sounds.length + (sounds.length === 1 ? ' sound clip' : ' sound clips')));
+function _soundSection(box, sounds, alone) {
+  // (phase V73 block 5, 5b) its title is its group's
+  const host = _group(box, 'sound', alone ? 'Sound'
+    : 'Sound · for ' + sounds.length + (sounds.length === 1 ? ' sound clip' : ' sound clips'));
   const base = sounds.map(s => ({ s, v: s.clip.volume == null ? 1 : +s.clip.volume }));
   const levelsAt = (db) => base.map(({ s, v }) => ({ trackId: s.track.id, clipId: s.clip.id, volume: _shifted(v, db) }));
   const vol = C.slider({
@@ -633,42 +667,42 @@ function _blankSound(host, track, c, set, pair) {
   // (phase V66.1) The music the app laid on a highlights fragment: its track and the choice of another on top.
   const ex = Views.laneExtraFor(track, c);
   if (ex) ex.render(host, track, c);
-  host.appendChild(C.row('Volume', C.volume(c.volume == null ? 1 : +c.volume,
+  // (phase V73 block 5, 5b, (б5-8) а) ONE GROUP, Sound.
+  const g = _group(host, 'sound', 'Sound');
+  g.appendChild(C.row('Volume', C.volume(c.volume == null ? 1 : +c.volume,
     (v) => set('volume', v))));
-  host.appendChild(C.hint((+c.volume || 0) > 0
+  g.appendChild(C.hint((+c.volume || 0) > 0
     ? 'Muted is the bottom of the travel.'
     : 'Silent. Raise it to hear this clip in the preview and in the export.'));
 
   // (phase V23) Its own fades - the two variants of a Suno track cross into each other over three seconds. (phase V54, (зв11) а)
   // Written since V54: they were not on the timeline's list of fields, and nothing was.
-  host.appendChild(C.row('Fade in', C.slider({
+  g.appendChild(C.row('Fade in', C.slider({
     min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeIn || 0), fmt: _fadeLbl, onChange: (v) => set('fadeIn', v),
   })));
-  host.appendChild(C.row('Fade out', C.slider({
+  g.appendChild(C.row('Fade out', C.slider({
     min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeOut || 0), fmt: _fadeLbl, onChange: (v) => set('fadeOut', v),
   })));
 
-  host.appendChild(C.row('Speed', C.pair(
+  g.appendChild(C.row('Speed', C.pair(
     C.slider({
       min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
       onChange: (v) => set('speed', v),
     }),
-    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards'),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards', 'rotate-ccw'),
   )));
 
-  _bsep(host);
   if (pair) {
-    host.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
+    g.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
       + 'picture on ' + pair.track.name + '. The level is not.'));
   }
-  if (_isLine(c)) host.appendChild(C.hint(LINE_HINT));
+  if (_isLine(c)) g.appendChild(C.hint(LINE_HINT));
 
-  _bsep(host);
-  host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
+  _removeRow(host, C.button('Remove from timeline', () => removeB(track.id, c.id), {
     danger: true,
     title: pair ? 'The picture stays where it is, and goes silent.'
                 : 'Takes the sound off the timeline. The library keeps the file.',
-  })));
+  }));
 }
 
 // ── A whole lane in a blank project ─────────────────────────────────────────
@@ -694,7 +728,7 @@ function _laneRemove(host, track) {
         : (track.kind === 'audio' ? 'Any picture paired with it stays, and goes silent.' : ''),
       () => removeTrackB(track.id));
   });
-  host.appendChild(C.row('', btn));
+  _removeRow(host, btn);
 }
 
 // WHAT THE WHOLE LANE IS SET TO, which is only answerable when its clips agree. Rather than
@@ -716,16 +750,18 @@ function _blankVideoTrack(host, track) {
     host.appendChild(emptyEl('Nothing on this lane yet. A setting for the whole lane is written '
       + 'into the clips on it, so there is nothing here to write it into.', { line: true }));
   } else {
-    host.appendChild(C.row('Frame', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
+    // (phase V73 block 5, 5b, (б5-8) а) The lane's rows - its one group.
+    const g = _group(host, 'lane', 'Frame');
+    g.appendChild(C.row('Frame', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
       (v) => stampB(track.id, { fit: v }))));
     if (_commonOf(track, 'fit') === 'fill') {
-      host.appendChild(C.row('Keep', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
+      g.appendChild(C.row('Keep', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
         (v) => stampB(track.id, { cropAlign: v }))));
     }
     // THE WARNING IS GONE FROM THE PANEL, and the behaviour is not: choosing one of these
     // still writes it into every clip on the lane, over whatever each had. It lives in the
     // tooltip of the control that does it, and the undo arrow is still the way back.
-    host.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
+    g.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
       title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
            + 'placement and levels are left alone.',
     })));
@@ -733,11 +769,9 @@ function _blankVideoTrack(host, track) {
   // (phase V74, the owner's (\u043f\u04421)-(\u043f\u04429)) MAIN VIDEO'S PATTERNS - the set with ticks, the layers ticked with their settings
   // (patterns-ui.js): over the whole of main video and every lane above it, under the words; each change one undo step.
   if (isMainVideo(track)) {
-    host.appendChild(_el('div', 'mv3-c-sep'));
     renderPatterns(host, { list: () => patternsB(), write: (next) => setPatternsB(next), repaint: () => render(), empty: !clips });
   }
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _laneRemove(host, track);
 }
 
@@ -748,9 +782,9 @@ function _blankAudioTrack(host, track) {
   // THE MUSIC PANEL, on this lane: the lane's master volume and the generator (js/merge-v3/music.js). The tracks
   // themselves are in the Library panel, Audio -> Music, dragged onto a lane from there (phase V28.4).
   M.setMusicDest(track.id);
-  M.renderMusicTrack(host, track);
+  // (phase V73 block 5, 5b) its rows - one group, Sound
+  M.renderMusicTrack(_group(host, 'lane', 'Sound'), track);
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _laneRemove(host, track);
 }
 
@@ -840,12 +874,16 @@ function _blankWordsTrack(host, track) {
     if (s) setSubsStyleB(track.id, isSubs ? Object.assign(keepMotion(s, raw), mix ? { mix: [] } : {}) : s, isSubs);
   };
   const pagesNow = (track.clips || []).filter(isHeard).length;
-  _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : '')
+  // (phase V73 block 5, 5b) the lane's name in the strip's head, what it holds under it
+  _capHead(host, _cap1(track.name || (isSubs ? 'Subtitles' : 'Text')), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : '')
     + (mix ? ' · ' + mix.length + ' presets' : ''));
   // Saved as the lane's style is stored - an automatic size stays automatic. Several presets are no one look (пр23): no saving.
   if (mix) _mixLine(host, mix);
   else _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw, isSubs ? '' : 'text');
 
+  // (phase V73 block 5, 5b, (б5-8) а) FOUR GROUPS: Text - where the lines come from and how they are cut; Look; Motion - In and
+  // Out; Place - where and how big. The rows in each as they were.
+  const tx = _group(host, 'text', 'Text');
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
   if (isSubs) {
@@ -872,8 +910,8 @@ function _blankWordsTrack(host, track) {
     }
     // The ways a line gets onto this lane - heard, typed, heard again - in ONE row (phase S2, the owner
     // 2026-10-05; a labelled row held only two).
-    host.appendChild(C.acts([gen, add, back]));
-    if (fixed) host.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with "back to what was heard".', true));
+    tx.appendChild(C.acts([gen, add, back]));
+    if (fixed) tx.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with "back to what was heard".', true));
     // No Language row (phase V29, the owner 2026-10-14): the listener detects the language by itself.
     const how = listenOf(track) || {};
     // WHO LISTENS (phase K1b): Groq, or this computer - which is also where a run goes by itself when Groq
@@ -885,32 +923,31 @@ function _blankWordsTrack(host, track) {
     const engine = how.engine === 'local' ? 'local' : 'cloud';
     const on = C.select(ENGINES, engine, (val) => setListenB(track.id, { engine: val }));
     on.disabled = !can && engine !== 'local';
-    host.appendChild(C.row('Listen on', on));
+    tx.appendChild(C.row('Listen on', on));
     if (L && !can) {
-      host.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - '
+      tx.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - '
         + (engine === 'local' ? 'switch Listen on to cloud (Groq).' : 'Groq only.')));
     } else if (engine === 'local' && L && !L.model.present) {
-      host.appendChild(C.hint('The first time downloads the speech model (' + Math.round(L.model.bytes / 1e6)
+      tx.appendChild(C.hint('The first time downloads the speech model (' + Math.round(L.model.bytes / 1e6)
         + ' MB) into the library\'s cache - after that it needs no internet.'));
     }
     // The line is marked, so a percent that moves rewrites it in place instead of rebuilding the strip.
     const ln = C.hint(v.line || '');
     ln.dataset.listenLine = '1';
     ln.hidden = !v.line;
-    host.appendChild(ln);
+    tx.appendChild(ln);
     _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, again: v.again, heard: v.heard, local: L };
     // A run that fell over here with no model asks once (the owner, K1b answer 4).
     if (v.ask && L) {
-      host.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
+      tx.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
         + ' MB) and listen on this computer', () => Listen.start({ download: true }))));
     }
   } else {
-    host.appendChild(C.acts([add]));
-    host.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
+    tx.appendChild(C.acts([add]));
+    tx.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
       + 'and never touches this one.', true));
   }
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
   // AT ONCE, not at the next transcription. The words and their timings are on the lane
   // already, so a new page length is a re-cut of what is here - and a slider that only took
   // effect the next time you paid to listen would be a slider you could not judge. The rules
@@ -925,20 +962,19 @@ function _blankWordsTrack(host, track) {
     // HOW THE LANE IS CUT (phase V30, block 4, (с12), (с42)): a few words a page, or classic subtitles - a sentence or a
     // part of one in two lines of up to 42 characters. Changing it cuts the heard words again in the same step.
     const sent = raw.cut === 'sentences';
-    host.appendChild(C.row('Cut', C.pair(C.select(CUT_OPTS, sent ? 'sentences' : 'pages', (v) => set({ cut: v })), sent ? recut : null)));
+    tx.appendChild(C.row('Cut', C.pair(C.select(CUT_OPTS, sent ? 'sentences' : 'pages', (v) => set({ cut: v })), sent ? recut : null)));
     const pages = (track.clips || []).filter(c => Array.isArray(c.words) && c.words.length).length;
     const counted = heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
       + '; changing this cuts them again straight away, lines you typed stay as they are.';
     if (sent) {
-      // One rule, no Words or Lines (с42); In and Out under Cut (V49, (пр17)); Rows under them (V71).
-      _pageMotionRows(host, st, set, anims);
-      _rowsRow(host, raw, set);
-      host.appendChild(C.hint(heard
+      // One rule, no Words or Lines (с42); Rows under Cut (V71); In and Out in the group Motion (V73 block 5).
+      _rowsRow(tx, raw, set);
+      tx.appendChild(C.hint(heard
         ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
           + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
         : 'Classic subtitles, a sentence at a time. Nothing has been transcribed yet, so this waits for the first Generate.'));
     } else {
-      host.appendChild(C.row('Words', C.pair(C.slider({
+      tx.appendChild(C.row('Words', C.pair(C.slider({
         min: 0, max: 12, step: 1, value: +raw.wordsPerLine || 0,
         fmt: (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine(fmt) + ')'),
         onChange: (v) => set({ wordsPerLine: v }),
@@ -946,37 +982,33 @@ function _blankWordsTrack(host, track) {
       // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
       const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
       const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
-      host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
-      // In and Out right under Lines; the hint that stood here went (V49, the owner's (пр17)). Rows under them (V71).
-      _pageMotionRows(host, st, set, anims);
-      _rowsRow(host, raw, set);
+      tx.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
+      // Rows under Lines (V71); In and Out in the group Motion (V73 block 5).
+      _rowsRow(tx, raw, set);
     }
   }
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
-  // A subtitle lane's In and Out are above, under Lines.
   const marks = (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k));
-  const rowsO = { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, motion: false, marks,
+  const rowsO = { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks,
     pages: () => (track.clips || []).map(c => ({ track, clip: c })), laneFonts: fontsOf(raw) };
+  const lk = _group(host, 'look', 'Look');
   // (V68 P4) The fonts chosen in the fonts tab, said with a ✕ that takes them all away - the preset's own font again.
-  if (fontsOf(raw)) _fontsRow(host, track, raw);
-  if (mix) {
-    // Several presets (пр22): the common rows - Where, Nudge, Size - and a section per preset, closed until opened.
-    _placeRows(host, st, set, rowsO);
-    host.appendChild(_el('div', 'mv3-c-sep'));
-    _mixSections(host, track, raw, mix, fmt, marks);
-  } else _styleRows(host, st, set, rowsO);
+  if (fontsOf(raw)) _fontsRow(lk, track, raw);
+  // Several presets (пр22): a section per preset, closed until opened; the common rows - Where, Nudge, Size - are Place's.
+  if (mix) _mixSections(lk, track, raw, mix, fmt, marks);
+  else _lookRows(lk, st, set, rowsO);
+  // A subtitle lane's In and Out - with several animations dealt, "mixed" where they differ (V49).
+  _motionRows(_group(host, 'motion', 'Motion'), st, set, rowsO, anims);
+  _placeRows(_group(host, 'place', 'Place'), st, set, rowsO);
 
   // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2). What a mix dealt them is no
   // style of their own, and stays (V49).
   const own = (track.clips || []).filter(c => c && withoutRefs(c.style));
   if (own.length) {
-    host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(C.row('', C.button(own.length + (own.length === 1 ? ' line has its' : ' lines have their') + ' own style - reset',
+    _actRow(host, C.button(own.length + (own.length === 1 ? ' line has its' : ' lines have their') + ' own style - reset',
       () => setCapStyleB(own.map(c => c.id), (c) => refsOf(c.style), { replace: true, cut: isSubs }),
-      { title: 'Puts those lines back on the lane\'s style' })));
+      { title: 'Puts those lines back on the lane\'s style' }));
   }
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _presetsHint(host);
   _laneRemove(host, track);
   // A press on an animation's tile: the pair on the lane - one pair again; with Shift on the subtitle lane, one more dealt (_shiftAnim).
@@ -1001,7 +1033,9 @@ function _fontsRow(host, track, raw) {
   const said = _el('span', 'mv3-c-fonts', names.join(', '));
   said.title = list.length > 1 ? 'Each page one of them, two in a row never the same - the fonts tab; each page as wide as in the preset\'s font'
     : 'Every page in it - the fonts tab; each page as wide as in the preset\'s font';
-  const x = C.button('✕', () => _laneFonts(track, raw, []), { title: 'Takes the fonts away - the preset\'s own font again' });
+  const x = C.button('', () => _laneFonts(track, raw, []), { title: 'Takes the fonts away - the preset\'s own font again' });
+  x.classList.add('is-icon', 'is-quiet', 'is-del', 'u-x');   // (phase V73 block 5, 5b) the one ✕
+  x.setAttribute('aria-label', 'Take the fonts away');
   x.disabled = !Store.canEdit();
   host.appendChild(C.row(list.length > 1 ? list.length + ' fonts' : 'Font tab', C.pair(said, x)));
 }
@@ -1078,9 +1112,11 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     const head = _el('button', 'mv3-cap-sec' + (open ? ' is-open' : ''));
     head.type = 'button';
     head.title = open ? 'Fold it' : 'The look of these pages - font, colours, the spoken word, outline, shadow, box';
-    head.appendChild(_el('span', 'mv3-cap-sec-c', open ? '▾' : '▸'));
+    const c = _el('span', 'mv3-cap-sec-c');
+    c.appendChild(iconEl(open ? 'chevron-down' : 'chevron-right', 14));   // (phase V73 block 5, 5b) Lucide's, not ▾ ▸
+    head.appendChild(c);
     head.appendChild(_el('span', 'mv3-cap-sec-n', presetName(e.preset) || 'a look'));
-    head.appendChild(_el('span', 'mv3-cap-sec-k', n + (n === 1 ? ' page' : ' pages') + (edited ? ' · edited' : '')));
+    head.appendChild(setFigures(_el('span', 'mv3-cap-sec-k'), n + (n === 1 ? ' page' : ' pages') + (edited ? ' · edited' : '')));
     head.addEventListener('click', () => { if (_openSec.has(key)) _openSec.delete(key); else _openSec.add(key); render(); });
     host.appendChild(head);
     if (!open) return;
@@ -1106,11 +1142,10 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
 
 // ── The settings of words, shared by a lane, one caption and several (K6) ────
 // The head: what the settings below apply to - the owner's addition: a lane, this line, or several.
+// (phase V73 block 5, 5b) The title goes into the strip's head; what it applies to stays at the top of the strip, its figures in mono.
 function _capHead(host, title, sub) {
-  const h = _el('div', 'mv3-cap-head');
-  h.appendChild(_el('span', 'mv3-cap-what', title));
-  if (sub) h.appendChild(_el('span', 'mv3-cap-sub', sub));
-  host.appendChild(h);
+  _title = title;
+  if (sub) host.appendChild(setFigures(_el('div', 'mv3-cap-sub'), sub));
 }
 
 // "based on Red Pop · edited" and the way back to it - a style made from a preset says which. Where ONE look is shown (a
@@ -1159,9 +1194,11 @@ function _presetsHint(host) {
 // size is still the format's (a caption has no "auto" of its own); `textLane` - a text lane's: no spoken word there.
 // Two halves since V49: where and how big (_placeRows) - common to every page of a lane with several presets - and the look
 // (_lookRows), which each of them has its own of.
+// (phase V73 block 5, 5b, (б5-8) а) In groups since V73: Look · Motion · Place - after a line's own Text.
 function _styleRows(host, st, set, o) {
-  _placeRows(host, st, set, o);
-  _lookRows(host, st, set, o);
+  _lookRows(_group(host, 'look', 'Look'), st, set, o);
+  _motionRows(_group(host, 'motion', 'Motion'), st, set, o);
+  _placeRows(_group(host, 'place', 'Place'), st, set, o);
 }
 
 function _placeRows(host, st, set, o) {
@@ -1197,15 +1234,14 @@ function _placeRows(host, st, set, o) {
 }
 
 function _lookRows(host, st, set, o) {
-  host.appendChild(_el('div', 'mv3-c-sep'));
   // Bold is a choice only where the family ships both weights; a Black or a Bold file is what it is.
   // (V68 P4) Under the fonts of the fonts tab the row shows the preset's own font (the one a page keeps the width of); a font
   // chosen here is the lane's one font again - the tab's go.
   const dealt = !!o.laneFonts;
   const fontSel = C.select(FONTS, dealt ? (st.fitTo || st.font) : st.font, (v) => set(dealt ? { font: v, fonts: [] } : { font: v }));
   const marks = [];
-  if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'));
-  marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), 'Italic'));
+  if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold', 'bold'));
+  marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), 'Italic', 'italic'));
   const markBox = _el('span', 'mv3-c-marks');
   for (const m of marks) markBox.appendChild(m);
   host.appendChild(C.row('Font', C.pair(fontSel, markBox)));
@@ -1232,24 +1268,6 @@ function _lookRows(host, st, set, o) {
   // A typed line of the subtitle lane plays the spoken word by its letters (phase V30, block 1); a text lane holds titles.
   if (o.textLane && st.effect !== 'none') {
     host.appendChild(C.hint('A text lane has no spoken word - it plays on the Subtitles lane.'));
-  }
-  if (o.textLane) {
-    // IN AND OUT (V42, (о15), (ц4)): each with its length - on a lane for all its lines, on a line for itself.
-    const enter = st.enter && st.enter !== 'none' ? st.enter : (APPEAR_AS[st.appear] || 'none');
-    host.appendChild(C.row('In', C.select(ENTER_OPTS, enter, (v) => set({ enter: v, appear: 'none' }))));
-    if (enter !== 'none') {
-      host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.enterDur || 0.5, fmt: _secs,
-        onChange: (v) => set({ enterDur: v }) })));
-    }
-    const leave = st.leave || 'none';
-    host.appendChild(C.row('Out', C.select(LEAVE_OPTS, leave, (v) => set({ leave: v }))));
-    if (leave !== 'none') {
-      host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
-        onChange: (v) => set({ leaveDur: v }) })));
-    }
-  } else if (o.motion !== false) {
-    // One line's, or several lines': where "Arrives" was (V49, (пр17)).
-    _pageMotionRows(host, st, set);
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
@@ -1291,6 +1309,24 @@ function _lookRows(host, st, set, o) {
     C.slider({ min: 0, max: 10, step: 0.5, value: +st.glow || 0, fmt: (v) => (v > 0 ? String(v) : 'none'), onChange: (v) => set({ glow: v }) }),
     C.color(st.glowColor || st.primary, (v) => set({ glowColor: v })),
   )));
+}
+
+// IN AND OUT (phase V73 block 5, 5b: the group Motion): a text lane's or line's entrance and exit, each with its length (V42, (о15),
+// (ц4)) - on a lane for all its lines, on a line for itself; a subtitle page's In and Out (V49) - `anims`, a lane's dealt pairs.
+function _motionRows(host, st, set, o, anims) {
+  if (!o.textLane) { _pageMotionRows(host, st, set, anims); return; }
+  const enter = st.enter && st.enter !== 'none' ? st.enter : (APPEAR_AS[st.appear] || 'none');
+  host.appendChild(C.row('In', C.select(ENTER_OPTS, enter, (v) => set({ enter: v, appear: 'none' }))));
+  if (enter !== 'none') {
+    host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.enterDur || 0.5, fmt: _secs,
+      onChange: (v) => set({ enterDur: v }) })));
+  }
+  const leave = st.leave || 'none';
+  host.appendChild(C.row('Out', C.select(LEAVE_OPTS, leave, (v) => set({ leave: v }))));
+  if (leave !== 'none') {
+    host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
+      onChange: (v) => set({ leaveDur: v }) })));
+  }
 }
 
 // A SUBTITLE PAGE'S IN AND OUT (phase V49, (пр16)-(пр18)): the In shown is the one chosen, or the preset's own way of arriving
@@ -1355,6 +1391,7 @@ function _renderCaptions(host, items) {
   const fmt = (tl && tl.format) || '9:16';
   const ids = items.map(x => x.clip.id);
   const lanes = [...new Set(items.map(x => x.track.name || x.track.kind))];
+  _kind = 'lines';
   _capHead(host, items.length + ' lines', 'on ' + lanes.join(' and '));
   const first = items[0];
   // "based on" only when EVERY picked line wears the same preset - one line's preset put on the others by
@@ -1374,18 +1411,15 @@ function _renderCaptions(host, items) {
   const st = styleOf(first.track, fmt, first.clip);
   const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
   const setBehind = (v) => setCapStyleB(ids, (c, t) => _behind(v, styleOf(t, fmt, c)), { cut: true });
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
     pages: () => items });
   if (items.some(x => x.clip.style)) {
-    host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
-      { title: 'These lines wear their lane\'s style again' })));
+    _actRow(host, C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
+      { title: 'These lines wear their lane\'s style again' }));
   }
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _presetsHint(host);
-  host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
-    { danger: true, title: 'Also on the Delete key' })));
+  _removeRow(host, C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
+    { danger: true, title: 'Also on the Delete key' }));
   // The pair they all wear is lit (V49); a press puts one on each.
   const pairs = new Set(items.map(x => pairNow(styleOf(x.track, fmt, x.clip))));
   return { preset: common, edited: anyEdited, apply: wear, readOnly: !Store.canEdit(),
@@ -1405,7 +1439,8 @@ function _blankCaption(host, track, clip) {
   const own = !!withoutRefs(clip.style);
   const drawn = styleOf(track, fmt, clip);
   const dealt = track.kind === 'subs' && !!mixOf(track.style) && !own && drawn.preset ? presetName(drawn.preset) : '';
-  _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : dealt ? ' · ' + dealt : ''));
+  // (phase V73 block 5, 5b) "Line · Subtitles" in the strip's head
+  _capHead(host, 'Line · ' + _cap1(track.name || track.kind), own ? 'its own style' : dealt);
   // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
   // A text preset keeps where the line is now (V42, (ц3)).
   const wear = (id, cut) => {
@@ -1415,6 +1450,8 @@ function _blankCaption(host, track, clip) {
   _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true),
     undefined, () => resolveStyle(track.style, clip.style), track.kind === 'text' ? 'text' : '');
   const heardLine = isHeard(clip);
+  // (phase V73 block 5, 5b, (б5-8) а) its words - the group Text; then Look · Motion · Place
+  const tx = _group(host, 'text', 'Text');
   const area = C.textarea(clip.name || '', (v) => {
     // NEVER THE OLD TEXT OVER A NEWER ONE (review K10): the box writes the WHOLE text, and the line may have
     // changed after the box was painted - a word corrected just before the box was clicked, a lay. Then what
@@ -1456,29 +1493,28 @@ function _blankCaption(host, track, clip) {
       }
     }
   });
-  host.appendChild(area);
-  host.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
+  tx.appendChild(area);
+  tx.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
     + 'stays up.'));
 
   if (heardLine) {
     // A HEARD LINE KEEPS ITS TIMING WHEN IT IS REWRITTEN (K10): the words that stay keep their moments, new
     // ones share the time of what they replace (words.js) - and each word can be changed by itself (K10b).
-    host.appendChild(_el('div', 'mv3-c-sep'));
     const fixed = correctedCount(clip);
-    host.appendChild(_fact('Timed', clip.words.length + ' words' + (fixed ? ' · ' + fixed + ' corrected' : '')));
+    tx.appendChild(_fact('Timed', clip.words.length + ' words' + (fixed ? ' · ' + fixed + ' corrected' : '')));
     if (spells(clip.words, clip.name)) {
-      WordEdit.paint(host, track, clip, { mark: markedColour(styleOf(track, fmt, clip)) });
+      WordEdit.paint(tx, track, clip, { mark: markedColour(styleOf(track, fmt, clip)) });
       // Corrections can make a line more than a page of its lane holds; a correction never cuts by itself.
       const over = isCorrected(clip) ? overPage(clip, track.style, fmt) : null;
       if (over) {
-        host.appendChild(C.hint('Longer than a page of this lane: ' + over + '.'));
-        host.appendChild(C.row('', C.button('re-cut this line', () => recutLinesB(track.id, [clip.id]),
+        tx.appendChild(C.hint('Longer than a page of this lane: ' + over + '.'));
+        tx.appendChild(C.row('', C.button('re-cut this line', () => recutLinesB(track.id, [clip.id]),
           { title: 'Cuts this line into pages by the lane\'s rules, keeping its words and corrections' })));
       }
     } else {
       // Rewritten before K10: its words still say what was heard, and it is drawn as one piece until timed.
-      host.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
-      host.appendChild(C.row('', C.button('time the text', () => {
+      tx.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
+      tx.appendChild(C.row('', C.button('time the text', () => {
         const r = setCapTextB(track.id, clip.id, clip.name || '');
         if (r && r.why) note(area, 'Not timed.', r.why);
       }, { title: 'Gives the words of the text the moments of the words heard there' })));
@@ -1492,21 +1528,18 @@ function _blankCaption(host, track, clip) {
   }
 
   // ITS OWN LOOK (the owner's addition, 2026-10-03): what is changed here is this line's, over its lane's.
-  host.appendChild(_el('div', 'mv3-c-sep'));
   const heard = isHeard(clip);
   _styleRows(host, styleOf(track, fmt, clip), (patch) => setCapStyleB([clip.id], patch, { cut: heard && _cuts(patch) }),
     { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
       pages: () => [{ track, clip }] });
   if (own) {
-    host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
-      { title: 'This line wears its lane\'s style again' })));
+    _actRow(host, C.button('back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
+      { title: 'This line wears its lane\'s style again' }));
   }
-  host.appendChild(_el('div', 'mv3-c-sep'));
   _presetsHint(host);
-  host.appendChild(C.row('', C.button('Remove this line', () => removeB(track.id, clip.id), {
+  _removeRow(host, C.button('Remove this line', () => removeB(track.id, clip.id), {
     danger: true, title: 'Takes the caption off the lane',
-  })));
+  }));
   // ITS tiles lit (V49, (пр17)): the preset it is drawn with - its own, the one its lane's mix dealt it, or its lane's.
   const s = own ? clip.style : null;
   return { preset: s ? (s.preset || '') : (drawn.preset || ''), edited: !!(s && s.preset) && editedKeys(withoutRefs(s)).length > 0,
@@ -1522,23 +1555,27 @@ function _ownFonts(clips) {
   return f.size === 1 && !f.has('') ? [...f] : [];
 }
 
-// NO HEADER, and no description of the lane under it. Which lane is open is visible on the
-// timeline - it is the one marked - and what is on it is the lane itself, drawn full width two
-// inches away. A panel that restates the thing you just clicked spends the one column that is
-// short of room on what you already know.
+// NO DESCRIPTION of the lane under its name: what is on it is the lane itself, drawn full width two inches away. (Since phase
+// V73 block 5 the strip has a head - the lane's name and a ✕, the owner's (к24-4).)
 function _renderBlankTrack(host, track) {
+  // (phase V73 block 5, 5b) Its name in the strip's head ("Main video"); its folded groups kept per kind of lane.
+  _kind = 'lane-' + track.kind + (track.main ? '-main' : '');
+  _title = _cap1(track.name || track.kind);
   if (track.kind === 'video') return _blankVideoTrack(host, track);
   if (track.kind === 'audio') return _blankAudioTrack(host, track);
   if (track.kind === 'subs' || track.kind === 'text') return _blankWordsTrack(host, track);
 }
 
-// NO HEADER HERE EITHER. Which clip is selected is visible on the timeline, it is outlined on
-// the preview, and its name is on the clip itself - three places already saying it, none of
-// which cost a row of the panel.
+// Which clip is selected is visible on the timeline and outlined on the preview; since phase V73 block 5 the strip's head says it
+// too - "Clip · <name>" - with the ✕ that lets it go (the owner's (к24-4)).
 function _renderBlankClip(host, { track, clip }) {
   const set = (k, v) => setB(track.id, clip.id, k, v);
   const still = isStill(clip);
   const pair = mateB(clip.id);
+  // (phase V73 block 5, 5b, (к24-4)) What it is and its name in the strip's head; its folded groups kept per kind of clip.
+  const words = track.kind === 'subs' || track.kind === 'text';
+  _kind = words ? 'line' : track.kind === 'audio' ? 'sound' : still ? 'picture' : 'clip';
+  _title = (track.kind === 'audio' ? 'Sound' : still ? 'Picture' : 'Clip') + ' · ' + (clip.name || 'untitled');
 
   // (phase V28.4) Its file was deleted from the library: said first, with the way to be rid of it - and the way to
   // replace it, which is a tile from the Library let go on the clip.
@@ -1559,40 +1596,36 @@ function _renderBlankClip(host, { track, clip }) {
 }
 
 function _renderMany(host, n) {
-  const h = document.createElement('div');
-  h.className = 'mv3-ins-title';
-  h.textContent = n + ' clips selected';
-  host.appendChild(h);
+  // (phase V73 block 5, 5b) "5 clips" in the strip's head; their rows in the groups Sound · Picture · Frame
+  _kind = 'many';
+  _title = n + ' clips';
 
   const picked = pickedB();
   // (phase V54, block 3) Their sound - the audio lanes' clips and the sound of the films among them - shifted and faded at once.
   const sounds = _soundsOf(picked);
-  if (sounds.length) {
-    _soundSection(host, sounds, picked.every(x => x.track.kind === 'audio'));
-    _bsep(host);
-  }
+  if (sounds.length) _soundSection(host, sounds, picked.every(x => x.track.kind === 'audio'));
   // (phase V65, (пз5)) The video clips among them - every video lane - seen as much as one another: one slider, one step.
   const videos = picked.filter(x => x.track.kind === 'video');
   if (videos.length) {
-    _opacityRow(host, videos);
-    if (videos.length < n) host.appendChild(C.hint('Opacity is for the ' + videos.length + ' picked clips of the video lanes.'));
+    const pic = _group(host, 'picture', 'Picture');
+    _opacityRow(pic, videos);
+    if (videos.length < n) pic.appendChild(C.hint('Opacity is for the ' + videos.length + ' picked clips of the video lanes.'));
     // (phase V65, (пз10)) The blend mode - for those of lanes above main.
     const above = videos.filter(x => !isMainVideo(x.track));
     if (above.length) {
-      _blendRow(host, above);
-      if (above.length < videos.length) host.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
+      _blendRow(pic, above);
+      if (above.length < videos.length) pic.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
     }
-    _bsep(host);
   }
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
   const mains = picked.filter(x => isMainVideo(x.track));
   if (mains.length) {
-    if (mains.length < n) host.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
+    const fr = _group(host, 'frame', 'Frame');
+    if (mains.length < n) fr.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
     // (phase V51, (пр44)) One crop frame for all of them, the field showing the first.
-    cropRows(host, mains);
-    _bsep(host);
-    _pipSection(host, mains);
-    _bsep(host);
+    cropRows(fr, mains);
+    _bsep(fr);
+    _pipSection(fr, mains);
   } else if (!sounds.length && !videos.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
@@ -1601,8 +1634,8 @@ function _renderMany(host, n) {
     host.appendChild(p);
   }
 
-  host.appendChild(C.row('', C.button('Delete ' + n + ' clips', () => deleteMultiB(),
-    { danger: true, title: 'Also on the Delete key' })));
+  _removeRow(host, C.button('Delete ' + n + ' clips', () => deleteMultiB(),
+    { danger: true, title: 'Also on the Delete key' }));
 }
 
 // THE CAPTIONS VIEW FOLLOWS THE PICK (K6): up while captions are picked and the tiles are open, gone
@@ -1617,6 +1650,7 @@ function render(force) {
   let cap;
   WordEdit.beforeRepaint();
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }
+  _paintHead(_overHost());
   const was = Views.isCaptions();
   // While a band is swept the view stays as it was - it follows the pick when the band is let go.
   const on = gestureB() ? was : (!!cap && !_narrow());
@@ -1648,6 +1682,8 @@ window.addEventListener('resize', () => { if (oneB() || trackB() || multiB() > 1
 function _render() {
   const host = _host();
   const over = _overHost();
+  _title = '';
+  _kind = '';
   if (host) {
     host.textContent = '';
     // A step may lay the panel out itself (js/merge-v3/wk-setup.js); this is where that
@@ -1723,6 +1759,16 @@ export function initInspector() {
   MyPresets.onChange(() => render());
   MyPresets.load();
   Views.onBack('captions', () => { const alt = !!Views.altCaptions(); Views.altRelease(); clearSelB(); if (alt) render(true); });
+  // (phase V73 block 5, 5b, the owner's (к24-4)) THE HEAD'S ✕ does what Escape does - the pick let go; and with nothing picked,
+  // a view's own captions (a highlights project's ticked fragments) let go, as "Library" in the captions view lets them.
+  const x = document.getElementById('mv3-over-x');
+  if (x) {
+    x.addEventListener('click', () => {
+      const alt = !oneB() && !trackB() && multiB() <= 1 && !!Views.altCaptions();
+      clearSelB();
+      if (alt) { Views.altRelease(); render(true); }
+    });
+  }
   // (phase V18.2) The "captions" crumb from another view: the subtitle lane picked - every timeline has one, and it
   // cannot be removed - and the captions view follows the pick as it always has. (phase V33.3) Unless a view offers a
   // target of its own (a highlights project's ticked fragments, lib-views.js captionsAlt): then that, with nothing picked.
