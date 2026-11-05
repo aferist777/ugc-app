@@ -298,6 +298,7 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .u-win-sub{ flex:0 1 auto; min-width:0; color:var(--faint); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .u-win-head > .sp{ flex:1 1 auto }
+  .u-win-head > .u-x:last-child{ margin-left:auto }   /* the ✕ at the right end even with no spacer before it */
   .u-crumbs{ flex:1; min-width:0; display:flex; align-items:center; gap:6px; color:var(--muted); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font);
     white-space:nowrap; overflow:hidden }
   .u-crumbs .is-cur{ color:var(--ink) }

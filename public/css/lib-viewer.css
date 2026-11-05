@@ -20,21 +20,28 @@
   /* (phase V60.1, (пк2а)) Darker than the other windows - one looks at the picture here -, blurred as they are. */
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-.lib-view{
-  display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(860px, 92vh);
+.lib-view{ display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(860px, 92vh) }
+/* (phase V73 block 4, rule 5) The frame, its head of 40 px, the name and the ✕ of 28 px are the shared ones (`.u-win`,
+   `.u-win-head`, `.u-win-title`, css/app-shell.css; js/library/viewer.js puts them on); the count is the head's quiet note,
+   its figures in mono. The 3D Studio's page keeps the viewer it had - its old frame below, scoped to it (the owner: «Не
+   трогать»). */
+:root:has(link[href="css/studio3d.css"]) .lib-view{
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
   box-shadow:var(--shadow); overflow:hidden;
 }
-.lib-view-head{
+:root:has(link[href="css/studio3d.css"]) .lib-view-head{
   display:flex; align-items:center; gap:10px; flex:0 0 auto;
   padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
 }
 .lib-view-head .sp{ flex:1; }
-.lib-view-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
-.lib-view-count{
+:root:has(link[href="css/studio3d.css"]) .lib-view-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
+:root:has(link[href="css/studio3d.css"]) .lib-view-count{
   font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--muted);
   border:1px solid var(--border); border-radius:var(--pill); padding:2px 8px;
 }
+:root:not(:has(link[href="css/studio3d.css"])) .lib-view-count{ flex:0 0 auto; font-family:var(--mono); font-variant-numeric:tabular-nums }
+/* the item's actions: a row of the shared small buttons, an icon and its word (viewer.js fillAct) */
+:root:not(:has(link[href="css/studio3d.css"])) .lib-view-acts{ display:flex; align-items:center; gap:var(--sp-1); flex:0 0 auto }
 
 /* The old shared button. Since phase V73 block 2 the pages wear the shared part (`.u-btn`, css/app-shell.css); this
    stays for the 3D Studio's page, which keeps its whole look ((б1-13а)), and for the window heads' ✕ until block 4. */

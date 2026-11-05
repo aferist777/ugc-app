@@ -14,15 +14,17 @@
 .chm{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
 .chm-col{ display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--surface); }
 .chm-col + .chm-col{ border-left:1px solid var(--border); }
+/* (phase V73 block 4, (б4-10) а) ONE head - the window's; a column is a section: its small title in sentence case with its own
+   buttons beside it, no band of its own. */
 .chm-head{
-  display:flex; align-items:center; gap:8px; flex:0 0 auto; min-height:38px;
-  padding:6px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px; flex:0 0 auto; min-height:36px;
+  padding:6px 12px 2px;
 }
 .chm-head .sp{ flex:1; }
-.chm-t{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-.chm-status{ font-size:11px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-/* (phase V73 block 2, (б2-20) а) a failure is a popup in the corner (js/library/chmake.js _status) - the line has no red */
-.chm-status.ok{ color:var(--success); }
+.chm-t{ font:500 11px/16px var(--font); color:var(--muted); }
+/* (phase V73 block 2, (б2-20) а) a failure is a popup in the corner (js/library/chmake.js _status) - the line has no red; the
+   line itself is the one status line (.u-status, block 4) */
+.chm-status{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chm-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 
 /* The parameters: 480px, as on the Character page. The portrait takes what is left. */
@@ -33,7 +35,7 @@
 .chm-spine{
   display:none; flex:1; align-items:center; justify-content:center;
   writing-mode:vertical-rl; text-orientation:mixed;
-  font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  font:500 11px/16px var(--font); color:var(--muted);
   user-select:none;
 }
 
@@ -147,19 +149,14 @@
 /* ── The save form ───────────────────────────────────────────────────────────── */
 .cv2-save{ flex:1; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:14px; }
 .cv2-save-sec{ flex:0 0 auto; }
-.cv2-save-sec-t{
-  margin-bottom:7px; font:700 10px var(--font); text-transform:uppercase;
-  letter-spacing:.06em; color:var(--muted);
-}
+.cv2-save-sec-t{ margin-bottom:8px; font:500 11px/16px var(--font); color:var(--muted); }
 .cv2-save-row{ display:flex; align-items:center; gap:8px; }
 .cv2-save-row + .cv2-save-row{ margin-top:6px; }
 .cv2-save-lab{ flex:0 0 58px; font-size:10.5px; color:var(--muted); }
 /* 28px, so a select does not clip the word inside it. */
 .cv2-save-in{ flex:1 1 auto; min-width:0 }
 .cv2-save-note{ font-size:10px; line-height:1.55; color:var(--muted); opacity:.85; }
-.cv2-save-stat{ margin-top:7px; font:600 10.5px var(--font); color:var(--muted); min-height:14px; }
-.cv2-save-stat.ok{ color:var(--success); }
-.cv2-save-stat.err{ color:var(--danger); }
+.cv2-save-stat{ margin-top:8px; min-height:16px; }   /* the one status line (.u-status) - .ok green, .err red */
 
 /* ── the save form footer ── */
 /* Cancel sits to the LEFT of Save character, as asked. */
@@ -193,7 +190,7 @@
 }
 .cv2-grp{
   grid-column:1 / -1; margin-top:6px;
-  font:700 9.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+  font:500 11px/16px var(--font); color:var(--muted);
 }
 /* A preset replaces the parameters entirely, and there is no way to reopen them while one is
    chosen - clearing the preset is the way back to building by hand. */
@@ -229,7 +226,7 @@
   padding:9px 10px; border-top:1px solid var(--border-soft); background:var(--surface);
 }
 .cv2-crfoot-row{ display:flex; align-items:center; gap:9px; }
-.cv2-crfoot-note{ font-size:9.5px; line-height:1.45; color:var(--muted); opacity:.8; }
+.cv2-crfoot-note{ font-size:10px; line-height:1.45; color:var(--muted); opacity:.8; }
 /* flex, not width:100% - the row shares itself with the use button now, and a full-width
      select would push it out. min-width:0 so a long preset label ellipsises instead of
      refusing to shrink. */
@@ -249,9 +246,7 @@
 .cv2-fld-head{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:0 10px 4px;
 }
-.cv2-fld-lbl{
-  font:700 9.5px var(--font); text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
-}
+.cv2-fld-lbl{ font:500 10px/14px var(--font); color:var(--muted); }
 /* The how-to lives behind this rather than as a paragraph competing with the text it
    describes. Three lines wide by design. */
 .cv2-help{
@@ -275,7 +270,7 @@
 .cv2-edited{
   margin-left:auto; padding:1px 7px;
   border:1px solid var(--warn); border-radius:var(--pill);
-  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em;
+  font:500 10px/14px var(--font);
   color:var(--warn);
 }
 
@@ -297,17 +292,14 @@
 /* ── The value picker, above the token it belongs to ──────────────────────── */
 /* (phase V73 block 2) the shared menu's frame */
 .cv2-pop.u-menu{ z-index:9000; max-width:330px; padding:7px 8px; }
-.cv2-pop-t{
-  font:700 9px var(--font); text-transform:uppercase; letter-spacing:.07em;
-  color:var(--muted); margin-bottom:5px;
-}
+.cv2-pop-t{ font:500 11px/16px var(--font); color:var(--muted); margin-bottom:4px; }
 /* Two rows: what the other choices allow, then everything else. The split is the point - the
    second row is reachable, and you can see you are stepping outside what the rest implies. */
 .cv2-pop-row{ display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:2px 0; }
 .cv2-pop-row.is-other{ border-top:1px solid var(--border); margin-top:4px; padding-top:5px; }
 .cv2-pop-lbl{
   flex:0 0 auto; margin-right:3px;
-  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); opacity:.7;
+  font:500 10px/14px var(--font); color:var(--faint);
 }
 /* .cv2-pop-opt and .cv2-chip are the shared chip (.u-chip, phase V73 block 2) */
 /* The second row reads as a step outside the rules, not as an equal option. */
@@ -318,13 +310,10 @@
    Chips take the room between the name and the field, scrolling if the groups do
    not fit; the field and the two buttons sit on the floor, where a decision goes. */
 .cv2-edit{ flex:1; min-height:0; display:flex; flex-direction:column; }
-.cv2-edit-note{ flex:0 0 auto; padding:8px 10px 0; font-size:9.5px; line-height:1.5; color:var(--muted); opacity:.85; }
+.cv2-edit-note{ flex:0 0 auto; padding:8px 10px 0; font-size:10px; line-height:1.5; color:var(--muted); opacity:.85; }
 .cv2-chips{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px 10px; display:flex; flex-direction:column; gap:7px; }
 .cv2-chip-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
-.cv2-chip-lab{
-  flex:0 0 100%; font:700 9px var(--font); text-transform:uppercase;
-  letter-spacing:.06em; color:var(--muted);
-}
+.cv2-chip-lab{ flex:0 0 100%; font:500 10px/14px var(--font); color:var(--muted); }
 /* Lit means it is in the field: the chip's selected look. */
 .cv2-edit-txt{ flex:0 0 auto; margin:0 10px; min-height:58px; resize:vertical }
 /* Cancel and Edit go on the column's floor, so the always-there TPDNE foot steps aside for this
@@ -366,6 +355,6 @@
 /* Its own action: this edits the face that is already there, rather than making a new one. */
 .cv2-apply{ flex:0 0 auto; margin:8px 10px 0; }
 .cv2-textpanel-note{
-  flex:0 0 auto; padding:8px 10px; font-size:9.5px; line-height:1.5;
+  flex:0 0 auto; padding:8px 10px; font-size:10px; line-height:1.5;
   color:var(--muted); opacity:.75;
 }

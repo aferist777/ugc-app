@@ -32,15 +32,18 @@ export async function openScenario(summary, hooks = {}) {
   const saved = hooks.saved || (() => {});
   let rec = { id: null, title: '', lines: [], vertical: '', product: '', roles: [] };
   const ov = _el('div', 'mv3-x-ov');
-  const box = _el('div', 'mv3-x is-scen');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
+  const box = _el('div', 'mv3-x is-scen u-win is-float');
   ov.appendChild(box);
 
-  const head = _el('div', 'mv3-x-head');
+  const head = _el('div', 'mv3-x-head u-win-head');
   const h3 = document.createElement('h3');
+  h3.className = 'u-win-title';
   h3.textContent = isNew ? 'New scenario' : 'Scenario';
   head.appendChild(h3);
-  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
+  const close = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   close.type = 'button';
+  close.title = 'Close (Esc)';
   head.appendChild(close);
   box.appendChild(head);
 
@@ -100,8 +103,9 @@ export async function openScenario(summary, hooks = {}) {
     'This is the scenario in the library. A project made from it keeps its own copy of the text, '
     + 'so editing here never changes a project that already exists.'));
 
-  const foot = _el('div', 'mv3-x-foot');
-  const note = _el('span', 'mv3-x-note');
+  // the foot: save and the window's one status line (u-status) at the left, use alone at the right
+  const foot = _el('div', 'mv3-x-foot u-win-foot');
+  const note = _el('span', 'u-status');
   const save = _el('button', 'mv3-c-btn u-btn', 'save');
   save.type = 'button';
   save.title = 'Keep it in the library';

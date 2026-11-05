@@ -229,7 +229,7 @@ export function paintChoose(host, o) {
   bar.append(q, count);
   const grid = el('div', 'pk-grid');
   grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
-  const said = el('div', 'wkc-said', '');
+  const said = el('div', 'wkc-said u-status', '');
   main.append(bar, grid, said);
   box.append(side, main);
   host.appendChild(box);

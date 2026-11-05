@@ -97,12 +97,13 @@ export function closeHelp() {
 function _build(o) {
   // (phase V60.1) Over the page darkened and blurred: a modal layer - a press on the dark closes it.
   const ov = el('div', 'hp-ov');
-  const box = el('div', 'hp');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - the name, a quiet note, the 28 px ✕
+  const box = el('div', 'hp u-win is-float');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Almanac');
-  const head = el('div', 'hp-head');
-  head.append(el('b', null, 'Almanac'), el('span', 'hp-sub', 'press a tip to copy it'));
-  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
+  const head = el('div', 'hp-head u-win-head');
+  head.append(el('b', 'u-win-title', 'Almanac'), el('span', 'hp-sub u-win-sub', 'press a tip to copy it'));
+  const x = el('button', 'hp-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.appendChild(x);
@@ -192,7 +193,7 @@ function _paintSide() {
     b.appendChild(el('span', 'nm', s.label));
     const f = _files.get(s.id);
     if (ready && f) b.appendChild(el('small', null, String((f.items || []).length)));
-    if (!ready) b.appendChild(el('i', null, 'in development'));
+    if (!ready) b.appendChild(el('i', null, 'In development'));
     b.title = s.about || '';
     b.addEventListener('click', () => { if (_st.sec !== s.id || _st.cat) _open(s.id); });
     S.appendChild(b);
@@ -223,7 +224,7 @@ function _paintList() {
     bar.hidden = true;
     _w.note.hidden = true;
     const soon = el('div', 'hp-soon');
-    soon.append(el('b', null, sec.label), el('i', null, 'in development'), el('p', null, sec.about || ''),
+    soon.append(el('b', null, sec.label), el('i', null, 'In development'), el('p', null, sec.about || ''),
       el('p', 'hp-soon-more', 'This part of the reference is being filled in step by step.'));
     L.appendChild(soon);
     return;
@@ -274,7 +275,8 @@ function _tile(it, catLabel) {
   const nm = el('span', 'hp-name', it.name);
   if (catLabel) nm.appendChild(el('i', null, catLabel));
   words.append(nm, el('span', 'hp-text', it.prompt));
-  t.append(pv, words, el('span', 'hp-copy', 'copy'));
+  // (phase V73 block 4) "copy" wears the quiet button - the whole tip is still what is pressed
+  t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', 'copy'));
   t.addEventListener('click', () => _copy(it, t));
   return t;
 }
@@ -305,10 +307,9 @@ async function _toClipboard(text) {
 async function _copy(it, tile) {
   const ok = await _toClipboard(it.prompt);
   if (!_w) return;
-  tile.classList.remove('is-blink', 'is-fail');
-  void tile.offsetWidth;
-  tile.classList.add(ok ? 'is-blink' : 'is-fail');
-  setTimeout(() => tile.classList.remove('is-blink', 'is-fail'), 1000);
+  // (phase V73 block 4) no blinking: the note on the prompt field says it was copied; a tip not copied is outlined red a moment
+  tile.classList.remove('is-fail');
+  if (!ok) { tile.classList.add('is-fail'); setTimeout(() => tile.classList.remove('is-fail'), 1000); }
   _toast(_w.fieldOf(), ok ? 'Copied: ' + it.name + ' - paste it into the prompt (Ctrl+V)' : 'Could not copy - the words are selected: copy them yourself', !ok);
   // Not copied: its words are selected, one Ctrl+C away.
   if (!ok) _select(tile.querySelector('.hp-text'));

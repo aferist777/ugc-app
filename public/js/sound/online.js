@@ -44,15 +44,20 @@ export function openOnline(opts) {
   const o = opts || {};
   if (typeof o.stop === 'function') o.stop();
   const back = el('div', 'snd-back');
-  const win = el('div', 'snd-win snd-online');
-  const head = el('div', 'snd-win-head');
-  head.appendChild(el('b', null, 'Find sounds online'));
-  const sub = el('span', 'snd-muted', 'free to use in any video, sold or not (CC0)');
-  head.appendChild(sub);
-  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4, rule 5) The one frame: a head band of 40 px - the name, the source as its quiet note, the ✕ of 28 px;
+  // what was the window's padding is its body's.
+  const win = el('div', 'snd-win snd-online u-win is-float');
+  const head = el('div', 'snd-win-head u-win-head');
+  head.appendChild(el('span', 'u-win-title', 'Find sounds online'));
+  const sub = el('span', 'u-win-sub', 'free to use in any video, sold or not (CC0)');
+  head.append(sub, el('span', 'sp'));
+  const x = el('button', 'u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
+  x.title = 'Close (Esc)';
   head.appendChild(x);
   win.appendChild(head);
+  const body = el('div', 'snd-win-body');
+  win.appendChild(body);
 
   const bar = el('form', 'snd-on-bar');
   const q = el('input', 'snd-search u-in');
@@ -76,12 +81,12 @@ export function openOnline(opts) {
   }
   if (o.cat && (o.cats || []).some(c => c.id === o.cat)) into.value = o.cat;
   bar.appendChild(into);
-  win.appendChild(bar);
+  body.appendChild(bar);
 
   const list = el('div', 'snd-on-list');
-  win.appendChild(list);
+  body.appendChild(list);
   const pager = el('div', 'snd-on-pager');
-  win.appendChild(pager);
+  body.appendChild(pager);
 
   const foot = el('div', 'snd-on-foot');
   const g = el('div', 'snd-on-gal');
@@ -106,7 +111,7 @@ export function openOnline(opts) {
     sub.title = sub.textContent;
   };
   credited('', '');
-  win.appendChild(foot);
+  body.appendChild(foot);
 
   document.body.append(back, win);
   const layer = Layers.open(win, { modal: true, onEsc: () => close() });

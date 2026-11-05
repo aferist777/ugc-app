@@ -13,8 +13,29 @@ import * as Layers from '../layers.js';
 import { showError } from '../notice.js';
 // (phase V73 block 2, (н2)) a source downloaded by a link is new until it is looked at here
 import { opened as openedNew } from '../references/news.js';
+import { iconEl } from '../icons.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
+// (phase V73 block 4) The 3D Studio's page keeps its whole look (the owner: «Не трогать») - the viewer reaches it through
+// Alerts "open"; there it is drawn exactly as before, with none of the frame's classes.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
+
+// (phase V73 block 4) An action of a viewer's head - an ICON and its WORD where the action is obvious (as in the menus,
+// js/icons.js menuIcons): Rename pencil, Favorite star, Delete trash, Move to folder, Copy copy, Cut… scissors; any other
+// keeps its word alone. The word sits in a <span>, so `button.textContent` is still the label - the pages find a viewer's
+// button by it (library/main.js _viewerBtn, sound/lyrics.js, references/yt.js). On the 3D Studio's page: the word only.
+const ACT_ICONS = [[/^(un)?favou?rite\b/i, 'star'], [/^delete\b/i, 'trash-2'], [/^rename\b/i, 'pencil'],
+  [/^move to\b/i, 'folder'], [/^copy\b/i, 'copy'], [/^cut…/i, 'scissors']];
+export function fillAct(btn, label) {
+  btn.textContent = '';
+  const text = String(label == null ? '' : label);
+  const hit = OLD_LOOK() ? null : ACT_ICONS.find(([re]) => re.test(text));
+  if (!hit) { btn.textContent = text; return btn; }
+  const span = document.createElement('span');
+  span.textContent = text;
+  btn.append(iconEl(hit[1]), span);
+  return btn;
+}
 
 let _ov = null;
 let _layer = null;
@@ -164,7 +185,7 @@ function _paint() {
 
 // The action row is rebuilt per item: what you may do depends on the shelf the item
 // came from (a lookbook file has no favourite flag, a character has no category), and
-// the labels are stateful — "Favourite" flips to "Unfavourite".
+// the labels are stateful — "Favorite" flips to "Unfavorite".
 function _paintActions(it) {
   const box = $('.lib-view-acts', _ov);
   if (!box) return;
@@ -174,7 +195,7 @@ function _paintActions(it) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'u-btn is-s' + (a.danger ? ' danger is-danger' : '') + (a.armed ? ' is-armed' : '');
-    b.textContent = a.label;
+    fillAct(b, a.label);
     if (a.title) b.title = a.title;
     b.addEventListener('click', async () => {
       box.querySelectorAll('button').forEach(x => { x.disabled = true; });
@@ -290,14 +311,17 @@ export function openViewer(items, index, opts) {
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';
+  // (phase V73 block 4, rule 5) The one frame: a head of 40 px - the name and the count at the left, the item's actions
+  // (an icon and its word) at the right, the ✕ of 28 px last. The 3D Studio's page: the markup it had.
+  const NEW = !OLD_LOOK();
   ov.innerHTML = `
-    <div class="lib-view">
-      <div class="lib-view-head">
-        <span class="lib-view-title"></span>
-        <span class="lib-view-count"></span>
+    <div class="lib-view${NEW ? ' u-win is-float' : ''}">
+      <div class="lib-view-head${NEW ? ' u-win-head' : ''}">
+        <span class="lib-view-title${NEW ? ' u-win-title' : ''}"></span>
+        <span class="lib-view-count${NEW ? ' u-win-sub' : ''}"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <button class="u-btn is-s is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
+        <button class="u-btn${NEW ? '' : ' is-s'} is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
       </div>
       <div class="lib-view-body">
         <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>

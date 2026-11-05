@@ -10,7 +10,7 @@
 //   - "+ new folder…" is the last row of a kind's branch and of every folder's (phase V54, (зв44)): the name asked, the
 //     folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that one), and that is
 //     the place;
-//   - where the thing is now: a row on top ("BESIDE IT"), marked in the tree too (.is-here);
+//   - where the thing is now: a row on top ("Beside it"), marked in the tree too (.is-here);
 //   - a place that cannot take it is grey, why in its tooltip - and so is a branch whose every place cannot.
 //
 // The places are js/media-targets.js placesOf; one window at a time.
@@ -130,7 +130,7 @@ export function openPlaces(anchor, o) {
     const top = list.scrollTop;
     list.textContent = '';
     if (hereNode) {
-      list.appendChild(el('div', 'ref-move-head', 'BESIDE IT'));
+      list.appendChild(el('div', 'ref-move-head', 'Beside it'));   // (phase V73 block 4, (к17)) sentence case
       list.appendChild(row(hereNode, 0, true));
       list.appendChild(el('div', 'mtp-sep'));
     }

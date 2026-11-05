@@ -148,7 +148,7 @@ export function build(host, hooks) {
     + 'wait for it, and it is what Scenarios reads later.';
   sheet.appendChild(snote);
   const sstat = document.createElement('div');
-  sstat.className = 'cv2-save-stat';
+  sstat.className = 'cv2-save-stat u-status';
   sstat.id = 'cv2-save-stat';
   sheet.appendChild(sstat);
   wrap.appendChild(sheet);
@@ -200,7 +200,7 @@ export function build(host, hooks) {
       name.value = n || '';
       if (g && GENDERS.includes(g)) gender.value = g;
       sstat.textContent = '';
-      sstat.className = 'cv2-save-stat';
+      sstat.className = 'cv2-save-stat u-status';
       _syncFoot();
     },
     state: () => _state,
@@ -211,7 +211,7 @@ export function build(host, hooks) {
     sync: _syncFoot,
     status: (text, kind) => {
       sstat.textContent = text || '';
-      sstat.className = 'cv2-save-stat' + (kind ? ' ' + kind : '');
+      sstat.className = 'cv2-save-stat u-status' + (kind ? ' ' + kind : '');
       // Only a verdict changes the footer. Progress ticks arrive with no kind at all and must
       // not wipe the memory of how the previous run ended.
       if (kind === 'err' || kind === 'ok') { _lastKind = kind; _syncFoot(); }

@@ -46,22 +46,26 @@ export function openTrim(opts) {
   let from = Math.max(0, Math.min(+o.from || 0, dur - min));
   let to = Math.max(from + min, Math.min(+o.to || (from + max), from + max, dur));
 
-  const box = _el('div', 'vtrim');
-  const head = _el('div', 'vtrim-h');
-  head.append(_el('b', null, o.title || (o.kind === 'audio' ? 'the sound' : 'the clip')), _el('span', null, _t(dur) + ' in all'));
-  const x = _el('button', 'vtrim-x u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4, (б4-6) а) a panel at its place: the frame's edges, its head row with the 28 px ✕, no backdrop; what it
+  // holds under the head in its own padded column (`body`)
+  const box = _el('div', 'vtrim u-win is-float');
+  const head = _el('div', 'vtrim-h u-win-head');
+  head.append(_el('b', 'u-win-title', o.title || (o.kind === 'audio' ? 'the sound' : 'the clip')), _el('span', 'u-win-sub', _t(dur) + ' in all'));
+  const x = _el('button', 'vtrim-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.appendChild(x);
   box.appendChild(head);
-  if (o.why) box.appendChild(_el('div', 'vtrim-why', o.why));
+  const body = _el('div', 'vtrim-body');
+  box.appendChild(body);
+  if (o.why) body.appendChild(_el('div', 'vtrim-why', o.why));
 
   const media = document.createElement(o.kind === 'audio' ? 'audio' : 'video');
   media.className = 'vtrim-media';
   media.preload = 'metadata';
   media.src = o.src;
   if (o.kind !== 'audio') { media.muted = false; media.playsInline = true; if (o.poster) media.poster = o.poster; }
-  box.appendChild(media);
+  body.appendChild(media);
   // (phase V17) The first frame: its moment on a slider of its own - the part starts there.
   let still = null;
   if (o.still && o.kind !== 'audio') {
@@ -74,8 +78,8 @@ export function openTrim(opts) {
     range.title = 'The first frame: the moment the character is seen best - the moves go from here';
     wireRange(range);                               // (phase V73 block 2) the shared slider, in the trimmer's gold
     const at = _el('span', 'vtrim-still-at u-range-v');
-    still.append(_el('span', 'k', 'first frame'), range, at);
-    box.appendChild(still);
+    still.append(_el('span', 'k', 'First frame'), range, at);
+    body.appendChild(still);
     still.range = range;
     still.at = at;
   }
@@ -91,7 +95,7 @@ export function openTrim(opts) {
   win.append(l, r);
   const head2 = _el('span', 'vtrim-at');
   bar.append(win, head2);
-  box.appendChild(bar);
+  body.appendChild(bar);
 
   const foot = _el('div', 'vtrim-foot');
   const span = _el('span', 'vtrim-span');
@@ -100,7 +104,7 @@ export function openTrim(opts) {
   const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', 'done');
   done.type = 'button';
   foot.append(span, play, done);
-  box.appendChild(foot);
+  body.appendChild(foot);
 
   const paint = () => {
     win.style.left = (from / dur * 100) + '%';

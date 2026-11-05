@@ -448,11 +448,11 @@ function _render(kind) {
   const right = el('div', 'gw-half is-make');
   right.appendChild(_field(kind));
   const foot = el('div', 'gw-foot');
-  const said = s.said ? el('div', 'gw-said', s.said) : null;
+  const said = s.said ? el('div', 'gw-said u-status is-bad', s.said) : null;
   if (said) foot.appendChild(said);
   const go = el('button', 'gw-create u-btn is-main', 'create');
   go.type = 'button';
-  const hint = el('span', 'gw-hint');
+  const hint = el('span', 'gw-hint u-status');
   const sync = () => {
     const why = _why(kind);
     go.disabled = !!why || s.making;
@@ -489,7 +489,7 @@ function _render(kind) {
     sync();
   });
   foot.appendChild(note);
-  if (s.status) foot.appendChild(el('div', 'gw-status' + (s.making ? ' is-on' : ''), s.status));
+  if (s.status) foot.appendChild(el('div', 'gw-status u-status', s.status));
   const row = el('div', 'gw-row');
   go.addEventListener('click', () => _make(kind, o));
   row.append(hint, go);

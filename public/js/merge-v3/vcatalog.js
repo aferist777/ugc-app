@@ -31,7 +31,7 @@ import { twoPress } from '../really.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
 import { hoverPlayer } from './hover-play.js';
 // (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
-import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { emptyEl, loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
 
 const LS = 'mv3_vc_cat_v1';               // { filters, sort } - the window opens as it was left
@@ -330,11 +330,13 @@ function _close() {
 
 function _build() {
   const ov = el('div', 'vc-ov');
-  const box = el('div', 'vc');
-  const head = el('div', 'vc-head');
-  const h = el('h3', null, 'Catalog');
-  const sub = el('span', 'vc-head-sub', '');
-  const close = el('button', 'vc-close u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - the name, the model as a quiet note, the
+  // 28 px ✕; its labels in sentence case (к17)
+  const box = el('div', 'vc u-win is-float');
+  const head = el('div', 'vc-head u-win-head');
+  const h = el('h3', 'u-win-title', 'Catalog');
+  const sub = el('span', 'vc-head-sub u-win-sub', '');
+  const close = el('button', 'vc-close u-btn is-icon is-quiet u-x', '');
   close.type = 'button';
   close.title = 'Close (Esc)';
   head.append(h, sub, close);
@@ -408,7 +410,7 @@ function _paintLeft() {
   }
   if (m) sel.value = m.id;
   sel.addEventListener('change', () => { _st.model = sel.value; _st.pick = _st.inUse || null; _hp.stop(); _paintLeft(); _paintGrid(false); _paintRight(); });
-  inner.append(el('div', 'vc-lab', 'model'), sel);
+  inner.append(el('div', 'vc-lab', 'Model'), sel);
   if (m) {
     const facts = el('div', 'vc-facts');
     for (const r of m.records) {
@@ -457,14 +459,14 @@ function _paintLeft() {
       _paintLeft();
       _paintGrid(false);
     });
-    const lab = el('div', 'vc-lab vc-has-tip', 'category');
+    const lab = el('div', 'vc-lab vc-has-tip', 'Category');
     _tipOn(lab, HINTS.cat);
     _tipOn(cs, HINTS.cat);
     inner.append(lab, cs);
     _w.catSel = { el: cs, g: cat };
     const tpl = groups.find(g => g.key === 'tpl');
     if (tpl) inner.appendChild(_dd(tpl));
-    inner.appendChild(el('div', 'vc-lab', 'filters'));
+    inner.appendChild(el('div', 'vc-lab', 'Filters'));
     for (const g of groups) if (g.key !== 'cat' && g.key !== 'tpl') inner.appendChild(_dd(g));
   }
 
@@ -475,7 +477,7 @@ function _paintLeft() {
   }
   sort.value = _st.sort;
   sort.addEventListener('change', () => { _st.sort = sort.value; _paintGrid(false); });
-  const sl = el('div', 'vc-lab vc-has-tip', 'order');
+  const sl = el('div', 'vc-lab vc-has-tip', 'Order');
   _tipOn(sl, HINTS.sort);
   inner.append(sl, sort);
 
@@ -494,7 +496,7 @@ function _dd(g) {
   b.type = 'button';
   b.dataset.g = g.key;
   const val = el('span', 'vc-dd-v', 'any');
-  b.append(el('span', 'vc-dd-n', g.label), val, el('i', null, '▾'));
+  b.append(el('span', 'vc-dd-n', cap(g.label)), val, el('i', null, '▾'));
   _tipOn(b, HINTS[g.key]);
   b.addEventListener('click', () => {
     if (_ddList && _ddList.g.key === g.key) _ddClose();
@@ -745,7 +747,7 @@ function _tile(it) {
     box.classList.add('is-text');
     box.appendChild(el('span', 'vc-lead', it.kind === 'template' ? it.sub : (it.sub || it.title)));
   }
-  box.appendChild(el('span', 'vc-kind is-' + it.kind, KIND_WORD[it.kind]));
+  box.appendChild(el('span', 'vc-kind is-' + it.kind, cap(KIND_WORD[it.kind])));
   if (it.ts) box.appendChild(el('span', 'vc-two', '2-step'));
   b.appendChild(box);
   b.appendChild(el('span', 'vc-cap', it.title));
@@ -938,7 +940,7 @@ async function _paintRight() {
   const scroll = el('div', 'vc-right-in');
   R.appendChild(scroll);
 
-  scroll.appendChild(el('div', 'vc-kindline', KIND_WORD[it.kind] + (it.kind === 'case' && it.v ? ' · Seedance ' + it.v : '') + (it.kind === 'example' ? ' · ' + (it.bucket || '') : '')
+  scroll.appendChild(el('div', 'vc-kindline', cap(KIND_WORD[it.kind]) + (it.kind === 'case' && it.v ? ' · Seedance ' + it.v : '') + (it.kind === 'example' ? ' · ' + (it.bucket || '') : '')
     + (_st.inUse === want ? ' · in use in the chat' : '')));
   if (it.kind === 'preset') {
     const ti = document.createElement('input');
@@ -978,14 +980,14 @@ async function _paintRight() {
   scroll.appendChild(fit);
 
   // What it needs attached - editable.
-  scroll.appendChild(el('div', 'vc-hdr', 'needs'));
+  scroll.appendChild(el('div', 'vc-hdr', 'Needs'));
   scroll.appendChild(_slotsBox(it, ed));
 
   // The skill - editable, with the way back.
   // Under Kling motion control a recipe only lays out what to attach (phase V7.3): its video has no writer.
   const noWriter = !!(m && m.family === 'kmc');
-  const sh = el('div', 'vc-hdr', noWriter ? 'skill - for Seedance and Grok; under ' + m.label + ' a recipe only lays out what to attach'
-      : 'skill - the recipe the writer follows');
+  const sh = el('div', 'vc-hdr', noWriter ? 'Skill - for Seedance and Grok; under ' + m.label + ' a recipe only lays out what to attach'
+      : 'Skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');
   ta.className = 'vc-skill u-area';
@@ -1115,7 +1117,7 @@ function _slotsBox(it, ed) {
 function _casesOf(t) {
   const box = el('div', 'vc-cases');
   const list = (t.cases || []);
-  box.appendChild(el('div', 'vc-hdr', 'its cases - ' + list.length));
+  box.appendChild(el('div', 'vc-hdr', 'Its cases - ' + list.length));
   if (!list.length) { box.appendChild(emptyEl(_data.cases.length ? 'none filed under it' : 'the cases are not fetched yet', { line: true })); return box; }
   const byId = new Map(_data.cases.map(c => [c.s, c]));
   for (const s of list.slice(0, 40)) {

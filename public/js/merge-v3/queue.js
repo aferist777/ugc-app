@@ -19,7 +19,7 @@
 
    A HIGHLIGHTS PROJECT IS ONE ROW (phase V33.4, the owner's (х44), (х44а)): its fragments' entries under "▸ <project> ·
    highlights · 5 fragments" with their way along all together ("rendering 2 of 5 · 1:30 left", "3 rendered · 2
-   interrupted"); a press opens its fragments' rows, as any. Its own "▶ go on" starts only ITS interrupted and failed
+   interrupted"); a press opens its fragments' rows, as any. Its own "Continue" (V73 block 4; "▶ go on" before) starts only ITS interrupted and failed
    renders (POST /api/mv3q/run { hl }) - Render all, as always, starts everything waiting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -29,6 +29,7 @@ import { showResult } from './render-result.js';
 // (phase V73 block 2, step 2b) An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { iconEl } from '../icons.js';
 
 let _pop = null;
 let _layer = null;
@@ -162,7 +163,8 @@ function _row(it, refresh) {
   // name: rebuilding it from the project would render something else.
   if (it.status === 'failed') {
     const r = document.createElement('button');
-    r.type = 'button'; r.className = 'mv3-qx u-btn is-s is-icon is-quiet'; r.textContent = '↻';
+    // (phase V73 block 4) the icon, its words in the title
+    r.type = 'button'; r.className = 'mv3-qx u-btn is-s is-icon is-quiet'; r.appendChild(iconEl('refresh-cw', 14));
     r.title = 'Try this one again';
     r.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -173,7 +175,8 @@ function _row(it, refresh) {
   }
   if (it.status !== 'running') {
     const x = document.createElement('button');
-    x.type = 'button'; x.className = 'mv3-qx u-btn is-s is-icon is-quiet'; x.textContent = '×';
+    // (phase V73 block 4) the one ✕ - "take out of a row", red under the pointer
+    x.type = 'button'; x.className = 'mv3-qx u-btn is-s is-icon is-quiet is-del u-x';
     x.title = 'Remove from the queue';
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -240,9 +243,12 @@ async function _paintList() {
   _failing = false;
   _pop.textContent = '';
 
+  // (phase V73 block 4, (б4-6) а) a panel at its button: the frame's edges, its head row - the title, Render all, the quiet
+  // Clear, the 28 px ✕ that closes it as Escape does -, no backdrop
   const head = document.createElement('div');
-  head.className = 'mv3-qhead';
+  head.className = 'mv3-qhead u-win-head';
   const ttl = document.createElement('span');
+  ttl.className = 'u-win-title';
   ttl.textContent = 'Render queue';
   head.appendChild(ttl);
   const sp = document.createElement('span');
@@ -270,7 +276,7 @@ async function _paintList() {
 
   const clr = document.createElement('button');
   clr.type = 'button';
-  clr.className = 'mv3-c-btn u-btn is-s';
+  clr.className = 'mv3-c-btn u-btn is-s is-quiet';
   clr.textContent = 'Clear';
   clr.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -281,6 +287,12 @@ async function _paintList() {
     _paintList(); _paintBadge();
   });
   head.appendChild(clr);
+  const shut = document.createElement('button');
+  shut.type = 'button';
+  shut.className = 'mv3-qclose u-btn is-icon is-quiet u-x';
+  shut.title = 'Close (Esc)';
+  shut.addEventListener('click', (e) => { e.stopPropagation(); _close(); });
+  head.appendChild(shut);
   _pop.appendChild(head);
 
   const list = document.createElement('div');
@@ -399,7 +411,7 @@ function _group(id, items, refresh) {
     const go = document.createElement('button');
     go.type = 'button';
     go.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
-    go.textContent = '▶ go on';
+    go.textContent = 'Continue';
     go.title = 'Render this project\'s interrupted and failed fragments - nothing else in the queue starts';
     go.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -426,7 +438,7 @@ function _open() {
   const btn = $('mv3-queue');
   if (!btn) return;
   _pop = document.createElement('div');
-  _pop.className = 'mv3-qpop';
+  _pop.className = 'mv3-qpop u-win is-float';
   document.body.appendChild(_pop);
   const r = btn.getBoundingClientRect();
   _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';

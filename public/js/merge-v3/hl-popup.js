@@ -102,7 +102,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     step: 1,
   };
 
-  const frame = openFrame({ name: 'highlights', size: POPUP_SIZE, geom: GEOM, onClose: () => {
+  const frame = openFrame({ name: 'highlights', size: POPUP_SIZE, geom: GEOM, foot: true, onClose: () => {
     if (!_win || _win.frame !== frame) return;
     try { _win.picker.stop(); } catch (e) { /* gone */ }
     try { _win.anim.stop(); } catch (e) { /* gone */ }
@@ -120,11 +120,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const P = _el('div', 'mv3-hlp-sec');
   const M = _el('div', 'mv3-hlp-sec');
   const R = _el('div', 'mv3-hlp-sec');
-  const foot = _el('div', 'mv3-x-foot mv3-hlp-foot');
-  frame.body.append(cols, foot);
+  // (phase V73 block 4) the foot is the frame's: who hears and what was said at the left, '‹ back', the price and the press at the right
+  const foot = frame.foot;
+  foot.classList.add('mv3-hlp-foot');
+  frame.body.append(cols);
 
   // ── The video ──
-  L.appendChild(_el('div', 'mv3-x-hdr', 'the video'));
+  L.appendChild(_el('div', 'mv3-x-hdr', 'The video'));
   const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
   // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
@@ -194,7 +196,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
 
   // ── The fragments: the kind, its words, the length and the count ──
-  const fragHdr = _el('div', 'mv3-x-hdr', 'the fragments');
+  const fragHdr = _el('div', 'mv3-x-hdr', 'The fragments');
   P.appendChild(fragHdr);
   const kindRow = _el('div', 'mv3-hlp-kinds');
   const kindBtns = {};
@@ -211,7 +213,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     if (v.inDev) {
       b.disabled = true;
       b.classList.add('is-dev');
-      b.appendChild(_el('span', 'mv3-hlp-kind-dev', 'in development'));
+      b.appendChild(_el('span', 'mv3-hlp-kind-dev', 'In development'));
       b.title = (v.label || k) + ' - in development';
     }
     b.addEventListener('click', () => { if (!v.inDev && st.kind !== k) setKind(k); });
@@ -246,7 +248,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── (V68 P3) The background music - the moods of Music → highlights ──
   const musicSec = _el('div', 'mv3-hlp-music');
-  musicSec.appendChild(_el('div', 'mv3-x-hdr', 'music'));
+  musicSec.appendChild(_el('div', 'mv3-x-hdr', 'Music'));
   M.appendChild(musicSec);
   const music = moodPicker(musicSec, {
     onChange: (moods) => { st.moods = moods; keep(); },
@@ -258,7 +260,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   });
 
   // ── The captions: presets · animation, what is chosen, the tiles ──
-  R.appendChild(_el('div', 'mv3-x-hdr', 'captions'));
+  R.appendChild(_el('div', 'mv3-x-hdr', 'Captions'));
   // (V69 P12, (хп90)) The title on top: on / off - auto's "by the video" too; each kind remembers its own.
   const titleRow = _el('div', 'mv3-hlp-orow mv3-hlp-titlerow');
   titleRow.appendChild(_el('span', 'mv3-hlp-olab', 'title on top'));
@@ -301,8 +303,9 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   });
 
   // ── The foot: who hears, and the press ──
-  const hear = _el('div', 'mv3-hlp-hear');
-  const said = _el('div', 'mv3-hlp-said');
+  const hear = _el('div', 'mv3-hlp-hear u-status is-line');
+  const said = _el('div', 'mv3-hlp-said u-status is-line');
+  const priceEl = _el('span', 'mv3-hlp-price u-price');
   const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
@@ -316,7 +319,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   backBtn.addEventListener('click', () => toStep(1));
   const footL = _el('div', 'mv3-hlp-footl');
   footL.append(hear, said);
-  foot.append(footL, backBtn, nextBtn, goBtn);
+  foot.append(footL, backBtn, priceEl, nextBtn, goBtn);
 
   // A file let go anywhere on the window.
   box.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); box.classList.add('is-drop'); } });
@@ -503,7 +506,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   // tile in its group, ✕ lets it go.
   function chosenSet(label, items, empty, onShow, onDrop) {
     const r = _el('div', 'mv3-hlp-cset');
-    r.appendChild(_el('div', 'mv3-hlp-cset-h', label + (items.length ? ' · ' + items.length : '')));
+    r.appendChild(_el('div', 'mv3-hlp-cset-h', label.charAt(0).toUpperCase() + label.slice(1) + (items.length ? ' · ' + items.length : '')));
     const list = _el('div', 'mv3-hlp-chips');
     if (!items.length) list.appendChild(_el('span', 'mv3-hlp-quiet' + (empty.err ? ' is-err' : ''), empty.text));
     for (const [key, name] of items) {
@@ -598,7 +601,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       b.addEventListener('click', () => { st.title = v; keep(); paint(); });
       titleChips.appendChild(b);
     }
-    fragHdr.textContent = whole ? 'the parts' : 'the fragments';
+    fragHdr.textContent = whole ? 'The parts' : 'The fragments';
     fragNote.textContent = !st.kind ? '' : whole
       ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
       : 'The agent returns this many - the strongest first, weaker ones last with a lower score; fewer only when the video has no more. A fragment may be made of up to three pieces of the video.';
@@ -628,7 +631,9 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
       cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
-    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments') + (cost && st.kind ? ' · ' + cost : '');
+    // (phase V73 block 4) the price stands by the press, in mono - not inside its words
+    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments');
+    priceEl.textContent = cost && st.kind ? cost : '';
     goBtn.disabled = !ready();
     goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';
     // (V63) The steps' buttons: "next →" on the first, "‹ back" and the press on the second.
@@ -637,6 +642,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     nextBtn.disabled = !!wait || st.busy;
     nextBtn.title = wait ? wait : 'The music and the captions';
     backBtn.hidden = goBtn.hidden = st.step !== 2;
+    priceEl.hidden = st.step !== 2 || !priceEl.textContent;
     backBtn.disabled = st.busy;
     said.textContent = st.said;
     said.classList.toggle('is-err', st.err);

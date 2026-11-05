@@ -214,11 +214,13 @@ function _window(o) {
   const many = o.many || null;
 
   _ov = _el('div', 'mv3-x-ov');
-  const box = _el('div', 'mv3-x');
-  const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
-  const x = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4) the one window frame: its head of 40 px, the 28 px ✕, the foot of 52 px (css/app-shell.css .u-win)
+  const box = _el('div', 'mv3-x u-win is-float');
+  const head = _el('div', 'mv3-x-head u-win-head');
+  head.appendChild(_el('h3', 'u-win-title', many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
+  const x = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
+  x.title = 'Close (Esc)';
   x.addEventListener('click', () => { if (!_busy) _close(); });
   head.appendChild(x);
   box.appendChild(head);
@@ -289,10 +291,10 @@ function _window(o) {
     : 'The Subtitles lane is empty - no file will be written.'));
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'Extras'));
-  const e1 = _select([['none', '— none —'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
+  const e1 = _select([['none', 'None'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
     ['black20', '+ Black tail 20 min'], ['black30', '+ Black tail 30 min']], adv.extra1);
   body.appendChild(_row('After the end', e1));
-  const noises = [['none', '— none —']];
+  const noises = [['none', 'None']];
   for (const kind of ['white', 'pink', 'brown']) {
     for (let i = 1; i <= 5; i++) noises.push(['wn_' + kind + '_' + i, '+ ' + kind[0].toUpperCase() + kind.slice(1) + ' noise ' + i + '%']);
   }
@@ -327,7 +329,9 @@ function _window(o) {
     return a;
   };
 
-  const foot = _el('div', 'mv3-x-foot');
+  // the buttons at the right: Cancel, then Add to queue, the gold Render last
+  const foot = _el('div', 'mv3-x-foot u-win-foot');
+  foot.appendChild(_el('span', 'sp'));
   const cancel = _el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });

@@ -29,7 +29,7 @@
 
 import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome } from './chat-shell.js';
+import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome, switchRow } from './chat-shell.js';
 import { chatWindow } from './chat-window.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -469,31 +469,22 @@ function VIDEOS(ctx) {
         : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
     const held = !bWhy && _boardOn();
     // (phase V16, the owner) The writer is a checkbox like the storyboard - on by default.
-    const wr = el('label', 'mv3-vc-check' + (held ? ' is-held' : ''));
-    const wcb = document.createElement('input');
-    wcb.type = 'checkbox'; wcb.classList.add('u-check');
-    wcb.checked = ctx.writing();
-    wcb.disabled = held;
-    wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
-    wr.append(wcb, el('span', null, 'writer'));
+    // (phase V73 block 4) the shared switch (.u-switch), its word beside it
+    const wr = switchRow('writer', ctx.writing(), held, (v) => ctx.setWriting(v));
+    if (held) wr.classList.add('is-held');
     // (phase V17) Under Kling motion control the writer writes the first frame's picture prompt.
     wr.title = held ? 'The storyboard is written by the writer - untick the storyboard first'
       : isMC() ? 'On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.'
         : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
     box.appendChild(wr);
-    const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
-    const scb = document.createElement('input');
-    scb.type = 'checkbox'; scb.classList.add('u-check');
-    scb.checked = !bWhy && _boardOn();
-    scb.disabled = !!bWhy;
-    scb.addEventListener('change', () => {
-      setParam('storyboard', scb.checked);
-      if (scb.checked && !ctx.writing()) ctx.setWriting(true);
+    const sb = switchRow('storyboard', !bWhy && _boardOn(), !!bWhy, (v) => {
+      setParam('storyboard', v);
+      if (v && !ctx.writing()) ctx.setWriting(true);
       _paintSwitches();
       _paintPrice();
       ctx.paintAtts();
     });
-    sb.append(scb, el('span', null, 'storyboard'));
+    if (bWhy) sb.classList.add('is-off');
     sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into the prompt of a sheet of numbered panels - nothing is paid at ">". On its message "draw the storyboard" draws the sheet (4K), "write the video" writes the video with it among the pictures and "make the video" makes it - each paid step by its own press. While it is ticked the writer stays on.';
     box.appendChild(sb);
   }
@@ -670,6 +661,7 @@ function VIDEOS(ctx) {
         el('span', null, 'the first frame first' + (fi ? ' · ' + fi.quality + ' · ' + fi.label : '') + ' · then, by its own press, the video '
           + (pr.usd != null ? '≈' + money(pr.usd * many) : '≈' + money(pr.per) + ' per second of the clip')));
     }
+    if (ctx.priceFrom) ctx.priceFrom(box);
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
     if (r && r.duration.fromClip) notes.push(r.billWhole ? 'the most it costs: billed by the whole seconds that come back, rounded down' : 'the most it costs: billed by the seconds that come back');

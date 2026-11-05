@@ -113,7 +113,7 @@ export function modelColumn(ctx, o) {
         arSel.id = id('ar');
         arSel.title = 'Shape';
         row('shape', arSel, 'is-arsel');
-        host.appendChild(el('div', 'mv3-ig-sep', 'shape'));
+        host.appendChild(el('div', 'mv3-ig-sep', 'Shape'));
         arWrap = el('div', 'mv3-ig-ar-row');
         host.appendChild(arWrap);
       } else {
@@ -214,6 +214,7 @@ export function modelColumn(ctx, o) {
       box.innerHTML = '<b>' + (chosen.approx ? '≈' : '') + money(val) + '</b>'
         + '<span>per picture' + (many > 1 ? ' · ' + money(val * many) + ' for ' + many : '') + '</span>';
     }
+    if (ctx.priceFrom) ctx.priceFrom(box);
     // WHO CATCHES A REFUSAL, and what that would cost - known before it happens rather than after.
     const others = _houses(e, n).filter(r => r !== chosen && (r.price || {})[q] != null);
     _set.fall.innerHTML = others.length

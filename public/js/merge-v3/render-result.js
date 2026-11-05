@@ -162,10 +162,11 @@ export async function showResult(o) {
   }
 
   const ov = el('div', 'mv3-x-ov');
-  const box = el('div', 'mv3-x is-result is-wide');
-  const head = el('div', 'mv3-x-head');
-  head.appendChild(el('h3', null, o.fresh ? 'Render finished' : (o.title || 'Render')));
-  const x = el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', ''); x.type = 'button'; x.title = 'Close (Esc)';
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
+  const box = el('div', 'mv3-x is-result is-wide u-win is-float');
+  const head = el('div', 'mv3-x-head u-win-head');
+  head.appendChild(el('h3', 'u-win-title', o.fresh ? 'Render finished' : (o.title || 'Render')));
+  const x = el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', ''); x.type = 'button'; x.title = 'Close (Esc)';
   head.appendChild(x);
   box.appendChild(head);
 
@@ -209,12 +210,12 @@ export async function showResult(o) {
   box.appendChild(body);
 
   // ── the foot: the full name along the left, the buttons on the right ──
-  const foot = el('div', 'mv3-x-foot is-rr');
+  const foot = el('div', 'mv3-x-foot is-rr u-win-foot');
   const name = document.createElement('input');
   name.type = 'text'; name.className = 'mv3-rr-name u-in'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
   name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
-  const hint = el('span', 'mv3-rr-hint');
+  const hint = el('span', 'mv3-rr-hint u-status');
   const cancel = el('button', 'mv3-c-btn u-btn' + (o.fresh ? ' danger is-danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
   if (o.fresh) cancel.title = 'Delete this render';
   const save = el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Save & download'); save.type = 'button';
@@ -248,7 +249,8 @@ export async function showResult(o) {
   showSrt(state.url);
 
   // ── keeping the parts and the name in step ──
-  const say = (text, cls) => { hint.textContent = text; hint.title = text; hint.className = 'mv3-rr-hint' + (cls ? ' ' + cls : ''); };
+  // the window's one status line (u-status): red only an error, green only what is done
+  const say = (text, cls) => { hint.textContent = text; hint.title = text; hint.className = 'mv3-rr-hint u-status' + (cls ? ' ' + cls : ''); };
   const paintHint = () => { const c = check(name.value); say(c.text, c.ok ? 'ok' : ''); };
   // A part is a word with no separator in it: underscores go as they are typed; on leaving
   // the field the words are joined camelCase, the way the pattern asks.
@@ -315,7 +317,7 @@ export async function showResult(o) {
       state.srt = d.srt || null;
       srtBox.hidden = !state.srt;
       if (state.srt && srtOn.checked) download(state.srt);
-      say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-good');
+      say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-ok');
       cancel.textContent = 'Close'; cancel.classList.remove('danger', 'is-danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');

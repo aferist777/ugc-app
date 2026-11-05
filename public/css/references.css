@@ -40,10 +40,8 @@
 /* The post viewer: the stage over the strip of the post's miniatures. One line of head: a long caption-title is cut. */
 .ref-view .lib-view-title{ flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ref-view .lib-view-count, .ref-view-where, .ref-view .lib-view-acts{ flex:0 0 auto; white-space:nowrap; }
-.ref-view-where{
-  font-size:10.5px; color:var(--muted);
-  border:1px solid var(--border); border-radius:var(--pill, 99px); padding:2px 8px;
-}
+/* (phase V73 block 4) the post's place and its count are the head's quiet notes (`.u-win-sub`; the count in mono -
+   css/lib-viewer.css) */
 .ref-view-mid{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
 .ref-view-mid > .lib-view-stage{ flex:1 1 auto; min-height:0; }
 .ref-strip-bar{
@@ -67,7 +65,7 @@
 .ref-cell-none{ display:flex; align-items:center; justify-content:center; height:100%; font-size:10px; color:var(--muted); }
 .ref-cell-dur{
   position:absolute; left:4px; bottom:4px; padding:0 4px; border-radius:3px;
-  background:var(--scrim); color:var(--on-media); font-size:9.5px; line-height:1.5; font-variant-numeric:tabular-nums;
+  background:var(--scrim); color:var(--on-media); font-size:10px; line-height:1.5; font-variant-numeric:tabular-nums;
 }
 /* The tick in the top right corner - selects, never opens. */
 .ref-tick{
@@ -89,11 +87,14 @@
 
 /* (block 5b) Where the chosen files go - the window of the place picker (js/place-tree.js, phase V39: a folded tree of
    the media tree's places, its rows in css/media-tree.css), grey where they cannot go. Also "save the piece to". */
-.ref-said{ font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50%; }
+/* (phase V73 block 4, (б4-8) а) The post viewer's status line - the window's one status line (`.u-status`, css/app-shell.css), the
+   first line of the right column. */
+.ref-said{ margin:0 0 8px; overflow-wrap:anywhere; }
+.ref-said:empty{ display:none; }
 .ref-move{ width:290px; max-height:min(460px, 70vh); display:flex; flex-direction:column; }
 /* (phase V73 block 2) the frame is the shared menu (.u-menu.is-float) */
 .ref-move.u-menu{ z-index:9200; padding:0; max-width:none; }
 .ref-move-title{ padding:7px 10px; font:600 11px/1.3 var(--font); color:var(--ink); border-bottom:1px solid var(--border); }
 .ref-move-list{ overflow-y:auto; padding:4px 0; }
-.ref-move-head{ padding:6px 10px 2px; font-size:9px; font-weight:700; letter-spacing:.09em; color:var(--muted); }
+.ref-move-head{ padding:6px 10px 2px; font:500 10px/14px var(--font); color:var(--muted); }
 .ref-caption{ white-space:pre-wrap; max-height:260px; overflow-y:auto; line-height:1.45; }

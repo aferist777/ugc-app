@@ -19,7 +19,8 @@ import { openPlaces, closePlaces } from '../place-tree.js';
 // (block 7) A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
 import * as Cut from '../cut.js';
 // (phase V35) The sash before the right column - one helper and one remembered width with the media viewer.
-import { wireInfoSash } from '../library/viewer.js';
+// (phase V73 block 4) and the head's actions as the viewer draws them: an icon and its word (fillAct)
+import { wireInfoSash, fillAct } from '../library/viewer.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
 import { twoPress } from '../really.js';
@@ -155,16 +156,18 @@ export function openPost(list, at, o) {
   const posts = (list || []).filter(x => x && x.kind === 'references');
   if (!posts.length) return;
   const ov = el('div', 'lib-view-ov ref-view-ov');
+  // (phase V73 block 4, rule 5; the owner's (б4-8) а) The one frame: a head of 40 px - the post's name, its place and the
+  // count at the left, the actions (an icon and its word) at the right, the ✕ of 28 px last; the window's status line
+  // (`.ref-said`) is the first line of the right column, not in the head.
   ov.innerHTML = `
-    <div class="lib-view ref-view">
-      <div class="lib-view-head">
-        <span class="lib-view-title"></span>
-        <span class="ref-view-where"></span>
-        <span class="lib-view-count"></span>
+    <div class="lib-view ref-view u-win is-float">
+      <div class="lib-view-head u-win-head">
+        <span class="lib-view-title u-win-title"></span>
+        <span class="ref-view-where u-win-sub"></span>
+        <span class="lib-view-count u-win-sub"></span>
         <span class="sp"></span>
-        <span class="ref-said"></span>
         <span class="lib-view-acts"></span>
-        <button class="u-btn is-s is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
+        <button class="u-btn is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
       </div>
       <div class="lib-view-body">
         <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
@@ -179,7 +182,7 @@ export function openPost(list, at, o) {
           <div class="ref-strip"></div>
         </div>
         <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
-        <aside class="lib-view-info"></aside>
+        <aside class="lib-view-info"><div class="ref-said u-status" aria-live="polite"></div></aside>
       </div>
     </div>`;
   document.body.appendChild(ov);
@@ -224,11 +227,20 @@ function _step(d) {
   _v.file = 0;
   _v.sel = new Set();
   _v.whole = false;
-  _v.ov.querySelector('.ref-said').textContent = '';
+  _said('');
   _paint();
 }
 
 const _cur = () => (_v ? _v.list[_v.at] : null);
+
+// (phase V73 block 4) The window's ONE status line (`u-status`, the first line of the right column): quiet; red only when
+// it says something did not happen ("not moved: …", "not added: …", a cut that failed).
+function _setSaid(node, t, bad) {
+  if (!node) return;
+  node.textContent = t || '';
+  node.classList.toggle('is-bad', !!(bad || /^not /i.test(String(t || ''))));
+}
+function _said(t, bad) { if (_v) _setSaid(_v.ov.querySelector('.ref-said'), t, bad); }
 
 function _paint() {
   const it = _cur();
@@ -297,9 +309,9 @@ function _paintStage() {
       src: whole ? f.original.path : f.path, start: whole ? f.original : null, whole,
       here: { kind: 'references', cat: (it.meta && it.meta.categoryId) || '' },
     }, {
-      say: (t) => { if (_v && said.isConnected) said.textContent = t; },
+      say: (t, err) => { if (_v && said.isConnected) _setSaid(said, t, err); },
       onSaved: (r) => {
-        if (_v && said.isConnected) said.textContent = 'saved as a new clip in ' + r.where;
+        if (_v && said.isConnected) _setSaid(said, 'saved as a new clip in ' + r.where);
         if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ cut: it }); } catch (e) { /* the page's */ } }
       },
     });
@@ -370,7 +382,9 @@ function _row(box, k, v) {
 
 function _paintInfo(it) {
   const box = _v.ov.querySelector('.lib-view-info');
+  const said = box.querySelector('.ref-said');      // (phase V73 block 4) the status line stays the column's first line
   box.textContent = '';
+  if (said) box.appendChild(said);
   const m = it.meta || {};
   const files = filesOf(it);
   _row(box, 'where', whereOf(it));
@@ -404,7 +418,7 @@ function _paintActs(it) {
   box.textContent = '';
   // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
   // picture, into VIDEO or IMAGES (the owner: one of several goes by its files, from the strip).
-  const mv = el('button', 'u-btn is-s', 'Move to…');
+  const mv = fillAct(el('button', 'u-btn is-s'), 'Move to…');
   mv.type = 'button';
   mv.title = 'Move the whole post';
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
@@ -429,7 +443,7 @@ function _paintActs(it) {
     });
     box.appendChild(hl);
   }
-  const del = el('button', 'u-btn is-s is-danger', 'Delete');
+  const del = fillAct(el('button', 'u-btn is-s is-danger'), 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
   // "Really?" on the button itself (the owner's way), by js/really.js (phase V73 block 2): a second press within 3 s deletes.
@@ -438,14 +452,14 @@ function _paintActs(it) {
     // the pattern read `d+` and never matched - it is `\d+`.)
     armed: () => deleteQuestion(it).then((q) => {
       const m = /It is used in (\d+ projects?)/.exec(q);
-      if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
+      if (m && _v && _cur() === it) _said('on the timelines of ' + m[1] + ' - its clips there turn red');
     }),
     go: async () => {
     del.disabled = true;
     try {
       const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
       if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
-    } catch (e) { del.disabled = false; del.textContent = 'Delete'; showError('Not deleted: ' + e.message); return; }
+    } catch (e) { del.disabled = false; fillAct(del, 'Delete'); showError('Not deleted: ' + e.message); return; }
     if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
     _v.list = _v.list.filter(x => x !== it);
     if (!_v.list.length) return closePost();
@@ -465,7 +479,7 @@ function _paintActs(it) {
 async function _toSources(it, btn) {
   btn.disabled = true;
   const said = _v.ov.querySelector('.ref-said');
-  const say = (t) => { if (_v && said.isConnected) said.textContent = t; btn.textContent = t.length < 40 ? t : 'To scenario sources'; };
+  const say = (t) => { if (_v && said.isConnected) _setSaid(said, t); btn.textContent = t.length < 40 ? t : 'To scenario sources'; };
   say('reading the link…');
   const api = async (url, body) => {
     const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
@@ -501,11 +515,11 @@ async function _toSources(it, btn) {
     _v.file = 0;
     _v.sel = new Set();
     _paint();
-    _v.ov.querySelector('.ref-said').textContent = 'it is a source already - its downloaded video is in YouTube · Videos';
+    _said('it is a source already - its downloaded video is in YouTube · Videos');
     return;
   }
   btn.textContent = 'To scenario sources';
-  _v.ov.querySelector('.ref-said').textContent = 'added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in';
+  _said('added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in');
 }
 
 // ── moving (block 5b) ────────────────────────────────────────────────────────
@@ -544,14 +558,14 @@ async function _moveMenu(anchor, ids, files, whole) {
 
 async function _doMove(it, ids, to) {
   const said = _v.ov.querySelector('.ref-said');
-  said.textContent = 'moving…';
+  _setSaid(said, 'moving…');
   let r = null;
   try {
     r = await fetch('/api/references/' + encodeURIComponent(it.id) + '/move', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: ids, to }),
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
-  } catch (e) { if (_v) said.textContent = 'not moved: ' + e.message; return; }
+  } catch (e) { if (_v) _setSaid(said, 'not moved: ' + e.message, true); return; }
   if (!_v) return;
   const where = (to.kind === 'references' ? 'REFERENCES · ' + (to.cat ? to.label : 'its source folder')
     : to.kind === 'images' ? 'IMAGES' + (to.cat ? ' · ' + to.label : '')
@@ -575,6 +589,6 @@ async function _doMove(it, ids, to) {
   _v.file = 0;
   _v.sel = new Set();
   _paint();
-  _v.ov.querySelector('.ref-said').textContent = (r.moved ? r.moved + ' moved to ' + where : 'nothing moved')
-    + (skipped ? ' · ' + skipped + ' stayed: ' + r.skipped[0].why : '');
+  _said((r.moved ? r.moved + ' moved to ' + where : 'nothing moved')
+    + (skipped ? ' · ' + skipped + ' stayed: ' + r.skipped[0].why : ''));
 }

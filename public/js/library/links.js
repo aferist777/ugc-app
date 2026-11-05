@@ -93,22 +93,25 @@ export function openLinkWindow({ where, prefill, onAdd }) {
   const ov = document.createElement('div');
   ov.className = 'mk-ov';
   ov.innerHTML = `
-    <div class="mk-panel lk-panel" role="dialog" aria-modal="true">
-      <div class="mk-panel-head"><span class="mk-panel-t">Add by a link</span><span class="sp"></span>
-        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
+    <div class="mk-panel lk-panel u-win is-float" role="dialog" aria-modal="true">
+      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">Add by a link</span><span class="sp"></span>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
       <div class="mk-panel-body">
         <textarea class="lk-ta u-area" rows="5" placeholder="One link per line - YouTube, TikTok, Instagram and the other sites yt-dlp reads"></textarea>
-        <p class="mk-pnote"></p>
-        <div class="lk-row"><span class="lk-said"></span><span class="sp"></span>
-          <button class="u-btn is-main" type="button" data-go="add">Add</button></div>
+        <p class="mk-pnote u-status is-line"></p>
       </div>
+      <div class="lk-row u-win-foot"><span class="lk-said u-status"></span><span class="sp"></span>
+        <button class="u-btn is-main" type="button" data-go="add">Add</button></div>
     </div>`;
   document.body.appendChild(ov);
   const ta = ov.querySelector('.lk-ta');
   const said = ov.querySelector('.lk-said');
-  ov.querySelector('.mk-pnote').textContent = 'Each lands in ' + (where || 'Uploads') + ' as a file brought in would, at the best quality '
-    + 'there is - one at a time, the progress in the shelf\'s status line. Without a login: a video a site shows only to '
-    + 'signed-in people cannot be fetched - add it as a file then.';
+  // (phase V73 block 4, rule 5) The one frame: the note ONE line - its first sentence shown, the whole under the pointer; the
+  // last row is the frame's foot (the status line left, "Add" right).
+  const note = ov.querySelector('.mk-pnote');
+  note.textContent = 'Each lands in ' + (where || 'Uploads') + ' as a file brought in would, at the best quality '
+    + 'there is - one at a time, the progress in the shelf\'s status line.';
+  note.title = note.textContent + ' Without a login: a video a site shows only to signed-in people cannot be fetched - add it as a file then.';
   if (prefill) ta.value = prefill;
   const go = () => {
     const urls = parseLinks(ta.value);

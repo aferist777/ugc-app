@@ -181,7 +181,7 @@
 .mv3-hlp-src-img{width:54px; height:30px; object-fit:cover; border-radius:2px; flex:0 0 auto}
 .mv3-hlp-src-t{display:flex; flex-direction:column; min-width:0}
 .mv3-hlp-src-t b{font:600 11px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mv3-hlp-src-t small{font:400 9.5px/1.3 var(--font); color:var(--muted)}
+.mv3-hlp-src-t small{font:400 10px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab{display:flex; align-items:center; gap:7px; margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab[hidden]{display:none}
 /* The kinds: square buttons, the owner's pixel icons (P1) three times their grid, gold */
@@ -190,7 +190,7 @@
   width:96px; height:96px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:6px 4px;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--gold); cursor:pointer;
 }
-.mv3-hlp-kind:hover{border-color:var(--gold)}
+.mv3-hlp-kind:hover{border-color:var(--sel-line)}   /* (phase V73 block 4) gold is the main button's; the icons keep theirs */
 .mv3-hlp-kind.is-on{border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 1px var(--sel-line)}   /* (б1-17) the picked kind: a step and a light line */
 .mv3-hlp-kind-ic{width:48px; height:48px; display:flex; align-items:center; justify-content:center; font:800 22px/1 var(--font)}
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
@@ -201,7 +201,7 @@
 .mv3-hlp-about{height:116px; overflow-y:auto; margin-top:8px; padding:8px 11px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); font:400 10.5px/1.5 var(--font); color:var(--ink)}
 .mv3-hlp-about-h{margin-bottom:3px; font:600 10px/1.4 var(--font); color:var(--muted)}
-.mv3-hlp-about-l b{color:var(--gold); font-weight:700}
+.mv3-hlp-about-l b{color:var(--ink); font-weight:600}
 .mv3-hlp-about-p{margin:0}
 /* The length, the count, the moods: buttons in a row */
 .mv3-hlp-opts{margin-top:10px; display:flex; flex-direction:column; gap:6px}
@@ -218,13 +218,13 @@
   border-bottom:1px solid var(--border-soft)}
 /* (the owner's check of P3) The open tab's set only: its name on top, its buttons under it - one column, small */
 .mv3-hlp-cset{display:flex; flex-direction:column; gap:4px; min-width:0}
-.mv3-hlp-cset-h{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.mv3-hlp-cset-h{font:500 11px/16px var(--font); color:var(--muted)}
 .mv3-hlp-cset .mv3-hlp-chips{gap:3px}
 .mv3-hlp-pick{display:inline-flex; align-items:center; max-width:100%; height:19px; border:1px solid var(--sel-line); border-radius:999px;
   background:var(--sel-bg); overflow:hidden}
-.mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:600 9.5px/17px var(--font);
+.mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:500 10px/17px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
-.mv3-hlp-pick-nm:hover{color:var(--gold)}
+.mv3-hlp-pick-nm:hover{text-decoration:underline}
 .mv3-hlp-pick-x{flex:0 0 auto; display:flex; align-items:center; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); cursor:pointer; --x-size:10px}
 .mv3-hlp-pick-x:hover{color:var(--danger)}
 .mv3-hlp-style{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:7px; padding:7px;
@@ -238,13 +238,9 @@
 .mv3-hlp-fonts .mv3-fnt-cats{flex:0 0 auto; margin-bottom:7px}
 .mv3-hlp-fonts .mv3-fnt-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
 /* (V68 P3) A chosen one pressed in its row: its tile outlined in gold */
-.mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold)}
-.mv3-hlp-foot{flex:0 0 auto}
+.mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}   /* the selected look (б1-17) */
+/* (phase V73 block 4) the frame's foot: who hears and what was said - the one status line, two of them - at the left */
 .mv3-hlp-footl{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px}
-.mv3-hlp-hear{font:500 10px/1.35 var(--font); color:var(--muted)}
-.mv3-hlp-hear.is-err{color:var(--danger)}
-.mv3-hlp-said{font:600 10px/1.35 var(--font); color:var(--muted)}
-.mv3-hlp-said.is-err{color:var(--danger)}
 .mv3-c-btn.mv3-hlp-go{flex:0 0 auto}
 
 /* ── The card's line of the captions' style (phase V33.3) ── */
@@ -254,32 +250,34 @@
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
 
 /* (phase V33.8, H2) The captions recommended for the video's kind: their chip first, gold; their groups marked with a dot */
-.mv3-hls-cats .mv3-cap-cat.is-rec{border-color:var(--gold); color:var(--gold)}
-.mv3-hls-cats .mv3-cap-cat.is-rec.is-on{background:color-mix(in oklch, var(--gold) 16%, transparent); color:var(--ink)}
-.mv3-hls-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
+/* (phase V73 block 4, a proposal) the recommended marks are not gold any more (gold - the main button, the generators, your move):
+   the recommended group's chip a light dashed line, the dots in the text's colour */
+.mv3-hls-cats .mv3-cap-cat.is-rec{border-style:dashed; border-color:var(--sel-line); color:var(--ink)}
+.mv3-hls-cats .mv3-cap-cat.is-rec.is-on{border-style:solid; background:var(--sel-bg); color:var(--ink)}
+.mv3-hls-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--ink); font-size:7px; margin-right:4px; vertical-align:2px}
 /* (phase V33.8, (в1)) The "by the video" tile of auto: the two styles it chooses between */
-.mv3-hls-by-box{display:flex; flex-direction:column; justify-content:center; gap:6px; padding:6px 8px; border:1px dashed var(--gold)}
+.mv3-hls-by-box{display:flex; flex-direction:column; justify-content:center; gap:6px; padding:6px 8px; border:1px dashed var(--sel-line)}
 .mv3-hls-by-l{display:flex; flex-direction:column; gap:1px; text-align:left; min-width:0}
-.mv3-hls-by-l small{font:500 8.5px/1.2 var(--font); color:var(--muted)}
-.mv3-hls-by-l b{font:700 9.5px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-hls-by-l small{font:500 10px/1.2 var(--font); color:var(--muted)}
+.mv3-hls-by-l b{font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hls-by.is-on .mv3-hls-by-box{border-style:solid}
 /* (phase V69 P12) A kind in development: grey, not pressed, its words under its name; the title's ✕ on a card; the recommended marks
    of the moods, the animations and the font groups (a gold dot, as the preset groups have) */
 .mv3-hlp-kind.is-dev{opacity:.45; filter:grayscale(1); cursor:default; border-style:dashed}
 .mv3-hlp-kind.is-dev:hover{border-color:var(--border)}
-.mv3-hlp-kind-dev{font:600 8.5px/1.1 var(--font); color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+.mv3-hlp-kind-dev{font:400 10px/1.1 var(--font); color:var(--faint)}   /* a quiet label (phase V73 block 4) */
 .mv3-hl-title-x{margin-left:6px}
 .mv3-hlp-moods .mv3-hlp-chip.is-rec::before,
-.mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
-.mv3-hlp-byvideo{border-style:dashed; border-color:var(--gold)}
-.mv3-hls-grid .mv3-cap-tile.is-rec::after{content:'●'; position:absolute; top:4px; right:5px; color:var(--gold); font-size:8px; line-height:1}
+.mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--ink); font-size:7px; margin-right:4px; vertical-align:2px}
+.mv3-hlp-byvideo{border-style:dashed; border-color:var(--sel-line)}
+.mv3-hls-grid .mv3-cap-tile.is-rec::after{content:'●'; position:absolute; top:4px; right:5px; color:var(--ink); font-size:8px; line-height:1}
 .mv3-hlp-titlerow{margin:4px 0 2px}
 .mv3-hls-grid .mv3-cap-tile.is-rec{position:relative}
 /* (phase V69 P12) "by the video" lists each kind auto may find - one line each, the kind and the set it would wear */
 .mv3-hls-by-box.is-kinds{justify-content:flex-start; align-items:stretch; gap:2px; padding:5px 6px}
 .mv3-hls-by-box.is-kinds .mv3-hls-by-l{flex-direction:row; align-items:baseline; gap:4px; overflow:hidden}
-.mv3-hls-by-box.is-kinds .mv3-hls-by-l small{flex:0 0 auto; font-size:7.5px}
-.mv3-hls-by-box.is-kinds .mv3-hls-by-l b{min-width:0; font-size:8px}
+.mv3-hls-by-box.is-kinds .mv3-hls-by-l small{flex:0 0 auto; font-size:10px}
+.mv3-hls-by-box.is-kinds .mv3-hls-by-l b{min-width:0; font-size:10px}
 
 /* (phase V66) The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
 .mv3-hlg{display:flex; flex-direction:column; gap:6px}
