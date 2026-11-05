@@ -124,11 +124,12 @@
 .hm-qs-fmts{display:flex; gap:10px}
 .hm-qs-fmt{display:flex; align-items:center; gap:9px; padding:8px 14px 8px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--muted); cursor:pointer; font:600 11px/1.2 var(--font)}
-.hm-qs-fmt b{color:var(--ink); font-weight:700}
+.hm-qs-fmt b{color:var(--ink); font-weight:600}
 .hm-qs-fmt small{font-size:10px}
-.hm-qs-fmt:hover{border-color:var(--gold)}
-.hm-qs-fmt.is-on{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); background:color-mix(in oklch, var(--gold) 12%, transparent)}
-.hm-qs-shape{display:block; border:1.5px solid var(--gold); border-radius:2px}
+/* (phase V73 block 4) the chosen format is the selected look - a step and a light line (к16); gold is the window's main button only */
+.hm-qs-fmt:hover{border-color:var(--sel-line); color:var(--ink)}
+.hm-qs-fmt.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
+.hm-qs-shape{display:block; border:1.5px solid currentColor; border-radius:2px}
 .hm-qs-shape.is-v{width:14px; height:24px}
 .hm-qs-shape.is-h{width:30px; height:17px}
 .hm-qs-cols{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)}
@@ -144,24 +145,23 @@
 .hm-qs-cols.is-one .mv3-x-hdr{margin-top:8px}
 .hm-qs-box{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
 .hm-qs-box.is-choose{border:1px solid var(--border-soft); border-radius:var(--r-xs); overflow:hidden}
-.hm-qs-who{display:flex; align-items:center; gap:10px; min-height:26px; margin-bottom:6px; font:600 11.5px/1.3 var(--font); color:var(--gold)}
+.hm-qs-who{display:flex; align-items:center; gap:10px; min-height:26px; margin-bottom:6px; font:500 12px/1.3 var(--font); color:var(--ink)}
 .hm-qs-quiet{font-weight:400; color:var(--muted)}
 /* The text chosen: its title, what it is, its lines */
 .hm-qs-text{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:8px}
 .hm-qs-text-h{display:flex; align-items:center; gap:8px; min-width:0}
-.hm-qs-text-h b{font:700 12.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.hm-qs-text-h b{font:600 12.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .hm-qs-text-h .sp{flex:1}
 .hm-qs-text-sub{flex:0 0 auto; font:500 10.5px/1.3 var(--font); color:var(--muted)}
 .hm-qs-lines{flex:1 1 auto; min-height:0; overflow-y:auto; margin:0; padding:8px 10px 8px 30px; border:1px solid var(--border-soft);
   border-radius:var(--r-xs); background:var(--surface-2); font:400 11.5px/1.5 var(--font); color:var(--ink)}
 .hm-qs-lines li{padding:2px 0; white-space:pre-wrap; overflow-wrap:anywhere}
-.hm-qs-lines li::marker{color:var(--gold); font-weight:700}
+.hm-qs-lines li::marker{color:var(--faint); font-weight:500}
 /* The voiceover's mood and voice */
 .hm-qs .hm-qs-mood{ flex:0 0 auto; align-self:flex-start; width:auto; min-width:240px; max-width:360px }
 .hm-qs-col > .mv3-x-hdr, .hm-qs-col > .mv3-x-note, .hm-qs-voice, .hm-qs-vnotes{flex:0 0 auto}
 .hm-qs-voice{display:flex; align-items:center; min-height:28px}
-.hm-qs-vnote{margin-top:4px; font:400 10.5px/1.4 var(--font); color:var(--muted)}
-.hm-qs-vnote.is-bad{color:var(--danger)}
-.hm-qs-foot .hm-qs-said{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--muted)}
-.hm-qs-said.is-bad{color:var(--danger)}
+.hm-qs-vnote{margin-top:4px}   /* the one status line (.u-status) */
+/* (phase V73 block 4) the foot is the frame's: the line at the left (.u-status), "create" at the right */
+.hm-qs-said{flex:0 1 auto}
 /* (phase V73) the quick start's "create" is its window's main button: a gold fill, not a gold outline */

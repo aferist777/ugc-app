@@ -69,7 +69,7 @@ export async function openStart(kind) {
 function _frame(kind, label, o) {
   let frame = null;
   frame = openFrame({
-    name: label, size: o.size, geom: o.geom,
+    name: label, size: o.size, geom: o.geom, foot: true,
     onClose: () => { if (_cur && _cur.frame === frame) _cur = null; if (o.onClose) o.onClose(); },
   });
   frame.setCrumbs([{ label: 'new project · ' + label }]);
@@ -77,15 +77,14 @@ function _frame(kind, label, o) {
   _cur = { kind, frame };
   return frame;
 }
-// The foot every popup has: what it says, and its press.
+// The foot every popup has - the frame's (phase V73 block 4): what it says at the left (the one status line), its press at the right.
 function _foot(frame, label, title) {
-  const foot = el('div', 'mv3-x-foot hm-qs-foot');
-  const said = el('span', 'hm-qs-said');
+  const foot = frame.foot;
+  const said = el('span', 'hm-qs-said u-status');
   const go = el('button', 'mv3-c-btn hm-qs-go u-btn is-main', label);
   go.type = 'button';
   if (title) go.title = title;
-  foot.append(said, go);
-  frame.body.appendChild(foot);
+  foot.append(said, el('span', 'sp'), go);
   // (phase V73 block 2) a press that failed is a popup (`fail`); the line keeps what is being done and the hints
   return { foot, said, go, say: (t, bad) => { said.textContent = t || ''; said.classList.toggle('is-bad', !!bad); },
     fail: (t) => { said.textContent = ''; said.classList.remove('is-bad'); showError(t); } };
@@ -97,14 +96,14 @@ function _blank() {
   const frame = _frame('blank', 'blank', { size: { w: 560, h: 330 }, geom: { key: 'start_blank', move: true, keepPos: true } });
   const form = el('div', 'hm-qs-form');
   frame.body.appendChild(form);
-  form.appendChild(el('div', 'mv3-x-hdr', 'name'));
+  form.appendChild(el('div', 'mv3-x-hdr', 'Name'));
   const name = el('input', 'mv3-sc-inp hm-qs-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.value = _today() + ' - ';
   name.placeholder = 'what the project is called';
   form.appendChild(name);
-  form.appendChild(el('div', 'mv3-x-hdr', 'format'));
+  form.appendChild(el('div', 'mv3-x-hdr', 'Format'));
   const fmts = el('div', 'hm-qs-fmts');
   form.appendChild(fmts);
   const btns = {};
@@ -241,10 +240,10 @@ async function _talking() {
   const R = el('div', 'hm-qs-col is-who');
   cols.append(L, R);
   frame.body.appendChild(cols);
-  L.appendChild(el('div', 'mv3-x-hdr', 'the text'));
+  L.appendChild(el('div', 'mv3-x-hdr', 'The text'));
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
-  R.appendChild(el('div', 'mv3-x-hdr', 'who'));
+  R.appendChild(el('div', 'mv3-x-hdr', 'Who'));
   const whoLine = el('div', 'hm-qs-who');
   R.appendChild(whoLine);
   const whoHost = el('div', 'hm-qs-box is-choose');
@@ -344,16 +343,16 @@ async function _voiceover() {
   const R = el('div', 'hm-qs-col');
   cols.append(L, R);
   frame.body.appendChild(cols);
-  L.appendChild(el('div', 'mv3-x-hdr', 'the text'));
+  L.appendChild(el('div', 'mv3-x-hdr', 'The text'));
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
-  R.appendChild(el('div', 'mv3-x-hdr', 'mood'));
+  R.appendChild(el('div', 'mv3-x-hdr', 'Mood'));
   const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood u-in');
   moodSel.title = 'The emotion of the whole voiceover: the text is marked up by it, and read by its [tags]';
   R.appendChild(moodSel);
   const moodAbout = el('p', 'mv3-x-note');
   R.appendChild(moodAbout);
-  R.appendChild(el('div', 'mv3-x-hdr', 'voice'));
+  R.appendChild(el('div', 'mv3-x-hdr', 'Voice'));
   const voiceHost = el('div', 'hm-qs-voice');
   const voiceNotes = el('div', 'hm-qs-vnotes');
   R.append(voiceHost, voiceNotes);
@@ -370,7 +369,7 @@ async function _voiceover() {
     go: (v) => { if (v === 'voice') VOICE.openVoices(vapi, { key: 'home-voiceover', lang: VOICE.scriptLang(true, textOf()) }); },
     repaint: () => { paintVoice(); VOICE.paintVoices(vapi); },
     reload: () => Promise.resolve(),
-    note: (t, bad) => el('div', 'hm-qs-vnote' + (bad ? ' is-bad' : ''), t),
+    note: (t, bad) => el('div', 'hm-qs-vnote u-status' + (bad ? ' is-bad' : ''), t),
     patchChar: async () => { throw new Error('a voiceover has no character'); },
   };
   function paintVoice() {

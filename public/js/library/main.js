@@ -719,7 +719,7 @@ function _actionsFor(it) {
   if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: 'Rename' });
   if (_FAVABLE.has(it.kind)) {
     const on = !!(it.meta && it.meta.favorite);
-    out.push({ id: 'fav', label: on ? 'Unfavourite' : 'Favourite' });
+    out.push({ id: 'fav', label: on ? 'Unfavorite' : 'Favorite' });
   }
   out.push({ id: 'del', label: 'Delete', danger: true });
   return out;

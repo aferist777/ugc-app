@@ -650,33 +650,32 @@ function _relinkSource(it) {
 
 // (phase V43, (ё17а): "удалить с галочкой удаления расшифровок") A source whose video is gone from the disk: deleted - with its
 // transcripts, or keeping them (the box not ticked) for the same file added again, which then is not heard twice.
+// (phase V73 block 4, the owner's (б4-14) а) The shared question IN THE MIDDLE over the dimmed page (the update's and the
+// speech model's - `.dr-back` + `.u-ask`): the question, what goes, the tick inside, "Cancel" left and the red "Delete" right.
 function _deleteMissing(it) {
-  const ov = el('div', 'mv3-x-ov');
-  const box = el('div', 'mv3-x');
+  const back = el('div', 'dr-back');
+  const box = el('div', 'nm-box dr-box u-ask is-float mk-delq');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
-  const head = el('div', 'mv3-x-head');
-  head.appendChild(el('h3', null, `Delete "${it.title}"?`));
-  const body = el('div', 'mv3-x-body');
-  body.appendChild(el('p', 'mv3-x-note', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
-  const lab = el('label', 'mv3-x-check');
+  box.appendChild(el('b', 'nm-t', `Delete "${it.title}"?`));
+  box.appendChild(el('p', 'mk-delq-p', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
+  const lab = el('label', 'mk-delq-tick');
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.classList.add('u-check');
-  lab.append(cb, document.createTextNode(' and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
-  body.appendChild(lab);
-  const foot = el('div', 'mv3-x-foot');
-  const cancel = el('button', 'mv3-c-btn u-btn', 'Cancel');
+  lab.append(cb, el('span', null, 'and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
+  box.appendChild(lab);
+  const row = el('div', 'nm-r u-ask-r');
+  const cancel = el('button', 'u-btn is-s', 'Cancel');
   cancel.type = 'button';
-  const go = el('button', 'mv3-c-btn danger u-btn is-danger', 'Delete');
+  const go = el('button', 'u-btn is-s is-danger is-armed', 'Delete');
   go.type = 'button';
-  foot.append(cancel, go);
-  box.append(head, body, foot);
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  const close = () => { ov.remove(); Layers.close(layer); };
-  const layer = Layers.open(ov, { name: 'delete-source', onEsc: close });
+  row.append(cancel, go);
+  box.appendChild(row);
+  document.body.append(back, box);
+  const close = () => { back.remove(); box.remove(); Layers.close(layer); };
+  const layer = Layers.open(box, { name: 'delete-source', onEsc: close });
   cancel.addEventListener('click', close);
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
+  back.addEventListener('mousedown', close);
   go.addEventListener('click', async () => {
     go.disabled = true;
     await _flushDraft();
@@ -893,11 +892,11 @@ function _openSourceWin(it, play) {
   const id = String(it.id);
   const ov = el('div', 'mk-ov');
   ov.innerHTML = `
-    <div class="mk-panel src-panel" role="dialog" aria-modal="true" aria-label="Source">
-      <div class="mk-panel-head">
-        <span class="mk-panel-t" data-f="head"></span>
+    <div class="mk-panel src-panel u-win is-float" role="dialog" aria-modal="true" aria-label="Source">
+      <div class="mk-panel-head u-win-head">
+        <span class="mk-panel-t u-win-title" data-f="head"></span>
         <span class="sp"></span>
-        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button>
       </div>
       <div class="src-body">
         <div class="src-stage" data-f="stage"></div>
@@ -905,7 +904,7 @@ function _openSourceWin(it, play) {
           <label class="mk-field"><span>Name</span><input type="text" class="u-in" data-f="name" maxlength="200" spellcheck="false"></label>
           <div class="src-save">
             <button class="u-btn is-main" type="button" data-f="save">Save name</button>
-            <span class="lib-status" data-f="st"></span>
+            <span class="u-status" data-f="st"></span>
           </div>
           <div class="lib-vi" data-f="facts"></div>
         </aside>
@@ -962,8 +961,8 @@ function _openSourceWin(it, play) {
   const doSave = async () => {
     const title = name.value.trim();
     const st = q('st');
-    if (!title) { st.textContent = 'A name is needed.'; st.className = 'lib-status err'; return; }
-    if (title === it.title) { st.textContent = 'unchanged'; st.className = 'lib-status'; return; }
+    if (!title) { st.textContent = 'A name is needed.'; st.className = 'u-status err'; return; }
+    if (title === it.title) { st.textContent = 'unchanged'; st.className = 'u-status'; return; }
     q('save').disabled = true;
     try {
       const saved = await _renameSource(id, title);
@@ -971,10 +970,10 @@ function _openSourceWin(it, play) {
       if (_srcWin && _srcWin.ov === ov) {
         q('head').textContent = saved;
         st.textContent = 'saved';
-        st.className = 'lib-status ok';
+        st.className = 'u-status ok';
       }
     } catch (e) {
-      if (_srcWin && _srcWin.ov === ov) { st.textContent = e.message; st.className = 'lib-status err'; }
+      if (_srcWin && _srcWin.ov === ov) { st.textContent = e.message; st.className = 'u-status err'; }
     } finally { if (_srcWin && _srcWin.ov === ov) q('save').disabled = false; }
   };
   q('save').addEventListener('click', doSave);
@@ -2099,13 +2098,15 @@ function _closeAddSource() {
   Layers.close(w.layer);
 }
 
+const ADD_NOTE = ['A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once.',
+  'A vertical or square one is asked about: onto Uploads in Media, or a source after all. A sound without a picture - in development. Links are read without a login: a video a site shows only to signed-in people - add it as a file. The transcription and the topics are paid calls.'];
 function _openAddSource() {
   if (_addWin) return;
   const ov = el('div', 'mk-ov');
   ov.innerHTML = `
-    <div class="mk-panel" role="dialog" aria-modal="true">
-      <div class="mk-panel-head"><span class="mk-panel-t">Add a source</span><span class="sp"></span>
-        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
+    <div class="mk-panel u-win is-float" role="dialog" aria-modal="true">
+      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">Add a source</span><span class="sp"></span>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
       <div class="mk-panel-body">
         <div class="mk-choice u-tabs">
           <button class="mk-choice-btn u-tab cur" type="button" data-route="link">From a link</button>
@@ -2127,18 +2128,17 @@ function _openAddSource() {
           <span class="mk-lib-head">REFERENCES · YouTube · Videos</span>
           <div class="mk-lib" data-f="lib"></div>
         </section>
-        <p class="mk-pnote">A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or
-          copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once. A vertical or
-          square one is asked about: onto Uploads in Media, or a source after all. A sound without a picture - in
-          development. Links are read without a login: a video a site shows only to signed-in people - add it as a
-          file. The transcription and the topics are paid calls.</p>
-        <div class="mk-adds-say" data-f="said" hidden></div>
+        <p class="mk-pnote u-status is-line" data-f="note"></p>
+        <div class="mk-adds-say u-status" data-f="said" hidden></div>
         <div class="mk-adds" data-f="adds"></div>
       </div>
     </div>`;
   document.body.appendChild(ov);
   const q = (s) => ov.querySelector(s);
   const f = (name) => q(`[data-f="${name}"]`);
+  // (phase V73 block 4) The long note is ONE line - the one about money ((4а-14) а), the whole under the pointer.
+  f('note').textContent = 'The transcription and the topics are paid calls.';
+  f('note').title = ADD_NOTE.join(' ');
   const route = (r) => {
     ov.querySelectorAll('.mk-choice-btn').forEach(b => b.classList.toggle('cur', b.dataset.route === r));
     ov.querySelectorAll('.mk-route').forEach(s => { s.hidden = s.dataset.r !== r; });
@@ -2190,7 +2190,7 @@ async function _paintLib() {
       ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
     row.appendChild(t);
     if (it.type === 'remote') {
-      const b = el('button', 'u-btn is-s is-main', 'Add');
+      const b = el('button', 'u-btn is-s', 'Add');   // (phase V73 block 4) plain - one gold per route
       b.type = 'button';
       b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
       b.addEventListener('click', async () => {
@@ -2328,10 +2328,11 @@ function _paintAdds() {
 function _addLine(r) {
   const line = el('div', 'mk-addl');
   line.appendChild(el('div', 'mk-addl-t', r.title || r.url || 'a file'));
-  const say = (text, err) => { const s = el('div', 'mk-addl-s', text); if (err) line.classList.add('err'); line.appendChild(s); };
+  const say = (text, err) => { const s = el('div', 'mk-addl-s u-status' + (err ? ' err' : ''), text); if (err) line.classList.add('err'); line.appendChild(s); };
   const acts = el('div', 'mk-addl-acts');
   const btn = (label, title, on, cls) => {
-    const b = el('button', 'u-btn is-s' + (cls === 'primary' ? ' primary is-main' : cls ? ' ' + cls : ''), label);
+    // (phase V73 block 4) the answers are plain buttons - the window's gold is each route's own "Add"
+    const b = el('button', 'u-btn is-s' + (cls === 'primary' ? ' primary' : cls ? ' ' + cls : ''), label);
     b.type = 'button';
     if (title) b.title = title;
     if (on) b.addEventListener('click', on); else b.disabled = true;

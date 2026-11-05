@@ -47,6 +47,7 @@ import * as GW from '../gen-window.js';
 // in the big form, the same on Home's quick start).
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { icon } from '../icons.js';
 
 const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
@@ -110,13 +111,15 @@ function _mark() {
   const on = !!(_audio && !_audio.paused) ? _playing : '';
   document.querySelectorAll('.mv3-wk-vplay:not(.is-read)').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
-    b.textContent = is ? '❚❚' : '▶';
+    // (phase V73 block 4) the voices window's buttons draw the icons (play / pause), the others their signs
+    if (b.dataset.ico) b.innerHTML = icon(is ? 'pause' : 'play', 14); else b.textContent = is ? '❚❚' : '▶';
     b.classList.toggle('is-playing', !!is);
   });
 }
 
-function _playBtn(src, what) {
-  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon', '▶');
+function _playBtn(src, what, ico) {
+  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon', ico ? '' : '▶');
+  if (ico) { b.dataset.ico = '1'; b.innerHTML = icon('play', 14); }
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -413,12 +416,12 @@ export function paintPicker(host, api) {
   // The project's own pick, when it is what the reads use: no character, or one without a voice.
   if (own && !mine.length) {
     const row = el('div', 'mv3-wk-vrow is-on');
-    row.appendChild(_playBtn(own.sample || '', 'our own demo'));
+    row.appendChild(_playBtn(own.sample || '', 'our own demo', api.inWindow));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', own.name || own.voiceId));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || 'no tags'));
     row.appendChild(txt);
-    row.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
+    row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'the voice'));
     host.appendChild(row);
     host.appendChild(api.note(rec
       ? 'Every line is read in it until ' + (rec.name || 'the character') + ' is given a voice of their own.'
@@ -428,15 +431,15 @@ export function paintPicker(host, api) {
   }
   for (const v of mine) {
     const row = el('div', 'mv3-wk-vrow' + (String(v.voiceId) === now ? ' is-on' : ''));
-    row.appendChild(_playBtn(v.sample || '', 'our own demo'));
+    row.appendChild(_playBtn(v.sample || '', 'our own demo', api.inWindow));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voiceId));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
     row.appendChild(txt);
     if (String(v.voiceId) === now) {
-      row.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
+      row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'the voice'));
     } else {
-      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s' + (api.inWindow ? ' is-quiet' : ''), 'use');
       use.type = 'button';
       use.title = 'Read every line in this one';
       use.disabled = !!_busy;
@@ -461,7 +464,7 @@ export function paintPicker(host, api) {
 
   // (phase V62, the owner: "в попапе выбора голоса, нужно дать обозначения фильтров elevenlabs. названия фильров написать над
   // дропдаунами") Each filter's name over its menu.
-  const NAMES = { gender: 'gender', age: 'age', descriptives: 'style', use_cases: 'use case', accent: 'accent', language: 'language' };
+  const NAMES = { gender: 'Gender', age: 'Age', descriptives: 'Style', use_cases: 'Use case', accent: 'Accent', language: 'Language' };
   const pick = (key, label, list) => {
     const cell = el('label', 'mv3-wk-vfcell');
     cell.appendChild(el('span', 'mv3-wk-vfname', NAMES[key] || key));
@@ -521,7 +524,7 @@ export function paintPicker(host, api) {
   const have = new Set(mine.map(v => String(v.voiceId)));
   for (const v of found) {
     const row = el('div', 'mv3-wk-vrow');
-    row.appendChild(_playBtn(v.preview_url || '', 'the owner’s sample'));
+    row.appendChild(_playBtn(v.preview_url || '', 'the owner’s sample', api.inWindow));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voice_id));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));

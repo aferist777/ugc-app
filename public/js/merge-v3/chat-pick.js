@@ -76,7 +76,7 @@ import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../fo
 import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from '../del-x.js';
 // (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts, the reason a popup in the
 // corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own, б1-13а).
-import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { emptyEl, loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
 
 const PAGE = 120;                 // tiles drawn at once - the next ones as the grid is scrolled to its end
@@ -378,7 +378,8 @@ export function dropLink(dt) {
 
 function _paintHead() {
   const o = _o;
-  _w.h.textContent = o.title;
+  // (phase V73 block 4) the window with the tree: its title in sentence case ("Pictures · first frame 1"); the old window as it was
+  _w.h.textContent = o.tree ? cap(o.title) : o.title;
   // (phase V57, (ок1)) What the window leaves out, beside the slot's own words ("clips up to 15 s - Seedance 2.0").
   const note = (o.tree && o.tree.note) || '';
   const hint = [o.hint || '', note].filter(Boolean).join(' · ');
@@ -750,13 +751,15 @@ function _openTree(o) {
 function _buildTree() {
   const T = _o.tree;
   const ov = el('div', 'pk-ov is-tree');
-  const box = el('div', 'pk is-tree');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - the title, then the slot's words and
+  // "one more goes here" as quiet notes, the 28 px ✕ -, its foot with "done" the gold one at the right
+  const box = el('div', 'pk is-tree u-win is-float');
   box.setAttribute('role', 'dialog');
-  const head = el('div', 'pk-head');
-  const h = el('h3', null, '');
-  const hint = el('span', 'pk-hint', '');
-  const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
+  const head = el('div', 'pk-head u-win-head');
+  const h = el('h3', 'u-win-title', '');
+  const hint = el('span', 'pk-hint u-win-sub', '');
+  const left = el('span', 'pk-room u-win-sub', '');
+  const x = el('button', 'pk-close u-btn is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
@@ -790,7 +793,7 @@ function _buildTree() {
   body.append(side, main);
 
   // The foot: this computer (and a clip by a link), what the chat says, done.
-  const foot = el('div', 'pk-foot');
+  const foot = el('div', 'pk-foot u-win-foot');
   const c = _o.computer;
   const up = el('button', 'pk-up u-btn is-s', '+ from this computer…');
   up.type = 'button';
@@ -832,8 +835,8 @@ function _buildTree() {
     b.addEventListener('click', go);
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   }
-  const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
+  const said = el('span', 'pk-said u-status is-line', '');
+  const done = el('button', 'mv3-c-btn pk-done u-btn is-main', 'done');
   done.type = 'button';
   foot.append(said, done);
 

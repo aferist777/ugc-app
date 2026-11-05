@@ -2232,10 +2232,11 @@ function _closeClipWindow() {
 function _clipWindow(p, l, i, n) {
   _closeClipWindow();
   const shade = el('div', 'mv3-wk-cwin');
-  const box = el('div', 'mv3-wk-cwin-box');
-  const head = el('div', 'mv3-wk-cwin-head');
-  head.appendChild(el('span', '', 'fragment ' + n + ' · its clips'));
-  const x = el('button', 'mv3-wk-cwin-x u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - "Fragment N · its clips", the 28 px ✕
+  const box = el('div', 'mv3-wk-cwin-box u-win is-float');
+  const head = el('div', 'mv3-wk-cwin-head u-win-head');
+  head.appendChild(el('span', 'u-win-title', 'Fragment ' + n + ' · its clips'));
+  const x = el('button', 'mv3-wk-cwin-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   x.addEventListener('click', _closeClipWindow);
@@ -2258,8 +2259,8 @@ function _clipWindow(p, l, i, n) {
     card.appendChild(v);
     const meta = el('div', 'mv3-wk-cwin-meta');
     meta.appendChild(el('span', 'mv3-wk-vname', c.dur ? c.dur.toFixed(1) + ' s' : 'take'));
-    if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
-    if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
+    if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
+    if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
     else {
       const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
       use.type = 'button';

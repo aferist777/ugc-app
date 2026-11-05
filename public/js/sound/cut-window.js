@@ -40,14 +40,21 @@ export async function openCut(it, opts) {
   if (typeof o.stop === 'function') o.stop();
   const music = it.kind === 'music';
   const back = el('div', 'snd-back');
-  const win = el('div', 'snd-win snd-cut');
-  const head = el('div', 'snd-win-head');
-  head.appendChild(el('b', null, 'Cut a piece'));
-  head.appendChild(el('span', 'snd-muted', it.name));
-  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4, rule 5) The one frame: a head band of 40 px - the name, the sound as its quiet note, the ✕ of 28 px;
+  // what was the window's padding is its body's.
+  const win = el('div', 'snd-win snd-cut u-win is-float');
+  const head = el('div', 'snd-win-head u-win-head');
+  head.appendChild(el('span', 'u-win-title', 'Cut a piece'));
+  const sub = el('span', 'u-win-sub', it.name);
+  sub.title = it.name || '';
+  head.append(sub, el('span', 'sp'));
+  const x = el('button', 'u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
+  x.title = 'Close (Esc)';
   head.appendChild(x);
   win.appendChild(head);
+  const body = el('div', 'snd-win-body');
+  win.appendChild(body);
 
   const audio = new Audio(it.path);
   let dur = +it.dur || 0;
@@ -67,11 +74,11 @@ export async function openCut(it, opts) {
     cut: { title: music ? 'The piece becomes a new track in Music' : 'The piece becomes a new sound in My sounds', onCut: (x0, x1) => _cut(x0, x1) },
   });
   stage.appendChild(sc.el);
-  win.appendChild(stage);
+  body.appendChild(stage);
   // The playhead starts at the piece: ▶ plays it from its beginning.
   if (a > 0) { audio.currentTime = a; sc.setTime(a); }
   const info = el('div', 'snd-cut-info');
-  win.appendChild(info);
+  body.appendChild(info);
 
   const row = el('div', 'snd-cut-row');
   const play = el('button', 'snd-btn snd-cut-play u-btn is-s is-icon', '▶');
@@ -89,12 +96,12 @@ export async function openCut(it, opts) {
     lay.title = 'Lay the piece at the playhead of the timeline - the same file, cut to the piece';
     row.appendChild(lay);
   }
-  win.appendChild(row);
+  body.appendChild(row);
   const HINT = 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
     + ' - the sound itself stays as it is.';
   // (phase V73 block 2) The line says what was done ("Laid on …", "cutting…"); an error is a popup in the corner (js/notice.js).
-  const said = el('div', 'snd-cut-said snd-muted', HINT);
-  win.appendChild(said);
+  const said = el('div', 'snd-cut-said u-status', HINT);   // (phase V73 block 4) the window's one status line
+  body.appendChild(said);
 
   document.body.append(back, win);
   const layer = Layers.open(win, { modal: true, onEsc: () => close() });

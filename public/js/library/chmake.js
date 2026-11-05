@@ -122,7 +122,7 @@ function _status(text, kind) {
   const el = $('chm-status');
   if (!el) return;
   el.textContent = text || '';
-  el.className = 'chm-status' + (kind ? ' ' + kind : '');
+  el.className = 'chm-status u-status' + (kind ? ' ' + kind : '');
   el.title = text || '';
 }
 
@@ -625,7 +625,7 @@ function _build() {
         </div>
       </section>
       <section class="chm-col chm-work" aria-label="Portrait">
-        <div class="chm-head"><span class="chm-t">Portrait</span><span class="sp"></span><span class="chm-status" id="chm-status"></span></div>
+        <div class="chm-head"><span class="chm-t">Portrait</span><span class="sp"></span><span class="chm-status u-status" id="chm-status"></span></div>
         <div class="chm-body">
           <div class="cv2-drop" id="chm-drop">
             <button class="cv2-page is-prev" type="button" id="chm-prev" title="Previous take"></button>

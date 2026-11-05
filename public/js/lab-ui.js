@@ -144,6 +144,12 @@ function wireParts() {
       for (const x of $$('.u-chip', box)) x.classList.toggle('is-on', x === c);
     });
   }
+  for (const box of $$('[data-seg]')) {
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      for (const x of $$('button', box)) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-pressed', String(x === b)); }
+    });
+  }
   for (const box of $$('[data-list]')) {
     box.addEventListener('click', (e) => {
       const r = e.target.closest('.u-row'); if (!r) return;

@@ -178,7 +178,7 @@ function _left() {
 function _form() {
   const right = el('div', 'gw-half is-make pw-right');
   const body = el('div', 'pw-fields');
-  body.appendChild(el('label', 'pw-lab', 'name'));
+  body.appendChild(el('label', 'pw-lab u-label', 'Name'));
   const name = el('input', 'pw-name u-in');
   name.type = 'text';
   name.maxLength = 120;
@@ -186,7 +186,7 @@ function _form() {
   name.value = _s.name;
   name.addEventListener('input', () => { _s.name = name.value; });
   body.appendChild(name);
-  body.appendChild(el('label', 'pw-lab', 'what you know about the product'));
+  body.appendChild(el('label', 'pw-lab u-label', 'What you know about the product'));
   const words = el('textarea', 'gw-say pw-words u-area');
   words.placeholder = 'What it is, its size, what it does, what matters to show - in any language. What the photo does not show comes from here.';
   words.value = _s.words;
@@ -195,7 +195,7 @@ function _form() {
   right.appendChild(body);
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
-  const hint = el('span', 'gw-hint' + (_s.photo ? '' : ' is-why'),
+  const hint = el('span', 'gw-hint u-status',
     _s.photo ? 'An agent describes it for the frames chat - fractions of a cent, nothing is drawn' : 'a photo of the product first');
   const go = el('button', 'gw-create u-btn is-main', _s.busy ? 'adding…' : 'add');
   go.type = 'button';
@@ -247,9 +247,9 @@ function _result() {
   const right = el('div', 'gw-half is-make pw-right');
   const i = _s.info || {};
   const body = el('div', 'pw-fields');
-  body.appendChild(el('div', 'pw-landed', 'In IMAGES → Props'));
+  body.appendChild(el('div', 'pw-landed u-status is-ok', 'In IMAGES → Props'));
   body.appendChild(el('div', 'pw-title', i.name || _s.added.name || 'the product'));
-  body.appendChild(el('label', 'pw-lab', 'description'));
+  body.appendChild(el('label', 'pw-lab u-label', 'Description'));
   if (i.reading) body.appendChild(el('div', 'pw-desc is-wait', 'describing…'));
   else if (i.description) body.appendChild(el('div', 'pw-desc', i.description));
   else {
@@ -265,12 +265,12 @@ function _result() {
     });
     body.appendChild(again);
   }
-  body.appendChild(el('div', 'pw-note', 'Change the name, your words or the description in its viewer - open it in Props.'
+  body.appendChild(el('div', 'pw-note u-status', 'Change the name, your words or the description in its viewer - open it in Props.'
     + ' The frames chat takes it into its product place.'));
   right.appendChild(body);
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
-  row.appendChild(el('span', 'gw-hint'));
+  row.appendChild(el('span', 'gw-hint u-status'));
   const more = el('button', 'gw-create u-btn is-main', 'add another');
   more.type = 'button';
   more.title = 'A new product - the window empties';

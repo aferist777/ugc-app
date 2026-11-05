@@ -776,7 +776,8 @@ export function createSunoForm(o) {
 
   /** The almanac's gold button, into the column's foot. */
   function almanacButton(foot) {
-    const alm = el('button', 'mv3-vc-almanac u-btn is-l' + (almSections().length ? '' : ' is-soon'), 'almanac');
+    // (phase V73 block 4) in the frame's foot: a quiet button at the left, as the showcase's window has it
+    const alm = el('button', 'mv3-vc-almanac u-btn is-quiet' + (almSections().length ? '' : ' is-soon'), 'almanac');
     alm.type = 'button';
     alm.title = almSections().length ? 'Notes on styles and sounds - gather them into a prompt' : 'The almanac of music and sounds is being written - soon';
     alm.addEventListener('click', () => { if (almSections().length) openAlmanac(); else say('The almanac is being written (V34.A) - soon.'); });
@@ -791,12 +792,14 @@ export function createSunoForm(o) {
     const secs0 = almSections();
     const allNotes = secs0.flatMap(s => s.notes.map(n => Object.assign({ sec: s.id }, n)));
     const ov = el('div', 'aal-ov');
-    const win = el('div', 'aal');
+    // (phase V73 block 4, rule 5) The one frame: a head of 40 px - the name, its quiet note, the ✕ of 28 px; its own shadow gone.
+    const win = el('div', 'aal u-win is-float');
     win.setAttribute('role', 'dialog');
-    const head = el('div', 'aal-head');
-    head.appendChild(el('b', null, 'Almanac'));
-    head.appendChild(el('span', 'aal-sub', 'music and sounds · press a chip to read it, "+ add" gathers it into your prompt' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
-    const x = el('button', 'aal-x u-btn is-s is-icon is-quiet u-x', '');
+    const head = el('div', 'aal-head u-win-head');
+    head.appendChild(el('span', 'u-win-title', 'Almanac'));
+    head.appendChild(el('span', 'aal-sub u-win-sub', 'music and sounds · press a chip to read it, "+ add" gathers it into your prompt' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
+    head.appendChild(el('span', 'sp'));
+    const x = el('button', 'aal-x u-btn is-icon is-quiet u-x', '');
     x.type = 'button';
     x.title = 'Close (Esc)';
     head.appendChild(x);
@@ -898,7 +901,8 @@ export function createSunoForm(o) {
       h.appendChild(el('span', 'sp'));
       if (to.length) {
         const has = inBuilt(n);
-        const add = el('button', 'aal-btn u-btn is-s' + (has ? '' : ' is-primary is-main'), has ? '− take out' : '+ add');
+        // (phase V73 block 4) a plain button - the window's one gold is "into …"
+        const add = el('button', 'aal-btn u-btn is-s', has ? '− take out' : '+ add');
         add.type = 'button';
         add.title = has ? 'Take its words out of your prompt' : 'Add its words to your prompt below';
         add.addEventListener('click', () => {
@@ -928,7 +932,7 @@ export function createSunoForm(o) {
     // ── your prompt ──
     const bh = el('div', 'aal-build-h');
     bh.appendChild(withQ(el('span', 'aal-lbl', 'Your prompt'), 'The notes you add with "+ add" gather here - change the words by hand if you like.\n"into …" puts it after what the open mode\'s field holds, by a comma: Simple - In your words, Custom - Style (a note of Exclude into Exclude, of the lyrics into Lyrics), Lyrics - the idea, ElevenLabs - its description, Sounds - the sound; what the field holds already is not added twice.\nIt stays here until ✕ empties it.'));
-    const said = el('span', 'aal-said');
+    const said = el('span', 'aal-said u-status');   // (phase V73 block 4) the window's one status line - green when it went in
     const sp = el('span', 'sp');
     const clear = el('button', 'aal-x aal-clear u-btn is-s is-icon is-quiet u-x', '');
     clear.type = 'button';
@@ -958,7 +962,7 @@ export function createSunoForm(o) {
     };
     const paintBuild = () => { if (ta.value !== built) ta.value = built; paintInto(); };
     let _saidT = 0;
-    const tell = (t) => { said.textContent = t; clearTimeout(_saidT); _saidT = setTimeout(() => { said.textContent = ''; }, 2600); };
+    const tell = (t, ok) => { said.textContent = t; said.classList.toggle('is-ok', !!ok); clearTimeout(_saidT); _saidT = setTimeout(() => { said.textContent = ''; }, 2600); };
     into.addEventListener('click', () => {
       const t = target();
       const f = t && S.f[S.mode];
@@ -985,7 +989,7 @@ export function createSunoForm(o) {
       if (lyrNew.length) { f.lyrics = [String(f.lyrics || '').trim(), ...lyrNew].filter(Boolean).join('\n\n'); went.push('Lyrics'); }
       save();
       call('paintMake');
-      tell(went.length ? 'into ' + went.join(', ') + ' ✓' : 'it is there already');
+      tell(went.length ? 'into ' + went.join(', ') + ' ✓' : 'it is there already', went.length > 0);
     });
 
     paintSide();

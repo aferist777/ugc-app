@@ -15,13 +15,17 @@
    a highlights project, whose ticked fragments it renders (merge-v3/highlights.js, setRenderTarget): it says what the
    button reads ("Render 3", "✕ stop"), whether it can be pressed, and what a press does. Its window is THIS one, the same
    fields, for N fragments (openMany): "N fragments · 3:47 in all", no "Add to queue" - one Render, at once.
+
+   RENDER IS AN ENTRY OF THE QUEUE (phase V73 block 4, the owner's (б4-2) а, (б4-3) а): one entry, armed and started at
+   once (routes/mv3q.js POST /mv3q/render); the window can be closed while it goes, Stop is in it and in Queue, and a render
+   that finishes with the window closed says so in a popup with "open" (_run, _follow).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
-import { showError } from '../notice.js';
+import { showError, showToast } from '../notice.js';
 import { wire as wireRange } from '../ui-range.js';
 
 let _busy = false;
@@ -90,23 +94,27 @@ function _slider(min, max, step, value, fmt) {
 }
 
 // ── Running the job ─────────────────────────────────────────────────────────
-// The window's body becomes the progress, phase by phase - the film, then what is done to the
-// finished file - and then the result window every render shares.
+// (phase V73 block 4, the owner's (б4-2) а, (б4-3) а) THE RENDER GOES THROUGH THE QUEUE: ONE entry, armed and started at once
+// (POST /api/mv3q/render, routes/mv3q.js addArmed) - as a highlights project's Render. The window's body becomes the
+// progress, phase by phase - in line, the film, then what is done to the finished file -, its foot the line that says it
+// goes on and "Stop" (POST /api/mv3q/stop/:id - Queue has the same). The window may be closed while it goes (✕, Escape, a
+// press beside it): the page follows the entry all the same (_follow, GET /api/mv3q). Done with the window open - the result
+// window every render shares, as before; with it closed - a popup "Rendered" with "open". Failed with it closed - a popup.
 const PHASES = {
   render: 'Rendering',
   speeding: 'Changing the speed',
   tail: 'Adding the black tail',
   poster: 'Finishing',
 };
+let _job = null;          // { id, key, title, ui: { head, fill, note, said, stop, foot, body } | null - the window is closed }
 
-async function _run(body, adv) {
+async function _run(body, foot, adv) {
   if (_busy) return;
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return;
 
   _busy = true;
-  const btn = document.getElementById('mv3-export');
-  if (btn) btn.disabled = true;
+  paintExportButton();
 
   body.textContent = '';
   const head = _el('div', 'mv3-rhead', PHASES.render);
@@ -116,40 +124,114 @@ async function _run(body, adv) {
   bar.appendChild(fill);
   const note = _el('div', 'mv3-rsum', 'Starting…');
   body.append(head, bar, note);
+  foot.textContent = '';
+  const said = _el('span', 'mv3-rsaid u-status is-line', 'It goes on in Queue if you close this window');
+  const stop = _el('button', 'mv3-c-btn mv3-rstop u-btn is-danger', 'Stop');
+  stop.type = 'button';
+  stop.title = 'Stop this render - nothing of it is kept';
+  foot.append(said, _el('span', 'sp'), stop);
+  const ui = { body, foot, head, fill, note, said, stop };
 
+  let d = null;
   try {
-    // The timeline and the settings go up as they stand. The server builds the graph from them -
-    // the same module, read the same way as the preview reads it.
-    const start = await fetch('/api/mv3b/render', {
+    // The timeline and the settings go up as they stand; the entry keeps them (routes/mv3q.js).
+    d = await fetch('/api/mv3q/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeline: tl, key: Store.key(), adv }),
+      body: JSON.stringify({ timeline: tl, key: Store.key(), title: Store.title(), adv, dur: Store.duration() }),
     }).then(r => r.json());
-    if (!start || !start.success) throw new Error((start && start.error) || 'refused');
+  } catch (e) { d = { success: false, error: e.message }; }
+  if (!d || !d.success) {
+    _failed(ui, (d && d.error) || 'refused');
+    _busy = false;
+    paintExportButton();
+    return;
+  }
+  // Still open? It may have been closed while the entry was being made.
+  _job = { id: d.id, key: Store.key(), title: Store.title(), ui: _ov && body.isConnected ? ui : null };
+  stop.addEventListener('click', () => _stop(_job));
+  _follow(_job);
+}
 
+// The window says the render did not come: its line, and a way out.
+function _failed(ui, msg) {
+  if (!ui || !ui.body.isConnected) { showError('Not rendered: ' + msg); return; }
+  ui.body.textContent = '';
+  ui.body.appendChild(_el('div', 'mv3-rhead', 'Not rendered'));
+  ui.body.appendChild(_el('div', 'mv3-rwarn', msg));
+  ui.foot.textContent = '';
+  const close = _el('button', 'mv3-c-btn u-btn', 'Close');
+  close.type = 'button';
+  close.addEventListener('click', _close);
+  ui.foot.append(_el('span', 'sp'), close);
+}
+
+// Stop, in the window: the entry is taken out or its encode cut off - or, in its finishing passes, kept.
+async function _stop(job) {
+  if (!job || !job.ui) return;
+  const { stop, said } = job.ui;
+  stop.disabled = true;
+  let r = null;
+  try { r = await fetch('/api/mv3q/stop/' + encodeURIComponent(job.id), { method: 'POST' }).then(x => x.json()); }
+  catch (e) { r = { success: false, error: e.message }; }
+  if (!r || !r.success) { stop.disabled = false; showError('Not stopped: ' + ((r && r.error) || 'the app did not answer')); return; }
+  said.textContent = r.finishing ? 'Finishing its file - it is kept' : r.finished ? 'It has already finished' : 'Stopping…';
+}
+
+// The entry followed to its end, the window open or not.
+async function _follow(job) {
+  let misses = 0;
+  try {
     for (;;) {
       await new Promise(r => setTimeout(r, 1200));
-      const st = await fetch('/api/mv3b/render/' + encodeURIComponent(start.jobId)).then(r => r.json());
-      if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
-      if (st.status === 'running') {
-        head.textContent = PHASES[st.phase] || PHASES.render;
-        fill.style.width = (st.percent || 0) + '%';
-        note.textContent = st.phase === 'poster' ? 'Almost done…'
-          : (st.percent || 0) + '%' + (st.remain != null ? ' · about ' + _mmss(st.remain) + ' left' : ' · measuring…');
+      let q = null;
+      try { q = await fetch('/api/mv3q').then(r => r.json()); } catch (e) { q = null; }
+      if (!q || !q.success) {
+        if (++misses >= 5) throw new Error('the app did not answer about the render');
         continue;
       }
-      if (st.status === 'failed') throw new Error(st.error || 'ffmpeg failed');
-
-      // Done: the window every render shares - playable, named, kept, sent (render-result.js).
-      _close();
-      showResult({ url: st.url, title: Store.title(), key: Store.key(), fresh: true });
-      if (st.warning) _say('Rendered, but ' + st.warning + '.', 'err');
-      return;
+      misses = 0;
+      const it = (q.items || []).find(x => x.id === job.id);
+      const ui = job.ui;
+      // Gone from the list: stopped (here or in Queue), or cleared away.
+      if (!it) {
+        if (ui) _close();
+        _say('Render stopped.', 'info');
+        return;
+      }
+      if (it.status === 'queued') {
+        if (ui) {
+          ui.head.textContent = 'Waiting in Queue';
+          ui.fill.style.width = '0%';
+          ui.note.textContent = it.ahead ? it.ahead + (it.ahead === 1 ? ' render' : ' renders') + ' ahead of it' : 'next';
+        }
+        continue;
+      }
+      if (it.status === 'running') {
+        if (ui) {
+          ui.head.textContent = PHASES[it.phase] || PHASES.render;
+          ui.fill.style.width = (it.percent || 0) + '%';
+          ui.note.textContent = it.phase === 'poster' ? 'Almost done…'
+            : (it.percent || 0) + '%' + (it.remain != null ? ' · about ' + _mmss(it.remain) + ' left' : ' · measuring…');
+        }
+        continue;
+      }
+      if (it.status === 'failed') { _failed(ui, it.error || 'ffmpeg failed'); return; }
+      if (it.status === 'done' && it.url) {
+        const open = () => showResult({ url: it.url, title: job.title, key: job.key, queueId: job.id, fresh: true });
+        if (ui && ui.body.isConnected) { _close(); open(); }
+        else {
+          // (б4-3) а: the window was closed - a popup; the render is in Queue -> open as well
+          const t = showToast({ mark: '▣', title: 'Rendered', where: job.title, ms: 15000,
+            act: { label: 'open', run: () => { t.close(); open(); } } });
+        }
+        if (it.warning) _say('Rendered, but ' + it.warning + '.', 'err');
+        return;
+      }
     }
   } catch (e) {
-    body.textContent = '';
-    body.appendChild(_el('div', 'mv3-rhead', 'Not rendered'));
-    body.appendChild(_el('div', 'mv3-rwarn', e.message));
+    _failed(job.ui, e.message);
   } finally {
+    if (_job === job) _job = null;
     _busy = false;
     paintExportButton();
   }
@@ -160,6 +242,8 @@ let _ov = null;
 let _layer = null;
 
 function _close() {
+  // (phase V73 block 4) a render going on stays followed - its window is only not there to say it
+  if (_job) _job.ui = null;
   if (_ov) { _ov.remove(); _ov = null; }
   if (_layer) { Layers.close(_layer); _layer = null; }
 }
@@ -214,12 +298,14 @@ function _window(o) {
   const many = o.many || null;
 
   _ov = _el('div', 'mv3-x-ov');
-  const box = _el('div', 'mv3-x');
-  const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
-  const x = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
+  // (phase V73 block 4) the one window frame: its head of 40 px, the 28 px ✕, the foot of 52 px (css/app-shell.css .u-win)
+  const box = _el('div', 'mv3-x u-win is-float');
+  const head = _el('div', 'mv3-x-head u-win-head');
+  head.appendChild(_el('h3', 'u-win-title', many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
+  const x = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.addEventListener('click', () => { if (!_busy) _close(); });
+  x.title = 'Close (Esc)';
+  x.addEventListener('click', _close);     // (phase V73 block 4) a render going on goes on in Queue
   head.appendChild(x);
   box.appendChild(head);
 
@@ -289,10 +375,10 @@ function _window(o) {
     : 'The Subtitles lane is empty - no file will be written.'));
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'Extras'));
-  const e1 = _select([['none', '— none —'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
+  const e1 = _select([['none', 'None'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
     ['black20', '+ Black tail 20 min'], ['black30', '+ Black tail 30 min']], adv.extra1);
   body.appendChild(_row('After the end', e1));
-  const noises = [['none', '— none —']];
+  const noises = [['none', 'None']];
   for (const kind of ['white', 'pink', 'brown']) {
     for (let i = 1; i <= 5; i++) noises.push(['wn_' + kind + '_' + i, '+ ' + kind[0].toUpperCase() + kind.slice(1) + ' noise ' + i + '%']);
   }
@@ -327,7 +413,9 @@ function _window(o) {
     return a;
   };
 
-  const foot = _el('div', 'mv3-x-foot');
+  // the buttons at the right: Cancel, then Add to queue, the gold Render last
+  const foot = _el('div', 'mv3-x-foot u-win-foot');
+  foot.appendChild(_el('span', 'sp'));
   const cancel = _el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });
@@ -371,23 +459,21 @@ function _window(o) {
   const go = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render');
   go.type = 'button';
   go.disabled = !s.end;
-  // The window STAYS. It becomes the progress and then the result: throwing the file at a new
-  // tab leaves nothing behind to say what was made.
+  // The window becomes the progress and then the result - and may be closed meanwhile: the render is an entry of the queue
+  // (phase V73 block 4, (б4-2) а).
   go.addEventListener('click', async () => {
     go.disabled = true; queue.disabled = true;
     const a = await save();
-    foot.remove();
-    _run(body, a);
+    _run(body, foot, a);
   });
   foot.append(cancel, queue, go);
   box.appendChild(foot);
 
   _ov.appendChild(box);
-  _ov.addEventListener('mousedown', (e) => { if (e.target === _ov && !_busy) _close(); });
+  // Escape, the ✕ and a press beside it close it - a render in flight too: it goes on in Queue (phase V73 block 4).
+  _ov.addEventListener('mousedown', (e) => { if (e.target === _ov) _close(); });
   document.body.appendChild(_ov);
-  // Escape closes it - unless a render is in flight, when the window stays and the key is
-  // simply eaten: what is on top decides, including deciding to do nothing (js/layers.js).
-  _layer = Layers.open(_ov, { name: 'render', onEsc: () => { if (!_busy) _close(); } });
+  _layer = Layers.open(_ov, { name: 'render', onEsc: _close });
 }
 
 // ── Who owns the button (phase V33.4) ───────────────────────────────────────
@@ -408,7 +494,7 @@ export function paintExportButton() {
   const can = Store.hasProject() && Store.canEdit();
   const st = _target ? _target.state() : null;
   b.textContent = st ? st.label : 'Export';
-  b.title = st ? st.title : 'Render this timeline with FFmpeg';
+  b.title = st ? st.title : _busy ? 'Rendering - it is in Queue, where it can be stopped' : 'Render this timeline with FFmpeg';
   b.disabled = !can || (st ? !st.enabled : _busy);
   b.classList.toggle('is-stop', !!(st && st.stop));
   // (phase V73 block 2) "✕ stop" is the part's danger button; Export / Render N its gold one

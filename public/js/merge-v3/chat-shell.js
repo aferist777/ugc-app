@@ -63,6 +63,7 @@ import { twoPress } from '../really.js';
 // (phase V73 block 2, step 2b) The empty conversation - the shared "nothing here".
 import { emptyEl } from '../ui-state.js';
 import { markField, markText } from './image-words.js';
+import { icon } from '../icons.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -111,6 +112,26 @@ export function refCell(a, k, n, peek) {
   return c;
 }
 export const money = (v) => '$' + (+(+v).toFixed(4));
+// (phase V73 block 4) a label in sentence case - its first letter capital; the word itself stays (it makes sentences elsewhere)
+const capWord = (w) => { const s = String(w || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
+/** (phase V73 block 4) A switch of a chat's column (the writer, the storyboard): the shared toggle (.u-switch, on is green) and
+ *  its word in one <label> - the word pressed switches it too. onChange(on) after each press. */
+export function switchRow(word, on, off, onChange) {
+  const row = el('label', 'mv3-vc-check');
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'u-switch';
+  b.setAttribute('role', 'switch');
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
+  b.disabled = !!off;
+  b.addEventListener('click', () => {
+    const v = b.getAttribute('aria-checked') !== 'true';
+    b.setAttribute('aria-checked', v ? 'true' : 'false');
+    onChange(v);
+  });
+  row.append(b, el('span', null, word));
+  return row;
+}
 /** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
 export function almanacSoon() {
   const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'almanac');
@@ -199,6 +220,8 @@ export function createChat(make) {
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
+    // (phase V73 block 4) the column's price box, read into the bar beside the send
+    priceFrom: (box) => _priceFrom(box),
     attach: (path, name, o) => _attach(path, name, o),
     // (phase V7) An attachment changed by its description - the part of a clip or a sound that goes, its length once
     // measured (a value of null or '' takes the field away) - or taken back off.
@@ -711,7 +734,7 @@ export function createChat(make) {
     const all = _ordered().filter(a => _kindOf(a) === p.kind);
     const keys = g.slots.map(x => x.key);
     const mine = all.filter(a => keys.includes(a.slot));
-    const head = el('div', 'mv3-ig-part-h', g.word);
+    const head = el('div', 'mv3-ig-part-h', capWord(g.word));
     head.appendChild(el('b', null, mine.filter(a => !a.hole).length + ' / ' + g.slots.reduce((n, x) => n + x.max, 0)));
     if (g.note) { const nt = el('span', 'mv3-ig-part-note', g.note); nt.title = g.noteLong || g.note; head.appendChild(nt); }
     box.appendChild(head);
@@ -739,7 +762,7 @@ export function createChat(make) {
     // Its places in order - empty ones too (phase V15).
     const mine = _ordered().filter(a => _kindOf(a) === p.kind);
     const real = mine.filter(a => !a.hole);
-    const head = el('div', 'mv3-ig-part-h', p.word);
+    const head = el('div', 'mv3-ig-part-h', capWord(p.word));
     if (p.room && !p.off) head.appendChild(el('b', null, real.length + ' / ' + p.room));
     // (phase V16) A part's own word on its head line - the video chat's frames going as references.
     if (p.note && p.room && !p.off) {
@@ -1666,6 +1689,26 @@ export function createChat(make) {
   }
 
   // The writer on or off - the pen in the bar, or (phase V15) the description's own switch through ctx.setWriting.
+  // (phase V73 block 4) How many at once: the layers icon and the number, the words in its title.
+  function _paintN() {
+    const b = _ui && _ui.nBtn;
+    if (!b) return;
+    b.innerHTML = icon('layers', 14) + '<span class="u-mono">' + _n + '</span>';
+    b.title = 'How many to make at once: ' + _n + ' - press for ' + S.counts[(S.counts.indexOf(_n) + 1) % S.counts.length] + '. Each is its own attempt.';
+    b.setAttribute('aria-label', 'How many at once: ' + _n);
+  }
+  // (phase V73 block 4) THE PRICE BY THE SEND: the column's price box (a model column paints it) is read into the bar - its
+  // figure beside the button, the whole phrase in the title - and the box itself is not shown.
+  function _priceFrom(box) {
+    const p = _ui && _ui.price;
+    if (!p || !box) return;
+    box.hidden = true;
+    const b = box.querySelector('b');
+    const fig = (b ? b.textContent : '').trim().replace(/^≈s*/, '≈ ');
+    p.textContent = fig;
+    p.title = [...box.children].map(c => c.textContent.trim()).filter(Boolean).join(' · ');
+    p.hidden = !fig;
+  }
   function _paintPen() {
     const pen = _ui && _ui.pen;
     if (!pen) return;
@@ -2036,7 +2079,7 @@ export function createChat(make) {
 
     const setBox = el('div', 'mv3-ig-set');
     const left = el('div', 'mv3-ig-scroll');
-    const said = el('div', 'mv3-ig-said');
+    const said = el('div', 'mv3-ig-said u-status is-bad');
     // (phase V15) A description's own foot of the column, under everything - the video chat's almanac.
     setBox.append(left, said, ...(typeof S.columnFoot === 'function' ? S.columnFoot() : []));
 
@@ -2067,15 +2110,20 @@ export function createChat(make) {
     ta.placeholder = T.placeholder;
     // THE WRITER: on, the message is rewritten into the shape the chosen model wants; off, the words go
     // exactly as typed. (phase V15) A description that keeps its own switch for it in its column has no pen here.
-    const pen = S.penInBar === false ? null : el('button', 'pen u-btn is-s is-icon', '✎');
-    if (pen) pen.type = 'button';
-    const nBtn = el('button', 'n u-btn is-s', '×1');
+    // (phase V73 block 4, (б4-13) а) the bar's buttons are icons, their words in the title: the writer a pencil, how many at
+    // once the layers with the number, the send an arrow; the price of the press stands right before it (_priceFrom).
+    const pen = S.penInBar === false ? null : el('button', 'pen u-btn is-s is-icon');
+    if (pen) { pen.type = 'button'; pen.innerHTML = icon('pencil', 14); }
+    const nBtn = el('button', 'n u-btn is-s');
     nBtn.type = 'button';
-    nBtn.title = 'How many to make at once. Each is its own attempt.';
-    const go = el('button', 'b u-btn is-s is-main', '>');
+    const go = el('button', 'b u-btn is-s is-icon is-main');
     go.type = 'button';
+    go.innerHTML = icon('arrow-right', 14);
     go.title = 'Send (Enter) · a new line is Shift+Enter';
-    bar.append(...[ta, pen, nBtn, go].filter(Boolean));
+    go.setAttribute('aria-label', 'Send');
+    const price = el('span', 'mv3-ig-price u-price');
+    price.hidden = true;
+    bar.append(...[ta, pen, nBtn, price, go].filter(Boolean));
     // (phase V26.6, the owner's check 2026-10-31, (а)) A description with `markImages` (the frames chat) has the pictures'
     // numbers - "image 1" - yellow in its box (js/merge-v3/image-words.js).
     if (S.markImages) markField(ta);
@@ -2115,7 +2163,8 @@ export function createChat(make) {
       headL.append(...S.crumbButtons());
     }
 
-    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, go, stripBox, narrow: null };
+    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, price, go, stripBox, narrow: null };
+    _paintN();
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
         roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
@@ -2137,7 +2186,7 @@ export function createChat(make) {
     nBtn.addEventListener('click', () => {
       const i = S.counts.indexOf(_n);
       _n = S.counts[(i + 1) % S.counts.length];
-      nBtn.textContent = '×' + _n;
+      _paintN();
       set.onCount();
     });
     if (pen) {

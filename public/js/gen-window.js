@@ -92,27 +92,33 @@ function _geomPut(key, g) {
 }
 
 /**
- * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags, geom }.
+ * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags, geom, foot }.
  *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720; V64: a
  *         generation's GEN_SIZE); a smaller screen still makes it smaller
  *   passDrags  (phase V64) a thing of the app dragged out of it lays the windows aside until it is let go (_passing)
  *   geom  (phase V64, fix (л)) { key, resize, move, keepSize, keepPos } - moved by its head, stretched by its edges, kept
- * -> { box, head, crumbs, body, close(), alive(), isTop(), setCrumbs(list) }
+ *   foot  (phase V73 block 4) true - the frame's foot of 52 px under the body, `win.foot`, filled by the caller: what is
+ *         secondary at the left, a `.sp`, then the price and the one gold button at the right
+ * (phase V73 block 4, rule 5) The frame is the shared one (css/app-shell.css `.u-win`): a head of 40 px one step lighter, the
+ * crumbs at 13 px, the ✕ of 28 px.
+ * -> { box, head, crumbs, body, foot, close(), alive(), isTop(), setCrumbs(list) }
  *    setCrumbs([{ label, on?, act?: { label, title, on } }]) - the last is where the window is; the others go back.
  */
 export function openFrame(o) {
   ensureCss();
   const ov = el('div', 'gw-ov' + (o.cls ? ' ' + o.cls : ''));
-  const box = el('div', 'gw');
+  const box = el('div', 'gw u-win is-float');
   box.setAttribute('role', 'dialog');
-  const head = el('div', 'gw-head');
-  const crumbs = el('div', 'gw-crumbs');
-  const x = el('button', 'gw-x u-btn is-s is-icon is-quiet u-x', '');
+  const head = el('div', 'gw-head u-win-head');
+  const crumbs = el('div', 'gw-crumbs u-crumbs');
+  const x = el('button', 'gw-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(crumbs, x);
   const body = el('div', 'gw-body');
   box.append(head, body);
+  const foot = o.foot ? el('div', 'gw-wfoot u-win-foot') : null;
+  if (foot) box.appendChild(foot);
   ov.appendChild(box);
   document.body.appendChild(ov);
   const G = o.geom && o.geom.key ? o.geom : null;
@@ -145,7 +151,7 @@ export function openFrame(o) {
   window.addEventListener('resize', place);
   let open = true;
   const win = {
-    box, head, crumbs, body, name: o.name || '',
+    box, head, crumbs, body, foot, name: o.name || '',
     alive: () => open,
     isTop: () => open && _frames[_frames.length - 1] === win,
     close: () => {
@@ -202,7 +208,8 @@ function _crumbs(host, list) {
     if (!last && c.on) { b.type = 'button'; b.title = 'Back to ' + c.label; b.addEventListener('click', c.on); }
     host.appendChild(b);
     if (c.act) {
-      const a = el('button', 'gw-act', c.act.label);
+      // (phase V73 block 4) a generator's place in the head: the button with the gold line ("+ new look", "+ new environment")
+      const a = el('button', 'gw-act u-btn is-s is-gen', c.act.label);
       a.type = 'button';
       if (c.act.title) a.title = c.act.title;
       a.disabled = !!c.act.off;
@@ -441,11 +448,11 @@ function _render(kind) {
   const right = el('div', 'gw-half is-make');
   right.appendChild(_field(kind));
   const foot = el('div', 'gw-foot');
-  const said = s.said ? el('div', 'gw-said', s.said) : null;
+  const said = s.said ? el('div', 'gw-said u-status is-bad', s.said) : null;
   if (said) foot.appendChild(said);
   const go = el('button', 'gw-create u-btn is-main', 'create');
   go.type = 'button';
-  const hint = el('span', 'gw-hint');
+  const hint = el('span', 'gw-hint u-status');
   const sync = () => {
     const why = _why(kind);
     go.disabled = !!why || s.making;
@@ -459,7 +466,8 @@ function _render(kind) {
     ask.appendChild(el('div', 'gw-choice-why', s.optionsWhy || 'There is no place in this picture. What should it become?'));
     const chips = el('div', 'gw-chips');
     for (const opt of s.options) {
-      const c = el('button', 'gw-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
+      // (phase V73 block 4, (4а-10) а) the shared chip (.u-chip): several may be lit
+      const c = el('button', 'gw-chip u-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
       c.type = 'button';
       c.title = 'Pick any number of them - they are made into one place';
       c.addEventListener('click', () => {
@@ -482,7 +490,7 @@ function _render(kind) {
     sync();
   });
   foot.appendChild(note);
-  if (s.status) foot.appendChild(el('div', 'gw-status' + (s.making ? ' is-on' : ''), s.status));
+  if (s.status) foot.appendChild(el('div', 'gw-status u-status', s.status));
   const row = el('div', 'gw-row');
   go.addEventListener('click', () => _make(kind, o));
   row.append(hint, go);

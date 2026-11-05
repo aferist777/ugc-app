@@ -19,6 +19,7 @@
 
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
+import { showError } from '../notice.js';
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -33,20 +34,22 @@ export const paragraphs = (t) => String(t || '').split(/\r?\n/).map(x => x.repla
 
 /**
  * @param put(body)  where the text goes - { text, name } (a voiceover: one line) or { lines, name } (a talking head) -, answering
- *                   what `done` is given; a refusal is said in the window, which stays
+ *                   what `done` is given; a refusal is a popup in the corner (V73 block 4), and the window stays
  * @param done(r)    what `put` answered (in Merge: the voiceover draft as it is now, with its one line)
  * @param o          (phase V63) { talking, text, name } - a talking head's text; what the field and the name start with
  */
 export function openOwnText(put, done, o = {}) {
   const talking = !!o.talking;
   const ov = _el('div', 'mv3-x-ov');
-  const box = _el('div', 'mv3-x is-scen is-votext');
+  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
+  const box = _el('div', 'mv3-x is-scen is-votext u-win is-float');
   ov.appendChild(box);
 
-  const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, talking ? 'Talking head from your text' : 'Voiceover from your text'));
-  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
+  const head = _el('div', 'mv3-x-head u-win-head');
+  head.appendChild(_el('h3', 'u-win-title', talking ? 'Talking head from your text' : 'Voiceover from your text'));
+  const close = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   close.type = 'button';
+  close.title = 'Close (Esc)';
   head.appendChild(close);
   box.appendChild(head);
 
@@ -78,8 +81,9 @@ export function openOwnText(put, done, o = {}) {
     : 'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5 000 at a time, '
       + 'and the rest is left for the mood\'s tags.'));
 
-  const foot = _el('div', 'mv3-x-foot');
-  const note = _el('span', 'mv3-x-note');
+  // the foot: the window's one status line (u-status) at the left, use at the right
+  const foot = _el('div', 'mv3-x-foot u-win-foot');
+  const note = _el('span', 'u-status');
   const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'use');
   go.type = 'button';
   go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
@@ -122,7 +126,9 @@ export function openOwnText(put, done, o = {}) {
       _close(ov, layer);
       done(r);
     } catch (e) {
-      note.textContent = e.message;
+      // (phase V73 block 4) a refusal is a popup in the corner (js/notice.js); the window stays, its line goes quiet
+      note.textContent = '';
+      showError(e.message || 'The text could not be taken');
       go.disabled = false;
     }
   });

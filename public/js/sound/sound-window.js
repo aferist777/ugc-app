@@ -271,10 +271,11 @@ function paintCol() {
   // пилюля тумблер айфоновская") A pill with a thumb that slides under the group chosen (css/music-window.css .au-switch) - drawn
   // where it was, then moved, so the column painted again still shows the slide.
   const g = groupOf(S().mode);
-  const seg = el('div', 'au-switch');
+  // (phase V73 block 4, (б2-12)) the shared segment (css/app-shell.css .u-seg): the group lit is the selected look
+  const seg = el('div', 'au-switch u-seg');
   seg.dataset.on = _groupShown || g;
   for (const k of ['music', 'sounds']) {
-    const b = el('button', 'au-switch-b' + (g === k ? ' on' : ''), GROUP_WORD[k]);
+    const b = el('button', 'au-switch-b' + (g === k ? ' on is-on' : ''), GROUP_WORD[k]);
     b.type = 'button';
     b.setAttribute('aria-pressed', g === k ? 'true' : 'false');
     b.addEventListener('click', () => setGroup(k));
@@ -312,14 +313,13 @@ function paintMake() {
   host.textContent = '';
   const m = _mode();
   if (!m) return;
+  // (phase V73 block 4) the gold card is a panel: its head the mode's name in gold (the generator's place), whom it is for after it
   const card = el('div', 'au-card');
   const title = H && H.made ? String(_hook('title') || '') : '';
-  if (title) {
-    const h = el('div', 'au-card-h');
-    h.appendChild(el('span', 'au-card-n', _engineWord(S().mode) + ' · ' + m.label));
-    h.appendChild(el('span', 'au-muted', 'for ' + title));
-    card.appendChild(h);
-  }
+  const h = el('div', 'au-card-h');
+  h.appendChild(el('span', 'au-card-n', _engineWord(S().mode) + ' · ' + m.label));
+  if (title) h.appendChild(el('span', 'au-muted', 'for ' + title));
+  card.appendChild(h);
   const f = S().f[S().mode];
   if (F.paintFields(card)) { /* Simple, Custom, Lyrics - the shared form's */ } else if (S().mode === 'sounds') {
     card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }),
@@ -543,7 +543,7 @@ function paintFoot() {
   const p = F.price();
   _ui.price.textContent = '';
   if (p.big) {
-    _ui.price.appendChild(el('b', null, p.big));
+    _ui.price.appendChild(el('b', 'u-price', p.big));
     _ui.price.appendChild(el('span', null, p.small + (_cat() && _cat().fake ? ' · FAKE' : '')));
   }
   _ui.price.title = p.big ? 'per press · ' + p.big + ' · ' + p.small : '';
@@ -554,7 +554,7 @@ function paintFoot() {
 function _paintLine() {
   const line = _ui && _ui.line;
   if (!line) return;
-  line.className = 'au-line';
+  line.className = 'au-line u-status is-line';
   if (_err) { line.textContent = _err; line.title = _err; line.classList.add('is-bad'); return; }
   const r = _last;
   const g = r && r.gen;
@@ -565,7 +565,6 @@ function _paintLine() {
   let t;
   if (g.state === 'pending') {
     t = (lyr ? 'writing the lyrics' : 'in Alerts · ' + (g.stage || (g.taskId ? (g.engine === 'eleven' ? 'ElevenLabs is making it' : 'Suno is making it') : 'starting'))) + '…';
-    line.classList.add('is-on');
   } else if (g.state === 'done') {
     const n = (g.results || []).length;
     const what = g.kind === 'sound' ? (n === 1 ? 'sound' : 'sounds') : (n === 1 ? 'track' : 'tracks');
@@ -1008,7 +1007,7 @@ export async function open(o) {
   _err = '';
   _win = openFrame({
     // (fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
-    name: 'generate audio', anchor: _o.anchor, cls: 'is-music is-sound', size: GEN_SIZE, geom: GEOM_CHAT,  passDrags: true,
+    name: 'generate audio', anchor: _o.anchor, cls: 'is-music is-sound', size: GEN_SIZE, geom: GEOM_CHAT,  passDrags: true, foot: true,
     onClose: () => {
       F.closeAlmanac();
       closeQ();
@@ -1031,7 +1030,7 @@ export async function open(o) {
   const right = el('div', 'au-right');
   const pair = el('div', 'au-pair');
   const mid = el('div', 'au-mid');
-  const status = el('div', 'au-status');
+  const status = el('div', 'au-status u-status');
   status.hidden = true;
   const make = el('div', 'au-make');
   mid.append(status, make);
@@ -1041,7 +1040,10 @@ export async function open(o) {
   v2m.append(v2mGal, v2mTree);
   v2m.hidden = true;
   pair.append(mid, v2m);
-  const foot = el('div', 'au-foot');
+  // (phase V73 block 4) the foot is the frame's, across the whole window: the almanac and the last press at the left; where it
+  // goes, the price and "generate" at the right
+  const foot = _win.foot;
+  foot.classList.add('au-foot');
   const alm = el('div', 'au-foot-alm');
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
@@ -1049,8 +1051,8 @@ export async function open(o) {
   const go = el('button', 'au-go u-btn is-main', 'generate');
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
-  foot.append(alm, line, into, price, go);
-  right.append(pair, foot);
+  foot.append(alm, line, el('span', 'sp'), into, price, go);
+  right.append(pair);
   body.append(set, sash, right);
   _ui = { set, col, sash, mid, status, make, v2m, v2mGal, v2mTree, alm, line, into, price, go, madeH: null, made: null };
   _vtree = null;

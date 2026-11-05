@@ -10,6 +10,8 @@ let _armed = null;      // { id, t } - the one whose "Delete" was pressed once
 
 // (phase V73 block 2) one "Really?", 3 s (js/really.js); what goes is said in the line beside it, as before
 import { REALLY, MS } from '../really.js';
+// (phase V73 block 4) a viewer's action is an icon and its word - put back whole when "Really?" lets go
+import { fillAct } from '../library/viewer.js';
 
 /** The viewer's buttons for a downloaded YouTube video. */
 export function ytActions(it) {
@@ -43,7 +45,7 @@ export async function ytDelete(it) {
       if (!_armed || _armed.id !== id) return;
       _armed = null;
       // The button goes back to itself where it is still on screen - without drawing the viewer again (that restarts the video).
-      document.querySelectorAll('.lib-view-acts button').forEach((b) => { if (b.textContent === REALLY) { b.textContent = 'Delete'; b.classList.remove('is-armed'); } });
+      document.querySelectorAll('.lib-view-acts button').forEach((b) => { if (b.textContent === REALLY) { fillAct(b, 'Delete'); b.classList.remove('is-armed'); } });
     }, MS) };
     return { armed: true, msg: 'Press again to delete the source - its video, its transcript and its topics.' + await _usage(it) };
   }

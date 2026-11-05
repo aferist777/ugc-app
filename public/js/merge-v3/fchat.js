@@ -20,7 +20,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { createChat, el, thumbOf, json, money, refCell, almanacSoon } from './chat-shell.js';
+import { createChat, el, thumbOf, json, money, refCell, almanacSoon, switchRow } from './chat-shell.js';
 import { note } from './ask.js';
 import { closePick } from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
@@ -97,12 +97,8 @@ function FRAMES(ctx) {
       host.appendChild(r);
       _shotSel = s;
       // The writer, a switch of the column (as in the video chat, V15/V16).
-      const wr = el('label', 'mv3-vc-check');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.classList.add('u-check');
-      cb.checked = ctx.writing();
-      cb.addEventListener('change', () => ctx.setWriting(cb.checked));
-      wr.append(cb, el('span', null, 'writer'));
+      // (phase V73 block 4) the shared switch (.u-switch), its word beside it
+      const wr = switchRow('writer', ctx.writing(), false, (v) => ctx.setWriting(v));
       wr.title = 'On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. '
         + 'Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.';
       const sw = el('div', 'mv3-vc-switches');
@@ -531,7 +527,7 @@ function FRAMES(ctx) {
       const it = el('button', 'mv3-fc-idea' + (used.has(i) ? ' is-used' : ''));
       it.type = 'button';
       it.appendChild(markText(el('span', 't'), idea));
-      if (used.has(i)) it.appendChild(el('span', 'u', 'used'));
+      if (used.has(i)) it.appendChild(el('span', 'u', 'Used'));
       it.title = (used.has(i) ? 'A frame was asked for from this one. ' : '') + 'Put it into the message box - change it as you like, then send';
       it.addEventListener('click', () => {
         if (cell.classList.contains('is-again')) return;
@@ -758,14 +754,8 @@ function FRAMES(ctx) {
         done.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: x.prompt || '', meta: { date: x.at } })),
         at, { showSrc: (it) => thumbOf(it.media, 'main') }));
     },
-    // Its own head line: the cross back to the fields.
-    headButtons() {
-      const x = el('button', 'mv3-fc-close u-btn is-s is-icon is-quiet u-x', '');
-      x.type = 'button';
-      x.title = 'Close the frames chat - back to the fields. What is written stays.';
-      x.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });
-      return [x];
-    },
+    // (phase V73 block 4) No cross of its own: the chat lives in its window, whose head's ✕ closes it (its own head line is
+    // not shown there).
   };
 }
 

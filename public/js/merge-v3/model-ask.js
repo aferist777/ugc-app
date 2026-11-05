@@ -47,8 +47,9 @@ export async function askModelOnce() {
   const no = _el('button', 'nm-b u-btn is-s', 'Not now');
   for (const b of [yes, no]) b.type = 'button';
   row.append(no, yes);                                  // "Not now" left, the verb right (б2-8)
-  box.append(err, row, _el('div', 'dr-note', 'From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> '
-    + 'This computer offer it later.'));
+  // (phase V73 block 4) the note above the buttons, as the update's question has it
+  box.append(_el('div', 'dr-note', 'From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> '
+    + 'This computer offer it later.'), err, row);
   document.body.append(back, box);
   yes.focus();
 

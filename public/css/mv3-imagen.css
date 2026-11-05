@@ -19,18 +19,19 @@
 
 /* ── left: what to make them with ── */
 .mv3-ig-set{
-  flex:0 0 232px; display:flex; flex-direction:column; min-height:0;
+  flex:0 0 260px; display:flex; flex-direction:column; min-height:0;
   border-right:1px solid var(--border); background:var(--surface);
 }
 .mv3-ig-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:11px 12px }
 /* The label sits ABOVE its control: a model name does not fit beside a label in 232px. */
 .mv3-ig-row{ display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:3px 0 }
-.mv3-ig-row > label{ font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted) }
+.mv3-ig-row > label{ font:500 10px/14px var(--font); color:var(--muted) }
+.mv3-ig-row > label::first-letter{ text-transform:uppercase }
 .mv3-ig-row select{ width:100%; min-width:0 }
 /* The shape as a dropdown is the folded row's; the wide column has its buttons. */
 .mv3-ig-row.is-arsel{ display:none }
 .mv3-ig-sep{
-  margin:11px 0 6px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase;
+  margin:12px 0 6px; font:500 11px/16px var(--font);
   color:var(--muted); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
 }
 .mv3-ig-ar-row{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px }
@@ -47,12 +48,9 @@
 .mv3-ig-cost b{ font:700 13px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
 .mv3-ig-cost span{ font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-ig-cost.is-unknown b{ color:var(--muted) }
-.mv3-ig-fall{ margin:5px 0 0; font:600 9.5px/1.4 var(--font); color:var(--muted) }
+.mv3-ig-fall{ margin:5px 0 0; font:500 10px/1.4 var(--font); color:var(--muted) }
 .mv3-ig-fall b{ color:var(--ink) }
-.mv3-ig-said{
-  flex:0 0 auto; margin:0; padding:8px 12px 10px;
-  font:600 9.5px/1.45 var(--font); color:var(--danger);
-}
+.mv3-ig-said{ flex:0 0 auto; margin:0; padding:8px 12px 10px }   /* the one status line (.u-status), red */
 .mv3-ig-said:empty{ display:none }
 
 /* ── the settings folded into a row (the owner's answer 3) ──
@@ -130,13 +128,13 @@
 .mv3-ig-msg-ref img + .ic{ color:var(--on-media); text-shadow:0 0 4px rgba(0,0,0,.8) }
 .mv3-ig-msg-ref .dur{
   position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
-  font:600 8px/12px var(--font); text-align:center; pointer-events:none;
+  font:500 10px/14px var(--font); text-align:center; pointer-events:none;
 }
 .mv3-ig-msg-ref .n,
 .mv3-ig-att .n{
-  position:absolute; top:2px; left:2px; min-width:13px; padding:0 3px; border-radius:2px;
+  position:absolute; top:2px; left:2px; min-width:14px; padding:0 3px; border-radius:2px;
   background:var(--scrim); color:var(--on-media);
-  font:700 8.5px/13px var(--font); text-align:center;
+  font:500 10px/14px var(--font); text-align:center;
 }
 
 /* ONE CARD PER PICTURE: the picture, then its buttons under it, all one width - the widest
@@ -155,7 +153,7 @@
 .mv3-ig-gone{
   width:132px; display:flex; align-items:center; justify-content:center; padding:6px;
   border:1px dashed var(--border); border-radius:var(--r-xs);
-  font:600 9.5px/1.4 var(--font); color:var(--muted); text-align:center;
+  font:500 10px/1.4 var(--font); color:var(--muted); text-align:center;
 }
 /* The strip its countdown fills - startInlineProgress positions its row against it. */
 .mv3-ig-prog{
@@ -178,14 +176,14 @@
 .mv3-ig-more{ display:flex; flex-direction:column; gap:4px }
 .mv3-ig-more-b{
   align-self:flex-start; padding:0; border:0; background:none; cursor:pointer;
-  font:600 9.5px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
+  font:500 10px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
 }
 .mv3-ig-more-b:hover{ color:var(--ink) }
 .mv3-ig-more-body{
   display:flex; flex-direction:column; gap:2px; padding:6px 8px;
   border-left:2px solid var(--border); background:var(--surface-2); border-radius:var(--r-xs);
 }
-.mv3-ig-more-row{ display:flex; gap:8px; font:600 9.5px/1.45 var(--font) }
+.mv3-ig-more-row{ display:flex; gap:8px; font:500 10px/1.45 var(--font) }
 .mv3-ig-more-row .k{ flex:0 0 68px; color:var(--muted) }
 .mv3-ig-more-row .v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word }
 
@@ -213,7 +211,7 @@
 }
 .mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
 .mv3-ig-att .x{ position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:2px; --x-size:10px }   /* the cells' sizes stay (b5) */
-.mv3-ig-att-note{ font:600 9.5px/1.4 var(--font); color:var(--muted) }
+.mv3-ig-att-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
 
 /* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
    Each part grows one empty place at a time and scrolls sideways; with a recipe every cell wears its slot's name. */
@@ -225,7 +223,7 @@
 .mv3-ig-part.is-image{ flex-grow:2.2 }
 .mv3-ig-part-h{
   display:flex; align-items:baseline; gap:5px;
-  font:700 8.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+  font:500 10px/14px var(--font); color:var(--muted);
 }
 .mv3-ig-part-h b{ font-weight:600; letter-spacing:0; font-variant-numeric:tabular-nums }
 .mv3-ig-part.is-off .mv3-ig-part-h{ opacity:.6 }
@@ -233,17 +231,17 @@
   display:flex; align-items:flex-start; gap:6px; min-width:0;
   overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; padding-bottom:3px;
 }
-.mv3-ig-part-off{ padding:4px 0; font:600 9.5px/1.35 var(--font); color:var(--muted); opacity:.75; white-space:nowrap }
+.mv3-ig-part-off{ padding:4px 0; font:500 10px/1.35 var(--font); color:var(--muted); opacity:.75; white-space:nowrap }
 /* (phase V16) A part's own word on its head line: frames beside a clip or a sound go as references. */
 .mv3-ig-part-note{
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help;
-  font-weight:600; letter-spacing:0; text-transform:none; color:var(--gold);
+  font-weight:500; letter-spacing:0; text-transform:none; color:var(--muted);
 }
 /* (phase V16) A picture that does not go as things are: dimmed, its number and cross as they were. */
 .mv3-ig-att.is-dim img{ opacity:.3 }
 .mv3-ig-cell{ flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:2px }
 .mv3-ig-cell .lab{
-  max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted);
+  max-width:100%; font:500 10px/1.2 var(--font); color:var(--muted);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 /* A slot that must be filled, still empty. */
@@ -258,20 +256,20 @@
    row stays as it was. A slot's name may run wider than its place. */
 .mv3-ig-atts.is-zone{ padding:3px 12px 2px }
 .mv3-ig-atts.is-zone .mv3-ig-part{ gap:2px }
-.mv3-ig-atts.is-zone .mv3-ig-part-h{ font-size:8px }
+.mv3-ig-atts.is-zone .mv3-ig-part-h{ font-size:10px }
 .mv3-ig-atts.is-zone .mv3-ig-part-row{ gap:4px; padding-bottom:1px }
-.mv3-ig-atts.is-zone .mv3-ig-part-off{ padding:1px 0; font-size:8.5px }
+.mv3-ig-atts.is-zone .mv3-ig-part-off{ padding:1px 0; font-size:10px }
 .mv3-ig-atts.is-zone .mv3-ig-cell{ width:auto; min-width:29px; max-width:64px; gap:1px }
-.mv3-ig-atts.is-zone .mv3-ig-cell .lab{ font-size:7.5px; line-height:1 }
+.mv3-ig-atts.is-zone .mv3-ig-cell .lab{ font-size:10px; line-height:1.1 }
 .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:29px; height:29px; line-height:27px; font-size:12px }
 .mv3-ig-atts.is-zone .mv3-ig-att .x{ top:1px; right:1px; width:11px; height:11px; --x-size:8px }
-.mv3-ig-atts.is-zone .mv3-ig-att .n{ top:1px; left:1px; min-width:10px; padding:0 2px; font:700 7px/10px var(--font) }
+.mv3-ig-atts.is-zone .mv3-ig-att .n{ top:1px; left:1px; min-width:13px; padding:0 2px; font:500 10px/13px var(--font) }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:3px 10px 2px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-cell{ width:auto; min-width:20px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:20px; height:20px; line-height:18px; font-size:10px }
-.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .n{ min-width:8px; padding:0 1px; font-size:6.5px; line-height:8px }
+.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .n{ min-width:12px; padding:0 1px; font-size:10px; line-height:12px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; --x-size:7px }
 
 /* ── the input ──
@@ -292,6 +290,10 @@
 /* The pen, the count and the send: the shared part at 24 (phase V73 block 2); the send is the one action here. */
 .mv3-ig-bar .pen, .mv3-ig-bar .n{ flex:0 0 auto; margin-bottom:1px }
 .mv3-ig-bar .b{ flex:0 0 auto; min-width:30px; margin-bottom:1px }
+/* (phase V73 block 4, (б4-13) а) the pen, the count and the send as icons; the count's number in mono beside its icon; the price
+   of the press right before the send */
+.mv3-ig-bar .n{ gap:4px; padding:0 6px }
+.mv3-ig-price{ flex:0 0 auto; align-self:center; margin:0 2px 0 4px }
 
 /* ── right: everything there is to point at ──
    Narrow by default and dragged by the sash beside it (picchat.js sets the basis). */
@@ -317,23 +319,23 @@
 }
 .mv3-ig-card.is-plus:hover{ border-color:var(--sel-line); color:var(--ink); border-style:solid }
 .mv3-ig-card.is-busy, .mv3-ig-card.is-fail{ display:flex; align-items:center; justify-content:center }
-.mv3-ig-card.is-busy .sp{ font:600 9px/1 var(--font); color:var(--muted) }
+.mv3-ig-card.is-busy .sp{ font:500 10px/1 var(--font); color:var(--muted) }
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
-.mv3-ig-card.is-fail .sp{ font:600 8.5px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
+.mv3-ig-card.is-fail .sp{ font:500 10px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
 /* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in the corner plays it large; a sound - a row with
    ▶ to listen, its name and its length. One the model cannot take (too short) is dimmed, and says why under the pointer. */
 .mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
 .mv3-ig-cplay{
   position:absolute; left:4px; top:4px; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
-  background:var(--scrim); color:var(--on-media); font:600 9px/22px var(--font); cursor:pointer; opacity:.85;
+  background:var(--scrim); color:var(--on-media); font:500 10px/22px var(--font); cursor:pointer; opacity:.85;
 }
 .mv3-ig-cplay:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
 .mv3-ig-card.is-sound{
   display:flex; align-items:center; gap:6px; min-height:0; height:30px; padding:0 7px 0 4px; box-sizing:border-box;
 }
 .mv3-ig-card.is-sound .nm{ flex:1 1 auto; min-width:0; font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.mv3-ig-card.is-sound .du{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-ig-card.is-sound .du{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-ig-splay{ flex:0 0 auto }
 .mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round, as before */
 .mv3-ig-card.is-short{ opacity:.45 }
@@ -368,7 +370,7 @@
 }
 .mv3-ig-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
-  background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); pointer-events:none;
+  background:var(--scrim); color:var(--on-media); font:500 10px/1.3 var(--font); pointer-events:none;
 }
 /* Dragged onto a lane (phase V13). */
 .mv3-vc-shot.is-dragging{ opacity:.5 }
@@ -377,7 +379,7 @@
 .mv3-ig-att .ic{ font:600 11px/1 var(--font); color:var(--muted) }
 .mv3-ig-att .dur{
   position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
-  font:600 7px/10px var(--font); text-align:center; pointer-events:none;
+  font:500 10px/12px var(--font); text-align:center; pointer-events:none;
 }
 .mv3-ig-att.is-bad{ border-color:var(--danger) }
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
@@ -401,15 +403,14 @@
 /* A clip from the timeline held over the part that takes it (timeline-b.js). */
 .mv3-ig-part.is-drop{ background:var(--sel-bg); border-radius:var(--r-xs); outline:1px dashed var(--sel-line); outline-offset:-1px }
 
-/* (phase V7) The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). */
-.vtrim{
-  position:fixed; z-index:9050; display:flex; flex-direction:column; gap:7px; padding:9px 10px 10px;  /* (V64) over a chat's window */
-  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface); box-shadow:0 10px 30px rgba(0,0,0,.45);
-}
-.vtrim-h{ display:flex; align-items:baseline; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.vtrim-h b{ font:700 11px/1.3 var(--font); color:var(--ink) }
+/* (phase V7) The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). (phase V73 block 4,
+   (б4-6) а) A panel at its place, not a window: the frame's edges (`u-win is-float`), its head row (`u-win-head` - the clip's
+   name, "N s in all" a quiet note, the 28 px ✕), no backdrop; what it holds in its own padded column under the head. */
+.vtrim{ position:fixed; z-index:9050 }   /* (V64) over a chat's window */
 .vtrim-x{ margin-left:auto }
-.vtrim-why{ font:600 10px/1.4 var(--font); color:var(--gold) }
+:root:not(:has(link[href="css/studio3d.css"])) .vtrim-body{ display:flex; flex-direction:column; gap:7px; padding:10px 12px 12px }
+/* what the model does with the part - the quiet text (the gold went: gold is the main button's, (б1-18)) */
+.vtrim-why{ font:500 11px/16px var(--font); color:var(--muted) }
 .vtrim-media{ display:block; width:100%; max-height:200px; background:var(--media-bg); border-radius:var(--r-xs) }
 audio.vtrim-media{ background:none; height:32px }
 .vtrim-bar{ position:relative; height:26px; border-radius:var(--r-xs); background:var(--surface-2); border:1px solid var(--border-soft); touch-action:none }
@@ -428,7 +429,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vtrim-span{ flex:1 1 auto; font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
 /* (phase V17) Kling motion control's first frame: its moment on a slider - the part goes from there. */
 .vtrim-still{ display:flex; align-items:center; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.vtrim-still .k{ flex:0 0 auto; font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
+.vtrim-still .k{ flex:0 0 auto; font:500 10px/1.2 var(--font); color:var(--muted) }   /* (V73 block 4) sentence case, not gold */
 .vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
 .vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
@@ -452,10 +453,11 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-foot{ display:flex; flex-direction:column }
 .vc-card{ max-width:min(640px, 100%); width:100% }
 .vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
-.vc-card-h .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
-.vc-card-h .t{ flex:0 1 auto; min-width:0; font:700 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.vc-card-h .k{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted) }
+.vc-card-h .k::first-letter{ text-transform:uppercase }
+.vc-card-h .t{ flex:0 1 auto; min-width:0; font:600 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
-.vc-card-h i{ font:600 10px/1 var(--font); font-style:normal; color:var(--gold) }
+.vc-card-h i{ font:500 10px/1 var(--font); font-style:normal; color:var(--muted) }
 .vc-req{ font:500 12px/1.75 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .vc-place{
   padding:1px 5px; margin:0 1px; border-radius:var(--r-xs);
@@ -495,13 +497,13 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-asked-t.is-none{ color:var(--muted) }
 .vc-asked-more{
   align-self:flex-start; margin-top:-3px; padding:0; border:0; background:none; cursor:pointer;
-  font:600 9.5px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
+  font:500 10px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
 }
 .vc-asked-more:hover{ color:var(--ink) }
 .vc-sending{ font:600 10px/1.3 var(--font); color:var(--muted); animation:vc-sending 1.2s ease-in-out infinite }
 @keyframes vc-sending{ 50%{ opacity:.45 } }
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
-.vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.vc-ref .lab{ max-width:100%; font:500 10px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 /* (phase V23) Not in this library any more - a card's character or place deleted since. */
 .vc-ref.is-gone > :first-child{ outline:1.5px solid var(--danger); outline-offset:1px; opacity:.55 }
 .vc-ref.is-gone .lab{ color:var(--danger) }
@@ -509,12 +511,11 @@ audio.vtrim-media{ background:none; height:32px }
    the almanac at its foot. */
 .mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
 .mv3-vc-switches:empty{ display:none }
-.mv3-vc-check{ display:flex; align-items:center; gap:7px; padding:2px 2px; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none }
-.mv3-vc-check input{ margin:0 }
+/* (phase V73 block 4) the writer and the storyboard: the shared switch (.u-switch, on green) with its word */
+.mv3-vc-check{ display:flex; align-items:center; gap:8px; padding:2px 2px; font:500 11px/16px var(--font); color:var(--ink); cursor:pointer; user-select:none }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
-.mv3-vc-check.is-off input{ cursor:default }
 /* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
-.mv3-vc-check.is-held, .mv3-vc-check.is-held input{ cursor:default }
+.mv3-vc-check.is-held, .mv3-vc-check.is-held .u-switch{ cursor:default }
 /* (phase V25, the owner 2026-10-13: "в золотой обводке с закругленными краями и золотым шрифтом чтобы было видно что это
    кнопка") The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
@@ -538,12 +539,13 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-board:hover{ border-color:var(--muted) }
 .vc-board.is-busy{ width:240px; max-width:100%; cursor:default; border-style:dashed }
 .vc-board.is-busy .mv3-ig-prog{ min-width:0; border:0 }
-.vc-board.is-bad{ width:240px; max-width:100%; padding:6px 8px; cursor:default; border-color:var(--danger); font:600 9.5px/1.4 var(--font); color:var(--danger) }
+.vc-board.is-bad{ width:240px; max-width:100%; padding:6px 8px; cursor:default; border-color:var(--danger); font:500 10px/1.4 var(--font); color:var(--danger) }
 .vc-board.is-gone{ opacity:.45; border-style:dashed; cursor:default }
 /* An attempt's line on the message's video step: which one, when, from which variant. */
 .vc-try-h{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.vc-try-h .k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
-.vc-try-h .is-mine{ color:var(--gold) }
+.vc-try-h .k{ font:500 10px/1.2 var(--font); color:var(--muted) }
+.vc-try-h .k::first-letter{ text-transform:uppercase }
+.vc-try-h .is-mine{ color:var(--ink) }
 /* (phase V48) What the agent saw of each clip - the message's first step: the clip's part, who watched it, the description. */
 .vc-watch{ display:flex; flex-direction:column; gap:5px; min-width:0 }
 .vc-watch + .vc-watch{ padding-top:8px; border-top:1px solid var(--border-soft) }
@@ -557,10 +559,13 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-steps{ padding-bottom:6px; border-bottom:1px solid var(--border-soft) }
 .vc-vars{ padding-top:6px; border-top:1px solid var(--border-soft) }
 .vc-steps-t, .vc-vars-t{ flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.vc-steps-t{ font:700 9.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+/* (phase V73 block 4) "‹ step k of N ›" in ONE form with the variants' "‹ 2 of 3 ›": the words in sentence case at 10 px, even
+   figures, arrows of 20 px */
+.vc-steps-t{ font:500 10px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.vc-steps-t::first-letter{ text-transform:uppercase }
 .vc-vars-t{ font:600 10px/1.2 var(--font); color:var(--muted) }
 .vc-nav{ flex:0 0 auto }
-.vc-nav.u-btn{ font-size:13px }
+.vc-nav.u-btn{ width:20px; height:20px; font-size:12px }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
 .vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
@@ -605,7 +610,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* A set's variants, small: "‹ 2 of 3 ›" - in a prompt's line, under a sheet, under the video. */
 .vm-pg{ flex:0 0 auto; display:inline-flex; align-items:center; gap:4px }
 .vm-pg .vc-nav.u-btn{ width:20px; height:20px; font-size:12px }   /* the pager keeps its 20 px in a 24-px title line */
-.vm-pg-t{ font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
+.vm-pg-t{ font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
 .vm-pg.is-vid{ align-self:center }
 .vc-step > .vm-pg{ align-self:flex-start }
 /* A prompt folded into one line: its word, ▸, its first words, how many characters; open - the whole text to edit. */
@@ -618,10 +623,11 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .vm-fold-b:hover{ border-color:var(--sel-line) }
 .vm-fold.is-open .vm-fold-b{ border-color:var(--border-soft) }
-.vm-fold-b .k{ flex:0 0 auto; font:700 9px/24px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+.vm-fold-b .k{ flex:0 0 auto; font:500 10px/24px var(--font); color:var(--muted) }
+.vm-fold-b .k::first-letter{ text-transform:uppercase }
 .vm-fold-b .tw{ flex:0 0 auto; width:9px; color:var(--muted); font-size:9px }
 .vm-fold-b .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted) }
-.vm-fold-b .n{ flex:0 0 auto; font:500 9.5px/24px var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.vm-fold-b .n{ flex:0 0 auto; font:500 10px/24px var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .vm-fold-part{ display:flex; flex-direction:column; gap:6px; min-width:0 }
 .vm-fold-part[hidden]{ display:none }
 /* Open: as tall as its text, never a box of its own scrolling or empty under it - and as wide as the message, whatever it holds. */
@@ -635,9 +641,10 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fh .vc-steps{ flex:0 1 auto; min-width:0; padding:0; border:0; gap:4px }
 .vm-fh .vc-steps-t{ flex:0 1 auto; text-align:left }
 .vm-fh .vc-nav.u-btn{ width:20px; height:20px; font-size:12px }
-.vm-fh .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); white-space:nowrap }
+.vm-fh .k{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); white-space:nowrap }
+.vm-fh .k::first-letter{ text-transform:uppercase }
 .vm-fh .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10px/1.3 var(--font); color:var(--muted) }
-.vm-fh .n{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
+.vm-fh .n{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
 .vc-prompt-ta.vm-ta{ flex:1 1 0; min-height:120px; resize:none; overflow-y:auto }
 /* (вс8а) Its place while it has no text: dashed, as tall, the countdown (or "sending…") inside, why not in red. */
 .vm-wait{
@@ -696,18 +703,19 @@ audio.vtrim-media{ background:none; height:32px }
   background:var(--ov-dim, oklch(0 0 0 / .45)); padding:18px;
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-.pk{
-  position:relative; display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
-  box-shadow:var(--shadow); overflow:hidden;
-}
-.pk-head{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
-  padding:9px 13px; background:var(--surface-2); border-bottom:1px solid var(--border);
-}
-.pk-head h3{ margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink); white-space:nowrap }
-.pk-hint{ flex:1 1 auto; min-width:0; font:500 11px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.pk-room{ flex:0 0 auto; font:600 11px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+/* (phase V73 block 4) The window WITH the tree (the chats', New prop's) wears the one frame - `.u-win`, its head and foot
+   (css/app-shell.css; the rules at the end of this window's section); the look below - frame, head, foot - is the OLD
+   window's alone (`:not(.is-tree)`), which only the 3D Studio's page opens, and stays as it was there. */
+.pk{ position:relative; display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0; overflow:hidden }
+.pk:not(.is-tree){ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow) }
+.pk-head{ display:flex; align-items:center; flex:0 0 auto }
+.pk:not(.is-tree) .pk-head{ gap:10px; padding:9px 13px; background:var(--surface-2); border-bottom:1px solid var(--border) }
+.pk-head h3{ margin:0; white-space:nowrap }
+.pk:not(.is-tree) .pk-head h3{ font:700 12.5px/1.2 var(--font); color:var(--ink) }
+.pk-hint{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pk:not(.is-tree) .pk-hint{ font:500 11px/1.3 var(--font); color:var(--muted) }
+.pk-room{ flex:0 0 auto; font-variant-numeric:tabular-nums }
+.pk:not(.is-tree) .pk-room{ font:600 11px/1.2 var(--font); color:var(--muted) }
 .pk-close{ flex:0 0 auto }
 /* the shared ✕; the 3D Studio's page keeps its look (б1-13а) */
 :root:has(link[href="css/studio3d.css"]) .pk-close{
@@ -835,11 +843,10 @@ audio.vtrim-media{ background:none; height:32px }
   font:700 13px/1.4 var(--font); color:var(--ink);
 }
 .pk.is-drop .pk-drop{ display:flex }
-.pk-foot{
-  flex:0 0 auto; display:flex; align-items:center; gap:10px;
-  padding:7px 13px; border-top:1px solid var(--border); background:var(--surface-2);
-}
-.pk-said{ flex:1 1 auto; min-width:0; font:600 10.5px/1.4 var(--font); color:var(--muted) }
+.pk-foot{ flex:0 0 auto; display:flex; align-items:center }
+.pk:not(.is-tree) .pk-foot{ gap:10px; padding:7px 13px; border-top:1px solid var(--border); background:var(--surface-2) }
+.pk-said{ flex:1 1 auto; min-width:0 }
+.pk:not(.is-tree) .pk-said{ font:600 10.5px/1.4 var(--font); color:var(--muted) }
 .pk-done{ flex:0 0 auto }
 :root:has(link[href="css/studio3d.css"]) .pk-done{ padding:3px 14px }   /* the 3D Studio's page keeps its look (б1-13а) */
 @media (max-width:760px){
@@ -854,8 +861,7 @@ audio.vtrim-media{ background:none; height:32px }
    brings files from this computer (and a clip by a link). The tiles are the window's above, a size smaller. */
 /* (phase V60.1, (пк2а)) The page darkened and blurred under it too - the one rule of css/app-shell.css. */
 .pk-ov.is-tree{ display:block; padding:0 }
-.pk.is-tree{ position:absolute; width:860px; height:560px; max-width:none; box-shadow:0 14px 40px rgba(0,0,0,.5) }
-.pk.is-tree .pk-head{ padding:7px 11px }
+.pk.is-tree{ position:absolute; width:860px; height:560px; max-width:none }
 .pk.is-tree .pk-body{ grid-template-columns:210px minmax(0, 1fr) }
 .pk.is-tree .pk-side{ overflow:hidden; gap:0; padding:6px 4px 4px 6px }
 .pk-rows{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
@@ -891,11 +897,18 @@ audio.vtrim-media{ background:none; height:32px }
 /* The folder's own folders first, a line of their own. */
 .pk-grid .mt-folders{ flex:0 0 100%; width:100%; grid-column:1 / -1; margin:0 0 2px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) }
 .pk-grid .mt-ftile{ height:32px }
-.pk.is-tree .pk-foot{ gap:8px; padding:6px 10px }
 .pk-up{ flex:0 0 auto }
 /* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop" (.u-btn.is-gen). */
 .pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
 .pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+/* (phase V73 block 4) Its frame, head and foot are the shared ones (chat-pick.js _buildTree: `u-win is-float`, `u-win-head` with
+   the title, the slot's words and "one more goes here" as quiet notes and the 28 px ✕, `u-win-foot` with "done" the gold one,
+   the status line `u-status`). Not on the 3D Studio's page - it never opens this window, and its tiles keep their sizes. */
+:root:not(:has(link[href="css/studio3d.css"])){
+  /* no text under 10 px on the tiles - here and in who / where, which borrow them (rule 2) */
+  .pk-sub, .pk-why, .pk-mark{ font-size:10px }
+  .pk-dur{ font-size:10px }
+}
 
 /* ── Talking head's windows (phase V57; V58 - js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
    "who" and "where" choose from a list in the attachment window's tiles: the characters on the left with the scenario's
@@ -910,14 +923,14 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc .pk-count{ margin-left:auto }
 .wkc .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .wkc.is-flat .pk-grid{ --pk-h:150px }
-.wkc-said{ flex:0 0 auto; min-height:0; padding:0 12px; font:600 10.5px/1.4 var(--font); color:var(--muted) }
+.wkc-said{ flex:0 0 auto; min-height:0; padding:0 12px }   /* the one status line (.u-status, phase V73 block 4) */
 .wkc-said:not(:empty){ padding:6px 12px; border-top:1px solid var(--border-soft) }
 .pk-ftabs{ flex:0 0 auto; display:flex; gap:4px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
 .pk-ftabs .mv3-sc-tab{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .mk-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto }
 .mk-pair{ flex:0 0 auto; display:flex; align-items:center; gap:6px }
 .mk-pair-img{ width:64px; height:44px; object-fit:contain; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface) }
-.mk-pair-img.is-empty{ display:flex; align-items:center; justify-content:center; font:600 9.5px/1 var(--font); color:var(--muted); border-style:dashed }
+.mk-pair-img.is-empty{ display:flex; align-items:center; justify-content:center; font:500 10px/1 var(--font); color:var(--muted); border-style:dashed }
 .mk-pair-plus{ font:600 13px/1 var(--font); color:var(--muted) }
 .mk-dress .gw-row{ margin-top:0 }
 /* (phase V58) A half of the stage waits for its own work: a box over the half, what is under it blurred, the countdown in
@@ -931,23 +944,15 @@ audio.vtrim-media{ background:none; height:32px }
 /* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
    (phase V60.1, (пк3а)) A window in the middle over the page darkened and blurred - the one rule of css/app-shell.css -,
    half the attachment picker: the sections on the left - the ones in development dimmed and saying so -, the tips on the
-   right: a still that plays under the pointer, the name, the category, the words. A press copies: the tip blinks and a
-   note sits on the prompt field - or at the window's foot when the field is under it - for a moment. */
+   right: a still that plays under the pointer, the name, the category, the words. A press copies: a note sits on the
+   prompt field - or at the window's foot when the field is under it - for a moment. (phase V73 block 4) The one frame
+   (`u-win is-float`, its head `u-win-head` with the 28 px ✕); "copy" the quiet button; nothing blinks. */
 .hp-ov{
   position:fixed; inset:0; z-index:9300; background:var(--ov-dim, oklch(0 0 0 / .45));
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-.hp{
-  position:absolute; display:flex; flex-direction:column; min-height:0;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
-  box-shadow:0 14px 40px rgba(0,0,0,.5); overflow:hidden;
-}
-.hp-head{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
-  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
-}
-.hp-head b{ font:700 12px/1.2 var(--font); color:var(--ink); white-space:nowrap }
-.hp-sub{ flex:1 1 auto; min-width:0; font:500 10.5px/1.2 var(--font); color:var(--muted) }
+.hp{ position:absolute; min-height:0 }
+.hp-sub{ flex:1 1 auto }
 .hp-x{ flex:0 0 auto }
 .hp-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr) }
 .hp-side{
@@ -960,14 +965,11 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .hp-sec{ padding:6px 8px; border:1px solid transparent; color:var(--ink); font:600 11px/1.3 var(--font) }
 .hp-sec .nm, .hp-cat .nm{ flex:1 1 auto; min-width:0 }
-.hp-sec small, .hp-cat small{ flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.hp-sec small, .hp-cat small{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .hp-sec:hover{ background:var(--surface-2) }
 .hp-sec.on{ border-color:var(--sel-line); background:var(--sel-bg) }
 .hp-sec.is-soon{ color:var(--muted) }
-.hp-sec.is-soon i{
-  flex:0 0 auto; font:600 8px/1.2 var(--font); font-style:normal; letter-spacing:.04em; text-transform:uppercase;
-  color:var(--muted); opacity:.75;
-}
+.hp-sec.is-soon i{ flex:0 0 auto; font:500 10px/1.2 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label (V73 block 4) */
 .hp-cat{ padding:4px 8px 4px 18px; border:0; color:var(--muted); font:600 10.5px/1.3 var(--font) }
 .hp-cat:hover, .hp-cat.on{ color:var(--ink); background:var(--surface-2) }
 .hp-main{ min-height:0; display:flex; flex-direction:column }
@@ -975,7 +977,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-bar[hidden]{ display:none }
 .hp-q{ flex:1 1 auto; min-width:0 }
 .hp-count{ flex:0 0 auto; font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.hp-note{ flex:0 0 auto; padding:6px 10px; border-bottom:1px solid var(--border-soft); font:600 10.5px/1.4 var(--font); color:var(--gold) }
+.hp-note{ flex:0 0 auto; padding:6px 10px; border-bottom:1px solid var(--border-soft); font:500 10.5px/1.4 var(--font); color:var(--warn) }   /* a warning: gold */
 .hp-note[hidden]{ display:none }
 .hp-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 10px }
 .hp-tile{
@@ -987,30 +989,21 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-pv{ flex:0 0 auto; width:160px; height:90px; border-radius:3px; overflow:hidden; background:var(--media-bg) }
 .hp-pv img{ display:block; width:100%; height:100%; object-fit:cover }
 .hp-words{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px }
-.hp-name{ display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 7px; font:700 11.5px/1.3 var(--font); color:var(--ink) }
-.hp-name i{ font:600 9px/1.2 var(--font); font-style:normal; letter-spacing:.05em; text-transform:uppercase; color:var(--muted) }
+.hp-name{ display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 7px; font:600 11.5px/1.3 var(--font); color:var(--ink) }
+.hp-name i{ font:500 10px/1.2 var(--font); font-style:normal; color:var(--muted) }
 .hp-text{
   font:500 10.5px/1.45 var(--font); color:var(--muted);
   display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
 }
 .hp-tile:hover .hp-text{ color:var(--ink) }
-.hp-copy{
-  flex:0 0 auto; align-self:center; padding:2px 8px; border:1px solid var(--border); border-radius:var(--pill);
-  font:600 9.5px/14px var(--font); color:var(--muted);
-}
-.hp-tile:hover .hp-copy{ color:var(--ink); border-color:var(--muted) }
-/* Copied: the tip blinks (the owner's answer 3). */
-.hp-tile.is-blink{ animation:hp-blink .24s ease-in-out 3 }
-@keyframes hp-blink{ 50%{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 2px var(--sel-line) } }
+.hp-copy{ flex:0 0 auto; align-self:center }   /* the quiet button (.u-btn.is-s.is-quiet) */
+.hp-tile:hover .hp-copy{ color:var(--ink) }
 .hp-tile.is-fail{ border-color:var(--danger) }
 .hp-soon{ margin:auto; max-width:420px; padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center }
-.hp-soon b{ font:700 13px/1.3 var(--font); color:var(--ink) }
-.hp-soon i{
-  padding:2px 8px; border:1px solid var(--border); border-radius:var(--pill);
-  font:600 9px/1.4 var(--font); font-style:normal; letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
-}
+.hp-soon b{ font:600 13px/1.3 var(--font); color:var(--ink) }
+.hp-soon i{ font:500 10px/1.4 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label (V73 block 4) */
 .hp-soon p{ margin:0; font:500 11px/1.55 var(--font); color:var(--muted) }
-.hp-src{ padding:6px 2px 2px; font:500 9.5px/1.4 var(--font); color:var(--muted) }
+.hp-src{ padding:6px 2px 2px; font:500 10px/1.4 var(--font); color:var(--muted) }
 .hp-src a{ color:var(--ink); text-decoration:none }
 .hp-src a:hover{ text-decoration:underline }
 /* The note on the prompt field: copied - or not, and the words are selected. */
@@ -1048,8 +1041,8 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
 /* The shape, said rather than chosen: always the project's. */
 .mv3-ig-shape{ display:flex; align-items:baseline; gap:6px; padding:6px 0 2px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.mv3-ig-shape .k{ font-size:9.5px; letter-spacing:.03em }
-.mv3-ig-shape b{ color:var(--ink); font-weight:700 }
+.mv3-ig-shape .k{ font-size:10px }
+.mv3-ig-shape b{ color:var(--ink); font-weight:600 }
 .mv3-pc.is-narrow .mv3-ig-shape{ padding:0 }
 .mv3-pc.is-narrow .mv3-ig-shape .k, .mv3-pc.is-narrow .mv3-ig-shape span:last-child{ display:none }
 /* What stands right of the attachment row - the frames chat's `ideas`. */
@@ -1066,7 +1059,7 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
   font:500 11px/1.4 var(--font);
 }
-.mv3-fc-idea:hover{ border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, var(--surface-2)) }
+.mv3-fc-idea:hover{ border-color:var(--sel-line) }
 /* (phase V26.5, the owner after the first look) The zone as TWO FIELDS: the base - the person and the place, or the frame
    being changed - as wide as its places, and the extra pictures taking the rest. */
 .mv3-ig-part.is-group.is-base{ flex:0 0 auto }
@@ -1074,19 +1067,21 @@ audio.vtrim-media{ background:none; height:32px }
 /* The ideas in two columns; one a message went from in gold, "used". */
 .mv3-fc-ideaslist{ display:grid; grid-template-columns:1fr 1fr; gap:5px }
 .mv3-fc-idea{ display:flex; flex-direction:column; gap:3px }
-.mv3-fc-idea .u{ align-self:flex-start; font:700 8px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
-.mv3-fc-idea.is-used{ border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, var(--surface-2)) }
+/* (phase V73 block 4) an idea a frame went from: the selected look and a quiet "Used" (not gold - gold is the main button's) */
+.mv3-fc-idea .u{ align-self:flex-start; font:500 10px/1 var(--font); color:var(--muted) }
+.mv3-fc-idea.is-used{ border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg) }
 /* (phase V26.5, the owner after the first look) A MESSAGE OF THE FRAMES CHAT: what was asked at its head, then the prompt
    on the left and the frame on the right - a box of the project's shape the picture lands in, its arrows under it. */
 .mv3-fc-msg{ max-width:none; width:100% }
 .mv3-fc-asked{ display:flex; flex-direction:column; gap:5px; padding-bottom:7px; margin-bottom:7px; border-bottom:1px solid var(--border-soft) }
 .mv3-fc-asked-t{ font:600 11.5px/1.4 var(--font); color:var(--ink); white-space:pre-wrap }
 .mv3-fc-asked .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:1px }
-.mv3-fc-asked .vc-ref .lab{ font:600 7.5px/1 var(--font); color:var(--muted) }
+.mv3-fc-asked .vc-ref .lab{ font:500 10px/1 var(--font); color:var(--muted) }
 .mv3-fc-cols{ display:flex; gap:10px; align-items:flex-start }
 .mv3-fc-left{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
 .mv3-fc-right{ flex:0 0 150px; display:flex; flex-direction:column; align-items:stretch; gap:4px }
-.mv3-fc-k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+.mv3-fc-k{ font:500 10px/14px var(--font); color:var(--muted) }
+.mv3-fc-k::first-letter{ text-transform:uppercase }
 .mv3-fc-note{ font:500 10px/1.35 var(--font); color:var(--muted) }
 .mv3-fc-sent summary{ cursor:pointer; font:600 10px/1.4 var(--font); color:var(--muted) }
 .mv3-fc-sent-t{ margin-top:3px; font:500 10.5px/1.4 var(--font); color:var(--ink); white-space:pre-wrap }
@@ -1095,12 +1090,12 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-fc-shotbox.is-empty{ border-style:dashed; border-color:color-mix(in oklch, var(--gold) 55%, transparent) }
-.mv3-fc-shotbox.is-empty span{ padding:0 10px; text-align:center; font:600 9.5px/1.35 var(--font); color:var(--muted) }
+.mv3-fc-shotbox.is-empty span{ padding:0 10px; text-align:center; font:500 10px/1.35 var(--font); color:var(--muted) }
 .mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; cursor:pointer; display:block }
 .mv3-fc-shotbox .mv3-ig-prog{ position:absolute; left:6px; right:6px; bottom:6px }
 .mv3-fc-shotbox .mv3-ig-bad{ padding:8px; font-size:10px }
 .mv3-fc-shotnav{ justify-content:space-between }
-.mv3-fc-from{ font:600 9px/1.2 var(--font); color:var(--muted); text-align:center }
+.mv3-fc-from{ font:500 10px/1.2 var(--font); color:var(--muted); text-align:center }
 .mv3-fc-acts{ display:flex; flex-direction:column; gap:4px }
 .mv3-fc-acts .mv3-c-btn{ width:100% }
 .mv3-pc.is-narrow .mv3-fc-right{ flex-basis:118px }
@@ -1122,6 +1117,6 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-fc-idea-re.u-btn{ width:20px; height:20px; border-radius:50%; font-size:12px }   /* keeps its place on the card's corner */
 .mv3-fc-ideacell:hover .mv3-fc-idea-re, .mv3-fc-idea-re:focus-visible{ opacity:1 }
 
-.mv3-fc-ideacell.is-again .mv3-fc-idea-re{ opacity:1; color:var(--gold); border-color:var(--gold); cursor:default; animation:mv3-fc-spin 1s linear infinite }
+.mv3-fc-ideacell.is-again .mv3-fc-idea-re{ opacity:1; color:var(--ink); border-color:var(--sel-line); cursor:default; animation:mv3-fc-spin 1s linear infinite }
 .mv3-fc-ideacell.is-again .mv3-fc-idea{ opacity:.5; cursor:default }
 @keyframes mv3-fc-spin{ to{ transform:rotate(360deg) } }
