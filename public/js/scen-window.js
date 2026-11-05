@@ -10,12 +10,13 @@
 //   openScenario(summary, { saved, use, closeOnSave })
 //     summary      a row of a list ({ id, archived }), or null for a new scenario
 //     saved(rec)   after every save and restore - the list behind the window reads itself again
-//     use(rec)     makes the project and opens it; a throw is said in the window, which stays
+//     use(rec)     makes the project and opens it; a throw is said in the corner (js/notice.js), the window stays
 //     closeOnSave  the window goes after a save (the Library: the shelf shows it, selected)
 //     voiceover    (phase V62) `use` makes a voiceover, and the lines are kept in the language they are typed in
 
 import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
+import { showError } from './notice.js';
 
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
@@ -38,7 +39,7 @@ export async function openScenario(summary, hooks = {}) {
   const h3 = document.createElement('h3');
   h3.textContent = isNew ? 'New scenario' : 'Scenario';
   head.appendChild(h3);
-  const close = _el('button', 'mv3-x-close', '✕');
+  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   head.appendChild(close);
   box.appendChild(head);
@@ -55,7 +56,7 @@ export async function openScenario(summary, hooks = {}) {
     return node;
   };
   const input = (placeholder, listId) => {
-    const i = _el('input', 'mv3-sc-inp');
+    const i = _el('input', 'mv3-sc-inp u-in');
     i.type = 'text';
     if (placeholder) i.placeholder = placeholder;
     if (listId) i.setAttribute('list', listId);
@@ -70,6 +71,7 @@ export async function openScenario(summary, hooks = {}) {
   // voice a script is WRITTEN in, a field of its own).
   const gender = field('Gender', (() => {
     const s = document.createElement('select');
+    s.className = 'u-in';                             // (phase V73 block 2) the shared field, as the window's others
     for (const [v, t] of [['', 'any - every character is offered'], ['female', 'female'], ['male', 'male']]) {
       const o = document.createElement('option');
       o.value = v; o.textContent = t;
@@ -88,7 +90,7 @@ export async function openScenario(summary, hooks = {}) {
   }
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'The lines'));
-  const lines = _el('textarea', 'mv3-sc-lines');
+  const lines = _el('textarea', 'mv3-sc-lines u-area is-dark');
   lines.spellcheck = false;
   lines.placeholder = 'One line per row. Each line becomes one fragment: it is spoken in one take and animated as one clip.';
   body.appendChild(lines);
@@ -100,14 +102,14 @@ export async function openScenario(summary, hooks = {}) {
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
-  const save = _el('button', 'mv3-c-btn', 'save');
+  const save = _el('button', 'mv3-c-btn u-btn', 'save');
   save.type = 'button';
   save.title = 'Keep it in the library';
   // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
   // 2026-10-01). For a scenario in the archive the same place says `restore`: the row and its menu
   // offer nothing to build with until it is back, and neither does this window.
   let archived = !!(summary && summary.archived);
-  const use = _el('button', 'mv3-c-btn mv3-x-use');
+  const use = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main');
   use.type = 'button';
   const dressUse = () => {
     use.textContent = archived ? 'restore' : 'use';
@@ -117,6 +119,9 @@ export async function openScenario(summary, hooks = {}) {
   dressUse();
   foot.append(save, note, use);
   box.appendChild(foot);
+  // (phase V73 block 2) The foot's line says how the work goes ("reading…", "saving…", "saved"); an error is a popup in the
+  // corner (js/notice.js) and the line goes quiet.
+  const fail = (text) => { note.textContent = ''; showError(text); };
 
   const linesOf = () => lines.value.split('\n').map(s => s.trim()).filter(Boolean);
   const gate = () => {
@@ -172,7 +177,7 @@ export async function openScenario(summary, hooks = {}) {
       dressUse();
       note.textContent = '';
     } catch (e) {
-      note.textContent = 'Could not read it: ' + e.message;
+      fail('Could not read it: ' + e.message);
     }
   }
   gate();
@@ -209,7 +214,7 @@ export async function openScenario(summary, hooks = {}) {
     try {
       await store();
       if (hooks.closeOnSave) { _close(ov, layer); return; }
-    } catch (e) { note.textContent = e.message; }
+    } catch (e) { fail(e.message); }
     save.disabled = false;
   });
   use.addEventListener('click', async () => {
@@ -224,7 +229,7 @@ export async function openScenario(summary, hooks = {}) {
         note.textContent = 'back in the library';
         saved(rec);
       } catch (e) {
-        note.textContent = e.message;
+        fail(e.message);
       }
       gate();
       return;
@@ -238,7 +243,7 @@ export async function openScenario(summary, hooks = {}) {
       // a modal layer holds them.
       _close(ov, layer);
     } catch (e) {
-      note.textContent = e.message;
+      fail(e.message);
       use.disabled = false;
     }
   });

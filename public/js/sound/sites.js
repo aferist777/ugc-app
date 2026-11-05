@@ -51,8 +51,8 @@ export function openSites(anchor, words) {
   _close();
   if (was) return;                       // the "?" pressed again folds it
   const w = String(words || '').trim();
-  const box = el('div', 'mt-pop snd-sites');
-  box.appendChild(el('div', 'mt-pop-head', 'Free sounds on other sites'));
+  const box = el('div', 'mt-pop snd-sites u-ask is-float');
+  box.appendChild(el('b', 'mt-pop-head', 'Free sounds on other sites'));
   box.appendChild(el('div', 'snd-sites-sub', (w ? 'They open searching for «' + w + '». ' : '')
     + 'Download a sound there, then drop the file onto My sounds in the tree.'));
   for (const s of SITES) {

@@ -58,6 +58,9 @@ import * as MyPresets from './my-presets.js';
 import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
 import { note } from './ask.js';
+import { menuIcons } from '../icons.js';
+// (phase V73 block 2, step 2b) An empty `Mine` - the shared "nothing here".
+import { emptyEl } from '../ui-state.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
@@ -140,10 +143,10 @@ function _build() {
   const status = _el('div', 'mv3-cap-status');
   top.appendChild(chips);
   top.appendChild(status);
-  const tabs = _el('div', 'mv3-cap-tabs');
+  const tabs = _el('div', 'mv3-cap-tabs u-tabs');
   tabs.setAttribute('role', 'tablist');
   for (const [id, label, title] of TABS) {
-    const b = _el('button', 'mv3-cap-tab', label);
+    const b = _el('button', 'mv3-cap-tab u-tab', label);
     b.type = 'button';
     b.dataset.tab = id;
     b.title = title;
@@ -153,8 +156,8 @@ function _build() {
   }
   const grid = _el('div', 'mv3-cap-grid');
   // An empty `Mine` says how to fill it; the person's tiles go between it and the app's first (_syncMine).
-  const empty = _el('div', 'mv3-cap-empty', 'Nothing here yet. Give a lane or a line the look you want in the settings on the right, '
-    + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.');
+  const empty = emptyEl('Nothing here yet. Give a lane or a line the look you want in the settings on the right, '
+    + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.', { icon: 'folder', cls: 'mv3-cap-empty' });
   empty.hidden = true;
   grid.appendChild(empty);
   for (const p of PRESETS.concat(TEXT_PRESETS)) {
@@ -356,9 +359,9 @@ function _openMenu(ev, id, tile) {
   _closeMenu();
   const p = MyPresets.find(id);
   if (!p) return;
-  const el = _el('div', 'mv3-plus-menu');
+  const el = _el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, danger) => {
-    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = _el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, label));
     if (sub) b.appendChild(_el('small', null, sub));
@@ -368,6 +371,7 @@ function _openMenu(ev, id, tile) {
   // Anchored on the TILE: the menu is gone by the time these run.
   item('Rename', p.name, () => _rename(p, tile));
   item('Delete', 'at once - lanes and lines that wear it keep their look', () => _delete(p, tile), true);
+  menuIcons(el);
   document.body.appendChild(el);
   const w = el.offsetWidth, h = el.offsetHeight;
   el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';

@@ -22,6 +22,9 @@ import * as Cut from '../cut.js';
 import { wireInfoSash } from '../library/viewer.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+import { twoPress } from '../really.js';
+// (phase V73 block 2, (н2)) a new post's gold dot until it is opened - one module with the YouTube sources' tiles
+import * as News from './news.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -84,6 +87,7 @@ export function decorate(tile, it, open, opts) {
   else badge.textContent = '';
   if (badge.textContent) tile.appendChild(badge);
   tile.title = [it.name, m.author, whereOf(it)].filter(Boolean).join('\n');
+  News.mark(tile, it);
   if (files.length > 1) {
     tile.addEventListener('mouseenter', () => _hoverIn(tile, it, open, opts));
     tile.addEventListener('mouseleave', () => _hoverOut());
@@ -160,21 +164,21 @@ export function openPost(list, at, o) {
         <span class="sp"></span>
         <span class="ref-said"></span>
         <span class="lib-view-acts"></span>
-        <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
         <div class="ref-view-mid">
           <div class="lib-view-stage"></div>
           <div class="ref-strip-bar">
             <span class="ref-strip-n"></span>
-            <button class="lib-btn" data-x="all" type="button"></button>
+            <button class="u-btn is-s" data-x="all" type="button"></button>
             <span class="sp"></span>
-            <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
+            <button class="u-btn is-s" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
           </div>
           <div class="ref-strip"></div>
         </div>
-        <button class="lib-view-arrow" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
         <aside class="lib-view-info"></aside>
       </div>
     </div>`;
@@ -234,6 +238,7 @@ function _paint() {
   ov.querySelector('.lib-view-title').textContent = it.name || '';
   ov.querySelector('.ref-view-where').textContent = whereOf(it);
   ov.querySelector('.lib-view-count').textContent = 'post ' + (_v.at + 1) + ' / ' + _v.list.length;
+  News.opened(it);                                  // (phase V73 block 2, (н2)) looked at - no longer new
   _paintStage();
   _paintStrip();
   _paintInfo(it);
@@ -399,19 +404,20 @@ function _paintActs(it) {
   box.textContent = '';
   // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
   // picture, into VIDEO or IMAGES (the owner: one of several goes by its files, from the strip).
-  const mv = el('button', 'lib-btn', 'Move to…');
+  const mv = el('button', 'u-btn is-s', 'Move to…');
   mv.type = 'button';
   mv.title = 'Move the whole post';
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
   box.appendChild(mv);
   // (block 5c) A long video kept as a tile goes on from here - and leaves REFERENCES (the owner's answer (о)).
   if (it.meta && it.meta.remote && it.meta.link) {
-    const src = el('button', 'lib-btn', 'To scenario sources');
+    const src = el('button', 'u-btn is-s', 'To scenario sources');
     src.type = 'button';
     src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
-    src.addEventListener('click', () => _toSources(it, src));
+    // (phase V73 block 2) paid: asked on the button itself by js/really.js - a light step, not a red fill (б2-10)
+    twoPress(src, { paid: true, text: 'paid: hearing + topics - press again', go: () => _toSources(it, src) });
     box.appendChild(src);
-    const hl = el('button', 'lib-btn', 'To highlights');
+    const hl = el('button', 'u-btn is-s', 'To highlights');
     hl.type = 'button';
     hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.';
     hl.addEventListener('click', () => {
@@ -423,23 +429,18 @@ function _paintActs(it) {
     });
     box.appendChild(hl);
   }
-  const del = el('button', 'lib-btn danger', 'Delete');
+  const del = el('button', 'u-btn is-s is-danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
-  del.addEventListener('click', async () => {
-    // "really?" on the button itself (the owner's way): a second press within a few seconds deletes.
-    if (!_v.armed) {
-      del.textContent = 'really? delete the post';
-      _v.armed = setTimeout(() => { if (_v) { _v.armed = null; del.textContent = 'Delete'; } }, 6000);
-      // (block 5d) Its files on a timeline: said before the second press - there its clips turn red.
-      deleteQuestion(it).then((q) => {
-        const m = /It is used in (d+ projects?)/.exec(q);
-        if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
-      });
-      return;
-    }
-    clearTimeout(_v.armed);
-    _v.armed = null;
+  // "Really?" on the button itself (the owner's way), by js/really.js (phase V73 block 2): a second press within 3 s deletes.
+  twoPress(del, {
+    // (block 5d) Its files on a timeline: said before the second press - there its clips turn red. (V73 block 2, (б2-26):
+    // the pattern read `d+` and never matched - it is `\d+`.)
+    armed: () => deleteQuestion(it).then((q) => {
+      const m = /It is used in (\d+ projects?)/.exec(q);
+      if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
+    }),
+    go: async () => {
     del.disabled = true;
     try {
       const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
@@ -452,7 +453,7 @@ function _paintActs(it) {
     _v.file = 0;
     _v.sel = new Set();
     _paint();
-  });
+  } });
   box.appendChild(del);
 }
 
@@ -462,13 +463,6 @@ function _paintActs(it) {
 // vertical or square video is asked about there - from here it was chosen as a source. Once it is a source (or was one
 // already) the post leaves REFERENCES.
 async function _toSources(it, btn) {
-  if (!btn.dataset.armed) {
-    btn.dataset.armed = '1';
-    btn.textContent = 'paid: hearing + topics - press again';
-    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'To scenario sources'; } }, 5000);
-    return;
-  }
-  delete btn.dataset.armed;
   btn.disabled = true;
   const said = _v.ov.querySelector('.ref-said');
   const say = (t) => { if (_v && said.isConnected) said.textContent = t; btn.textContent = t.length < 40 ? t : 'To scenario sources'; };

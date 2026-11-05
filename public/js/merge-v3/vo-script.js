@@ -21,12 +21,14 @@ import { openScenario } from '../scen-window.js';
 import { openOwnText } from './vo-text.js';
 import { el } from './wk-maker.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 let _rows = null;             // the scenarios, read once per draft shown - null while not read
 let _counts = null;
 let _lib = '';                // the category: '' | 'library1' | 'src:<id>' | 'nosrc'
 let _q = '';
-let _state = '';              // '' | 'loading' | an error
+let _state = '';              // '' | 'loading' | 'failed' - the list did not load (the reason was a popup)
 let _busy = false;            // a script being put in
 
 /**
@@ -43,13 +45,13 @@ export function paintChooser(host, project, adopt, o = {}) {
   root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
-  const own = el('button', 'mv3-sc-new', '+ your text');
+  const own = el('button', 'mv3-sc-new u-btn is-s', '+ your text');
   own.type = 'button';
   own.title = o.talking ? 'Your own text, pasted or typed - every paragraph a line of the talking head'
     : 'Your own text, pasted or typed in any language - the whole of it one line';
   own.disabled = _busy;
   own.addEventListener('click', () => openOwnText(put, adopt, { talking: !!o.talking, ...(o.ownText ? o.ownText() : {}) }));
-  const add = el('button', 'mv3-sc-new', '+ scenario');
+  const add = el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario - it is kept in the library, and "use" puts it here';
   add.disabled = _busy;
@@ -58,7 +60,7 @@ export function paintChooser(host, project, adopt, o = {}) {
   root.appendChild(top);
 
   const bar = el('div', 'mv3-vos-top');
-  const cat = el('select', 'mv3-wk-vsel is-small mv3-vos-cat');
+  const cat = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-vos-cat');
   cat.title = 'Which scenarios';
   for (const c of _choices()) {
     const o = el('option', '', c.label + ' · ' + c.n);
@@ -67,7 +69,7 @@ export function paintChooser(host, project, adopt, o = {}) {
     cat.appendChild(o);
   }
   cat.addEventListener('change', () => { _lib = cat.value; _rows = null; _load(adopt.repaint); });
-  const search = el('input', 'mv3-sc-search');
+  const search = el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
   search.placeholder = 'search by title, product, role';
   search.value = _q;
@@ -99,7 +101,9 @@ async function _load(repaint) {
     _state = '';
   } catch (e) {
     _rows = [];
-    _state = 'Could not read the scenarios: ' + e.message;
+    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    _state = 'failed';
+    showError('Could not read the scenarios: ' + e.message);
   }
   if (repaint) repaint();
 }
@@ -122,16 +126,22 @@ function _matches(s) {
 
 function _paintRows(list, put, adopt, o) {
   list.textContent = '';
-  const note = (t, bad) => list.appendChild(el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), t));
-  if (_state === 'loading' || _rows === null) { note('reading the scenarios…'); return; }
-  if (_state) { note(_state, true); return; }
+  if (_state === 'loading' || _rows === null) { list.appendChild(loadingEl('reading the scenarios…')); return; }
+  if (_state) {
+    list.appendChild(failedEl('The scenarios', () => { _rows = null; _load(adopt.repaint); _paintRows(list, put, adopt, o); }));
+    return;
+  }
   const rows = _rows.filter(_matches);
-  if (!rows.length) { note(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.'); return; }
+  if (!rows.length) {
+    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.',
+      { icon: _rows.length ? 'search' : 'list' }));
+    return;
+  }
   for (const s of rows) {
     const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
     row.title = 'Open the text';
     const acts = el('div', 'mv3-sc-acts');
-    const go = el('button', 'mv3-sc-btn is-use', 'use');
+    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', 'use');
     go.type = 'button';
     go.title = o.put ? 'Take this scenario' : 'Put its lines into this voiceover';
     go.disabled = _busy;

@@ -46,6 +46,9 @@ import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { REALLY, MS } from '../really.js';
 import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
 
 const NAME = 'highlights';
@@ -409,7 +412,7 @@ const _partsFound = () => (_rec && _rec.agent && +_rec.agent.found) || ((_rec &&
 function _arm(what) {
   _armed = what;
   if (_armT) clearTimeout(_armT);
-  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paint(); }, 3000);
+  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paint(); }, MS);
   _paint();
 }
 
@@ -439,7 +442,13 @@ function _paintTop() {
   top.textContent = '';
   const r = _rec;
   const what = _el('div', 'mv3-hl-what');
-  if (!r) { what.appendChild(_el('span', 'mv3-hl-note' + (_err ? ' is-err' : ''), _err || 'reading the project…')); top.appendChild(what); return; }
+  // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (_load).
+  if (!r) {
+    what.appendChild(_err ? failedEl('The project', () => { _err = ''; _paint(); _load(); }, { line: true })
+      : loadingEl('reading the project…', { line: true }));
+    top.appendChild(what);
+    return;
+  }
   const v = r.video;
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
@@ -468,7 +477,7 @@ function _paintTop() {
     const panel = !_frags().length;
     state.appendChild(_el('span', 'mv3-hl-words', _prog && !panel ? _prog.words
       : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
-    const x = _el('button', 'mv3-c-btn danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? 'really?' : '✕ stop');
+    const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : '✕ stop');
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
     x.addEventListener('click', () => { if (_armed !== 'stop') { _arm('stop'); return; } _armed = ''; _stop(); });
@@ -480,7 +489,7 @@ function _paintTop() {
     if (/not where it was/i.test(String(w.error || '')) && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
     if (_retry) {
       const armed = _armed === 'retry';
-      const b = _el('button', 'mv3-c-btn' + (armed ? ' is-armed' : ''), armed ? 'spend again?' : 'retry');
+      const b = _el('button', 'mv3-c-btn u-btn is-s' + (armed ? ' is-armed' : ''), armed ? 'spend again?' : 'retry');
       b.type = 'button';
       b.title = _retryFree ? 'Go on from where it stopped - nothing is paid for' : 'Go on from where it stopped - this step is paid for again';
       b.addEventListener('click', () => {
@@ -518,7 +527,7 @@ function _paintTop() {
   if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
   if (_said) state.appendChild(_el('span', 'mv3-hl-said', _said.text));
   if (!v && !_live) {
-    const add = _el('button', 'mv3-c-btn mv3-hl-add', '+ add video');
+    const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', '+ add video');
     add.type = 'button';
     add.title = 'A link, a file, or a source of the Library - and how long and how many';
     add.addEventListener('click', _popup);
@@ -546,7 +555,7 @@ const TARGET = {
   state() {
     if (_rec && _rec.rendering) {
       const armed = _armed === 'rstop';
-      return { label: armed ? 'really?' : '✕ stop', stop: true, armed, enabled: true,
+      return { label: armed ? REALLY : '✕ stop', stop: true, armed, enabled: true,
         title: 'Stop rendering this project\'s fragments - all of them; the ones made stay' };
     }
     const n = _checked.size;
@@ -647,13 +656,9 @@ function _paintField() {
   // No video yet: the field is the way in, and there is no card to show.
   _ui.root.classList.toggle('is-empty', !r.video && !_live);
   if (!r.video && !_live) {
-    const empty = _el('div', 'mv3-hl-empty');
-    empty.appendChild(_el('p', null, 'A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.'));
-    const add = _el('button', 'mv3-c-btn mv3-hl-add is-big', '+ add video');
-    add.type = 'button';
-    add.addEventListener('click', _popup);
-    empty.appendChild(add);
-    field.appendChild(empty);
+    // (phase V73 block 2, step 2b) The shared "nothing here", its button the way in.
+    field.appendChild(emptyEl('A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.',
+      { icon: 'film', cls: 'mv3-hl-empty', action: { label: '+ add video', on: () => _popup() } }));
     return;
   }
   const grid = _el('div', 'mv3-hl-grid');
@@ -680,7 +685,7 @@ function _paintField() {
     if (pic) fr.style.backgroundImage = 'url("' + pic + '")';
     t.appendChild(fr);
     const cb = _el('input', 'mv3-hl-check');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = _checked.has(f.n);
     cb.title = 'Tick it - for the captions of several and for rendering them together';
     cb.addEventListener('click', (e) => e.stopPropagation());
@@ -689,7 +694,7 @@ function _paintField() {
     // The cross in the corner, twice ("really?"): the fragment goes - Ctrl+Z in the field brings it back until the app
     // is started again (the owner's (х19), (х19а)).
     const armed = _armed === 'del' + f.n;
-    const x = _el('button', 'mv3-hl-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+    const x = _el('button', 'mv3-hl-x u-onpic is-del' + (armed ? ' is-armed' : ' u-x'), armed ? REALLY : '');
     x.type = 'button';
     x.title = 'Delete this fragment - Ctrl+Z here brings it back';
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
@@ -888,13 +893,13 @@ function _paintCard() {
       tl.appendChild(_el('b', null, said || 'yes'));
       tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
       // (phase V69 P12, the owner's (хп90)) Taken off this fragment with one press.
-      const x = _el('button', 'mv3-hl-title-x', '✕');
+      const x = _el('button', 'mv3-hl-title-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Take the title off this fragment';
       x.addEventListener('click', () => _dropTitle(f));
       tl.appendChild(x);
     } else {
-      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle', 'add title');
+      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle u-btn is-s', 'add title');
       add.type = 'button';
       add.title = 'Its headline at the top for the first three seconds: «' + topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' }) + '»';
       add.addEventListener('click', () => _addTitle(f));
@@ -935,7 +940,7 @@ function _paintCard() {
 function _showInFolder(url, title) {
   const w = window.ugcWindow;
   if (!url || !w || typeof w.reveal !== 'function') return null;
-  const b = _el('button', 'mv3-c-btn', 'show in folder');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', 'show in folder');
   b.type = 'button';
   b.title = title;
   b.addEventListener('click', async () => {
@@ -964,7 +969,7 @@ function _renderLine(f) {
       line.appendChild(ch);
     }
     const acts = _el('div', 'mv3-hl-racts');
-    const play = _el('button', 'mv3-c-btn', '▶ play');
+    const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ play');
     play.type = 'button';
     play.title = 'Play the render - the result window, as Queue opens it';
     play.addEventListener('click', () => showResult({ url: rd.url, title: f.title, key: f.key, fresh: false }));
@@ -1082,7 +1087,7 @@ async function _retryNow() {
 // (phase V43, (ё17а)) "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
 // file's path over (desktop/preload.js pathOf), the server checks it is the same video (its print) and the work goes on.
 function _relinkButton(sourceId) {
-  const b = _el('button', 'mv3-c-btn', 'point at the file…');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', 'point at the file…');
   b.type = 'button';
   b.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
   const inp = document.createElement('input');

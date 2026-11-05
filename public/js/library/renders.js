@@ -14,6 +14,9 @@
    The server says which folder and project each render is in, and its length (routes/library.js, lib/render-posters.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// (phase V73 block 2, step 2b) "no renders yet" as the shared part (css/app-shell.css .u-empty)
+import { emptyEl } from '../ui-state.js';
+
 const LS_OPEN = 'lib-renders-open';
 const NONE = '~none';
 
@@ -52,7 +55,7 @@ export function render(items, hooks) {
   grid.className = 'lib-rows is-renders';
   grid.textContent = '';
   if (!items.length) {
-    grid.appendChild(_el('div', 'lib-empty', 'No renders yet. Render a project in Merge.'));
+    grid.appendChild(emptyEl('No renders yet. Render a project in Merge.', { cls: 'lib-empty' }));
     return;
   }
 

@@ -36,7 +36,8 @@
   border:1px solid var(--border); border-radius:var(--pill); padding:2px 8px;
 }
 
-/* Shared by the viewer's header and by the Library page's own rows. */
+/* The old shared button. Since phase V73 block 2 the pages wear the shared part (`.u-btn`, css/app-shell.css); this
+   stays for the 3D Studio's page, which keeps its whole look ((б1-13а)), and for the window heads' ✕ until block 4. */
 .lib-btn{
   padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); text-decoration:none;
@@ -60,11 +61,8 @@
   padding:14px 20px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface);
   color:var(--ink); font:400 13.5px/1.65 var(--font); white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; cursor:text;
 }
-.lib-view-arrow{
-  flex:0 0 40px; border:0; background:transparent; color:var(--muted);
-  font-size:26px; line-height:1; cursor:pointer; transition:.12s var(--ease);
-}
-.lib-view-arrow:hover{ color:var(--ink); background:var(--surface-2); }
+.lib-view-arrow{ flex:0 0 40px; }
+.lib-view-arrow.u-btn{ width:40px; height:auto; align-self:stretch; border-radius:0; font-size:26px; line-height:1 }   /* a full-height column */
 .lib-view-info{
   flex:0 0 220px; min-width:0; overflow-y:auto;
   padding:10px 12px; background:var(--surface); border-left:1px solid var(--border);
@@ -74,13 +72,7 @@
 .lib-view-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; }
 
 /* The viewer's dropdowns, in the right column beside the read-only facts. */
-.lib-view-sel{
-  width:100%; height:24px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font); cursor:pointer;
-}
-.lib-view-sel:hover{ border-color:var(--border-soft); }
+.lib-view-sel{ width:100% }
 
 /* The picture a clip was animated from. A thumbnail rather than a path: a generated six
    seconds is hard to place months later, and the reference frame is what identifies it. */
@@ -116,14 +108,10 @@
   background:var(--scrim); border-radius:1px;
 }
 .mv3-trim-say{ font:600 10.5px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.mv3-trimbox-save{
-  flex:0 0 auto; padding:7px 12px; border:1px solid var(--main); border-radius:var(--r-xs);
-  background:var(--main); color:var(--on-main); font:700 11px/1 var(--font); cursor:pointer;
-}
-.mv3-trimbox-save[disabled]{ opacity:.55; cursor:default }
+.mv3-trimbox-save{ flex:0 0 auto }
 /* A piece's "original": the tick in the right column. */
 .cut-orig{ display:flex; align-items:flex-start; gap:7px; cursor:pointer; font:600 11.5px/1.3 var(--font); color:var(--ink) }
-.cut-orig input{ margin:2px 0 0; accent-color:var(--success) }
+.cut-orig input{ margin:2px 0 0 }
 .cut-orig-txt{ display:flex; flex-direction:column; gap:2px; min-width:0 }
 .cut-orig-txt small{ font-weight:500; color:var(--muted); overflow-wrap:anywhere }
 /* The window "save the piece to" is the place picker (js/place-tree.js, phase V39): the post viewer's move menu

@@ -25,6 +25,7 @@
 
 import { openFrame, GEN_SIZE, POPUP_SIZE } from '../gen-window.js';
 import { showError } from '../notice.js';
+import { loadingEl, failedEl } from '../ui-state.js';
 import { el, api, ls, lsSet } from './util.js';
 import { sheets } from './windows.js';
 
@@ -80,12 +81,14 @@ function _frame(kind, label, o) {
 function _foot(frame, label, title) {
   const foot = el('div', 'mv3-x-foot hm-qs-foot');
   const said = el('span', 'hm-qs-said');
-  const go = el('button', 'mv3-c-btn hm-qs-go', label);
+  const go = el('button', 'mv3-c-btn hm-qs-go u-btn is-main', label);
   go.type = 'button';
   if (title) go.title = title;
   foot.append(said, go);
   frame.body.appendChild(foot);
-  return { foot, said, go, say: (t, bad) => { said.textContent = t || ''; said.classList.toggle('is-bad', !!bad); } };
+  // (phase V73 block 2) a press that failed is a popup (`fail`); the line keeps what is being done and the hints
+  return { foot, said, go, say: (t, bad) => { said.textContent = t || ''; said.classList.toggle('is-bad', !!bad); },
+    fail: (t) => { said.textContent = ''; said.classList.remove('is-bad'); showError(t); } };
 }
 
 // ── BLANK: the name and the format ((хп31), (хп44)) ─────────────────────────────
@@ -95,7 +98,7 @@ function _blank() {
   const form = el('div', 'hm-qs-form');
   frame.body.appendChild(form);
   form.appendChild(el('div', 'mv3-x-hdr', 'name'));
-  const name = el('input', 'mv3-sc-inp hm-qs-name');
+  const name = el('input', 'mv3-sc-inp hm-qs-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.value = _today() + ' - ';
@@ -131,7 +134,7 @@ function _blank() {
       const d = await _post('/api/mv3/timeline/new', { title, kind: 'blank', format: st.format });
       _keep('blank', { format: st.format });
       _merge(d.key);
-    } catch (e) { st.busy = false; F.say(e.message, true); paint(); }
+    } catch (e) { st.busy = false; F.fail(e.message); paint(); }
   };
   F.go.addEventListener('click', go);
   name.addEventListener('input', () => { F.say(''); paint(); });
@@ -190,13 +193,13 @@ async function _textCard(host, st, o) {
     head.appendChild(sub);
     head.appendChild(el('span', 'sp'));
     if (t.from === 'text') {
-      const ed = el('button', 'mv3-sc-new', 'edit');
+      const ed = el('button', 'mv3-sc-new u-btn is-s', 'edit');
       ed.type = 'button';
       ed.title = 'Change the text';
       ed.addEventListener('click', () => VT.openOwnText((b) => put(b), adopt, { talking: !!o.talking, ...own() }));
       head.appendChild(ed);
     }
-    const other = el('button', 'mv3-sc-new', 'other text');
+    const other = el('button', 'mv3-sc-new u-btn is-s', 'other text');
     other.type = 'button';
     other.title = 'Back to the scenarios and your own text';
     other.addEventListener('click', () => { st.text = null; o.changed(); paint(); });
@@ -255,19 +258,19 @@ async function _talking() {
     const t = st.text;
     F.go.disabled = st.busy || !t;
     F.go.textContent = st.busy ? 'creating…' : 'create';
-    if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '', !t);
+    if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '');   // a hint, not red (V73 block 2)
   };
   const paintWho = () => {
     whoLine.textContent = '';
     if (st.look) {
       whoLine.appendChild(el('span', null, st.look.characterName + ' · in this look'));
-      const x = el('button', 'mv3-sc-new', '✕ none');
+      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ none');
       x.type = 'button';
       x.title = 'Choose nobody here - the character and the place are chosen in the project';
       x.addEventListener('click', () => { st.look = null; keep(); paintWho(); });
       whoLine.appendChild(x);
     } else whoLine.appendChild(el('span', 'hm-qs-quiet', 'Not chosen - the character and the place are chosen in the project.'));
-    if (!chars) { whoHost.textContent = 'reading the characters…'; return; }
+    if (!chars) { if (!whoHost.querySelector('.u-failed')) whoHost.replaceChildren(loadingEl('reading the characters…', { line: true })); return; }
     const g = st.text && st.text.gender ? st.text.gender : '';
     WM.paintChoose(whoHost, {
       state: whoState,
@@ -288,13 +291,18 @@ async function _talking() {
   await _textCard(textHost, st, { talking: true, changed: () => { keep(); paintFoot(); paintWho(); } });
   paintFoot();
   paintWho();
-  CS.loadCharacters().then((all) => {
+  const loadChars = () => CS.loadCharacters().then((all) => {
     chars = CS.byLooks(all || []);
     // A look remembered that is not on its character any more is let go.
     if (st.look && !chars.some(c => (c.obrazy || []).some(o => String(o.id) === String(st.look.obrazId)))) { st.look = null; keep(); }
     if (st.look) whoState.group = st.look.characterId;
     paintWho();
-  }).catch((e) => { whoHost.textContent = 'Could not read the characters: ' + e.message; });
+  }).catch((e) => {
+    // (phase V73 block 2) did not load, with Try again; the reason a popup
+    showError('Could not read the characters', { detail: e.message });
+    whoHost.replaceChildren(failedEl('The characters', () => { whoHost.replaceChildren(loadingEl('reading the characters…', { line: true })); loadChars(); }, { line: true }));
+  });
+  loadChars();
 
   F.go.addEventListener('click', async () => {
     const t = st.text;
@@ -316,7 +324,7 @@ async function _talking() {
       }
       keep();
       _merge(key, 'setup');
-    } catch (e) { st.busy = false; paintFoot(); F.say(e.message, true); }
+    } catch (e) { st.busy = false; paintFoot(); F.fail(e.message); }
   });
 }
 
@@ -340,7 +348,7 @@ async function _voiceover() {
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
   R.appendChild(el('div', 'mv3-x-hdr', 'mood'));
-  const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood');
+  const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood u-in');
   moodSel.title = 'The emotion of the whole voiceover: the text is marked up by it, and read by its [tags]';
   R.appendChild(moodSel);
   const moodAbout = el('p', 'mv3-x-note');
@@ -415,7 +423,7 @@ async function _voiceover() {
       if (Object.keys(patch).length) await _post('/api/scen3/projects', { id, ...patch });
       keep();
       _merge(key, 'setup');
-    } catch (e) { st.busy = false; paintFoot(); F.say(e.message, true); }
+    } catch (e) { st.busy = false; paintFoot(); F.fail(e.message); }
   });
 }
 

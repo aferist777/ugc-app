@@ -18,6 +18,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 const MAX = 5;
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 const GOING_MS = 300;
 
 const _list = [];            // newest first: { el, key, n, stays, timer, nEl }
@@ -83,7 +85,7 @@ function _putOnTop(it) {
 }
 
 function _cross(it, title) {
-  const x = _el('button', 'sv3-toast-x', '✕');
+  const x = _el('button', 'sv3-toast-x u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = title || 'Close';
   x.setAttribute('aria-label', x.title);
@@ -123,7 +125,7 @@ export function showError(text, opts = {}) {
   el.appendChild(main);
   const a = opts.action;
   if (a && a.label && typeof a.run === 'function') {
-    const b = _el('button', 'sv3-al-act', a.label);
+    const b = _el('button', 'sv3-al-act u-btn is-s', a.label);
     b.type = 'button';
     b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -155,7 +157,7 @@ export function showToast(o = {}) {
   if (o.where) main.appendChild(_el('span', 'sv3-al-where', o.where));
   el.appendChild(main);
   if (o.act && o.act.label && typeof o.act.run === 'function') {
-    const b = _el('button', 'sv3-al-act', o.act.label);
+    const b = _el('button', 'sv3-al-act u-btn is-s', o.act.label);
     b.type = 'button';
     b.addEventListener('click', (e) => { e.stopPropagation(); o.act.run(); });
     el.appendChild(b);

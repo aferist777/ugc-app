@@ -22,10 +22,13 @@ import * as API from './scen-api.js';
 import { derived } from '../chars-store.js';
 import { paintChoose } from './wk-maker.js';
 import { openFrame, paintBench } from '../gen-window.js';
+// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts; the reason a popup in the corner.
+import { loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 let _api = null;                   // the step's (wk-setup.js _envApi), as the window was last opened with it
 let _w = null;                     // { win, page: 'list' | 'make' }
-let _envs = null;                  // the made environments; read when the window opens, again after a change
+let _envs = null;                  // the made environments; read when the window opens, again after a change - false: not read
 const _state = {};                 // the list's search
 let _was = null;                   // { key, loc } - where the project was set when a place began to be made for it
 
@@ -90,11 +93,13 @@ function _paint() {
   }
   win.setCrumbs([{ label: 'environments', act: { label: '+ new environment', title: 'Make one from a photo or a sentence', on: () => _go('make') } }]);
   if (_envs === null) {
-    win.body.appendChild(Object.assign(document.createElement('div'), { className: 'gw-note', textContent: 'reading the environments…' }));
+    win.body.appendChild(loadingEl('reading the environments…'));
     API.environments().then((files) => { _envs = files || []; _paint(); })
-      .catch((e) => { _envs = []; _paint(); console.warn('[where] environments:', e.message); });
+      // (phase V73 block 2, (б2-19)) Not read is not "No environments yet": "did not load" with Try again, the reason a popup.
+      .catch((e) => { _envs = false; showError('Could not read the environments: ' + e.message); _paint(); });
     return;
   }
+  if (_envs === false) { win.body.appendChild(failedEl('The environments', () => { _envs = null; _paint(); })); return; }
   const here = String(api.casting().locationImage || '');
   paintChoose(win.body, {
     state: _state,

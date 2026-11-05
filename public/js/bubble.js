@@ -124,7 +124,7 @@ export function tipBox(o) {
   for (const p of String(opts.text || '').split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
   const never = _el('label', 'bub-never');
   const tick = document.createElement('input');
-  tick.type = 'checkbox';
+  tick.type = 'checkbox'; tick.classList.add('u-check');
   tick.checked = !!opts.never;
   tick.addEventListener('change', () => { if (opts.onNever) opts.onNever(tick.checked); });
   never.append(tick, document.createTextNode(' don\'t show again'));

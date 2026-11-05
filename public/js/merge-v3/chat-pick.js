@@ -68,10 +68,16 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
 import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../folder-column.js';
 import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from '../del-x.js';
+// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts, the reason a popup in the
+// corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own, б1-13а).
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const PAGE = 120;                 // tiles drawn at once - the next ones as the grid is scrolled to its end
 const LS_SRC = 'mv3_vpick_v1';    // { <kind>: <source id> } - where each kind was last taken from
@@ -163,7 +169,7 @@ export function openPick(o) {
   const has = (id) => !!id && o.sources.some(s => s.id === id);
   const sel = o.select && o.select.path ? { path: o.select.path, srcs: (o.select.srcs || []).filter(has) } : null;
   const src = sel && sel.srcs.length ? sel.srcs[0] : has(o.start) ? o.start : has(last) ? last : has(o.first) ? o.first : (o.sources[0] || {}).id;
-  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: false, sel: sel && sel.srcs.length ? sel : null };
+  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: false, sel: sel && sel.srcs.length ? sel : null };
   _build();
   _paintHead();
   _paintSources();
@@ -244,7 +250,7 @@ function _build() {
   const h = el('h3', null, '');
   const hint = el('span', 'pk-hint', '');
   const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close', '✕');
+  const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
@@ -254,11 +260,11 @@ function _build() {
   const bar = el('div', 'pk-bar');
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'pk-q';
+  q.className = 'pk-q u-in is-s';
   q.placeholder = 'search by name';
   q.spellcheck = false;
   const cat = document.createElement('select');
-  cat.className = 'pk-cat';
+  cat.className = 'pk-cat u-in is-s';
   cat.title = 'A folder of this shelf';
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
@@ -272,7 +278,7 @@ function _build() {
 
   const foot = el('div', 'pk-foot');
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
   done.type = 'button';
   foot.append(said, done);
 
@@ -417,8 +423,9 @@ function _paintSources() {
   const row = el('div', 'pk-link');
   const inp = document.createElement('input');
   inp.type = 'text';
+  inp.className = 'u-in is-s';
   inp.placeholder = 'YouTube, TikTok, Instagram…';
-  const b = el('button', 'pk-link-go', 'add');
+  const b = el('button', 'pk-link-go u-btn is-s', 'add');
   b.type = 'button';
   row.appendChild(inp);
   row.appendChild(b);
@@ -442,6 +449,17 @@ function _paintSources() {
 
 const _memoKey = () => (_o.project.key || '') + '|' + _st.src;
 
+// (phase V73 block 2, (б2-19)) A read that FAILED is not an empty shelf or folder: the grid says "<what> did not load" with
+// Try again (`retry`), the reason is a popup. Not cached, so Try again reads it again. The 3D Studio's page: its old line.
+function _failedAs(got, what, retry) {
+  if (!got || !got.failed) return null;
+  if (OLD_LOOK()) return null;
+  showError(what + ' did not load: ' + (got.reason || got.why || 'it could not be read'));
+  return { what, retry };
+}
+const _none = (text, icon) => (OLD_LOOK() ? el('div', 'pk-none', text) : emptyEl(text, { icon }));
+const _kindIcon = () => (_o.kind === 'audio' ? 'music' : _o.kind === 'video' ? 'film' : 'image');
+
 // ── A source ────────────────────────────────────────────────────────────────
 async function _load(keepCat) {
   const mine = ++_seq;
@@ -454,15 +472,16 @@ async function _load(keepCat) {
   if (!got) {
     _st.loading = true;
     _paintGrid();
-    try { got = await s.load(); } catch (e) { got = null; }
+    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: 'it could not be read', failed: true, reason: e && e.message }; }
     if (!_w || mine !== _seq) return;
     _st.loading = false;
-    got = got || { items: [], cats: [], why: 'it could not be read' };
-    _cache.set(s.id, got);
+    got = got || { items: [], cats: [], why: 'it could not be read', failed: true };
+    if (!got.failed || OLD_LOOK()) _cache.set(s.id, got);
   }
   _st.items = got.items || [];
   _st.cats = (got.cats || []).filter(c => c && c.id && (+c.count > 0 || c.id === _st.cat));
   _st.why = got.why || '';
+  _st.failed = _failedAs(got, s.label || 'The shelf', () => _load(keepCat));
   // (phase V15) Opened on a thing in the zone: on its shelf - the next that may hold it when this one does not -, in its
   // category, the thing in view.
   let it = null;
@@ -529,7 +548,7 @@ function _paintGrid() {
   G.textContent = '';
   G.scrollTop = 0;
   G.classList.toggle('is-rows', _o.kind === 'audio');
-  if (_st.loading) { G.appendChild(el('div', 'pk-none', 'reading…')); _w.count.textContent = ''; return; }
+  if (_st.loading) { G.appendChild(OLD_LOOK() ? el('div', 'pk-none', 'reading…') : loadingEl('reading…')); _w.count.textContent = ''; return; }
   // (phase V55) With the tree: the open folder's own folders first, as tiles - not while a search looks deeper.
   const node = _t && !_st.src ? _t.node : null;
   const look = _st.q.trim();
@@ -538,15 +557,17 @@ function _paintGrid() {
   _st.list = _shown();
   _st.drawn = 0;
   _w.count.textContent = _st.list.length === _st.items.length ? String(_st.items.length) : _st.list.length + ' of ' + _st.items.length;
+  // The folder's own folders stay over it (the tree drew them, not this read).
+  if (_st.failed) { G.appendChild(failedEl(_st.failed.what, _st.failed.retry)); _w.count.textContent = ''; return; }
   if (!_st.list.length && node) {
     const words = look ? 'Nothing here or in the folders under it is called “' + look + '”.' : _st.why || (fold ? '' : 'Nothing in this folder.');
-    if (words) G.appendChild(el('div', 'pk-none', words));
+    if (words) G.appendChild(_none(words, look ? 'search' : 'folder'));
     return;
   }
   if (!_st.list.length) {
     const src = _o.sources.find(x => x.id === _st.src) || {};
-    G.appendChild(el('div', 'pk-none', _st.items.length ? (_st.q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing in this folder.')
-      : (_st.why || src.empty || 'Nothing on this shelf.')));
+    G.appendChild(_none(_st.items.length ? (_st.q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing in this folder.')
+      : (_st.why || src.empty || 'Nothing on this shelf.'), _st.items.length ? (_st.q ? 'search' : 'folder') : _kindIcon()));
     return;
   }
   _more();
@@ -718,7 +739,7 @@ function _openTree(o) {
   // index - the files of this kind in every folder (folder-column.js folderIndex), shapeOn - the tree deals them itself
   // (createTree `shape`); groups / group / all - a row read in groups (characters & looks) and the group shown.
   _t = { tree: null, node: null, index: null, shapeOn: false, groups: null, group: '', all: [], qT: 0 };
-  _st = { src: '', cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: true, sel: null };
+  _st = { src: '', cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: true, sel: null };
   _buildTree();
   _paintHead();
   _paintGrid();
@@ -735,7 +756,7 @@ function _buildTree() {
   const h = el('h3', null, '');
   const hint = el('span', 'pk-hint', '');
   const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close', '✕');
+  const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
@@ -752,13 +773,13 @@ function _buildTree() {
   const path = el('div', 'pk-path');
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'pk-q';
+  q.className = 'pk-q u-in is-s';
   q.placeholder = 'search here and deeper';
   q.title = 'By name - in the open folder and every folder under it';
   q.spellcheck = false;
   // Kept for the code the rows share with the window above: rows have no categories, so it stays hidden.
   const cat = document.createElement('select');
-  cat.className = 'pk-cat';
+  cat.className = 'pk-cat u-in is-s';
   cat.hidden = true;
   const count = el('span', 'pk-count', '');
   bar.append(path, q, count);
@@ -771,7 +792,7 @@ function _buildTree() {
   // The foot: this computer (and a clip by a link), what the chat says, done.
   const foot = el('div', 'pk-foot');
   const c = _o.computer;
-  const up = el('button', 'pk-up', '+ from this computer…');
+  const up = el('button', 'pk-up u-btn is-s', '+ from this computer…');
   up.type = 'button';
   up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
   up.addEventListener('click', () => c.open());
@@ -779,7 +800,7 @@ function _buildTree() {
   // (phase V26.6, the owner's (пр3)) The place's own way to make what goes into it: the product place's "+ new prop".
   const M = _o.make;
   if (M && typeof M.on === 'function') {
-    const mk = el('button', 'pk-up is-make', M.label || '+ new');
+    const mk = el('button', 'pk-up is-make u-btn is-s is-gen', M.label || '+ new');
     mk.type = 'button';
     if (M.title) mk.title = M.title;
     mk.addEventListener('click', () => M.on());
@@ -790,9 +811,10 @@ function _buildTree() {
     const row = el('div', 'pk-link');
     const inp = document.createElement('input');
     inp.type = 'text';
+    inp.className = 'u-in is-s';
     inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
     inp.title = L.hint || '';
-    const b = el('button', 'pk-link-go', 'add');
+    const b = el('button', 'pk-link-go u-btn is-s', 'add');
     b.type = 'button';
     row.append(inp, b);
     foot.appendChild(row);
@@ -811,7 +833,7 @@ function _buildTree() {
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   }
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done', 'done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', 'done');
   done.type = 'button';
   foot.append(said, done);
 
@@ -951,12 +973,12 @@ const _fits = (x) => !(_o && _o.tree && typeof _o.tree.fit === 'function') || !!
 async function _rowItems(s) {
   let got = _cache.get(s.id);
   if (!got) {
-    try { got = await s.load(); } catch (e) { got = null; }
-    got = got || { items: [], cats: [], why: 'it could not be read' };
+    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: 'it could not be read', failed: true, reason: e && e.message }; }
+    got = got || { items: [], cats: [], why: 'it could not be read', failed: true };
     // A row shows only what the window takes too (the clips made in this project, by their length).
     if (got.items) got = Object.assign({}, got, { items: got.items.filter(_fits) });
     if (Array.isArray(got.groups)) got.groups = got.groups.map(g => Object.assign({}, g, { items: (g.items || []).filter(_fits) })).filter(g => g.items.length);
-    _cache.set(s.id, got);
+    if (!got.failed || OLD_LOOK()) _cache.set(s.id, got);
   }
   return got;
 }
@@ -1039,6 +1061,7 @@ async function _openRow(id, reveal) {
   if (!_w || mine !== _seq || _st.src !== id) return;
   _st.loading = false;
   _st.why = got.why || '';
+  _st.failed = _failedAs(got, s.label || 'The shelf', () => _openRow(id, reveal));
   _t.all = got.items || [];
   _t.groups = Array.isArray(got.groups) && got.groups.length ? got.groups : null;
   if (_t.groups) {
@@ -1069,6 +1092,7 @@ function _leaveRow() {
   if (k) { _t.tree.select(k, false); _openNode(_t.tree.node(k)); return; }
   _st.src = '';
   _st.items = [];
+  _st.failed = null;
   _paintSide();
   _paintPath();
   _paintGrid();
@@ -1098,12 +1122,13 @@ async function _openNode(n, reveal) {
     _st.loading = true;
     _paintGrid();
     try { got = { items: (await nodeFiles(n, _o.tree.type)).filter(_fits).map(_itemOf).filter(Boolean), why: '' }; }
-    catch (e) { got = { items: [], why: e.message || 'the folder could not be read' }; }
+    catch (e) { got = { items: [], why: e.message || 'the folder could not be read', failed: true }; }
     if (!_w || mine !== _seq) return;
   }
   _st.loading = false;
   _st.items = got.items;
   _st.why = got.why;
+  _st.failed = _failedAs(got, n.label || n.name || 'The folder', () => _openNode(n, reveal));
   _paintGrid();
   if (reveal) _reveal(reveal);
 }
@@ -1117,6 +1142,7 @@ function _searchTree(now) {
     if (!_st.q.trim()) { _openNode(n); return; }
     ++_seq;
     _st.loading = false;
+    _st.failed = null;
     _st.items = _t.index ? filesUnder(n, _t.index).map(_itemOf).filter(Boolean) : [];
     _st.why = _t.index ? '' : 'the folders could not be read';
     _paintGrid();

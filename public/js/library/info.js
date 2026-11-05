@@ -13,6 +13,10 @@
 // same column (js/library/voices.js); the page decides which of the two has it.
 
 import * as CV from './char-voices.js';
+// (phase V73 block 2, step 2b) "nothing here" and "did not load" as the shared parts, rows of the column; the reason of a
+// failed read is the popup in the corner (the owner's (б2-19) а)
+import { emptyEl, failedEl, cap } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,7 +37,7 @@ const _big = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=sheet';
 // What the head says.
 const _title = (it) => it.name || 'character';
 
-const _note = (text) => _el('div', 'lib-info-note', text);
+const _note = (text) => emptyEl(text, { line: true, cls: 'lib-info-note' });
 
 // ── The top: the picture, and the way into the enlarged view ────────────────
 function _ref(kind, it, hooks) {
@@ -92,7 +96,13 @@ export async function show(kind, it, hooks) {
     d = await fetch('/api/library/info/' + encodeURIComponent(kind) + '/' + encodeURIComponent(it.id)).then(r => r.json());
   } catch (e) { d = { success: false, error: e.message }; }
   if (my !== _seq) return;
-  if (!d || !d.success) { body.appendChild(_note((d && d.error) || 'It could not be read.')); return; }
+  // A column whose read failed is not an empty one: "did not load" with Try again, the reason in the corner.
+  if (!d || !d.success) {
+    const what = kind === 'characters' ? 'this character' : 'this';
+    body.appendChild(failedEl(what, () => show(kind, it, hooks), { line: true, cls: 'lib-info-note' }));
+    showError(cap(what) + ' did not load: ' + ((d && d.error) || 'It could not be read.'));
+    return;
+  }
   if (kind === 'characters') {
     CV.paint(body, it, d.voices || [], { changed: hooks.changed, alive: () => my === _seq });
     body.appendChild(_looks(d.looks || [], hooks, 'No looks for this character yet.'));

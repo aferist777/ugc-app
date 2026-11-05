@@ -43,6 +43,9 @@ import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
 import * as Layers from '../layers.js';
 import * as GW from '../gen-window.js';
+// (phase V73 block 2, step 2b) Being read, nothing found - the shared parts (rows in the voice menu; the library window's list
+// in the big form, the same on Home's quick start).
+import { emptyEl, loadingEl } from '../ui-state.js';
 
 const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
@@ -107,7 +110,7 @@ function _mark() {
 }
 
 function _playBtn(src, what) {
-  const b = el('button', 'mv3-wk-vplay', '▶');
+  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -163,7 +166,7 @@ export function paintRow(host, api, o) {
 
   const row = el('div', 'mv3-wk-vrow is-now');
   row.appendChild(_playBtn((cur && cur.sample) || '', 'our own demo'));
-  const btn = el('button', 'mv3-wk-vpickbtn' + (cur ? '' : ' is-need'));
+  const btn = el('button', 'mv3-wk-vpickbtn u-btn is-s is-field' + (cur ? '' : ' is-need'));
   btn.type = 'button';
   btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
   btn.appendChild(el('span', 'mv3-wk-vpickarrow', '▾'));
@@ -246,14 +249,14 @@ const _labelsSub = (L) => _sub({ descriptive: L.descriptive, gender: L.gender, a
 
 async function _voiceMenu(anchor, api) {
   if (_menu) { _closeMenu(); return; }
-  const box = el('div', 'mv3-plus-menu mv3-wk-vmenu');
+  const box = el('div', 'mv3-plus-menu mv3-wk-vmenu u-menu is-float');
   const rec = api.char();
   const mine = _mine(rec);
   const now = _active(rec);
   const pick = api.pick();
   const curId = String((now && now.voiceId) || (!mine.length && pick ? pick.voiceId : '') || '');
 
-  const lib = el('button', 'mv3-plus-item is-lib');
+  const lib = el('button', 'mv3-plus-item u-mi is-lib');
   lib.type = 'button';
   lib.appendChild(el('span', '', 'ElevenLabs library…'));
   lib.appendChild(el('small', '', 'thousands of voices - search and listen free, take one'));
@@ -279,10 +282,10 @@ async function _voiceMenu(anchor, api) {
   const savedAt = box.childNodes.length;
   const paintSaved = () => {
     while (box.childNodes.length > savedAt) box.lastChild.remove();
-    if (_shelf === null) { box.appendChild(el('div', 'mv3-wk-vmnote', 'reading the saved voices…')); return; }
+    if (_shelf === null) { box.appendChild(loadingEl('reading the saved voices…', { line: true, cls: 'mv3-wk-vmnote' })); return; }
     const have = new Set(mine.map(v => String(v.voiceId)));
     const list = _shelf.filter(it => !have.has(String(it.id)));
-    if (!list.length) { box.appendChild(el('div', 'mv3-wk-vmnote', 'No saved voices yet - take one from the ElevenLabs library.')); return; }
+    if (!list.length) { box.appendChild(emptyEl('No saved voices yet - take one from the ElevenLabs library.', { line: true, cls: 'mv3-wk-vmnote' })); return; }
     for (const it of list) {
       const m = it.meta || {};
       row(it.media, it.name, [_labelsSub(m.labels || {}), m.accountRemoved ? 'out of the account - taken back free when chosen' : ''].filter(Boolean).join(' · '),
@@ -355,12 +358,12 @@ async function _useSaved(api, it) {
 // ── The sub-level ───────────────────────────────────────────────────────────
 function _bar(host, api) {
   const acts = el('div', 'mv3-wk-bar is-own');
-  const tab = el('button', 'mv3-sc-tab is-on', 'voice');
+  const tab = el('button', 'mv3-sc-tab u-tab is-on', 'voice');
   tab.type = 'button';
   tab.disabled = true;
   tab.title = 'The voices of this character, and the library';
   acts.appendChild(tab);
-  const x = el('button', 'mv3-iconbtn', '✕');
+  const x = el('button', 'u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Back to the script';
   x.addEventListener('click', () => api.go('hub'));
@@ -372,7 +375,7 @@ export function paintPicker(host, api) {
   // (phase V62) In its window (js/merge-v3/wk-setup.js) the window's own ✕ closes it - no bar of its own.
   if (!api.inWindow) _bar(host, api);
   const rec = api.char();
-  if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
+  if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl('reading the filters…')); return; }
 
   const mine = _mine(rec);
   const now = String((rec && rec.voice) || '');
@@ -411,7 +414,7 @@ export function paintPicker(host, api) {
     if (String(v.voiceId) === now) {
       row.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
     } else {
-      const use = el('button', 'mv3-wk-vuse', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
       use.type = 'button';
       use.title = 'Read every line in this one';
       use.disabled = !!_busy;
@@ -426,7 +429,7 @@ export function paintPicker(host, api) {
   // ── the library ──
   host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'The ElevenLabs library'));
   const f = el('div', 'mv3-wk-vfilters');
-  const search = el('input', 'mv3-wk-vsearch');
+  const search = el('input', 'mv3-wk-vsearch u-in is-s');
   search.type = 'search';
   search.placeholder = 'a name, or a word from the description';
   search.value = _q.search;
@@ -440,7 +443,7 @@ export function paintPicker(host, api) {
   const pick = (key, label, list) => {
     const cell = el('label', 'mv3-wk-vfcell');
     cell.appendChild(el('span', 'mv3-wk-vfname', NAMES[key] || key));
-    const s = el('select', 'mv3-wk-vfilter');
+    const s = el('select', 'mv3-wk-vfilter u-in is-s');
     s.title = label;
     const any = el('option', '', label);
     any.value = '';
@@ -464,7 +467,7 @@ export function paintPicker(host, api) {
   pick('language', 'any language', _filters.languages || []);
   host.appendChild(f);
 
-  const go = el('button', 'mv3-wk-vsearchbtn', _busy === 'search' ? 'searching…' : 'search');
+  const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? 'searching…' : 'search');
   go.type = 'button';
   go.disabled = !!_busy;
   go.addEventListener('click', () => _search(api, 1));
@@ -485,7 +488,7 @@ export function paintPicker(host, api) {
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
-    host.appendChild(api.note(_busy === 'search' || !_res ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
+    host.appendChild(_busy === 'search' || !_res ? loadingEl('searching…') : emptyEl('Nothing matches all of those. Drop a filter.', { icon: 'search' }));
     if (pagerHost) _pager(pagerHost, api);
     return;
   }
@@ -497,7 +500,7 @@ export function paintPicker(host, api) {
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voice_id));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
     row.appendChild(txt);
-    const take = el('button', 'mv3-wk-vuse', _busy === 'take:' + v.voice_id ? '…' : 'take');
+    const take = el('button', 'mv3-wk-vuse u-btn is-s', _busy === 'take:' + v.voice_id ? '…' : 'take');
     take.type = 'button';
     take.title = !rec ? 'Add it to the account and make it the project’s voice'
       : have.has(String(v.voice_id))
@@ -519,7 +522,7 @@ function _pager(host, api) {
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const pager = el('div', 'mv3-wk-vpager');
   const step = (label, to, can) => {
-    const b = el('button', 'mv3-wk-vpage', label);
+    const b = el('button', 'mv3-wk-vpage u-btn is-s is-icon', label);
     b.type = 'button';
     b.disabled = !can || !!_busy;
     b.addEventListener('click', () => _search(api, to));

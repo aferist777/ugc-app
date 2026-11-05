@@ -50,7 +50,7 @@ export function createPlayer(host, opts) {
   let marked = null;         // the grid the cards are marked in
 
   // ── The bar ──
-  const play = el('button', 'snd-btn snd-pl-play', '▶');
+  const play = el('button', 'snd-btn snd-pl-play u-btn is-l is-icon', '▶');
   play.type = 'button';
   play.title = 'Play / pause (Space)';
   const time = el('span', 'snd-clock', '');
@@ -59,10 +59,10 @@ export function createPlayer(host, opts) {
   const name = el('span', 'snd-pl-name', 'choose a track');
   const wave = el('div', 'snd-pl-wave');
   mid.append(name, wave);
-  const piece = el('button', 'snd-btn snd-pl-tool', '▶ the piece');
+  const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', '▶ the piece');
   piece.type = 'button';
   piece.title = 'Play only the piece between the gold handles';
-  const x = el('button', 'snd-btn snd-pl-x snd-pl-tool', '✕');
+  const x = el('button', 'snd-btn snd-pl-x snd-pl-tool u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Take the track off the player';
   host.append(play, time, mid, piece, x);

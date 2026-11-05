@@ -225,7 +225,7 @@ function _paintPick() {
   const w = S.words[S.sel];
   const n = S.words.length;
   const row = _el('div', 'mv3-wd-row');
-  const f = _el('input', 'mv3-wd-in');
+  const f = _el('input', 'mv3-wd-in u-in is-s');
   f.type = 'text';
   f.maxLength = LIMITS.word;
   f.spellcheck = false;
@@ -245,7 +245,7 @@ function _paintPick() {
   f.addEventListener('blur', () => { if (!_painting && S.edit && f.__edit === S.edit && document.activeElement !== f) _commit('none'); });
   row.appendChild(f);
   const btn = (label, title, fn, off, cls) => {
-    const b = _el('button', 'mv3-wd-btn' + (cls ? ' ' + cls : ''), label);
+    const b = _el('button', 'mv3-wd-btn u-btn is-s is-icon' + (cls ? ' ' + cls : ''), label);
     b.type = 'button';
     b.title = title;
     b.tabIndex = -1;

@@ -59,7 +59,9 @@ import { createFolderColumn } from '../folder-column.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
-import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
+// (phase V73 block 2, step 2b) The empty conversation - the shared "nothing here".
+import { emptyEl } from '../ui-state.js';
 import { markField, markText } from './image-words.js';
 
 const POLL_MS = 4000;
@@ -111,7 +113,7 @@ export function refCell(a, k, n, peek) {
 export const money = (v) => '$' + (+(+v).toFixed(4));
 /** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
 export function almanacSoon() {
-  const b = el('button', 'mv3-vc-almanac is-soon', 'almanac');
+  const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'almanac');
   b.type = 'button';
   b.disabled = true;
   b.title = 'In development: how to ask for pictures, and references to place the person by';
@@ -858,7 +860,7 @@ export function createChat(make) {
       });
     }
     cell.appendChild(el('span', 'n', String(n)));
-    const x = el('button', 'x', '✕');
+    const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = swap ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
     x.addEventListener('click', (ev) => { ev.stopPropagation(); _detach(a.path); });
@@ -923,7 +925,7 @@ export function createChat(make) {
     });
     box.appendChild(go);
     box.appendChild(el('span', 'n', String(n)));
-    const x = el('button', 'x', '✕');
+    const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = 'Close this place - the numbers after it move up';
     x.addEventListener('click', () => _closeHole(h));
@@ -1352,9 +1354,16 @@ export function createChat(make) {
     // for the conversation too: with it there is no "describe a clip".
     const footed = !!(_ui.foot && _ui.foot.childNodes.length);
     if (!_thread.length && !footed && !_pend) {
-      if (!empty) { empty = el('div', 'mv3-ig-empty'); host.insertBefore(empty, _ui.foot); }
       // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
-      empty.textContent = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
+      const said = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
+      // (phase V73 block 2, step 2b) The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
+      // when its words change.
+      if (!empty || empty.dataset.said !== said) {
+        const e = emptyEl(said, { icon: T.emptyIcon || 'image', cls: 'mv3-ig-empty' });
+        e.dataset.said = said;
+        if (empty) empty.replaceWith(e); else host.insertBefore(e, _ui.foot);
+        empty = e;
+      }
     } else if (empty) empty.remove();
 
     let prev = null;
@@ -1401,30 +1410,13 @@ export function createChat(make) {
   // and the records of what it made; the clips and pictures stay on their shelves and on the timeline (ч6, the server's
   // lib/mv3-chat.js remove). It goes back to ✕ after 3 s, when the pointer leaves the message, or on Escape.
   function _delOn(b, m) {
-    const x = el('button', 'mv3-ig-del', '✕');
+    // (phase V73 block 2) the shared cross, "Really?" by js/really.js (3 s, Escape and the pointer leaving the message let go)
+    const x = el('button', 'mv3-ig-del u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Delete this message - what it made stays on its shelf and on the timeline';
-    let t = 0;
-    let layer = null;
-    const back = () => {
-      clearTimeout(t);
-      t = 0;
-      if (layer) { Layers.close(layer); layer = null; }
-      x.classList.remove('is-ask');
-      x.textContent = '✕';
-    };
-    x.addEventListener('click', async (e) => {
+    twoPress(x, { host: b, go: async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (x.disabled) return;
-      if (!x.classList.contains('is-ask')) {
-        x.classList.add('is-ask');
-        x.textContent = 'really?';
-        t = setTimeout(back, 3000);
-        layer = Layers.open(x, { modal: false, onEsc: back, name: 'delete a message' });
-        return;
-      }
-      back();
       x.disabled = true;
       const d = await json('/api/mv3/chat/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }),
@@ -1438,8 +1430,7 @@ export function createChat(make) {
       _thread = _thread.filter(y => y.id !== m.id);
       _paintThread();
       _reload();
-    });
-    b.addEventListener('pointerleave', () => { if (x.classList.contains('is-ask')) back(); });
+    } });
     b.classList.add('has-del');
     b.appendChild(x);
     return x;
@@ -1679,6 +1670,7 @@ export function createChat(make) {
     const pen = _ui && _ui.pen;
     if (!pen) return;
     pen.classList.toggle('on', _write);
+    pen.classList.toggle('is-on', _write);   // (phase V73 block 2) pressed: the selected look (б2-13)
     pen.title = _write
       ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
       : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
@@ -1899,7 +1891,7 @@ export function createChat(make) {
   function _soundTile(it) {
     const t = el('div', 'mv3-ig-card is-sound' + (_atts.some(a => a.path === it.path) ? ' on' : ''));
     t.title = it.name || '';
-    const play = el('button', 'mv3-ig-splay', _hear && _hear.path === it.path ? '❚❚' : '▶');
+    const play = el('button', 'mv3-ig-splay u-btn is-s is-icon', _hear && _hear.path === it.path ? '❚❚' : '▶');
     play.type = 'button';
     play.title = 'Listen';
     play.draggable = false;
@@ -2075,12 +2067,12 @@ export function createChat(make) {
     ta.placeholder = T.placeholder;
     // THE WRITER: on, the message is rewritten into the shape the chosen model wants; off, the words go
     // exactly as typed. (phase V15) A description that keeps its own switch for it in its column has no pen here.
-    const pen = S.penInBar === false ? null : el('button', 'pen', '✎');
+    const pen = S.penInBar === false ? null : el('button', 'pen u-btn is-s is-icon', '✎');
     if (pen) pen.type = 'button';
-    const nBtn = el('button', 'n', '×1');
+    const nBtn = el('button', 'n u-btn is-s', '×1');
     nBtn.type = 'button';
     nBtn.title = 'How many to make at once. Each is its own attempt.';
-    const go = el('button', 'b', '>');
+    const go = el('button', 'b u-btn is-s is-main', '>');
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(...[ta, pen, nBtn, go].filter(Boolean));

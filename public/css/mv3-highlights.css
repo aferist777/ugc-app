@@ -26,9 +26,6 @@
 .mv3-hl-state{flex:0 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
 .mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
 .mv3-hl-words.is-err{color:var(--danger); white-space:normal}
-.mv3-hl-add{color:var(--ink); border-color:var(--sel-line)}
-.mv3-hl-add.is-big{padding:8px 16px; font-size:12px}
-.mv3-c-btn.is-armed:not(.danger){background:var(--warn); border-color:var(--warn); color:var(--on-fill)}
 .mv3-hl-note{margin:0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
 .mv3-hl-note.is-err{color:var(--danger)}
 
@@ -39,8 +36,8 @@
   border-left:1px solid var(--border-soft); background:var(--surface);
 }
 .mv3-hlv.is-empty .mv3-hl-card{display:none}
-.mv3-hl-empty{max-width:420px; margin:40px auto; text-align:center; display:flex; flex-direction:column; align-items:center; gap:14px}
-.mv3-hl-empty p{margin:0; font:400 11.5px/1.5 var(--font); color:var(--muted)}
+/* (phase V73 block 2) No video yet is the shared part with its "+ add video" (js/ui-state.js emptyEl); here only where it sits. */
+.mv3-hl-empty{max-width:420px; margin:40px auto}
 
 /* The tiles: vertical, as a short is */
 .mv3-hl-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:10px; align-content:start}
@@ -53,7 +50,7 @@
 .mv3-hl-tile.is-checked{border-color:var(--sel-line)}
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
-.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--success); cursor:pointer}
+.mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; margin:0}
 .mv3-hl-score{
   position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
   background:var(--scrim); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;
@@ -63,14 +60,10 @@
   background:var(--scrim); color:var(--on-media); font:600 8.5px/1.3 var(--font);
 }
 /* The cross in the corner (х19): pale until the tile is pointed at; armed - "really?" - filled red. */
-.mv3-hl-x{
-  position:absolute; top:5px; right:5px; z-index:3; min-width:20px; height:20px; padding:0 5px;
-  border:1px solid var(--on-media-line); border-radius:var(--r-xs); background:var(--scrim);
-  color:var(--on-media); font:700 10px/18px var(--font); cursor:pointer; opacity:.35; transition:opacity .12s var(--ease);
-}
+.mv3-hl-x{position:absolute; top:5px; right:5px; z-index:3; opacity:.35; transition:opacity var(--dur-1) var(--ease)}
+.mv3-hl-x.u-onpic:not(.is-armed){width:20px; height:20px; --x-size:12px}   /* the shared cross on the tile; armed - the part's red fill */
+.mv3-hl-x.u-onpic.is-armed{height:20px}
 .mv3-hl-tile:hover .mv3-hl-x, .mv3-hl-x.is-armed{opacity:1}
-.mv3-hl-x:hover{border-color:var(--danger); color:var(--danger)}
-.mv3-hl-x.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
 /* Being made: the poster dimmed under its own bar; made: its own first frame; its timeline open: lit. */
 .mv3-hl-tile.is-making .mv3-hl-frame{filter:grayscale(.5) brightness(.5)}
 .mv3-hl-tile.is-open{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}
@@ -84,7 +77,6 @@
   background:var(--bg); font:700 12.5px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
 }
 .mv3-hl-card-name:hover{border-color:var(--muted)}
-.mv3-hl-card-name:focus{outline:none; border-color:var(--focus)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
   background:linear-gradient(to top, var(--scrim-strong), oklch(0 0 0 / 0));
@@ -137,9 +129,6 @@
 .mv3-hl-rline b{overflow-wrap:anywhere}
 .mv3-hl-meta.is-err{color:var(--danger)}
 .mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
-/* The render button in a highlights project while its renders go: "✕ stop", armed - "really?" - filled red (export-b.js) */
-#mv3-export.is-stop{background:transparent; border-color:var(--danger); color:var(--danger)}
-#mv3-export.is-stop.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
 
 /* The card of the moment pressed */
 .mv3-hl-card-h{font:700 12.5px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}
@@ -175,10 +164,10 @@
 .mv3-hlp-back{margin-right:6px}
 /* (хп48) No kind yet: what is under the kinds waits, blurred */
 .mv3-hlp .is-locked{filter:blur(2px); opacity:.45; pointer-events:none; user-select:none}
-.mv3-hlp-tabs{display:flex; gap:6px; margin-bottom:7px}
+.mv3-hlp-tabs{margin-bottom:7px}
 .mv3-hlp-pane{display:flex; align-items:center; gap:8px; min-height:30px}
 .mv3-hlp-pane[hidden]{display:none}
-.mv3-hlp-url{width:100%}
+.mv3-hlp-url{ width:100% }
 .mv3-hlp-file{font:500 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 /* The Library's list - its own box, scrolled inside */
 .mv3-hlp-srcs{flex-direction:column; align-items:stretch; gap:4px; height:196px; overflow-y:auto; padding:6px; box-sizing:border-box;
@@ -195,10 +184,6 @@
 .mv3-hlp-src-t small{font:400 9.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab{display:flex; align-items:center; gap:7px; margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab[hidden]{display:none}
-.mv3-hlp-sel{
-  height:24px; padding:0 4px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10.5px/22px var(--font); cursor:pointer;
-}
 /* The kinds: square buttons, the owner's pixel icons (P1) three times their grid, gold */
 .mv3-hlp-kinds{display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap}
 .mv3-hlp-kind{
@@ -211,9 +196,7 @@
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
 .mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}
 .mv3-hlp-kind.is-on .mv3-hlp-kind-nm{color:var(--ink)}
-.mv3-hlp-reset{margin-left:auto; padding:2px 0; border:0; background:none; color:var(--muted); font:600 10px/1.3 var(--font); cursor:pointer}
-.mv3-hlp-reset:hover{color:var(--ink)}
-.mv3-hlp-reset[disabled]{color:var(--muted); opacity:.5; cursor:default}
+.mv3-hlp-reset{margin-left:auto}
 /* (хп35) The kind's words - one height, whatever they say */
 .mv3-hlp-about{height:116px; overflow-y:auto; margin-top:8px; padding:8px 11px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); font:400 10.5px/1.5 var(--font); color:var(--ink)}
@@ -226,11 +209,7 @@
 .mv3-hlp-orow[hidden]{display:none}
 .mv3-hlp-olab{flex:0 0 66px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-chips{display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0}
-.mv3-hlp-chip{height:24px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted);
-  font:700 10.5px/22px var(--font); cursor:pointer}
-.mv3-hlp-chip:hover{border-color:var(--muted); color:var(--ink)}
-.mv3-hlp-chip.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
-.mv3-hlp-chip[disabled]{opacity:.4; cursor:default}
+/* .mv3-hlp-chip is the shared chip (.u-chip, phase V73 block 2) */
 .mv3-hlp-quiet{font:500 10px/1.4 var(--font); color:var(--muted)}
 .mv3-hlp-quiet.is-err{color:var(--danger)}
 /* The captions: the tabs, what is chosen in rows, the tiles filling the rest of the column */
@@ -246,7 +225,7 @@
 .mv3-hlp-pick-nm{min-width:0; padding:0 2px 0 7px; border:0; background:none; color:var(--ink); font:600 9.5px/17px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
 .mv3-hlp-pick-nm:hover{color:var(--gold)}
-.mv3-hlp-pick-x{flex:0 0 auto; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); font:600 8.5px/17px var(--font); cursor:pointer}
+.mv3-hlp-pick-x{flex:0 0 auto; display:flex; align-items:center; padding:0 6px 0 2px; border:0; background:none; color:var(--muted); cursor:pointer; --x-size:10px}
 .mv3-hlp-pick-x:hover{color:var(--danger)}
 .mv3-hlp-style{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:7px; padding:7px;
   border:1px solid var(--border); border-radius:var(--r-xs)}
@@ -266,9 +245,7 @@
 .mv3-hlp-hear.is-err{color:var(--danger)}
 .mv3-hlp-said{font:600 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlp-said.is-err{color:var(--danger)}
-.mv3-c-btn.mv3-hlp-go{flex:0 0 auto; padding:6px 14px; border-color:var(--main); background:var(--main); color:var(--on-main); font-size:11px}
-.mv3-c-btn.mv3-hlp-go:hover{background:var(--main-hover); color:var(--on-main); filter:brightness(1.1)}
-.mv3-c-btn.mv3-hlp-go[disabled]{opacity:.45; cursor:default; filter:none}
+.mv3-c-btn.mv3-hlp-go{flex:0 0 auto}
 
 /* ── The card's line of the captions' style (phase V33.3) ── */
 .mv3-hl-cap{font:500 10px/1.4 var(--font); color:var(--muted); margin:0 0 6px}
@@ -291,8 +268,7 @@
 .mv3-hlp-kind.is-dev{opacity:.45; filter:grayscale(1); cursor:default; border-style:dashed}
 .mv3-hlp-kind.is-dev:hover{border-color:var(--border)}
 .mv3-hlp-kind-dev{font:600 8.5px/1.1 var(--font); color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
-.mv3-hl-title-x{margin-left:6px; padding:0 4px; border:0; background:none; color:var(--muted); font:600 10px/1 var(--font); cursor:pointer}
-.mv3-hl-title-x:hover{color:var(--danger)}
+.mv3-hl-title-x{margin-left:6px}
 .mv3-hlp-moods .mv3-hlp-chip.is-rec::before,
 .mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
 .mv3-hlp-byvideo{border-style:dashed; border-color:var(--gold)}
@@ -308,7 +284,6 @@
 /* (phase V66) The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
 .mv3-hlg{display:flex; flex-direction:column; gap:6px}
 .mv3-hlg.is-busy{opacity:.6; pointer-events:none}
-.mv3-hlg .mv3-c-btn.is-on{border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
 .mv3-hlg-each{font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-hlg-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
 .mv3-hlg-item{display:flex; flex-direction:column; gap:1px; padding:4px 6px; border-radius:6px; cursor:pointer}
@@ -317,15 +292,9 @@
 .mv3-hlg-what{font:500 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlg-sub{font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlg-moods{gap:4px}
-.mv3-hlg-moods .mv3-hlp-chip{height:22px; padding:0 8px; line-height:20px}
 .mv3-hlg-track{max-width:100%; min-width:0}
 /* (phase V66.1) While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
 #mv3-timeline.is-hlg{position:relative}
 .mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start;
   gap:5px; padding:10px 12px; background:var(--bg); border-top:1px solid var(--border-soft)}
-.mv3-hlg-pbtn{height:24px; padding:0 12px; flex:0 0 auto; border:1px solid var(--border); border-radius:7px; background:var(--surface-2);
-  color:var(--ink); font:700 11px/1 var(--font); cursor:pointer; white-space:nowrap}
-.mv3-hlg-pbtn:hover{border-color:var(--sel-line)}   /* (б1-26) a light line, as the picked one */
-.mv3-hlg-pbtn.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line)}   /* (б1-21) the selected look */
-.mv3-hlg-pbtn[disabled]{opacity:.5; cursor:default}
-.mv3-iconbtn.mv3-hlg-back{color:var(--gold)}
+.mv3-hlg-pbtn{flex:0 0 auto}   /* the shared part; .is-on its pressed look (б1-21, б2-13) */

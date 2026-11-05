@@ -9,14 +9,8 @@
 .adm-body{ padding:14px; display:flex; flex-direction:column; gap:10px; flex:1 1 auto; min-height:0; overflow-y:auto; }
 
 /* ── the tab strip ─────────────────────────────────────────────────────── */
-.adm-tabs{ display:flex; gap:4px; position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
-.adm-tab{
-  padding:6px 14px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11.5px/1.2 var(--font); cursor:pointer;
-  transition:.12s var(--ease);
-}
-.adm-tab:hover{ color:var(--ink); }
-.adm-tab.cur{ color:var(--ink); background:var(--surface-2); border-color:var(--sel-line); }
+.adm-tabs{ position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
+/* the tabs are the shared part (.u-tabs / .u-tab, phase V73 block 2); the row keeps its sticky place */
 
 .adm-panel{
   flex:0 0 auto;
@@ -30,8 +24,6 @@
 }
 .adm-title{ font:600 12px/1.2 var(--font); color:var(--ink); }
 .adm-count{ font:500 10.5px/1.2 var(--font); color:var(--muted); }
-.adm-go{ color:var(--on-main); background:var(--main); border-color:var(--main); }
-.adm-go:hover{ background:var(--main-hover); border-color:var(--main-hover); }
 
 .adm-status{ padding:8px 12px; min-height:14px; font:10.5px/1.45 var(--font); color:var(--muted); }
 .adm-status.err{ color:var(--danger); }
@@ -50,22 +42,13 @@
   flex:0 0 132px; font-size:10px; font-weight:700; color:var(--muted);
   letter-spacing:.01em; text-align:right; padding-top:6px;
 }
-.bk-field{
-  flex:0 0 300px; min-width:0; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color:var(--ink); background:var(--bg); border:1px solid var(--border);
-  border-radius:var(--r-xs); padding:4px 6px;
-}
-.bk-field:focus{ outline:none; border-color:var(--focus); box-shadow:0 0 0 2px var(--sel-line); }
+/* (phase V73 block 2) the shared field (.u-in); a key is read in mono, its state in its border */
+.bk-field{ flex:0 0 300px; min-width:0; font-family:var(--mono) }
 /* (phase TG, block 8) The field and its x in a column; a key's instruction opens under them, at their width. */
 .bk-col{ flex:0 0 330px; width:330px; min-width:0; display:flex; flex-direction:column; }
 .bk-frow{ display:flex; align-items:flex-start; gap:6px; }
-.bk-frow .bk-field{ flex:1 1 auto; }
-.bk-x{
-  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
-  color:var(--muted); font-size:12px; line-height:1; padding:3px 7px; cursor:pointer;
-}
-.bk-x:hover:not(:disabled){ color:var(--danger); border-color:var(--danger); }
-.bk-x:disabled{ opacity:.35; cursor:default; }
+.bk-frow .bk-field{ flex:1 1 auto }
+.bk-x{ flex:0 0 auto; }   /* the shared ✕ that takes out (.u-x.is-del) */
 /* The mask is a reading, not a value: muted, and it goes the moment the field is focused. */
 .bk-field.is-mask{ color:var(--muted); letter-spacing:.03em; }
 /* Whether the key is there and whether it works, in the border: green, amber, red. */
@@ -95,12 +78,7 @@
 .bk-step a{ color:var(--ink); }
 .bk-step.ok{ color:var(--success); }
 .bk-step.down{ color:var(--gold); }
-.bk-mini{
-  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
-  color:var(--muted); font-size:10px; line-height:1; padding:3px 7px; cursor:pointer;
-}
-.bk-mini:hover:not(:disabled){ color:var(--ink); border-color:var(--sel-line); }
-.bk-mini:disabled{ opacity:.45; cursor:default; }
+.bk-mini{ flex:0 0 auto; }
 .bk-help{ margin-top:4px; font-size:10px; line-height:1.5; color:var(--muted); }
 .bk-col .bk-help{ margin-top:5px; }
 .bk-help[open]{ padding:6px 8px 7px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); }
@@ -112,7 +90,7 @@
 /* (phase TG, block 2) The bot's state under its field. */
 .bk-tg{ font-size:10px; line-height:1.5; color:var(--muted); margin-top:2px; }
 .bk-tg .bk-step a{ color:var(--ink); }
-.bk-tg .bk-mini{ margin-left:4px; padding:1px 6px; }
+.bk-tg .bk-mini{ margin-left:4px; }
 
 /* ── What the panes share (AI settings, This computer, Thanks) ─────────────────
    The dio- names are from the Import / Export pane they were made for, gone in phase V54 (the owner 2026-10-28). */
@@ -124,12 +102,12 @@
   display:flex; align-items:center; gap:12px; margin-top:6px; padding:9px 11px;
   border:1px solid var(--border-soft); border-radius:8px;
 }
-.loc-row > .lib-btn, .loc-row > .loc-state{ flex:0 0 auto; }
+.loc-row > .u-btn, .loc-row > .loc-state{ flex:0 0 auto; }
 .loc-state{ font:600 10.5px var(--font); }
 .loc-state.ok{ color:var(--success); }
 .loc-state.bad{ color:var(--danger); }
 .loc-prog{ flex:0 0 200px; }
-.loc-armed{ color:var(--danger); border-color:var(--danger); }
+
 .dio-sec{
   font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase;
   color:var(--muted); margin:14px 0 6px;
@@ -185,14 +163,7 @@
 }
 .ai-rung.is-off{ border-color:oklch(from var(--danger) l c h / .55); }
 .ai-no{ flex:0 0 18px; font:700 11px var(--font); color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
-.ai-sel{
-  height:26px; padding:0 6px; border:1px solid var(--border); border-radius:6px;
-  background:var(--surface-2); color:var(--ink); font:500 11px var(--font); cursor:pointer;
-}
-.ai-sel:focus{ outline:none; border-color:var(--focus); box-shadow:0 0 0 2px var(--sel-line); }
-.ai-sel:disabled{ opacity:.6; cursor:default; }
 .ai-prov{ flex:0 0 200px; }
 .ai-model{ flex:0 0 170px; }
 .ai-off{ flex:1 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--danger); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ai-mini{ flex:0 0 auto; min-width:26px; height:24px; padding:0 6px; }
-.ai-add{ font-weight:600; }
+.ai-mini{ flex:0 0 auto; }

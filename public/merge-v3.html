@@ -73,34 +73,34 @@
   <div class="mv3-bar">
     <!-- Left of the picker on purpose: making one and choosing one are the same decision, and
          the new project is what the picker will be showing a second later. -->
-    <button class="mv3-c-btn" id="mv3-project-new" type="button"
+    <button class="mv3-c-btn u-btn is-s" id="mv3-project-new" type="button"
             title="Start an empty project and open it">+ new project</button>
     <label class="mv3-bar-fld">
       <span>Project</span>
-      <select id="mv3-project"></select>
+      <select id="mv3-project" class="u-in is-s"></select>
       <!-- The same slot as the picker, one of them shown at a time: renaming happens where the
            name already is, so there is nothing to look for and nothing that moves. -->
-      <input id="mv3-project-name" type="text" maxlength="120" hidden
+      <input id="mv3-project-name" class="u-in is-s" type="text" maxlength="120" hidden
              autocomplete="off" spellcheck="false">
     </label>
     <!-- Between the picker and the delete: it acts on the project the picker is showing, and
          reads as the milder of the two things that can be done to it. -->
-    <button class="mv3-c-btn" id="mv3-project-edit" type="button"
+    <button class="mv3-c-btn u-btn is-s" id="mv3-project-edit" type="button"
             title="Rename this project">edit</button>
     <!-- Two clicks, not a dialog: the first turns the button into "really?", the second
          does it. A modal for this is heavier than the action deserves, and the button
          showing its own armed state is impossible to miss. -->
-    <button class="mv3-c-btn danger" id="mv3-project-del" type="button"
+    <button class="mv3-c-btn danger u-btn is-s is-danger" id="mv3-project-del" type="button"
             title="Delete this project's timeline">delete</button>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
     <!-- (phase V33.4) In a highlights project only: every fragment ticked, or none - for the render beside it
          (js/merge-v3/highlights.js). -->
-    <button class="mv3-c-btn" id="mv3-hl-all" type="button" hidden>select all</button>
+    <button class="mv3-c-btn u-btn is-s" id="mv3-hl-all" type="button" hidden>select all</button>
     <!-- The render window, with the export settings: js/merge-v3/export-b.js. (The queue button
          that stood here moved into the top strip, beside Alerts - phase R.) In a highlights project it renders the
          ticked fragments, and stops them while they render (phase V33.4). -->
-      <button class="mv3-c-btn mv3-x-open" id="mv3-export" type="button"
+      <button class="mv3-c-btn mv3-x-open u-btn is-l is-main" id="mv3-export" type="button"
             title="Render this timeline with FFmpeg">Export</button>
   </div>
 
@@ -206,33 +206,33 @@
                track stamps it onto every clip in it, and the report on the old editor is
                that its Ctrl+Z never actually worked. A visible control also shows whether
                there is anything to undo. Disabled until the timeline store is bound. -->
-          <button class="mv3-iconbtn" id="mv3-undo" type="button" title="Undo" disabled>&#8630;</button>
-          <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
-          <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
+          <button class="mv3-iconbtn u-btn is-icon" id="mv3-undo" type="button" title="Undo" disabled>&#8630;</button>
+          <button class="mv3-iconbtn u-btn is-icon" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
+          <button class="mv3-iconbtn is-text u-btn" id="mv3-split" type="button"
                   title="Cut the selected clip at the playhead">split</button>
           <!-- The transport, right of split (phase V36, T3; the owner 2026-10-23) - it moves the playhead the lanes below
                show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays as before. -->
           <span class="mv3-tl-transport">
-            <button class="mv3-iconbtn" id="mv3-pv-start" type="button" title="Back to the start">&#9198;&#xFE0E;</button>
-            <button class="mv3-iconbtn" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;&#xFE0E;</button>
-            <button class="mv3-iconbtn is-play" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
-            <button class="mv3-iconbtn" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;&#xFE0E;</button>
+            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-start" type="button" title="Back to the start">&#9198;&#xFE0E;</button>
+            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;&#xFE0E;</button>
+            <button class="mv3-iconbtn is-play u-btn is-icon" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
+            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;&#xFE0E;</button>
             <!-- (phase V44) Cut silence: the pauses of main audio in the stretch or the picked clips shortened
                  (js/merge-v3/tl-silence.js) - live while something is picked, dim otherwise. -->
-            <button class="mv3-iconbtn is-silence is-dim" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
+            <button class="mv3-iconbtn is-silence is-dim u-btn is-icon" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
           </span>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
                is what made the old store's data loss so hard to notice. -->
           <span class="mv3-tl-status" id="mv3-tl-status" hidden></span>
           <span class="mv3-tl-clock" id="mv3-tl-clock">0:00.0</span>
-          <button class="mv3-iconbtn is-text" id="mv3-fit" type="button"
+          <button class="mv3-iconbtn is-text u-btn" id="mv3-fit" type="button"
                   title="Fit the whole timeline into view">FIT</button>
           <!-- px/sec, the same scale and range the old editor used. Alt + wheel over the timeline moves it too, toward the
                playhead (phase V49.1, js/merge-v3/timeline-b.js _onWheel). -->
           <label class="mv3-tl-zoom" title="Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead">
             <span>zoom</span>
-            <input type="range" id="mv3-zoom" min="1" max="240" step="1" value="60">
+            <input type="range" id="mv3-zoom" class="u-range" min="1" max="240" step="1" value="60">
             <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>
           </label>
         </div>
@@ -264,13 +264,13 @@
         <span class="mv3-pv-time" id="mv3-pv-time">0:00.0 / 0:00.0</span>
         <label class="mv3-pv-q" title="Preview resolution - not the export">
           <span>q</span>
-          <select id="mv3-pv-q"></select>
+          <select id="mv3-pv-q" class="u-in is-s"></select>
         </label>
         <!-- The same stage, shown big. Not a second canvas - see js/merge-v3/bar.js. -->
-        <button class="mv3-pv-btn" id="mv3-pv-big" type="button" title="Enlarge the preview">&#9974;</button>
+        <button class="mv3-pv-btn u-btn is-s is-icon" id="mv3-pv-big" type="button" title="Enlarge the preview">&#9974;</button>
         <!-- Saves the frame under the playhead into the library at the film's own size, drawn off
              the original files (js/merge-v3/preview-b.js grabFrame). -->
-        <button class="mv3-pv-btn" id="mv3-pv-shot" type="button"
+        <button class="mv3-pv-btn u-btn is-s is-icon" id="mv3-pv-shot" type="button"
                 title="Save this frame to the library (Images / Screenshots)">&#128247;</button>
         <span class="sp"></span>
       </div>

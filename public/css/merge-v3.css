@@ -38,51 +38,32 @@
    the whole page - putting it inside Library or Timeline would claim it was theirs. */
 .mv3-bar{
   display:flex; align-items:center; gap:9px; flex:0 0 auto; min-height:36px;
-  padding:5px 12px; background:var(--surface); border-bottom:1px solid var(--border);
+  /* (phase V73 block 2) 2 px above, 1 below: the 32-px Export (б2-2) keeps the bar at 36 with its line */
+  padding:2px 12px 1px; background:var(--surface); border-bottom:1px solid var(--border);
 }
 .mv3-bar .sp{flex:1}
 .mv3-bar-fld{display:flex; align-items:center; gap:6px; min-width:0}
 /* The rename field takes the picker's slot, so it borrows the picker's look. */
 /* (phase V67, second round (б), the owner 2026-11-01: "сделай строку с названием проекта шире в 1.5 раза") 230-430 -> 345-645. */
-.mv3-bar-fld input#mv3-project-name{
-  min-width:345px; max-width:645px; height:24px; padding:0 5px;
-  border:1px solid var(--focus); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font);
-}
+.mv3-bar-fld input#mv3-project-name{ min-width:345px; max-width:645px }
 
 /* (phase V67, second round (д)) The picker's own list: the kinds in a row over the projects (js/merge-v3/projects.js _openList). */
-.mv3-plist{
-  position:fixed; z-index:9300; display:flex; flex-direction:column; min-height:0; padding:4px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm); box-shadow:var(--shadow);
-}
+/* (phase V73 block 2) the frame is the shared menu (.u-menu.is-float), a project a row (.u-mi) */
+.mv3-plist{ display:flex; flex-direction:column; min-height:0; }
 .mv3-plist-kinds{display:flex; gap:4px; flex:0 0 auto; padding:2px 2px 6px; border-bottom:1px solid var(--border-soft); margin-bottom:4px}
-.mv3-plist-kind{
-  height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
-  font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap;
-}
-.mv3-plist-kind:hover{background:var(--surface-2)}
-.mv3-plist-kind.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); cursor:default}
+.mv3-plist-kind.is-on{cursor:default}   /* the shared chip (.u-chip) */
 .mv3-plist-rows{display:flex; flex-direction:column; gap:1px; min-height:0; overflow-y:auto}
-.mv3-plist-row{
-  flex:0 0 auto; padding:5px 8px; border:0; border-radius:var(--r-xs); background:transparent; color:var(--ink); text-align:left;
-  font:600 11px/1.3 var(--font); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.mv3-plist-row:hover{background:var(--surface-2)}
-.mv3-plist-row.is-on{color:var(--ink)}
-.mv3-plist-none{padding:8px; color:var(--muted); font:400 11px/1.3 var(--font)}
+.mv3-plist-row{ flex:0 0 auto; }
+.mv3-plist-row > span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+/* (phase V73 block 2) A kind with no projects - the shared part as a row (js/ui-state.js); here only where it sits. */
+.mv3-plist-none{margin:0 var(--sp-2)}
 
 .mv3-bar-fld > span{
   font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
 /* Wide enough for a real title: an imported project is named by date plus product, and a
    picker that only shows the date cannot be used to pick. */
-.mv3-bar-fld select{
-  min-width:345px; max-width:645px; height:24px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font); cursor:pointer;
-}
+.mv3-bar-fld select{ min-width:345px; max-width:645px }
 .mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
 
 /* ── Export dialog ────────────────────────────────────────────────────────────
@@ -90,8 +71,6 @@
    old one was two, and half its rows were truncated as a result. The frame every dialog of this
    page wears (.mv3-x) and the buttons (.mv3-c-btn) are css/dialog.css, loaded right after this file:
    the Library opens the scenario window too (phase V28.2). */
-.mv3-x-open{font-weight:700; color:var(--ink); border-color:var(--sel-line)}
-.mv3-x-open:hover{background:var(--surface-3); color:var(--ink)}
 
 /* While a render runs the dialog must not look idle. */
 .mv3-x.is-busy{outline:1px solid var(--border); outline-offset:-1px}
@@ -104,11 +83,8 @@
   font:600 10px/1.4 var(--font); font-variant-numeric:tabular-nums;
 }
 .mv3-x-sl{flex:1 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
-.mv3-x-sl input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--muted); cursor:pointer}
-.mv3-x-slv{
-  flex:0 0 auto; min-width:34px; text-align:right;
-  font:600 10px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
-}
+.mv3-x-sl input[type=range]{flex:1 1 auto; min-width:0}
+.mv3-x-slv{flex:0 0 auto; min-width:34px; text-align:right}   /* the value in mono - .u-range-v */
 /* The result view: the video is the content, so the body gives it everything. */
 .mv3-x.is-result{width:min(520px, 94vw)}
 /* The result window: the video on the left, narrow - it is a vertical - with the send tick
@@ -125,11 +101,7 @@
 /* The name takes the room the buttons leave: sixty monospace characters is the longest a name
    in the pattern gets, and the field never ellipsises one. */
 .mv3-x-foot.is-rr{gap:9px}
-.mv3-rr-name{
-  flex:1 1 auto; min-width:420px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.mv3-rr-name:focus{outline:none; border-color:var(--focus)}
+.mv3-rr-name{ flex:1 1 auto; min-width:420px; font-family:var(--mono) }
 /* The reading of the name against the pattern, and the word on what saving did - the same
    line, beside the field. Gives way before the field does. */
 .mv3-rr-hint{
@@ -144,12 +116,7 @@
 /* One row per part: its number and name, the field, the description beside it. */
 .mv3-rr-row{display:grid; grid-template-columns:112px 168px minmax(0, 1fr); gap:8px; align-items:center; padding:2px 0}
 .mv3-rr-rl{font:600 10.5px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--ink); white-space:nowrap}
-.mv3-rr-rf{
-  height:24px; padding:0 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width:0;
-}
-.mv3-rr-rf:focus{outline:none; border-color:var(--focus)}
-select.mv3-rr-rf{cursor:pointer}
+.mv3-rr-rf{ min-width:0; font-family:var(--mono) }
 .mv3-rr-rd{font:10.5px/1.35 var(--font); color:var(--muted); min-width:0}
 @media (max-width:820px){ .mv3-rr{grid-template-columns:1fr} .mv3-rr-left{border-right:0; border-bottom:1px solid var(--border)} .mv3-rr-row{grid-template-columns:100px 1fr} .mv3-rr-rd{grid-column:1 / -1} }
 .mv3-x-body.is-video{padding:0; background:var(--media-bg); display:flex; align-items:center; justify-content:center}
@@ -158,10 +125,6 @@ select.mv3-rr-rf{cursor:pointer}
    Deliberately tiny: while a render runs there is nothing to decide except whether to
    stop it, so the window carries a bar, the time left, and that one button. */
 
-/* (phase V73) the window's main button - Render, Render N, Render all, Save & download: one gold fill. Weighed as
-   `.mv3-c-btn.mv3-x-go`, because css/dialog.css (loaded after this sheet) gives every `.mv3-c-btn` its plain look. */
-.mv3-x-go, .mv3-c-btn.mv3-x-go{font-weight:700; color:var(--on-main); background:var(--main); border-color:var(--main)}
-.mv3-x-go:hover:not([disabled]), .mv3-c-btn.mv3-x-go:hover:not([disabled]){background:var(--main-hover); color:var(--on-main); border-color:var(--main-hover)}
 
 /* ── Enlarged preview ─────────────────────────────────────────────────────────
    The stage itself is moved in here, so this is a frame around it and nothing more. */
@@ -179,14 +142,7 @@ select.mv3-rr-rf{cursor:pointer}
   /* The stage moved in here fits this box whole, as it fits its own field (container units). */
   container-type:size;
 }
-.mv3-big-x{
-  position:absolute; top:14px; right:16px;
-  width:28px; height:28px; padding:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted);
-  font:600 12px/1 var(--font); cursor:pointer;
-}
-.mv3-big-x:hover{color:var(--ink); border-color:var(--border-soft)}
+.mv3-big-x{position:absolute; top:14px; right:16px}
 
 /* ── The stack - two panels, one open, and the timeline under them ────────────
    The column is a flex column: the pair takes what the timeline leaves, and the
@@ -367,37 +323,8 @@ body.mv3-noproject .mv3-tl::after{
   object-fit:contain; border-radius:4px;
 }
 
-/* The question a Main clip's X opens. Fixed, because it is anchored to the button in
-   viewport coordinates from JS - the lane it belongs to scrolls and would clip it. */
-.mv3-ask{
-  position:fixed; z-index:9460;     /* (V64) over a chat's window (8900) - the chats ask here too */
-  display:flex; align-items:center; gap:6px;
-  padding:5px 7px; border-radius:6px;
-  border:1px solid var(--border); background:var(--surface);
-  box-shadow:0 6px 18px oklch(0 0 0 / .3);
-}
-.mv3-ask-t{font:600 11px/1 var(--font); color:var(--ink); white-space:nowrap}
-.mv3-ask-b{
-  padding:3px 9px; border-radius:4px; cursor:pointer;
-  border:1px solid var(--border); background:var(--surface-2);
-  font:600 11px/1 var(--font); color:var(--ink);
-}
-.mv3-ask-b:hover{border-color:var(--muted)}
-/* Yes is the destructive one and is coloured as such - the safe answer must not be the
-   one that looks like the button you are meant to press. */
-.mv3-ask-b.is-yes{border-color:var(--danger-fill); background:var(--danger-fill); color:var(--on-danger)}
-.mv3-ask-b.is-yes:hover{filter:brightness(1.1)}
-/* With a consequence to state - "its sound goes with it" - the strip becomes a small block:
-   the question, what else it takes, then the two answers. Without one the wrapper collapses
-   and the layout is the strip above, unchanged. */
-.mv3-ask-r{display:contents}
-.mv3-ask.has-sub{display:block; width:220px}
-.mv3-ask.has-sub .mv3-ask-t{display:block; white-space:normal; margin-bottom:3px}
-.mv3-ask-s{display:block; font:400 11px/1.4 var(--font); color:var(--muted); margin-bottom:8px}
-/* (phase V23) A list, one thing per line - the window grows to hold it. */
-.mv3-ask.has-sub:has(.mv3-ask-s.is-lines){width:auto; min-width:220px; max-width:360px}
-.mv3-ask-s.is-lines{white-space:pre-line; color:var(--ink)}
-.mv3-ask.has-sub .mv3-ask-r{display:flex; gap:6px; justify-content:flex-end}
+/* The question a clip's X opens (js/ask.js) - since phase V73 block 2 the shared part `.u-ask.is-float` (css/app-shell.css),
+   with a list one thing per line (`is-lines`, phase V23) wider and scrolling inside (`.u-ask.is-wide`). */
 
 /* ── Drop target on a lane ─────────────────────────────────────────────────── */
 
@@ -417,19 +344,11 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
   border:1px solid var(--border); border-radius:var(--pill); padding:4px 8px;
 }
 /* Header icon buttons: the two history arrows and FIT. Same shell, so the row reads
-   as one set of controls; `is-text` widens it for a word instead of a glyph. */
-.mv3-iconbtn{
-  flex:0 0 auto; width:20px; height:20px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:600 12px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-iconbtn.is-text{width:auto; padding:0 7px; font:700 9.5px/1 var(--font); letter-spacing:.06em}
-.mv3-iconbtn:hover:not([disabled]){color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
-/* A disabled history button has to look unavailable, not just refuse the click -
-   that is the whole point of showing the state instead of hiding it in a shortcut. */
-.mv3-iconbtn[disabled]{opacity:.35; cursor:default}
+   as one set of controls; `is-text` widens it for a word instead of a glyph. Since phase V73 block 2 they wear the shared
+   part (`.u-btn`) and keep their 20 px - the timeline head is laid out again in block 5 (б2-2). */
+.mv3-iconbtn.u-btn{width:20px; height:20px; padding:0; border-radius:var(--r-xs); font-size:12px; line-height:1}
+.mv3-iconbtn.u-btn.is-text{width:auto; padding:0 7px; font-size:var(--fs-10)}
+.mv3-iconbtn{flex:0 0 auto}
 
 /* Shown only when a save was refused or failed. Red, because the message it carries
    is "an edit of yours is not on the server". */
@@ -444,9 +363,9 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
 .mv3-tl-zoom > span:first-child{
   font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
-.mv3-tl-zoom input[type=range]{width:110px; height:14px; accent-color:var(--muted); cursor:pointer}
+.mv3-tl-zoom input[type=range]{width:110px}
 .mv3-tl-pps{
-  font:600 10px/1 var(--font); font-variant-numeric:tabular-nums;
+  font:400 10px/1 var(--mono); font-variant-numeric:tabular-nums;
   color:var(--muted); min-width:22px; text-align:right;
 }
 
@@ -490,23 +409,13 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    body element rather than on the stage so one rule can reach it from the mount. */
 body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 
-.mv3-pv-btn[disabled]{opacity:.4; cursor:default}
 
 /* ── The platforms' screens (phase V30, block 3; js/merge-v3/platforms.js) ─────
    Three one-colour marks right of "Preview"; the one whose screen is over the frame is lit. The screen itself
    is laid exactly over the frame like the captions' canvas, the mouse passing through it. */
 .mv3-pf{display:flex; align-items:center; gap:4px; flex:0 0 auto}
-.mv3-pf-btn{
-  flex:0 0 auto; width:24px; height:22px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); cursor:pointer; transition:.12s var(--ease);
-}
+.mv3-pf-btn{flex:0 0 auto}   /* the shared icon button; the screen shown - pressed (.is-on), off a 9:16 frame - .is-off */
 .mv3-pf-btn svg{width:13px; height:13px; fill:currentColor; display:block}
-.mv3-pf-btn:hover{color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
-.mv3-pf-btn.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg)}
-.mv3-pf-btn.is-off{opacity:.4; cursor:default}
-.mv3-pf-btn.is-off:hover{color:var(--muted); border-color:var(--border); background:var(--surface-2)}
 .mv3-pf-over{position:absolute; pointer-events:none; overflow:visible}
 
 /* ── Transport ────────────────────────────────────────────────────────────────
@@ -516,14 +425,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   padding:6px 10px; background:var(--surface); border-top:1px solid var(--border);
 }
 .mv3-pv-bar .sp{flex:1}
-.mv3-pv-btn{
-  flex:0 0 auto; width:24px; height:22px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:600 10px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-pv-btn:hover{color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
+.mv3-pv-btn{flex:0 0 auto}
 /* Play is the one you reach for without looking. */
 .mv3-pv-btn.is-main{width:30px; color:var(--ink); background:var(--surface); font-size:11px}
 .mv3-pv-btn.is-main:hover{border-color:var(--main); color:var(--main)}
@@ -536,12 +438,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-pv-q > span{
   font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
-.mv3-pv-q select, #mv3-pvb-fmt{
-  height:21px; padding:0 3px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10px/19px var(--font); cursor:pointer;
-}
+/* the shared field (.u-in.is-s), at the preview bar's own 21 px */
+.mv3-pv-q select.u-in, #mv3-pvb-fmt.u-in{ height:21px; font-size:var(--fs-10) }
 
 /* ── The gallery and the media tree (phase V28.4) ─────────────────────────────
    One row under the status line: the gallery (.mv3-panel-body, scrolling itself), a sash, the tree on the right
@@ -579,8 +477,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-tl-gone[hidden]{display:none}
 .mv3-tl-gone span{flex:1 1 auto; min-width:0}
-.mv3-tl-gone-x{flex:0 0 auto; width:20px; height:20px; padding:0; border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer}
-.mv3-tl-gone-x:hover{background:var(--surface-2); color:var(--ink)}
+.mv3-tl-gone-x{flex:0 0 auto}
 .mv3-ins-gone{
   margin-bottom:10px; padding:8px 9px; border:1px solid var(--danger); border-radius:var(--r-xs);
   background:color-mix(in oklch, var(--danger) 14%, transparent); font:500 11px/1.4 var(--font); color:var(--ink);
@@ -642,20 +539,16 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    so each carries its own shadowed backdrop - a bare glyph is unreadable over a
    thumbnail that happens to be pale there. */
 .mv3-tile-btn{
-  position:absolute; top:2px; width:17px; height:17px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border:0; border-radius:var(--r-xs); cursor:pointer;
-  background:var(--scrim); color:var(--on-media);
-  font:700 10px/1 var(--font);
-  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+  position:absolute; top:2px;
+  opacity:0; transition:opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
 }
+/* the shared on-picture part (.u-onpic) at the tile's 17 px (block 6 sizes the tiles) */
+.mv3-tile-btn.u-onpic{width:17px; height:17px; border-radius:var(--r-xs); font:700 10px/1 var(--font); --x-size:11px}
 .mv3-tile:hover .mv3-tile-btn{opacity:1}
-.mv3-tile-btn:focus-visible{opacity:1; outline:1px solid var(--focus)}
+.mv3-tile-btn:focus-visible{opacity:1}
 .mv3-tile-btn[disabled]{opacity:.4; cursor:default}
 .mv3-tile-star{left:2px}
 .mv3-tile-del{right:2px}
-.mv3-tile-star:hover{background:var(--scrim-strong); color:var(--on-media)}
-.mv3-tile-del:hover{background:var(--danger-fill); color:var(--on-danger)}
 /* A favourite shows its star WITHOUT hovering - that is how the mark is read at a
    glance, and the same reason the Library page marks its cards. */
 .mv3-tile.is-fav .mv3-tile-star{opacity:1; color:var(--on-media)}
@@ -676,7 +569,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-tile.mv3-plus[disabled]{opacity:.4; cursor:default; border-color:var(--border)}
 /* The menus (.mv3-plus-menu / .mv3-plus-item) live in css/app-shell.css since phase F2: the
    Library's source menu uses them too. */
-.mv3-grid-note{display:block; padding:8px 2px 0; font-size:11px; color:var(--muted)}
+/* (phase V73 block 2) An empty folder under the "+" is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+.mv3-grid-note{margin-top:var(--sp-2)}
 
 /* ── Drop target ─────────────────────────────────────────────────────────────
    The WHOLE panel lights up, not just the grid: aiming at a 6px gap between tiles
@@ -807,39 +701,26 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    way evenly when it is short - a label that no longer fits ends in "…". */
 .mv3-c-acts{display:flex; align-items:center; gap:4px; padding:3px 0; min-width:0}
 .mv3-c-acts > .mv3-c-btn{
-  flex:0 1 auto; min-width:0; padding:3px 6px; font-size:9px;
+  flex:0 1 auto; min-width:0; display:block;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
 .mv3-c-slider{display:flex; align-items:center; gap:7px; width:100%; min-width:0}
-.mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0; height:14px; accent-color:var(--muted); cursor:pointer}
+.mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0}
+/* (phase V73 block 2) a number of the strip in mono, at the strip's own size */
 .mv3-c-num{
   flex:0 0 auto; min-width:36px; text-align:right;
-  font:600 10px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
+  font:400 10.5px/1 var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap;
 }
 
 /* Full height, not a squeezed one: a select whose text is clipped is worse than a
    slightly taller row. */
-.mv3-c-sel{
-  width:100%; min-width:0; height:23px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10.5px/21px var(--font); cursor:pointer;
-}
-.mv3-c-sel:hover{border-color:var(--border-soft)}
+.mv3-c-sel{ width:100%; min-width:0 }
 /* (phase V65) The blend mode's own list (js/merge-v3/blend-menu.js): a mode under the pointer is shown on the
    preview at once, a press chooses it. Over the page, under no dimmer - a menu. */
-.mv3-blend-btn{text-align:left}
-.mv3-blend-menu{
-  position:fixed; z-index:9500; display:flex; flex-direction:column; padding:3px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs); box-shadow:var(--shadow);
-}
-.mv3-blend-item{
-  padding:4px 10px; border:0; border-radius:var(--r-xs); background:transparent; color:var(--ink);
-  font:600 10.5px/1.4 var(--font); text-align:left; cursor:pointer;
-}
-.mv3-blend-item:hover{background:var(--surface-2)}
-.mv3-blend-item.is-on{color:var(--ink)}
+.mv3-blend-btn{ text-align:left }
+/* (phase V73 block 2) the shared menu, over the windows it opens on */
+.mv3-blend-menu.u-menu{ z-index:9500; min-width:150px }
 /* (phase V65, block 5) A pattern's direction buttons in a row (js/merge-v3/patterns-ui.js since V74). */
 .mv3-pat-dirs{display:flex; flex-wrap:wrap; gap:3px}
 .mv3-pat-dirs .mv3-c-sw{min-width:26px; padding:0 5px}
@@ -873,52 +754,27 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-patl-head img{flex:none; width:28px; height:28px; border-radius:3px; background:var(--surface-2); object-fit:cover}
 .mv3-patl-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 11px/1.3 var(--font); color:var(--ink)}
 .mv3-patl-look{flex:none; font:500 10px/1.3 var(--font); color:var(--muted)}
-.mv3-patl-arrow{
-  flex:none; width:22px; height:22px; padding:0; cursor:pointer;
-  border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--ink); font:600 12px/1 var(--font);
-}
-.mv3-patl-arrow:hover:not(:disabled){border-color:var(--border-soft)}
-.mv3-patl-arrow:disabled{opacity:.3; cursor:default}
+.mv3-patl-arrow{flex:none}
 .mv3-patl-body{padding:6px 6px 4px; border-top:1px solid var(--border)}
 
 /* A switch that says which way it is set. A bare coloured pill leaves you guessing
    whether the colour means on or means "you may turn it on". */
-.mv3-c-sw{
-  min-width:40px; height:21px; padding:0 9px;
-  border:1px solid var(--border); border-radius:var(--pill);
-  background:var(--surface-2); color:var(--muted);
-  font:700 9.5px/19px var(--font); letter-spacing:.06em; text-transform:uppercase;
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-c-sw:hover{color:var(--ink); border-color:var(--border-soft)}
-.mv3-c-sw.is-on{background:var(--success); border-color:var(--success); color:var(--on-fill)}
+/* (phase V73 block 2) C.toggle is the shared switch (.u-switch), C.toggleNamed a pressed button (.u-btn.is-on) */
 
 /* The one control here that holds prose. */
-.mv3-c-area{
-  width:100%; min-width:0; resize:vertical; padding:5px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-c-area:focus{outline:none; border-color:var(--focus)}
+.mv3-c-area{ width:100%; min-width:0; resize:vertical }
 
 /* A typed number plus its unit. */
 .mv3-c-numrow{display:flex; align-items:center; gap:5px; min-width:0}
-.mv3-c-inp{
-  width:56px; height:22px; padding:0 5px; min-width:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10.5px/20px var(--font); font-variant-numeric:tabular-nums;
-}
-.mv3-c-inp:focus{outline:1px solid var(--focus); outline-offset:-1px}
+.mv3-c-inp{ width:56px; min-width:0; font-variant-numeric:tabular-nums; }
 .mv3-c-suf{font:600 9.5px/1 var(--font); color:var(--muted)}
 
 /* The control plus a small button beside it (clear an override, back to full frame). */
 .mv3-c-pair{display:flex; align-items:center; gap:6px; width:100%; min-width:0}
 .mv3-c-pair > :first-child{flex:1 1 auto; min-width:0}
-.mv3-c-pair > .mv3-c-btn{flex:0 0 auto; padding:3px 7px; font-size:9px}
+.mv3-c-pair > .mv3-c-btn{flex:0 0 auto}
 /* A switch riding beside a slider rather than filling a row of its own. */
-.mv3-c-pair > .mv3-c-sw{flex:0 0 auto; min-width:0; padding:0 9px}
+.mv3-c-pair > .mv3-c-sw{flex:0 0 auto}
 
 /* A colour swatch that reads as a swatch: the browser's default colour input is a fat grey
    button with a stripe, which looks like nothing else in this panel. */
@@ -934,14 +790,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-crop{display:flex; justify-content:center; padding:4px 0 6px}
 .mv3-crop-cv{display:block; touch-action:none; cursor:default}
 .mv3-crop-shapes{display:flex; gap:4px; padding:0 0 4px}
-.mv3-crop-shape{
-  flex:1 1 0; min-width:0; height:22px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:700 9.5px/20px var(--font); letter-spacing:.03em; cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-crop-shape:hover{color:var(--ink); border-color:var(--border-soft)}
-.mv3-crop-shape.is-on{color:var(--ink); background:var(--sel-bg); border-color:var(--sel-line)}
+.mv3-crop-shape{flex:1 1 0; min-width:0}
+.mv3-crop-shape.u-chip{padding:0 4px}   /* equal widths in the strip */
 
 
 /* ── Music library rows ───────────────────────────────────────────────────────
@@ -966,14 +816,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-mus-gh{margin:8px 0 4px; font:600 10px/1 var(--font); letter-spacing:.04em;
   text-transform:uppercase; color:var(--muted)}
 .mv3-chips{display:flex; flex-wrap:wrap; gap:4px}
-.mv3-chip{
-  padding:4px 8px; border-radius:11px; cursor:pointer;
-  border:1px solid var(--border-soft); background:transparent; color:var(--muted);
-  font:500 11px/1 var(--font); white-space:nowrap;
-}
-.mv3-chip:hover:not([disabled]){color:var(--ink); border-color:var(--muted)}
-.mv3-chip.on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
-.mv3-chip[disabled]{opacity:.45; cursor:default}
+/* .mv3-chip is the shared chip (.u-chip, phase V73 block 2) */
 
 /* Where the button is, and where the timer stands instead while it runs. Fixed height so
    the swap does not shift the panel under the cursor.
@@ -1002,16 +845,6 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-mus-btn:hover:not([disabled]){color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
 .mv3-mus-btn[disabled]{opacity:.4; cursor:default}
 .mv3-mus-btn.danger:hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
-
-/* ── Empty-region marker ─────────────────────────────────────────────────────
-   Dashed and muted: reads as "nothing here yet" rather than as a control. */
-.mv3-empty{
-  height:100%; min-height:60px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
-  border:1px dashed var(--border); border-radius:var(--r-sm);
-  color:var(--muted); font-size:11.5px; text-align:center; padding:14px;
-}
-.mv3-empty b{color:var(--ink); font-size:12px; font-weight:600}
 
 /* ════════════════════════════════════════════════════════════════════════════
    BLANK-PROJECT TIMELINE (js/merge-v3/timeline-b.js)
@@ -1182,14 +1015,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 
 /* The square itself. One glyph, no chrome until it is pointed at - a column of eight boxed
    buttons down the side of a timeline is louder than the timeline. */
-.mv3b-sq{
-  width:16px; height:16px; padding:0; line-height:1;
-  display:grid; place-items:center; cursor:pointer;
-  background:none; border:1px solid transparent; border-radius:var(--r-xs);
-  color:var(--muted); font:400 12px/1 var(--font);
-}
-.mv3b-sq:hover:not(:disabled){color:var(--ink); border-color:var(--border)}
-.mv3b-sq:disabled{opacity:.35; cursor:default}
+.mv3b-sq.u-btn{width:16px; height:16px; padding:0; border-radius:var(--r-xs); font:400 12px/1 var(--font)}   /* a lane's square keeps its 16 px (block 5) */
 
 /* ── Render queue ────────────────────────────────────────────────────────────
    Shared by both workflows, like the queue itself. */
@@ -1213,7 +1039,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-qhead .sp{flex:1}
 .mv3-qlist{padding:4px}
-.mv3-qempty{padding:14px 10px; font:11px/1.5 var(--font); color:var(--muted)}
 /* Taller than a line, because a row now carries what the project is MADE of - two projects
    named after the same date are told apart by their contents, not their titles. */
 .mv3-qrow{
@@ -1231,41 +1056,20 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qbar.is-indet > i{width:28%; animation:mv3-qslide 1.1s linear infinite}
 @keyframes mv3-qslide{from{transform:translateX(-100%)} to{transform:translateX(360%)}}
 .mv3-qrow-acts{flex:0 0 auto; display:flex; align-items:center; gap:4px}
-.mv3-qx{
-  width:18px; height:18px; padding:0; line-height:1;
-  display:grid; place-items:center; cursor:pointer;
-  background:none; border:1px solid transparent; border-radius:var(--r-xs);
-  color:var(--muted); font:12px/1 var(--font);
-}
-.mv3-qx:hover{color:var(--ink); border-color:var(--border)}
 
 /* The cross on a clip. Only on hover: a lane of clips each wearing a permanent delete button
    is a row of invitations to lose work. */
-.mv3b-clipx{
-  position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; z-index:1;
-  display:grid; place-items:center; cursor:pointer; opacity:0;
-  background:var(--scrim); border:0; border-radius:var(--r-xs);
-  color:var(--on-media); font:11px/1 var(--font); transition:opacity .12s var(--ease);
-}
+.mv3b-clipx{position:absolute; top:1px; right:1px; z-index:1; opacity:0; transition:opacity var(--dur-1) var(--ease)}
+.mv3b-clipx.u-onpic{width:13px; height:13px; border-radius:var(--r-2xs); --x-size:10px}   /* a clip's 20 px (block 5) */
 .mv3b-clip:hover .mv3b-clipx{opacity:1}
-.mv3b-clipx:hover{background:var(--danger)}
 .mv3-qrow:last-child{border-bottom:0}
 .mv3-qrow-t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
 .mv3-qrow-s{flex:0 0 auto; font-size:10px; color:var(--muted)}
 .mv3-qrow.is-running .mv3-qrow-s{color:var(--ink)}
 .mv3-qrow.is-done .mv3-qrow-s{color:var(--success)}
 .mv3-qrow.is-failed .mv3-qrow-s{color:var(--danger)}
-.mv3-qrow-a{flex:0 0 auto; font-size:10px; color:var(--ink)}
-/* (phase V33.4, the owner 2026-10-21) The panel's buttons are the app's (.mv3-c-btn, dialog.css): in a row a little lower,
-   "open" and "go on" in the app's colour; a button with nothing to do now is dim, the primary one too. */
-.mv3-qrow-acts .mv3-c-btn{padding:2px 8px}
-.mv3-c-btn.mv3-qrow-a{color:var(--ink); border-color:var(--sel-line)}
-.mv3-c-btn.mv3-qrow-a:hover{color:var(--ink); background:var(--surface-3); border-color:var(--sel-line)}
-.mv3-qhead .mv3-c-btn{text-transform:none; letter-spacing:0}
-.mv3-qhead .mv3-c-btn.mv3-x-go{font-weight:700; color:var(--on-main); background:var(--main); border-color:var(--main)}
-.mv3-qhead .mv3-c-btn.mv3-x-go:hover:not([disabled]){filter:brightness(1.1)}
-.mv3-qhead .mv3-c-btn[disabled]{opacity:.45; cursor:default; filter:none}
-.mv3-qhead .mv3-c-btn.mv3-x-go[disabled]:hover{background:var(--main-hover); color:var(--on-main); border-color:var(--main)}
+.mv3-qrow-a{flex:0 0 auto}
+/* (phase V73 block 2) The panel's buttons are the shared part (`.u-btn.is-s`); "Render all" its gold one. */
 /* (phase V33.4) A highlights project: one row that opens on its fragments' rows, set in under it. */
 .mv3-qgrp-row{cursor:pointer}
 .mv3-qgrp-row:hover .mv3-qrow-t{color:var(--ink)}
@@ -1273,12 +1077,8 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qgrp:last-child .mv3-qgrp-kids, .mv3-qgrp:last-child > .mv3-qgrp-row:last-child{border-bottom:0}
 /* The clear question sits INSIDE the panel rather than over it: it is about this list, and a
    dialogue that covered the list would hide the very thing being asked about. */
-.mv3-qask{
-  margin:6px; padding:9px 10px;
-  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
-}
-.mv3-qask-t{font:11px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
-.mv3-qask-r{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
+.mv3-qask{ width:auto; margin:6px }   /* the shared question (.u-ask), in the list */
+.mv3-qask-r{ flex-wrap:wrap }
 
 /* ── The render window (blank projects) ─────────────────────────────────────── */
 .mv3-rhead{font:700 11px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px}
@@ -1287,11 +1087,8 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-rsum{font:12px/1.5 var(--font); color:var(--ink); margin-bottom:12px}
 .mv3-rwarn{font:11px/1.45 var(--font); color:var(--danger); margin-bottom:10px}
 
-/* Export is the button that MAKES something; the queue beside it only collects. One is blue
-   so the two are not a pair of identical words next to each other. */
-#mv3-export{background:var(--main); border-color:var(--main); color:var(--on-main)}
-#mv3-export:hover:not(:disabled){filter:brightness(1.08)}
-#mv3-export:disabled{opacity:.45}
+/* Export is the page's main button - the shared part at 32 (`.u-btn.is-l.is-main`, phase V73 block 2); "✕ stop" of a
+   highlights project its danger look (export-b.js). */
 
 /* Progress inside the render window - it stays open and becomes the report, rather than
    throwing the file at a new tab and leaving nothing behind. */
@@ -1323,12 +1120,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 #mv3-library.is-captions .mv3-scv{display:none !important}
 .mv3-scv-top{flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 9px 0}
 .mv3-scv .mv3-sc-list{flex:1 1 auto; min-height:0; overflow-y:auto}
-.mv3-sc-tab{
-  padding:3px 8px; border:1px solid var(--border); border-radius:999px;
-  background:transparent; color:var(--muted); font:600 9.5px/1.4 var(--font); cursor:pointer;
-}
-.mv3-sc-tab:hover{color:var(--ink)}
-.mv3-sc-tab.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg)}
+/* .mv3-sc-tab is the shared tab (.u-tab, phase V73 block 2) */
 /* The category dropdown (phase F8): a pill that says what is shown, and how many. A long source
    name is cut on the button; the list shows it whole. */
 .mv3-sc-filter{
@@ -1348,16 +1140,8 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
   color:var(--muted);
 }
 .mv3-sc-menu-sep.is-end{padding:0; margin:3px 0; border-top:1px solid var(--border-soft)}
-.mv3-sc-new{
-  flex:0 0 auto; padding:3px 9px; border:1px solid var(--sel-line); border-radius:var(--r-xs);
-  background:transparent; color:var(--ink); font:700 9.5px/1.4 var(--font); cursor:pointer;
-}
-.mv3-sc-new:hover{background:var(--surface-3); color:var(--ink)}
-.mv3-sc-search{
-  display:block; flex:1 1 auto; min-width:0; padding:4px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:400 11px/1.3 var(--font);
-}
+.mv3-sc-new{flex:0 0 auto}
+.mv3-sc-search{ display:block; flex:1 1 auto; min-width:0 }
 .mv3-sc-list{display:flex; flex-direction:column; gap:3px; padding:7px 9px 11px}
 /* The buttons sit at the START of the row, the cross first - ✕ · use · the title (the owner, V28.3) - and are pale
    until the row is pointed at: two words beside every title is a wall of "use use use" to read past. */
@@ -1375,20 +1159,10 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-sc-meta{font:400 9px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-sc-acts{flex:0 0 auto; display:flex; gap:4px; opacity:.35}
 .mv3-sc-row:hover .mv3-sc-acts{opacity:1}
-.mv3-sc-btn{
-  padding:2px 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:transparent; color:var(--muted); font:600 9.5px/1.4 var(--font); cursor:pointer;
-}
-.mv3-sc-btn:hover{color:var(--ink); border-color:var(--ink)}
-.mv3-sc-btn.is-use{border-color:var(--sel-line); color:var(--ink)}
-.mv3-sc-btn.is-use:hover{background:var(--surface-3); color:var(--ink)}
-.mv3-sc-btn[disabled]{opacity:.5; cursor:default}
 /* The row's cross into the archive (phase I1): as quiet as its neighbour until pointed at, red when
    pointed at, and filled red while armed - "really?" for three seconds - so the second press is never
    a surprise. An armed row keeps its buttons at full strength even when the pointer has left it. */
-.mv3-sc-btn.is-x{min-width:22px; text-align:center}
-.mv3-sc-btn.is-x:not(.is-armed):hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
-.mv3-sc-btn.is-x.is-armed{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
+/* the row's cross is the shared one (.u-x.is-del); armed - "Really?" in the part's red fill */
 .mv3-sc-acts:has(.is-armed){opacity:1}
 /* ── The route inside setup ──────────────────────────────────────────────────
    In the Setup panel's own header, beside its title (js/merge-v3/workshop.js): a second header
@@ -1483,13 +1257,8 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    2026-09-21): the act stands on the thing it acts on. (The dressing's `apply` stood here too; since
    phase V24 it stands on the stage, .mv3-wk-apply.) */
 .mv3-wk-tileact{
-  position:absolute; left:50%; bottom:7px; transform:translateX(-50%); z-index:2;
-  padding:4px 12px; border-radius:var(--pill); cursor:pointer;
-  border:1px solid var(--gold); background:var(--gold); color:var(--bg);
-  font:700 10px/1 var(--font); letter-spacing:.02em; box-shadow:var(--shadow); white-space:nowrap;
+  position:absolute; left:50%; bottom:7px; transform:translateX(-50%); z-index:2; box-shadow:var(--shadow); white-space:nowrap;
 }
-.mv3-wk-tileact:hover{filter:brightness(1.08)}
-.mv3-wk-tileact[disabled]{opacity:.6; cursor:default}
 
 /* The shelf of outfits, shown in place of the faces while a look is being made. Wider tiles
    than a face: an outfit is judged by the whole picture, not by a head. */
@@ -1717,33 +1486,17 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 }
 .mv3-wk-vrow.is-on{border-color:var(--sel-line)}
 .mv3-wk-vrow.is-now{margin-bottom:3px; padding:5px}
-.mv3-wk-vplay{
-  flex:0 0 auto; width:24px; height:24px; padding:0; cursor:pointer;
-  border:1px solid var(--border); border-radius:50%; background:var(--bg); color:var(--ink);
-  font:600 9px/1 var(--font);
-}
-.mv3-wk-vplay:hover{border-color:var(--sel-line); color:var(--ink)}
-.mv3-wk-vplay.is-playing{border-color:var(--sel-line); color:var(--ink)}
-.mv3-wk-vplay[disabled]{opacity:.4; cursor:default}
+.mv3-wk-vplay{flex:0 0 auto}
+.mv3-wk-vplay.u-btn{border-radius:50%; font-size:9px}   /* round, as before */
+.mv3-wk-vplay.is-playing{border-color:var(--sel-line)}
 .mv3-wk-vtxt{flex:1 1 auto; min-width:0}
 .mv3-wk-vname{font:600 11px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-wk-vsub{font:400 9.5px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* The dropdown IS the choice: the voices a character has are few, and a list of two with a
    button each would say less than the one line this is. */
-.mv3-wk-vsel{
-  flex:1 1 auto; min-width:0; padding:4px 6px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:600 11px/1.3 var(--font);
-}
-.mv3-wk-vsel[disabled]{opacity:.6; cursor:default}
+.mv3-wk-vsel{ flex:1 1 auto; min-width:0 }
 .mv3-wk-vtag{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--ink)}
-.mv3-wk-vuse, .mv3-wk-vmore, .mv3-wk-vsearchbtn{
-  flex:0 0 auto; padding:4px 11px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--pill); background:var(--bg); color:var(--ink);
-  font:600 10px/1.2 var(--font);
-}
-.mv3-wk-vuse:hover, .mv3-wk-vmore:hover, .mv3-wk-vsearchbtn:hover{border-color:var(--sel-line); color:var(--ink)}
-.mv3-wk-vuse[disabled], .mv3-wk-vsearchbtn[disabled]{opacity:.5; cursor:default}
+.mv3-wk-vuse, .mv3-wk-vmore, .mv3-wk-vsearchbtn{flex:0 0 auto}
 .mv3-wk-vfoot{display:flex; justify-content:flex-start; margin:6px 0 2px}
 .mv3-wk-vhead{margin:10px 0 5px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-vhead:first-child{margin-top:2px}
@@ -1754,16 +1507,11 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vwinfoot .mv3-wk-vpager{margin:0; justify-content:center}
 /* (phase V62) Each ElevenLabs filter with its name over it. */
 .mv3-wk-vfcell{flex:1 1 92px; min-width:0; max-width:150px; display:flex; flex-direction:column; gap:2px}
-.mv3-wk-vfcell .mv3-wk-vfilter{flex:0 0 auto; max-width:none; width:100%}
+.mv3-wk-vfcell .mv3-wk-vfilter{ flex:0 0 auto; max-width:none; width:100% }
 .mv3-wk-vfname{font:700 8.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 /* (phase V62) Field 1's voice: its name with ▾ - the menu of the saved voices and the ElevenLabs library (wk-voice.js). */
-.mv3-wk-vpickbtn{
-  flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; padding:4px 7px; cursor:pointer; text-align:left;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/1.3 var(--font);
-}
-.mv3-wk-vpickbtn:hover{border-color:var(--sel-line)}
+.mv3-wk-vpickbtn{ flex:1 1 auto; min-width:0; display:flex; gap:6px; text-align:left }
 .mv3-wk-vpickbtn.is-need{border-color:var(--gold); color:var(--gold)}
-.mv3-wk-vpickbtn[disabled]{opacity:.6; cursor:default}
 .mv3-wk-vpickname{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-wk-vpickarrow{flex:0 0 auto; color:var(--muted)}
 .mv3-wk-vmenu{width:min(420px, 92vw); overflow-y:auto}
@@ -1771,7 +1519,8 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vmrow{display:flex; align-items:center; gap:7px; padding:4px 8px; cursor:pointer; border-radius:var(--r-xs)}
 .mv3-wk-vmrow:hover{background:var(--surface-2)}
 .mv3-wk-vmrow.is-on{cursor:default; background:var(--sel-bg)}
-.mv3-wk-vmnote{padding:4px 8px 6px; font:400 10px/1.4 var(--font); color:var(--muted)}
+/* (phase V73 block 2) The saved voices being read or none - the shared parts as rows (js/ui-state.js); here only where they sit. */
+.mv3-wk-vmnote{margin:0 var(--sp-2)}
 /* (phase V62) Field 1 in a NARROW setup (a field under ~520 px - the preview beside it takes half the window): its one line
    gave the voice no room at all, and the voice is now the menu that chooses it. Under that width the line folds in two pairs -
    mood and voice, stability and speed, each name over its control - and generate under them at the right. The children, in
@@ -1793,7 +1542,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* (phase V62) The voiceover draft's script column while it has no script (js/merge-v3/vo-script.js), and its bar over the lines. */
 .mv3-vos{display:flex; flex-direction:column; min-height:0; flex:1 1 auto}
 .mv3-vos-top{display:flex; align-items:center; gap:6px; padding:6px 2px 0}
-.mv3-vos-cat{flex:0 1 auto; max-width:45%}
+.mv3-vos-cat{ flex:0 1 auto; max-width:45% }
 .mv3-vos-list{flex:1 1 auto; min-height:0; overflow-y:auto; padding-left:0; padding-right:0}
 .mv3-vos-bar{display:flex; align-items:center; gap:7px; margin:0 0 6px}
 /* (the owner 2026-10-31: "давай поле с b-roll медиа будет рядом вместе со столбцом настроек фрагмента выезжающим. потому что сейчас
@@ -1836,40 +1585,14 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* Six vocabularies and a search box. They wrap: the panel is narrow when the sash is left
    alone and wide when it is not, and a fixed grid would be wrong in both. */
 .mv3-wk-vfilters{display:flex; flex-wrap:wrap; gap:4px; margin:0 0 6px}
-.mv3-wk-vsearch{
-  flex:1 1 100%; min-width:0; padding:4px 7px;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.3 var(--font);
-}
-.mv3-wk-vsearch:focus{outline:none; border-color:var(--focus)}
-.mv3-wk-vfilter{
-  flex:1 1 92px; min-width:0; max-width:150px; padding:3px 5px; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 10px/1.3 var(--font);
-}
+.mv3-wk-vsearch{ flex:1 1 100%; min-width:0 }
+.mv3-wk-vfilter{ flex:1 1 92px; min-width:0; max-width:150px }
 .mv3-wk-vpager{display:flex; align-items:center; gap:7px; margin:7px 0 2px}
-.mv3-wk-vpage{
-  width:22px; height:22px; padding:0; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:600 11px/1 var(--font);
-}
-.mv3-wk-vpage[disabled]{opacity:.35; cursor:default}
 .mv3-wk-vcount{font:400 9.5px/1.3 var(--font); color:var(--muted)}
 
 /* The words of the open line, put back or edited (js/merge-v3/wk-fragments.js, the right column). */
-.mv3-wk-lback{
-  margin:2px 0 8px; padding:2px 8px; cursor:pointer; align-self:flex-start;
-  border:1px solid var(--border); border-radius:var(--pill); background:var(--bg); color:var(--muted);
-  font:600 9.5px/1.2 var(--font);
-}
-.mv3-wk-lback:hover{border-color:var(--sel-line); color:var(--ink)}
-.mv3-wk-lback[disabled]{opacity:.5; cursor:default}
-.mv3-wk-ledit{
-  width:100%; margin:0 0 4px; padding:5px 6px; resize:vertical;
-  border:1px solid var(--sel-line); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-wk-ledit:focus{outline:none}
+.mv3-wk-lback{margin:2px 0 8px; align-self:flex-start}
+.mv3-wk-ledit{ width:100%; margin:0 0 4px; resize:vertical }
 .mv3-wk-fwords.is-edit{cursor:text}
 .mv3-wk-fwords.is-edit:hover{color:var(--ink)}
 .mv3-wk-vfoot.is-tight{margin:0 0 8px; gap:6px}
@@ -1878,7 +1601,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 
 /* The voice level's own bar - its tab and the way back - stands at the top of its column. */
 .mv3-wk-bar.is-own{margin:0 0 7px; display:flex; align-items:center; gap:5px}
-.mv3-wk-vmore.is-small{padding:2px 9px; font-size:9.5px}
 /* The sentence takes the width that is left and gives it back when the row needs it: with
    `auto` it set its own floor and pushed the button beside it onto a line of its own. */
 .mv3-wk-vsub.is-grow{flex:1 1 0; min-width:0; white-space:normal}
@@ -1973,12 +1695,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-stage-body .mv3-wk-vrow.is-now{margin:0}
 /* margin-top:auto keeps the foot at the bottom of a field stretched to its neighbour. */
 .mv3-wk-stage-foot{display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:auto}
-.mv3-wk-gen{
-  flex:0 0 auto; padding:4px 14px; cursor:pointer; border-radius:var(--pill);
-  border:1px solid var(--gold); background:var(--gold); color:var(--bg); font:700 10px/1.2 var(--font);
-}
-.mv3-wk-gen:hover{filter:brightness(1.08)}
-.mv3-wk-gen[disabled]{opacity:.4; cursor:default}
+.mv3-wk-gen{flex:0 0 auto}
 /* The number and the length of the take, stacked to exactly the play button's height. */
 .mv3-wk-lmeta{
   flex:0 0 auto; width:24px; height:24px; display:flex; flex-direction:column;
@@ -2005,9 +1722,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 }
 .mv3-wk-half.is-frags > *{flex:0 0 auto}
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */
-.mv3-wk-frow .mv3-wk-vplay{width:20px; height:20px; font-size:8px}
+.mv3-wk-frow .mv3-wk-vplay.u-btn{width:20px; height:20px; font-size:8px}
 .mv3-wk-fsets{display:flex; flex-wrap:wrap; gap:4px}
-.mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
+.mv3-wk-vsel.is-small{flex:1 1 110px}
 /* How the two columns work, over the script it is about (V7): a gold band, not grey italics at the
    foot of a zone nobody scrolls to. */
 .mv3-wk-fhint{
@@ -2028,16 +1745,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    border - its top half on the row, its bottom half over the row below, which does not move - while the pointer is on
    the row. Dim while something is being made in the project. */
 .mv3-wk-frow{position:relative}
-.mv3-wk-fins{
-  position:absolute; left:50%; bottom:-10px; z-index:3; transform:translateX(-50%);
-  width:18px; height:18px; display:none; align-items:center; justify-content:center;
-  border:1px solid var(--gold); border-radius:var(--r-xs); background:var(--bg); color:var(--gold);
-  font:700 13px/1 var(--font); cursor:pointer;
-}
+.mv3-wk-fins{position:absolute; left:50%; bottom:-10px; z-index:3; transform:translateX(-50%); display:none}
+.mv3-wk-fins.u-btn{width:18px; height:18px; padding:0; border-radius:var(--r-xs); background:var(--bg); font-size:13px; line-height:1}   /* keeps its 18 px on the row's edge */
 .mv3-wk-frow:hover > .mv3-wk-fins{display:flex}
-.mv3-wk-fins:hover{background:var(--gold); color:var(--bg)}
-.mv3-wk-fins.is-off{opacity:.45; cursor:default}
-.mv3-wk-fins.is-off:hover{background:var(--bg); color:var(--gold)}
 /* (phase V26.8, sixth round) THE POPUP while a voice's demo is being made: over the foot of the page, gold, taking
    nothing - no keys, no presses. */
 .mv3-wk-popup{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:60; max-width:420px;
@@ -2054,7 +1764,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-flabel.is-off{margin:8px 0 3px; color:var(--muted)}
 .mv3-wk-frow.is-off{opacity:.45; cursor:default; border-style:dashed}
 .mv3-wk-frow.is-off:hover{opacity:.75; border-color:var(--border)}
-.mv3-wk-frow.is-off .mv3-wk-vuse{flex:0 0 auto; padding:2px 8px; font-size:9px}
+.mv3-wk-frow.is-off .mv3-wk-vuse{flex:0 0 auto}
 /* Three marks: the read, the frame, the clip - green done, amber stale, hollow not yet. */
 .mv3-wk-fdots{flex:0 0 auto; display:flex; gap:3px}
 .mv3-wk-fdot{width:7px; height:7px; border-radius:50%; border:1px solid var(--border)}
@@ -2074,18 +1784,10 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-fwrow{display:flex; align-items:flex-start; gap:8px}
 .mv3-wk-fwrow > .mv3-wk-fwords{flex:1 1 auto; min-width:0}
 /* `read` / `read again` in the open fragment: gold, the border and the words (the owner, 2026-10-10). */
-.mv3-wk-fread{flex:0 0 auto; margin-top:1px; padding:2px 8px; border:1px solid var(--gold); border-radius:999px; background:transparent;
-  font:600 10px/1.4 var(--font); color:var(--gold); cursor:pointer; white-space:nowrap}
-.mv3-wk-fread:hover:not(:disabled){background:var(--gold); color:var(--bg)}
-.mv3-wk-fread:disabled{opacity:.45; cursor:default}
-/* (phase V26.8) `mood` on a line with no [tags] yet: red - it cannot be read until it is marked up. */
-.mv3-wk-fread.is-need{border-color:var(--gold); color:var(--gold)}
-.mv3-wk-fread.is-need:hover:not(:disabled){background:var(--gold); color:var(--bg)}
+.mv3-wk-fread{flex:0 0 auto; margin-top:1px; white-space:nowrap}   /* a generator's place: the part's gold line (.u-btn.is-gen) */
 /* What the tagger put between the words, in gold (the owner, 2026-09-22): the words are the
    person's, the [tags] are the machine's, and the difference is worth seeing without reading. */
 .mv3-wk-wtag{color:var(--gold); font-weight:600}
-.mv3-wk-vmore[disabled]{opacity:.55; cursor:default}
-.mv3-wk-vmore.is-go{border-color:var(--main); color:var(--main)}
 .mv3-wk-fstale{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--warn)}
 /* The tier is short and fixed; the motion preset gets what is left of the row, so its name is read. */
 .mv3-wk-vsel.is-small.is-tier{flex:0 0 auto; width:auto}
@@ -2095,15 +1797,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* The cross in the corner of a stage half that holds something written - the character, the
    environment - takes it off the project (js/merge-v3/wk-setup.js, _stageClears). In the corner
    of the HALF, not of the picture: the picture moves under the zoom, the cross does not. */
-.mv3-wk-clear{
-  position:absolute; right:10px; top:10px; z-index:3; width:24px; height:24px; padding:0; cursor:pointer;
-  display:flex; align-items:center; justify-content:center; border-radius:50%;
-  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 12px/1 var(--font);
-  transition:background .12s var(--ease), border-color .12s var(--ease);
-}
+.mv3-wk-clear{position:absolute; right:10px; top:10px; z-index:3}
+.mv3-wk-clear.u-onpic{border-radius:50%; border:1px solid var(--on-media-line)}   /* round on the stage, as before */
 .mv3-wk-clear.is-bottom{top:calc(50% + 10px)}
-.mv3-wk-clear:hover{background:var(--danger); border-color:var(--danger)}
-.mv3-wk-clear[disabled]{opacity:.5; cursor:default}
 /* (phase V67 block 3) Back to the first look cast - a pill left of the upper half's cross (in its place when there is none). */
 .mv3-wk-back{
   position:absolute; right:42px; top:10px; z-index:3; height:24px; max-width:60%; padding:0 10px; cursor:pointer;
@@ -2136,13 +1832,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-flabel.is-row{display:flex; align-items:center; gap:8px}
 .mv3-wk-flabel .mv3-wk-flink{margin-left:0; text-transform:none; letter-spacing:0}
 .mv3-wk-fedited{color:var(--warn); text-transform:none; letter-spacing:0; font-weight:600}
-.mv3-wk-ftext-in{
-  width:100%; padding:5px 7px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-wk-ftext-in:focus{outline:none; border-color:var(--focus)}
-.mv3-wk-ftext-in[disabled]{opacity:.6}
+.mv3-wk-ftext-in{ width:100%; resize:vertical }
 .mv3-wk-fwhy{margin:4px 0 2px; font:400 10px/1.45 var(--font); color:var(--muted); font-style:italic}
 .mv3-wk-vmore.is-busy{border-color:var(--sel-line); color:var(--ink)}
 
@@ -2190,14 +1880,9 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    The ✕ in its corner is what switched it off; the ✓ in the same corner brings it back. */
 .mv3-wk-fsetfr.is-off img{filter:brightness(.32) saturate(.5)}
 .mv3-wk-fsetfr.is-off{border-style:dashed}
-.mv3-wk-fsetx{
-  position:absolute; top:2px; right:2px; width:16px; height:16px; padding:0; z-index:2;
-  display:flex; align-items:center; justify-content:center; border-radius:var(--r-xs); cursor:pointer;
-  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 8.5px/1 var(--font);
-  opacity:0; transition:opacity .12s var(--ease);
-}
+.mv3-wk-fsetx{position:absolute; top:2px; right:2px; z-index:2; opacity:0; transition:opacity var(--dur-1) var(--ease)}
+.mv3-wk-fsetx.u-onpic{width:16px; height:16px; border-radius:var(--r-xs); font:600 8.5px/1 var(--font)}   /* the 76-px frames */
 .mv3-wk-fsetfr:hover .mv3-wk-fsetx, .mv3-wk-fsetx.is-back{opacity:1}
-.mv3-wk-fsetx:hover{background:var(--danger); border-color:var(--danger)}
 .mv3-wk-fsetx.is-back{color:var(--success)}
 .mv3-wk-fsetx.is-back:hover{background:var(--success); border-color:var(--success); color:var(--on-media)}
 .mv3-wk-fsetfr img{width:100%; height:100%; object-fit:cover; display:block}
@@ -2216,20 +1901,14 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* (phase V61) FIELD 2's FOOT: the tick "scattered" on the left, "frames chat" on the right. */
 .mv3-wk-stage-foot.is-frames{justify-content:space-between}
 .mv3-wk-ftick{display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--font); color:var(--muted); cursor:pointer; user-select:none}
-.mv3-wk-ftick input{margin:0; accent-color:var(--gold); cursor:pointer}
+.mv3-wk-ftick input{margin:0}
 .mv3-wk-ftick:hover{color:var(--ink)}
 /* LETTING GO of something that is being made (phase N1): the cross in its top-right corner. Red,
    because it is the one control here that ends something, and small, because it is not the thing
    you are meant to press. Its own class (phase I0): it was .mv3-wk-drop, the name the makers' photo
    field already had, and coming later in the file it turned that field into this cross. */
-.mv3-wk-letgo{
-  position:absolute; right:3px; top:3px; z-index:3; width:16px; height:16px; padding:0; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid transparent; border-radius:var(--r-xs);
-  background:var(--scrim); color:var(--on-media); font:700 9px/1 var(--font);
-}
-.mv3-wk-letgo:hover{background:var(--danger); border-color:var(--danger)}
-.mv3-wk-letgo[disabled]{opacity:.4; cursor:default}
+.mv3-wk-letgo{position:absolute; right:3px; top:3px; z-index:3}
+.mv3-wk-letgo.u-onpic{width:16px; height:16px; border-radius:var(--r-xs); --x-size:11px}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
 .mv3-wk-flabel.is-row > span:first-child{flex:1 1 auto}
 .mv3-wk-vsel.is-small.is-col{flex:0 0 auto; width:100%}
@@ -2352,18 +2031,13 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-vctl .mv3-wk-gen{margin-left:auto}
 .mv3-wk-vlab{flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 .mv3-wk-vlab .mv3-wk-vsel.is-small{flex:0 0 auto; width:auto}
-.mv3-wk-vnum{
-  width:52px; padding:3px 4px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 10px/1.3 var(--font);
-}
-.mv3-wk-vnum[disabled]{opacity:.6}
+.mv3-wk-vnum{ width:52px }
 
 /* The line's own speed in its fragment, between `read` and play (V26.1): gold while it is the line's own,
    with the way back to the project's beside it. */
 .mv3-wk-fwrow > .mv3-wk-vlab.is-line, .mv3-wk-fwrow > .mv3-wk-vplay{margin-top:-2px}
 .mv3-wk-vlab.is-own .mv3-wk-vnum{border-color:var(--gold); color:var(--gold)}
-.mv3-wk-vback{flex:0 0 auto; padding:0 4px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font)}
-.mv3-wk-vback:hover:not(:disabled){color:var(--ink)}
+.mv3-wk-vback{flex:0 0 auto}
 /* Read, beside play on a row of the list (V26.1): a send mark, then a read-again mark. */
 .mv3-wk-vplay.is-send{font-size:10px}
 .mv3-wk-vplay.is-send.is-busy{animation:mv3-wk-pulse 1.1s ease-in-out infinite}
@@ -2374,14 +2048,13 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
 .mv3-wk-cwin-box{display:flex; flex-direction:column; gap:10px; max-width:min(920px, 94vw); max-height:92vh; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r)}
 .mv3-wk-cwin-head{display:flex; align-items:center; gap:8px; font:700 10px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold)}
-.mv3-wk-cwin-x{margin-left:auto; padding:2px 6px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 12px/1 var(--font)}
-.mv3-wk-cwin-x:hover{color:var(--ink)}
+.mv3-wk-cwin-x{margin-left:auto}
 .mv3-wk-cwin-grid{display:flex; flex-wrap:wrap; gap:10px; overflow:auto}
 .mv3-wk-cwin-card{display:flex; flex-direction:column; gap:5px; width:170px; padding:5px; border:1px solid var(--border); border-radius:var(--r-sm)}
 .mv3-wk-cwin-card.is-on{border-color:var(--sel-line)}
 .mv3-wk-cwin-card video{width:100%; aspect-ratio:9/16; object-fit:contain; background:var(--media-bg); border-radius:var(--r-xs)}
 .mv3-wk-cwin-meta{display:flex; align-items:center; gap:6px}
-.mv3-wk-cwin-meta .mv3-wk-vuse{margin-left:auto; padding:2px 10px; font-size:10px}
+.mv3-wk-cwin-meta .mv3-wk-vuse{margin-left:auto}
 
 /* (phase V26.5) THE FRAGMENT'S CROSS, top right in gold (the owner, 2026-10-10). */
 .mv3-wk-half.is-guide.has-close{ position:relative }

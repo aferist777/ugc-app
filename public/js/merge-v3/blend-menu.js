@@ -28,9 +28,9 @@ export function closeBlendMenu() {
 
 function _open(anchor, current, live, write) {
   closeBlendMenu();
-  const el = _el('div', 'mv3-blend-menu');
+  const el = _el('div', 'mv3-blend-menu u-menu is-float');
   for (const m of BLENDS) {
-    const it = _el('button', 'mv3-blend-item' + (m.id === current ? ' is-on' : ''), m.label);
+    const it = _el('button', 'mv3-blend-item u-mi' + (m.id === current ? ' is-on' : ''), m.label);
     it.type = 'button';
     it.title = m.tip;
     it.addEventListener('mouseenter', () => live(m.id));
@@ -61,7 +61,7 @@ function _open(anchor, current, live, write) {
 export function blendButton({ current, title, live, write }) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sel mv3-blend-btn';
+  b.className = 'mv3-blend-btn u-btn is-s is-field';
   const now = BLENDS.find((m) => m.id === current);
   b.textContent = (now ? now.label : 'mixed') + ' ▾';
   if (title) b.title = title;

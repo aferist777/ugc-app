@@ -32,6 +32,7 @@
 
 import * as Layers from './layers.js';
 import { openPlaces } from './place-tree.js';
+import { menuIcons } from './icons.js';
 
 const BAND_FROM = 5;          // px a press moves before it is a band
 // The most a batch takes at once - routes/library.js BATCH_MAX says the same; more is refused in words before anything.
@@ -58,12 +59,12 @@ export function createSelection(o) {
 
   // The chip that says how many are picked - over the gallery's top left corner.
   const chip = document.createElement('div');
-  chip.className = 'ts-chip';
+  chip.className = 'ts-chip u-chip is-on';
   chip.hidden = true;
   const chipText = document.createElement('span');
   const chipX = document.createElement('button');
   chipX.type = 'button';
-  chipX.textContent = '✕';
+  chipX.className = 'u-btn is-s is-icon is-quiet u-x';
   chipX.title = 'Pick nothing (Escape)';
   chipX.addEventListener('click', (e) => { e.stopPropagation(); clear(); });
   chip.append(chipText, chipX);
@@ -238,11 +239,11 @@ function _closeMenu() {
 export function menuAt(x, y, rows) {
   _closeMenu();
   const m = document.createElement('div');
-  m.className = 'mv3-plus-menu ts-menu';
+  m.className = 'mv3-plus-menu ts-menu u-menu is-float';
   for (const [label, sub, fn, danger] of rows) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item' + (danger ? ' is-danger' : '');
+    b.className = 'mv3-plus-item u-mi' + (danger ? ' is-danger' : '');
     const t = document.createElement('span');
     t.textContent = label;
     b.appendChild(t);
@@ -251,6 +252,7 @@ export function menuAt(x, y, rows) {
     else b.disabled = true;
     m.appendChild(b);
   }
+  menuIcons(m);
   document.body.appendChild(m);
   const w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, x))) + 'px';

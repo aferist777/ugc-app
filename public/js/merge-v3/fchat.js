@@ -82,6 +82,7 @@ function FRAMES(ctx) {
       const r = el('div', 'mv3-ig-row');
       const l = el('label', null, 'shot');
       const s = document.createElement('select');
+      s.className = 'u-in is-s';
       s.id = 'mv3-fc-shot';
       l.htmlFor = s.id;
       s.title = 'Where the frame\'s edge is. none - your words decide how much of the person is in it; the pose is always your words.';
@@ -98,7 +99,7 @@ function FRAMES(ctx) {
       // The writer, a switch of the column (as in the video chat, V15/V16).
       const wr = el('label', 'mv3-vc-check');
       const cb = document.createElement('input');
-      cb.type = 'checkbox';
+      cb.type = 'checkbox'; cb.classList.add('u-check');
       cb.checked = ctx.writing();
       cb.addEventListener('change', () => ctx.setWriting(cb.checked));
       wr.append(cb, el('span', null, 'writer'));
@@ -232,8 +233,8 @@ function FRAMES(ctx) {
     host.appendChild(box);
     if (gens.length > 1) {
       const nav = el('div', 'vc-vars mv3-fc-shotnav');
-      const prev = el('button', 'vc-nav is-prev', '‹');
-      const next = el('button', 'vc-nav is-next', '›');
+      const prev = el('button', 'vc-nav is-prev u-btn is-s is-icon', '‹');
+      const next = el('button', 'vc-nav is-next u-btn is-s is-icon', '›');
       prev.type = 'button'; next.type = 'button';
       prev.disabled = i === 0;
       next.disabled = i === gens.length - 1;
@@ -254,7 +255,7 @@ function FRAMES(ctx) {
   function _shotActs(g) {
     const acts = el('div', 'mv3-ig-acts mv3-fc-acts');
     const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
-    const add = el('button', 'mv3-c-btn', inSet() ? 'in frames' : 'to frames');
+    const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? 'in frames' : 'to frames');
     add.type = 'button';
     add.disabled = inSet();
     add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
@@ -265,7 +266,7 @@ function FRAMES(ctx) {
       add.textContent = 'in frames';
       if (_hooks.added) _hooks.added(d.project);
     });
-    const use = el('button', 'mv3-c-btn', 'to reference');
+    const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
     use.type = 'button';
     use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the products and the extra pictures stay';
     use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
@@ -327,7 +328,7 @@ function FRAMES(ctx) {
       }
       box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'write it again');
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -361,7 +362,7 @@ function FRAMES(ctx) {
     l.left.appendChild(head);
     if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = v.prompt || '';
     ta.title = 'The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.';
@@ -389,8 +390,8 @@ function FRAMES(ctx) {
     }
     if (vs.length > 1) {
       const nav = el('div', 'vc-vars');
-      const prev = el('button', 'vc-nav is-prev', '‹');
-      const next = el('button', 'vc-nav is-next', '›');
+      const prev = el('button', 'vc-nav is-prev u-btn is-s is-icon', '‹');
+      const next = el('button', 'vc-nav is-next u-btn is-s is-icon', '›');
       prev.type = 'button'; next.type = 'button';
       prev.disabled = vi === 0;
       next.disabled = vi === vs.length - 1;
@@ -410,7 +411,7 @@ function FRAMES(ctx) {
       l.left.appendChild(nav);
     }
     const acts = el('div', 'vc-card-acts');
-    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
     nBtn.title = 'How many frames to draw from it - each lands in the box on the right';
     nBtn.addEventListener('click', () => {
@@ -419,7 +420,7 @@ function FRAMES(ctx) {
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshen(l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make', 'draw');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'draw');
     go.type = 'button';
     go.addEventListener('click', () => _draw(l, go));
     const price = el('span', 'vc-card-why');
@@ -495,7 +496,7 @@ function FRAMES(ctx) {
   // message of the thread; a press on one puts it into the box. In English (the owner's answer (e)).
   let _ideasBtn = null;
   function _ideasSide() {
-    const b = el('button', 'mv3-fc-ideas', 'ideas');
+    const b = el('button', 'mv3-fc-ideas u-btn is-gen', 'ideas');
     b.type = 'button';
     b.title = 'The agent looks at the pictures above the box - the person, the place, the products, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
     b.addEventListener('click', () => _askIdeas(b));
@@ -539,7 +540,7 @@ function FRAMES(ctx) {
         const ui = ctx.ui();
         if (ui) ui.ta.focus();
       });
-      const re = el('button', 'mv3-fc-idea-re', '↻');
+      const re = el('button', 'mv3-fc-idea-re u-btn is-icon', '↻');
       re.type = 'button';
       re.title = 'Another take on this idea - the same spot, another pose or angle - in its place. Fractions of a cent.';
       re.addEventListener('click', (ev) => { ev.stopPropagation(); _ideaAgain(m, i, cell, re); });
@@ -718,7 +719,7 @@ function FRAMES(ctx) {
       // next change.
       const acts = el('div', 'mv3-ig-acts');
       const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
-      const add = el('button', 'mv3-c-btn', inSet() ? 'in frames' : 'to frames');
+      const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? 'in frames' : 'to frames');
       add.type = 'button';
       add.disabled = inSet();
       add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
@@ -729,7 +730,7 @@ function FRAMES(ctx) {
         add.textContent = 'in frames';
         if (_hooks.added) _hooks.added(d.project);
       });
-      const use = el('button', 'mv3-c-btn', 'to reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', 'to reference');
       use.type = 'button';
       use.title = 'Put it into the "frame" place above the message box, to change it with the next message';
       use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
@@ -759,7 +760,7 @@ function FRAMES(ctx) {
     },
     // Its own head line: the cross back to the fields.
     headButtons() {
-      const x = el('button', 'mv3-iconbtn mv3-fc-close', '✕');
+      const x = el('button', 'mv3-fc-close u-btn is-s is-icon is-quiet u-x', '');
       x.type = 'button';
       x.title = 'Close the frames chat - back to the fields. What is written stays.';
       x.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });

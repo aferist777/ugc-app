@@ -344,7 +344,7 @@ function _mark() {
 // a way of saying "this one" (Y5). The press does NOT reach the row - it would close an open
 // fragment - so the opening is done here instead.
 function _playBtn(src, what, then) {
-  const b = el('button', 'mv3-wk-vplay is-read', '▶');
+  const b = el('button', 'mv3-wk-vplay is-read u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -643,7 +643,7 @@ async function _dropRow(alertId, what) {
 
 // The cross itself, for the corner of whatever is being made.
 function _dropX(alertId, what) {
-  const b = el('button', 'mv3-wk-letgo', '✕');
+  const b = el('button', 'mv3-wk-letgo u-onpic is-del u-x', '');
   b.type = 'button';
   b.title = 'Stop waiting for ' + what + '. It was paid for when it was asked for - this does not'
     + ' get that back; it takes the row out of Alerts and stops the app expecting a picture.';
@@ -1146,10 +1146,12 @@ function _stage(host, id, spec) {
 
 function _genButton(foot, spec) {
   if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub', spec.cap));
-  const b = el('button', 'mv3-wk-gen', spec.label || 'generate');
+  const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || 'generate');
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.disabled;
+  // (phase V73 block 2) a paid press armed for its second press: the light step (б2-10) - no time limit here, as before
+  if (spec.armed) b.classList.add('is-armed');
   if (spec.on) b.addEventListener('click', spec.on);
   foot.appendChild(b);
   return b;
@@ -1237,7 +1239,7 @@ function _stageMoodVoice(host, p, lines) {
   body.appendChild(row);
   const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', word), tip);
   // The mood. What it means is said in the bubble of its name (the owner's (т12)).
-  const mood = el('select', 'mv3-wk-vsel is-small is-mood');
+  const mood = el('select', 'u-in is-s mv3-wk-vsel is-small is-mood');
   if (!now) _noneOption(mood, 'none');
   for (const m of (_kit && _kit.moods) || []) {
     const o = el('option', '', m.label);
@@ -1296,7 +1298,7 @@ function _stageMoodVoice(host, p, lines) {
     if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
     else if (_demoMissing(p)) {
       notes.appendChild(_note(_demoErr || 'This voice has no demo yet - Seedance takes its timbre from it.', !!_demoErr));
-      const mk = el('button', 'mv3-wk-vuse', 'make the demo');
+      const mk = el('button', 'mv3-wk-vuse u-btn is-s', 'make the demo');
       mk.type = 'button';
       mk.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
       mk.addEventListener('click', () => _askDemo(p));
@@ -1321,7 +1323,7 @@ const SPEED_TIP = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED
 // The two controls, for the second line of field 1 (their names stand over them, with STAB_TIP and SPEED_TIP).
 function _voiceSettings(p, busy) {
   const now = VOICE.params(p);
-  const stab = el('select', 'mv3-wk-vsel is-small is-stab');
+  const stab = el('select', 'u-in is-s mv3-wk-vsel is-small is-stab');
   for (const s of STABILITY) {
     const o = el('option', '', s.label);
     o.value = String(s.v);
@@ -1331,7 +1333,7 @@ function _voiceSettings(p, busy) {
   }
   stab.disabled = busy || _saving;
   stab.addEventListener('change', () => _saveVoice({ stability: +stab.value, speed: VOICE.params(p).speed }));
-  const speed = el('input', 'mv3-wk-vnum');
+  const speed = el('input', 'mv3-wk-vnum u-in is-s');
   speed.type = 'number';
   speed.min = String(SPEED.min);
   speed.max = String(SPEED.max);
@@ -1498,7 +1500,7 @@ function _stageBroll(host, p, lines) {
       + 'free; the keywords are written by the agent (a fraction of a cent).'));
   }
   // What is laid, and laid again when changed.
-  const mode = el('select', 'mv3-wk-vsel is-small mv3-wk-bmode');
+  const mode = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-wk-bmode');
   for (const [v, label] of BROLL_MODES) {
     const o = el('option', '', label);
     o.value = v;
@@ -1586,7 +1588,7 @@ function _stageFrames(host, p) {
     b.appendChild(img);
     // The ✕ in the corner takes a frame out of the rotation; the ✓ in the same corner brings it
     // back (the owner, 2026-09-21). A switched-off frame is dimmed and stands first, out of the way.
-    const sw = el('button', 'mv3-wk-fsetx' + (gone ? ' is-back' : ''), gone ? '✓' : '✕');
+    const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' is-del'), gone ? '✓' : '✕');
     sw.type = 'button';
     sw.title = gone ? 'Use this frame again' : 'Do not use this frame in any fragment';
     sw.addEventListener('click', (e) => { e.stopPropagation(); _banFrame(p, fr.id, !gone); });
@@ -1606,7 +1608,7 @@ function _stageFrames(host, p) {
   foot.classList.add('is-frames');
   const tick = el('label', 'mv3-wk-ftick');
   const box = el('input');
-  box.type = 'checkbox';
+  box.type = 'checkbox'; box.classList.add('u-check');
   box.checked = v.spread === 'random';
   box.disabled = _saving;
   box.addEventListener('change', () => _saveVideo({ spread: box.checked ? 'random' : 'cycle' }));
@@ -1659,7 +1661,7 @@ function _stageVideo(host, p, lines) {
   // Neither is chosen for a new project (V24): both say none, and the field is red until they are.
   const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
-  const model = el('select', 'mv3-wk-vsel is-small is-model');
+  const model = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   model.title = 'What films the clips - for the whole video';
   if (!v.model) _noneOption(model);
   for (const m of models) {
@@ -1676,7 +1678,7 @@ function _stageVideo(host, p, lines) {
     const keep = !!(next && (next.qualities || []).some(q => q.id === v.quality));
     _saveVideo({ model: model.value, quality: keep ? v.quality : '' });
   });
-  const tier = el('select', 'mv3-wk-vsel is-small is-tier');
+  const tier = el('select', 'u-in is-s mv3-wk-vsel is-small is-tier');
   tier.title = 'How sharp the clips are, and what a second of them costs';
   if (!v.quality || !v.model) _noneOption(tier);
   for (const q of v.model ? _qualities() : []) {
@@ -1734,6 +1736,7 @@ function _stageVideo(host, p, lines) {
       label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + _standing(p).n + '…'
           : armed ? (sample ? 'go?' : _money(clipCost) + ' · go?') : done ? 'again' : 'generate',
+        armed,
       cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
         sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : '',
         _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
@@ -1760,6 +1763,7 @@ function _stageVideo(host, p, lines) {
       : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+        armed,
     // What this press will SPEND and how long the video is - and nothing else (the owner,
     // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
     // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
@@ -1795,7 +1799,7 @@ function _seedanceSettings(body, p) {
   // sample. Not chosen, it is the read (the owner's answer (я13)).
   const sounds = (_kit && _kit.sounds) || [];
   const cur = v.sound || 'read';
-  const sound = el('select', 'mv3-wk-vsel is-small is-model');
+  const sound = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   for (const s of sounds) {
     const o = el('option', '', s.label);
     o.value = s.id;
@@ -1812,7 +1816,7 @@ function _seedanceSettings(body, p) {
   // GESTURES - how the head, the hands and the body move (the owner's answer (ц)): one way per mood, the project's mood
   // until another is picked; the face follows the mood always (answer (щ)). Picking the mood itself follows it again.
   const moods = (_kit && _kit.moods) || [];
-  const gest = el('select', 'mv3-wk-vsel is-small is-model');
+  const gest = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const curG = v.gestures || v.mood || '';
   if (!curG) _noneOption(gest, 'as the mood');
   for (const md of moods) {
@@ -1828,7 +1832,7 @@ function _seedanceSettings(body, p) {
     + ' the face always follows the mood.');
 
   // THE CAMERA - one continuous shot (the owner's answer (е)); several shots in one clip are in development.
-  const cam = el('select', 'mv3-wk-vsel is-small is-model');
+  const cam = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const one = el('option', '', 'one continuous shot');
   one.value = 'one';
   const more = el('option', '', 'several shots · soon');
@@ -1850,7 +1854,7 @@ function _list(host, p, lines) {
     if (!lines.length) { VOS.paintChooser(host, p, adopt); return; }
     const bar = el('div', 'mv3-vos-bar');
     bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? 'the scenario «' + (p.title || 'untitled') + '»' : 'your own text'));
-    const other = el('button', 'mv3-wk-vmore', 'other script');
+    const other = el('button', 'mv3-wk-vmore u-btn is-s', 'other script');
     other.type = 'button';
     other.title = 'Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.';
     other.disabled = VOICE.reading().busy;
@@ -2047,7 +2051,7 @@ const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.s
   : _writing ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
-  const plus = el('span', 'mv3-wk-fins' + (why ? ' is-off' : ''), '+');
+  const plus = el('span', 'mv3-wk-fins u-btn is-icon is-gen' + (why ? ' is-off' : ''), '+');
   plus.setAttribute('role', 'button');
   plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
   plus.addEventListener('click', (e) => {
@@ -2076,7 +2080,7 @@ function _insertEditor(host, p, lines) {
   host.appendChild(shut);
   host.appendChild(el('div', 'mv3-wk-flabel', 'a new line after fragment ' + _no(lines, after)));
   host.appendChild(el('div', 'mv3-wk-fwhy', 'After: “' + (_words(lines[after]) || '').slice(0, 160) + '”'));
-  const box = el('textarea', 'mv3-wk-ledit is-frag');
+  const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
   box.rows = 3;
   box.placeholder = 'The words of the new line';
   box.value = _insDraft;
@@ -2089,12 +2093,12 @@ function _insertEditor(host, p, lines) {
   });
   host.appendChild(box);
   const acts = el('div', 'mv3-wk-vfoot is-tight');
-  const save = el('button', 'mv3-wk-vuse', _insSaving ? 'putting it in…' : 'put it in');
+  const save = el('button', 'mv3-wk-vuse u-btn is-s', _insSaving ? 'putting it in…' : 'put it in');
   save.type = 'button';
   save.title = 'Put the line in (Ctrl+Enter)';
   save.disabled = _insSaving || !_insDraft.trim();
   save.addEventListener('click', () => _insertLine(p, after));
-  const drop = el('button', 'mv3-wk-vuse', 'cancel');
+  const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
   drop.type = 'button';
   drop.disabled = _insSaving;
   drop.addEventListener('click', cancel);
@@ -2132,7 +2136,7 @@ async function _insertLine(p, after) {
 function _offRow(l, i) {
   const row = el('div', 'mv3-wk-frow is-off');
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
-  const back = el('button', 'mv3-wk-vuse', 'restore');
+  const back = el('button', 'mv3-wk-vuse u-btn is-s', 'restore');
   back.type = 'button';
   back.title = 'Put this line back where it was in the script';
   back.disabled = _offing;
@@ -2172,7 +2176,7 @@ function _rowRead(p, l, i) {
   const ra = _readAct(p, l, i);
   const reading = (VOICE.reading().lines || []).includes(i);
   const has = isRead(l);
-  const b = el('button', 'mv3-wk-vplay is-send' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
+  const b = el('button', 'mv3-wk-vplay is-send u-btn is-s is-icon' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
   b.type = 'button';
   b.disabled = !ra.on || reading;
   b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2195,7 +2199,7 @@ function _lineSpeed(p, l, i) {
   const box = el('label', 'mv3-wk-vlab is-line' + (own ? ' is-own' : ''));
   box.title = own ? "This line's own speed - the project's (" + proj + ') does not touch it. The read is retimed at once, free.'
     : "The speed of this line's read - the project's, " + proj + ". Changed here, it becomes this line's own; the read is retimed at once, free.";
-  const inp = el('input', 'mv3-wk-vnum');
+  const inp = el('input', 'mv3-wk-vnum u-in is-s');
   inp.type = 'number';
   inp.min = String(SPEED.min);
   inp.max = String(SPEED.max);
@@ -2205,7 +2209,7 @@ function _lineSpeed(p, l, i) {
   _speedLater(inp, 'line' + i, () => VOICE.speedOf(_ctx.project, (_ctx.project.lines || [])[i]), v => ({ line: i, lineSpeed: v }));
   box.append(el('span', '', 'speed'), inp);
   if (own) {
-    const back = el('button', 'mv3-wk-vback', '↺');
+    const back = el('button', 'mv3-wk-vback u-btn is-s is-icon is-quiet', '↺');
     back.type = 'button';
     back.title = "Back to the project's speed (" + proj + ')';
     back.disabled = inp.disabled;
@@ -2231,7 +2235,7 @@ function _clipWindow(p, l, i, n) {
   const box = el('div', 'mv3-wk-cwin-box');
   const head = el('div', 'mv3-wk-cwin-head');
   head.appendChild(el('span', '', 'fragment ' + n + ' · its clips'));
-  const x = el('button', 'mv3-wk-cwin-x', '✕');
+  const x = el('button', 'mv3-wk-cwin-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   x.addEventListener('click', _closeClipWindow);
@@ -2257,7 +2261,7 @@ function _clipWindow(p, l, i, n) {
     if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
     if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
     else {
-      const use = el('button', 'mv3-wk-vuse', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'use');
       use.type = 'button';
       use.title = "Make this the fragment's clip - on the timeline too" + (stale ? ', stale as it is' : '');
       use.addEventListener('click', async () => { use.disabled = true; await _pickClip(i, c.id); _closeClipWindow(); });
@@ -2300,9 +2304,9 @@ function _readAct(p, l, i) {
 
 function _rowMenu(ev, row, p, l, i, n) {
   _closeMenu();
-  const box = el('div', 'mv3-plus-menu');
+  const box = el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, danger) => {
-    const b = el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', '', label));
     if (sub) b.appendChild(el('small', '', sub));
@@ -2369,7 +2373,7 @@ function _fragment(host, p, l, i) {
   // the cheap way.
   const shown = String(l.tagged || '').trim() || _words(l);
   if (_editWords === i) {
-    const box = el('textarea', 'mv3-wk-ledit is-frag');
+    const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
     box.value = _wordsDraft;
     box.rows = _isVo(p) ? 12 : 3;
     const count = _voCount(p, box);
@@ -2380,11 +2384,11 @@ function _fragment(host, p, l, i) {
     });
     host.appendChild(box);
     const acts = el('div', 'mv3-wk-vfoot is-tight');
-    const save = el('button', 'mv3-wk-vuse', 'save');
+    const save = el('button', 'mv3-wk-vuse u-btn is-s', 'save');
     save.type = 'button';
     save.title = 'Save the words (Ctrl+Enter)';
     save.addEventListener('click', () => _saveWords(va, i));
-    const drop = el('button', 'mv3-wk-vuse', 'cancel');
+    const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'cancel');
     drop.type = 'button';
     drop.addEventListener('click', () => { _editWords = -1; _ctx.repaint(); });
     acts.append(save, drop);
@@ -2398,7 +2402,7 @@ function _fragment(host, p, l, i) {
     // spoken from them, and the voice will not start without them.
     const g = VOICE.reading();
     const marked = !!String(l.tagged || '').trim();
-    const mb = el('button', 'mv3-wk-fread' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
+    const mb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
     mb.type = 'button';
     mb.disabled = g.busy || !_video().mood;
     mb.title = !_video().mood ? 'Choose the mood first (field 1)' : g.busy ? 'The voice is busy'
@@ -2410,7 +2414,7 @@ function _fragment(host, p, l, i) {
     if (!_bySample()) {
       const ra = _readAct(p, l, i);
       const reading = (VOICE.reading().lines || []).includes(i);
-      const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+      const rb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
       rb.type = 'button';
       rb.disabled = !ra.on || reading;
       rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2440,7 +2444,7 @@ function _fragment(host, p, l, i) {
   }
   if (rs === 'stale' && !_bySample()) {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
-    const back = el('button', 'mv3-wk-lback is-frag', 'put the words back');
+    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'put the words back');
     back.type = 'button';
     back.title = 'Restore the line to what the take says';
     back.disabled = busyRead;
@@ -2542,7 +2546,7 @@ function _framePromptCol(p, l, i) {
 
 // A field that is only there to say what will be in it: same box, same height, no typing.
 function _dead(rows, placeholder) {
-  const box = el('textarea', 'mv3-wk-ftext-in');
+  const box = el('textarea', 'mv3-wk-ftext-in u-area is-s');
   box.rows = rows;
   box.placeholder = placeholder;
   box.value = '';
@@ -2627,7 +2631,7 @@ function _pickRow(host, p, l, i) {
     shot.addEventListener('click', () => { _pickView = _pickView === v.id ? '' : v.id; _ctx.repaint(); });
     row.appendChild(shot);
     if (v.id === _pickView) {
-      const sel = el('button', 'mv3-wk-tileact is-pick', fr && v.id === fr.id ? 'this one' : 'select');
+      const sel = el('button', 'mv3-wk-tileact is-pick u-btn is-s is-main', fr && v.id === fr.id ? 'this one' : 'select');
       sel.type = 'button';
       sel.title = 'Open this fragment on this frame';
       sel.disabled = !!(fr && v.id === fr.id && !auto);
@@ -2836,10 +2840,11 @@ function _clipCol(p, l, i, rs, take) {
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
   if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
-  const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
+  const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go is-gen' : ''),
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
+  if (_armedClip === i && !busy) make.classList.add('is-armed');   // (phase V73 block 2) paid, armed: the light step
   // What the press will actually do: with nothing written yet it is two analyses and then the
   // clip, and that is worth saying before it takes half a minute (phase U4).
   const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));
@@ -2876,7 +2881,7 @@ async function _saveWords(va, i) {
 // person leaves it, not on every key.
 function _textField(i, field, value, rows, placeholder, save) {
   const k = i + ':' + field;
-  const box = el('textarea', 'mv3-wk-ftext-in');
+  const box = el('textarea', 'mv3-wk-ftext-in u-area is-s');
   box.rows = rows;
   box.placeholder = placeholder;
   box.value = k in _drafts ? _drafts[k] : value;

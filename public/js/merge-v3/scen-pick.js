@@ -38,6 +38,10 @@ import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { REALLY } from '../really.js';
+import { menuIcons } from '../icons.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -52,7 +56,7 @@ let _rows = [];
 let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
 let _lib = '';                // '' | 'library1' | 'src:<id>' | 'nosrc' | 'archive'
 let _q = '';
-let _state = '';              // '', 'loading', or an error to show in place of the list
+let _state = '';              // '', 'loading', or 'failed' - the list did not load (the reason was a popup)
 let _ui = null;               // { root, filter, search, list } - built the first time the view shows
 
 const _el = (tag, cls, text) => {
@@ -160,7 +164,9 @@ async function _load() {
     _state = '';
   } catch (e) {
     _rows = [];
-    _state = 'Could not read the scenarios: ' + e.message;
+    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    _state = 'failed';
+    showError('Could not read the scenarios: ' + e.message);
   }
   _paintFilter();
   _paintList();
@@ -223,14 +229,14 @@ async function _filterMenu() {
   _paintList();
   const anchor = _ui && _ui.filter;
   if (!_shown || !anchor) return;
-  const el = _el('div', 'mv3-plus-menu mv3-sc-menu');
+  const el = _el('div', 'mv3-plus-menu mv3-sc-menu u-menu is-float');
   let srcHead = false;
   for (const t of _choices()) {
     if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'written from')); srcHead = true; }
     if (!t.src && srcHead && (t.id === 'nosrc' || t.id === 'archive') && !el.querySelector('.mv3-sc-menu-sep.is-end')) {
       el.appendChild(_el('div', 'mv3-sc-menu-sep is-end'));
     }
-    const b = _el('button', 'mv3-plus-item' + (t.id === _lib ? ' is-on' : ''));
+    const b = _el('button', 'mv3-plus-item u-mi' + (t.id === _lib ? ' is-on' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, t.label));
     b.appendChild(_el('small', null, t.n + (t.n === 1 ? ' scenario' : ' scenarios') + (t.gone ? ' · source deleted' : '')));
@@ -279,7 +285,7 @@ function _build() {
   const root = $('mv3-sc');
   if (!root) return;
   const top = _el('div', 'mv3-scv-top');
-  const add = _el('button', 'mv3-sc-new', '+ scenario');
+  const add = _el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
@@ -291,7 +297,7 @@ function _build() {
   filter.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
   top.appendChild(filter);
 
-  const search = _el('input', 'mv3-sc-search');
+  const search = _el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
   search.placeholder = 'search by title, product, role';
   search.addEventListener('input', () => { _q = search.value; _paintList(); });
@@ -318,14 +324,13 @@ function _paintList() {
   if (!_ui) return;
   const list = _ui.list;
   list.textContent = '';
-  if (_state === 'loading') { list.appendChild(_el('div', 'mv3-ins-note', 'reading the scenarios…')); return; }
-  if (_state) { list.appendChild(_el('div', 'mv3-ins-note is-err', _state)); return; }
+  if (_state === 'loading') { list.appendChild(loadingEl('reading the scenarios…')); return; }
+  if (_state) { list.appendChild(failedEl('The scenarios', () => _load())); return; }
 
   const rows = _rows.filter(_matches);
   if (!rows.length) {
-    list.appendChild(_el('div', 'mv3-ins-note',
-      _rows.length ? 'Nothing matches that.'
-        : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".'));
+    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.'
+      : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".', { icon: _rows.length ? 'search' : 'list' }));
     return;
   }
   for (const s of rows) {
@@ -339,7 +344,7 @@ function _paintList() {
     // make a row vanish under a stray click; the archive filter's `restore` brings it back.
     if (!s.archived) {
       const armed = !!_armed && _armed.id === s.id;
-      const x = _el('button', 'mv3-sc-btn is-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+      const x = _el('button', 'mv3-sc-btn is-x u-btn is-s' + (armed ? ' is-danger is-armed' : ' is-icon is-quiet is-del u-x'), armed ? REALLY : '');
       x.type = 'button';
       x.title = 'Move to the archive - press twice';
       if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
@@ -352,7 +357,7 @@ function _paintList() {
       });
       acts.appendChild(x);
     }
-    const go = _el('button', 'mv3-sc-btn is-use', s.archived ? 'restore' : 'use');
+    const go = _el('button', 'mv3-sc-btn is-use u-btn is-s', s.archived ? 'restore' : 'use');
     go.type = 'button';
     go.title = s.archived
       ? 'Put it back in the library'
@@ -400,9 +405,9 @@ function _closeMenu() {
 
 function _rowMenu(ev, s, row) {
   _closeMenu();
-  const el = _el('div', 'mv3-plus-menu');
+  const el = _el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, danger) => {
-    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = _el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, label));
     if (sub) b.appendChild(_el('small', null, sub));
@@ -428,6 +433,7 @@ function _rowMenu(ev, s, row) {
       });
   }, true);
 
+  menuIcons(el);
   document.body.appendChild(el);
   const w = el.offsetWidth, h = el.offsetHeight;
   el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';

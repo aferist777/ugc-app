@@ -16,6 +16,8 @@
    destructive or expensive actions, and none of these are either.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { wire as wireRange } from '../ui-range.js';
+
 // A labelled row. The label column is fixed so every control on the panel lines up
 // down the left edge, which is what makes a stack of them readable at 240px.
 export function row(label, control) {
@@ -65,6 +67,7 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   inp.type = 'range';
   inp.min = String(min); inp.max = String(max); inp.step = String(step);
   inp.value = String(value);
+  wireRange(inp);                                   // (phase V73 block 2) the shared slider, its track filled to the thumb
   const out = document.createElement('span');
   out.className = 'mv3-c-num';
   let moved = false;
@@ -111,7 +114,7 @@ export function volume(value, onChange) {
 // opts: [[value, label], ...]
 export function select(opts, value, onChange) {
   const sel = document.createElement('select');
-  sel.className = 'mv3-c-sel';
+  sel.className = 'mv3-c-sel u-in is-s';
   for (const [v, l] of opts) {
     const o = document.createElement('option');
     o.value = v; o.textContent = l;
@@ -125,9 +128,11 @@ export function select(opts, value, onChange) {
 export function toggle(on, onChange) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sw' + (on ? ' is-on' : '');
-  b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  b.textContent = on ? 'on' : 'off';
+  // (phase V73 block 2) The shared switch (.u-switch): on is green (б1-7) - no "on / off" words in a pill any more.
+  b.className = 'mv3-c-sw u-switch' + (on ? ' is-on' : '');
+  b.setAttribute('role', 'switch');
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
+  b.title = on ? 'On' : 'Off';
   b.addEventListener('click', () => { if (onChange) onChange(!on); });
   return b;
 }
@@ -138,7 +143,8 @@ export function toggle(on, onChange) {
 export function toggleNamed(label, on, onChange, title) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-sw' + (on ? ' is-on' : '');
+  // (phase V73 block 2) a pressed button - the selected look (б2-13), never the switch's green
+  b.className = 'mv3-c-sw u-btn is-s' + (on ? ' is-on' : '');
   b.setAttribute('aria-pressed', on ? 'true' : 'false');
   b.textContent = label;
   if (title) b.title = title;
@@ -158,7 +164,7 @@ export function number({ value, min, max, step, suffix, onChange }) {
   if (max != null) inp.max = String(max);
   inp.step = String(step == null ? 1 : step);
   inp.value = String(value);
-  inp.className = 'mv3-c-inp';
+  inp.className = 'mv3-c-inp u-in is-s';
   inp.addEventListener('change', () => {
     let v = parseFloat(inp.value);
     if (isNaN(v)) { inp.value = String(value); return; }
@@ -193,7 +199,7 @@ export function color(value, onChange) {
 // rather than per keystroke - a store write per letter would bury the undo history.
 export function textarea(value, onChange, rows) {
   const t = document.createElement('textarea');
-  t.className = 'mv3-c-area';
+  t.className = 'mv3-c-area u-area is-s';
   t.rows = rows || 2;
   t.value = String(value == null ? '' : value);
   t.addEventListener('change', () => { if (onChange) onChange(t.value); });
@@ -214,7 +220,7 @@ export function button(label, onClick, opts) {
   const o = opts || {};
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-c-btn' + (o.danger ? ' danger' : '');
+  b.className = 'mv3-c-btn u-btn is-s' + (o.danger ? ' danger is-danger' : '');
   b.textContent = label;
   if (o.title) b.title = o.title;
   b.addEventListener('click', onClick);

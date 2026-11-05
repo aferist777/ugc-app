@@ -27,8 +27,12 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
 import { hoverPlayer } from './hover-play.js';
+// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const LS = 'mv3_vc_cat_v1';               // { filters, sort } - the window opens as it was left
 const SHOW_CASES = 240;                    // cases drawn at once; "show N more" for the rest
@@ -54,12 +58,29 @@ async function _load() {
     json('/api/mv3/video/catalog'), json('/api/mv3/video/catalog/cases'), json('/api/mv3/video/presets'),
   ]);
   _data = {
+    // (phase V73 block 2, (б2-19)) The catalog not read is not "the cookbook is not installed": its grid says "did not load".
+    failed: (cat && cat.success) ? '' : ((cat && cat.error) || 'the app did not answer'),
     cat: (cat && cat.success) ? cat : { templates: [], categories: [], tags: {}, examples: [], status: {}, credits: {} },
     cases: (cases && cases.success) ? cases.cases : [],
     why: (cases && cases.success) ? cases.why : 'the catalog could not be read',
     presets: (presets && presets.success) ? presets.presets : [],
     deleted: (presets && presets.success) ? presets.deleted || [] : [],
   };
+}
+
+// The catalog read, and said in the corner when it could not be.
+async function _loadSaid() {
+  await _load();
+  if (_data.failed) showError('The catalog did not load: ' + _data.failed);
+}
+async function _reread() {
+  if (!_w) return;
+  _w.grid.replaceChildren(loadingEl('reading the catalog…'));
+  await _loadSaid();
+  if (!_w) return;
+  _paintLeft();
+  _paintGrid();
+  _paintRight();
 }
 
 // ── The model ───────────────────────────────────────────────────────────────
@@ -266,8 +287,8 @@ export async function openCatalog(o) {
   if (inUse && /^case:/.test(inUse)) _st.more = true;
   _build();
   _paintLeft();
-  _w.grid.appendChild(el('div', 'vc-note', 'reading the catalog…'));
-  await _load();
+  _w.grid.appendChild(loadingEl('reading the catalog…'));
+  await _loadSaid();
   if (!_w) return;
   _paintLeft();
   _paintGrid();
@@ -290,7 +311,7 @@ async function _fetch() {
   if (!_w) return;
   _st.fetching = false;
   if (!d || !d.success) _st.error = (d && d.error) || 'the server did not answer';
-  else { _full.clear(); await _load(); }
+  else { _full.clear(); await _loadSaid(); }
   if (!_w) return;
   _paintLeft();
   _paintGrid();
@@ -313,7 +334,7 @@ function _build() {
   const head = el('div', 'vc-head');
   const h = el('h3', null, 'Catalog');
   const sub = el('span', 'vc-head-sub', '');
-  const close = el('button', 'vc-close', '✕');
+  const close = el('button', 'vc-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   close.title = 'Close (Esc)';
   head.append(h, sub, close);
@@ -378,7 +399,7 @@ function _paintLeft() {
 
   // The model: the chat's own dropdown.
   const sel = document.createElement('select');
-  sel.className = 'vc-model';
+  sel.className = 'vc-model u-in';
   sel.title = 'The model - the catalog shows only what fits it';
   for (const x of _models()) {
     const op = document.createElement('option');
@@ -404,7 +425,7 @@ function _paintLeft() {
   // The search.
   const q = document.createElement('input');
   q.type = 'search';
-  q.className = 'vc-q';
+  q.className = 'vc-q u-in';
   q.placeholder = 'search';
   q.value = _st.q;
   q.addEventListener('input', () => { _st.q = q.value; _paintGrid(false); _paintCounts(); });
@@ -418,7 +439,7 @@ function _paintLeft() {
     const cat = groups.find(g => g.key === 'cat');
     if ((_st.filters.cat || []).length > 1) _st.filters.cat = _st.filters.cat.slice(0, 1);
     const cs = document.createElement('select');
-    cs.className = 'vc-catsel';
+    cs.className = 'vc-catsel u-in';
     const all = document.createElement('option');
     all.value = ''; all.textContent = 'all categories';
     cs.appendChild(all);
@@ -448,7 +469,7 @@ function _paintLeft() {
   }
 
   const sort = document.createElement('select');
-  sort.className = 'vc-sort';
+  sort.className = 'vc-sort u-in';
   for (const [v, t] of [['heat', 'hottest first'], ['steady', 'steadiest first'], ['new', 'newest first']]) {
     const op = document.createElement('option'); op.value = v; op.textContent = t; sort.appendChild(op);
   }
@@ -469,7 +490,7 @@ function _paintLeft() {
 // One filter: a button with its name and what is chosen; pressed, its list opens under it.
 function _dd(g) {
   const box = el('div', 'vc-dd');
-  const b = el('button', 'vc-dd-b');
+  const b = el('button', 'vc-dd-b u-btn is-field');
   b.type = 'button';
   b.dataset.g = g.key;
   const val = el('span', 'vc-dd-v', 'any');
@@ -502,7 +523,7 @@ function _ddOpen(g, btn) {
   for (const [v, t] of g.values) {
     const row = el('label', 'vc-dd-row');
     const cb = document.createElement('input');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.addEventListener('change', () => {
       const cur = new Set(_st.filters[g.key] || []);
       if (cb.checked) cur.add(v); else cur.delete(v);
@@ -610,6 +631,7 @@ function _paintGrid(keep = true) {
   const G = _w.grid;
   const top = keep ? G.scrollTop : 0;
   G.textContent = '';
+  if (_data.failed) { G.appendChild(failedEl('The catalog', () => _reread())); return; }
   const m = _model();
   const groups = _groups(m);
   const all = _items().filter(it => _fits(it, m));
@@ -671,7 +693,7 @@ function _paintGrid(keep = true) {
   }
   _section(G, 'Examples', by('example'), all.filter(it => it.kind === 'example').length, 'Grok b-roll prompts picked by hand: the writer takes one as an example.');
   _section(G, 'Presets', by('preset'), all.filter(it => it.kind === 'preset').length, 'Yours: the samples that came with the program and your copies of them.');
-  if (!shown.length && all.length) G.appendChild(el('div', 'vc-note', 'Nothing fits these filters.'));
+  if (!shown.length && all.length) G.appendChild(emptyEl('Nothing fits these filters.', { icon: 'search' }));
   if ((_data.deleted || []).length) {
     const n = el('div', 'vc-note vc-deleted');
     n.append('Deleted samples: ');
@@ -700,7 +722,7 @@ function _section(G, title, list, total, hint, full) {
   for (const it of list) wrap.appendChild(_tile(it));
   G.appendChild(wrap);
   if (full && full > list.length) {
-    const more = el('button', 'vc-more', 'show ' + (full - list.length) + ' more');
+    const more = el('button', 'vc-more u-btn', 'show ' + (full - list.length) + ' more');
     more.type = 'button';
     more.addEventListener('click', () => { _st.more = true; _paintGrid(); });
     G.appendChild(more);
@@ -817,22 +839,14 @@ function _presetTools(it, ed) {
   const p = it.preset;
   const box = el('div', 'vc-preset');
   const row = el('div', 'vc-preset-row');
-  const b = (text, title) => { const x = el('button', 'mv3-c-btn', text); x.type = 'button'; x.title = title; return x; };
+  const b = (text, title) => { const x = el('button', 'mv3-c-btn u-btn is-s', text); x.type = 'button'; x.title = title; return x; };
   const save = b('save', 'Save the title, what it needs and its skill as they are here - a new version; the one before is kept');
   save.addEventListener('click', () => _presetOp(p.id, '', { fields: { title: ed.title, skill: ed.text, slots: ed.slots } }, save));
   const dup = b('duplicate', 'A copy of it as it is saved now - the way to change a sample and keep the sample as it is');
   dup.addEventListener('click', () => _presetOp(p.id, 'duplicate', null, dup));
   const del = b('delete', p.seed ? 'Delete it - a sample can be brought back from under the tiles' : 'Delete it with its versions');
   del.classList.add('is-danger');
-  del.addEventListener('click', () => {
-    if (!del.dataset.really) {
-      del.dataset.really = '1';
-      del.textContent = 'really?';
-      setTimeout(() => { if (del.isConnected) { delete del.dataset.really; del.textContent = 'delete'; } }, 3000);
-      return;
-    }
-    _presetOp(p.id, 'delete', null, del);
-  });
+  twoPress(del, { go: () => _presetOp(p.id, 'delete', null, del) });   // (phase V73 block 2) one "Really?"
   row.append(save, dup, del);
   box.appendChild(row);
   const said = el('div', 'vc-preset-said', _st.said || '');
@@ -865,7 +879,7 @@ function _presetTools(it, ed) {
   det.appendChild(list);
   det.addEventListener('toggle', async () => {
     if (!det.open || list.childNodes.length) return;
-    list.appendChild(el('div', 'vc-none', 'reading…'));
+    list.appendChild(loadingEl('reading…', { line: true }));
     const d = await json('/api/mv3/video/presets/' + encodeURIComponent(p.id));
     list.textContent = '';
     for (const v of ((d && d.success && d.versions) || []).slice().reverse()) {
@@ -899,11 +913,16 @@ async function _paintRight() {
   const it = _items().find(x => _key(x) === want);
   if (!it) { _st.pick = null; _paintRight(); return; }
   R.textContent = '';
-  R.appendChild(el('div', 'vc-note', 'reading…'));
+  R.appendChild(loadingEl('reading…', { line: true }));
   const d = await _read(it);
   if (!_w || _st.pick !== want) return;
   R.textContent = '';
-  if (!d) { R.appendChild(el('div', 'vc-note', 'It could not be read.')); return; }
+  // (phase V73 block 2, (б2-19)) Not read: "did not load" with Try again, the words a popup.
+  if (!d) {
+    showError('It could not be read.', { detail: it.title || it.id || '' });
+    R.appendChild(failedEl(KIND_WORD[it.kind] || 'It', () => _paintRight(), { line: true }));
+    return;
+  }
   const m = _model();
   const ed = _edit(it, d);
   const scroll = el('div', 'vc-right-in');
@@ -959,7 +978,7 @@ async function _paintRight() {
       : 'skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');
-  ta.className = 'vc-skill';
+  ta.className = 'vc-skill u-area';
   ta.spellcheck = false;
   ta.value = ed.text;
   const orig = (d.skill && d.skill.text) || '';
@@ -988,7 +1007,7 @@ async function _paintRight() {
 
   // use
   const foot = el('div', 'vc-right-foot');
-  const use = el('button', 'mv3-c-btn vc-use', 'use');
+  const use = el('button', 'mv3-c-btn vc-use u-btn is-main', 'use');
   use.type = 'button';
   const fits = !!m && _fits(it, m);
   use.disabled = !m || !m.usable || !fits;
@@ -1035,28 +1054,30 @@ function _slotsBox(it, ed) {
   const box = el('div', 'vc-slots');
   const paint = () => {
     box.textContent = '';
-    if (!ed.slots.length) box.appendChild(el('div', 'vc-none', 'nothing - words alone'));
+    if (!ed.slots.length) box.appendChild(emptyEl('nothing - words alone', { line: true }));
     ed.slots.forEach((s, i) => {
       const row = el('div', 'vc-slot');
       const kind = document.createElement('select');
+      kind.className = 'u-in is-s';
       for (const k of KINDS) { const o = document.createElement('option'); o.value = k; o.textContent = k.replace('-', ' '); kind.appendChild(o); }
       kind.value = s.kind;
       kind.addEventListener('change', () => { s.kind = kind.value; });
       const role = document.createElement('select');
+      role.className = 'u-in is-s';
       for (const r of ROLES) { const o = document.createElement('option'); o.value = r; o.textContent = r; role.appendChild(o); }
       role.value = ROLES.includes(s.role) ? s.role : 'person';
       role.addEventListener('change', () => { s.role = role.value; });
-      const num = (v, on) => { const n = document.createElement('input'); n.type = 'number'; n.min = '0'; n.max = '50'; n.value = String(v); n.addEventListener('change', () => on(_clamp(Math.round(+n.value || 0), 0, 50))); return n; };
+      const num = (v, on) => { const n = document.createElement('input'); n.className = 'u-in is-s'; n.type = 'number'; n.min = '0'; n.max = '50'; n.value = String(v); n.addEventListener('change', () => on(_clamp(Math.round(+n.value || 0), 0, 50))); return n; };
       const min = num(s.min, (v) => { s.min = v; if (s.max < v) { s.max = v; paint(); } });
       const max = num(s.max, (v) => { s.max = Math.max(v, s.min); paint(); });
       const req = document.createElement('input');
-      req.type = 'checkbox'; req.checked = !!s.required; req.title = 'it must be attached';
+      req.type = 'checkbox'; req.classList.add('u-check'); req.checked = !!s.required; req.title = 'it must be attached';
       req.addEventListener('change', () => { s.required = req.checked; });
-      const x = el('button', 'vc-x', '×');
+      const x = el('button', 'vc-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button'; x.title = 'take this slot away';
       x.addEventListener('click', () => { ed.slots.splice(i, 1); paint(); });
       const hint = document.createElement('input');
-      hint.type = 'text'; hint.className = 'vc-hint'; hint.value = s.hint || ''; hint.placeholder = 'a hint for what to attach';
+      hint.type = 'text'; hint.className = 'vc-hint u-in is-s'; hint.value = s.hint || ''; hint.placeholder = 'a hint for what to attach';
       hint.addEventListener('input', () => { s.hint = hint.value; });
       const lab = (t, n) => { const l = el('label', null, t); l.appendChild(n); return l; };
       row.append(kind, role, lab('from', min), lab('to', max), lab('must', req), x, hint);
@@ -1085,7 +1106,7 @@ function _casesOf(t) {
   const box = el('div', 'vc-cases');
   const list = (t.cases || []);
   box.appendChild(el('div', 'vc-hdr', 'its cases - ' + list.length));
-  if (!list.length) { box.appendChild(el('div', 'vc-none', _data.cases.length ? 'none filed under it' : 'the cases are not fetched yet')); return box; }
+  if (!list.length) { box.appendChild(emptyEl(_data.cases.length ? 'none filed under it' : 'the cases are not fetched yet', { line: true })); return box; }
   const byId = new Map(_data.cases.map(c => [c.s, c]));
   for (const s of list.slice(0, 40)) {
     const c = byId.get(s);

@@ -36,8 +36,7 @@
 .hm-head a:hover, .hm-head button:hover{color:var(--ink)}
 .hm-st.is-dragging{opacity:.35}
 .hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
-.hm-empty{font-size:11.5px; color:var(--muted); padding:2px 2px}
-.hm-err{font-size:11.5px; color:var(--danger)}
+/* (phase V73 block 2) a block's empty, loading and did-not-load bodies are the shared parts (js/ui-state.js) */
 
 /* ── THE TILES (phase V70): New project, Generate, Library - a filled gold icon (js/home/icons.js, drawn in currentColor)
    and its word under it; as many places a row as the row has tiles (js/home/util.js `tiles` sets --hm-cols) - New project and
@@ -47,7 +46,6 @@
   border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--ink); text-decoration:none;
   font:600 11.5px/1.2 var(--font); text-align:center; cursor:pointer; transition:border-color .12s, background .12s}
 .hm-tile:hover{border-color:var(--gold); background:var(--surface-2)}
-.hm-tile:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
 .hm-tile-ico{width:30px; height:30px; color:var(--gold)}
 .hm-tile-ico svg{display:block; width:100%; height:100%}
 .hm-tile-t{max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -55,10 +53,7 @@
 /* ── PROJECTS (phase V70; what Continue was): the chips as Merge's open list has them (css/merge-v3.css .mv3-plist-kind), the
    rows with a small picture, a card beside a row the pointer rests on ── */
 .hm-chips{display:flex; flex-wrap:wrap; gap:4px; padding-bottom:8px; border-bottom:1px solid var(--border-soft)}
-.hm-chip{height:22px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--ink);
-  font:600 10.5px/20px var(--font); cursor:pointer; white-space:nowrap}
-.hm-chip:hover{background:var(--surface-2)}
-.hm-chip.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg); cursor:default}
+.hm-chip.is-on{cursor:default}   /* the shared chip (.u-chip) */
 .hm-plist{display:flex; flex-direction:column; gap:2px; min-height:40px}
 .hm-prow{display:flex; align-items:center; gap:10px; padding:4px 8px 4px 4px; border-radius:var(--r-xs); color:var(--ink); text-decoration:none}
 .hm-prow:hover{background:var(--surface-2)}
@@ -82,9 +77,6 @@
 .hm-peek-d{font-size:10.5px; color:var(--muted); max-width:260px}
 
 /* ── the buttons of First steps ── */
-.hm-btn{display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:var(--r-xs); border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font:600 11px var(--font); cursor:pointer; text-decoration:none}
-.hm-btn:hover{border-color:var(--muted)}
-.hm-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
 
 /* ── rows: New since ── */
 .hm-rows{display:flex; flex-direction:column; gap:6px}
@@ -128,7 +120,7 @@
    columns (talking head - the text | who; voiceover - the text | mood and voice), the foot across ── */
 .gw-body.hm-qs{flex-direction:column}
 .hm-qs-form{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 16px 12px}
-.hm-qs-name{width:100%; box-sizing:border-box}
+.hm-qs-name{ width:100%; box-sizing:border-box }
 .hm-qs-fmts{display:flex; gap:10px}
 .hm-qs-fmt{display:flex; align-items:center; gap:9px; padding:8px 14px 8px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--muted); cursor:pointer; font:600 11px/1.2 var(--font)}
@@ -165,7 +157,7 @@
 .hm-qs-lines li{padding:2px 0; white-space:pre-wrap; overflow-wrap:anywhere}
 .hm-qs-lines li::marker{color:var(--gold); font-weight:700}
 /* The voiceover's mood and voice */
-.hm-qs .hm-qs-mood{flex:0 0 auto; align-self:flex-start; width:auto; min-width:240px; max-width:360px; height:26px}
+.hm-qs .hm-qs-mood{ flex:0 0 auto; align-self:flex-start; width:auto; min-width:240px; max-width:360px }
 .hm-qs-col > .mv3-x-hdr, .hm-qs-col > .mv3-x-note, .hm-qs-voice, .hm-qs-vnotes{flex:0 0 auto}
 .hm-qs-voice{display:flex; align-items:center; min-height:28px}
 .hm-qs-vnote{margin-top:4px; font:400 10.5px/1.4 var(--font); color:var(--muted)}
@@ -173,6 +165,3 @@
 .hm-qs-foot .hm-qs-said{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--muted)}
 .hm-qs-said.is-bad{color:var(--danger)}
 /* (phase V73) the quick start's "create" is its window's main button: a gold fill, not a gold outline */
-.hm-qs .hm-qs-go{padding:6px 18px; border-color:var(--main); background:var(--main); color:var(--on-main); font-weight:700}
-.hm-qs .hm-qs-go:hover{background:var(--main-hover); border-color:var(--main-hover); color:var(--on-main)}
-.hm-qs .hm-qs-go[disabled]{opacity:.45; cursor:default; border-color:var(--border); color:var(--muted); background:var(--surface-2)}

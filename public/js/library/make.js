@@ -30,7 +30,13 @@
 import * as J from './jobs.js';
 import * as HT from './hook-types.js';
 import * as Layers from '../layers.js';
+import { REALLY, MS } from '../really.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
+// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here", "reading…"
+// and "did not load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а).
+import { ask } from '../ask.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 const el = J.el;
@@ -58,7 +64,7 @@ let _embedded = false;         // (V38.6) the form stands on the Scenarios shelf
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
   <aside class="mk-src" id="mk-src">
-    <button class="mk-add" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
+    <button class="mk-add u-btn is-s" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
     <div class="mk-src-list" id="mk-src-list"></div>
   </aside>
   <div class="mk-sash" id="mk-sash" title="Drag to resize, double-click for the usual width"></div>
@@ -70,8 +76,8 @@ const HTML = `
                title="The name of this source - click to rename" placeholder="Untitled source">
         <span class="mk-note" id="mk-title-saved"></span>
         <span class="sp"></span>
-        <button class="lib-btn" type="button" id="mk-mine">Find topics</button>
-        <button class="lib-btn" type="button" id="mk-src-off" title="Let go of this source and write without one">✕</button>
+        <button class="u-btn is-s" type="button" id="mk-mine">Find topics</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" id="mk-src-off" title="Let go of this source and write without one"></button>
       </div>
       <div class="mk-body">
         <div class="mk-summary" id="mk-summary"></div>
@@ -81,25 +87,25 @@ const HTML = `
     </div>
     <div class="mk-view" id="mk-form">
       <div class="mk-head">
-        <button class="lib-btn" type="button" id="mk-to-topics" hidden title="Back to this source's topics">← topics</button>
+        <button class="u-btn is-s" type="button" id="mk-to-topics" hidden title="Back to this source's topics">← topics</button>
         <span class="mk-col-title">Generate script</span>
         <span class="mk-note" id="mk-from"></span>
         <span class="sp"></span>
-        <button class="lib-btn danger" type="button" id="mk-discard" hidden>Discard draft</button>
+        <button class="u-btn is-s is-danger" type="button" id="mk-discard" hidden>Discard draft</button>
       </div>
       <div class="mk-body">
         <label class="mk-field"><span>Topic</span>
-          <input type="text" id="mk-topic" placeholder="What the video is about"></label>
+          <input type="text" id="mk-topic" class="u-in" placeholder="What the video is about"></label>
         <div class="mk-note-line" id="mk-nar-note" hidden></div>
         <div class="mk-step1">
         <div class="mk-box" id="mk-box1">
           <div class="mk-ctls" id="mk-controls"></div>
           <label class="mk-ctl" for="mk-hook-n"><span>Hooks</span>
-            <select id="mk-hook-n" title="How many hooks to write - each of a type picked at random"></select></label>
+            <select id="mk-hook-n" class="u-in" title="How many hooks to write - each of a type picked at random"></select></label>
           <span class="sp"></span>
           <span class="mk-ctl"><span>&nbsp;</span><span class="mk-btns">
-            <button class="lib-btn primary" type="button" id="mk-go">Write hooks</button>
-            <button class="lib-btn mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
+            <button class="u-btn is-main" type="button" id="mk-go">Write hooks</button>
+            <button class="u-btn is-icon mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
           </span></span>
         </div>
         <!-- (V38.6) The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
@@ -112,26 +118,26 @@ const HTML = `
         <div class="mk-box mk-box2" id="mk-box2" hidden>
           <div class="mk-box-row">
             <label class="mk-ctl mk-ctl-hook" for="mk-hook"><span>Hook</span>
-              <textarea id="mk-hook" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
-            <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes"></select></label>
+              <textarea id="mk-hook" class="u-area" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
+            <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes" class="u-in"></select></label>
             <span class="mk-ctl"><span>&nbsp;</span>
-              <button class="lib-btn primary" type="button" id="mk-write">Write scenario</button></span>
+              <button class="u-btn is-main" type="button" id="mk-write">Write scenario</button></span>
           </div>
-          <textarea class="mk-ad-t" id="mk-ad" rows="2" spellcheck="false"
+          <textarea class="mk-ad-t u-area" id="mk-ad" rows="2" spellcheck="false"
             placeholder="Advertise - optional. What to advertise and what to say about it: worked into 2 paragraphs, natively; a call to buy or a link only if you write it here. Empty - no ad."></textarea>
         </div>
         <div class="mk-stage" id="mk-save-stage" hidden>
           <div class="mk-stage-h">
             <span>Save as a scenario</span>
             <span class="sp"></span>
-            <button class="lib-btn primary" type="button" id="mk-save">Save to Scenarios</button>
+            <button class="u-btn is-main" type="button" id="mk-save">Save to Scenarios</button>
           </div>
           <div class="mk-save-row">
-            <label class="mk-field"><span>Title</span><input type="text" id="mk-title"></label>
+            <label class="mk-field"><span>Title</span><input type="text" id="mk-title" class="u-in"></label>
             <label class="mk-field"><span>Narrator gender <em>— the store requires it</em></span>
-              <select id="mk-gender"><option value="male">male</option><option value="female">female</option></select></label>
-            <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" placeholder="e.g. history"></label>
-            <label class="mk-field"><span>Product</span><input type="text" id="mk-product" placeholder="what it sells, if anything"></label>
+              <select id="mk-gender" class="u-in"><option value="male">male</option><option value="female">female</option></select></label>
+            <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" class="u-in" placeholder="e.g. history"></label>
+            <label class="mk-field"><span>Product</span><input type="text" id="mk-product" class="u-in" placeholder="what it sells, if anything"></label>
           </div>
           <div class="mk-stage-h">
             <span class="lib-status" id="mk-save-status"></span>
@@ -404,7 +410,7 @@ function _paintSources() {
   _painted = key;
   box.textContent = '';
   if (!_sources.length) {
-    box.appendChild(el('div', 'mk-src-empty', 'No sources yet. A long video, added with +, becomes material to write from.'));
+    box.appendChild(emptyEl('No sources yet. A long video, added with +, becomes material to write from.'));
     return;
   }
   for (const it of _sources) box.appendChild(_srcLine(it));
@@ -470,11 +476,11 @@ function _srcLine(it) {
     where.style.color = 'var(--danger)';
     main.appendChild(where);
     const acts = el('div', 'mk-srow-acts');
-    const re = el('button', 'lib-btn', 'Point at the file…');
+    const re = el('button', 'u-btn is-s', 'Point at the file…');
     re.type = 'button';
     re.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
     re.addEventListener('click', (e) => { e.stopPropagation(); _relinkSource(it); });
-    const del = el('button', 'lib-btn', 'Delete…');
+    const del = el('button', 'u-btn is-s', 'Delete…');
     del.type = 'button';
     del.title = 'Delete this source - your files on the disk are not touched';
     del.addEventListener('click', (e) => { e.stopPropagation(); _deleteMissing(it); });
@@ -483,7 +489,7 @@ function _srcLine(it) {
   }
   if (offer) {
     const acts = el('div', 'mk-srow-acts');
-    const up = el('button', 'lib-btn', 'Put on Uploads');
+    const up = el('button', 'u-btn is-s', 'Put on Uploads');
     up.type = 'button';
     up.title = 'The video goes onto Uploads in Media, and is not kept as a source';
     up.addEventListener('click', (e) => { e.stopPropagation(); _sourceToUploads(it, up); });
@@ -491,7 +497,8 @@ function _srcLine(it) {
     main.appendChild(acts);
   }
   row.appendChild(main);
-  const x = el('button', 'mk-x' + (p && _stopArmed === id ? ' armed' : ''), p && _stopArmed === id ? 'really?' : '✕');
+  // (phase V73 block 2) the shared cross on the row; armed - "Really?" in the part's red fill
+  const x = el('button', 'mk-x u-onpic is-del' + (p && _stopArmed === id ? ' is-armed' : ' u-x'), p && _stopArmed === id ? REALLY : '');
   x.type = 'button';
   if (p) {
     x.title = p.step === 'topics'
@@ -500,7 +507,7 @@ function _srcLine(it) {
     x.addEventListener('click', (e) => { e.stopPropagation(); _stopAdding(it); });
   } else {
     x.title = offer ? 'Delete it, and its file' : 'Delete this source, its video and its transcript';
-    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it, x); });
   }
   row.appendChild(x);
   if (_choosable(it)) {
@@ -517,7 +524,7 @@ async function _stopAdding(it) {
   if (_stopArmed !== id) {
     _stopArmed = id;
     _paintSources();
-    setTimeout(() => { if (_stopArmed === id) { _stopArmed = ''; _paintSources(); } }, 3000);
+    setTimeout(() => { if (_stopArmed === id) { _stopArmed = ''; _paintSources(); } }, MS);
     return;
   }
   _stopArmed = '';
@@ -654,13 +661,13 @@ function _deleteMissing(it) {
   body.appendChild(el('p', 'mv3-x-note', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
   const lab = el('label', 'mv3-x-check');
   const cb = document.createElement('input');
-  cb.type = 'checkbox';
+  cb.type = 'checkbox'; cb.classList.add('u-check');
   lab.append(cb, document.createTextNode(' and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
   body.appendChild(lab);
   const foot = el('div', 'mv3-x-foot');
-  const cancel = el('button', 'mv3-c-btn', 'Cancel');
+  const cancel = el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
-  const go = el('button', 'mv3-c-btn danger', 'Delete');
+  const go = el('button', 'mv3-c-btn danger u-btn is-danger', 'Delete');
   go.type = 'button';
   foot.append(cancel, go);
   box.append(head, body, foot);
@@ -687,14 +694,15 @@ function _deleteMissing(it) {
   });
 }
 
-async function _deleteSource(it) {
+async function _deleteSource(it, anchor) {
   const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
   // (phase V43) A video that stays on the disk is never deleted by the app - only what the library holds goes.
   const lines = [`Delete "${it.title}"?`, '',
     it.disk ? 'Its poster and its transcript are removed. Your video stays where it is on the disk (' + it.disk.path + ').'
       : `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
   if (nd) lines.push('', `${nd === 1 ? 'Its draft is' : `Its ${nd} drafts are`} kept, and carry on without a source.`);
-  if (!confirm(lines.join('\n'))) return;
+  // `stay`: the column repaints as its sources move along, and a repaint's scroll must not answer "no" for the person.
+  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
   // What is typed goes first, with the source it was written from - the server then detaches it.
   await _flushDraft();
   try {
@@ -730,29 +738,26 @@ function _paintTopics(rec) {
   const box = $('mk-topic-list');
   box.textContent = '';
   const t = rec.transcript || {};
+  // (phase V73 block 2) No topics to show - the shared part, in the source's own words.
   if (_reading(rec)) {
-    box.appendChild(el('div', 'mk-empty', 'Still being read. The topics can be found the moment the words are in.'));
+    box.appendChild(emptyEl('Still being read. The topics can be found the moment the words are in.'));
     return;
   }
   if (t.state !== 'ready') {
-    const e = el('div', 'mk-empty', rec.state === 'error'
+    // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
+    // again. Paid - it is the same speech-to-text call. Its button inside the part, under the words.
+    const offer = rec.videoPath && !_srcJobs.has(String(rec.id));
+    const e = emptyEl(rec.state === 'error'
       ? `This source failed: ${rec.error || 'unknown reason'}${rec.intake && rec.intake.alertId ? ' - its row in Alerts has "retry".' : ''}`
-      : 'No transcript yet.');
+      : 'No transcript yet.', offer ? { action: { label: 'Transcribe again', on: (ev) => _transcribeAgain(rec, ev.currentTarget) } } : {});
+    const again = offer ? e.querySelector('button') : null;
+    if (again) again.title = 'Read the words out of this source again - a paid transcription';
     box.appendChild(e);
-    if (rec.videoPath && !_srcJobs.has(String(rec.id))) {
-      // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
-      // again. Paid - it is the same speech-to-text call.
-      const again = el('button', 'lib-btn', 'Transcribe again');
-      again.type = 'button';
-      again.title = 'Read the words out of this source again - a paid transcription';
-      again.addEventListener('click', () => _transcribeAgain(rec));
-      box.appendChild(again);
-    }
     return;
   }
   const topics = rec.topics || [];
   if (!topics.length) {
-    box.appendChild(el('div', 'mk-empty', 'No topics found yet. Press “Find topics” above - one long video usually holds several.'));
+    box.appendChild(emptyEl('No topics found yet. Press “Find topics” above - one long video usually holds several.'));
     return;
   }
   for (const tp of topics) {
@@ -774,7 +779,7 @@ function _paintTopics(rec) {
     const f = el('div', 'mk-topic-f');
     f.appendChild(el('span', 'mk-topic-name', `${tp.projectName || ''} · ${String(tp.text || '').length} chars of transcript`));
     f.appendChild(el('span', 'sp'));
-    const write = el('button', 'lib-btn primary', draft ? 'Continue the draft' : 'Write a script');
+    const write = el('button', 'u-btn is-main', draft ? 'Continue the draft' : 'Write a script');
     write.type = 'button';
     f.appendChild(write);
     card.appendChild(f);
@@ -848,9 +853,9 @@ function _closeMenu() {
 
 function _sourceMenu(ev, it) {
   _closeMenu();
-  const m = el('div', 'mv3-plus-menu');
+  const m = el('div', 'mv3-plus-menu u-menu is-float');
   const item = (label, sub, on, off) => {
-    const b = el('button', 'mv3-plus-item');
+    const b = el('button', 'mv3-plus-item u-mi');
     b.type = 'button';
     b.appendChild(el('span', null, label));
     if (sub) b.appendChild(el('small', null, sub));
@@ -892,14 +897,14 @@ function _openSourceWin(it, play) {
       <div class="mk-panel-head">
         <span class="mk-panel-t" data-f="head"></span>
         <span class="sp"></span>
-        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button>
       </div>
       <div class="src-body">
         <div class="src-stage" data-f="stage"></div>
         <aside class="src-side">
-          <label class="mk-field"><span>Name</span><input type="text" data-f="name" maxlength="200" spellcheck="false"></label>
+          <label class="mk-field"><span>Name</span><input type="text" class="u-in" data-f="name" maxlength="200" spellcheck="false"></label>
           <div class="src-save">
-            <button class="lib-btn primary" type="button" data-f="save">Save name</button>
+            <button class="u-btn is-main" type="button" data-f="save">Save name</button>
             <span class="lib-status" data-f="st"></span>
           </div>
           <div class="lib-vi" data-f="facts"></div>
@@ -1046,7 +1051,9 @@ async function _mineTopics() {
   if (!rec) return;
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  if ((rec.topics || []).length && !confirm('Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.')) return;
+  // Paid - a plain answer (б2-5); the question waits, so a job picked up meanwhile is not started twice.
+  if ((rec.topics || []).length && !await ask($('mk-mine'), 'Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.', { yes: 'Find again', stay: true })) return;
+  if (_srcJobs.has(id)) return;
   $('mk-mine').disabled = true;
   let run = null;
   try {
@@ -1068,10 +1075,11 @@ async function _mineTopics() {
   if (_view === 'topics' && _src && String(_src.id) === id) _showTopics();
 }
 
-async function _transcribeAgain(rec) {
+async function _transcribeAgain(rec, anchor) {
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  if (!confirm(`Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`)) return;
+  if (!await ask(anchor, `Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`, { yes: 'Transcribe', stay: true })) return;
+  if (_srcJobs.has(id)) return;
   try {
     // When it has no topics yet, they are found after the words (phase V28.1) - by the agents' ladder (V37).
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, {
@@ -1131,7 +1139,7 @@ function _ctl(label, node, extra) {
 // narrators AREA since phase V28.2, in place of the generator, with "← Generate script" back to it as it was.
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 function _narratorsGear() {
-  const b = el('button', 'mk-gear');
+  const b = el('button', 'mk-gear u-btn is-icon is-quiet');
   b.type = 'button';
   b.id = 'mk-narrators';
   b.title = 'The narrators - how a script is written';
@@ -1142,7 +1150,7 @@ function _narratorsGear() {
 }
 
 function _select(id, values, current) {
-  const s = el('select');
+  const s = el('select', 'u-in');
   s.id = id;
   for (const v of values) {
     const o = el('option', null, typeof v === 'string' ? v : v.label);
@@ -1263,6 +1271,7 @@ function _paintGo() {
   go.textContent = _stage === 'hooks' ? 'Writing hooks…' : hooks ? 'Write again' : 'Write hooks';
   go.disabled = busy;
   go.classList.toggle('primary', !hooks);
+  go.classList.toggle('is-main', !hooks);
   const wr = $('mk-write');
   // (V38.6) On two lines, in a taller button: "Write / scenario".
   wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
@@ -1271,6 +1280,7 @@ function _paintGo() {
   // кнопкой") Blue while there is no script - and again when box 2 holds another hook than the script's first line.
   const other = written && String((_gen && _gen.hook) || '').trim() !== String(_gen.paragraphs[0] || '').trim();
   wr.classList.toggle('primary', !written || other);
+  wr.classList.toggle('is-main', !written || other);
   $('mk-box2').hidden = !(_gen && _gen.box2);
   $('mk-hook').readOnly = busy;
   $('mk-hook-stage').hidden = !hooks && _stage !== 'hooks';
@@ -1416,7 +1426,8 @@ async function _ensureDraft() {
 
 async function _discardDraft() {
   if (!_gen || !_gen.draftId) return;
-  if (!confirm('Discard this draft? What was generated into it is lost.')) return;
+  if (!await ask($('mk-discard'), 'Discard this draft? What was generated into it is lost.', { yes: 'Discard', danger: true, stay: true })) return;
+  if (!_gen || !_gen.draftId) return;
   // A save still waiting would land after the delete and bring the draft back.
   clearTimeout(_saveT);
   _saveT = null;
@@ -1549,7 +1560,7 @@ function _renderHooks(hooks) {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
     // (V38.6, the owner: "кнопка use hooks сделай более видимой") Blue, as the main buttons are.
-    const use = el('button', 'lib-btn primary mk-hook-use', 'use hook');
+    const use = el('button', 'u-btn is-s is-main mk-hook-use', 'use hook');
     use.type = 'button';
     use.title = 'Put this hook into the box below - the script is written from it there';
     use.disabled = _busy();
@@ -1577,7 +1588,7 @@ function _renderHooks(hooks) {
       // (V38.7) Saved at once, so the draft's row in the list says "hook chosen".
       _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
-    const remake = el('button', 'lib-btn mk-hook-remake', 'remake');
+    const remake = el('button', 'u-btn is-s mk-hook-remake', 'remake');
     remake.type = 'button';
     remake.dataset.type = type ? type.id : '';
     remake.title = type ? `Write this hook again - another ${type.name.toLowerCase()} on the same topic`
@@ -1882,7 +1893,7 @@ function _renderScenes() {
     const row = el('div', 'mk-scene' + (i === 0 ? ' hook' : ''));
     // Paragraph one is the hook, and says so instead of saying "1".
     row.appendChild(el('div', 'mk-scene-n' + (i === 0 ? ' is-hook' : ''), i === 0 ? 'hook' : String(i + 1)));
-    const ta = el('textarea', 'mk-scene-t');
+    const ta = el('textarea', 'mk-scene-t u-area is-dark');
     ta.rows = 2;
     ta.value = text;
     const acts = el('div', 'mk-scene-a');
@@ -1899,7 +1910,7 @@ function _renderScenes() {
     });
     setTimeout(fit, 0);
     if (i > 0) {
-      const rw = el('button', 'mk-scene-rw', 'rewrite');
+      const rw = el('button', 'mk-scene-rw u-btn is-s', 'rewrite');
       rw.type = 'button';
       rw.title = 'Rewrite this paragraph from a different angle - or select some of its words to rewrite only them';
       rw.addEventListener('click', () => _rewrite(i, rw));
@@ -1959,7 +1970,7 @@ function _fragFrom(ta, index, ev) {
   const text = ta.value.slice(start, end);
   if (end <= start || text.trim().length < 2 || text.trim() === ta.value.trim()) { _hideFragBtn(); return; }
   _hideFragBtn();
-  const btn = el('button', 'lib-btn mk-frag-btn', 'rewrite fragment');
+  const btn = el('button', 'u-btn is-s mk-frag-btn', 'rewrite fragment');
   btn.type = 'button';
   btn.title = 'Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is';
   // Pressed without taking the focus: the selection - and the textarea's own blur - stay as they are.
@@ -2051,12 +2062,12 @@ function _say(text, kind, scenarioId) {
   box.className = 'mk-said' + (kind ? ' ' + kind : '');
   box.appendChild(el('span', null, text));
   if (scenarioId && _hooks.openScenario) {
-    const a = el('button', 'lib-btn', 'open');
+    const a = el('button', 'u-btn is-s', 'open');
     a.type = 'button';
     a.addEventListener('click', () => _hooks.openScenario(scenarioId));
     box.appendChild(a);
   }
-  const x = el('button', 'mk-said-x', '✕');
+  const x = el('button', 'mk-said-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => _say(''));
   box.appendChild(x);
@@ -2094,23 +2105,23 @@ function _openAddSource() {
   ov.innerHTML = `
     <div class="mk-panel" role="dialog" aria-modal="true">
       <div class="mk-panel-head"><span class="mk-panel-t">Add a source</span><span class="sp"></span>
-        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button></div>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
       <div class="mk-panel-body">
-        <div class="mk-choice">
-          <button class="mk-choice-btn cur" type="button" data-route="link">From a link</button>
-          <button class="mk-choice-btn" type="button" data-route="file">From a file</button>
-          <button class="mk-choice-btn" type="button" data-route="lib">From the Library</button>
+        <div class="mk-choice u-tabs">
+          <button class="mk-choice-btn u-tab cur" type="button" data-route="link">From a link</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="file">From a file</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="lib">From the Library</button>
         </div>
         <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>
-            <input type="text" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
-          <button class="lib-btn primary" type="button" data-go="link">Add</button>
+            <input type="text" class="u-in" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
+          <button class="u-btn is-main" type="button" data-go="link">Add</button>
         </section>
         <section class="mk-route" data-r="file" hidden>
           <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
           <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
-            <input type="text" data-f="title" placeholder="What this source is"></label>
-          <button class="lib-btn primary" type="button" data-go="file">Add</button>
+            <input type="text" class="u-in" data-f="title" placeholder="What this source is"></label>
+          <button class="u-btn is-main" type="button" data-go="file">Add</button>
         </section>
         <section class="mk-route" data-r="lib" hidden>
           <span class="mk-lib-head">REFERENCES · YouTube · Videos</span>
@@ -2155,13 +2166,21 @@ async function _paintLib() {
   if (!_addWin) return;
   const box = _addWin.f('lib');
   box.textContent = '';
-  box.appendChild(el('div', 'mk-pnote', 'reading…'));
+  // (phase V73 block 2) Reading, nothing there, did not load - the shared parts, as rows; a failed read is not "nothing
+  // there": "did not load" with Try again, the reason in the corner (б2-19).
+  box.appendChild(loadingEl('reading…', { line: true }));
   let items = [];
   try { items = (await J.api('/api/references/youtube')).items || []; }
-  catch (e) { box.textContent = ''; box.appendChild(el('div', 'mk-pnote', e.message)); return; }
+  catch (e) {
+    if (!_addWin || _addWin.f('lib') !== box) return;
+    box.textContent = '';
+    box.appendChild(failedEl('YouTube videos', () => _paintLib(), { line: true }));
+    showError('YouTube videos did not load: ' + e.message);
+    return;
+  }
   if (!_addWin || _addWin.f('lib') !== box) return;
   box.textContent = '';
-  if (!items.length) { box.appendChild(el('div', 'mk-pnote', 'Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.')); return; }
+  if (!items.length) { box.appendChild(emptyEl('Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.', { line: true })); return; }
   for (const it of items) {
     const row = el('div', 'mk-lib-row');
     if (it.thumb) { const im = el('img'); im.src = it.thumb; im.alt = ''; im.loading = 'lazy'; row.appendChild(im); }
@@ -2171,7 +2190,7 @@ async function _paintLib() {
       ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
     row.appendChild(t);
     if (it.type === 'remote') {
-      const b = el('button', 'lib-btn primary', 'Add');
+      const b = el('button', 'u-btn is-s is-main', 'Add');
       b.type = 'button';
       b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
       b.addEventListener('click', async () => {
@@ -2312,7 +2331,7 @@ function _addLine(r) {
   const say = (text, err) => { const s = el('div', 'mk-addl-s', text); if (err) line.classList.add('err'); line.appendChild(s); };
   const acts = el('div', 'mk-addl-acts');
   const btn = (label, title, on, cls) => {
-    const b = el('button', 'lib-btn' + (cls ? ' ' + cls : ''), label);
+    const b = el('button', 'u-btn is-s' + (cls === 'primary' ? ' primary is-main' : cls ? ' ' + cls : ''), label);
     b.type = 'button';
     if (title) b.title = title;
     if (on) b.addEventListener('click', on); else b.disabled = true;
@@ -2346,7 +2365,7 @@ function _addLine(r) {
   if (acts.childNodes.length) line.appendChild(acts);
   // A line that has ended is let go of by its cross; a question is let go of too (nothing was downloaded).
   if (r.state === 'ask' || _addSettled(r)) {
-    const x = el('button', 'mk-x', '✕');
+    const x = el('button', 'mk-x u-onpic is-del u-x', '');
     x.type = 'button';
     x.title = r.state === 'ask' ? 'Let go of it - nothing was downloaded' : 'Take this line away';
     x.addEventListener('click', () => { if (r.state === 'ask') _answer(r, 'drop'); else { _adds.delete(r.id); _paintAdds(); } });

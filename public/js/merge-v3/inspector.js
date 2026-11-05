@@ -68,6 +68,8 @@ import { setLive as setLivePlace } from './place-b.js';
 // (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
 import { blendButton } from './blend-menu.js';
 import { renderPatterns } from './patterns-ui.js';
+// (phase V73 block 2, step 2b) A lane with nothing on it - the shared "nothing here", a row of the strip.
+import { emptyEl } from '../ui-state.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -711,8 +713,8 @@ function _blankVideoTrack(host, track) {
   const clips = (track.clips || []).filter(c => c && c.src).length;
 
   if (!clips) {
-    host.appendChild(C.hint('Nothing on this lane yet. A setting for the whole lane is written '
-      + 'into the clips on it, so there is nothing here to write it into.'));
+    host.appendChild(emptyEl('Nothing on this lane yet. A setting for the whole lane is written '
+      + 'into the clips on it, so there is nothing here to write it into.', { line: true }));
   } else {
     host.appendChild(C.row('Frame', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
       (v) => stampB(track.id, { fit: v }))));

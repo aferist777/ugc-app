@@ -22,6 +22,7 @@ import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
 import { showError } from '../notice.js';
+import { wire as wireRange } from '../ui-range.js';
 
 let _busy = false;
 
@@ -65,6 +66,7 @@ function _row(label, control) {
 
 function _select(opts, value) {
   const s = document.createElement('select');
+  s.className = 'u-in is-s';                         // (phase V73 block 2) the shared field, at the rows' 24
   for (const [v, l] of opts) {
     const o = document.createElement('option');
     o.value = String(v); o.textContent = l;
@@ -79,7 +81,8 @@ function _slider(min, max, step, value, fmt) {
   const wrap = _el('span', 'mv3-x-sl');
   const i = document.createElement('input');
   i.type = 'range'; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(value);
-  const out = _el('span', 'mv3-x-slv', fmt(+value));
+  wireRange(i);                                     // (phase V73 block 2) the shared slider; its value in mono (.u-range-v)
+  const out = _el('span', 'mv3-x-slv u-range-v', fmt(+value));
   i.addEventListener('input', () => { out.textContent = fmt(+i.value); });
   wrap.appendChild(i); wrap.appendChild(out);
   wrap._input = i;
@@ -214,7 +217,7 @@ function _window(o) {
   const box = _el('div', 'mv3-x');
   const head = _el('div', 'mv3-x-head');
   head.appendChild(_el('h3', null, many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
-  const x = _el('button', 'mv3-x-close', '✕');
+  const x = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => { if (!_busy) _close(); });
   head.appendChild(x);
@@ -269,7 +272,7 @@ function _window(o) {
   // subtitles beside the video (lib/mv3b-job.js, public/js/captions/srt.js).
   body.appendChild(_el('div', 'mv3-x-hdr', 'Subtitles'));
   const srt = document.createElement('input');
-  srt.type = 'checkbox';
+  srt.type = 'checkbox'; srt.classList.add('u-check');
   srt.checked = adv.srt !== false;
   // A label inside a span: a row's own direct label is its name column (dialog.css).
   const srtBox = _el('span', 'mv3-x-check');
@@ -325,13 +328,13 @@ function _window(o) {
   };
 
   const foot = _el('div', 'mv3-x-foot');
-  const cancel = _el('button', 'mv3-c-btn', 'Cancel');
+  const cancel = _el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });
   // (phase V33.4) Several fragments: one Render, at once - the settings go up with them (the server keeps them on each
   // one and on the project), and the window closes; their tiles show the way along.
   if (many) {
-    const all = _el('button', 'mv3-c-btn mv3-x-go', 'Render ' + many.count);
+    const all = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render ' + many.count);
     all.type = 'button';
     all.disabled = !s.end || !many.count;
     all.title = 'Into the render queue at once, one after another, with these settings';
@@ -352,7 +355,7 @@ function _window(o) {
   }
   // Left of Render, because it is the calmer of the two and the one to reach for when several
   // projects are being set up in a row.
-  const queue = _el('button', 'mv3-c-btn', 'Add to queue');
+  const queue = _el('button', 'mv3-c-btn u-btn', 'Add to queue');
   queue.type = 'button';
   queue.disabled = !s.end;
   queue.title = 'Leave it for later - the queue renders them one after another, with these settings';
@@ -365,7 +368,7 @@ function _window(o) {
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
          d && d.success ? 'info' : 'err');
   });
-  const go = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
+  const go = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render');
   go.type = 'button';
   go.disabled = !s.end;
   // The window STAYS. It becomes the progress and then the result: throwing the file at a new
@@ -408,6 +411,9 @@ export function paintExportButton() {
   b.title = st ? st.title : 'Render this timeline with FFmpeg';
   b.disabled = !can || (st ? !st.enabled : _busy);
   b.classList.toggle('is-stop', !!(st && st.stop));
+  // (phase V73 block 2) "✕ stop" is the part's danger button; Export / Render N its gold one
+  b.classList.toggle('is-danger', !!(st && st.stop));
+  b.classList.toggle('is-main', !(st && st.stop));
   b.classList.toggle('is-armed', !!(st && st.armed));
 }
 

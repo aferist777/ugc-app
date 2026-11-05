@@ -47,9 +47,15 @@ import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
 // (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
+import * as News from '../references/news.js';
 // (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
 import * as YT from '../references/yt.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm() - at the button pressed, or
+// at the tile a menu or the Delete key was about (the owner's (б2-6) а); "nothing here" and "did not load" as the shared
+// parts (css/app-shell.css .u-empty, .u-failed).
+import { ask } from '../ask.js';
+import { emptyEl, failedEl } from '../ui-state.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -488,11 +494,11 @@ function _closeNewMenu() {
 function _newMenu(anchor) {
   if (_newPop) { _closeNewMenu(); return; }
   const menu = document.createElement('div');
-  menu.className = 'mv3-plus-menu';
+  menu.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, on) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item';
+    b.className = 'mv3-plus-item u-mi';
     const t = document.createElement('span');
     t.textContent = label;
     const s = document.createElement('small');
@@ -720,8 +726,9 @@ function _actionsFor(it) {
 }
 
 // Runs one action and reports what the caller has to do about it. `removed` means the
-// item is gone, so whoever is showing it has to stop.
-async function _runAction(id, it) {
+// item is gone, so whoever is showing it has to stop. `anchor` - where a question opens: the button pressed, or the tile
+// a menu or the Delete key was about (phase V73 block 2, (б2-6)); with none, in the middle.
+async function _runAction(id, it, anchor) {
   // A character whose sheet is being made is left alone until it lands (phase H6).
   if ((id === 'rename' || id === 'del') && it.kind === 'characters' && it.meta && it.meta.sheetRunning) {
     return { msg: 'Its 4K sheet is being made - wait for it, or let it go in Alerts first', err: true };
@@ -749,14 +756,15 @@ async function _runAction(id, it) {
   }
   if (id === 'del' && it.kind === 'references') {
     // (phase TG) A post of REFERENCES goes with its files - its own route.
-    if (!confirm(await RP.deleteQuestion(it))) return { changed: false };
+    // `stay`: the projects it is used in are a list that scrolls inside the question (б2-7) - scrolling it must not close it.
+    if (!await ask(anchor, await RP.deleteQuestion(it), { yes: 'Delete', danger: true, stay: true })) return { changed: false };
     const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
     _items = _items.filter(x => x !== it);
     return { removed: true, reload: true, msg: 'Post deleted' };
   }
   if (id === 'del') {
-    if (!confirm(await A.deleteQuestion(it))) return { changed: false };
+    if (!await ask(anchor, await A.deleteQuestion(it), { yes: 'Delete', danger: true, stay: true })) return { changed: false };
     await A.deleteItem(it);
     _items = _items.filter(x => x !== it);
     return { removed: true, reload: true, msg: 'Deleted' };
@@ -832,11 +840,11 @@ function _open(it, list, follow) {
     extraRows: (item) => {
       const rows = [];
       if (_KINDABLE.has(item.kind)) {
-        rows.push(['kind', _picker('lib-view-sel', item.kind, () => A.KINDS,
+        rows.push(['kind', _picker('lib-view-sel u-in is-s', item.kind, () => A.KINDS,
           (k) => _setKind(item, k), 'Which kind of clip this is')]);
       }
       if (_CATABLE.has(item.kind)) {
-        rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
+        rows.push(['category', _picker('lib-view-sel u-in is-s', (item.meta && item.meta.categoryId) || '',
           () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
           (id) => _setCat(item, id), 'Folder')]);
       }
@@ -847,11 +855,20 @@ function _open(it, list, follow) {
       return rows;
     },
     onAction: async (id, item) => {
-      const r = await _runAction(id, item);
+      const r = await _runAction(id, item, _viewerBtn(id, item));
       await _apply(r);
       return r;
     },
   });
+}
+
+// The viewer's button of an action - where its question opens (phase V73 block 2, (б2-6)): js/library/viewer.js draws the
+// row from _actionsFor, a button a label.
+function _viewerBtn(id, it) {
+  const a = (_actionsFor(it) || []).find(x => x.id === id);
+  const box = document.querySelector('.lib-view-acts');
+  if (!a || !box) return null;
+  return [...box.querySelectorAll('button')].find(b => b.textContent === a.label) || null;
 }
 
 // One list per kind, fetched once per page and shared by every dropdown rather than
@@ -1031,7 +1048,7 @@ function _card(it, extra) {
     x.title = 'Delete';
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
-      try { await _apply(await _runAction('del', it)); } catch (err) { _status(err.message, 'err'); }
+      try { await _apply(await _runAction('del', it, x)); } catch (err) { _status(err.message, 'err'); }
     });
     box.appendChild(x);
   }
@@ -1081,6 +1098,8 @@ function _card(it, extra) {
   if (extra) card.appendChild(extra);
   // (phase TG) A post of REFERENCES: how many files, and its miniatures on hover - a press on one opens the post on it.
   if (it.kind === 'references') RP.decorate(card, it, (post, file) => _openPost(post, file));
+  // (phase V73 block 2, (н2)) a source downloaded by a link: its gold dot until it is opened, as a new post's
+  else if (it.kind === 'youtube') News.mark(card, it);
   // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
   // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
   // miniature, not the file. What the old menu offered is in the viewer and on the tile.
@@ -1096,7 +1115,8 @@ function _card(it, extra) {
       stop: () => { _stopHearing(); if (_player) _player.pause(); },
       changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
       del: async (x) => {
-        try { _stopHearing(); await _apply(await _runAction('del', x)); if (_player) _player.forget(x.id); }
+        // The question at the tile the menu was about (б2-6).
+        try { _stopHearing(); await _apply(await _runAction('del', x, card)); if (_player) _player.forget(x.id); }
         catch (err) { _status(err.message, 'err'); }
       },
       // (phase V54, (зв14)) A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
@@ -1137,6 +1157,8 @@ function _manyMenu(items, e) {
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
   // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
   const madeOnly = items.every(x => MADE_KINDS.has(x.kind));
+  // "Delete N" asks at the tile the menu was opened on (б2-6).
+  const tile = e.target && e.target.closest ? e.target.closest('.lib-card') : null;
   TS.menuAt(e.clientX, e.clientY, [
     // (phase V59.1) Saved texts stay in Music -> Lyrics.
     items.every(LYR.isLyrics) ? ['Move to…', 'texts stay in Music → Lyrics', null]
@@ -1150,10 +1172,19 @@ function _manyMenu(items, e) {
         try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
         catch (err) { _status(err.message, 'err'); }
       } : null],
-    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items), true],
+    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, tile), true],
   ]);
 }
-async function _deleteMany(all) {
+// The tile pressed last among the picked - where the Delete key's question opens (б2-6); the last one picked otherwise.
+let _pressedKey = '';
+function _lastPicked(keys) {
+  const grid = $('lib-grid');
+  const list = keys || [];
+  const k = list.includes(_pressedKey) ? _pressedKey : list[list.length - 1];
+  if (!grid || !k) return null;
+  return [...grid.querySelectorAll('.lib-card[data-key]')].find(c => c.dataset.key === k) || null;
+}
+async function _deleteMany(all, anchor) {
   // The app's own sounds, a project's talking head and a YouTube source (two presses on its tile) are not deleted here -
   // the question names only what will go (as in Merge).
   const items = all.filter(x => x.kind !== 'sfx' && !_fixed(x));
@@ -1161,10 +1192,11 @@ async function _deleteMany(all) {
   if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', 'err'); return; }
   // One alone: the question it always had.
   if (items.length === 1) {
-    try { await _apply(await _runAction('del', items[0])); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }
+    try { await _apply(await _runAction('del', items[0], anchor)); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }
     return;
   }
-  if (!confirm(await TS.deleteQuestion(items))) return;
+  // `stay`: the names and the projects are a list that scrolls inside the question (б2-7).
+  if (!await ask(anchor, await TS.deleteQuestion(items), { yes: 'Delete ' + items.length, danger: true, stay: true })) return;
   _stopHearing();
   try { await _afterMany(await TS.batch('delete', items), 'deleted', true); }
   catch (err) { _status(err.message, 'err'); }
@@ -1282,13 +1314,16 @@ function _renderGrid() {
 
   if (!_items.length) {
     if (folders) return;
-    const e = document.createElement('div');
-    e.className = 'lib-empty';
-    e.textContent = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
+    const said = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
       // (phase V59.1) Music -> Lyrics: where its texts come from.
       : _mkind() === 'lyrics' ? 'No saved lyrics yet - Generate music saves them here (its Lyrics, or "save" by Custom\'s Lyrics).'
       : 'Nothing here' + (_node && _node.cat ? ' in this folder.' : ' yet.')) : 'Nothing on this shelf yet.';
-    grid.appendChild(e);
+    // (phase V73 block 2) The shared part, its icon by what the folder holds: sound, pictures, or a folder.
+    const k = _mkind();
+    const icon = _shelf !== 'media' ? 'folder'
+      : (searching || AUDIO.has(k) || k === 'lyrics') ? 'music'
+        : (k === 'images' || MADE_KINDS.has(k) || !!_madeNode()) ? 'image' : 'folder';
+    grid.appendChild(emptyEl(said, { icon, cls: 'lib-empty' }));
     return;
   }
   // The viewer pages through what it can show - not the sounds and tracks, which play on their cards.
@@ -1501,24 +1536,22 @@ async function _load(opts) {
 // shelf with nothing on it ("Nothing on this shelf yet.", "No voices with a demo yet." …); those words are replaced by
 // "<shelf> did not load." - the grid's with "Try again", which reads it again. The reason is the popup in the corner.
 // Media's folder tiles stay: the tree, not this read, draws them.
+// (phase V73 block 2, step 2b) Both are the shared part "did not load" (js/ui-state.js failedEl, css/app-shell.css
+// .u-failed): the grid's whole, with Try again; the column's in the form of the "nothing here" it replaces, with none.
 function _shelfFailed() {
-  const said = (SHELVES[_shelf] || 'The shelf') + ' did not load.';
+  const what = SHELVES[_shelf] || 'the shelf';
   const grid = $('lib-grid');
   if (grid) {
-    for (const e of grid.querySelectorAll(':scope > .lib-empty')) e.remove();
-    const box = document.createElement('div');
-    box.className = 'lib-empty is-failed';
-    box.appendChild(document.createTextNode(said + ' '));
-    const again = document.createElement('button');
-    again.type = 'button';
-    again.className = 'lib-btn';
-    again.textContent = 'Try again';
-    again.addEventListener('click', () => { _load(); });
-    box.appendChild(again);
-    grid.appendChild(box);
+    for (const e of grid.querySelectorAll(':scope > .u-empty')) e.remove();
+    grid.appendChild(failedEl(what, () => { _load(); }, { cls: 'lib-empty' }));
   }
   const body = $('lib-info-body');
-  if (body) for (const e of body.querySelectorAll('.lib-empty, .lib-info-note')) e.textContent = said;
+  if (body) {
+    for (const e of body.querySelectorAll('.u-empty')) {
+      const line = e.classList.contains('is-line');
+      e.replaceWith(failedEl(what, null, { line, cls: line ? 'lib-info-note' : 'lib-empty' }));
+    }
+  }
 }
 
 async function _counts() {
@@ -1620,7 +1653,8 @@ async function _cleanBroken() {
   lines.push('The records are removed. There is no file to delete - that is the point.');
   lines.push('A generation still running is never swept.');
   lines.push('', 'Go ahead?');
-  if (!confirm(lines.join(NL))) return;
+  // At the button; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
+  if (!await ask($('lib-broken'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
 
   const btn = $('lib-broken');
   if (btn) btn.disabled = true;
@@ -1680,7 +1714,7 @@ async function _cleanDupes() {
     lines.push('because the copies disagreed and the kept one wins.');
   }
   lines.push('', 'Go ahead?');
-  if (!confirm(lines.join(NL))) return;
+  if (!await ask($('lib-dupes'), lines.join(NL), { yes: 'Remove copies', danger: true, stay: true })) return;
   const btn = $('lib-dupes');
   if (btn) btn.disabled = true;
   try {
@@ -1756,7 +1790,8 @@ async function _fixThumbs() {
   const gone = (_thumbs.missing || []).length;
   if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
   lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
-  if (!confirm(lines.join(NL))) return;
+  // Nothing is deleted - a plain answer (б2-5).
+  if (!await ask(btn, lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
 
   if (btn) btn.disabled = true;
   const byId = _thumbs.byId || new Map(_items.map(it => [String(it.id), it]));
@@ -2202,7 +2237,7 @@ function boot() {
     _tsel = TS.createSelection({
       host: grid, tile: '.lib-card[data-key]',
       active: () => _shelf === 'media' && !_makingOn,
-      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x))), _lastPicked(keys)),
       // (phase V64 block 0, the owner 2026-10-31) The outline of a tile arrived at - an Alerts row, "show", the tracks the
       // music window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
       // on a tile only that one (its own pick). A track in the player still glows while it plays (js/sound/player.js).
@@ -2210,6 +2245,11 @@ function boot() {
       // (phase V64, fix (а)) The player is there while its track is picked.
       onChange: () => _paintPlayer(),
     });
+    // (phase V73 block 2) The tile pressed last - the Delete key's question opens at it (_lastPicked).
+    grid.addEventListener('pointerdown', (e) => {
+      const c = e.target && e.target.closest ? e.target.closest('.lib-card[data-key]') : null;
+      if (c) _pressedKey = c.dataset.key;
+    }, true);
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
     grid.addEventListener('contextmenu', (e) => {

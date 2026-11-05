@@ -16,6 +16,10 @@
 // in the column while it runs.
 
 import { startInlineProgress } from '../progress.js';
+// (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "no voice yet" as the
+// shared part, a row
+import { ask } from '../ask.js';
+import { emptyEl } from '../ui-state.js';
 
 const PAGE = 20;
 const GENDERS = ['female', 'male'];
@@ -58,7 +62,7 @@ function _play(src, btn) {
   a.play().catch(done);
 }
 function _playBtn(src, title) {
-  const b = _el('button', 'lib-vplay', '▶');
+  const b = _el('button', 'lib-vplay u-btn is-s is-icon', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.title = src ? title : 'There is nothing to play for this voice';
@@ -84,7 +88,7 @@ export function paint(body, it, voices, hooks) {
   const gRow = _el('div', 'lib-cv-gender');
   gRow.appendChild(_el('span', 'lib-cv-l', 'gender'));
   const gBtns = GENDERS.map(g => {
-    const b = _el('button', 'lib-cv-g', g);
+    const b = _el('button', 'lib-cv-g u-chip', g);
     b.type = 'button';
     b.addEventListener('click', () => {
       if (String((it.meta || {}).gender || '') === g) return;
@@ -129,7 +133,7 @@ export function paint(body, it, voices, hooks) {
   const paintSaved = () => {
     sec.textContent = saved.length > 1 ? 'Voices · ' + saved.length : 'Voice';
     list.textContent = '';
-    if (!saved.length) { list.appendChild(_el('div', 'lib-info-note', 'No voice yet - find one below.')); return; }
+    if (!saved.length) { list.appendChild(emptyEl('No voice yet - find one below.', { line: true, cls: 'lib-info-note' })); return; }
     for (const v of saved) {
       const row = _el('div', 'lib-info-voice lib-cv-row' + (v.main ? ' is-main' : ''));
       row.title = v.main ? 'The voice every read uses' : 'One of the voices saved for this character';
@@ -140,7 +144,7 @@ export function paint(body, it, voices, hooks) {
       row.appendChild(txt);
       if (v.main) row.appendChild(_el('span', 'lib-info-main', 'main'));
       else {
-        const star = _el('button', 'lib-cv-star', '★');
+        const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet', '★');
         star.type = 'button';
         star.title = 'Make this the voice every read uses';
         star.addEventListener('click', () => run('Setting the main voice…', async () => {
@@ -150,12 +154,12 @@ export function paint(body, it, voices, hooks) {
         }));
         row.appendChild(star);
       }
-      const x = _el('button', 'lib-cv-x', '✕');
+      const x = _el('button', 'lib-cv-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Unbind this voice: it stays on the Voices shelf with its demo, its ElevenLabs slot is freed';
-      x.addEventListener('click', () => {
-        if (!confirm('Unbind “' + (v.name || v.voiceId) + '” from ' + (it.name || 'this character') + '?\n\n'
-          + 'It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.')) return;
+      x.addEventListener('click', async () => {
+        if (!await ask(x, 'Unbind “' + (v.name || v.voiceId) + '” from ' + (it.name || 'this character') + '?\n\n'
+          + 'It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.', { yes: 'Unbind', danger: true, stay: true })) return;
         run('Unbinding the voice…', async () => {
           const d = await _json('/api/char-store/' + encodeURIComponent(id) + '/voice/' + encodeURIComponent(v.voiceId), { method: 'DELETE' });
           await reread();
@@ -183,7 +187,7 @@ export function paint(body, it, voices, hooks) {
   const find = _el('div', 'lib-cv-find');
   find.appendChild(_el('div', 'lib-info-sec', 'Find a voice'));
   const bar = _el('div', 'lib-cv-bar');
-  const sel = (cls) => { const s = _el('select', 'lib-cv-sel' + (cls ? ' ' + cls : '')); return s; };
+  const sel = (cls) => { const s = _el('select', 'lib-cv-sel u-in is-s' + (cls ? ' ' + cls : '')); return s; };
   const fill = (s, values, anyLabel, def) => {
     s.textContent = '';
     const any = _el('option', null, anyLabel); any.value = ''; s.appendChild(any);
@@ -200,7 +204,7 @@ export function paint(body, it, voices, hooks) {
     fill(fLang, d.languages, 'any language', 'en');
     fill(fAccent, d.accents, 'any accent');
   }).catch(() => { /* the lists stay "any" */ });
-  const go = _el('button', 'lib-btn lib-cv-go', 'Search');
+  const go = _el('button', 'u-btn is-s lib-cv-go', 'Search');
   go.type = 'button';
   go.title = 'Search the ElevenLabs voice library';
   bar.appendChild(fGender); bar.appendChild(fLang); bar.appendChild(fAccent); bar.appendChild(go);
@@ -234,7 +238,7 @@ export function paint(body, it, voices, hooks) {
       txt.appendChild(_el('div', 'lib-vname', v.name || v.voice_id));
       txt.appendChild(_el('div', 'lib-vsub', [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).map(_pretty).join(' · ')));
       row.appendChild(txt);
-      const take = _el('button', 'lib-btn lib-cv-take', 'Save');
+      const take = _el('button', 'u-btn is-s lib-cv-take', 'Save');
       take.type = 'button';
       take.title = 'Add it to the account and make it this character’s main voice';
       take.addEventListener('click', () => run('Saving the voice…', async () => {
@@ -260,7 +264,7 @@ export function paint(body, it, voices, hooks) {
     if (pages > 1) {
       const pager = _el('div', 'lib-cv-pager');
       const step = (label, to, on) => {
-        const b = _el('button', 'lib-btn', label);
+        const b = _el('button', 'u-btn is-s', label);
         b.type = 'button';
         b.disabled = !on;
         b.addEventListener('click', () => { page = to; search(); });

@@ -45,12 +45,16 @@ import { renderPatterns, nameOf as patternName } from './patterns-ui.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
 import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.js';
+// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts (rows of the strip); the reason a popup.
+import { loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 let _A = null;              // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
 let _own = '';              // a fragment opened from its row with its OWN Subtitles picked ((хо15)) - its key
 let _busy = '';             // 'subs' | 'speech' | 'music' | 'pattern' while a write for all is under way
 let _patWant = null;        // (V74) the patterns waiting to go to the rest while a write of them is under way: { list, ns }
 let _moods = null;          // Music -> highlights: [{ id, label, n }] (the root as 'yours' when it has tracks)
+let _moodsAsk = '';         // (phase V73 block 2) 'asking' while it is read, 'failed' when it could not be (the reason was a popup)
 let _dealMoods = [];        // the moods "deal again" takes
 let _sample = false;        // the «example» is on the preview
 
@@ -228,13 +232,20 @@ async function _musicAll(none) {
 }
 
 async function _readMoods() {
+  if (_moodsAsk) return;
+  _moodsAsk = 'asking';
   try {
     const r = await fetch('/api/audio/music/highlights');
     const d = await r.json();
-    if (!d || !d.success) throw new Error();
+    if (!d || !d.success) throw new Error((d && d.error) || '');
     _moods = (d.moods || []).map((m) => ({ id: m.id, label: m.label, n: (m.tracks || []).length }));
     if ((d.root || []).length) _moods.push({ id: 'yours', label: 'yours', n: d.root.length });
-  } catch (e) { _moods = []; }
+    _moodsAsk = '';
+  } catch (e) {
+    // (phase V73 block 2, (б2-19)) Not read is not "no moods": the strip says "did not load" with Try again.
+    _moodsAsk = 'failed';
+    showError('Music → highlights could not be read', { detail: (e && e.message) || '' });
+  }
   Views.altChanged();
 }
 
@@ -365,11 +376,13 @@ function renderMusic(host) {
   };
   box.appendChild(C.row('Volume', _mixedVolume(list.map(vol), (v) => _volume('music', v))));
   // Deal again ((хо4)): the moods as chips, then the press.
-  if (!_moods) { _readMoods(); box.appendChild(_el('p', 'mv3-ins-note', 'reading Music → highlights…')); }
+  if (!_moods && _moodsAsk === 'failed') {
+    box.appendChild(failedEl('Music → highlights', () => { _moodsAsk = ''; _readMoods(); Views.altChanged(); }, { line: true }));
+  } else if (!_moods) { _readMoods(); box.appendChild(loadingEl('reading Music → highlights…', { line: true })); }
   else {
     const chips = _el('div', 'mv3-hlp-chips mv3-hlg-moods');
     for (const m of _moods) {
-      const b = _el('button', 'mv3-hlp-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), m.label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), m.label);
       b.type = 'button';
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + m.n));
       b.disabled = !m.n;
@@ -554,7 +567,7 @@ function _panelPaint(tl) {
   _panel.dataset.sig = sig;
   _panel.textContent = '';
   for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', music ? 'music' : '+ music'], ['pattern', 'pattern']]) {
-    const b = _el('button', 'mv3-hlg-pbtn' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
+    const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
     b.type = 'button';
     b.disabled = !!_busy;
     b.addEventListener('click', () => pickLane(k));
@@ -566,7 +579,7 @@ function _backPaint() {
   const want = isGroup() && _ownNow() && !!head;
   if (!want) { if (_back) { _back.remove(); _back = null; } return; }
   if (!_back || !head.contains(_back)) {
-    _back = _el('button', 'mv3-iconbtn is-text mv3-hlg-back');
+    _back = _el('button', 'u-btn is-s is-quiet mv3-hlg-back');
     _back.type = 'button';
     _back.title = 'Back to the buttons of the ticked fragments';
     _back.addEventListener('click', () => { _own = ''; pickLane('subs'); _sync(); });

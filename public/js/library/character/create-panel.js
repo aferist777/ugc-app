@@ -86,7 +86,7 @@ function row(p) {
   lab.textContent = p.label;
   lab.htmlFor = SEL_ID(p.k);
   const sel = document.createElement('select');
-  sel.className = 'cv2-row-sel';
+  sel.className = 'cv2-row-sel u-in is-s';
   sel.id = SEL_ID(p.k);
   sel.addEventListener('change', () => { _markEdited(); refreshOptions(); });
   r.appendChild(lab); r.appendChild(sel);
@@ -245,7 +245,7 @@ function openTokenPicker(anchor, k) {
   const rest = p.opts.filter(o => !allowed.includes(o));
 
   const pop = document.createElement('div');
-  pop.className = 'cv2-pop';
+  pop.className = 'cv2-pop u-menu is-float';
   pop.addEventListener('click', (e) => e.stopPropagation());
 
   const title = document.createElement('div');
@@ -261,7 +261,7 @@ function openTokenPicker(anchor, k) {
     for (const o of list) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'cv2-pop-opt' + (values[k] === o ? ' cur' : '');
+      b.className = 'cv2-pop-opt u-chip' + (values[k] === o ? ' cur' : '');
       b.textContent = o;
       b.addEventListener('click', () => {
         const el = document.getElementById(SEL_ID(k));
@@ -308,13 +308,13 @@ export function buildHead(host, hooks) {
   const head = document.createElement('div');
   head.className = 'cv2-crhead';
   const name = document.createElement('input');
-  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name'; name.placeholder = 'Name (auto)';
+  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name u-in'; name.placeholder = 'Name (auto)';
   const rnd = document.createElement('button');
-  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd'; rnd.textContent = 'rnd';
+  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'rnd';
   rnd.title = 'Randomise every parameter except marks, and the name';
   rnd.addEventListener('click', randomize);
   const gen = document.createElement('button');
-  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen'; gen.textContent = '▶ Create';
+  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen u-btn is-l is-main'; gen.textContent = '▶ Create';
   gen.title = 'Generate the character from the values below';
   gen.addEventListener('click', () => { if (_onGenerate) _onGenerate(currentValues(), name.value.trim(), _preset); });
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);
@@ -333,7 +333,7 @@ export function buildFoot(host, hooks) {
   const tprow = document.createElement('div');
   tprow.className = 'cv2-crfoot-row';
   const tp = document.createElement('button');
-  tp.type = 'button'; tp.className = 'cv2-tpdne'; tp.textContent = 'TPDNE';
+  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = 'TPDNE';
   tp.title = 'Take a random synthetic face from thispersondoesnotexist.com - press again for another';
   tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
   const tpnote = document.createElement('div');
@@ -357,7 +357,7 @@ export function build(host, hooks) {
   const prow = document.createElement('div');
   prow.className = 'cv2-presetrow';
   const psel = document.createElement('select');
-  psel.className = 'cv2-preset'; psel.id = 'cv2-preset';
+  psel.className = 'cv2-preset u-in'; psel.id = 'cv2-preset';
   psel.title = 'A preset fills every parameter and names the character';
   const none = document.createElement('option');
   none.value = ''; none.textContent = '— no preset: build by hand —';
@@ -379,7 +379,7 @@ export function build(host, hooks) {
   // chose. Disabled with no preset, since there would be nothing to take.
   const puse = document.createElement('button');
   puse.type = 'button';
-  puse.className = 'cv2-preset-use';
+  puse.className = 'cv2-preset-use u-btn';
   puse.id = 'cv2-preset-use';
   puse.textContent = 'use';
   puse.title = 'Put this preset\u2019s face in the middle column and start editing it - no generation';
@@ -394,9 +394,8 @@ export function build(host, hooks) {
   // way out of one choice deserves to be one press beside it.
   const pclr = document.createElement('button');
   pclr.type = 'button';
-  pclr.className = 'cv2-preset-clear';
+  pclr.className = 'cv2-preset-clear u-btn is-icon is-quiet is-del u-x';
   pclr.id = 'cv2-preset-clear';
-  pclr.textContent = '✕';
   pclr.title = 'Clear the preset and go back to the parameters';
   pclr.addEventListener('click', () => clearPreset());
   prow.appendChild(pclr);
@@ -525,7 +524,7 @@ export function buildRef(host, hooks) {
   wrap.appendChild(head);
 
   const ta = document.createElement('textarea');
-  ta.className = 'cv2-refine';
+  ta.className = 'cv2-refine u-area';
   ta.id = 'cv2-refine';
   ta.rows = 4;
   ta.placeholder = REFINE_PLACEHOLDER;
@@ -539,7 +538,7 @@ export function buildRef(host, hooks) {
   let src = '';
   const apply = document.createElement('button');
   apply.type = 'button';
-  apply.className = 'cv2-apply';
+  apply.className = 'cv2-apply u-btn is-l is-main';
   apply.id = 'cv2-apply';
   const sync = () => {
     const typed = !!ta.value.trim();

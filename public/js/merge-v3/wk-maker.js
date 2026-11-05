@@ -12,6 +12,9 @@ import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
 import { delX } from '../del-x.js';
 import { derived } from '../chars-store.js';
+import { menuIcons } from '../icons.js';
+// (phase V73 block 2, step 2b) "Nothing here" - the shared part (the groups' column a row of it).
+import { emptyEl } from '../ui-state.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -217,7 +220,7 @@ export function paintChoose(host, o) {
   side.appendChild(people);
   const main = el('div', 'pk-main');
   const bar = el('div', 'pk-bar');
-  const q = el('input', 'pk-q');
+  const q = el('input', 'pk-q u-in is-s');
   q.type = 'search';
   q.placeholder = 'search by name';
   q.spellcheck = false;
@@ -238,9 +241,9 @@ export function paintChoose(host, o) {
     people.textContent = '';
     if (!groups) return;
     if (f) {
-      const tabs = el('div', 'pk-ftabs');
+      const tabs = el('div', 'pk-ftabs u-tabs');
       const tab = (label, on, set) => {
-        const b = el('button', 'mv3-sc-tab' + (on ? ' is-on' : ''), label);
+        const b = el('button', 'mv3-sc-tab u-tab' + (on ? ' is-on' : ''), label);
         b.type = 'button';
         b.addEventListener('click', () => {
           if (st.filterOn === set) return;
@@ -256,7 +259,7 @@ export function paintChoose(host, o) {
       people.appendChild(tabs);
     }
     const vis = shown();
-    if (!vis.length) people.appendChild(el('div', 'pk-none is-side', groups.length ? 'Nobody of that kind - show all.' : ''));
+    if (!vis.length && groups.length) people.appendChild(emptyEl('Nobody of that kind - show all.', { line: true }));
     for (const g of vis) {
       const b = el('button', 'pk-person' + (g.key === st.group ? ' on' : ''));
       b.type = 'button';
@@ -320,7 +323,7 @@ export function paintChoose(host, o) {
     const list = look ? pool.filter(it => String(it.name || '').toLowerCase().includes(look) || String(it.sub || '').toLowerCase().includes(look)) : pool;
     count.textContent = look ? list.length + ' of ' + pool.length : String(pool.length);
     if (!list.length) {
-      grid.appendChild(el('div', 'pk-none', o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.'))));
+      grid.appendChild(emptyEl(o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.')), { icon: look ? 'search' : 'image' }));
       return;
     }
     for (const it of list) grid.appendChild(tile(it));
@@ -370,15 +373,16 @@ export function closeMenu() {
 /** @param items [{ label, sub, on, danger }] */
 export function tileMenu(ev, items, name) {
   closeMenu();
-  const box = el('div', 'mv3-plus-menu');
+  const box = el('div', 'mv3-plus-menu u-menu is-float');
   for (const it of items) {
-    const b = el('button', 'mv3-plus-item' + (it.danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (it.danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', null, it.label));
     if (it.sub) b.appendChild(el('small', null, it.sub));
     b.addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); it.on(); });
     box.appendChild(b);
   }
+  menuIcons(box);
   document.body.appendChild(box);
   const w = box.offsetWidth, h = box.offsetHeight;
   box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';

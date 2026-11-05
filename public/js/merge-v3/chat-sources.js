@@ -7,7 +7,8 @@
 
 import { thumbOf, json } from './chat-shell.js';
 
-export const gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read' });
+// A shelf that could not be read (phase V73 block 2, (б2-19)): `failed` - the attachment window says "did not load" with Try again.
+export const gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read', failed: true });
 export const shape = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
 export const pic = (path, name, sub, x) => Object.assign({ path, name: name || '', sub: sub || '',
   thumb: thumbOf(path, 'strip'), big: thumbOf(path, 'main') }, x || {});

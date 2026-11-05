@@ -18,8 +18,17 @@
 (function () {
   var body = document.getElementById('loc-body');
   if (!body) return;
-  var state = null, timer = null, shown = false, msg = '', msgErr = false, armed = null;
+  var state = null, timer = null, shown = false, msg = '', armed = null;
   var yt = null, ytBusy = false, ytTimer = null;
+  var stateFailed = false, ytFailed = false;   // a read that failed, said in place of "reading…" for ever (б2-19)
+  // (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js); a part being read or not read is the
+  // shared part (js/ui-state.js) - this is a classic script, so the modules come with import().
+  function sayError(t, detail) { import('/js/notice.js').then(function (m) { m.showError(t, detail ? { detail: detail } : {}); }).catch(function () {}); }
+  function stateEl(make) {
+    var hold = document.createElement('div');
+    import('/js/ui-state.js').then(function (m) { if (hold.isConnected) hold.replaceWith(make(m)); }).catch(function () {});
+    return hold;
+  }
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function mb(b) { return Math.round((+b || 0) / 1e6) + ' MB'; }
@@ -40,28 +49,30 @@
     w.appendChild(el('div', 'dio-now', Math.floor(100 * dl.got / Math.max(1, dl.total)) + '% of ' + mb(dl.total)));
     return w;
   }
-  function btn(label, fn, go) { var b = el('button', 'lib-btn' + (go ? ' adm-go' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
+  function btn(label, fn, go) { var b = el('button', 'u-btn is-s' + (go ? ' adm-go is-main' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
   // Two presses for a delete: the first arms it for three seconds.
   function del(what) {
-    var b = btn(armed === what ? 'Really delete?' : 'Delete', function () {
+    // (phase V73 block 2) one "Really?" (js/really.js's words, 3 s); a delete - the danger button, armed - its red fill
+    var b = btn(armed === what ? 'Really?' : 'Delete', function () {
       if (armed !== what) { armed = what; paint(); setTimeout(function () { if (armed === what) { armed = null; paint(); } }, 3000); return; }
       armed = null;
       post('/api/speech/local/remove', what);
     });
-    if (armed === what) b.classList.add('loc-armed');
+    b.classList.add('is-danger');
+    if (armed === what) b.classList.add('is-armed');
     return b;
   }
 
   function post(url, what) {
-    msg = ''; msgErr = false;
+    msg = '';
     fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ what: what }) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d && d.state) state = d.state;
-        if (!d || !d.success) { msg = (d && d.error) || 'It did not work.'; msgErr = true; }
+        if (!d || !d.success) sayError('It did not work.', (d && d.error) || '');
         paint(); schedule();
       })
-      .catch(function (e) { msg = e.message; msgErr = true; paint(); });
+      .catch(function (e) { sayError('It did not work.', e.message); paint(); });
   }
 
   // ── yt-dlp ─────────────────────────────────────────────────────────────────
@@ -106,8 +117,11 @@
 
   function paintYt() {
     body.appendChild(el('div', 'dio-sec', 'Links (yt-dlp)'));
-    if (!yt) { body.appendChild(el('div', 'dio-status', 'reading…')); return; }
-    if (yt.probing) { body.appendChild(el('div', 'dio-status', 'Looking for yt-dlp…')); return; }
+    if (!yt) {
+      body.appendChild(stateEl(function (m) { return ytFailed ? m.failedEl('yt-dlp', ytLoad, { line: true }) : m.loadingEl('reading…', { line: true }); }));
+      return;
+    }
+    if (yt.probing) { body.appendChild(stateEl(function (m) { return m.loadingEl('Looking for yt-dlp…', { line: true }); })); return; }
     if (!yt.available) {
       body.appendChild(row('yt-dlp', 'Missing from this copy of the app - npm install puts it in vendor/yt-dlp. Links cannot be read.',
         el('span', 'loc-state bad', 'missing')));
@@ -122,8 +136,12 @@
   }
   function ytLoad() {
     return fetch('/api/ytdlp').then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.success) yt = d; paint(); ytSchedule(); })
-      .catch(function () { /* the next look tries again */ });
+      .then(function (d) {
+        if (d && d.success) { yt = d; ytFailed = false; }
+        else { ytFailed = !yt; sayError('Could not read yt-dlp', (d && d.error) || 'no answer'); }
+        paint(); ytSchedule();
+      })
+      .catch(function (e) { ytFailed = !yt; sayError('Could not read yt-dlp', e.message); paint(); });
   }
   // While a check runs on its own (or a probe is slow), the row is read again until it ends.
   function ytSchedule() {
@@ -136,14 +154,18 @@
     if (ytBusy) return;
     ytBusy = true; paint();
     fetch('/api/ytdlp/check', { method: 'POST' }).then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.success) yt = d; })
-      .catch(function () { /* the row says what the last check found */ })
+      .then(function (d) { if (d && d.success) yt = d; else sayError('yt-dlp was not checked', (d && d.error) || 'no answer'); })
+      .catch(function (e) { sayError('yt-dlp was not checked', e.message); /* the row says what the last check found */ })
       .then(function () { ytBusy = false; paint(); ytSchedule(); });
   }
 
   function paint() {
     body.textContent = '';
-    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); paintHome(); paintLook(); return; }
+    if (!state) {
+      body.appendChild(stateEl(function (m) { return stateFailed ? m.failedEl('This computer', load, { line: true }) : m.loadingEl('reading…', { line: true }); }));
+      paintYt(); paintHome(); paintLook();
+      return;
+    }
     if (!state.platform) {
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
       paintYt(); paintHome(); paintLook();
@@ -171,15 +193,19 @@
     // (phase V23, the owner 2026-10-09) No field about the graphics card: another computer has another one. A build for
     // NVIDIA cards already fetched is still used by the server when a card answers (lib/whisper-local.js).
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
-    var s = el('div', 'dio-status' + (msgErr ? ' err' : ''), msg);
+    var s = el('div', 'dio-status', msg);
     body.appendChild(s);
     paintYt(); paintHome(); paintLook();
   }
 
   function load() {
     return fetch('/api/speech/local').then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.success) state = d.state; paint(); })
-      .catch(function () { /* the next look tries again */ });
+      .then(function (d) {
+        if (d && d.success) { state = d.state; stateFailed = false; }
+        else { stateFailed = !state; sayError('Could not read the recognition on this computer', (d && d.error) || 'no answer'); }
+        paint();
+      })
+      .catch(function (e) { stateFailed = !state; sayError('Could not read the recognition on this computer', e.message); paint(); });
   }
   function schedule() {
     if (timer) clearTimeout(timer);

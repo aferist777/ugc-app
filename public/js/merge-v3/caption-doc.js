@@ -35,6 +35,8 @@ import { note } from './ask.js';
 import { linesOf, textOfLine, isWordsLane, editLine, splitLine, joinLines, rewrite, matcher, matchesIn, replaceIn } from '../captions/doc.js';
 import { isHeard } from '../captions/heard.js';
 import { isCorrected } from '../captions/words.js';
+// (phase V73 block 2, step 2b) A lane with no lines - the shared "nothing here", a row of the document.
+import { emptyEl } from '../ui-state.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 0:12.4 - minutes and seconds to a tenth.
@@ -66,14 +68,14 @@ export function mount(host) {
   // Find and replace.
   const find = _el('div', 'mv3-doc-find');
   const r1 = _el('div', 'mv3-doc-fr');
-  const q = _el('input', 'mv3-doc-q');
+  const q = _el('input', 'mv3-doc-q u-in is-s');
   q.type = 'text';
   q.placeholder = 'find';
   q.spellcheck = false;
   q.setAttribute('aria-label', 'Find in the subtitles and the text lanes');
   const count = _el('span', 'mv3-doc-n');
   const opt = (label, title, key) => {
-    const b = _el('button', 'mv3-c-sw mv3-doc-opt', label);
+    const b = _el('button', 'mv3-doc-opt u-btn is-s', label);
     b.type = 'button';
     b.title = title;
     b.setAttribute('aria-pressed', 'false');
@@ -88,14 +90,14 @@ export function mount(host) {
   };
   r1.append(q, count, opt('Aa', 'Match case', 'cased'), opt('W', 'Whole words only', 'whole'));
   const r2 = _el('div', 'mv3-doc-fr');
-  const rep = _el('input', 'mv3-doc-r');
+  const rep = _el('input', 'mv3-doc-r u-in is-s');
   rep.type = 'text';
   rep.placeholder = 'replace with';
   rep.spellcheck = false;
-  const one = _el('button', 'mv3-c-btn', 'replace');
+  const one = _el('button', 'mv3-c-btn u-btn is-s', 'replace');
   one.type = 'button';
   one.title = 'Replace the lit match and go on to the next';
-  const all = _el('button', 'mv3-c-btn', 'replace all');
+  const all = _el('button', 'mv3-c-btn u-btn is-s', 'replace all');
   all.type = 'button';
   all.title = 'Replace every match - one step to undo';
   r2.append(rep, one, all);
@@ -207,8 +209,11 @@ export function paint() {
         seen.add(c.id);
       }
       if (!lines.length) {
-        sec.empty = sec.empty || _el('div', 'mv3-doc-none');
-        sec.empty.textContent = t.kind === 'subs' ? 'No lines yet - Generate from the sound, or Add a line, in the strip.' : 'No lines yet - Add a line in the strip.';
+        const said = t.kind === 'subs' ? 'No lines yet - Generate from the sound, or Add a line, in the strip.' : 'No lines yet - Add a line in the strip.';
+        if (!sec.empty || sec.empty.dataset.said !== said) {
+          sec.empty = emptyEl(said, { line: true, cls: 'mv3-doc-none' });
+          sec.empty.dataset.said = said;
+        }
         nodes.push(sec.empty);
       }
       _place(sec.list, nodes);

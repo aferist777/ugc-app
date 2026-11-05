@@ -26,11 +26,7 @@
 }
 .vc-head h3{margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink)}
 .vc-head-sub{flex:1; font:600 11px/1.2 var(--font); color:var(--muted)}
-.vc-close{
-  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.vc-close:hover{color:var(--ink)}
+.vc-close{flex:0 0 auto}
 .vc-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:240px minmax(0, 1fr) 360px}
 .vc-foot{
   flex:0 0 auto; padding:6px 13px; border-top:1px solid var(--border); background:var(--surface-2);
@@ -44,10 +40,7 @@
 .vc-left-in{flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 12px 14px}
 .vc-lab{margin:10px 0 4px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .vc-lab:first-child{margin-top:2px}
-.vc-model, .vc-sort{
-  width:100%; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.vc-model, .vc-sort{ width:100% }
 .vc-facts{display:flex; flex-wrap:wrap; gap:4px; margin-top:6px}
 .vc-agg{
   padding:1px 6px; border:1px solid var(--border); border-radius:var(--pill);
@@ -55,24 +48,12 @@
 }
 .vc-agg.is-ok{color:var(--success); border-color:var(--success-soft)}
 .vc-fact{flex:1 0 100%; font:600 10px/1.4 var(--font); color:var(--muted)}
-.vc-q{
-  width:100%; height:26px; margin-top:12px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.vc-q:focus{outline:none; border-color:var(--focus)}
+.vc-q{ width:100%; margin-top:12px }
 /* The category - one, or all - and the filters: each a dropdown of several values that stays open (phase V6). */
-.vc-catsel{
-  width:100%; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.vc-catsel{ width:100% }
 .vc-has-tip{cursor:help}
 .vc-dd{margin-top:5px}
-.vc-dd-b{
-  display:flex; align-items:center; gap:6px; width:100%; height:28px; padding:0 8px;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--ink); cursor:pointer; text-align:left;
-}
-.vc-dd-b:hover{border-color:var(--muted)}
+.vc-dd-b{ width:100%; padding:0 8px }
 .vc-dd-n{flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .vc-dd-v{
   flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -96,7 +77,7 @@
   font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none;
 }
 .vc-dd-row:hover{background:var(--surface-2)}
-.vc-dd-row input{margin:0; accent-color:var(--success); cursor:pointer}
+.vc-dd-row input{margin:0}
 .vc-dd-row span{flex:1 1 auto; min-width:0}
 .vc-dd-row b{font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums}
 .vc-dd-row.is-none{opacity:.42}
@@ -137,8 +118,6 @@
 .vc-box img, .vc-vid{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
 .vc-tile:hover .vc-box{border-color:var(--muted)}
 .vc-tile.is-picked .vc-box{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}
-.vc-tile:focus-visible{outline:none}
-.vc-tile:focus-visible .vc-box{box-shadow:0 0 0 2px var(--focus)}
 .vc-box.is-text{padding:24px 9px 9px}
 .vc-lead{
   display:-webkit-box; -webkit-line-clamp:11; -webkit-box-orient:vertical; overflow:hidden;
@@ -160,15 +139,13 @@
 }
 .vc-tags{display:flex; gap:6px; font:600 9.5px/1.3 var(--font); color:var(--muted)}
 .vc-tags i{margin-left:auto; font-style:normal; color:var(--ink); white-space:nowrap}
-.vc-more{
-  display:block; margin:12px auto 0; padding:5px 14px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10.5px/1.2 var(--font); cursor:pointer;
-}
-.vc-more:hover{border-color:var(--muted)}
+.vc-more{ display:flex; margin:12px auto 0 }
 
 /* ── right: the one picked ── */
 .vc-right{min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--surface)}
 .vc-right > .vc-note{margin:14px}
+/* (phase V73 block 2) The one picked being read, or not read - the shared parts as rows (js/ui-state.js), where the note stood. */
+.vc-right > .u-loading, .vc-right > .u-failed{margin:14px}
 .vc-right-in{flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 14px 16px}
 .vc-kindline{font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .vc-title{margin:5px 0 2px; font:700 14px/1.3 var(--font); color:var(--ink)}
@@ -192,26 +169,14 @@
   display:grid; grid-template-columns:auto auto auto auto auto 1fr; align-items:center; gap:4px 6px;
   padding:5px 6px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg);
 }
-.vc-slot select, .vc-slot input[type=number], .vc-hint{
-  height:22px; padding:0 4px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10px/20px var(--font); min-width:0;
-}
-.vc-slot input[type=number]{width:38px}
+.vc-slot select, .vc-slot input[type=number], .vc-hint{ min-width:0 }
+.vc-slot input[type=number]{ width:52px }
 .vc-slot label{display:inline-flex; align-items:center; gap:3px; font:600 9.5px/1 var(--font); color:var(--muted)}
-.vc-slot input[type=checkbox]{margin:0; accent-color:var(--success)}
-.vc-x{
-  justify-self:end; width:20px; height:20px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.vc-x:hover{color:var(--danger); border-color:var(--danger)}
-.vc-hint{grid-column:1 / -1; width:100%; font-weight:500}
+.vc-slot input[type=checkbox]{margin:0}
+.vc-x{justify-self:end}
+.vc-hint{ grid-column:1 / -1; width:100% }
 .vc-adds{display:flex; gap:12px}
-.vc-skill{
-  display:block; width:100%; min-height:240px; padding:8px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.vc-skill:focus{outline:none; border-color:var(--focus)}
+.vc-skill{ display:block; width:100%; min-height:240px; resize:vertical; font-family:var(--mono) }
 .vc-prompt{margin-top:14px}
 .vc-prompt summary{font:600 10.5px/1.4 var(--font); color:var(--muted); cursor:pointer}
 .vc-prompt pre{
@@ -233,9 +198,6 @@
   flex:0 0 auto; display:flex; justify-content:flex-end; padding:9px 14px;
   border-top:1px solid var(--border); background:var(--surface-2);
 }
-.vc-use{font-weight:700; color:var(--on-main); background:var(--main); border-color:var(--main); padding:5px 18px}
-.vc-use:hover:not([disabled]){background:var(--main-hover); color:var(--on-main); filter:brightness(1.1)}
-.vc-use[disabled]{opacity:.45; cursor:not-allowed}
 
 /* A narrower window: the columns give way, the tiles first. */
 @media (max-width:1180px){ .vc-body{grid-template-columns:210px minmax(0, 1fr) 320px} }
@@ -270,13 +232,9 @@
   display:block; width:100%; margin:5px 0 2px; padding:3px 6px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--bg); color:var(--ink); font:700 14px/1.3 var(--font);
 }
-.vc-title-in:focus{outline:none; border-color:var(--focus)}
 .vc-hint-line{margin-top:4px; font:500 10px/1.4 var(--font); color:var(--gold)}
 .vc-preset{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding:8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
 .vc-preset-row{display:flex; gap:6px; flex-wrap:wrap}
-.vc-preset-row .mv3-c-btn{padding:3px 10px}
-.vc-preset-row .mv3-c-btn.is-danger{color:var(--danger)}
-.vc-preset-row .mv3-c-btn[disabled]{opacity:.5}
 .vc-preset-said{font:600 10px/1.4 var(--font); color:var(--success)}
 .vc-preset-said:empty{display:none}
 .vc-preset-said.is-bad{color:var(--danger)}

@@ -45,7 +45,7 @@ export function openOwnText(put, done, o = {}) {
 
   const head = _el('div', 'mv3-x-head');
   head.appendChild(_el('h3', null, talking ? 'Talking head from your text' : 'Voiceover from your text'));
-  const close = _el('button', 'mv3-x-close', '✕');
+  const close = _el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', '');
   close.type = 'button';
   head.appendChild(close);
   box.appendChild(head);
@@ -54,7 +54,7 @@ export function openOwnText(put, done, o = {}) {
   box.appendChild(body);
   const row = _el('div', 'mv3-x-row');
   row.appendChild(_el('label', null, 'Name'));
-  const name = _el('input', 'mv3-sc-inp');
+  const name = _el('input', 'mv3-sc-inp u-in');
   name.type = 'text';
   name.placeholder = 'what this ' + (talking ? 'talking head' : 'voiceover') + ' is called - the first words when empty';
   name.value = String(o.name || '');
@@ -62,7 +62,7 @@ export function openOwnText(put, done, o = {}) {
   body.appendChild(row);
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'The text'));
-  const text = _el('textarea', 'mv3-sc-lines is-votext');
+  const text = _el('textarea', 'mv3-sc-lines is-votext u-area is-dark');
   text.spellcheck = false;
   text.maxLength = API.VO_MAX;
   text.placeholder = talking
@@ -80,7 +80,7 @@ export function openOwnText(put, done, o = {}) {
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
-  const go = _el('button', 'mv3-c-btn mv3-x-use', 'use');
+  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'use');
   go.type = 'button';
   go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
   foot.append(note, go);

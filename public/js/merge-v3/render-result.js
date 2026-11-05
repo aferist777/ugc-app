@@ -165,7 +165,7 @@ export async function showResult(o) {
   const box = el('div', 'mv3-x is-result is-wide');
   const head = el('div', 'mv3-x-head');
   head.appendChild(el('h3', null, o.fresh ? 'Render finished' : (o.title || 'Render')));
-  const x = el('button', 'mv3-x-close', '✕'); x.type = 'button'; x.title = 'Close (Esc)';
+  const x = el('button', 'mv3-x-close u-btn is-s is-icon is-quiet u-x', ''); x.type = 'button'; x.title = 'Close (Esc)';
   head.appendChild(x);
   box.appendChild(head);
 
@@ -193,12 +193,12 @@ export async function showResult(o) {
     let f;
     if (p.select) {
       f = document.createElement('select');
-      f.className = 'mv3-rr-rf';
+      f.className = 'mv3-rr-rf u-in is-s';
       const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; f.appendChild(o0);
       for (const v of p.select) { const oo = document.createElement('option'); oo.value = v; oo.textContent = v; f.appendChild(oo); }
     } else {
       f = document.createElement('input');
-      f.type = 'text'; f.className = 'mv3-rr-rf'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
+      f.type = 'text'; f.className = 'mv3-rr-rf u-in is-s'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
     }
     row.appendChild(f);
     row.appendChild(el('div', 'mv3-rr-rd', p.desc));
@@ -211,19 +211,19 @@ export async function showResult(o) {
   // ── the foot: the full name along the left, the buttons on the right ──
   const foot = el('div', 'mv3-x-foot is-rr');
   const name = document.createElement('input');
-  name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
+  name.type = 'text'; name.className = 'mv3-rr-name u-in'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
   name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
   const hint = el('span', 'mv3-rr-hint');
-  const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
+  const cancel = el('button', 'mv3-c-btn u-btn' + (o.fresh ? ' danger is-danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
   if (o.fresh) cancel.title = 'Delete this render';
-  const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
+  const save = el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Save & download'); save.type = 'button';
   // THE SUBTITLES FILE beside the render (phase V30, block 4): shown when it has one; downloaded with the video only
   // when this is ticked - off unless the person ticked it last time (the owner's (с38)).
   const srtBox = el('span', 'mv3-x-check');
   const srtLbl = document.createElement('label');
   const srtOn = document.createElement('input');
-  srtOn.type = 'checkbox';
+  srtOn.type = 'checkbox'; srtOn.classList.add('u-check');
   srtOn.checked = _srtWanted();
   srtOn.addEventListener('change', () => { try { localStorage.setItem(LS_SRT, srtOn.checked ? '1' : '0'); } catch (e) { /* a private window */ } });
   srtLbl.append(srtOn, el('span', null, '.srt too'));
@@ -316,7 +316,7 @@ export async function showResult(o) {
       srtBox.hidden = !state.srt;
       if (state.srt && srtOn.checked) download(state.srt);
       say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-good');
-      cancel.textContent = 'Close'; cancel.classList.remove('danger'); cancel.title = '';
+      cancel.textContent = 'Close'; cancel.classList.remove('danger', 'is-danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');
     } finally {

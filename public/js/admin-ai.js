@@ -14,8 +14,12 @@
   if (!body) return;
   let st = null;          // { ladder, max, providers: [{ id, label, off, unproven, models: [{ id, label }] }] }
   let msg = '';
-  let msgErr = false;
   let busy = false;
+  let failed = false;     // the settings could not be read and nothing is shown yet
+  // (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js); the pane being read or not read is the
+  // shared part (js/ui-state.js) - this is a classic script, so the modules come with import().
+  const sayError = (t, detail) => { import('/js/notice.js').then(m => m.showError(t, detail ? { detail } : {})).catch(() => {}); };
+  const stateEl = (make) => { const hold = el('div'); import('/js/ui-state.js').then(m => { if (hold.isConnected) hold.replaceWith(make(m)); }).catch(() => {}); return hold; };
 
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
@@ -78,7 +82,7 @@
     // step being changed would vanish.
     const used = new Set(st.ladder.filter((_, k) => k !== i).map(s => s.provider + '|' + s.model));
 
-    const ps = el('select', 'ai-sel ai-prov');
+    const ps = el('select', 'ai-sel ai-prov u-in is-s');
     ps.title = 'The aggregator this step asks';
     for (const q of st.providers) {
       const o = el('option', null, q.label + (q.off ? ' - ' + offWord(q.off) : '') + (q.unproven ? ' (not tried yet)' : ''));
@@ -99,7 +103,7 @@
     });
     row.appendChild(ps);
 
-    const ms = el('select', 'ai-sel ai-model');
+    const ms = el('select', 'ai-sel ai-model u-in is-s');
     ms.title = 'The model - every one of them sees pictures';
     for (const m of ((p && p.models) || [{ id: step.model, label: step.model }])) {
       const o = el('option', null, m.label + (used.has(step.provider + '|' + m.id) ? ' - on another step' : ''));
@@ -119,7 +123,7 @@
     row.appendChild(el('span', 'ai-off', off ? 'stepped over: ' + off : ''));
 
     const move = (to, sym, title) => {
-      const b = el('button', 'lib-btn ai-mini', sym);
+      const b = el('button', 'u-btn is-s is-icon is-quiet ai-mini', sym);
       b.type = 'button';
       b.title = title;
       b.disabled = to < 0 || to >= n;
@@ -132,7 +136,7 @@
     };
     row.appendChild(move(i - 1, '▲', 'Ask this one earlier'));
     row.appendChild(move(i + 1, '▼', 'Ask this one later'));
-    const del = el('button', 'lib-btn ai-mini', '−');
+    const del = el('button', 'u-btn is-s is-icon is-quiet ai-mini', '−');
     del.type = 'button';
     del.title = n < 2 ? 'The ladder needs one step at least' : 'Remove this step';
     del.disabled = n < 2;
@@ -155,7 +159,7 @@
 
   function paint() {
     body.textContent = '';
-    if (!st) { body.appendChild(el('div', 'dio-status', msg || 'reading…')); return; }
+    if (!st) { body.appendChild(stateEl(m => (failed ? m.failedEl('AI settings', load) : m.loadingEl('reading…', { line: true })))); return; }
     body.appendChild(explain());
     body.appendChild(el('div', 'dio-sec', 'Agents'));
     const list = el('div', 'ai-ladder');
@@ -163,7 +167,7 @@
     body.appendChild(list);
     const free = nextFree();
     const full = st.ladder.length >= st.max;
-    const add = el('button', 'lib-btn ai-add', '+ add a step');
+    const add = el('button', 'u-btn ai-add', '+ add a step');
     add.type = 'button';
     add.disabled = full || !free || busy;
     add.title = full ? 'Five is the cap - more steps buy waiting, not reliability'
@@ -172,30 +176,31 @@
     const foot = el('div', 'dio-actions');
     foot.append(add, el('span', 'adm-count', st.ladder.length + ' of ' + st.max));
     body.appendChild(foot);
-    body.appendChild(el('div', 'dio-status' + (msgErr ? ' err' : ''), msg));
+    body.appendChild(el('div', 'dio-status', msg));
     body.querySelectorAll('select, .ai-mini').forEach(c => { if (busy) c.disabled = true; });
   }
 
-  function take(d) {
+  function take(d, what) {
     if (d && d.success) { st = { ladder: d.ladder, max: d.max, providers: d.providers }; return true; }
-    msg = (d && d.error) || 'the server did not answer'; msgErr = true;
+    msg = '';
+    sayError(what, (d && d.error) || 'the server did not answer');
     return false;
   }
 
   function save(list) {
-    busy = true; msg = 'saving…'; msgErr = false;
+    busy = true; msg = 'saving…';
     paint();
     fetch('/api/ai-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: list }) })
       .then(r => r.json())
-      .then(d => { if (take(d)) msg = 'Saved. The next agent asks this ladder.'; })
-      .catch(() => { msg = 'Not saved - the server did not answer.'; msgErr = true; })
+      .then(d => { if (take(d, 'Not saved')) msg = 'Saved. The next agent asks this ladder.'; })
+      .catch(() => { msg = ''; sayError('Not saved - the server did not answer.'); })
       .finally(() => { busy = false; paint(); });
   }
 
   function load() {
     fetch('/api/ai-settings').then(r => r.json())
-      .then(d => { if (take(d)) { msg = ''; msgErr = false; } paint(); })
-      .catch(() => { msg = 'Could not read the settings.'; msgErr = true; paint(); });
+      .then(d => { if (take(d, 'Could not read the settings.')) { msg = ''; failed = false; } else failed = !st; paint(); })
+      .catch(() => { failed = !st; sayError('Could not read the settings.'); paint(); });
   }
 
   document.addEventListener('adm-pane', (e) => { if (e.detail === 'ai') { paint(); load(); } });

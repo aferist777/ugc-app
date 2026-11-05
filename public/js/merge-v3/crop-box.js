@@ -476,7 +476,7 @@ export function cropRows(host, items) {
   for (const [name, label] of [['', 'Free'], ...Object.keys(SHAPES).map((s) => [s, s])]) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-crop-shape' + ((k.shape || '') === name ? ' is-on' : '');
+    b.className = 'mv3-crop-shape u-chip' + ((k.shape || '') === name ? ' is-on' : '');
     b.textContent = label;
     b.title = name ? 'The largest ' + name + ' frame about the middle of this one - kept ' + name + ' until Free'
       : 'Any shape - Shift while dragging a corner keeps the one it has';

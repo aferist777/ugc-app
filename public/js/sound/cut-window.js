@@ -21,6 +21,7 @@
 
 import * as Layers from '../layers.js';
 import { scrubber, clock } from './scrub.js';
+import { showError } from '../notice.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -43,7 +44,7 @@ export async function openCut(it, opts) {
   const head = el('div', 'snd-win-head');
   head.appendChild(el('b', null, 'Cut a piece'));
   head.appendChild(el('span', 'snd-muted', it.name));
-  const x = el('button', 'hp-x', '✕');
+  const x = el('button', 'hp-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   head.appendChild(x);
   win.appendChild(head);
@@ -73,9 +74,9 @@ export async function openCut(it, opts) {
   win.appendChild(info);
 
   const row = el('div', 'snd-cut-row');
-  const play = el('button', 'snd-btn snd-cut-play', '▶');
+  const play = el('button', 'snd-btn snd-cut-play u-btn is-s is-icon', '▶');
   play.title = 'Play from the playhead (Space) - a press on the wave moves it';
-  const piece = el('button', 'snd-btn', '▶ the piece');
+  const piece = el('button', 'snd-btn u-btn is-s', '▶ the piece');
   piece.title = 'Play only the piece between the gold handles';
   play.type = piece.type = 'button';
   const time = el('span', 'snd-clock', '');
@@ -83,17 +84,17 @@ export async function openCut(it, opts) {
   row.appendChild(el('span', 'sp'));
   let lay = null;
   if (typeof o.toTimeline === 'function') {
-    lay = el('button', 'snd-btn', 'to timeline');
+    lay = el('button', 'snd-btn u-btn is-s', 'to timeline');
     lay.type = 'button';
     lay.title = 'Lay the piece at the playhead of the timeline - the same file, cut to the piece';
     row.appendChild(lay);
   }
   win.appendChild(row);
-  const said = el('div', 'snd-cut-said snd-muted', 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
-    + ' - the sound itself stays as it is.');
+  const HINT = 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
+    + ' - the sound itself stays as it is.';
+  // (phase V73 block 2) The line says what was done ("Laid on …", "cutting…"); an error is a popup in the corner (js/notice.js).
+  const said = el('div', 'snd-cut-said snd-muted', HINT);
   win.appendChild(said);
-  const err = el('div', 'snd-err');
-  win.appendChild(err);
 
   document.body.append(back, win);
   const layer = Layers.open(win, { modal: true, onEsc: () => close() });
@@ -128,7 +129,7 @@ export async function openCut(it, opts) {
   const startAt = (from, to) => {
     audio.currentTime = from;
     playEnd = to;
-    audio.play().then(() => { if (!raf) raf = requestAnimationFrame(tick); }).catch(() => { err.textContent = 'That file will not play'; });
+    audio.play().then(() => { if (!raf) raf = requestAnimationFrame(tick); }).catch(() => { showError('That file will not play'); });
   };
   audio.addEventListener('pause', paintClock);
   audio.addEventListener('ended', () => { sc.setTime(audio.currentTime); paintClock(); });
@@ -151,7 +152,6 @@ export async function openCut(it, opts) {
   // ── "to timeline" (Merge): the piece at the playhead; the window stays ──
   if (lay) {
     lay.addEventListener('click', () => {
-      err.textContent = '';
       let r = null;
       try {
         r = o.toTimeline({ src: it.path, name: it.name, libId: it.id || null, kind: it.kind || '',
@@ -159,19 +159,16 @@ export async function openCut(it, opts) {
       } catch (e) { r = { ok: false, why: e.message }; }
       if (r && r.ok) {
         said.textContent = 'Laid on ' + (r.lane || 'an audio lane') + ' at ' + clock(r.at || 0, true) + ' - Ctrl+Z on the timeline takes it off.';
-        said.classList.remove('is-bad');
       } else {
-        said.textContent = (r && r.why) || 'The piece could not be laid.';
-        said.classList.add('is-bad');
+        said.textContent = HINT;
+        showError((r && r.why) || 'The piece could not be laid.');
       }
     });
   }
 
   // "Cut" by the right flag (scrub.js waits on its button while this goes).
   async function _cut(x0, x1) {
-    err.textContent = '';
     said.textContent = 'cutting…';
-    said.classList.remove('is-bad');
     try {
       const r = await fetch('/api/audio/cut', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -182,8 +179,8 @@ export async function openCut(it, opts) {
       close();
       if (o.done) o.done(d.item, d.where);
     } catch (e) {
-      said.textContent = '';
-      err.textContent = e.message;
+      said.textContent = HINT;
+      showError(e.message);
     }
   }
 }

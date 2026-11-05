@@ -24,6 +24,11 @@
 
 import * as J from './jobs.js';
 import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
+// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here" as the
+// shared part (css/app-shell.css .u-empty).
+import { ask } from '../ask.js';
+import { emptyEl } from '../ui-state.js';
 
 const el = J.el;
 
@@ -62,27 +67,27 @@ const HTML = `
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
       <aside class="nr-list-col">
-        <button class="mk-add nr-new" type="button" data-f="new" title="Make a narrator - a name first, samples after">+ New narrator</button>
+        <button class="mk-add nr-new u-btn is-s" type="button" data-f="new" title="Make a narrator - a name first, samples after">+ New narrator</button>
         <div class="nr-list" data-f="list"></div>
       </aside>
       <section class="nr-col">
         <div class="nr-col-h">Samples <em>— writing by this author</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
         <div class="nr-samples" data-f="samples"></div>
         <div class="nr-add">
-          <textarea data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
+          <textarea class="u-area" data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
           <div class="nr-add-row">
-            <button class="lib-btn" type="button" data-f="addtext">Add text</button>
+            <button class="u-btn is-s" type="button" data-f="addtext">Add text</button>
             <span class="sp"></span>
             <input type="file" data-f="file" accept="video/*,audio/*">
-            <button class="lib-btn" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
+            <button class="u-btn is-s" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
           </div>
           <div class="nr-add-row">
-            <input type="text" class="nr-url" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
-            <button class="lib-btn" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
+            <input type="text" class="nr-url u-in" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
+            <button class="u-btn is-s" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
           </div>
           <div class="nr-add-row">
-            <select class="nr-url nr-src-pick" data-f="src"><option value="">…or a source of the Library</option></select>
-            <button class="lib-btn" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
+            <select class="nr-url nr-src-pick u-in" data-f="src"><option value="">…or a source of the Library</option></select>
+            <button class="u-btn is-s" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
           </div>
           <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
             transcribed (a paid call), and its words become the sample. A source of the Library was heard when it came in:
@@ -97,7 +102,7 @@ const HTML = `
           <div class="mk-job" data-f="vjob" hidden></div>
           <div class="nr-foot-row">
             <span class="nr-foot-note" data-f="readnote"></span>
-            <button class="lib-btn primary" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
+            <button class="u-btn is-main" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
           </div>
         </div>
       </section>
@@ -142,7 +147,7 @@ function _say(text, isError) {
   if (!text) return;
   box.className = 'nr-said' + (isError ? ' err' : '');
   box.appendChild(el('span', null, text));
-  const x = el('button', 'mk-said-x', '✕');
+  const x = el('button', 'mk-said-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.addEventListener('click', () => _say(''));
   box.appendChild(x);
@@ -175,7 +180,7 @@ function _paintList() {
   for (const n of [...box.children]) if (n !== keep) n.remove();
   if (keep && keep.parentNode !== box) box.prepend(keep);
   if (!_list.length && !keep) {
-    box.appendChild(el('div', 'mk-src-empty', 'No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.'));
+    box.appendChild(emptyEl('No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.'));
     return;
   }
   for (const it of _list) {
@@ -188,11 +193,11 @@ function _paintList() {
     row.appendChild(main);
     const [kind, text] = _tag(it);
     row.appendChild(el('span', 'mk-tag ' + (kind === 'run' ? 'wait' : kind), text));
-    const x = el('button', 'nr-x', '✕');
+    const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Delete this narrator';
     x.disabled = _running(it.id);
-    x.addEventListener('click', (e) => { e.stopPropagation(); _delete(it); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); _delete(it, x); });
     row.appendChild(x);
     const pick = () => { if (String(it.id) !== _sel) { _sel = String(it.id); _paintList(); } _show(); };
     row.addEventListener('click', pick);
@@ -209,7 +214,7 @@ function _askName() {
   if (!_win) return;
   if (_nameBox) { _nameBox.input.focus(); return; }
   const row = el('div', 'nr-name');
-  const input = el('input');
+  const input = el('input', 'u-in');
   input.type = 'text';
   input.placeholder = 'Name, then Enter';
   input.maxLength = 80;
@@ -250,7 +255,7 @@ function _closeName() {
   Layers.close(b.layer);
 }
 
-async function _delete(it) {
+async function _delete(it, anchor) {
   if (_running(it.id)) return;
   // Drafts that were written with it: they keep their text, and the form will ask for another.
   let n = 0;
@@ -260,7 +265,9 @@ async function _delete(it) {
   } catch (e) { /* the count is a courtesy */ }
   const lines = [`Delete the narrator "${it.name}"?`, '', 'Its samples and its voice go with it, and that cannot be undone.'];
   if (n) lines.push('', `${n === 1 ? 'One draft was' : `${n} drafts were`} written with it - ${n === 1 ? 'it keeps its' : 'they keep their'} text, and the form will ask for another narrator.`);
-  if (!confirm(lines.join('\n'))) return;
+  // `stay`: the list repaints as a narrator's job lands, and a repaint's scroll must not answer "no" for the person.
+  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
+  if (_running(it.id)) return;
   try {
     await J.api(_nurl(it.id), { method: 'DELETE' });
     _typed.delete(String(it.id));
@@ -347,7 +354,7 @@ function _paintSamples() {
   box.textContent = '';
   const owner = String(_rec.narrator.id);
   const samples = (_rec.narrator.samples || []);
-  if (!samples.length) { box.appendChild(el('div', 'mk-empty', 'No samples yet.')); return; }
+  if (!samples.length) { box.appendChild(emptyEl('No samples yet.')); return; }
   samples.forEach((s, i) => {
     const card = el('div', 'nr-sample' + (s.readAt ? '' : ' unread'));
     const h = el('div', 'nr-sample-h');
@@ -359,10 +366,10 @@ function _paintSamples() {
     const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'read' : 'not read');
     tag.title = s.readAt ? 'Read into the voice - it is not read again' : 'Not read yet - "Read new samples" reads it';
     h.appendChild(tag);
-    const x = el('button', 'nr-x', '✕');
+    const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Remove this sample';
-    x.addEventListener('click', () => _removeSample(owner, i, s));
+    x.addEventListener('click', () => _removeSample(owner, i, s, x));
     h.appendChild(x);
     card.appendChild(h);
     const text = String(s.text || '');
@@ -371,9 +378,11 @@ function _paintSamples() {
   });
 }
 
-async function _removeSample(id, i, s) {
+async function _removeSample(id, i, s, anchor) {
   const said = s && s.readAt ? 'What was read from it stays in the voice.' : 'It has not been read yet.';
-  if (id !== _sel || _running(id) || !confirm(`Remove this sample? ${said}`)) return;
+  if (id !== _sel || _running(id)) return;
+  if (!await ask(anchor, `Remove this sample? ${said}`, { yes: 'Remove', danger: true, stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   try {
     await J.api(_nurl(id, `/samples/${i}`), { method: 'DELETE' });
     await _readList();
@@ -462,16 +471,9 @@ function _paintRight() {
   _paintVoice(box);
 }
 
-// A press arms a ✕ ("really?" for three seconds); the second press within them does it.
+// A press arms a ✕ ("Really?" for three seconds); the second press within them does it - js/really.js (phase V73 block 2).
 function _twice(btn, act) {
-  const label = btn.textContent;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (btn.classList.contains('armed')) { btn.classList.remove('armed'); clearTimeout(btn._t); btn.textContent = label; act(); return; }
-    btn.classList.add('armed');
-    btn.textContent = 'really?';
-    btn._t = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3000);
-  });
+  twoPress(btn, { go: (e) => { e.stopPropagation(); act(); } });
 }
 
 // A text corrected in place: pressed, it takes the cursor; Enter or leaving it saves, Escape puts it back. `save(text)`
@@ -519,7 +521,7 @@ function _editable(node, value, save, { multiline = false } = {}) {
 function _paintVoice(box) {
   const n = _rec.narrator;
   if (!_hasVoice(n)) {
-    box.appendChild(el('div', 'mk-empty', (n.samples || []).length
+    box.appendChild(emptyEl((n.samples || []).length
       ? 'Not read yet. Press “Read new samples” - the voice is read out of the samples.'
       : 'Not read yet. Add samples, then press “Read new samples”.'));
     return;
@@ -543,7 +545,7 @@ function _paintVoice(box) {
       line.appendChild(t);
       // What the last reading added - when it was not the first.
       if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', 'new'));
-      const x = el('button', 'nr-x', '✕');
+      const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Delete this line of the voice';
       _twice(x, async () => {
@@ -621,7 +623,9 @@ async function _addFile() {
   const input = _win.q('file');
   const file = input.files && input.files[0];
   if (!file) { J.sayJob(_win.q('sjob'), 'Pick a video or audio file first.', true); return; }
-  if (!confirm(`Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`)) return;
+  // Paid - a plain answer (б2-5); the question waits, so a job started meanwhile is not doubled.
+  if (!await ask(_win.q('addfile'), `Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`, { yes: 'Transcribe', stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   const form = new FormData();
   form.append('file', file);
   input.value = '';
@@ -637,7 +641,9 @@ async function _addLink() {
   const input = _win.q('url');
   const url = input.value.trim();
   if (!url) { J.sayJob(_win.q('sjob'), 'Paste a link first.', true); return; }
-  if (!confirm('Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.')) return;
+  // At "add link" whether it was pressed or Enter was pressed in the field.
+  if (!await ask(_win.q('addlink'), 'Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.', { yes: 'Transcribe', stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   input.value = '';
   await _start(id, 'sample', () => _post(_nurl(id, '/samples/link'), { url }),
     { key: 'l2-sample|link', label: 'Reading the link…', estimateMs: J.EST.ingestLink });

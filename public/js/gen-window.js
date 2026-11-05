@@ -35,6 +35,8 @@ import { derived } from './chars-store.js';
 import { isPictureFile, pictureDataUrl, PICTURE_ACCEPT } from './picture-file.js';
 import { showPicture, tileMenu, MIN_WORDS_ALONE, nonsense } from './merge-v3/wk-maker.js';
 import { delX } from './del-x.js';
+import { showError } from './notice.js';
+import { emptyEl, loadingEl, failedEl } from './ui-state.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -105,7 +107,7 @@ export function openFrame(o) {
   box.setAttribute('role', 'dialog');
   const head = el('div', 'gw-head');
   const crumbs = el('div', 'gw-crumbs');
-  const x = el('button', 'gw-x', '✕');
+  const x = el('button', 'gw-x u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
   head.append(crumbs, x);
@@ -306,7 +308,7 @@ const KINDS = {
     none: 'No lookbooks yet. The first one is made on the right.',
   },
 };
-const _blank = () => ({ list: null, loading: false, ref: null, base: '', note: '', options: null, optionsWhy: '', picked: new Set(),
+const _blank = () => ({ list: null, loading: false, failed: false, ref: null, base: '', note: '', options: null, optionsWhy: '', picked: new Set(),
   making: false, said: '', status: '', job: null, looked: '' });
 const S = { environment: _blank(), lookbook: _blank() };
 const _shown = { environment: null, lookbook: null };   // { host, o } - where each bench is painted now
@@ -325,6 +327,7 @@ export function paintBench(host, o) {
   ensureCss();
   const kind = KINDS[o.kind] ? o.kind : 'environment';
   _shown[kind] = { host, o };
+  if (S[kind].list === null) S[kind].failed = false;   // opened again: read again, "reading…" meanwhile
   _render(kind);
   if (S[kind].list === null) _read(kind);
   _pickUp(kind, o);
@@ -339,13 +342,19 @@ export function openGenerator(o) {
   return win;
 }
 
+// (phase V73 block 2, (б2-19)) A shelf that could not be read is not an empty shelf: "Environments did not load" and Try
+// again where its tiles would be, the reason in the corner (js/notice.js). Tiles shown already stay.
 function _read(kind) {
   const s = S[kind];
   if (s.loading) return;
   s.loading = true;
+  s.failed = false;
   KINDS[kind].list()
     .then((files) => { s.list = files || []; })
-    .catch((e) => { s.list = s.list || []; s.said = 'Could not read the ' + KINDS[kind].noun + 's: ' + e.message; })
+    .catch((e) => {
+      if (s.list === null) s.failed = true;
+      showError('Could not read the ' + KINDS[kind].noun + 's: ' + ((e && e.message) || 'the app did not answer'));
+    })
     .finally(() => { s.loading = false; _render(kind); });
 }
 
@@ -408,8 +417,10 @@ function _render(kind) {
 
   // LEFT: the shelf a base is drawn from. What is made joins it, so the pile grows while you work.
   const left = el('div', 'gw-half is-shelf');
-  if (s.list === null) left.appendChild(el('div', 'gw-note', 'reading the ' + K.noun + 's…'));
-  else if (!s.list.length) left.appendChild(el('div', 'gw-note', K.none));
+  // (phase V73 block 2) the shared parts - reading, empty, did not load (js/ui-state.js); `gw-note` is their place here
+  if (s.failed) left.appendChild(failedEl(K.noun + 's', () => { s.failed = false; _render(kind); _read(kind); }, { cls: 'gw-note' }));
+  else if (s.list === null) left.appendChild(loadingEl('reading the ' + K.noun + 's…', { cls: 'gw-note' }));
+  else if (!s.list.length) left.appendChild(emptyEl(K.none, { icon: 'image', cls: 'gw-note' }));
   else {
     const grid = el('div', 'gw-grid is-' + kind);
     for (const p of s.list) {
@@ -432,7 +443,7 @@ function _render(kind) {
   const foot = el('div', 'gw-foot');
   const said = s.said ? el('div', 'gw-said', s.said) : null;
   if (said) foot.appendChild(said);
-  const go = el('button', 'gw-create', 'create');
+  const go = el('button', 'gw-create u-btn is-main', 'create');
   go.type = 'button';
   const hint = el('span', 'gw-hint');
   const sync = () => {
@@ -461,7 +472,7 @@ function _render(kind) {
     ask.appendChild(chips);
     foot.appendChild(ask);
   }
-  const note = el('textarea', 'gw-say');
+  const note = el('textarea', 'gw-say u-area');
   note.placeholder = K.say;
   note.value = s.note;
   note.addEventListener('input', () => {
@@ -495,9 +506,10 @@ function _field(kind) {
   input.hidden = true;
   const take = async (file) => {
     if (!file) return;
-    if (!isPictureFile(file)) { s.said = 'that is not a picture'; _render(kind); return; }
+    // (phase V73 block 2) a refused or unread file is said in the corner (js/notice.js)
+    if (!isPictureFile(file)) { showError('That is not a picture'); return; }
     try { s.ref = { name: file.name || 'photo', dataUrl: await pictureDataUrl(file), token: '' }; s.base = ''; _forget(s); }
-    catch (e) { s.said = e.message; }
+    catch (e) { showError((e && e.message) || 'The file could not be read'); return; }
     _render(kind);
   };
   input.addEventListener('change', () => take(input.files && input.files[0]));
@@ -506,7 +518,7 @@ function _field(kind) {
     img.alt = '';
     img.src = src;
     box.appendChild(img);
-    const clear = el('button', 'gw-dropx', '✕');
+    const clear = el('button', 'gw-dropx u-onpic is-del u-x', '');
     clear.type = 'button';
     clear.title = 'Take it off';
     clear.addEventListener('click', (e) => { e.stopPropagation(); s.ref = null; s.base = ''; _forget(s); _render(kind); });
@@ -621,8 +633,10 @@ async function _make(kind, o) {
     const msg = (e && e.message) || 'unknown';
     s.making = false;
     s.status = '';
-    // A refusal of the agent is an answer about what was asked for, and it reads better as that than as an error.
-    s.said = e && e.refused ? msg : 'The ' + KINDS[kind].noun + ' failed: ' + msg;
+    // A refusal of the agent is an answer about what was asked for, and it reads better as that than as an error - it stays
+    // on the bench's line; a failure of the press is an error, in the corner (phase V73 block 2).
+    if (e && e.refused) s.said = msg;
+    else showError('The ' + KINDS[kind].noun + ' failed: ' + msg);
     _end(kind, msg);
     _render(kind);
   }

@@ -38,7 +38,7 @@ function el(tag, cls, text) {
   return e;
 }
 function arrow(cls, text) {
-  const b = el('button', 'vc-nav ' + cls, text);
+  const b = el('button', 'vc-nav u-btn is-s is-icon ' + cls, text);
   b.type = 'button';
   return b;
 }

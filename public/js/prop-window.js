@@ -19,6 +19,7 @@ import { isPictureFile, pictureDataUrl, PICTURE_ACCEPT } from './picture-file.js
 import { openPick, closePick, ensurePickCss } from './merge-v3/chat-pick.js';
 import * as Src from './merge-v3/chat-sources.js';
 import { showPicture } from './merge-v3/wk-maker.js';
+import { showError } from './notice.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -44,7 +45,7 @@ let _s = null;
 let _poll = 0;
 let _input = null;
 
-const _blank = () => ({ photo: null, name: '', words: '', busy: false, said: '', added: null, info: null, polls: 0 });
+const _blank = () => ({ photo: null, name: '', words: '', busy: false, added: null, info: null, polls: 0 });
 
 /** The window of New prop - over everything open; the one open already when there is one. */
 export function openNewProp(o) {
@@ -79,11 +80,12 @@ function _onPaste(e) {
   _take(files[0]);
 }
 
+// (phase V73 block 2) A refused or unread file, and a failed `add`, are said in the corner (js/notice.js).
 async function _take(file) {
   if (!file) return;
-  if (!isPictureFile(file)) { _s.said = 'That is not a picture.'; _render(); return; }
-  try { _s.photo = { dataUrl: await pictureDataUrl(file), name: file.name || 'photo' }; _s.said = ''; }
-  catch (e) { _s.said = e.message; }
+  if (!isPictureFile(file)) { showError('That is not a picture.'); return; }
+  try { _s.photo = { dataUrl: await pictureDataUrl(file), name: file.name || 'photo' }; }
+  catch (e) { showError((e && e.message) || 'The file could not be read'); return; }
   _render();
 }
 
@@ -97,7 +99,6 @@ function _fromLibrary(anchor) {
     why: () => '',
     press: (it) => {
       _s.photo = { path: it.path, name: it.name || String(it.path).split('/').pop(), src: it.big || it.thumb || it.path };
-      _s.said = '';
       closePick();
       _render();
     },
@@ -135,7 +136,7 @@ function _left() {
     img.src = src;
     box.appendChild(img);
     if (!done) {
-      const x = el('button', 'gw-dropx', '✕');
+      const x = el('button', 'gw-dropx u-onpic is-del u-x', '');
       x.type = 'button';
       x.title = 'Take it off';
       x.addEventListener('click', (e) => { e.stopPropagation(); _s.photo = null; _render(); });
@@ -164,7 +165,7 @@ function _left() {
   wrap.append(box, _input);
   left.appendChild(wrap);
   if (!done) {
-    const lib = el('button', 'pw-lib', 'from IMAGES…');
+    const lib = el('button', 'pw-lib u-btn is-s', 'from IMAGES…');
     lib.type = 'button';
     lib.title = 'A picture of the Library - it is copied into Props, and stays where it is';
     lib.addEventListener('click', () => _fromLibrary(lib));
@@ -178,7 +179,7 @@ function _form() {
   const right = el('div', 'gw-half is-make pw-right');
   const body = el('div', 'pw-fields');
   body.appendChild(el('label', 'pw-lab', 'name'));
-  const name = el('input', 'pw-name');
+  const name = el('input', 'pw-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.placeholder = 'Optional - the agent names it from the picture';
@@ -186,18 +187,17 @@ function _form() {
   name.addEventListener('input', () => { _s.name = name.value; });
   body.appendChild(name);
   body.appendChild(el('label', 'pw-lab', 'what you know about the product'));
-  const words = el('textarea', 'gw-say pw-words');
+  const words = el('textarea', 'gw-say pw-words u-area');
   words.placeholder = 'What it is, its size, what it does, what matters to show - in any language. What the photo does not show comes from here.';
   words.value = _s.words;
   words.addEventListener('input', () => { _s.words = words.value; });
   body.appendChild(words);
   right.appendChild(body);
   const foot = el('div', 'gw-foot');
-  if (_s.said) foot.appendChild(el('div', 'gw-said', _s.said));
   const row = el('div', 'gw-row');
   const hint = el('span', 'gw-hint' + (_s.photo ? '' : ' is-why'),
     _s.photo ? 'An agent describes it for the frames chat - fractions of a cent, nothing is drawn' : 'a photo of the product first');
-  const go = el('button', 'gw-create', _s.busy ? 'adding…' : 'add');
+  const go = el('button', 'gw-create u-btn is-main', _s.busy ? 'adding…' : 'add');
   go.type = 'button';
   go.disabled = !_s.photo || _s.busy;
   go.title = _s.photo ? 'Into IMAGES → Props' : 'a photo of the product first';
@@ -211,7 +211,6 @@ function _form() {
 async function _add() {
   if (!_s.photo || _s.busy) return;
   _s.busy = true;
-  _s.said = '';
   _render();
   const body = { name: _s.name.trim(), words: _s.words.trim() };
   if (_s.photo.dataUrl) body.imageBase64 = _s.photo.dataUrl; else body.imagePath = _s.photo.path;
@@ -222,7 +221,7 @@ async function _add() {
     _s.polls = 0;
     if (typeof _o.onAdded === 'function') { try { _o.onAdded(_s.added); } catch (e) { /* the caller's */ } }
     _follow();
-  } catch (e) { _s.said = 'Not added: ' + e.message; }
+  } catch (e) { showError('Not added: ' + e.message); }
   _s.busy = false;
   _render();
 }
@@ -255,13 +254,14 @@ function _result() {
   else if (i.description) body.appendChild(el('div', 'pw-desc', i.description));
   else {
     body.appendChild(el('div', 'pw-desc is-fail', 'Not described: ' + (i.fail || 'the agent did not answer') + '.'));
-    const again = el('button', 'pw-again', 'read again');
+    const again = el('button', 'pw-again u-btn is-s', 'read again');
     again.type = 'button';
     again.title = 'The agent looks at the picture and reads your words again';
     again.addEventListener('click', async () => {
       again.disabled = true;
       try { await post('/api/props/' + encodeURIComponent(_s.added.id) + '/read', {}); _s.info = Object.assign({}, i, { reading: true, fail: '' }); _s.polls = 0; _render(); _follow(); }
-      catch (e) { _s.info = Object.assign({}, i, { fail: e.message }); _render(); }
+      // (phase V73 block 2) the press failed: in the corner; the description's own state stays as it was
+      catch (e) { again.disabled = false; showError(e.message); }
     });
     body.appendChild(again);
   }
@@ -271,7 +271,7 @@ function _result() {
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
   row.appendChild(el('span', 'gw-hint'));
-  const more = el('button', 'gw-create', 'add another');
+  const more = el('button', 'gw-create u-btn is-main', 'add another');
   more.type = 'button';
   more.title = 'A new product - the window empties';
   more.addEventListener('click', () => { clearTimeout(_poll); _s = _blank(); _render(); });

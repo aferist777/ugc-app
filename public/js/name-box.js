@@ -15,8 +15,13 @@
 //                 box the same way, and the box stays open
 //
 // One box at a time: opening a second one cancels the first.
+//
+// (phase V73 block 2, (б2-8)) The shared question's look (`.u-ask.is-float`, css/app-shell.css) with the shared field and
+// buttons: Cancel LEFT, the verb right. The 3D Studio's page keeps its old look and order.
 
 import * as Layers from './layers.js';
+
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
 let _box = null;
 
@@ -56,21 +61,21 @@ export function askName(opts) {
   const o = opts || {};
   _close(null);
   return new Promise((resolve) => {
-    const el = _el('div', 'nm-box');
-    el.appendChild(_el('div', 'nm-t', o.title || 'Name'));
-    const inp = _el('input', 'nm-in');
+    const el = _el('div', 'nm-box u-ask is-float');
+    el.appendChild(_el('b', 'nm-t', o.title || 'Name'));
+    const inp = _el('input', 'nm-in u-in');
     inp.type = 'text';
     inp.value = o.value || '';
     inp.placeholder = o.placeholder || 'Name';
     inp.maxLength = o.maxLength || 120;
     inp.spellcheck = false;
     const err = _el('div', 'nm-err');
-    const row = _el('div', 'nm-r');
-    const ok = _el('button', 'nm-b is-ok', o.okLabel || 'OK');
+    const row = _el('div', 'nm-r u-ask-r');
+    const ok = _el('button', 'nm-b is-ok u-btn is-s is-main', o.okLabel || 'OK');
     ok.type = 'button';
-    const no = _el('button', 'nm-b', 'Cancel');
+    const no = _el('button', 'nm-b u-btn is-s', 'Cancel');
     no.type = 'button';
-    row.append(ok, no);
+    if (OLD_LOOK()) row.append(ok, no); else row.append(no, ok);
     el.append(inp, err, row);
     document.body.appendChild(el);
     _place(el, o.anchor);

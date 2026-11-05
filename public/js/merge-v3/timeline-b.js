@@ -1495,7 +1495,7 @@ function _lane(t) {
   if (t.kind === 'subs' || t.kind === 'text') {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3b-sq';
+    btn.className = 'mv3b-sq u-btn is-icon is-quiet';
     const all = ((Store.timeline() || {}).tracks) || [];
     if (t.kind === 'subs') {
       const full = _count(all, 'text') >= MAX_TEXT;
@@ -1519,7 +1519,7 @@ function _lane(t) {
   } else if (t.kind !== 'subs') {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3b-sq';
+    btn.className = 'mv3b-sq u-btn is-icon is-quiet';
     const tl = Store.timeline();
     const all = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];
     if (t.main) {
@@ -1682,8 +1682,7 @@ function _clipEl(t, c, over) {
   // saying out loud before it happens rather than after.
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'mv3b-clipx';
-  x.textContent = '×';
+  x.className = 'mv3b-clipx u-onpic is-del u-x';
   x.title = 'Remove this clip';
   x.addEventListener('mousedown', (e) => e.stopPropagation());   // not a drag
   x.addEventListener('click', (e) => {
@@ -2067,8 +2066,7 @@ function _paintGone() {
   el.appendChild(t);
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'mv3-tl-gone-x';
-  x.textContent = '✕';
+  x.className = 'mv3-tl-gone-x u-btn is-s is-icon is-quiet u-x';
   x.title = 'Close - the clips stay red';
   x.addEventListener('click', () => { _goneShut = key; _paintGone(); });
   el.appendChild(x);
@@ -3031,11 +3029,11 @@ function _laneMenu(e) {
   _seekTo((e.clientX - lane.getBoundingClientRect().left) / _zoom());
 
   const box = document.createElement('div');
-  box.className = 'mv3-plus-menu';
+  box.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, title, on) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item';
+    b.className = 'mv3-plus-item u-mi';
     b.title = title;
     const s = document.createElement('span');
     s.textContent = label;
@@ -3092,10 +3090,10 @@ function _clipMenu(e) {
   e.preventDefault();
   _closeCtx();
   const box = document.createElement('div');
-  box.className = 'mv3-plus-menu';
+  box.className = 'mv3-plus-menu u-menu is-float';
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'mv3-plus-item';
+  b.className = 'mv3-plus-item u-mi';
   const usd = 0.15 * (+c.dur || 0) / 60;
   b.title = 'Music made for this clip by ElevenLabs - laid under it on "audio 2" (or the next free sound lane) when it comes';
   const s = document.createElement('span');

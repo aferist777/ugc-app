@@ -27,6 +27,7 @@ import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
 import { openCut } from './cut-window.js';
 import { secs } from './wave.js';
+import { menuIcons } from '../icons.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -74,9 +75,9 @@ export async function soundMenu(it, ev, opts) {
   _close();
   const own = it.kind === 'sounds';
   const builtin = it.kind === 'sfx';
-  const m = el('div', 'mv3-plus-menu snd-menu');
+  const m = el('div', 'mv3-plus-menu snd-menu u-menu is-float');
   const item = (label, sub, fn, danger) => {
-    const b = el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    const b = el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
     b.type = 'button';
     b.appendChild(el('span', null, label));
     if (sub) b.appendChild(el('small', null, sub));
@@ -140,6 +141,7 @@ export async function soundMenu(it, ev, opts) {
   item('About', builtin ? 'the built-in set: its author and licence' : 'where it came from', () => about(it, ev));
   if (!builtin && typeof o.del === 'function') item('Delete', it.kind === 'music' ? 'the track and its file' : 'the sound and its file', () => o.del(it), true);
 
+  menuIcons(m);
   document.body.appendChild(m);
   _place(m, ev.clientX, ev.clientY);
   const away = (e) => { if (!m.contains(e.target)) _close(); };
@@ -151,8 +153,8 @@ export async function soundMenu(it, ev, opts) {
 
 /** What a sound is: its length, where it lies, where it came from, its licence, what it was asked, its tags. */
 export function about(it, ev) {
-  const pop = el('div', 'mt-pop snd-about');
-  pop.appendChild(el('div', 'mt-pop-head', it.name));
+  const pop = el('div', 'mt-pop snd-about u-ask is-float');
+  pop.appendChild(el('b', 'mt-pop-head', it.name));
   const row = (k, v, href) => {
     if (!v) return;
     const r = el('div', 'snd-about-row');
@@ -177,8 +179,8 @@ export function about(it, ev) {
   row('style', i.style || m.style);
   if (m.original) row('cut from', (m.original.name || '') + ' · ' + m.original.in + '–' + m.original.out + ' s');
   if (Array.isArray(m.tags) && m.tags.length) row('tags', m.tags.join(', '));
-  const btns = el('div', 'mt-pop-btns');
-  const ok = el('button', 'mt-pop-btn', 'Close');
+  const btns = el('div', 'mt-pop-btns u-ask-r');
+  const ok = el('button', 'mt-pop-btn u-btn is-s', 'Close');
   ok.type = 'button';
   btns.appendChild(ok);
   pop.appendChild(btns);

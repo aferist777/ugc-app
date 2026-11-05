@@ -39,15 +39,16 @@
 .au-muted{color:var(--muted)}
 .au-err{color:var(--danger); font-size:11.5px; margin-top:4px}
 .au-err:empty{display:none}
-.au-empty{padding:16px 4px; font-size:12px; color:var(--muted); grid-column:1/-1}
+/* (phase V73 block 2) Video to Music's gallery empty / reading / did not load, the settings column reading and Lyrics' empty list
+   are the shared parts (js/ui-state.js, css/app-shell.css) - .au-empty went; .au-note stays for a mode's note ("No kie.ai key") */
 .au-note{font:600 9.5px/1.4 var(--font); color:var(--muted); margin-top:3px}
 .au-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
-.au-len .au-in{width:74px; height:26px; padding:0 6px}
+.au-len .au-in{ width:74px }
 .au-len-auto{font-size:10px; color:var(--muted)}
 /* "Length ? [46] s · by the video (46 s)" in one line (phase V59.1 in the Library, V60 in Merge) */
 .au-len-one{flex-wrap:nowrap; margin-top:6px; min-width:0}
 .au-len-one > label{flex:0 0 auto; display:inline-flex; align-items:center; margin-right:2px; font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted)}
-.au-len-one .au-in{flex:0 0 56px; width:56px}
+.au-len-one .au-in{ flex:0 0 56px; width:56px }
 .au-len-one .au-link{flex:0 1 auto; min-width:0; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* a value with nothing to choose (ElevenLabs' model) */
 .au-val{font:600 10.5px/1.4 var(--font); color:var(--ink); opacity:.8}
@@ -60,10 +61,8 @@
 /* its popup is the app's bubble since phase V61 - css/app-shell.css .bub, js/bubble.js */
 .au-set .mv3-ig-row > label, .au-chips-h b, .au-f-n{display:inline-flex; align-items:center}
 .au-set .mv3-ig-row > label{align-self:flex-start}
-.au-sel, .au-in, .au-ta{width:100%; box-sizing:border-box; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:6px 8px}
-.au-sel{padding:5px 6px}
-.au-sel:focus, .au-in:focus, .au-ta:focus{outline:none; border-color:var(--focus)}
-.au-ta{resize:vertical; min-height:64px}
+.au-sel, .au-in, .au-ta{ width:100%; box-sizing:border-box }
+.au-ta{ resize:vertical; min-height:64px }
 .au-chip{padding:3px 8px; border:1px solid var(--border); border-radius:var(--pill); background:transparent; color:var(--ink); font:500 11px/1.3 var(--font)}
 .au-chip.on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
 .au-link{border:0; background:none; padding:0; cursor:pointer; color:var(--ink); font:500 11.5px var(--font)}
@@ -75,17 +74,14 @@
 .au-f-links{display:flex; align-items:baseline; gap:16px; flex-wrap:wrap}
 .au-sel.au-saved{margin-bottom:2px}
 .au-sel.au-saved[disabled]{color:var(--muted); cursor:default}
-.au-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
-.au-btn:hover{border-color:var(--muted)}
 .au-btn.is-primary{background:var(--main); border-color:var(--main); color:var(--on-main)}
-.au-x{border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
-.au-x:hover{color:var(--ink)}
+.au-x{flex:0 0 auto}
 
 /* ── the middle: the word line and the constructor ── */
 .au-mid{flex:1 1 auto; min-width:300px; min-height:0; overflow-y:auto; padding:12px 16px 24px; display:flex; flex-direction:column; gap:12px}
 .au-status{flex:0 0 auto; padding:5px 9px; border-radius:var(--r-xs); background:var(--surface-2);
   font:600 10.5px/1.35 var(--font); color:var(--muted); overflow-wrap:anywhere}
-.au-status.is-bad{color:var(--danger)}
+/* (phase V73 block 2) an error is a popup in the corner (js/notice.js) - the line says only how the work goes */
 .au-make{flex:0 0 auto}
 .au-card{position:relative; padding:12px 14px 14px; border:1px solid var(--gold); border-radius:var(--r-sm); background:var(--bg); display:flex; flex-direction:column; gap:10px}
 .au-card-h{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
@@ -105,11 +101,9 @@
 .au-knob > span:first-child{display:inline-flex; align-items:center}
 .au-knob{display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:8px; font-size:11.5px; margin-top:6px}
 .au-knob input[type=range]{width:100%}
-.au-knob span:last-child{text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
+.au-knob span:last-child{text-align:right}   /* the value in mono - .u-range-v */
 .au-go-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-.au-go{padding:8px 16px; border:1px solid var(--main); border-radius:var(--r-xs); background:var(--main); color:var(--on-main); font:700 12px/1 var(--font); cursor:pointer}
-.au-go:hover{filter:brightness(1.08)}
-.au-go[disabled]{opacity:.5; cursor:default; filter:none}
+
 .au-go-row .au-muted{font-size:11px}
 .au-picked{display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted)}
 /* (V34.F) a highlights mood in Simple: its preset, read only */
@@ -123,7 +117,7 @@
 .au-edited[hidden]{display:none}
 .au-preset .au-f{margin-top:4px}
 .au-preset .au-f-h{font-size:10.5px}
-.au-preset .au-ta{min-height:44px; background:var(--bg)}
+.au-preset .au-ta{ min-height:44px }
 
 /* the video of Video to Music - a clip of the timeline (its lane, from-to, length, price) or a file (phase V54) */
 .au-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
@@ -179,9 +173,11 @@
 .au-res.is-playing .snd-wave rect{fill:var(--ink); opacity:.95}
 .au-res-n{flex:0 1 210px; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-res .au-muted{font-size:10.5px; white-space:nowrap}
-.au-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
+.au-play{flex:0 0 auto}
+.au-play.u-btn{border-radius:50%; font-size:10px}   /* round, as before */
 .au-res.is-playing .au-play{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
-.au-star{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px}
+.au-star{flex:0 0 auto}
+.au-star.u-btn{font-size:13px}
 .au-star.on{color:var(--ink)}   /* (phase V73, (б1-9)) a favourite: light, the text's colour */
 .au-lyr{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:8px 10px; background:var(--bg)}
 .au-lyr-h{display:flex; align-items:baseline; gap:8px; font-weight:600; font-size:12px; margin-bottom:4px}
@@ -211,10 +207,7 @@
 .aal-head{display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border)}
 .aal-head b{font:700 12px/1.2 var(--font); white-space:nowrap}
 .aal-sub{flex:1 1 auto; min-width:0; font:500 10.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.aal-x{flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer}
-.aal-x:hover{color:var(--ink)}
-.aal-x[disabled]{opacity:.4; cursor:default}
+.aal-x{flex:0 0 auto}
 .aal-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr)}
 .aal-side{min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px; border-right:1px solid var(--border)}
 .aal-g{margin:10px 4px 3px; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
@@ -247,15 +240,9 @@
 .aal-text{font-size:12.5px; line-height:1.5; color:var(--ink); white-space:pre-wrap}
 .aal-why{margin-top:5px; font-size:11px; line-height:1.45; color:var(--muted)}
 .aal-try{margin-top:4px; font-size:10.5px; color:var(--muted)}
-.aal-btn{flex:0 0 auto; padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
-  font:600 11px/1.1 var(--font); cursor:pointer; white-space:nowrap}
-.aal-btn:hover{border-color:var(--muted)}
-.aal-btn.is-primary{background:var(--main); border-color:var(--main); color:var(--on-main)}
-.aal-btn[disabled]{opacity:.45; cursor:default}
+.aal-btn{flex:0 0 auto}
 .aal-build{flex:0 0 auto; display:flex; flex-direction:column; gap:5px; padding:8px 14px 12px; border-top:1px solid var(--border); background:var(--surface)}
 .aal-build-h{display:flex; align-items:center; gap:8px; min-width:0}
 .aal-lbl{display:inline-flex; align-items:center; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
 .aal-said{font:600 10.5px/1.2 var(--font); color:var(--success); white-space:nowrap}
-.aal-ta{width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical; background:var(--bg); color:var(--ink);
-  border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.45 var(--font); padding:6px 8px}
-.aal-ta:focus{outline:none; border-color:var(--gold)}
+.aal-ta{ width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical }

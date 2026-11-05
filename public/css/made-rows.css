@@ -1,22 +1,11 @@
 /* What is known about a made picture, in the viewer's right column (Library and Merge, js/library/made-rows.js): a
    lookbook's gender, the description, how a place moves. (phase V56, (ги7); in css/makechat.css until phase V58.) */
 .made-ed{ display:flex; flex-direction:column; gap:3px; }
-.made-ed-ta{
-  display:block; width:100%; min-height:54px; padding:5px 7px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--ink); font:500 11px/1.45 var(--font);
-}
-.made-ed-ta:focus{ outline:none; border-color:var(--focus); }
-.made-ed-ta::placeholder{ color:var(--muted); }
+.made-ed-ta{ display:block; width:100%; min-height:54px; resize:vertical }
 .made-ed-foot{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:0; }
 .made-ed-foot:has(.made-ed-save:not([hidden])), .made-ed-foot:has(.made-ed-said:not(:empty)){ min-height:22px; }
 .made-ed-said{ flex:1 1 auto; font-size:10px; color:var(--muted); }
 .made-ed-chips{ display:flex; flex-wrap:wrap; gap:4px; }
-.made-ed-chip{
-  padding:2px 7px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--muted); font:600 10px/1.2 var(--font); cursor:pointer;
-}
-.made-ed-chip:hover{ color:var(--ink); }
-.made-ed-chip.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink); }
+/* .made-ed-chip is the shared chip (.u-chip, phase V73 block 2) */
 /* (phase V26.6) A product's name: one line. */
-.made-ed.is-line .made-ed-ta{ min-height:0; resize:none; white-space:nowrap; overflow:hidden; }
+.made-ed.is-line .made-ed-ta{ min-height:0; resize:none; white-space:nowrap; overflow:hidden }

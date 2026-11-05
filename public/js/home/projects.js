@@ -14,6 +14,10 @@
 
 import { ICONS } from './icons.js';
 import { el, api, ls, lsSet, when, frame } from './util.js';
+// (phase V73 block 2, step 2b) "Loading" until the list comes, "did not load" + Try again when it does not (the reason a
+// popup), the empty list in the shared part ((б2-17) а, (б2-19) а).
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const CHIPS = [['all', 'all'], ['blank', 'blank'], ['talking', 'talking head'], ['voiceover', 'voiceover'], ['highlights', 'highlights']];
 const WORD = { draft: 'draft · not saved', blank: 'blank', talking: 'talking head', voiceover: 'voiceover', highlights: 'highlights' };
@@ -92,13 +96,12 @@ export function projectsBlock() {
   f.body.append(chips, rows);
 
   let data = null;
-  let failed = '';
   let chip = ls(CHIP_KEY, 'all');
   if (!CHIPS.some(c => c[0] === chip)) chip = 'all';
 
   const paintChips = () => {
     chips.replaceChildren(...CHIPS.map(([k, label]) => {
-      const b = el('button', 'hm-chip' + (k === chip ? ' is-on' : ''), label);
+      const b = el('button', 'hm-chip u-chip' + (k === chip ? ' is-on' : ''), label);
       b.type = 'button';
       b.addEventListener('click', () => {
         if (k === chip) return;
@@ -125,21 +128,28 @@ export function projectsBlock() {
   };
   const paintRows = () => {
     _hidePeek();
-    if (failed) { rows.replaceChildren(el('div', 'hm-err', 'Could not read the projects: ' + failed)); return; }
     if (!data) return;
     const list = (data.kinds && data.kinds[chip]) || [];
     if (!list.length) {
       const word = (CHIPS.find(c => c[0] === chip) || ['', ''])[1];
-      rows.replaceChildren(el('div', 'hm-empty', chip === 'all' ? 'No projects yet - start one in New project.' : 'No ' + word + ' projects yet.'));
+      rows.replaceChildren(emptyEl(chip === 'all' ? 'No projects yet - start one in New project.' : 'No ' + word + ' projects yet.'));
       return;
     }
     rows.replaceChildren(...list.map(row));
   };
   const paint = async () => {
-    try { data = await api('/api/home/projects'); failed = ''; }
-    catch (e) { failed = e.message; }
+    try { data = await api('/api/home/projects'); }
+    catch (e) {
+      showError('Could not read the projects', { detail: e.message, key: 'home-projects' });
+      paintChips();
+      if (!data) rows.replaceChildren(failedEl('Projects', () => paint()));
+      return;
+    }
     paintChips();
     paintRows();
   };
+  // The kinds at once, "Loading" under them until the list comes.
+  paintChips();
+  rows.appendChild(loadingEl('Loading'));
   return { el: f.st, paint };
 }

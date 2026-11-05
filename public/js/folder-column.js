@@ -26,6 +26,8 @@
 
 import * as Layers from './layers.js';
 import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from './del-x.js';
+import { showError } from './notice.js';
+import { emptyEl, loadingEl, failedEl } from './ui-state.js';
 
 const UNCAT = '__uncat__';
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2c.6 0 1.2.24 1.65.66L12.8 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11z"/></svg>';
@@ -284,16 +286,15 @@ export function createFolderColumn(host, o) {
   let ownItems = [];
   let files = [];               // what lies in the node open
   let state = 'idle';           // 'reading' | 'ready' | 'error'
-  let why = '';
   let loads = 0;
   let menu = null;              // the dropdown, while open
 
   host.textContent = '';
   const root = el('div', 'fc');
   const head = el('div', 'fc-head');
-  const up = el('button', 'fc-up', '‹');
+  const up = el('button', 'fc-up u-btn is-s is-icon', '‹');
   up.type = 'button';
-  const pick = el('button', 'fc-pick');
+  const pick = el('button', 'fc-pick u-btn is-s is-field');
   pick.type = 'button';
   pick.setAttribute('aria-haspopup', 'tree');
   const pickName = el('span', 'fc-pick-t', '');
@@ -325,6 +326,9 @@ export function createFolderColumn(host, o) {
     const roots = typeof opt.roots === 'function' ? opt.roots() : opt.roots;
     try { t = await typedTree(roots, opt.files, null, typeof opt.fit === 'function' ? opt.fit : null); } catch (e) { err = e.message || 'the folders could not be read'; }
     if (mine !== loads) return;
+    // (phase V73 block 2, (б2-19)) No answer is a failed reading too (readTree answers null), never an empty column. The reason
+    // goes to the corner (js/notice.js); a column read before keeps what it shows.
+    if (!t) { err = err || 'the folders could not be read'; showError(err); }
     if (t) tree = t;
     if (wanted && _valid(wanted)) { sel = wanted; remember(); }
     wanted = '';
@@ -336,7 +340,7 @@ export function createFolderColumn(host, o) {
       sel = _fallback();
     }
     _paintHead();
-    if (!t && err) { state = 'error'; why = err; paint(); return; }
+    if (!t && !tree) { state = 'error'; paint(); return; }
     _read();
   }
 
@@ -346,10 +350,9 @@ export function createFolderColumn(host, o) {
 
   // What lies in the folder open - from the reading of the tree, so its number and its tiles agree.
   function _read() {
-    if (sel === OWN) { state = 'ready'; why = ''; paint(); return; }
+    if (sel === OWN) { state = 'ready'; paint(); return; }
     files = (tree && tree.index.direct.get(sel)) || [];
     state = 'ready';
-    why = '';
     paint();
   }
 
@@ -409,13 +412,15 @@ export function createFolderColumn(host, o) {
     const own = sel === OWN;
     const shown = own ? ownItems : files;
     const lead = typeof opt.lead === 'function' ? opt.lead() : null;
-    if (state === 'reading' && !own) { list.replaceChildren(el('div', 'fc-none', 'reading…')); return; }
-    if (state === 'error' && !own) { list.replaceChildren(el('div', 'fc-none', why)); return; }
+    // (phase V73 block 2) reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
+    // are the shared parts (js/ui-state.js); `fc-none` is their place in the list
+    if (state === 'reading' && !own) { list.replaceChildren(loadingEl('reading…', { cls: 'fc-none' })); return; }
+    if (state === 'error' && !own) { list.replaceChildren(failedEl('the folders', () => { state = 'reading'; paint(); load(); }, { cls: 'fc-none' })); return; }
     if (!shown.length) {
       const n = own ? null : node(sel);
       // A folder that holds folders says nothing of its own emptiness - its tiles are above.
       const words = own ? (opt.own.empty || 'Nothing here yet.') : n && (!n.q || (n.children && n.children.length)) ? '' : opt.empty;
-      list.replaceChildren(...[words ? el('div', 'fc-none', words) : null, lead].filter(Boolean));
+      list.replaceChildren(...[words ? emptyEl(words, { icon: own ? 'image' : 'folder', cls: 'fc-none' }) : null, lead].filter(Boolean));
       return;
     }
     // Sounds are rows across the column (phase V60.2): a folder of AUDIO is one column.
@@ -459,7 +464,7 @@ export function createFolderColumn(host, o) {
     if (!tree && !opt.own) return;
     const open = new Set();
     for (let k = parentKey(sel); k; k = parentKey(k)) open.add(k);
-    const box = el('div', 'ref-move mtp-box fc-menu');
+    const box = el('div', 'ref-move mtp-box fc-menu u-menu is-float');
     box.appendChild(el('div', 'ref-move-title', opt.title));
     const lst = el('div', 'ref-move-list mt mtp');
     lst.setAttribute('role', 'tree');
@@ -481,8 +486,9 @@ export function createFolderColumn(host, o) {
       }
       b.appendChild(tw);
       b.appendChild(el('span', 'mt-name', ownRow ? opt.own.label : n.label));
+      // (phase V73 block 2, (б2-22)) the count in brackets right after the name, the lock at the right edge - the media tree's way
+      b.appendChild(el('span', 'mt-n', '(' + (ownRow ? ownItems.length : (n.count || 0)) + ')'));
       if (!ownRow && n.locked) { const l = el('span', 'mt-lock'); l.innerHTML = LOCK_SVG; b.appendChild(l); }
-      b.appendChild(el('span', 'mt-n', String(ownRow ? ownItems.length : (n.count || 0))));
       b.title = ownRow ? opt.own.label : pathOf(key).join(' / ');
       b.addEventListener('click', () => { _closeMenu(); select(key); });
       return b;

@@ -11,6 +11,8 @@
 import * as Layers from '../layers.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+// (phase V73 block 2, (н2)) a source downloaded by a link is new until it is looked at here
+import { opened as openedNew } from '../references/news.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 
@@ -69,6 +71,7 @@ function _paint() {
   if (!_ov) return;
   const it = _list[_at];
   if (!it) return closeViewer();
+  if (it.kind === 'youtube') openedNew(it);
 
   const stage = $('.lib-view-stage', _ov);
   stage.textContent = '';                     // replace, never reuse (see the note above)
@@ -170,7 +173,7 @@ function _paintActions(it) {
   for (const a of (_actionsFor(it) || [])) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'lib-btn' + (a.danger ? ' danger' : '');
+    b.className = 'u-btn is-s' + (a.danger ? ' danger is-danger' : '') + (a.armed ? ' is-armed' : '');
     b.textContent = a.label;
     if (a.title) b.title = a.title;
     b.addEventListener('click', async () => {
@@ -294,12 +297,12 @@ export function openViewer(items, index, opts) {
         <span class="lib-view-count"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>
         <div class="lib-view-stage"></div>
-        <button class="lib-view-arrow" data-x="next" type="button" title="Next (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="Next (right arrow)">&#8250;</button>
         <aside class="lib-view-info"></aside>
       </div>
     </div>`;

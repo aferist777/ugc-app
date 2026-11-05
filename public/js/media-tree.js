@@ -104,6 +104,8 @@
 import * as A from './library/actions.js';
 import * as Layers from './layers.js';
 import { askName } from './name-box.js';
+import { menuIcons, iconEl } from './icons.js';
+import { since as newsSince } from './references/news.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -218,6 +220,11 @@ function _dropAction(n, from, refType) {
 // is NEW - green - while that is later than when it was last opened. Opening a node sees it and everything under it; a
 // branch is green while any node under it is. Kept for the whole app (the Library and Merge alike): seen in one, seen in
 // both. The first time ever, everything there is counts as seen.
+// (phase V73 block 2, the owner 2026-11-05, (н1) а, (н3) б) REFERENCES - what comes from outside: a post of the bot, and a
+// source downloaded by a link that came after the moment this first ran (js/references/news.js `since`, sent as ?srcFrom=)
+// - is new DOWN TO THE INNER FOLDER: a node there is new while what lies DIRECTLY in it (`own`) is newer than when IT was
+// opened, as a folder tile of the gallery too; opening a parent sees nothing under it, so a branch stays lit while a folder
+// under it holds something unseen and the lit path leads to it. The other roots keep the rule above.
 const LS_SEEN = 'ugc_tree_seen_v1';
 
 function _ls(key, fallback) {
@@ -346,21 +353,30 @@ export function createTree(host, o) {
     const walk = (n) => {
       let g = false;
       if (n.children && n.children.length) { for (const c of n.children) if (walk(c)) g = true; }
-      else g = (n.newest || 0) > (seen[n.key] || 0);
+      // REFERENCES: what lies directly in the node, against when the node itself was opened
+      if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) g = true; }
+      else if (!(n.children && n.children.length)) g = (n.newest || 0) > (seen[n.key] || 0);
       if (g) fresh.add(n.key);
       return g;
     };
     for (const n of nodes) walk(n);
   }
+  // A node of REFERENCES or under it (phase V73 block 2, (н3)) - its own rule of what is new.
+  const _isRef = (key) => isUnderKey(key, 'references');
+  // Opened: under REFERENCES the node alone sees what lies in it (its folders keep theirs, (н1)); elsewhere it and
+  // everything under it.
   function _seeAll(n, save = true) {
-    const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
-    go(n);
+    if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) seen[n.key] = n.own || 0; }
+    else {
+      const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
+      go(n);
+    }
     if (save) _lsSet(LS_SEEN, seen);
   }
 
   async function load() {
     let d;
-    try { d = await fetch('/api/library/tree').then(r => r.json()); }
+    try { d = await fetch('/api/library/tree?srcFrom=' + newsSince()).then(r => r.json()); }
     catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
     if (!d || !d.success) { opt.status((d && d.error) || 'Could not read the media tree', true); return nodes; }
     nodes = d.nodes || [];
@@ -497,54 +513,63 @@ export function createTree(host, o) {
     const name = _el('span', 'mt-name', n.label);
     name.title = _tipOf(n);
     row.appendChild(name);
+    // (phase V73 block 2, (б2-21)-(б2-24)) The count in brackets right after the name - the name is cut, the count never -,
+    // and at the right edge two columns of one width on every row: the lock, then the button (a generator's "generate" /
+    // "create", or "+" / ✕ under the pointer): locks and buttons one under another whatever the count is.
+    row.appendChild(_el('span', 'mt-n', '(' + (n.count || 0) + ')'));
+    const side = _el('span', 'mt-side');
+    const lockCol = _el('span', 'mt-lk');
+    const btnCol = _el('span', 'mt-bt');
+    side.append(lockCol, btnCol);
+    row.appendChild(side);
     if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
       lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
-      row.appendChild(lock);
+      lockCol.appendChild(lock);
     }
     // A kind that can have folders: "+" makes one at its top - unless a generator has the row (V64: a root's "generate";
     // Music, whose generator is in its menu - (phase V59, (мг3б)) - as its "New folder" is): then "New folder" is in the
     // menu under the right button and on the gallery's empty space.
     if (holds(n) && !n.cat && !(n.make && typeof opt.onMake === 'function') && !gens) {
-      const add = _el('button', 'mt-act mt-add', '+');
+      const add = _el('button', 'mt-act mt-add u-btn is-s is-icon is-quiet');
+      add.appendChild(iconEl('plus', 14));
       add.type = 'button';
       add.tabIndex = -1;
       add.title = 'New folder in ' + (n.label || n.kind);
       add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
-      row.appendChild(add);
+      btnCol.appendChild(add);
     }
     // (phase V55, (гн10), (гн11); V64 (зг3)) Environments / Lookbooks / Props: "create" under the pointer, in a blue frame
     // (gold under the pointer itself), opens their generator - where, the page says (`onMake`).
     if (creates) {
-      const mk = _el('button', 'mt-act mt-make', 'create');
+      const mk = _el('button', 'mt-make u-btn is-s is-gen', 'create');
       mk.type = 'button';
       mk.tabIndex = -1;
       mk.title = n.makeLabel + ' - opens the generator';
       mk.addEventListener('click', (e) => { e.stopPropagation(); opt.onMake(n, mk); });
       mk.addEventListener('dblclick', (e) => e.stopPropagation());
-      row.appendChild(mk);
+      btnCol.appendChild(mk);
     }
     // (phase V64 (зг6)) A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
     if (gens) {
-      const g = _el('button', 'mt-gen', 'generate');
+      const g = _el('button', 'mt-gen u-btn is-s is-gen', 'generate');
       g.type = 'button';
       g.tabIndex = -1;
       g.title = GEN_TIP[n.key];
       g.addEventListener('click', (e) => { e.stopPropagation(); opt.onGenerate(n, g); });
       g.addEventListener('dblclick', (e) => e.stopPropagation());
-      row.appendChild(g);
+      btnCol.appendChild(g);
     }
     if (isCat && n.own && !n.locked) {
-      const x = _el('button', 'mt-act mt-x', '✕');
+      const x = _el('button', 'mt-act mt-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.tabIndex = -1;
       x.title = 'Delete this folder';
       x.addEventListener('mousedown', (e) => e.stopPropagation());
       x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(n, row); });
-      row.appendChild(x);
+      btnCol.appendChild(x);
     }
-    row.appendChild(_el('span', 'mt-n', String(n.count || 0)));
 
     // A press selects; the second press of a double one does not read the gallery again.
     row.addEventListener('click', () => {
@@ -788,7 +813,8 @@ export function createTree(host, o) {
     const h = how || {};
     sel = key;
     _lsSet(K_SEL, sel);
-    // Opened: it and everything under it are seen - and its branch is green only while something else in it is new.
+    // Opened: it is seen (under REFERENCES only what lies in it, (н1); elsewhere everything under it too) - and its branch
+    // is lit only while something else in it is new.
     _seeAll(byKey.get(key));
     _computeNew();
     const changed = h.path || h.open ? _setOpen(key, !!h.open) : false;
@@ -1004,7 +1030,7 @@ export function createTree(host, o) {
   function _askDelete(n, anchor) {
     _closePop();
     _closeMenu();
-    const box = _el('div', 'mt-pop');
+    const box = _el('div', 'mt-pop u-ask is-float');      // (phase V73 block 2) the shared question
     const count = n.count || 0;
     const noun = NOUN[n.kind] || 'item';
     // Its folders, all the way down.
@@ -1016,11 +1042,11 @@ export function createTree(host, o) {
     const up = byKey.get(parentOf.get(n.key));
     const home = up && up.cat ? '"' + up.label + '"'
       : n.kind === 'references' ? 'their sources\' folders' : n.kind === 'music' ? 'Music' : homeName(n.kind);
-    box.appendChild(_el('div', 'mt-pop-head', 'Delete "' + n.label + '"?'));
+    box.appendChild(_el('b', 'mt-pop-head', 'Delete "' + n.label + '"?'));
     if (count || folders) box.appendChild(_el('div', 'mt-pop-note', 'Inside: ' + [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' and ') + '.'));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
-    cb.type = 'checkbox';
+    cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = true;                       // the safe branch is the default
     lab.appendChild(cb);
     lab.appendChild(_el('span', null, (count || folders) ? 'Move what is in it up into ' + home + (folders ? ' - its folders stay folders' : '') : 'Nothing in it to move'));
@@ -1029,10 +1055,10 @@ export function createTree(host, o) {
     box.appendChild(note);
     const used = _el('div', 'mt-pop-used');
     box.appendChild(used);
-    const btns = _el('div', 'mt-pop-btns');
-    const cancel = _el('button', 'mt-pop-btn', 'Cancel');
+    const btns = _el('div', 'mt-pop-btns u-ask-r');
+    const cancel = _el('button', 'mt-pop-btn u-btn is-s', 'Cancel');
     cancel.type = 'button';
-    const go = _el('button', 'mt-pop-btn', '');
+    const go = _el('button', 'mt-pop-btn u-btn is-s', '');
     go.type = 'button';
     btns.appendChild(cancel);
     btns.appendChild(go);
@@ -1045,7 +1071,8 @@ export function createTree(host, o) {
         : count ? 'Its ' + _plural(count, noun) + (folders ? ' - in it and in every folder under it -' : '') + ' will be deleted from the disk. This cannot be undone.'
         : 'Its folders go with it.';
       go.textContent = keep ? 'Delete folder' : count ? 'Delete folder and ' + _plural(count, noun) : 'Delete folder and its folders';
-      go.classList.toggle('is-danger', !keep);
+      go.classList.toggle('is-danger', !keep);           // red only when files go (б2-5)
+      go.classList.toggle('is-armed', !keep);
       used.textContent = '';
       used.hidden = keep || !projects || !projects.length;
       if (!used.hidden) {
@@ -1121,9 +1148,9 @@ export function createTree(host, o) {
       }
     }
     if (!items.length) return;
-    const m = _el('div', 'mv3-plus-menu mt-menu');
+    const m = _el('div', 'mv3-plus-menu mt-menu u-menu is-float');
     for (const [label, sub, on] of items) {
-      const b = _el('button', 'mv3-plus-item');
+      const b = _el('button', 'mv3-plus-item u-mi');
       b.type = 'button';
       b.appendChild(_el('span', null, label));
       if (sub) b.appendChild(_el('small', null, sub));
@@ -1131,6 +1158,7 @@ export function createTree(host, o) {
       else b.disabled = true;
       m.appendChild(b);
     }
+    menuIcons(m);
     document.body.appendChild(m);
     const w = m.offsetWidth, h = m.offsetHeight;
     m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, x))) + 'px';

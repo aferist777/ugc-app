@@ -10,17 +10,19 @@
 //
 // Its look is its own (a <style> put in once), so it is the same on every page.
 
-import * as Layers from './layers.js';
+import { twoPress, REALLY } from './really.js';
 import { showError } from './notice.js';
 
+// The 3D Studio's page draws this cross itself (the shared parts never reach it, (б1-13а)).
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 const CSS = `
-.dx{position:absolute; top:4px; right:4px; z-index:3; min-width:20px; height:20px; padding:0 5px; border-radius:10px;
-  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 11px/18px var(--font, system-ui);
-  cursor:pointer; opacity:0; transition:opacity .12s; white-space:nowrap}
-.dx-host:hover > .dx, .dx:focus-visible, .dx.is-ask{opacity:1}
-.dx:hover{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
-.dx.is-ask{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger); padding:0 8px}
-.dx[disabled]{opacity:.5; cursor:default}
+.dx{position:absolute; top:4px; right:4px; z-index:3; opacity:0; transition:opacity .12s; white-space:nowrap}
+.dx-host:hover > .dx, .dx:focus-visible, .dx.is-ask, .dx.is-armed{opacity:1}
+:root:has(link[href="css/studio3d.css"]) .dx{min-width:20px; height:20px; padding:0 5px; border-radius:10px;
+  border:1px solid var(--on-media-line); background:var(--scrim); color:var(--on-media); font:600 11px/18px var(--font, system-ui); cursor:pointer}
+:root:has(link[href="css/studio3d.css"]) .dx:hover{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger)}
+:root:has(link[href="css/studio3d.css"]) .dx.is-ask{background:var(--danger-fill); border-color:var(--danger-fill); color:var(--on-danger); padding:0 8px}
+:root:has(link[href="css/studio3d.css"]) .dx[disabled]{opacity:.5; cursor:default}
 .dx-host{position:relative}
 `;
 let _css = false;
@@ -43,59 +45,40 @@ function _ensureCss() {
  */
 export function delX(o) {
   _ensureCss();
+  // (phase V73 block 2) The shared parts: a 24-px cross on a picture (.u-onpic.is-del.u-x), armed by js/really.js. The 3D
+  // Studio's page keeps its own look ((б1-13а)): the glyph, "really?" and the rules above.
+  const old = OLD_LOOK();
   const x = document.createElement('button');
   x.type = 'button';
-  x.className = 'dx';
-  x.textContent = '✕';
+  x.className = old ? 'dx' : 'dx u-onpic is-del u-x';
+  x.textContent = old ? '✕' : '';
   x.title = o.title || 'Delete it from the library';
   x.draggable = false;
   if (o.host) o.host.classList.add('dx-host');
-  let t = 0, layer = null, asking = 0;
-  const back = () => {
-    clearTimeout(t);
-    t = 0;
-    asking++;
-    if (layer) { Layers.close(layer); layer = null; }
-    x.classList.remove('is-ask');
-    x.textContent = '✕';
-  };
   const stop = (e) => { e.stopPropagation(); };
   x.addEventListener('pointerdown', stop);
   x.addEventListener('mousedown', stop);
   x.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
-  x.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (x.disabled) return;
-    if (!x.classList.contains('is-ask')) {
-      x.classList.add('is-ask');
-      x.textContent = 'really?';
-      t = setTimeout(back, 3000);
-      layer = Layers.open(x, { modal: false, onEsc: back, name: 'delete it' });
-      const mine = ++asking;
-      if (typeof o.ask === 'function') {
-        let words = '';
-        try { words = await o.ask(); } catch (err) { words = ''; }
-        if (mine === asking && x.classList.contains('is-ask') && words) {
-          x.textContent = 'really? · ' + words;
-          clearTimeout(t);
-          t = setTimeout(back, 4000);
-        }
+  twoPress(x, {
+    text: old ? 'really?' : REALLY,
+    host: o.host,
+    extra: typeof o.ask === 'function' ? o.ask : null,
+    armed: () => { if (old) x.classList.add('is-ask'); },
+    rest: () => { x.classList.remove('is-ask'); if (old) x.classList.remove('is-armed', 'is-danger'); },
+    go: async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      x.disabled = true;
+      let why = '';
+      try { why = await o.run(); } catch (err) { why = (err && err.message) || 'it could not be deleted'; }
+      if (why) {
+        x.disabled = false;
+        showError('Not deleted: ' + why);
+        return;
       }
-      return;
-    }
-    back();
-    x.disabled = true;
-    let why = '';
-    try { why = await o.run(); } catch (err) { why = (err && err.message) || 'it could not be deleted'; }
-    if (why) {
-      x.disabled = false;
-      showError('Not deleted: ' + why);
-      return;
-    }
-    if (typeof o.done === 'function') o.done();
+      if (typeof o.done === 'function') o.done();
+    },
   });
-  if (o.host) o.host.addEventListener('pointerleave', () => { if (x.classList.contains('is-ask')) back(); });
   return x;
 }
 

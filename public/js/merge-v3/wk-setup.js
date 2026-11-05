@@ -64,6 +64,8 @@ import * as API from './scen-api.js';
 import * as Store from './store.js';
 import { askChoice } from './ask.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import * as PV from './preview-b.js';
 import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
@@ -76,7 +78,7 @@ import {
 } from './wk-maker.js';
 
 let _chars = null;
-let _state = 'idle';                     // 'idle' | 'loading' | an error to show
+let _state = 'idle';                     // 'idle' | 'loading' | 'failed' - the characters did not load (the reason was a popup)
 let _all = false;                        // the gender filter lifted by hand
 let _ctx = null;                         // { project, repaint } from the workshop
 let _host = null;                        // the panel - the windows stand over it
@@ -104,7 +106,7 @@ let _ask = '';                           // a window the address asked for, open
   if (v === 'voice' || WINDOWS.includes(v)) _ask = v;
   else if (VIEWS.includes(v)) _view = v;
 })();
-let _lbs = null;                          // the lookbooks to dress in, read when that page opens
+let _lbs = null;                          // the lookbooks to dress in, read when that page opens - false: they did not load
 let _lbPick = '';                         // the outfit picked to dress in
 let _dressing = false;                    // one at a time: it is a minute and it is paid for
 let _dressSaid = '';                      // the line of the dressing page - in Alerts, done, failed
@@ -133,7 +135,9 @@ async function _load(repaint) {
     _state = 'idle';
   } catch (e) {
     _chars = [];
-    _state = 'Could not read the characters: ' + e.message;
+    // (phase V73 block 2, (б2-18)) The reason a popup; the setup says the characters did not load, with Try again.
+    _state = 'failed';
+    showError('Could not read the characters: ' + e.message);
   }
   repaint();
 }
@@ -159,7 +163,8 @@ async function _patch(casting) {
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     _ctx.project = r.project;
   } catch (e) {
-    _state = 'Could not save the casting: ' + e.message;
+    // (phase V73 block 2) A refusal is a popup in the corner (it stood as a red line over the setup until the next read).
+    showError('Could not save the casting: ' + e.message);
   }
   _saving = false;
   _ctx.repaint();
@@ -273,9 +278,9 @@ export function paint(host, ctx) {
   // "saving…" stands grey at its right while the casting is saved ((т9а)).
   _savingWord();
 
-  if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
-  if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
-  if (_state !== 'idle' && _state !== 'loading') root.appendChild(_note(_state, true));
+  if (!ctx.project) { root.appendChild(loadingEl('Reading the project…')); return; }
+  if (_chars === null) { _load(ctx.repaint); root.appendChild(loadingEl('reading the characters…')); return; }
+  if (_state === 'failed') root.appendChild(failedEl('The characters', () => { _chars = null; _state = 'idle'; ctx.repaint(); }, { line: true }));
 
   const chosen = _castChar();
   const scroll = _el('div', 'mv3-wk-scroll');
@@ -467,7 +472,7 @@ function _stageClears(top, bottom) {
   _dropStageCtl();
   const cast = _casting();
   const mk = (half, title) => {
-    const b = _el('button', 'mv3-wk-clear mv3-stage-ctl' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
+    const b = _el('button', 'mv3-wk-clear mv3-stage-ctl u-onpic is-del u-x' + (half === 'bottom' ? ' is-bottom' : ''), '');
     b.type = 'button';
     b.title = title;
     b.disabled = _saving;
@@ -733,9 +738,12 @@ function _paintDress(body, c) {
   softScroll(list);
   body.appendChild(list);
   if (_lbs === null) {
-    list.appendChild(_el('div', 'gw-note', 'reading the lookbooks…'));
+    list.appendChild(loadingEl('reading the lookbooks…'));
     API.lookbooks().then((files) => { _lbs = files || []; _paintWho(); })
-      .catch((e) => { _lbs = []; _dressSaid = 'Could not read the lookbooks: ' + e.message; _paintWho(); });
+      // (phase V73 block 2, (б2-19)) Not read is not "No lookbooks yet": "did not load" with Try again, the reason a popup.
+      .catch((e) => { _lbs = false; showError('Could not read the lookbooks: ' + e.message); _paintWho(); });
+  } else if (_lbs === false) {
+    list.appendChild(failedEl('The lookbooks', () => { _lbs = null; _paintWho(); }));
   } else {
     const grid = _el('div', 'gw-grid is-lookbook');
     const add = _el('button', 'gw-tile is-add', '+');
@@ -748,7 +756,7 @@ function _paintDress(body, c) {
       if (path) grid.appendChild(_lbTile(path));
     }
     list.appendChild(grid);
-    if (!_lbs.length) list.appendChild(_el('div', 'gw-note', 'No lookbooks yet - the "+" makes one.'));
+    if (!_lbs.length) list.appendChild(emptyEl('No lookbooks yet - the "+" makes one.', { icon: 'image' }));
   }
 
   // The foot: who, in what, the line, and the press that dresses them.
@@ -767,7 +775,7 @@ function _paintDress(body, c) {
     pair.appendChild(fit);
   } else pair.appendChild(_el('span', 'mk-pair-img is-empty', 'outfit'));
   const said = _el('span', 'gw-hint' + (_dressing ? ' is-on' : ''), _dressSaid || (_lbPick ? '' : 'pick an outfit'));
-  const go = _el('button', 'gw-create', _dressing ? 'dressing…' : 'apply');
+  const go = _el('button', 'gw-create u-btn is-main', _dressing ? 'dressing…' : 'apply');
   go.type = 'button';
   go.disabled = _dressing || !_lbPick;
   go.title = 'Dress ' + c.name + ' in this outfit and save it as a look - this spends credits';

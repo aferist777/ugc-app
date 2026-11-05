@@ -10,6 +10,9 @@
 
 import * as Store from './store.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
+// (phase V73 block 2, step 2b) The model table being read or not read - the shared parts (a row of the column); the reason a popup.
+import { loadingEl, failedEl, cap } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 /**
  * The column for `ctx` (the shell's handles). `o`: { lsKey - where the choice is remembered, maxAtts - the most
@@ -29,7 +32,10 @@ export function modelColumn(ctx, o) {
     if (_table) { paint(); return; }
     const d = await json('/api/mv3/img/matrix');
     if (d && d.success) { _table = d; _tableErr = ''; }
-    else _tableErr = (d && d.error) || 'could not read the model table';
+    else {
+      _tableErr = (d && d.error) || 'could not read the model table';
+      showError(cap(_tableErr));
+    }
     paint();
     ctx.paintAtts();
   }
@@ -68,7 +74,10 @@ export function modelColumn(ctx, o) {
     const host = ui.left;
     if (!_table || !_table.engines.length) {
       host.textContent = '';
-      host.appendChild(el('div', 'mv3-ig-fall', _tableErr || (_table ? 'No picture model is available - check the API keys in Admin.' : 'reading the models…')));
+      // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (load).
+      host.appendChild(_tableErr ? failedEl('The models', () => { _tableErr = ''; paint(); load(); }, { line: true })
+        : _table ? el('div', 'mv3-ig-fall', 'No picture model is available - check the API keys in Admin.')
+          : loadingEl('reading the models…', { line: true }));
       _set = null;
       return;
     }
@@ -78,6 +87,7 @@ export function modelColumn(ctx, o) {
       const tl = Store.timeline();
       const row = (label, ctl, cls) => {
         const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
+        if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // (phase V73 block 2) the shared field at 24, (2a-3) б
         const l = el('label', null, label);
         l.htmlFor = ctl.id;
         r.append(l, ctl);
@@ -224,7 +234,7 @@ export function modelColumn(ctx, o) {
     _set.arWrap.textContent = '';
     _set.arSel.textContent = '';
     for (const a of _table.aspects) {
-      const b = el('button', 'mv3-ig-ar-b' + (a === _set.ar ? ' on' : ''));
+      const b = el('button', 'mv3-ig-ar-b u-chip' + (a === _set.ar ? ' on' : ''));
       b.type = 'button';
       b.textContent = a;
       if (a === _set.fmt) {

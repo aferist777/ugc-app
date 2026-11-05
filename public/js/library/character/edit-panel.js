@@ -64,7 +64,7 @@ export function build(host, hooks) {
   wrap.appendChild(chipBox);
 
   const ta = document.createElement('textarea');
-  ta.className = 'cv2-edit-txt';
+  ta.className = 'cv2-edit-txt u-area';
   ta.id = 'cv2-edit-txt';
   ta.rows = 3;
   ta.placeholder = 'e.g. age: 40; hair color: red; longer nose, a scar across the brow';
@@ -72,12 +72,12 @@ export function build(host, hooks) {
   const foot = document.createElement('div');
   foot.className = 'cv2-edit-foot';
   const cancel = document.createElement('button');
-  cancel.type = 'button'; cancel.id = 'cv2-edit-cancel'; cancel.className = 'cv2-edit-btn';
+  cancel.type = 'button'; cancel.id = 'cv2-edit-cancel'; cancel.className = 'cv2-edit-btn u-btn is-l';
   cancel.textContent = 'Cancel';
   cancel.title = 'Leave the portrait as it is and go back to the parameters';
   cancel.addEventListener('click', () => { if (onCancel) onCancel(); });
   const go = document.createElement('button');
-  go.type = 'button'; go.id = 'cv2-edit-go'; go.className = 'cv2-edit-btn is-go';
+  go.type = 'button'; go.id = 'cv2-edit-go'; go.className = 'cv2-edit-btn is-go u-btn is-l is-main';
   go.textContent = 'Edit';
   go.title = 'Apply these changes to the portrait';
   go.addEventListener('click', () => {
@@ -101,7 +101,7 @@ export function build(host, hooks) {
         const b = document.createElement('button');
         b.type = 'button';
         const on = pairs.get(g.key) === o;
-        b.className = 'cv2-chip' + (on ? ' is-on' : '');
+        b.className = 'cv2-chip u-chip' + (on ? ' is-on' : '');
         b.textContent = o;
         b.addEventListener('click', () => {
           const cur = parse(ta.value);

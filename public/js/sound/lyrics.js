@@ -20,6 +20,8 @@
 import { openViewer, closeViewer } from '../library/viewer.js';
 import { deleteQuestion, deleteItem } from '../library/actions.js';
 import { askName } from '../name-box.js';
+// (phase V73 block 2, step 2b) the question at the viewer's Delete in place of the browser's confirm()
+import { ask } from '../ask.js';
 
 export const KIND = 'lyrics';
 export const isLyrics = (it) => !!it && it.kind === KIND;
@@ -135,7 +137,10 @@ export function openLyrics(list, it, o) {
         return null;
       }
       if (id === 'lydel') {
-        if (!confirm(await deleteQuestion(x))) return { actionsOnly: true };
+        // At the viewer's Delete (js/library/viewer.js draws the row - the action's label is its button).
+        const label = (ACTIONS.find(a => a.id === 'lydel') || {}).label;
+        const btn = [...document.querySelectorAll('.lib-view-acts button')].find(b => b.textContent === label) || null;
+        if (!await ask(btn, await deleteQuestion(x), { yes: 'Delete', danger: true, stay: true })) return { actionsOnly: true };
         await deleteItem(x);
         if (typeof opt.changed === 'function') await opt.changed({ removed: x });
         say('Deleted "' + x.name + '"', false);

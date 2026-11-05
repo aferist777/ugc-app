@@ -50,6 +50,9 @@ import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } fro
 import { moodPicker } from './hl-music.js';
 import * as KIND from './hl-kinds.js';
 import { fontPicker, fontLabel } from './font-tiles.js';
+// (phase V73 block 2, step 2b) Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const GEOM = Object.freeze({ key: 'highlights', resize: true, move: true, keepSize: true, keepPos: true });
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -122,11 +125,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── The video ──
   L.appendChild(_el('div', 'mv3-x-hdr', 'the video'));
-  const tabs = _el('div', 'mv3-hlp-tabs');
+  const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
   // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
   for (const [k, label] of [['link', 'a link'], ['source', 'from the Library'], ['file', 'a file']]) {
-    const b = _el('button', 'mv3-sc-tab', label);
+    const b = _el('button', 'mv3-sc-tab u-tab', label);
     b.type = 'button';
     b.dataset.from = k;
     b.addEventListener('click', () => { st.from = k; paint(); price(); readTracks(); if (k === 'source') loadSources(); if (k === 'link') link.focus(); });
@@ -134,7 +137,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
   L.appendChild(tabs);
 
-  const link = _el('input', 'mv3-sc-inp mv3-hlp-url');
+  const link = _el('input', 'mv3-sc-inp mv3-hlp-url u-in');
   link.type = 'text';
   link.placeholder = 'https://www.youtube.com/watch?v=…  - one video';
   link.addEventListener('input', () => { st.url = link.value.trim(); paint(); });
@@ -150,7 +153,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   fileIn.accept = 'video/*';
   fileIn.hidden = true;
   fileIn.addEventListener('change', () => takeFile(fileIn.files && fileIn.files[0]));
-  const pickBtn = _el('button', 'mv3-c-btn', 'choose a video file…');
+  const pickBtn = _el('button', 'mv3-c-btn u-btn', 'choose a video file…');
   pickBtn.type = 'button';
   pickBtn.addEventListener('click', () => fileIn.click());
   const fileSaid = _el('span', 'mv3-hlp-file', 'or let a file go anywhere on this window');
@@ -159,7 +162,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   for (const k of Object.keys(panes)) L.appendChild(panes[k]);
   // (phase V43, the owner's (ё18): "давать выбор дорожки если есть выбор") A file with more than one sound track - a dub and the
   // original, say - says so here: the one chosen is heard and is the parts' sound.
-  const trackSel = _el('select', 'mv3-hlp-sel');
+  const trackSel = _el('select', 'mv3-hlp-sel u-in is-s');
   trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
   const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'sound');
   trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';
@@ -216,7 +219,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     kindRow.appendChild(b);
   }
   // (хп19) The kind's standards back: its length, count, music, captions.
-  const reset = _el('button', 'mv3-hlp-reset', 'reset to standard');
+  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'reset to standard');
   reset.type = 'button';
   reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
@@ -262,9 +265,9 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const titleChips = _el('div', 'mv3-hlp-chips');
   titleRow.appendChild(titleChips);
   R.appendChild(titleRow);
-  const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs');
+  const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs u-tabs');
   const tabBtn = (tab, label, title) => {
-    const b = _el('button', 'mv3-cap-tab', label);
+    const b = _el('button', 'mv3-cap-tab u-tab', label);
     b.type = 'button';
     b.dataset.tab = tab;
     b.title = title;
@@ -300,14 +303,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
   const said = _el('div', 'mv3-hlp-said');
-  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'find moments');
+  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
   // (V63) The steps: "next →" on the first, "‹ back" beside the press on the second.
-  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go', 'next →');
+  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'next →');
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => next());
-  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back', '‹ back');
+  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', '‹ back');
   backBtn.type = 'button';
   backBtn.title = 'Back to the video and the parts';
   backBtn.addEventListener('click', () => toStep(1));
@@ -396,16 +399,21 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function loadSources() {
     if (!sourcesP) {
       panes.source.textContent = '';
-      panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading REFERENCES · YouTube · Videos…'));
+      panes.source.appendChild(loadingEl('reading REFERENCES · YouTube · Videos…', { line: true }));
       sourcesP = _api('/api/references/youtube').then((d) => { sources = d.items || []; paintSources(); })
-        .catch((e) => { sources = []; panes.source.textContent = e.message; });
+        // (phase V73 block 2, (б2-19)) Not read: "did not load" with Try again (read again), the reason a popup.
+        .catch((e) => {
+          sourcesP = null;
+          showError('Could not read REFERENCES · YouTube · Videos: ' + e.message);
+          panes.source.replaceChildren(failedEl('REFERENCES · YouTube · Videos', () => loadSources(), { line: true }));
+        });
     }
     return sourcesP;
   }
   function paintSources() {
     panes.source.textContent = '';
     panes.source.appendChild(_el('div', 'mv3-ins-note', 'REFERENCES · YouTube · Videos'));
-    if (!sources.length) { panes.source.appendChild(_el('div', 'mv3-ins-note', 'Nothing there yet - give a link or a file.')); return; }
+    if (!sources.length) { panes.source.appendChild(emptyEl('Nothing there yet - give a link or a file.', { line: true })); return; }
     for (const s of sources) {
       const r = _el('button', 'mv3-hlp-src' + (st.pick === s ? ' is-on' : ''));
       r.type = 'button';
@@ -504,7 +512,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       nm.type = 'button';
       nm.title = 'Show it among the tiles';
       nm.addEventListener('click', () => onShow(key));
-      const x = _el('button', 'mv3-hlp-pick-x', '✕');
+      const x = _el('button', 'mv3-hlp-pick-x u-x', '');
       x.type = 'button';
       x.title = 'Take it away';
       x.addEventListener('click', () => onDrop(key));
@@ -567,14 +575,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const whole = isWhole(st.kind);
     lenChips.textContent = '';
     for (const [k, v] of Object.entries(lengthsOf(st.kind))) {
-      const b = _el('button', 'mv3-hlp-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
       b.type = 'button';
       b.addEventListener('click', () => { st.length = k; keep(); paint(); price(); });
       lenChips.appendChild(b);
     }
     cntChips.textContent = '';
     for (const n of countsOf(st.kind)) {
-      const b = _el('button', 'mv3-hlp-chip' + (n === st.count ? ' is-on' : ''), String(n));
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (n === st.count ? ' is-on' : ''), String(n));
       b.type = 'button';
       b.addEventListener('click', () => { st.count = n; keep(); paint(); price(); });
       cntChips.appendChild(b);
@@ -584,7 +592,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     titleChips.textContent = '';
     for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, 'by the video', 'As the kind auto finds has it']] : []).concat([
       [true, 'on', 'The fragment\'s headline at the top for its first 3 s'], [false, 'off', 'No title - "add title" on a fragment\'s card puts one']])) {
-      const b = _el('button', 'mv3-hlp-chip' + (st.title === v ? ' is-on' : ''), label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (st.title === v ? ' is-on' : ''), label);
       b.type = 'button';
       b.title = tip;
       b.addEventListener('click', () => { st.title = v; keep(); paint(); });

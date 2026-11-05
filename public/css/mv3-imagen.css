@@ -26,11 +26,7 @@
 /* The label sits ABOVE its control: a model name does not fit beside a label in 232px. */
 .mv3-ig-row{ display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:3px 0 }
 .mv3-ig-row > label{ font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted) }
-.mv3-ig-row select{
-  width:100%; min-width:0; height:26px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
-}
+.mv3-ig-row select{ width:100%; min-width:0 }
 /* The shape as a dropdown is the folded row's; the wide column has its buttons. */
 .mv3-ig-row.is-arsel{ display:none }
 .mv3-ig-sep{
@@ -38,13 +34,7 @@
   color:var(--muted); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
 }
 .mv3-ig-ar-row{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px }
-.mv3-ig-ar-b{
-  flex:0 0 auto; padding:4px 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted); font:600 10px/1 var(--font);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-ig-ar-b:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft); background:var(--surface) }
-.mv3-ig-ar-b.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
+.mv3-ig-ar-b{ flex:0 0 auto }   /* the shared chip (.u-chip) */
 .mv3-ig-ar-b .dot{ color:var(--ink) }
 .mv3-ig-ar-b.on .dot{ color:var(--ink); opacity:.7 }
 /* What this will cost, under the choice that decides it - the price of the aggregator that will be
@@ -102,10 +92,8 @@
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
   display:flex; flex-direction:column; gap:12px;
 }
-.mv3-ig-empty{
-  margin:auto; max-width:320px; text-align:center;
-  font:600 11px/1.6 var(--font); color:var(--muted);
-}
+/* (phase V73 block 2) The empty conversation is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+.mv3-ig-empty{ margin:auto; max-width:320px }
 /* A turn. The two sides lean opposite ways and nothing else about them differs. */
 .mv3-ig-msg{
   display:flex; flex-direction:column; gap:7px; max-width:86%;
@@ -117,15 +105,11 @@
 /* (phase V31) The cross that takes a message away: on the message's top right corner, over its border so it never covers
    what the message says; faint, brighter under the pointer; the first press turns it into "really?". */
 .mv3-ig-msg.has-del{ position:relative }
-.mv3-ig-del{
-  position:absolute; top:-7px; right:-7px; z-index:2;
-  min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
-  border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--muted);
-  font:700 9px/16px var(--font); text-align:center; cursor:pointer; opacity:.55;
-}
-.mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible{ opacity:1 }
-.mv3-ig-del:hover{ color:var(--ink); border-color:var(--muted) }
-.mv3-ig-del.is-ask{ opacity:1; padding:0 7px; color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); font-size:10px }
+.mv3-ig-del{ position:absolute; top:-7px; right:-7px; z-index:2; opacity:.55 }
+/* the shared cross on the message's corner, at its 18 px over the border; armed - the part's red fill (js/really.js) */
+.mv3-ig-del.u-btn{ width:18px; height:18px; border-radius:9px; background:var(--surface); border-color:var(--border); --x-size:11px }
+.mv3-ig-del.u-btn.is-armed{ width:auto; padding:0 7px; border-color:transparent; background:var(--danger-fill); font-size:var(--fs-10) }
+.mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible, .mv3-ig-del.is-armed{ opacity:1 }
 .mv3-ig-del[hidden]{ display:none }
 .mv3-ig-text{ font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .mv3-ig-note{ font:600 10px/1.4 var(--font); color:var(--muted) }
@@ -228,12 +212,7 @@
   border:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
-.mv3-ig-att .x{
-  position:absolute; top:2px; right:2px; width:15px; height:15px; padding:0;
-  border:0; border-radius:2px; background:var(--scrim); color:var(--on-media);
-  font:600 8px/15px var(--font); cursor:pointer;
-}
-.mv3-ig-att .x:hover{ background:var(--danger) }
+.mv3-ig-att .x{ position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:2px; --x-size:10px }   /* the cells' sizes stay (b5) */
 .mv3-ig-att-note{ font:600 9.5px/1.4 var(--font); color:var(--muted) }
 
 /* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
@@ -286,14 +265,14 @@
 .mv3-ig-atts.is-zone .mv3-ig-cell .lab{ font-size:7.5px; line-height:1 }
 .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:29px; height:29px; line-height:27px; font-size:12px }
-.mv3-ig-atts.is-zone .mv3-ig-att .x{ top:1px; right:1px; width:11px; height:11px; font:600 7px/11px var(--font) }
+.mv3-ig-atts.is-zone .mv3-ig-att .x{ top:1px; right:1px; width:11px; height:11px; --x-size:8px }
 .mv3-ig-atts.is-zone .mv3-ig-att .n{ top:1px; left:1px; min-width:10px; padding:0 2px; font:700 7px/10px var(--font) }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:3px 10px 2px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-cell{ width:auto; min-width:20px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att,
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att-slot{ width:20px; height:20px; line-height:18px; font-size:10px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .n{ min-width:8px; padding:0 1px; font-size:6.5px; line-height:8px }
-.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; font-size:6px; line-height:9px }
+.mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; --x-size:7px }
 
 /* ── the input ──
    (phase V55, the owner 2026-10-28, (гн5): "текстовое поле ... сделай меньше по высоте ... и кнопки и поле компактней")
@@ -310,29 +289,9 @@
 .mv3-ig-say::placeholder{ color:var(--muted) }
 .mv3-ig-say.is-bad{ border-color:var(--danger) }
 /* The writer, on or off. Filled when on: it changes what is sent. */
-.mv3-ig-bar .pen{
-  flex:0 0 auto; width:24px; height:24px; margin-bottom:1px; padding:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 12px/22px var(--font);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-ig-bar .pen:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
-.mv3-ig-bar .pen.on{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
-.mv3-ig-bar .n{
-  flex:0 0 auto; height:24px; margin-bottom:1px; padding:0 7px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 10.5px/22px var(--font);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-ig-bar .n:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
-/* The one action here. */
-.mv3-ig-bar .b{
-  flex:0 0 auto; height:24px; min-width:30px; margin-bottom:1px; padding:0 9px;
-  border:1px solid var(--main); border-radius:var(--r-xs);
-  background:var(--main); color:var(--on-main); font:700 12px/1 var(--font);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-ig-bar .b:hover:not([disabled]){ filter:brightness(1.1) }
-.mv3-ig-bar .b[disabled], .mv3-ig-bar .n[disabled]{ opacity:.45; cursor:default }
+/* The pen, the count and the send: the shared part at 24 (phase V73 block 2); the send is the one action here. */
+.mv3-ig-bar .pen, .mv3-ig-bar .n{ flex:0 0 auto; margin-bottom:1px }
+.mv3-ig-bar .b{ flex:0 0 auto; min-width:30px; margin-bottom:1px }
 
 /* ── right: everything there is to point at ──
    Narrow by default and dragged by the sash beside it (picchat.js sets the basis). */
@@ -375,11 +334,8 @@
 }
 .mv3-ig-card.is-sound .nm{ flex:1 1 auto; min-width:0; font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .mv3-ig-card.is-sound .du{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.mv3-ig-splay{
-  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:50%;
-  background:var(--surface); color:var(--ink); font:600 8px/20px var(--font); cursor:pointer;
-}
-.mv3-ig-splay:hover{ border-color:var(--sel-line); color:var(--ink) }
+.mv3-ig-splay{ flex:0 0 auto }
+.mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round, as before */
 .mv3-ig-card.is-short{ opacity:.45 }
 
 /* Hovering shows the picture larger, at one fixed place over the conversation. */
@@ -452,8 +408,7 @@
 }
 .vtrim-h{ display:flex; align-items:baseline; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vtrim-h b{ font:700 11px/1.3 var(--font); color:var(--ink) }
-.vtrim-x{ margin-left:auto; border:0; background:none; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font) }
-.vtrim-x:hover{ color:var(--ink) }
+.vtrim-x{ margin-left:auto }
 .vtrim-why{ font:600 10px/1.4 var(--font); color:var(--gold) }
 .vtrim-media{ display:block; width:100%; max-height:200px; background:var(--media-bg); border-radius:var(--r-xs) }
 audio.vtrim-media{ background:none; height:32px }
@@ -471,11 +426,11 @@ audio.vtrim-media{ background:none; height:32px }
 .vtrim-at{ position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--ink); pointer-events:none }
 .vtrim-foot{ display:flex; align-items:center; gap:8px }
 .vtrim-span{ flex:1 1 auto; font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
-.vtrim-done{ color:var(--on-main); background:var(--main); border-color:var(--main) }
 /* (phase V17) Kling motion control's first frame: its moment on a slider - the part goes from there. */
 .vtrim-still{ display:flex; align-items:center; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vtrim-still .k{ flex:0 0 auto; font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
-.vtrim-still input{ flex:1 1 auto; min-width:0; margin:0; accent-color:var(--gold) }
+.vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
+.vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
 /* What the chosen model does, under its dropdown (phase V6 - the line above the thread is the recipe's). */
 .mv3-vc-brief{ margin:1px 0 6px; font:500 10px/1.45 var(--font); color:var(--muted) }
@@ -521,30 +476,12 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .vc-fold:hover{ color:var(--ink) }
 .vc-back{ font-size:10px }
-.vc-req-body{
-  display:block; width:100%; min-height:160px; padding:8px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.vc-req-body:focus{ outline:none; border-color:var(--focus) }
+.vc-req-body{ display:block; width:100%; min-height:160px; resize:vertical; font-family:var(--mono) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
-.vc-go{ font-weight:700 }
-.vc-go.is-make{ color:var(--on-main); background:var(--main); border-color:var(--main); padding:4px 14px }
-.vc-go.is-make:hover:not([disabled]){ background:var(--main-hover); color:var(--on-main); filter:brightness(1.1) }
-.vc-go[disabled]{ opacity:.45; cursor:default }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
-.vc-n{
-  height:24px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 10.5px/22px var(--font); cursor:pointer;
-}
-.vc-n:hover{ color:var(--ink); border-color:var(--border-soft) }
-.vc-prompt-ta{
-  display:block; width:100%; min-height:90px; padding:8px 9px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
-  font:500 11.5px/1.55 var(--font);
-}
-.vc-prompt-ta:focus{ outline:none; border-color:var(--focus) }
+
+.vc-prompt-ta{ display:block; width:100%; min-height:90px; resize:vertical }
 .vc-card.is-sent .vc-req{ opacity:.92 }
 /* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
    the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
@@ -573,7 +510,7 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
 .mv3-vc-switches:empty{ display:none }
 .mv3-vc-check{ display:flex; align-items:center; gap:7px; padding:2px 2px; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none }
-.mv3-vc-check input{ margin:0; accent-color:var(--success); cursor:pointer }
+.mv3-vc-check input{ margin:0 }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
 .mv3-vc-check.is-off input{ cursor:default }
 /* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
@@ -581,12 +518,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V25, the owner 2026-10-13: "в золотой обводке с закругленными краями и золотым шрифтом чтобы было видно что это
    кнопка") The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
-.mv3-vc-almanac{
-  flex:0 0 auto; display:block; width:auto; height:30px; margin:8px 10px 10px; padding:0 12px;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:transparent; color:var(--ink);
-  font:700 10.5px/28px var(--font); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-vc-almanac:hover{ background:var(--hover) }
+.mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px; text-transform:uppercase }   /* the shared part at 32; its capitals go in block 7 */
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
 .mv3-pc.is-narrow .mv3-vc-almanac{ height:24px; margin:4px 10px 6px; line-height:22px }
 
@@ -627,12 +559,8 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-steps-t, .vc-vars-t{ flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .vc-steps-t{ font:700 9.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
 .vc-vars-t{ font:600 10px/1.2 var(--font); color:var(--muted) }
-.vc-nav{
-  flex:0 0 auto; width:24px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--ink); font:700 13px/20px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.vc-nav:hover:not([disabled]){ border-color:var(--sel-line); color:var(--ink) }
-.vc-nav[disabled]{ opacity:.35; cursor:default }
+.vc-nav{ flex:0 0 auto }
+.vc-nav.u-btn{ font-size:13px }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
 .vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
@@ -676,7 +604,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-foot:empty{ display:none }
 /* A set's variants, small: "‹ 2 of 3 ›" - in a prompt's line, under a sheet, under the video. */
 .vm-pg{ flex:0 0 auto; display:inline-flex; align-items:center; gap:4px }
-.vm-pg .vc-nav{ width:20px; height:20px; font-size:12px; line-height:18px }
+.vm-pg .vc-nav.u-btn{ width:20px; height:20px; font-size:12px }   /* the pager keeps its 20 px in a 24-px title line */
 .vm-pg-t{ font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
 .vm-pg.is-vid{ align-self:center }
 .vc-step > .vm-pg{ align-self:flex-start }
@@ -706,7 +634,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fh{ flex:0 0 auto; display:flex; align-items:center; gap:8px; min-width:0; height:24px }
 .vm-fh .vc-steps{ flex:0 1 auto; min-width:0; padding:0; border:0; gap:4px }
 .vm-fh .vc-steps-t{ flex:0 1 auto; text-align:left }
-.vm-fh .vc-nav{ width:20px; height:20px; font-size:12px; line-height:18px }
+.vm-fh .vc-nav.u-btn{ width:20px; height:20px; font-size:12px }
 .vm-fh .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); white-space:nowrap }
 .vm-fh .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10px/1.3 var(--font); color:var(--muted) }
 .vm-fh .n{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
@@ -780,11 +708,13 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-head h3{ margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink); white-space:nowrap }
 .pk-hint{ flex:1 1 auto; min-width:0; font:500 11px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .pk-room{ flex:0 0 auto; font:600 11px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.pk-close{
-  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+.pk-close{ flex:0 0 auto }
+/* the shared ✕; the 3D Studio's page keeps its look (б1-13а) */
+:root:has(link[href="css/studio3d.css"]) .pk-close{
+  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
 }
-.pk-close:hover{ color:var(--ink) }
+:root:has(link[href="css/studio3d.css"]) .pk-close:hover{ color:var(--ink) }
 .pk-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:220px minmax(0, 1fr) }
 .pk-side{
   min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px;
@@ -803,30 +733,30 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-up-note{ padding:2px 2px 0; font:500 10px/1.45 var(--font); color:var(--muted) }
 /* (phase V27) "from a link" under "from this computer": the field and "add" (js/merge-v3/chat-pick.js). */
 .pk-link{ display:flex; gap:4px }
-.pk-link input{
-  flex:1; min-width:0; font:500 11px/1.3 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px;
-}
-.pk-link input:focus{ outline:none; border-color:var(--focus) }
-.pk-link-go{
+.pk-link input{ flex:1; min-width:0 }
+:root:has(link[href="css/studio3d.css"]) .pk-link input{ font:500 11px/1.3 var(--font); color:var(--ink); background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px; }
+:root:has(link[href="css/studio3d.css"]) .pk-link input:focus{ outline:none; border-color:var(--focus) }
+/* the 3D Studio's page keeps its look (б1-13а); everywhere else this is the shared part */
+:root:has(link[href="css/studio3d.css"]) .pk-link-go{
   font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:0 10px;
 }
-.pk-link-go:hover{ border-color:var(--sel-line) }
-.pk-link-go[disabled]{ opacity:.5; cursor:default }
+:root:has(link[href="css/studio3d.css"]) .pk-link-go:hover{ border-color:var(--sel-line) }
+:root:has(link[href="css/studio3d.css"]) .pk-link-go[disabled]{ opacity:.5; cursor:default }
 /* The place a clip by a link goes into says how far it is (js/merge-v3/chat-shell.js _linkIn). */
 .mv3-ig-cell.is-linking .mv3-ig-att-slot, .mv3-ig-cell.is-linking .go{
   font:600 9.5px/1.2 var(--font); color:var(--muted); border-style:solid; border-color:var(--border);
 }
 .pk-main{ min-height:0; display:flex; flex-direction:column }
 .pk-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-soft) }
-.pk-q{
-  flex:0 1 280px; min-width:120px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.pk-q:focus{ outline:none; border-color:var(--focus) }
-.pk-cat{
-  flex:0 1 260px; min-width:0; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
+/* (phase V73 block 2) the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+.pk-q{ flex:0 1 280px; min-width:120px }
+:root:has(link[href="css/studio3d.css"]) .pk-q{ height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/24px var(--font); }
+:root:has(link[href="css/studio3d.css"]) .pk-q:focus{ outline:none; border-color:var(--focus) }
+:root:has(link[href="css/studio3d.css"]) .pk.is-tree .pk-q, :root:has(link[href="css/studio3d.css"]) .wkc .pk-q{ height:24px }
+.pk-cat{ flex:0 1 260px; min-width:0 }   /* the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+:root:has(link[href="css/studio3d.css"]) .pk-cat{
+  height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
 }
 .pk-cat[hidden]{ display:none }
@@ -836,7 +766,10 @@ audio.vtrim-media{ background:none; height:32px }
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px;
   display:flex; flex-wrap:wrap; align-content:flex-start; align-items:flex-start; gap:12px 10px;
 }
-.pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
+/* (phase V73 block 2) Being read, nothing here, did not load - the shared parts (js/ui-state.js) across the wrapping grid. The
+   3D Studio's page keeps its own line (js/merge-v3/chat-pick.js OLD_LOOK). */
+.pk-grid > .u-empty, .pk-grid > .u-loading, .pk-grid > .u-failed{ width:100% }
+:root:has(link[href="css/studio3d.css"]) .pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
 .pk-sentinel{ width:100%; height:1px }
 .pk-tile{ position:relative; display:flex; flex-direction:column; gap:2px; width:calc(var(--pk-h) * var(--ar, .75)); max-width:100%; min-width:0 }
 .pk-hit{ display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:left }
@@ -845,7 +778,6 @@ audio.vtrim-media{ background:none; height:32px }
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden; background:var(--surface-2);
 }
 .pk-hit:hover .pk-box, .pk-hit:focus-visible .pk-box{ border-color:var(--muted) }
-.pk-hit:focus-visible{ outline:none }
 .pk-box img, .pk-vid{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block }
 .pk-box.is-blank{
   background:repeating-linear-gradient(45deg,
@@ -908,7 +840,8 @@ audio.vtrim-media{ background:none; height:32px }
   padding:7px 13px; border-top:1px solid var(--border); background:var(--surface-2);
 }
 .pk-said{ flex:1 1 auto; min-width:0; font:600 10.5px/1.4 var(--font); color:var(--muted) }
-.pk-done{ flex:0 0 auto; padding:3px 14px }
+.pk-done{ flex:0 0 auto }
+:root:has(link[href="css/studio3d.css"]) .pk-done{ padding:3px 14px }   /* the 3D Studio's page keeps its look (б1-13а) */
 @media (max-width:760px){
   .pk-ov{ padding:8px }
   .pk-body{ grid-template-columns:150px minmax(0, 1fr) }
@@ -951,7 +884,7 @@ audio.vtrim-media{ background:none; height:32px }
 .pk.is-tree .pk-bar{ gap:8px; padding:6px 10px }
 .pk-path{ flex:1 1 auto; min-width:0; overflow:hidden; font:600 11px/1.2 var(--font) }
 .pk-path .mt-crumbs{ margin:0; flex-wrap:nowrap; overflow:hidden }
-.pk.is-tree .pk-q{ flex:0 1 210px; min-width:110px; height:24px }
+.pk.is-tree .pk-q{ flex:0 1 210px; min-width:110px }
 .pk.is-tree .pk-count{ margin-left:0; flex:0 0 auto }
 .pk.is-tree .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .pk.is-tree .pk-grid.is-rows{ grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)) }
@@ -959,15 +892,9 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-grid .mt-folders{ flex:0 0 100%; width:100%; grid-column:1 / -1; margin:0 0 2px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) }
 .pk-grid .mt-ftile{ height:32px }
 .pk.is-tree .pk-foot{ gap:8px; padding:6px 10px }
-.pk-up{
-  flex:0 0 auto; padding:4px 10px; border:1px dashed var(--border); border-radius:var(--r-xs);
-  background:transparent; color:var(--muted); font:600 10.5px/1.3 var(--font); cursor:pointer;
-}
-.pk-up:hover{ border-style:solid; border-color:var(--sel-line); color:var(--ink) }
-/* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop". */
-.pk-up.is-make{ border-style:solid; border-color:var(--gold); color:var(--gold) }
+.pk-up{ flex:0 0 auto }
+/* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop" (.u-btn.is-gen). */
 .pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
-.pk.is-tree .pk-link input{ padding:3px 7px; font-size:10.5px }
 .pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
 /* ── Talking head's windows (phase V57; V58 - js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
@@ -979,7 +906,7 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc.is-flat .pk-side{ display:none }
 .wkc .pk-side{ overflow:hidden; gap:0; padding:6px 4px 4px 6px }
 .wkc .pk-bar{ gap:8px; padding:6px 10px }
-.wkc .pk-q{ flex:0 1 240px; min-width:110px; height:24px }
+.wkc .pk-q{ flex:0 1 240px; min-width:110px }
 .wkc .pk-count{ margin-left:auto }
 .wkc .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .wkc.is-flat .pk-grid{ --pk-h:150px }
@@ -987,7 +914,6 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc-said:not(:empty){ padding:6px 12px; border-top:1px solid var(--border-soft) }
 .pk-ftabs{ flex:0 0 auto; display:flex; gap:4px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
 .pk-ftabs .mv3-sc-tab{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.pk-none.is-side{ padding:14px 4px; text-align:left }
 .mk-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto }
 .mk-pair{ flex:0 0 auto; display:flex; align-items:center; gap:6px }
 .mk-pair-img{ width:64px; height:44px; object-fit:contain; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface) }
@@ -1022,11 +948,7 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .hp-head b{ font:700 12px/1.2 var(--font); color:var(--ink); white-space:nowrap }
 .hp-sub{ flex:1 1 auto; min-width:0; font:500 10.5px/1.2 var(--font); color:var(--muted) }
-.hp-x{
-  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
-}
-.hp-x:hover{ color:var(--ink) }
+.hp-x{ flex:0 0 auto }
 .hp-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr) }
 .hp-side{
   min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px;
@@ -1051,11 +973,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-main{ min-height:0; display:flex; flex-direction:column }
 .hp-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border-soft) }
 .hp-bar[hidden]{ display:none }
-.hp-q{
-  flex:1 1 auto; min-width:0; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
-}
-.hp-q:focus{ outline:none; border-color:var(--focus) }
+.hp-q{ flex:1 1 auto; min-width:0 }
 .hp-count{ flex:0 0 auto; font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .hp-note{ flex:0 0 auto; padding:6px 10px; border-bottom:1px solid var(--border-soft); font:600 10.5px/1.4 var(--font); color:var(--gold) }
 .hp-note[hidden]{ display:none }
@@ -1085,7 +1003,6 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-tile.is-blink{ animation:hp-blink .24s ease-in-out 3 }
 @keyframes hp-blink{ 50%{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 2px var(--sel-line) } }
 .hp-tile.is-fail{ border-color:var(--danger) }
-.hp-none{ padding:30px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
 .hp-soon{ margin:auto; max-width:420px; padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center }
 .hp-soon b{ font:700 13px/1.3 var(--font); color:var(--ink) }
 .hp-soon i{
@@ -1129,7 +1046,6 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-top .sp{ flex:1 1 auto }
 .mv3-ig-top-t{ font:700 9.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold) }
 .mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
-.mv3-fc-close{ color:var(--gold); border-color:color-mix(in oklch, var(--gold) 60%, transparent) }
 /* The shape, said rather than chosen: always the project's. */
 .mv3-ig-shape{ display:flex; align-items:baseline; gap:6px; padding:6px 0 2px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-ig-shape .k{ font-size:9.5px; letter-spacing:.03em }
@@ -1143,13 +1059,7 @@ audio.vtrim-media{ background:none; height:32px }
    saying "in development" (V25: no longer dimmed into the column, the owner wants it seen as a button). */
 .mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ cursor:not-allowed; background:transparent }
 /* The frames chat's `ideas` (phase V26.5): right of the places above the box, in gold; its answer a list to press. */
-.mv3-fc-ideas{
-  flex:0 0 auto; align-self:center; margin:0 10px 0 4px; height:28px; padding:0 12px; cursor:pointer;
-  border:1px solid var(--gold); border-radius:var(--r-xs); background:transparent; color:var(--gold);
-  font:700 10px/26px var(--font); letter-spacing:.06em; text-transform:uppercase;
-}
-.mv3-fc-ideas:hover{ background:color-mix(in oklch, var(--gold) 16%, transparent) }
-.mv3-fc-ideas:disabled{ opacity:.6; cursor:default }
+.mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px; text-transform:uppercase }   /* a gold line (.u-btn.is-gen); capitals - block 7 */
 .mv3-fc-ideaslist{ display:flex; flex-direction:column; gap:5px; margin-top:6px }
 .mv3-fc-idea{
   display:block; width:100%; text-align:left; padding:6px 9px; cursor:pointer;
@@ -1208,13 +1118,10 @@ audio.vtrim-media{ background:none; height:32px }
    again as a variation of itself, in its place (js/merge-v3/fchat.js _ideaAgain); the card waits while it is written. */
 .mv3-fc-ideacell{ position:relative; display:flex; min-width:0 }
 .mv3-fc-ideacell > .mv3-fc-idea{ flex:1 1 auto; min-width:0; padding-right:26px }
-.mv3-fc-idea-re{
-  position:absolute; top:4px; right:4px; width:19px; height:19px; padding:0; display:grid; place-items:center;
-  border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--muted);
-  font:700 12px/1 var(--font); cursor:pointer; opacity:0; transition:opacity .12s;
-}
+.mv3-fc-idea-re{ position:absolute; top:4px; right:4px; opacity:0; transition:opacity var(--dur-1) var(--ease) }
+.mv3-fc-idea-re.u-btn{ width:20px; height:20px; border-radius:50%; font-size:12px }   /* keeps its place on the card's corner */
 .mv3-fc-ideacell:hover .mv3-fc-idea-re, .mv3-fc-idea-re:focus-visible{ opacity:1 }
-.mv3-fc-idea-re:hover{ color:var(--gold); border-color:var(--gold) }
+
 .mv3-fc-ideacell.is-again .mv3-fc-idea-re{ opacity:1; color:var(--gold); border-color:var(--gold); cursor:default; animation:mv3-fc-spin 1s linear infinite }
 .mv3-fc-ideacell.is-again .mv3-fc-idea{ opacity:.5; cursor:default }
 @keyframes mv3-fc-spin{ to{ transform:rotate(360deg) } }

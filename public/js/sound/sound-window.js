@@ -54,6 +54,9 @@ import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 import { waveEl, secs } from './wave.js';
 import { createSunoForm, el, api, post, ls, lsSet, copyText, titleOf, qmark, withQ, closeQ, modeRowHelp, MODEL_ROW_HELP } from './suno-form.js';
+import { ask } from '../ask.js';
+import { showError } from '../notice.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 // ── the modes, in two groups ──────────────────────────────────────────────────
 const GROUPS = { music: ['simple', 'custom', 'lyrics', 'compose', 'video'], sounds: ['sounds', 'sfx'] };
@@ -195,15 +198,18 @@ function paint() {
   _side();
 }
 
+// The line over the card says how the work goes and goes quiet after 9 s. (phase V73 block 2) An error (`bad`) - a refusal of
+// the tree, a file that will not play, a press that failed, the form's "Not saved" - is a popup in the corner instead
+// (js/notice.js), and the line goes quiet.
 let _sayT = 0;
 function _say(text, bad) {
+  if (bad) { showError(text); text = ''; }
   if (!_ui) return;
   const s = _ui.status;
   s.textContent = text || '';
   s.hidden = !text;
-  s.classList.toggle('is-bad', !!bad);
   clearTimeout(_sayT);
-  if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
+  if (text) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
 }
 
 // ── where it goes ─────────────────────────────────────────────────────────────
@@ -319,12 +325,12 @@ function paintMake() {
     card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }),
       { max: 500, help: 'What the sound is, as a sound designer says it - the source, the action, the material; a loop with its tempo and key. Up to 500 characters.' }));
     const r2 = el('div', 'au-row2');
-    const tempo = el('input', 'au-in');
+    const tempo = el('input', 'au-in u-in');
     tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = 'auto';
     tempo.value = f.tempo ? String(f.tempo) : '';
     tempo.addEventListener('change', () => { f.tempo = Math.max(0, Math.min(300, Math.round(+tempo.value || 0))); F.save(); });
     r2.appendChild(_field('Tempo', tempo, { help: 'Beats per minute, for a loop. Empty - Suno\'s own.' }));
-    const key = el('select', 'au-sel');
+    const key = el('select', 'au-sel u-in');
     for (const k of (_cat().soundKeys || ['Any'])) { const op = el('option', null, k); op.value = k; key.appendChild(op); }
     key.value = f.key || 'Any';
     key.addEventListener('change', () => { f.key = key.value; F.save(); });
@@ -394,7 +400,7 @@ function _attachment(f) {
       att.appendChild(el('div', 'au-att-ph'));
       att.appendChild(el('div', 'au-att-tx', 'Press a video in the VIDEO folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
     }
-    const up = el('button', 'au-btn', 'from this computer…');
+    const up = el('button', 'au-btn u-btn is-s', 'from this computer…');
     up.type = 'button';
     up.title = 'A video from this computer - it is copied into VIDEO → Uploads first';
     up.addEventListener('click', () => {
@@ -410,7 +416,7 @@ function _attachment(f) {
     });
     att.appendChild(up);
     if (f.video || f.clip) {
-      const x = el('button', 'au-x', '✕');
+      const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'no video';
       x.addEventListener('click', () => { Object.assign(f, { video: '', name: '', thumb: '', dur: 0, clip: null }); F.save(); paintMake(); paintFoot(); });
@@ -469,7 +475,12 @@ function _v2mOpen() {
   }
   if (Date.now() - _vRead < 2000) return;
   _vRead = Date.now();
-  _vtree.load().then(() => _v2mLoad(_vtree.selected()));
+  _vtree.load().then(() => {
+    const n = _vtree.selected();
+    if (n) { _v2mLoad(n); return; }
+    // (phase V73 block 2, (б2-19)) The tree not read (its reason said in the corner by `status`): the gallery says so - not empty.
+    if (_ui) _ui.v2mGal.replaceChildren(failedEl('the videos', () => { _vRead = 0; _v2mOpen(); }));
+  });
 }
 async function _v2mLoad(n) {
   if (!_ui || !_vtree || !n) return;
@@ -481,19 +492,21 @@ async function _v2mLoad(n) {
   if (fold) gal.appendChild(fold);
   const grid = el('div', 'au-v2m-grid');
   gal.appendChild(grid);
-  if (!n.q) { if (!fold) grid.appendChild(el('div', 'au-empty', 'Nothing here.')); return; }
-  grid.appendChild(el('div', 'au-empty', 'reading…'));
+  // (phase V73 block 2) empty, reading and did not load are the shared parts (js/ui-state.js); a folder not read says so with
+  // Try again, the reason in the corner - never "No videos here."
+  if (!n.q) { if (!fold) grid.appendChild(emptyEl('Nothing here.', { icon: 'folder' })); return; }
+  grid.appendChild(loadingEl('reading…'));
   let items = [];
   try {
     const d = await api('/api/library/shelf/media?' + new URLSearchParams(n.q));
     items = (d.items || []).filter(i => i && i.media && /\.(mp4|mov|webm|m4v|mkv)$/i.test(String(i.media).split('?')[0]));
   } catch (e) {
-    if (mine === _vseq) { grid.textContent = ''; grid.appendChild(el('div', 'au-err', e.message)); }
+    if (mine === _vseq) { grid.textContent = ''; grid.appendChild(failedEl('the videos', () => _v2mLoad(n))); showError(e.message); }
     return;
   }
   if (mine !== _vseq || !_ui) return;
   grid.textContent = '';
-  if (!items.length && !fold) grid.appendChild(el('div', 'au-empty', 'No videos here.'));
+  if (!items.length && !fold) grid.appendChild(emptyEl('No videos here.', { icon: 'film' }));
   for (const it of items) grid.appendChild(_v2mTile(it));
 }
 function _v2mTile(it) {
@@ -608,8 +621,9 @@ async function _generate(btn) {
     if (H && H.made) { GENS = [r.gen].concat(GENS.filter(g => g.id !== r.gen.id)); _paintMade(); _followProject(); }
     _say(r.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can close this window, the app files it when it comes.');
   } catch (e) {
-    _err = e.message;
-    _paintLine();
+    // (phase V73 block 2) A press refused or failed before it started is an error - in the corner (js/notice.js); a field left
+    // empty at the press ("The mood's style is empty…", js/sound/suno-form.js - `hint`) is said on the foot's line, as a hint.
+    if (e && e.hint) { _err = e.message; _paintLine(); } else showError(e.message);
   } finally {
     _going = false;
     btn.disabled = false;
@@ -671,7 +685,7 @@ function _lyricsList() {
   const box = el('div', 'au-lyrs');
   const gens = _lyricGens.slice(0, LYR_MAX);
   if (!gens.length) {
-    box.appendChild(el('div', 'au-note', 'The texts come here - a row each, to save into Music → Lyrics or to use in Custom.'));
+    box.appendChild(emptyEl('The texts come here - a row each, to save into Music → Lyrics or to use in Custom.', { line: true }));
     return box;
   }
   gens.forEach((g, gi) => {
@@ -749,7 +763,7 @@ function _genCard(g) {
   h.appendChild(el('span', 'sp'));
   h.appendChild(el('span', null, (g.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + _modeName(g.mode) + (g.fake ? ' · FAKE' : '') + ' · ' + _ago(g.at)));
   if (g.state !== 'pending') {
-    const x = el('button', 'au-x', '✕');
+    const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Off this list - the files stay where they are';
     x.addEventListener('click', async () => {
@@ -789,7 +803,8 @@ function _genCard(g) {
       const again = el('button', 'au-link', 'try again (pays again)');
       again.type = 'button';
       again.addEventListener('click', async () => {
-        if (!window.confirm('Ask for it again? It costs ' + (g.engine === 'eleven' ? 'ElevenLabs credits' : 'kie credits') + ' again.')) return;
+        // (phase V73 block 2) the question at the button, a plain answer - it is paid (б2-5)
+        if (!await ask(again, 'Ask for it again? It costs ' + (g.engine === 'eleven' ? 'ElevenLabs credits' : 'kie credits') + ' again.', { yes: 'Ask again' })) return;
         try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/retry', {}); _say('Asked again.'); _followProject(); _pollProject(); } catch (e) { _say(e.message, true); }
       });
       card.appendChild(again);
@@ -827,7 +842,7 @@ function _result(r) {
   const it = LIBIDX.get(r.path);
   const row = el('div', 'au-res' + (_hear && _hear.path === r.path ? ' is-playing' : ''));
   row.dataset.path = r.path;
-  const pb = el('button', 'au-play', '▶');
+  const pb = el('button', 'au-play u-btn is-s is-icon', '▶');
   pb.type = 'button';
   row.appendChild(pb);
   row.appendChild(el('span', 'au-res-n', (it && it.name) || r.title));
@@ -835,7 +850,7 @@ function _result(r) {
   row.appendChild(el('span', 'au-muted', secs(r.dur)));
   if (it) {
     const fav = !!(it.meta && it.meta.favorite);
-    const star = el('button', 'au-star' + (fav ? ' on' : ''), fav ? '★' : '☆');
+    const star = el('button', 'au-star u-btn is-s is-icon is-quiet' + (fav ? ' on' : ''), fav ? '★' : '☆');
     star.type = 'button';
     star.title = fav ? 'Take it out of Favorites' : 'Into Favorites';
     star.addEventListener('click', async (e) => {
@@ -1031,7 +1046,7 @@ export async function open(o) {
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
   const price = el('div', 'au-price');
-  const go = el('button', 'au-go', 'generate');
+  const go = el('button', 'au-go u-btn is-main', 'generate');
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
   foot.append(alm, line, into, price, go);
@@ -1042,15 +1057,24 @@ export async function open(o) {
   _setW(ls(KEY_SASH, SET_W));
   _wireSash();
   window.addEventListener('resize', _onResize);
-  col.appendChild(el('div', 'au-note', 'reading…'));
   const win = _win;
-  if (!(await F.ready()) || win !== _win) return win;
-  F.almanacButton(alm);
+  await _start(win, opt);
+  return win;
+}
+
+// The settings column while the catalog is read ("Reading…"); (phase V73 block 2, (б2-19)) not read - "The settings did not
+// load" and Try again there, the reason in the corner (the form says it, js/sound/suno-form.js ready).
+async function _start(win, opt) {
+  if (!_ui || win !== _win) return;
+  _ui.col.replaceChildren(loadingEl('reading…', { line: true }));
+  const ok = await F.ready();
+  if (!_ui || win !== _win) return;
+  if (!ok) { _ui.col.replaceChildren(failedEl('the settings', () => _start(win, opt), { line: true })); return; }
+  F.almanacButton(_ui.alm);
   _fitMode();
   _apply(opt);
   _pickUp();
   _readProject();
-  return win;
 }
 
 /** The window open now, or null. */

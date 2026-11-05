@@ -27,6 +27,9 @@ import { createHighlights, homeOf } from './highlights.js';
 // (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) A kind with no projects - the shared "nothing here", a row of the list.
+import { emptyEl } from '../ui-state.js';
+import { REALLY, MS } from '../really.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -136,7 +139,7 @@ async function _openList() {
   await _paint();
   if (_plist) return;
   const el = document.createElement('div');
-  el.className = 'mv3-plist';
+  el.className = 'mv3-plist u-menu is-float';
   const head = document.createElement('div');
   head.className = 'mv3-plist-kinds';
   const rows = document.createElement('div');
@@ -148,7 +151,7 @@ async function _openList() {
     for (const [k, label] of KINDS) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'mv3-plist-kind' + (k === f ? ' is-on' : '');
+      b.className = 'mv3-plist-kind u-chip' + (k === f ? ' is-on' : '');
       b.textContent = label;
       b.addEventListener('click', (e) => { e.stopPropagation(); _setFilter(k); fill(); });
       head.appendChild(b);
@@ -162,8 +165,8 @@ async function _openList() {
     for (const o of shown) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'mv3-plist-row' + (o === open ? ' is-on' : '');
-      b.textContent = o.textContent;
+      b.className = 'mv3-plist-row u-mi' + (o === open ? ' is-on' : '');
+      b.appendChild(Object.assign(document.createElement('span'), { textContent: o.textContent }));
       b.title = o.textContent;
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -175,10 +178,7 @@ async function _openList() {
       rows.appendChild(b);
     }
     if (shown.length === drafts.length) {
-      const none = document.createElement('div');
-      none.className = 'mv3-plist-none';
-      none.textContent = 'No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.';
-      rows.appendChild(none);
+      rows.appendChild(emptyEl('No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.', { line: true, cls: 'mv3-plist-none' }));
     }
     const on = rows.querySelector('.is-on');
     if (on) on.scrollIntoView({ block: 'nearest' });
@@ -355,11 +355,11 @@ function _closeKind() {
 function _kindMenu(anchor) {
   if (_kindPop) { _closeKind(); return; }             // the same press closes it again
   const el = document.createElement('div');
-  el.className = 'mv3-plus-menu';
+  el.className = 'mv3-plus-menu u-menu is-float';
   const item = (label, sub, on) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'mv3-plus-item';
+    btn.className = 'mv3-plus-item u-mi';
     // A kind that is coming (phase V61): there, greyed, and nothing happens on a press (css/app-shell.css [disabled]).
     if (!on) btn.disabled = true;
     const t = document.createElement('span');
@@ -500,11 +500,11 @@ function _wireDelete() {
   b.addEventListener('click', async () => {
     if (!_armed) {
       _armed = true;
-      b.textContent = 'really?';
+      b.textContent = REALLY;
       b.classList.add('is-armed');
       // Disarms itself. An armed delete left sitting there is a trap for the next click
-      // that happens to land on it.
-      _armTimer = setTimeout(_disarm, 4000);
+      // that happens to land on it. (phase V73 block 2: one "Really?", 3 s - js/really.js)
+      _armTimer = setTimeout(_disarm, MS);
       return;
     }
     _disarm();
@@ -521,7 +521,7 @@ function _wireDelete() {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
         'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, in Uncategorized.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
-          { label: 'And its files', kind: 'yes', on: () => _askHeads(b, key) },
+          { label: 'And its files', kind: 'danger', on: () => _askHeads(b, key) },
           { label: 'Cancel' },
         ], { stay: true });   // the bar does not scroll; a project still opening scrolls the page under it
       return;
@@ -557,7 +557,7 @@ async function _askHeads(anchor, key) {
     'Every take made in this project. Kept, they stay in the Library - Generated · Talking heads · «' + (Store.title() || 'this project')
       + '» - until you delete them there; a timeline of another project that uses one keeps it.', [
       { label: 'Keep in the Library', kind: 'yes', on: () => _delete(key, true, 'keep') },
-      { label: 'Delete them too', on: () => _delete(key, true, 'delete') },
+      { label: 'Delete them too', kind: 'danger', on: () => _delete(key, true, 'delete') },
       { label: 'Cancel' },
     ], { stay: true });
 }

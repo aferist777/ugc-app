@@ -19,6 +19,8 @@
 
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
+import { MS } from './really.js';
+import { emptyEl } from './ui-state.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
@@ -43,6 +45,8 @@ const _el = (tag, cls, text) => {
 };
 
 const _json = (url, opt) => fetch(url, opt).then(r => r.json()).catch(() => null);
+// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): there the empty list keeps its own line.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
 // ── the bell ────────────────────────────────────────────────────────────────
 // Made here rather than shipped as a file: two short tones and a decay are a smaller thing to
@@ -334,14 +338,14 @@ function _row(rec) {
 
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act', 'open');
+    const open = _el('button', 'sv3-al-act u-btn is-s', 'open');
     open.type = 'button';
     open.title = 'Look at what came out';
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
     acts.appendChild(open);
   }
   if (rec.state === 'failed' && rec.retryable) {
-    const again = _el('button', 'sv3-al-act' + (_armed === rec.id ? ' is-armed' : ''),
+    const again = _el('button', 'sv3-al-act u-btn is-s' + (_armed === rec.id ? ' is-armed' : ''),
       _armed === rec.id ? 'spend again?' : 'retry');
     again.type = 'button';
     again.title = rec.retryFree ? 'Go on from where it stopped - this costs nothing' : 'Ask for it again - this spends credits';
@@ -352,7 +356,7 @@ function _row(rec) {
       if (!rec.retryFree && _armed !== rec.id) {
         _armed = rec.id;
         _paintMenu();
-        setTimeout(() => { if (_armed === rec.id) { _armed = null; _paintMenu(); } }, 4000);
+        setTimeout(() => { if (_armed === rec.id) { _armed = null; _paintMenu(); } }, MS);
         return;
       }
       _armed = null;
@@ -383,7 +387,7 @@ function _paintMenu() {
   const head = _el('div', 'sv3-al-head');
   head.appendChild(_el('span', 'sv3-al-h', 'Alerts'));
   head.appendChild(_el('span', 'sp'));
-  const clear = _el('button', 'sv3-al-clear', 'clear');
+  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', 'clear');
   clear.type = 'button';
   clear.title = 'Forget the finished ones. What is still running stays.';
   clear.addEventListener('click', () => { _json('/api/alerts/clear', { method: 'POST' }).then(_poll); });
@@ -391,7 +395,9 @@ function _paintMenu() {
   _menu.appendChild(head);
 
   const list = _el('div', 'sv3-al-list');
-  if (!_items.length) list.appendChild(_el('div', 'sv3-al-empty', 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.'));
+  // (phase V73 block 2) the shared empty part (js/ui-state.js); `sv3-al-empty` its place in the menu
+  const none = 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.';
+  if (!_items.length) list.appendChild(OLD_LOOK() ? _el('div', 'sv3-al-empty', none) : emptyEl(none, { icon: 'bell', cls: 'sv3-al-empty' }));
   for (const rec of _items) list.appendChild(_row(rec));
   _menu.appendChild(list);
 }
@@ -435,7 +441,7 @@ function _goTo(href) {
 
 function _toggle() {
   if (_menu) return _close();
-  _menu = _el('div', 'sv3-al-menu');
+  _menu = _el('div', 'sv3-al-menu u-menu');
   document.body.appendChild(_menu);
   _paintMenu();
   _place();

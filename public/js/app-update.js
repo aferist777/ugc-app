@@ -68,18 +68,19 @@ function _ask() {
   if (_open) return;
   _open = true;
   const back = _el('div', 'dr-back');
-  const box = _el('div', 'nm-box dr-box');
+  const box = _el('div', 'nm-box dr-box u-ask is-float');   // (phase V73 block 2) the shared question, in the middle
   box.setAttribute('role', 'dialog');
-  box.appendChild(_el('div', 'nm-t', 'The app was updated'));
+  box.appendChild(_el('b', 'nm-t', 'The app was updated'));
   const d = _state || {};
   if (d.subject) box.appendChild(_el('div', 'dr-holds', d.subject));
   box.appendChild(_el('div', 'dr-note', 'Restart to use the new version. What you have open is saved'
     + (d.renderBusy ? '; a render is running - you will be asked about it first.' : '.')));
-  const row = _el('div', 'nm-r');
-  const go = _el('button', 'nm-b is-ok', 'Restart and update');
-  const later = _el('button', 'nm-b', 'Later');
+  const row = _el('div', 'nm-r u-ask-r');
+  const go = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Restart and update');
+  const later = _el('button', 'nm-b u-btn is-s', 'Later');
   for (const b of [go, later]) b.type = 'button';
-  row.append(go, later);
+  // "Later" left, the verb right (б2-8); the 3D Studio's page keeps its old order
+  if (document.querySelector('link[href="css/studio3d.css"]')) row.append(go, later); else row.append(later, go);
   box.appendChild(row);
   document.body.append(back, box);
   let layer = null;

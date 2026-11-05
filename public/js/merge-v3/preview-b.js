@@ -2237,9 +2237,8 @@ function _wireFormat() {
   if (!bar || document.getElementById('mv3-pvb-fmt')) return;
   const sel = document.createElement('select');
   sel.id = 'mv3-pvb-fmt';
-  // Styled by id to match the quality picker beside it - mv3-pv-q is the label that WRAPS
-  // that select, not the select itself, so borrowing the class styled nothing.
-  sel.className = '';
+  // The shared field, as the quality picker beside it (phase V73 block 2); its size by id with it.
+  sel.className = 'u-in is-s';
   sel.title = 'The shape of the finished video';
   for (const [k, v] of Object.entries(FORMATS)) {
     const o = document.createElement('option');

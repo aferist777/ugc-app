@@ -33,14 +33,14 @@ const _patchMeta = (it, body) => json('/api/library/meta/' + encodeURIComponent(
 // and answers with what is kept now; the item's meta follows, so the viewer opened again shows it.
 function _textRow(value, placeholder, rows, store) {
   const box = el('div', 'made-ed');
-  const ta = el('textarea', 'made-ed-ta');
+  const ta = el('textarea', 'made-ed-ta u-area is-s');
   ta.value = value || '';
   ta.placeholder = placeholder;
   ta.rows = rows;
   ta.spellcheck = true;
   const foot = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const save = el('button', 'lib-btn made-ed-save', 'save');
+  const save = el('button', 'u-btn is-s made-ed-save', 'save');
   save.type = 'button';
   save.hidden = true;
   let kept = ta.value;
@@ -67,7 +67,7 @@ function _genderRow(it, m) {
   let cur = GENDERS.includes(m.gender) ? m.gender : '';
   const paint = () => row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === cur));
   for (const g of GENDERS.concat([''])) {
-    const b = el('button', 'made-ed-chip', g || '—');
+    const b = el('button', 'made-ed-chip u-chip', g || '—');
     b.type = 'button';
     b.dataset.g = g;
     b.title = g ? 'Worn by ' + (g === 'unisex' ? 'either' : 'a ' + g + ' character') : 'Not said';
@@ -136,7 +136,7 @@ function _propRows(it, m) {
 function _readAgain(it, m, desc) {
   const box = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const b = el('button', 'lib-btn made-ed-save', 'read again');
+  const b = el('button', 'u-btn is-s made-ed-save', 'read again');
   b.type = 'button';
   b.title = 'The agent writes the description anew from the picture and your words (saved) - it replaces the one here';
   const ta = desc.querySelector('textarea');
