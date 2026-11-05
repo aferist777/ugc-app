@@ -36,8 +36,7 @@
 .hm-head a:hover, .hm-head button:hover{color:var(--ink)}
 .hm-st.is-dragging{opacity:.35}
 .hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
-.hm-empty{font-size:11.5px; color:var(--muted); padding:2px 2px}
-.hm-err{font-size:11.5px; color:var(--danger)}
+/* (phase V73 block 2) a block's empty, loading and did-not-load bodies are the shared parts (js/ui-state.js) */
 
 /* ── THE TILES (phase V70): New project, Generate, Library - a filled gold icon (js/home/icons.js, drawn in currentColor)
    and its word under it; as many places a row as the row has tiles (js/home/util.js `tiles` sets --hm-cols) - New project and

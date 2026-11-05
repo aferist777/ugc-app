@@ -23,6 +23,9 @@ import { initNav } from '../app-nav.js';
 // (`lib_chmake_v1`, one for every page); its rows in Alerts still lead to the Library ((пк5б), chmake.js `_where`).
 import * as CM from '../library/chmake.js';
 import { showError, showToast } from '../notice.js';
+// (phase V73 block 2, step 2b) A block being read says "Loading"; one that could not be read says so, with Try again, and
+// the reason is a popup - what it showed before stays ((б2-17) а, (б2-19) а).
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
 import { ICONS } from './icons.js';
 import * as WIN from './windows.js';
@@ -126,7 +129,9 @@ BLOCKS.new = () => {
   seen.addEventListener('click', () => { visit.prev = new Date().toISOString(); lsSet(VISIT, visit); paint(); });
   f.right.appendChild(seen);
   const rows = el('div', 'hm-rows');
+  rows.appendChild(loadingEl('Loading'));
   f.body.appendChild(rows);
+  let shown = false;           // painted once - a later failed read leaves what it shows
   const row = (ico, title, sub, go, href, bad) => {
     const r = el('div', 'hm-row' + (bad ? ' is-bad' : ''));
     r.appendChild(el('span', 'hm-ico', ico));
@@ -146,7 +151,11 @@ BLOCKS.new = () => {
     f.what.textContent = '· ' + (when(visit.prev) || 'the last visit');
     let d;
     try { d = await api('/api/home/news?since=' + encodeURIComponent(visit.prev)); }
-    catch (e) { rows.replaceChildren(el('div', 'hm-err', 'Could not read what is new: ' + e.message)); return; }
+    catch (e) {
+      showError('Could not read what is new', { detail: e.message, key: 'home-new' });
+      if (!shown) rows.replaceChildren(failedEl('What is new', () => paint()));
+      return;
+    }
     const out = [];
     const s = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
     if (d.refs && d.refs.n) {
@@ -166,7 +175,8 @@ BLOCKS.new = () => {
       out.push(row('!', s(d.failed.n, 'generation') + ' failed', d.failed.last ? (d.failed.last.title + (d.failed.last.error ? ' · ' + d.failed.last.error : '')).slice(0, 140) : '',
         'Alerts →', () => { const b = $('.sv3-alerts'); if (b) b.click(); }, true));
     }
-    rows.replaceChildren(...(out.length ? out : [el('div', 'hm-empty', 'Nothing new since then.')]));
+    rows.replaceChildren(...(out.length ? out : [emptyEl('Nothing new since then.', { icon: 'circle-check' })]));
+    shown = true;
   };
   return { el: f.st, paint, every: 30000 };
 };
@@ -203,13 +213,27 @@ BLOCKS.steps = () => {
   const count = el('span');
   prog.append(bar, count);
   const list = el('ol', 'hm-steps');
-  f.body.append(prog, list);
+  const wait = loadingEl('Loading');
+  prog.hidden = true;
+  f.body.append(prog, list, wait);
+  let shown = false;
   const paint = async () => {
+    // (phase V73 block 2, (б2-19) а) A read that fails no longer ticks its step off in silence ("0 of 7 done"): the steps
+    // are not drawn from half an answer - what was shown stays, the first time the body says it did not load.
+    let bad = null;
+    const read = (u) => api(u).catch((e) => { bad = bad || e; return null; });
     const [health, tg, cf, counts, heads, speech] = await Promise.all([
-      api('/api/keys/health').catch(() => null), api('/api/telegram').catch(() => null), api('/api/cloudflare').catch(() => null),
-      api('/api/library/counts').catch(() => null), api('/api/library/shelf/media?filter=heads').catch(() => null),
-      api('/api/speech/local').catch(() => null),
+      read('/api/keys/health'), read('/api/telegram'), read('/api/cloudflare'),
+      read('/api/library/counts'), read('/api/library/shelf/media?filter=heads'), read('/api/speech/local'),
     ]);
+    if (bad) {
+      showError('Could not read the first steps', { detail: bad.message, key: 'home-steps' });
+      if (!shown) { prog.hidden = true; list.replaceChildren(); wait.replaceWith(failedEl('First steps', () => paint())); }
+      return;
+    }
+    f.body.querySelectorAll(':scope > .u-loading, :scope > .u-failed').forEach(x => x.remove());
+    prog.hidden = false;
+    shown = true;
     const prov = (id) => ((health && health.providers) || []).find((p) => p.id === id) || {};
     const sp = speech && speech.state;
     const done = {
@@ -277,14 +301,24 @@ BLOCKS.app = () => {
   f.right.appendChild(adm);
   const box = el('div');
   box.style.display = 'contents';
+  box.appendChild(loadingEl('Loading'));
   f.body.appendChild(box);
+  let shown = false;
   const td = (cls, ...kids) => { const c = el('td', cls); for (const k of kids) c.append(k); return c; };
   const dot = (st) => el('span', 'hm-dot ' + (st === 'ok' ? 'ok' : st === 'down' ? 'down' : st === 'unset' ? '' : 'no'));
   const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
   const paint = async () => {
-    const [health, tg, cf] = await Promise.all([
-      api('/api/keys/health').catch(() => null), api('/api/telegram').catch(() => null), api('/api/cloudflare').catch(() => null),
-    ]);
+    // (phase V73 block 2, (б2-19) а) A failed read is said - never "not set - connect it in Admin" for a bot or a key that
+    // could only not be read; what was shown stays, the first time each part that failed says it did not load.
+    const bad = {};
+    const read = (k, u) => api(u).catch((e) => { bad[k] = e; return null; });
+    const [health, tg, cf] = await Promise.all([read('keys', '/api/keys/health'), read('bot', '/api/telegram'), read('cf', '/api/cloudflare')]);
+    const failed = Object.keys(bad);
+    if (failed.length) {
+      showError('Could not read ' + failed.map(k => ({ keys: 'the keys', bot: 'the bot', cf: 'Cloudflare' })[k]).join(', '),
+        { detail: bad[failed[0]].message, key: 'home-app' });
+      if (shown) return;
+    }
     const parts = [];
     // keys and balances
     parts.push(el('div', 'hm-subh', 'Keys and balances'));
@@ -306,13 +340,17 @@ BLOCKS.app = () => {
       tr.append(k, v, td('r', ROLE[id] || ''));
       t1.appendChild(tr);
     }
-    if (!t1.children.length) t1.appendChild(Object.assign(el('tr'), { innerHTML: '<td class="hm-muted">The keys could not be checked.</td>' }));
-    parts.push(t1);
+    if (bad.keys) parts.push(failedEl('The keys', () => paint(), { line: true }));
+    else {
+      if (!t1.children.length) t1.appendChild(Object.assign(el('tr'), { innerHTML: '<td class="hm-muted">The keys could not be checked.</td>' }));
+      parts.push(t1);
+    }
     // the bot
     parts.push(el('div', 'hm-subh', 'Telegram bot'));
     const t2 = el('table', 'hm-tbl');
     const tr2 = el('tr');
-    if (!tg || !tg.bot) {
+    if (bad.bot) tr2.appendChild(Object.assign(td('', failedEl('The bot', () => paint(), { line: true })), { colSpan: 3 }));
+    else if (!tg || !tg.bot) {
       tr2.append(td('k', dot('unset'), 'not set'), td('hm-muted', 'send links and media from the phone into REFERENCES - ', Object.assign(el('a', null, 'connect it in Admin'), { href: '/admin' })), td('r', ''));
     } else {
       const paired = tg.chat && tg.chat.name;
@@ -327,7 +365,8 @@ BLOCKS.app = () => {
     parts.push(el('div', 'hm-subh', 'Cloudflare'));
     const t3 = el('table', 'hm-tbl');
     const tr3 = el('tr');
-    if (!cf || !cf.tokenSet) {
+    if (bad.cf) tr3.appendChild(Object.assign(td('', failedEl('Cloudflare', () => paint(), { line: true })), { colSpan: 3 }));
+    else if (!cf || !cf.tokenSet) {
       tr3.append(td('k', dot('unset'), 'not set'), td('hm-muted', 'hosts the references the models fetch - ', Object.assign(el('a', null, 'add the key in Admin'), { href: '/admin' })), td('r', ''));
     } else {
       const c = cf.check || {};
@@ -347,6 +386,7 @@ BLOCKS.app = () => {
     }
     parts.push(t3);
     box.replaceChildren(...parts);
+    if (!failed.length) shown = true;
   };
   return { el: f.st, paint, every: 60000 };
 };
@@ -402,16 +442,19 @@ $('#hm-reset').addEventListener('click', () => { place(FIRST); keep(); });
 
 // ── painting, and painting again ──────────────────────────────────────────────
 // Each block paints at once; the ones about work in flight again on their own beat, while the page is looked at.
+// (phase V73 block 2, (б2-19) а) A block that throws while it draws is said - a popup, once per block - not lost.
+const _drawn = (id) => (e) => showError('A block of Home could not be drawn', { detail: id + ': ' + ((e && e.message) || e), key: 'home-paint-' + id });
+const _paint = (id) => { const b = made[id]; if (b) b.paint().catch(_drawn(id)); };
 for (const id of Object.keys(made)) {
   const b = made[id];
-  b.paint().catch(() => { /* the block says so itself */ });
-  if (b.every) setInterval(() => { if (!document.hidden) b.paint().catch(() => {}); }, b.every);
+  _paint(id);
+  if (b.every) setInterval(() => { if (!document.hidden) _paint(id); }, b.every);
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  for (const id of Object.keys(made)) made[id].paint().catch(() => {});
+  for (const id of Object.keys(made)) _paint(id);
 });
 // A post the bot brought while this page is open (js/alerts-bell.js): what is new, at once.
-window.addEventListener('ugc-references', () => { made.new.paint().catch(() => {}); });
+window.addEventListener('ugc-references', () => _paint('new'));
 // Something a window made landed (js/home/windows.js): what is new, at once.
-WIN.setOnMade(() => { made.new.paint().catch(() => {}); });
+WIN.setOnMade(() => _paint('new'));
