@@ -66,6 +66,22 @@ function _adminLink(nav) {
   if (!OLD_LOOK() && !a.querySelector('.u-ico')) { a.classList.add('has-ico'); a.insertBefore(iconEl('settings', 14), a.firstChild); }
 }
 
+// (phase V73 block 6, the owner's (б6-1) б: "на всех страницах") THE RENDER QUEUE on every page, right of the spacer and left
+// of the wait - Merge's markup carries its own button and Merge starts it (js/merge-v3/main.js); on every other page it is put
+// in here and the same module (js/merge-v3/queue.js - the server's /api/mv3q list, open / Continue / Stop / Clear) is brought
+// in for it. Not on the 3D Studio's page (OLD_LOOK).
+function _queueButton(nav) {
+  if (OLD_LOOK() || document.getElementById('mv3-queue')) return;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sv3-navbtn';
+  b.id = 'mv3-queue';
+  b.title = 'Render queue - projects waiting to be rendered';
+  b.textContent = 'Queue';
+  nav.insertBefore(b, nav.querySelector('a[href="/admin"]'));
+  import('./merge-v3/queue.js').then((m) => m.initQueue()).catch(() => { b.hidden = true; });
+}
+
 // (phase V19, the owner 2026-10-08) THE WINDOW'S BUTTONS at the far right, in the app only - the shell gives its pages
 // `ugcWindow` (desktop/preload.js); a browser has none and draws none. Full screen: minimise, into a window, quit - the
 // quit goes the way of the window's own close, a running render asked about first. In a window Windows' own title bar
@@ -111,6 +127,7 @@ export function initNav() {
   _adminLink(nav);
   _lightCurrent(nav);
   _soon3d(nav);
+  _queueButton(nav);
   // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
   // the list is the same wherever you are standing.
   mountAlerts(nav);
