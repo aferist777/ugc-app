@@ -366,7 +366,6 @@ function _finalPath(url) {
 const MVQ = require('./mv3q');
 const _ROOT_DIR = require('../lib/config').ROOT_DIR;
 const { toUrl } = require('../lib/media');
-const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100);
 
 router.post('/mv3/render/finish', (req, res) => {
   try {
@@ -383,20 +382,8 @@ router.post('/mv3/render/finish', (req, res) => {
 // new url.
 // (phase V33.4) THROUGH lib/relocate.js: the file moves with its poster and its subtitles file (phase V30, block 4), and
 // every store that names them follows - the queue's entry, and a highlights fragment's record of its render among them.
-function _renameFinal(abs, url, name) {
-  const want = _safeName(name);
-  if (!want || want + '.mp4' === path.basename(abs)) return { abs, url };
-  const dir = path.dirname(abs);
-  let target = path.join(dir, want + '.mp4');
-  for (let n = 2; fs.existsSync(target); n++) target = path.join(dir, `${want} (${n}).mp4`);
-  const from = toUrl(abs);
-  const nextUrl = toUrl(target);
-  const files = [[from, nextUrl]];
-  const s = JOB.srtOf(abs);
-  if (fs.existsSync(s)) files.push([toUrl(s), toUrl(JOB.srtOf(target))]);
-  require('../lib/relocate').relocate({ files });
-  return { abs: target, url: nextUrl };
-}
+// (phase V73, (rn-2) а) The rule lives in lib/render-files.js now - the viewer's Rename of a render takes it too.
+const _renameFinal = (abs, url, name) => require('../lib/render-files').rename(abs, name);
 
 const JOB = require('../lib/mv3b-job');
 // A render's subtitles file, as an address - or null when it has none.

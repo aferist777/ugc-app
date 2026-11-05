@@ -146,6 +146,8 @@ export function showError(text, opts = {}) {
  *   cls                  a class of its own ('is-update')
  *   onClick              a press on it (it goes then)
  *   act                  { label, run } - a button of its own ("open")
+ *   acts                 [{ label, title, run }] - several (phase V73: a render's "Open" and "Show in folder"); a press on one
+ *                        takes the popup away
  *   ms                   how long it stays (5 s)
  */
 export function showToast(o = {}) {
@@ -160,6 +162,14 @@ export function showToast(o = {}) {
     const b = _el('button', 'sv3-al-act u-btn is-s', o.act.label);
     b.type = 'button';
     b.addEventListener('click', (e) => { e.stopPropagation(); o.act.run(); });
+    el.appendChild(b);
+  }
+  for (const a of (Array.isArray(o.acts) ? o.acts : [])) {
+    if (!a || !a.label || typeof a.run !== 'function') continue;
+    const b = _el('button', 'sv3-al-act u-btn is-s', a.label);
+    b.type = 'button';
+    if (a.title) b.title = a.title;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _drop(it); a.run(); });
     el.appendChild(b);
   }
   if (typeof o.onClick === 'function') {

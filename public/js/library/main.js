@@ -10,6 +10,7 @@
 
 import { initNav } from '../app-nav.js';
 import { openViewer, repaint as repaintViewer } from './viewer.js';
+import { REALLY, MS as REALLY_MS } from '../really.js';
 // (phase TG, block 7) Cutting a piece out of any video - one module with Merge's panel and the post viewer.
 import * as Cut from '../cut.js';
 import * as A from './actions.js';
@@ -721,9 +722,16 @@ function _actionsFor(it) {
     const on = !!(it.meta && it.meta.favorite);
     out.push({ id: 'fav', label: on ? 'Unfavorite' : 'Favorite' });
   }
+  // (phase V73, the owner's (rn-3) а) a render's Delete in its viewer takes two presses - "Really?" first (js/really.js)
+  if (it.kind === 'renders') {
+    const armed = !!(_rArmed && _rArmed.id === it.id);
+    out.push({ id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed });
+    return out;
+  }
   out.push({ id: 'del', label: 'Delete', danger: true });
   return out;
 }
+let _rArmed = null;       // { id, t } - the render whose Delete was pressed once in the viewer
 
 // Runs one action and reports what the caller has to do about it. `removed` means the
 // item is gone, so whoever is showing it has to stop. `anchor` - where a question opens: the button pressed, or the tile
@@ -736,6 +744,8 @@ async function _runAction(id, it, anchor) {
   if (id === 'rename') {
     const name = await A.renameItem(it);
     if (name) it.name = name;
+    // a render's file moved: the shelf is read again (its id is new)
+    if (name && it.kind === 'renders') return { reload: true, msg: 'Renamed' };
     return { changed: !!name, msg: name ? 'Renamed' : '' };
   }
   if (id === 'fav') {
@@ -855,6 +865,21 @@ function _open(it, list, follow) {
       return rows;
     },
     onAction: async (id, item) => {
+      // (rn-3) а: a render's Delete here - the first press arms it, the second within a few seconds deletes (no question)
+      if (id === 'del' && item.kind === 'renders' && !(_rArmed && _rArmed.id === item.id)) {
+        if (_rArmed) clearTimeout(_rArmed.t);
+        _rArmed = { id: item.id, t: setTimeout(() => { _rArmed = null; repaintViewer(); }, REALLY_MS) };
+        return { actionsOnly: true };
+      }
+      if (id === 'del' && item.kind === 'renders') {
+        clearTimeout(_rArmed.t);
+        _rArmed = null;
+        await A.deleteItem(item);
+        _items = _items.filter(x => x !== item);
+        const r = { removed: true, reload: true, msg: 'Deleted' };
+        await _apply(r);
+        return r;
+      }
       const r = await _runAction(id, item, _viewerBtn(id, item));
       await _apply(r);
       return r;

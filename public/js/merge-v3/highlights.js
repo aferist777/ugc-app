@@ -44,7 +44,8 @@ import { deal, newSeed, redealFonts } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
-import { showResult } from './render-result.js';
+// (phase V73, the owner's (рф-4) а) a fragment's render opens in the Library's viewer - Rename and Delete there
+import { openRender } from '../library/render-view.js';
 import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
@@ -971,8 +972,8 @@ function _renderLine(f) {
     const acts = _el('div', 'mv3-hl-racts');
     const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ play');
     play.type = 'button';
-    play.title = 'Play the render - the result window, as Queue opens it';
-    play.addEventListener('click', () => showResult({ url: rd.url, title: f.title, key: f.key, fresh: false }));
+    play.title = 'Play the render in the Library\'s viewer - Rename and Delete are there';
+    play.addEventListener('click', () => openRender(rd.url, { onChanged: () => _load() }));
     acts.appendChild(play);
     const shown = _showInFolder(rd.url, 'Show this file in its folder - Explorer, the file picked');
     if (shown) acts.appendChild(shown);

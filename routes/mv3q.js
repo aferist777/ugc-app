@@ -107,10 +107,17 @@ function _drop(id) {
 }
 
 // Where an entry's file goes. A highlights fragment's is named after its timeline (lib/names.js, as the timeline's own
-// file) and takes the place of its own earlier render; anything else's is mv3q_<number> until the result window names it.
+// file) and takes the place of its own earlier render; (phase V73, the owner's (rn-1) а) anything else's is
+// "<project title> <YYYY-MM-DD HH-MM>" - the title and the time of the press (lib/render-files.js nameFor: at most 60
+// characters, the title cut, the time whole, " (2)" when taken); renamed later by the viewer's Rename.
 function _finalFor(item) {
   const dir = require('../lib/shelf-files').rendersDir(item.key).dir;
-  if (!item.hl) return path.join(dir, 'mv3q_' + Date.now() + '.mp4');
+  if (!item.hl) {
+    let stems = [];
+    try { stems = fs.readdirSync(dir).filter(f => /\.mp4$/i.test(f) && !JOB.isDraft(f)).map(f => f.replace(/\.mp4$/i, '')); }
+    catch (e) { /* a new folder */ }
+    return path.join(dir, require('../lib/render-files').nameFor(item.title, item.addedAt, stems) + '.mp4');
+  }
   const { folderName, uniqueName } = require('../lib/names');
   const t = require('../lib/highlights-render').target(item);
   const own = t.replace ? path.basename(String(require('../lib/media').toDisk(t.replace) || '')).toLowerCase() : '';
