@@ -40,9 +40,15 @@ export function closeAsk() {
   a.el.remove();
   document.removeEventListener('mousedown', a.away, true);
   Layers.close(a.layer);
-  window.removeEventListener('scroll', closeAsk, true);
+  window.removeEventListener('scroll', _onScroll, true);
   // Closed without an answer (Escape, a press away, another question): a question that waits hears "no".
   if (!a.answered && typeof a.onClose === 'function') a.onClose();
+}
+
+// The page scrolling under the question closes it - but not its own list scrolling inside it (б2-7).
+function _onScroll(e) {
+  if (_ask && e && e.target instanceof Node && _ask.el.contains(e.target)) return;
+  closeAsk();
 }
 
 /** A name, cut to something a one-line question can carry. */
@@ -131,7 +137,7 @@ function _panel(anchor, text, sub, buttons, opts) {
   document.addEventListener('mousedown', away, true);
   // A note that says what was LOST stays until it is read (`stay`): the scrolling that follows a new pick - the
   // strip painted again, the timeline bringing the pick into view - closed it before anyone saw it.
-  if (!(opts && opts.stay)) window.addEventListener('scroll', closeAsk, true);
+  if (!(opts && opts.stay)) window.addEventListener('scroll', _onScroll, true);
   return made;
 }
 
