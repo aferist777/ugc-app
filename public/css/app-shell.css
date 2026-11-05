@@ -48,6 +48,7 @@
   --fw-regular:400; --fw-medium:500; --fw-strong:600;
   --sp-half:2px; --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
   --gap-zone:6px; --r-2xs:4px;
+  --r-panel:14px;   /* (phase V73 block 5, the owner's (5а-1): "14, как на витрине") a zone's panel - the windows keep --r-lg */
   --dur-1:140ms; --dur-2:180ms; --dur-3:320ms;
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
   /* THE PAGE UNDER A WINDOW (phase V60.1, the owner 2026-10-29, (пк1а), (пк2а): "нужно затемнение и блёр на фон. давай это
@@ -326,13 +327,13 @@
   .u-seg > button[disabled]{ opacity:.45; cursor:default }
 
   /* ── THE PANEL (phase V73 block 5, part 5a; (к15), the owner's (б5-1) а, (б5-2) а - the showcase's zones, moved here from
-     css/ui-v73.css): a zone of a page is a panel on the dark base, one step lighter (`--surface`), a hairline, the large
-     radius, with a 6 px gap of the base between panels (`--gap-zone`; `.u-base` lays panels out on a grid). Its head is 40 px
+     css/ui-v73.css): a zone of a page is a panel on the dark base, one step lighter (`--surface`), a hairline, the panel's
+     radius (`--r-panel` 14, the showcase's - (5а-1)), with a 6 px gap of the base between panels (`--gap-zone`; `.u-base` lays panels out on a grid). Its head is 40 px
      with the name (`.u-panel-name`, 13 px 500, sentence case) and the panel's own buttons - no figures in it ((б5-2) а;
      `.u-panel-meta` is the showcase's). Inside: sections `.u-sec` with a small title `.u-sec-t`; the field that waits for the
      person `.u-yourmove` (the gold dashed line) and a done one `.u-done` (a hairline, a green tick and "Done"). ── */
-  .u-base{ display:grid; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); border-radius:var(--r-lg) }
-  .u-panel{ display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-lg); overflow:hidden }
+  .u-base{ display:grid; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); border-radius:var(--r-panel) }
+  .u-panel{ display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel); overflow:hidden }
   .u-panel-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-2) 0 var(--sp-4);
     border-bottom:1px solid var(--border-soft) }
   .u-panel-name{ flex:0 1 auto; min-width:0; color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none;
