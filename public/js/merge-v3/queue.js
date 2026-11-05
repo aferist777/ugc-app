@@ -25,7 +25,8 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
-import { showResult } from './render-result.js';
+// (phase V73, the owner's (рф-4) а) a ready render opens in the Library's viewer - Rename and Delete there
+import { openRender } from '../library/render-view.js';
 // (phase V73 block 2, step 2b) An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
@@ -151,11 +152,11 @@ function _row(it, refresh) {
     a.type = 'button';
     a.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
     a.textContent = 'open';
-    a.title = 'Play it, name it, save and download it, send it';
+    a.title = 'Watch it in the Library\'s viewer - Rename and Delete are there';
     a.addEventListener('click', (e) => {
       e.stopPropagation();
       _close();
-      showResult({ url: it.url, title: it.title, key: it.key, queueId: it.id, fresh: false });
+      openRender(it.url);
     });
     acts.appendChild(a);
   }

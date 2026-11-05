@@ -19,13 +19,17 @@
    RENDER IS AN ENTRY OF THE QUEUE (phase V73 block 4, the owner's (б4-2) а, (б4-3) а): one entry, armed and started at
    once (routes/mv3q.js POST /mv3q/render); the window can be closed while it goes, Stop is in it and in Queue, and a render
    that finishes with the window closed says so in a popup with "open" (_run, _follow).
+
+   NO RESULT WINDOW (phase V73, the owner's (рф-1) а - (рф-4) а): a finished render closes this window if it is open, and
+   says so in the corner - "Rendered · <its name>" with Open (the Library's viewer of it) and Show in folder
+   (merge-v3/render-done.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
-import { showResult } from './render-result.js';
+import { renderDone } from './render-done.js';
 import { addCurrent } from './queue.js';
-import { showError, showToast } from '../notice.js';
+import { showError } from '../notice.js';
 import { wire as wireRange } from '../ui-range.js';
 
 let _busy = false;
@@ -98,8 +102,8 @@ function _slider(min, max, step, value, fmt) {
 // (POST /api/mv3q/render, routes/mv3q.js addArmed) - as a highlights project's Render. The window's body becomes the
 // progress, phase by phase - in line, the film, then what is done to the finished file -, its foot the line that says it
 // goes on and "Stop" (POST /api/mv3q/stop/:id - Queue has the same). The window may be closed while it goes (✕, Escape, a
-// press beside it): the page follows the entry all the same (_follow, GET /api/mv3q). Done with the window open - the result
-// window every render shares, as before; with it closed - a popup "Rendered" with "open". Failed with it closed - a popup.
+// press beside it): the page follows the entry all the same (_follow, GET /api/mv3q). Done - the window closes if it is open
+// and a popup says so, with Open and Show in folder ((рф-1) а, merge-v3/render-done.js). Failed with it closed - a popup.
 const PHASES = {
   render: 'Rendering',
   speeding: 'Changing the speed',
@@ -217,13 +221,9 @@ async function _follow(job) {
       }
       if (it.status === 'failed') { _failed(ui, it.error || 'ffmpeg failed'); return; }
       if (it.status === 'done' && it.url) {
-        const open = () => showResult({ url: it.url, title: job.title, key: job.key, queueId: job.id, fresh: true });
-        if (ui && ui.body.isConnected) { _close(); open(); }
-        else {
-          // (б4-3) а: the window was closed - a popup; the render is in Queue -> open as well
-          const t = showToast({ mark: '▣', title: 'Rendered', where: job.title, ms: 15000,
-            act: { label: 'open', run: () => { t.close(); open(); } } });
-        }
+        // (рф-1) а: the window closes if it is open; the popup either way - the render is on the Renders shelf and in Queue too
+        if (ui && ui.body.isConnected) _close();
+        renderDone(it.url);
         if (it.warning) _say('Rendered, but ' + it.warning + '.', 'err');
         return;
       }

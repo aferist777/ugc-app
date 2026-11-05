@@ -72,7 +72,8 @@ export async function fixThumb(it) {
 //     re-derives the folder from the record would point at a folder that does not exist.
 //     Renaming a look safely means moving the folder and rewriting every URL in the record;
 //     that belongs with the storage rework (moves on rename), not here.
-export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds', 'music']);
+// (phase V73, the owner's (rn-2) а) a render too - its file, its .srt and its poster take the name (routes/library.js)
+export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds', 'music', 'renders']);
 
 export async function renameItem(it, anchor) {
   const next = await askName({ anchor, title: 'Rename', value: it.name || '', okLabel: 'Rename' });
@@ -86,10 +87,15 @@ export async function renameItem(it, anchor) {
       body: JSON.stringify({ name }),
     });
   } else {
-    await _json(_itemUrl(it), {
+    const d = await _json(_itemUrl(it), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
+    // A render's FILE took the name: its id and address are new (the server may have made it " (2)").
+    if (it.kind === 'renders' && d && d.url) {
+      Object.assign(it, { id: d.id || it.id, media: d.url, thumb: d.thumb || it.thumb, name: d.name || name });
+      return it.name;
+    }
   }
   return name;
 }

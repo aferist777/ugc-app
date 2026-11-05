@@ -1644,6 +1644,29 @@ function _placeAll(list) {
 function _patchOne(kindIn, idIn, bodyIn) {
     const req = { params: { kind: kindIn, id: idIn }, body: bodyIn || {} };   // the route's own names, kept
     const kind = String(req.params.kind || '');
+    // (phase V73, the owner's (rn-2) а) A render's Rename - its only change here: the file takes the name by the rule of
+    // lib/render-files.js (its .srt, its poster, the queue's entry and a highlights fragment's record follow; " (2)" when
+    // taken). The id is its path inside media/renders/ - a new id comes back.
+    if (kind === 'renders') {
+      const id = String(req.params.id || '').replace(/\\/g, '/');
+      const base = path.basename(id);
+      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: 'not a render' });
+      const abs = toDiskWithin('/media/renders/' + id, [FINALS_DIR]);
+      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: 'not found' });
+      const b = req.body || {};
+      if (Object.keys(b).some(k => k !== 'name')) return _r(409, { success: false, error: 'only a render\'s name changes here' });
+      const name = String(b.name || '').trim();
+      if (!name) return _r(400, { success: false, error: 'a name is needed' });
+      const moved = require('../lib/render-files').rename(abs, name);
+      const stem = path.basename(moved.abs).replace(VID_RE, '');
+      // Its entry in Queue says the name too (the move rewrote its address already).
+      try { const MVQ = require('./mv3q'); const e = MVQ.findByUrl(moved.url); if (e) MVQ.updateEntry(e.id, { title: stem }); }
+      catch (e) { /* no queue: the file is renamed all the same */ }
+      const turl = VT.thumbUrlFor(moved.url);
+      const hasThumb = !!turl && fs.existsSync(path.join(ROOT_DIR, String(turl).replace(/^\/+/, '')));
+      return _r(200, { success: true, kind, id: path.relative(FINALS_DIR, moved.abs).split(path.sep).join('/'), name: stem,
+        url: moved.url, thumb: hasThumb ? turl : null });
+    }
     // (phase V34.E) A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
     if (kind === 'sfx') {
       const s = require('../lib/sfx-builtin').read().sounds.find(x => x.id === String(req.params.id || ''));
@@ -1833,6 +1856,9 @@ function _deleteOne(kindIn, idIn, filesIn) {
       if (turl) _unlink(turl);
       // Its subtitles file beside it (phase V30, block 4).
       try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open */ }
+      // (phase V73, the owner's (rn-4) а) and its entry in Queue, as /mv3/render/discard takes it - Queue -> open would open
+      // a file that is gone
+      try { require('./mv3q').removeByUrl(url); } catch (e) { /* no queue */ }
       return _r(200, { success: true, kind, id, removed });
     }
 
