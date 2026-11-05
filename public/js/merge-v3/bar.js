@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the controls on the timeline's bar and the preview's bar.
 
-   Undo and redo, the save status, the zoom, FIT and split above the timeline; the quality,
+   Undo and redo, the save status, the zoom, FIT and split above the timeline (their icons since phase V73 block 5, 5c); the quality,
    the enlarged preview and the screenshot under the picture. The transport beside split (phase V36, T3) is the
    preview's own (js/merge-v3/preview-b.js _wireTransport). They were wired inside the
    talking-head editor's modules and did nothing - or the wrong thing - for a project made in
@@ -63,7 +63,8 @@ function _status() {
     if (s && Store.statusIsError()) { if (s !== _popped) { _popped = s; showError(s); } }
     else _popped = '';
     if (!s && !el.textContent) return;
-    el.className = 'mv3-tl-status' + (s && Store.statusIsInfo() ? ' is-info' : '');
+    // (phase V73 block 5, 5c) the one status line (`.u-status`): quiet for news, red for a refusal or a failure
+    el.className = 'mv3-tl-status u-status is-line' + (s && !Store.statusIsInfo() ? ' is-bad' : '');
     el.textContent = s || '';
     el.hidden = !s;
   });
@@ -229,7 +230,13 @@ async function _shoot() {
   }
 }
 
+// (phase V73 block 5, 5c) The timeline head's icons - Lucide's, 14 px in its 20-px buttons, in place of the glyphs ↶ ↷ ⏮ ⏪ ▶ ⏩.
+// Play turns into pause and back in the preview, which knows which of the two it is (preview-b.js _syncPlayBtn, the same 14).
+const HEAD_ICONS = [['mv3-undo', 'undo-2'], ['mv3-redo', 'redo-2'], ['mv3-pv-start', 'skip-back'], ['mv3-pv-back', 'rewind'],
+  ['mv3-pv-play', 'play'], ['mv3-pv-fwd', 'fast-forward']];
+
 export function initBar() {
+  for (const [id, name] of HEAD_ICONS) { const b = $(id); if (b && !b.firstChild) b.innerHTML = icon(name, 14); }
   _history();
   _status();
   _zoom();

@@ -268,11 +268,24 @@ body.mv3-resize-h, body.mv3-resize-h *{cursor:row-resize !important; user-select
 /* ── Timeline ────────────────────────────────────────────────────────────────
    The bottom of the left column. Height set inline by the page, dragged by the
    horizontal sash; the width is the column's, and the lanes scroll inside it. */
-#mv3-timeline{flex:0 0 auto; height:290px; min-width:0}
+#mv3-timeline{flex:0 0 auto; height:290px; min-width:0; position:relative}
+
+/* (phase V73 block 5, 5c; the owner's (б5-14) а) AN EMPTY TIMELINE'S WORDS, quiet, over the middle of its lanes - from under
+   the ruler to the panel's foot, right of the frozen names (`top` / `left` set by js/merge-v3/timeline-b.js _paintEmpty).
+   Absolute, so js/merge-v3/layout.js does not count it in the panel's height; the pointer and a drop go through. Not with no
+   project (its own words below) and not under setup. */
+.mv3-tl-empty{
+  position:absolute; right:0; bottom:0; z-index:6; display:grid; place-items:center; padding:0 var(--sp-4);
+  pointer-events:none; text-align:center;
+  font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); color:var(--faint);
+}
+.mv3-tl-empty[hidden],
+body:is(.mv3-noproject, .mv3-locked, .mv3-workshop) .mv3-tl-empty{display:none}
 
 /* Must match LBL_W in js/merge-v3/timeline-b.js: the playhead is positioned in px
-   from the left edge of the scrolling area, so both sides need the same number. */
-:root{--mv3-lbl-w:84px}
+   from the left edge of the scrolling area, so both sides need the same number. 88 since phase V73 block 5, 5c (the names in
+   500 11 px). */
+:root{--mv3-lbl-w:88px}
 
 /* The scroll box. Only this scrolls - the labels inside it are sticky, so they stay
    put while the lanes run right. */
@@ -340,35 +353,36 @@ body.mv3-noproject .mv3-tl::after{
 /* While scrubbing, the pointer must not turn into a text caret over the lanes. */
 body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-select:none}
 
-/* ── Zoom + clock, in the panel header ─────────────────────────────────────── */
+/* ── The timeline's head (phase V73 block 5, 5c; the owner's (б5-15) б) ────────────────────────────────────────────────
+   FOUR GROUPS - edit (undo, redo, split) | play (the transport and the playhead's time right after it) | silence - and, at the
+   right, the zoom (FIT, the slider, its number); a thin line between the first three (`.mv3-tl-div`). The buttons keep their
+   20 px and the head its 35 (above); Lucide's icons in them, 14 px (js/merge-v3/bar.js initBar). */
+.mv3-tl-grp{flex:0 0 auto; display:flex; align-items:center; gap:var(--sp-1)}
+.mv3-tl-div{flex:0 0 auto; width:1px; height:16px; background:var(--border)}
+/* The time - mono, as the preview's (`.u-mono`), no pill: a readout of the playhead, not a control. */
 .mv3-tl-clock{
-  flex:0 0 auto; font:600 10.5px/1 var(--font); font-variant-numeric:tabular-nums;
-  color:var(--muted); background:var(--surface-2);
-  border:1px solid var(--border); border-radius:var(--pill); padding:4px 8px;
+  flex:0 0 auto; margin-left:var(--sp-1);
+  font-size:var(--fs-11); line-height:1; color:var(--muted); white-space:nowrap;
 }
 /* Header icon buttons: the two history arrows and FIT. Same shell, so the row reads
    as one set of controls; `is-text` widens it for a word instead of a glyph. Since phase V73 block 2 they wear the shared
-   part (`.u-btn`) and keep their 20 px - the timeline head is laid out again in block 5 (б2-2). */
+   part (`.u-btn`) and keep their 20 px (б2-2, (б5-15) б). */
 .mv3-iconbtn.u-btn{width:20px; height:20px; padding:0; border-radius:var(--r-xs); font-size:12px; line-height:1}
 .mv3-iconbtn.u-btn.is-text{width:auto; padding:0 7px; font-size:var(--fs-10)}
 .mv3-iconbtn{flex:0 0 auto}
 
-/* Shown only when a save was refused or failed. Red, because the message it carries
-   is "an edit of yours is not on the server". */
-.mv3-tl-status{
-  flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:600 10px/1 var(--font); color:var(--danger);
-}
-/* The server laying its own cells (the fragments, the lines heard from the sound) is news, not a fault. */
-.mv3-tl-status.is-info{color:var(--muted)}
+/* Shown only when a save was refused or failed, or for news - the one status line (`.u-status is-line`: quiet, red for an
+   error - `is-bad`, set by js/merge-v3/bar.js and export-b.js). Red, because the message an error carries is "an edit of yours
+   is not on the server". */
+.mv3-tl-status{flex:0 1 auto}
 
 .mv3-tl-zoom{flex:0 0 auto; display:flex; align-items:center; gap:6px}
 .mv3-tl-zoom > span:first-child{
-  font:700 9.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/1 var(--font); color:var(--muted);   /* "Zoom", sentence case ((к17)) */
 }
 .mv3-tl-zoom input[type=range]{width:110px}
 .mv3-tl-pps{
-  font:400 10px/1 var(--mono); font-variant-numeric:tabular-nums;
+  font-size:var(--fs-10); line-height:1;                                   /* mono (`.u-mono`) */
   color:var(--muted); min-width:22px; text-align:right;
 }
 
@@ -467,21 +481,21 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* (phase V59.1) Music's name was gold here; since phase V64 ((зг8)) it is not - gold is where a generator's button is
    (css/media-tree.css). */
 
-/* (phase V28.4) A clip whose file was deleted from the library: red, striped, "deleted · <name>" - to be replaced (a tile
-   let go on it) or removed - and the notice over the timeline that says so as the project opens. */
-.mv3b-clip.is-gone{
-  background-image:repeating-linear-gradient(135deg, color-mix(in oklch, var(--danger) 55%, transparent) 0 6px,
-    color-mix(in oklch, var(--danger) 30%, transparent) 6px 12px) !important;
-  border-color:var(--danger) !important;
-}
-.mv3b-clip.is-gone .mv3b-clip-t{color:var(--on-media); font-weight:700}
+/* (phase V28.4) A clip whose file was deleted from the library: red, "Deleted · <name>" - to be replaced (a tile let go on it)
+   or removed - and the notice over the timeline that says so as the project opens. (phase V73 block 5, 5c; the owner's
+   (б5-17) а) Quieter: the clip a red dashed frame with no stripes, its words as any clip's; the notice a line one step
+   lighter, a red icon and plain words. */
+.mv3b-clip.is-gone{border-style:dashed; border-color:var(--danger) !important}
+.mv3b-clip.is-gone .mv3b-clip-t{color:var(--on-media)}
 .mv3-tl-gone{
-  display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:5px 10px;
-  background:color-mix(in oklch, var(--danger) 18%, var(--surface)); border-bottom:1px solid var(--danger);
-  font:600 11px/1.35 var(--font); color:var(--ink);
+  display:flex; align-items:center; gap:var(--sp-2); flex:0 0 auto; min-height:32px;
+  padding:var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-3);
+  background:var(--surface); border-bottom:1px solid var(--border-soft);
+  font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); color:var(--ink);
 }
+.mv3-tl-gone-i{flex:0 0 auto; color:var(--danger)}
 .mv3-tl-gone[hidden]{display:none}
-.mv3-tl-gone span{flex:1 1 auto; min-width:0}
+.mv3-tl-gone > span{flex:1 1 auto; min-width:0}
 .mv3-tl-gone-x{flex:0 0 auto}
 .mv3-ins-gone{
   margin-bottom:10px; padding:8px 9px; border:1px solid var(--danger); border-radius:var(--r-xs);
@@ -911,7 +925,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    silence have their own copies inside it. */
 .mv3b-zone.is-subs.has-words{
   position:sticky; bottom:0; z-index:4; background:var(--bg);
-  box-shadow:0 -1px 0 var(--border), 0 -6px 8px -6px oklch(0 0 0 / .55);
+  box-shadow:0 -1px 0 var(--border), 0 -6px 8px -6px var(--scrim);   /* (V73 block 5, 5c) the scrim token, not a black of its own */
 }
 /* The seam. A real element, not a border: the pairing is read off distance from it, so it
    has to be findable rather than painted on. */
@@ -943,7 +957,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   flex:0 0 var(--mv3-lbl-w); width:var(--mv3-lbl-w);
   display:flex; align-items:center; padding:0 6px;
   background:var(--surface); border-right:1px solid var(--border);
-  font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
+  /* (phase V73 block 5, 5c; (к17)) 500 11 px, sentence case - the name is written so (timeline-b.js _shownName) */
+  font:var(--fw-medium) var(--fs-11)/1 var(--font);
   color:var(--muted); user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 /* Main reads as the anchor of its block; the numbered lanes are quieter. */
@@ -969,16 +984,17 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    lost its opposite number - so it is quiet rather than decorative. */
 .mv3b-lbl{gap:4px}
 .mv3b-lbl > span:first-child{overflow:hidden; text-overflow:ellipsis}
-/* THE NAME IS A BUTTON AND LOOKS LIKE ONE (phase S4, the owner 2026-10-05): a gold frame drawn inside the cell,
-   so nothing moves - over the cell's background, under the name. Hover and the picked lane fill it faintly.
-   The ruler's empty cell has none. An exception to "gold once per surface" (app-shell.css), asked for. */
+/* THE NAME IS A BUTTON AND LOOKS LIKE ONE (phase S4, the owner 2026-10-05): a frame drawn inside the cell, so nothing
+   moves - over the cell's background, under the name. Hover and the picked lane fill it faintly. The ruler's empty cell has
+   none. Gold until phase V73; a grey hairline since block 1 - kept a frame by the owner's (б1-12): "чтобы было видно, что
+   это кнопки". */
 .mv3b-row:not(.is-ruler) .mv3b-lbl::before{
   content:''; position:absolute; inset:3px 2px; z-index:-1; pointer-events:none;
   border:1px solid var(--border); border-radius:var(--r-xs); transition:background .12s var(--ease);
 }
 .mv3b-row:not(.is-ruler) .mv3b-lbl:hover::before,
 .mv3b-row.is-selT .mv3b-lbl::before{background:var(--sel-bg)}
-.mv3b-link{flex:0 0 auto; font-size:9px; opacity:.7}
+.mv3b-link{flex:0 0 auto; display:flex; opacity:.7}   /* Lucide's link, 10 px (V73 block 5, 5c) */
 
 /* Clips. A video lane is a LAYER - clips on it may cover one another and the lane's place in
    the list decides which shows - so nothing here keeps them apart. */
@@ -1008,12 +1024,13 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
 /* A video lane is a layer and its clips may lie on top of one another. Two blocks meeting edge
    to edge read as one long block, so each casts a shadow to its right, and the clip it covers
    shows underneath. */
-.mv3b-clip.is-video{box-shadow:2px 0 7px oklch(0 0 0 / .5)}
+/* (phase V73 block 5, 5c) The shadow in the scrim token, not a black of its own. */
+.mv3b-clip.is-video{box-shadow:2px 0 7px var(--scrim)}
 .mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--sel-ring) inset, 0 0 0 1px var(--sel-ring)}
-.mv3b-clip.is-video.is-sel{box-shadow:0 0 0 1px var(--sel-ring) inset, 0 0 0 1px var(--sel-ring), 2px 0 7px oklch(0 0 0 / .5)}
+.mv3b-clip.is-video.is-sel{box-shadow:0 0 0 1px var(--sel-ring) inset, 0 0 0 1px var(--sel-ring), 2px 0 7px var(--scrim)}
 /* A halfer band says so on the clip: on the timeline it looks like any other picture, and on the
-   preview it is a strip rather than the frame. */
-.mv3b-clip.is-halfer .mv3b-clip-t::before{content:'HALFER \00b7  '; color:var(--on-media)}
+   preview it is a strip rather than the frame. Sentence case since phase V73 block 5 ((к17)). */
+.mv3b-clip.is-halfer .mv3b-clip-t::before{content:'Halfer \00b7  '; color:var(--on-media)}
 
 /* Ruler and playhead. The row is shorter than a lane - it carries numbers, not clips. */
 .mv3b-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}
@@ -1024,7 +1041,8 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
 .mv3b-tick{
   position:absolute; top:3px; padding-left:3px;
   border-left:1px solid var(--border);
-  font:9px/1.3 var(--font); color:var(--muted); white-space:nowrap; user-select:none;
+  font:var(--fs-9)/1.3 var(--mono); font-variant-numeric:tabular-nums;   /* (V73 block 5, 5c) mono, as the showcase's ruler */
+  color:var(--muted); white-space:nowrap; user-select:none;
 }
 /* One line over the whole stack rather than a mark per lane: it is one moment, and a mark
    per lane makes it possible for them to disagree. (phase V49.1) Over the clips and UNDER the frozen names (2-3): scrolled
@@ -1047,14 +1065,15 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
 body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3b-clip-t{
   position:absolute; left:3px; right:3px; bottom:1px;
-  font:600 8px/1.3 var(--font); color:var(--on-media); text-shadow:0 1px 2px rgba(0,0,0,.85);
+  /* (phase V73 block 5, 5c; the owner's (б5-13) б) 8 px - a clip's label, as the showcase's; its shadow the scrim token */
+  font:600 var(--fs-8)/1.3 var(--font); color:var(--on-media); text-shadow:0 1px 2px var(--scrim-strong);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .mv3b-lane{flex:1 1 auto; min-width:0; position:relative}
 
-/* The square itself. One glyph, no chrome until it is pointed at - a column of eight boxed
-   buttons down the side of a timeline is louder than the timeline. */
-.mv3b-sq.u-btn{width:16px; height:16px; padding:0; border-radius:var(--r-xs); font:400 12px/1 var(--font)}   /* a lane's square keeps its 16 px (block 5) */
+/* The square itself. One icon (Lucide's plus / minus, 12 px - phase V73 block 5, 5c), no chrome until it is pointed at - a
+   column of eight boxed buttons down the side of a timeline is louder than the timeline. It keeps its 16 px. */
+.mv3b-sq.u-btn{width:16px; height:16px; padding:0; border-radius:var(--r-xs)}
 
 /* ── Render queue ────────────────────────────────────────────────────────────
    Shared by both workflows, like the queue itself. */
@@ -1243,7 +1262,8 @@ body.mv3-locked #mv3-timeline{
    brings the timeline step back (layout.js softLock; js/merge-v3/workshop.js). Nothing in it takes the pointer. */
 body.mv3-locked.mv3-lock-soft #mv3-timeline{filter:none; opacity:1; pointer-events:auto; cursor:pointer}
 body.mv3-locked.mv3-lock-soft #mv3-timeline *{pointer-events:none}
-body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var(--gold)}
+/* (phase V73 block 5, 5c; plan 3.2, (б1-18)) under the pointer a light line, not gold - gold is the main button's */
+body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var(--sel-line)}
 /* (во53) The crumb "b-roll /" before the B-roll is laid. */
 #mv3-lib-br.is-off{opacity:.35; cursor:default}
 #mv3-lib-br.is-off:hover{text-decoration:none}
@@ -2023,12 +2043,12 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* The stamp-sized strip of frames under a fragment went with the picker above (.mv3-wk-fpick): a
    frame is chosen by looking at it on the stage, not at a 20px sliver of it. */
 
-/* A heard line corrected by hand (K10b): a small mark in the corner the cross does not use, in the accent - gold
-   is the one thing singled out on a surface, and a lane may hold many corrected lines. Generate keeps such a
-   line; "back to what was heard" takes it back to what was heard. */
+/* A heard line corrected by hand (K10b): a small quiet mark in the corner the cross does not use - a lane may hold many
+   corrected lines. Generate keeps such a line; "back to what was heard" takes it back to what was heard. (phase V73 block 5,
+   5c) Its ring the scrim token. */
 .mv3b-fix{
   position:absolute; top:3px; left:3px; width:5px; height:5px; z-index:2; pointer-events:none;
-  border-radius:50%; background:var(--muted); box-shadow:0 0 0 1px oklch(0 0 0 / .55);
+  border-radius:50%; background:var(--muted); box-shadow:0 0 0 1px var(--scrim);
 }
 
 /* ── TALKING HEAD STEP BY STEP (phase V61, the owner 2026-10-30) ──────────────────────────────────────────────────────

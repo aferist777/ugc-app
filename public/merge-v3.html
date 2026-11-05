@@ -214,45 +214,64 @@
       <section class="mv3-panel u-panel" id="mv3-timeline">
         <div class="mv3-panel-head u-panel-head">
           <span class="mv3-panel-title u-panel-name">Timeline</span>
+          <!-- (phase V73 block 5, 5c; the owner's (б5-15) б) THE HEAD IN FOUR GROUPS - edit | play and its time | silence | at the
+               right the zoom -, a thin line between the first three; the buttons keep their 20 px and the head its 35. The icons
+               are Lucide's, put in by js/merge-v3/bar.js (initBar) and, for play / pause, js/merge-v3/preview-b.js (_syncPlayBtn). -->
           <!-- Undo / redo as buttons rather than a shortcut: applying an effect from a
                track stamps it onto every clip in it, and the report on the old editor is
                that its Ctrl+Z never actually worked. A visible control also shows whether
                there is anything to undo. Disabled until the timeline store is bound. -->
-          <button class="mv3-iconbtn u-btn is-icon" id="mv3-undo" type="button" title="Undo" disabled>&#8630;</button>
-          <button class="mv3-iconbtn u-btn is-icon" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
-          <button class="mv3-iconbtn is-text u-btn" id="mv3-split" type="button"
-                  title="Cut the selected clip at the playhead">split</button>
+          <span class="mv3-tl-grp is-edit">
+            <button class="mv3-iconbtn u-btn is-icon" id="mv3-undo" type="button" title="Undo" disabled></button>
+            <button class="mv3-iconbtn u-btn is-icon" id="mv3-redo" type="button" title="Redo" disabled></button>
+            <button class="mv3-iconbtn is-text u-btn" id="mv3-split" type="button"
+                    title="Cut the selected clip at the playhead">split</button>
+          </span>
+          <i class="mv3-tl-div" aria-hidden="true"></i>
           <!-- The transport, right of split (phase V36, T3; the owner 2026-10-23) - it moves the playhead the lanes below
-               show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays as before. -->
-          <span class="mv3-tl-transport">
-            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-start" type="button" title="Back to the start">&#9198;&#xFE0E;</button>
-            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;&#xFE0E;</button>
-            <button class="mv3-iconbtn is-play u-btn is-icon" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
-            <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;&#xFE0E;</button>
-            <!-- (phase V44) Cut silence: the pauses of main audio in the stretch or the picked clips shortened
-                 (js/merge-v3/tl-silence.js) - live while something is picked, dim otherwise. -->
-            <button class="mv3-iconbtn is-silence is-dim u-btn is-icon" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
+               show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays as before. The time of the
+               playhead right after it (written by js/merge-v3/timeline-b.js by its id). -->
+          <span class="mv3-tl-grp is-play">
+            <span class="mv3-tl-transport">
+              <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-start" type="button" title="Back to the start"></button>
+              <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-back" type="button" title="Back 5 seconds"></button>
+              <button class="mv3-iconbtn is-play u-btn is-icon" id="mv3-pv-play" type="button" title="Play (Space)"></button>
+              <button class="mv3-iconbtn u-btn is-icon" id="mv3-pv-fwd" type="button" title="Forward 5 seconds"></button>
+            </span>
+            <span class="mv3-tl-clock u-mono" id="mv3-tl-clock">0:00.0</span>
+          </span>
+          <i class="mv3-tl-div" aria-hidden="true"></i>
+          <!-- (phase V44) Cut silence: the pauses of main audio in the stretch or the picked clips shortened
+               (js/merge-v3/tl-silence.js) - live while something is picked, dim otherwise. Its own icon (Lucide has none), in
+               the set's stroke of 1.5. -->
+          <span class="mv3-tl-grp is-silence">
+            <button class="mv3-iconbtn is-silence is-dim u-btn is-icon" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
           </span>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
-               is what made the old store's data loss so hard to notice. -->
-          <span class="mv3-tl-status" id="mv3-tl-status" hidden></span>
-          <span class="mv3-tl-clock" id="mv3-tl-clock">0:00.0</span>
-          <button class="mv3-iconbtn is-text u-btn" id="mv3-fit" type="button"
-                  title="Fit the whole timeline into view">FIT</button>
-          <!-- px/sec, the same scale and range the old editor used. Alt + wheel over the timeline moves it too, toward the
-               playhead (phase V49.1, js/merge-v3/timeline-b.js _onWheel). -->
-          <label class="mv3-tl-zoom" title="Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead">
-            <span>zoom</span>
-            <input type="range" id="mv3-zoom" class="u-range" min="1" max="240" step="1" value="60">
-            <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>
-          </label>
+               is what made the old store's data loss so hard to notice. The one status line (`.u-status`, red for an error). -->
+          <span class="mv3-tl-status u-status is-line" id="mv3-tl-status" hidden></span>
+          <span class="mv3-tl-grp is-zoom">
+            <button class="mv3-iconbtn is-text u-btn" id="mv3-fit" type="button"
+                    title="Fit the whole timeline into view">FIT</button>
+            <!-- px/sec, the same scale and range the old editor used. Alt + wheel over the timeline moves it too, toward the
+                 playhead (phase V49.1, js/merge-v3/timeline-b.js _onWheel). -->
+            <label class="mv3-tl-zoom" title="Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead">
+              <span>Zoom</span>
+              <input type="range" id="mv3-zoom" class="u-range" min="1" max="240" step="1" value="60">
+              <span class="mv3-tl-pps u-mono" id="mv3-tl-pps">60</span>
+            </label>
+          </span>
         </div>
         <!-- (phase V28.4) Media of this project deleted from the library: said here, the clips red (timeline-b.js). -->
         <div class="mv3-tl-gone" id="mv3-tl-gone" hidden></div>
         <!-- Ruler, lanes and playhead are built by js/merge-v3/timeline-b.js from the project's
              list of lanes. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
         <div class="mv3-tl" id="mv3-tl"></div>
+        <!-- (phase V73 block 5, 5c; the owner's (б5-14) а) AN EMPTY TIMELINE SAYS WHAT GOES ON IT: quiet words over the middle of
+             its lanes while no lane holds a clip - not in a highlights project, not under setup. Over the lanes, not in them, so
+             the pointer and a drop go through; placed and shown by js/merge-v3/timeline-b.js (_paintEmpty). -->
+        <div class="mv3-tl-empty" id="mv3-tl-empty" hidden>Drag clips, pictures and sounds here from the Library</div>
       </section>
 
     </div>

@@ -61,7 +61,9 @@ function _draw(cv, c, z, x0, x1) {
   const dur = Math.max(0, +c.dur || 0);
   const rev = !!c.reversed;
   const mid = H / 2;
-  ctx.fillStyle = getComputedStyle(cv).color || '#7fd1a8';
+  // (phase V73 block 5, 5c) the wave's colour is the sheet's (--muted, --ink picked); with none, the same quiet grey - not the
+  // old green
+  ctx.fillStyle = getComputedStyle(cv).color || '#a1a1a6';
   // (phase V49, (пр2) а) Where the clip lies over an earlier sound of its lane (timeline-b.js _overlaps: seconds from its
   // start) it is see-through, and its own wave is drawn faint there, so the wave under it reads.
   const over = (cv.parentElement && cv.parentElement.__over) || null;

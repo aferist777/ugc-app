@@ -36,6 +36,7 @@ import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 import { opacityOf, blendOf } from '../overlay/look.js';
 // (phase V65, block 5) A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
 import * as PAT from '../overlay/pattern.js';
+import { icon } from '../icons.js';
 
 const STAGE = 'mv3-stage';
 
@@ -2228,7 +2229,8 @@ export const isPlaying = () => _playing;
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');
-  if (b) { b.innerHTML = _playing ? '&#10074;&#10074;' : '&#9654;'; b.title = _playing ? 'Pause (Space)' : 'Play (Space)'; }
+  // (phase V73 block 5, 5c) Lucide's play / pause, 14 px as the timeline head's other icons (bar.js initBar)
+  if (b) { b.innerHTML = icon(_playing ? 'pause' : 'play', 14); b.title = _playing ? 'Pause (Space)' : 'Play (Space)'; }
 }
 
 // ── Mounting ────────────────────────────────────────────────────────────────

@@ -52,7 +52,8 @@ function _say(msg, kind) {
   if (!el) return;
   el.hidden = !msg;
   el.textContent = msg || '';
-  el.className = 'mv3-tl-status' + (kind ? ' is-' + kind : '');
+  // (phase V73 block 5, 5c) the one status line (`.u-status`): `info` quiet, anything else red as before
+  el.className = 'mv3-tl-status u-status is-line' + (kind === 'info' ? '' : ' is-bad');
 }
 
 function _mmss(v) {

@@ -56,6 +56,12 @@ import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
 import { wireClip, copyPicked, paste } from './tl-clip.js';
 // (phase V49.1) Refusals and failures in the corner of popups.
 import { showError } from '../notice.js';
+// (phase V73 block 5, 5c) The lanes' squares, the link mark and the stretch's label as Lucide's icons; its seconds in mono.
+import { icon, iconEl } from '../icons.js';
+import { figures } from '../num.js';
+
+// A lane's name as it is shown: sentence case ("Main video") - the stored name stays as it is ("main video").
+const _shownName = (n) => { const s = String(n || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -68,8 +74,9 @@ let _on = false;        // is this module the one currently showing?
 const _host = () => document.getElementById(HOST);
 
 // The label column's width is shared with the CSS (--mv3-lbl-w): the playhead is positioned in pixels,
-// so both have to agree. 84 since phase S4 - at 78 "MAIN VIDEO" with its link mark ended in "…".
-const LBL_W = 84;
+// so both have to agree. 84 since phase S4 - at 78 "MAIN VIDEO" with its link mark ended in "…". 88 since phase V73 block 5,
+// 5c: "Main video" in 500 11 px with its link icon ended in "…" by a pixel at 84.
+const LBL_W = 88;
 // The square column sits to the LEFT of the labels, so the lanes begin 20px further in than
 // the label width alone says. The playhead is positioned in pixels from the timeline's left
 // edge; using LBL_W by itself put the line over the names it was meant to stand beside.
@@ -810,10 +817,12 @@ function _paintRange() {
     lbl.title = 'Cut this stretch out of every lane - or press Delete';
     lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
     lbl.addEventListener('click', (e) => { e.stopPropagation(); cutRange(); });
+    // (phase V73 block 5, 5c) Lucide's scissors in place of "✂", the seconds in mono
+    lbl.append(iconEl('scissors', 10), document.createElement('span'));
     ruler.appendChild(lbl);
   }
   lbl.style.left = (_range.a * z + 2) + 'px';
-  lbl.textContent = '✂ ' + (_range.b - _range.a).toFixed(2) + ' s · Delete';
+  lbl.lastChild.replaceChildren(figures((_range.b - _range.a).toFixed(2) + ' s · Delete'));
 }
 
 /**
@@ -1374,10 +1383,10 @@ function _ghostRow(kind, side, label, withClip) {
   row.dataset.side = side;
   const box = document.createElement('div');
   box.className = 'mv3b-box';
-  box.textContent = '+';
+  box.innerHTML = icon('plus', 12);                 // (phase V73 block 5, 5c) Lucide's, as the lanes' squares
   const lbl = document.createElement('div');
   lbl.className = 'mv3b-lbl';
-  lbl.textContent = label;
+  lbl.textContent = _shownName(label);
   const lane = document.createElement('div');
   lane.className = 'mv3b-lane';
   if (withClip) {
@@ -1499,13 +1508,13 @@ function _lane(t) {
     const all = ((Store.timeline() || {}).tracks) || [];
     if (t.kind === 'subs') {
       const full = _count(all, 'text') >= MAX_TEXT;
-      btn.textContent = '+';
+      btn.innerHTML = icon('plus', 12);
       btn.disabled = full;
       btn.title = full ? 'Two text lanes is the limit'
                        : 'Add a lane for text you type yourself';
       btn.addEventListener('click', (e) => { e.stopPropagation(); addTextTrack(); });
     } else {
-      btn.textContent = '\u2212';
+      btn.innerHTML = icon('minus', 12);
       btn.title = 'Remove ' + t.name + ' and the lines on it';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1524,7 +1533,7 @@ function _lane(t) {
     const all = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];
     if (t.main) {
       const full = _count(all, t.kind) >= MAX_PER_SIDE;
-      btn.textContent = '+';
+      btn.innerHTML = icon('plus', 12);
       btn.disabled = full;
       btn.title = full
         ? 'Three ' + t.kind + ' tracks beside the main one is the limit'
@@ -1536,7 +1545,7 @@ function _lane(t) {
         if (t.kind === 'video') addVideoTrack(); else addAudioTrack();
       });
     } else {
-      btn.textContent = '\u2212';
+      btn.innerHTML = icon('minus', 12);
       btn.title = t.kind === 'video'
         ? 'Remove ' + t.name + ' and the audio track paired with it'
         : 'Remove ' + t.name + ' - any video paired with it stays, and goes silent';
@@ -1560,12 +1569,12 @@ function _lane(t) {
   const lbl = document.createElement('div');
   lbl.className = 'mv3b-lbl' + (mate ? ' is-linked' : '');
   const nm = document.createElement('span');
-  nm.textContent = t.name;
+  nm.textContent = _shownName(t.name);              // (phase V73 block 5, 5c; (к17)) sentence case, 500 11 px
   lbl.appendChild(nm);
   if (mate) {
     const mk = document.createElement('span');
     mk.className = 'mv3b-link';
-    mk.textContent = '⚭';
+    mk.innerHTML = icon('link', 10);                // Lucide's link in place of "⚭"
     lbl.appendChild(mk);
   }
   lbl.title = (mate
@@ -1672,7 +1681,7 @@ function _clipEl(t, c, over) {
   }
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
-  cap.textContent = (Store.isGone(c) ? 'deleted · ' : '') + (c.name || '');
+  cap.textContent = (Store.isGone(c) ? 'Deleted · ' : '') + (c.name || '');   // (V73 block 5, 5c; (к17)) sentence case
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
@@ -2060,9 +2069,13 @@ function _paintGone() {
   if (!n || _goneShut === key) { el.hidden = true; el.textContent = ''; if (!n && _goneShut === key) _goneShut = ''; return; }
   el.hidden = false;
   el.textContent = '';
+  // (phase V73 block 5, 5c; the owner's (б5-17) а) a line one step lighter with a red icon and plain words, the count in mono
+  const mark = iconEl('circle-alert', 14);
+  mark.classList.add('mv3-tl-gone-i');
+  el.appendChild(mark);
   const t = document.createElement('span');
-  t.textContent = n + (n === 1 ? ' piece of media' : ' pieces of media') + ' of this project ' + (n === 1 ? 'was' : 'were')
-    + ' deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.';
+  t.appendChild(figures(n + (n === 1 ? ' piece of media' : ' pieces of media') + ' of this project ' + (n === 1 ? 'was' : 'were')
+    + ' deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.'));
   el.appendChild(t);
   const x = document.createElement('button');
   x.type = 'button';
@@ -2070,6 +2083,23 @@ function _paintGone() {
   x.title = 'Close - the clips stay red';
   x.addEventListener('click', () => { _goneShut = key; _paintGone(); });
   el.appendChild(x);
+}
+
+// (phase V73 block 5, 5c; the owner's (б5-14) а) AN EMPTY TIMELINE SAYS WHAT GOES ON IT - quiet words over the middle of its lanes
+// while no lane holds a clip (a subtitle or a text line is a clip of its lane, as layout.js _empty counts). Not in a highlights
+// project (its own timeline takes nothing, a fragment holds its pieces); under setup the sheet hides them. From under the ruler
+// to the panel's foot, right of the frozen names - laid over the lanes, so they do not scroll away and a drop goes through.
+function _paintEmpty(tracks, inner) {
+  const el = document.getElementById('mv3-tl-empty');
+  const host = _host();
+  if (!el || !host) return;
+  const key = String(Store.key() || '');
+  const empty = !!key && !/^hl_/.test(key) && tracks.every(t => !(t && Array.isArray(t.clips) && t.clips.length));
+  el.hidden = !empty;
+  if (!empty) return;
+  const ruler = inner && inner.querySelector(':scope > .mv3b-row.is-ruler');
+  el.style.top = (host.offsetTop + (ruler ? ruler.offsetHeight : 0)) + 'px';
+  el.style.left = (host.offsetLeft + GUTTER) + 'px';
 }
 
 function _build() {
@@ -2158,6 +2188,7 @@ function _build() {
 
   inner.appendChild(_head());
   host.appendChild(inner);
+  _paintEmpty(tracks, inner);
   // What is brought into view (a picked lane, a clip) stops short of the ruler and the words block that cover the lanes.
   host.style.scrollPaddingTop = '19px';
   host.style.scrollPaddingBottom = (subs && subs.classList.contains('has-words')) ? subs.offsetHeight + 'px' : '';
