@@ -23,7 +23,8 @@
    renders (POST /api/mv3q/run { hl }) - Render all, as always, starts everything waiting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import * as Store from './store.js';
+// (phase V73 block 6, the owner's (б6-1) б: Queue on every page) Merge's store is asked only by addCurrent - Merge's own
+// render window -, so it is brought in there: on the other pages the queue loads nothing of Merge but this module.
 import * as Layers from '../layers.js';
 // (phase V73, the owner's (рф-4) а) a ready render opens in the Library's viewer - Rename and Delete there
 import { openRender } from '../library/render-view.js';
@@ -41,6 +42,15 @@ let _timer = 0;
 let _asking = false;
 
 const $ = (id) => document.getElementById(id);
+
+// The Library's viewer's sheet, brought in on the first "open" on a page that has none (Admin, the showcase) - as Alerts do.
+function _viewerCss() {
+  if (document.querySelector('link[href$="lib-viewer.css"]')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/css/lib-viewer.css';
+  document.head.appendChild(link);
+}
 
 async function _get() {
   try { return await fetch('/api/mv3q').then(r => r.json()); }
@@ -156,6 +166,7 @@ function _row(it, refresh) {
     a.addEventListener('click', (e) => {
       e.stopPropagation();
       _close();
+      _viewerCss();
       openRender(it.url);
     });
     acts.appendChild(a);
@@ -479,6 +490,7 @@ function _away(e) {
 
 /** Put the open project into the queue. Called by the render window of either workflow. */
 export async function addCurrent(adv) {
+  const Store = await import('./store.js');   // Merge's own, loaded already there
   const tl = Store.timeline();
   if (!tl || !Store.hasProject()) return { success: false, error: 'no project open' };
   const body = { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration(), adv: adv || Store.adv() || null };

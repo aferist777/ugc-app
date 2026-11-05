@@ -56,6 +56,8 @@ import { showError } from '../notice.js';
 // at the tile a menu or the Delete key was about (the owner's (б2-6) а); "nothing here" and "did not load" as the shared
 // parts (css/app-shell.css .u-empty, .u-failed).
 import { ask } from '../ask.js';
+import { icon } from '../icons.js';
+import { int } from '../num.js';
 import { emptyEl, failedEl } from '../ui-state.js';
 
 const $ = (id) => document.getElementById(id);
@@ -158,7 +160,9 @@ function _status(text, kind) {
   const el = $('lib-status');
   if (!el) return;
   el.textContent = text || '';
-  el.className = 'lib-status' + (kind ? ' ' + kind : '');
+  // (phase V73 block 6) the shared status line, one line - cut, the whole of it under the pointer
+  el.className = 'lib-status u-status is-line' + (kind ? ' ' + kind : '');
+  el.title = text || '';
 }
 
 function _paintShelves() {
@@ -167,6 +171,7 @@ function _paintShelves() {
   _paintMake();
   // Media's three checks show their buttons only there; leaving Media puts them away at once.
   if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
+  _paintMore();
   // Media's tree, beside its grid.
   // (V38.6) Scenarios: the list at its own width on the left, a sash, the selected one on the right - a scenario's
   // column, or a draft's form. Elsewhere the draft's place is put away.
@@ -1043,7 +1048,7 @@ function _card(it, extra) {
     box.classList.add('lib-thumb-broken');
     const bad = document.createElement('span');
     bad.className = 'lib-broken-tag';
-    bad.textContent = 'unreadable';
+    bad.textContent = 'Unreadable';   // (к17) sentence case - the tag is not written in capitals any more
     bad.title = 'The file is truncated - the render did not finish writing, so it cannot be played.';
     box.appendChild(bad);
   }
@@ -1054,8 +1059,9 @@ function _card(it, extra) {
   if (_FAVABLE.has(it.kind)) {
     const star = document.createElement('button');
     star.type = 'button';
-    star.className = 'lib-star';
-    star.textContent = '★';
+    // (phase V73 block 6) ★ and ✕ as Merge's gallery has them: the shared on-picture part, Lucide's icons
+    star.className = 'lib-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
+    star.innerHTML = icon('star', 12);
     star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
     star.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1068,8 +1074,7 @@ function _card(it, extra) {
   if (!_fixed(it) && it.kind !== 'sfx') {
     const x = document.createElement('button');
     x.type = 'button';
-    x.className = 'lib-x';
-    x.textContent = '✕';
+    x.className = 'lib-x u-onpic is-del u-x';
     x.title = 'Delete';
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1586,7 +1591,7 @@ async function _counts() {
     document.querySelectorAll('.lib-shelf').forEach(b => {
       const n = d.counts[b.dataset.kind];
       const el = b.querySelector('.lib-n');
-      if (el) el.textContent = (n == null) ? '' : String(n);
+      if (el) el.textContent = (n == null) ? '' : int(n);   // (phase V73 block 6) "1,363", in mono
     });
   } catch (e) { /* the counts are a nicety, not the page */ }
 }
@@ -1642,7 +1647,57 @@ function _pressShelf(kind) {
 // All three at once. Each one looks at the shelf again after its answer: one that lands after
 // Media was left must not show its button on another shelf.
 function _runChecks() {
-  return Promise.all([_checkDupes(), _checkBroken(), _checkThumbs()]);
+  return Promise.all([_checkDupes(), _checkBroken(), _checkThumbs()]).finally(_paintMore);
+}
+
+// ── The menu "⋯" (phase V73 block 6) ────────────────────────────────────────────────────────────────────────────
+// The three checks are not buttons of the bar any more: their buttons stay as they were (hidden in .lib-svc, each shown
+// or hidden by its check, its words saying how much) and "⋯" at the bar's end shows while any of them would - its rows
+// are theirs, a press runs the same work; the question of each is asked at "⋯".
+const SVC = ['lib-dupes', 'lib-broken', 'lib-thumbs'];
+let _morePop = null;
+function _paintMore() {
+  const more = $('lib-more');
+  if (!more) return;
+  if (!more.firstChild) more.innerHTML = icon('ellipsis', 16);
+  const any = SVC.some(id => { const b = $(id); return b && !b.hidden; });
+  more.hidden = !any;
+  if (!any) _closeMore();
+}
+function _closeMore() {
+  if (!_morePop) return;
+  document.removeEventListener('mousedown', _morePop.away, true);
+  Layers.close(_morePop.layer);
+  _morePop.el.remove();
+  _morePop = null;
+}
+function _moreMenu() {
+  if (_morePop) { _closeMore(); return; }
+  const anchor = $('lib-more');
+  const menu = document.createElement('div');
+  menu.className = 'mv3-plus-menu u-menu is-float';
+  for (const id of SVC) {
+    const src = $(id);
+    if (!src || src.hidden) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-plus-item u-mi';
+    b.disabled = src.disabled;
+    const t = document.createElement('span');
+    t.textContent = src.textContent;
+    const s = document.createElement('small');
+    s.textContent = src.title || '';
+    b.append(t, s);
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMore(); src.click(); });
+    menu.appendChild(b);
+  }
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.right - menu.offsetWidth))) + 'px';
+  menu.style.top = Math.round(r.bottom + 4) + 'px';
+  const away = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) _closeMore(); };
+  _morePop = { el: menu, away, layer: Layers.open(menu, { modal: false, name: 'library checks', onEsc: _closeMore }) };
+  document.addEventListener('mousedown', away, true);
 }
 
 // ── Broken records ──────────────────────────────────────────────────────────
@@ -1679,7 +1734,7 @@ async function _cleanBroken() {
   lines.push('A generation still running is never swept.');
   lines.push('', 'Go ahead?');
   // At the button; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
-  if (!await ask($('lib-broken'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
+  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
 
   const btn = $('lib-broken');
   if (btn) btn.disabled = true;
@@ -1739,7 +1794,7 @@ async function _cleanDupes() {
     lines.push('because the copies disagreed and the kept one wins.');
   }
   lines.push('', 'Go ahead?');
-  if (!await ask($('lib-dupes'), lines.join(NL), { yes: 'Remove copies', danger: true, stay: true })) return;
+  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove copies', danger: true, stay: true })) return;
   const btn = $('lib-dupes');
   if (btn) btn.disabled = true;
   try {
@@ -1816,7 +1871,7 @@ async function _fixThumbs() {
   if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
   lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
   // Nothing is deleted - a plain answer (б2-5).
-  if (!await ask(btn, lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
+  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
 
   if (btn) btn.disabled = true;
   const byId = _thumbs.byId || new Map(_items.map(it => [String(it.id), it]));
@@ -1826,6 +1881,7 @@ async function _fixThumbs() {
     if (!it) { failed++; continue; }
     try { await A.fixThumb(it); done++; } catch (e) { failed++; }
     if (btn) btn.textContent = 'Thumbnails ' + (done + failed) + '/' + need.length;
+    _status('Making thumbnails · ' + (done + failed) + ' of ' + need.length);   // its button is a row of "⋯" now
   }
   await _load();
   _counts();
@@ -2170,6 +2226,8 @@ function boot() {
   if (brk) brk.addEventListener('click', _cleanBroken);
   const thb = $('lib-thumbs');
   if (thb) thb.addEventListener('click', _fixThumbs);
+  const more = $('lib-more');
+  if (more) more.addEventListener('click', _moreMenu);
 
   MK.init({
     status: _status,

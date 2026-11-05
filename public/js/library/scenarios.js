@@ -51,6 +51,7 @@ import { spokenSeconds } from './jobs.js';
 // (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "nothing here" and "did not
 // load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а)
 import { ask } from '../ask.js';
+import { icon } from '../icons.js';
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -280,7 +281,7 @@ function _archHead() {
   b.type = 'button';
   b.setAttribute('aria-expanded', _archOpen ? 'true' : 'false');
   b.title = _archOpen ? 'Fold the archive' : 'The archived scenarios';
-  b.appendChild(_el('span', 'lib-sc-arch-c', '▸'));
+  b.appendChild(_el('span', 'lib-sc-arch-c')).innerHTML = icon('chevron-right', 14);   // (phase V73 block 6, (к18))
   b.appendChild(_el('span', 'lib-sc-arch-t', 'Archive'));
   b.appendChild(_el('span', 'lib-sc-arch-n', '· ' + _archived.length));
   b.addEventListener('click', () => {

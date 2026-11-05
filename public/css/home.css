@@ -4,7 +4,9 @@
    (css/merge-v3.css .mv3-wk-stage), dragged by its head to any place of either column.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── the sub-header: the lit tab wears the frames' gold line ── */
+/* (phase V73 block 6) The sub-header (.hm-sub, its one tab "Overview" and "reset layout") went: one tab is not tabs. "Reset
+   layout" is a quiet button in the corner under the blocks (.hm-foot). ITS RULES BELOW ARE UNUSED - kept for the V50
+   inventory, which deletes what is dead with the owner's answer. */
 .hm-sub{flex:0 0 auto; display:flex; align-items:stretch; gap:2px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--border-soft)}
 .hm-tab{position:relative; display:flex; align-items:center; gap:6px; padding:9px 12px 8px; border:0; background:none; cursor:pointer;
   color:var(--muted); font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase}
@@ -18,21 +20,25 @@
 
 /* ── the body scrolls; the shell's body does not ── */
 .hm-body{flex:1 1 auto; min-height:0; overflow-y:auto}
-.hm-pane{max-width:1480px; margin:0 auto; padding:22px 22px 30px}
+.hm-pane{max-width:1480px; margin:0 auto; padding:22px 22px 12px}
 .hm-cols{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start}
 .hm-col{display:flex; flex-direction:column; gap:22px; min-width:0; min-height:120px}
 @media (max-width: 1100px){ .hm-cols{grid-template-columns:1fr} }
+.hm-foot{display:flex; justify-content:flex-end; margin-top:var(--sp-4)}
 
-/* ── THE GOLD FRAME: dashed while something is left to do in it, solid when nothing is; its name in gold capitals, what it
-   says about itself after it; taken by its head, it moves ── */
-.hm-st{position:relative; padding:12px 14px 13px; border:1px solid var(--gold); border-radius:var(--r-sm); display:flex; flex-direction:column; gap:10px; background:var(--bg)}
+/* ── THE GOLD FRAME (kept, (к4)): dashed while something is left to do in it, solid when nothing is. Its head (phase V73
+   block 6): the grip icon ("Drag"), the name in sentence case (к17), what the block says about itself after it, its links at
+   the right; taken by its head, it moves. The same padding on every side of its rows. ── */
+.hm-st{position:relative; padding:var(--sp-3) var(--sp-4); border:1px solid var(--gold); border-radius:var(--r-sm); display:flex; flex-direction:column; gap:var(--sp-3); background:var(--bg)}
 .hm-st.is-todo{border-style:dashed}
-.hm-head{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold); cursor:grab; user-select:none}
-.hm-grip{font-size:12px; letter-spacing:0; color:var(--muted); opacity:.55; margin-right:-2px; transition:opacity .12s}
+.hm-head{display:flex; align-items:center; gap:var(--sp-2); min-height:20px; cursor:grab; user-select:none}
+.hm-grip{display:flex; margin:0 -2px 0 -4px; color:var(--faint); opacity:.7; transition:opacity var(--dur-1) var(--ease)}
 .hm-st:hover .hm-grip{opacity:1}
-.hm-what{text-transform:none; letter-spacing:0; font-weight:400; color:var(--muted); font-size:11px}
+.hm-name{color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); white-space:nowrap}
+.hm-what{min-width:0; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .hm-head .sp{flex:1}
-.hm-head a, .hm-head button{font:600 11px var(--font); text-transform:none; letter-spacing:0; color:var(--muted); text-decoration:none; border:0; background:none; padding:0; cursor:pointer}
+.hm-right{display:flex; align-items:center; gap:var(--sp-3)}
+.hm-head a, .hm-head button{font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); text-transform:none; letter-spacing:0; color:var(--muted); text-decoration:none; border:0; background:none; padding:0; cursor:pointer; white-space:nowrap}
 .hm-head a:hover, .hm-head button:hover{color:var(--ink)}
 .hm-st.is-dragging{opacity:.35}
 .hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
@@ -42,9 +48,9 @@
    and its word under it; as many places a row as the row has tiles (js/home/util.js `tiles` sets --hm-cols) - New project and
    Library four, Generate three (phase V73 block 0: in four places its three left a hole on the right) ── */
 .hm-tiles{display:grid; grid-template-columns:repeat(var(--hm-cols, 4), minmax(0,1fr)); gap:8px}
-.hm-tile{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-width:0; min-height:80px; padding:13px 6px 10px;
+.hm-tile{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-width:0; min-height:80px; padding:12px 6px 10px;
   border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--ink); text-decoration:none;
-  font:600 11.5px/1.2 var(--font); text-align:center; cursor:pointer; transition:border-color .12s, background .12s}
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); text-align:center; cursor:pointer; transition:border-color .12s, background .12s}
 .hm-tile:hover{border-color:var(--gold); background:var(--surface-2)}
 .hm-tile-ico{width:30px; height:30px; color:var(--gold)}
 .hm-tile-ico svg{display:block; width:100%; height:100%}
@@ -61,8 +67,8 @@
   display:flex; align-items:center; justify-content:center; color:var(--gold)}
 .hm-pthumb svg{width:16px; height:16px; opacity:.75}
 .hm-ptx{flex:1 1 auto; min-width:0}
-.hm-ptx b{display:block; font:600 12px/1.3 var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.hm-ptx span{display:block; font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-ptx b{display:block; font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-ptx span{display:block; font-size:var(--fs-10); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* The card on hover (the owner asked for it, (хп29)): the frame in the project's own shape, then the words. Not pressed - the
    row under the pointer is. */
 .hm-peek{position:fixed; z-index:9000; display:flex; flex-direction:column; gap:3px; width:max-content; max-width:280px; padding:8px 8px 9px;
@@ -72,47 +78,53 @@
 .hm-peek-pic.is-wide{width:260px; aspect-ratio:16/9}
 .hm-peek-pic.is-none{display:flex; align-items:center; justify-content:center; color:var(--gold)}
 .hm-peek-pic.is-none svg{width:40px; height:40px; opacity:.6}
-.hm-peek-t{font:600 12px/1.3 var(--font); max-width:260px; overflow-wrap:anywhere}
-.hm-peek-k{font:700 9px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
-.hm-peek-d{font-size:10.5px; color:var(--muted); max-width:260px}
+.hm-peek-t{font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); max-width:260px; overflow-wrap:anywhere}
+.hm-peek-k{font:var(--fw-medium) var(--fs-10)/var(--lh-10) var(--font); color:var(--muted)}   /* (phase V73 block 6) the kind in words, not gold capitals */
+.hm-peek-d{font-size:var(--fs-10); color:var(--muted); max-width:260px}
 
 /* ── the buttons of First steps ── */
 
 /* ── rows: New since ── */
 .hm-rows{display:flex; flex-direction:column; gap:6px}
 .hm-row{display:flex; align-items:center; gap:10px; padding:7px 9px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs)}
-.hm-ico{flex:0 0 22px; height:22px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; background:var(--surface-2); font-size:12px}
+.hm-ico{flex:0 0 24px; height:24px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; background:var(--surface-2); color:var(--muted)}   /* a Lucide icon (phase V73 block 6) */
 .hm-row.is-bad .hm-ico{color:var(--danger)}
 .hm-tx{flex:1 1 auto; min-width:0}
-.hm-tx b{display:block; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.hm-tx span{display:block; font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-tx b{display:block; font-size:var(--fs-12); font-weight:var(--fw-medium); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-tx span{display:block; font-size:var(--fs-10); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .hm-go{font:11px var(--font); color:var(--muted); text-decoration:none; white-space:nowrap; border:0; background:none; cursor:pointer; padding:0}
 .hm-go:hover{color:var(--ink)}
 .hm-bar{height:4px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin-top:4px}
-.hm-bar i{display:block; height:100%; background:var(--gold); transition:width .4s var(--ease)}
+.hm-bar i{display:block; height:100%; background:var(--muted); transition:width .4s var(--ease)}   /* (phase V73 block 6) gold only at the next step */
 
-/* ── First steps: a ring each, gold and ticked when done ── */
+/* ── First steps (phase V73 block 6): a ring each - ticked in the one green when done; gold, dashed, only at the first step
+   not done, whose button is the only gold one; the rest dashed grey with quiet buttons ── */
 .hm-progress{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
 .hm-progress .hm-bar{flex:1; margin:0}
 .hm-steps{display:flex; flex-direction:column; gap:7px; margin:0; padding:0; list-style:none}
 .hm-steps li{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:var(--r-xs); background:var(--surface)}
-.hm-ck{flex:0 0 18px; height:18px; border-radius:50%; border:1.5px dashed var(--gold); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--bg)}
-.hm-steps li.is-done .hm-ck{background:var(--gold); border-style:solid}
+.hm-ck{flex:0 0 18px; height:18px; border-radius:50%; border:1.5px dashed var(--border); display:flex; align-items:center; justify-content:center; color:var(--on-fill)}
+.hm-steps li.is-next .hm-ck{border-color:var(--gold)}
+.hm-steps li.is-done .hm-ck{background:var(--success); border:0}
+.hm-ck .u-ico{stroke-width:2.5}
 .hm-step-tx{flex:1 1 auto; min-width:0}
-.hm-step-t{font-weight:600; font-size:12px}
+.hm-step-t{font-weight:var(--fw-medium); font-size:var(--fs-12)}
 .hm-steps li.is-done .hm-step-t{color:var(--muted); text-decoration:line-through}
-.hm-step-d{font-size:10.5px; color:var(--muted)}
+.hm-step-d{font-size:var(--fs-10); color:var(--muted)}
 .hm-steps .hm-btn{flex:0 0 auto}
 
 /* ── The app ── */
-.hm-subh{font:700 9px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:4px 0 -2px}
+.hm-subh{font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted); margin:4px 0 -2px}   /* (к17) sentence case */
 .hm-tbl{width:100%; border-collapse:collapse; font-size:12px}
 .hm-tbl td{padding:6px 6px; border-top:1px solid var(--border-soft); vertical-align:top}
 .hm-tbl tr:first-child td{border-top:0}
-.hm-tbl td.k{width:140px; font-weight:600; white-space:nowrap}
+.hm-tbl td.k{width:120px; font-weight:var(--fw-medium); white-space:nowrap}
+/* (phase V73 block 6) the state - a dot and its word - in its own column */
+.hm-tbl td.s{width:112px; white-space:nowrap; color:var(--muted)}
+.hm-state{display:inline-flex; align-items:center; gap:6px; font-size:var(--fs-11)}
 .hm-tbl td.r{text-align:right; white-space:nowrap; color:var(--muted); font-size:11px}
 .hm-tbl a{color:var(--ink)}
-.hm-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--border)}
+.hm-dot{display:inline-block; flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--faint)}
 .hm-dot.ok{background:var(--success)} .hm-dot.down{background:var(--warn)} .hm-dot.no{background:var(--danger)}
 .hm-muted{color:var(--muted)}
 

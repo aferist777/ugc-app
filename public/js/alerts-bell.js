@@ -21,10 +21,16 @@ import * as Layers from './layers.js';
 import { showToast } from './notice.js';
 import { MS } from './really.js';
 import { emptyEl } from './ui-state.js';
+import { icon } from './icons.js';
+import { setFigures } from './num.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
 const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓', highlights: '✂' };
+// (phase V73 block 6, "Меню Alerts") A row's kind as one of the interface's icons, its word under the pointer. The 3D Studio's
+// page keeps the marks above (OLD_LOOK).
+const KIND_ICON = { image: ['image', 'Picture'], video: ['film', 'Video'], music: ['music', 'Music'], source: ['download', 'Source'],
+  highlights: ['scissors', 'Highlights'] };
 
 let _btn = null;
 let _menu = null;
@@ -297,7 +303,9 @@ function _paintWait() {
   if (!n) { _wait.hidden = true; _wait.textContent = ''; return; }
   const ms = _leftMs();
   _wait.hidden = false;
-  _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
+  // (phase V73 block 6) its figures in mono, so the chip keeps its width while it counts down
+  if (OLD_LOOK()) _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
+  else setFigures(_wait, ms ? _leftSays(ms) : 'any moment now');
   _wait.title = n + (n === 1 ? ' thing is running' : ' things are running side by side')
     + '. The wait is the longest of them, from how long the last ones of the same kind took.';
 }
@@ -316,7 +324,14 @@ function _paintButton() {
 // ── the list ────────────────────────────────────────────────────────────────
 function _row(rec) {
   const row = _el('div', 'sv3-al-row' + (rec.state === 'failed' ? ' is-failed' : ''));
-  row.appendChild(_el('span', 'sv3-al-mark', KIND_MARK[rec.kind] || '▣'));
+  if (OLD_LOOK()) row.appendChild(_el('span', 'sv3-al-mark', KIND_MARK[rec.kind] || '▣'));
+  else {
+    const [ico, word] = KIND_ICON[rec.kind] || ['image', rec.what ? String(rec.what) : 'Generation'];
+    const mark = _el('span', 'sv3-al-mark');
+    mark.innerHTML = icon(ico, 14);
+    mark.title = word;
+    row.appendChild(mark);
+  }
 
   const main = _el('span', 'sv3-al-main');
   main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || 'generation'));
@@ -333,19 +348,23 @@ function _row(rec) {
   main.appendChild(_el('span', 'sv3-al-where' + (stage ? ' is-stage' : ''), under));
   row.appendChild(main);
 
-  row.appendChild(_el('span', 'sv3-al-state',
-    _running(rec) ? _ago(rec.startedAt) : (rec.state === 'done' ? _ago(rec.doneAt) + ' ago' : '')));
+  const when = _el('span', 'sv3-al-state');
+  const ago = _running(rec) ? _ago(rec.startedAt) : (rec.state === 'done' ? _ago(rec.doneAt) + ' ago' : '');
+  // (phase V73 block 6) the time in mono, as every figure of the pages
+  if (OLD_LOOK()) when.textContent = ago; else setFigures(when, ago);
+  row.appendChild(when);
 
+  // (phase V73 block 6) "open" and "retry" are quiet buttons: the row itself is the way to the work
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act u-btn is-s', 'open');
+    const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', 'open');
     open.type = 'button';
     open.title = 'Look at what came out';
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
     acts.appendChild(open);
   }
   if (rec.state === 'failed' && rec.retryable) {
-    const again = _el('button', 'sv3-al-act u-btn is-s' + (_armed === rec.id ? ' is-armed' : ''),
+    const again = _el('button', 'sv3-al-act u-btn is-s is-quiet' + (_armed === rec.id ? ' is-armed' : ''),
       _armed === rec.id ? 'spend again?' : 'retry');
     again.type = 'button';
     again.title = rec.retryFree ? 'Go on from where it stopped - this costs nothing' : 'Ask for it again - this spends credits';
@@ -387,7 +406,7 @@ function _paintMenu() {
   const head = _el('div', 'sv3-al-head');
   head.appendChild(_el('span', 'sv3-al-h', 'Alerts'));
   head.appendChild(_el('span', 'sp'));
-  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', 'clear');
+  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', OLD_LOOK() ? 'clear' : 'Clear');
   clear.type = 'button';
   clear.title = 'Forget the finished ones. What is still running stays.';
   clear.addEventListener('click', () => { _json('/api/alerts/clear', { method: 'POST' }).then(_poll); });
@@ -572,6 +591,8 @@ export function mountAlerts(nav) {
   if (!nav || _btn) return;
   _btn = _el('button', 'sv3-alerts');
   _btn.type = 'button';
+  // (phase V73 block 6) an icon and a word, as Admin beside it
+  if (!OLD_LOOK()) _btn.insertAdjacentHTML('beforeend', icon('bell', 14));
   _btn.appendChild(_el('span', null, 'Alerts'));
   _btn.appendChild(_el('span', 'sv3-al-count'));
   _btn.addEventListener('click', _toggle);

@@ -12,35 +12,42 @@
 .adm-tabs{ position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
 /* the tabs are the shared part (.u-tabs / .u-tab, phase V73 block 2); the row keeps its sticky place */
 
+/* (phase V73 block 6) a pane is the page's panel (к15): the whole width, a head of 40 px with its name and its buttons, what the pane
+   is in a line under the head (it was a phrase squeezed into the head) */
 .adm-panel{
   flex:0 0 auto;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel);
   overflow:hidden;
 }
 .adm-panel[hidden]{ display:none; }
 .adm-head{
-  display:flex; align-items:center; gap:10px;
-  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:var(--sp-2); height:40px;
+  padding:0 var(--sp-2) 0 var(--sp-4); border-bottom:1px solid var(--border-soft);
 }
-.adm-title{ font:600 12px/1.2 var(--font); color:var(--ink); }
-.adm-count{ font:500 10.5px/1.2 var(--font); color:var(--muted); }
+.adm-head .sp{ flex:1; }
+.adm-title{ font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); color:var(--ink); }
+.adm-count{ font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); color:var(--faint); font-variant-numeric:tabular-nums; }
+.adm-lead{ margin:0; padding:var(--sp-3) var(--sp-4) 0; color:var(--muted); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); }
+.adm-lead:empty{ display:none; }
+.adm-lead > .adm-count:not(:empty)::before{ content:' · '; }
 
-.adm-status{ padding:8px 12px; min-height:14px; font:10.5px/1.45 var(--font); color:var(--muted); }
+.adm-status{ padding:8px 16px; min-height:14px; font:var(--fs-11)/1.45 var(--font); color:var(--muted); }
 .adm-status.err{ color:var(--danger); }
 .adm-status.ok{ color:var(--success); }
 
 /* ── the keys ──────────────────────────────────────────────────────────────
    Moved here from library.css with the Brains popup they belonged to. Every row is the same:
    a field showing the mask, a × that removes on Save, and a state line under it. */
-.adm-keys{ padding:10px 12px; }
+.adm-keys{ padding:var(--sp-3) var(--sp-4); }
 .bk-row{ margin-bottom:6px; }
 .bk-row:last-child{ margin-bottom:0; }
 /* One line per key: label, the field at a fixed width, the x, and to the right of it the
    verdict with the description under it - the row is as tall as the description makes it. */
 .bk-line{ display:flex; align-items:flex-start; gap:6px; }
+/* (phase V73 block 6) the label at the left, without its colon (js/admin-keys.js) */
 .bk-label{
-  flex:0 0 132px; font-size:10px; font-weight:700; color:var(--muted);
-  letter-spacing:.01em; text-align:right; padding-top:6px;
+  flex:0 0 150px; font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted);
+  text-align:left; padding-top:6px;
 }
 /* (phase V73 block 2) the shared field (.u-in); a key is read in mono, its state in its border */
 .bk-field{ flex:0 0 300px; min-width:0; font-family:var(--mono) }
@@ -49,16 +56,21 @@
 .bk-frow{ display:flex; align-items:flex-start; gap:6px; }
 .bk-frow .bk-field{ flex:1 1 auto }
 .bk-x{ flex:0 0 auto; }   /* the shared ✕ that takes out (.u-x.is-del) */
+/* (phase V73 block 6) a key marked for removal: its button puts it back - Lucide's undo-2 */
+.bk-x.bk-undo::before{ content:''; display:block; width:16px; height:16px; background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E") center / contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E") center / contain no-repeat; }
 /* The mask is a reading, not a value: muted, and it goes the moment the field is focused. */
 .bk-field.is-mask{ color:var(--muted); letter-spacing:.03em; }
-/* Whether the key is there and whether it works, in the border: green, amber, red. */
-.bk-field.is-ok{ border-color:var(--success); }
-.bk-field.is-down{ border-color:var(--gold); }
-.bk-field.is-missing{ border-color:var(--border); }
+/* (phase V73 block 6) Whether the key is there and whether it works: a dot and its words beside the field - the field's border is the
+   field's (the classes stay for the dot). A key to be removed on Save keeps its dashed red field: that is a change, not a state. */
 .bk-field.is-cleared{ border-color:var(--danger); border-style:dashed; }
-.bk-state{ margin:0; font-size:10px; line-height:1.4; color:var(--muted); min-height:12px; font-weight:600; }
-.bk-state.ok{ color:var(--success); }
-.bk-state.down{ color:var(--gold); }
+.bk-staterow{ display:flex; align-items:center; gap:6px; min-height:16px; }
+.bk-dot{ flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--faint); }
+.bk-staterow:has(.bk-state.ok) .bk-dot{ background:var(--success); }
+.bk-staterow:has(.bk-state.down) .bk-dot{ background:var(--warn); }
+.bk-row:has(.bk-field.is-cleared) .bk-dot{ background:var(--danger); }
+.bk-staterow:has(.bk-state:empty) .bk-dot{ visibility:hidden; }
+.bk-state{ margin:0; font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--ink); min-height:12px; }
 .bk-state.missing{ color:var(--muted); }
 .bk-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; padding-top:3px; }
 .bk-desc{
@@ -67,8 +79,8 @@
 .bk-desc a{ color:var(--ink); }
 /* Marks where one provider's fields end and the next set begins. */
 .bk-group{
-  margin:12px 0 6px; padding-top:8px; border-top:1px solid var(--border-soft);
-  font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  margin:14px 0 8px; padding-top:10px; border-top:1px solid var(--border-soft);
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* (phase V73 block 6) sentence case (к17) */
   color:var(--muted);
 }
 .bk-row:first-child .bk-group{ margin-top:0; padding-top:0; border-top:0; }
@@ -82,7 +94,7 @@
 .bk-help{ margin-top:4px; font-size:10px; line-height:1.5; color:var(--muted); }
 .bk-col .bk-help{ margin-top:5px; }
 .bk-help[open]{ padding:6px 8px 7px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); }
-.bk-help summary{ cursor:pointer; color:var(--ink); font-weight:600; width:max-content; }
+.bk-help summary{ cursor:pointer; color:var(--ink); font-weight:var(--fw-medium); width:max-content; }
 .bk-help ol{ margin:4px 0 2px; padding-left:18px; }
 .bk-help li{ margin:1px 0; }
 .bk-help a{ color:var(--ink); }
@@ -94,7 +106,7 @@
 
 /* ── What the panes share (AI settings, This computer, Thanks) ─────────────────
    The dio- names are from the Import / Export pane they were made for, gone in phase V54 (the owner 2026-10-28). */
-.dio-body{ padding:12px 14px; max-width:760px; }
+.dio-body{ padding:var(--sp-3) var(--sp-4) var(--sp-4); }   /* (phase V73 block 6) the whole width - it stopped at 760 */
 
 /* Admin -> This computer (js/admin-local.js): one row per thing, what it is on the left, its state or its
    button on the right. */
@@ -103,21 +115,21 @@
   border:1px solid var(--border-soft); border-radius:8px;
 }
 .loc-row > .u-btn, .loc-row > .loc-state{ flex:0 0 auto; }
-.loc-state{ font:600 10.5px var(--font); }
+.loc-state{ font:var(--fw-medium) var(--fs-11) var(--font); }
 .loc-state.ok{ color:var(--success); }
 .loc-state.bad{ color:var(--danger); }
 .loc-prog{ flex:0 0 200px; }
 
 .dio-sec{
-  font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase;
-  color:var(--muted); margin:14px 0 6px;
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* (phase V73 block 6) sentence case (к17) */
+  color:var(--muted); margin:16px 0 6px;
 }
 .dio-sec:first-child{ margin-top:0; }
 .dio-lbl{ flex:1; min-width:0; }
-.dio-lbl b{ display:block; font:600 11.5px var(--font); color:var(--ink); }
-.dio-lbl i{ display:block; margin-top:1px; font-style:normal; font:10px/1.4 var(--font); color:var(--muted); }
+.dio-lbl b{ display:block; font:var(--fw-medium) var(--fs-12) var(--font); color:var(--ink); }
+.dio-lbl i{ display:block; margin-top:1px; font-style:normal; font:var(--fs-11)/1.4 var(--font); color:var(--muted); }
 .dio-actions{ display:flex; align-items:center; gap:8px; margin:10px 0 0; }
-.dio-status{ margin:7px 0 0; font:10.5px/1.45 var(--font); color:var(--muted); min-height:14px; }
+.dio-status{ margin:7px 0 0; font:var(--fs-11)/1.45 var(--font); color:var(--muted); min-height:14px; }
 
 /* A bar of how far a download has come (This computer). */
 .dio-bar{
@@ -129,41 +141,52 @@
   transition:width .15s linear;
 }
 .dio-now{
-  margin:5px 0 3px; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin:5px 0 3px; font:var(--fs-10)/1.3 var(--mono);
   color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-height:12px;
 }
 
 /* ── Thanks (js/admin-thanks.js): the repositories the app is built on ─────── */
-.thx-body{ max-width:860px; }
-.thx-intro{ margin:0 0 14px; font:500 12px/1.5 var(--font); color:var(--muted); }
+.thx-body{ max-width:none; }   /* (phase V73 block 6) the whole width - it stopped at 860 */
+.thx-intro{ margin:0 0 14px; font:var(--fw-regular) var(--fs-12)/1.5 var(--font); color:var(--muted); }
 .thx-group{ margin:0 0 18px; }
 .thx-gh{ display:flex; align-items:baseline; gap:8px; margin:0 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
-.thx-gt{ font:700 10.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink); }
-.thx-gn{ font:600 10.5px/1.2 var(--font); color:var(--muted); }
+.thx-gt{ font:var(--fw-strong) var(--fs-12)/1.2 var(--font); color:var(--ink); }   /* (к17) sentence case */
+.thx-gn{ font:var(--fw-regular) var(--fs-11)/1.2 var(--mono); color:var(--muted); }
 .thx-row{ padding:7px 0 8px; border-bottom:1px solid var(--border-soft); }
 .thx-row:last-child{ border-bottom:0; }
 .thx-top{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
-.thx-name{ font:700 12.5px/1.3 var(--font); color:var(--ink); text-decoration:none; }
+.thx-name{ font:var(--fw-strong) var(--fs-12)/1.3 var(--font); color:var(--ink); text-decoration:none; }
 .thx-name:hover{ color:var(--ink); text-decoration:underline; }
-.thx-lic{ font:600 10px/1.3 var(--font); color:var(--muted); padding:1px 6px; border:1px solid var(--border); border-radius:999px; }
+.thx-lic{ font:var(--fw-regular) var(--fs-11)/1.3 var(--font); color:var(--faint); }   /* (phase V73 block 6) the licence as quiet text, not a pill */
 /* The group an entry belongs to, pale on its line: the list itself is one A-Z (phase S5). */
-.thx-grp{ margin-left:auto; font:600 9.5px/1.3 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted); opacity:.7; }
-.thx-what{ margin-top:3px; font:600 11.5px/1.45 var(--font); color:var(--ink); }
-.thx-how{ margin-top:2px; font:500 11.5px/1.5 var(--font); color:var(--muted); }
+.thx-grp{ margin-left:auto; font:var(--fw-regular) var(--fs-10)/1.3 var(--font); color:var(--faint); }
+.thx-what{ margin-top:3px; font:var(--fw-medium) var(--fs-11)/1.45 var(--font); color:var(--ink); }
+.thx-how{ margin-top:2px; font:var(--fw-regular) var(--fs-11)/1.5 var(--font); color:var(--muted); }
 
 /* ── AI settings (phase V25, js/admin-ai.js): what the agents are, then their ladder ─────────────────────────────
    One line per step: its number, the aggregator, the model, why it is stepped over when it is, the arrows and the
    minus. A step on an aggregator that cannot be asked is outlined in danger. */
-.ai-say p{ margin:0 0 7px; font:500 11.5px/1.5 var(--font); color:var(--muted); }
-.ai-say b{ color:var(--ink); font-weight:600; }
+.ai-say p{ margin:0 0 7px; font:var(--fw-regular) var(--fs-11)/1.5 var(--font); color:var(--muted); }
+.ai-say b{ color:var(--ink); font-weight:var(--fw-medium); }
+/* (phase V73 block 6) one line, the four paragraphs under "How it works" */
+.ai-say > .ai-line{ margin:0 0 6px; color:var(--ink); font-size:var(--fs-12); }
+.ai-how{ margin:0 0 10px; }
+.ai-how > summary{ width:max-content; cursor:pointer; color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); }
+.ai-how > summary:hover{ color:var(--ink); }
+.ai-how[open] > summary{ margin-bottom:6px; color:var(--ink); }
+/* ▲ ▼ − as Lucide's arrow-up, arrow-down and minus, drawn in the text's colour */
+.ai-ico::before{ content:''; display:block; width:14px; height:14px; background:currentColor; -webkit-mask:var(--ai-ico) center / contain no-repeat; mask:var(--ai-ico) center / contain no-repeat; }
+.ai-ico.is-up{ --ai-ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 7-7 7 7'/%3E%3Cpath d='M12 19V5'/%3E%3C/svg%3E"); }
+.ai-ico.is-down{ --ai-ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14'/%3E%3Cpath d='m19 12-7 7-7-7'/%3E%3C/svg%3E"); }
+.ai-ico.is-minus{ --ai-ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E"); }
 .ai-ladder{ display:flex; flex-direction:column; gap:5px; }
 .ai-rung{
   display:flex; align-items:center; gap:7px; padding:6px 9px;
   border:1px solid var(--border-soft); border-radius:8px;
 }
 .ai-rung.is-off{ border-color:oklch(from var(--danger) l c h / .55); }
-.ai-no{ flex:0 0 18px; font:700 11px var(--font); color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.ai-no{ flex:0 0 18px; font:var(--fw-medium) var(--fs-11) var(--mono); color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
 .ai-prov{ flex:0 0 200px; }
 .ai-model{ flex:0 0 170px; }
-.ai-off{ flex:1 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--danger); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-off{ flex:1 1 auto; min-width:0; font:var(--fw-medium) var(--fs-10)/1.3 var(--font); color:var(--danger); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ai-mini{ flex:0 0 auto; }

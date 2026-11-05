@@ -203,3 +203,89 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-failed .sv3-toast-mark{ color:var(--danger) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-error .sv3-toast-mark{ color:var(--on-danger); background:var(--danger-fill) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast-n{ color:var(--on-danger); background:var(--danger-fill) }
+
+/* ── Phase V73 block 6: the strip's right end and the Alerts menu ─────────────────────────────────────────────────────
+   Every page but the 3D Studio's (the same guard as above; js/app-nav.js and js/alerts-bell.js add nothing there).
+   - Alerts and Admin: an icon and a word.
+   - "Updated", the wait and Alerts' count: ONE label form - a small rounded square, its figures in mono (the wait no longer
+     changes its width every second); the count is the shared `.u-count`'s look.
+   - The menu: a head "Alerts" with a quiet "Clear"; a row's kind an icon (its word under the pointer), its time in mono,
+     "open" / "retry" quiet buttons. */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts{ display:inline-flex; align-items:center; gap:6px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico .u-ico,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts .u-ico{ color:currentColor }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd{
+  display:inline-flex; align-items:center; height:22px; padding:0 var(--sp-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:none; font:var(--fw-medium) var(--fs-11)/1 var(--font); letter-spacing:0 }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait{ color:var(--muted) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait .u-mono{ font-size:var(--fs-11) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-running .sv3-al-count{
+  display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 5px; border-radius:var(--r-2xs);
+  font:var(--fw-medium) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-done::after{ top:3px; right:3px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-head{ height:40px; padding:0 var(--sp-1) 0 var(--sp-3); border-bottom-color:var(--border-soft) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-h{ color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row{ gap:var(--sp-2); padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-linked:hover{ background:var(--hover) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-failed{ background:var(--danger-soft) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-mark{ display:flex; align-items:center; justify-content:center; width:16px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-failed .sv3-al-mark{ color:var(--danger) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-title{ font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-where{ font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-where.is-stage{ color:var(--ink) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state{ color:var(--faint); font:var(--fw-regular) var(--fs-11)/1 var(--font) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state .u-mono{ font-size:var(--fs-11) }
+
+/* ── THE RENDER QUEUE (moved from css/merge-v3.css in phase V73 block 6, the owner's (б6-1) б): its button stands in the top
+   strip of every page but the 3D Studio's (js/app-nav.js _queueButton; Merge's markup has its own), its panel is
+   js/merge-v3/queue.js. The rules as they were. ── */
+#mv3-queue{position:relative}
+/* The badge counts what is still to happen. Red because it is a claim on attention: work is
+   sitting there unfinished. */
+.mv3-qbadge{
+  position:absolute; top:-5px; right:-6px; min-width:15px; height:15px; padding:0 4px;
+  display:grid; place-items:center; border-radius:var(--pill);
+  background:var(--surface-3); color:var(--ink); font:700 9px/1 var(--font);
+}
+/* (phase V73 block 4, (б4-6) а) A panel at its button, not a window: the frame's edges (`u-win is-float` - its radius, hairline
+   and the one shadow), its head row (`u-win-head`: the title, Render all, the quiet Clear, the ✕), no backdrop. */
+.mv3-qpop{ position:fixed; z-index:9400; width:460px; max-height:min(60vh,420px); overflow:auto }
+.mv3-qhead{ position:sticky; top:0; z-index:1 }
+.mv3-qlist{padding:4px}
+/* Taller than a line, because a row now carries what the project is MADE of - two projects
+   named after the same date are told apart by their contents, not their titles. */
+.mv3-qrow{
+  display:flex; align-items:flex-start; gap:8px; padding:8px 7px;
+  border-bottom:1px solid var(--border-soft); font:11px var(--font);
+}
+.mv3-qrow-m{flex:1; min-width:0}
+.mv3-qrow-top{display:flex; align-items:baseline; gap:8px}
+.mv3-qrow-sub{margin-top:2px; font:10px var(--font); color:var(--muted)}
+.mv3-qrow-e{margin-top:3px; font:10px/1.4 var(--font); color:var(--danger)}
+/* The encoder's progress, under the row it is working on. Indeterminate while a phase reports
+   no seconds (preparing clips, the speed pass): a moving stripe rather than a bar stuck at 0. */
+.mv3-qbar{margin-top:5px; height:3px; border-radius:2px; background:var(--surface-2); overflow:hidden}
+.mv3-qbar > i{display:block; height:100%; width:0; background:var(--muted); transition:width .4s var(--ease)}
+.mv3-qbar.is-indet > i{width:28%; animation:mv3-qslide 1.1s linear infinite}
+@keyframes mv3-qslide{from{transform:translateX(-100%)} to{transform:translateX(360%)}}
+.mv3-qrow-acts{flex:0 0 auto; display:flex; align-items:center; gap:4px}
+
+.mv3-qrow:last-child{border-bottom:0}
+.mv3-qrow-t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
+.mv3-qrow-s{flex:0 0 auto; font-size:10px; color:var(--muted)}
+.mv3-qrow.is-running .mv3-qrow-s{color:var(--ink)}
+.mv3-qrow.is-done .mv3-qrow-s{color:var(--success)}
+.mv3-qrow.is-failed .mv3-qrow-s{color:var(--danger)}
+.mv3-qrow-a{flex:0 0 auto}
+/* (phase V73 block 2) The panel's buttons are the shared part (`.u-btn.is-s`); "Render all" its gold one. */
+/* (phase V33.4) A highlights project: one row that opens on its fragments' rows, set in under it. */
+.mv3-qgrp-row{cursor:pointer}
+.mv3-qgrp-row:hover .mv3-qrow-t{color:var(--ink)}
+.mv3-qgrp-kids{margin-left:14px; border-left:2px solid var(--border-soft); border-bottom:1px solid var(--border-soft)}
+.mv3-qgrp:last-child .mv3-qgrp-kids, .mv3-qgrp:last-child > .mv3-qgrp-row:last-child{border-bottom:0}
+/* The clear question sits INSIDE the panel rather than over it: it is about this list, and a
+   dialogue that covered the list would hide the very thing being asked about. */
+.mv3-qask{ width:auto; margin:6px }   /* the shared question (.u-ask), in the list */
+.mv3-qask-r{ flex-wrap:wrap }

@@ -16,6 +16,9 @@
      select cannot show a category name. */
   --card-w:78px; --card-h:139px; --card-total:181px;
 }
+/* (phase V73 block 6) Media's tiles are of TWO shapes, larger: 9:16 (a clip, a picture) and a square (a sound, a track, a product, a
+   wide video, a saved text) - five sizes before. The box is inside the card's 1px border. */
+.lib-grid, .lib-rstrip{ --card-w:100px; --card-h:174px; }
 /* One ratio cannot fit every shelf — measured from the real thumbnails: character sheets
    and looks are 16:9, lookbooks are square, environments are mixed, clips are 9:16. A card
    shaped against its content crops the subject out, so each shelf sets its own. */
@@ -29,7 +32,9 @@
    row until they all fitted: the 16:9 sheet kept its height and the name and the counts slid under
    the bottom edge. max-content rows keep the whole tile, and the shelf scrolls instead. */
 .lib-grid.is-characters{
-  grid-template-columns:repeat(6, minmax(0, 1fr));
+  /* (phase V73 block 6) columns by the width, not six always: the column of the selected one stands beside the grid on
+     this shelf whatever is selected, so the count does not jump */
+  grid-template-columns:repeat(auto-fill, minmax(168px, 1fr));
   grid-auto-rows:max-content;
   --card-total:auto;
 }
@@ -44,76 +49,85 @@
 .lib-grid.is-characters .lib-name{
   white-space:normal; overflow-wrap:anywhere;
   display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
-  height:calc(2.5em + 6px);
+  height:calc(2.6em + 8px);   /* two lines of the 11 px name and its padding */
 }
 
 /* ── Card hover controls ────────────────────────────────────────────────────
    The star top left, the cross top right, both over the thumbnail. Hidden until the
    card is hovered so 218 cards are not 436 buttons of visual noise — except a star
    that is ON, which is the whole point of having starred it. */
+/* (phase V73 block 6) ★ and ✕ are Merge's gallery's: the shared on-picture part (.u-onpic, js/library/main.js) at 20 px with Lucide's
+   icons at 12 - shown on the tile under the pointer AND on the selected one; a star that is on always. */
 .lib-star, .lib-x{
-  position:absolute; top:2px; z-index:2;
-  width:17px; height:17px; padding:0; border:0; border-radius:50%;
-  background:var(--scrim); color:var(--on-media);
-  font-size:10px; line-height:17px; text-align:center; cursor:pointer;
-  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+  position:absolute; top:4px; z-index:2;
+  opacity:0; transition:opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
 }
-.lib-star{ left:2px; }
-.lib-x{ right:2px; }
-.lib-card:hover .lib-star,
-.lib-card:hover .lib-x{ opacity:1; }
-.lib-star:hover{ background:var(--scrim-strong); color:var(--on-media); }
-.lib-x:hover{ background:var(--danger); }
-.lib-card.fav .lib-star{ opacity:1; color:var(--on-media); }
-.lib-card.fav .lib-star:hover{ color:var(--on-media); }
+.lib-star.u-onpic, .lib-x.u-onpic{ width:20px; height:20px; border-radius:var(--r-xs); --x-size:12px; }
+.lib-x.u-onpic.is-armed{ width:auto; }
+.lib-star{ left:4px; }
+.lib-x{ right:4px; }
+.lib-card:hover .lib-star, .lib-card:hover .lib-x,
+.lib-card.cur .lib-star, .lib-card.cur .lib-x,
+.lib-star:focus-visible, .lib-x:focus-visible, .lib-x.is-armed{ opacity:1; }
+.lib-card.fav .lib-star{ opacity:1; }
 .lib-star[disabled]{ cursor:default; }
 
 /* ── Card category dropdown ─────────────────────────────────────────────────
    Second line, under the name. Sized so the text is not clipped — a select that
    crops its own value is worse than no select. */
+/* (phase V73 block 6) quieter: a line of text with a chevron, not a field - a step of the background under the pointer. */
 .lib-cat-sel{
-  display:block; width:calc(100% - 8px); margin:0 4px 4px; height:22px;
-  padding:0 3px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:600 10px/20px var(--font); cursor:pointer;
+  display:block; width:calc(100% - 8px); margin:0 4px 4px; height:20px;
+  padding:0 16px 0 2px; border:0; border-radius:var(--r-2xs); appearance:none;
+  background:transparent no-repeat right 2px center / 10px 10px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  color:var(--faint); font:var(--fw-regular) var(--fs-10)/20px var(--font); cursor:pointer;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.lib-cat-sel:hover{ color:var(--ink); border-color:var(--border-soft); }
+.lib-cat-sel:hover{ color:var(--ink); background-color:var(--hover); }
 
-.lib-body{ display:flex; flex:1 1 auto; min-height:0; }
+/* (phase V73 block 6) THE PAGE'S ZONES ARE PANELS on the dark base (к15), as Merge's (block 5): the shelves and the shelf itself,
+   6 px apart; the bar is the shelf's head; the tree and the column of the selected one lie inside it, a hairline apart. */
+.lib-body{ display:flex; flex:1 1 auto; min-height:0; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); }
 /* The main column MUST be a bounded flex column, or the grid inside it grows instead of
    scrolling — which is exactly what happened: the page had no vertical scrollbar and
    everything past the first screen was unreachable. */
-.lib-main{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0; }
+.lib-main{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel); overflow:hidden; }
 
 /* ── Shelves ───────────────────────────────────────────────────────────────── */
 .lib-shelves{
   flex:0 0 176px; display:flex; flex-direction:column; gap:2px;
-  padding:10px 8px; background:var(--surface); border-right:1px solid var(--border);
+  padding:var(--sp-2); background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel);
   overflow-y:auto;
 }
+/* (phase V73 block 6) rows of 32 px; the current one a step of the background and a mark at its left - not a second lit plate */
 .lib-shelf{
-  display:flex; align-items:center; gap:8px; width:100%;
-  padding:7px 10px; border:1px solid transparent; border-radius:var(--r-xs);
+  position:relative; flex:0 0 auto; display:flex; align-items:center; gap:8px; width:100%; height:32px;
+  padding:0 10px; border:0; border-radius:var(--r-xs);
   background:transparent; color:var(--muted);
-  font:600 12px/1.2 var(--font); text-align:left; cursor:pointer;
-  transition:.12s var(--ease);
+  font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); text-align:left; cursor:pointer;
+  transition:background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
-.lib-shelf:hover{ color:var(--ink); background:var(--surface-2); }
-.lib-shelf.cur{ color:var(--ink); background:var(--sel-bg); border-color:var(--sel-line); }
-/* The count sits right-aligned and stays quiet: it is context, not a control. */
+.lib-shelf:hover{ color:var(--ink); background:var(--hover); }
+.lib-shelf.cur{ color:var(--ink); background:var(--sel-bg); }
+.lib-shelf.cur::before{ content:''; position:absolute; left:0; top:8px; bottom:8px; width:2px; border-radius:2px; background:var(--ink); }
+/* The count sits right-aligned and stays quiet: it is context, not a control. In mono. */
 .lib-shelf .lib-n{
-  margin-left:auto; font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums;
-  color:inherit; opacity:.65;
+  margin-left:auto; font:var(--fw-regular) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums;
+  color:var(--faint);
 }
 
 /* ── Filter bar ────────────────────────────────────────────────────────────── */
+/* (phase V73 block 6) the shelf's head, 40 px: its action at the left, the path and the state in the middle, bringing in at the right,
+   the checks in "⋯" at the end */
 .lib-bar{
-  display:flex; align-items:center; gap:8px; flex:0 0 auto; min-height:38px;
-  padding:6px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px; flex:0 0 auto; height:40px;
+  padding:0 var(--sp-2) 0 var(--sp-3); background:none; border-bottom:1px solid var(--border-soft);
 }
 .lib-bar .sp{ flex:1; }
-.lib-status{ font-size:11px; color:var(--muted); }
-.lib-status.err{ color:var(--danger); }
+.lib-status{ flex:0 1 auto; min-width:0; }   /* the shared status line (.u-status.is-line) */
+.lib-svc{ display:none !important; }   /* the checks' own buttons: the rows of "⋯" */
 
 /* ── The grid, and the right column about the selected tile (phase B) ──────────
    The column is a third of the width and ONE scroller - its body - so the picture, the voices and
@@ -122,14 +136,16 @@
 .lib-split{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
 /* (phase V28.5) Media's media tree on the right of the grid, a sash between (js/library/main.js _wireTreeSash). */
 .lib-tree-sash{
-  flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:var(--border);
-  transition:background .12s var(--ease);
+  flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:transparent;
 }
+/* (phase V73 block 6) inside the panel the sash is a hairline, its handle under the pointer */
+.lib-tree-sash::before{ content:''; position:absolute; top:0; bottom:0; left:2px; width:1px; background:var(--border-soft); }
+.lib-tree-sash:hover::before{ background:var(--border); }
 .lib-tree-sash::after{
   content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
   border-radius:2px; background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
 }
-.lib-tree-sash:hover{ background:var(--border); }
+.lib-tree-sash:hover{ background:transparent; }
 .lib-tree-sash:hover::after{ opacity:1; }
 .lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
 body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
@@ -146,11 +162,12 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-sc-draft[hidden]{ display:none; }
 .lib-info{
   flex:0 0 33.333%; min-width:0; display:flex; flex-direction:column;
-  border-left:1px solid var(--border); background:var(--surface);
+  border-left:1px solid var(--border-soft); background:var(--surface);
 }
+/* (phase V73 block 6) the column's head: the selected one's name, 13 px in sentence case (к17) */
 .lib-info-head{
-  flex:0 0 auto; padding:7px 12px; border-bottom:1px solid var(--border);
-  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  flex:0 0 auto; height:40px; line-height:40px; padding:0 var(--sp-4); border-bottom:1px solid var(--border-soft);
+  font:var(--fw-medium) var(--fs-13)/40px var(--font); color:var(--ink);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .lib-info-body{ flex:1 1 auto; min-height:0; overflow-y:auto; }
@@ -171,24 +188,25 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   display:flex; align-items:center; gap:8px; padding:6px 12px;
   border-bottom:1px solid var(--border-soft);
 }
-.lib-info-voice.is-main .lib-vname{ color:var(--gold); }
+/* (phase V73 block 6) (б1-18) the main voice is said by a neutral label "Main", not gold; it and the others' star stand in one column */
 .lib-info-main{
-  flex:0 0 auto; padding:1px 5px; border:1px solid var(--gold); border-radius:var(--r-xs);
-  font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--gold);
+  flex:0 0 40px; box-sizing:border-box; height:18px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:var(--r-2xs);
+  font:var(--fw-medium) var(--fs-10)/1 var(--font); color:var(--muted);
 }
 /* A character's gender, a press away, and its voices with the ways to change them (phase H7,
    js/library/char-voices.js). */
 .lib-cv-gender{ display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border-soft); }
-.lib-cv-l{ flex:0 0 auto; margin-right:4px; font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.lib-cv-l{ flex:0 0 auto; margin-right:4px; font:var(--fw-medium) var(--fs-10)/1 var(--font); color:var(--muted); }
 .lib-cv-g.is-on{ cursor:default; }   /* the shared chip (.u-chip) */
 .lib-cv-row{ position:relative; }
 .lib-cv-star{ flex:0 0 auto; }
-.lib-cv-star.u-btn{ width:20px; height:20px; font-size:13px; line-height:1; color:var(--faint); }   /* not the main voice: a dim star */
+.lib-cv-star.u-btn{ width:20px; height:20px; margin:0 10px; color:var(--faint); }   /* in the column of "Main" */   /* not the main voice: a dim star */
 .lib-cv-x{ flex:0 0 auto; opacity:0; transition:opacity var(--dur-1) var(--ease); }   /* the shared ✕ that takes out, on the row's hover */
 .lib-cv-row:hover .lib-cv-x, .lib-cv-x:focus-visible{ opacity:1; }
 /* The status line is also the host of a countdown row, which lies over it. */
 .lib-cv-stat{ position:relative; min-height:26px; display:flex; align-items:center; padding:4px 12px; }
-.lib-cv-stat-t{ font:600 10px var(--font); color:var(--muted); }
+.lib-cv-stat-t{ font:var(--fw-medium) var(--fs-10) var(--font); color:var(--muted); }
 .lib-cv-stat-t.ok{ color:var(--success); }
 .lib-cv-stat-t.err{ color:var(--danger); }
 .lib-cv-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; padding:8px 12px; }
@@ -197,7 +215,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-cv-go{ margin-left:auto; }
 .lib-cv-take{ flex:0 0 auto; }
 .lib-cv-pager{ display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; }
-.lib-cv-at{ font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums; }
+.lib-cv-at{ font:var(--fw-regular) var(--fs-10) var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
 .lib-info-looks{
   --card-w:120px; --card-h:68px; --card-total:86px;
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content;
@@ -213,7 +231,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-info-text{ padding:8px 12px 2px; font-size:11px; line-height:1.5; color:var(--ink); }
 .lib-info-text b{
   display:block; margin-bottom:2px;
-  font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+  font:var(--fw-medium) var(--fs-10)/var(--lh-10) var(--font); color:var(--muted);
 }
 .lib-info-text.is-none{ color:var(--muted); }
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
@@ -264,7 +282,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-broken-tag{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  font-size:8.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  font:var(--fw-medium) var(--fs-9)/1.2 var(--font);
   color:var(--danger); background:var(--scrim);
   border:1px solid var(--danger); border-radius:4px; padding:2px 5px;
   pointer-events:none; white-space:nowrap;
@@ -277,7 +295,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-snd{ font-size:26px; line-height:1; color:var(--muted); pointer-events:none; }
 .lib-snd-dur{
-  position:absolute; left:5px; bottom:4px; font-size:9px; color:var(--muted);
+  position:absolute; left:5px; bottom:4px; font:var(--fw-regular) var(--fs-9)/1 var(--mono); color:var(--muted);
   font-variant-numeric:tabular-nums; pointer-events:none;
 }
 .lib-card.is-playing{ border-color:var(--sel-line); }   /* (б1-17) the playing sound: the selected look */
@@ -288,13 +306,13 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-hid{
   display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
   background:var(--surface-2); color:var(--muted);
-  font:700 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing:.03em; vertical-align:1px;
+  font:var(--fw-medium) var(--fs-9)/1.2 var(--mono);
+  vertical-align:1px;
 }
 .lib-hid.is-used{ background:color-mix(in oklch, var(--success) 70%, black); color:var(--on-media); }
 /* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{
-  padding:3px 5px; font-size:9.5px; line-height:1.25; color:var(--muted);
+  padding:4px 6px; font-size:var(--fs-11); line-height:1.3; color:var(--muted);   /* (phase V73 block 6) 11 px - it was 9.5 */
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 /* THE SELECTED TILE (phase B2, the owner 2026-09-29): gold, three pixels, drawn OVER the picture -
@@ -309,7 +327,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-card.cur .lib-name{ color:var(--ink); }
 /* A character card carries its own counts: looks, and whether a voice is set. */
 .lib-sub{
-  display:flex; gap:5px; padding:0 5px 4px; font-size:9px; color:var(--muted); opacity:.8;
+  display:flex; gap:5px; padding:0 6px 5px; font-size:var(--fs-10); color:var(--muted);
 }
 /* (phase V73 block 2) An empty shelf, folder or filter - and a shelf that did not load (js/library/main.js _shelfFailed) - are
    the shared parts .u-empty / .u-failed (css/app-shell.css, js/ui-state.js); this keeps only where they sit: the whole row
@@ -336,9 +354,10 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
    name, a set of tags and our own demo, which is a ROW. The grid's card columns are
    switched off here and the side pane becomes a permanent info column. */
 .lib-grid.is-voices{ display:flex; flex-direction:column; gap:4px; }
+/* (phase V73 block 6) Voices, Scenarios and Renders: rows of one height (48 px), weights 500 / 600 */
 .lib-vrow{
-  flex:0 0 auto; position:relative;
-  display:flex; align-items:center; gap:8px; padding:6px 26px 6px 8px;
+  flex:0 0 auto; position:relative; min-height:48px; box-sizing:border-box;
+  display:flex; align-items:center; gap:8px; padding:6px 30px 6px 10px;
   border:1px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface); cursor:pointer; transition:.12s var(--ease);
 }
@@ -348,13 +367,13 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 /* Fixed width, not padding: the label swaps between a one-character play sign and a
    two-character pause one, and padding would nudge the row every time one starts. */
 .lib-vplay{ flex:0 0 27px; }
-.lib-vplay.u-btn{ width:27px; font-size:10.5px; }   /* a fixed width: play and pause do not move the row */
+.lib-vplay.u-btn{ width:24px; }   /* a fixed width: play and pause do not move the row */
 .lib-vplay.is-playing{ border-color:var(--sel-line); }
 .lib-vtxt{ flex:1 1 auto; min-width:0; }
-.lib-vname{ font:600 11px var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.lib-vsub{ font-size:9.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lib-vname{ font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lib-vsub{ font-size:var(--fs-10); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lib-vuse{
-  flex:0 1 auto; max-width:34%; font-size:9.5px; color:var(--ink); opacity:.85;
+  flex:0 1 auto; max-width:34%; font-size:var(--fs-10); color:var(--ink); opacity:.85;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .lib-vuse.is-free{ color:var(--muted); opacity:.7; }
@@ -375,11 +394,13 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-vi{ display:flex; flex-direction:column; gap:3px; padding:10px 12px; }
 .lib-vi-row{ display:flex; gap:8px; align-items:baseline; font-size:10px; }
 .lib-vi-l{
-  flex:0 0 62px; font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em;
+  flex:0 0 62px; font:var(--fw-medium) var(--fs-10) var(--font);
   color:var(--muted);
 }
+/* (phase V73 block 6) the voice's facts are labelled in sentence case (к17): "Voice id", "Category" */
+.lib-vi-l::first-letter{ text-transform:uppercase; }
 .lib-vi-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-all; }
-.lib-vi-v.is-mono{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:9.5px; }
+.lib-vi-v.is-mono{ font-family:var(--mono); font-size:var(--fs-9); }
 .lib-vi-v.is-copy{ cursor:pointer; }
 .lib-vi-v.is-copy:hover{ color:var(--ink); }
 .lib-vi-v.is-warn{ color:var(--warn); }
@@ -387,7 +408,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-vi-sep, .lib-info-sec{
   padding:6px 12px; background:var(--surface-2);
   border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);
-  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted);   /* (phase V73 block 6) sentence case (к17) */
 }
 .lib-vi-none{ padding:10px 12px; font-size:10px; color:var(--muted); }
 /* The 4K sheets of whoever speaks with this voice, through the 20kB card variant of the
@@ -419,8 +440,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   display:flex; flex-direction:column; gap:4px; padding:10px;
 }
 .lib-srow{
-  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
-  padding:8px 10px; cursor:pointer;
+  display:flex; align-items:center; gap:12px; width:100%; min-height:48px; box-sizing:border-box; text-align:left;
+  padding:6px 10px; cursor:pointer;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   transition:.12s var(--ease);
 }
@@ -429,26 +450,26 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
    since phase V73 the selected look, not gold. */
 .lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* (б1-17) a step and a light line */
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.lib-srow-t{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+.lib-srow-t{ font-size:var(--fs-12); font-weight:var(--fw-medium); line-height:var(--lh-12); color:var(--ink); overflow-wrap:anywhere; }
 /* One line, clipped: the tail is for recognising a scenario, and a wrapped tail turns a list
    into paragraphs. */
 .lib-srow-s{
-  font-size:10.5px; color:var(--muted);
+  font-size:var(--fs-10); color:var(--muted);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .lib-srow-d{
-  flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
+  flex:0 0 auto; font:var(--fw-regular) var(--fs-10)/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums;
 }
 
 /* ── Renders: a row per project, opening a strip of its renders (phase V23) ───── */
 .lib-rgroup{ display:flex; flex-direction:column; gap:6px; }
 .lib-rhead{ font:inherit; }
-.lib-rcaret{ flex:0 0 auto; width:12px; color:var(--muted); transition:transform .12s var(--ease); }
+.lib-rcaret{ flex:0 0 auto; display:flex; width:14px; color:var(--muted); transition:transform .12s var(--ease); }
 .lib-rgroup.is-open .lib-rcaret{ transform:rotate(90deg); color:var(--ink); }
 .lib-rstrip{ display:none; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content; gap:8px; padding:2px 4px 10px 22px; align-content:start; justify-content:start; }
 .lib-rgroup.is-open .lib-rstrip{ display:grid; }
-.lib-rsub{ display:flex; gap:6px; font-variant-numeric:tabular-nums; }
-.lib-rlen{ color:var(--ink); font-weight:600; }
+.lib-rsub{ display:flex; gap:6px; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.lib-rlen{ color:var(--ink); font-weight:var(--fw-medium); }
 
 /* ── Scenarios: the selected one, in the right column (phase D5) ──────────────
    The title in the body at its own size - the column's head is upper case and cut to one line -
@@ -462,8 +483,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 /* (V38.7) The title with its line count and date beside it. */
 .lib-sc-top{ display:flex; align-items:baseline; gap:10px; padding:8px 12px 2px; }
 .lib-sc-top > .lib-sc-title{ flex:1 1 auto; min-width:0; padding:0; }
-.lib-sc-meta{ flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.lib-sc-title{ padding:10px 12px 2px; font-size:13px; font-weight:650; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
+.lib-sc-meta{ flex:0 0 auto; font:var(--fw-regular) var(--fs-10)/1.3 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
+.lib-sc-title{ padding:10px 12px 2px; font-size:13px; font-weight:var(--fw-strong); line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
 /* The scenario column is a column: its parts keep their height. */
 .lib-info-body.is-scenarios{ display:flex; flex-direction:column; }
 .lib-info-body.is-scenarios > *{ flex:0 0 auto; }
@@ -485,20 +506,23 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-job-say.err{ color:var(--danger); }
 
 /* A draft heading the Scenarios list: the tag says it is one and how far it got. */
+/* (phase V73 block 6) "Draft" and its stage: quiet text, not a pill */
 .lib-sc-tag{
-  flex:0 0 auto; padding:2px 7px; border-radius:var(--pill);
-  font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
-  color:var(--muted); background:var(--surface-2);
+  flex:0 0 auto;
+  font:var(--fw-medium) var(--fs-10)/1.3 var(--font);
+  color:var(--faint);
 }
-.lib-sc-tag.run{ color:var(--ink); background:var(--muted); }
+.lib-sc-tag.run{ color:var(--ink); }
 .lib-srow.is-draft{ border-style:dashed; }
 /* (phase V60, the owner's (пп6а)) THE ARCHIVE at the bottom of the list: a folded row "▸ Archive · N", the archived
    scenarios under it when it is open - paler; the selected one keeps its gold at full strength. */
-.lib-sc-arch{ width:100%; margin-top:6px; justify-content:flex-start; }   /* a quiet row (the shared part) */
-.lib-sc-arch-c{ font-size:9px; transition:transform .12s var(--ease); }
+/* (phase V73 block 6) the archive is a ROW of the list (48 px, its hairline), "Archive · N" with a chevron - not a button */
+.lib-sc-arch{ width:100%; height:48px; margin-top:4px; padding:0 10px; justify-content:flex-start; gap:8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); font-size:var(--fs-12); }
+.lib-sc-arch-c{ display:flex; transition:transform .12s var(--ease); }
 .lib-sc-arch.is-open .lib-sc-arch-c{ transform:rotate(90deg); }
 .lib-sc-arch.is-open{ color:var(--ink); }
-.lib-sc-arch-n{ font-weight:500; font-variant-numeric:tabular-nums; }
+.lib-sc-arch-n{ font-weight:500; font-family:var(--mono); font-size:var(--fs-11); font-variant-numeric:tabular-nums; }
 .lib-srow.is-archived:not(.cur){ opacity:.6; background:transparent; }
 .lib-srow.is-archived:not(.cur):hover{ opacity:.85; }
 
@@ -738,7 +762,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   flex:0 0 auto; width:30px; text-align:center; padding-top:3px;
   font-size:10px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums;
 }
-.mk-scene-n.is-hook{ font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink); }
+.mk-scene-n.is-hook{ font-size:var(--fs-9); color:var(--ink); }   /* (phase V73 block 6) "hook" in sentence case (к17) */
+.mk-scene-n.is-hook::first-letter{ text-transform:uppercase; }
 /* (V38.8, the owner: "сделай редактируемые строки сценария в темное поле. так будет видно что строки можно редактировать")
    A line's words in a dark field, as every field that takes typing - in the generator and on the shelf alike. */
 /* (phase V73 block 2) the shared dark field (.u-area.is-dark, (б2-14)); the lines keep their own height and spacing */
@@ -940,7 +965,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* A scenario kept in the list though the filters would hide it (it was opened on purpose). */
 .lib-srow.is-outside:not(.cur){ border-style:dashed; opacity:.8; }
 /* A character whose 4K sheet is still being made (phase H6). */
-.lib-sub-run{ color:var(--gold); font-weight:600; }
+.lib-sub-run{ color:var(--ink); font-weight:var(--fw-medium); }   /* (phase V73 block 6) work going on, not gold */
 /* The scenario column's fields and facts, two to a row (phases G4, G5): the name above, the value or
    its dropdown under it; a long one (a source's or a topic's name) takes the whole row. (V38.7) The fields three to a
    row, each name on the left of its dropdown, the names of one width so the dropdowns stand in line. */
@@ -951,7 +976,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-fields .lib-sc-fbtn{ flex:1 1 auto }
 .lib-sc-cell{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .lib-sc-cell.is-wide{ grid-column:1 / -1; }
-.lib-sc-cl{ font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.lib-sc-cl{ font:var(--fw-medium) var(--fs-10) var(--font); color:var(--muted); }   /* (phase V73 block 6) the column's labels in sentence case (к17) */
+.lib-sc-cl::first-letter{ text-transform:uppercase; }
 .lib-sc-cv{ font-size:10.5px; color:var(--ink); overflow-wrap:anywhere; }
 .lib-sc-fbtn{ display:flex; gap:6px; width:100%; min-width:0; text-align:left }
 .lib-sc-fbtn-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -983,11 +1009,11 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 
 /* (phase V35, the owner's (т1)) Sounds and tracks on Media are SQUARE cards - a grid of only them (js/library/main.js
    is-sound): the note, the wave and the length in a square, the name under it (and an own sound's category). */
-.lib-grid.is-sound{ --card-w:100px; --card-h:98px; }  /* the box inside the 1px border: a 100x100 card */
+.lib-grid.is-sound{ --card-w:132px; --card-h:130px; }  /* the box inside the 1px border: a square card (phase V73 block 6: one square size) */
 /* (phase V35, the owner's (т3)) REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
-.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }
+.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }   /* (phase V73 block 6, the owner's (b6-2) a) still 16:9, as (т3) - the whole frame */
 /* (phase V26.6) IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
-.lib-grid.is-whole{ --card-w:120px; --card-h:120px; }
+.lib-grid.is-whole{ --card-w:132px; --card-h:130px; }
 .lib-grid.is-whole .lib-thumb{ object-fit:contain; padding:4px; box-sizing:border-box; }
 /* The square of a sound: the note, its name (two lines at most) under it, the wave and the length at the bottom - laid out
    as Merge's sound tile is. */

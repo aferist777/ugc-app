@@ -6,7 +6,7 @@
    on is outlined while it hangs over it. */
 .mt{
   height:100%; overflow:auto; padding:4px 4px 10px; box-sizing:border-box;
-  font:500 11.5px/1.25 var(--font); color:var(--ink); user-select:none;
+  font:var(--fw-medium) var(--fs-11)/1.25 var(--font); color:var(--ink); user-select:none;   /* (phase V73 block 6, (б5-20)) on the scale */
 }
 .mt-row{
   position:relative; display:flex; align-items:center; gap:3px; min-height:28px; padding-right:4px;
@@ -16,15 +16,15 @@
 .mt-row.is-sel{background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line)}
 .mt-row.is-sel .mt-name{color:var(--ink); font-weight:600}
 .mt-row.is-sel::before{content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:2px; background:transparent}
-.mt-row.is-group .mt-name{font:700 10.5px/1.25 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.mt-row.is-group .mt-name{font:var(--fw-strong) var(--fs-10)/1.25 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}   /* the four roots keep their capitals - names, not labels */
 .mt-row.is-group.is-sel .mt-name{color:var(--ink)}
 .mt-row.is-empty{opacity:.42}
 .mt-row.is-empty:hover, .mt-row.is-empty.is-drop{opacity:.8}
 
 .mt-tw{
   flex:0 0 14px; width:14px; height:18px; padding:0; border:0; background:none; cursor:pointer;
-  color:var(--muted); font:400 9px/18px var(--font); text-align:center; transition:transform .12s var(--ease);
-}
+  display:flex; align-items:center; justify-content:center; color:var(--muted); transition:transform .12s var(--ease);
+}   /* (б5-20) Lucide's chevron, 12 px */
 .mt-tw.is-open{transform:rotate(90deg)}
 .mt-tw:hover{color:var(--ink)}
 .mt-tw[disabled]{cursor:default}
@@ -32,7 +32,7 @@
    on every row, so locks and buttons stand one under another. The other two trees ("Move to…", the folder column's
    dropdown) have the count after the name too and the lock at the right edge (.mtp-row). */
 .mt-name{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mt-n{flex:0 0 auto; color:var(--faint); font:var(--fw-regular) var(--fs-11)/1 var(--font); font-variant-numeric:tabular-nums; white-space:nowrap}
+.mt-n{flex:0 0 auto; color:var(--faint); font:var(--fw-regular) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}   /* (б5-20) mono, "(1,260)" */
 .mt-side{flex:0 0 auto; margin-left:auto; display:flex; align-items:center; gap:2px}
 .mt-lk{flex:0 0 16px; width:16px; display:flex; align-items:center; justify-content:center}
 .mt-bt{flex:0 0 64px; width:64px; display:flex; align-items:center; justify-content:flex-end}
@@ -88,12 +88,12 @@
 .mt-ftile{
   display:flex; align-items:center; gap:7px; min-width:0; height:38px; padding:0 9px 0 7px; box-sizing:border-box;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
-  font:600 11.5px/1.2 var(--font); text-align:left; cursor:pointer; transition:border-color .12s var(--ease), background .12s var(--ease);
+  font:var(--fw-medium) var(--fs-11)/1.2 var(--font); text-align:left; cursor:pointer; transition:border-color .12s var(--ease), background .12s var(--ease);
 }
 .mt-ftile:hover{border-color:var(--sel-line); background:var(--surface-3)}
 .mt-ficon{flex:0 0 auto; display:inline-flex; color:var(--muted)}
 .mt-fname{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mt-fn{flex:0 0 auto; color:var(--muted); font:500 10.5px/1 var(--font); font-variant-numeric:tabular-nums}
+.mt-fn{flex:0 0 auto; color:var(--muted); font:var(--fw-regular) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums}
 .mt-ftile.is-empty{opacity:.5}
 .mt-ftile.is-empty .mt-ficon{color:var(--muted)}
 .mt-ftile.is-empty:hover, .mt-ftile.is-empty.is-drop{opacity:.85}
@@ -102,7 +102,7 @@
 
 .mt-crumbs{
   display:flex; align-items:center; flex-wrap:wrap; gap:1px; min-width:0; margin:0 0 8px;
-  font:600 11px/1.2 var(--font); color:var(--muted); user-select:none;
+  font:var(--fw-medium) var(--fs-11)/1.2 var(--font); color:var(--muted); user-select:none;
 }
 .mt-crumb{
   padding:3px 5px; border:0; border-radius:var(--r-xs); background:none; color:var(--muted);
@@ -110,7 +110,7 @@
 }
 button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .mt-crumb.is-top{letter-spacing:.06em}
-.mt-crumb.is-here{color:var(--ink); font-weight:700; cursor:default}
+.mt-crumb.is-here{color:var(--ink); font-weight:var(--fw-strong); cursor:default}
 .mt-crumb.is-drop{outline:1px dashed var(--sel-line); outline-offset:-1px; background:var(--sel-bg); color:var(--ink)}
 .mt-crumb-sep{color:var(--muted); opacity:.55; padding:0 1px}
 
@@ -126,7 +126,7 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 }
 .mtp-row.is-place:not(.is-off):hover .mt-name, .mtp-row.is-newcat:hover .mt-name{color:var(--ink)}
 .mtp-row.is-newcat .mt-name{color:var(--muted)}
-.mtp-row.is-here .mt-name{color:var(--ink); font-weight:700}
+.mtp-row.is-here .mt-name{color:var(--ink); font-weight:var(--fw-strong)}
 .mtp-row.is-off .mt-name, .mtp-row.is-off .mt-n, .mtp-row.is-off .mt-lock{opacity:.4}
 .mtp-row.is-off:not([aria-expanded]){cursor:default}
 .mtp-row.is-off:not([aria-expanded]):hover{background:none}
@@ -139,7 +139,7 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 }
 .lib-card.is-picked::after, .mv3-tile.is-picked::after{
   content:'✓'; position:absolute; right:5px; bottom:5px; z-index:3; width:16px; height:16px; border-radius:50%;
-  background:var(--sel-ring); color:var(--on-fill); font:700 10px/16px var(--font); text-align:center; pointer-events:none;
+  background:var(--sel-ring); color:var(--on-fill); font:var(--fw-strong) var(--fs-10)/16px var(--font); text-align:center; pointer-events:none;
 }
 .ts-band{
   position:fixed; z-index:9000; pointer-events:none;

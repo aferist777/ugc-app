@@ -20,6 +20,10 @@ import { startInlineProgress } from '../progress.js';
 // shared part, a row
 import { ask } from '../ask.js';
 import { emptyEl } from '../ui-state.js';
+import { icon } from '../icons.js';
+
+// (phase V73 block 6, (к18)) play and pause as the interface's icons
+const PLAY = icon('play', 12), PAUSE = icon('pause', 12);
 
 const PAGE = 20;
 const GENDERS = ['female', 'male'];
@@ -46,7 +50,7 @@ const _send = (url, method, body) => _json(url, {
 let _audio = null, _playing = null;
 export function stop() {
   if (_audio) { try { _audio.pause(); } catch (e) { /* going anyway */ } }
-  if (_playing) { _playing.textContent = '▶'; _playing.classList.remove('is-playing'); }
+  if (_playing) { _playing.innerHTML = PLAY; _playing.classList.remove('is-playing'); }
   _audio = null; _playing = null;
 }
 function _play(src, btn) {
@@ -55,14 +59,15 @@ function _play(src, btn) {
   if (again || !src) return;
   const a = new Audio(src);
   _audio = a; _playing = btn;
-  btn.textContent = '❚❚';
+  btn.innerHTML = PAUSE;
   btn.classList.add('is-playing');
   const done = () => { if (_audio === a) stop(); };
   a.addEventListener('ended', done);
   a.play().catch(done);
 }
 function _playBtn(src, title) {
-  const b = _el('button', 'lib-vplay u-btn is-s is-icon', '▶');
+  const b = _el('button', 'lib-vplay u-btn is-s is-icon');
+  b.innerHTML = PLAY;
   b.type = 'button';
   b.disabled = !src;
   b.title = src ? title : 'There is nothing to play for this voice';
@@ -86,7 +91,7 @@ export function paint(body, it, voices, hooks) {
 
   // ── gender ──
   const gRow = _el('div', 'lib-cv-gender');
-  gRow.appendChild(_el('span', 'lib-cv-l', 'gender'));
+  gRow.appendChild(_el('span', 'lib-cv-l', 'Gender'));
   const gBtns = GENDERS.map(g => {
     const b = _el('button', 'lib-cv-g u-chip', g);
     b.type = 'button';
@@ -142,9 +147,11 @@ export function paint(body, it, voices, hooks) {
       txt.appendChild(_el('div', 'lib-vname', v.name || 'Not on the Voices shelf'));
       txt.appendChild(_el('div', 'lib-vsub', (v.tags || []).map(_pretty).join(' · ') || v.voiceId));
       row.appendChild(txt);
-      if (v.main) row.appendChild(_el('span', 'lib-info-main', 'main'));
+      // (phase V73, (б1-18)) the main voice: a neutral label "Main" in the column of the star, not gold
+      if (v.main) row.appendChild(_el('span', 'lib-info-main', 'Main'));
       else {
-        const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet', '★');
+        const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet');
+        star.innerHTML = icon('star', 14);
         star.type = 'button';
         star.title = 'Make this the voice every read uses';
         star.addEventListener('click', () => run('Setting the main voice…', async () => {

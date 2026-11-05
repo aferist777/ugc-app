@@ -16,6 +16,7 @@
 
 // (phase V73 block 2, step 2b) "no renders yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
+import { icon } from '../icons.js';
 
 const LS_OPEN = 'lib-renders-open';
 const NONE = '~none';
@@ -74,7 +75,7 @@ export function render(items, hooks) {
     const wrap = _el('div', 'lib-rgroup' + (open.has(g.key) ? ' is-open' : ''));
     const head = _el('button', 'lib-srow lib-rhead');
     head.type = 'button';
-    head.appendChild(_el('span', 'lib-rcaret', '▸'));
+    head.appendChild(_el('span', 'lib-rcaret')).innerHTML = icon('chevron-right', 14);   // (phase V73 block 6, (к18))
     const main = _el('div', 'lib-srow-main');
     main.appendChild(_el('div', 'lib-srow-t', g.title));
     const n = g.items.length;
