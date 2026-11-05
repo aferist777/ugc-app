@@ -988,8 +988,13 @@ async function _freshIndex() {
   const t = _t;
   if (!t || t.shapeOn) return;
   const nodes = (_o.tree.roots || []).map(k => t.tree.node(k)).filter(Boolean);
-  const idx = nodes.length ? await folderIndex(nodes, _o.tree.type, null, _o.tree.fit || null).catch(() => null) : null;
-  if (_t === t) t.index = idx;
+  let why = '';
+  t.reading = true;                                   // (2b-2) a search meanwhile waits, it is not told the folders failed
+  let idx = null;
+  try {
+    idx = nodes.length ? await folderIndex(nodes, _o.tree.type, null, _o.tree.fit || null).catch((e) => { why = (e && e.message) || ''; return null; }) : null;
+  } finally { t.reading = false; }
+  if (_t === t) { t.index = idx; t.indexError = idx ? '' : why; if (idx) t.indexSaid = false; }
 }
 
 // Where the window opens: on the thing it was opened on - its row, else its folder -, else the first of `start` that is
@@ -1143,6 +1148,35 @@ function _searchTree(now) {
     ++_seq;
     _st.loading = false;
     _st.failed = null;
+    // (phase V73 block 2, the owner's (2b-2) а) The folders not read in one go - a search needs them all: "The folders did not
+    // load" with Try again (which reads them again), the reason a popup once - not at every letter typed (б2-19).
+    // ...but while they are being read (again) it is only "Reading…" - no popup, no failure ((2b-2)): the read runs the search
+    // again when it is done.
+    if (!_t.index && _t.reading && !OLD_LOOK()) {
+      _st.items = [];
+      _st.why = '';
+      _st.loading = true;
+      _paintGrid();
+      return;
+    }
+    if (!_t.index && !OLD_LOOK()) {
+      const t = _t;
+      if (!t.indexSaid) { t.indexSaid = true; showError('The folders did not load', { detail: t.indexError || 'they could not be read in one go' }); }
+      _st.items = [];
+      _st.why = '';
+      _st.failed = { what: 'The folders', retry: async () => {
+        t.indexSaid = false;
+        _st.failed = null;
+        _st.loading = true;
+        _paintGrid();
+        await _freshIndex();
+        if (_t !== t || !_w) return;
+        _st.loading = false;
+        _searchTree(true);
+      } };
+      _paintGrid();
+      return;
+    }
     _st.items = _t.index ? filesUnder(n, _t.index).map(_itemOf).filter(Boolean) : [];
     _st.why = _t.index ? '' : 'the folders could not be read';
     _paintGrid();
@@ -1157,9 +1191,14 @@ async function _refreshTree(treeDone, land) {
   const t = _t;
   if (!t) return;
   _cache.clear();
-  if (!treeDone) { if (t.shapeOn) t.index = null; await t.tree.load(); }
-  if (!t.shapeOn) t.index = null;
-  await _freshIndex();
+  // (phase V73 block 2, (2b-2)) The folders are being read AGAIN: a search typed meanwhile waits ("Reading…") - nothing failed,
+  // the index is only not back yet. The `_openNode` at the end runs the search again once it is.
+  t.reading = true;
+  try {
+    if (!treeDone) { if (t.shapeOn) t.index = null; await t.tree.load(); }
+    if (!t.shapeOn) t.index = null;
+    await _freshIndex();
+  } finally { t.reading = false; }
   if (_t !== t || !_w) return;
   _paintRows();
   if (land && land.node && t.tree.node(land.node)) {
