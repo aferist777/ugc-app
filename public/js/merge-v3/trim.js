@@ -10,6 +10,8 @@
    sent to a model - is the caller's business, told through onChange and read through get().
    ════════════════════════════════════════════════════════════════════════════ */
 
+import { loadingEl } from '../ui-state.js';
+
 const MIN_LEN = 0.3;
 
 const _fmt = (t) => {
@@ -49,7 +51,8 @@ export function trimmer(video, opts) {
   let dur = 0, a = 0, b = 0, dragging = null;
 
   const paint = () => {
-    if (!(dur > 0)) { say.textContent = 'reading the clip…'; return; }
+    // (phase V73 block 2, step 2b) The turning icon with the line's words until the clip's length is known.
+    if (!(dur > 0)) { say.replaceChildren(loadingEl('reading the clip…', { line: true })); return; }
     const pa = (a / dur) * 100, pb = (b / dur) * 100;
     hIn.style.left = pa + '%';
     hOut.style.left = pb + '%';

@@ -30,6 +30,9 @@ import * as Layers from '../layers.js';
 import { twoPress } from '../really.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
 import { hoverPlayer } from './hover-play.js';
+// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const LS = 'mv3_vc_cat_v1';               // { filters, sort } - the window opens as it was left
 const SHOW_CASES = 240;                    // cases drawn at once; "show N more" for the rest
@@ -55,12 +58,29 @@ async function _load() {
     json('/api/mv3/video/catalog'), json('/api/mv3/video/catalog/cases'), json('/api/mv3/video/presets'),
   ]);
   _data = {
+    // (phase V73 block 2, (б2-19)) The catalog not read is not "the cookbook is not installed": its grid says "did not load".
+    failed: (cat && cat.success) ? '' : ((cat && cat.error) || 'the app did not answer'),
     cat: (cat && cat.success) ? cat : { templates: [], categories: [], tags: {}, examples: [], status: {}, credits: {} },
     cases: (cases && cases.success) ? cases.cases : [],
     why: (cases && cases.success) ? cases.why : 'the catalog could not be read',
     presets: (presets && presets.success) ? presets.presets : [],
     deleted: (presets && presets.success) ? presets.deleted || [] : [],
   };
+}
+
+// The catalog read, and said in the corner when it could not be.
+async function _loadSaid() {
+  await _load();
+  if (_data.failed) showError('The catalog did not load: ' + _data.failed);
+}
+async function _reread() {
+  if (!_w) return;
+  _w.grid.replaceChildren(loadingEl('reading the catalog…'));
+  await _loadSaid();
+  if (!_w) return;
+  _paintLeft();
+  _paintGrid();
+  _paintRight();
 }
 
 // ── The model ───────────────────────────────────────────────────────────────
@@ -267,8 +287,8 @@ export async function openCatalog(o) {
   if (inUse && /^case:/.test(inUse)) _st.more = true;
   _build();
   _paintLeft();
-  _w.grid.appendChild(el('div', 'vc-note', 'reading the catalog…'));
-  await _load();
+  _w.grid.appendChild(loadingEl('reading the catalog…'));
+  await _loadSaid();
   if (!_w) return;
   _paintLeft();
   _paintGrid();
@@ -291,7 +311,7 @@ async function _fetch() {
   if (!_w) return;
   _st.fetching = false;
   if (!d || !d.success) _st.error = (d && d.error) || 'the server did not answer';
-  else { _full.clear(); await _load(); }
+  else { _full.clear(); await _loadSaid(); }
   if (!_w) return;
   _paintLeft();
   _paintGrid();
@@ -611,6 +631,7 @@ function _paintGrid(keep = true) {
   const G = _w.grid;
   const top = keep ? G.scrollTop : 0;
   G.textContent = '';
+  if (_data.failed) { G.appendChild(failedEl('The catalog', () => _reread())); return; }
   const m = _model();
   const groups = _groups(m);
   const all = _items().filter(it => _fits(it, m));
@@ -672,7 +693,7 @@ function _paintGrid(keep = true) {
   }
   _section(G, 'Examples', by('example'), all.filter(it => it.kind === 'example').length, 'Grok b-roll prompts picked by hand: the writer takes one as an example.');
   _section(G, 'Presets', by('preset'), all.filter(it => it.kind === 'preset').length, 'Yours: the samples that came with the program and your copies of them.');
-  if (!shown.length && all.length) G.appendChild(el('div', 'vc-note', 'Nothing fits these filters.'));
+  if (!shown.length && all.length) G.appendChild(emptyEl('Nothing fits these filters.', { icon: 'search' }));
   if ((_data.deleted || []).length) {
     const n = el('div', 'vc-note vc-deleted');
     n.append('Deleted samples: ');
@@ -858,7 +879,7 @@ function _presetTools(it, ed) {
   det.appendChild(list);
   det.addEventListener('toggle', async () => {
     if (!det.open || list.childNodes.length) return;
-    list.appendChild(el('div', 'vc-none', 'reading…'));
+    list.appendChild(loadingEl('reading…', { line: true }));
     const d = await json('/api/mv3/video/presets/' + encodeURIComponent(p.id));
     list.textContent = '';
     for (const v of ((d && d.success && d.versions) || []).slice().reverse()) {
@@ -892,11 +913,16 @@ async function _paintRight() {
   const it = _items().find(x => _key(x) === want);
   if (!it) { _st.pick = null; _paintRight(); return; }
   R.textContent = '';
-  R.appendChild(el('div', 'vc-note', 'reading…'));
+  R.appendChild(loadingEl('reading…', { line: true }));
   const d = await _read(it);
   if (!_w || _st.pick !== want) return;
   R.textContent = '';
-  if (!d) { R.appendChild(el('div', 'vc-note', 'It could not be read.')); return; }
+  // (phase V73 block 2, (б2-19)) Not read: "did not load" with Try again, the words a popup.
+  if (!d) {
+    showError('It could not be read.', { detail: it.title || it.id || '' });
+    R.appendChild(failedEl(KIND_WORD[it.kind] || 'It', () => _paintRight(), { line: true }));
+    return;
+  }
   const m = _model();
   const ed = _edit(it, d);
   const scroll = el('div', 'vc-right-in');
@@ -1028,7 +1054,7 @@ function _slotsBox(it, ed) {
   const box = el('div', 'vc-slots');
   const paint = () => {
     box.textContent = '';
-    if (!ed.slots.length) box.appendChild(el('div', 'vc-none', 'nothing - words alone'));
+    if (!ed.slots.length) box.appendChild(emptyEl('nothing - words alone', { line: true }));
     ed.slots.forEach((s, i) => {
       const row = el('div', 'vc-slot');
       const kind = document.createElement('select');
@@ -1080,7 +1106,7 @@ function _casesOf(t) {
   const box = el('div', 'vc-cases');
   const list = (t.cases || []);
   box.appendChild(el('div', 'vc-hdr', 'its cases - ' + list.length));
-  if (!list.length) { box.appendChild(el('div', 'vc-none', _data.cases.length ? 'none filed under it' : 'the cases are not fetched yet')); return box; }
+  if (!list.length) { box.appendChild(emptyEl(_data.cases.length ? 'none filed under it' : 'the cases are not fetched yet', { line: true })); return box; }
   const byId = new Map(_data.cases.map(c => [c.s, c]));
   for (const s of list.slice(0, 40)) {
     const c = byId.get(s);

@@ -92,10 +92,8 @@
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
   display:flex; flex-direction:column; gap:12px;
 }
-.mv3-ig-empty{
-  margin:auto; max-width:320px; text-align:center;
-  font:600 11px/1.6 var(--font); color:var(--muted);
-}
+/* (phase V73 block 2) The empty conversation is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+.mv3-ig-empty{ margin:auto; max-width:320px }
 /* A turn. The two sides lean opposite ways and nothing else about them differs. */
 .mv3-ig-msg{
   display:flex; flex-direction:column; gap:7px; max-width:86%;
@@ -768,7 +766,10 @@ audio.vtrim-media{ background:none; height:32px }
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px;
   display:flex; flex-wrap:wrap; align-content:flex-start; align-items:flex-start; gap:12px 10px;
 }
-.pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
+/* (phase V73 block 2) Being read, nothing here, did not load - the shared parts (js/ui-state.js) across the wrapping grid. The
+   3D Studio's page keeps its own line (js/merge-v3/chat-pick.js OLD_LOOK). */
+.pk-grid > .u-empty, .pk-grid > .u-loading, .pk-grid > .u-failed{ width:100% }
+:root:has(link[href="css/studio3d.css"]) .pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
 .pk-sentinel{ width:100%; height:1px }
 .pk-tile{ position:relative; display:flex; flex-direction:column; gap:2px; width:calc(var(--pk-h) * var(--ar, .75)); max-width:100%; min-width:0 }
 .pk-hit{ display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:left }
@@ -913,7 +914,6 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc-said:not(:empty){ padding:6px 12px; border-top:1px solid var(--border-soft) }
 .pk-ftabs{ flex:0 0 auto; display:flex; gap:4px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
 .pk-ftabs .mv3-sc-tab{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.pk-none.is-side{ padding:14px 4px; text-align:left }
 .mk-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto }
 .mk-pair{ flex:0 0 auto; display:flex; align-items:center; gap:6px }
 .mk-pair-img{ width:64px; height:44px; object-fit:contain; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface) }
@@ -1003,7 +1003,6 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-tile.is-blink{ animation:hp-blink .24s ease-in-out 3 }
 @keyframes hp-blink{ 50%{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 2px var(--sel-line) } }
 .hp-tile.is-fail{ border-color:var(--danger) }
-.hp-none{ padding:30px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
 .hp-soon{ margin:auto; max-width:420px; padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center }
 .hp-soon b{ font:700 13px/1.3 var(--font); color:var(--ink) }
 .hp-soon i{

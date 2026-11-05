@@ -50,6 +50,9 @@ import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } fro
 import { moodPicker } from './hl-music.js';
 import * as KIND from './hl-kinds.js';
 import { fontPicker, fontLabel } from './font-tiles.js';
+// (phase V73 block 2, step 2b) Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const GEOM = Object.freeze({ key: 'highlights', resize: true, move: true, keepSize: true, keepPos: true });
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -396,16 +399,21 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function loadSources() {
     if (!sourcesP) {
       panes.source.textContent = '';
-      panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading REFERENCES · YouTube · Videos…'));
+      panes.source.appendChild(loadingEl('reading REFERENCES · YouTube · Videos…', { line: true }));
       sourcesP = _api('/api/references/youtube').then((d) => { sources = d.items || []; paintSources(); })
-        .catch((e) => { sources = []; panes.source.textContent = e.message; });
+        // (phase V73 block 2, (б2-19)) Not read: "did not load" with Try again (read again), the reason a popup.
+        .catch((e) => {
+          sourcesP = null;
+          showError('Could not read REFERENCES · YouTube · Videos: ' + e.message);
+          panes.source.replaceChildren(failedEl('REFERENCES · YouTube · Videos', () => loadSources(), { line: true }));
+        });
     }
     return sourcesP;
   }
   function paintSources() {
     panes.source.textContent = '';
     panes.source.appendChild(_el('div', 'mv3-ins-note', 'REFERENCES · YouTube · Videos'));
-    if (!sources.length) { panes.source.appendChild(_el('div', 'mv3-ins-note', 'Nothing there yet - give a link or a file.')); return; }
+    if (!sources.length) { panes.source.appendChild(emptyEl('Nothing there yet - give a link or a file.', { line: true })); return; }
     for (const s of sources) {
       const r = _el('button', 'mv3-hlp-src' + (st.pick === s ? ' is-on' : ''));
       r.type = 'button';

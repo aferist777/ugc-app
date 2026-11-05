@@ -22,6 +22,8 @@ import { onSelChange, selectedOne, selectClipById, playhead } from './timeline-b
 import { hint } from '../bubble.js';
 import { setOpenColumn } from './layout.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts.
+import { loadingEl, failedEl } from '../ui-state.js';
 
 const NAME = 'broll';
 const $ = (id) => document.getElementById(id);
@@ -39,7 +41,7 @@ let _shown = false;
 let _cell = '';               // the piece shown: its cell id
 let _data = null;             // GET /api/broll/:id/piece/:cell
 let _busy = '';               // the item being put in
-let _said = '';
+let _failed = false;          // (phase V73 block 2) the piece could not be read and nothing of it is shown - the reason was a popup
 let _pop = null;              // the preview under the pointer
 
 // The B-roll's pieces on main video, in their order on the timeline.
@@ -73,7 +75,7 @@ export function openCurrent() {
 /** A piece pressed on the timeline - or the crumb: its sentence's batch, in the Library panel. */
 export async function openPiece(cell) {
   if (!cell) return;
-  if (cell !== _cell) { _cell = cell; _data = null; _said = ''; }
+  if (cell !== _cell) { _cell = cell; _data = null; _failed = false; }
   Views.toBase();
   setOpenColumn('library');
   _show(true);
@@ -95,10 +97,11 @@ async function _load() {
     const r = await fetch('/api/broll/' + encodeURIComponent(id) + '/piece/' + encodeURIComponent(_cell)).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     _data = r.piece;
-    _said = '';
+    _failed = false;
   } catch (e) {
-    _data = null;
-    _said = e.message;
+    // (phase V73 block 2, (б2-19)) The reason a popup; what is shown of the piece stays - with nothing shown, "did not load".
+    showError('The piece did not load: ' + e.message);
+    if (!_data) _failed = true;
   }
   _paint();
 }
@@ -107,8 +110,8 @@ function _paint() {
   const root = $('mv3-br');
   if (!root || !_shown) return;
   root.textContent = '';
-  if (_said && !_data) { root.appendChild(_el('div', 'mv3-ins-note is-err', _said)); return; }
-  if (!_data) { root.appendChild(_el('div', 'mv3-ins-note', 'reading the piece…')); return; }
+  if (_failed && !_data) { root.appendChild(failedEl('The piece', () => { _failed = false; _paint(); _load(); })); return; }
+  if (!_data) { root.appendChild(loadingEl('reading the piece…')); return; }
   const d = _data;
   const head = _el('div', 'mv3-brv-head');
   // (the owner 2026-10-31: "текст предложения над полем с выбором биролов выдели золотым, а синим выдели ключевые слова
@@ -130,7 +133,6 @@ function _paint() {
   }
   head.appendChild(meta);
   root.appendChild(head);
-  if (_said) root.appendChild(_el('div', 'mv3-ins-note is-err', _said));
   const scroll = _el('div', 'mv3-brv-scroll');
   root.appendChild(scroll);
   for (const [kind, label] of [['video', 'videos'], ['image', 'pictures']]) {

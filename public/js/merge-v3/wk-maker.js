@@ -13,6 +13,8 @@ import { startProgress } from '../progress.js';
 import { delX } from '../del-x.js';
 import { derived } from '../chars-store.js';
 import { menuIcons } from '../icons.js';
+// (phase V73 block 2, step 2b) "Nothing here" - the shared part (the groups' column a row of it).
+import { emptyEl } from '../ui-state.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -257,7 +259,7 @@ export function paintChoose(host, o) {
       people.appendChild(tabs);
     }
     const vis = shown();
-    if (!vis.length) people.appendChild(el('div', 'pk-none is-side', groups.length ? 'Nobody of that kind - show all.' : ''));
+    if (!vis.length && groups.length) people.appendChild(emptyEl('Nobody of that kind - show all.', { line: true }));
     for (const g of vis) {
       const b = el('button', 'pk-person' + (g.key === st.group ? ' on' : ''));
       b.type = 'button';
@@ -321,7 +323,7 @@ export function paintChoose(host, o) {
     const list = look ? pool.filter(it => String(it.name || '').toLowerCase().includes(look) || String(it.sub || '').toLowerCase().includes(look)) : pool;
     count.textContent = look ? list.length + ' of ' + pool.length : String(pool.length);
     if (!list.length) {
-      grid.appendChild(el('div', 'pk-none', o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.'))));
+      grid.appendChild(emptyEl(o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.')), { icon: look ? 'search' : 'image' }));
       return;
     }
     for (const it of list) grid.appendChild(tile(it));

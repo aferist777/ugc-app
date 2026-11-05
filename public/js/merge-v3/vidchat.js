@@ -38,6 +38,9 @@ import { openCatalog } from './vcatalog.js';
 import { openHelp, closeHelp } from './vhelp.js';
 import { stepCard } from './vsteps.js';
 import { note, askDelete } from './ask.js';
+// (phase V73 block 2, step 2b) The model table being read or not read - the shared parts (a row of the column); the reason a popup.
+import { emptyEl, loadingEl, failedEl, cap as capFirst } from '../ui-state.js';
+import { showError } from '../notice.js';
 import { startInlineProgress } from '../progress.js';
 import { wire as wireRange } from '../ui-range.js';
 
@@ -367,7 +370,11 @@ function VIDEOS(ctx) {
   async function load() {
     if (_table) { paint(); return; }
     const d = await json('/api/mv3/video/matrix');
-    if (d && d.success) { _table = d; _err = ''; } else _err = (d && d.error) || 'could not read the models';
+    if (d && d.success) { _table = d; _err = ''; }
+    else {
+      _err = (d && d.error) || 'could not read the models';
+      showError(capFirst(_err));
+    }
     paint();
     ctx.paintAtts();
   }
@@ -402,7 +409,10 @@ function VIDEOS(ctx) {
     const host = ui.left;
     if (!_table || !models().length) {
       host.textContent = '';
-      host.appendChild(el('div', 'mv3-ig-fall', _err || 'reading the models…'));
+      // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (load). A table with no
+      // model says so rather than "reading" for ever.
+      host.appendChild(_err ? failedEl('The models', () => { _err = ''; paint(); load(); }, { line: true })
+        : _table ? emptyEl('No video models.', { line: true }) : loadingEl('reading the models…', { line: true }));
       _set = null;
       ctx.banner('');
       return;
@@ -2931,6 +2941,7 @@ function VIDEOS(ctx) {
     text: {
       placeholder: 'Describe a clip, or say what to change.',
       empty: 'Describe a clip. What comes back stays in this project — and on the B-roll shelf.',
+      emptyIcon: 'film',
       // (phase V73 block 0) From Home or the Library - THE draft's conversation (chat-owner.js unbound): VIDEO → Generated →
       // the model's folder (phase V60.2).
       emptyDraft: 'Describe a clip. What comes back lies in the Library, in VIDEO → Generated → its model.',

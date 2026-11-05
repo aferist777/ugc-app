@@ -35,6 +35,8 @@ import { note } from './ask.js';
 import { linesOf, textOfLine, isWordsLane, editLine, splitLine, joinLines, rewrite, matcher, matchesIn, replaceIn } from '../captions/doc.js';
 import { isHeard } from '../captions/heard.js';
 import { isCorrected } from '../captions/words.js';
+// (phase V73 block 2, step 2b) A lane with no lines - the shared "nothing here", a row of the document.
+import { emptyEl } from '../ui-state.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 0:12.4 - minutes and seconds to a tenth.
@@ -207,8 +209,11 @@ export function paint() {
         seen.add(c.id);
       }
       if (!lines.length) {
-        sec.empty = sec.empty || _el('div', 'mv3-doc-none');
-        sec.empty.textContent = t.kind === 'subs' ? 'No lines yet - Generate from the sound, or Add a line, in the strip.' : 'No lines yet - Add a line in the strip.';
+        const said = t.kind === 'subs' ? 'No lines yet - Generate from the sound, or Add a line, in the strip.' : 'No lines yet - Add a line in the strip.';
+        if (!sec.empty || sec.empty.dataset.said !== said) {
+          sec.empty = emptyEl(said, { line: true, cls: 'mv3-doc-none' });
+          sec.empty.dataset.said = said;
+        }
         nodes.push(sec.empty);
       }
       _place(sec.list, nodes);

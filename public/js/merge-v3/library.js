@@ -55,6 +55,10 @@ import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
 import * as LK from '../library/links.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The question at the button, waiting for its answer, and the parts that say a folder is empty,
+// is being read or could not be read.
+import { ask } from './ask.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V34.E) Sound on the shelf: the waveform, the menu under the right button, the search and the online libraries.
 import { waveEl } from '../sound/wave.js';
@@ -76,6 +80,7 @@ let _items = [];      // what the grid is showing, and what the viewer pages thr
 let _tree = null;
 let _node = null;     // the tree's selected node - what the gallery shows; (phase V60.2) null - the panel's ROOTS
 let _seq = 0;         // guards against a slow response for a node you have left
+let _shownAs = '';    // (phase V73 block 2) the node and the question whose answer the gallery shows - '' while none is
 
 const _kind = () => (_node && _node.kind) || '';
 const _isImages = () => _kind() === 'images';
@@ -97,18 +102,16 @@ const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : (it.kind === 'images' |
 
 function _body() { return document.querySelector('#mv3-library .mv3-panel-body'); }
 
-function _note(text, isError) {
+// (phase V73 block 2, step 2b) A folder being read: its path over the turning icon and the panel's word ("Loading…"). A read
+// that FAILED is not an empty folder (б2-19): "<folder> did not load" and Try again, the reason a popup in the corner.
+function _note(fail) {
   const b = _body();
   if (!b) return;
   b.textContent = '';
-  const d = document.createElement('div');
-  d.className = 'mv3-empty';
-  const t = document.createElement('b');
-  t.textContent = isError ? 'Could not load' : ((_node && _node.label) || 'Library');
-  const s = document.createElement('span');
-  s.textContent = text;
-  d.appendChild(t); d.appendChild(s);
-  b.appendChild(d);
+  if (_tree && _node) b.appendChild(_tree.crumbsEl(_node));
+  const what = (_node && _node.label) || 'The folder';
+  b.appendChild(fail == null ? loadingEl('loading…') : failedEl(what, () => _load()));
+  if (fail != null) showError(what + ' did not load: ' + fail);
 }
 
 // ── Hearing a sound or a track, right on its tile ──────────────────────────
@@ -170,7 +173,7 @@ function _lyricTile(it) {
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
     del.disabled = true;
-    if (!confirm(await deleteQuestion(it))) { del.disabled = false; return; }
+    if (!await ask(del, await deleteQuestion(it), { yes: 'Delete', danger: true })) { del.disabled = false; return; }
     try { await deleteItem(it); await _reload(); } catch (err) { showError(err.message); del.disabled = false; }
   });
   cell.appendChild(del);
@@ -201,8 +204,9 @@ function _tile(it, list) {
         // (phase V54) Merge has no player: every sound - a track too - is cut in the Cut window, and "to timeline" lays
         // the piece at the playhead (one undo step; refused in words on a highlights project's own timeline).
         toTimeline: (piece) => placeSoundPiece(piece),
+        // (phase V73 block 2, (б2-6)) Asked at the tile the menu was about.
         del: async (x) => {
-          if (!confirm(await deleteQuestion(x))) return;
+          if (!await ask(cell, await deleteQuestion(x), { yes: 'Delete', danger: true })) return;
           try { if (_hear && _hear.id === x.id) _stopHearing(); await deleteItem(x); markGone(x.media); await _reload(); }
           catch (err) { _status(err.message, true); }
         },
@@ -293,7 +297,7 @@ function _tile(it, list) {
       e.stopPropagation();
       // Asked as every tile here asks - with the projects that hold its files (block 5d).
       del.disabled = true;
-      if (!confirm(await RP.deleteQuestion(it))) { del.disabled = false; return; }
+      if (!await ask(del, await RP.deleteQuestion(it), { yes: 'Delete', danger: true })) { del.disabled = false; return; }
       try {
         const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
         if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
@@ -360,7 +364,7 @@ function _tile(it, list) {
     // This removes the record AND its files from disk, so it asks first - with the Library page's own wording, and the
     // projects that use it (phase V28.4).
     del.disabled = true;
-    if (!confirm(await deleteQuestion(it))) { del.disabled = false; return; }
+    if (!await ask(del, await deleteQuestion(it), { yes: 'Delete', danger: true })) { del.disabled = false; return; }
     try {
       if (_hear && _hear.id === it.id) _stopHearing();
       await deleteItem(it);
@@ -872,12 +876,12 @@ function _paint() {
   if (!_items.length) {
     b.appendChild(grid);
     if (folders) return;
-    const s = document.createElement('span');
-    s.className = 'mv3-grid-note';
-    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _kind() === 'lyrics' ? 'no saved lyrics yet - Generate music saves them here'
+    // (phase V73 block 2, step 2b) The shared "nothing here" under the "+" - the words as they were, the first letter capital.
+    const text = searching ? 'nothing with "' + _q + '" in SFX' : _kind() === 'lyrics' ? 'no saved lyrics yet - Generate music saves them here'
       : _node && _node.cat ? 'nothing in this folder'
       : _node && !_node.q ? 'empty' : 'empty - drop files here';
-    b.appendChild(s);
+    const icon = searching ? 'search' : (_isAudio() || _kind() === 'lyrics') ? 'music' : (_isImages() || MADE.has(_kind())) ? 'image' : 'folder';
+    b.appendChild(emptyEl(text, { icon, cls: 'mv3-grid-note' }));
     return;
   }
   // The viewer pages through what it can show - not the sounds, which play on their tiles (a saved text pages through the
@@ -893,6 +897,10 @@ function _paint() {
 // the right button's menu and Delete for them.
 let _tsel = null;
 const _keyOf = (it) => it.kind + ':' + it.id;
+const _tileOf = (key) => {
+  const b = _body();
+  return b && key ? b.querySelector('.mv3-tile[data-key="' + CSS.escape(String(key)) + '"]') : null;
+};
 function _pickedWith(it) {
   if (!_tsel || _tsel.size() < 2 || !_tsel.has(_keyOf(it))) return null;
   const keys = new Set(_tsel.keys());
@@ -904,6 +912,8 @@ async function _afterMany(d, verb) {
 }
 function _manyMenu(items, e) {
   const n = items.length;
+  // (phase V73 block 2, (б2-6)) "Delete N" asks at the tile the menu was about.
+  const at = e && e.target && e.target.closest ? e.target.closest('.mv3-tile') : null;
   const starable = items.filter(x => !['references', 'heads', 'youtube', 'lyrics'].includes(x.kind) && !MADE.has(x.kind));
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
   // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
@@ -920,15 +930,16 @@ function _manyMenu(items, e) {
         try { await _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
         catch (err) { _status(err.message, true); }
       } : null],
-    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items), true],
+    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, at), true],
   ]);
 }
-async function _deleteMany(all) {
+// `at` - the tile the question stands at: the one the menu was about, or (the Delete key) the last one picked (б2-6).
+async function _deleteMany(all, at) {
   const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube' && !_fixed(x));
   if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds and a project\'s talking heads stay', true); return; }
   if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', true); return; }
   const q = items.length === 1 ? await deleteQuestion(items[0]) : await TS.deleteQuestion(items);
-  if (!confirm(q)) return;
+  if (!await ask(at, q, { yes: items.length === 1 ? 'Delete' : 'Delete ' + items.length, danger: true })) return;
   _stopHearing();
   try {
     const d = await TS.batch('delete', items);
@@ -1086,24 +1097,30 @@ function _wireDrop() {
 async function _load() {
   const mine = ++_seq;
   // (phase V60.2) The roots: the four tiles, nothing asked of the shelf.
-  if (!_node) { _items = []; _paint(); return; }
+  if (!_node) { _items = []; _shownAs = ''; _paint(); return; }
   if (!SS.isSfx(_node)) _q = '';
   // (phase V35) What lies directly in the node (its `q`) - none in a node that only holds folders; a search over SFX looks
   // through all of SFX, whichever of its folders is open (the owner's (у3)).
   const qo = _q ? { group: 'sfxall', q: _q } : _node.q;
-  if (!qo) { _items = []; _paint(); return; }
-  _note('loading…');
+  if (!qo) { _items = []; _shownAs = ''; _paint(); return; }
   const q = new URLSearchParams(qo);
+  // (phase V73 block 2, (б2-19)) The folder shown read again (after a delete, an upload, a star): what is shown stays until the
+  // answer, and a read that fails leaves it - only the popup says so. Another folder: "Loading…" until its answer.
+  const as = (_node.key || '') + '?' + q;
+  const again = _shownAs === as;
+  if (!again) { _shownAs = ''; _note(); }
   try {
     const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
     if (!d || !d.success) throw new Error((d && d.error) || 'shelf refused');
     // (phase V59.1) A saved text of Music -> Lyrics has no file - it is a tile all the same.
     _items = (d.items || []).filter(i => i && (i.media || LYR.isLyrics(i)));
+    _shownAs = as;
     _paint();
   } catch (e) {
     if (mine !== _seq) return;
-    _note(e.message, true);
+    if (again) { showError(((_node && _node.label) || 'The folder') + ' did not load: ' + e.message); return; }
+    _note(e.message || 'it could not be read');
   }
 }
 
@@ -1367,7 +1384,8 @@ export function initLibrary() {
     _tsel = TS.createSelection({
       host: body, tile: '.mv3-grid .mv3-tile[data-key]',
       active: () => !!body.querySelector('.mv3-grid') && body.offsetParent !== null,
-      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+      // (phase V73 block 2, (б2-6)) The Delete key asks at the last tile picked.
+      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x))), _tileOf(keys[keys.length - 1])),
       // (phase V64 block 0) The tile an Alerts row led to (reveal, `is-found`) stays lit only until the first press here.
       onPress: () => body.querySelectorAll('.mv3-tile.is-found').forEach(c => c.classList.remove('is-found')),
     });

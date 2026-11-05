@@ -46,6 +46,8 @@ import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
 
@@ -440,7 +442,13 @@ function _paintTop() {
   top.textContent = '';
   const r = _rec;
   const what = _el('div', 'mv3-hl-what');
-  if (!r) { what.appendChild(_el('span', 'mv3-hl-note' + (_err ? ' is-err' : ''), _err || 'reading the project…')); top.appendChild(what); return; }
+  // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (_load).
+  if (!r) {
+    what.appendChild(_err ? failedEl('The project', () => { _err = ''; _paint(); _load(); }, { line: true })
+      : loadingEl('reading the project…', { line: true }));
+    top.appendChild(what);
+    return;
+  }
   const v = r.video;
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
@@ -648,13 +656,9 @@ function _paintField() {
   // No video yet: the field is the way in, and there is no card to show.
   _ui.root.classList.toggle('is-empty', !r.video && !_live);
   if (!r.video && !_live) {
-    const empty = _el('div', 'mv3-hl-empty');
-    empty.appendChild(_el('p', null, 'A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.'));
-    const add = _el('button', 'mv3-c-btn mv3-hl-add is-big u-btn', '+ add video');
-    add.type = 'button';
-    add.addEventListener('click', _popup);
-    empty.appendChild(add);
-    field.appendChild(empty);
+    // (phase V73 block 2, step 2b) The shared "nothing here", its button the way in.
+    field.appendChild(emptyEl('A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.',
+      { icon: 'film', cls: 'mv3-hl-empty', action: { label: '+ add video', on: () => _popup() } }));
     return;
   }
   const grid = _el('div', 'mv3-hl-grid');

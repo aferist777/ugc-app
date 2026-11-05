@@ -38,6 +38,8 @@ import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY } from '../really.js';
 import { menuIcons } from '../icons.js';
 
@@ -54,7 +56,7 @@ let _rows = [];
 let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
 let _lib = '';                // '' | 'library1' | 'src:<id>' | 'nosrc' | 'archive'
 let _q = '';
-let _state = '';              // '', 'loading', or an error to show in place of the list
+let _state = '';              // '', 'loading', or 'failed' - the list did not load (the reason was a popup)
 let _ui = null;               // { root, filter, search, list } - built the first time the view shows
 
 const _el = (tag, cls, text) => {
@@ -162,7 +164,9 @@ async function _load() {
     _state = '';
   } catch (e) {
     _rows = [];
-    _state = 'Could not read the scenarios: ' + e.message;
+    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    _state = 'failed';
+    showError('Could not read the scenarios: ' + e.message);
   }
   _paintFilter();
   _paintList();
@@ -320,14 +324,13 @@ function _paintList() {
   if (!_ui) return;
   const list = _ui.list;
   list.textContent = '';
-  if (_state === 'loading') { list.appendChild(_el('div', 'mv3-ins-note', 'reading the scenarios…')); return; }
-  if (_state) { list.appendChild(_el('div', 'mv3-ins-note is-err', _state)); return; }
+  if (_state === 'loading') { list.appendChild(loadingEl('reading the scenarios…')); return; }
+  if (_state) { list.appendChild(failedEl('The scenarios', () => _load())); return; }
 
   const rows = _rows.filter(_matches);
   if (!rows.length) {
-    list.appendChild(_el('div', 'mv3-ins-note',
-      _rows.length ? 'Nothing matches that.'
-        : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".'));
+    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.'
+      : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".', { icon: _rows.length ? 'search' : 'list' }));
     return;
   }
   for (const s of rows) {

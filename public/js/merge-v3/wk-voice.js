@@ -43,6 +43,9 @@ import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
 import * as Layers from '../layers.js';
 import * as GW from '../gen-window.js';
+// (phase V73 block 2, step 2b) Being read, nothing found - the shared parts (rows in the voice menu; the library window's list
+// in the big form, the same on Home's quick start).
+import { emptyEl, loadingEl } from '../ui-state.js';
 
 const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
@@ -279,10 +282,10 @@ async function _voiceMenu(anchor, api) {
   const savedAt = box.childNodes.length;
   const paintSaved = () => {
     while (box.childNodes.length > savedAt) box.lastChild.remove();
-    if (_shelf === null) { box.appendChild(el('div', 'mv3-wk-vmnote', 'reading the saved voices…')); return; }
+    if (_shelf === null) { box.appendChild(loadingEl('reading the saved voices…', { line: true, cls: 'mv3-wk-vmnote' })); return; }
     const have = new Set(mine.map(v => String(v.voiceId)));
     const list = _shelf.filter(it => !have.has(String(it.id)));
-    if (!list.length) { box.appendChild(el('div', 'mv3-wk-vmnote', 'No saved voices yet - take one from the ElevenLabs library.')); return; }
+    if (!list.length) { box.appendChild(emptyEl('No saved voices yet - take one from the ElevenLabs library.', { line: true, cls: 'mv3-wk-vmnote' })); return; }
     for (const it of list) {
       const m = it.meta || {};
       row(it.media, it.name, [_labelsSub(m.labels || {}), m.accountRemoved ? 'out of the account - taken back free when chosen' : ''].filter(Boolean).join(' · '),
@@ -372,7 +375,7 @@ export function paintPicker(host, api) {
   // (phase V62) In its window (js/merge-v3/wk-setup.js) the window's own ✕ closes it - no bar of its own.
   if (!api.inWindow) _bar(host, api);
   const rec = api.char();
-  if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
+  if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl('reading the filters…')); return; }
 
   const mine = _mine(rec);
   const now = String((rec && rec.voice) || '');
@@ -485,7 +488,7 @@ export function paintPicker(host, api) {
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
-    host.appendChild(api.note(_busy === 'search' || !_res ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
+    host.appendChild(_busy === 'search' || !_res ? loadingEl('searching…') : emptyEl('Nothing matches all of those. Drop a filter.', { icon: 'search' }));
     if (pagerHost) _pager(pagerHost, api);
     return;
   }

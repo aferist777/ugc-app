@@ -26,6 +26,9 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
+// (phase V73 block 2, step 2b) An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
+import { emptyEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 let _pop = null;
 let _layer = null;
@@ -39,8 +42,9 @@ const $ = (id) => document.getElementById(id);
 
 async function _get() {
   try { return await fetch('/api/mv3q').then(r => r.json()); }
-  catch (e) { return { success: false, items: [], waiting: 0 }; }
+  catch (e) { return { success: false, items: [], waiting: 0, error: e.message }; }
 }
+let _failing = false;         // (phase V73 block 2) the list's last read failed - said once, not at every beat
 
 // The badge counts what is still to happen - queued and running - not the whole history.
 // A number that only grows is not something anybody acts on.
@@ -224,6 +228,16 @@ function _askClear(head, waiting, onDone) {
 async function _paintList() {
   if (!_pop || _asking) return;
   const d = await _get();
+  if (!_pop) return;
+  // (phase V73 block 2, (б2-19)) A read that fails is not an empty queue: what is shown stays and the popup says why, once;
+  // with nothing shown yet, "did not load" and Try again.
+  if (!d || !d.success) {
+    if (!_failing) showError('The render queue did not load: ' + ((d && d.error) || 'the app did not answer'));
+    _failing = true;
+    if (!_pop.querySelector('.mv3-qhead')) _pop.replaceChildren(failedEl('The render queue', () => _paintList()));
+    return;
+  }
+  _failing = false;
   _pop.textContent = '';
 
   const head = document.createElement('div');
@@ -272,10 +286,7 @@ async function _paintList() {
   const list = document.createElement('div');
   list.className = 'mv3-qlist';
   if (!(d.items || []).length) {
-    const e = document.createElement('div');
-    e.className = 'mv3-qempty';
-    e.textContent = 'Nothing queued. Add a project from its render window.';
-    list.appendChild(e);
+    list.appendChild(emptyEl('Nothing queued. Add a project from its render window.', { icon: 'list' }));
   } else {
     const again = () => { _paintList(); _paintBadge(); };
     // A highlights project's entries are one row, where its first one stands (phase V33.4).
@@ -422,6 +433,7 @@ function _open() {
   _pop.style.top = Math.round(r.bottom + 6) + 'px';
   // A panel, not a window: Escape closes it, the page keeps its shortcuts.
   _layer = Layers.open(_pop, { modal: false, name: 'queue', onEsc: _close });
+  _failing = false;
   _paintList();
   // While it is open it follows the queue: a render finishing behind it should show, not wait
   // for the panel to be closed and opened again.

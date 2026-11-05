@@ -59,6 +59,8 @@ import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
 import { note } from './ask.js';
 import { menuIcons } from '../icons.js';
+// (phase V73 block 2, step 2b) An empty `Mine` - the shared "nothing here".
+import { emptyEl } from '../ui-state.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
@@ -154,8 +156,8 @@ function _build() {
   }
   const grid = _el('div', 'mv3-cap-grid');
   // An empty `Mine` says how to fill it; the person's tiles go between it and the app's first (_syncMine).
-  const empty = _el('div', 'mv3-cap-empty', 'Nothing here yet. Give a lane or a line the look you want in the settings on the right, '
-    + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.');
+  const empty = emptyEl('Nothing here yet. Give a lane or a line the look you want in the settings on the right, '
+    + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.', { icon: 'folder', cls: 'mv3-cap-empty' });
   empty.hidden = true;
   grid.appendChild(empty);
   for (const p of PRESETS.concat(TEXT_PRESETS)) {

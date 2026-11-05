@@ -16,6 +16,9 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const BASE = '/presets/helper/';
 const LS = 'mv3_vhelp_v1';            // { sec, cat } - where the reference was left
@@ -33,7 +36,9 @@ function el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
-const _json = (url) => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
+// A read that fails says why (phase V73 block 2, (б2-19)): the index or a section's file is "did not load" with Try again, never
+// "nothing here".
+const _read = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error('the app answered ' + r.status); return r.json(); });
 function _stored() { try { return JSON.parse(localStorage.getItem(LS) || '') || {}; } catch (e) { return {}; } }
 function _keep() { try { localStorage.setItem(LS, JSON.stringify({ sec: _st.sec, cat: _st.cat })); } catch (e) { /* a private window */ } }
 const _lc = (s) => String(s || '').toLowerCase();
@@ -50,8 +55,29 @@ export async function openHelp(o) {
   const was = _stored();
   _st = { sec: was.sec || '', cat: was.cat || '', q: '' };
   _build(o);
-  if (!_index) _index = await _json(BASE + 'index.json');
+  await _start();
+}
+
+// The index first (read once), then the section left open.
+async function _start() {
   if (!_w) return;
+  if (!_index) {
+    _w.list.replaceChildren(loadingEl('reading…'));
+    let why = '';
+    try {
+      const d = await _read(BASE + 'index.json');
+      if (d && Array.isArray(d.sections) && d.sections.length) _index = d;
+      else why = 'it lists no sections';
+    } catch (e) { why = e.message || 'it could not be read'; }
+    if (!_w) return;
+    if (!_index) {
+      showError('The reference could not be read.', { detail: why });
+      _paintSide();
+      _w.q.parentElement.hidden = true;
+      _w.list.replaceChildren(failedEl('The reference', () => _start()));
+      return;
+    }
+  }
   const secs = (_index && _index.sections) || [];
   if (!secs.some(s => s.id === _st.sec)) _st.sec = (secs.find(s => s.file) || secs[0] || {}).id || '';
   await _open(_st.sec, true);
@@ -131,8 +157,17 @@ async function _open(id, keepCat) {
   _w.q.value = '';
   if (sec && sec.file && !_files.has(id)) {
     _paintSide();
-    _w.list.replaceChildren(el('div', 'hp-none', 'reading…'));
-    const d = await _json(BASE + sec.file);
+    _w.list.replaceChildren(loadingEl('reading…'));
+    let d = null;
+    try { d = await _read(BASE + sec.file); }
+    catch (e) {
+      if (!_w || _st.sec !== id) return;
+      showError(sec.label + ' did not load: ' + (e.message || 'it could not be read'));
+      _w.q.parentElement.hidden = true;
+      _w.note.hidden = true;
+      _w.list.replaceChildren(failedEl(sec.label, () => _open(id, true)));
+      return;
+    }
     _files.set(id, d || { items: [], cats: [] });
     if (!_w || _st.sec !== id) return;
   }
@@ -147,7 +182,8 @@ function _paintSide() {
   const S = _w.side;
   S.textContent = '';
   const secs = (_index && _index.sections) || [];
-  if (!secs.length) { S.appendChild(el('div', 'hp-none', 'The reference could not be read.')); return; }
+  // (phase V73 block 2) An index that did not load: the list on the right says so, with Try again.
+  if (!secs.length) return;
   for (const s of secs) {
     const ready = !!s.file;
     const on = s.id === _st.sec;
@@ -203,7 +239,7 @@ function _paintList() {
     && (!q || _lc(it.name).includes(q) || _lc(it.prompt).includes(q) || _lc(catOf.get(it.cat)).includes(q)));
   const all = (f.items || []).filter(it => !_st.cat || it.cat === _st.cat).length;
   _w.count.textContent = shown.length === all ? String(all) : shown.length + ' of ' + all;
-  if (!shown.length) { L.appendChild(el('div', 'hp-none', q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing here yet.')); return; }
+  if (!shown.length) { L.appendChild(emptyEl(q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing here yet.', { icon: q ? 'search' : 'film' })); return; }
   for (const it of shown) L.appendChild(_tile(it, catOf.get(it.cat) || ''));
   if (f.source && f.source.url) {
     const src = el('div', 'hp-src');

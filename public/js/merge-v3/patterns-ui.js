@@ -23,6 +23,9 @@ import * as PAT from '../overlay/pattern.js';
 import { opacityOf, blendOf, PATTERN_OPACITY } from '../overlay/look.js';
 import { setLive as setLivePlace } from './place-b.js';
 import { blendButton } from './blend-menu.js';
+// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts (rows in the strip); the reason a popup.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -38,7 +41,11 @@ function _readSet(repaint) {
   _asking = fetch('/api/patterns').then((r) => r.json()).then((d) => {
     if (!d || !d.success || !Array.isArray(d.patterns)) throw new Error('no set');
     _set = d.patterns;
-  }).catch(() => { _set = null; _failedAt = Date.now(); }).then(() => {
+  }).catch((e) => {
+    _set = null;
+    _failedAt = Date.now();
+    showError('The patterns could not be read', { detail: (e && e.message) || '' });
+  }).then(() => {
     _asking = null;
     const list = [..._waiting];
     _waiting.clear();
@@ -84,12 +91,16 @@ export function renderPatterns(host, io) {
   if (!_set) {
     // Read whether open or not: the layers' rows take their names and tiles from the set.
     const failed = !_asking && Date.now() - _failedAt < 5000;
-    if (_gridOpen) host.appendChild(_el('p', 'mv3-ins-note', failed ? 'The patterns could not be read - pick the lane again in a moment.' : 'reading the patterns…'));
+    // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again; the reason was the popup (_readSet).
+    if (_gridOpen) {
+      host.appendChild(failed ? failedEl('The patterns', () => { _failedAt = 0; _readSet(io.repaint); _keep(() => io.repaint()); }, { line: true })
+        : loadingEl('reading the patterns…', { line: true }));
+    }
     if (!failed) _readSet(io.repaint);
   } else if (!_set.length) {
     if (_gridOpen) host.appendChild(C.hint('The app\'s patterns are not installed.'));
   } else if (_gridOpen) _grid(host, io, list);
-  if (io.empty) host.appendChild(C.hint('Nothing on main video yet - the patterns show over it once it has something.'));
+  if (io.empty) host.appendChild(emptyEl('Nothing on main video yet - the patterns show over it once it has something.', { line: true }));
   if (!list.length) {
     host.appendChild(C.hint((_gridOpen ? 'Tick a pattern' : 'Open «Patterns» and tick one')
       + ': it lies over the whole of main video and every lane on it, under the words.'));

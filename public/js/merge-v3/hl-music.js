@@ -14,6 +14,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { YOURS, BY_VIDEO } from './hl-kinds.js';
+// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts; the reason a popup in the corner.
+import { loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -41,7 +44,11 @@ export function moodPicker(host, { onChange, onReady } = {}) {
 
   function paint() {
     row.textContent = '';
-    if (!data) { row.appendChild(_el('span', 'mv3-hlp-quiet', err || 'reading Music → highlights…')); return; }
+    if (!data) {
+      row.appendChild(err ? failedEl('Music → highlights', () => read(), { line: true })
+        : loadingEl('reading Music → highlights…', { line: true }));
+      return;
+    }
     if (byVideoOn) {
       const by = _el('button', 'mv3-hlp-chip u-chip mv3-hlp-byvideo' + (chosen.includes(BY_VIDEO) ? ' is-on' : ''), 'by the video');
       by.type = 'button';
@@ -75,13 +82,19 @@ export function moodPicker(host, { onChange, onReady } = {}) {
     }
   }
 
-  (async () => {
+  // (phase V73 block 2, (б2-18)) A read that fails: the row says "did not load" with Try again, the reason is a popup.
+  const SAID = 'Music → highlights could not be read';
+  async function read() {
+    if (err) { err = ''; paint(); }
     try {
       const r = await fetch('/api/audio/music/highlights');
       const d = await r.json();
-      if (!d || !d.success) throw new Error((d && d.error) || 'Music → highlights could not be read');
+      if (!d || !d.success) throw new Error((d && d.error) || SAID);
       data = { moods: Array.isArray(d.moods) ? d.moods : [], root: Array.isArray(d.root) ? d.root : [] };
-    } catch (e) { err = e.message || 'Music → highlights could not be read'; }
+    } catch (e) {
+      err = e.message || SAID;
+      showError(SAID, err === SAID ? {} : { detail: err });
+    }
     if (data && onReady) {
       const of = new Map();
       for (const m of data.moods) for (const t of (m.tracks || [])) of.set(String(t.id), m.id);
@@ -89,7 +102,8 @@ export function moodPicker(host, { onChange, onReady } = {}) {
       onReady((id) => of.get(String(id)) || '');
     }
     paint();
-  })();
+  }
+  read();
 
   paint();
   return {

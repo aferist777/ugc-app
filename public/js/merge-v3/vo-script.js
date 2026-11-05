@@ -21,12 +21,14 @@ import { openScenario } from '../scen-window.js';
 import { openOwnText } from './vo-text.js';
 import { el } from './wk-maker.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 let _rows = null;             // the scenarios, read once per draft shown - null while not read
 let _counts = null;
 let _lib = '';                // the category: '' | 'library1' | 'src:<id>' | 'nosrc'
 let _q = '';
-let _state = '';              // '' | 'loading' | an error
+let _state = '';              // '' | 'loading' | 'failed' - the list did not load (the reason was a popup)
 let _busy = false;            // a script being put in
 
 /**
@@ -99,7 +101,9 @@ async function _load(repaint) {
     _state = '';
   } catch (e) {
     _rows = [];
-    _state = 'Could not read the scenarios: ' + e.message;
+    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    _state = 'failed';
+    showError('Could not read the scenarios: ' + e.message);
   }
   if (repaint) repaint();
 }
@@ -122,11 +126,17 @@ function _matches(s) {
 
 function _paintRows(list, put, adopt, o) {
   list.textContent = '';
-  const note = (t, bad) => list.appendChild(el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), t));
-  if (_state === 'loading' || _rows === null) { note('reading the scenarios…'); return; }
-  if (_state) { note(_state, true); return; }
+  if (_state === 'loading' || _rows === null) { list.appendChild(loadingEl('reading the scenarios…')); return; }
+  if (_state) {
+    list.appendChild(failedEl('The scenarios', () => { _rows = null; _load(adopt.repaint); _paintRows(list, put, adopt, o); }));
+    return;
+  }
   const rows = _rows.filter(_matches);
-  if (!rows.length) { note(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.'); return; }
+  if (!rows.length) {
+    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.',
+      { icon: _rows.length ? 'search' : 'list' }));
+    return;
+  }
   for (const s of rows) {
     const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
     row.title = 'Open the text';

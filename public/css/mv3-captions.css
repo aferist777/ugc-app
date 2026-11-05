@@ -101,7 +101,8 @@
 .mv3-cap-preset.is-plain{ border-left-color:var(--border) }
 .mv3-cap-preset .mv3-cap-save{ margin-left:auto }
 .mv3-cap-preset.is-plain .mv3-cap-save{ margin-left:0 }
-.mv3-cap-empty{ grid-column:1 / -1; max-width:380px; padding:2px; font:600 10.5px/1.45 var(--font); color:var(--muted) }
+/* (phase V73 block 2) An empty `Mine` is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+.mv3-cap-empty{ grid-column:1 / -1 }
 .mv3-cap-empty[hidden]{ display:none }
 .mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft) }
 .mv3-c-marks{ display:inline-flex; gap:4px }
@@ -174,7 +175,8 @@
 }
 .mv3-doc-sh.is-sel{ color:var(--ink) }
 .mv3-doc-sec + .mv3-doc-sec{ margin-top:6px; border-top:1px solid var(--border-soft) }
-.mv3-doc-none{ padding:2px 10px 4px 62px; font:400 10.5px/1.4 var(--font); color:var(--muted) }
+/* (phase V73 block 2) A lane with no lines - the shared part as a row (js/ui-state.js), under the lines' words. */
+.mv3-doc-none{ margin-left:62px }
 .mv3-doc-row{ display:flex; align-items:flex-start; gap:6px; padding:0 8px 0 10px; border-left:2px solid transparent }
 .mv3-doc-row:hover{ background:var(--hover) }
 .mv3-doc-row.is-sel{ background:var(--sel-bg); border-left-color:var(--sel-line) }

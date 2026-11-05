@@ -27,6 +27,8 @@ import { createHighlights, homeOf } from './highlights.js';
 // (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
+// (phase V73 block 2, step 2b) A kind with no projects - the shared "nothing here", a row of the list.
+import { emptyEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
@@ -176,10 +178,7 @@ async function _openList() {
       rows.appendChild(b);
     }
     if (shown.length === drafts.length) {
-      const none = document.createElement('div');
-      none.className = 'mv3-plist-none';
-      none.textContent = 'No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.';
-      rows.appendChild(none);
+      rows.appendChild(emptyEl('No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.', { line: true, cls: 'mv3-plist-none' }));
     }
     const on = rows.querySelector('.is-on');
     if (on) on.scrollIntoView({ block: 'nearest' });

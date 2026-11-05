@@ -60,6 +60,8 @@ import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
 import { twoPress } from '../really.js';
+// (phase V73 block 2, step 2b) The empty conversation - the shared "nothing here".
+import { emptyEl } from '../ui-state.js';
 import { markField, markText } from './image-words.js';
 
 const POLL_MS = 4000;
@@ -1352,9 +1354,16 @@ export function createChat(make) {
     // for the conversation too: with it there is no "describe a clip".
     const footed = !!(_ui.foot && _ui.foot.childNodes.length);
     if (!_thread.length && !footed && !_pend) {
-      if (!empty) { empty = el('div', 'mv3-ig-empty'); host.insertBefore(empty, _ui.foot); }
       // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
-      empty.textContent = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
+      const said = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
+      // (phase V73 block 2, step 2b) The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
+      // when its words change.
+      if (!empty || empty.dataset.said !== said) {
+        const e = emptyEl(said, { icon: T.emptyIcon || 'image', cls: 'mv3-ig-empty' });
+        e.dataset.said = said;
+        if (empty) empty.replaceWith(e); else host.insertBefore(e, _ui.foot);
+        empty = e;
+      }
     } else if (empty) empty.remove();
 
     let prev = null;
