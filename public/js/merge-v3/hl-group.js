@@ -48,8 +48,11 @@ import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.
 // (phase V73 block 2, step 2b) Being read, could not be read - the shared parts (rows of the strip); the reason a popup.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+// (phase V73 block 5, 5c) The buttons over the timeline: "+" and "‹" as Lucide's icons, N in mono.
+import { iconEl } from '../icons.js';
+import { figures } from '../num.js';
 
-let _A = null;              // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
+let _A = null;             // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
 let _own = '';              // a fragment opened from its row with its OWN Subtitles picked ((хо15)) - its key
 let _busy = '';             // 'subs' | 'speech' | 'music' | 'pattern' while a write for all is under way
 let _patWant = null;        // (V74) the patterns waiting to go to the rest while a write of them is under way: { list, ns }
@@ -250,10 +253,14 @@ async function _readMoods() {
 }
 
 // ── Painting ────────────────────────────────────────────────────────────────
+// (phase V73 block 5, part 5b) The strip's head takes this title (inspector.js _paintHead, `data-strip-title`).
 function _head(host, what, n) {
-  host.appendChild(_el('div', 'mv3-ins-title', what + ' · for all ' + n));
+  const h = _el('div', 'mv3-ins-title', what + ' · for all ' + n);
+  h.dataset.stripTitle = '1';
+  host.appendChild(h);
 }
-function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'each fragment')); }
+// (phase V73 block 5, 5b, (к17)) a section title in sentence case
+function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'Each fragment')); }
 const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
 
 /**
@@ -566,8 +573,11 @@ function _panelPaint(tl) {
   if (_panel.dataset.sig === sig) return;
   _panel.dataset.sig = sig;
   _panel.textContent = '';
-  for (const [k, label] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', music ? 'music' : '+ music'], ['pattern', 'pattern']]) {
-    const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''), label + ' · for all ' + n);
+  // (phase V73 block 5, 5c) ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
+  for (const [k, label, plus] of [['subs', 'Subtitles'], ['speech', 'main audio'], ['music', 'music', !music], ['pattern', 'pattern']]) {
+    const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''));
+    if (plus) b.appendChild(iconEl('plus', 14));
+    b.appendChild(_el('span')).appendChild(figures(label + ' · for all ' + n));
     b.type = 'button';
     b.disabled = !!_busy;
     b.addEventListener('click', () => pickLane(k));
@@ -586,7 +596,9 @@ function _backPaint() {
     const title = head.querySelector('.mv3-panel-title');
     if (title && title.nextSibling) head.insertBefore(_back, title.nextSibling); else head.appendChild(_back);
   }
-  _back.textContent = '‹ all ' + _A.ticked().length;
+  // (phase V73 block 5, 5c) Lucide's chevron in place of "‹", N in mono; 24 px in the head's 35, which does not grow
+  _back.replaceChildren(iconEl('chevron-left', 14), _el('span'));
+  _back.lastChild.appendChild(figures('all ' + _A.ticked().length));
 }
 let _panelWas = false;
 function _panelSync() {

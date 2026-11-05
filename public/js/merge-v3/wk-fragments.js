@@ -48,6 +48,12 @@ import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from
 import * as FCHAT from './fchat.js';
 // (phase V62) The voiceover draft's script, chosen in its script column.
 import * as VOS from './vo-script.js';
+// (phase V73 block 5, 5d) Lucide's icons in place of the signs, the figures in mono, "4,500".
+import { icon, iconEl } from '../icons.js';
+import { figures, int } from '../num.js';
+
+// A word as a label shows it: sentence case ((к17)) - the words in the code stay as they are.
+const _cap = (s) => { const t = String(s == null ? '' : s); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // The one ceiling a read has for Kling avatar, from the tier (lib/motion-presets.js) - read from
 // the kit when it has arrived, this only until then.
@@ -336,7 +342,7 @@ function _mark() {
   const on = _audio && !_audio.paused ? _playing : '';
   document.querySelectorAll('.mv3-wk-vplay.is-read').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
-    b.textContent = is ? '❚❚' : '▶';
+    b.innerHTML = icon(is ? 'pause' : 'play', 10);
     b.classList.toggle('is-playing', !!is);
   });
 }
@@ -344,7 +350,8 @@ function _mark() {
 // a way of saying "this one" (Y5). The press does NOT reach the row - it would close an open
 // fragment - so the opening is done here instead.
 function _playBtn(src, what, then) {
-  const b = el('button', 'mv3-wk-vplay is-read u-btn is-s is-icon', '▶');
+  const b = el('button', 'mv3-wk-vplay is-read u-btn is-s is-icon');
+  b.innerHTML = icon('play', 10);
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -1076,7 +1083,7 @@ function _all(host, p, lines) {
   const zone = el('div', 'mv3-wk-zone' + ((missing.length || noText) ? ' is-locked' : ''));
   host.appendChild(zone);
   _stageMoodVoice(zone, p, lines);
-  if (_isVo(p)) { _stageBroll(zone, p, lines); return; }
+  if (_isVo(p)) { _stageBroll(zone, p, lines); _markWait(zone); return; }
   const cols = el('div', 'mv3-wk-zcols');
   const left = el('div', 'mv3-wk-zcol');
   const right = el('div', 'mv3-wk-zcol');
@@ -1084,6 +1091,20 @@ function _all(host, p, lines) {
   zone.appendChild(cols);
   _stageFrames(left, p);
   _stageVideo(right, p, lines);
+  _markWait(zone);
+}
+
+// (phase V73 block 5, 5d; the owner's (б5-6) а) THE FIELD THAT WAITS - the one gold dashed frame ("your move"): the first field in
+// order that is not done and not locked (waiting for the voice); while that one is working, the next that needs a choice; none
+// while the zone is locked (who / where, or a voiceover's script, wait first - on the stage, in the script column). The others
+// stand in a quiet hairline.
+function _markWait(zone) {
+  if (!zone || zone.classList.contains('is-locked')) return;
+  const open = [...zone.querySelectorAll('.mv3-wk-stage')]
+    .filter((b) => !b.classList.contains('is-done') && !b.classList.contains('is-voicelock'));
+  let w = open[0];
+  if (w && w.classList.contains('is-working')) w = open.slice(1).find((b) => b.classList.contains('is-need'));
+  if (w) w.classList.add('is-wait');
 }
 
 // ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
@@ -1113,28 +1134,35 @@ function _stage(host, id, spec) {
       askNote(box, spec.lock);
     });
   }
-  // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
-  // 3 draw, 4 film - the order they actually work in, said once and visibly.
-  if (spec.step) box.appendChild(el('span', 'mv3-wk-znum', String(spec.step)));
-  // DONE, beside the number, and it stays (the owner, 2026-09-23 - a mark that flashes for two
-  // seconds is a mark you miss). The border says the same thing without a word; the word is for
-  // the moment you look up and want to be told.
-  if (done && spec.step) box.appendChild(el('span', 'mv3-wk-zdone', 'done'));
-  // ...and while there IS work in it, the bottom line of the frame fills up (N3).
+  // ...while there IS work in it, the bottom line of the frame fills up (N3) - a thin grey line since V73 block 5.
   if (spec.work) _barWatch(box, spec.work);
-  // A shelf has no number and no button: it is not a step, it is where what was made lands.
+  // (phase V73 block 5, 5d; the owner's (б5-7) а) THE HEAD: the field's number before its name - in mono, quiet (it was a circle
+  // on the corner) -, the name 12 / 500 in sentence case (gold capitals before), and DONE - a green tick and "Done" - at its
+  // right, staying (the owner, 2026-09-23: a mark that flashes for two seconds is a mark you miss). What the field is and where
+  // it stands is the second line, and it wraps (б1-24: the VIDEO row is whole).
   const head = el('div', 'mv3-wk-stage-head');
-  head.appendChild(el('span', '', spec.name));
+  if (spec.step) head.appendChild(el('span', 'mv3-wk-snum u-mono', String(spec.step)));
+  head.appendChild(el('span', 'mv3-wk-sname', _cap(spec.name)));
+  if (done && spec.step) {
+    const d = el('span', 'mv3-wk-sdone');
+    d.append(iconEl('circle-check', 14), document.createTextNode('Done'));
+    head.appendChild(d);
+  }
   // What the field IS, and then where it stands. The second used to appear only when the drawer
   // was shut; with nothing to shut, it belongs in the head all the time.
   const sub = spec.lock ? spec.lock.replace(/ - field 1.*$/, '').replace(/\.$/, '').toLowerCase()
     : spec.need ? 'choose ' + spec.need
     : spec.blocked ? 'needs ' + spec.why
       : [spec.sub, spec.summary].filter(Boolean).join(' · ');
-  if (sub) head.appendChild(el('span', 'mv3-wk-vsub' + ((spec.need || spec.lock) ? ' is-need' : ''), sub));
   if (spec.need) head.title = 'Choose ' + spec.need + ' - nothing in this field is made until it is chosen';
   else if (spec.blocked) head.title = 'Still missing: ' + spec.why;
   box.appendChild(head);
+  if (sub) {
+    const s = el('div', 'mv3-wk-vsub mv3-wk-ssub' + (spec.need ? ' is-need' : '') + (spec.lock ? ' is-lock' : ''));
+    s.appendChild(figures(_cap(sub)));
+    if (spec.need) s.title = head.title;
+    box.appendChild(s);
+  }
   host.appendChild(box);
   const body = el('div', 'mv3-wk-stage-body');
   box.appendChild(body);
@@ -1145,7 +1173,8 @@ function _stage(host, id, spec) {
 }
 
 function _genButton(foot, spec) {
-  if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub', spec.cap));
+  // (phase V73 block 5, 5d) what the press is about - a line of its own over the button, wrapping, its prices and counts in mono
+  if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub mv3-wk-gcap')).appendChild(figures(spec.cap));
   const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || 'generate');
   b.type = 'button';
   b.title = spec.title || '';
@@ -1237,7 +1266,7 @@ function _stageMoodVoice(host, p, lines) {
   // the controls under them - `generate` at the end of that second line. One grid, so a name stands over its control.
   const row = el('div', 'mv3-wk-mvrow' + (sample ? ' is-sample' : ''));
   body.appendChild(row);
-  const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', word), tip);
+  const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', _cap(word)), tip);
   // The mood. What it means is said in the bubble of its name (the owner's (т12)).
   const mood = el('select', 'u-in is-s mv3-wk-vsel is-small is-mood');
   if (!now) _noneOption(mood, 'none');
@@ -1420,7 +1449,7 @@ async function _saveVoice(ttsParams) {
 function _labelled(word, sel, tip, tight) {
   const box = el('label', 'mv3-wk-fsetlab' + (tight ? ' is-tight' : ''));
   box.title = tip;
-  box.appendChild(el('span', 'mv3-wk-fsetlabw', word));
+  box.appendChild(el('span', 'mv3-wk-fsetlabw', _cap(word)));
   box.appendChild(sel);
   return box;
 }
@@ -1433,7 +1462,7 @@ function _voCount(p, box) {
   box.maxLength = API.VO_MAX;
   const c = el('div', 'mv3-wk-fwhy mv3-vo-count');
   const paint = () => {
-    c.textContent = box.value.length.toLocaleString('en-US').replace(/,/g, ' ') + ' / ' + API.VO_MAX.toLocaleString('en-US').replace(/,/g, ' ');
+    c.textContent = int(box.value.length) + ' / ' + int(API.VO_MAX);   // (phase V73 block 5, 5d; (б5-21) а) "4,500 / 4,500"
     c.classList.toggle('is-full', box.value.length >= API.VO_MAX);
   };
   paint();
@@ -1580,7 +1609,7 @@ function _stageFrames(host, p) {
       + (prods.length ? 'product ' + prods.join(', ') + ' · ' : '')
       + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
     // (phase V26.5) A frame made to order in the frames chat says so on its tile.
-    if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'chat'));
+    if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'Chat'));
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';
@@ -1588,7 +1617,9 @@ function _stageFrames(host, p) {
     b.appendChild(img);
     // The ✕ in the corner takes a frame out of the rotation; the ✓ in the same corner brings it
     // back (the owner, 2026-09-21). A switched-off frame is dimmed and stands first, out of the way.
-    const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' is-del'), gone ? '✓' : '✕');
+    // (phase V73 block 5, 5d) Lucide's ✕ (the shared mask) and ✓; taking a frame out is not a deletion, so the ✕ is not red
+    const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' u-x'));
+    if (gone) sw.innerHTML = icon('check', 12);
     sw.type = 'button';
     sw.title = gone ? 'Use this frame again' : 'Do not use this frame in any fragment';
     sw.addEventListener('click', (e) => { e.stopPropagation(); _banFrame(p, fr.id, !gone); });
@@ -1878,7 +1909,7 @@ function _list(host, p, lines) {
   live.forEach((x, pos) => list.appendChild(_row(p, x.l, x.i, pos + 1)));
   const off = lines.map((l, i) => ({ l, i })).filter(x => !isLive(x.l));
   if (off.length) {
-    list.appendChild(el('div', 'mv3-wk-flabel is-off', 'taken off the script'));
+    list.appendChild(el('div', 'mv3-wk-flabel is-off', 'Taken off the script'));
     off.forEach(x => list.appendChild(_offRow(x.l, x.i)));
   }
   // Where it stood before this paint - a repaint rebuilds the column, and a rebuilt column starts
@@ -1936,9 +1967,9 @@ function _sdPromptCol(p, f) {
   }
   const busy = _sdBusy(f);
   const act = el('span', 'mv3-wk-fedited-row');
-  if (f.edited) act.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
+  if (f.edited) act.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
   if (f.stale) {
-    const s = el('span', 'mv3-wk-fstale', 'written for other settings');
+    const s = el('span', 'mv3-wk-fstale', 'Written for other settings');
     s.title = 'The frame, the mood, the gestures, the sound, the place, the words, the read or the voice changed since it was written';
     act.appendChild(s);
   }
@@ -2051,7 +2082,8 @@ const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.s
   : _writing ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
-  const plus = el('span', 'mv3-wk-fins u-btn is-icon is-gen' + (why ? ' is-off' : ''), '+');
+  const plus = el('span', 'mv3-wk-fins u-btn is-icon' + (why ? ' is-off' : ''));   // (V73 block 5, 5d) not gold
+  plus.innerHTML = icon('plus', 12);
   plus.setAttribute('role', 'button');
   plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
   plus.addEventListener('click', (e) => {
@@ -2078,7 +2110,7 @@ function _insertEditor(host, p, lines) {
   shut.title = 'Do not put a line in - back to the whole video';
   shut.addEventListener('click', cancel);
   host.appendChild(shut);
-  host.appendChild(el('div', 'mv3-wk-flabel', 'a new line after fragment ' + _no(lines, after)));
+  host.appendChild(el('div', 'mv3-wk-flabel', 'A new line after fragment ' + _no(lines, after)));
   host.appendChild(el('div', 'mv3-wk-fwhy', 'After: “' + (_words(lines[after]) || '').slice(0, 160) + '”'));
   const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
   box.rows = 3;
@@ -2176,7 +2208,8 @@ function _rowRead(p, l, i) {
   const ra = _readAct(p, l, i);
   const reading = (VOICE.reading().lines || []).includes(i);
   const has = isRead(l);
-  const b = el('button', 'mv3-wk-vplay is-send u-btn is-s is-icon' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
+  const b = el('button', 'mv3-wk-vplay is-send u-btn is-s is-icon' + (reading ? ' is-busy' : ''));
+  b.innerHTML = icon(reading ? 'loader-circle' : has ? 'rotate-cw' : 'mic', 10);   // (V73 block 5, 5d) in place of … ↻ ➤
   b.type = 'button';
   b.disabled = !ra.on || reading;
   b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2207,9 +2240,10 @@ function _lineSpeed(p, l, i) {
   inp.value = String(VOICE.speedOf(p, l));
   inp.disabled = _saving || VOICE.reading().busy;
   _speedLater(inp, 'line' + i, () => VOICE.speedOf(_ctx.project, (_ctx.project.lines || [])[i]), v => ({ line: i, lineSpeed: v }));
-  box.append(el('span', '', 'speed'), inp);
+  box.append(el('span', '', 'Speed'), inp);
   if (own) {
-    const back = el('button', 'mv3-wk-vback u-btn is-s is-icon is-quiet', '↺');
+    const back = el('button', 'mv3-wk-vback u-btn is-s is-icon is-quiet');
+    back.innerHTML = icon('rotate-ccw', 12);
     back.type = 'button';
     back.title = "Back to the project's speed (" + proj + ')';
     back.disabled = inp.disabled;
@@ -2403,7 +2437,7 @@ function _fragment(host, p, l, i) {
     // spoken from them, and the voice will not start without them.
     const g = VOICE.reading();
     const marked = !!String(l.tagged || '').trim();
-    const mb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
+    const mb = el('button', 'mv3-wk-fread u-btn is-s' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
     mb.type = 'button';
     mb.disabled = g.busy || !_video().mood;
     mb.title = !_video().mood ? 'Choose the mood first (field 1)' : g.busy ? 'The voice is busy'
@@ -2415,7 +2449,7 @@ function _fragment(host, p, l, i) {
     if (!_bySample()) {
       const ra = _readAct(p, l, i);
       const reading = (VOICE.reading().lines || []).includes(i);
-      const rb = el('button', 'mv3-wk-fread u-btn is-s is-gen' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+      const rb = el('button', 'mv3-wk-fread u-btn is-s' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
       rb.type = 'button';
       rb.disabled = !ra.on || reading;
       rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2481,7 +2515,7 @@ function _fragment(host, p, l, i) {
 function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
-    host.appendChild(el('div', 'mv3-wk-flabel', 'takes'));
+    host.appendChild(el('div', 'mv3-wk-flabel', 'Takes'));
     const now = _clipOf(p, l, i);
     for (const c of clips.slice().reverse()) {
       const on = !!(now && c.id === now.id);
@@ -2497,9 +2531,9 @@ function _takes(host, p, l, i) {
         img.src = c.thumb;
         r.appendChild(img);
       }
-      r.appendChild(el('span', 'mv3-wk-vname', 'take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
-      if (stale) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
-      if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
+      r.appendChild(el('span', 'mv3-wk-vname')).appendChild(figures('Take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
+      if (stale) r.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
+      if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
       if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
       host.appendChild(r);
     }
@@ -2558,7 +2592,7 @@ function _dead(rows, placeholder) {
 // A column's heading: a small label, and - on the shot - the one action it has.
 function _colHead(label, action) {
   const h = el('div', 'mv3-wk-flabel is-row');
-  h.appendChild(el('span', '', label));
+  h.appendChild(el('span', '', _cap(label)));
   if (action) h.appendChild(action);
   return h;
 }
@@ -2602,10 +2636,10 @@ function _pickRow(host, p, l, i) {
   const bar = el('button', 'mv3-wk-fpick' + (_picking ? ' is-open' : ''));
   bar.type = 'button';
   bar.title = 'Which frame this fragment opens on';
-  bar.appendChild(el('span', 'mv3-wk-fpick-t', fr
-    ? (auto ? 'frame ' + (pool.findIndex(v => v.id === fr.id) + 1) + ' of ' + pool.length + ' · from the set, in turn' : 'frame picked by hand')
-    : 'no frame yet'));
-  bar.appendChild(el('span', 'mv3-wk-fpick-c', _picking ? '▴' : '▾'));
+  bar.appendChild(el('span', 'mv3-wk-fpick-t')).appendChild(figures(fr
+    ? (auto ? 'Frame ' + (pool.findIndex(v => v.id === fr.id) + 1) + ' of ' + pool.length + ' · from the set, in turn' : 'Frame picked by hand')
+    : 'No frame yet'));
+  bar.appendChild(el('span', 'mv3-wk-fpick-c')).appendChild(iconEl(_picking ? 'chevron-up' : 'chevron-down', 12));
   bar.addEventListener('click', () => { _picking = !_picking; _pickView = ''; _ctx.repaint(); });
   host.appendChild(bar);
   if (!_picking) return;
@@ -2665,9 +2699,9 @@ function _motionCol(l, i, hasFrame) {
   const staleWords = !!(sh && sh.motion && !_animated(l));
   if ((sh && sh.motionEdited) || staleWords) {
     action = el('span', 'mv3-wk-fedited-row');
-    if (sh && sh.motionEdited) action.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
+    if (sh && sh.motionEdited) action.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
     if (staleWords) {
-      const s = el('span', 'mv3-wk-fstale', 'the words changed');
+      const s = el('span', 'mv3-wk-fstale', 'The words changed');
       s.title = 'It was written for: “' + String(sh.said || '').slice(0, 120) + '”';
       action.appendChild(s);
     }
@@ -2841,7 +2875,7 @@ function _clipCol(p, l, i, rs, take) {
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
   if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
-  const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go is-gen' : ''),
+  const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go' : ''),
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
@@ -2866,7 +2900,7 @@ function _clipCol(p, l, i, rs, take) {
   // While it runs, the caption is the journal's own stage - "analysis 1/2 - the place", then
   // "rendering" - so the half-minute before anything is sent to Kling is not silence (V2).
   const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
-  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'),
+  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'))).appendChild(figures(
     busy ? (stage || 'making the clip…') : (ready && needsWords) ? (sf ? 'the prompt, then ' : 'analysis, then ') + cap : cap));
   return col;
 }

@@ -182,7 +182,8 @@ export function mountButtons() {
   for (const id of ORDER) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-pf-btn u-btn is-s is-icon';
+    // (phase V73 block 5, 5a) quiet toggles in the panel's head; the screen shown - pressed (the selected look)
+    b.className = 'mv3-pf-btn u-btn is-s is-icon is-quiet';
     b.dataset.platform = id;
     b.appendChild(_svgIcon(ICON[id]));
     b.addEventListener('click', () => { if (_fmt === '9:16') _set(_on === id ? '' : id); });

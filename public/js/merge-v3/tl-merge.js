@@ -21,6 +21,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
+import { setFigures } from '../num.js';
 
 const SEAM = 0.011;
 let _acc = null;
@@ -115,10 +116,13 @@ export function offerMerge() {
   const anchor = document.querySelector(`.mv3b-clip[data-clip="${CSS.escape(last.id)}"]`);
   if (!anchor) return;
   const box = document.createElement('div');
-  box.className = 'mv3-mergeask u-ask';              // (phase V73 block 2) the shared question's look, a strip of its own
-  box.innerHTML = '<span class="mv3-mergeask-t"></span><button type="button" class="mv3-mergeask-go u-btn is-s is-main">merge</button>'
-    + '<button type="button" class="mv3-mergeask-x u-btn is-s is-icon is-quiet u-x" title="Close (Esc)"></button>';
-  box.querySelector('.mv3-mergeask-t').textContent = 'Merge ' + m.n + ' clips into one?';
+  // (phase V73 block 5, 5c; the owner's (б5-16) б) one line as it was - only its edges and its ✕: the frame of the panels at their
+  // button (`u-win is-float`) holding its head row alone (`u-win-head`), the 28-px ✕ at its right end
+  box.className = 'mv3-mergeask u-win is-float';
+  box.innerHTML = '<div class="mv3-mergeask-r u-win-head"><span class="mv3-mergeask-t"></span>'
+    + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main">merge</button>'
+    + '<button type="button" class="mv3-mergeask-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>';
+  setFigures(box.querySelector('.mv3-mergeask-t'), 'Merge ' + m.n + ' clips into one?');
   // (phase V72) Lines that cannot be merged as lines: the words in place of the offer, nothing to press.
   const why = (_linesOf(m) || {}).why;
   if (why) {
@@ -160,7 +164,7 @@ export function closeMerge() {
 function _say(text, bad) {
   if (!_win) return;
   const t = _win.box.querySelector('.mv3-mergeask-t');
-  t.textContent = text;
+  setFigures(t, text);                               // (phase V73 block 5, 5c) "merging… 42%" - its figures in mono
   t.classList.toggle('is-bad', !!bad);
 }
 

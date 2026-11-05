@@ -3,10 +3,11 @@
 
    A button right of ⏩ in the timeline's header (and the key S - "Ы" in the Russian layout, by the key's place): live
    when there is something to cut in (ы1) - a stretch drawn over a wave, or picked clips (the time they take); dim with
-   nothing picked. Pressed, a small window opens above it - TWO SLIDERS that work together ((ы12)):
+   nothing picked. Pressed, a small panel opens above it (phase V73 block 5, 5c: the panels' frame at their button, `u-win
+   is-float`, its head "Cut silence" with the ✕) - TWO SLIDERS that work together ((ы12)):
 
-     keep pauses up to  [0.01-1.00 s, 0.30 at first]        a pause longer than this is shortened to it (ы2)
-     silent below       [−60 … −20 dB]  [auto]              quieter than this is silence; auto - the stretch's own noise
+     Keep pauses up to  [0.01-1.00 s, 0.30 at first]       a pause longer than this is shortened to it (ы2)
+     Silent below       [−60 … −20 dB]  [auto]             quieter than this is silence; auto - the stretch's own noise
                                                             floor + 6 dB, never above −36 (V33.5), each clip its own
      14 pauses · −6.2 s                       [cut]
 
@@ -30,6 +31,7 @@ import * as Layers from '../layers.js';
 import { note } from './ask.js';
 import { cutsOfPauses } from './tl-cut.js';
 import { wire as wireRange, fill as fillRange } from '../ui-range.js';
+import { setFigures } from '../num.js';
 
 const KEEP_DEFAULT = 0.30;
 const KEEP_MIN = 0.01, KEEP_MAX = 1.00;
@@ -88,20 +90,25 @@ export function openSilence() {
     return;
   }
   const box = document.createElement('div');
-  box.className = 'mv3-silence';
+  // (phase V73 block 5, 5c; the owner's (б5-16) б) a panel at its button: the frame's edges, its 40-px head with the name and
+  // the 28-px ✕, no backdrop; the rows in its body, the one status line left of the gold "cut"; labels in sentence case (к17)
+  box.className = 'mv3-silence u-win is-float';
   box.innerHTML =
-    '<div class="mv3-silence-h"><b>Cut silence</b><button type="button" class="mv3-silence-x u-btn is-s is-icon is-quiet u-x" title="Close (Esc)"></button></div>' +
+    '<div class="mv3-silence-h u-win-head"><span class="u-win-title">Cut silence</span>' +
+    '<button type="button" class="mv3-silence-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>' +
+    '<div class="mv3-silence-b">' +
     '<label class="mv3-silence-row" title="A pause longer than this is shortened to it - half after the sound before, half before the sound after">' +
-    '<span>keep pauses up to</span>' +
+    '<span>Keep pauses up to</span>' +
     `<input type="range" min="${KEEP_MIN}" max="${KEEP_MAX}" step="0.01" class="mv3-silence-k">` +
     '<span class="mv3-silence-v u-range-v"></span></label>' +
     '<label class="mv3-silence-row" title="Quieter than this is silence. auto - this sound\'s own noise floor + 6 dB, never above −36 dB">' +
-    '<span>silent below</span>' +
+    '<span>Silent below</span>' +
     `<input type="range" min="${DB_MIN}" max="${DB_MAX}" step="1" class="mv3-silence-d" disabled>` +
     '<span class="mv3-silence-v u-range-v is-db"></span>' +
     '<button type="button" class="mv3-silence-auto u-chip is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
-    '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n">listening to main audio…</span>' +
-    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>cut</button></div>';
+    '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n u-status">listening to main audio…</span>' +
+    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>cut</button></div>' +
+    '</div>';
   const k = box.querySelector('.mv3-silence-k');
   const d = box.querySelector('.mv3-silence-d');
   k.value = String(_keep);
@@ -173,7 +180,7 @@ function _place() {
 function _say(text, bad) {
   if (!_win) return;
   const n = _win.box.querySelector('.mv3-silence-n');
-  n.textContent = text;
+  setFigures(n, text);                              // (phase V73 block 5, 5c) its figures in mono - "14 pauses · −6.2 s"
   n.classList.toggle('is-bad', !!bad);
 }
 

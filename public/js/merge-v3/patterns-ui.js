@@ -26,6 +26,11 @@ import { blendButton } from './blend-menu.js';
 // (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts (rows in the strip); the reason a popup.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+// (phase V73 block 5, part 5b) Lucide's icons for ▸ ▾ ✓ ↑ ↓ ↻ ↺ and the eight ways of a drift; the figures in mono
+import { icon, iconEl } from '../icons.js';
+import { setFigures } from '../num.js';
+const DIR_ICON = { e: 'arrow-right', ne: 'arrow-up-right', n: 'arrow-up', nw: 'arrow-up-left', w: 'arrow-left', sw: 'arrow-down-left',
+  s: 'arrow-down', se: 'arrow-down-right' };
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -84,8 +89,9 @@ export function renderPatterns(host, io) {
   const fold = _el('button', 'mv3-patf' + (_gridOpen ? ' is-open' : ''));
   fold.type = 'button';
   fold.title = _gridOpen ? 'Fold the patterns' : 'The app\'s patterns - tick one to lay it over main video';
-  fold.appendChild(_el('span', 'mv3-patf-name', 'Patterns' + (list.length ? ' · ' + list.length : '')));
-  fold.appendChild(_el('span', 'mv3-patf-arrow', _gridOpen ? '▾' : '▸'));
+  // (phase V73 block 5, 5b) the strip's one fold form: a chevron, then the title
+  fold.appendChild(iconEl(_gridOpen ? 'chevron-down' : 'chevron-right', 14));
+  fold.appendChild(setFigures(_el('span', 'mv3-patf-name'), 'Patterns' + (list.length ? ' · ' + list.length : '')));
   fold.addEventListener('click', () => { _setGrid(!_gridOpen); _keep(() => io.repaint()); });
   host.appendChild(fold);
   if (!_set) {
@@ -122,7 +128,9 @@ function _grid(host, io, list) {
     img.alt = p.name;
     img.loading = 'lazy';
     b.appendChild(img);
-    b.appendChild(_el('span', 'mv3-patg-tick', on ? '✓' : ''));
+    const tick = _el('span', 'mv3-patg-tick');
+    if (on) tick.innerHTML = icon('check', 12);
+    b.appendChild(tick);
     b.addEventListener('click', () => _keep(() => {
       const now = io.list();
       if (now.some((x) => x.src === p.path)) {
@@ -152,7 +160,7 @@ function _layers(host, io, list) {
     img.alt = '';
     head.appendChild(img);
     head.appendChild(_el('span', 'mv3-patl-name', _name(e.src)));
-    head.appendChild(_el('span', 'mv3-patl-look', _lookOf(e)));
+    head.appendChild(setFigures(_el('span', 'mv3-patl-look'), _lookOf(e)));
     const move = (d) => {
       const now = io.list();
       const k = now.findIndex((x) => x.src === e.src);
@@ -162,8 +170,9 @@ function _layers(host, io, list) {
       [next[k], next[j]] = [next[j], next[k]];
       _keep(() => io.write(next));
     };
-    for (const [d, label, title] of [[-1, '↑', 'One layer up'], [1, '↓', 'One layer down']]) {
-      const a = _el('button', 'mv3-patl-arrow u-btn is-s is-icon', label);
+    for (const [d, ico, title] of [[-1, 'arrow-up', 'One layer up'], [1, 'arrow-down', 'One layer down']]) {
+      const a = _el('button', 'mv3-patl-arrow u-btn is-s is-icon');
+      a.innerHTML = icon(ico, 14);
       a.type = 'button';
       a.title = title;
       a.disabled = d < 0 ? i === 0 : i === list.length - 1;
@@ -218,14 +227,14 @@ function _rows(host, e, io) {
   if (f0.move === 'rotate') {
     slider('Speed', 'speed', PAT.ROTATE, (v) => (+v).toFixed(1) + '°/s', (s) => s, (v) => v);
     const way = _el('span', 'mv3-pat-dirs');
-    for (const [d, label, title] of [['cw', '↻', 'Clockwise'], ['ccw', '↺', 'Counter-clockwise']]) {
-      way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), title));
+    for (const [d, label, title, ico] of [['cw', '↻', 'Clockwise', 'rotate-cw'], ['ccw', '↺', 'Counter-clockwise', 'rotate-ccw']]) {
+      way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), title, ico));
     }
     host.appendChild(C.row('Direction', way));
   } else if (f0.move === 'drift') {
     slider('Speed', 'speed', PAT.DRIFT, (v) => Math.round(v) + ' px/s', (s) => s, (v) => v);
     const way = _el('span', 'mv3-pat-dirs');
-    for (const [d, label] of PAT.DIRS) way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), 'Drift ' + d));
+    for (const [d, label] of PAT.DIRS) way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), 'Drift ' + d, DIR_ICON[d]));
     host.appendChild(C.row('Direction', way));
   }
   const op = C.slider({

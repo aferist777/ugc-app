@@ -51,6 +51,10 @@ import { showError } from '../notice.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
+// (phase V73 block 5, 5d) Lucide's icons in place of the signs; every figure of the view in mono.
+import { icon, iconEl } from '../icons.js';
+import { figures } from '../num.js';
+const _fig = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.appendChild(figures(text)); return e; };
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -452,7 +456,7 @@ function _paintTop() {
   }
   const v = r.video;
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
-  if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
+  if (v && v.seconds) what.appendChild(_fig('span', 'mv3-hl-meta', _clock(v.seconds)));
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
   // (phase V33.8) Auto - what the agent found the video to be.
   // (phase V69 P12) Auto - the kind its first call found, by that kind's name.
@@ -468,7 +472,7 @@ function _paintTop() {
   const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label : (r.ask ? r.ask.length : '');
   const cut = K && K.whole && r.agent && Array.isArray(r.agent.skipped) && r.agent.skipped.length
     ? ' · cut out: ' + [...new Set(r.agent.skipped.map((x) => x.skip))].join(', ') : '';
-  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
+  if (r.ask) what.appendChild(_fig('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
   top.appendChild(what);
 
   const state = _el('div', 'mv3-hl-state');
@@ -476,9 +480,10 @@ function _paintTop() {
   if (_live) {
     // (phase V40) Before the moments are found the field's panel says the way in full: here only what is going.
     const panel = !_frags().length;
-    state.appendChild(_el('span', 'mv3-hl-words', _prog && !panel ? _prog.words
+    state.appendChild(_fig('span', 'mv3-hl-words', _prog && !panel ? _prog.words
       : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
-    const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : '✕ stop');
+    const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : null);
+    if (_armed !== 'stop') x.append(iconEl('x', 14), document.createTextNode('stop'));   // (V73 block 5, 5d) Lucide's x
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
     x.addEventListener('click', () => { if (_armed !== 'stop') { _arm('stop'); return; } _armed = ''; _stop(); });
@@ -508,16 +513,16 @@ function _paintTop() {
     const made = _frags().filter((f) => f.state === 'ready').length;
     const whole = !!(r.ask && r.kinds && r.kinds[r.ask.kind] && r.kinds[r.ask.kind].whole);
     const what = whole ? (n === 1 ? ' part' : ' parts') : made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
-    state.appendChild(_el('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
+    state.appendChild(_fig('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
   }
   // (phase V33.4) The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
   const rd = r.rendering;
   if (rd) {
     const k = Math.min(rd.of, rd.done + 1);
-    state.appendChild(_el('span', 'mv3-hl-words', 'rendering ' + k + ' of ' + rd.of + (rd.left > 0 ? ' · ~' + _clock(rd.left) + ' left' : '')));
+    state.appendChild(_fig('span', 'mv3-hl-words', 'rendering ' + k + ' of ' + rd.of + (rd.left > 0 ? ' · ~' + _clock(rd.left) + ' left' : '')));
   }
   const tr = r.renderTrouble || {};
-  if (tr.interrupted) state.appendChild(_el('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
+  if (tr.interrupted) state.appendChild(_fig('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
   if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', tr.failed + ' not rendered'));
   // The project's renders folder, once one is made: Explorer on it (the owner's (х40)).
   const one = _frags().find((f) => f.rendered && f.rendered.url);
@@ -525,7 +530,7 @@ function _paintTop() {
   const sf = dir ? _showInFolder(dir, 'Open the folder of this project\'s renders in Explorer') : null;
   if (sf) state.appendChild(sf);
   const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
-  if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
+  if (gone) state.appendChild(_fig('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
   if (_said) state.appendChild(_el('span', 'mv3-hl-said', _said.text));
   if (!v && !_live) {
     const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', '+ add video');
@@ -701,16 +706,21 @@ function _paintField() {
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
     t.appendChild(x);
     // (phase V43, (ё9)) fragmentation's parts have no score: their place in the video instead - "3 / 38".
-    t.appendChild(_el('span', 'mv3-hl-score', Number.isFinite(f.score) ? String(f.score) : f.rank + ' / ' + _partsFound()));
-    if ((f.pieces || []).length > 1) t.appendChild(_el('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
-    // (phase V33.4) Rendered: a mark on its frame - pale, "changed since", when its timeline was edited after.
+    // (phase V73 block 5, 5d; the owner's (б5-18) а) THE MARKS IN ONE LINE at the foot, over the name - the score, the pieces,
+    // "Rendered" -; the tick and the ✕ stay in the top corners as on every tile.
+    const marks = _el('div', 'mv3-hl-marks');
+    marks.appendChild(_el('span', 'mv3-hl-score u-mono', Number.isFinite(f.score) ? String(f.score) : f.rank + ' / ' + _partsFound()));
+    if ((f.pieces || []).length > 1) marks.appendChild(_fig('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
+    // (phase V33.4) Rendered: a quiet mark with Lucide's play - "Changed since", dashed, when its timeline was edited after.
     if (ready && f.rendered) {
       const ch = _changed(f);
-      const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''), ch ? 'changed since' : '▶ rendered');
+      const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''));
+      if (ch) mark.textContent = 'Changed since'; else mark.append(iconEl('play', 10), document.createTextNode('Rendered'));
       mark.title = 'Rendered: ' + _fileOf(f.rendered.url) + (ch ? ' - its timeline was edited after; Render again to bring it up to date' : '');
-      t.appendChild(mark);
+      marks.appendChild(mark);
     }
     const foot = _el('div', 'mv3-hl-foot');
+    foot.appendChild(marks);
     foot.appendChild(_el('div', 'mv3-hl-name', f.title));
     const rq = ready ? f.rq : null;
     if (!ready && now) {
@@ -719,9 +729,9 @@ function _paintField() {
       fill.style.width = Math.round(Math.max(0.02, now.pct || 0) * 100) + '%';
       bar.appendChild(fill);
       foot.appendChild(bar);
-      foot.appendChild(_el('div', 'mv3-hl-step', now.words || 'cutting'));
+      foot.appendChild(_fig('div', 'mv3-hl-step', now.words || 'cutting'));
     } else if (failed) {
-      foot.appendChild(_el('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
+      foot.appendChild(_fig('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
     } else if (rq && rq.state === 'running') {
       // (phase V33.4) Its render, where it is (the owner's (х42)).
       const bar = _el('div', 'mv3-hl-bar');
@@ -729,22 +739,22 @@ function _paintField() {
       fill.style.width = Math.max(2, rq.percent || 0) + '%';
       bar.appendChild(fill);
       foot.appendChild(bar);
-      foot.appendChild(_el('div', 'mv3-hl-step', rq.phase ? 'finishing…'
+      foot.appendChild(_fig('div', 'mv3-hl-step', rq.phase ? 'finishing…'
         : 'rendering ' + (rq.percent || 0) + '%' + (rq.remain != null ? ' · ' + _clock(rq.remain) : '')));
     } else if (rq && rq.state === 'line') {
-      foot.appendChild(_el('div', 'mv3-hl-step', 'in line · ' + (rq.ahead ? rq.ahead + ' ahead' : 'next')));
+      foot.appendChild(_fig('div', 'mv3-hl-step', 'in line · ' + (rq.ahead ? rq.ahead + ' ahead' : 'next')));
     } else if (rq && rq.state === 'interrupted') {
-      foot.appendChild(_el('div', 'mv3-hl-step is-warn', 'interrupted - go on in Queue'));
+      foot.appendChild(_fig('div', 'mv3-hl-step is-warn', 'interrupted - go on in Queue'));
     } else if (rq && rq.state === 'failed') {
-      const st = _el('div', 'mv3-hl-step is-err', 'render failed');
+      const st = _fig('div', 'mv3-hl-step is-err', 'render failed');
       st.title = rq.error || '';
       foot.appendChild(st);
-      const again = _el('button', 'mv3-hl-again', 'render again');
+      const again = _el('button', 'mv3-hl-again u-btn is-s', 'render again');   // (V73 block 5, 5d) the shared button, not red
       again.type = 'button';
       again.title = (rq.error ? rq.error + '\n' : '') + 'Put it back in line with the same settings';
       again.addEventListener('click', (e) => { e.stopPropagation(); _renderAgain(f); });
       foot.appendChild(again);
-    } else foot.appendChild(_el('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
+    } else foot.appendChild(_fig('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
     t.appendChild(foot);
     t.addEventListener('click', () => {
       // (phase V33.4, the owner 2026-10-21: "повторный клик на плитку должен снимать выделение и отключать превью с этим фрагментом")
@@ -793,9 +803,12 @@ function _prepPanel(stages, fresh) {
   const list = _el('ol', 'mv3-hl-stages');
   for (const s of stages) {
     const li = _el('li', 'mv3-hl-stage is-' + s.state);
-    li.appendChild(_el('i', 'mv3-hl-stage-m', s.state === 'done' ? '✓' : s.state === 'now' ? '●' : s.state === 'failed' ? '✕' : '○'));
+    // (phase V73 block 5, 5d) Lucide's check / x, the turning loader on the step at work (no blinking), a ring for the next
+    const m = li.appendChild(_el('i', 'mv3-hl-stage-m'));
+    if (s.state === 'done' || s.state === 'now' || s.state === 'failed') m.innerHTML = icon(s.state === 'done' ? 'check' : s.state === 'now' ? 'loader-circle' : 'x', 14);
+    else m.classList.add('is-ring');
     li.appendChild(_el('span', 'mv3-hl-stage-w', _stageSaid(s) + (s.state === 'failed' ? ' - stopped here' : '')));
-    if (s.state === 'done' && s.took) li.appendChild(_el('span', 'mv3-hl-stage-t', _clock(s.took / 1000)));
+    if (s.state === 'done' && s.took) li.appendChild(_fig('span', 'mv3-hl-stage-t', _clock(s.took / 1000)));
     list.appendChild(li);
   }
   box.appendChild(list);
@@ -806,7 +819,7 @@ function _prepPanel(stages, fresh) {
     bar.appendChild(fill);
     box.appendChild(bar);
     const left = +_prog.leftMs || 0;
-    box.appendChild(_el('div', 'mv3-hl-prep-t', _clock((+_prog.elapsedMs || 0) / 1000) + (left > 1500 ? ' · ~' + _clock(left / 1000) + ' left' : '')));
+    box.appendChild(_fig('div', 'mv3-hl-prep-t', _clock((+_prog.elapsedMs || 0) / 1000) + (left > 1500 ? ' · ~' + _clock(left / 1000) + ' left' : '')));
   }
   return box;
 }
@@ -854,7 +867,7 @@ function _paintCard() {
   const facts = _el('div', 'mv3-hl-facts');
   // (phase V69 P12) Auto: the kind it found - the rules it was cut by.
   if (_rec && _rec.ask && _rec.ask.kind === 'auto' && _rec.agent && _rec.agent.kind) {
-    const kf = _el('span', 'mv3-hl-fact', _foundSaid(_rec));
+    const kf = _fig('span', 'mv3-hl-fact', _foundSaid(_rec));
     if (_rec.agent.kindWhy) kf.title = _rec.agent.kindWhy;
     facts.appendChild(kf);
   }
@@ -869,7 +882,7 @@ function _paintCard() {
     if (k) score.appendChild(document.createTextNode(' · ' + k + (k === 1 ? ' key moment' : ' key moments')));
   }
   facts.appendChild(score);
-  facts.appendChild(_el('span', 'mv3-hl-fact', _secs(f.seconds)));
+  facts.appendChild(_fig('span', 'mv3-hl-fact', _secs(f.seconds)));
   card.appendChild(facts);
   // (phase V33.3) The style its captions wear - the open one's as its timeline is now, the others' as the server read them.
   const cap = f.state !== 'ready' ? null : (f.n === _openN() ? _capOpen() : f.cap);
@@ -923,12 +936,12 @@ function _paintCard() {
   const pcs = _el('div', 'mv3-hl-pcs');
   (f.pieces || []).forEach((p, k) => {
     const later = k === 0 && (f.pieces || []).length > 1 && p.start > f.pieces[1].start;
-    pcs.appendChild(_el('span', 'mv3-hl-pc' + (later ? ' is-hook' : ''), (later ? 'hook ' : '') + _clock(p.start) + '–' + _clock(p.end)));
+    pcs.appendChild(_fig('span', 'mv3-hl-pc' + (later ? ' is-hook' : ''), (later ? 'hook ' : '') + _clock(p.start) + '–' + _clock(p.end)));
   });
   card.appendChild(pcs);
   const sec = (label, text) => {
     if (!text) return;
-    card.appendChild(_el('div', 'mv3-x-hdr', label));
+    card.appendChild(_el('div', 'mv3-x-hdr', label.charAt(0).toUpperCase() + label.slice(1)));   // sentence case (V73 block 5, 5d)
     card.appendChild(_el('p', 'mv3-hl-text', text));
   };
   sec('hook', f.hook);
@@ -970,7 +983,8 @@ function _renderLine(f) {
       line.appendChild(ch);
     }
     const acts = _el('div', 'mv3-hl-racts');
-    const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ play');
+    const play = _el('button', 'mv3-c-btn u-btn is-s');
+    play.append(iconEl('play', 14), document.createTextNode('play'));   // (V73 block 5, 5d) Lucide's play
     play.type = 'button';
     play.title = 'Play the render in the Library\'s viewer - Rename and Delete are there';
     play.addEventListener('click', () => openRender(rd.url, { onChanged: () => _load() }));

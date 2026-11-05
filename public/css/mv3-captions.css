@@ -19,14 +19,9 @@
 /* The categories, and how far the making is. */
 .mv3-cap-top{ flex:0 0 auto; padding:8px 10px 6px; border-bottom:1px solid var(--border-soft) }
 .mv3-cap-cats{ display:flex; flex-wrap:wrap; gap:4px }
-.mv3-cap-cat{
-  height:22px; padding:0 8px; border:1px solid var(--border); border-radius:999px;
-  background:var(--surface-2); color:var(--muted); cursor:pointer;
-  font:700 10px/20px var(--font); letter-spacing:.03em;
-}
-.mv3-cap-cat:hover{ color:var(--ink) }
-.mv3-cap-cat.is-on{ border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg) }
-.mv3-cap-n{ font-weight:600; opacity:.6 }
+/* (phase V73 block 5, 5d; plan 3.5) A category is the shared chip (`.u-chip`; .is-on its selected look) - its own look went. */
+.mv3-cap-cat{ flex:0 0 auto; gap:4px }
+.mv3-cap-n{ color:var(--muted) }   /* in mono (`.u-mono`) */
 .mv3-cap-status{ margin-top:6px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-cap-status[hidden]{ display:none }
 /* A mixed subtitle lane's sections, one per preset (phase V49, (пр22)): closed until opened; its look below it, set in a little. */
@@ -36,9 +31,9 @@
 }
 .mv3-cap-sec:hover{ border-color:var(--muted) }
 .mv3-cap-sec.is-open{ border-color:var(--sel-line); border-bottom-left-radius:0; border-bottom-right-radius:0 }
-.mv3-cap-sec-c{ flex:0 0 auto; width:10px; font-size:10px; color:var(--muted) }
-.mv3-cap-sec-n{ font:700 11px/1.3 var(--font) }
-.mv3-cap-sec-k{ margin-left:auto; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
+.mv3-cap-sec-c{ flex:0 0 auto; display:flex; align-self:center; color:var(--muted) }   /* Lucide's chevron (V73 block 5) */
+.mv3-cap-sec-n{ font:var(--fw-strong) var(--fs-11)/1.3 var(--font) }
+.mv3-cap-sec-k{ margin-left:auto; font:500 var(--fs-10)/1.3 var(--font); color:var(--muted); white-space:nowrap }
 .mv3-cap-sec-body{ padding:4px 0 6px 10px; border-left:2px solid var(--sel-bg); margin:0 0 4px 0 }
 /* The animations' tab (phase V49): one line on what a press does, over the pairs' tiles. */
 .mv3-cap-note{ font:600 10.5px/1.4 var(--font); color:var(--muted); max-width:520px }
@@ -79,23 +74,24 @@
   overflow-wrap:anywhere;
 }
 .mv3-cap-tile.is-on .mv3-cap-nm{ color:var(--ink) }
-.mv3-cap-ed{ flex:0 0 auto; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink) }
+.mv3-cap-ed{ flex:0 0 auto; font-size:var(--fs-9); color:var(--ink) }   /* "Edited", sentence case (V73 block 5, 5d) */
 .mv3-cap-ed[hidden]{ display:none }
 .mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
 /* The fonts tab (phase V68 P4, merge-v3/font-tiles.js): each font's picture (public/fonts/captions/tiles/, drawn by
    tools/font-tiles.js on the box's own ground). "lat" by the name: no Russian letters, a Russian line in its twin. */
-.mv3-fnt-tw{ flex:0 0 auto; font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); opacity:.8 }
+.mv3-fnt-tw{ flex:0 0 auto; font-size:var(--fs-9); color:var(--muted); opacity:.8 }   /* "Lat", 9 px */
 
 /* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
 .mv3-cap-head{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 6px }
 .mv3-cap-what{ font:800 11px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink) }
-.mv3-cap-sub{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+/* (phase V73 block 5, 5b) what the settings apply to, under the strip's head (its title is the head's); figures in mono */
+.mv3-cap-sub{ margin:0 0 6px; font:500 var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
 .mv3-cap-preset{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:5px 7px;
   border:1px solid var(--border); border-left:2px solid var(--sel-line); border-radius:var(--r-xs);
   background:var(--surface);
 }
-.mv3-cap-based{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+.mv3-cap-based{ font:500 var(--fs-11)/1.3 var(--font); color:var(--muted) }
 /* The person's own presets (phase V30, block 5): "save as my preset" at the right of the row (alone on a look made from no
    preset), the hint of an empty Mine, and a tile just saved, marked for a moment. */
 .mv3-cap-preset.is-plain{ border-left-color:var(--border) }
@@ -104,7 +100,7 @@
 /* (phase V73 block 2) An empty `Mine` is the shared part (js/ui-state.js emptyEl); here only where it sits. */
 .mv3-cap-empty{ grid-column:1 / -1 }
 .mv3-cap-empty[hidden]{ display:none }
-.mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft) }
+.mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--sel-line); box-shadow:0 0 0 3px var(--sel-bg) }   /* just saved: the selected look, not gold */
 .mv3-c-marks{ display:inline-flex; gap:4px }
 
 /* ── A heard line's words, one by one (K10b, word-edit.js) ───────────────────
@@ -122,14 +118,16 @@
   font:500 11px/1.25 var(--font); color:var(--ink);
 }
 .mv3-wd-chip:hover{ border-color:var(--muted) }
-.mv3-wd-t{ font:500 8.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-t{ font:400 var(--fs-9)/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-chip.is-sel{ background:var(--sel-bg); border-color:var(--sel-line) }
 .mv3-wd-list:focus .mv3-wd-chip.is-sel{ background:var(--sel-line); color:var(--ink) }
 .mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:var(--ink) }
 .mv3-wd-chip.is-now .mv3-wd-w{ text-decoration:underline; text-underline-offset:3px }
 .mv3-wd-chip.is-after{ opacity:.45 }
-.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--gold) }
-.mv3-wd-chip.is-k::before{ content:'A'; font:800 8.5px/1 var(--font); color:var(--gold) }
+/* (phase V73 block 5, 5b, (б1-18) а) a word that stands out in ITS colour - the one it wears on the frame (`--mark`, word-edit.js) -,
+   not the interface's gold */
+.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--mark, var(--ink)) }
+.mv3-wd-chip.is-k::before{ content:'A'; font:var(--fw-strong) var(--fs-9)/1 var(--font); color:var(--mark, var(--ink)) }
 .mv3-wd-chip.is-h::after{
   content:''; position:absolute; top:2px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--muted);
 }
@@ -137,10 +135,10 @@
 .mv3-wd-in{ flex:1 1 auto; min-width:0 }
 .mv3-wd-in.is-insert{ border-style:dashed }
 .mv3-wd-btn{ flex:0 0 auto }   /* .is-on - the part's pressed look (б2-13) */
-.mv3-wd-time{ margin-top:4px; font:500 10px/1.3 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-time{ margin-top:4px; font:400 var(--fs-10)/1.3 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-msg{ margin-top:4px; font:500 10px/1.4 var(--font); color:var(--danger) }
 .mv3-wd-msg[hidden]{ display:none }
-.mv3-wd-help{ margin-top:5px; font:400 9.5px/1.45 var(--font); color:var(--muted) }
+.mv3-wd-help{ margin-top:4px; font:400 var(--fs-10)/1.45 var(--font); color:var(--muted) }
 
 /* ── The two tabs over the tiles (phase V30, block 2): presets | text ─────────
    `text` puts the words of the subtitle and text lanes, as one document, in the tiles' place (caption-doc.js); the
@@ -171,7 +169,7 @@
 .mv3-doc-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 0 10px; outline:none }
 .mv3-doc-sh{
   position:sticky; top:-4px; z-index:1; padding:7px 10px 4px; background:var(--bg);
-  font:800 10px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+  font:var(--fw-medium) var(--fs-11)/1.3 var(--font); color:var(--muted);   /* "Subtitles · 12 lines" - sentence case, 500 */
 }
 .mv3-doc-sh.is-sel{ color:var(--ink) }
 .mv3-doc-sec + .mv3-doc-sec{ margin-top:6px; border-top:1px solid var(--border-soft) }
@@ -184,7 +182,7 @@
 .mv3-doc-row.is-seam{ box-shadow:inset 0 1px 0 var(--border) }
 .mv3-doc-t{
   position:relative; flex:0 0 44px; padding-top:4px; cursor:pointer; user-select:none;
-  font:500 9.5px/16px var(--font); color:var(--muted); opacity:.75; font-variant-numeric:tabular-nums;
+  font:400 var(--fs-10)/16px var(--mono); color:var(--muted); opacity:.75; font-variant-numeric:tabular-nums;   /* in mono */
 }
 .mv3-doc-row.is-fix .mv3-doc-t::after{
   content:''; position:absolute; top:10px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--muted);
@@ -195,8 +193,8 @@
   font:500 12px/18px var(--font); letter-spacing:normal; white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
 }
 .mv3-doc-bd{ position:absolute; inset:0; color:transparent; pointer-events:none; overflow:hidden }
-.mv3-doc-bd mark{ color:transparent; background:var(--gold-soft); border-radius:2px }
-.mv3-doc-bd mark.is-cur{ background:var(--gold-line) }
+.mv3-doc-bd mark{ color:transparent; background:var(--sel-bg); box-shadow:inset 0 -1px 0 var(--sel-line); border-radius:2px }   /* found: the selected look */
+.mv3-doc-bd mark.is-cur{ background:var(--sel-line) }
 .mv3-doc-in{
   position:relative; display:block; width:100%; min-height:26px; resize:none; overflow:hidden; outline:none;
   field-sizing:content; background:transparent; color:var(--ink);
@@ -205,7 +203,7 @@
 .mv3-doc-in:hover{ border-color:var(--border-soft) }
 .mv3-doc-in:focus{ border-color:var(--focus); background:oklch(0 0 0 / .18) }
 .mv3-doc-in[readonly]{ cursor:default }
-.mv3-doc-msg{ flex:0 0 auto; padding:6px 10px; border-top:1px solid var(--border-soft); font:500 10.5px/1.4 var(--font); color:var(--danger) }
+.mv3-doc-msg{ flex:0 0 auto; padding:6px 10px; border-top:1px solid var(--border-soft); font:500 var(--fs-10)/1.4 var(--font); color:var(--danger) }
 .mv3-doc-msg[hidden]{ display:none }
-.mv3-doc-help{ flex:0 0 auto; padding:5px 10px 7px; border-top:1px solid var(--border-soft); font:400 9.5px/1.45 var(--font); color:var(--muted) }
+.mv3-doc-help{ flex:0 0 auto; padding:5px 10px 7px; border-top:1px solid var(--border-soft); font:400 var(--fs-10)/1.45 var(--font); color:var(--muted) }
 .mv3-doc-msg.is-ok{ color:var(--muted) }

@@ -80,25 +80,8 @@
 .u-in.is-focus{ outline:2px solid var(--focus); outline-offset:2px }
 
 
-/* ── Zones (к15): panels on the dark base, a 6 px gap, a hairline ───────────── */
-.u-base{ display:grid; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); border-radius:var(--r-lg) }
-.u-panel{ display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-lg); overflow:hidden }
-.u-panel-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-2) 0 var(--sp-4);
-  border-bottom:1px solid var(--border-soft) }
-.u-panel-name{ font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); color:var(--ink) }
-.u-panel-meta{ color:var(--faint); font:var(--fs-11)/1 var(--mono) }
-.u-panel-head .sp{ flex:1 }
-.u-panel-body{ padding:var(--sp-4); min-width:0 }
-.u-sec + .u-sec{ margin-top:var(--sp-6) }
-.u-sec-t{ margin:0 0 var(--sp-2); color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font) }
-/* "your move" (к15): the field that waits for the person - a gold dashed line */
-.u-yourmove{ padding:var(--sp-3) var(--sp-4); border:1px dashed var(--gold); border-radius:var(--r) }
-.u-yourmove b{ display:block; color:var(--ink); font-weight:var(--fw-medium); font-size:var(--fs-12) }
-.u-yourmove span{ color:var(--muted); font-size:var(--fs-11) }
-.u-done{ padding:var(--sp-3) var(--sp-4); border:1px solid var(--border-soft); border-radius:var(--r) }
-.u-done b{ display:flex; align-items:center; gap:6px; color:var(--ink); font-weight:var(--fw-medium); font-size:var(--fs-12) }
-.u-done b .u-ico{ color:var(--success) }
-.u-done span{ color:var(--muted); font-size:var(--fs-11) }
+/* ── Zones (к15): the panel (.u-base, .u-panel and its head, .u-sec, .u-yourmove, .u-done) lives in css/app-shell.css
+   since phase V73 block 5 (part 5a) ── */
 /* a row of the tree: a generator's place has a gold name */
 .u-trow{ display:flex; align-items:center; gap:var(--sp-2); height:28px; padding:0 var(--sp-2); border-radius:var(--r-xs); color:var(--ink); font-size:var(--fs-12) }
 .u-trow:hover{ background:var(--hover) }

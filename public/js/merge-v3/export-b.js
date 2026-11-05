@@ -31,6 +31,8 @@ import { renderDone } from './render-done.js';
 import { addCurrent } from './queue.js';
 import { showError } from '../notice.js';
 import { wire as wireRange } from '../ui-range.js';
+import { iconEl } from '../icons.js';
+import { figures } from '../num.js';
 
 let _busy = false;
 
@@ -50,7 +52,8 @@ function _say(msg, kind) {
   if (!el) return;
   el.hidden = !msg;
   el.textContent = msg || '';
-  el.className = 'mv3-tl-status' + (kind ? ' is-' + kind : '');
+  // (phase V73 block 5, 5c) the one status line (`.u-status`): `info` quiet, anything else red as before
+  el.className = 'mv3-tl-status u-status is-line' + (kind === 'info' ? '' : ' is-bad');
 }
 
 function _mmss(v) {
@@ -486,6 +489,14 @@ export function setRenderTarget(t) {
   paintExportButton();
 }
 
+// (phase V73 block 5, 5a) The button's words: a figure in mono ("Render 3", (к21а) - js/num.js), a leading "✕ " as Lucide's x.
+function _label(b, text) {
+  b.textContent = '';
+  let t = String(text || '');
+  if (t.startsWith('✕ ')) { b.appendChild(iconEl('x', 14)); t = t.slice(2); }
+  b.appendChild(figures(t));
+}
+
 /** The button as it should read now: Export for the open timeline, or what the target says. */
 export function paintExportButton() {
   const b = document.getElementById('mv3-export');
@@ -493,7 +504,7 @@ export function paintExportButton() {
   // Somebody else's project counts as none: rendering writes export settings (js/merge-v3/main.js).
   const can = Store.hasProject() && Store.canEdit();
   const st = _target ? _target.state() : null;
-  b.textContent = st ? st.label : 'Export';
+  _label(b, st ? st.label : 'Export');
   b.title = st ? st.title : _busy ? 'Rendering - it is in Queue, where it can be stopped' : 'Render this timeline with FFmpeg';
   b.disabled = !can || (st ? !st.enabled : _busy);
   b.classList.toggle('is-stop', !!(st && st.stop));

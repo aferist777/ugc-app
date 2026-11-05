@@ -124,7 +124,7 @@
 }
 .vc-kind{left:6px}
 .vc-kind.is-template{color:var(--muted)}
-.vc-kind.is-preset{color:var(--success)}
+.vc-kind.is-preset{color:var(--on-media)}   /* (phase V73 block 5, 5d; (б5-22) а) as Case / Example - green is only "done / on" */
 .vc-two{right:6px}
 .vc-cap{
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;

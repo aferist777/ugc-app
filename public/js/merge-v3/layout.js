@@ -31,7 +31,8 @@ const _defLeft = () => Math.round(window.innerWidth * 0.6);
 const DEF_TL_H   = 290;
 
 const SPINE_W     = 42;    // .mv3-col.is-collapsed in css/merge-v3.css: 34px and a 4px margin each side
-const SASH        = 5;     // must match .mv3-sash in css/merge-v3.css
+const SASH        = 6;     // must match .mv3-sash in css/merge-v3.css - the 6 px gap between panels (phase V73 block 5, (к15))
+const EDGES       = 12;    // .mv3-work's own 6 px of the base at the left and the right edge
 // Wide enough that the Library header's crumbs fit, the gallery keeps a column of tiles beside the media tree, and
 // the timeline under it shows its label column and a few seconds of lane.
 const MIN_PANEL   = 380;   // narrowest the OPEN panel may get, beside the spine
@@ -53,7 +54,7 @@ export const columnMax = () => _clampLeft(Number.MAX_SAFE_INTEGER);
 
 function _clampLeft(px) {
   const lo = SPINE_W + MIN_PANEL;
-  const hi = Math.max(lo, window.innerWidth - MIN_PREVIEW - SASH);
+  const hi = Math.max(lo, window.innerWidth - MIN_PREVIEW - SASH - EDGES);
   return Math.round(Math.max(lo, Math.min(px, hi)));
 }
 function _applyLeft(px) {

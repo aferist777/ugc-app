@@ -17,6 +17,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { wire as wireRange } from '../ui-range.js';
+// (phase V73 block 5, part 5b) a pressed button may be a Lucide icon; a label's figures in mono (js/num.js)
+import { icon } from '../icons.js';
+import { setFigures } from '../num.js';
 
 // A labelled row. The label column is fixed so every control on the panel lines up
 // down the left edge, which is what makes a stack of them readable at 240px.
@@ -25,7 +28,7 @@ export function row(label, control) {
   r.className = 'mv3-c-row';
   const l = document.createElement('span');
   l.className = 'mv3-c-lbl';
-  l.textContent = label || '';
+  setFigures(l, label || '');
   r.appendChild(l);
   const box = document.createElement('span');
   box.className = 'mv3-c-ctl';
@@ -140,13 +143,14 @@ export function toggle(on, onChange) {
 // The same switch, wearing the name of the thing it switches. For when it sits beside
 // another control instead of at the end of a labelled row, where "on / off" would be a
 // question with no question.
-export function toggleNamed(label, on, onChange, title) {
+export function toggleNamed(label, on, onChange, title, ico) {
   const b = document.createElement('button');
   b.type = 'button';
   // (phase V73 block 2) a pressed button - the selected look (б2-13), never the switch's green
-  b.className = 'mv3-c-sw u-btn is-s' + (on ? ' is-on' : '');
+  b.className = 'mv3-c-sw u-btn is-s' + (ico ? ' is-icon' : '') + (on ? ' is-on' : '');
   b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  b.textContent = label;
+  // (phase V73 block 5, 5b) `ico` - a Lucide icon in place of the label's glyph (↺, B, I, ↻); the label then names it
+  if (ico) { b.innerHTML = icon(ico, 14); b.setAttribute('aria-label', title || label); } else b.textContent = label;
   if (title) b.title = title;
   b.addEventListener('click', () => { if (onChange) onChange(!on); });
   return b;

@@ -37,14 +37,16 @@ export const framingsOf = (c) => (c && c.frame && c.frame.active ? [c.frame.spea
 export function zoomRow(c, C) {
   const f = c && c.frame;
   if (!f || !f.active || !Array.isArray(f.zooms) || !f.zooms.length) return null;
-  const sel = C.select([['on', 'on'], ['off', 'off']], f.noZoom ? 'off' : 'on', (v) => {
+  // (phase V73 block 5, 5b, the owner's (б5-11) а) on / off is the shared switch, as Crop, PiP and Halfer
+  const sw = C.toggle(!f.noZoom, (on) => {
     const next = { ...f };
-    if (v === 'off') next.noZoom = true; else delete next.noZoom;
+    if (!on) next.noZoom = true; else delete next.noZoom;
     _setFrame(c, next);
   });
-  sel.title = f.zooms.length + (f.zooms.length === 1 ? ' punch-in' : ' punch-ins') + ' on its key moments, x' + f.zooms[0].z
+  const row = C.row('Punch-ins', sw);
+  row.title = f.zooms.length + (f.zooms.length === 1 ? ' punch-in' : ' punch-ins') + ' on its key moments, x' + f.zooms[0].z
     + ' - the program places them; off: none';
-  return C.row('Punch-ins', sel);
+  return row;
 }
 
 const _wait = new Map();     // clip id -> { mode, frac, error }
