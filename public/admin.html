@@ -33,14 +33,14 @@
 
   <!-- The keys every generator reads, saved into settings.json in the library. -->
   <section class="adm-panel" data-pane="keys">
+    <!-- (phase V73 block 6) the head: the name and the buttons; what the pane is, a line under it -->
     <div class="adm-head">
       <span class="adm-title">API keys</span>
-      <span class="adm-count">first six and last four are all anyone sees here</span>
-      <span class="adm-count" id="adm-keys-health"></span>
       <span class="sp"></span>
       <button class="u-btn is-s" type="button" id="adm-keys-check" title="Ask each provider whether its key works">Check again</button>
-      <button class="u-btn is-s is-main adm-go" type="button" id="adm-keys-save">💾 Save</button>
+      <button class="u-btn is-s is-main adm-go" type="button" id="adm-keys-save">Save</button>
     </div>
+    <p class="adm-lead">First six and last four are all anyone sees here<span class="adm-count" id="adm-keys-health"></span></p>
     <div class="adm-keys" id="adm-keys"></div>
     <div class="adm-status" id="adm-keys-status"></div>
   </section>
@@ -51,8 +51,8 @@
       <!-- (V38.1) Back to where the way here started - the scenario generator, on its draft; only when it started there. -->
       <button class="u-btn is-s adm-back" type="button" id="ai-back" hidden>← back</button>
       <span class="adm-title">AI settings</span>
-      <span class="adm-count">the models that read your words and pictures and answer</span>
     </div>
+    <p class="adm-lead">The models that read your words and pictures and answer</p>
     <div class="dio-body" id="ai-body"></div>
   </section>
 
@@ -60,8 +60,8 @@
   <section class="adm-panel" data-pane="local" hidden>
     <div class="adm-head">
       <span class="adm-title">This computer</span>
-      <span class="adm-count">speech recognition for captions, and the yt-dlp links are read with</span>
     </div>
+    <p class="adm-lead">Speech recognition for captions, and the yt-dlp links are read with</p>
     <div class="dio-body" id="loc-body"></div>
   </section>
 
@@ -69,8 +69,8 @@
   <section class="adm-panel" data-pane="thanks" hidden>
     <div class="adm-head">
       <span class="adm-title">Thanks</span>
-      <span class="adm-count" id="thx-count"></span>
     </div>
+    <p class="adm-lead" id="thx-count"></p>
     <div class="dio-body thx-body" id="thx-body"></div>
   </section>
 </div>

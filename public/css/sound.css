@@ -115,7 +115,7 @@
 .lyr-lines span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lyr-from{flex:0 0 auto; font:600 8.5px/1 var(--font); color:var(--gold); opacity:.85}
 .lyr-from:empty{display:none}
-.lib-grid.is-text{--card-w:150px; --card-h:120px}
+.lib-grid.is-text{--card-w:132px; --card-h:130px}   /* (phase V73 block 6) Media's one square size */
 .lib-thumb-box.lib-thumb-text{background:linear-gradient(180deg, var(--surface-2), var(--surface))}
 .mv3-grid.is-text{grid-template-columns:repeat(auto-fill, minmax(124px, 1fr))}
 .mv3-grid.is-text .mv3-tile{aspect-ratio:3 / 2}

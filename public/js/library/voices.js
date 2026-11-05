@@ -16,6 +16,7 @@
 
 // (phase V73 block 2, step 2b) "no voices yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
+import { icon } from '../icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,7 +49,7 @@ function _row(it) {
   audio.src = it.media; audio.preload = 'none';
 
   const play = document.createElement('button');
-  play.type = 'button'; play.className = 'lib-vplay u-btn is-s is-icon'; play.textContent = '▶';
+  play.type = 'button'; play.className = 'lib-vplay u-btn is-s is-icon'; play.innerHTML = icon('play', 12);
   play.title = 'Play our demo';
   play.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -58,7 +59,7 @@ function _row(it) {
   });
   const mark = () => {
     const on = !audio.paused;
-    play.textContent = on ? '❚❚' : '▶';
+    play.innerHTML = icon(on ? 'pause' : 'play', 12);   // (phase V73 block 6, (к18))
     play.title = (on ? 'Pause' : 'Play') + ' our demo';
     play.classList.toggle('is-playing', on);
     row.classList.toggle('is-playing', on);

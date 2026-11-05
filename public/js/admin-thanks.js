@@ -729,7 +729,7 @@
   function build() {
     built = true;
     var count = document.getElementById('thx-count');
-    if (count) count.textContent = 'the open-source work this app is built on - ' + THANKS.length + ' repositories';
+    if (count) count.textContent = 'The open-source work this app is built on - ' + THANKS.length + ' repositories';
     body.appendChild(el('p', 'thx-intro', 'UGC Studio stands on the work of these projects and the people behind them. '
       + 'Each is listed with its licence, what it is, and what it does in this app. Thank you.'));
     var coll = null;

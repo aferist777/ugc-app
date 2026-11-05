@@ -4,6 +4,8 @@
    about itself, a link at the right) and a body the block paints.
    ════════════════════════════════════════════════════════════════════════════ */
 
+import { icon } from '../icons.js';
+
 export const $ = (s, r) => (r || document).querySelector(s);
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -37,8 +39,12 @@ export function frame(id, name) {
   const st = el('section', 'hm-st');
   st.dataset.block = id;
   const head = el('div', 'hm-head');
-  head.appendChild(el('span', 'hm-grip', '⠿'));
-  head.appendChild(document.createTextNode(name));
+  // (phase V73 block 6) the handle is the interface's grip icon, "Drag" under the pointer; the name in sentence case
+  const grip = el('span', 'hm-grip');
+  grip.innerHTML = icon('grip-vertical', 14);
+  grip.title = 'Drag';
+  head.appendChild(grip);
+  head.appendChild(el('span', 'hm-name', name));
   const what = el('span', 'hm-what');
   head.appendChild(what);
   head.appendChild(el('span', 'sp'));

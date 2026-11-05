@@ -203,3 +203,37 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-failed .sv3-toast-mark{ color:var(--danger) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-error .sv3-toast-mark{ color:var(--on-danger); background:var(--danger-fill) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast-n{ color:var(--on-danger); background:var(--danger-fill) }
+
+/* ── Phase V73 block 6: the strip's right end and the Alerts menu ─────────────────────────────────────────────────────
+   Every page but the 3D Studio's (the same guard as above; js/app-nav.js and js/alerts-bell.js add nothing there).
+   - Alerts and Admin: an icon and a word.
+   - "Updated", the wait and Alerts' count: ONE label form - a small rounded square, its figures in mono (the wait no longer
+     changes its width every second); the count is the shared `.u-count`'s look.
+   - The menu: a head "Alerts" with a quiet "Clear"; a row's kind an icon (its word under the pointer), its time in mono,
+     "open" / "retry" quiet buttons. */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts{ display:inline-flex; align-items:center; gap:6px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico .u-ico,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts .u-ico{ color:currentColor }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd{
+  display:inline-flex; align-items:center; height:22px; padding:0 var(--sp-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:none; font:var(--fw-medium) var(--fs-11)/1 var(--font); letter-spacing:0 }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait{ color:var(--muted) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait .u-mono{ font-size:var(--fs-11) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-running .sv3-al-count{
+  display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 5px; border-radius:var(--r-2xs);
+  font:var(--fw-medium) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-done::after{ top:3px; right:3px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-head{ height:40px; padding:0 var(--sp-1) 0 var(--sp-3); border-bottom-color:var(--border-soft) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-h{ color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row{ gap:var(--sp-2); padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-linked:hover{ background:var(--hover) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-failed{ background:var(--danger-soft) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-mark{ display:flex; align-items:center; justify-content:center; width:16px }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row.is-failed .sv3-al-mark{ color:var(--danger) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-title{ font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-where{ font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-where.is-stage{ color:var(--ink) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state{ color:var(--faint); font:var(--fw-regular) var(--fs-11)/1 var(--font) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state .u-mono{ font-size:var(--fs-11) }

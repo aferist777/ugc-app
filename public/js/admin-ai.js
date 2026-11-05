@@ -46,8 +46,13 @@
 
   // ── What this is ─────────────────────────────────────────────────────────
   function explain() {
+    // (phase V73 block 6) One line of what this is; the four paragraphs fold under "How it works".
     const box = el('div', 'ai-say');
-    const p = (html) => { const e = el('p'); e.innerHTML = html; box.appendChild(e); };
+    box.appendChild(el('p', 'ai-line', 'The first step of the ladder is asked; the next one only when it fails.'));
+    const more = el('details', 'ai-how');
+    more.appendChild(el('summary', null, 'How it works'));
+    box.appendChild(more);
+    const p = (html) => { const e = el('p'); e.innerHTML = html; more.appendChild(e); };
     p('<b>Agents</b> read what you write and the pictures attached to it, look at the pictures, and answer: a prompt '
       + 'shaped for the model you chose, a description, a plan, a script. Mostly short calls - words and a few pictures '
       + 'in, a short answer back within a minute; some are long work (below).');
@@ -122,8 +127,9 @@
 
     row.appendChild(el('span', 'ai-off', off ? 'stepped over: ' + off : ''));
 
+    // (phase V73 block 6, (к18)) the arrows and the minus are icons (css/admin.css .ai-ico, Lucide's), not ▲ ▼ −
     const move = (to, sym, title) => {
-      const b = el('button', 'u-btn is-s is-icon is-quiet ai-mini', sym);
+      const b = el('button', 'u-btn is-s is-icon is-quiet ai-mini ai-ico is-' + sym);
       b.type = 'button';
       b.title = title;
       b.disabled = to < 0 || to >= n;
@@ -134,9 +140,9 @@
       });
       return b;
     };
-    row.appendChild(move(i - 1, '▲', 'Ask this one earlier'));
-    row.appendChild(move(i + 1, '▼', 'Ask this one later'));
-    const del = el('button', 'u-btn is-s is-icon is-quiet ai-mini', '−');
+    row.appendChild(move(i - 1, 'up', 'Ask this one earlier'));
+    row.appendChild(move(i + 1, 'down', 'Ask this one later'));
+    const del = el('button', 'u-btn is-s is-icon is-quiet ai-mini ai-ico is-minus');
     del.type = 'button';
     del.title = n < 2 ? 'The ladder needs one step at least' : 'Remove this step';
     del.disabled = n < 2;

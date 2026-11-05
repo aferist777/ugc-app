@@ -105,6 +105,7 @@ import * as A from './library/actions.js';
 import * as Layers from './layers.js';
 import { askName } from './name-box.js';
 import { menuIcons, iconEl } from './icons.js';
+import { int } from './num.js';
 import { since as newsSince } from './references/news.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
@@ -500,7 +501,9 @@ export function createTree(host, o) {
     const has = !!(n.children && n.children.length);
     if (has) row.setAttribute('aria-expanded', open.has(n.key) ? 'true' : 'false');
 
-    const tw = _el('button', 'mt-tw', has ? '▸' : '');
+    // (phase V73 block 6, (б5-20) а) the twisty is the interface's chevron, turned when open
+    const tw = _el('button', 'mt-tw');
+    if (has) tw.appendChild(iconEl('chevron-right', 12));
     tw.type = 'button';
     tw.tabIndex = -1;
     if (has) {
@@ -516,7 +519,7 @@ export function createTree(host, o) {
     // (phase V73 block 2, (б2-21)-(б2-24)) The count in brackets right after the name - the name is cut, the count never -,
     // and at the right edge two columns of one width on every row: the lock, then the button (a generator's "generate" /
     // "create", or "+" / ✕ under the pointer): locks and buttons one under another whatever the count is.
-    row.appendChild(_el('span', 'mt-n', '(' + (n.count || 0) + ')'));
+    row.appendChild(_el('span', 'mt-n', '(' + int(n.count || 0) + ')'));   // in mono, "(1,260)" (б5-20)
     const side = _el('span', 'mt-side');
     const lockCol = _el('span', 'mt-lk');
     const btnCol = _el('span', 'mt-bt');
@@ -757,7 +760,7 @@ export function createTree(host, o) {
         lock.innerHTML = LOCK_SVG;
         t.appendChild(lock);
       }
-      t.appendChild(_el('span', 'mt-fn', String(c.count || 0)));
+      t.appendChild(_el('span', 'mt-fn', int(c.count || 0)));
       t.addEventListener('click', () => openNode(c.key));
       t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(c, t, e.clientX, e.clientY); });
       _takesDrops(t, c);

@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    HOME - the page the app opens on (the owner 2026-10-22; the approved mockup is docs/local-app/mockups/home.html).
 
-   Its own sub-header: the tabs on the left (Overview; the knowledge base comes later), what belongs to the open tab on the
-   right ("reset layout"). The Overview is BLOCKS in two columns, each in the gold frame of a talking head's field, no
+   (phase V73 block 6) No sub-header of its own any more - its one tab "Overview" went, "Reset layout" is a quiet button
+   in the corner under the blocks. The Overview is BLOCKS in two columns, each in the gold frame of a talking head's field, no
    numbers; a block is taken by its head and let go anywhere in either column, and where they stand is kept
    (`ugc_home_layout_v2`, mirrored into the library by js/storage-sync.js).
 
@@ -28,6 +28,8 @@ import { showError, showToast } from '../notice.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
 import { ICONS } from './icons.js';
+import { icon } from '../icons.js';
+import { figures } from '../num.js';
 import * as WIN from './windows.js';
 import { projectsBlock } from './projects.js';
 import { openStart } from './start.js';
@@ -134,10 +136,13 @@ BLOCKS.new = () => {
   let shown = false;           // painted once - a later failed read leaves what it shows
   const row = (ico, title, sub, go, href, bad) => {
     const r = el('div', 'hm-row' + (bad ? ' is-bad' : ''));
-    r.appendChild(el('span', 'hm-ico', ico));
+    // (phase V73 block 6, (к18)) the kind of news as one of the interface's icons; figures in mono
+    const mark = el('span', 'hm-ico');
+    mark.innerHTML = icon(ico, 14);
+    r.appendChild(mark);
     const tx = el('div', 'hm-tx');
-    tx.appendChild(el('b', null, title));
-    if (sub) tx.appendChild(el('span', null, sub));
+    tx.appendChild(el('b')).appendChild(figures(title));
+    if (sub) tx.appendChild(el('span')).appendChild(figures(sub));
     r.appendChild(tx);
     if (go) {
       const a = el('a', 'hm-go', go);
@@ -159,20 +164,20 @@ BLOCKS.new = () => {
     const out = [];
     const s = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
     if (d.refs && d.refs.n) {
-      out.push(row('✈', s(d.refs.n, 'post') + ' from Telegram',
+      out.push(row('download', s(d.refs.n, 'post') + ' from Telegram',
         Object.entries(d.refs.where).map(([k, n]) => k + (n > 1 ? ' (' + n + ')' : '')).join(', '), 'look →', '/library?shelf=media'));
     }
     if (d.renders && d.renders.n) {
       const reveal = window.ugcWindow && window.ugcWindow.reveal;
-      out.push(row('✓', s(d.renders.n, 'render') + ' finished',
+      out.push(row('film', s(d.renders.n, 'render') + ' finished',
         Object.entries(d.renders.projects).map(([k, n]) => k + (n > 1 ? ' (' + n + ')' : '')).join(', ') + (d.renders.mb ? ' · ' + d.renders.mb + ' MB' : ''),
         reveal ? 'show in folder' : 'Renders →', reveal ? () => reveal(d.renders.folder) : '/library?shelf=renders'));
     }
     const m = d.made || {};
     const madeBits = [m.pictures && s(m.pictures, 'picture'), m.clips && s(m.clips, 'clip'), m.music && s(m.music, 'track')].filter(Boolean);
-    if (madeBits.length) out.push(row('◆', madeBits.join(', ') + ' made', 'IMAGES · Generated, B-rolls, Music', 'Library →', '/library?shelf=media'));
+    if (madeBits.length) out.push(row('image', madeBits.join(', ') + ' made', 'IMAGES · Generated, B-rolls, Music', 'Library →', '/library?shelf=media'));
     if (d.failed && d.failed.n) {
-      out.push(row('!', s(d.failed.n, 'generation') + ' failed', d.failed.last ? (d.failed.last.title + (d.failed.last.error ? ' · ' + d.failed.last.error : '')).slice(0, 140) : '',
+      out.push(row('circle-alert', s(d.failed.n, 'generation') + ' failed', d.failed.last ? (d.failed.last.title + (d.failed.last.error ? ' · ' + d.failed.last.error : '')).slice(0, 140) : '',
         'Alerts →', () => { const b = $('.sv3-alerts'); if (b) b.click(); }, true));
     }
     rows.replaceChildren(...(out.length ? out : [emptyEl('Nothing new since then.', { icon: 'circle-check' })]));
@@ -248,18 +253,23 @@ BLOCKS.steps = () => {
     };
     const n = STEPS.filter((s) => done[s.id]).length;
     f.st.classList.toggle('is-todo', n < STEPS.length);
-    f.what.textContent = '· ' + n + ' of ' + STEPS.length + ' done';
+    f.what.replaceChildren(figures('· ' + n + ' of ' + STEPS.length + ' done'));
     fill.style.width = Math.round((n / STEPS.length) * 100) + '%';
-    count.textContent = n + ' / ' + STEPS.length;
+    count.replaceChildren(figures(n + ' / ' + STEPS.length));
+    // (phase V73 block 6) Gold only at the first step not done - its ring and its button; the others' buttons are quiet, a
+    // step done is ticked in the one green.
+    const next = STEPS.find((s) => !done[s.id]);
     list.replaceChildren(...STEPS.map((s) => {
-      const li = el('li', done[s.id] ? 'is-done' : '');
-      li.appendChild(el('span', 'hm-ck', done[s.id] ? '✓' : ''));
+      const li = el('li', done[s.id] ? 'is-done' : s === next ? 'is-next' : '');
+      const ck = el('span', 'hm-ck');
+      if (done[s.id]) ck.innerHTML = icon('check', 12);
+      li.appendChild(ck);
       const tx = el('div', 'hm-step-tx');
       tx.appendChild(el('div', 'hm-step-t', s.title));
       tx.appendChild(el('div', 'hm-step-d', s.sub));
       li.appendChild(tx);
       if (!done[s.id]) {
-        const a = el('a', 'hm-btn is-gold u-btn is-s is-gen', s.go);
+        const a = el('a', 'hm-btn u-btn is-s ' + (s === next ? 'is-gen' : 'is-quiet'), s.go);
         a.href = s.href;
         // (phase V60.1) The first character is made here, in New Character's window.
         if (s.id === 'char') a.addEventListener('click', _newCharacter);
@@ -305,7 +315,15 @@ BLOCKS.app = () => {
   f.body.appendChild(box);
   let shown = false;
   const td = (cls, ...kids) => { const c = el('td', cls); for (const k of kids) c.append(k); return c; };
-  const dot = (st) => el('span', 'hm-dot ' + (st === 'ok' ? 'ok' : st === 'down' ? 'down' : st === 'unset' ? '' : 'no'));
+  // (phase V73 block 6) A state is a dot AND its word, in a column of its own - not a colour alone; one green for "works".
+  const dot = (st, word) => {
+    const c = el('td', 's');
+    const s = el('span', 'hm-state');
+    s.append(el('span', 'hm-dot ' + (st === 'ok' ? 'ok' : st === 'down' ? 'down' : st === 'unset' ? '' : 'no')), word);
+    c.appendChild(s);
+    return c;
+  };
+  const WORD = { ok: 'works', down: 'not working', unset: 'no key' };
   const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
   const paint = async () => {
     // (phase V73 block 2, (б2-19) а) A failed read is said - never "not set - connect it in Admin" for a bot or a key that
@@ -328,16 +346,16 @@ BLOCKS.app = () => {
       const p = provs.get(id);
       if (!p) continue;
       const tr = el('tr');
-      const k = td('k', dot(p.state), p.label || id);
+      const k = td('k', p.label || id);
       let v;
-      if (p.state === 'unset') v = td('hm-muted', 'no key - ', Object.assign(el('a', null, 'add it in Admin'), { href: '/admin' }));
-      else if (p.state !== 'ok') v = td('', el('span', null, 'not working · ' + (p.detail || 'no answer')));
+      if (p.state === 'unset') v = td('hm-muted', Object.assign(el('a', null, 'add it in Admin'), { href: '/admin' }));
+      else if (p.state !== 'ok') v = td('', el('span', null, p.detail || 'no answer'));
       else {
         const b = balanceOf(p);
-        if (b) { const s = el('span', null, b.text); if (b.low) s.style.color = 'var(--warn)'; v = td('', s); }
-        else v = td('hm-muted', 'active' + (BILLING[id] ? ' · no balance in its API - ' : ''), ...(BILLING[id] ? [link('billing ↗', BILLING[id])] : []));
+        if (b) { const s = el('span'); s.appendChild(figures(b.text)); if (b.low) s.style.color = 'var(--warn)'; v = td('', s); }
+        else v = td('hm-muted', BILLING[id] ? 'no balance in its API - ' : '', ...(BILLING[id] ? [link('billing ↗', BILLING[id])] : []));
       }
-      tr.append(k, v, td('r', ROLE[id] || ''));
+      tr.append(k, dot(p.state, WORD[p.state] || 'refused'), v, td('r', ROLE[id] || ''));
       t1.appendChild(tr);
     }
     if (bad.keys) parts.push(failedEl('The keys', () => paint(), { line: true }));
@@ -349,15 +367,16 @@ BLOCKS.app = () => {
     parts.push(el('div', 'hm-subh', 'Telegram bot'));
     const t2 = el('table', 'hm-tbl');
     const tr2 = el('tr');
-    if (bad.bot) tr2.appendChild(Object.assign(td('', failedEl('The bot', () => paint(), { line: true })), { colSpan: 3 }));
+    if (bad.bot) tr2.appendChild(Object.assign(td('', failedEl('The bot', () => paint(), { line: true })), { colSpan: 4 }));
     else if (!tg || !tg.bot) {
-      tr2.append(td('k', dot('unset'), 'not set'), td('hm-muted', 'send links and media from the phone into REFERENCES - ', Object.assign(el('a', null, 'connect it in Admin'), { href: '/admin' })), td('r', ''));
+      tr2.append(td('k', 'bot'), dot('unset', 'not set'), td('hm-muted', 'send links and media from the phone into REFERENCES - ', Object.assign(el('a', null, 'connect it in Admin'), { href: '/admin' })), td('r', ''));
     } else {
       const paired = tg.chat && tg.chat.name;
-      tr2.append(td('k', dot(tg.error || tg.conflict ? 'down' : paired ? 'ok' : 'down'), '@' + tg.bot.username),
+      const down = tg.error || tg.conflict;
+      tr2.append(td('k', '@' + tg.bot.username), dot(down ? 'down' : paired ? 'ok' : 'down', down ? 'not working' : paired ? 'works' : 'not connected'),
         td('', paired ? 'listens to ' + tg.chat.name + ' only' + (tg.mode === 'receiver' ? ' · through your Cloudflare' : ' · while the app is open')
-          : 'not connected yet - send it the code shown in Admin'),
-        td('r', tg.queue && tg.queue.waiting ? tg.queue.waiting + ' in the queue' : ''));
+          : 'send it the code shown in Admin'),
+        td('r', figures(tg.queue && tg.queue.waiting ? tg.queue.waiting + ' in the queue' : '')));
     }
     t2.appendChild(tr2);
     parts.push(t2);
@@ -365,23 +384,24 @@ BLOCKS.app = () => {
     parts.push(el('div', 'hm-subh', 'Cloudflare'));
     const t3 = el('table', 'hm-tbl');
     const tr3 = el('tr');
-    if (bad.cf) tr3.appendChild(Object.assign(td('', failedEl('Cloudflare', () => paint(), { line: true })), { colSpan: 3 }));
+    if (bad.cf) tr3.appendChild(Object.assign(td('', failedEl('Cloudflare', () => paint(), { line: true })), { colSpan: 4 }));
     else if (!cf || !cf.tokenSet) {
-      tr3.append(td('k', dot('unset'), 'not set'), td('hm-muted', 'hosts the references the models fetch - ', Object.assign(el('a', null, 'add the key in Admin'), { href: '/admin' })), td('r', ''));
+      tr3.append(td('k', 'key · R2'), dot('unset', 'not set'), td('hm-muted', 'hosts the references the models fetch - ', Object.assign(el('a', null, 'add the key in Admin'), { href: '/admin' })), td('r', ''));
     } else {
       const c = cf.check || {};
       const acc = c.account || cf.account, bkt = c.bucket || cf.bucket;
       const failed = (c.steps || []).find((s) => !s.ok);
       const v = td('');
       if (cf.inUse && acc && bkt) v.append('bucket ', el('b', null, bkt), ' — ', link('open it ↗', 'https://dash.cloudflare.com/' + encodeURIComponent(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt)));
-      else if (failed) v.append('not working · ' + failed.id + ' · ' + String(failed.words || '').slice(0, 90));
-      else v.append(cf.checking ? 'checking…' : 'not checked yet - see Admin');
-      tr3.append(td('k', dot(cf.inUse ? 'ok' : failed ? 'down' : 'unset'), 'key · R2'), v, td('r', cf.inUse ? 'R2 works' : ''));
+      else if (failed) v.append(failed.id + ' · ' + String(failed.words || '').slice(0, 90));
+      else v.append(cf.checking ? '' : 'see Admin');
+      tr3.append(td('k', 'key · R2'), dot(cf.inUse ? 'ok' : failed ? 'down' : 'unset', cf.inUse ? 'works' : failed ? 'not working' : cf.checking ? 'checking' : 'not checked'),
+        v, td('r', cf.inUse ? 'R2 works' : ''));
     }
     t3.appendChild(tr3);
     if (tg && tg.receiver && tg.receiver.script) {
       const r = el('tr');
-      r.append(td('k', dot('ok'), 'receiver'), td('', tg.receiver.script + ' on workers.dev - keeps messages while the app is closed'), td('r', ''));
+      r.append(td('k', 'receiver'), dot('ok', 'works'), td('', tg.receiver.script + ' on workers.dev - keeps messages while the app is closed'), td('r', ''));
       t3.appendChild(r);
     }
     parts.push(t3);

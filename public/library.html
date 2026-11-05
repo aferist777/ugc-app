@@ -82,22 +82,28 @@
       <div class="lib-crumbs" id="lib-crumbs" hidden></div>
       <!-- (phase V34.E) Over SFX: the search and "find online…" (js/sound/shelf.js, painted by js/library/main.js). -->
       <div class="lib-snd-head" id="lib-snd-head" hidden></div>
-      <span class="sp"></span>
-      <span class="lib-status" id="lib-status"></span>
+      <!-- (phase V73 block 6) The bar in three parts: the shelf's action at the left, the path and the state in the middle,
+           bringing in at the right - and the checks of the library in the menu "⋯" at its end. -->
+      <span class="lib-status u-status is-line" id="lib-status"></span>
       <!-- (phase V27) Stops the link being downloaded - shown only while one is (js/library/links.js). -->
       <button class="u-btn is-s is-icon is-quiet u-x lib-link-stop" type="button" id="lib-link-stop" hidden title="Stop this download"></button>
-      <!-- Only appears when two records point at one file; says how many. -->
-      <button class="u-btn is-s" type="button" id="lib-dupes" hidden>Duplicates</button>
-      <!-- Only appears when a record points at a file that is not on disk. -->
-      <button class="u-btn is-s" type="button" id="lib-broken" hidden>Broken</button>
-      <!-- Only appears when a clip has no thumbnail, or has one that is really a full frame. -->
-      <button class="u-btn is-s" type="button" id="lib-thumbs" hidden>Thumbnails</button>
+      <span class="sp"></span>
+      <!-- The checks: each appears only when there is something to fix and says how much - Duplicates (two records on one
+           file), Broken (a record whose file is not on disk), Thumbnails (a clip with none, or a full frame as one). Never
+           shown here since phase V73 block 6: they are the rows of the menu "⋯" (#lib-more, js/library/main.js _moreMenu),
+           which shows while any of them would. -->
+      <span class="lib-svc" hidden>
+        <button class="u-btn is-s" type="button" id="lib-dupes" hidden>Duplicates</button>
+        <button class="u-btn is-s" type="button" id="lib-broken" hidden>Broken</button>
+        <button class="u-btn is-s" type="button" id="lib-thumbs" hidden>Thumbnails</button>
+      </span>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="u-btn is-s" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
       <!-- (phase V27) The same clips from a link - YouTube, TikTok, Instagram... - downloaded by the server. -->
       <button class="u-btn is-s" type="button" id="lib-link" hidden>From a link</button>
       <!-- accept follows the node selected in the media tree (js/library/main.js). -->
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
+      <button class="u-btn is-s is-icon is-quiet" type="button" id="lib-more" hidden title="Checks of the library"></button>
     </div>
     <!-- THE RIGHT COLUMN (phase B): the grid keeps two thirds, and the last third says what the
          selected tile is - on Characters (js/library/info.js) - or the

@@ -192,7 +192,8 @@ function buildRow(r) {
 
   const lbl = document.createElement('label');
   lbl.className = 'bk-label';
-  lbl.textContent = r.label;
+  // (phase V73 block 6) a label at the left, without its colon
+  lbl.textContent = String(r.label || '').replace(/:s*$/, '');
   line.appendChild(lbl);
 
   const field = document.createElement('input');
@@ -223,9 +224,15 @@ function buildRow(r) {
   // row is one line tall and twelve keys fit on one screen (an instruction, when there is one, under the field).
   const side = document.createElement('div');
   side.className = 'bk-side';
+  // (phase V73 block 6) the key's state is a dot and its words - no longer the colour of the field's border
+  const stateRow = document.createElement('div');
+  stateRow.className = 'bk-staterow';
+  const dot = document.createElement('span');
+  dot.className = 'bk-dot';
   const state = document.createElement('div');
   state.className = 'bk-state';
-  side.appendChild(state);
+  stateRow.append(dot, state);
+  side.appendChild(stateRow);
   if (r.desc) {
     const d = document.createElement('div');
     d.className = 'bk-desc';
@@ -316,7 +323,11 @@ function sayError(text, detail) {
 function paint(row) {
   const { field, state, x } = row;
   field.classList.remove('is-ok', 'is-down', 'is-missing', 'is-cleared', 'is-mask');
-  x.textContent = row.mode === 'cleared' ? '↶' : '×';
+  // (phase V73 block 6) the shared ✕ draws itself (.u-x) - the "×" written into it made two crosses; "keep it after all"
+  // is Lucide's undo arrow (css/admin.css .bk-undo)
+  x.textContent = '';
+  x.classList.toggle('u-x', row.mode !== 'cleared');
+  x.classList.toggle('bk-undo', row.mode === 'cleared');
   x.title = row.mode === 'cleared' ? 'Keep it after all' : 'Remove this key (on Save)';
   x.disabled = !(row.present || row.fromEnv || row.mode === 'typed' || row.mode === 'cleared') || (row.fromEnv && !row.present && row.mode !== 'typed');
 
@@ -563,7 +574,7 @@ async function save(btn) {
   // Removing is asked about once: an empty key is a feature that stops working.
   // (phase V73 block 2) one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
   if (removals && !_armed) {
-    _armed = setTimeout(() => { _armed = null; btn.textContent = '💾 Save'; btn.classList.remove('is-danger', 'is-armed'); }, 3000);
+    _armed = setTimeout(() => { _armed = null; btn.textContent = 'Save'; btn.classList.remove('is-danger', 'is-armed'); }, 3000);
     btn.textContent = 'Really? · ' + removals + (removals === 1 ? ' key' : ' keys');
     btn.classList.add('is-danger', 'is-armed');
     return;
@@ -571,7 +582,7 @@ async function save(btn) {
   if (_armed) { clearTimeout(_armed); _armed = null; }
   btn.classList.remove('is-danger', 'is-armed');
   btn.disabled = true;
-  btn.textContent = '⏳ Saving…';
+  btn.textContent = 'Saving';   // (phase V73 block 6) no emoji, no dots
   try {
     const r = await fetch('/api/settings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -594,7 +605,7 @@ async function save(btn) {
     sayError('Not saved', e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '💾 Save';
+    btn.textContent = 'Save';
   }
 }
 

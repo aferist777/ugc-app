@@ -11,6 +11,10 @@
 
 import { mountAlerts } from './alerts-bell.js';
 import { mountUpdate } from './app-update.js';
+import { iconEl } from './icons.js';
+
+// (phase V73, (б1-13а)) The 3D Studio's page keeps its whole look - its strip too: nothing below adds to it there.
+const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
 function _lightCurrent(nav) {
   const here = location.pathname.replace(/\/+$/, '') || '/';
@@ -52,10 +56,14 @@ function _homeLink(nav) {
 }
 
 function _adminLink(nav) {
-  if (nav.querySelector('a[href="/admin"]')) return;
-  const a = document.createElement('a');
-  a.href = '/admin'; a.textContent = 'Admin';
-  nav.appendChild(a);
+  let a = nav.querySelector('a[href="/admin"]');
+  if (!a) {
+    a = document.createElement('a');
+    a.href = '/admin'; a.textContent = 'Admin';
+    nav.appendChild(a);
+  }
+  // (phase V73 block 6) Alerts and Admin - the two at the right end that are not places of work - are an icon and a word.
+  if (!OLD_LOOK() && !a.querySelector('.u-ico')) { a.classList.add('has-ico'); a.insertBefore(iconEl('settings', 14), a.firstChild); }
 }
 
 // (phase V19, the owner 2026-10-08) THE WINDOW'S BUTTONS at the far right, in the app only - the shell gives its pages
