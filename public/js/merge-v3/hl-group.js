@@ -287,7 +287,7 @@ export function renderSubs(host, target) {
   const autoS = subs.length > 0 && subs.every((s) => s.sizeAuto);
   const size = C.slider({ min: 20, max: 200, step: 1, value: +ref.size || 60, mixed: mixed('size') || mixed('sizeAuto'),
     fmt: (v) => v + (autoS ? ' (auto)' : ''), onChange: (v) => _subsPatch({ size: v }) });
-  box.appendChild(C.row('Size', C.pair(size, C.toggleNamed('auto', autoS, (on) => _subsPatch({ size: on ? 'auto' : (+ref.size || 60) }),
+  box.appendChild(C.row('Size', C.pair(size, C.toggleNamed('Auto', autoS, (on) => _subsPatch({ size: on ? 'auto' : (+ref.size || 60) }),
     'Let the format choose the size'))));
   box.appendChild(C.row('Words', C.slider({ min: 0, max: 12, step: 1, value: +ref.wordsPerLine || 0, mixed: mixed('wordsPerLine'),
     fmt: _wordsSaid, onChange: (v) => _subsPatch({ wordsPerLine: v }) })));

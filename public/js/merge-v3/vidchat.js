@@ -470,14 +470,14 @@ function VIDEOS(ctx) {
     const held = !bWhy && _boardOn();
     // (phase V16, the owner) The writer is a checkbox like the storyboard - on by default.
     // (phase V73 block 4) the shared switch (.u-switch), its word beside it
-    const wr = switchRow('writer', ctx.writing(), held, (v) => ctx.setWriting(v));
+    const wr = switchRow('Writer', ctx.writing(), held, (v) => ctx.setWriting(v));
     if (held) wr.classList.add('is-held');
     // (phase V17) Under Kling motion control the writer writes the first frame's picture prompt.
     wr.title = held ? 'The storyboard is written by the writer - untick the storyboard first'
       : isMC() ? 'On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.'
         : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
     box.appendChild(wr);
-    const sb = switchRow('storyboard', !bWhy && _boardOn(), !!bWhy, (v) => {
+    const sb = switchRow('Storyboard', !bWhy && _boardOn(), !!bWhy, (v) => {
       setParam('storyboard', v);
       if (v && !ctx.writing()) ctx.setWriting(true);
       _paintSwitches();

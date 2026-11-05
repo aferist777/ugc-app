@@ -98,7 +98,7 @@ function FRAMES(ctx) {
       _shotSel = s;
       // The writer, a switch of the column (as in the video chat, V15/V16).
       // (phase V73 block 4) the shared switch (.u-switch), its word beside it
-      const wr = switchRow('writer', ctx.writing(), false, (v) => ctx.setWriting(v));
+      const wr = switchRow('Writer', ctx.writing(), false, (v) => ctx.setWriting(v));
       wr.title = 'On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. '
         + 'Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.';
       const sw = el('div', 'mv3-vc-switches');

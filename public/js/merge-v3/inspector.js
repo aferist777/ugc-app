@@ -218,8 +218,8 @@ const FITS = [['fit', 'Fit'], ['fill', 'Fill']];
 // wider than the frame loses its sides, a taller one loses its top and bottom - so the five
 // answers are one list rather than two controls, and whichever axis is not being cut ignores
 // its own answer and stays centred.
-const CROPS = [['left', 'left'], ['center', 'center'], ['right', 'right'],
-               ['top', 'top'], ['bottom', 'bottom']];
+const CROPS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right'],
+               ['top', 'Top'], ['bottom', 'Bottom']];
 
 // ── An insert on the frame ──────────────────────────────────────────────────
 // PLACED BY HAND, ON THE PREVIEW. There is nothing here for where it sits, how big it is or
@@ -799,7 +799,7 @@ let _listenShape = null;
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
-const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
+const POS = [['top', 'Top'], ['center', 'Middle'], ['bottom', 'Bottom']];
 // How a heard lane is cut (phase V30, block 4): style.js CUTS.
 const CUT_OPTS = [['pages', 'Pages - a few words at a time'], ['sentences', 'Sentences - classic subtitles']];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
@@ -808,7 +808,7 @@ const CUTS = CUT_KEYS;
 const _cuts = (patch) => Object.keys(patch || {}).some(k => CUTS.includes(k));
 
 // What a word does while it is spoken, how it is cased, what stands behind it (K0's fields, given controls in K6).
-const EFFECTS = [['none', 'none'], ['color', 'Color'], ['box', 'A box'], ['pop', 'Pop'], ['bounce', 'Jump'],
+const EFFECTS = [['none', 'None'], ['color', 'Color'], ['box', 'A box'], ['pop', 'Pop'], ['bounce', 'Jump'],
   ['sweep', 'Sweep'], ['karaoke', 'Karaoke']];
 // HOW A SUBTITLE PAGE COMES IN AND GOES OUT (phase V49, the owner's (пр16)-(пр18)): motions of the whole page, their lengths the
 // app's (captions/page-fx.js). "Arrives" went: a preset's own way of arriving shows as its In until one is chosen ((пр17)).
@@ -1229,7 +1229,7 @@ function _placeRows(host, st, set, o) {
   const size = C.slider({ min: 20, max: 200, step: 1, value: st.size, fmt: (v) => v + (autoS ? ' (auto)' : ''),
     onChange: (v) => set({ size: v, sizeAuto: false }) });
   host.appendChild(C.row('Size', o.autoS === undefined ? size : C.pair(size,
-    C.toggleNamed('auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
+    C.toggleNamed('Auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
       'Let the format choose the size'))));
 }
 
@@ -1262,7 +1262,7 @@ function _lookRows(host, st, set, o) {
   if (o.marks || st.marked) {
     host.appendChild(C.row('Marked', C.pair(
       C.color(markedColour(st), (v) => set({ marked: v })),
-      C.toggleNamed('auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
+      C.toggleNamed('Auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
         'The color that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
   }
   // A typed line of the subtitle lane plays the spoken word by its letters (phase V30, block 1); a text lane holds titles.

@@ -438,7 +438,7 @@ function _foundSaid(r) {
   const k = String((r && r.agent && r.agent.kind) || '');
   if (!k) return '';
   const K = r.kinds && r.kinds[k];
-  return 'auto → ' + (K ? K.label + (K.inDev ? ' (in development - cut as other)' : '') : k);
+  return 'auto → ' + (K ? K.label.toLowerCase() + (K.inDev ? ' (in development - cut as other)' : '') : k);
 }
 
 function _paintTop() {
@@ -460,7 +460,7 @@ function _paintTop() {
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
   // (phase V33.8) Auto - what the agent found the video to be.
   // (phase V69 P12) Auto - the kind its first call found, by that kind's name.
-  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label
+  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label.toLowerCase()
     : (r.ask && r.agent && r.agent.kind ? ' · ' + _foundSaid(r) : '');
   // (phase V33.8, H3) And the background music asked for - (V68 P3) its moods; a project of before, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
@@ -469,7 +469,7 @@ function _paintTop() {
   // (phase V43) fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
   const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
   const L = (K && K.whole && K.lengths) || r.lengths;
-  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label : (r.ask ? r.ask.length : '');
+  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label.toLowerCase() : (r.ask ? r.ask.length : '');
   const cut = K && K.whole && r.agent && Array.isArray(r.agent.skipped) && r.agent.skipped.length
     ? ' · cut out: ' + [...new Set(r.agent.skipped.map((x) => x.skip))].join(', ') : '';
   if (r.ask) what.appendChild(_fig('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
