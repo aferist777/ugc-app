@@ -185,6 +185,22 @@ function _row(it, refresh) {
     });
     acts.appendChild(x);
   }
+  // (phase V73 block 4, the owner's (б4-2) а) The one under the encoder is stopped here as in Export's window (POST
+  // /api/mv3q/stop/:id): its encode cut off, nothing of it kept - in its finishing passes it is not stopped and stays.
+  // A highlights project's renders keep their own stop on the project bar.
+  if (running && !it.hl) {
+    const s = document.createElement('button');
+    s.type = 'button'; s.className = 'mv3-c-btn mv3-qstop u-btn is-s is-danger'; s.textContent = 'Stop';
+    s.title = it.phase ? 'Finishing its file - it is kept' : 'Stop this render - nothing of it is kept';
+    s.disabled = !!it.phase;
+    s.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      s.disabled = true;
+      try { await fetch('/api/mv3q/stop/' + encodeURIComponent(it.id), { method: 'POST' }); } catch (er) { /* the next read says */ }
+      refresh();
+    });
+    acts.appendChild(s);
+  }
   el.appendChild(acts);
   return el;
 }

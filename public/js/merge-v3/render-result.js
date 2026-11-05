@@ -11,15 +11,17 @@
    and the title often carries the trigger), and joined with `_` into the full name as they
    are edited. (Phase V54 block 8, the owner 2026-10-28: the hook id is out of the pattern -
    the hooks have no numbers any more.)
-   FOOT: the full name, one editable field along the left, and the two buttons on the right.
+   FOOT: the red "Delete render" at the left, the full name - one editable field -, and "Save & download" at the right.
    Editing the full name feeds the parts back while it still has six of them.
 
-   TWO BUTTONS. Save & download names the file in finals/ (renaming it if the name changed),
-   keeps it on the Library's renders shelf and downloads it. Cancel on a FRESH render deletes
-   the file, as it always did; Cancel on a render opened from the queue just closes, because
-   that file was kept on purpose.
+   CLOSING KEEPS IT (phase V73 block 4, the owner's (к24-1), (б4-4) а, (б4-5) а). The ✕, Escape and a press beside the
+   window only close it - a fresh render too: it is filed in the queue the moment it is made, so it stays on the Library's
+   renders shelf and in Queue -> open. DELETE RENDER, at the left of the foot, takes two presses (js/really.js) - a fresh
+   render and one opened from the queue alike - and deletes the file, its subtitles file, its poster and its entry
+   (POST /api/mv3/render/discard). Save & download names the file in finals/ (renaming it if the name changed), keeps it
+   on the Library's renders shelf and downloads it.
 
-   A RENDER'S SUBTITLES FILE (`<name>.en_US.srt`, phase V30, block 4) goes with it: Save renames it, Cancel deletes
+   A RENDER'S SUBTITLES FILE (`<name>.en_US.srt`, phase V30, block 4) goes with it: Save renames it, Delete render deletes
    it. A box beside the buttons - shown only when the render has one - downloads it with the video; it is off until
    ticked (the owner's (с38)), and remembered.
 
@@ -30,6 +32,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
+import { twoPress } from '../really.js';
 
 const TRIGGERS = ['AUTH', 'FEAR', 'FOMO', 'SECRET', 'PROOF', 'DESIRE'];
 
@@ -143,7 +146,8 @@ function close() {
 
 /**
  * @param {object} o  { url, title, key, queueId?, fresh }
- *   fresh   true straight after a render: Cancel deletes the file. From the queue: false.
+ *   fresh   true straight after a render: it plays at once, its title "Render finished". From the queue: false. Either way
+ *           closing keeps the file and Delete render deletes it (phase V73 block 4).
  */
 export async function showResult(o) {
   close();
@@ -216,8 +220,9 @@ export async function showResult(o) {
   name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
   const hint = el('span', 'mv3-rr-hint u-status');
-  const cancel = el('button', 'mv3-c-btn u-btn' + (o.fresh ? ' danger is-danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
-  if (o.fresh) cancel.title = 'Delete this render';
+  // (phase V73 block 4, (к24-1)) the red delete at the left, two presses; closing is the ✕'s, Escape's, a press beside it
+  const del = el('button', 'mv3-c-btn mv3-rr-del u-btn is-danger', 'Delete render'); del.type = 'button';
+  del.title = 'Delete this render - its file, its .srt and its entry in Queue (press twice)';
   const save = el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Save & download'); save.type = 'button';
   // THE SUBTITLES FILE beside the render (phase V30, block 4): shown when it has one; downloaded with the video only
   // when this is ticked - off unless the person ticked it last time (the owner's (с38)).
@@ -230,7 +235,7 @@ export async function showResult(o) {
   srtLbl.append(srtOn, el('span', null, '.srt too'));
   srtBox.appendChild(srtLbl);
   srtBox.hidden = true;
-  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(srtBox); foot.appendChild(cancel); foot.appendChild(save);
+  foot.appendChild(del); foot.appendChild(name); foot.appendChild(hint); foot.appendChild(srtBox); foot.appendChild(save);
   box.appendChild(foot);
   // Whether this render has its .srt, and where: asked of the file itself, so a render opened from the queue knows too.
   const showSrt = async (url) => {
@@ -288,20 +293,29 @@ export async function showResult(o) {
     document.body.appendChild(a); a.click(); a.remove();
   };
 
-  cancel.addEventListener('click', async () => {
-    if (!state.fresh || state.saved) { close(); return; }
-    cancel.disabled = true; save.disabled = true;
-    release();     // Windows will not unlink a file a <video> still holds
-    try {
-      await fetch('/api/mv3/render/discard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: state.url, queueId: state.queueId }) });
-    } catch (e) {}
-    close();
+  twoPress(del, {
+    go: async () => {
+      del.disabled = true; save.disabled = true;
+      release();     // Windows will not unlink a file a <video> still holds
+      let d = null;
+      try {
+        d = await fetch('/api/mv3/render/discard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: state.url, queueId: state.queueId }) }).then(r => r.json());
+      } catch (e) { d = null; }
+      if (!d || !d.success) {
+        // not deleted: it is still there to look at and to delete again
+        v.src = state.url;
+        del.disabled = false; save.disabled = false;
+        say('not deleted: ' + ((d && d.error) || 'the app did not answer'), 'is-bad');
+        return;
+      }
+      close();
+    },
   });
 
   save.addEventListener('click', async () => {
     const want = name.value.trim();
     if (!want) { say('a name is needed', 'is-bad'); name.focus(); return; }
-    save.disabled = true; cancel.disabled = true;
+    save.disabled = true; del.disabled = true;
     say('saving…');
     release();     // the file may be renamed underneath the player
     try {
@@ -318,16 +332,16 @@ export async function showResult(o) {
       srtBox.hidden = !state.srt;
       if (state.srt && srtOn.checked) download(state.srt);
       say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-ok');
-      cancel.textContent = 'Close'; cancel.classList.remove('danger', 'is-danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');
     } finally {
-      save.disabled = false; cancel.disabled = false;
+      save.disabled = false; del.disabled = false;
     }
   });
 
-  x.addEventListener('click', () => { if (state.fresh && !state.saved) cancel.click(); else close(); });
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov && !(state.fresh && !state.saved)) close(); });
+  // (phase V73 block 4, (к24-1), (б4-5) а) the ✕ and a press beside it only close - a fresh render stays in Queue -> open
+  x.addEventListener('click', close);
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
   ov.appendChild(box);
   document.body.appendChild(ov);
   _ov = ov;

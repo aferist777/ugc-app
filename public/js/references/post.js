@@ -197,7 +197,9 @@ export function openPost(list, at, o) {
     const files = filesOf(_cur()).filter(f => _v.sel.has(f.id));
     if (files.length) _moveMenu(e.currentTarget, files.map(f => f.id), files);
   });
-  ov.addEventListener('click', (e) => { if (e.target === ov) closePost(); });
+  // (phase V73 block 4, (к24-3)) closed by the press beside it (`mousedown`), as every window - a drag let go over the dark
+  // does not close it
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closePost(); });
   document.addEventListener('keydown', _onKey);
   if (o && Number.isInteger(o.file)) _v.file = o.file;
   _paint();

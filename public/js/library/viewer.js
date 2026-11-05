@@ -337,7 +337,10 @@ export function openViewer(items, index, opts) {
   $('[data-x="close"]', ov).addEventListener('click', closeViewer);
   $('[data-x="prev"]', ov).addEventListener('click', () => step(-1));
   $('[data-x="next"]', ov).addEventListener('click', () => step(1));
-  ov.addEventListener('click', (e) => { if (e.target === ov) closeViewer(); });
+  // (phase V73 block 4, the owner's (к24-3)) Closed by a press BESIDE it - the press itself (`mousedown`), as every window:
+  // a drag begun inside (a trim handle, a selection of text) and let go over the dark no longer closes it. The 3D Studio's
+  // page keeps its `click` (the owner: «Не трогать»).
+  ov.addEventListener(OLD_LOOK() ? 'click' : 'mousedown', (e) => { if (e.target === ov) closeViewer(); });
   document.addEventListener('keydown', _onKey);
   _layer = Layers.open(ov, { name: 'viewer', onEsc: closeViewer });
 

@@ -31,6 +31,10 @@
    own earlier render (another file of that name is not touched: "(2)"); done, the fragment's record learns it. The
    project's renders are stopped together (stopWhere: the waiting ones taken out, the one under the encoder killed and
    its draft deleted) and gone on with together (armWhere - the Queue's "go on" on the project's row).
+
+   EXPORT'S RENDER (phase V73 block 4, the owner's (б4-2) а) is one such entry too: POST /mv3q/render puts the timeline in
+   line ARMED (addArmed) and starts it when the encoder is free; POST /mv3q/stop/:id stops one entry (stopWhere) - Export's
+   Stop and Queue's. The page follows the entry through GET /mv3q (merge-v3/export-b.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -378,6 +382,41 @@ router.post('/mv3q/run', (req, res) => {
   const was = !!_active;
   if (!was) next();
   res.json({ success: true, already: was, started: !was && !!_active, freed, armed });
+});
+
+// (phase V73 block 4, the owner's (б4-2) а) EXPORT'S RENDER is ONE entry of this queue: in line at once and ARMED - the
+// press asks for it - without arming anybody else's waiting entries (addArmed), started now when the encoder is free. So
+// the window may be closed while it goes, Queue shows it, and it is stopped by its own Stop (POST /mv3q/stop/:id) in the
+// window or in Queue. The checks of `add` first: a timeline, and no clip whose file is gone.
+router.post('/mv3q/render', (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
+      return res.status(400).json({ success: false, error: 'a render needs its timeline' });
+    }
+    const gone = JOB.missingCount(b.timeline);
+    if (gone) {
+      return res.status(409).json({ success: false, missing: gone,
+        error: gone + (gone === 1 ? ' clip has' : ' clips have') + ' no file - replace or remove ' + (gone === 1 ? 'it' : 'them') + ' (red on the timeline)' });
+    }
+    const was = !!_active;
+    const ids = addArmed([{ key: b.key, title: b.title, timeline: b.timeline, adv: b.adv, dur: b.dur }]);
+    if (!ids.length) return res.status(400).json({ success: false, error: 'a render needs its timeline' });
+    res.json({ success: true, id: ids[0], started: !was && _active === ids[0] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// (phase V73 block 4) ONE entry stopped - Export's Stop and Queue's: waiting, it is taken out; under the encoder, ffmpeg is
+// killed and its entry and draft go once it has exited (runBlank); in its finishing passes it is not stopped - only an
+// encode can be cut off - and is kept (`finishing`). A finished or failed one is left as it is (`finished`).
+router.post('/mv3q/stop/:id', (req, res) => {
+  const id = String(req.params.id || '');
+  const it = read().items.find(x => x.id === id);
+  if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
+  if (!_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
+  if (it.status === 'done' || it.status === 'failed') return res.json({ success: true, removed: 0, stopping: false, finished: true });
+  const r = stopWhere(x => x.id === id);
+  res.json({ success: true, removed: r.removed, stopping: r.stopping, finishing: !r.removed && !r.stopping });
 });
 
 // Clearing has two meanings and the caller has to say which. A finished entry stays in the
