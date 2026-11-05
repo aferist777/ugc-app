@@ -78,7 +78,7 @@ export function modelColumn(ctx, o) {
       const tl = Store.timeline();
       const row = (label, ctl, cls) => {
         const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
-        if (ctl.tagName === 'SELECT') ctl.classList.add('u-in');   // (phase V73 block 2) the shared field
+        if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // (phase V73 block 2) the shared field at 24, (2a-3) б
         const l = el('label', null, label);
         l.htmlFor = ctl.id;
         r.append(l, ctl);

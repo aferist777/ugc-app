@@ -82,7 +82,7 @@ function FRAMES(ctx) {
       const r = el('div', 'mv3-ig-row');
       const l = el('label', null, 'shot');
       const s = document.createElement('select');
-      s.className = 'u-in';
+      s.className = 'u-in is-s';
       s.id = 'mv3-fc-shot';
       l.htmlFor = s.id;
       s.title = 'Where the frame\'s edge is. none - your words decide how much of the person is in it; the pose is always your words.';

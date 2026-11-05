@@ -280,7 +280,7 @@ export function createSunoForm(o) {
   // ── the settings column's rows ────────────────────────────────────────────
   /** The mode's dropdown, of `modes` (the catalog's records). A choice here is the person's: setMode(id, 'pick'). */
   function modeSelect(modes) {
-    const ms = el('select', 'u-in');                // (phase V73 block 2) the shared field
+    const ms = el('select', 'u-in is-s');           // (phase V73 block 2) the shared field, 24 in the column ((2a-3) б)
     for (const m of modes || []) {
       const op = el('option', null, m.label);
       op.value = m.id;
@@ -292,7 +292,7 @@ export function createSunoForm(o) {
   }
   /** Suno's model - one price for all three; the choice is remembered. */
   function modelSelect() {
-    const mo = el('select', 'u-in');
+    const mo = el('select', 'u-in is-s');
     for (const id of (CAT ? CAT.sunoModels : ['V6'])) {
       const op = el('option', null, id + ' - ' + (MODEL_HELP[id] || ''));
       op.value = id;
@@ -315,7 +315,7 @@ export function createSunoForm(o) {
     const mood = !!preset();
     const key = mood ? 'pSeconds' : 'seconds';
     if (mood) { lo = 30; note = 'a highlight plays a window from its middle - 90-180 s leaves room'; if (f.pSeconds == null) f.pSeconds = 120; }
-    const n = el('input', 'au-in u-in');
+    const n = el('input', 'au-in u-in is-s');
     n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
     n.value = f[key] ? String(f[key]) : '';
     n.placeholder = 'auto';
