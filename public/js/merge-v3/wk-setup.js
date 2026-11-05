@@ -70,6 +70,7 @@ import * as PV from './preview-b.js';
 import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
 import * as FRAG from './wk-fragments.js';
+import { iconEl } from '../icons.js';
 import * as GW from '../gen-window.js';
 import { delX } from '../del-x.js';
 import {
@@ -432,7 +433,9 @@ function _stageBack(withCross) {
   const back = _backLook();
   const stage = document.getElementById('mv3-stage');
   if (!back || !stage) return;
-  const b = _el('button', 'mv3-wk-back mv3-stage-ctl' + (withCross ? '' : ' is-alone'), '↺ ' + back.characterName);
+  const b = _el('button', 'mv3-wk-back mv3-stage-ctl' + (withCross ? '' : ' is-alone'));
+  // (phase V73 block 5, 5d) Lucide's rotate-ccw in place of "↺"
+  b.append(iconEl('rotate-ccw', 12), document.createTextNode(back.characterName));
   b.type = 'button';
   b.title = 'Back to ' + back.characterName + ' in the look this project began with - what was made for them comes back';
   b.disabled = _saving;

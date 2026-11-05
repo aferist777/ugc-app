@@ -23,7 +23,10 @@ import { hint } from '../bubble.js';
 import { setOpenColumn } from './layout.js';
 import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) Being read, could not be read - the shared parts.
-import { loadingEl, failedEl } from '../ui-state.js';
+import { loadingEl, failedEl, emptyEl } from '../ui-state.js';
+// (phase V73 block 5, 5d) Lucide's ▶ and ✓, the figures in mono.
+import { icon } from '../icons.js';
+import { figures } from '../num.js';
 
 const NAME = 'broll';
 const $ = (id) => document.getElementById(id);
@@ -42,7 +45,6 @@ let _cell = '';               // the piece shown: its cell id
 let _data = null;             // GET /api/broll/:id/piece/:cell
 let _busy = '';               // the item being put in
 let _failed = false;          // (phase V73 block 2) the piece could not be read and nothing of it is shown - the reason was a popup
-let _pop = null;              // the preview under the pointer
 
 // The B-roll's pieces on main video, in their order on the timeline.
 const _pieces = () => {
@@ -85,7 +87,6 @@ export async function openPiece(cell) {
 function _show(on) {
   _shown = !!on;
   Views.setBase(NAME, _shown);
-  if (!_shown) _closePop();
   _crumb();
   _paint();
 }
@@ -115,9 +116,11 @@ function _paint() {
   const d = _data;
   const head = _el('div', 'mv3-brv-head');
   // (the owner 2026-10-31: "текст предложения над полем с выбором биролов выдели золотым, а синим выдели ключевые слова
-  // использованые"; (во52) а) The sentence in gold, the keywords it was searched by in blue under it.
+  // использованые"; (во52) а) The sentence, the keywords it was searched by under it. (phase V73 block 5, 5d; plan 3.5) The sentence
+  // in plain text with a thin gold line at its left - "your sentence" -, the keywords in the second colour.
   head.appendChild(_el('div', 'mv3-brv-sent', '«' + d.text + '»'));
-  const meta = _el('div', 'mv3-brv-meta', 'piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: ');
+  const meta = _el('div', 'mv3-brv-meta');
+  meta.appendChild(figures('Piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: '));
   (d.queries || []).forEach((q, i) => {
     if (i) meta.appendChild(document.createTextNode(' · '));
     meta.appendChild(_el('span', 'mv3-brv-q', q));
@@ -135,10 +138,12 @@ function _paint() {
   root.appendChild(head);
   const scroll = _el('div', 'mv3-brv-scroll');
   root.appendChild(scroll);
-  for (const [kind, label] of [['video', 'videos'], ['image', 'pictures']]) {
+  // (phase V73 block 5, 5d) a piece with nothing found says so - the shared "empty"
+  if (!d.items.length) scroll.appendChild(emptyEl('Nothing was found for this piece.', { icon: 'search' }));
+  for (const [kind, label] of [['video', 'Videos'], ['image', 'Pictures']]) {
     const items = d.items.filter(i => i.kind === kind);
     if (!items.length) continue;
-    scroll.appendChild(_el('div', 'mv3-brv-hdr', label + ' · ' + items.length));
+    scroll.appendChild(_el('div', 'mv3-brv-hdr')).appendChild(figures(label + ' · ' + items.length));
     const grid = _el('div', 'mv3-brv-grid');
     for (const it of items) grid.appendChild(_tile(it));
     scroll.appendChild(grid);
@@ -153,8 +158,12 @@ function _tile(it) {
   img.alt = '';
   img.src = it.thumb;
   t.appendChild(img);
-  if (it.kind === 'video') t.appendChild(_el('span', 'mv3-brv-dur', '▶ ' + (it.dur ? Math.round(it.dur) + ' s' : '')));
-  if (it.on) t.appendChild(_el('span', 'mv3-brv-on', '✓'));
+  if (it.kind === 'video') {
+    const dur = t.appendChild(_el('span', 'mv3-brv-dur'));
+    dur.innerHTML = icon('play', 10);
+    if (it.dur) dur.appendChild(figures(Math.round(it.dur) + ' s'));
+  }
+  if (it.on) t.appendChild(_el('span', 'mv3-brv-on')).innerHTML = icon('check', 12);
   // (phase V62, block 3, (во45)) Where it is from, and whose - Pixabay's terms: its results say so.
   t.appendChild(_el('span', 'mv3-brv-by', [_site(it.site), it.author].filter(Boolean).join(' · ')));
   if (_busy === it.id) t.appendChild(_el('span', 'mv3-brv-wait', 'putting it in…'));
@@ -162,56 +171,18 @@ function _tile(it) {
   // the tile and its preview say it all.
   t.setAttribute('aria-label', it.here ? 'In this piece now' : 'Put it into this piece');
   t.disabled = !!_busy;
-  t.addEventListener('mouseenter', () => _openPop(t, it));
-  t.addEventListener('mouseleave', _closePop);
   t.addEventListener('click', () => { if (!it.here) _swap(it); });
   return t;
 }
 
-// ── The preview under the pointer (the owner: "при наведении показывать всплывашку с предпросмотром") ──
-function _openPop(anchor, it) {
-  _closePop();
-  const box = _el('div', 'mv3-brv-pop');
-  const wide = (it.w || 9) >= (it.h || 16);
-  box.classList.toggle('is-wide', wide);
-  if (it.kind === 'video' && it.preview) {
-    const v = document.createElement('video');
-    v.src = it.preview;
-    v.muted = true;
-    v.autoplay = true;
-    v.loop = true;
-    v.playsInline = true;
-    box.appendChild(v);
-  } else {
-    const img = _el('img');
-    img.src = it.thumb;
-    img.alt = '';
-    box.appendChild(img);
-  }
-  box.appendChild(_el('div', 'mv3-brv-popcap', [it.kind === 'video' ? 'video' : 'picture', it.w && it.h ? it.w + '×' + it.h : '',
-    it.author, it.site].filter(Boolean).join(' · ')));
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  const bw = box.offsetWidth, bh = box.offsetHeight;
-  const left = r.right + 8 + bw < window.innerWidth ? r.right + 8 : Math.max(6, r.left - 8 - bw);
-  box.style.left = Math.round(left) + 'px';
-  box.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - bh - 6, r.top + r.height / 2 - bh / 2))) + 'px';
-  _pop = box;
-}
-function _closePop() {
-  if (!_pop) return;
-  const v = _pop.querySelector('video');
-  if (v) { try { v.pause(); } catch (e) { /* gone */ } }
-  _pop.remove();
-  _pop = null;
-}
+// (phase V73 block 5, 5d; the owner's (б5-19) а, (к10)) The preview under the pointer is gone - a tile is seen as it is, and a
+// press puts it in.
 
 // ── The press: this item into the piece ──
 async function _swap(it) {
   const id = _pid();
   if (!id || _busy) return;
   _busy = it.id;
-  _closePop();
   _paint();
   Store.hush(120000);
   try {

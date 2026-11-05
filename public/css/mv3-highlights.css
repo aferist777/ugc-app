@@ -21,7 +21,7 @@
   padding:8px 10px; border-bottom:1px solid var(--border-soft);
 }
 .mv3-hl-what{flex:1 1 220px; min-width:0; display:flex; align-items:baseline; gap:8px}
-.mv3-hl-title{font:700 12px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.mv3-hl-title{font:600 12px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .mv3-hl-meta{flex:0 0 auto; font:500 10px/1.3 var(--font); color:var(--muted); white-space:nowrap}
 .mv3-hl-state{flex:0 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
 .mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
@@ -42,7 +42,7 @@
 /* The tiles: vertical, as a short is */
 .mv3-hl-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:10px; align-content:start}
 .mv3-hl-tile{
-  position:relative; aspect-ratio:9 / 16; border:1px solid var(--border); border-radius:var(--r);
+  position:relative; aspect-ratio:9 / 16; border:1px solid var(--border); border-radius:var(--r-xs);   /* (V73 block 5, 5d) the gallery's radius */
   overflow:hidden; background:var(--surface-2); cursor:pointer; transition:border-color .12s var(--ease);
 }
 .mv3-hl-tile:hover{border-color:var(--muted)}
@@ -51,14 +51,14 @@
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
 .mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; margin:0}
-.mv3-hl-score{
-  position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
-  background:var(--scrim); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;
+/* (phase V73 block 5, 5d; the owner's (б5-18) а) THE MARKS IN ONE LINE at the foot, over the name: the score (mono), the pieces,
+   "Rendered" - quiet labels on the scrim; the tick and the ✕ in the top corners. */
+.mv3-hl-marks{display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1)}
+.mv3-hl-score, .mv3-hl-pieces, .mv3-hl-rendered{
+  display:inline-flex; align-items:center; gap:3px; padding:1px 5px; border-radius:999px; white-space:nowrap;
+  background:var(--scrim); color:var(--on-media); font:var(--fw-medium) var(--fs-9)/1.3 var(--font);
 }
-.mv3-hl-pieces{
-  position:absolute; top:49px; right:5px; z-index:2; padding:1px 5px; border-radius:999px;
-  background:var(--scrim); color:var(--on-media); font:600 8.5px/1.3 var(--font);
-}
+.mv3-hl-score{font-weight:var(--fw-strong)}
 /* The cross in the corner (х19): pale until the tile is pointed at; armed - "really?" - filled red. */
 .mv3-hl-x{position:absolute; top:5px; right:5px; z-index:3; opacity:.35; transition:opacity var(--dur-1) var(--ease)}
 .mv3-hl-x.u-onpic:not(.is-armed){width:20px; height:20px; --x-size:12px}   /* the shared cross on the tile; armed - the part's red fill */
@@ -74,16 +74,16 @@
    .mk-scene-t): seen at once as a field that takes typing; pointed at - its frame lighter, typed in - blue. */
 .mv3-hl-card-name{
   display:block; width:100%; padding:3px 8px; margin-bottom:6px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--bg); font:700 12.5px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
+  background:var(--bg); font:600 12px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
 }
 .mv3-hl-card-name:hover{border-color:var(--muted)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
-  background:linear-gradient(to top, var(--scrim-strong), oklch(0 0 0 / 0));
+  background:linear-gradient(to top, var(--scrim-strong), transparent);
   display:flex; flex-direction:column; gap:3px;
 }
 .mv3-hl-name{
-  font:700 10.5px/1.25 var(--font); color:var(--on-media);
+  font:600 var(--fs-10)/1.25 var(--font); color:var(--on-media);
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
 }
 .mv3-hl-step{font:600 9px/1.3 var(--font); color:var(--ink); overflow-wrap:anywhere}
@@ -92,46 +92,41 @@
 /* (phase V40, the owner's (о5)) Until the moments are found: ONE panel the field's width - the way's steps as rows, one bar for
    the whole of it, "0:48 · ~3:10 left" - popping up once. */
 .mv3-hl-prep{
-  margin:0; padding:12px 14px 12px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+  margin:0; padding:var(--sp-3) var(--sp-4);   /* (V73 block 5, 5d) no shadow: a section of the panel */
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
 }
 .mv3-hl-prep.is-new{animation:mv3-hl-pop .28s var(--ease) both}
 @keyframes mv3-hl-pop{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
 .mv3-hl-stages{list-style:none; margin:0 0 10px; padding:0; display:flex; flex-direction:column; gap:6px}
-.mv3-hl-stage{display:flex; align-items:baseline; gap:9px; font:500 11px/1.35 var(--font); color:var(--muted)}
-.mv3-hl-stage-m{flex:0 0 14px; font-style:normal; font-weight:700; text-align:center}
+.mv3-hl-stage{display:flex; align-items:center; gap:var(--sp-2); font:500 11px/1.35 var(--font); color:var(--muted)}
+.mv3-hl-stage-m{flex:0 0 14px; display:flex; justify-content:center; font-style:normal}   /* Lucide's icons (V73 block 5, 5d) */
+.mv3-hl-stage-m.is-ring::before{content:''; width:8px; height:8px; border:1.5px solid currentColor; border-radius:50%}
 .mv3-hl-stage-w{flex:1 1 auto; min-width:0; overflow-wrap:anywhere}
 .mv3-hl-stage-t{flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--muted)}
 .mv3-hl-stage.is-done{color:var(--ink)}
 .mv3-hl-stage.is-done .mv3-hl-stage-m{color:var(--success)}
 .mv3-hl-stage.is-now{color:var(--ink); font-weight:600}
-.mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--ink); animation:mv3-hl-beat 1.2s ease-in-out infinite}
+.mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--ink)}
+.mv3-hl-stage.is-now .mv3-hl-stage-m .u-ico{animation:u-spin 1s linear infinite}   /* the turning loader while it works - the blink went */
 @keyframes mv3-hl-beat{50%{opacity:.35}}
 .mv3-hl-stage.is-next{opacity:.7}
 .mv3-hl-stage.is-failed, .mv3-hl-stage.is-failed .mv3-hl-stage-m{color:var(--danger)}
 .mv3-hl-prep-bar{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}
 .mv3-hl-prep-bar > i{display:block; height:100%; width:0; background:var(--muted); border-radius:3px; transition:width .6s linear}
-.mv3-hl-prep-t{margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
+.mv3-hl-prep-t{margin-top:6px; font:500 var(--fs-10)/1.3 var(--font); color:var(--muted); text-align:right}   /* figures in mono */
 
 /* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
 .mv3-hl-fill.is-render{background:var(--muted)}
 .mv3-hl-step.is-warn{color:var(--warn)}
-.mv3-hl-rendered{
-  position:absolute; top:28px; left:5px; z-index:2; padding:2px 6px; border-radius:999px;
-  background:var(--success); color:var(--on-fill); font:700 8.5px/1.3 var(--font); white-space:nowrap;
-}
-.mv3-hl-rendered.is-changed{background:var(--scrim); color:var(--ink); border:1px dashed var(--on-media-line)}
-.mv3-hl-again{
-  align-self:flex-start; padding:2px 7px; border:1px solid var(--danger); border-radius:var(--r-xs);
-  background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); cursor:pointer;
-}
-.mv3-hl-again:hover{background:var(--danger)}
+/* "Rendered" is a quiet mark with Lucide's play (green went: green is "on" - the tick); "Changed since" dashed */
+.mv3-hl-rendered.is-changed{color:var(--muted); border:1px dashed var(--on-media-line)}
+.mv3-hl-again{align-self:flex-start}   /* the shared button, not red (V73 block 5, 5d) */
 .mv3-hl-rline b{overflow-wrap:anywhere}
 .mv3-hl-meta.is-err{color:var(--danger)}
 .mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
 
 /* The card of the moment pressed */
-.mv3-hl-card-h{font:700 12.5px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}
+.mv3-hl-card-h{font:600 12px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}
 .mv3-hl-facts{display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom:6px}
 .mv3-hl-fact{font:500 10px/1.3 var(--font); color:var(--muted)}
 .mv3-hl-fact b{color:var(--muted); font-size:12px}

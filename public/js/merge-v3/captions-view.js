@@ -129,11 +129,12 @@ function _build() {
   for (const [kind, cats, list] of [['subs', CATEGORIES, PRESETS], ['text', TEXT_CATEGORIES, TEXT_PRESETS]]) {
     const all = [['', 'All', 0], [MINE, 'Mine', 0]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
     for (const [id, label, n] of all) {
-      const b = _el('button', 'mv3-cap-cat', label);
+      // (phase V73 block 5, 5d; plan 3.5) the shared chip, its count in mono
+      const b = _el('button', 'mv3-cap-cat u-chip', label);
       b.type = 'button';
       b.dataset.cat = id;
       b.dataset.kind = kind;
-      const num = _el('span', 'mv3-cap-n', ' ' + n);
+      const num = _el('span', 'mv3-cap-n u-mono', String(n));
       b.appendChild(num);
       _counts.set(kind + '|' + id, num);
       b.addEventListener('click', () => _setCat(id));
@@ -215,7 +216,7 @@ function _tile(p, mine) {
   const name = _el('div', 'mv3-cap-name');
   const nm = _el('span', 'mv3-cap-nm', p.name);
   name.appendChild(nm);
-  const ed = _el('span', 'mv3-cap-ed', 'edited');
+  const ed = _el('span', 'mv3-cap-ed', 'Edited');
   ed.hidden = true;
   name.appendChild(ed);
   btn.appendChild(box);
@@ -324,8 +325,8 @@ function _syncMine() {
 function _paintCounts() {
   for (const [kind, list] of [['subs', PRESETS], ['text', TEXT_PRESETS]]) {
     const n = MyPresets.all().filter((p) => _kindOf(p) === kind).length;
-    if (_counts.has(kind + '|')) _counts.get(kind + '|').textContent = ' ' + (list.length + n);
-    if (_counts.has(kind + '|' + MINE)) _counts.get(kind + '|' + MINE).textContent = ' ' + n;
+    if (_counts.has(kind + '|')) _counts.get(kind + '|').textContent = String(list.length + n);
+    if (_counts.has(kind + '|' + MINE)) _counts.get(kind + '|' + MINE).textContent = String(n);
   }
 }
 

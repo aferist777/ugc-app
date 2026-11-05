@@ -41,10 +41,10 @@ export function fontPicker(host, { onPick, note } = {}) {
   const list = FONTS.slice().sort((a, b) => order.indexOf(groupOf(a)) - order.indexOf(groupOf(b)));
   const chips = [['', 'All', list.length]].concat(GROUPS.map(([id, label]) => [id, label, list.filter((f) => groupOf(f) === id).length]));
   for (const [id, label, n] of chips) {
-    const b = _el('button', 'mv3-cap-cat', label);
+    const b = _el('button', 'mv3-cap-cat u-chip', label);   // (phase V73 block 5, 5d) the shared chip, its count in mono
     b.type = 'button';
     b.dataset.cat = id;
-    b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
+    b.appendChild(_el('span', 'mv3-cap-n u-mono', String(n)));
     b.addEventListener('click', () => { cat = id; _spot(null); paintCat(); });
     top.appendChild(b);
   }
@@ -60,7 +60,7 @@ export function fontPicker(host, { onPick, note } = {}) {
     const box = _el('div', 'mv3-cap-box mv3-fnt-box');
     const name = _el('div', 'mv3-cap-name');
     name.appendChild(_el('span', 'mv3-cap-nm', f.label));
-    if (twin !== f.family) name.appendChild(_el('span', 'mv3-fnt-tw', 'lat'));
+    if (twin !== f.family) name.appendChild(_el('span', 'mv3-fnt-tw', 'Lat'));
     btn.append(box, name);
     btn.addEventListener('click', (e) => {
       const shift = !!(e && e.shiftKey);

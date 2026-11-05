@@ -111,15 +111,16 @@ function _mark() {
   const on = !!(_audio && !_audio.paused) ? _playing : '';
   document.querySelectorAll('.mv3-wk-vplay:not(.is-read)').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
-    // (phase V73 block 4) the voices window's buttons draw the icons (play / pause), the others their signs
-    if (b.dataset.ico) b.innerHTML = icon(is ? 'pause' : 'play', 14); else b.textContent = is ? '❚❚' : '▶';
+    // (phase V73 block 4) the voices window's buttons draw the icons (play / pause) at 14 px; (block 5, 5d) setup's at 12
+    b.innerHTML = icon(is ? 'pause' : 'play', b.dataset.ico ? 14 : 12);
     b.classList.toggle('is-playing', !!is);
   });
 }
 
 function _playBtn(src, what, ico) {
-  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon', ico ? '' : '▶');
-  if (ico) { b.dataset.ico = '1'; b.innerHTML = icon('play', 14); }
+  const b = el('button', 'mv3-wk-vplay u-btn is-s is-icon');
+  if (ico) b.dataset.ico = '1';
+  b.innerHTML = icon('play', ico ? 14 : 12);
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -178,7 +179,7 @@ export function paintRow(host, api, o) {
   const btn = el('button', 'mv3-wk-vpickbtn u-btn is-s is-field' + (cur ? '' : ' is-need'));
   btn.type = 'button';
   btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
-  btn.appendChild(el('span', 'mv3-wk-vpickarrow', '▾'));
+  btn.appendChild(el('span', 'mv3-wk-vpickarrow')).innerHTML = icon('chevron-down', 12);   // (V73 block 5, 5d) Lucide's
   btn.disabled = !!_busy;
   hint(btn, (now
     ? 'The voice ' + (rec.name || 'the character') + ' is read in.'
@@ -285,7 +286,7 @@ async function _voiceMenu(anchor, api) {
     t.appendChild(el('div', 'mv3-wk-vname', name));
     if (sub) t.appendChild(el('div', 'mv3-wk-vsub', sub));
     r.appendChild(t);
-    if (isOn) r.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
+    if (isOn) r.appendChild(el('span', 'mv3-wk-vtag', 'The voice'));
     if (!disabled && !isOn) r.addEventListener('click', () => { _closeMenu(); on(); });
     box.appendChild(r);
   };
@@ -293,7 +294,7 @@ async function _voiceMenu(anchor, api) {
     box.appendChild(el('div', 'mv3-sc-menu-sep', (rec.name || 'the character') + '’s voices'));
     for (const v of mine) row(v.sample, v.name || v.voiceId, _sub(v), () => _star(api, v.voiceId), String(v.voiceId) === curId);
   }
-  box.appendChild(el('div', 'mv3-sc-menu-sep', 'saved voices'));
+  box.appendChild(el('div', 'mv3-sc-menu-sep', 'Saved voices'));
   const savedAt = box.childNodes.length;
   if (_shelf === null) _shelfFailed = false;      // read again now: "Reading…" until its answer
   const paintSaved = () => {
@@ -421,7 +422,7 @@ export function paintPicker(host, api) {
     txt.appendChild(el('div', 'mv3-wk-vname', own.name || own.voiceId));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || 'no tags'));
     row.appendChild(txt);
-    row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'the voice'));
+    row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'The voice'));
     host.appendChild(row);
     host.appendChild(api.note(rec
       ? 'Every line is read in it until ' + (rec.name || 'the character') + ' is given a voice of their own.'
@@ -437,7 +438,7 @@ export function paintPicker(host, api) {
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
     row.appendChild(txt);
     if (String(v.voiceId) === now) {
-      row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'the voice'));
+      row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'The voice'));
     } else {
       const use = el('button', 'mv3-wk-vuse u-btn is-s' + (api.inWindow ? ' is-quiet' : ''), 'use');
       use.type = 'button';

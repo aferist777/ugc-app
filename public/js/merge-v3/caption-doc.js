@@ -37,6 +37,7 @@ import { isHeard } from '../captions/heard.js';
 import { isCorrected } from '../captions/words.js';
 // (phase V73 block 2, step 2b) A lane with no lines - the shared "nothing here", a row of the document.
 import { emptyEl } from '../ui-state.js';
+import { setFigures } from '../num.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 0:12.4 - minutes and seconds to a tenth.
@@ -192,8 +193,9 @@ export function paint() {
       sec.el.dataset.track = t.id;
       const lines = linesOf(t);
       const name = t.name || (t.kind === 'subs' ? 'Subtitles' : 'Text');
-      const head = name + ' · ' + lines.length + (lines.length === 1 ? ' line' : ' lines');
-      if (sec.head.textContent !== head) sec.head.textContent = head;
+      // (phase V73 block 5, 5d) sentence case ("Text 1"), its count in mono
+      const head = name.charAt(0).toUpperCase() + name.slice(1) + ' · ' + lines.length + (lines.length === 1 ? ' line' : ' lines');
+      if (sec.head.dataset.t !== head) { sec.head.dataset.t = head; setFigures(sec.head, head); }
       const nodes = [];
       let voice = null;
       for (const c of lines) {

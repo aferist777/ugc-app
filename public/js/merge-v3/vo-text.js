@@ -20,6 +20,7 @@
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { showError } from '../notice.js';
+import { int } from '../num.js';
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -27,7 +28,7 @@ const _el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-const _n = (v) => v.toLocaleString('en-US').replace(/,/g, ' ');
+const _n = int;   // (phase V73 block 5, 5d; (б5-21) а) "4,500" - the page's one figure function
 
 /** (phase V63) A talking head's text cut into its lines: every paragraph - every Enter - a line. */
 export const paragraphs = (t) => String(t || '').split(/\r?\n/).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean);
@@ -78,7 +79,7 @@ export function openOwnText(put, done, o = {}) {
   body.appendChild(_el('p', 'mv3-x-note', talking
     ? 'Every paragraph is one line - a fragment with its own frame and clip, read by itself. Written in another language, it is '
       + 'made English when the project is made.'
-    : 'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5 000 at a time, '
+    : 'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5,000 at a time, '
       + 'and the rest is left for the mood\'s tags.'));
 
   // the foot: the window's one status line (u-status) at the left, use at the right

@@ -41,7 +41,8 @@ import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY } from '../really.js';
-import { menuIcons } from '../icons.js';
+import { menuIcons, iconEl } from '../icons.js';
+import { figures } from '../num.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -232,7 +233,7 @@ async function _filterMenu() {
   const el = _el('div', 'mv3-plus-menu mv3-sc-menu u-menu is-float');
   let srcHead = false;
   for (const t of _choices()) {
-    if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'written from')); srcHead = true; }
+    if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'Written from')); srcHead = true; }
     if (!t.src && srcHead && (t.id === 'nosrc' || t.id === 'archive') && !el.querySelector('.mv3-sc-menu-sep.is-end')) {
       el.appendChild(_el('div', 'mv3-sc-menu-sep is-end'));
     }
@@ -285,14 +286,16 @@ function _build() {
   const root = $('mv3-sc');
   if (!root) return;
   const top = _el('div', 'mv3-scv-top');
-  const add = _el('button', 'mv3-sc-new u-btn is-s', '+ scenario');
+  const add = _el('button', 'mv3-sc-new u-btn is-s');
+  add.append(iconEl('plus', 14), document.createTextNode('scenario'));   // (phase V73 block 5, 5d) Lucide's plus
   add.type = 'button';
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
   top.appendChild(add);
 
   // The category: one button showing the choice and its count; pressing it opens the list.
-  const filter = _el('button', 'mv3-sc-filter');
+  // (phase V73 block 5, 5d) the shared list button (`is-field`), its chevron Lucide's, its count in mono
+  const filter = _el('button', 'mv3-sc-filter u-btn is-s is-field');
   filter.type = 'button';
   filter.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
   top.appendChild(filter);
@@ -317,7 +320,8 @@ function _paintFilter() {
   b.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
   b.textContent = '';
   b.appendChild(_el('span', 'mv3-sc-filter-t', cur.label));
-  b.appendChild(_el('span', 'mv3-sc-filter-n', '· ' + cur.n + ' ▾'));
+  b.appendChild(_el('span', 'mv3-sc-filter-n')).appendChild(figures('· ' + cur.n));
+  b.appendChild(iconEl('chevron-down', 14));
 }
 
 function _paintList() {
@@ -336,8 +340,9 @@ function _paintList() {
   for (const s of rows) {
     const row = _el('div', 'mv3-sc-row' + (s.archived ? ' is-archived' : ''));
     row.title = 'Open the text. Right-click for the rest.';
-    // THE BUTTONS LEFT OF THE TITLE, the cross first (the owner, V28.3): ✕ - use - the title. The button depends on
-    // where the scenario is: an archived one is not offered as something to build with until it is back in the library.
+    // THE BUTTONS RIGHT OF THE TITLE (phase V73 block 5, 5d; plan 3.5 - left of it, the cross first, since V28.3): the title -
+    // use - ✕. The button depends on where the scenario is: an archived one is not offered as something to build with until it
+    // is back in the library.
     const acts = _el('div', 'mv3-sc-acts');
     // OUT OF THE LIST from the row itself (phase I1, the owner 2026-10-01), in two presses: the
     // first turns the cross into "really?" for three seconds, the second archives. One press would
@@ -376,13 +381,13 @@ function _paintList() {
         showError('Could not make the project: ' + err.message);
       }
     });
-    acts.appendChild(go);
-    row.appendChild(acts);
+    acts.insertBefore(go, acts.firstChild);
 
     const txt = _el('div', 'mv3-sc-txt');
     txt.appendChild(_el('b', null, s.title || 'untitled'));
-    txt.appendChild(_el('span', 'mv3-sc-meta', _meta(s)));
+    txt.appendChild(_el('span', 'mv3-sc-meta')).appendChild(figures(_meta(s)));   // its count and date in mono
     row.appendChild(txt);
+    row.appendChild(acts);
 
     row.addEventListener('click', () => openForm(s));
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _rowMenu(e, s, row); });
