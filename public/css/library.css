@@ -163,7 +163,9 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-info-ref img{ display:block; width:100%; height:auto; }
 .lib-info-ref.is-characters img{ aspect-ratio:16 / 9; object-fit:cover; }
-.lib-info-note{ padding:10px 12px; font-size:10.5px; color:var(--muted); }
+/* (phase V73 block 2) The column's "nothing here" / "did not load" rows are the shared parts (.u-empty / .u-failed .is-line,
+   css/app-shell.css); this keeps only where they sit - inset as the column's other rows. */
+.lib-info-note{ margin:6px 12px; }
 /* A character's voices: the play button and the lines of a Voices row, and the main one in gold. */
 .lib-info-voice{
   display:flex; align-items:center; gap:8px; padding:6px 12px;
@@ -309,12 +311,11 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-sub{
   display:flex; gap:5px; padding:0 5px 4px; font-size:9px; color:var(--muted); opacity:.8;
 }
-.lib-empty{
-  grid-column:1 / -1; padding:28px 12px; text-align:center;
-  font-size:12px; color:var(--muted);
-}
-/* (phase V73 block 0) A shelf that did not load - its words and "Try again" (js/library/main.js _shelfFailed). */
-.lib-empty.is-failed .u-btn{ margin-left:6px; }
+/* (phase V73 block 2) An empty shelf, folder or filter - and a shelf that did not load (js/library/main.js _shelfFailed) - are
+   the shared parts .u-empty / .u-failed (css/app-shell.css, js/ui-state.js); this keeps only where they sit: the whole row
+   of the grid, and inset in the right column. */
+.lib-empty{ grid-column:1 / -1; }
+.lib-info-body > .lib-empty{ margin:10px; }
 
 /* The viewer (.lib-view-*) and .lib-btn now live in css/lib-viewer.css, which this
    page loads too. They moved because Merge v3 opens the same popup through the same
@@ -521,7 +522,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-add{ flex:0 0 auto; width:100%; }
 .mk-add.u-btn{ font-size:14px; }
 .mk-src-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
-.mk-src-empty{ padding:8px 2px; font-size:11px; line-height:1.5; color:var(--muted); }
+/* (phase V73 block 2) "No sources yet" / "No narrators yet" are the shared part .u-empty (css/app-shell.css) - .mk-src-empty went. */
 /* A source is a LINE, not a poster (phase V28.1 - a podcast has no picture). */
 .mk-srow{
   position:relative; display:flex; align-items:flex-start; gap:6px; flex:0 0 auto;
@@ -588,7 +589,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   scrollbar-gutter:stable;
   display:flex; flex-direction:column; gap:8px;
 }
-.mk-empty{ padding:12px 2px; font-size:12px; line-height:1.5; color:var(--muted); }
+/* (phase V73 block 2) "No topics found yet", "No samples yet", "Not read yet" are the shared part .u-empty - .mk-empty went. */
 /* The countdown row (css/gen-progress.css .sv3-inline-prog) lies over its host: the host is a
    positioned strip of its own height, or the row would cover the whole window. */
 .mk-job{ position:relative; min-height:28px; display:flex; flex-direction:column; gap:5px; }

@@ -25,6 +25,10 @@
 import * as J from './jobs.js';
 import * as Layers from '../layers.js';
 import { twoPress } from '../really.js';
+// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here" as the
+// shared part (css/app-shell.css .u-empty).
+import { ask } from '../ask.js';
+import { emptyEl } from '../ui-state.js';
 
 const el = J.el;
 
@@ -176,7 +180,7 @@ function _paintList() {
   for (const n of [...box.children]) if (n !== keep) n.remove();
   if (keep && keep.parentNode !== box) box.prepend(keep);
   if (!_list.length && !keep) {
-    box.appendChild(el('div', 'mk-src-empty', 'No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.'));
+    box.appendChild(emptyEl('No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.'));
     return;
   }
   for (const it of _list) {
@@ -193,7 +197,7 @@ function _paintList() {
     x.type = 'button';
     x.title = 'Delete this narrator';
     x.disabled = _running(it.id);
-    x.addEventListener('click', (e) => { e.stopPropagation(); _delete(it); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); _delete(it, x); });
     row.appendChild(x);
     const pick = () => { if (String(it.id) !== _sel) { _sel = String(it.id); _paintList(); } _show(); };
     row.addEventListener('click', pick);
@@ -251,7 +255,7 @@ function _closeName() {
   Layers.close(b.layer);
 }
 
-async function _delete(it) {
+async function _delete(it, anchor) {
   if (_running(it.id)) return;
   // Drafts that were written with it: they keep their text, and the form will ask for another.
   let n = 0;
@@ -261,7 +265,9 @@ async function _delete(it) {
   } catch (e) { /* the count is a courtesy */ }
   const lines = [`Delete the narrator "${it.name}"?`, '', 'Its samples and its voice go with it, and that cannot be undone.'];
   if (n) lines.push('', `${n === 1 ? 'One draft was' : `${n} drafts were`} written with it - ${n === 1 ? 'it keeps its' : 'they keep their'} text, and the form will ask for another narrator.`);
-  if (!confirm(lines.join('\n'))) return;
+  // `stay`: the list repaints as a narrator's job lands, and a repaint's scroll must not answer "no" for the person.
+  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
+  if (_running(it.id)) return;
   try {
     await J.api(_nurl(it.id), { method: 'DELETE' });
     _typed.delete(String(it.id));
@@ -348,7 +354,7 @@ function _paintSamples() {
   box.textContent = '';
   const owner = String(_rec.narrator.id);
   const samples = (_rec.narrator.samples || []);
-  if (!samples.length) { box.appendChild(el('div', 'mk-empty', 'No samples yet.')); return; }
+  if (!samples.length) { box.appendChild(emptyEl('No samples yet.')); return; }
   samples.forEach((s, i) => {
     const card = el('div', 'nr-sample' + (s.readAt ? '' : ' unread'));
     const h = el('div', 'nr-sample-h');
@@ -363,7 +369,7 @@ function _paintSamples() {
     const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Remove this sample';
-    x.addEventListener('click', () => _removeSample(owner, i, s));
+    x.addEventListener('click', () => _removeSample(owner, i, s, x));
     h.appendChild(x);
     card.appendChild(h);
     const text = String(s.text || '');
@@ -372,9 +378,11 @@ function _paintSamples() {
   });
 }
 
-async function _removeSample(id, i, s) {
+async function _removeSample(id, i, s, anchor) {
   const said = s && s.readAt ? 'What was read from it stays in the voice.' : 'It has not been read yet.';
-  if (id !== _sel || _running(id) || !confirm(`Remove this sample? ${said}`)) return;
+  if (id !== _sel || _running(id)) return;
+  if (!await ask(anchor, `Remove this sample? ${said}`, { yes: 'Remove', danger: true, stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   try {
     await J.api(_nurl(id, `/samples/${i}`), { method: 'DELETE' });
     await _readList();
@@ -513,7 +521,7 @@ function _editable(node, value, save, { multiline = false } = {}) {
 function _paintVoice(box) {
   const n = _rec.narrator;
   if (!_hasVoice(n)) {
-    box.appendChild(el('div', 'mk-empty', (n.samples || []).length
+    box.appendChild(emptyEl((n.samples || []).length
       ? 'Not read yet. Press “Read new samples” - the voice is read out of the samples.'
       : 'Not read yet. Add samples, then press “Read new samples”.'));
     return;
@@ -615,7 +623,9 @@ async function _addFile() {
   const input = _win.q('file');
   const file = input.files && input.files[0];
   if (!file) { J.sayJob(_win.q('sjob'), 'Pick a video or audio file first.', true); return; }
-  if (!confirm(`Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`)) return;
+  // Paid - a plain answer (б2-5); the question waits, so a job started meanwhile is not doubled.
+  if (!await ask(_win.q('addfile'), `Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`, { yes: 'Transcribe', stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   const form = new FormData();
   form.append('file', file);
   input.value = '';
@@ -631,7 +641,9 @@ async function _addLink() {
   const input = _win.q('url');
   const url = input.value.trim();
   if (!url) { J.sayJob(_win.q('sjob'), 'Paste a link first.', true); return; }
-  if (!confirm('Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.')) return;
+  // At "add link" whether it was pressed or Enter was pressed in the field.
+  if (!await ask(_win.q('addlink'), 'Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.', { yes: 'Transcribe', stay: true })) return;
+  if (id !== _sel || _running(id)) return;
   input.value = '';
   await _start(id, 'sample', () => _post(_nurl(id, '/samples/link'), { url }),
     { key: 'l2-sample|link', label: 'Reading the link…', estimateMs: J.EST.ingestLink });

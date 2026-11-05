@@ -14,6 +14,9 @@
 // stops when another row's play pauses it and when the demo runs out, and either would leave
 // a pause sign standing over silence.
 
+// (phase V73 block 2, step 2b) "no voices yet" as the shared part (css/app-shell.css .u-empty)
+import { emptyEl } from '../ui-state.js';
+
 const $ = (id) => document.getElementById(id);
 
 let _sel = '';          // the selected voiceId
@@ -164,10 +167,7 @@ function _info() {
   const it = _items.find(i => i.meta.voiceId === _sel);
   if (!it) {
     head.textContent = 'Voice';
-    const e = document.createElement('div');
-    e.className = 'lib-empty';
-    e.textContent = _items.length ? 'Pick a voice on the left.' : 'No voices with a demo yet.';
-    body.appendChild(e);
+    body.appendChild(emptyEl(_items.length ? 'Pick a voice on the left.' : 'No voices with a demo yet.', { icon: 'music', cls: 'lib-empty' }));
     return;
   }
   const m = it.meta;
@@ -239,10 +239,7 @@ export function render(items, hooks) {
   if (!_items.some(i => i.meta.voiceId === _sel)) _sel = _items.length ? _items[0].meta.voiceId : '';
 
   if (!_items.length) {
-    const e = document.createElement('div');
-    e.className = 'lib-empty';
-    e.textContent = 'No voices with a demo yet. Take one in a character’s Voice panel.';
-    grid.appendChild(e);
+    grid.appendChild(emptyEl('No voices with a demo yet. Take one in a character’s Voice panel.', { icon: 'music', cls: 'lib-empty' }));
     _info();
     return;
   }

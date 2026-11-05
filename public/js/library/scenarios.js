@@ -48,6 +48,11 @@ import * as Layers from '../layers.js';
 import { talkingHead, archive as archiveScenario } from '../merge-v3/scen-api.js';
 import { menuAt } from '../tile-select.js';
 import { spokenSeconds } from './jobs.js';
+// (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "nothing here" and "did not
+// load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а)
+import { ask } from '../ask.js';
+import { emptyEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -231,8 +236,8 @@ export function render(items, hooks = {}) {
   }
   for (const dr of drafts) grid.appendChild(_draftRow(dr));
 
-  if (!_items.length) grid.appendChild(_el('div', 'lib-empty', _archived.length ? 'Every scenario is in the archive.' : 'No scenarios yet. “New scenario” above writes one.'));
-  else if (!shown.length) grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
+  if (!_items.length) grid.appendChild(emptyEl(_archived.length ? 'Every scenario is in the archive.' : 'No scenarios yet. “New scenario” above writes one.', { cls: 'lib-empty' }));
+  else if (!shown.length) grid.appendChild(emptyEl('Nothing under these filters.', { cls: 'lib-empty' }));
   for (const it of shown) grid.appendChild(_row(it, false));
   if (_archShown()) {
     grid.appendChild(_archHead());
@@ -327,7 +332,7 @@ function _pane() {
 function _empty(note) {
   _seq++;
   const body = _pane();
-  if (body) body.appendChild(_el('div', 'lib-info-note', note || 'Nothing on this shelf yet.'));
+  if (body) body.appendChild(emptyEl(note || 'Nothing on this shelf yet.', { line: true, cls: 'lib-info-note' }));
 }
 
 // ── The fields, as dropdowns (phase F7) ─────────────────────────────────────
@@ -643,7 +648,9 @@ async function _show(it) {
     s = d.scenario;
   } catch (e) {
     if (my !== _seq) return;
-    body.appendChild(_el('div', 'lib-info-note', e.message));
+    // A scenario whose read failed: "did not load" with Try again under its title, the reason in the corner.
+    body.appendChild(failedEl('the scenario', () => _show(it), { line: true, cls: 'lib-info-note' }));
+    showError('The scenario did not load: ' + e.message);
     return;
   }
   if (my !== _seq) return;
@@ -884,7 +891,7 @@ async function _makeVideo(a, btn) {
 }
 
 async function _delete(s, btn) {
-  if (!confirm('Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.')) return;
+  if (!await ask(btn, 'Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.', { yes: 'Delete', danger: true, stay: true })) return;
   // Its lines are not saved on the way out: it is going.
   if (_auto && String(_auto.s.id) === String(s.id)) { clearTimeout(_auto.timer); _auto.was = _valueOf(_auto); }
   btn.disabled = true;

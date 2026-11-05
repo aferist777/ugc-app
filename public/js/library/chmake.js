@@ -42,6 +42,11 @@ import { startProgress, lockControls } from '../progress.js';
 import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
 // (phase V60) The window it is shown in.
 import { openFrame, GEN_SIZE } from '../gen-window.js';
+// (phase V73 block 2, step 2b; the owner's (б2-20) а) A failure is ONE popup in the corner - it was said three times (the
+// progress overlay's red label, the red status line, the red block under the portrait); the save form's Try again stays.
+// "Start over" asks at its button in place of the browser's confirm().
+import { showError } from '../notice.js';
+import { ask } from '../ask.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
@@ -110,7 +115,10 @@ function _recall() {
 }
 
 // ── Status and the last failure ─────────────────────────────────────────────
+// The head's line says what was just done ("Take deleted", "Renamed to …"); a refusal or a failure (kind 'err') is a
+// popup in the corner instead (phase V73 block 2, (б2-20) а; js/notice.js), and the line goes.
 function _status(text, kind) {
+  if (text && kind === 'err') { showError(text); text = ''; kind = ''; }
   const el = $('chm-status');
   if (!el) return;
   el.textContent = text || '';
@@ -118,26 +126,11 @@ function _status(text, kind) {
   el.title = text || '';
 }
 
-function _clearErr() {
-  const b = $('chm-err');
-  if (b) { b.hidden = true; b.textContent = ''; }
-}
-
-// The whole sentence, under the picture, until it is dismissed or the next job starts: what was being
-// attempted and exactly what came back - an engine's own words say whether to wait or to change something.
+// A job that failed: ONE popup - what was being attempted and exactly what came back (an engine's own words say whether to
+// wait or to change something), until its ✕.
 function _showErr(label, message, detail) {
-  const b = $('chm-err');
-  if (!b) return;
-  b.textContent = '';
-  const h = document.createElement('div'); h.className = 'cv2-err-h'; h.textContent = label || 'That did not work';
-  const m = document.createElement('div'); m.className = 'cv2-err-m'; m.textContent = String(message || 'no reason was given');
-  b.appendChild(h); b.appendChild(m);
-  if (detail) { const d = document.createElement('div'); d.className = 'cv2-err-d'; d.textContent = detail; b.appendChild(d); }
-  const x = document.createElement('button');
-  x.type = 'button'; x.className = 'cv2-err-x'; x.textContent = '×'; x.title = 'Dismiss';
-  x.addEventListener('click', _clearErr);
-  b.appendChild(x);
-  b.hidden = false;
+  const what = String(label || 'That did not work').replace(/(…|\.\.\.)\s*$/, '');
+  showError(what + ': ' + String(message || 'no reason was given'), detail ? { detail } : {});
 }
 
 // ── Following a row of the journal ──────────────────────────────────────────
@@ -198,11 +191,10 @@ function _controls() {
 }
 
 // fn receives the overlay's handle. opts.startedAt picks a running wait up at its real age; opts.onCancel
-// offers the overlay's own Cancel once the wait is longer than usual; opts.detail reaches the error block.
+// offers the overlay's own Cancel once the wait is longer than usual; opts.detail reaches the error popup's second line.
 async function _run(label, fn, opts = {}) {
   if (_busy) { _status('Already working - one thing at a time', 'err'); return false; }
   _busy = true;
-  _clearErr();
   const unlock = lockControls(_controls());
   const pr = startProgress($('chm-drop'), { label, total: 1, startedAt: opts.startedAt || 0, onCancel: opts.onCancel || null });
   let ok = false;
@@ -214,7 +206,8 @@ async function _run(label, fn, opts = {}) {
     if (e && e.stopped) pr.detach();             // the bench was emptied under it: nothing to report
     else if (e && e.cancelled) { pr.detach(); _status('Let go of - what was asked for is paid for'); }
     else if (e && e.soft) { pr.detach(); _status(e.message); }
-    else { pr.fail(e.message); _status(e.message, 'err'); _showErr(label, e.message, opts.detail); }
+    // (б2-20) а: the overlay goes without its red label, the line is cleared, the failure is the popup alone.
+    else { pr.detach(); _status(''); _showErr(label, e && e.message, opts.detail); }
   } finally {
     unlock();
     if (_refPanel) _refPanel.sync();
@@ -645,7 +638,6 @@ function _build() {
               <button class="cv2-savemodel u-btn is-l is-main" type="button" id="chm-savemodel" disabled title="Name this character and draw its 4K reference sheet">Save character</button>
             </div>
           </div>
-          <div class="cv2-err" id="chm-err" hidden></div>
         </div>
       </section>
       <section class="chm-col chm-save" aria-label="Save character">
@@ -658,8 +650,6 @@ function _build() {
 
   // No "Save image as" on a miniature: every picture here cancels the window's own menu (phase B7).
   host.addEventListener('contextmenu', (e) => { if (e.target.closest('img')) e.preventDefault(); });
-  // Dismissing a failed overlay dismisses the whole failure, the block under the picture too.
-  host.addEventListener('sv3-progress-dismissed', _clearErr);
 
   const onGenerate = (values, name) => _makePortrait('Generating the character…', async () => ({
     body: { prompt: genPrompt(values) },
@@ -720,13 +710,14 @@ function _build() {
   }
   _wireUpload();
 
-  $('chm-over').addEventListener('click', () => {
+  $('chm-over').addEventListener('click', async () => {
     if (_busy) return;
-    if ((_face.src || _vars.length) && !confirm('Start over? The portrait and its takes leave the bench - their files stay in media/work.')) return;
+    // Only when there is something on the bench, as before; at the button, the answer red - it throws the takes away.
+    if ((_face.src || _vars.length) && !await ask($('chm-over'), 'Start over? The portrait and its takes leave the bench - their files stay in media/work.', { yes: 'Start over', danger: true, stay: true })) return;
+    if (_busy) return;
     _pending = null;
     _follow++;
     _showFace(null);
-    _clearErr();
     _status('');
   });
 

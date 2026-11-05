@@ -21,7 +21,7 @@
 .chm-head .sp{ flex:1; }
 .chm-t{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
 .chm-status{ font-size:11px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.chm-status.err{ color:var(--danger); }
+/* (phase V73 block 2, (б2-20) а) a failure is a popup in the corner (js/library/chmake.js _status) - the line has no red */
 .chm-status.ok{ color:var(--success); }
 .chm-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 
@@ -65,24 +65,8 @@
 /* The picture field in this layout: square corners, the Library's dashed edge. */
 .chm .cv2-drop{ border-radius:var(--r-xs); }
 
-/* ── the last failure, spelled out ── */
-.cv2-err{
-  flex:0 0 auto; position:relative; margin:0 12px 12px; padding:9px 30px 10px 11px;
-  border:1px solid var(--danger); border-left-width:3px; border-radius:var(--r-xs);
-  background:color-mix(in srgb, var(--danger) 8%, var(--surface));
-}
-.cv2-err-h{ font:700 11px var(--font); color:var(--danger); }
-.cv2-err-m{
-  margin-top:4px; font:500 11.5px/1.5 var(--font); color:var(--ink);
-  overflow-wrap:anywhere; user-select:text; cursor:text;
-}
-.cv2-err-d{ margin-top:5px; font:600 10px var(--font); color:var(--muted); letter-spacing:.02em; }
-.cv2-err-x{
-  position:absolute; top:5px; right:6px; width:18px; height:18px; padding:0; line-height:1;
-  border:none; border-radius:var(--r-xs); background:none; color:var(--muted);
-  font-size:14px; cursor:pointer;
-}
-.cv2-err-x:hover{ color:var(--danger); }
+/* (phase V73 block 2, (б2-20) а) The last failure is a popup in the corner now (js/notice.js) - the red block under the
+   portrait (.cv2-err) went. */
 
 /* ── the drop field, paging, the takes ── */
 .cv2-drop{

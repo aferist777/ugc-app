@@ -32,6 +32,11 @@ import * as HT from './hook-types.js';
 import * as Layers from '../layers.js';
 import { REALLY, MS } from '../really.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
+// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here", "reading…"
+// and "did not load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а).
+import { ask } from '../ask.js';
+import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 const el = J.el;
@@ -405,7 +410,7 @@ function _paintSources() {
   _painted = key;
   box.textContent = '';
   if (!_sources.length) {
-    box.appendChild(el('div', 'mk-src-empty', 'No sources yet. A long video, added with +, becomes material to write from.'));
+    box.appendChild(emptyEl('No sources yet. A long video, added with +, becomes material to write from.'));
     return;
   }
   for (const it of _sources) box.appendChild(_srcLine(it));
@@ -502,7 +507,7 @@ function _srcLine(it) {
     x.addEventListener('click', (e) => { e.stopPropagation(); _stopAdding(it); });
   } else {
     x.title = offer ? 'Delete it, and its file' : 'Delete this source, its video and its transcript';
-    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it, x); });
   }
   row.appendChild(x);
   if (_choosable(it)) {
@@ -689,14 +694,15 @@ function _deleteMissing(it) {
   });
 }
 
-async function _deleteSource(it) {
+async function _deleteSource(it, anchor) {
   const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
   // (phase V43) A video that stays on the disk is never deleted by the app - only what the library holds goes.
   const lines = [`Delete "${it.title}"?`, '',
     it.disk ? 'Its poster and its transcript are removed. Your video stays where it is on the disk (' + it.disk.path + ').'
       : `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
   if (nd) lines.push('', `${nd === 1 ? 'Its draft is' : `Its ${nd} drafts are`} kept, and carry on without a source.`);
-  if (!confirm(lines.join('\n'))) return;
+  // `stay`: the column repaints as its sources move along, and a repaint's scroll must not answer "no" for the person.
+  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
   // What is typed goes first, with the source it was written from - the server then detaches it.
   await _flushDraft();
   try {
@@ -732,29 +738,26 @@ function _paintTopics(rec) {
   const box = $('mk-topic-list');
   box.textContent = '';
   const t = rec.transcript || {};
+  // (phase V73 block 2) No topics to show - the shared part, in the source's own words.
   if (_reading(rec)) {
-    box.appendChild(el('div', 'mk-empty', 'Still being read. The topics can be found the moment the words are in.'));
+    box.appendChild(emptyEl('Still being read. The topics can be found the moment the words are in.'));
     return;
   }
   if (t.state !== 'ready') {
-    const e = el('div', 'mk-empty', rec.state === 'error'
+    // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
+    // again. Paid - it is the same speech-to-text call. Its button inside the part, under the words.
+    const offer = rec.videoPath && !_srcJobs.has(String(rec.id));
+    const e = emptyEl(rec.state === 'error'
       ? `This source failed: ${rec.error || 'unknown reason'}${rec.intake && rec.intake.alertId ? ' - its row in Alerts has "retry".' : ''}`
-      : 'No transcript yet.');
+      : 'No transcript yet.', offer ? { action: { label: 'Transcribe again', on: (ev) => _transcribeAgain(rec, ev.currentTarget) } } : {});
+    const again = offer ? e.querySelector('button') : null;
+    if (again) again.title = 'Read the words out of this source again - a paid transcription';
     box.appendChild(e);
-    if (rec.videoPath && !_srcJobs.has(String(rec.id))) {
-      // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
-      // again. Paid - it is the same speech-to-text call.
-      const again = el('button', 'u-btn is-s', 'Transcribe again');
-      again.type = 'button';
-      again.title = 'Read the words out of this source again - a paid transcription';
-      again.addEventListener('click', () => _transcribeAgain(rec));
-      box.appendChild(again);
-    }
     return;
   }
   const topics = rec.topics || [];
   if (!topics.length) {
-    box.appendChild(el('div', 'mk-empty', 'No topics found yet. Press “Find topics” above - one long video usually holds several.'));
+    box.appendChild(emptyEl('No topics found yet. Press “Find topics” above - one long video usually holds several.'));
     return;
   }
   for (const tp of topics) {
@@ -1048,7 +1051,9 @@ async function _mineTopics() {
   if (!rec) return;
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  if ((rec.topics || []).length && !confirm('Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.')) return;
+  // Paid - a plain answer (б2-5); the question waits, so a job picked up meanwhile is not started twice.
+  if ((rec.topics || []).length && !await ask($('mk-mine'), 'Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.', { yes: 'Find again', stay: true })) return;
+  if (_srcJobs.has(id)) return;
   $('mk-mine').disabled = true;
   let run = null;
   try {
@@ -1070,10 +1075,11 @@ async function _mineTopics() {
   if (_view === 'topics' && _src && String(_src.id) === id) _showTopics();
 }
 
-async function _transcribeAgain(rec) {
+async function _transcribeAgain(rec, anchor) {
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  if (!confirm(`Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`)) return;
+  if (!await ask(anchor, `Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`, { yes: 'Transcribe', stay: true })) return;
+  if (_srcJobs.has(id)) return;
   try {
     // When it has no topics yet, they are found after the words (phase V28.1) - by the agents' ladder (V37).
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, {
@@ -1420,7 +1426,8 @@ async function _ensureDraft() {
 
 async function _discardDraft() {
   if (!_gen || !_gen.draftId) return;
-  if (!confirm('Discard this draft? What was generated into it is lost.')) return;
+  if (!await ask($('mk-discard'), 'Discard this draft? What was generated into it is lost.', { yes: 'Discard', danger: true, stay: true })) return;
+  if (!_gen || !_gen.draftId) return;
   // A save still waiting would land after the delete and bring the draft back.
   clearTimeout(_saveT);
   _saveT = null;
@@ -2159,13 +2166,21 @@ async function _paintLib() {
   if (!_addWin) return;
   const box = _addWin.f('lib');
   box.textContent = '';
-  box.appendChild(el('div', 'mk-pnote', 'reading…'));
+  // (phase V73 block 2) Reading, nothing there, did not load - the shared parts, as rows; a failed read is not "nothing
+  // there": "did not load" with Try again, the reason in the corner (б2-19).
+  box.appendChild(loadingEl('reading…', { line: true }));
   let items = [];
   try { items = (await J.api('/api/references/youtube')).items || []; }
-  catch (e) { box.textContent = ''; box.appendChild(el('div', 'mk-pnote', e.message)); return; }
+  catch (e) {
+    if (!_addWin || _addWin.f('lib') !== box) return;
+    box.textContent = '';
+    box.appendChild(failedEl('YouTube videos', () => _paintLib(), { line: true }));
+    showError('YouTube videos did not load: ' + e.message);
+    return;
+  }
   if (!_addWin || _addWin.f('lib') !== box) return;
   box.textContent = '';
-  if (!items.length) { box.appendChild(el('div', 'mk-pnote', 'Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.')); return; }
+  if (!items.length) { box.appendChild(emptyEl('Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.', { line: true })); return; }
   for (const it of items) {
     const row = el('div', 'mk-lib-row');
     if (it.thumb) { const im = el('img'); im.src = it.thumb; im.alt = ''; im.loading = 'lazy'; row.appendChild(im); }

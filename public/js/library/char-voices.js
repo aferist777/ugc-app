@@ -16,6 +16,10 @@
 // in the column while it runs.
 
 import { startInlineProgress } from '../progress.js';
+// (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "no voice yet" as the
+// shared part, a row
+import { ask } from '../ask.js';
+import { emptyEl } from '../ui-state.js';
 
 const PAGE = 20;
 const GENDERS = ['female', 'male'];
@@ -129,7 +133,7 @@ export function paint(body, it, voices, hooks) {
   const paintSaved = () => {
     sec.textContent = saved.length > 1 ? 'Voices · ' + saved.length : 'Voice';
     list.textContent = '';
-    if (!saved.length) { list.appendChild(_el('div', 'lib-info-note', 'No voice yet - find one below.')); return; }
+    if (!saved.length) { list.appendChild(emptyEl('No voice yet - find one below.', { line: true, cls: 'lib-info-note' })); return; }
     for (const v of saved) {
       const row = _el('div', 'lib-info-voice lib-cv-row' + (v.main ? ' is-main' : ''));
       row.title = v.main ? 'The voice every read uses' : 'One of the voices saved for this character';
@@ -153,9 +157,9 @@ export function paint(body, it, voices, hooks) {
       const x = _el('button', 'lib-cv-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Unbind this voice: it stays on the Voices shelf with its demo, its ElevenLabs slot is freed';
-      x.addEventListener('click', () => {
-        if (!confirm('Unbind “' + (v.name || v.voiceId) + '” from ' + (it.name || 'this character') + '?\n\n'
-          + 'It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.')) return;
+      x.addEventListener('click', async () => {
+        if (!await ask(x, 'Unbind “' + (v.name || v.voiceId) + '” from ' + (it.name || 'this character') + '?\n\n'
+          + 'It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.', { yes: 'Unbind', danger: true, stay: true })) return;
         run('Unbinding the voice…', async () => {
           const d = await _json('/api/char-store/' + encodeURIComponent(id) + '/voice/' + encodeURIComponent(v.voiceId), { method: 'DELETE' });
           await reread();
