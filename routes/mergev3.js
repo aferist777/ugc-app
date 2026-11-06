@@ -584,8 +584,10 @@ function _folderFiles(keys) {
   const PROJECTS = require('../lib/projects-store');
   const talking = new Set(PROJECTS.entries().filter(e => e.kind === 'scenarios').map(e => e.folder));
   const byFolder = new Map();
+  // (phase V76.2) Every key's folder with the store's index looked at once - locate() each looked at every file on the disk.
+  const where = MSTORE.locateMany(keys);
   for (const k of keys) {
-    const at = MSTORE.locate(k);
+    const at = where.get(String(k));
     if (at && talking.has(at.folder)) byFolder.set(at.folder, (byFolder.get(at.folder) || []).concat(k));
   }
   const out = new Set();
