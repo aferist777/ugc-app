@@ -199,6 +199,9 @@ export function createChat(make) {
   const _memo = new Map();
   let _uploading = null;        // the upload in flight - a send waits for it
   let _made = false;            // something landed or was added while the chat showed - the shelf reads again
+  // (phase V77, the owner's (тч7)) The page's own word at the end of the thread - what came in from the timeline and how to change
+  // it: never kept, never sent; it goes with the next send or another project.
+  let _notice = '';
 
   // ── What the description works with ───────────────────────────────────────
   const ctx = {
@@ -276,6 +279,8 @@ export function createChat(make) {
     // (phase V60.2) What the right column offers may have changed - the video chat's model takes no clips, or shorter ones:
     // it is read again when its description's `sig` says so.
     columnChanged: () => _columnChanged(),
+    // (phase V77) The page's word at the end of the thread (above); '' takes it away.
+    notice: (t) => { _notice = String(t || ''); if (_ui && _chat) _paintThread(true); },
   };
   const S = make(ctx);
   const T = S.text;
@@ -352,8 +357,9 @@ export function createChat(make) {
     }
     if (k === _key) return;
     const was = _key;
-    // The picker was for a place of the project being left.
+    // The picker was for a place of the project being left; (phase V77) so was the page's word.
     if (_picking) Pick.closePick();
+    _notice = '';
     if (was !== null) {
       _saveDraft(was);
       _memo.set(was, { pending: _pending, attSeq: _attSeq });
@@ -1376,7 +1382,7 @@ export function createChat(make) {
     // (phase V6) The foot - a description's own step at the end of the thread (the video chat's recipe card) - stands
     // for the conversation too: with it there is no "describe a clip".
     const footed = !!(_ui.foot && _ui.foot.childNodes.length);
-    if (!_thread.length && !footed && !_pend) {
+    if (!_thread.length && !footed && !_pend && !_notice) {
       // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
       const said = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
       // (phase V73 block 2, step 2b) The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
@@ -1421,6 +1427,20 @@ export function createChat(make) {
       const want = prev ? prev.nextSibling : host.firstChild;
       if (n.el !== want) host.insertBefore(n.el, want);
       prev = n.el;
+    }
+    // (phase V77) The page's word after the messages, before the foot.
+    let word = host.querySelector(':scope > .mv3-ig-notice');
+    if (!_notice) { if (word) word.remove(); }
+    else {
+      if (!word || word.dataset.said !== _notice) {
+        const w = el('div', 'mv3-ig-msg is-agent mv3-ig-notice');
+        for (const line of _notice.split('\n')) if (line.trim()) w.appendChild(el('div', 'mv3-ig-text', line));
+        w.dataset.said = _notice;
+        if (word) word.replaceWith(w);
+        word = w;
+      }
+      const after = prev ? prev.nextSibling : host.firstChild;
+      if (word !== after) host.insertBefore(word, after);
     }
     // The foot stays the last thing in the thread.
     if (_ui.foot && host.lastChild !== _ui.foot) host.appendChild(_ui.foot);
@@ -1668,6 +1688,7 @@ export function createChat(make) {
       if (!d || !d.success) { _dropPend(); note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
       if (_pend) _pend.id = d.send || '';
       ta.value = '';
+      _notice = '';
       _grow();
       // (phase V16) What the description does once a send is in (the video chat: the zone emptied - its attachments are
       // packed into the writer's message).

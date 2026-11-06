@@ -229,7 +229,19 @@ async function _shoot() {
 // (phase V73 block 5, 5c) The timeline head's icons - Lucide's, 14 px in its 20-px buttons, in place of the glyphs ↶ ↷ ⏮ ⏪ ▶ ⏩.
 // Play turns into pause and back in the preview, which knows which of the two it is (preview-b.js _syncPlayBtn, the same 14).
 const HEAD_ICONS = [['mv3-undo', 'undo-2'], ['mv3-redo', 'redo-2'], ['mv3-pv-start', 'skip-back'], ['mv3-pv-back', 'rewind'],
-  ['mv3-pv-play', 'play'], ['mv3-pv-fwd', 'fast-forward']];
+  ['mv3-pv-play', 'play'], ['mv3-pv-fwd', 'fast-forward'], ['mv3-frame-pic', 'image'], ['mv3-frame-vid', 'film']];
+
+// (phase V77, the owner's (тч3а)) The frame at the playhead into a chat - as the preview shows it, without words (js/merge-v3/tl-gen.js).
+function _frames() {
+  for (const [id, chat] of [['mv3-frame-pic', 'pictures'], ['mv3-frame-vid', 'videos']]) {
+    const b = $(id);
+    if (b) b.addEventListener('click', () => {
+      if (b.disabled) return;
+      import('./tl-gen.js').then(G => G.fromFrame(chat, b))
+        .catch(err => showError('The frame did not go to the chat', { detail: (err && err.message) || String(err) }));
+    });
+  }
+}
 
 export function initBar() {
   for (const [id, name] of HEAD_ICONS) { const b = $(id); if (b && !b.firstChild) b.innerHTML = icon(name, 14); }
@@ -237,6 +249,7 @@ export function initBar() {
   _status();
   _zoom();
   _split();
+  _frames();
   _quality();
   // (phase V73 block 2) the shared part's icon button, Lucide's icons in place of the glyph and the emoji
   const big = $('mv3-pv-big');

@@ -43,6 +43,7 @@ import { emptyEl, loadingEl, failedEl, cap as capFirst } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { startInlineProgress } from '../progress.js';
 import { wire as wireRange } from '../ui-range.js';
+import { backButton } from './tl-gen.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
 const SHOW_ATTS = 9;                       // the old row's places at most (the zone grows instead - phase V6)
@@ -50,6 +51,8 @@ const MAX_PICS = 30;                       // pictures at most, whatever a model
 const MAX_ATTS = 50;                       // everything attached at most - pictures, clips and sounds
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// (phase V77) The description's way in from outside (openVideos with a thing from the timeline) - set when it is made.
+let _api = null;
 
 function VIDEOS(ctx) {
   let _table = null;
@@ -421,7 +424,7 @@ function VIDEOS(ctx) {
       host.textContent = '';
       const mSel = _select('mv3-vc-model', 'The model - each its own price', models().map(m => ({
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
-      })), _last.model, (v) => { _last.model = v; _recipeParams(v); _remember(); _paintModel(); ctx.paintAtts(); });
+      })), _last.model, (v) => { _last.model = v; _recipeParams(v); _recent(v); _remember(); _paintModel(); ctx.paintAtts(); });
       _row(host, 'model', mSel);
       // What the chosen model does and what to attach - under its dropdown (phase V6, the owner: the line above the
       // thread is the recipe's now).
@@ -763,6 +766,77 @@ function VIDEOS(ctx) {
     _cardEls = null;
     _paintFoot();
   }
+
+  // (phase V77) The models used, newest first - the one to go back to when the chosen one cannot take what the timeline gives.
+  function _recent(id) {
+    if (!id) return;
+    _last.recent = [id].concat((_last.recent || []).filter(x => x !== id)).slice(0, 8);
+  }
+  function _useModel(id) {
+    _last.model = id;
+    _recipeParams(id);
+    _recent(id);
+    _remember();
+    if (_set) { _set.model.value = id; _paintModel(); }
+  }
+  // Whether a model takes what came from the timeline: a clip as a reference, or a picture as the clip's FIRST FRAME - Grok
+  // starts on one picture by itself, Seedance once its pictures are frames; Kling motion control's picture is the character it
+  // moves, never a first frame.
+  function _takesFrom(mm, kind, as) {
+    if (!mm || !mm.usable) return false;
+    const r = recOf(mm, _last.agg[mm.id]) || recOf(mm, mm.defaultAgg) || mm.records[0];
+    const L = (r && r.limits) || {};
+    if (kind === 'video') return L.videos > 0;
+    if (!(L.images > 0)) return false;
+    return as !== 'first' || (mm.family !== 'kmc' && (r.modes || []).includes('i2v'));
+  }
+
+  // (phase V77, the owner's (тч6)-(тч8а)) A THING FROM THE TIMELINE (js/merge-v3/tl-gen.js): the zone emptied - the thread and the
+  // words in the box stay -, the thing in its place, a model that takes it (the chosen one, else the last one used that does,
+  // else Seedance 2.5), Seedance's pictures as the first frame for a first frame, a recipe in use let go; then the page's word
+  // at the end of the thread - what came in, what was changed and where to change it back (the owner's (тч7)).
+  async function fromTimeline(o) {
+    const a = (o && o.attach) || {};
+    if (!a.path) return;
+    await load();
+    if (!_table || !models().length) return;
+    const kind = a.kind === 'video' ? 'video' : 'image';
+    const was = model();
+    let switched = '';
+    if (!_takesFrom(was, kind, o.as)) {
+      const byId = (id) => models().find(x => x.id === id);
+      const fits = (mm) => _takesFrom(mm, kind, o.as);
+      const want = (_last.recent || []).map(byId).find(fits) || [byId('sd25')].find(fits) || models().find(fits);
+      if (want) { switched = was ? was.label : ''; _useModel(want.id); }
+    }
+    const hadRecipe = !!_skill;
+    if (_skill) { _skill = null; _wantRecipe = false; _cardEls = null; ctx.saveDraft(); _paintRecipe(); _paintFoot(); }
+    const m = model();
+    const seed = !!m && m.family === 'seedance';
+    const first = kind === 'image' && o.as === 'first';
+    if (first && seed && _asOf() !== 'frame') { setParam('picturesAs', 'frame'); _paintParams(); }
+    // Beside a clip Seedance's pictures are references: its frames' places would wait empty and hold the send.
+    if (kind === 'video' && seed && _framesMode()) { setParam('picturesAs', 'refs'); _paintParams(); }
+    ctx.useAtts([]);
+    if (kind === 'video') ctx.attach(a.path, a.name || '', { kind: 'video', poster: a.poster || '', dur: +a.dur || 0, in: a.in, out: a.out });
+    else ctx.attach(a.path, a.name || '', first && seed ? { slot: 'first' } : {});
+    const lines = [];
+    if (kind === 'video') lines.push('The clip from the timeline is a REFERENCE: the part the timeline plays, ' + _s(+a.in || 0) + ' - ' + _s(+a.out || 0) + ' of its file.');
+    else if (o.act === 'continue') lines.push('The last frame of the clip on the timeline is the FIRST FRAME - the new clip starts on it.');
+    else if (first) lines.push('The ' + (o.act === 'frame-vid' ? 'frame' : 'picture') + ' from the timeline is the FIRST FRAME - the clip starts on it.');
+    else lines.push('The picture from the timeline is in the zone.');
+    if (!m || !_takesFrom(m, kind, o.as)) lines.push('No model here takes it - a key is set on Admin → API keys.');
+    else if (switched) lines.push(switched + (kind === 'video' ? ' takes no clips' : ' does not start a clip on a picture') + ' - the model is ' + m.label + ' now.');
+    if (hadRecipe) lines.push('The recipe in use was let go.');
+    if (first && seed) lines.push('To send it as a reference instead, set "pictures are" on the left to References; the model and its settings are on the left too.');
+    else if (kind === 'video') lines.push('Its part is set on it in the zone; the model and its settings are on the left.');
+    else lines.push('The model and its settings are on the left.');
+    if (o.back) lines.push('When the clip is made, "' + o.back + '" under it puts it on the timeline.');
+    ctx.notice(lines.join('\n'));
+    const ui = ctx.ui();
+    if (ui) ui.ta.focus();
+  }
+  _api = { fromTimeline };
 
   // A two-step recipe's video takes its storyboard as one more picture, after the card's own (phase V8): one place fewer
   // - Seedance's alone, the only family that makes one (review V8: under Grok the seat took its one place) - and the
@@ -2894,6 +2968,10 @@ function VIDEOS(ctx) {
     });
     box.addEventListener('dragend', () => box.classList.remove('is-dragging'));
     cell.appendChild(box);
+    // (phase V77) Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
+    const back = backButton(g, g.media || [], { src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
+      name: item.name, dur: +g.duration || 0, w: +g.w || 0, h: +g.h || 0 }, 'video');
+    if (back) cell.appendChild(back);
   }
 
   // "attachments back to the zone" (the owner's answer 6): this message's attachments in the zone again, for the next
@@ -3101,7 +3179,11 @@ const CHAT = createChat(VIDEOS);
 const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', name: 'video chat', title: 'generate video' });
 
 /** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window (phase V64 block 3). */
-export const openVideos = () => WIN.open();
+export async function openVideos(o) {
+  await WIN.open();
+  // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
+  if (o && o.attach && _api) await _api.fromTimeline(o);
+}
 export const closeVideos = () => WIN.close();
 
 export function initVidChat() { CHAT.init(); }

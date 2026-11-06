@@ -100,6 +100,10 @@
 }
 .mv3-ig-msg.is-user{ align-self:flex-end; background:var(--surface-2) }
 .mv3-ig-msg.is-agent{ align-self:flex-start }
+/* (phase V77) The page's word after the messages - what came in from the timeline: never kept, a dashed gold edge. */
+.mv3-ig-msg.mv3-ig-notice{ border-style:dashed; border-color:var(--gold-line); gap:4px }
+/* (phase V77) A result started on the timeline goes back to it: the button under it. */
+.mv3-ig-back{ width:100%; margin-top:4px; white-space:nowrap }
 /* (phase V31) The cross that takes a message away: on the message's top right corner, over its border so it never covers
    what the message says; faint, brighter under the pointer; the first press turns it into "really?". */
 .mv3-ig-msg.has-del{ position:relative }

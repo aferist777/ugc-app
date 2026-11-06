@@ -1994,63 +1994,72 @@ export function splitAtPlayhead() {
   const { clip } = selectedOne();
   const at = _r2(_playhead);
   let made = null;
-  Store.mutate(tl => {
-    const tracks = tl.tracks || [];
-    const newPair = clip.pairId ? 'p' + _id().slice(1) : null;
-    const cut = (t, c) => {
-      const sp = +c.speed || 1;
-      const left = _r2(at - (+c.start));
-      const right = _r2((+c.start) + (+c.dur) - at);
-      const b = JSON.parse(JSON.stringify(c));
-      b.id = _id();
-      b.start = at;
-      b.dur = right;
-      // (phase V23) A sound's fade belongs to its own end: the left half keeps the fade in, the right the fade out.
-      delete b.fadeIn;
-      delete c.fadeOut;
-      if (c.reversed) {
-        // Played backwards, the first half on the timeline is the END of the source window.
-        b.trimIn = _r2(+c.trimIn || 0);
-        c.trimIn = _r2((+c.trimIn || 0) + right * sp);
-      } else {
-        b.trimIn = _r2((+c.trimIn || 0) + left * sp);
-      }
-      c.dur = left;
-      if (isHeard(c)) {
-        // A line rewritten before K10 is timed for its text first: the halves carry the person's words.
-        const words = timedWords(c);
-        // A word ends where its half does (K10): the left half's last word used to run on past the cut.
-        const w0 = words.filter(w => _r2(+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
-        // The whole word, mark and all (K2: the right half used to lose `k`).
-        const w1 = words.filter(w => _r2(+w.s) >= left)
-          .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
-        c.words = w0.length ? w0 : null;
-        b.words = w1.length ? w1 : null;
-        if (c.words) c.name = c.words.map(w => w.w).join(' ');
-        if (b.words) b.name = b.words.map(w => w.w).join(' ');
-      }
-      if (newPair && b.pairId) b.pairId = newPair;
-      // Straight after the original: on a video lane the order of the clips is which one shows,
-      // and the second half belongs where the whole clip was.
-      t.clips.splice(t.clips.indexOf(c) + 1, 0, b);
-      if (t.kind === 'audio') t.clips.sort((x, y) => x.start - y.start);
-      return b;
-    };
-    for (const t of tracks) {
-      const c = (t.clips || []).find(x => x.id === clip.id);
-      if (c) { made = cut(t, c).id; break; }
-    }
-    if (clip.pairId) {
-      for (const t of tracks) {
-        const m = (t.clips || []).find(x => x.id !== clip.id && x.pairId === clip.pairId && (+x.start) < at && (+x.start) + (+x.dur) > at);
-        if (m) { cut(t, m); break; }
-      }
-    }
-  });
+  Store.mutate(tl => { made = _cutIn(tl.tracks || [], clip.id, at); });
   // The second half is selected: after a cut, the part not looked at yet is the one about to be
   // worked on.
   if (made) selectClipById(made);
   return { ok: true };
+}
+
+// (phase V77) A CLIP CUT AT `at` inside a mutation - Split's rule, also "Into the cut" of a result made from a frame
+// (js/merge-v3/tl-gen.js): the clip and its pair's half under the cut, each the right half straight after the original. The
+// right half's id, or null when `at` is not inside it.
+function _cutIn(tracks, clipId, at) {
+  let clip = null;
+  for (const t of tracks) { clip = (t.clips || []).find(x => x.id === clipId) || null; if (clip) break; }
+  if (!clip || !(at > (+clip.start) && at < (+clip.start) + (+clip.dur))) return null;
+  const newPair = clip.pairId ? 'p' + _id().slice(1) : null;
+  const cut = (t, c) => {
+    const sp = +c.speed || 1;
+    const left = _r2(at - (+c.start));
+    const right = _r2((+c.start) + (+c.dur) - at);
+    const b = JSON.parse(JSON.stringify(c));
+    b.id = _id();
+    b.start = at;
+    b.dur = right;
+    // (phase V23) A sound's fade belongs to its own end: the left half keeps the fade in, the right the fade out.
+    delete b.fadeIn;
+    delete c.fadeOut;
+    if (c.reversed) {
+      // Played backwards, the first half on the timeline is the END of the source window.
+      b.trimIn = _r2(+c.trimIn || 0);
+      c.trimIn = _r2((+c.trimIn || 0) + right * sp);
+    } else {
+      b.trimIn = _r2((+c.trimIn || 0) + left * sp);
+    }
+    c.dur = left;
+    if (isHeard(c)) {
+      // A line rewritten before K10 is timed for its text first: the halves carry the person's words.
+      const words = timedWords(c);
+      // A word ends where its half does (K10): the left half's last word used to run on past the cut.
+      const w0 = words.filter(w => _r2(+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
+      // The whole word, mark and all (K2: the right half used to lose `k`).
+      const w1 = words.filter(w => _r2(+w.s) >= left)
+        .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
+      c.words = w0.length ? w0 : null;
+      b.words = w1.length ? w1 : null;
+      if (c.words) c.name = c.words.map(w => w.w).join(' ');
+      if (b.words) b.name = b.words.map(w => w.w).join(' ');
+    }
+    if (newPair && b.pairId) b.pairId = newPair;
+    // Straight after the original: on a video lane the order of the clips is which one shows,
+    // and the second half belongs where the whole clip was.
+    t.clips.splice(t.clips.indexOf(c) + 1, 0, b);
+    if (t.kind === 'audio') t.clips.sort((x, y) => x.start - y.start);
+    return b;
+  };
+  let made = null;
+  for (const t of tracks) {
+    const c = (t.clips || []).find(x => x.id === clip.id);
+    if (c) { made = cut(t, c).id; break; }
+  }
+  if (clip.pairId) {
+    for (const t of tracks) {
+      const m = (t.clips || []).find(x => x.id !== clip.id && x.pairId === clip.pairId && (+x.start) < at && (+x.start) + (+x.dur) > at);
+      if (m) { cut(t, m); break; }
+    }
+  }
+  return made;
 }
 
 // The project the pick was made in (K6b).
@@ -2445,6 +2454,193 @@ export function placeClipAbove(data) {
   if (!laneId) return { ok: false, why: Store.status() || 'The clip could not be placed' };
   _drop(laneId, at, data || {});
   return { ok: true, lane, at };
+}
+
+// ── The timeline's media into the generation chats and back (phase V77, js/merge-v3/tl-gen.js) ─────────────────────────────
+// A moment of the timeline inside a clip -> the moment of its FILE (played backwards, the clip's start is its window's end).
+function _fileAt(c, t) {
+  const sp = +c.speed || 1;
+  const x = Math.max(0, Math.min(+c.dur || 0, t - (+c.start || 0)));
+  return c.reversed ? (+c.trimIn || 0) + ((+c.dur || 0) - x) * sp : (+c.trimIn || 0) + x * sp;
+}
+// ...and back: the moment of the timeline a moment of the clip's file is shown at.
+function _tlAt(c, f) {
+  const sp = +c.speed || 1;
+  const x = c.reversed ? ((+c.trimIn || 0) + (+c.dur || 0) * sp - f) / sp : (f - (+c.trimIn || 0)) / sp;
+  return (+c.start || 0) + x;
+}
+
+/**
+ * (phase V77, the owner's (тч3а)) THE CLIP A FRAME OF THE PREVIEW IS OF - for the frame buttons right of "cut silence": the
+ * picked video clip when one is picked and the playhead is on it, else the topmost video clip under the playhead (the lanes
+ * above main first; on a lane the later clip is the one drawn). A talking head's line is never one (the mirror's, (тч11а)), nor
+ * a red clip. -> { trackId, clipId, fileT, at } | null
+ */
+export function frameTarget() {
+  const tl = Store.timeline();
+  const at = _playhead;
+  const on = (c) => c && c.src && c.frag == null && !Store.isGone(c) && at >= (+c.start || 0) && at < (+c.start || 0) + (+c.dur || 0);
+  const vids = ((tl && tl.tracks) || []).filter(t => t.kind === 'video');
+  const pick = _sel.size === 1 ? [..._sel][0] : '';
+  for (const t of vids) {
+    const c = pick && (t.clips || []).find(x => x.id === pick);
+    if (on(c)) return { trackId: t.id, clipId: c.id, fileT: isStill(c) ? 0 : _fileAt(c, at), at };
+  }
+  for (const t of vids) {
+    const cs = (t.clips || []).filter(on);
+    const c = cs[cs.length - 1];
+    if (c) return { trackId: t.id, clipId: c.id, fileT: isStill(c) ? 0 : _fileAt(c, at), at };
+  }
+  return null;
+}
+
+// What a file is like, asked of the browser (its length, its shape) - 0 when it cannot be read in a few seconds.
+function _probe(src, video) {
+  return new Promise((resolve) => {
+    const el = video ? document.createElement('video') : new Image();
+    let done = false;
+    const end = (v) => { if (done) return; done = true; try { el.removeAttribute('src'); if (video) el.load(); } catch (e) { /* gone */ } resolve(v); };
+    setTimeout(() => end({ dur: 0, w: 0, h: 0 }), 6000);
+    if (video) {
+      el.preload = 'metadata';
+      el.addEventListener('loadedmetadata', () => end({ dur: +el.duration || 0, w: el.videoWidth || 0, h: el.videoHeight || 0 }), { once: true });
+    } else el.addEventListener('load', () => end({ dur: 0, w: el.naturalWidth || 0, h: el.naturalHeight || 0 }), { once: true });
+    el.addEventListener('error', () => end({ dur: 0, w: 0, h: 0 }), { once: true });
+    el.src = src;
+  });
+}
+
+// The look a clip was given that a result laid in its place keeps (lib/frag-mirror.js LOOK, with V65's opacity and blend).
+const GEN_LOOK = ['fit', 'cropAlign', 'crop', 'pip', 'tx', 'ty', 'tw', 'angle', 'feather', 'radius', 'outline', 'outlineColor', 'color',
+  'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation', 'opacity', 'blend'];
+
+/**
+ * (phase V77, the owner's (тч10), (тч10а)-(тч10в)) A RESULT OF A CHAT LAID BACK where the thing it was made from came from -
+ * the button under it (js/merge-v3/tl-gen.js backButton). One mutation, one step to undo. By what was done (`o.act`):
+ *   edit         the picture's FILE replaced - its place, length and look stay; its crop (shares of the file) only on a picture
+ *                of the same shape
+ *   animate, ref the new clip in the clip's place: from its second, no longer than it was - nothing after it moves; the look
+ *                carried (the crop only on a frame of the same shape); the old clip's sound half goes with it
+ *   continue     INSERTED right after the clip: what is after it on that lane moves on by the new clip's length, with the
+ *                sound halves of what moves; the other lanes stay ((тч10в) а)
+ *   frame-vid    the same, inserted INTO A CUT at the frame's moment - the clip cut there by Split's rule (_cutIn)
+ *   frame-pic    a picture on the lane above the clip's lane, at the frame's moment, 10 s, over what is there
+ * `item` - { kind: 'image' | 'video', src, thumb, libId, name, dur, w, h }. -> { ok, lane, at } | { ok: false, why }
+ */
+export async function genBack(o, item) {
+  if (!_on) return { ok: false, why: 'The timeline is not showing.' };
+  if (!o || !item || !item.src) return { ok: false, why: 'Nothing to lay.' };
+  if (Store.key() !== o.key) return { ok: false, why: 'Its project is not the one open.' };
+  const find = (tracks) => {
+    for (const t of tracks || []) { const c = (t.clips || []).find(x => x.id === o.clipId); if (c) return { t, c }; }
+    return null;
+  };
+  const now = find((Store.timeline() || {}).tracks);
+  if (!now) return { ok: false, why: 'The clip is not on the timeline any more.' };
+  const video = item.kind === 'video';
+  let dur = video ? (+item.dur || 0) : 0;
+  let w = +item.w || 0, h = +item.h || 0;
+  if (video && !(dur > 0 && w > 0 && h > 0)) {
+    const p = await _probe(item.src, true);
+    if (!(dur > 0)) dur = p.dur;
+    if (!(w > 0 && h > 0)) { w = p.w; h = p.h; }
+  }
+  if (video && !(dur > 0)) return { ok: false, why: 'The new clip\'s length could not be read.' };
+  dur = _r2(dur);
+  const inPlace = o.act === 'edit' || o.act === 'animate' || o.act === 'ref';
+  // The crop is a piece of the FILE in shares of it: it carries only onto a file of the same shape.
+  let sameShape = false;
+  if (inPlace && now.c.crop) {
+    const was = await _probe(now.c.src, !isStill(now.c));
+    if (!(w > 0 && h > 0)) { const p = await _probe(item.src, video); w = p.w; h = p.h; }
+    sameShape = was.w > 0 && was.h > 0 && w > 0 && h > 0 && Math.abs((was.w / was.h) / (w / h) - 1) < 0.01;
+  }
+  const base = (at, len) => ({
+    src: item.src, thumb: item.thumb || (video ? null : item.src), name: String(item.name || '').slice(0, 200), libId: item.libId || null,
+    start: _r2(at), dur: _r2(len), srcDur: video ? dur : 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+    transition: null, animation: null, filter: null,
+  });
+  // A film on `track` at `at`: its picture there, its sound on the lane paired with it (as a drop lays one).
+  const layFilm = (tracks, track, at, len, look) => {
+    const id = _id();
+    const mate = track.linkId ? tracks.find(x => x.id === track.linkId) : null;
+    const pairId = mate ? 'p' + _id().slice(1) : null;
+    track.clips.push(Object.assign(base(at, len), look || {}, { id, volume: 0, pairId }));
+    if (mate) {
+      mate.clips.push(Object.assign(base(at, len), { id: _id(), pairId, volume: 1 }));
+      mate.clips.sort((a, b) => a.start - b.start);
+    }
+    return id;
+  };
+  // The frame's moment on the timeline: a film's by the moment of its file (the clip may have moved or been trimmed since), a
+  // picture's - it has no moments of its own - where the playhead was.
+  const _momentOf = (c) => (isStill(c) ? (o.at != null ? +o.at : +c.start || 0) : _tlAt(c, +o.fileT || 0));
+  let out = null;
+  const ok = Store.mutate(tl => {
+    const tracks = tl.tracks || [];
+    const f = find(tracks);
+    if (!f) { out = { ok: false, why: 'The clip is not on the timeline any more.' }; return; }
+    const { t, c } = f;
+    const look = {};
+    for (const k of GEN_LOOK) if (c[k] != null && (k !== 'crop' || sameShape)) look[k] = JSON.parse(JSON.stringify(c[k]));
+    if (o.act === 'edit') {
+      if (video) { out = { ok: false, why: 'A clip does not go in place of a picture this way.' }; return; }
+      c.src = item.src; c.thumb = item.thumb || item.src; c.name = String(item.name || c.name || '').slice(0, 200); c.libId = item.libId || null;
+      if (!sameShape) delete c.crop;
+      delete c.frame;
+      out = { ok: true, id: c.id, lane: t.name, at: +c.start || 0 };
+      return;
+    }
+    if (inPlace) {
+      if (!video) { out = { ok: false, why: 'A picture does not go in place of a clip this way.' }; return; }
+      const at = +c.start || 0;
+      const len = Math.min(dur, +c.dur || dur);
+      _removeIn(tracks, t.id, c.id);
+      const id = layFilm(tracks, t, at, len, look);
+      out = { ok: true, id, lane: t.name, at };
+      return;
+    }
+    if (o.act === 'frame-pic') {
+      if (video) { out = { ok: false, why: 'Only a picture goes above it.' }; return; }
+      const at = Math.max(+c.start || 0, Math.min((+c.start || 0) + (+c.dur || 0), _momentOf(c)));
+      const vids = tracks.filter(x => x.kind === 'video');
+      const i = vids.indexOf(t);
+      const over = i > 0 ? vids[i - 1] : _newVideoLane(tracks);
+      if (!over) { out = { ok: false, why: 'There is no lane above it, and four video lanes is the most.' }; return; }
+      const id = _id();
+      over.clips.push(Object.assign(base(at, STILL_DUR), { id, volume: 0, pairId: null }));
+      out = { ok: true, id, lane: over.name, at: _r2(at) };
+      return;
+    }
+    // continue / frame-vid: inserted, what is after it on this lane moving on.
+    if (!video) { out = { ok: false, why: 'Only a clip is inserted.' }; return; }
+    const s0 = +c.start || 0, e0 = s0 + (+c.dur || 0);
+    let at = e0;
+    if (o.act === 'frame-vid') {
+      at = _r2(_momentOf(c));
+      // Too near an end to cut: before the clip, or after it.
+      if (at - s0 < MIN_SPLIT) at = s0;
+      else if (e0 - at < MIN_SPLIT) at = e0;
+      else _cutIn(tracks, c.id, at);
+    }
+    at = _r2(at);
+    const moved = new Set();
+    for (const x of t.clips) {
+      if ((+x.start || 0) < at - 0.005) continue;
+      x.start = _r2((+x.start || 0) + dur);
+      if (x.pairId) moved.add(x.pairId);
+    }
+    for (const other of tracks) {
+      if (other === t || !moved.size) continue;
+      for (const x of (other.clips || [])) if (x.pairId && moved.has(x.pairId)) x.start = _r2((+x.start || 0) + dur);
+      if (other.kind === 'audio') other.clips.sort((a, b) => a.start - b.start);
+    }
+    const id = layFilm(tracks, t, at, dur, null);
+    out = { ok: true, id, lane: t.name, at };
+  });
+  if (!out) return { ok: false, why: (!ok && Store.status()) || 'The timeline did not take it.' };
+  if (!out.ok) return out;
+  return { ok: true, lane: out.lane || '', at: out.at || 0 };
 }
 
 // A sound lane below main audio with nothing on it in [a, b) - "audio 2" first, then on outwards; null when every one is taken
@@ -3121,11 +3317,32 @@ function _showCtx(box, e) {
   window.addEventListener('scroll', _closeCtx, true);
 }
 
-// ── The right button on a clip (phase V54, block 2, the owner's (зв3), (зв4)) ─────────────────────────────────────────────────
-// A clip of a VIDEO lane that is a film - not a picture, not a red clip whose file is gone - has a menu: "Video to Music…" puts
-// THIS clip, as it is seen, into the Library panel's "generate audio" -> ElevenLabs -> Video to Music (js/merge-v3/audchat.js),
-// where "generate" asks for music made for it; the server makes the clip into a file and lays the track under it. Longer than
-// one clip - "Merge N clips" first. A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
+// ── The right button on a clip (phase V54, block 2, the owner's (зв3), (зв4); phase V77, (тч1), (тч2), (тч11а)) ──────────────────
+// A clip of a VIDEO lane - not a red clip whose file is gone - has a menu. (phase V77) The generation chats WITH this clip
+// (js/merge-v3/tl-gen.js): a picture - "Animate…" (the video chat, the picture as its first frame) and "Change…" (the pictures
+// chat); a film - "Continue…" (its last frame as the video chat's first frame), "As a reference…" (the part the timeline plays)
+// and "Frame to the pictures chat…" (the frame at the playhead, else the first one it shows). A talking head's line has none of
+// them (the mirror's, (тч11а)). (phase V54) A film's "Video to Music…" puts THIS clip, as it is seen, into the sound window's
+// Video to Music (js/merge-v3/audchat.js); the server makes the clip into a file and lays the track under it on a lane of its
+// own (V77, (тч14)). A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
+function _ctxItem(box, label, sub, title, on) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mv3-plus-item u-mi';
+  b.title = title;
+  const s = document.createElement('span');
+  s.textContent = label;
+  const m = document.createElement('small');
+  m.textContent = sub;
+  b.append(s, m);
+  b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    _closeCtx();
+    if (Views.isHlHome(Store.key())) { Views.noFragment(); return; }
+    on();
+  });
+  box.appendChild(b);
+}
 function _clipMenu(e) {
   if (!_on || locked()) return;
   const host = _host();
@@ -3134,31 +3351,42 @@ function _clipMenu(e) {
   const tl = Store.timeline();
   const t = ((tl && tl.tracks) || []).find(x => x.id === el.dataset.track);
   const c = t && (t.clips || []).find(x => x.id === el.dataset.clip);
-  if (!t || !c || t.kind !== 'video' || isStill(c) || Store.isGone(c) || !c.src) return;
+  if (!t || !c || t.kind !== 'video' || Store.isGone(c) || !c.src) return;
+  const still = isStill(c);
+  const line = c.frag != null;
+  if (still && line) return;
   e.preventDefault();
   _closeCtx();
   const box = document.createElement('div');
   box.className = 'mv3-plus-menu u-menu is-float';
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'mv3-plus-item u-mi';
-  const usd = 0.15 * (+c.dur || 0) / 60;
-  b.title = 'Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes';
-  const s = document.createElement('span');
-  s.textContent = 'Video to Music…';
-  const m = document.createElement('small');
-  m.textContent = 'ElevenLabs scores this clip · ' + (Math.round((+c.dur || 0) * 10) / 10) + ' s · ≈ $' + usd.toFixed(3);
-  b.append(s, m);
-  b.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    _closeCtx();
-    if (Views.isHlHome(Store.key())) { Views.noFragment(); return; }
-    // The strip of a pick would cover the Library panel the clip goes to.
-    _clearSel();
-    import('./audchat.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
-      .catch(err => showError('Video to Music did not open', { detail: (err && err.message) || String(err) }));
-  });
-  box.appendChild(b);
+  const at = _playhead;
+  const gen = (act) => import('./tl-gen.js').then(G => G.fromClip(act, { trackId: t.id, clipId: c.id, at }))
+    .catch(err => showError('The chat did not open', { detail: (err && err.message) || String(err) }));
+  if (!line && still) {
+    _ctxItem(box, 'Animate…', 'the video chat · this picture as the first frame',
+      'Open the video chat with this picture as the first frame of a new clip', () => gen('animate'));
+    _ctxItem(box, 'Change…', 'the pictures chat · this picture to change',
+      'Open the pictures chat with this picture - say what to change in it', () => gen('edit'));
+  }
+  if (!line && !still) {
+    const onIt = at >= (+c.start || 0) && at <= (+c.start || 0) + (+c.dur || 0);
+    _ctxItem(box, 'Continue…', 'the video chat · its last frame as the first frame',
+      'Open the video chat with the last frame of this clip as the first frame of a new clip that continues it', () => gen('continue'));
+    _ctxItem(box, 'As a reference…', 'the video chat · the part the timeline plays',
+      'Open the video chat with this clip as a reference - the part of its file the timeline plays', () => gen('ref'));
+    _ctxItem(box, 'Frame to the pictures chat…', onIt ? 'the frame at the playhead' : 'its first frame',
+      'Open the pictures chat with a frame of this clip - its own file, clean, at its size; saved in IMAGES → Screenshots', () => gen('frame-pic'));
+  }
+  if (!still) {
+    const usd = 0.15 * (+c.dur || 0) / 60;
+    _ctxItem(box, 'Video to Music…', 'ElevenLabs scores this clip · ' + (Math.round((+c.dur || 0) * 10) / 10) + ' s · ≈ $' + usd.toFixed(3),
+      'Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes', () => {
+        // The strip of a pick would cover the Library panel the clip goes to.
+        _clearSel();
+        import('./audchat.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
+          .catch(err => showError('Video to Music did not open', { detail: (err && err.message) || String(err) }));
+      });
+  }
   _showCtx(box, e);
 }
 

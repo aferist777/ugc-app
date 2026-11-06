@@ -30,13 +30,32 @@ import { chatWindow } from './chat-window.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
+import { backButton } from './tl-gen.js';
 
 const MAX_ATTS = 5;
 const LS_LAST = 'mv3-imagen-last';       // the model choice - the key the window this replaced used
+// (phase V77) The description's way in from outside (openPictures with a thing from the timeline) - set when it is made.
+let _api = null;
 
 function PICTURES(ctx) {
   // The model, the aggregator, the quality, the shape and the price (phase V26.5: shared with the frames chat).
   const M = modelColumn(ctx, { lsKey: LS_LAST, maxAtts: MAX_ATTS, shapes: true });
+
+  // (phase V77, the owner's (тч1), (тч8а)) A picture from the timeline: the zone emptied - the thread and the words in the box stay -,
+  // the picture in it, the page's word at the end of the thread, the box ready for what to change.
+  _api = {
+    fromTimeline(o) {
+      const a = (o && o.attach) || {};
+      if (!a.path) return;
+      ctx.useAtts([]);
+      ctx.attach(a.path, a.name || '');
+      const what = o.as === 'frame' ? 'The frame from the timeline' : 'The picture from the timeline';
+      ctx.notice(what + ' is in the zone - say what to change in it.'
+        + (o.back ? '\nWhen the picture is made, "' + o.back + '" under it puts it on the timeline.' : ''));
+      const ui = ctx.ui();
+      if (ui) ui.ta.focus();
+    },
+  };
 
   return {
     name: 'pictures',
@@ -134,6 +153,10 @@ function PICTURES(ctx) {
       use.title = 'Put it in the row above the message box and carry on from it';
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));
       acts.append(use);
+      // (phase V77) Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
+      const back = backButton(g, g.refs || [], { src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '',
+        name: (g.prompt || '').slice(0, 60), w: +g.w || 0, h: +g.h || 0 }, 'image');
+      if (back) acts.append(back);
       cell.appendChild(acts);
       // Taken off the shelf since: said, instead of a broken picture, and nothing builds on it.
       img.addEventListener('error', () => {
@@ -175,7 +198,11 @@ const CHAT = createChat(PICTURES);
 const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', name: 'pictures chat', title: 'generate image' });
 
 /** Every way in - IMAGES' "generate", "+" on the Images shelf, the lane's right-click, ?open=pictures: its window. */
-export const openPictures = () => WIN.open();
+export async function openPictures(o) {
+  await WIN.open();
+  // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
+  if (o && o.attach && _api) _api.fromTimeline(o);
+}
 export const closePictures = () => WIN.close();
 
 export function initPicChat() { CHAT.init(); }
