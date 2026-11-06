@@ -43,6 +43,7 @@ import { normalize as normalizeCrop } from '../framing/crop.js';
 // (phase V65) A clip's opacity and blend mode - one rule for the page and the server.
 import { normalizeOpacity, normalizeBlend } from '../overlay/look.js';
 import { normalizeColor } from '../overlay/color.js';
+import { normalizePitch } from '../sound/pitch.js';
 // (phase V74) Main video's patterns - a list on its lane (overlay/pattern.js).
 import { normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
@@ -2291,7 +2292,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              // what is under it (overlay/look.js).
                              'opacity', 'blend',
                              // (phase V75, (кп5)) Its colour correction (overlay/color.js).
-                             'color']);
+                             'color',
+                             // (phase V76) A sound at another pitch (sound/pitch.js).
+                             'pitch']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2334,6 +2337,8 @@ function _write(c, key, value) {
   if (key === 'blend') { const v = normalizeBlend(value); if (v == null) delete c.blend; else c.blend = v; return; }
   // (phase V75) The values that are not neutral; neutral takes the field off.
   if (key === 'color') { const v = normalizeColor(value); if (v == null) delete c.color; else c.color = v; return; }
+  // (phase V76) { st, shift } - semitones and the timbre moving with them; 0 takes the field off.
+  if (key === 'pitch') { const v = normalizePitch(value); if (v == null) delete c.pitch; else c.pitch = v; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
   // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which

@@ -38,6 +38,8 @@ import { opacityOf, blendOf } from '../overlay/look.js';
 import * as PAT from '../overlay/pattern.js';
 // (phase V75) A clip's colour correction - one rule with the render (overlay/color.js).
 import { svgOf } from '../overlay/color.js';
+// (phase V76) A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
+import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
 
 const STAGE = 'mv3-stage';
@@ -250,7 +252,8 @@ function _slotCount(kind, c) {
   return _slotN.get((kind === 'video' ? 'v|' : 'a|') + c.src + (_rev(c) ? '|rev' : '')) || 1;
 }
 const _slotKey = (slot) => (slot ? '#' + (slot + 1) : '');
-const _keyOf = (c) => _key(c.src, _rev(c)) + _slotKey(_slotOf(c));
+// (phase V76) A sound at another pitch is another element: it plays another file.
+const _keyOf = (c) => _key(c.src, _rev(c)) + (c.pitch ? '|' + tagOf(c.pitch) : '') + _slotKey(_slotOf(c));
 
 // The clips of a lane that start after `t` and within LOOK of it, the nearest first.
 function _nextOn(track, t) {
@@ -1438,7 +1441,51 @@ function _pcmSwap(el) {
 }
 // Held at Play, the clock waits for a sound whose decoded copy is still being made (at most HOLD_MS, as for the rest; a
 // Suno track of two and a half minutes takes ~0.3 s). Playing on, a track is decoded when its clip is LOOK away.
-const _pcmWaits = (el) => { const p = el.__orig ? _pcm.get(el.__orig) : null; return !!(p && !p.done); };
+// (phase V76) ...and for a sound's copy at its pitch, as long (a line's is made in under a second).
+const _pcmWaits = (el) => { const p = el.__orig ? _pcm.get(el.__orig) : null; return !!(p && !p.done) || !!(el.__pitch && !el.__pitch.done); };
+
+// ── A sound at another pitch (phase V76, the owner's (тн7) а) ──
+// The server makes its file's copy at that pitch once (GET /api/pitch-copy - lib/pitch-copy.js; `rev` from the sound played
+// backwards, for a reversed film); until it is there the clip is heard as it was, and the element changes over to the copy by
+// itself - even while it plays, put in place again as a new element is. One that could not be made is asked again later.
+const _pitch = new Map();           // src|tag|rev -> { url, done, failed }
+function _pitchOf(c) {
+  if (!c || !c.src || !isPitched(c)) return null;
+  const rev = _rev(c);
+  const key = c.src + '|' + tagOf(c.pitch) + (rev ? '|rev' : '');
+  let p = _pitch.get(key);
+  if (p) return p;
+  p = { url: null, done: false, failed: false };
+  _pitch.set(key, p);
+  const pp = pitchOf(c);
+  (async () => {
+    try {
+      const r = await fetch('/api/pitch-copy?src=' + encodeURIComponent(c.src) + '&st=' + pp.st + (pp.shift ? '&shift=1' : '') + (rev ? '&rev=1' : ''));
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.success || !d.url) throw new Error(d.error || 'HTTP ' + r.status);
+      p.url = d.url;
+    } catch (e) {
+      p.failed = true;
+      console.warn('[preview] the copy at its pitch could not be made:', e.message);
+      setTimeout(() => { if (_pitch.get(key) === p) _pitch.delete(key); }, 15000);
+    }
+    p.done = true;
+    if (_on) _syncAudio();
+  })();
+  return p;
+}
+// The element plays its pitched copy once there is one.
+function _pitchSwap(el) {
+  const p = el.__pitch;
+  if (!p || !p.url || el.__pitchOn) return false;
+  el.__pitchOn = true;
+  el.__orig = '';                 // no decoded copy of the file any more: the copy seeks exactly
+  el.src = p.url;
+  el.__fresh = true;              // put in place again, exactly, as a new element is
+  el.__seekAt = 0;
+  el.__cost = 0;
+  return true;
+}
 
 // Sound is taken from the same place the picture is. For a reversed clip that means the
 // reversed proxy, whose audio ffmpeg has already run through `areverse` - which is the only
@@ -1446,13 +1493,17 @@ const _pcmWaits = (el) => { const p = el.__orig ? _pcm.get(el.__orig) : null; re
 function _aud(c) {
   const rev = _rev(c);
   const key = _keyOf(c);
-  if (_audio.has(key)) { const was = _audio.get(key); _pcmSwap(was); return was; }
+  if (_audio.has(key)) { const was = _audio.get(key); if (!_pitchSwap(was)) _pcmSwap(was); return was; }
   const el = new Audio();
   el.preload = 'auto';
+  // (phase V76) A sound at another pitch: its copy once the server has made it, the file as it is until then.
+  const pp = _pitchOf(c);
+  el.__pitch = pp;
   // (V49) The decoded copy when the file does not seek exactly (above), once it is made.
-  const pc = rev ? null : _pcmOf(c.src);
+  const pc = (rev || (pp && pp.url)) ? null : _pcmOf(c.src);
   el.__orig = rev ? '' : c.src;
   el.src = rev ? _srcFor(c.src, true) : (pc && pc.url ? pc.url : c.src);
+  if (pp && pp.url) _pitchSwap(el);
   // HOW LONG THIS FILE TAKES TO PLAY AGAIN after a seek made while playing (phase V33.4, the owner 2026-10-21: "первые
   // секунд пять идут без звука, но картинка есть"): from the seek to sound, a half-and-half running average. A big file
   // read cold (a 4K piece of a highlights fragment, 17 Mbit/s) took 0.4-0.6 s a seek - more than the drift allowed - so the

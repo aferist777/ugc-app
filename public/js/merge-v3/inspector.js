@@ -32,6 +32,8 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB,
          selectTrackById as selectTrackB, patternsOf as patternsB, setPatterns as setPatternsB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
+// (phase V76) A sound's pitch - presets, semitones, keep timbre.
+import { pitchRows } from './pitch-rows.js';
 import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
@@ -512,6 +514,8 @@ function _blankFilm(host, track, c, set, pair) {
       (v) => setB(pair.track.id, pair.clip.id, 'volume', v));
     vol.title = 'This clip\u2019s own sound, on ' + pair.track.name;
     snd.appendChild(C.row('Volume', vol));
+    // (phase V76, (тн4) а) Its pitch, on the sound as its level is.
+    pitchRows(snd, [pair.clip.pitch], (fn) => setB(pair.track.id, pair.clip.id, 'pitch', fn(pair.clip.pitch)));
   } else {
     snd.appendChild(C.hint('No sound attached to this clip.'));
   }
@@ -677,6 +681,9 @@ function _soundSection(box, sounds, alone) {
   if (runs.some(r => r.length > 1)) {
     host.appendChild(C.hint('Clips in a row on one lane fade as one - in at the first, out at the last; the seams between them keep their 15 ms.'));
   }
+  // (phase V76, (тн4) а) One pitch for all of them - "Mixed" while they disagree.
+  pitchRows(host, sounds.map(s => s.clip.pitch),
+    (fn) => setClipsB(sounds.map(s => ({ trackId: s.track.id, clipId: s.clip.id, patch: { pitch: fn(s.clip.pitch) } }))));
   if (sounds.some(s => _isLine(s.clip))) host.appendChild(C.hint(LINE_HINT));
 }
 
@@ -710,6 +717,8 @@ function _blankSound(host, track, c, set, pair) {
     }),
     C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards', 'rotate-ccw'),
   )));
+  // (phase V76) Its pitch - the speed above keeps it.
+  pitchRows(g, [c.pitch], (fn) => set('pitch', fn(c.pitch)));
 
   if (pair) {
     g.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
@@ -804,7 +813,11 @@ function _blankAudioTrack(host, track) {
   // themselves are in the Library panel, Audio -> Music, dragged onto a lane from there (phase V28.4).
   M.setMusicDest(track.id);
   // (phase V73 block 5, 5b) its rows - one group, Sound
-  M.renderMusicTrack(_group(host, 'lane', 'Sound'), track);
+  // (phase V76, (тн4) а) The lane's pitch under its volume: written into every clip on it, one undo step, as a video lane's
+  // colour is.
+  const clips = (track.clips || []).filter(c => c && c.src);
+  M.renderMusicTrack(_group(host, 'lane', 'Sound'), track, clips.length ? (g) => pitchRows(g, clips.map(c => c.pitch),
+    (fn) => setClipsB(clips.map(c => ({ trackId: track.id, clipId: c.id, patch: { pitch: fn(c.pitch) } })))) : null);
 
   _laneRemove(host, track);
 }

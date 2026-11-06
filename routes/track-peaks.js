@@ -9,14 +9,21 @@
      GET /api/track-pauses?src=<address>&from=<s>&to=<s>
        (phase V44) the pauses of the file's sound inside [from, to) - seconds of the FILE - by the noise floor of that
        stretch (lib/track-pauses.js): { success, from, to, floor, thr, pauses: [[a, b], ...] }; the loudness is read once
-       and kept in cache/pauses/. The timeline's "cut silence" asks it for main audio's clips (js/merge-v3/tl-silence.js). */
+       and kept in cache/pauses/. The timeline's "cut silence" asks it for main audio's clips (js/merge-v3/tl-silence.js).
+
+     GET /api/pitch-copy?src=<address>&st=<semitones>&shift=1&rev=1
+       (phase V76) the file at another pitch (lib/pitch-copy.js): answered when the copy is made - { success, url } (an address
+       under /cache/pitch/), made once and kept; `shift` - the timbre moves with the pitch, `rev` - from the sound played
+       backwards. The preview plays it in place of the file (js/merge-v3/preview-b.js). */
 
 const fs = require('fs');
 const express = require('express');
 const router = express.Router();
-const { toDiskExisting } = require('../lib/media');
+const { toDiskExisting, toUrl } = require('../lib/media');
 const PEAKS = require('../lib/track-peaks');
 const PAUSES = require('../lib/track-pauses');
+const PITCH = require('../lib/pitch-copy');
+const { normalizePitch } = require('../public/js/sound/pitch.js');
 
 router.get('/track-peaks', async (req, res) => {
   const abs = toDiskExisting(String(req.query.src || ''));
@@ -44,6 +51,21 @@ router.get('/track-pauses', async (req, res) => {
   }
   try {
     res.json({ success: true, ...(await PAUSES.pausesIn(abs, from, to)) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.get('/pitch-copy', async (req, res) => {
+  const abs = toDiskExisting(String(req.query.src || ''));
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not a file of the library' });
+  const p = normalizePitch({ st: Number(req.query.st), shift: String(req.query.shift || '') === '1' });
+  if (!p) return res.status(400).json({ success: false, error: 'st is semitones, -12 to 12, not 0' });
+  try {
+    const copy = await PITCH.copyOf(abs, p, { rev: String(req.query.rev || '') === '1' });
+    const url = toUrl(copy);
+    if (!url) throw new Error('the copy is not in the library');
+    res.json({ success: true, url });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
