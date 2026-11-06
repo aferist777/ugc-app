@@ -20,7 +20,7 @@ import * as Store from './store.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
 import { playhead, setClipsFields } from './timeline-b.js';
-import { mapsOf, shownElement, frameSrc } from './preview-b.js';
+import { mapsOf, mediaDims, frameSrc } from './preview-b.js';
 import { setLive } from './place-b.js';
 import { normalize, active, SHAPES, largest, pickMap, placeFor } from '../framing/crop.js';
 import { showError } from '../notice.js';
@@ -44,25 +44,49 @@ function _fresh(items) {
 }
 
 // ── The shape of a clip's file ───────────────────────────────────────────────
-// Only its shape is used (the crop is in shares of it): the preview's element when it has one, else read once off the copy
-// the preview plays.
+// Only its shape is used (the crop is in shares of it). KEPT ONCE KNOWN, per file. (phase V75 fix, the owner 2026-11-06: after the
+// format was switched there and back the Crop switch said "has not loaded yet" again and again) It came only from the element the
+// preview was DRAWING (ready, not being sought), else from the preview's copy loaded anew - which a long film may not have made
+// yet: 15 s, then nothing. Now: what was known, any element of the preview that knows its size (preview-b.js mediaDims), the
+// server's reading of the file's header for a film (GET /api/media/probe - turned by its `rotate`), the picture or the copy last.
 const _dims = new Map();          // src -> { w, h } | Promise
 function _dimsNow(c) {
-  const el = shownElement(c);
-  if (el) return el.tagName === 'VIDEO' ? { w: el.videoWidth, h: el.videoHeight } : { w: el.naturalWidth, h: el.naturalHeight };
   const d = _dims.get(c.src);
-  return d && !d.then ? d : null;
+  if (d && !d.then) return d;
+  const m = mediaDims(c);
+  if (m) { _dims.set(c.src, m); return m; }
+  return null;
+}
+async function _probe(c) {
+  try {
+    const r = await fetch('/api/media/probe?src=' + encodeURIComponent(c.src));
+    const j = r.ok ? await r.json() : null;
+    if (!j || !(+j.w > 0 && +j.h > 0)) return null;
+    const turned = Math.abs(Math.round(+j.rotate || 0)) % 180 === 90;
+    return turned ? { w: +j.h, h: +j.w } : { w: +j.w, h: +j.h };
+  } catch (e) { return null; }
 }
 function _dimsOf(c) {
   const now = _dimsNow(c);
   if (now) return Promise.resolve(now);
   const was = _dims.get(c.src);
   if (was && was.then) return was;
-  const p = new Promise((res) => {
+  const p = (async () => {
+    // A picture is read by the page itself (its orientation as the page shows it); a film by the server first.
+    let d = isStill(c) ? null : await _probe(c);
+    if (!d) d = await _loadDims(c);
+    if (!d && isStill(c)) d = await _probe(c);
+    if (d) _dims.set(c.src, d); else _dims.delete(c.src);
+    return d;
+  })();
+  _dims.set(c.src, p);
+  return p;
+}
+function _loadDims(c) {
+  return new Promise((res) => {
     let tm = 0;
     const done = (d) => {
       clearTimeout(tm);
-      if (d && d.w > 0 && d.h > 0) _dims.set(c.src, d); else _dims.delete(c.src);
       res(d && d.w > 0 && d.h > 0 ? d : null);
     };
     tm = setTimeout(() => done(null), 15000);
@@ -81,8 +105,6 @@ function _dimsOf(c) {
       v.src = src;
     }
   });
-  _dims.set(c.src, p);
-  return p;
 }
 
 // ── What a switch writes ─────────────────────────────────────────────────────
@@ -185,8 +207,9 @@ async function _shape(items, name) {
       patch: { crop: { ..._rect(active(it.clip) || k) } } })));
     return;
   }
-  const d = await _dimsOf(now[0].clip);
-  const base = d ? cropBases(items) : null;
+  const ds = await Promise.all(now.map((it) => _dimsOf(it.clip)));
+  const d = ds[0];
+  const base = ds.every(Boolean) ? cropBases(items) : null;
   if (!base) { showError('The picture of this clip has not loaded yet - try again in a moment.'); return; }
   setLive(null);
   const nk = normalize(largest(SHAPES[name], d.w / d.h, k.x + k.w / 2, k.y + k.h / 2));

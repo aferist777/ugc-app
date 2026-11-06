@@ -994,6 +994,21 @@ export function mapsOf(c, main, sw, sh, t) {
 }
 
 /** (phase V51) The preview's own element for a clip on screen, decoded - what the crop's field shows while the playhead is on it. */
+/**
+ * (phase V75 fix) The SIZE of a clip's file from any element the preview holds for it - ready to draw or not (one being sought,
+ * another quality, a slot): its size is known once its metadata is. Null when none knows it.
+ */
+export function mediaDims(c) {
+  if (!c || !c.src) return null;
+  const head = c.src + '|';
+  for (const [k, el] of _media) {
+    if (!k.startsWith(head) || !el) continue;
+    const w = el.tagName === 'VIDEO' ? el.videoWidth : el.naturalWidth;
+    const h = el.tagName === 'VIDEO' ? el.videoHeight : el.naturalHeight;
+    if (w > 0 && h > 0) return { w, h };
+  }
+  return null;
+}
 export function shownElement(c) {
   const el = c && c.src ? _media.get(_keyOf(c)) : null;
   if (!el) return null;
