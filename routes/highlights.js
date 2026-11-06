@@ -58,8 +58,10 @@ function view(rec, o) {
   if (o && o.caps) {
     // (phase V33.4) And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
     const rv = RENDER.viewOf(rec);
+    // (phase V76.1) Every made fragment's timeline read at once (lib/merge-store.js many), not the store's index once each.
+    const tls = MSTORE.many((rec.fragments || []).filter((f) => f.state === 'ready' && f.key).map((f) => f.key));
     out.fragments = (rec.fragments || []).map((f) => {
-      const tl = f.state === 'ready' && f.key ? MSTORE.one(f.key) : null;
+      const tl = f.state === 'ready' && f.key ? (tls.get(String(f.key)) || null) : null;
       const r = rv.byN[f.n] || {};
       // (phase V66) `lanes`: what the common settings of several show of each - its subtitles' place and shape, its sound lanes.
       return { ...f, ...(tl ? { cap: CUT.capOf(tl), lanes: CUT.lanesOf(tl) } : {}), rq: r.line || null, rendered: r.render || null };
@@ -226,11 +228,9 @@ router.post('/highlights/:id/title-on-top', (req, res) => {
     const frags = _made(rec, b.ns);
     if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
     const TT = require('../public/js/captions/title.js');
-    let n = 0;
-    for (const f of frags) {
-      if (b.on) n += CUT.addTitle(f.key, TT.topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' })) ? 1 : 0;
-      else n += CUT.dropTitle(f.key) ? 1 : 0;
-    }
+    // (phase V76.1) All of them in one pass of the store.
+    const texts = b.on ? new Map(frags.map((f) => [String(f.key), TT.topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' })])) : null;
+    const n = CUT.titles(frags.map((f) => f.key), texts).length;
     res.json({ success: true, n });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
@@ -301,7 +301,7 @@ router.post('/highlights/:id/pitch', (req, res) => {
 // The track a fragment's record keeps (as lib/highlights-job.js deals it), and its music written: on its timeline - or, for the OPEN
 // one (`open`), handed back for the page to lay (one undo step; a server's write under an open timeline reads as another's edit).
 const _trackOf = (t) => (t ? { id: t.id, title: t.title, path: t.path, dur: t.dur, mood: t.mood || '' } : null);
-async function _music(rec, f, track, open) {
+async function _music(rec, f, track, open, later) {
   const HLM = require('../lib/highlights-music');
   const tl = MSTORE.one(f.key);
   if (!tl) throw Object.assign(new Error('its timeline is not there'), { status: 409 });
@@ -312,7 +312,8 @@ async function _music(rec, f, track, open) {
   }
   const loud = clips.loud || null;
   const laid = open ? CUT.bedClips(clips, CUT.filmEnd(tl)) : null;
-  if (!open) CUT.setMusic(f.key, clips);
+  // (phase V76.1) `later` - a Map the clips wait in, written with the others' in one pass (POST /music).
+  if (!open) { if (later) later.set(String(f.key), clips); else CUT.setMusic(f.key, clips); }
   return { track: _trackOf(track), loud, laid };
 }
 function _keepMusic(id, results) {
@@ -378,17 +379,19 @@ router.post('/highlights/:id/music', async (req, res) => {
       }
     }
     const results = new Map();
+    const later = new Map();
     let open = null;
     let missed = 0;
     for (let k = 0; k < frags.length; k++) {
       const f = frags[k];
       const isOpen = Number(b.open) === f.n;
       try {
-        const m = await _music(rec, f, dealt[k], isOpen);
+        const m = await _music(rec, f, dealt[k], isOpen, later);
         results.set(f.n, m);
         if (isOpen) open = { n: f.n, clips: m.laid || [] };
       } catch (e) { missed++; }
     }
+    if (later.size) CUT.setMusics(later);
     _keepMusic(rec.id, results);
     res.json({ success: true, n: results.size, open, missed });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
