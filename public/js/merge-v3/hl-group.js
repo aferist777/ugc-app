@@ -28,6 +28,10 @@
    CHANGED (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)): while a group is ticked the TIMELINE'S PANEL IS COVERED BY THREE
    BUTTONS - Subtitles, main audio, music - for all N (no lanes, no transport; the bubbles and gold names went); a fragment's row in
    the strip shows its own timeline until "‹ all N". (Phase V74: a fourth, "pattern".)
+   CHANGED (phase V76, the owner 2026-11-06: «кнопки "for all" в поле таймлайна расположи по горизонтали под верхней границей поля
+   таймлайнов. еще нужна там кнопка main video с общими настройками для видео. и pitch так же будет общей настройкой»): the buttons
+   are ONE ROW under the timeline's top edge - Subtitles · Main video · Main audio · Music; MAIN VIDEO (in place of "pattern") is
+   its colour, its frame ("By the kind" back to the app's), its punch-ins and the patterns ((тн9)); main audio has the pitch ((тн10) а).
 
    THE SAMPLE ((хо7)): while the Subtitles block is in the strip, the preview draws a whole page of «example» - as many words in a
    line as the lanes have, in as many lines - in the open fragment's look, instead of its subtitles (captions/layer.js setLive),
@@ -39,7 +43,12 @@ import * as Views from './lib-views.js';
 import * as C from './controls.js';
 import * as CapPlace from './cap-place.js';
 import { fitTimeline } from './layout.js';
-import { setSubsStyle, selectTrackById, onSelChange, newBedLane, mainVideo, patternsOf, setPatterns } from './timeline-b.js';
+import { setSubsStyle, selectTrackById, onSelChange, newBedLane, mainVideo, patternsOf, setPatterns, setClipsFields } from './timeline-b.js';
+// (phase V76) Main video's colour and frame, main audio's pitch - for all of them.
+import { COLOR_KEYS, COLOR_RANGE, COLOR_LABEL, colorOf } from '../overlay/color.js';
+import { FRAMINGS, modeOf } from './framing-ui.js';
+import { pitchOf } from '../sound/pitch.js';
+import { pitchRows } from './pitch-rows.js';
 // (phase V74) Main video's patterns, picked by ticks - the one lane's block, for all of them.
 import { renderPatterns, nameOf as patternName } from './patterns-ui.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
@@ -54,7 +63,7 @@ import { figures } from '../num.js';
 
 let _A = null;             // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
 let _own = '';              // a fragment opened from its row with its OWN Subtitles picked ((хо15)) - its key
-let _busy = '';             // 'subs' | 'speech' | 'music' | 'pattern' while a write for all is under way
+let _busy = '';             // 'subs' | 'speech' | 'music' | 'pattern' | 'video' while a write for all is under way
 let _patWant = null;        // (V74) the patterns waiting to go to the rest while a write of them is under way: { list, ns }
 let _moods = null;          // Music -> highlights: [{ id, label, n }] (the root as 'yours' when it has tracks)
 let _moodsAsk = '';         // (phase V73 block 2) 'asking' while it is read, 'failed' when it could not be (the reason was a popup)
@@ -157,6 +166,70 @@ async function _patternsAll(next) {
   _busy = '';
   await _A.load();
   Views.altChanged();
+}
+
+// ── (phase V76, the owner's (тн9) «все по рекомендации») MAIN VIDEO of the ticked ─────────────────────────────────────────────
+// Its colour (one value of one slider), its punch-ins on / off - into every clip of main video of every ticked fragment, the open one
+// by the page (one undo step), the rest by the server; its frame planned by the server for all of them, the open one's laid here.
+const _mainOpen = () => { const m = mainVideo(); return ((m && m.clips) || []).filter((c) => c && c.src); };
+const _uniq = (list) => { const seen = new Set(), out = []; for (const v of list) { const k = JSON.stringify(v); if (!seen.has(k)) { seen.add(k); out.push(v); } } return out; };
+/** What a ticked fragment's main video is now: the open one's from its timeline, the others' as the server read them. */
+function _videoOf(f) {
+  if (f.n === _A.openN()) {
+    const cs = _mainOpen();
+    const z = cs.filter((c) => c.frame && Array.isArray(c.frame.zooms) && c.frame.zooms.length);
+    return { modes: _uniq(cs.map(modeOf)), was: cs.some((c) => c.frameWas), colors: _uniq(cs.map((c) => colorOf(c))),
+      zooms: z.length, zoomOff: z.filter((c) => c.frame.noZoom).length };
+  }
+  return (f.lanes && f.lanes.video) || { modes: [], was: false, colors: [], zooms: 0, zoomOff: 0 };
+}
+// A fragment's frame as the switch says it: 'kind' while it is the app's, its one mode, or 'mixed'.
+const _frameState = (v) => (!v.was ? 'kind' : v.modes.length === 1 ? v.modes[0] : 'mixed');
+const FRAME_WORDS = Object.fromEntries([['kind', 'By the kind'], ...FRAMINGS, ['mixed', 'Mixed'], ['active', 'By the kind']]);
+function _videoAll(patch) {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  _forAll('video', () => {
+    const lane = mainVideo();
+    if (!lane) return;
+    const items = [];
+    for (const c of _mainOpen()) {
+      if (patch.color) items.push({ trackId: lane.id, clipId: c.id, patch: { color: { ...colorOf(c), [patch.color.key]: patch.color.value } } });
+      else if (c.frame && Array.isArray(c.frame.zooms) && c.frame.zooms.length) {
+        items.push({ trackId: lane.id, clipId: c.id, patch: { frame: { ...c.frame, noZoom: patch.zoom ? undefined : true } } });
+      }
+    }
+    if (items.length) setClipsFields(items);
+  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/video', { ns, ...patch }));
+}
+async function _framingAll(mode) {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  const { list, open } = _split();
+  _busy = 'video';
+  Views.altChanged();
+  try {
+    const d = await _post('/api/highlights/' + _enc(_A.pid()) + '/video', { ns: list.map((f) => f.n), open: open ? open.n : 0, framing: mode });
+    const lane = mainVideo();
+    if (open && d.open && lane) {
+      const items = Object.entries(d.open).map(([id, ch]) => ({ trackId: lane.id, clipId: id, patch: { frame: ch.frame || null, frameWas: ch.frameWas || null } }));
+      if (items.length) setClipsFields(items);
+    }
+    _A.say(d.missed ? d.missed + (d.missed === 1 ? ' fragment kept its frame: ' : ' fragments kept their frame: ') + d.why
+      : 'framed: ' + (FRAME_WORDS[mode] || mode).toLowerCase(), !!d.missed);
+  } catch (e) { _A.say(e.message, true); }
+  _busy = '';
+  await _A.load();
+  Views.altChanged();
+}
+
+// ── (phase V76, (тн10) а) Main audio's pitch for all the ticked - the open one by the page, the rest by the server (the part changed).
+function _pitchAll(fn, part) {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  _forAll('speech', () => {
+    const a1 = _openA1();
+    if (!a1) return;
+    const items = (a1.clips || []).filter((c) => c && c.src).map((c) => ({ trackId: a1.id, clipId: c.id, patch: { pitch: fn(c.pitch) } }));
+    if (items.length) setClipsFields(items);
+  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/pitch', { ns, pitch: part }));
 }
 
 /** (хо12) The title on top on / off for all the ticked. */
@@ -331,28 +404,61 @@ export function renderSubs(host, target) {
   return out;
 }
 
-// (phase V74, (пт7)) Main video's patterns for all the ticked - the open one's list shown, a change puts the whole list on all.
-function renderPattern(host) {
+// (phase V76, (тн9)) MAIN VIDEO for all the ticked: its colour, its frame, its punch-ins and (V74, (пт7)) its patterns - the open
+// one's list shown, a change puts the whole list on all.
+function renderVideo(host) {
   const list = _A.ticked();
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
-  box.dataset.hlGroup = 'pattern';
+  box.dataset.hlGroup = 'video';
   host.appendChild(box);
-  _head(box, 'Patterns', list.length);
+  _head(box, 'Main video', list.length);
+  const vids = list.map(_videoOf);
+  // Colour - each slider one value for all of them, "mixed" while they differ; the other sliders stay each clip's.
+  for (const k of COLOR_KEYS) {
+    const [min, max, mid, step] = COLOR_RANGE[k];
+    const vals = vids.flatMap((v) => v.colors.map((c) => c[k]));
+    const mixed = vals.some((x) => Math.abs(x - vals[0]) > 1e-6);
+    box.appendChild(C.row(COLOR_LABEL[k], C.slider({
+      min, max, step, value: vals.length ? vals[0] : mid, fmt: (x) => (+x).toFixed(2), mixed,
+      onChange: (x) => _videoAll({ color: { key: k, value: x } }),
+    })));
+  }
+  box.appendChild(_el('div', 'mv3-c-sep'));
+  // The frame - "By the kind" while it is the app's, back to it from any other.
+  const states = vids.map(_frameState);
+  const now = states.every((s) => s === states[0]) ? states[0] : 'mixed';
+  const opts = [['kind', 'By the kind'], ...FRAMINGS];
+  if (now === 'mixed') opts.unshift(['mixed', 'Mixed']);
+  const sel = C.select(opts, now, (v) => { if (v !== 'mixed' && v !== now) _framingAll(v); });
+  sel.disabled = !!_busy;
+  sel.title = 'Every clip of main video of every ticked fragment. By the kind - the frame the app gave it (the speaker, the most active, a lecture\u2019s shots)';
+  box.appendChild(C.row('Framing', sel));
+  const zooms = vids.reduce((s, v) => s + v.zooms, 0);
+  if (zooms) {
+    const off = vids.reduce((s, v) => s + v.zoomOff, 0);
+    const sw = C.toggle(off === 0, (on) => _videoAll({ zoom: on }));
+    sw.title = off && off < zooms ? 'Mixed - on for some of them' : 'The punch-ins on the key lines';
+    box.appendChild(C.row('Punch-ins', sw));
+  }
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'video' ? 'Putting it on them…'
+    : 'Into every clip of main video of every ticked fragment. Following a face uses the faces counted when they were cut.'));
+  box.appendChild(_el('div', 'mv3-c-sep'));
   renderPatterns(box, {
     list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(),
     note: _busy === 'pattern' ? 'Putting them on them…' : 'Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.',
   });
   _each(box);
   const ul = _el('ul', 'mv3-hlg-list');
-  for (const f of list) {
+  list.forEach((f, i) => {
     const mine = f.n === _A.openN() ? patternsOf() : ((f.lanes && f.lanes.patterns) || []);
     const li = _el('li', 'mv3-hlg-item');
     li.appendChild(_el('span', 'mv3-hlg-name', f.title));
-    li.appendChild(_el('span', 'mv3-hlg-what', mine.length ? mine.map((p) => patternName(p.src)).join(', ') : 'no pattern'));
-    li.title = 'Open «' + f.title + '» with its own main video - its patterns';
+    li.appendChild(_el('span', 'mv3-hlg-what', (FRAME_WORDS[states[i]] || states[i]).toLowerCase()
+      + ' · ' + (mine.length ? mine.map((p) => patternName(p.src)).join(', ') : 'no pattern')));
+    li.title = 'Open «' + f.title + '» with its own main video';
     li.addEventListener('click', () => _openOwn(f, 'main'));
     ul.appendChild(li);
-  }
+  });
   box.appendChild(ul);
 }
 
@@ -365,6 +471,11 @@ function renderSpeech(host) {
   const vol = (f) => (f.n === _A.openN() ? ((_openA1() || {}).volume != null ? +_openA1().volume : 1) : ((f.lanes && f.lanes.speech && f.lanes.speech.volume) != null ? +f.lanes.speech.volume : 1));
   const vols = list.map(vol);
   box.appendChild(C.row('Volume', _mixedVolume(vols, (v) => _volume('speech', v))));
+  // (phase V76, (тн10) а) One pitch of the speech for all of them - "Mixed" while it differs; the music stays as it is.
+  const pitches = list.flatMap((f) => (f.n === _A.openN()
+    ? (((_openA1() || {}).clips) || []).filter((c) => c && c.src).map((c) => pitchOf(c))
+    : ((f.lanes && f.lanes.speech && f.lanes.speech.pitches) || [])));
+  pitchRows(box, pitches, _pitchAll);
   box.appendChild(_el('p', 'mv3-ins-note', _busy === 'speech' ? 'Putting it on them…' : 'The speech of every ticked fragment - its music stays as it is.'));
   _each(box);
   for (const f of list) box.appendChild(C.row(f.title, C.volume(vol(f), (v) => _volume('speech', v, f))));
@@ -472,7 +583,7 @@ async function _openFirst(laneKind) {
   if (!f || !f.key) return;
   try { await Store.open(f.key); } catch (e) { _A.say(e.message, true); return; }
   if (laneKind === 'music') { pickMusic(); return; }
-  if (laneKind === 'pattern') { selectTrackById((mainVideo() || {}).id || 'v1'); return; }
+  if (laneKind === 'video') { selectTrackById((mainVideo() || {}).id || 'v1'); return; }
   selectTrackById(laneKind === 'subs' ? 'subs' : 'a1');
 }
 
@@ -495,7 +606,7 @@ export function pickLane(kind) {
   if (!isGroup()) return;
   if (kind === 'music') { pickMusic(); return; }
   if (_A.openN() <= 0) { _openFirst(kind); return; }
-  if (kind === 'pattern') { selectTrackById((mainVideo() || {}).id || 'v1'); return; }
+  if (kind === 'video') { selectTrackById((mainVideo() || {}).id || 'v1'); return; }
   selectTrackById(kind === 'subs' ? 'subs' : 'a1');
 }
 
@@ -503,8 +614,8 @@ const _kindOf = (track) => {
   if (!track) return '';
   if (track.kind === 'subs') return 'subs';
   if (track.id === 'a1') return 'speech';
-  // (phase V74) The main video lane - its patterns.
-  if (track.kind === 'video') { const m = mainVideo(); return m && m.id === track.id ? 'pattern' : ''; }
+  // (phase V74) The main video lane - (V76) its colour, frame, punch-ins and patterns.
+  if (track.kind === 'video') { const m = mainVideo(); return m && m.id === track.id ? 'video' : ''; }
   if (track.kind === 'audio') { const m = openMusicLane(); return m && m.id === track.id ? 'music' : ''; }
   return '';
 };
@@ -547,7 +658,8 @@ const _checkSample = () => _sync();
 // "когда выбрано несколько фрагментов нарезки, то на таймлайне просто отображать эти кнопки для массового редактирования. без элементов
 // таймлайна". While a group is ticked the timeline's panel - its head with the transport and its lanes - is covered by the buttons
 // of the common settings: compact buttons at its left edge, Subtitles, main audio, music ("+ music" while the open
-// fragment has none) and (phase V74) pattern; the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
+// fragment has none) and (phase V74) pattern - (phase V76) ONE ROW under its top edge: Subtitles, Main video, Main audio, Music;
+// the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
 // frame and «example» (a group with none open opens the first ticked, quietly - (хо24)). A fragment's row in the strip shows ITS
 // timeline, lanes and all, with "‹ all N" in the timeline's head back to the buttons ((хо26)); fewer than two ticked - the timeline as
 // it was ((хо28)). No bubbles, no gold names ((хо27)).
@@ -574,7 +686,7 @@ function _panelPaint(tl) {
   _panel.dataset.sig = sig;
   _panel.textContent = '';
   // (phase V73 block 5, 5c) ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
-  for (const [k, label, plus] of [['subs', 'Subtitles'], ['speech', 'Main audio'], ['music', 'Music', !music], ['pattern', 'Pattern']]) {
+  for (const [k, label, plus] of [['subs', 'Subtitles'], ['video', 'Main video'], ['speech', 'Main audio'], ['music', 'Music', !music]]) {
     const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''));
     if (plus) b.appendChild(iconEl('plus', 14));
     b.appendChild(_el('span')).appendChild(figures(label + ' · for all ' + n));
@@ -646,7 +758,7 @@ export function initGroup(api) {
       let out = null;
       if (k === 'subs') out = renderSubs(host, (box) => _A.tiles(box));
       else if (k === 'speech') renderSpeech(host);
-      else if (k === 'pattern') renderPattern(host);
+      else if (k === 'video') renderVideo(host);
       else renderMusic(host);
       _sync();
       return out;

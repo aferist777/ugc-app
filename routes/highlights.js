@@ -264,6 +264,40 @@ router.post('/highlights/:id/patterns', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
+// (phase V76, the owner's (тн9)) MAIN VIDEO of several made fragments: `color` { key, value } and `zoom` true / false into every
+// clip of it - the OPEN one is the page's, as above; or `framing` (lib/highlights-cut.js REFRAMES) - planned for all of them, the
+// open one's frames handed back (`open` - its number) for the page to lay. -> { n, open?, missed, why }
+router.post('/highlights/:id/video', async (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (b.framing) {
+      const openF = frags.find((f) => f.n === Number(b.open)) || null;
+      const out = await CUT.reframe(frags.map((f) => f.key), String(b.framing), { openKey: openF ? openF.key : '' });
+      return res.json({ success: true, n: out.keys.length + (out.open ? 1 : 0), open: out.open, missed: out.missed, why: out.why });
+    }
+    const out = CUT.videoLook(frags.map((f) => f.key), { color: b.color, zoom: b.zoom });
+    res.json({ success: true, n: out.keys.length });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V76, the owner's (тн10) а) Main audio's pitch on several made fragments - `pitch` { st?, shift? }, the part given; the OPEN
+// one is the page's.
+router.post('/highlights/:id/pitch', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const frags = _made(rec, b.ns);
+    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    const out = CUT.lanePitch(frags.map((f) => f.key), b.pitch);
+    res.json({ success: true, n: out.keys.length });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
 // The track a fragment's record keeps (as lib/highlights-job.js deals it), and its music written: on its timeline - or, for the OPEN
 // one (`open`), handed back for the page to lay (one undo step; a server's write under an open timeline reads as another's edit).
 const _trackOf = (t) => (t ? { id: t.id, title: t.title, path: t.path, dur: t.dur, mood: t.mood || '' } : null);

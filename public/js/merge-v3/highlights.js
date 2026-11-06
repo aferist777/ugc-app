@@ -838,7 +838,7 @@ function _paintCard() {
     for (const f of frags) if (_checked.has(f.n)) ul.appendChild(_el('li', null, f.title));
     card.appendChild(ul);
     // (phase V66.1) Their common settings are the buttons in place of the timeline (hl-group.js).
-    card.appendChild(_el('p', 'mv3-hl-note', 'Their common settings: the buttons in place of the timeline - Subtitles, main audio, music - '
+    card.appendChild(_el('p', 'mv3-hl-note', 'Their common settings: the buttons in place of the timeline - Subtitles, main video, main audio, music - '
       + 'for all of them at once. Rendering them: Render on the right of the project bar - one after another, with one set of settings.'));
     return;
   }

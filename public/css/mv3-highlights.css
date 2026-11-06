@@ -289,8 +289,8 @@
 .mv3-hlg-track{max-width:100%; min-width:0}
 /* (phase V66.1) While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
 #mv3-timeline.is-hlg{position:relative}
-/* (phase V73 block 5, 5c) ONE FORM: one column as wide as the widest button, each button that wide, its words from the left;
-   on the 4-px grid. */
-.mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:grid; grid-template-columns:max-content; align-content:start; justify-content:start;
-  gap:var(--sp-1); padding:var(--sp-3); background:var(--bg); border-top:1px solid var(--border-soft)}
+/* (phase V73 block 5, 5c) ONE FORM, on the 4-px grid. (phase V76, the owner 2026-11-06) ONE ROW under the timeline's top edge,
+   left to right; a narrow window carries it on to the next line. */
+.mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-wrap:wrap; align-items:flex-start; align-content:flex-start;
+  justify-content:flex-start; gap:var(--sp-1); padding:var(--sp-3); background:var(--bg); border-top:1px solid var(--border-soft)}
 .mv3-hlg-pbtn{justify-content:flex-start}   /* the shared part; .is-on its pressed look (б1-21, б2-13) */

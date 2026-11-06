@@ -2293,8 +2293,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'opacity', 'blend',
                              // (phase V75, (кп5)) Its colour correction (overlay/color.js).
                              'color',
-                             // (phase V76) A sound at another pitch (sound/pitch.js).
-                             'pitch']);
+                             // (phase V76) A sound at another pitch (sound/pitch.js); (тн9) the frame the app gave a highlights
+                             // clip, kept while the frame of several is changed (hl-group.js).
+                             'pitch', 'frameWas']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2339,6 +2340,8 @@ function _write(c, key, value) {
   if (key === 'color') { const v = normalizeColor(value); if (v == null) delete c.color; else c.color = v; return; }
   // (phase V76) { st, shift } - semitones and the timbre moving with them; 0 takes the field off.
   if (key === 'pitch') { const v = normalizePitch(value); if (v == null) delete c.pitch; else c.pitch = v; return; }
+  // (phase V76, (тн9)) { frame } - the app's frame of a highlights clip, null for none; no value takes the field off.
+  if (key === 'frameWas') { if (value && typeof value === 'object') c.frameWas = { frame: normalizeFrame(value.frame) || null }; else delete c.frameWas; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
   // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which
