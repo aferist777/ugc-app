@@ -108,6 +108,23 @@ async function _paint() {
 /** (phase V67) The list read again - a name the server gave (a talking head's character in its title, js/merge-v3/wk-setup.js). */
 export function repaintPicker() { return _paint(); }
 
+// (phase V76.3, the owner 2026-11-07: "чтобы быстрее проекты загружались") A project opened that the picker already lists - picked
+// from it, a highlights fragment under its project's line - is SHOWN there; the list is read again only for one it does not know
+// (one just made, renamed by the server). A press on the picker reads it again in any case (_openList), so nothing goes stale;
+// it was read after every opening (~0.24 s in the owner's library, the server answering nothing else meanwhile).
+function _show(k) {
+  const sel = _sel();
+  if (!sel || !k) return false;
+  const want = [...sel.options].some(o => o.value === k) ? k : homeOf(k);
+  if (!want || ![...sel.options].some(o => o.value === want)) return false;
+  const ph = [...sel.options].find(o => !o.value);
+  if (ph) ph.remove();           // "Choose a project" goes once one is open
+  sel.value = want;
+  _note(_after);
+  _after = '';
+  return true;
+}
+
 // ── THE LIST, WITH ITS FILTER (phase V67, second round (д), the owner 2026-11-01: "давай добавим еще в дропдаун выбора проекта
 // фильтр "all, talking head, voiceover, highlights", чтобы показывались проекты определенного типа"; "показывать в самом
 // дроплауне над списком проектов"; (об14) "только all - all стоит по умолчанию", (об15), (об16)) ─────────────────────────
@@ -244,7 +261,7 @@ export function initProjects() {
     _paintDraft();
     if (k === last) return;
     last = k;
-    _paint();
+    if (!_show(k)) _paint();
     _disarm();          // a different project means the armed delete no longer applies
     _cancelRename();    // and that a half-typed name belongs to a project no longer open
   });

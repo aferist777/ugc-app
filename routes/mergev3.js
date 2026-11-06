@@ -139,12 +139,16 @@ router.get('/mv3/timelines', (req, res) => {
 
 router.get('/mv3/timeline', (req, res) => {
   try {
-    const s = _read();
+    // (phase V76.3) The timeline asked for, alone - every timeline was read to hand back one (~0.06 s in the owner's library).
+    let key = String(req.query.key || '');
+    let t = key ? MSTORE.one(key) : null;
     // No key, or one that is not there: hand back the most recently touched project. A 404
     // would make the page's first load depend on it already knowing what exists.
-    let key = String(req.query.key || '');
-    if (!key || !s.timelines[key]) key = _newestKey(s.timelines) || LOCAL_KEY;
-    let t = s.timelines[key];
+    if (!t) {
+      const s = _read();
+      key = _newestKey(s.timelines) || LOCAL_KEY;
+      t = s.timelines[key];
+    }
     // One still in the talking-head shape (nothing should be: the upgrade rewrites them at start)
     // is shown rewritten rather than handed to an editor that cannot read it; its next save stores it.
     if (t && !Array.isArray(t.tracks)) t = require('../lib/timeline-convert').convert({ key, ...t }, { root: require('../lib/config').ROOT_DIR }) || t;
@@ -181,6 +185,10 @@ const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines
 // take - the draft just saved under a name had it, and its folder and category have just moved away from it (an old
 // address of that folder is redirected to the new one, lib/moves.js, so a new folder must not take it back).
 function _ensureDraft(req, avoid) {
+  // (phase V76.3) The draft there is found in the store's index (MSTORE.draftKey) - every timeline is read only to make one.
+  const there = MSTORE.draftKey();
+  const had = there ? MSTORE.one(there) : null;
+  if (had) return { key: there, title: had.title, version: MSTORE.stateVersion(), made: false };
   const cur = _read();
   const was = _draftOf(cur.timelines);
   if (was) return { key: was, title: cur.timelines[was].title, version: cur.version, made: false };
@@ -214,10 +222,10 @@ router.get('/mv3/blank', (req, res) => {
 // without one, the file's counter, which moves on every write to anything.
 router.get('/mv3/timeline/version', (req, res) => {
   try {
-    const s = _read();
     const key = String(req.query.key || '');
-    if (!key) return res.json({ success: true, version: s.version });
-    const t = s.timelines[key];
+    if (!key) return res.json({ success: true, version: MSTORE.stateVersion() });
+    // (phase V76.3) Its own timeline, not all of them - the page asks this every 20 s.
+    const t = MSTORE.one(key);
     if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
     res.json({ success: true, version: _revOf(t), key });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -225,7 +233,6 @@ router.get('/mv3/timeline/version', (req, res) => {
 
 router.put('/mv3/timeline', (req, res) => {
   try {
-    const cur = _read();
     const claimed = Number((req.body || {}).version);
     if (!Number.isFinite(claimed)) {
       return res.status(400).json({ success: false, error: 'version is required - a write that does not say what it replaces cannot be checked' });
@@ -236,7 +243,9 @@ router.put('/mv3/timeline', (req, res) => {
     // with no key it wrote into the newest project. Both are refused now: 400 and 404 `gone`, the edit not saved.
     const key = String((req.body || {}).key || '').trim();
     if (!key) return res.status(400).json({ success: false, error: 'which project? - the edit was not saved' });
-    const prev = cur.timelines[key];
+    // (phase V76.3, the owner 2026-11-07: "загрузку самих проектов ускорить") ITS OWN TIMELINE read and written - every save read
+    // and wrote the whole store (299 timelines in the owner's library, ~0.2 s, the server answering nothing else meanwhile).
+    const prev = MSTORE.one(key);
     if (!prev) return res.status(404).json({ success: false, gone: true, key, error: 'this project is not there any more - the edit was not saved' });
     // Somebody else's project: refused before the version is even looked at. The page shows
     // it read-only and should never send this; this is for the page that did not know.
@@ -259,7 +268,7 @@ router.put('/mv3/timeline', (req, res) => {
     }
     const now = new Date().toISOString();
     const clean = _sanitizeBlank(incoming);
-    cur.timelines[key] = {
+    const rec = {
       title: prev.title,
       createdAt: prev.createdAt || now,
       updatedAt: now,
@@ -275,8 +284,8 @@ router.put('/mv3/timeline', (req, res) => {
       // (phase V20) The draft stays the draft across its saves - only "save" takes the mark off.
       ...(prev.draft ? { draft: true } : {}),
     };
-    const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
-    _write(next);
+    // The record replaced whole, as before; its rev and time are the ones above; the store's counter moves once.
+    MSTORE.updateMany([key], (t) => { for (const k of Object.keys(t)) delete t[k]; Object.assign(t, rec); }, { own: true });
     // (phase V44) A TALKING HEAD'S LINES CUT ON ITS TIMELINE - cut silence, a stretch cut by hand, an undo of either: what
     // their pieces say is written into the lines in the same tick, so the mirror lays them so again (lib/line-cuts.js).
     const th = /^sv3_(.+)$/.exec(key);
@@ -286,9 +295,9 @@ router.put('/mv3/timeline', (req, res) => {
     // sent and what is now here are not byte-identical. The caller needs the stored shape to
     // compare against later: a merge that measures "what did I change" against the version it
     // sent would count the normalising itself as a change.
-    res.json({ success: true, version: cur.timelines[key].rev, updatedAt: now, key,
-               kind: cur.timelines[key].kind || null, format: cur.timelines[key].format || null,
-               tracks: cur.timelines[key].tracks });
+    res.json({ success: true, version: rec.rev, updatedAt: now, key,
+               kind: rec.kind || null, format: rec.format || null,
+               tracks: rec.tracks });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
