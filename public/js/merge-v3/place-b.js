@@ -25,8 +25,16 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { selectedOne, selectClipById, setClipFields, setClipsFields, selectedClips, multiCount } from './timeline-b.js';
+// (phase V75, the owner's (кп1) б, (кп4) а) A CROPPED piece's frame is cut HERE, on the preview: a side of the picked piece cuts
+// its edge where it is - the piece stays where it was, only that edge moves (framing/crop.js dragFrame, placeFor through
+// crop-box.js cropPatches), a form chosen in the strip kept, Shift keeps the one it has -, and Alt + its middle slides the
+// picture inside a frame that stays (panFrame). The corners, the middle and the knob size, move and turn it as ever. Live
+// through setLive, written on release - one undo step; several main clips picked are cut by one frame.
+import { active as cropActive, SHAPES, normalize as cropNormalize, dragFrame, panFrame } from '../framing/crop.js';
+import { cropBases, cropPatches } from './crop-box.js';
 
 const HANDLE = 9;      // half-width of a corner grip, in canvas pixels
+const SIDES = new Set(['n', 's', 'e', 'w']);
 const KNOB = 22;       // how far above the top edge the turning knob sits
 // (phase V73, the owner's (б1-10)) White, the selected thing's colour (--sel-ring: no colour of its own, (к16)), over the
 // dark line drawn under it, so a bright shot does not swallow it. It was yellow until then. Read at the first drawing, when
@@ -105,13 +113,60 @@ function _local(p, r) {
   return { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) };
 }
 
-function _partAt(p, r) {
+// `sides` - a cropped piece: its edges, between the corners, are taken too (phase V75).
+function _partAt(p, r, sides) {
   const l = _local(p, r);
   const hw = r.dw / 2, hh = r.dh / 2;
   if (Math.abs(l.x) <= HANDLE + 2 && Math.abs(l.y + hh + KNOB) <= HANDLE + 2) return 'turn';
   if (Math.abs(Math.abs(l.x) - hw) <= HANDLE && Math.abs(Math.abs(l.y) - hh) <= HANDLE) return 'size';
+  if (sides) {
+    const edge = HANDLE * 0.8;
+    if (Math.abs(l.x) <= hw - HANDLE && Math.abs(Math.abs(l.y) - hh) <= edge) return l.y < 0 ? 'n' : 's';
+    if (Math.abs(l.y) <= hh - HANDLE && Math.abs(Math.abs(l.x) - hw) <= edge) return l.x < 0 ? 'w' : 'e';
+  }
   if (Math.abs(l.x) <= hw && Math.abs(l.y) <= hh) return 'move';
   return '';
+}
+const _cut = (t) => !!(t && cropActive(t.clip));
+
+// (phase V75) A gesture on a cropped piece's frame: a side ('n' 's' 'e' 'w') or 'pan' (Alt + its middle). False when its file is
+// not loaded yet - the press is then an ordinary one.
+function _beginCrop(t, p, part, e) {
+  const items = t.group ? t.group.filter(x => cropActive(x.clip)) : [{ track: t.track, clip: t.clip }];
+  if (!items.length) return false;
+  const base = cropBases(items);
+  const k = cropActive(t.clip);
+  if (!base || !k) return false;
+  const mine = base.find(b => b.it.clip.id === t.clip.id) || base[0];
+  setLive(null);
+  _drag = {
+    kind: 'crop', part, base, moved: false, patches: null,
+    r0: { cx: t.r.cx, cy: t.r.cy, dw: t.r.dw, dh: t.r.dh, angle: +t.r.angle || 0 },
+    l0: _local(p, t.r),
+    k0: { x: k.x, y: k.y, w: k.w, h: k.h }, shape: k.shape || '', fileAr: mine.d.w / mine.d.h,
+    pg0: { x: e.clientX, y: e.clientY },
+  };
+  return true;
+}
+
+function _moveCrop(e, p) {
+  const d = _drag;
+  if (!d.moved && Math.hypot(e.clientX - d.pg0.x, e.clientY - d.pg0.y) < 3) return;
+  d.moved = true;
+  const l = _local(p, d.r0);
+  // A point of the piece's box in shares of the FILE, by the frame it had at the press.
+  const sh = (q) => ({ x: d.k0.x + (q.x / d.r0.dw + 0.5) * d.k0.w, y: d.k0.y + (q.y / d.r0.dh + 0.5) * d.k0.h });
+  if (d.part === 'pan') {
+    // The picture follows the hand: the frame slides the other way over the file.
+    const k = panFrame(d.k0, -(l.x - d.l0.x) / d.r0.dw * d.k0.w, -(l.y - d.l0.y) / d.r0.dh * d.k0.h);
+    const crop = { ...k, ...(d.shape ? { shape: d.shape } : {}) };
+    d.patches = d.base.map(b => ({ trackId: b.it.track.id, clipId: b.it.clip.id, patch: { crop } }));
+  } else {
+    const q = d.shape && SHAPES[d.shape] ? SHAPES[d.shape] / d.fileAr : (e.shiftKey ? d.k0.w / d.k0.h : 0);
+    const k = cropNormalize(dragFrame(d.part, d.k0, sh(d.l0), sh(l), q)) || d.k0;
+    d.patches = cropPatches(d.base, k, d.shape);
+  }
+  setLive(new Map(d.patches.map(x => [x.clipId, x.patch])));
 }
 
 // Which picture is under the pointer. Last one wins: the rectangles are recorded bottom layer
@@ -177,9 +232,12 @@ function _down(e) {
   const top = id && _api.rectOf ? _api.rectOf(id) : null;
 
   const t = _target();
-  const part = t ? _partAt(p, t.r) : '';
+  const part = t ? _partAt(p, t.r, _cut(t)) : '';
   // The selected picture's grips come first...
   if (t && (part === 'size' || part === 'turn')) { _begin(t, p, part, e); e.preventDefault(); return; }
+  // ...(phase V75) a cropped piece's sides, and Alt + its middle...
+  const cropPart = SIDES.has(part) ? part : (part === 'move' && e.altKey && _cut(t)) ? 'pan' : '';
+  if (cropPart && _beginCrop(t, p, cropPart, e)) { e.preventDefault(); return; }
   // ...then the captions, drawn over every picture (phase V30, block 3: cap-place.js picks and moves them)...
   if (_api.caption && _api.caption(e, p)) return;
   if (t) {
@@ -204,17 +262,20 @@ function _move(e) {
     if (!_cv || !_api) return;
     const p = _at(e);
     const t = _target();
-    const part = t ? _partAt(p, t.r) : '';
+    const part = t ? _partAt(p, t.r, _cut(t)) : '';
     const id = _pick(p);
     const top = id && _api.rectOf ? _api.rectOf(id) : null;
     const bandOver = part === 'move' && top && top.band && id !== t.clip.id;
     // A caption under the pointer is what a press takes, but for the grips (cap-place.js).
-    const cap = (part === 'size' || part === 'turn') ? '' : (_api.capHover ? _api.capHover(p) : '');
-    _cv.style.cursor = cap ? cap : bandOver ? 'pointer' : part === 'move' ? 'move' : part === 'size' ? 'nwse-resize'
+    const cap = (part === 'size' || part === 'turn' || SIDES.has(part)) ? '' : (_api.capHover ? _api.capHover(p) : '');
+    _cv.style.cursor = cap ? cap : bandOver ? 'pointer'
+                     : part === 'n' || part === 's' ? 'ns-resize' : part === 'e' || part === 'w' ? 'ew-resize'
+                     : part === 'move' ? (e.altKey && _cut(t) ? 'grab' : 'move') : part === 'size' ? 'nwse-resize'
                      : part === 'turn' ? 'grab' : (id ? 'pointer' : '');
     return;
   }
   const p = _at(e);
+  if (_drag.kind === 'crop') { _moveCrop(e, p); return; }
   const f = _api.frame();
   const b = _drag.base;
   // A CLICK IS NOT A PLACEMENT. Picking a picture must leave it exactly as it was - so until
@@ -248,6 +309,14 @@ function _move(e) {
 
 function _up() {
   if (!_drag) return;
+  if (_drag.kind === 'crop') {
+    // (phase V75) The frame written once, then the live one let go - one undo step.
+    const d = _drag;
+    _drag = null;
+    if (d.moved && d.patches && d.patches.length) setClipsFields(d.patches);
+    setLive(null);
+    return;
+  }
   const d = _drag, patch = (_live && _live.patch) || {};
   _drag = null;
   _live = null;
@@ -319,6 +388,20 @@ export function paintHandles(ctx) {
   };
   grip(-hw, -hh); grip(hw, -hh); grip(-hw, hh); grip(hw, hh);
   grip(0, -hh - KNOB, true);
+  // (phase V75) A cropped piece: a bar on the middle of each side - the sides cut it.
+  if (_cut(t)) {
+    const bar = (x, y, w, h) => {
+      ctx.beginPath();
+      ctx.rect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = mark();
+      ctx.fill();
+      ctx.lineWidth = 1.25; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+      ctx.stroke();
+    };
+    const len = HANDLE * 2.4, th = HANDLE * 0.6;
+    if (hw > len) { bar(0, -hh, len, th); bar(0, hh, len, th); }
+    if (hh > len) { bar(-hw, 0, th, len); bar(hw, 0, th, len); }
+  }
   ctx.restore();
   void live;
 }

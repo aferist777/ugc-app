@@ -113,7 +113,6 @@ function _row(it, refresh) {
   const running = it.status === 'running';
   const named = it.phase === 'normalizing' ? 'preparing clips…'
               : it.phase === 'speeding' ? 'speeding up…'
-              : it.phase === 'tail' ? 'adding the black tail…'
               : it.phase === 'poster' ? 'finishing…'
               : null;
   st.textContent = it.status === 'done' ? 'ready'

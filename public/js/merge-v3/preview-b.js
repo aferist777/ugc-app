@@ -36,6 +36,8 @@ import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 import { opacityOf, blendOf } from '../overlay/look.js';
 // (phase V65, block 5) A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
 import * as PAT from '../overlay/pattern.js';
+// (phase V75) A clip's colour correction - one rule with the render (overlay/color.js).
+import { svgOf } from '../overlay/color.js';
 import { icon } from '../icons.js';
 
 const STAGE = 'mv3-stage';
@@ -525,6 +527,56 @@ function _pipMasks(cw, ch, fr, rr, tpx, col) {
   return { mask: _maskCv, ring: _ringCv };
 }
 
+// ── A clip's colour correction (phase V75, the owner's (кп5)) ──────────────────
+// overlay/color.js's numbers as an SVG filter in the page, made once per set of values (a slider held makes a few dozen:
+// the oldest go past 64), and named in the canvas's filter for every draw of the clip's FILE while the clip is drawn
+// (`_cc`, set by _show) - before a blur, as the render corrects the clip's input before anything else. Its outline and the
+// masks are not the file's, and are not corrected.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const _ccMade = new Map();         // id -> the <filter>
+let _cc = '';                      // the filter of the clip being drawn: 'url(#…)' or ''
+function _ccFilter(c) {
+  const s = svgOf(c);
+  if (!s || typeof document === 'undefined') return '';
+  const id = 'mv3-cc-' + s.key;
+  if (_ccMade.has(id)) return `url(#${id})`;
+  let defs = document.getElementById('mv3-cc-defs');
+  if (!defs) {
+    defs = document.createElementNS(SVG_NS, 'svg');
+    defs.id = 'mv3-cc-defs';
+    defs.setAttribute('width', '0');
+    defs.setAttribute('height', '0');
+    defs.setAttribute('aria-hidden', 'true');
+    defs.style.position = 'absolute';
+    document.body.appendChild(defs);
+  }
+  const f = document.createElementNS(SVG_NS, 'filter');
+  f.id = id;
+  f.setAttribute('color-interpolation-filters', 'sRGB');
+  const el = (tag, attrs) => { const e = document.createElementNS(SVG_NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+  if (s.matrix) f.appendChild(el('feColorMatrix', { type: 'matrix', values: s.matrix.join(' ') }));
+  const lin = el('feComponentTransfer', {}), gam = el('feComponentTransfer', {});
+  for (const ch of ['feFuncR', 'feFuncG', 'feFuncB']) {
+    lin.appendChild(el(ch, { type: 'linear', slope: s.slope, intercept: s.intercept }));
+    gam.appendChild(el(ch, { type: 'gamma', amplitude: '1', exponent: s.exponent, offset: '0' }));
+  }
+  f.appendChild(lin);
+  f.appendChild(gam);
+  defs.appendChild(f);
+  _ccMade.set(id, f);
+  if (_ccMade.size > 64) { const [old, node] = _ccMade.entries().next().value; _ccMade.delete(old); node.remove(); }
+  return `url(#${id})`;
+}
+// A canvas filter with the clip's correction first.
+const _withCc = (f) => (_cc ? (f && f !== 'none' ? _cc + ' ' + f : _cc) : (f || 'none'));
+// One draw of the file with the correction, the filter put back after it.
+function _ccDraw(g, fn) {
+  if (!_cc) { fn(); return; }
+  const was = g.filter;
+  g.filter = _withCc(was);
+  try { fn(); } finally { g.filter = was; }
+}
+
 let _pipCv = null;
 // `bg` - the blur behind it: a PiP of main has it, a cropped clip of a lane above has none ((пр42)).
 function _drawPip(el, r, sw, sh, bg = true) {
@@ -542,7 +594,7 @@ function _drawPip(el, r, sw, sh, bg = true) {
     _ctx.beginPath();
     _ctx.rect(0, 0, W, H);
     _ctx.clip();
-    _ctx.filter = `blur(${b}px)`;
+    _ctx.filter = _withCc(`blur(${b}px)`);
     try { _ctx.drawImage(el, f.sx + (f.sw - bw) / 2, f.sy + (f.sh - bh) / 2, bw, bh, -2 * b, -2 * b, W + 4 * b, H + 4 * b); } catch (e) { /* not decoded yet */ }
     _ctx.restore();
   }
@@ -560,16 +612,18 @@ function _drawPip(el, r, sw, sh, bg = true) {
       const k = cw / W;
       const ps = r.inner.parts || [{ sx: r.inner.sx, sy: r.inner.sy, sw: r.inner.sw, sh: r.inner.sh, dx: 0, dy: 0, dw: W, dh: H }];
       for (const p of ps) {
-        g.filter = p.blur ? `blur(${Math.max(1, p.blur * k).toFixed(1)}px)` : 'none';
+        g.filter = _withCc(p.blur ? `blur(${Math.max(1, p.blur * k).toFixed(1)}px)` : 'none');
         g.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx * k, p.dy * k, p.dw * k, p.dh * k);
       }
-      g.filter = 'none';
     } else if (r.src) {
+      g.filter = _withCc('none');
       g.drawImage(el, r.src.sx, r.src.sy, r.src.sw, r.src.sh, 0, 0, cw, ch);
     } else {
+      g.filter = _withCc('none');
       g.drawImage(el, 0, 0, sw, sh, 0, 0, cw, ch);
     }
   } catch (e) { /* not decoded yet */ }
+  g.filter = 'none';
   // Corners, soft edge, outline: the outline's thickness is a share of the FRAME's width, in the box's pixels.
   const tpx = r.outline * W * (cw / r.dw);
   if (r.feather > 0.001 || r.radius > 0.001 || tpx > 0.05) {
@@ -635,7 +689,7 @@ function _drawBand(el, sw, sh, c) {
   if (b.rot === 90) { g.translate(RW, 0); g.rotate(Math.PI / 2); }
   else if (b.rot === 270) { g.translate(0, RH); g.rotate(-Math.PI / 2); }
   else if (b.rot === 180) { g.translate(RW, RH); g.rotate(Math.PI); }
-  try { g.drawImage(el, 0, 0, sw * s, sh * s); } catch (e) {}
+  try { _ccDraw(g, () => g.drawImage(el, 0, 0, sw * s, sh * s)); } catch (e) {}
   g.setTransform(1, 0, 0, 1, 0, 0);
 
   if (b.softTop || b.softBot) {
@@ -687,23 +741,25 @@ function _draw(el, r) {
       if (p.blur) {
         _ctx.save();
         const f = _ctx.filter;
-        _ctx.filter = (f && f !== 'none' ? f + ' ' : '') + `blur(${p.blur}px)`;
+        _ctx.filter = _withCc((f && f !== 'none' ? f + ' ' : '') + `blur(${p.blur}px)`);
         try { _ctx.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx, p.dy, p.dw, p.dh); } catch (e) {}
         _ctx.restore();
       } else {
-        try { _ctx.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx, p.dy, p.dw, p.dh); } catch (e) {}
+        try { _ccDraw(_ctx, () => _ctx.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx, p.dy, p.dw, p.dh)); } catch (e) {}
       }
     }
     return;
   }
   if (!r.placed || (!r.angle && !r.feather)) {
-    try { _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh); } catch (e) {}
+    try { _ccDraw(_ctx, () => _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh)); } catch (e) {}
     return;
   }
   const src = r.feather > 0.001 ? softened(el, r.sx, r.sy, r.sw, r.sh, r.dw, r.dh, r.feather) : null;
   _ctx.save();
   _ctx.translate(r.cx, r.cy);
   if (r.angle) _ctx.rotate(r.angle * Math.PI / 180);
+  // (phase V75) The softened copy is the file's colours under its mask: the correction applies to it as to the file.
+  _ctx.filter = _withCc(_ctx.filter);
   try {
     if (src) _ctx.drawImage(src, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
     else _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
@@ -859,6 +915,12 @@ function _drawPattern(el, sw, c) {
 function _show(el, sw, sh, c, gaps, main) {
   // (phase V74) A pattern of main video is no picture placed: its tiles cover the frame.
   if (c.layer) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
+  // (phase V75) Its colour correction, the slider's while one is held (place-b.js liveOf), for every draw of its file.
+  const lv = liveOf(c.id);
+  _cc = _ccFilter(lv ? Object.assign({}, c, lv) : c);
+  try { _showClip(el, sw, sh, c, gaps, main); } finally { _cc = ''; }
+}
+function _showClip(el, sw, sh, c, gaps, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
   // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.

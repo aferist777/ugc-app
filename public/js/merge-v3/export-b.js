@@ -4,9 +4,8 @@
    The third piece of the editor, after its timeline and its preview. What the window is for:
    saying what is about to be made before it is made - shape, length, how many pieces - and the
    export settings the owner renders with (docs/local-app/PLAN.md, phase 3; they came from the
-   talking-head editor's Export): the size and quality of the file, a color correction, a playback speed, and the two
-   extras, minutes of black after the end and a quiet noise under the sound. What each of them does
-   is lib/render-finish.js.
+   talking-head editor's Export): the size and quality of the file and a playback speed (phase V75: the colour correction
+   is each clip's, overlay/color.js; the Extras are gone). What each of them does is lib/render-finish.js.
 
    The settings belong to the PROJECT (POST /api/mv3/adv) and are saved when Render or Add to queue
    is pressed; the render is made from the numbers on screen, and a queued one keeps them.
@@ -40,8 +39,7 @@ let _busy = false;
 // there were settings, so an old project renders as it did.
 const DEFAULTS = {
   resolution: '', fps: 30, crf: 20, preset: 'veryfast', audioBitrate: '192k',
-  eqBrightness: 0, eqContrast: 1, eqSaturation: 1, eqGamma: 1,
-  playbackSpeed: 1, extra1: 'none', extra2: 'none', srt: true,
+  playbackSpeed: 1, srt: true,
 };
 
 // The timeline's header line ("Added to the queue."); an error ("Not queued: …", "Rendered, but …") is a popup instead
@@ -110,7 +108,6 @@ function _slider(min, max, step, value, fmt) {
 const PHASES = {
   render: 'Rendering',
   speeding: 'Changing the speed',
-  tail: 'Adding the black tail',
   poster: 'Finishing',
 };
 let _job = null;          // { id, key, title, ui: { head, fill, note, said, stop, foot, body } | null - the window is closed }
@@ -347,15 +344,7 @@ function _window(o) {
   const ab = _select([['128k', '128 kbps'], ['192k', '192 kbps'], ['320k', '320 kbps']], adv.audioBitrate);
   body.appendChild(_row('Audio bitrate', ab));
 
-  body.appendChild(_el('div', 'mv3-x-hdr', 'Color correction'));
-  const br = _slider(-0.5, 0.5, 0.02, adv.eqBrightness, v => v.toFixed(2));
-  body.appendChild(_row('Brightness', br));
-  const ct = _slider(0.5, 1.5, 0.05, adv.eqContrast, v => v.toFixed(2));
-  body.appendChild(_row('Contrast', ct));
-  const sa = _slider(0, 2, 0.05, adv.eqSaturation, v => v.toFixed(2));
-  body.appendChild(_row('Saturation', sa));
-  const ga = _slider(0.5, 2, 0.05, adv.eqGamma, v => v.toFixed(2));
-  body.appendChild(_row('Gamma (exposure)', ga));
+  // (phase V75, the owner's (кп5)) The colour correction is each clip's now - its strip and its lane's (overlay/color.js).
 
   // THE SUBTITLES FILE (phase V30, block 4, the owner's (с11)): on unless turned off - the Subtitles lane as classic
   // subtitles beside the video (lib/mv3b-job.js, public/js/captions/srt.js).
@@ -377,16 +366,7 @@ function _window(o) {
       + '(Meta reads the language from that name). The text lanes are not in it.'
     : 'The Subtitles lane is empty - no file will be written.'));
 
-  body.appendChild(_el('div', 'mv3-x-hdr', 'Extras'));
-  const e1 = _select([['none', 'None'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
-    ['black20', '+ Black tail 20 min'], ['black30', '+ Black tail 30 min']], adv.extra1);
-  body.appendChild(_row('After the end', e1));
-  const noises = [['none', 'None']];
-  for (const kind of ['white', 'pink', 'brown']) {
-    for (let i = 1; i <= 5; i++) noises.push(['wn_' + kind + '_' + i, '+ ' + kind[0].toUpperCase() + kind.slice(1) + ' noise ' + i + '%']);
-  }
-  const e2 = _select(noises, adv.extra2);
-  body.appendChild(_row('Under the sound', e2));
+  // (phase V75, the owner's (кп7)) No Extras: neither a black tail nor a noise under the sound.
   box.appendChild(body);
 
   const collect = () => ({
@@ -395,13 +375,7 @@ function _window(o) {
     crf: parseInt(crf._input.value, 10),
     preset: preset.value,
     audioBitrate: ab.value,
-    eqBrightness: parseFloat(br._input.value),
-    eqContrast: parseFloat(ct._input.value),
-    eqSaturation: parseFloat(sa._input.value),
-    eqGamma: parseFloat(ga._input.value),
     playbackSpeed: parseFloat(spd._input.value) || 1,
-    extra1: e1.value,
-    extra2: e2.value,
     srt: !!srt.checked,
   });
   const save = async () => {

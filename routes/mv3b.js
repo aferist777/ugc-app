@@ -10,7 +10,7 @@
      POST /api/mv3b/render      { timeline, key, adv } -> { jobId, w, h, dur }, a file in the renders
                                 folder of the project the timeline belongs to; adv is the export
                                 settings as the window shows them (lib/render-finish.js)
-     GET  /api/mv3b/render/:id  -> status, phase (render | speeding | tail | poster), url, percent,
+     GET  /api/mv3b/render/:id  -> status, phase (render | speeding | poster), url, percent,
                                 remaining seconds, and a warning when an extra could not be added
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -42,12 +42,12 @@ router.post('/mv3b/render', async (req, res) => {
     const final = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
     const out = JOB.draftOf(final);
     // `span` is the length the current phase's ffmpeg position counts up to: the film, then the
-    // film at its new speed, then that and the tail.
+    // film at its new speed.
     const job = { id, status: 'running', phase: 'render', url: null, error: null, warning: null, log: '',
                   dur: ready.dur, span: ready.dur, at: 0, startedAt: Date.now(), phaseAt: Date.now() };
     _jobs.set(id, job);
 
-    // Busy until the finishing passes are over too: a speed pass and a tail are encodes as well.
+    // Busy until the finishing passes are over too: a speed pass is an encode as well.
     const done = BUSY.start();
     const proc = spawn(ffmpegPath, ready.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     // HOW FAR IT HAS GOT, read off ffmpeg rather than guessed from a stopwatch. It prints the
@@ -66,7 +66,7 @@ router.post('/mv3b/render', async (req, res) => {
       ready.dispose();
       if (code !== 0 || !fs.existsSync(out)) { JOB.dropDraft(out); done(); job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
       const s = ready.settings;
-      const spans = { speeding: ready.dur / s.speed, tail: ready.dur / s.speed + s.tailMinutes * 60 };
+      const spans = { speeding: ready.dur / s.speed };
       try {
         const r = await JOB.finish(out, s, ({ phase, at }) => {
           const ph = phase === 'speed' ? 'speeding' : phase;

@@ -42,6 +42,7 @@ import { normalize as normalizeFrame } from '../framing/path.js';
 import { normalize as normalizeCrop } from '../framing/crop.js';
 // (phase V65) A clip's opacity and blend mode - one rule for the page and the server.
 import { normalizeOpacity, normalizeBlend } from '../overlay/look.js';
+import { normalizeColor } from '../overlay/color.js';
 // (phase V74) Main video's patterns - a list on its lane (overlay/pattern.js).
 import { normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
@@ -2105,6 +2106,9 @@ function _paintEmpty(tracks, inner) {
 function _build() {
   const host = _host();
   if (!host) return;
+  // (phase V75, the owner's (кп8): "прокрутка уходила") The lanes are rebuilt whole on every change - a clip moved on the
+  // preview too -, and emptied for a moment the scroll box lost its place: the same timeline is shown where it was looked at.
+  const keepX = host.scrollLeft, keepY = host.scrollTop;
   host.textContent = '';
   _paintGone();
 
@@ -2195,6 +2199,7 @@ function _build() {
   // (phase V36, T1) Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
   // the lanes are shown from there, not scrolled to where the last one was looked at.
   if (opened) host.scrollLeft = 0;
+  else { host.scrollLeft = keepX; host.scrollTop = keepY; }
   // (phase V36, T4) The waves of what can be seen - laid out now, so they are drawn at once.
   paintWaves(host, _zoom(), GUTTER);
   // (phase V36, T5) A stretch drawn belongs to the timeline it was drawn on.
@@ -2284,7 +2289,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'fadeIn', 'fadeOut',
                              // (phase V65, (пз5)) How much of a clip of a video lane is seen, and (пз7) how it mixes with
                              // what is under it (overlay/look.js).
-                             'opacity', 'blend']);
+                             'opacity', 'blend',
+                             // (phase V75, (кп5)) Its colour correction (overlay/color.js).
+                             'color']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2325,6 +2332,8 @@ function _write(c, key, value) {
   if (key === 'opacity') { const v = normalizeOpacity(value); if (v == null) delete c.opacity; else c.opacity = v; return; }
   // (phase V65) A blend mode's id; none takes the field off.
   if (key === 'blend') { const v = normalizeBlend(value); if (v == null) delete c.blend; else c.blend = v; return; }
+  // (phase V75) The values that are not neutral; neutral takes the field off.
+  if (key === 'color') { const v = normalizeColor(value); if (v == null) delete c.color; else c.color = v; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
   // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which

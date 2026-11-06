@@ -105,3 +105,58 @@ export function placeFor(map, to, W, H, whole) {
   if (+b.angle) out.angle = Math.round(+b.angle);
   return out;
 }
+
+/**
+ * (phase V75, the owner's (кп4) а) The frame after a side or a corner of it is dragged - the rule the crop field had
+ * (merge-v3/crop-box.js until V75), now the preview's (merge-v3/place-b.js): every side inside the file. `part` 'n' 's' 'e'
+ * 'w' or a corner ('nw' ...), `k0` the frame at the press, `p0` / `p` the pointer at the press and now, in shares of the file;
+ * `q` the shape to keep, width over height in shares, or 0 for free. A kept shape grows the other way about its middle.
+ */
+export function dragFrame(part, k0, p0, p, q) {
+  const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const minW = q ? Math.max(MIN, MIN * q) : MIN, minH = q ? minW / q : MIN;
+  if (part.length === 2) {
+    const east = part[1] === 'e', south = part[0] === 's';
+    const ax = east ? k0.x : k0.x + k0.w, ay = south ? k0.y : k0.y + k0.h;
+    const maxW = east ? 1 - ax : ax, maxH = south ? 1 - ay : ay;
+    let w = cl(Math.abs(cl(p.x, 0, 1) - ax), minW, maxW), h = cl(Math.abs(cl(p.y, 0, 1) - ay), minH, maxH);
+    if ((east ? p.x < ax : p.x > ax)) w = minW;
+    if ((south ? p.y < ay : p.y > ay)) h = minH;
+    if (q) {
+      w = Math.max(w, h * q);
+      w = Math.min(w, maxW, maxH * q);
+      w = Math.max(w, minW);
+      h = w / q;
+    }
+    return { x: east ? ax : ax - w, y: south ? ay : ay - h, w, h };
+  }
+  if (part === 'e' || part === 'w') {
+    const east = part === 'e';
+    const ax = east ? k0.x : k0.x + k0.w;
+    let w = cl(east ? p.x - ax : ax - p.x, minW, east ? 1 - ax : ax);
+    let y = k0.y, h = k0.h;
+    if (q) {
+      const my = k0.y + k0.h / 2;
+      w = Math.min(w, 2 * Math.min(my, 1 - my) * q);
+      w = Math.max(w, minW);
+      h = w / q; y = my - h / 2;
+    }
+    return { x: east ? ax : ax - w, y, w, h };
+  }
+  const south = part === 's';
+  const ay = south ? k0.y : k0.y + k0.h;
+  let h = cl(south ? p.y - ay : ay - p.y, minH, south ? 1 - ay : ay);
+  let x = k0.x, w = k0.w;
+  if (q) {
+    const mx = k0.x + k0.w / 2;
+    h = Math.min(h, 2 * Math.min(mx, 1 - mx) / q);
+    h = Math.max(h, minH);
+    w = h * q; x = mx - w / 2;
+  }
+  return { x, y: south ? ay : ay - h, w, h };
+}
+
+/** (phase V75) The frame slid inside the file by `dx`, `dy` (shares of it) - the picture moved inside a frame that stays. */
+export function panFrame(k0, dx, dy) {
+  return { x: Math.max(0, Math.min(1 - k0.w, k0.x + dx)), y: Math.max(0, Math.min(1 - k0.h, k0.y + dy)), w: k0.w, h: k0.h };
+}

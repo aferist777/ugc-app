@@ -323,21 +323,7 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-c-still-stack{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .mv3-c-still-stack > .mv3-ins-fx3-cell{ min-width:0; }
 
-/* (phase V73 block 5, 5b, (б5-10) а) small, at the top of the group Picture */
-.mv3-c-still{
-  margin:0 0 8px; padding:4px; border-radius:var(--r-sm);
-  border:1px solid var(--border);
-  background-color:var(--surface-3);
-  background-image:
-    linear-gradient(45deg, var(--surface-3) 25%, transparent 25% 75%, var(--surface-3) 75%),
-    linear-gradient(45deg, var(--surface-3) 25%, transparent 25% 75%, var(--surface-3) 75%);
-  background-size:14px 14px;
-  background-position:0 0, 7px 7px;
-}
-.mv3-c-still img{
-  display:block; width:100%; max-height:120px;
-  object-fit:contain; border-radius:var(--r-2xs);
-}
+/* (phase V75, the owner's (кп3)) The picture at the top of the group Picture went: it is on the preview. */
 
 /* The question a clip's X opens (js/ask.js) - since phase V73 block 2 the shared part `.u-ask.is-float` (css/app-shell.css),
    with a list one thing per line (`is-lines`, phase V23) wider and scrolling inside (`.u-ask.is-wide`). */
@@ -840,10 +826,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-c-color:disabled{opacity:.4; cursor:not-allowed}
 
-/* A clip's crop (phase V51, point 1, js/merge-v3/crop-box.js): the clip's whole picture with the frame over it, and the
-   forms under it - Free, 9:16, 1:1, 16:9, 4:5 - the one kept lit. */
-.mv3-crop{display:flex; justify-content:center; padding:4px 0 6px}
-.mv3-crop-cv{display:block; touch-action:none; cursor:default}
+/* A clip's crop (phase V51, point 1, js/merge-v3/crop-box.js): the forms - Free, 9:16, 1:1, 16:9, 4:5 - the one kept lit. Since
+   phase V75 the frame is cut on the preview (place-b.js); the field with the clip's whole picture went. */
 .mv3-crop-shapes{display:flex; gap:4px; padding:0 0 4px}
 .mv3-crop-shape{flex:1 1 0; min-width:0}
 .mv3-crop-shape.u-chip{padding:0 4px}   /* equal widths in the strip */

@@ -64,6 +64,8 @@ import { active as cropActive } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen and how it mixes; held on the preview while the slider moves or the pointer rests
 // on a mode (place-b.js setLive).
 import { opacityOf, blendOf } from '../overlay/look.js';
+// (phase V75) A clip's colour correction - one rule with the preview and the render.
+import { COLOR_KEYS, COLOR_RANGE, COLOR_LABEL, colorOf } from '../overlay/color.js';
 import { setLive as setLivePlace } from './place-b.js';
 // (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
 import { blendButton } from './blend-menu.js';
@@ -306,28 +308,50 @@ function _blendButton(items) {
   });
 }
 
+// (phase V75, the owner's (кп2)) NO PiP SWITCH: a main clip becomes a PiP by its Crop (crop-box.js), and its Crop switched off
+// makes it the whole frame again. What is left here are a PiP's edges and the way back to its first size - shown while the
+// clip IS a PiP; an old one made by the switch with no crop has "Full frame" too. Returns whether anything was shown.
 function _pipSection(host, items) {
-  const clips = items.map(x => x.clip);
-  const on = clips.every(c => !!c.pip);
-  const write = (patch) => setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch })));
-  const many = items.length > 1;
-  // (phase V51, (пр43)) Off takes a crop with it - remembered, the Crop switch brings it back.
-  const head = C.row('PiP', C.toggle(on, (v) => (v ? write({ pip: true })
-    : setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id,
-      patch: { pip: null, tx: null, ty: null, tw: null, angle: null, ...pipOffCrop(clip) } }))))));
-  head.title = on ? 'A picture in the picture over its own blur. Switch off for the whole frame again.'
-                  : 'Make ' + (many ? 'these clips' : 'this clip') + ' a picture in the picture: what the frame shows now, '
-                    + 'sized and moved on the preview, over a blurred copy of itself';
-  host.appendChild(head);
-  if (!on) {
-    if (clips.some(c => c.pip)) host.appendChild(C.hint('Some of the picked clips are a PiP already - switching on makes all of them one.'));
-    return;
-  }
-  _edgeRows(host, clips[0], write);
-  host.appendChild(C.row('', C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
-    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' })));
+  const on = items.filter(x => !!x.clip.pip);
+  if (!on.length) return false;
+  const write = (patch) => setClipsB(on.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch })));
+  const many = on.length > 1;
+  if (on.length < items.length) host.appendChild(C.hint('The edges below are for the ' + on.length + ' picked clips that are a PiP.'));
+  _edgeRows(host, on[0].clip, write);
+  const size = C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
+    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' });
+  const uncut = on.filter(x => !cropActive(x.clip));
+  host.appendChild(C.row('', uncut.length
+    ? C.pair(size, C.button('Full frame', () => setClipsB(uncut.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id,
+      patch: { pip: null, tx: null, ty: null, tw: null, angle: null } }))),
+      { title: 'Not a picture in the picture any more - the whole frame again' }))
+    : size));
   host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
-    + (many ? ' - all ' + items.length + ' picked clips move together.' : '.')));
+    + (many ? ' - all ' + on.length + ' picked clips move together.' : '.')));
+  return true;
+}
+
+// (phase V75, the owner's (кп5)) THE COLOUR CORRECTION - Brightness, Contrast, Saturation, Gamma (overlay/color.js) - of every
+// video clip of `items` at once: one slider a value, "mixed" while they differ. Held, the preview shows it (place-b.js setLive -
+// nothing written); let go, it is written into each clip, its other values its own - ONE undo step. A lane gives all its clips
+// (as its Fit does); a clip added later comes as it is.
+function _colorGroup(host, items) {
+  if (!items.length) return;
+  const g = _group(host, 'color', 'Color');
+  for (const k of COLOR_KEYS) {
+    const [min, max, , step] = COLOR_RANGE[k];
+    const vals = items.map(x => colorOf(x.clip)[k]);
+    const mixed = vals.some(v => Math.abs(v - vals[0]) > 1e-6);
+    const patchOf = (clip, v) => ({ color: { ...colorOf(clip), [k]: v } });
+    g.appendChild(C.row(COLOR_LABEL[k], C.slider({
+      min, max, step, value: vals[0], fmt: (v) => (+v).toFixed(2), mixed,
+      onInput: (v) => setLivePlace(new Map(items.map(x => [x.clip.id, patchOf(x.clip, v)]))),
+      onChange: (v) => {
+        setLivePlace(null);
+        setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: patchOf(clip, v) })));
+      },
+    })));
+  }
 }
 
 // A PiP's edges - and (phase V51, (пр42)) a cropped clip's of a lane above, by the same rule: its soft edge, its rounded
@@ -477,6 +501,7 @@ function _blankFilm(host, track, c, set, pair) {
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
   if (!main || c.halfer) _halferRows(pic, c, set);
+  _colorGroup(host, [{ track, clip: c }]);
 
   const snd = _group(host, 'sound', 'Sound');
   if (pair) {
@@ -499,7 +524,7 @@ function _blankFilm(host, track, c, set, pair) {
     // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
     // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
-    if (main) { if (!cropped) { _frameRows(fr, c, set); _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
+    if (main) { if (!cropped) { _frameRows(fr, c, set); if (c.pip) _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
     else if (cropped) _cutRows(fr, track, c);
     else if (_isPlaced(c)) _pipRows(fr, track, c);
     else _frameRows(fr, c, set);
@@ -517,8 +542,9 @@ function _blankFilm(host, track, c, set, pair) {
 // Laid out like the other workflow's still panel, because it answers the same question
 // first: which picture is this.
 function _blankStill(host, track, c, set) {
-  // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture · Frame, the picture itself small at the top
-  // of Picture, Remove at the bottom - no columns of its own any more.
+  // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture · Frame, Remove at the bottom - no columns of
+  // its own any more. (phase V75, the owner's (кп3)) The picture itself is not shown at the top of Picture any more: it is on the
+  // preview.
   // (phase V49) On main video a picture is framed as ever and may be a PiP; it has no Halfer.
   const main = isMainVideo(track);
   const placed = _isPlaced(c) && !main;
@@ -526,17 +552,10 @@ function _blankStill(host, track, c, set) {
   const cropped = !c.halfer && !!cropActive(c);
 
   const pic = _group(host, 'picture', 'Picture');
-  const fig = _el('div', 'mv3-c-still');
-  if (c.thumb || c.src) {
-    const img = document.createElement('img');
-    img.src = c.thumb || c.src;
-    img.alt = c.name || '';
-    fig.appendChild(img);
-  }
-  pic.appendChild(fig);
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   if (!main || c.halfer) _halferRows(pic, c, set);
+  _colorGroup(host, [{ track, clip: c }]);
 
   // A band takes none of these: no crop, placement or framing on a band.
   if (!c.halfer) {
@@ -552,7 +571,7 @@ function _blankStill(host, track, c, set) {
       fr.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
       if (c.fit === 'fill') fr.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
     }
-    if (main) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
+    if (main && c.pip) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
   }
 
   _removeRow(host, C.button('Remove', () => removeB(track.id, c.id), {
@@ -765,6 +784,8 @@ function _blankVideoTrack(host, track) {
       title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
            + 'placement and levels are left alone.',
     })));
+    // (phase V75, the owner's (\u043a\u043f5) \u0430) The lane's colour: written into every clip on it, as its Fit is.
+    _colorGroup(host, (track.clips || []).filter(c => c && c.src).map(clip => ({ track, clip })));
   }
   // (phase V74, the owner's (\u043f\u04421)-(\u043f\u04429)) MAIN VIDEO'S PATTERNS - the set with ticks, the layers ticked with their settings
   // (patterns-ui.js): over the whole of main video and every lane above it, under the words; each change one undo step.
@@ -1616,16 +1637,17 @@ function _renderMany(host, n) {
       _blendRow(pic, above);
       if (above.length < videos.length) pic.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
     }
+    // (phase V75) Their colour - one set of sliders for all the picked video clips.
+    _colorGroup(host, videos);
   }
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
   const mains = picked.filter(x => isMainVideo(x.track));
   if (mains.length) {
     const fr = _group(host, 'frame', 'Frame');
     if (mains.length < n) fr.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
-    // (phase V51, (пр44)) One crop frame for all of them, the field showing the first.
+    // (phase V51, (пр44)) One crop frame for all of them.
     cropRows(fr, mains);
-    _bsep(fr);
-    _pipSection(fr, mains);
+    if (mains.some(x => x.clip.pip)) { _bsep(fr); _pipSection(fr, mains); }
   } else if (!sounds.length && !videos.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
@@ -1638,6 +1660,18 @@ function _renderMany(host, n) {
     { danger: true, title: 'Also on the Delete key' }));
 }
 
+// What the strip is about, as a key: the clip, the lane, the clips picked together - or nothing.
+let _paintedPick = null;
+function _pickKey() {
+  const many = multiB();
+  if (many > 1) return 'm:' + pickedB().map(x => x.clip.id).join(',');
+  const one = oneB();
+  if (one) return 'c:' + one.clip.id;
+  const tr = trackB();
+  if (tr) return 't:' + tr.id;
+  return Views.altCaptions() ? 'alt' : '';
+}
+
 // THE CAPTIONS VIEW FOLLOWS THE PICK (K6): up while captions are picked and the tiles are open, gone
 // with the pick - lib-views.js puts the shelf or the chat back, and the room with it.
 function render(force) {
@@ -1647,9 +1681,17 @@ function render(force) {
   // pick (`force`) writes the field into its own line first (onSelB) and paints at once. The words of a caption
   // keep their own field across a paint (word-edit.js), so they do not hold it.
   if (!force && _typing) { _typedPending = true; _freshenField(); return; }
+  // (phase V75, the owner 2026-11-06: "чтобы не скакало по вертикали поле настроек") THE STRIP KEEPS ITS SCROLL while it is
+  // painted again for the same pick - a slider let go, a list changed: the strip is rebuilt whole, and emptied for a moment it
+  // lost its place. Another pick starts at the top.
+  const scroller = _overHost();
+  const pick = _pickKey();
+  const top = scroller && pick === _paintedPick ? scroller.scrollTop : 0;
   let cap;
   WordEdit.beforeRepaint();
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }
+  if (scroller) scroller.scrollTop = top;
+  _paintedPick = pick;
   _paintHead(_overHost());
   const was = Views.isCaptions();
   // While a band is swept the view stays as it was - it follows the pick when the band is let go.
