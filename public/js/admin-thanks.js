@@ -176,7 +176,7 @@
     { group: "Captions", name: "libass",
       url: "https://github.com/libass/libass", license: "ISC",
       what: "The reference renderer for ASS/SSA subtitles.",
-      how: "Draws every caption. Inside FFmpeg it burns them into the render, screenshots and preset tiles with our shipped fonts. Inside JASSUB it draws the same .ass file in the preview, so the screen matches the video (lib/mv3b-render.js, lib/caption-shot.js, lib/caption-tiles.js, public/js/captions/layer.js)." },
+      how: "Draws every caption. Inside FFmpeg it burns them into the render and the preset tiles with our shipped fonts. Inside JASSUB it draws the same .ass file in the preview, so the screen matches the video (lib/mv3b-render.js, lib/caption-tiles.js, public/js/captions/layer.js)." },
     { group: "Captions", name: "JASSUB",
       url: "https://github.com/ThaUnknown/jassub", license: "MIT; the package with its wasm: LGPL-2.1-or-later AND (FTL OR GPL-2.0-or-later) AND MIT AND MIT-Modern-Variant AND ISC AND NTP AND Zlib AND BSL-1.0",
       what: "libass compiled to WebAssembly so it can draw subtitles in a web page; a fork of JavascriptSubtitlesOctopus.",

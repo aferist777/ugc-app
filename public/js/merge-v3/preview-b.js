@@ -1163,9 +1163,9 @@ function _paintFrame() {
   }
   // OVER EVERY LAYER, like the render burns them. Drawn by libass on its own canvas over the frame
   // (captions/layer.js, K4); the painter is the stand-in while that is not up. A screenshot is saved
-  // without them and the server burns them in with the render's own libass (lib/caption-shot.js).
+  // without them and stays so (phase V77, (тч13): the picture alone - a frame for the library or a chat).
   // A caption being moved is drawn where the pointer has it (cap-place.js) - the layer is handed it there.
-  if (_shooting) { /* burnt in by the server */ }
+  if (_shooting) { /* no words on a frame */ }
   else if (CapLayer.ready()) CapLayer.render(_at);
   else { try { paintCaptions(_ctx, CapPlace.liveTimeline() || tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {} }
 

@@ -3143,7 +3143,7 @@ function _clipMenu(e) {
   b.type = 'button';
   b.className = 'mv3-plus-item u-mi';
   const usd = 0.15 * (+c.dur || 0) / 60;
-  b.title = 'Music made for this clip by ElevenLabs - laid under it on "audio 2" (or the next free sound lane) when it comes';
+  b.title = 'Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes';
   const s = document.createElement('span');
   s.textContent = 'Video to Music…';
   const m = document.createElement('small');

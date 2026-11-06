@@ -111,20 +111,8 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
   const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to its category's folder
   try {
-    // THE CAPTIONS, burnt in here (phase K4): the page draws them with libass on a canvas it cannot
-    // read back, so the frame arrives without them and the render's own libass adds them, from the
-    // project's timeline at that moment. A picture without them is still a picture - said, not lost.
-    // The page sends the captions it shows (a save may be half a second behind); the stored timeline
-    // is the fallback.
-    const key = String((req.body || {}).key || '');
-    if ((req.body || {}).at != null) {
-      try {
-        let tl = null;
-        try { tl = JSON.parse(String((req.body || {}).captions || '')); } catch (e) { tl = null; }
-        if (!(tl && Array.isArray(tl.tracks)) && key) tl = require('../lib/merge-store').read().timelines[key];
-        if (tl && Array.isArray(tl.tracks)) await require('../lib/caption-shot').burn(req.file.path, tl, +req.body.at);
-      } catch (e) { console.warn('[images/shot] the captions could not be drawn:', e.message); }
-    }
+    // (phase V77, the owner's (тч13)) NO WORDS ON IT: the page draws the captions and the text lanes with libass on a layer of
+    // its own, so the frame arrives without them - and stays so (phase K4 burnt them in here; the owner wants the picture).
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add(imagePath, {
       name: String((req.body || {}).name || '').trim().slice(0, 120) || 'screenshot',
@@ -146,6 +134,41 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
 
 router.use('/images/shot', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'could not save the shot' });
+});
+
+// ── A frame out of a clip's own file (phase V77, the owner's (тч3)-(тч5)) ─────────────────────────────────────────────────────
+//
+//   POST /api/images/frame   { src, t, name?, project?, at? }  -> { success, item }
+//
+// The right button on a video clip of Merge's timeline ("continue", "frame to the pictures chat"): the frame of the FILE at `t`
+// seconds of the file - clean, at its own size: no crop, no colour, no words, no other lane - filed in IMAGES -> Screenshots
+// like a screenshot, the project and the moment of the timeline remembered. Free: nothing is asked of anyone.
+const VT = require('../lib/video-thumb');
+const MEDIA_LIB = require('../lib/media');
+const VIDEO_RE = /\.(mp4|mov|m4v|webm|mkv|avi)$/i;
+router.post('/images/frame', express.json({ limit: '64kb' }), async (req, res) => {
+  const b = req.body || {};
+  const src = String(b.src || '').split(/[?#]/)[0];
+  const abs = src ? MEDIA_LIB.toDiskExisting(src) : null;
+  if (!abs || !VIDEO_RE.test(abs) || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'The clip\'s file is not in the library.' });
+  const t = Math.max(0, Number(b.t) || 0);
+  const name = 'shot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.jpg';
+  const out = path.join(MEDIA.work, name);
+  try {
+    await VT.frameAt(abs, out, t);
+    const { cat } = LC.add('images', 'Screenshots');
+    const { item } = await IMG.add('/media/work/' + name, {
+      name: String(b.name || '').trim().slice(0, 120) || 'frame',
+      source: 'screenshot',
+      categoryId: cat.id,
+      categoryLabel: cat.label,
+      meta: { project: String(b.project || '') || null, at: b.at != null ? +b.at : null, from: { src, t: Math.round(t * 1000) / 1000 } },
+    });
+    res.json({ success: true, item });
+  } catch (e) {
+    try { fs.rmSync(out, { force: true }); } catch (x) { /* it is going anyway */ }
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 module.exports = router;

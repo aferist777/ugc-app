@@ -204,11 +204,7 @@ async function _shoot() {
     fd.append('name', (title || 'shot') + ' ' + _clock(r.at));
     fd.append('project', title);
     fd.append('at', String(r.at));
-    // The captions are burnt in by the server (phase K4) - the ones on screen, not a save behind.
-    fd.append('key', Store.key() || '');
-    const tl = Store.timeline();
-    fd.append('captions', JSON.stringify({ format: (tl && tl.format) || '9:16',
-      tracks: ((tl && tl.tracks) || []).filter(t => t && (t.kind === 'subs' || t.kind === 'text')) }));
+    // (phase V77, (тч13)) No words on it: the frame is the picture alone (the captions are libass's own layer).
     const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'the server would not take it');
     btn.classList.remove('is-busy');
