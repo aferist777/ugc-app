@@ -2192,7 +2192,8 @@ export function createChat(make) {
         // (phase V78, (лч16)) THIS PROJECT's folders - the project's; none in the Library's unbound chat.
         plinks: () => (Store.unbound() ? '' : (_key || '')),
         // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
-        own: Store.unbound() ? null : { label: 'This project', empty: 'Nothing made in this project yet.' },
+        // (phase V78, the owner 2026-11-07) ONE "this project": what this chat made here, and THIS PROJECT's folders and links.
+        own: Store.unbound() ? null : { label: 'THIS PROJECT', empty: 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.' },
         tile: _tile, lead: _plusTile,
         // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
         onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },

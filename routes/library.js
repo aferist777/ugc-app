@@ -915,14 +915,16 @@ function _inNode(i, q) {
 // which light nothing - a source is never news.
 const _isNews = (i, srcFrom) => (i.kind === 'references' && (i.meta || {}).from === 'telegram' && !(i.meta || {}).handled)
   || (i.kind === 'youtube' && srcFrom > 0 && _ts(i.meta && i.meta.date) > srcFrom);
-// (phase V73 block 2, the owner's (н1) а) `own` - the newest news lying DIRECTLY in the node (its `q` matches only that);
+// (phase V73 block 2, the owner's (н1) а) `ownNews` - the newest news lying DIRECTLY in the node (its `q` matches only that);
 // `newest` - in it or under it. The page lights a REFERENCES node while its own news is newer than when IT was opened, and
 // a branch while any node under it is lit: the lit path leads down to the inner folder. Read-only, nothing kept.
 function _stampNewest(nodes, items, srcFrom) {
   for (const n of nodes) {
     let best = 0;
     for (const i of items) { if (_isNews(i, srcFrom) && _inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
-    n.own = best;
+    // (phase V78 fix) Its own field: `own` is a folder's "the person's" flag (catsOf) - stamped over, no folder of the person's
+    // could be renamed, moved or deleted, nor hold a folder (js/media-tree.js holds, movable) since V73 block 2.
+    n.ownNews = best;
     if (n.children) { _stampNewest(n.children, items, srcFrom); for (const c of n.children) if (c.newest > best) best = c.newest; }
     n.newest = best;
   }

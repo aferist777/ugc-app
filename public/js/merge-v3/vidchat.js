@@ -951,7 +951,9 @@ function VIDEOS(ctx) {
   // AUDIO - is the media tree itself (chat-sources.js TREE).
   const SOURCES = {
     image: [Src.PEOPLE_ROW],
-    video: [{ id: 'made', label: 'Made in this project', load: _made, empty: 'No clips made in this project yet.' }],
+    // (phase V78, the owner 2026-11-07: one "this project") With THIS PROJECT in the window's tree the row goes - its clips lie
+    // in THIS PROJECT's top (js/merge-v3/chat-pick.js _madeIntoProject).
+    video: [{ id: 'made', label: 'Made in this project', load: _made, empty: 'No clips made in this project yet.', unless: 'plinks' }],
     audio: [{ id: 'voices', label: 'Voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' }],
   };
   // Where the window opens: a recipe's slot of pictures by what it is for (the owner) - a person on the characters and

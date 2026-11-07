@@ -367,7 +367,7 @@ export function createTree(host, o) {
       let g = false;
       if (n.children && n.children.length) { for (const c of n.children) if (walk(c)) g = true; }
       // REFERENCES: what lies directly in the node, against when the node itself was opened
-      if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) g = true; }
+      if (_isRef(n.key)) { if ((n.ownNews || 0) > (seen[n.key] || 0)) g = true; }
       else if (!(n.children && n.children.length)) g = (n.newest || 0) > (seen[n.key] || 0);
       if (g) fresh.add(n.key);
       return g;
@@ -379,7 +379,7 @@ export function createTree(host, o) {
   // Opened: under REFERENCES the node alone sees what lies in it (its folders keep theirs, (н1)); elsewhere it and
   // everything under it.
   function _seeAll(n, save = true) {
-    if (_isRef(n.key)) { if ((n.own || 0) > (seen[n.key] || 0)) seen[n.key] = n.own || 0; }
+    if (_isRef(n.key)) { if ((n.ownNews || 0) > (seen[n.key] || 0)) seen[n.key] = n.ownNews || 0; }
     else {
       const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
       go(n);

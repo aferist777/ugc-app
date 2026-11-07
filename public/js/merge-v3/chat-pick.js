@@ -871,6 +871,7 @@ function _buildTree() {
     shape: async (nodes) => {
       const idx = await folderIndex(nodes, T.type, null, T.fit || null).catch(() => null);
       if (!idx) return nodes;
+      await _madeIntoProject(nodes, idx);
       t.shapeOn = true;
       t.index = idx;
       return pruneTree(nodes, idx);
@@ -880,6 +881,28 @@ function _buildTree() {
     // A folder made, renamed or moved here: the tree reads itself again; what is open is read again too.
     onChanged: () => _refreshTree(true),
   });
+}
+
+// (phase V78, the owner 2026-11-07: "чтобы была только одна папка this project") ONE THIS PROJECT: the row of what was made in
+// this project (a source with `unless: 'plinks'` - the video chat's "Made in this project") gives way to the tree's THIS PROJECT,
+// and what it holds lies in THIS PROJECT's top beside its links.
+async function _madeIntoProject(nodes, idx) {
+  const root = (nodes || []).find(n => n.key === 'plinks');
+  const s = ((_o && _o.sources) || []).find(x => x.unless === 'plinks');
+  if (!root || !s || typeof s.load !== 'function') return;
+  let got = null;
+  try { got = await s.load(); } catch (e) { return; }
+  const T = _o.tree;
+  const files = ((got && got.items) || []).filter(it => it && it.path).map(it => ({
+    path: it.path, name: it.name || '', aspect: it.aspect || '', w: 0, h: 0, thumb: it.poster || '', dur: +it.dur || 0,
+    kind: 'birols', libId: '', item: null, ftype: T.type,
+  })).filter(f => !T.fit || T.fit(f));
+  if (!files.length) return;
+  const have = idx.direct.get('plinks') || [];
+  const seen = new Set(have.map(f => f.path));
+  const add = files.filter(f => !seen.has(f.path));
+  idx.direct.set('plinks', add.concat(have));
+  idx.total.set('plinks', (idx.total.get('plinks') || 0) + add.length);
 }
 
 // Over the middle of the chat, the almanac's size, never past the page.

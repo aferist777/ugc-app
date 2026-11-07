@@ -262,7 +262,10 @@ export async function locateFile(path, roots) {
  *                  answering one or a list (phase V60.2, (вч1б): the video chat's pictures, clips and sounds)
  *   o.fit(file)    -> false for a file not to show or count (the video chat: a clip longer than its model takes, V57)
  *   o.own          { label, empty } - a first row that is not a folder ("this project"); its pictures are the caller's,
- *                  given with setOwn(items) - each { path, name, aspect, state, ... } as the caller's tile takes it
+ *                  given with setOwn(items) - each { path, name, aspect, state, ... } as the caller's tile takes it.
+ *                  (phase V78, the owner 2026-11-07: "чтобы была только одна папка this project") With THIS PROJECT in the
+ *                  tree (`plinks`) the two are ONE row: its folders are THIS PROJECT's, and in it lie what the caller gave
+ *                  and the links of THIS PROJECT's top - the tree's own node 'plinks' is not drawn apart.
  *   o.start        what is open first: 'own', a node's key - else what `lsKey` remembers, else `own`, else roots[0]
  *   o.lsKey        localStorage key to remember what is open (omitted - nothing remembered)
  *   o.tile(it)     -> an element for a picture: it is a file of filesOf (or an own item); the caller wires its press,
@@ -281,6 +284,7 @@ export async function locateFile(path, roots) {
 export function createFolderColumn(host, o) {
   const opt = Object.assign({ files: 'photo', empty: 'Nothing in this folder.', title: 'Show' }, o || {});
   const OWN = 'own';
+  const PL = 'plinks';            // (phase V78) THIS PROJECT's node - one with the own row
   let tree = null;              // typedTree's answer - only the folders holding files of `files`, and their files
   let sel = '';                 // OWN or a node's key
   let wanted = '';              // a folder asked for while it held nothing of the type - opened once it does (an upload)
@@ -312,10 +316,30 @@ export function createFolderColumn(host, o) {
   const stored = () => { if (!opt.lsKey) return ''; try { return String(JSON.parse(localStorage.getItem(opt.lsKey) || '""') || ''); } catch (e) { return ''; } };
   const remember = () => { if (!opt.lsKey) return; try { localStorage.setItem(opt.lsKey, JSON.stringify(sel)); } catch (e) { /* a private window */ } };
   const node = (k) => (tree ? tree.byKey.get(k) || null : null);
-  const parentKey = (k) => (tree ? tree.parentOf.get(k) || '' : '');
-  const pathOf = (k) => { const out = []; for (let x = k; x && node(x); x = parentKey(x)) out.unshift(node(x).label); return out; };
+  // (phase V78) THIS PROJECT's folders are the own row's: their parent at the top is the own row.
+  const parentKey = (k) => { const p = tree ? tree.parentOf.get(k) || '' : ''; return p === PL && opt.own ? OWN : p; };
+  const pathOf = (k) => {
+    const out = [];
+    let x = k;
+    for (; x && node(x) && x !== PL; x = parentKey(x)) out.unshift(node(x).label);
+    if ((x === OWN || x === PL) && opt.own) out.unshift(opt.own.label);
+    return out;
+  };
+  // What the own row shows: the caller's, then THIS PROJECT's top links not among them.
+  const _ownShown = () => {
+    const linked = (tree && tree.index && tree.index.direct.get(PL)) || [];
+    const seen = new Set(ownItems.map(x => x && x.path));
+    return ownItems.concat(linked.filter(f => !seen.has(f.path)));
+  };
+  const _ownCount = () => {
+    const pl = node(PL);
+    if (!pl || !tree || !tree.index) return ownItems.length;
+    const paths = new Set(ownItems.map(x => x && x.path));
+    for (const f of filesUnder(pl, tree.index)) paths.add(f.path);
+    return paths.size;
+  };
 
-  function _valid(k) { return (k === OWN && !!opt.own) || !!node(k); }
+  function _valid(k) { return ((k === OWN || k === PL) && !!opt.own) || !!node(k); }
   function _fallback() { return opt.own ? OWN : ((tree && tree.nodes[0]) || {}).key || ''; }
 
   async function load() {
@@ -353,6 +377,7 @@ export function createFolderColumn(host, o) {
 
   // What lies in the folder open - from the reading of the tree, so its number and its tiles agree.
   function _read() {
+    if (sel === PL && opt.own) sel = OWN;
     if (sel === OWN) { state = 'ready'; paint(); return; }
     files = (tree && tree.index.direct.get(sel)) || [];
     state = 'ready';
@@ -360,6 +385,7 @@ export function createFolderColumn(host, o) {
   }
 
   function select(k) {
+    if (k === PL && opt.own) k = OWN;
     // A folder with nothing of the type is not offered; asked for (where an upload went), it opens at the next reading.
     if (!_valid(k)) { if (k) wanted = k; return; }
     const same = k === sel;
@@ -377,16 +403,16 @@ export function createFolderColumn(host, o) {
     const path = own ? [opt.own.label] : pathOf(sel);
     pickName.textContent = path.length ? path[path.length - 1] : '…';
     pick.title = (path.join(' / ') || '') + ' - press to choose another folder';
-    pickN.textContent = own ? String(ownItems.length) : n ? String(n.count || 0) : '';
+    pickN.textContent = own ? String(_ownCount()) : n ? String(n.count || 0) : '';
     const p = own ? '' : parentKey(sel);
     up.hidden = !p;
-    up.title = p ? 'Up to ' + node(p).label : '';
+    up.title = p ? 'Up to ' + (p === OWN ? opt.own.label : node(p).label) : '';
   }
 
   // The folders of the one open, as tiles - pressed, one opens.
   function _paintFolders() {
     folders.textContent = '';
-    const n = sel === OWN ? null : node(sel);
+    const n = sel === OWN ? node(PL) : node(sel);
     const kids = (n && n.children) || [];
     folders.hidden = !kids.length;
     for (const c of kids) {
@@ -413,7 +439,7 @@ export function createFolderColumn(host, o) {
     _paintFolders();
     const top = body.scrollTop;
     const own = sel === OWN;
-    const shown = own ? ownItems : files;
+    const shown = own ? _ownShown() : files;
     const lead = typeof opt.lead === 'function' ? opt.lead() : null;
     // (phase V73 block 2) reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
     // are the shared parts (js/ui-state.js); `fc-none` is their place in the list
@@ -422,7 +448,8 @@ export function createFolderColumn(host, o) {
     if (!shown.length) {
       const n = own ? null : node(sel);
       // A folder that holds folders says nothing of its own emptiness - its tiles are above.
-      const words = own ? (opt.own.empty || 'Nothing here yet.') : n && (!n.q || (n.children && n.children.length)) ? '' : opt.empty;
+      const words = own ? (((node(PL) || {}).children || []).length ? '' : (opt.own.empty || 'Nothing here yet.'))
+        : n && (!n.q || (n.children && n.children.length)) ? '' : opt.empty;
       list.replaceChildren(...[words ? emptyEl(words, { icon: own ? 'image' : 'folder', cls: 'fc-none' }) : null, lead].filter(Boolean));
       return;
     }
@@ -474,7 +501,9 @@ export function createFolderColumn(host, o) {
     box.appendChild(lst);
 
     const row = (n, depth, ownRow) => {
-      const has = !ownRow && !!(n.children && n.children.length);
+      // (phase V78) The own row holds THIS PROJECT's folders.
+      const kids = ownRow ? ((node(PL) || {}).children || []) : (n.children || []);
+      const has = kids.length > 0;
       const key = ownRow ? OWN : n.key;
       const b = el('button', 'mt-row mtp-row is-place' + (depth === 0 && !ownRow ? ' is-group' : '') + (key === sel ? ' is-here' : '') + (n.empty ? ' is-empty' : ''));
       b.type = 'button';
@@ -490,7 +519,7 @@ export function createFolderColumn(host, o) {
       b.appendChild(tw);
       b.appendChild(el('span', 'mt-name', ownRow ? opt.own.label : n.label));
       // (phase V73 block 2, (б2-22)) the count in brackets right after the name, the lock at the right edge - the media tree's way
-      b.appendChild(el('span', 'mt-n', '(' + (ownRow ? ownItems.length : (n.count || 0)) + ')'));
+      b.appendChild(el('span', 'mt-n', '(' + (ownRow ? _ownCount() : (n.count || 0)) + ')'));
       if (!ownRow && n.locked) { const l = el('span', 'mt-lock'); l.innerHTML = LOCK_SVG; b.appendChild(l); }
       b.title = ownRow ? opt.own.label : pathOf(key).join(' / ');
       b.addEventListener('click', () => { _closeMenu(); select(key); });
@@ -499,12 +528,13 @@ export function createFolderColumn(host, o) {
     function paintMenu() {
       const top = lst.scrollTop;
       lst.textContent = '';
+      const walk = (n, d) => { lst.appendChild(row(n, d)); if (n.children && open.has(n.key)) for (const c of n.children) walk(c, d + 1); };
       if (opt.own) {
         lst.appendChild(row({}, 0, true));
+        if (open.has(OWN)) for (const c of ((node(PL) || {}).children || [])) walk(c, 1);
         lst.appendChild(el('div', 'mtp-sep'));
       }
-      const walk = (n, d) => { lst.appendChild(row(n, d)); if (n.children && open.has(n.key)) for (const c of n.children) walk(c, d + 1); };
-      for (const n of (tree ? tree.nodes : [])) walk(n, 0);
+      for (const n of (tree ? tree.nodes : [])) if (!(opt.own && n.key === PL)) walk(n, 0);
       lst.scrollTop = top;
     }
     paintMenu();
@@ -539,7 +569,7 @@ export function createFolderColumn(host, o) {
     // (phase V60.2) Before the first reading has chosen, "this project" is what opens when nothing else is asked for - so the
     // caller's first read of its own results is not left for its next tick.
     isOwn: () => sel === OWN || (!sel && !!opt.own && !opt.start && !stored()),
-    items: () => (sel === OWN ? ownItems : files),
+    items: () => (sel === OWN ? _ownShown() : files),
     close: _closeMenu,
   };
 }
