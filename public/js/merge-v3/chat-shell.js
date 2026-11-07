@@ -2193,7 +2193,11 @@ export function createChat(make) {
         plinks: () => (Store.unbound() ? '' : (_key || '')),
         // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
         // (phase V78, the owner 2026-11-07) ONE "this project": what this chat made here, and THIS PROJECT's folders and links.
-        own: Store.unbound() ? null : { label: 'THIS PROJECT', empty: 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.' },
+        // A draft has no THIS PROJECT (the owner 2026-11-07): there the row is what this chat made in the draft - "This draft".
+        own: Store.unbound() ? null : {
+          get label() { return Store.isDraft() ? 'This draft' : 'THIS PROJECT'; },
+          get empty() { return Store.isDraft() ? 'Nothing made in this draft yet.' : 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.'; },
+        },
         tile: _tile, lead: _plusTile,
         // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
         onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },

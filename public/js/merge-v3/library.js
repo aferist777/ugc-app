@@ -41,7 +41,7 @@ import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages,
          loadCats, setCategory, setKind, KINDS, createCategory } from '../library/actions.js';
 // (phase TG, block 7) Cutting a piece out of any video - one module with the Library page and the post viewer.
 import * as Cut from '../cut.js';
-import { DRAG_TYPE, DRAG_MEDIA, markGone, key as storeKey, onChange as onStoreChange } from './store.js';
+import { DRAG_TYPE, DRAG_MEDIA, markGone, key as storeKey, onChange as onStoreChange, isDraft as storeIsDraft } from './store.js';
 // (phase V56, (ги7)) What is known about a made environment or lookbook, in the viewer's right column.
 import { madeRows } from '../library/made-rows.js';
 // (phase V58, the owner's (лк7)) New environment / New lookbook - the generators' window (sub-session P's module).
@@ -1524,9 +1524,11 @@ export function initLibrary() {
   Views.onLibraryRoots(toRoots);
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
   // (phase V78) Another project opened: THIS PROJECT is its own - the tree read again, the gallery too when it shows it.
-  let plWas = _plKey();
+  // (the owner 2026-11-07) A draft has none: saved under a name, the tree is read again and THIS PROJECT is there.
+  const plSig = () => _plKey() + '|' + (storeIsDraft() ? 'draft' : '');
+  let plWas = plSig();
   onStoreChange(() => {
-    const k = _plKey();
+    const k = plSig();
     if (k === plWas || !_tree) return;
     plWas = k;
     _tree.load().then(() => { if (_node && _node.kind === 'plinks') { _node = _tree.selected(); _load(); } });

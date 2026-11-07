@@ -743,7 +743,8 @@ function _tree(opts) {
   const roots = [references, video, images, audio];
   _stampNewest(roots, items, (opts && opts.srcFrom) || 0);
   // (phase V78) Merge's tree for a project: THIS PROJECT first, above REFERENCES.
-  if (opts && opts.plinks) { try { roots.unshift(_plinksNode(opts.plinks, items)); } catch (e) { console.warn('[library] THIS PROJECT:', e.message); } }
+  // A draft has none (the owner 2026-11-07) - Merge's draft, the voiceover draft.
+  if (opts && opts.plinks && !PLINKS.isDraft(opts.plinks)) { try { roots.unshift(_plinksNode(opts.plinks, items)); } catch (e) { console.warn('[library] THIS PROJECT:', e.message); } }
   return roots;
 }
 
