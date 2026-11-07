@@ -36,6 +36,8 @@ const {
 const { toUrl, toDiskWithin } = require('../lib/media');
 const { siblingsOf } = require('../lib/relocate');
 const LC = require('../lib/library-cats');
+// (phase V78) THIS PROJECT's folders of links to the library's media.
+const PLINKS = require('../lib/project-links');
 // Where a shelf item's files live - its kind and category's folder - and moving them there.
 const SHELF = require('../lib/shelf-files');
 const VS = require('../lib/voice-shelf');
@@ -740,7 +742,51 @@ function _tree(opts) {
   _madeFolders(images);
   const roots = [references, video, images, audio];
   _stampNewest(roots, items, (opts && opts.srcFrom) || 0);
+  // (phase V78) Merge's tree for a project: THIS PROJECT first, above REFERENCES.
+  if (opts && opts.plinks) { try { roots.unshift(_plinksNode(opts.plinks, items)); } catch (e) { console.warn('[library] THIS PROJECT:', e.message); } }
   return roots;
+}
+
+// ── THIS PROJECT (phase V78, part B, the owner's (лч10)-(лч17); lib/project-links.js) ──────────────────────────────────────
+// Every item a link may name: the media shelf's whole set with what the generators of IMAGES made - a link is found by
+// 'kind:id', else by its address. Anything not found is a file deleted from the library: its link goes ((лч14)).
+function _linkables(items) {
+  const all = (items || _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true }).items).slice();
+  for (const k of MADE_KINDS) { try { all.push(..._madeItems(k)); } catch (e) { /* that shelf did not read */ } }
+  const byKey = new Map(), byMedia = new Map();
+  for (const i of all) {
+    if (!i || !i.kind) continue;
+    byKey.set(i.kind + ':' + i.id, i);
+    const m = String(i.media || '').split(/[?#]/)[0];
+    if (m && !byMedia.has(m)) byMedia.set(m, i);
+  }
+  return { byKey, byMedia };
+}
+// The links of a project as the library's items - each with its `link` (the link's id) and the folder it lies in.
+function _linkedItems(key, items) {
+  const { byKey, byMedia } = _linkables(items);
+  const r = PLINKS.resolve(key, byKey, byMedia);
+  return { folders: r.folders, items: r.found.map(({ link, item }) => Object.assign({}, item, { link: link.id, meta: Object.assign({}, item.meta || {}, { linkFolder: link.folder }) })) };
+}
+// The node: THIS PROJECT and its folders - `kind` 'plinks', `cat` a folder's id, `q` what the shelf is asked for what lies
+// directly in it (GET /api/library/shelf/media?plinks=<key>&plfolder=<id>).
+function _plinksNode(key, items) {
+  const k = PLINKS.homeKey(key);
+  const { folders, items: linked } = _linkedItems(k, items);
+  const direct = new Map();
+  for (const i of linked) direct.set(i.meta.linkFolder || '', (direct.get(i.meta.linkFolder || '') || 0) + 1);
+  const build = (parent) => folders.filter(f => f.parent === parent).sort((a, b) => _abc(a.name, b.name)).map(f => {
+    const kids = build(f.id);
+    const n = direct.get(f.id) || 0;
+    const count = n + kids.reduce((s, c) => s + c.count, 0);
+    return { key: 'plinks:' + f.id, kind: 'plinks', cat: f.id, label: f.name, name: f.name, own: true, count, direct: n, empty: !count,
+      q: { plinks: k, plfolder: f.id }, children: kids, newest: 0 };
+  });
+  const kids = build('');
+  const n = direct.get('') || 0;
+  return { key: 'plinks', kind: 'plinks', label: 'THIS PROJECT', count: n + kids.reduce((s, c) => s + c.count, 0), direct: n,
+    tip: 'This project\'s own folders - links to the library\'s media; the files stay where they are',
+    q: { plinks: k, plfolder: '' }, children: kids, newest: 0 };
 }
 
 // (phase V55, the owner 2026-10-28, (гн8)-(гн9): "в images нужно сделать так папки Environment (references, а в корневой
@@ -884,8 +930,38 @@ function _stampNewest(nodes, items, srcFrom) {
 
 router.get('/library/tree', (req, res) => {
   // ?srcFrom=<ms> - from when a source downloaded by a link counts as news (the page's moment; absent - never)
-  try { res.json({ success: true, nodes: _tree({ srcFrom: Math.max(0, Math.floor(+req.query.srcFrom || 0)) }) }); }
+  // ?plinks=<timeline key> - (phase V78) Merge's tree for that project: THIS PROJECT first
+  try { res.json({ success: true, nodes: _tree({ srcFrom: Math.max(0, Math.floor(+req.query.srcFrom || 0)), plinks: String(req.query.plinks || '') }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── THIS PROJECT's folders and links (phase V78, part B; lib/project-links.js) ─────────────────────────────────────────────
+//   POST   /api/plinks/folder        { key, name, parent }   -> { folder }      a folder ('' parent - THIS PROJECT itself)
+//   PATCH  /api/plinks/folder/:id    { key, name?, parent? } -> { folder }      renamed, moved
+//   DELETE /api/plinks/folder/:id?key=                     -> { folders, links }  the folder and its links - files stay
+//   POST   /api/plinks/put           { key, folder, items: [{ kind, id, media, link? }] } -> { added, moved, had }
+//   POST   /api/plinks/unlink        { key, ids }            -> { removed }      links taken off - files stay
+const _plErr = (res, e) => res.status(e.status || 500).json({ success: false, error: e.message });
+const _plKey = (k) => { const key = String(k || ''); if (!key) { const e = new Error('Which project?'); e.status = 400; throw e; } return key; };
+router.post('/plinks/folder', (req, res) => {
+  try { const b = req.body || {}; const f = PLINKS.addFolder(_plKey(b.key), b.name, b.parent); res.json({ success: true, folder: f, cat: { id: f.id, label: f.name } }); }
+  catch (e) { _plErr(res, e); }
+});
+router.patch('/plinks/folder/:id', (req, res) => {
+  try { const b = req.body || {}; const f = PLINKS.changeFolder(_plKey(b.key), req.params.id, { name: b.name, parent: b.parent }); res.json({ success: true, folder: f, cat: { id: f.id, label: f.name } }); }
+  catch (e) { _plErr(res, e); }
+});
+router.delete('/plinks/folder/:id', (req, res) => {
+  try { res.json(Object.assign({ success: true }, PLINKS.deleteFolder(_plKey(req.query.key), req.params.id))); }
+  catch (e) { _plErr(res, e); }
+});
+router.post('/plinks/put', (req, res) => {
+  try { const b = req.body || {}; res.json(Object.assign({ success: true }, PLINKS.put(_plKey(b.key), b.folder, b.items))); }
+  catch (e) { _plErr(res, e); }
+});
+router.post('/plinks/unlink', (req, res) => {
+  try { const b = req.body || {}; res.json(Object.assign({ success: true }, PLINKS.unlink(_plKey(b.key), b.ids))); }
+  catch (e) { _plErr(res, e); }
 });
 
 // ── Voices ──────────────────────────────────────────────────────────────────
@@ -1147,6 +1223,15 @@ router.get('/library/shelf/:kind', (req, res) => {
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
     // (phase TG, block 5d) REFERENCES' videos for the video chat's picker, by its folders and categories.
+    // (phase V78) THIS PROJECT: what lies directly in one of its folders (`plfolder`, '' - itself) - the library's items, each
+    // with its `link`; `accept` (kinds, comma-separated) - only those (a chat's own kinds, (лч16)).
+    if (kind === 'media' && req.query.plinks) {
+      const folder = String(req.query.plfolder || '');
+      const accept = String(req.query.accept || '').split(',').map(x => x.trim()).filter(Boolean);
+      const all = _linkedItems(String(req.query.plinks), null).items;
+      const items = all.filter(i => (req.query.plfolder == null || (i.meta.linkFolder || '') === folder) && (!accept.length || accept.includes(i.kind)));
+      return res.json({ success: true, kind, items, total: items.length, shown: items.length, filters: [], cats: [], labelKeys: null, running: 0 });
+    }
     if (kind === 'media' && String(req.query.filter || '') === 'refvideos') {
       const { items, cats } = _refFiles('video');
       return res.json({ success: true, kind, items, total: items.length, shown: items.length, filters: [], cats, labelKeys: null, running: 0 });
@@ -2747,7 +2832,8 @@ router.post('/library/usage', (req, res) => {
         for (const p of (store.files ? store.files(e) : [])) if (p) media.push(String(p));
       }
     }
-    res.json({ success: true, projects: require('../lib/timeline-media').usage(media) });
+    // (phase V78, (лч14)) And the projects whose THIS PROJECT holds them - a link goes with its file.
+    res.json({ success: true, projects: require('../lib/timeline-media').usage(media), linked: PLINKS.usage(media) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
