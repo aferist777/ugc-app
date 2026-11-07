@@ -70,8 +70,14 @@ router.get('/mv3/video/feed', (req, res) => {
   try {
     // (phase V60.2) A draft's clips are kept under the drafts' conversation (lib/mv3-chat.js threadOf): the right column's
     // "this project" and the window's "made in this project" ask by the draft's own key.
-    const p = CHAT.threadOf(String(req.query.project || ''));
-    res.json({ success: true, items: p ? VGENS.list(p) : [] });
+    // (phase V78 fix) A clip is recorded under the key it was asked from - a draft's own, as the pictures chat's are - so the
+    // feed asks by that key first; the drafts' conversation's key too, for what an older draft may have kept there.
+    const key = String(req.query.project || '');
+    const p = CHAT.threadOf(key);
+    const seen = new Set();
+    const items = [].concat(key ? VGENS.list(key) : [], p && p !== key ? VGENS.list(p) : [])
+      .filter(g => g && !seen.has(g.id) && seen.add(g.id));
+    res.json({ success: true, items });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
