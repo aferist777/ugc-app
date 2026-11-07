@@ -69,6 +69,8 @@ import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
 // (phase V54) Several tiles picked at once - one module with the Library page.
 import * as TS from '../tile-select.js';
+// (phase V78) The right button on one tile: the generation chats with it (part A).
+import { rowsFor as genRows } from '../gen-menu.js';
 // (phase V59.1) Music -> Lyrics: a saved text's tile and its viewer - one module with the Library page.
 import * as LYR from '../sound/lyrics.js';
 
@@ -85,6 +87,10 @@ let _seq = 0;         // guards against a slow response for a node you have left
 let _shownAs = '';    // (phase V73 block 2) the node and the question whose answer the gallery shows - '' while none is
 
 const _kind = () => (_node && _node.kind) || '';
+// (phase V78, part B) THIS PROJECT - the open project's own folders of links (js/media-tree.js, lib/project-links.js): its key (a
+// highlights fragment's is its home's), '' with none open; and whether the node open is it or one of its folders.
+const _plKey = () => { const k = storeKey(); return k ? Views.chatKey(k) : ''; };
+const _isLinks = () => _kind() === 'plinks';
 const _isImages = () => _kind() === 'images';
 const _isAudio = () => AUDIO.has(_kind()) || (_node && (_node.key === 'audio' || SS.isSfx(_node)));
 // (phase V34.E) The search over SFX - kept while SFX is looked at, let go of outside it.
@@ -199,8 +205,16 @@ function _tile(it, list) {
     // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
     const many = _pickedWith(it);
     if (many) { _manyMenu(many, e); return; }
+    // (phase V78) "Add to this project…" on every tile (part B, (лч11)); a picture's or a video's chats (part A, js/gen-menu.js).
+    const plus = _addRow(it, e);
+    if (!audio) {
+      const rows = genRows(it, _openChatWith).concat(plus ? [plus] : []);
+      if (rows.length) TS.menuAt(e.clientX, e.clientY, rows);
+      return;
+    }
     if (audio) {
       soundMenu(it, e, {
+        extra: plus ? [plus] : [],
         status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
         changed: () => _reload(), stop: () => _stopHearing(),
         // (phase V54) Merge has no player: every sound - a track too - is cut in the Cut window, and "to timeline" lays
@@ -217,6 +231,8 @@ function _tile(it, list) {
   });
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
+  // (phase V78, (лч13)) A tile of THIS PROJECT is a LINK: its mark, and its cross takes only the link out.
+  if (it.link) _linkMark(cell, it);
   cell.title = it.kind === 'heads'
     ? [(it.meta || {}).project, it.name, _mmss(it.dur), (it.meta || {}).used ? 'on a timeline' : ''].filter(Boolean).join(' · ')
     : [it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ')
@@ -306,7 +322,7 @@ function _tile(it, list) {
         await _reload();
       } catch (err) { showError(err.message); del.disabled = false; }
     });
-    cell.appendChild(del);
+    if (!it.link) cell.appendChild(del);
     // Onto a node of the tree (block 5b) - within REFERENCES, or a post of one file out of it.
     cell.draggable = true;
     cell.addEventListener('dragstart', (e) => {
@@ -333,6 +349,8 @@ function _tile(it, list) {
     });
     cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
     cell.addEventListener('click', () => openViewer(list, list.indexOf(it), _viewerOpts()));
+    // (phase V78) A link of THIS PROJECT carries the tree's payload too - onto another of its folders it moves.
+    if (it.link) cell.addEventListener('dragstart', (e) => setMediaDrag(e.dataTransfer, it, _pickedWith(it)));
     return cell;
   }
 
@@ -375,7 +393,7 @@ function _tile(it, list) {
       await _reload();
     } catch (err) { showError(err.message); del.disabled = false; }
   });
-  cell.appendChild(del);
+  if (!it.link) cell.appendChild(del);
 
   // Draggable onto a timeline lane - what it is rides along (DRAG_MEDIA), and the lane decides whether it takes it -
   // and onto a node of the tree (setMediaDrag).
@@ -404,6 +422,120 @@ function _tile(it, list) {
   if (audio) cell.addEventListener('click', () => _play(it, cell));
   else cell.addEventListener('click', () => openViewer(list, list.indexOf(it), _viewerOpts()));
   return cell;
+}
+
+// ── THIS PROJECT (phase V78, part B, the owner's (лч10)-(лч17)) ────────────────────────────────────────────────────────────
+// A tile of it: a small link mark, and the cross takes the link out of the folder - the file stays where it lies ((лч13)).
+function _linkMark(cell, it) {
+  cell.classList.add('is-link');
+  const mk = document.createElement('span');
+  mk.className = 'mv3-tile-link';
+  mk.innerHTML = icon('link', 11);
+  mk.title = 'A link - the file lies in the library; the cross takes only the link out';
+  cell.appendChild(mk);
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'mv3-tile-btn mv3-tile-del u-onpic u-x';
+  x.textContent = '';
+  x.title = 'Take the link out of this folder - the file stays in the library';
+  x.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    x.disabled = true;
+    try {
+      const r = await fetch('/api/plinks/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: _plKey(), ids: [it.link] }) }).then(y => y.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'not taken out');
+      await _reload();
+    } catch (err) { showError(err.message); x.disabled = false; }
+  });
+  cell.appendChild(x);
+}
+// "Add to this project…" ((лч11)): the folders of THIS PROJECT to choose from - a link there, the file where it lies.
+function _addRow(it, e) {
+  if (!_plKey() || !_tree || !_tree.node('plinks') || it.kind === 'lyrics') return null;
+  const x = e.clientX, y = e.clientY;
+  return ['Add to this project…', 'a link in one of its folders - the file stays where it is', () => setTimeout(() => _addToProject(it, x, y), 0)];
+}
+function _addToProject(it, x, y) {
+  const root = _tree && _tree.node('plinks');
+  if (!root) return;
+  const rows = [['THIS PROJECT', 'its top', () => _linkInto(it, root)]];
+  const walk = (n, path) => {
+    for (const c of (n.children || [])) {
+      const p = path ? path + ' / ' + c.label : c.label;
+      rows.push([p, '', () => _linkInto(it, c)]);
+      walk(c, p);
+    }
+  };
+  walk(root, '');
+  rows.push(['+ New folder…', 'in THIS PROJECT, the link in it', () => _newLinkFolder(it, x, y)]);
+  TS.menuAt(x, y, rows);
+}
+async function _linkInto(it, node) {
+  try {
+    const r = await fetch('/api/plinks/put', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: _plKey(), folder: node.cat || '', items: [{ kind: it.kind, id: it.id, media: it.media || '', ...(it.link ? { link: it.link } : {}) }] }) }).then(y => y.json());
+    if (!r || !r.success) throw new Error((r && r.error) || 'the server did not take it');
+    _status(r.added ? 'Linked in ' + node.label + ' - the file stays where it is' : r.moved ? 'Moved to ' + node.label : 'Already in ' + node.label);
+    setTimeout(() => _status(''), 3000);
+    await _tree.load();
+    if (_isLinks()) await _load();
+  } catch (err) { _status('Not linked: ' + err.message, true); }
+}
+async function _newLinkFolder(it, x, y) {
+  const mark = document.createElement('div');
+  mark.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;width:1px;height:1px;pointer-events:none';
+  document.body.appendChild(mark);
+  try {
+    const f = await askName({ anchor: mark, title: 'New folder in THIS PROJECT', okLabel: 'Create', maxLength: 60,
+      submit: async (name) => {
+        const r = await fetch('/api/plinks/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: _plKey(), name, parent: '' }) }).then(y => y.json());
+        if (!r || !r.success) throw new Error((r && r.error) || 'not made');
+        return r.folder;
+      } });
+    if (f) await _linkInto(it, { cat: f.id, label: f.name });
+  } finally { mark.remove(); }
+}
+// (phase V78, part A) The chats over the page with a tile of the panel - the project's conversation (js/gen-menu.js).
+function _openChatWith(which, o) {
+  return which === 'videos' ? import('./vidchat.js').then(V => V.openVideos(o)) : openPictures(o);
+}
+// (phase V78, (лч10) the owner's words) Files from this computer into a folder of THIS PROJECT: each into its own place in the
+// library - a video onto VIDEO -> Uploads, a picture into IMAGES, a sound into AUDIO -> Music, never twice (lib/drop-file.js) -,
+// and a link to it here.
+async function _uploadLinks(list, node) {
+  const key = _plKey();
+  if (!key || !node) { _status('Open a project first - THIS PROJECT is its own', true); return; }
+  const T = await import('./timeline-b.js');
+  const good = list.filter(f => T.mediaOfFile(f));
+  const skipped = list.length - good.length;
+  if (!good.length) { _status('Only videos, pictures and sounds go here', true); return; }
+  _lock(true);
+  const items = [];
+  let failed = 0;
+  try {
+    for (let i = 0; i < good.length; i++) {
+      const f = good[i];
+      _status('uploading ' + (i + 1) + '/' + good.length + ' · ' + f.name);
+      try {
+        const it = await T.sendFileToLibrary(f, null);
+        if (it && it.src && it.group) items.push({ kind: it.group, id: String(it.libId || ''), media: it.src }); else failed++;
+      } catch (e) { failed++; }
+    }
+    if (items.length) {
+      const r = await fetch('/api/plinks/put', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, folder: node.cat || '', items }) }).then(y => y.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'the links were not made');
+    }
+    _status(items.length + ' added' + (failed ? ', ' + failed + ' failed' : '') + (skipped ? ', ' + skipped + ' skipped (not a video, a picture or a sound)' : ''),
+      !!failed && !items.length);
+  } catch (e) {
+    _status(e.message, true);
+  } finally {
+    _lock(false);
+    await _reload();
+  }
 }
 
 // ── What can be done to a clip from inside the viewer ───────────────────────
@@ -646,6 +778,12 @@ function _plusTile() {
     b.title = _node.key === 'sfx-fav' ? 'Favorites are the starred sounds - the ★ on a tile' : 'Built into the app - read only';
     return b;
   }
+  // (phase V78) THIS PROJECT: files from this computer - each into its place in the library, a link to it here.
+  if (_isLinks()) {
+    b.title = 'Add files from this computer - each lies in its place in the library (VIDEO → Uploads, IMAGES, AUDIO → Music) and a link to it here';
+    b.addEventListener('click', (e) => { e.stopPropagation(); _pickFiles('plinks'); });
+    return b;
+  }
   b.title = _isImages() ? 'Add a picture to Images - from this computer, or made here'
     : _isAudio() ? 'Add music or sounds from this computer'
     : 'Add videos to ' + _landName(_videoKind()) + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
@@ -661,7 +799,7 @@ function _pickFiles(what) {
   const inp = document.getElementById('mv3-lib-file');
   if (!inp) return;
   _pickFor = what || '';
-  inp.accept = _isImages() ? PICTURE_ACCEPT : _isAudio() ? AUDIO_ACCEPT : 'video/*';
+  inp.accept = what === 'plinks' ? 'video/*,' + PICTURE_ACCEPT + ',' + AUDIO_ACCEPT : _isImages() ? PICTURE_ACCEPT : _isAudio() ? AUDIO_ACCEPT : 'video/*';
   inp.click();
 }
 
@@ -989,6 +1127,8 @@ function _shut() { return _tree && _node ? _tree.closedSays(_node) : ''; }
 async function _upload(files, what) {
   const list = Array.from(files || []);
   if (!list.length) return;
+  // (phase V78) A folder of THIS PROJECT: each into its place in the library, a link to it here.
+  if (_isLinks() || what === 'plinks') return _uploadLinks(list, _node);
   // (phase V60.2) At the roots there is no place to put them yet.
   if (!_node && !what) { _status('Open a folder first - REFERENCES, VIDEO, IMAGES or AUDIO, then the folder the files go into', true); return; }
   // (phase V55) Environments / Lookbooks take only what their generator made.
@@ -1370,7 +1510,9 @@ export function initLibrary() {
     onSelect: (n) => { _node = n || null; if (_tsel) _tsel.clear(); _load(); },
     onChanged: () => _load(),        // awaited by the tree before it says what was done
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
-    takesFiles: (n) => !!SS.filesTo(n),
+    takesFiles: (n) => (!!n && n.kind === 'plinks') || !!SS.filesTo(n),
+    // (phase V78, part B) THIS PROJECT, above REFERENCES - the open project's.
+    plinks: _plKey,
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
     // (phase V55, (гн11)) Environments / Lookbooks / Props' "create": their generator, right in this panel.
     onMake: (n) => { if (n && n.make) openMaker(n.make); },
@@ -1381,6 +1523,14 @@ export function initLibrary() {
   // (phase V60.2) "Library" pressed - from the shelf, a chat or the captions: the roots.
   Views.onLibraryRoots(toRoots);
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
+  // (phase V78) Another project opened: THIS PROJECT is its own - the tree read again, the gallery too when it shows it.
+  let plWas = _plKey();
+  onStoreChange(() => {
+    const k = _plKey();
+    if (k === plWas || !_tree) return;
+    plWas = k;
+    _tree.load().then(() => { if (_node && _node.kind === 'plinks') { _node = _tree.selected(); _load(); } });
+  });
   // (phase V54) Several tiles picked in the gallery (js/tile-select.js) - while the shelf is what the panel shows.
   const body = _body();
   if (body) {

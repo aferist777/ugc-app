@@ -43,6 +43,8 @@ import { createPlayer } from '../sound/player.js';
 import * as LYR from '../sound/lyrics.js';
 // (phase V54) Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
 import * as TS from '../tile-select.js';
+// (phase V78) The right button on one tile: the generation chats with it.
+import { rowsFor as genRows } from '../gen-menu.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
@@ -301,7 +303,7 @@ async function _openMusic(fromTree, lyric, stay) {
 // the same as Merge's draft's (js/merge-v3/chat-owner.js useDraft) - with no "this project". What they make lies in IMAGES →
 // Generated and VIDEO → Generated → <model>, as from Merge; the gallery is read again when a window closes on something made.
 const _chatOn = {};
-async function _openChat(which) {
+async function _openChat(which, o) {
   try {
     const W = await import('../merge-v3/chat-window.js');
     W.ensureChatCss();
@@ -310,11 +312,12 @@ async function _openChat(which) {
     if (which === 'videos') {
       const V = await import('../merge-v3/vidchat.js');
       if (!_chatOn.videos) { _chatOn.videos = true; V.initVidChat(); }
-      await V.openVideos();
+      // (phase V78) With a thing of the Library in its zone (js/gen-menu.js), or as it is.
+      await V.openVideos(o);
     } else {
       const P = await import('../merge-v3/picchat.js');
       if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
-      await P.openPictures();
+      await P.openPictures(o);
     }
   } catch (e) { _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
 }
@@ -1139,7 +1142,12 @@ function _card(it, extra) {
     // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
     const many = _pickedWith(it);
     if (many) { _manyMenu(many, e); return; }
-    if (!AUDIO.has(it.kind)) return;
+    // (phase V78, the owner's (лч1)-(лч3)) A picture or a video: the generation chats over the page with it (js/gen-menu.js).
+    if (!AUDIO.has(it.kind)) {
+      const rows = genRows(it, (which, o) => _openChat(which, o));
+      if (rows.length) TS.menuAt(e.clientX, e.clientY, rows);
+      return;
+    }
     soundMenu(it, e, {
       status: (t, bad) => _status(t, bad ? 'err' : ''),
       stop: () => { _stopHearing(); if (_player) _player.pause(); },

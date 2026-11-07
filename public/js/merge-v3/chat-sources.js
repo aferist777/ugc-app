@@ -49,10 +49,11 @@ export function pictureSourceOf(path) {
 const _treeClip = (f) => ({ path: f.path, src: f.path, poster: f.thumb || '', name: f.name || '', thumb: f.thumb ? thumbOf(f.thumb, 'strip') : '',
   aspect: f.aspect || '', dur: +f.dur || 0 });
 export const TREE = {
-  image: { roots: ['references', 'images'], page: 'pk_image', fallback: 'images', home: 'images', type: 'photo',
+  // (phase V78, (лч16)) THIS PROJECT first - in Merge, the project's own folders of links.
+  image: { roots: ['plinks', 'references', 'images'], page: 'pk_image', fallback: 'images', home: 'images', type: 'photo',
     map: (f) => pic(f.path, f.name, '', { aspect: f.aspect || '' }) },
-  video: { roots: ['references', 'video'], page: 'pk_video', fallback: 'uploads', home: 'uploads', type: 'video', map: _treeClip },
-  audio: { roots: ['audio'], page: 'pk_audio', fallback: 'sounds', home: 'sounds', type: 'audio',
+  video: { roots: ['plinks', 'references', 'video'], page: 'pk_video', fallback: 'uploads', home: 'uploads', type: 'video', map: _treeClip },
+  audio: { roots: ['plinks', 'audio'], page: 'pk_audio', fallback: 'sounds', home: 'sounds', type: 'audio',
     map: (f) => ({ path: f.path, src: f.path, name: f.name || '', dur: +f.dur || 0 }) },
 };
 

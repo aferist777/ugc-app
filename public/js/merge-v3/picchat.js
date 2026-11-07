@@ -49,9 +49,12 @@ function PICTURES(ctx) {
       if (!a.path) return;
       ctx.useAtts([]);
       ctx.attach(a.path, a.name || '');
-      const what = o.as === 'frame' ? 'The frame from the timeline' : 'The picture from the timeline';
+      // (phase V78) From the Library too (js/gen-menu.js).
+      const lib = o.from === 'library';
+      const what = (o.as === 'frame' ? 'The frame' : 'The picture') + (lib ? ' from the Library' : ' from the timeline');
       ctx.notice(what + ' is in the zone - say what to change in it.'
-        + (o.back ? '\nWhen the picture is made, "' + o.back + '" under it puts it on the timeline.' : ''));
+        + (o.back ? '\nWhen the picture is made, "' + o.back + '" under it puts it on the timeline.'
+          : lib ? '\nWhat it makes lies in IMAGES → Generated.' : ''));
       const ui = ctx.ui();
       if (ui) ui.ta.focus();
     },
@@ -94,7 +97,8 @@ function PICTURES(ctx) {
       map: (g) => ({ path: g.imagePath, aspect: g.aspect, state: g.state, name: g.prompt || '', error: g.error }),
     },
     // (phase V55, (гн7)) The right column: this project, then REFERENCES' pictures and IMAGES by their folders.
-    column: { roots: ['references', 'images'], files: 'photo', group: 'images', home: 'images' },
+    // (phase V78, (лч16)) THIS PROJECT first - its pictures only.
+    column: { roots: ['plinks', 'references', 'images'], files: 'photo', group: 'images', home: 'images' },
     // (phase V55, (гн6)) "+" of the zone opens the attachment window with the tree: characters & looks above it (and the
     // environments and lookbooks while IMAGES has no folders of them), REFERENCES and IMAGES in it.
     pick: {

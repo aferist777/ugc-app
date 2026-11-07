@@ -1208,6 +1208,11 @@ function _mediaOfFile(f) {
   return Object.keys(_FILE_RE).find(k => _FILE_RE[k].test(n)) || '';
 }
 
+// (phase V78) The same way in for THIS PROJECT's uploads (js/merge-v3/library.js): the file into its place in the library, a
+// link to it into the folder open there.
+export const mediaOfFile = (f) => _mediaOfFile(f);
+export const sendFileToLibrary = (f, onProgress) => _sendFile(f, onProgress);
+
 // The file into the library: asked by its name, size and time first (a file dropped before is not sent again), then sent
 // with its progress. Resolves with what a lane lays.
 async function _sendFile(f, onProgress) {

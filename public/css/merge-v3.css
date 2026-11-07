@@ -554,6 +554,11 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-tile-btn[disabled]{opacity:.4; cursor:default}
 .mv3-tile-star{left:2px}
 .mv3-tile-del{right:2px}
+/* (phase V78) A tile of THIS PROJECT is a link: a small mark at the bottom right, always there; its cross takes the link out. */
+.mv3-tile-link{
+  position:absolute; right:4px; bottom:4px; z-index:2; display:flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:var(--r-2xs); background:var(--scrim); color:var(--on-media); pointer-events:auto;
+}
 /* A favourite shows its star WITHOUT hovering - that is how the mark is read at a
    glance, and the same reason the Library page marks its cards. */
 .mv3-tile.is-fav .mv3-tile-star{opacity:1; color:var(--on-media)}

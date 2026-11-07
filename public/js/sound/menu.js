@@ -85,6 +85,8 @@ export async function soundMenu(it, ev, opts) {
     else b.disabled = true;
     m.appendChild(b);
   };
+  // (phase V78) The page's own rows first - Merge's "Add to this project…".
+  for (const [label, sub, fn] of (Array.isArray(o.extra) ? o.extra : [])) item(label, sub, fn);
   // (phase V54, (зв28)) Where the piece goes follows what is cut: a track's into Music, the rest into My sounds - no choice.
   const inPlayer = it.kind === 'music' && typeof o.cut === 'function';
   item('Cut…', inPlayer ? 'in the player - a piece of it as a new track in Music'

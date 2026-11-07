@@ -821,10 +821,14 @@ function VIDEOS(ctx) {
     if (kind === 'video') ctx.attach(a.path, a.name || '', { kind: 'video', poster: a.poster || '', dur: +a.dur || 0, in: a.in, out: a.out });
     else ctx.attach(a.path, a.name || '', first && seed ? { slot: 'first' } : {});
     const lines = [];
-    if (kind === 'video') lines.push('The clip from the timeline is a REFERENCE: the part the timeline plays, ' + _s(+a.in || 0) + ' - ' + _s(+a.out || 0) + ' of its file.');
-    else if (o.act === 'continue') lines.push('The last frame of the clip on the timeline is the FIRST FRAME - the new clip starts on it.');
-    else if (first) lines.push('The ' + (o.act === 'frame-vid' ? 'frame' : 'picture') + ' from the timeline is the FIRST FRAME - the clip starts on it.');
-    else lines.push('The picture from the timeline is in the zone.');
+    // (phase V78) From the Library too (js/gen-menu.js) - its words say where it came from.
+    const lib = o.from === 'library';
+    const src = lib ? 'the Library' : 'the timeline';
+    if (kind === 'video') lines.push(lib ? 'The clip from the Library is a REFERENCE: its first seconds the model takes go.'
+      : 'The clip from the timeline is a REFERENCE: the part the timeline plays, ' + _s(+a.in || 0) + ' - ' + _s(+a.out || 0) + ' of its file.');
+    else if (o.act === 'continue') lines.push('The last frame of the clip ' + (lib ? 'from the Library' : 'on the timeline') + ' is the FIRST FRAME - the new clip starts on it.');
+    else if (first) lines.push('The ' + (o.act === 'frame-vid' ? 'frame' : 'picture') + ' from ' + src + ' is the FIRST FRAME - the clip starts on it.');
+    else lines.push('The picture from ' + src + ' is in the zone.');
     if (!m || !_takesFrom(m, kind, o.as)) lines.push('No model here takes it - a key is set on Admin → API keys.');
     else if (switched) lines.push(switched + (kind === 'video' ? ' takes no clips' : ' does not start a clip on a picture') + ' - the model is ' + m.label + ' now.');
     if (hadRecipe) lines.push('The recipe in use was let go.');
@@ -832,6 +836,7 @@ function VIDEOS(ctx) {
     else if (kind === 'video') lines.push('Its part is set on it in the zone; the model and its settings are on the left.');
     else lines.push('The model and its settings are on the left.');
     if (o.back) lines.push('When the clip is made, "' + o.back + '" under it puts it on the timeline.');
+    else if (lib && m) lines.push('What it makes lies in VIDEO → Generated → ' + m.label + '.');
     ctx.notice(lines.join('\n'));
     const ui = ctx.ui();
     if (ui) ui.ta.focus();
@@ -3034,8 +3039,10 @@ function VIDEOS(ctx) {
     // (phase V60.2, the owner's (вч1б), (вч4б)) The right column: what the zone takes, by the model chosen.
     column: {
       multi: true,
-      roots: () => ['references', 'images'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : []),
-      files: (root) => (root === 'references' ? (_colTakes('video') ? ['photo', 'video'] : 'photo')
+      // (phase V78, (лч16)) THIS PROJECT first - its pictures, and its clips and sounds while the model takes them.
+      roots: () => ['plinks', 'references', 'images'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : []),
+      files: (root) => (root === 'plinks' ? ['photo'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : [])
+        : root === 'references' ? (_colTakes('video') ? ['photo', 'video'] : 'photo')
         : root === 'video' ? 'video' : root === 'audio' ? 'audio' : 'photo'),
       fit: (f) => { if (!f || f.ftype !== 'video') return true; const c = _clipFit(); return !c.fit || c.fit(f); },
       // Read again when what it offers changes with the model: clips or not, sounds or not, the longest clip.

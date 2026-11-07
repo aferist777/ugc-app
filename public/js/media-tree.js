@@ -99,6 +99,12 @@
    back to the roots (home()). A root's tile opens it as its row's press does - the others fold (one path, V59).
    (phase V60.2, the owner's (дг1а)-(дг3а)) Merge's Library panel has the roots too, with `home: true` - no word in the path
    (the panel's own "Library" crumb leads there) - and starts on the node it names (`start`: the last one, or the roots).
+
+   THIS PROJECT (phase V78, part B, the owner 2026-11-07, (лч10)-(лч17)): Merge's tree, given `plinks` (the open project's key),
+   starts with THIS PROJECT (kind `plinks`, routes/library.js _plinksNode): the project's own folders - made, renamed, moved,
+   deleted as any folder, through /api/plinks/* (lib/project-links.js) - holding LINKS. A tile (or several) let go on it or on
+   one of its folders is LINKED there, never moved: the file stays where it lies in the library; a link of this project let go
+   on another of its folders moves there. A folder of it deleted takes only its links - the files stay.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -112,12 +118,12 @@ export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
 const UNCAT = '__uncat__';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
-const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references', 'music']);
+const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references', 'music', 'plinks']);
 // (phase V54) A folder being dragged: what it is, and its kind as a type of its own (readable before the drop).
 const FOLDER_DRAG = 'application/x-ugc-folder';
 const FOLDER_KIND = 'application/x-ugc-folder-kind-';
 let _dragging = null;       // { kind, id, key, label } while a folder of this page is dragged
-const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
+const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound', plinks: 'link' };
 // (phase V55) What the generators of IMAGES -> Environments / Lookbooks made: their own kinds, never moved.
 // (phase V26.6) And IMAGES -> Props: the products, added by New prop.
 const MADE = { environments: 'Environments', lookbooks: 'Lookbooks', props: 'Props' };
@@ -145,8 +151,9 @@ export function setMediaDrag(dt, it, many) {
   const m = it.meta || {};
   // (phase V35) A track says where it lies in Music: in highlights (`folder`), in a mood of it (`mood`).
   const several = Array.isArray(many) && many.length > 1
-    ? many.map(x => ({ kind: x.kind, id: String(x.id) })) : null;
-  dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: m.categoryId || '',
+    ? many.map(x => ({ kind: x.kind, id: String(x.id), ...(x.link ? { link: x.link } : {}) })) : null;
+  // (phase V78) A tile of THIS PROJECT carries its link: let go on another of its folders, the link moves.
+  dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: m.categoryId || '', link: it.link || '',
     folder: m.folder || '', mood: m.mood || '', ...(several ? { many: several } : {}) }));
   dt.setData(KIND_TYPE + it.kind, '1');
   if (it.kind === 'references') {
@@ -170,6 +177,8 @@ function _dragKind(dt) {
 // nothing; Music and its folders take a track (`folder`, `mood` - V35).
 function _target(n) {
   if (!n) return null;
+  // (phase V78) THIS PROJECT and its folders: a link, whatever the kind.
+  if (n.kind === 'plinks') return { kind: 'plinks', cat: n.cat || '', plinks: true };
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
   // (phase V59.1) Music -> Lyrics: only Generate music saves there - what is let go is refused in words.
   if (n.lyrics) return { kind: 'lyrics', cat: '', lyrics: true };
@@ -194,6 +203,8 @@ function _target(n) {
 function _dropAction(n, from, refType) {
   const t = _target(n);
   if (!t || !from) return '';
+  // (phase V78) Into THIS PROJECT anything but a saved text goes - as a link.
+  if (t.plinks) return from === 'lyrics' ? '' : 'link';
   // (phase V59.1) A saved text goes nowhere; nothing goes into Lyrics - both refused in words (on Lyrics itself, nothing).
   if (from === 'lyrics' || t.lyrics) return from === 'lyrics' && t.lyrics ? '' : 'refuse';
   // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
@@ -265,6 +276,7 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *   o.home        (phase V60) the word the path begins with ('Media'): nothing selected is allowed - the roots; onSelect(null)
  *                 says the page went back to them (the word pressed). (phase V60.2) `true` - the roots with no word in the path
  *   o.start       (phase V60, with `home`) the node to open on - an address's; '' or omitted - the roots
+ *   o.plinks()    (phase V78) Merge only: the open project's key - THIS PROJECT is read for it and drawn first; '' - none
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind), holds(node), newFolder(node, anchor),
  *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may; home(fire) - (V60) back to the roots }
  */
@@ -377,7 +389,8 @@ export function createTree(host, o) {
 
   async function load() {
     let d;
-    try { d = await fetch('/api/library/tree?srcFrom=' + newsSince()).then(r => r.json()); }
+    const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
+    try { d = await fetch('/api/library/tree?srcFrom=' + newsSince() + (pk ? '&plinks=' + encodeURIComponent(pk) : '')).then(r => r.json()); }
     catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
     if (!d || !d.success) { opt.status((d && d.error) || 'Could not read the media tree', true); return nodes; }
     nodes = d.nodes || [];
@@ -886,6 +899,8 @@ export function createTree(host, o) {
         : 'A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
       return;
     }
+    // (phase V78) THIS PROJECT: linked there (or, a link of it, moved there) - the file stays where it lies.
+    if (act === 'link') { await _link(n, it); return; }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category lies in Generated, the rest in their kind.
     const where = t.cat ? n.label : homeName(t.kind);
@@ -937,6 +952,22 @@ export function createTree(host, o) {
     } catch (e) { opt.status('Could not move it: ' + e.message, true); await load(); }
   }
 
+  // (phase V78) Things let go on THIS PROJECT or one of its folders: links there - one request for all.
+  async function _link(n, it) {
+    const key = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
+    if (!key) { opt.status('Open a project first - THIS PROJECT is its own', true); return; }
+    const many = Array.isArray(it.many) && it.many.length > 1 ? it.many : [{ kind: it.kind, id: it.id, link: it.link || '' }];
+    let r = null;
+    try {
+      r = await fetch('/api/plinks/put', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, folder: n.cat || '', items: many.map(x => ({ kind: x.kind, id: x.id, ...(x.link ? { link: x.link } : {}) })) }) }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'not linked');
+    } catch (e) { opt.status('Could not put it there: ' + e.message, true); return; }
+    const said = [r.added ? _plural(r.added, 'link') + ' in ' + n.label : '', r.moved ? _plural(r.moved, 'link') + ' moved to ' + n.label : '',
+      r.had ? (r.had === 1 ? 'one was there already' : r.had + ' were there already') : ''].filter(Boolean).join(' · ');
+    await _after(said || 'Already in ' + n.label, { linked: true });
+  }
+
   async function _takeMany(n, t, many, where) {
     const there = t.kind === 'music' ? (t.cat ? n.label : musicPlace(t.folder, t.mood))
       : t.kind === 'references' ? (t.cat ? 'REFERENCES · ' + n.label : 'their sources\' folders in REFERENCES') : where;
@@ -980,7 +1011,7 @@ export function createTree(host, o) {
         const taken = kidFolders(n).find(c => _lcName(c) === name.toLowerCase());
         return taken ? 'There is already a folder called ' + taken.label + ' here.' : '';
       },
-      submit: async (name) => (await A.addFolder(kind, name, n.cat || '')).cat,
+      submit: async (name) => (kind === 'plinks' ? (await _pl('POST', '/api/plinks/folder', { name, parent: n.cat || '' })) : await A.addFolder(kind, name, n.cat || '')).cat,
     });
     if (!cat) return;
     _setOpen(n.key, true);
@@ -997,7 +1028,7 @@ export function createTree(host, o) {
       },
       submit: async (name) => {
         if (name === (n.name || n.label)) return null;
-        return (await A.renameCat(n.kind, n.cat, name)).cat;
+        return (n.kind === 'plinks' ? await _pl('PATCH', '/api/plinks/folder/' + encodeURIComponent(n.cat), { name }) : await A.renameCat(n.kind, n.cat, name)).cat;
       },
     });
     if (!next) return;
@@ -1008,6 +1039,14 @@ export function createTree(host, o) {
   async function _moveFolder(d, t) {
     if (!d || !t) return;
     let r = null;
+    // (phase V78) A folder of THIS PROJECT moves among its folders.
+    if (d.kind === 'plinks') {
+      try { r = await _pl('PATCH', '/api/plinks/folder/' + encodeURIComponent(d.id), { parent: t.cat || '' }); }
+      catch (e) { opt.status(e.message || 'Could not move the folder', true); return; }
+      _setOpen(t.key, true);
+      await _after('"' + d.label + '" is in ' + t.label + ' now', { cats: 'plinks' });
+      return;
+    }
     try {
       r = await fetch('/api/library/cats/' + encodeURIComponent(d.id) + '/move', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: d.kind, parent: t.cat || '' }),
@@ -1030,9 +1069,55 @@ export function createTree(host, o) {
     _pop = null;
   }
 
+  // (phase V78) A request about THIS PROJECT's folders - the open project's key added; refused in words.
+  async function _pl(method, url, body) {
+    const key = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
+    const r = await fetch(url + (method === 'DELETE' ? (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key) : ''), {
+      method, headers: { 'Content-Type': 'application/json' }, body: method === 'DELETE' ? undefined : JSON.stringify(Object.assign({ key }, body || {})),
+    }).then(x => x.json()).catch(() => null);
+    if (!r || !r.success) throw new Error((r && r.error) || 'the server did not answer');
+    return r;
+  }
+  // (phase V78, (лч13)) A folder of THIS PROJECT: only its links go - the files stay where they lie in the library.
+  function _askDeleteLinks(n, anchor) {
+    const box = _el('div', 'mt-pop u-ask is-float');
+    let folders = 0;
+    const walk = (x) => { for (const c of kidFolders(x)) { folders++; walk(c); } };
+    walk(n);
+    box.appendChild(_el('b', 'mt-pop-head', 'Delete "' + n.label + '"?'));
+    box.appendChild(_el('div', 'mt-pop-note', (n.count ? _plural(n.count, 'link') : 'No links') + (folders ? ' and ' + _plural(folders, 'folder') : '')
+      + ' go with it - the files stay in the library.'));
+    const btns = _el('div', 'mt-pop-btns u-ask-r');
+    const cancel = _el('button', 'mt-pop-btn u-btn is-s', 'Cancel');
+    cancel.type = 'button';
+    const go = _el('button', 'mt-pop-btn u-btn is-s', 'Delete folder');
+    go.type = 'button';
+    btns.append(cancel, go);
+    box.appendChild(btns);
+    document.body.appendChild(box);
+    const r = anchor.getBoundingClientRect();
+    const w = box.getBoundingClientRect();
+    box.style.left = Math.round(Math.max(6, Math.min(r.right - w.width, window.innerWidth - w.width - 6))) + 'px';
+    box.style.top = Math.round(Math.min(r.bottom + 4, window.innerHeight - w.height - 6)) + 'px';
+    const away = (e) => { if (!box.contains(e.target)) _closePop(); };
+    const layer = Layers.open(box, { modal: false, name: 'delete a folder', onEsc: _closePop });
+    _pop = { el: box, away, layer };
+    document.addEventListener('mousedown', away, true);
+    cancel.addEventListener('click', _closePop);
+    go.addEventListener('click', async () => {
+      go.disabled = true; cancel.disabled = true;
+      try {
+        const d = await _pl('DELETE', '/api/plinks/folder/' + encodeURIComponent(n.cat));
+        _closePop();
+        await _after('Deleted the folder' + (d.links ? ' and ' + _plural(d.links, 'link') + ' - the files stay' : ''), { cats: 'plinks' });
+      } catch (e) { _closePop(); opt.status(e.message, true); }
+    });
+  }
+
   function _askDelete(n, anchor) {
     _closePop();
     _closeMenu();
+    if (n && n.kind === 'plinks') { _askDeleteLinks(n, anchor); return; }
     const box = _el('div', 'mt-pop u-ask is-float');      // (phase V73 block 2) the shared question
     const count = n.count || 0;
     const noun = NOUN[n.kind] || 'item';
@@ -1147,7 +1232,7 @@ export function createTree(host, o) {
       else if (n.locked) items.push(['Required', 'it cannot be renamed, moved or deleted', null]);
       else if (n.own) {
         items.push(['Rename', n.label, () => _rename(n, row)]);
-        items.push(['Delete', 'the folder - what is in it goes up a level, or with it', () => _askDelete(n, row)]);
+        items.push(['Delete', n.kind === 'plinks' ? 'the folder and its links - the files stay' : 'the folder - what is in it goes up a level, or with it', () => _askDelete(n, row)]);
       }
     }
     if (!items.length) return;

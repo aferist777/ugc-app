@@ -999,7 +999,7 @@ export function createChat(make) {
       kind,
       title: p.word + (n ? ' · ' + (label || p.one) + ' ' + n : label ? ' · ' + label : ''),
       hint: (s && s.hint) || '',
-      project: { key: _key || '', title: Store.title() || '' },
+      project: { key: _key || '', title: Store.title() || '', plinks: Store.unbound() ? '' : (_key || '') },
       sources: P.sources(kind),
       // (phase V55) The window with the tree - the almanac's size, over the middle of this chat.
       tree: typeof P.tree === 'function' ? P.tree(kind) : null,
@@ -2189,6 +2189,8 @@ export function createChat(make) {
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
         roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
+        // (phase V78, (лч16)) THIS PROJECT's folders - the project's; none in the Library's unbound chat.
+        plinks: () => (Store.unbound() ? '' : (_key || '')),
         // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
         own: Store.unbound() ? null : { label: 'This project', empty: 'Nothing made in this project yet.' },
         tile: _tile, lead: _plusTile,

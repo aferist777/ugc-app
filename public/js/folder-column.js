@@ -43,9 +43,10 @@ const _json = (url) => fetch(url).then(r => r.json()).catch(() => null);
 
 // ── The tree and the files of its nodes ─────────────────────────────────────
 
-/** The media tree's top nodes `roots` (by key, in that order) -> { nodes, byKey, parentOf } or null when unread. */
-export async function readTree(roots) {
-  const d = await _json('/api/library/tree');
+/** The media tree's top nodes `roots` (by key, in that order) -> { nodes, byKey, parentOf } or null when unread. `plinks` -
+ *  (phase V78) the open project's key: its THIS PROJECT is read too (root 'plinks'). */
+export async function readTree(roots, plinks) {
+  const d = await _json('/api/library/tree' + (plinks ? '?plinks=' + encodeURIComponent(plinks) : ''));
   if (!d || !d.success) return null;
   const all = d.nodes || [];
   const nodes = Array.isArray(roots) && roots.length ? roots.map(k => all.find(n => n.key === k)).filter(Boolean) : all;
@@ -192,8 +193,8 @@ export function filesUnder(node, idx) {
 
 /** readTree, with only the folders holding files of `type` - readTree's answer plus `index` (folderIndex's), or null.
  *  `type` and `fit` as folderIndex takes them. */
-export async function typedTree(roots, type, cache, fit) {
-  const t = await readTree(roots);
+export async function typedTree(roots, type, cache, fit, plinks) {
+  const t = await readTree(roots, plinks);
   if (!t) return null;
   const index = await folderIndex(t.nodes, type, cache, fit);
   const nodes = pruneTree(t.nodes, index);
@@ -324,7 +325,9 @@ export function createFolderColumn(host, o) {
     let t = null;
     let err = '';
     const roots = typeof opt.roots === 'function' ? opt.roots() : opt.roots;
-    try { t = await typedTree(roots, opt.files, null, typeof opt.fit === 'function' ? opt.fit : null); } catch (e) { err = e.message || 'the folders could not be read'; }
+    // (phase V78, (лч16)) THIS PROJECT too, when the caller names the project (`plinks`) - only its files of the column's types.
+    const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
+    try { t = await typedTree(roots, opt.files, null, typeof opt.fit === 'function' ? opt.fit : null, pk); } catch (e) { err = e.message || 'the folders could not be read'; }
     if (mine !== loads) return;
     // (phase V73 block 2, (б2-19)) No answer is a failed reading too (readTree answers null), never an empty column. The reason
     // goes to the corner (js/notice.js); a column read before keeps what it shows.

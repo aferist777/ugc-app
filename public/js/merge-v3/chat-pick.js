@@ -863,6 +863,8 @@ function _buildTree() {
   const t = _t;
   _t.tree = createTree(treeHost, {
     page: T.page, roots: T.roots, fallback: T.fallback,
+    // (phase V78, (лч16)) THIS PROJECT - the chat's project's folders, only the files of this window's kind.
+    plinks: () => (_o && _o.project && _o.project.plinks) || '',
     // (phase V56, the owner's п. 2, (ги2)) Only the folders holding this kind - in them or under them -, each counting
     // them; the files read for that are what a folder shows and what a search looks through.
     // (phase V57, (ок1)) ...and of those only what `fit` takes - the clips the chosen model takes by their length.
