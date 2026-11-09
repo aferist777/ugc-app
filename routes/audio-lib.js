@@ -11,6 +11,11 @@
 //                                                  Openverse when there is no key or Freesound did not answer
 //                                                  (lib/openverse.js) - the answer says which (`via`) and why (`note`)
 //   POST /api/audio/online/add { id, cat, label }  a found sound into My sounds - `fs-<n>` is Freesound's, the rest Openverse's
+//   (phase V81) "Save audio" of a video:
+//   GET  /api/audio/tracks?src=                    the video's sound tracks [{ k, label }] - none: it has no sound
+//   POST /api/audio/from-video { src, track?, in?, out?, name? }
+//                                                  one track, whole or [in, out), as a sound in My sounds' root
+//                                                  (lib/audio-cut.js fromVideo) -> { item }
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -22,6 +27,25 @@ router.post('/audio/cut', async (req, res) => {
   try {
     const r = await require('../lib/audio-cut').cut(String(b.src || ''), +b.in, +b.out);
     res.json({ success: true, item: r.item, where: r.where });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+router.get('/audio/tracks', async (req, res) => {
+  const abs = require('../lib/media').toDiskExisting(String(req.query.src || '').split('?')[0]);
+  if (!abs) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  try {
+    const TR = require('../lib/audio-tracks');
+    const tracks = await TR.tracksOf(abs);
+    res.json({ success: true, tracks: tracks.map((t) => ({ k: t.k, label: TR.label(t), def: !!t.def })) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/audio/from-video', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const r = await require('../lib/audio-cut').fromVideo(String(b.src || ''), {
+      track: b.track, in: b.in, out: b.out, name: String(b.name || '').slice(0, 120) });
+    res.json({ success: true, item: r.item });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 

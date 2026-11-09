@@ -33,7 +33,7 @@ const {
   LOOKBOOKS_DIR, ENVIRONMENTS_DIR, PROPS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
   FINALS_DIR,
 } = require('../lib/config');
-const { toUrl, toDiskWithin } = require('../lib/media');
+const { toUrl, toDiskWithin, toDiskExisting } = require('../lib/media');
 const { siblingsOf } = require('../lib/relocate');
 const LC = require('../lib/library-cats');
 // (phase V78) THIS PROJECT's folders of links to the library's media.
@@ -221,7 +221,16 @@ const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === 
 // that file is on disk: its "original" tick shows it and cuts from it again.
 function _origMeta(o) {
   if (!o || !o.path || !_onDisk(o.path)) return null;
-  return { path: o.path, in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: o.name || '' };
+  const m = { path: o.path, in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: o.name || '' };
+  const parts = _origParts(o);
+  if (parts) m.parts = parts;
+  return m;
+}
+
+// (phase V81) A JOINED piece names every fragment of its whole video it was joined from (lib/cuts.js cutMany).
+function _origParts(o) {
+  if (!o || !Array.isArray(o.parts) || !o.parts.length) return null;
+  return o.parts.slice(0, 2000).map((p) => ({ in: Math.round((+p.in || 0) * 100) / 100, out: Math.round((+p.out || 0) * 100) / 100 }));
 }
 
 // A clip whose record lost its poster still has one beside it on disk (lib/video-thumb.js) - shown
@@ -1844,20 +1853,28 @@ router.patch('/library/item/:kind/:id', (req, res) => {
 const CUTS = require('../lib/cuts');
 const CUT_KINDS = ['birols', 'uploads', 'hooks', 'references'];
 
-router.post('/library/cut', async (req, res) => {
-  const b = req.body || {};
-  const to = b.to || {};
+// Where a piece goes, read from the request: { kind, cat, label } - refused in words before anything is cut.
+function _cutTo(b) {
+  const to = (b && b.to) || {};
   const kind = String(to.kind || '');
   const cat = String(to.cat || '');
   const label = String(to.label || '').trim().slice(0, 60);
-  let made = null, thumbPath = null;
-  try {
-    if (!CUT_KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'a piece goes into VIDEO or REFERENCES' });
-    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such folder in REFERENCES' });
-    made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
-    try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
+  if (!CUT_KINDS.includes(kind)) { const e = new Error('a piece goes into VIDEO or REFERENCES'); e.status = 400; throw e; }
+  if (kind === 'references' && cat && !LC.find('references', cat)) { const e = new Error('no such folder in REFERENCES'); e.status = 400; throw e; }
+  return { kind, cat, label };
+}
 
-    if (kind === 'references') {
+/**
+ * A piece made by lib/cuts.js (cut, cutMany) filed where the person chose: its poster, then a clip of VIDEO or a post of its
+ * own in REFERENCES. -> { kind, id, item, src, thumb, dur, name } (src..name - what a lane needs, phase V81's "Add to
+ * timeline"). A piece that cannot be filed goes, with its poster.
+ */
+async function _filePiece(made, to) {
+  let thumbPath = null;
+  try {
+    try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
+    const lane = (src, item) => ({ src, thumb: thumbPath, dur: made.dur, name: made.name, item });
+    if (to.kind === 'references') {
       const REFS = require('../lib/references-store');
       const from = made.root.post;
       const abs = _absInRoot(made.videoPath);
@@ -1865,7 +1882,7 @@ router.post('/library/cut', async (req, res) => {
       try { size = fs.statSync(abs).size; } catch (e) { size = 0; }
       const post = REFS.add({
         source: from ? (from.source || 'other') : 'files', folder: from ? (from.folder || '') : '',
-        categoryId: cat, categoryLabel: cat ? label : '',
+        categoryId: to.cat, categoryLabel: to.cat ? to.label : '',
         title: made.name, author: from ? (from.author || '') : '', link: from ? (from.link || '') : (made.root.link || ''),
         linkKey: '', caption: '', note: '', origin: from ? (from.origin || '') : '', postedAt: from ? (from.postedAt || '') : '',
         from: 'cut', poster: thumbPath, remote: null,
@@ -1876,20 +1893,112 @@ router.post('/library/cut', async (req, res) => {
       const item = REFS.read().find(p => p && p.id === post.id) || post;
       try { require('./proxies').warmProxies([item.media[0].path], 480); } catch (e) { /* made when laid */ }
       console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's -> references', item.media[0].path);
-      return res.json({ success: true, kind, id: item.id, item });
+      return { kind: 'references', id: item.id, ...lane(item.media[0].path, item) };
     }
-
     const { item } = _fileRecord({
-      videoPath: made.videoPath, thumbPath, name: made.name, kind, categoryId: cat, categoryLabel: kind === 'hooks' ? '' : label,
+      videoPath: made.videoPath, thumbPath, name: made.name, kind: to.kind, categoryId: to.cat,
+      categoryLabel: to.kind === 'hooks' ? '' : to.label,
       original: made.original, duration: made.dur, w: made.w, h: made.h, link: made.root.link || '',
     });
-    console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's ->', kind, item.videoPath);
-    res.json({ success: true, kind, id: item.id, item });
+    console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's ->', to.kind, item.videoPath);
+    return { kind: to.kind, id: item.id, ...lane(item.videoPath, item) };
   } catch (e) {
     // A file made and not filed is nobody's: it goes, with its poster.
-    if (made && made.videoPath) for (const u of [made.videoPath, thumbPath]) if (u) _unlink(u);
+    for (const u of [made.videoPath, thumbPath]) if (u) _unlink(u);
+    throw e;
+  }
+}
+
+router.post('/library/cut', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const to = _cutTo(b);
+    const made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
+    const r = await _filePiece(made, to);
+    res.json({ success: true, kind: r.kind, id: r.id, item: r.item });
+  } catch (e) {
     res.status(e.status || 500).json({ success: false, error: e.message });
   }
+});
+
+/* ── Several pieces at once, and the scenes (phase V81) ───────────────────────
+   POST   /api/library/cuts { src, parts: [{ in, out, label? }], join, to }   -> { job }
+          the fragments drawn over a video (js/cuts/parts.js): `join` - ONE new clip of them all in the order of time, else
+          each a new clip of its own, filed as it is made (lib/cuts.js cutMany, _filePiece) - all into the one place chosen
+   GET    /api/library/cuts/:job      -> { state: working | done | stopped | failed, done, total, pieces: [{ kind, id, src,
+                                         thumb, dur, name }], error }
+   DELETE /api/library/cuts/:job      stop: the pieces made stay, the rest are not made (the owner's (в17))
+   A job lives in the server's memory - it goes on while the viewer is closed; the app closed midway, the rest is simply not
+   made (nothing is paid: no row in Alerts). Kept an hour after it ends.
+
+   GET    /api/library/scenes?src=    the video's scenes (lib/scenes.js, rule js/cuts/parts.js scenesOf): begun when not
+                                      known -> { state: working, pct } | { state: done, scenes: [{ in, out }], dur } | failed
+   DELETE /api/library/scenes?src=    the search stopped */
+const _cutJobs = new Map();
+const CUT_JOB_KEEP_MS = 3600 * 1000;
+
+router.post('/library/cuts', (req, res) => {
+  const b = req.body || {};
+  let to;
+  try { to = _cutTo(b); } catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
+  const parts = Array.isArray(b.parts) ? b.parts.slice(0, 2000) : [];
+  if (!parts.length) return res.status(400).json({ success: false, error: 'draw a fragment over the bar first' });
+  for (const [k, j] of _cutJobs) if (j.endAt && Date.now() - j.endAt > CUT_JOB_KEEP_MS) _cutJobs.delete(k);
+  const id = 'cj' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const job = { state: 'working', done: 0, total: 0, pieces: [], error: '', ctl: new AbortController(), endAt: 0 };
+  _cutJobs.set(id, job);
+  (async () => {
+    try {
+      await CUTS.cutMany(String(b.src || ''), parts, {
+        join: !!b.join, signal: job.ctl.signal,
+        onTotal: (n) => { job.total = n; },
+        onPart: async (made) => {
+          const r = await _filePiece(made, to);
+          job.pieces.push({ kind: r.kind, id: r.id, src: r.src, thumb: r.thumb, dur: r.dur, name: r.name });
+          job.done++;
+        },
+      });
+      job.state = 'done';
+    } catch (e) {
+      job.state = (e && e.stopped) || job.ctl.signal.aborted ? 'stopped' : 'failed';
+      if (job.state === 'failed') { job.error = e.message; console.warn('[library/cuts]', e.message); }
+    }
+    job.ctl = null;
+    job.endAt = Date.now();
+  })();
+  res.json({ success: true, job: id });
+});
+
+router.get('/library/cuts/:job', (req, res) => {
+  const j = _cutJobs.get(String(req.params.job || ''));
+  if (!j) return res.status(404).json({ success: false, error: 'no such work' });
+  res.json({ success: true, state: j.state, done: j.done, total: j.total, pieces: j.pieces, error: j.error });
+});
+
+router.delete('/library/cuts/:job', (req, res) => {
+  const j = _cutJobs.get(String(req.params.job || ''));
+  if (!j) return res.status(404).json({ success: false, error: 'no such work' });
+  if (j.ctl) j.ctl.abort();
+  res.json({ success: true });
+});
+
+const _scenesFile = (q) => toDiskExisting(String((q && q.src) || '').split('?')[0]);
+router.get('/library/scenes', (req, res) => {
+  const abs = _scenesFile(req.query);
+  if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  const SC = require('../lib/scenes');
+  const st = SC.start(abs);
+  if (st.state === 'done') {
+    const { scenesOf } = require('../public/js/cuts/parts.js');
+    return res.json({ success: true, state: 'done', dur: st.dur, scenes: scenesOf(st.changes, st.dur) });
+  }
+  res.json({ success: true, state: st.state, pct: st.pct || 0, error: st.error || '' });
+});
+
+router.delete('/library/scenes', (req, res) => {
+  const abs = _scenesFile(req.query);
+  if (!abs) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  res.json({ success: true, stopped: require('../lib/scenes').cancel(abs) });
 });
 
 function _deleteOne(kindIn, idIn, filesIn) {
@@ -2591,6 +2700,8 @@ function _fileRecord(b) {
   if (b.original && b.original.path) {
     const o = b.original;
     rec.original = { path: String(o.path), in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: String(o.name || '').slice(0, 120) };
+    const parts = _origParts(o);
+    if (parts) rec.original.parts = parts;
   }
   if (+b.duration > 0) rec.duration = Math.round(+b.duration * 100) / 100;
   if (+b.w > 0 && +b.h > 0) { rec.w = +b.w; rec.h = +b.h; }
