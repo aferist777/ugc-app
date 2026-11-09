@@ -2,11 +2,12 @@
 
 /* fake-update-worker.js - the Worker `ugc-updates` on THIS computer, for stands (phase V83, block B4).
 
-       node tools/fake-update-worker.js --store <folder> [--port 3199]
+       node tools/fake-update-worker.js --store <folder> [--port 3199] [--cut <n>]
 
    Runs the very program `tools/release.js worker` uploads (tools/release-worker.js) with a stand-in for its R2
    binding over the folder tools/release.js --store wrote: the same routes, tokens and answers, nothing sent anywhere.
-   Tokens are read again on every request (TOKEN_CACHE_MS 0), so a friend removed is refused at once. Loopback only. */
+   Tokens are read again on every request (TOKEN_CACHE_MS 0), so a friend removed is refused at once. Loopback only.
+   --cut <n>: the first n files (blobs) are broken off halfway - a connection lost in the middle of an update. */
 
 const fs = require('fs');
 const os = require('os');
@@ -40,7 +41,8 @@ function binding(dir) {
   };
 }
 
-async function start({ store, port = 3199 }) {
+async function start({ store, port = 3199, cut = 0 }) {
+  let cutLeft = Number(cut) || 0;
   // The Worker's module, as Cloudflare would load it.
   const tmp = path.join(os.tmpdir(), `ugc-fake-worker-${process.pid}.mjs`);
   fs.writeFileSync(tmp, WORKER);
@@ -54,6 +56,14 @@ async function start({ store, port = 3199 }) {
       const request = new Request(`http://127.0.0.1:${port}${req.url}`, { method: req.method, headers: req.headers, body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body });
       const r = await worker.fetch(request, env);
       res.writeHead(r.status, Object.fromEntries(r.headers));
+      if (r.body && r.status === 200 && req.url.startsWith('/v1/blob/') && cutLeft > 0) {
+        cutLeft--;
+        const half = Math.floor((Number(r.headers.get('content-length')) || 2) / 2);
+        let sent = 0;
+        for await (const c of r.body) { const part = Buffer.from(c).subarray(0, Math.max(0, half - sent)); if (part.length) res.write(part); sent += part.length; if (sent >= half) break; }
+        res.destroy();
+        return;
+      }
       if (r.body) { for await (const c of r.body) { if (!res.write(c)) await new Promise((ok) => res.once('drain', ok)); } }
       res.end();
     } catch (e) {
@@ -67,7 +77,7 @@ async function start({ store, port = 3199 }) {
 }
 
 if (require.main === module) {
-  start({ store: arg('--store', ''), port: Number(arg('--port', '3199')) }).catch((e) => { console.error('[fake-worker] ' + e.message); process.exit(1); });
+  start({ store: arg('--store', ''), port: Number(arg('--port', '3199')), cut: Number(arg('--cut', '0')) }).catch((e) => { console.error('[fake-worker] ' + e.message); process.exit(1); });
 }
 
 module.exports = { start };

@@ -5,6 +5,11 @@
 // and update. Only in the app window (the owner's answer 5): the restart is the desktop shell's (desktop/preload.js
 // `restart`, desktop/main.js) - it asks about a running render first, as closing the window does - and in a browser
 // there is nothing to restart from a page.
+//
+// (phase V83, block B5, (н3); the owner 2026-11-09: (о11а) "обновления внутри приложения в правом верхнем углу update со
+// всплывающим окном") A friend's copy has no .git: there the news is a new VERSION the updater laid down (d.release:
+// { version, notes, important }) - the chip says "Update <version>", the window shows the release notes as they were
+// written; an important one (the owner (о6): nothing forced) has a gold chip and a notice that stays until it is closed.
 
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
@@ -49,9 +54,10 @@ async function _check() {
 
 function _paintChip() {
   if (_chip || !_nav) return;
-  _chip = _el('button', 'sv3-navbtn sv3-upd', 'Updated');
+  const rel = _state && _state.release;
+  _chip = _el('button', 'sv3-navbtn sv3-upd' + (rel && rel.important ? ' is-important' : ''), rel ? 'Update ' + rel.version : 'Updated');
   _chip.type = 'button';
-  _chip.title = 'A new version of the app is in its folder - restart to use it';
+  _chip.title = rel ? 'UGC Studio ' + rel.version + ' is downloaded - restart to use it' : 'A new version of the app is in its folder - restart to use it';
   _chip.addEventListener('click', _ask);
   // Left of the wait, which stands left of Alerts: the two read as one thing (js/alerts-bell.js).
   const at = _nav.querySelector('.sv3-al-wait') || _nav.querySelector('.sv3-alerts') || _nav.querySelector('a[href="/admin"]');
@@ -60,6 +66,12 @@ function _paintChip() {
 
 // Once: the corner of popups, the same look as a finished generation (js/notice.js) - it goes by itself, or by its ✕.
 function _notice(d) {
+  const rel = d.release;
+  if (rel) {
+    showToast({ mark: '↻', cls: 'is-update', title: 'An update is ready', where: 'UGC Studio ' + rel.version + ' - restart to use it',
+      onClick: _ask, ms: rel.important ? 24 * 3600 * 1000 : NOTICE_MS });
+    return;
+  }
   showToast({ mark: '↻', cls: 'is-update', title: 'The app was updated', where: d.subject || 'restart it to use the new version',
     onClick: _ask, ms: NOTICE_MS });
 }
@@ -70,9 +82,17 @@ function _ask() {
   const back = _el('div', 'dr-back');
   const box = _el('div', 'nm-box dr-box u-ask is-float');   // (phase V73 block 2) the shared question, in the middle
   box.setAttribute('role', 'dialog');
-  box.appendChild(_el('b', 'nm-t', 'The app was updated'));
   const d = _state || {};
+  const rel = d.release;
+  box.appendChild(_el('b', 'nm-t', rel ? 'UGC Studio ' + rel.version + ' is ready' : 'The app was updated'));
   if (d.subject) box.appendChild(_el('div', 'dr-holds', d.subject));
+  if (rel && rel.notes) {
+    const notes = _el('div', 'dr-holds u-notes', rel.notes);
+    notes.style.whiteSpace = 'pre-wrap';
+    notes.style.maxHeight = '40vh';
+    notes.style.overflow = 'auto';
+    box.appendChild(notes);
+  }
   box.appendChild(_el('div', 'dr-note', 'Restart to use the new version. What you have open is saved'
     + (d.renderBusy ? '; a render is running - you will be asked about it first.' : '.')));
   const row = _el('div', 'nm-r u-ask-r');

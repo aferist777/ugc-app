@@ -109,6 +109,16 @@ static class Launcher
         // Did the current version ever come up?
         bool came = Name(Str(ReadJson(Path.Combine(Updates, "started.json")), "version")) == current;
         if (came) tries = 0;
+        else if (tries >= 2 && previous != null && FormatOf(previous) >= 0 && LibraryFormat() > FormatOf(previous))
+        {
+            // The failed version already wrote the library in its newer format: the previous one would refuse it
+            // (lib/library-format.js). Going back would not help - said once, and the launcher keeps trying.
+            Log(current + " did not come up twice, but the library is in format " + LibraryFormat() + " and " + previous
+                + " reads " + FormatOf(previous) + ": not going back");
+            if (tries == 2)
+                Say("UGC Studio " + current + " did not start twice in a row. It cannot go back to " + previous + ": the library is "
+                    + "already in the newer format.\n\nSend the file\n\n" + LogFile + "\n\nto the one who gave you UGC Studio.", MessageBoxIcon.Warning);
+        }
         else if (tries >= 2 && previous != null)
         {
             string failed = current;
@@ -159,6 +169,19 @@ static class Launcher
         bool pb = Version.TryParse(Regex.Replace(b, "[^0-9.].*$", ""), out vb);
         if (pa && pb && va != vb) return va.CompareTo(vb);
         return string.CompareOrdinal(a, b);
+    }
+
+    // The data format a version writes (its version.json, tools/build-app.js); -1 when it does not say.
+    static int FormatOf(string version)
+    {
+        var v = ReadJson(Path.Combine(Versions, version, "resources", "app", "version.json"));
+        return v.ContainsKey("format") ? Int(v, "format") : -1;
+    }
+
+    // The library's data format (lib/library-format.js stamps data\library.json); 0 for a library not stamped yet.
+    static int LibraryFormat()
+    {
+        return Int(ReadJson(Path.Combine(Root, "library", "data", "library.json")), "format");
     }
 
     static bool HasExe(string version)

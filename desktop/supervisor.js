@@ -115,6 +115,8 @@ function createSupervisor({ appDir, libraryDir, log }) {
       env: { ...process.env, UGC_DATA_DIR: libraryDir, PORT: String(port) },
     });
     child = me;
+    // (phase V83, block B5) What the server asks of the shell (routes/app-update.js: "check for updates now").
+    me.on('message', (m) => events.emit('message', m));
     me.stdout.on('data', log.write);
     // (phase V83, block B0) A library a newer program wrote: the server says why on stderr and exits with
     // EXIT_REFUSED - no second try will open it, so the shell gives up at once, in those words.

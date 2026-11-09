@@ -289,3 +289,5 @@
    dialogue that covered the list would hide the very thing being asked about. */
 .mv3-qask{ width:auto; margin:6px }   /* the shared question (.u-ask), in the list */
 .mv3-qask-r{ flex-wrap:wrap }
+/* (phase V83, block B5) An important update (the release says so): the chip filled gold - nothing is forced, it only stands out. */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd.is-important{ background:var(--gold); border-color:var(--gold); color:var(--on-fill) }

@@ -31,6 +31,7 @@ const { createSupervisor } = require('./supervisor');
 const { openLog } = require('./log');
 const { createFacesWindow } = require('./faces');
 const { createHome } = require('./home');
+const { createUpdater } = require('./updater');
 
 const APP_DIR = path.join(__dirname, '..');
 const DEV = !app.isPackaged;
@@ -115,6 +116,8 @@ function run() {
   const faces = createFacesWindow({ log });
   // (phase V83, block B2) Started by the launcher: the marks it reads, the old versions tidied, its restart (desktop/home.js).
   const home = createHome({ home: process.env.UGC_HOME, launcher: LAUNCHER, appDir: APP_DIR, log });
+  // (phase V83, block B5) ...and the updater: a new version laid down beside this one (desktop/updater.js).
+  const updater = home ? createUpdater({ home: process.env.UGC_HOME, appDir: APP_DIR, log, key: require('./update-key') }) : null;
 
   let origin = null;         // http://127.0.0.1:<port>, once the server answers
   let mainWindow = null;
@@ -175,6 +178,7 @@ function run() {
     origin = url;
     log.line(`the server is up at ${url}`);
     if (home) home.cameUp();
+    if (updater && !was) updater.start();
     if (!was) {
       if (mainWindow) mainWindow.loadURL(url + '/');
       faces.open(url);
@@ -224,7 +228,9 @@ function run() {
   }));
   app.on('window-all-closed', () => app.quit());
   // Quitting waits for the server and whatever it started to be gone (desktop/supervisor.js).
-  app.on('quit', () => { if (home) home.closing(); });
+  app.on('quit', () => { if (updater) updater.stop(); if (home) home.closing(); });
+  // Admin -> This computer's "Check now", through the server (routes/app-update.js).
+  server.on('message', (m) => { if (m && m.type === 'update-check' && updater) updater.check('asked'); });
   app.on('will-quit', (e) => {
     if (serverStopped) return;
     e.preventDefault();

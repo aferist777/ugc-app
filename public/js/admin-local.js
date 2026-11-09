@@ -75,6 +75,64 @@
       .catch(function (e) { sayError('It did not work.', e.message); paint(); });
   }
 
+  // ── UGC Studio itself (phase V83, block B5; the owner 2026-11-09) ──────────────
+  // A friend's copy: its version, the channel, when it last asked, "Check now", the download as it goes, "Restart and
+  // update" once a new version is laid down (desktop/updater.js; GET /api/app/update, POST /api/app/update/check).
+  // The owner's copy from git: its version, and that its commits are what changes it.
+  var appSt = null, appBusy = false, appTimer = null;
+  function appLoad() {
+    return fetch('/api/app/update').then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.success) appSt = d; paint(); appSchedule(); })
+      .catch(function () { paint(); });
+  }
+  function appSchedule() {
+    if (appTimer) clearTimeout(appTimer);
+    appTimer = null;
+    var u = appSt && appSt.updater;
+    if (!shown || !u || !(appBusy || /^(checking|downloading|installing)$/.test(u.phase))) return;
+    appTimer = setTimeout(appLoad, 1000);
+  }
+  function appCheck() {
+    if (appBusy) return;
+    appBusy = true; paint();
+    fetch('/api/app/update/check', { method: 'POST' }).then(function (r) { return r.json(); })
+      .then(function (d) { if (!d || !d.success) sayError('Updates were not checked', (d && d.error) || 'no answer'); })
+      .catch(function (e) { sayError('Updates were not checked', e.message); })
+      .then(function () { setTimeout(function () { appBusy = false; appLoad(); }, 1200); });
+  }
+  function paintApp() {
+    body.appendChild(el('div', 'dio-sec', 'UGC Studio'));
+    if (!appSt) return;
+    var v = (appSt.program && appSt.program.version) || '';
+    var u = appSt.updater;
+    if (!u) {
+      body.appendChild(row('UGC Studio ' + v, 'Run from the program folder - its commits are what changes it, and the chip "Updated" says so.',
+        el('span', 'loc-state', 'from git')));
+      return;
+    }
+    var right, sub;
+    var ready = appSt.release || (u.phase === 'ready' ? { version: u.target } : null);
+    if (u.phase === 'downloading') {
+      right = bar({ got: u.done || 0, total: u.total || 0 });
+      sub = 'Downloading UGC Studio ' + u.target + ' - the app goes on working.';
+    } else if (u.phase === 'installing') {
+      right = el('span', 'loc-state', 'laying it out…');
+      sub = 'UGC Studio ' + u.target + ' is laid out beside this one.';
+    } else if (ready) {
+      right = btn('Restart and update', function () { if (window.ugcWindow && window.ugcWindow.restart) window.ugcWindow.restart(); }, true);
+      sub = 'UGC Studio ' + ready.version + ' is downloaded - restart to use it.';
+    } else {
+      var busy = appBusy || u.phase === 'checking';
+      right = btn(busy ? 'Checking…' : 'Check now', appCheck);
+      right.disabled = busy || u.phase === 'off';
+      sub = u.phase === 'off' ? u.error
+        : u.phase === 'error' ? 'The last check: ' + u.error
+        : u.checkedAt ? 'Up to date · checked ' + when(u.checkedAt) + '.'
+        : 'Not checked yet - the app asks a minute after it starts and every six hours.';
+    }
+    body.appendChild(row('UGC Studio ' + v + ' · ' + (u.channel || 'stable'), sub, right));
+  }
+
   // ── yt-dlp ─────────────────────────────────────────────────────────────────
   var COPY = {
     app: 'The copy that ships with the app.',
@@ -163,12 +221,12 @@
     body.textContent = '';
     if (!state) {
       body.appendChild(stateEl(function (m) { return stateFailed ? m.failedEl('This computer', load, { line: true }) : m.loadingEl('reading…', { line: true }); }));
-      paintYt(); paintHome(); paintLook();
+      paintApp(); paintYt(); paintHome(); paintLook();
       return;
     }
     if (!state.platform) {
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
-      paintYt(); paintHome(); paintLook();
+      paintApp(); paintYt(); paintHome(); paintLook();
       return;
     }
     var p = state.program, m = state.model;
@@ -195,7 +253,7 @@
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status', msg);
     body.appendChild(s);
-    paintYt(); paintHome(); paintLook();
+    paintApp(); paintYt(); paintHome(); paintLook();
   }
 
   function load() {
@@ -216,9 +274,10 @@
 
   document.addEventListener('adm-pane', function (e) {
     shown = e.detail === 'local';
-    if (shown) { load().then(schedule); ytLoad(); }
+    if (shown) { load().then(schedule); ytLoad(); appLoad(); }
     else {
       if (timer) { clearTimeout(timer); timer = null; }
+      if (appTimer) { clearTimeout(appTimer); appTimer = null; }
       if (ytTimer) { clearTimeout(ytTimer); ytTimer = null; }
     }
   });
