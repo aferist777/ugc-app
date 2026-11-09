@@ -26,6 +26,13 @@
                                                   %USERPROFILE%\.ugc-release\friends\<name>.token for the handoff)
      node tools/release.js friend remove <name>   that copy gets no updates any more
      node tools/release.js friends                who, and which version each copy said it has
+     node tools/release.js handoff <name> --to <empty folder> [--with-projects] [--no-library]
+                                                  (block B7) the friend's folder: the launcher, the version the channel
+                                                  has, the friend's token, a CLEAN copy of library\ (tools/clean-library.js:
+                                                  no keys, no Cloudflare or bot, no journal or chats, without the projects
+                                                  and their renders - the owner (о26)) and "Как запустить.txt"; then every
+                                                  file is searched for the owner's keys (tools/key-scan.js) - one found,
+                                                  and the folder is not to be handed over. The owner's app must be closed.
 
    Where: the bucket `ugc-updates` on the owner's Cloudflare - the account and the ONE Cloudflare key are READ from
    library/data/settings.json (the owner (о18): the key on Admin of the owner's library; nothing is written there).
@@ -209,6 +216,9 @@ async function publish() {
   const b = build({ out, seq, channel: CHANNEL, worktree: stand && flag('--worktree'), version: arg('--version-name', ''),
     updateKey: stand ? pub : '', updateUrl: stand ? urlKey : '' });
   if (!flag('--no-smoke')) await smokeBuilt(out);
+  // (block B7) No key of the owner's in the program that goes out.
+  const KS = require('./key-scan');
+  if (!KS.report(KS.scan([out]), say)) throw new Error('a key of yours is in the built program - nothing was published');
 
   // The files the bucket does not have yet.
   const list = JSON.parse(fs.readFileSync(path.join(out, 'resources', 'app', 'files.json'), 'utf8')).files;
@@ -380,7 +390,91 @@ async function friends() {
   return rows;
 }
 
+// ── The handoff (block B7) ─────────────────────────────────────────────────
+// The version friends have, laid out in `dir`: the local build when it is that very version (every file's hash the
+// manifest's), else unpacked from the bucket's blobs.
+async function layVersion(m, st, dir) {
+  const local = path.join(os.tmpdir(), 'ugcb', m.version);
+  const lf = (() => { try { return JSON.parse(fs.readFileSync(path.join(local, 'resources', 'app', 'files.json'), 'utf8')); } catch (e) { return null; } })();
+  const same = lf && lf.seq === m.seq && lf.files.length === m.files.length && (() => {
+    const h = new Map(lf.files.map((f) => [f.p, f.h]));
+    return m.files.every((f) => h.get(f.p) === f.h);
+  })();
+  if (same) {
+    const r = spawnSync('robocopy', [local, dir, '/E', '/MT:16', '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { windowsHide: true });
+    if (r.status >= 8) throw new Error('the version was not copied (robocopy ' + r.status + ')');
+    say(`${m.version}: copied from the build in ${local}`);
+    return;
+  }
+  say(`${m.version}: unpacked from the bucket (${m.files.length} files)`);
+  const byHash = new Map();
+  for (const f of m.files) { if (!byHash.has(f.h)) byHash.set(f.h, []); byHash.get(f.h).push(f); }
+  await pool([...byHash.entries()], 8, async ([h, files]) => {
+    const gz = await st.get(UM.keys.blob(h));
+    if (!gz) throw new Error('the bucket has no file ' + h);
+    const buf = zlib.gunzipSync(gz);
+    if (crypto.createHash('sha256').update(buf).digest('hex') !== h) throw new Error('a file of the bucket does not match its checksum: ' + h);
+    for (const f of files) { const t = path.join(dir, ...f.p.split('/')); fs.mkdirSync(path.dirname(t), { recursive: true }); fs.writeFileSync(t, buf); }
+  });
+  fs.writeFileSync(path.join(dir, 'resources', 'app', 'files.json'), JSON.stringify({ version: m.version, seq: m.seq, commit: m.commit, files: m.files.map((f) => ({ p: f.p, h: f.h, s: f.s })) }));
+}
+
+const README = (version) => [
+  `UGC Studio ${version} — как запустить`,
+  '',
+  '1. Скопируйте папку «UGC Studio» целиком на диск C: (например, C:\\UGC Studio).',
+  '   Не кладите её на Рабочий стол или в Документы, если их синхронизирует OneDrive.',
+  '2. Откройте «UGC Studio.exe» в этой папке. Если удобно — закрепите его на панели задач.',
+  '   Первый запуск может занять до минуты.',
+  '3. В приложении откройте Admin → API keys и введите свои ключи (kie.ai, ElevenLabs, Cloudflare и другие).',
+  '4. Обновления приходят сами. Когда новая версия скачается, справа вверху появится кнопка «Update …» —',
+  '   нажмите её, затем «Restart and update».',
+  '',
+  'Папка library — ваша библиотека: всё, что вы делаете, хранится в ней. Не удаляйте её.',
+  'Папки versions и updates — программа и её обновления, трогать их не нужно.',
+  'Если что-то не запускается — пришлите файл updates\\launcher.log.',
+  '',
+].join('\r\n');
+
+async function handoff(name) {
+  if (!FRIEND.test(String(name || ''))) throw new Error('a friend\'s name: small Latin letters, digits, - and _');
+  const to = path.resolve(arg('--to', ''));
+  if (!arg('--to', '')) throw new Error('--to <empty folder>, outside OneDrive');
+  if (fs.existsSync(to) && fs.readdirSync(to).length) throw new Error('the folder is not empty: ' + to);
+  if (/\\OneDrive/i.test(to)) say('note: this folder is inside OneDrive - gigabytes will go into the sync');
+  const st = store();
+  const pub = publicOf(readPrivate());
+  const env = await st.get(UM.keys.channel(CHANNEL));
+  if (!env) throw new Error('nothing is published yet - "publish" first: a friend\'s copy is the version the channel has');
+  const m = UM.open(env, pub);
+  const t0 = Date.now();
+
+  const vdir = path.join(to, 'versions', m.version);
+  await layVersion(m, st, vdir);
+  fs.copyFileSync(path.join(vdir, 'resources', 'app', 'launcher', 'UGC Studio.exe'), path.join(to, 'UGC Studio.exe'));
+  fs.writeFileSync(path.join(to, 'versions', 'current.json'), JSON.stringify({ current: m.version, previous: null, tries: 0, bad: [] }));
+
+  const token = fs.existsSync(tokenFile(name)) ? fs.readFileSync(tokenFile(name), 'utf8').trim() : await friendAdd(name);
+  fs.mkdirSync(path.join(to, 'updates'), { recursive: true });
+  fs.writeFileSync(path.join(to, 'updates', 'token'), token);
+
+  if (!flag('--no-library')) {
+    const { cleanCopy } = require('./clean-library');
+    await cleanCopy({ from: path.resolve(arg('--library', path.join(REPO, 'library'))), to: path.join(to, 'library'),
+      withProjects: flag('--with-projects'), allowOpen: flag('--allow-open') });
+  }
+  fs.writeFileSync(path.join(to, 'Как запустить.txt'), README(m.version), 'utf8');
+
+  // No key of the owner's in any of it - the program and the library.
+  const KS = require('./key-scan');
+  const found = KS.scan([to]);
+  if (!KS.report(found, say)) throw new Error(`a key of yours is in ${to} - do not hand it over; see the lines above`);
+  say(`${name}'s copy: ${to} (UGC Studio ${m.version}, seq ${m.seq}) in ${((Date.now() - t0) / 1000).toFixed(0)} s - copy the folder onto the flash drive`);
+  return { to, version: m.version, found };
+}
+
 async function main() {
+  if (cmd === 'handoff') return handoff(argv[1]);
   if (cmd === 'keygen') return keygen();
   if (cmd === 'notes') return notes();
   if (cmd === 'publish') return publish();
