@@ -16,6 +16,7 @@
                                    edits in it -, vendor\ (laid out by tools/fetch-*.js, checked here without --optional:
                                    a build with no network must fail, not ship without yt-dlp), node_modules\ - only the
                                    packages package-lock.json does not mark `dev` (no electron, eslint, globals)
+     resources\app\launcher\       UGC Studio.exe - the launcher (desktop/launcher/Launcher.cs, compiled here by csc.exe)
      resources\app\version.json    { version, seq, commit, date, format, channel, electron } - lib/app-version.js
      resources\app\files.json      every file of the folder with its sha256 and size - what the updater compares
    No asar (yt-dlp, whisper and ffmpeg are exes; the caption fonts are files libass opens); Electron's default_app.asar
@@ -59,6 +60,16 @@ function sha256(file) {
   try { for (let n; (n = fs.readSync(fd, buf, 0, buf.length, null)) > 0;) h.update(buf.subarray(0, n)); }
   finally { fs.closeSync(fd); }
   return h.digest('hex');
+}
+
+/** desktop/launcher/Launcher.cs -> an exe, by the .NET Framework's own C# compiler (in every Windows; C# 5). */
+function compileLauncher(cs, icon, exe) {
+  const fw = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  if (!fs.existsSync(fw)) throw new Error('the C# compiler of the .NET Framework is not there: ' + fw);
+  fs.mkdirSync(path.dirname(exe), { recursive: true });
+  run(fw, ['/nologo', '/target:winexe', '/optimize+', '/win32icon:' + icon, '/r:System.Web.Extensions.dll',
+    '/r:System.Windows.Forms.dll', '/out:' + exe, cs]);
+  return exe;
 }
 
 /** The production packages: every package-lock entry not marked dev, present on the disk (an optional one for
@@ -117,6 +128,10 @@ function build() {
     fs.rmSync(tar, { force: true });
   }
 
+  // 4b. The launcher (phase V83, block B2), compiled from this version's own source: it travels with every version,
+  //     and the app puts it in the UGC Studio folder when the one there differs (desktop/home.js).
+  compileLauncher(path.join(app, 'desktop', 'launcher', 'Launcher.cs'), path.join(app, 'desktop', 'icon.ico'), path.join(app, 'launcher', 'UGC Studio.exe'));
+
   // 5. vendor/ and the production node_modules from this checkout.
   fs.cpSync(path.join(REPO, 'vendor'), path.join(app, 'vendor'), { recursive: true });
   const pkgs = prodPackages();
@@ -141,4 +156,4 @@ if (require.main === module) {
   try { build(); } catch (e) { console.error('[build] ' + e.message); process.exit(1); }
 }
 
-module.exports = { build, prodPackages, sha256, walk };
+module.exports = { build, prodPackages, sha256, walk, compileLauncher };

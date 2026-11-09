@@ -30,6 +30,7 @@ const path = require('path');
 const { createSupervisor } = require('./supervisor');
 const { openLog } = require('./log');
 const { createFacesWindow } = require('./faces');
+const { createHome } = require('./home');
 
 const APP_DIR = path.join(__dirname, '..');
 const DEV = !app.isPackaged;
@@ -112,6 +113,8 @@ function run() {
   const server = createSupervisor({ appDir: APP_DIR, libraryDir: LIBRARY, log });
   // (phase V33.2) The hidden window that counts the faces of the highlights shorts (desktop/faces.js).
   const faces = createFacesWindow({ log });
+  // (phase V83, block B2) Started by the launcher: the marks it reads, the old versions tidied, its restart (desktop/home.js).
+  const home = createHome({ home: process.env.UGC_HOME, launcher: LAUNCHER, appDir: APP_DIR, log });
 
   let origin = null;         // http://127.0.0.1:<port>, once the server answers
   let mainWindow = null;
@@ -171,6 +174,7 @@ function run() {
     const was = origin;
     origin = url;
     log.line(`the server is up at ${url}`);
+    if (home) home.cameUp();
     if (!was) {
       if (mainWindow) mainWindow.loadURL(url + '/');
       faces.open(url);
@@ -220,6 +224,7 @@ function run() {
   }));
   app.on('window-all-closed', () => app.quit());
   // Quitting waits for the server and whatever it started to be gone (desktop/supervisor.js).
+  app.on('quit', () => { if (home) home.closing(); });
   app.on('will-quit', (e) => {
     if (serverStopped) return;
     e.preventDefault();
@@ -338,6 +343,8 @@ function run() {
     if (!go) return;
     log.line('restarting for a new version');
     closeConfirmed = true;
+    // (phase V83, (н2)) Started by the launcher, the launcher starts it again - and switches to a new version on the way.
+    if (home && home.restart()) { app.quit(); return; }
     app.relaunch();
     app.quit();
   }
