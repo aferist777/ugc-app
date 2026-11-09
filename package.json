@@ -1,6 +1,6 @@
 {
   "name": "ugc-character-generator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "productName": "UGC Studio",
   "description": "UGC Studio - vertical video ads from an idea to a finished mp4, as a desktop app",
   "main": "desktop/main.js",
