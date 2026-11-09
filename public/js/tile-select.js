@@ -276,6 +276,8 @@ const _plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 export function canGo(kind, to) {
   // (phase V59.1) A saved text of Music -> Lyrics stays there.
   if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube' || kind === 'lyrics') return false;
+  // (2026-11-09, the owner's (в20)) A sound and a track go into one another - Music, My sounds, AUDIO's root.
+  if ((kind === 'music' || kind === 'sounds') && (to.kind === 'music' || to.kind === 'sounds')) return true;
   if (kind === 'music' || to.kind === 'music') return kind === to.kind;
   if (kind === 'references' || to.kind === 'references') return kind === to.kind;
   if (kind === to.kind) return true;
@@ -350,7 +352,8 @@ export async function moveMany(x, y, items, o) {
     why: (to) => (kinds.some(k => canGo(k, to)) ? '' : 'none of them goes there'),
     onPick: async (to) => {
       try {
-        const d = await batch('move', items, { to: { kind: to.kind, cat: to.cat || '', label: to.label || '', folder: to.folder || '', mood: to.mood || '' } });
+        const d = await batch('move', items, { to: { kind: to.kind, cat: to.cat || '', label: to.label || '', folder: to.folder || '', mood: to.mood || '',
+          ...(to.aroot ? { aroot: true } : {}) } });
         await (opt.done ? opt.done(d) : null);
         if (opt.status) opt.status(saidOf(d, 'moved to ' + (to.text || to.label || to.kind)), !d.done && (d.skipped || []).length > 0);
       } catch (e) { if (opt.status) opt.status('Could not move them: ' + e.message, true); }

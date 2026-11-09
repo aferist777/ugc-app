@@ -343,7 +343,9 @@ function _mediaShelf(opts) {
     dur: +e.duration || 0,
     meta: { categoryId: e.categoryId || '', categoryLabel: e.categoryLabel || '', date: e.date || null, favorite: !!e.favorite,
             source: e.source || 'upload', wave: Array.isArray(e.wave) ? e.wave : [], tags: _soundTags(e), info: _soundInfo(e),
-            original: (e.meta && e.meta.original) || null },
+            original: (e.meta && e.meta.original) || null,
+            // (2026-11-09, the owner's (в19)) it lies in AUDIO itself, not in My sounds (lib/sounds-store.js)
+            inAudio: !!e.inAudio },
   }));
 
   // (phase V28.4) Music - no picture; its length kept on the record (measured once for the older ones). (phase V54) Its own
@@ -559,6 +561,8 @@ function _inSrc(i, src) {
   }
   return m.folder === fo;
 }
+// (2026-11-09, the owner's (в19)) AUDIO's own root: `aroot` '1' - only what lies there, '0' - none of it (My sounds' root, ★).
+const _aroot = (i, want) => (want === '1' ? !!(i.meta || {}).inAudio : want === '0' ? !(i.meta || {}).inAudio : true);
 // (phase V35) A track's place in Music: `folder` / `mood` asked as a value, or UNCAT for none.
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
@@ -708,10 +712,16 @@ function _tree(opts) {
   // (phase V34.E, the owner 2026-10-22: "SFX -> Favorites, Built-in, My sounds") SFX: every starred sound first; the
   // program's set, read only, by its categories; the person's own - the kind `sounds` with its categories (Generated
   // locked) - under "My sounds", so a category made, renamed or a tile filed works as it always did.
-  const own = byKind.sounds || [];
+  // (2026-11-09, the owner's (в19): "должно ложится в корень audio. там пользователь уже распределит по своим папкам") What
+  // lies in AUDIO itself - "Save audio"'s sounds (`inAudio`) - is no sound of My sounds: My sounds, SFX and ★ Favorites count
+  // without it, and My sounds' own root does not show it (`aroot: '0'`).
+  const aroot = (byKind.sounds || []).filter(i => i.meta.inAudio);
+  byKind.sounds = (byKind.sounds || []).filter(i => !i.meta.inAudio);
+  const own = byKind.sounds;
   const built = byKind.sfx || [];
   const set = require('../lib/sfx-builtin').read();
   const mine = kindNode('sounds', 'sounds', 'My sounds');
+  if (mine.q) mine.q.aroot = '0';
   const builtin = { key: 'sfx', kind: 'sfx', label: 'Built-in', locked: true, noAdd: true, builtin: true, count: built.length,
     children: set.categories.map(c => {
       const n = built.filter(i => i.meta.categoryId === c.id).length;
@@ -720,11 +730,15 @@ function _tree(opts) {
     }) };
   if (!builtin.children.length) delete builtin.children;
   const favN = own.concat(built).filter(i => i.meta.favorite).length;
-  const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1' } };
+  const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1', aroot: '0' } };
   // SFX holds its three folders; its search looks through all of them (the owner's (у3), js/sound/shelf.js).
   const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, children: [fav, builtin, mine] };
-  const audio = { key: 'audio', label: 'AUDIO', children: [_musicNode(byKind.music || [], catsOf('music', byKind.music || []).out), sfx] };
-  audio.count = audio.children.reduce((n, c) => n + c.count, 0);
+  // AUDIO is a folder too (the owner's (в19)): Music and SFX, then what lies in it itself - a sound to be filed from there into
+  // Music or SFX (lib/audio-kind.js). `aroot` - the page's sign of that place (js/media-tree.js _target).
+  const audio = { key: 'audio', label: 'AUDIO', loose: 'sounds', aroot: true, direct: aroot.length, q: { filter: 'sounds', aroot: '1' },
+    tip: 'AUDIO - Music and SFX; what lies in it itself ("Save audio" of a video) waits to be dragged into Music or SFX',
+    children: [_musicNode(byKind.music || [], catsOf('music', byKind.music || []).out), sfx] };
+  audio.count = aroot.length + audio.children.reduce((n, c) => n + c.count, 0);
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
   const refs = (byKind.references || []).concat(byKind.youtube || []);
@@ -907,6 +921,7 @@ function _inNode(i, q) {
   if (q.src && !_inSrc(i, q.src)) return false;
   if (q.folder && !_isIn(m.folder, q.folder)) return false;
   if (q.mood && !_isIn(m.mood, q.mood)) return false;
+  if (q.aroot && !_aroot(i, q.aroot)) return false;
   if (q.cat) {
     const c = m.categoryId || '';
     if (q.cat === UNCAT) { if (c && c !== UPLOADS_CAT) return false; }
@@ -1275,6 +1290,9 @@ router.get('/library/shelf/:kind', (req, res) => {
     const mood = String(req.query.mood || '');
     if (folder) shown = shown.filter(i => _isIn((i.meta || {}).folder, folder));
     if (mood) shown = shown.filter(i => _isIn((i.meta || {}).mood, mood));
+    // (2026-11-09) AUDIO's own root: `aroot=1` what lies there, `aroot=0` the rest.
+    const aroot = String(req.query.aroot || '');
+    if (aroot) shown = shown.filter(i => _aroot(i, aroot));
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
@@ -1819,6 +1837,8 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
 
     Object.assign(it, patch);
+    // (2026-11-09) A sound filed into My sounds (or a folder of it) leaves AUDIO's own root - it lies in one place.
+    if (kind === 'sounds' && 'categoryId' in patch) delete it.inAudio;
     // (phase V54) A track in an own folder of Music is out of highlights - it lies in one place.
     if (kind === 'music' && patch.categoryId) { delete it.folder; delete it.mood; }
     store.write(list);
@@ -2301,8 +2321,10 @@ function _moveOne(it, to) {
   // (phase V59.1, (мз6а)) A saved text stays in Music -> Lyrics, and only Generate music saves into it.
   if (from === 'lyrics') return LYRICS_STAY;
   if (to.kind === 'lyrics') return LYRICS_TAKE;
+  // (2026-11-09, the owner's (в20)) A sound and a track: between Music, SFX -> My sounds and AUDIO's root, either way.
+  if (AUDIO_MOVES.has(from) && AUDIO_MOVES.has(to.kind) && (from !== to.kind || from === 'sounds')) return _audioMove(it, to);
   if (from === 'music' || to.kind === 'music') {
-    if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
+    if (from !== to.kind) return from === 'music' ? 'a track goes into Music, SFX or AUDIO' : 'only tracks and sounds go into Music';
     if (to.cat) {
       const rec = _recOf('music', it.id);
       if (!rec) return 'not found';
@@ -2347,6 +2369,72 @@ function _moveOne(it, to) {
   return 'it cannot go there';
 }
 
+// (2026-11-09, the owner's (в19)-(в20): "должно ложится в корень audio. там пользователь уже распределит по своим папкам" -
+// "разрешить переносить") A sound into My sounds, a folder of it or AUDIO's own root (`to.aroot`); a sound into Music, a
+// track into SFX or AUDIO - the record changes store (lib/audio-kind.js swap). Its file is placed with the rest of a batch,
+// or at once. '' when it went, else why not.
+const AUDIO_MOVES = new Set(['sounds', 'music']);
+const AK = require('../lib/audio-kind');
+function _placeAudio(kind, id) {
+  if (_placeLater) { _placeLater.push({ kind, id: String(id) }); return; }
+  const rec = _recOf(kind, id);
+  if (rec) SHELF.placeRecords([{ kind, rec }]);
+}
+function _audioMove(it, to) {
+  const from = it.kind;
+  const rec = _recOf(from, it.id);
+  if (!rec) return 'not found';
+  if (to.kind === 'music') {
+    // A sound into Music: an own folder of it, or Music itself / highlights / the mood its preset made it for.
+    let place;
+    if (to.cat) {
+      const c = LC.find('music', to.cat);
+      if (!c) return 'that folder is not one of Music';
+      place = { categoryId: c.id, categoryLabel: c.label };
+    } else {
+      if (to.folder && to.folder !== MUSIC.HIGHLIGHTS) return 'there is no folder "' + to.folder + '" in Music';
+      if (to.mood) {
+        const was = AK.carriedOf(rec);
+        const made = was && was.kind === 'music' ? MUSIC.placeOf(was.rec).moodMade : '';
+        if (made !== to.mood) {
+          const m = MUSIC.moods().find(x => x.id === to.mood);
+          return '"' + (m ? m.label : to.mood) + '" takes only the tracks made by its preset - yours go into highlights itself';
+        }
+      }
+      place = { folder: to.folder || '', mood: to.folder ? (to.mood || '') : '' };
+    }
+    try { AK.swap('sounds', it.id, place); } catch (e) { return e.message; }
+    _placeAudio('music', it.id);
+    return '';
+  }
+  // Into SFX -> My sounds (a folder of it) or AUDIO's own root.
+  const cat = to.aroot ? '' : String(to.cat || '');
+  let label = '';
+  if (cat) {
+    const c = LC.find('sounds', cat);
+    if (!c) return 'that folder is not one of My sounds';
+    label = c.label;
+  }
+  if (from === 'music') {
+    try { AK.swap('music', it.id, { categoryId: cat, categoryLabel: label, inAudio: !!to.aroot }); } catch (e) { return e.message; }
+    _placeAudio('sounds', it.id);
+    return '';
+  }
+  if (String(rec.categoryId || '') === cat && !!rec.inAudio === !!to.aroot) return '';
+  if (!to.aroot) {
+    const r = _patchOne('sounds', it.id, { categoryId: cat, categoryLabel: label });
+    return r.status === 200 ? '' : _whyOf(r);
+  }
+  // Into AUDIO's root: out of its folder, its file into media/sounds/nocat/.
+  const list = SND.read();
+  const s = list.find(x => x && String(x.id) === String(it.id));
+  if (!s) return 'not found';
+  s.categoryId = ''; s.categoryLabel = ''; s.inAudio = true;
+  SND.write(list);
+  _placeAudio('sounds', it.id);
+  return '';
+}
+
 // Whole posts within REFERENCES - an own category, or back to their sources' folders (`cat` ''), in one write.
 function _postsTo(ids, to) {
   const REFS = require('../lib/references-store');
@@ -2379,7 +2467,7 @@ router.post('/library/batch/move', (req, res) => {
     const items = _batchItems(req.body);
     const t = (req.body || {}).to || {};
     const to = { kind: String(t.kind || ''), cat: String(t.cat || ''), label: String(t.label || ''),
-      folder: String(t.folder || ''), mood: String(t.mood || '') };
+      folder: String(t.folder || ''), mood: String(t.mood || ''), aroot: !!t.aroot && String(t.kind || '') === 'sounds' };
     if (!items.length || !to.kind) return res.status(400).json({ success: false, error: 'what, and where to' });
     if (to.cat === UNCAT) to.cat = '';
     // (phase V57) The references of Environments / Lookbooks take nothing by hand - said once, nothing moved.

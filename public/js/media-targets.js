@@ -17,7 +17,7 @@
 //
 // (phase V54, `audio: true` - "Move to…" of several tiles, js/tile-select.js) AUDIO too: Music itself, its highlights
 // folder and the moods (`to.folder`, `to.mood` - a mood takes only the tracks its preset made, the server says so), My
-// sounds and its categories; never Built-in or ★ Favorites.
+// sounds and its categories; never Built-in or ★ Favorites. (2026-11-09, the owner's (в19)) And AUDIO itself (`to.aroot`).
 
 const KINDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references']);
 // The kinds whose own node holds folders (its key is the kind) - and their folders do (phase V54).
@@ -41,7 +41,7 @@ export function placesOf(tree, opts) {
     if (n.closed) return null;
     let to = null;
     if (n.kind === 'music' && o.audio) to = { kind: 'music', cat: n.cat || '', label: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '', text: path || n.label };
-    else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label };
+    else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label, ...(n.aroot ? { aroot: true } : {}) };
     else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
     const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
     // A kind's own node (its key is the kind) and every folder of it (phase V54) end in "+ new folder…" - not the app's
@@ -82,7 +82,7 @@ export function whereText(to) {
   if (to.cat && to.text && to.kind !== 'references') return to.text;
   if (to.kind === 'references') return 'REFERENCES · ' + (to.cat ? (to.text ? to.text.replace(/^REFERENCES · /, '') : to.label) : 'its site\'s folder');
   if (to.kind === 'images') return 'IMAGES' + (to.cat ? ' · ' + to.label : '');
-  if (to.kind === 'sounds') return 'My sounds' + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'sounds') return to.aroot ? 'AUDIO' : 'My sounds' + (to.cat ? ' · ' + to.label : '');
   if (to.kind === 'music') return to.text || 'Music';
   if (to.kind === 'birols' && !to.cat) return 'Generated';
   return ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : '');

@@ -110,7 +110,7 @@ export async function nodeFiles(node, type) {
 // under it, and its number is how many - every one under it too. One rule for the attachment window (js/merge-v3/
 // chat-pick.js), the pictures chat's right column and the Images column of New environment / New lookbook (below).
 
-const _Q_KEYS = ['filter', 'cat', 'src', 'folder', 'mood'];
+const _Q_KEYS = ['filter', 'cat', 'src', 'folder', 'mood', 'aroot'];
 const ANYCAT = '__cat__';
 // A folder's query the shelf answers by these keys alone is answered here from its kind's whole answer (_inQ, the
 // shelf's own filters) - one request per kind; any other query (★ Favorites' group, "some category") is read by itself.
@@ -218,7 +218,7 @@ const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(wan
 // keys a folder's query has; a query with any other key is not guessed at.
 function _inQ(i, q, foldersOf) {
   const m = i.meta || {};
-  for (const k of Object.keys(q)) if (!['filter', 'cat', 'src', 'folder', 'mood'].includes(k)) return false;
+  for (const k of Object.keys(q)) if (!_Q_KEYS.includes(k)) return false;
   if (q.filter && i.kind !== q.filter && !(q.filter === 'references' && i.kind === 'youtube')) return false;
   if (q.src) {
     const [s, fo] = String(q.src).split('/');
@@ -228,6 +228,8 @@ function _inQ(i, q, foldersOf) {
   }
   if (q.folder && !_isIn(m.folder, q.folder)) return false;
   if (q.mood && !_isIn(m.mood, q.mood)) return false;
+  // (2026-11-09) AUDIO's own root - `aroot` '1' what lies there (a sound's `inAudio`), '0' the rest (My sounds' root).
+  if (q.aroot === '1' ? !m.inAudio : q.aroot === '0' ? !!m.inAudio : false) return false;
   if (q.cat) { const c = m.categoryId || ''; if (q.cat === ANYCAT || (q.cat === UNCAT ? !!c : c !== q.cat)) return false; }
   return true;
 }

@@ -747,18 +747,15 @@ function _underStage(item, video) {
 // a file or a link; pictures - a file, or made here; a sound or a track - a file.
 // (2026-11-09, the owner: "в корне REFERENCES везде стоят плюсики первой плиткой. хотя мы ничего не можем в этом корне делать.
 // давай поудаляем эти плюсики") REFERENCES and every folder in it have none - null. It fills itself: the Telegram bot's
-// posts, the pieces cut from a video, the YouTube sources.
+// posts, the pieces cut from a video, the YouTube sources. (The same day, the owner's (в22)) Nor where nothing is brought in
+// at all: Talking heads (the talking-head projects make them), Music -> Lyrics (Generate music saves its texts), SFX ->
+// Built-in (the app's) and ★ Favorites (the stars).
 function _plusTile() {
-  if (_kind() === 'references') return null;
+  if (_kind() === 'references' || _isHeads() || _kind() === 'lyrics' || (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav'))) return null;
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
   b.innerHTML = icon('plus', 20);   // (phase V73 block 5, 5a) Lucide's plus, not a 22-px "+"
-  if (_isHeads()) {
-    b.disabled = true;
-    b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
-    return b;
-  }
   // (phase V55, the owner's (гн11); phase V58, (лк7)) IMAGES -> Environments / Lookbooks: "+" opens their generator's window.
   if (_node && _node.make && MADE.has(_node.make)) {
     b.title = _node.makeLabel + ' - opens the generator in a window';
@@ -771,18 +768,6 @@ function _plusTile() {
   if (shut) {
     b.title = shut;
     b.addEventListener('click', (e) => { e.stopPropagation(); _status(shut, true); });
-    return b;
-  }
-  // (phase V59.1) Music -> Lyrics: the texts Generate music saved - nothing is brought in.
-  if (_kind() === 'lyrics') {
-    b.disabled = true;
-    b.title = 'Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is added here';
-    return b;
-  }
-  // (phase V34.E) Built-in is the app's, Favorites the starred - nothing is brought in there.
-  if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
-    b.disabled = true;
-    b.title = _node.key === 'sfx-fav' ? 'Favorites are the starred sounds - the ★ on a tile' : 'Built into the app - read only';
     return b;
   }
   // (phase V78) THIS PROJECT: files from this computer - each into its place in the library, a link to it here.
@@ -1028,8 +1013,8 @@ function _paint() {
     // (phase V73 block 2, step 2b) The shared "nothing here" under the "+" - the words as they were, the first letter capital.
     const text = searching ? 'nothing with "' + _q + '" in SFX' : _kind() === 'lyrics' ? 'no saved lyrics yet - Generate music saves them here'
       : _node && _node.cat ? 'nothing in this folder'
-      // REFERENCES fills itself - nothing is dropped in.
-      : (_node && !_node.q) || _kind() === 'references' ? 'empty' : 'empty - drop files here';
+      // Where there is no "+" (REFERENCES, ★ Favorites...) nothing is dropped in either.
+      : (_node && !_node.q) || !plus ? 'empty' : 'empty - drop files here';
     const icon = searching ? 'search' : (_isAudio() || _kind() === 'lyrics') ? 'music' : (_isImages() || MADE.has(_kind())) ? 'image' : 'folder';
     b.appendChild(emptyEl(text, { icon, cls: 'mv3-grid-note' }));
     return;

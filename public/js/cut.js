@@ -17,7 +17,8 @@
 //                     and how long, "Save…" - "Join into one" / "Each separately", then ONE window "save the pieces to" (the
 //                     place picker js/place-tree.js over js/media-targets.js, the clip's own place on top) and the work
 //                     (POST /api/library/cuts) with its count and "stop". The video itself stays as it is.
-//   right button      on the video: "Save audio" (a row per sound track - into My sounds' root, POST /api/audio/from-video)
+//   right button      on the video: "Save audio" (a row per sound track - into the root of AUDIO since 2026-11-09, the
+//                     owner's (в19)-(в21); POST /api/audio/from-video)
 //                     and "Save video as…" (what the shell's own menu had); on a fragment: "Save this fragment…" / "Save N
 //                     fragments…", "Save its audio", "Delete" - and in Merge (`o.lay`) "Add to timeline · separately" (each a
 //                     clip of this file, no new file) and "· as one file" (the join made first, beside the video).
@@ -291,7 +292,7 @@ export function cutBox(video, piece, o) {
     const rows = [];
     if (n === 1) {
       rows.push(['Save this fragment…', mmss(list[0].in) + '–' + mmss(list[0].out) + ' as a new clip', () => saveMenu(save, list, e.clientX, e.clientY)]);
-      rows.push(['Save its audio', 'its sound · into SFX → My sounds', () => saveAudio({ src: piece.src, name: piece.name, in: list[0].in, out: list[0].out, say })]);
+      rows.push(['Save its audio', 'its sound · into AUDIO', () => saveAudio({ src: piece.src, name: piece.name, in: list[0].in, out: list[0].out, say })]);
     } else {
       rows.push(['Save ' + n + ' fragments · joined…', 'one new clip of them, in the order of time', () => _places(save, piece, list, true, (to) => run(list, true, to))]);
       rows.push(['Save ' + n + ' fragments · each…', n + ' new clips, each its own', () => _places(save, piece, list, false, (to) => run(list, false, to))]);
@@ -362,7 +363,7 @@ export async function tracksOf(src) {
   return list;
 }
 
-/** One sound track of a video (whole, or [in, out)) into SFX -> My sounds - a popup says where. */
+/** One sound track of a video (whole, or [in, out)) into the root of AUDIO - a popup says where. */
 export async function saveAudio(o) {
   const say = typeof o.say === 'function' ? o.say : () => {};
   const body = { src: clean(o.src), name: o.name || '' };
@@ -377,8 +378,8 @@ export async function saveAudio(o) {
     showError('The sound was not saved', { detail: (d && d.error) || 'no answer' });
     return null;
   }
-  say('Saved the sound in SFX → My sounds.');
-  showToast({ mark: '♪', title: 'Saved · ' + ((d.item && d.item.name) || 'the sound'), where: 'SFX → My sounds' });
+  say('Saved the sound in AUDIO.');
+  showToast({ mark: '♪', title: 'Saved · ' + ((d.item && d.item.name) || 'the sound'), where: 'AUDIO' });
   return d.item;
 }
 
@@ -399,7 +400,7 @@ export async function videoMenu(e, o) {
   const tr = await tracksOf(o.src);
   const rows = [];
   if (!tr.length) rows.push(['Save audio', 'this video has no sound', null]);
-  else tr.forEach((t) => rows.push(['Save audio' + (tr.length > 1 ? ' · ' + t.label : ''), 'its sound · into SFX → My sounds',
+  else tr.forEach((t) => rows.push(['Save audio' + (tr.length > 1 ? ' · ' + t.label : ''), 'its sound · into AUDIO',
     () => saveAudio({ src: o.src, name: o.name, track: t.k, say: o.say })]));
   rows.push(['Save video as…', 'a copy of the file wherever you choose', () => _download(o.src, o.name)]);
   menuAt(x, y, rows);

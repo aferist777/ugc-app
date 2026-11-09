@@ -46,7 +46,10 @@
    categories) - moved to that kind. A picture never becomes a clip, nor a clip a picture; a talking head is its
    project's and goes nowhere. A TRACK (V35, the owner's (ф3)): on Music - out of highlights; on highlights - into its
    root; on a mood - only the track that mood's preset made (lib/music-store.js `place`, V34.F; refused in words
-   otherwise). A tile says what it is with setMediaDrag(); the kind rides in a type of its own, the only part of a drag a
+   otherwise). A SOUND AND A TRACK go between Music, SFX -> My sounds and AUDIO's own root, either way (2026-11-09, the
+   owner's (в19)-(в20): AUDIO holds what "Save audio" took out of a video, to be filed from there - `aroot`; a sound let go
+   on Music becomes a track, a track on My sounds or AUDIO a sound - routes/library.js _audioMove, lib/audio-kind.js); a
+   built-in sound goes nowhere. A tile says what it is with setMediaDrag(); the kind rides in a type of its own, the only part of a drag a
    page can read before the drop. SEVERAL TILES (phase V54, js/tile-select.js): a picked tile dragged carries the others
    (`many`) and they go in ONE request (POST /api/library/batch/move) - each as one would; what cannot go stays and the
    status says why. Whether the node takes the drop is the dragged tile's question.
@@ -143,6 +146,8 @@ const LYRICS_TAKE = 'Music → Lyrics holds only texts - saved from Generate mus
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
 const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+// (2026-11-09) The kinds that go into one another: a sound and a track.
+const AUDIO_KINDS = new Set(['sounds', 'music']);
 
 /** A tile being dragged says what it is - for a tree's node to take it. `it` is a shelf item; `many` - (phase V54) the
  *  picked tiles it is one of, when there are several (js/tile-select.js). */
@@ -153,8 +158,9 @@ export function setMediaDrag(dt, it, many) {
   const several = Array.isArray(many) && many.length > 1
     ? many.map(x => ({ kind: x.kind, id: String(x.id), ...(x.link ? { link: x.link } : {}) })) : null;
   // (phase V78) A tile of THIS PROJECT carries its link: let go on another of its folders, the link moves.
+  // (2026-11-09) A sound of AUDIO's own root says so (`aroot`): let go on My sounds itself it still moves.
   dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: m.categoryId || '', link: it.link || '',
-    folder: m.folder || '', mood: m.mood || '', ...(several ? { many: several } : {}) }));
+    folder: m.folder || '', mood: m.mood || '', ...(m.inAudio ? { aroot: true } : {}), ...(several ? { many: several } : {}) }));
   dt.setData(KIND_TYPE + it.kind, '1');
   if (it.kind === 'references') {
     const files = (it.meta && it.meta.items) || [];
@@ -180,6 +186,8 @@ function _target(n) {
   // (phase V78) THIS PROJECT and its folders: a link, whatever the kind.
   if (n.kind === 'plinks') return { kind: 'plinks', cat: n.cat || '', plinks: true };
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
+  // (2026-11-09, the owner's (в19)) AUDIO itself: a sound lying there - one let go on it, a track made a sound.
+  if (n.aroot) return { kind: 'sounds', cat: '', aroot: true };
   // (phase V59.1) Music -> Lyrics: only Generate music saves there - what is let go is refused in words.
   if (n.lyrics) return { kind: 'lyrics', cat: '', lyrics: true };
   // (phase V55) Environments / Lookbooks: only their generator files there - what is let go is refused in words.
@@ -207,12 +215,15 @@ function _dropAction(n, from, refType) {
   if (t.plinks) return from === 'lyrics' ? '' : 'link';
   // (phase V59.1) A saved text goes nowhere; nothing goes into Lyrics - both refused in words (on Lyrics itself, nothing).
   if (from === 'lyrics' || t.lyrics) return from === 'lyrics' && t.lyrics ? '' : 'refuse';
-  // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
-  if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
+  // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words (on Music and AUDIO too).
+  if (from === 'sfx') return t.kind === 'sounds' || t.kind === 'music' ? 'refuse' : '';
   // (phase V55, (гн9)) A made environment or lookbook goes nowhere - refused in words wherever it is let go but its own
   // folder; a picture let go on Environments / Lookbooks is refused in words too (a photo goes into references).
   if (MADE[from]) return t.kind === from ? '' : 'refuse';
   if (t.made || t.closed) return (from === 'images' || (from === 'references' && refType === 'photo')) ? 'refuse' : '';
+  // (2026-11-09, the owner's (в20)) A sound and a track go between Music, My sounds and AUDIO's root - the server's move
+  // (POST /api/library/batch/move); a track within Music and a sound within My sounds as before.
+  if (AUDIO_KINDS.has(from) && AUDIO_KINDS.has(t.kind)) return from !== t.kind || t.aroot ? 'audio' : from === 'music' ? 'place' : 'cat';
   // (phase V35) A track goes between Music, highlights and its moods - and nowhere else; nothing else goes there.
   if (from === 'music' || t.kind === 'music') return from === t.kind ? 'place' : '';
   if (from === 'references') {
@@ -903,9 +914,12 @@ export function createTree(host, o) {
     if (act === 'link') { await _link(n, it); return; }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category lies in Generated, the rest in their kind.
-    const where = t.cat ? n.label : homeName(t.kind);
+    const where = t.aroot ? 'AUDIO' : t.cat ? n.label : homeName(t.kind);
     // (phase V54) Several picked tiles: one request; each goes as it would alone, or stays and says why.
     if (Array.isArray(it.many) && it.many.length > 1) { await _takeMany(n, t, it.many, where); return; }
+    // (2026-11-09, the owner's (в19)-(в20)) A sound or a track into the other, or into AUDIO's root, or out of it: the server
+    // moves it (its record changes store, its file follows) - one request, as for several.
+    if (act === 'audio' || (act === 'cat' && it.aroot)) { await _takeMany(n, t, [{ kind: it.kind, id: String(it.id) }], where, it.name); return; }
     try {
       // (phase V35, the owner's (ф3)) A track: into Music, the highlights folder, or the one mood its preset made it for -
       // the rule is the store's (lib/music-store.js place, V34.F); a refusal comes back in words.
@@ -968,19 +982,23 @@ export function createTree(host, o) {
     await _after(said || 'Already in ' + n.label, { linked: true });
   }
 
-  async function _takeMany(n, t, many, where) {
+  // `one` - the name of the one tile moved this way (a sound or a track, 2026-11-09): said by its name.
+  async function _takeMany(n, t, many, where, one) {
     const there = t.kind === 'music' ? (t.cat ? n.label : musicPlace(t.folder, t.mood))
       : t.kind === 'references' ? (t.cat ? 'REFERENCES · ' + n.label : 'their sources\' folders in REFERENCES') : where;
     let r = null;
     try {
       r = await fetch('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: many, to: { kind: t.kind, cat: t.cat || '', label: t.name || '', folder: t.folder || '', mood: t.mood || '' } }),
+        body: JSON.stringify({ items: many, to: { kind: t.kind, cat: t.cat || '', label: t.name || '', folder: t.folder || '', mood: t.mood || '',
+          ...(t.aroot ? { aroot: true } : {}) } }),
       }).then(x => x.json());
       if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
-    } catch (e) { opt.status('Could not move them: ' + e.message, true); await load(); return; }
+    } catch (e) { opt.status('Could not move ' + (one ? 'it' : 'them') + ': ' + e.message, true); await load(); return; }
     const sk = r.skipped || [];
     const whys = [...new Set(sk.map(x => x.why))].slice(0, 3).join('; ');
-    const msg = (r.done ? _plural(r.done, 'item') + ' in ' + there : 'Nothing moved') + (sk.length ? ' · ' + sk.length + ' stayed: ' + whys : '');
+    const msg = one != null && many.length === 1
+      ? (r.done ? '"' + (one || 'It') + '" is in ' + there : 'Not moved: ' + whys)
+      : (r.done ? _plural(r.done, 'item') + ' in ' + there : 'Nothing moved') + (sk.length ? ' · ' + sk.length + ' stayed: ' + whys : '');
     await _after(sk.length && !r.done ? '' : msg, { moved: { many } });
     if (sk.length && !r.done) opt.status(msg, true);
   }

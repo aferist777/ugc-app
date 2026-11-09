@@ -414,7 +414,8 @@ const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind
 // library") SFX too - ★ Favorites, Built-in, My sounds and its folders: a sound pressed plays in the same bar, cut there as a
 // track is (its piece a new sound in My sounds - lib/audio-cut.js).
 const SFX_NODES = new Set(['sfx-all', 'sfx-fav', 'sfx', 'sounds']);
-const _inSfx = () => _shelf === 'media' && !_makingOn && !!_node && (SFX_NODES.has(_node.key) || _node.kind === 'sounds' || _node.kind === 'sfx');
+// (2026-11-09) And AUDIO itself - "Save audio"'s sounds lie there (`aroot`).
+const _inSfx = () => _shelf === 'media' && !_makingOn && !!_node && (SFX_NODES.has(_node.key) || _node.kind === 'sounds' || _node.kind === 'sfx' || !!_node.aroot);
 const _inPlayer = () => _inMusic() || _inSfx();
 function _playerPicked() {
   const c = _player && _player.current();
@@ -1123,9 +1124,13 @@ function _card(it, extra) {
   // Second line: which category this clip is filed under, changeable in place. Only
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
-    card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: 'No folder' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
-      (id) => _setCat(it, id), 'Folder'));
+    // (2026-11-09, the owner's (в19)) A sound may lie in AUDIO itself: the first choice, and where "Save audio" put it.
+    const snd = it.kind === 'sounds';
+    const here = snd && (it.meta || {}).inAudio ? AROOT_PICK : (it.meta && it.meta.categoryId) || '';
+    card.appendChild(_picker('lib-cat-sel', here,
+      () => (snd ? [{ id: AROOT_PICK, label: 'AUDIO' }] : []).concat([{ id: '', label: snd ? 'My sounds' : 'No folder' }],
+        _catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
+      (id) => (id === AROOT_PICK ? _toAudioRoot(it) : _setCat(it, id)), 'Folder'));
   }
 
   if (extra) card.appendChild(extra);
@@ -1281,6 +1286,16 @@ async function _setKind(it, kind) {
 
 // Filing one clip under a category, from wherever the control is. Repaints through
 // _apply so the chip counts and the filtered view stay honest.
+// (2026-11-09) A sound into AUDIO itself - the server's move (routes/library.js _audioMove).
+const AROOT_PICK = '__audio__';
+async function _toAudioRoot(it) {
+  try {
+    const d = await TS.batch('move', [it], { to: { kind: 'sounds', aroot: true } });
+    if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || 'not moved');
+    await _apply({ changed: true, reload: true, msg: 'In AUDIO' });
+  } catch (e) { _status(e.message, 'err'); }
+}
+
 async function _setCat(it, id) {
   const c = _catsFor(it.kind, id).find(x => x.id === id) || { id: '', label: '' };
   try {

@@ -8,6 +8,9 @@
                  Library opens in its player instead (the page's `cut`)
      Rename      its name (PATCH /api/library/item/:kind/:id)                          own sounds, tracks
      Move to     another category of My sounds, or My sounds itself                     own sounds
+                 (2026-11-09, the owner's (в19)-(в20)) AUDIO itself, Music - a sound    own sounds
+                 becomes a track; AUDIO, My sounds - a track becomes a sound            tracks
+                 (POST /api/library/batch/move, routes/library.js _audioMove)
      highlights  a track into Music -> highlights (its root), out of it, or back into
                  the mood its preset made it for (V34.F: a mood folder takes nothing
                  else - routes/music.js, lib/music-store.js `place`)                   tracks
@@ -129,12 +132,30 @@ export async function soundMenu(it, ev, opts) {
       if (pl.folder) item('Out of highlights', 'into Music itself - the popup stops offering it', put({ folder: '' }, '"' + it.name + '" is out of highlights.'));
     }
   }
+  // (2026-11-09, the owner's (в19)-(в20)) A sound and a track go into one another and into AUDIO itself - the server's move.
+  const moveTo = (to, said) => async () => {
+    try {
+      const d = await _api('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ kind: it.kind, id: String(it.id) }], to }) });
+      if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || 'not moved');
+      await o.changed();
+      o.status('"' + it.name + '" is in ' + said + '.');
+    } catch (e) { o.status(e.message, true); }
+  };
+  if (it.kind === 'music') {
+    item('Move to AUDIO', 'a sound in AUDIO itself', moveTo({ kind: 'sounds', aroot: true }, 'AUDIO'));
+    item('Move to My sounds', 'a sound of SFX → My sounds', moveTo({ kind: 'sounds' }, 'My sounds'));
+  }
   if (own) {
     const cats = await myCats();
-    const here = (it.meta || {}).categoryId || '';
+    const inAudio = !!(it.meta || {}).inAudio;
+    // A sound in AUDIO itself is in no folder of My sounds - My sounds itself is a place for it too.
+    const here = inAudio ? null : ((it.meta || {}).categoryId || '');
+    if (!inAudio) item('Move to AUDIO', 'AUDIO itself - beside Music and SFX', moveTo({ kind: 'sounds', aroot: true }, 'AUDIO'));
+    item('Move to Music', 'a track of Music', moveTo({ kind: 'music' }, 'Music'));
     for (const c of [{ id: '', label: 'My sounds' }].concat(cats)) {
       if (c.id === here) continue;
-      item('Move to ' + c.label, c.id ? '' : 'out of its folder', async () => {
+      item('Move to ' + c.label, c.id ? '' : inAudio ? 'SFX → My sounds itself' : 'out of its folder', async () => {
         try { await _patch(it, { categoryId: c.id, categoryLabel: c.id ? c.label : '' }); await o.changed(); o.status('"' + it.name + '" is in ' + c.label + '.'); }
         catch (e) { o.status(e.message, true); }
       });
@@ -168,7 +189,8 @@ export function about(it, ev) {
   const m = it.meta || {};
   const i = m.info || {};
   row('length', secs(it.dur));
-  row('where', it.kind === 'sfx' ? 'Built-in · ' + (m.categoryLabel || '') : it.kind === 'music' ? 'Music' : 'My sounds' + (m.categoryLabel ? ' · ' + m.categoryLabel : ''));
+  row('where', it.kind === 'sfx' ? 'Built-in · ' + (m.categoryLabel || '') : it.kind === 'music' ? 'Music'
+    : m.inAudio ? 'AUDIO' : 'My sounds' + (m.categoryLabel ? ' · ' + m.categoryLabel : ''));
   row('file', it.media, it.media);
   row('from', i.from);
   row('author', i.author, i.authorUrl || '');
