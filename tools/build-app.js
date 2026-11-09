@@ -34,7 +34,6 @@ const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'presets-src', 'server.
 const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-cookbook', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
 
 const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt; };
-const WORKTREE = process.argv.includes('--worktree');
 const say = (s) => console.log('[build] ' + s);
 
 function run(cmd, args, opts = {}) {
@@ -62,13 +61,22 @@ function sha256(file) {
   return h.digest('hex');
 }
 
-/** desktop/launcher/Launcher.cs -> an exe, by the .NET Framework's own C# compiler (in every Windows; C# 5). */
+/** desktop/launcher/Launcher.cs -> an exe, by the .NET Framework's own C# compiler (in every Windows; C# 5). That
+ *  compiler stamps every exe anew, so a compiled one is kept by its source's hash (%LOCALAPPDATA%\ugc-build\): the
+ *  same source gives the same file, and an update does not carry a "new" launcher that is not. */
 function compileLauncher(cs, icon, exe) {
   const fw = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
-  if (!fs.existsSync(fw)) throw new Error('the C# compiler of the .NET Framework is not there: ' + fw);
+  const src = crypto.createHash('sha256').update(fs.readFileSync(cs)).update(fs.readFileSync(icon)).digest('hex').slice(0, 16);
+  const cacheDir = path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'ugc-build');
+  const cached = path.join(cacheDir, `launcher-${src}.exe`);
   fs.mkdirSync(path.dirname(exe), { recursive: true });
-  run(fw, ['/nologo', '/target:winexe', '/optimize+', '/win32icon:' + icon, '/r:System.Web.Extensions.dll',
-    '/r:System.Windows.Forms.dll', '/out:' + exe, cs]);
+  if (!fs.existsSync(cached)) {
+    if (!fs.existsSync(fw)) throw new Error('the C# compiler of the .NET Framework is not there: ' + fw);
+    fs.mkdirSync(cacheDir, { recursive: true });
+    run(fw, ['/nologo', '/target:winexe', '/optimize+', '/win32icon:' + icon, '/r:System.Web.Extensions.dll',
+      '/r:System.Windows.Forms.dll', '/out:' + cached, cs]);
+  }
+  fs.copyFileSync(cached, exe);
   return exe;
 }
 
@@ -83,11 +91,16 @@ function prodPackages() {
   return keys.filter((k) => !keys.some((o) => o !== k && k.startsWith(o + '/')));
 }
 
-function build() {
+/**
+ * opts: { out, seq, channel, worktree, version, updateKey, updateUrl } - the last three for stands only: another
+ * version name than package.json's, and the public key (PEM) and Worker address baked into desktop/update-key.js.
+ */
+function build(opts = {}) {
   const t0 = Date.now();
+  const WORKTREE = !!opts.worktree;
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
-  const version = pkg.version;
-  const out = path.resolve(arg('--out', path.join(os.tmpdir(), 'ugcb', version)));
+  const version = opts.version || pkg.version;
+  const out = path.resolve(opts.out || path.join(os.tmpdir(), 'ugcb', version));
   if (out.startsWith(path.resolve(REPO) + path.sep)) throw new Error('the version folder must not be inside the program folder');
 
   // 1. vendor/ complete - each fetcher checks its pinned files and downloads only what is missing.
@@ -128,6 +141,13 @@ function build() {
     fs.rmSync(tar, { force: true });
   }
 
+  // 4a. A stand's key and Worker address (never a release's: tools/release.js passes neither).
+  if (opts.updateKey || opts.updateUrl) {
+    const baked = { PUBLIC_KEY: opts.updateKey || '', WORKER_URL: opts.updateUrl || '' };
+    fs.writeFileSync(path.join(app, 'desktop', 'update-key.js'),
+      `'use strict';\n// Baked in by tools/build-app.js for a stand.\nmodule.exports = ${JSON.stringify(baked, null, 2)};\n`);
+  }
+
   // 4b. The launcher (phase V83, block B2), compiled from this version's own source: it travels with every version,
   //     and the app puts it in the UGC Studio folder when the one there differs (desktop/home.js).
   compileLauncher(path.join(app, 'desktop', 'launcher', 'Launcher.cs'), path.join(app, 'desktop', 'icon.ico'), path.join(app, 'launcher', 'UGC Studio.exe'));
@@ -138,9 +158,9 @@ function build() {
   for (const k of pkgs) fs.cpSync(path.join(REPO, k), path.join(app, k), { recursive: true });
 
   // 6. What this version is, and every file of it.
-  const seq = Number(arg('--seq', '0')) || 0;
+  const seq = Number(opts.seq) || 0;
   const LF = require('../lib/library-format');
-  const info = { version, seq, commit, date: new Date().toISOString(), format: LF.FORMAT, channel: arg('--channel', 'stable'), electron };
+  const info = { version, seq, commit, date: new Date().toISOString(), format: LF.FORMAT, channel: opts.channel || 'stable', electron };
   fs.writeFileSync(path.join(app, 'version.json'), JSON.stringify(info, null, 2));
   const files = walk(out).filter((r) => r !== 'resources/app/files.json').sort();
   let bytes = 0;
@@ -153,7 +173,13 @@ function build() {
 }
 
 if (require.main === module) {
-  try { build(); } catch (e) { console.error('[build] ' + e.message); process.exit(1); }
+  try {
+    const keyFile = arg('--update-key', '');
+    build({
+      out: arg('--out', ''), seq: arg('--seq', '0'), channel: arg('--channel', 'stable'), worktree: process.argv.includes('--worktree'),
+      version: arg('--version-name', ''), updateKey: keyFile ? fs.readFileSync(keyFile, 'utf8') : '', updateUrl: arg('--update-url', ''),
+    });
+  } catch (e) { console.error('[build] ' + e.message); process.exit(1); }
 }
 
 module.exports = { build, prodPackages, sha256, walk, compileLauncher };
