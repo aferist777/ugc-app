@@ -49,7 +49,7 @@ import { normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
-import { paintWaves, onPeaks } from './tl-wave.js';
+import { paintWaves, paintWaveAs, onPeaks } from './tl-wave.js';
 // (phase V36, T5) A stretch cut out of every lane, the rest moved left.
 import { cutRefused, cutScope, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
@@ -954,6 +954,8 @@ function _beginDrag(e, t, c, el) {
   _drag = {
     edge,
     dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0, speed: +c.speed || 1,
+    // (phase V82, (тб5)) Played backwards, the timeline's left edge is the END of the file's window: trims mirror.
+    reversed: !!c.reversed && !isStill(c),
     group: edge ? [] : group,
     x0: e.clientX, y0: e.clientY, start0: +c.start,
     id: c.id, from: t.id, kind: t.kind, to: t.id,
@@ -1005,6 +1007,39 @@ function _clipOut(d, kind) {
   } }));
 }
 
+// (phase V82) A clip's wave as its edge is being dragged - its start, length and trimIn are the hand's until it lets go.
+function _waveAsDragged(el) {
+  const cv = el && el.querySelector(':scope > canvas.mv3b-wave');
+  const c = el && el.__clip;
+  if (!cv || !c || !_drag) return;
+  const now = { ...c, start: _drag.start != null ? _drag.start : c.start, dur: _drag.dur != null ? _drag.dur : c.dur,
+    trimIn: _drag.trimIn != null ? _drag.trimIn : c.trimIn };
+  paintWaveAs(_host(), cv, now, _zoom(), GUTTER);
+}
+
+// (phase V82, the owner 2026-11-09: "призрачный обрезок показывать слева и справа при сдвиге краев") The clip as it was when an
+// edge was taken, faint and under it - a sound with its wave: what the edge trims shows beside the clip, left or right; what an
+// edge adds needs none (the clip shows it). Gone with the next build, or at the let-go.
+function _ghostOf(el) {
+  if (!el || !el.parentElement) return null;
+  const g = document.createElement('div');
+  g.className = 'mv3b-ghost' + (el.classList.contains('is-audio') ? ' is-audio' : '');
+  g.style.left = el.style.left;
+  g.style.width = el.style.width;
+  g.style.top = el.offsetTop + 'px';
+  g.style.height = el.offsetHeight + 'px';
+  if (el.style.backgroundImage) g.style.backgroundImage = el.style.backgroundImage;
+  el.parentElement.insertBefore(g, el);
+  if (el.__clip && el.querySelector(':scope > canvas.mv3b-wave')) {
+    const cv = document.createElement('canvas');
+    cv.className = 'mv3b-wave';
+    g.appendChild(cv);
+    g.__clip = { ...el.__clip };
+    paintWaveAs(_host(), cv, g.__clip, _zoom(), GUTTER);
+  }
+  return g;
+}
+
 function _moveDrag(e) {
   if (!_drag) return;
   if (!_drag.moved && Math.abs(e.clientX - _drag.x0) < SLOP && Math.abs(e.clientY - _drag.y0) < SLOP) return;
@@ -1029,25 +1064,38 @@ function _moveDrag(e) {
     // (phase V49) The shortest a trim leaves a clip is 0.1 s - or the clip's own length when it is shorter already (a piece a
     // cut left): grabbing the edge of a piece of 0.05 s made it 0.1 s, and it ran over the piece beside it.
     const minD = Math.min(0.1, _drag.dur0);
+    const rev = _drag.reversed;
+    // (phase V82) The ghost of the clip as it was, under it: what an edge takes off shows beside it while the hand moves.
+    if (!_drag.ghosts) _drag.ghosts = [_ghostOf(_drag.el), _ghostOf(_drag.mateEl)].filter(Boolean);
     if (_drag.edge === 'in') {
-      // A caption has no source behind its front edge: it may be pulled back as far as the start.
-      const lo = _drag.words ? -_drag.start0 : -_drag.trimIn0 / sp;
+      // A caption has no source behind its front edge: it may be pulled back as far as the start. (phase V82) Nothing is
+      // pulled back past the timeline's start - the clip stopped at 0 while its length grew on, and what it played slid.
+      // Backwards, pulling it back takes the file AFTER its window.
+      let lo = -_drag.start0;
+      if (!_drag.words) lo = Math.max(lo, rev ? (room === Infinity ? -Infinity : _drag.dur0 - (room - _drag.trimIn0) / sp) : -_drag.trimIn0 / sp);
       const hi = _drag.dur0 - minD;
-      const d = Math.max(lo, Math.min(hi, dx));
+      const d = Math.max(Math.min(0, lo), Math.min(hi, dx));
       _drag.start = Math.max(0, Math.round((_drag.start0 + d) * 100) / 100);
       _drag.dur = Math.round((_drag.dur0 - d) * 100) / 100;
-      _drag.trimIn = Math.max(0, Math.round((_drag.trimIn0 + d * sp) * 100) / 100);
+      // Backwards, the left edge is the window's end: where the file is read from stays.
+      _drag.trimIn = rev ? _drag.trimIn0 : Math.max(0, Math.round((_drag.trimIn0 + d * sp) * 100) / 100);
       _drag.el.style.left = (_drag.start * z) + 'px';
     } else {
-      const hi = room === Infinity ? Infinity : (room - _drag.trimIn0) / sp;
+      // Backwards, the right edge is the window's START: it may be pulled on only while the file has a beginning before it.
+      const hi = rev ? _drag.dur0 + _drag.trimIn0 / sp : (room === Infinity ? Infinity : (room - _drag.trimIn0) / sp);
       const d = Math.max(minD - _drag.dur0, Math.min(hi - _drag.dur0, dx));
       _drag.dur = Math.round((_drag.dur0 + d) * 100) / 100;
+      if (rev) _drag.trimIn = Math.max(0, Math.round((_drag.trimIn0 - d * sp) * 100) / 100);
     }
     _drag.el.style.width = Math.max(2, _drag.dur * z) + 'px';
     if (_drag.mateEl) {
       _drag.mateEl.style.left = ((_drag.start != null ? _drag.start : _drag.start0) * z) + 'px';
       _drag.mateEl.style.width = Math.max(2, _drag.dur * z) + 'px';
     }
+    // (phase V82, the owner 2026-11-09) The wave stays where its sound is: drawn again for the clip as the edge leaves it - only
+    // the part trimmed goes, nothing slides with the edge.
+    _waveAsDragged(_drag.el);
+    _waveAsDragged(_drag.mateEl);
     return;
   }
 
@@ -1086,6 +1134,7 @@ function _endDrag(e) {
   if (!_drag) return;
   const d = _drag;
   _drag = null;
+  for (const g of (d.ghosts || [])) g.remove();
   document.body.classList.remove('mv3b-dragging');
   // Let go over the video chat's attachments (phase V7): the clip goes there, the lanes are drawn back as they were.
   const into = (d.far && !d.edge && !d.words && !d.still && e && e.clientX != null) ? _dropAt(e, d.kind) : null;
@@ -1168,6 +1217,8 @@ function _endDrag(e) {
               c.words = left;
             }
           }
+          // (phase V82, (тб5)) Backwards, the right edge moves where the file is read from.
+          if (d.edge === 'out' && d.reversed && d.trimIn != null) c.trimIn = d.trimIn;
           c.dur = d.dur;
           return;
         }

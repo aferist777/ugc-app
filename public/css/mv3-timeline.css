@@ -66,6 +66,14 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
   color:var(--muted);
 }
 .mv3b-clip.is-audio.is-sel .mv3b-wave{color:var(--ink)}
+/* (phase V82, the owner 2026-11-09: "призрачный обрезок показывать слева и справа при сдвиге краев") While an edge is dragged, the
+   clip as it was lies under it, faint and dashed - a sound with its wave: what the edge trims shows beside the clip. */
+.mv3b-ghost{
+  position:absolute; pointer-events:none; box-sizing:border-box;
+  border:1px dashed var(--muted); border-radius:var(--r-xs);
+  background:oklch(from var(--surface-2) l c h / .45) center/cover no-repeat; opacity:.5;
+}
+.mv3b-ghost .mv3b-wave{color:var(--muted)}
 
 /* ── The stretch to cut out (T5) ──────────────────────────────────────────────
    Drawn over a wave, laid across every lane - it goes from all of them. Red: Delete takes it away. Under the frozen names
