@@ -15,6 +15,14 @@
                                         still is only shortened
      a caption line, a title            js/captions/cut.js: words inside go, the rest move, nothing heard again
 
+   ONLY ITS OWN LANE when the sound is tied to no picture (phase V82, the owner 2026-11-09: "если пользователь выделяет волну на
+   аудиодорожке, а волна элемента не привязана к видео элементу, то видео не трогаем"): `cutScope` - a stretch drawn on a lane
+   where a sound inside it has its pair on a video lane (a film laid with its own sound, a talking head's line with its clip, a
+   highlights fragment) cuts every lane as above; else (a voiceover's read, music, an mp3, a sound effect) only THAT lane is cut,
+   what is after the cut on it moved left up to the first sound tied to a picture - that one and all after it stay where they
+   are, a pause before it - and the subtitle lanes go with it only when it is main audio ((тб1), (тб2)). Video, the other sound
+   lanes and the text lanes are not touched. Cut silence is not this (тб4): it cuts every lane, as it did.
+
    A TALKING HEAD's lines are laid by its script (lib/frag-mirror.js: cells with `frag`, and the caption pages bound to a
    line by `voice`). Since phase V44 ((ы5), (ы15)) they are cut here like any clip: a line becomes pieces of its file, and
    the save of the timeline writes what its pieces say into the line (lib/line-cuts.js), so the mirror lays it so again;
@@ -49,11 +57,14 @@ const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
 const LINE_GONE = 'A whole line of the talking head is inside the stretch - take it off the script in Setup instead, '
   + 'or cut a shorter stretch.';
 
+// (phase V82) The lanes a cut of `scope` (cutScope) touches: every lane, or its lane and - for main audio - the subtitles.
+const _inScope = (scope, t) => !scope || scope.all || t.id === scope.lane || (!!scope.subs && t.kind === 'subs');
+
 // (phase V44) Would `cuts` ({ a, b }) take a WHOLE line of a talking head away - every piece of it on main audio?
-function _lineGone(tl, cuts) {
+function _lineGone(tl, cuts, scope) {
   const lines = new Map();
   for (const t of tl.tracks) {
-    if (t.kind !== 'audio') continue;
+    if (t.kind !== 'audio' || !_inScope(scope, t)) continue;
     for (const c of (t.clips || [])) if (Number(c.frag) > 0) (lines.get(+c.frag) || lines.set(+c.frag, []).get(+c.frag)).push(c);
   }
   const inside = (c) => cuts.some((k) => +c.start >= k.a - EPS && _end(c) <= k.b + EPS);
@@ -64,8 +75,9 @@ function _lineGone(tl, cuts) {
 const MERGED_LINES = 'Merged lines of the talking head are one file - cut inside them before merging, or take the merge back (Ctrl+Z).';
 
 // (phase V45) Would `cuts` reach into a talking head's lines merged into one file (a cell with `merge`)?
-function _mergedHit(tl, cuts) {
+function _mergedHit(tl, cuts, scope) {
   for (const t of tl.tracks) {
+    if (!_inScope(scope, t)) continue;
     for (const c of (t.clips || [])) {
       if (!Array.isArray(c.merge) || !c.merge.length) continue;
       if (cuts.some((k) => k.a < _end(c) - EPS && k.b > +c.start + EPS)) return true;
@@ -74,17 +86,45 @@ function _mergedHit(tl, cuts) {
   return false;
 }
 
-/** Why [a, b) cannot be cut out of `tl`, in words - or '' when it can. */
-export function cutRefused(tl, a, b) {
+/** Why [a, b) cannot be cut out of `tl` (of the lanes `scope` takes - cutScope; every lane without one), in words - or ''. */
+export function cutRefused(tl, a, b, scope) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!(b - a >= MIN_CUT)) return 'Draw a longer stretch over the wave to cut it out';
-  if (_mergedHit(tl, [{ a, b }])) return MERGED_LINES;
-  return _lineGone(tl, [{ a, b }]) ? LINE_GONE : '';
+  if (_mergedHit(tl, [{ a, b }], scope)) return MERGED_LINES;
+  return _lineGone(tl, [{ a, b }], scope) ? LINE_GONE : '';
+}
+
+/** (phase V82) Is `c`, a clip of a sound lane, tied to a picture - the other half of its pair on a video lane of `tl`? A picture
+ *  whose sound was taken away keeps its pairId pointing at nothing, and a pairId alone says nothing. */
+export function tiedToPicture(tl, c) {
+  if (!c || !c.pairId || !tl || !Array.isArray(tl.tracks)) return false;
+  return tl.tracks.some((t) => t.kind === 'video' && (t.clips || []).some((x) => x !== c && x.pairId === c.pairId));
+}
+
+/**
+ * (phase V82) What a stretch [a, b) drawn on the sound lane `laneId` cuts:
+ *   { all: true }                              a sound in it on that lane is tied to a picture - every lane, as before
+ *   { all: false, lane, subs, stopAt }         that lane only; what is after the cut on it moves left up to `stopAt` (the start
+ *                                              of the first sound tied to a picture after it - Infinity when none), which
+ *                                              stays; `subs` - the subtitle lanes go with it (it is main audio)
+ */
+export function cutScope(tl, laneId, a, b) {
+  const all = { all: true };
+  if (!tl || !Array.isArray(tl.tracks)) return all;
+  const lane = tl.tracks.find((t) => t.id === laneId);
+  if (!lane || lane.kind !== 'audio') return all;
+  const clips = lane.clips || [];
+  if (clips.some((c) => +c.start < b - EPS && _end(c) > a + EPS && tiedToPicture(tl, c))) return all;
+  let stopAt = Infinity;
+  for (const c of clips) if (+c.start >= b - EPS && tiedToPicture(tl, c)) stopAt = Math.min(stopAt, +c.start);
+  return { all: false, lane: lane.id, subs: !!lane.main, stopAt };
 }
 
 /**
  * Cut [a, b) out of every lane of `tl` (a timeline being mutated) and close the gap.
- * `opts.newId()` - an id for a clip's right piece; `opts.isStill(c)` - a picture, which is shortened rather than split.
+ * `opts.newId()` - an id for a clip's right piece; `opts.isStill(c)` - a picture, which is shortened rather than split;
+ * `opts.only` - (phase V82) a cutScope that is not `all`: only its lane (and the subtitles with main audio), and on it nothing
+ * from `stopAt` on is moved.
  */
 export function rippleCut(tl, a, b, opts) {
   a = r2(+a || 0); b = r2(+b || 0);
@@ -101,10 +141,15 @@ export function rippleCut(tl, a, b, opts) {
 
   // (phase V44) Cut silence keeps every word - shortened, never dropped (js/captions/cut.js).
   const lineOpts = opts && opts.keepWords ? { keepWords: true } : undefined;
+  // (phase V82) One lane only, when the sound cut is tied to no picture: nothing from its first tied sound on moves.
+  const only = opts && opts.only && !opts.only.all ? opts.only : null;
+  const stopAt = only && Number.isFinite(+only.stopAt) ? +only.stopAt : Infinity;
   for (const t of (tl.tracks || [])) {
     if (!Array.isArray(t.clips)) continue;
+    if (only && !_inScope(only, t)) continue;
     const out = [];
     for (const c of t.clips) {
+      if (only && (+c.start || 0) >= stopAt - EPS) { out.push(c); continue; }
       if (_words(t)) {
         const n = cutLine(c, a, b, lineOpts);
         if (n) out.push(n);

@@ -51,7 +51,7 @@ import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
 import { paintWaves, onPeaks } from './tl-wave.js';
 // (phase V36, T5) A stretch cut out of every lane, the rest moved left.
-import { cutRefused, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
+import { cutRefused, cutScope, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
 import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
 // (phase V51, points 2 and 4) Ctrl+C / Ctrl+V of the picked clips and text lines - the buffer and the paste.
@@ -723,7 +723,10 @@ function _edgeOf(e, el) {
 // top with its name takes the clip as every clip is taken (moved, picked by a click), the WAVE under it draws a stretch
 // of time - as in a sound editor; its edges still trim. The stretch is drawn across all lanes; Delete cuts it, Escape or
 // a press on a clip lets it go; a press on the ruler or bare lane keeps it (to listen to it before cutting).
-let _range = null;              // { a, b } in timeline seconds, while a stretch is drawn
+// (phase V82, the owner 2026-11-09) Not every lane when the sound under it is tied to no picture: the stretch remembers the
+// lane it was drawn on, and tl-cut.js cutScope says what it cuts - every lane, or that lane alone (and the subtitles with main
+// audio); the band is drawn over what it cuts.
+let _range = null;              // { a, b, lane } in timeline seconds, while a stretch is drawn
 let _ranging = null;            // the gesture drawing it
 const WAVE_TOP = 12;            // where a sound clip's wave begins, px below its top (css/mv3-timeline.css)
 
@@ -733,7 +736,7 @@ function _onWave(e, el) {
 }
 
 function _beginRange(e, t, c, el) {
-  _ranging = { x0: e.clientX, t0: _timeAtX(e.clientX), moved: false, id: c.id };
+  _ranging = { x0: e.clientX, t0: _timeAtX(e.clientX), moved: false, id: c.id, lane: t.id };
   e.preventDefault();
 }
 
@@ -749,7 +752,7 @@ function _moveRange(e) {
   const end = Math.max(Store.duration(), 0);
   const t1 = Math.min(end, _timeAtX(e.clientX));
   const t0 = Math.min(end, _ranging.t0);
-  _range = { a: _r2(Math.min(t0, t1)), b: _r2(Math.max(t0, t1)) };
+  _range = { a: _r2(Math.min(t0, t1)), b: _r2(Math.max(t0, t1)), lane: _ranging.lane };
   _paintRange();
 }
 
@@ -789,24 +792,49 @@ function _letRangeGo() {
   _paintRange();
 }
 
+// What the drawn stretch cuts (phase V82): every lane, or its own lane alone - tl-cut.js cutScope.
+function _rangeScope() {
+  if (!_range || !_range.lane) return { all: true };
+  return cutScope(Store.timeline(), _range.lane, _range.a, _range.b);
+}
+
 // The stretch over the lanes: one element in the stack, under the playhead and the frozen names - and a copy inside the
 // words block while it sticks to the floor (phase V41: it is a layer of its own over the lanes, and the stretch cuts its
-// lines too). Its label lives in the ruler, which stays in sight.
+// lines too). Its label lives in the ruler, which stays in sight. (phase V82) A stretch that cuts its own lane alone lies in
+// that lane only - and in the subtitle lanes when it is main audio.
 function _paintRange() {
   refreshSilence();
   const host = _host();
   const inner = host && host.querySelector('.mv3b-inner');
   if (!inner) return;
-  if (!_range) { inner.querySelectorAll('.mv3b-range, .mv3b-range-t').forEach(el => el.remove()); return; }
+  inner.querySelectorAll('.mv3b-range').forEach(el => el.remove());
+  if (!_range) { inner.querySelectorAll('.mv3b-range-t').forEach(el => el.remove()); return; }
   const z = _zoom();
-  const words = inner.querySelector(':scope > .mv3b-zone.is-subs.has-words');
-  for (const p of [inner, words]) {
-    if (!p) continue;
-    let el = p.querySelector(':scope > .mv3b-range');
-    // Under the playhead's line, which shares its layer (phase V49.1): put before it.
-    if (!el) { el = document.createElement('div'); el.className = 'mv3b-range'; p.insertBefore(el, p.querySelector(':scope > .mv3b-head')); }
-    el.style.left = (GUTTER + _range.a * z) + 'px';
-    el.style.width = Math.max(1, (_range.b - _range.a) * z) + 'px';
+  const w = Math.max(1, (_range.b - _range.a) * z) + 'px';
+  const scope = _rangeScope();
+  const band = () => { const el = document.createElement('div'); el.className = 'mv3b-range'; return el; };
+  if (scope.all) {
+    const words = inner.querySelector(':scope > .mv3b-zone.is-subs.has-words');
+    for (const p of [inner, words]) {
+      if (!p) continue;
+      const el = band();
+      // Under the playhead's line, which shares its layer (phase V49.1): put before it.
+      p.insertBefore(el, p.querySelector(':scope > .mv3b-head'));
+      el.style.left = (GUTTER + _range.a * z) + 'px';
+      el.style.width = w;
+    }
+  } else {
+    const tl = Store.timeline();
+    for (const t of ((tl && tl.tracks) || [])) {
+      if (t.id !== scope.lane && !(scope.subs && t.kind === 'subs')) continue;
+      const lane = inner.querySelector(`.mv3b-row[data-track="${CSS.escape(t.id)}"] .mv3b-lane`);
+      if (!lane) continue;
+      const el = band();
+      el.classList.add('is-lane');
+      lane.appendChild(el);
+      el.style.left = (_range.a * z) + 'px';
+      el.style.width = w;
+    }
   }
   const ruler = inner.querySelector('.mv3b-ruler');
   if (!ruler) return;
@@ -816,32 +844,35 @@ function _paintRange() {
     lbl = document.createElement('button');
     lbl.type = 'button';
     lbl.className = 'mv3b-range-t';
-    lbl.title = 'Cut this stretch out of every lane - or press Delete';
     lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
     lbl.addEventListener('click', (e) => { e.stopPropagation(); cutRange(); });
     // (phase V73 block 5, 5c) Lucide's scissors in place of "✂", the seconds in mono
     lbl.append(iconEl('scissors', 10), document.createElement('span'));
     ruler.appendChild(lbl);
   }
+  lbl.title = scope.all
+    ? 'Cut this stretch out of every lane - or press Delete'
+    : 'Cut this stretch out of this lane only - no picture is tied to this sound. Or press Delete';
   lbl.style.left = (_range.a * z + 2) + 'px';
   lbl.lastChild.replaceChildren(figures((_range.b - _range.a).toFixed(2) + ' s · Delete'));
 }
 
 /**
  * Cut the drawn stretch out of every lane and move what is after it left - one step to undo. A talking head's lines are
- * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was.
+ * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was. (phase V82) A
+ * sound tied to no picture is cut out of its own lane alone (tl-cut.js cutScope).
  */
 export function cutRange() {
   if (!_range) return { ok: false, why: 'Draw a stretch over a wave first' };
-  const { a, b } = _range;
-  const why = cutRefused(Store.timeline(), a, b);
+  const { a, b, lane } = _range;
+  const why = cutRefused(Store.timeline(), a, b, _rangeScope());
   if (why) {
     const at = _host() && _host().querySelector('.mv3b-range-t, .mv3b-range');
     if (at) note(at, 'Not cut', why);
     return { ok: false, why };
   }
   _clearSel();
-  const ok = Store.mutate(tl => rippleCut(tl, a, b, { newId: _id, isStill }));
+  const ok = Store.mutate(tl => rippleCut(tl, a, b, { newId: _id, isStill, only: lane ? cutScope(tl, lane, a, b) : null }));
   _range = null;
   _paintRange();
   if (ok) _seekTo(a);
