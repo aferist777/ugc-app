@@ -227,9 +227,11 @@ async function publish() {
   const z = new Map();
   let sent = 0, sentBytes = 0;
   const t0 = Date.now();
+  // What the bucket has, in one listing (a thousand a page) - asking for each of eight thousand files took four minutes.
+  const there = new Map((await st.list('blobs/')).map((b) => [b.key, b.size]));
   await pool([...byHash.values()], stand ? 4 : 8, async (f) => {
     const key = UM.keys.blob(f.h);
-    const size = await st.has(key);
+    const size = there.has(key) ? there.get(key) : -1;
     if (size >= 0) { z.set(f.h, size); return; }
     const gz = zlib.gzipSync(fs.readFileSync(path.join(out, ...f.p.split('/'))), { level: 6 });
     await st.put(key, gz, 'application/gzip');
