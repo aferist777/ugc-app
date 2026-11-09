@@ -9,8 +9,10 @@
    window, downloads, links that leave the app, a context menu, the usual keys.
 
    THE LIBRARY is where everything the app writes goes (lib/config.js). Run from source it is
-   local-data/ in the checkout; built, it is the folder the exe sits in. UGC_DATA_DIR overrides
-   both, which is how a launcher that updates the program will name it.
+   local-data/ in the checkout. Built (phase V83), the exe sits in a VERSION folder that an update
+   replaces - <root>\versions\<version>\ - so the library is never the exe's folder: the launcher
+   names it in UGC_DATA_DIR (which overrides everything, from source too), and an exe started
+   straight from its version folder takes <root>\library; anywhere else it does not start.
 
    THE PROFILE - Chromium's own storage: localStorage, zoom, permissions - is in the library too,
    one per operating system, so the pages' state stays with the library, not with the machine.
@@ -36,8 +38,20 @@ const WINDOWED = DEV && process.argv.includes('--windowed');
 // The pages' dark background, so no window flashes white before its page paints.
 const BG = '#0c0f16';
 
-const LIBRARY = path.resolve(process.env.UGC_DATA_DIR
-  || (app.isPackaged ? path.dirname(process.execPath) : path.join(APP_DIR, 'local-data')));
+// (phase V83, (н1)) '' - a built exe that is not in a versions folder: there is no library to take.
+function libraryDir() {
+  if (process.env.UGC_DATA_DIR) return path.resolve(process.env.UGC_DATA_DIR);
+  if (!app.isPackaged) return path.join(APP_DIR, 'local-data');
+  const version = path.dirname(process.execPath);
+  if (path.basename(path.dirname(version)).toLowerCase() !== 'versions') return '';
+  return path.join(path.dirname(path.dirname(version)), 'library');
+}
+const LIBRARY = libraryDir();
+// (phase V83, (н4)) Started by the launcher: the taskbar's pin and its jump list start the LAUNCHER, never this
+// version's exe - an update deletes the folder it is in.
+const LAUNCHER = process.env.UGC_LAUNCHER || '';
+const APP_ID = 'UGCStudio.App';
+const ICON = path.join(__dirname, process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 
 function canWrite(dir) {
   try {
@@ -53,10 +67,16 @@ function canWrite(dir) {
 
 // (phase V83, block B0) A library a newer program wrote is not opened: said here, before the server is started.
 const LIB_FORMAT = require('../lib/library-format');
-const writable = canWrite(LIBRARY);
+const writable = !!LIBRARY && canWrite(LIBRARY);
 const refused = writable ? LIB_FORMAT.check(LIBRARY, require('../lib/app-version').current()) : null;
 
-if (refused) {
+if (!LIBRARY) {
+  dialog.showErrorBox('UGC Studio cannot start',
+    `This program is a version of UGC Studio:\n\n${path.dirname(process.execPath)}\n\n` +
+    'It is started by "UGC Studio.exe" in the UGC Studio folder - the one beside "versions" and "library". ' +
+    'Open that one.');
+  app.exit(1);
+} else if (refused) {
   dialog.showErrorBox('UGC Studio cannot open this library', refused.message);
   app.exit(LIB_FORMAT.EXIT_REFUSED);
 } else if (writable) {
@@ -76,6 +96,8 @@ function run() {
   fs.mkdirSync(profile, { recursive: true });
   app.setPath('userData', profile);
   app.setPath('sessionData', profile);
+  // (phase V83, (н4)) One taskbar identity for every version the launcher starts.
+  if (LAUNCHER && process.platform === 'win32') app.setAppUserModelId(APP_ID);
   if (!app.requestSingleInstanceLock()) {
     app.quit();
     return;
@@ -230,6 +252,8 @@ function run() {
       show: false,
       backgroundColor: BG,
       autoHideMenuBar: true,
+      // (phase V83, (о16)) The app's sign, not Electron's (tools/make-icon.js).
+      icon: ICON,
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
@@ -240,6 +264,12 @@ function run() {
         backgroundThrottling: false,
       },
     });
+    // (phase V83, (н4)) A pin of this window starts the launcher - with its icon, under the app's name.
+    if (LAUNCHER && process.platform === 'win32') {
+      try {
+        win.setAppDetails({ appId: APP_ID, appIconPath: LAUNCHER, appIconIndex: 0, relaunchCommand: `"${LAUNCHER}"`, relaunchDisplayName: 'UGC Studio' });
+      } catch (e) { log.line('the taskbar details were not set: ' + e.message); }
+    }
     // (phase V60, the owner 2026-10-29, (пп3а): "давай при открытии приложения открывать во все окно, но не на полный экран")
     // MAXIMISED at every start - Windows' title bar and the taskbar stay; full screen is the person's (F11, the strip's
     // button), and the next start is maximised again. `--windowed` (checks) is an ordinary window that takes no focus.

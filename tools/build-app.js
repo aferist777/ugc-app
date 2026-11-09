@@ -1,0 +1,144 @@
+'use strict';
+
+/* build-app.js - a VERSION FOLDER of the app, the one a friend's launcher runs and the updater fills (phase V83,
+   block B1; the owner 2026-11-09: (о15) "своим скриптом" - no electron-builder, every step here).
+
+       node tools/build-app.js [--out <folder>] [--seq <n>] [--channel stable] [--worktree]
+
+   --worktree takes the app's files from the folder as they are (a check before a commit; its version.json says
+   "<commit>+worktree") - a release is always built from the commit.
+
+   What it makes (default %TEMP%\ugcb\<version>, short and outside OneDrive - ten thousand files would sync):
+     UGC Studio.exe                Electron's own exe under the app's name (node_modules/electron/dist)
+     *.dll, *.pak, locales\ ...    the rest of Electron, as it is
+     resources\app\                the app: desktop\ lib\ routes\ public\ presets-src\ server.js package.json - from the
+                                   LAST COMMIT (`git archive HEAD`), never the working tree: other sessions keep half-made
+                                   edits in it -, vendor\ (laid out by tools/fetch-*.js, checked here without --optional:
+                                   a build with no network must fail, not ship without yt-dlp), node_modules\ - only the
+                                   packages package-lock.json does not mark `dev` (no electron, eslint, globals)
+     resources\app\version.json    { version, seq, commit, date, format, channel, electron } - lib/app-version.js
+     resources\app\files.json      every file of the folder with its sha256 and size - what the updater compares
+   No asar (yt-dlp, whisper and ffmpeg are exes; the caption fonts are files libass opens); Electron's default_app.asar
+   is left out, so the exe runs resources\app. The runAsNode fuse stays ON: yt-dlp solves YouTube's challenges on the
+   app's own Node (lib/ytdlp.js). Nothing at run time writes into this folder - everything goes to the library. */
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+const { spawnSync } = require('child_process');
+
+const REPO = path.join(__dirname, '..');
+const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'presets-src', 'server.js', 'package.json'];
+const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-cookbook', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
+
+const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt; };
+const WORKTREE = process.argv.includes('--worktree');
+const say = (s) => console.log('[build] ' + s);
+
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, { cwd: REPO, encoding: 'utf8', windowsHide: true, maxBuffer: 1 << 26, ...opts });
+  if (r.error) throw r.error;
+  if (r.status !== 0) throw new Error(`${path.basename(cmd)} ${args.slice(0, 3).join(' ')}: ${(r.stderr || r.stdout || '').trim().split('\n').pop()}`);
+  return r.stdout;
+}
+
+function walk(dir, rel = '', out = []) {
+  for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+    const r = rel ? `${rel}/${d.name}` : d.name;
+    if (d.isDirectory()) walk(path.join(dir, d.name), r, out);
+    else if (d.isFile()) out.push(r);
+  }
+  return out;
+}
+
+function sha256(file) {
+  const h = crypto.createHash('sha256');
+  const fd = fs.openSync(file, 'r');
+  const buf = Buffer.allocUnsafe(1 << 20);
+  try { for (let n; (n = fs.readSync(fd, buf, 0, buf.length, null)) > 0;) h.update(buf.subarray(0, n)); }
+  finally { fs.closeSync(fd); }
+  return h.digest('hex');
+}
+
+/** The production packages: every package-lock entry not marked dev, present on the disk (an optional one for
+ *  another platform is not), a nested one only when its parent is not already taken whole. */
+function prodPackages() {
+  const lock = JSON.parse(fs.readFileSync(path.join(REPO, 'package-lock.json'), 'utf8'));
+  if (lock.lockfileVersion < 2) throw new Error('package-lock.json is too old to read (lockfileVersion ' + lock.lockfileVersion + ')');
+  const keys = Object.entries(lock.packages || {})
+    .filter(([k, p]) => k && !p.dev && fs.existsSync(path.join(REPO, k)))
+    .map(([k]) => k).sort();
+  return keys.filter((k) => !keys.some((o) => o !== k && k.startsWith(o + '/')));
+}
+
+function build() {
+  const t0 = Date.now();
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
+  const version = pkg.version;
+  const out = path.resolve(arg('--out', path.join(os.tmpdir(), 'ugcb', version)));
+  if (out.startsWith(path.resolve(REPO) + path.sep)) throw new Error('the version folder must not be inside the program folder');
+
+  // 1. vendor/ complete - each fetcher checks its pinned files and downloads only what is missing.
+  for (const f of FETCH) run(process.execPath, [path.join('tools', f + '.js')], { stdio: ['ignore', 'pipe', 'pipe'] });
+  say('vendor/ checked');
+
+  // 2. The commit, and what of the app differs from it in the working tree (not shipped - said, so it is no surprise).
+  const head = run('git', ['rev-parse', 'HEAD']).trim();
+  const dirty = run('git', ['status', '--porcelain', '--', ...APP_PATHS]).trim();
+  if (dirty) say((WORKTREE ? 'IN this build, not committed' : 'not in this build (uncommitted)') + ':\n' + dirty.split('\n').map((l) => '        ' + l).join('\n'));
+  const commit = WORKTREE && dirty ? head + '+worktree' : head;
+
+  // 3. Electron under the app's name.
+  fs.rmSync(out, { recursive: true, force: true });
+  const dist = path.join(REPO, 'node_modules', 'electron', 'dist');
+  fs.cpSync(dist, out, { recursive: true, filter: (src) => path.basename(src) !== 'default_app.asar' });
+  fs.renameSync(path.join(out, 'electron.exe'), path.join(out, 'UGC Studio.exe'));
+  const electron = JSON.parse(fs.readFileSync(path.join(REPO, 'node_modules', 'electron', 'package.json'), 'utf8')).version;
+
+  // 4. The app from the commit - or, with --worktree (checks of a change before it is committed; never a release), the
+  //    files git knows or would add, as they are in the folder now.
+  const app = path.join(out, 'resources', 'app');
+  fs.mkdirSync(app, { recursive: true });
+  if (WORKTREE) {
+    const listed = run('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...APP_PATHS]).split('\0').filter(Boolean);
+    for (const r of listed) {
+      const src = path.join(REPO, r);
+      if (!fs.existsSync(src)) continue;          // deleted, not yet committed
+      fs.mkdirSync(path.dirname(path.join(app, r)), { recursive: true });
+      fs.copyFileSync(src, path.join(app, r));
+    }
+  } else {
+    const tar = path.join(out, 'app.tar');
+    run('git', ['archive', '--format=tar', '-o', tar, commit, '--', ...APP_PATHS]);
+    // Windows' own tar (bsdtar): Git's GNU tar reads "C:\..." as a remote host.
+    const TAR = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+    run(TAR, ['-xf', tar, '-C', app]);
+    fs.rmSync(tar, { force: true });
+  }
+
+  // 5. vendor/ and the production node_modules from this checkout.
+  fs.cpSync(path.join(REPO, 'vendor'), path.join(app, 'vendor'), { recursive: true });
+  const pkgs = prodPackages();
+  for (const k of pkgs) fs.cpSync(path.join(REPO, k), path.join(app, k), { recursive: true });
+
+  // 6. What this version is, and every file of it.
+  const seq = Number(arg('--seq', '0')) || 0;
+  const LF = require('../lib/library-format');
+  const info = { version, seq, commit, date: new Date().toISOString(), format: LF.FORMAT, channel: arg('--channel', 'stable'), electron };
+  fs.writeFileSync(path.join(app, 'version.json'), JSON.stringify(info, null, 2));
+  const files = walk(out).filter((r) => r !== 'resources/app/files.json').sort();
+  let bytes = 0;
+  const list = files.map((r) => { const abs = path.join(out, r); const s = fs.statSync(abs).size; bytes += s; return { p: r, h: sha256(abs), s }; });
+  fs.writeFileSync(path.join(app, 'files.json'), JSON.stringify({ version, seq, commit, files: list }));
+
+  say(`UGC Studio ${version} (${commit.slice(0, 12)}, Electron ${electron}) -> ${out}`);
+  say(`${list.length} files, ${(bytes / 1048576).toFixed(0)} MB; ${pkgs.length} packages; ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  return { out, info, files: list.length, bytes };
+}
+
+if (require.main === module) {
+  try { build(); } catch (e) { console.error('[build] ' + e.message); process.exit(1); }
+}
+
+module.exports = { build, prodPackages, sha256, walk };
