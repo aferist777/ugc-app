@@ -19,6 +19,13 @@
                                                   it first (a version is published once).
      node tools/release.js status                 what the channel holds
      node tools/release.js prune [--keep 3]       deletes the files no release among the last three uses
+     node tools/release.js worker                 (block B4) the bucket ugc-updates and the Worker ugc-updates on the
+                                                  owner's Cloudflare (tools/release-worker.js); its address into
+                                                  desktop/update-key.js - commit that file
+     node tools/release.js friend add <name>      a friend's token (its SHA-256 in the bucket, the token itself in
+                                                  %USERPROFILE%\.ugc-release\friends\<name>.token for the handoff)
+     node tools/release.js friend remove <name>   that copy gets no updates any more
+     node tools/release.js friends                who, and which version each copy said it has
 
    Where: the bucket `ugc-updates` on the owner's Cloudflare - the account and the ONE Cloudflare key are READ from
    library/data/settings.json (the owner (о18): the key on Admin of the owner's library; nothing is written there).
@@ -272,13 +279,119 @@ async function prune() {
   return drop.length;
 }
 
+// ── The Worker and the friends (block B4) ──────────────────────────────────
+function cfSettings() {
+  const s = JSON.parse(fs.readFileSync(path.join(REPO, 'library', 'data', 'settings.json'), 'utf8'));
+  const token = String(s.cloudflareApiToken || '').trim();
+  const account = String(s.r2AccountId || '').trim();
+  if (!token || !account) throw new Error('the Cloudflare key on Admin -> API keys has not passed its check');
+  return { token, account };
+}
+
+async function cf(method, url, body) {
+  const { token } = cfSettings();
+  const form = typeof FormData !== 'undefined' && body instanceof FormData;
+  const r = await fetch('https://api.cloudflare.com/client/v4' + url, {
+    method,
+    headers: { Authorization: 'Bearer ' + token, ...(body && !form ? { 'content-type': 'application/json' } : {}) },
+    body: body ? (form ? body : JSON.stringify(body)) : undefined,
+    signal: AbortSignal.timeout(60000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) {
+    const e = new Error(`Cloudflare ${method} ${url.replace(/accounts\/[^/]+/, 'accounts/…')}: ${r.status} ${(j.errors || []).map((x) => x.message).join('; ')}`);
+    e.status = r.status;
+    throw e;
+  }
+  return j.result;
+}
+
+// The bucket, the Worker bound to it, its workers.dev address - written into desktop/update-key.js (commit it).
+async function worker() {
+  const { account } = cfSettings();
+  const acc = encodeURIComponent(account);
+  const W = require('./release-worker');
+  try { await cf('GET', `/accounts/${acc}/r2/buckets/${BUCKET}`); say(`the bucket ${BUCKET} is there`); }
+  catch (e) {
+    if (e.status !== 404) throw e;
+    await cf('POST', `/accounts/${acc}/r2/buckets`, { name: BUCKET });
+    say(`the bucket ${BUCKET} was made`);
+  }
+  let sub = '';
+  try { sub = ((await cf('GET', `/accounts/${acc}/workers/subdomain`)) || {}).subdomain || ''; } catch (e) { /* none yet */ }
+  if (!sub) sub = (await cf('PUT', `/accounts/${acc}/workers/subdomain`, { subdomain: 'ugc-' + crypto.randomBytes(4).toString('hex') })).subdomain;
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({
+    main_module: 'worker.js', compatibility_date: '2025-01-01',
+    bindings: [{ type: 'r2_bucket', name: 'UPD', bucket_name: BUCKET }],
+  })], { type: 'application/json' }));
+  form.append('worker.js', new Blob([W.WORKER], { type: 'application/javascript+module' }), 'worker.js');
+  await cf('PUT', `/accounts/${acc}/workers/scripts/${W.NAME}`, form);
+  await cf('POST', `/accounts/${acc}/workers/scripts/${W.NAME}/subdomain`, { enabled: true });
+  const url = `https://${W.NAME}.${sub}.workers.dev`;
+  writeAppKey({ WORKER_URL: url });
+  say(`the Worker answers at ${url} - desktop/update-key.js holds it; commit it`);
+  return url;
+}
+
+const FRIEND = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const tokenFile = (name) => path.join(keysDir(), 'friends', `${name}.token`);
+
+async function readTokens(st) {
+  const b = await st.get('access/tokens.json');
+  try { return b ? JSON.parse(b.toString('utf8')) : {}; } catch (e) { throw new Error('access/tokens.json is not readable - nothing changed'); }
+}
+
+/** A friend's token: made, its SHA-256 into the bucket, the token itself into <keys>\friends\<name>.token (for handoff). */
+async function friendAdd(name) {
+  if (!FRIEND.test(String(name || ''))) throw new Error('a friend\'s name: small Latin letters, digits, - and _');
+  const st = store();
+  const t = await readTokens(st);
+  if (Object.values(t).some((f) => f.name === name && !f.revoked)) throw new Error(`${name} has a token already (friend remove ${name} first)`);
+  const token = crypto.randomBytes(24).toString('base64url');
+  t[crypto.createHash('sha256').update(token).digest('hex')] = { name, channel: CHANNEL, added: new Date().toISOString() };
+  await st.put('access/tokens.json', Buffer.from(JSON.stringify(t, null, 2)), 'application/json');
+  fs.mkdirSync(path.dirname(tokenFile(name)), { recursive: true });
+  fs.writeFileSync(tokenFile(name), token, { mode: 0o600 });
+  say(`${name}: a token made - it goes into the copy as updates\\token (release.js handoff); kept in ${tokenFile(name)}`);
+  return token;
+}
+
+async function friendRemove(name) {
+  const st = store();
+  const t = await readTokens(st);
+  let n = 0;
+  for (const f of Object.values(t)) if (f.name === name && !f.revoked) { f.revoked = new Date().toISOString(); n++; }
+  if (!n) throw new Error(`${name} has no token`);
+  await st.put('access/tokens.json', Buffer.from(JSON.stringify(t, null, 2)), 'application/json');
+  say(`${name}: no access to updates any more (within a minute)`);
+}
+
+async function friends() {
+  const st = store();
+  const t = await readTokens(st);
+  const rows = [];
+  for (const f of Object.values(t)) {
+    let seen = null;
+    try { const b = await st.get(`seen/${f.name}.json`); seen = b ? JSON.parse(b.toString('utf8')) : null; } catch (e) { seen = null; }
+    rows.push(`${f.name}${f.revoked ? ' (revoked)' : ''}: ${seen ? `${seen.version} (seq ${seen.seq}, ${seen.state || 'checked'}) ${seen.at}` : 'never asked'}`);
+  }
+  for (const r of rows) say(r);
+  return rows;
+}
+
 async function main() {
   if (cmd === 'keygen') return keygen();
   if (cmd === 'notes') return notes();
   if (cmd === 'publish') return publish();
   if (cmd === 'status') return status();
   if (cmd === 'prune') return prune();
-  console.log('node tools/release.js keygen | notes | publish [--bump] [--important] | status | prune [--keep 3]');
+  if (cmd === 'worker') return worker();
+  if (cmd === 'friend' && argv[1] === 'add') return friendAdd(argv[2]);
+  if (cmd === 'friend' && argv[1] === 'remove') return friendRemove(argv[2]);
+  if (cmd === 'friends') return friends();
+  console.log('node tools/release.js keygen | notes | publish [--bump] [--important] | status | prune [--keep 3]\n'
+    + '                       worker | friend add <name> | friend remove <name> | friends');
   return null;
 }
 
