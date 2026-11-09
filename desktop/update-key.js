@@ -6,6 +6,6 @@
 // asked for. A stand's build bakes its own in (tools/build-app.js --update-key / --update-url).
 
 module.exports = {
-  PUBLIC_KEY: '',
-  WORKER_URL: '',
+  PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAf9u+JWNAPOHmOqz9OAiJLvYC1nnGSGZwogc6UBofRzA=\n-----END PUBLIC KEY-----\n",
+  WORKER_URL: "https://ugc-updates.your-subdomain.workers.dev",
 };
