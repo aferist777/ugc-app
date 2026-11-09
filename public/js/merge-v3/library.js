@@ -745,7 +745,11 @@ function _underStage(item, video) {
 // The upload cell, first in the grid. A tile-sized target rather than a header button because that is where files are
 // dropped, and the two ways in should look like the same thing. What it offers follows the node (the owner): clips -
 // a file or a link; pictures - a file, or made here; a sound or a track - a file.
+// (2026-11-09, the owner: "в корне REFERENCES везде стоят плюсики первой плиткой. хотя мы ничего не можем в этом корне делать.
+// давай поудаляем эти плюсики") REFERENCES and every folder in it have none - null. It fills itself: the Telegram bot's
+// posts, the pieces cut from a video, the YouTube sources.
 function _plusTile() {
+  if (_kind() === 'references') return null;
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
@@ -773,12 +777,6 @@ function _plusTile() {
   if (_kind() === 'lyrics') {
     b.disabled = true;
     b.title = 'Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is added here';
-    return b;
-  }
-  // (phase V35) REFERENCES fills itself: the Telegram bot's posts, the pieces cut from a video, the sources downloaded.
-  if (_kind() === 'references') {
-    b.disabled = true;
-    b.title = 'REFERENCES fills itself - the Telegram bot\'s posts, pieces cut from a video, the YouTube sources';
     return b;
   }
   // (phase V34.E) Built-in is the app's, Favorites the starred - nothing is brought in there.
@@ -1020,7 +1018,8 @@ function _paint() {
   grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : _node && _node.tiles === 'whole' ? ' is-whole' : '')
     // (phase V59.1) Music -> Lyrics: wider tiles of text.
     + (_kind() === 'lyrics' ? ' is-text' : '');
-  grid.appendChild(_plusTile());
+  const plus = _plusTile();
+  if (plus) grid.appendChild(plus);
   // An empty shelf still gets the grid - it is how files get onto it in the first
   // place, so replacing it with an "empty" placard would hide the only way in. A folder of folders says nothing.
   if (!_items.length) {
@@ -1029,7 +1028,8 @@ function _paint() {
     // (phase V73 block 2, step 2b) The shared "nothing here" under the "+" - the words as they were, the first letter capital.
     const text = searching ? 'nothing with "' + _q + '" in SFX' : _kind() === 'lyrics' ? 'no saved lyrics yet - Generate music saves them here'
       : _node && _node.cat ? 'nothing in this folder'
-      : _node && !_node.q ? 'empty' : 'empty - drop files here';
+      // REFERENCES fills itself - nothing is dropped in.
+      : (_node && !_node.q) || _kind() === 'references' ? 'empty' : 'empty - drop files here';
     const icon = searching ? 'search' : (_isAudio() || _kind() === 'lyrics') ? 'music' : (_isImages() || MADE.has(_kind())) ? 'image' : 'folder';
     b.appendChild(emptyEl(text, { icon, cls: 'mv3-grid-note' }));
     return;

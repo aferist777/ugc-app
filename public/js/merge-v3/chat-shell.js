@@ -1803,7 +1803,11 @@ export function createChat(make) {
     const kind = n && n.cat && !n.locked ? Object.keys(lands).find(k => lands[k] === n.kind) : '';
     return kind ? { kind, cat: String(n.cat) } : null;
   }
+  // (2026-11-09, the owner: "в корне REFERENCES везде стоят плюсики первой плиткой ... давай поудаляем эти плюсики") Nothing
+  // is brought into REFERENCES - no "+" while one of its folders is open.
   function _plusTile() {
+    const open = _col ? _col.selected() : null;
+    if (open && open.node && open.node.kind === 'references') return null;
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
     b.title = T.plus;
