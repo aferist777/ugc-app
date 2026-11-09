@@ -14,7 +14,9 @@
               owner's; said, not refused
      paths    this computer's user folder (C:\Users\<name>) - said, not refused
    A media file (pictures, video, sound, fonts, models) is not read: no key is in one. Used by tools/release.js
-   (handoff, publish): a key found stops it. */
+   (handoff, publish): one of the owner's keys found stops it, anywhere; a key's SHAPE stops it in our code and in the
+   library, and is only said in third-party files - node_modules, vendor and the runtime's .exe / .dll - where public
+   examples have it (dotenv's README, a presigned link in ffmpeg-static's install.js, TLS strings in ffmpeg and Electron). */
 
 const fs = require('fs');
 const os = require('os');
@@ -24,6 +26,7 @@ const crypto = require('crypto');
 const REPO = path.join(__dirname, '..');
 const NAME = /key|token|secret|pass|auth|cred|sid|bearer/i;
 const SKIP = /\.(mp4|mov|mkv|webm|m4v|avi|jpe?g|png|webp|gif|bmp|ico|heic|avif|mp3|wav|m4a|aac|ogg|oga|flac|opus|ttf|otf|woff2?|tflite|task|wasm|glb|gltf|bin|zip|gz|7z|pak|dat)$/i;
+const THIRD = /[\\/](node_modules|vendor)[\\/]|\.(exe|dll|node)$/i;
 const SHAPES = /(sk-ant-[A-Za-z0-9_-]{10,}|r8_[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { return null; } };
@@ -65,7 +68,7 @@ function targets() {
 
 /** Every file under the roots read once; answers { files, keys: [{ file, what }], links, paths, shapes }. */
 function scan(roots, { list = targets() } = {}) {
-  const found = { files: 0, keys: [], links: [], paths: [], shapes: [] };
+  const found = { files: 0, keys: [], links: [], paths: [], shapes: [], thirdParty: [] };
   const walk = (dir) => {
     let ents = [];
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
@@ -85,7 +88,7 @@ function scan(roots, { list = targets() } = {}) {
         else found.paths.push(row);
       }
       const m = SHAPES.exec(text);
-      if (m) found.shapes.push({ file: abs, what: m[0].slice(0, 8) + '…' });
+      if (m) (THIRD.test(abs) ? found.thirdParty : found.shapes).push({ file: abs, what: m[0].slice(0, 8) + '…' });
     }
   };
   for (const r of roots) walk(path.resolve(r));
@@ -94,7 +97,8 @@ function scan(roots, { list = targets() } = {}) {
 
 function report(found, say = console.log) {
   say(`[keys] ${found.files} files read: ${found.keys.length} keys, ${found.shapes.length} key shapes, `
-    + `${found.links.length} links to the owner's Cloudflare, ${found.paths.length} paths of this computer`);
+    + `${found.links.length} links to the owner's Cloudflare, ${found.paths.length} paths of this computer`
+    + (found.thirdParty.length ? `; ${found.thirdParty.length} key-like strings in third-party files (public examples, not ours)` : ''));
   for (const r of [...found.keys, ...found.shapes].slice(0, 20)) say(`[keys]   KEY ${r.what} in ${r.file}`);
   for (const r of found.links.slice(0, 10)) say(`[keys]   link: ${r.what} in ${r.file}`);
   for (const r of found.paths.slice(0, 10)) say(`[keys]   path: ${r.what} in ${r.file}`);
