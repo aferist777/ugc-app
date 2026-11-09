@@ -33,6 +33,7 @@ const READY_WAIT_MS = 90 * 1000;
 const START_TRIES = 3;
 const DEATHS = 3;
 const DEATH_WINDOW_MS = 2 * 60 * 1000;
+const { EXIT_REFUSED } = require('../lib/library-format');
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -115,12 +116,21 @@ function createSupervisor({ appDir, libraryDir, log }) {
     });
     child = me;
     me.stdout.on('data', log.write);
-    me.stderr.on('data', log.write);
+    // (phase V83, block B0) A library a newer program wrote: the server says why on stderr and exits with
+    // EXIT_REFUSED - no second try will open it, so the shell gives up at once, in those words.
+    let refusal = '';
+    me.stderr.on('data', (chunk) => {
+      log.write(chunk);
+      const m = /\[format\] (.+)/.exec(String(chunk));
+      if (m) refusal = m[1].trim();
+    });
 
     let up = false;
     let gone = false;
+    let exitCode = null;
     me.once('exit', (code) => {
       gone = true;
+      exitCode = code;
       if (child === me) child = null;
       if (stopping) return;
       log.line(`the server exited with code ${code}`);
@@ -134,6 +144,10 @@ function createSupervisor({ appDir, libraryDir, log }) {
     }
     if (stopping) return;
 
+    if (!up && gone && exitCode === EXIT_REFUSED) {
+      events.emit('failed', refusal || 'This library was written by a newer UGC Studio.');
+      return;
+    }
     if (!up) {
       if (!gone) {
         log.line(`no answer on port ${port} after ${READY_WAIT_MS / 1000}s`);

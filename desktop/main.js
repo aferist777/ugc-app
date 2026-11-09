@@ -51,7 +51,15 @@ function canWrite(dir) {
   }
 }
 
-if (canWrite(LIBRARY)) {
+// (phase V83, block B0) A library a newer program wrote is not opened: said here, before the server is started.
+const LIB_FORMAT = require('../lib/library-format');
+const writable = canWrite(LIBRARY);
+const refused = writable ? LIB_FORMAT.check(LIBRARY, require('../lib/app-version').current()) : null;
+
+if (refused) {
+  dialog.showErrorBox('UGC Studio cannot open this library', refused.message);
+  app.exit(LIB_FORMAT.EXIT_REFUSED);
+} else if (writable) {
   run();
 } else {
   dialog.showErrorBox('UGC Studio cannot start',

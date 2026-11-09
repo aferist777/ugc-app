@@ -32,6 +32,24 @@ const {
   ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, MEDIA, CACHE_DIR,
   LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR,
 } = require('./lib/config');
+// (phase V83, block B0) A library a NEWER program wrote is not opened - in words, before anything reads a store, with
+// the exit code the desktop shell knows (lib/library-format.js). Then, the first time another program version opens
+// it, its stores go into one zip in backups/ before the start steps below may rewrite them.
+const LIB_FORMAT = require('./lib/library-format');
+const PROGRAM = require('./lib/app-version').current();
+{
+  const refused = LIB_FORMAT.check(ROOT_DIR, PROGRAM);
+  if (refused) {
+    console.error('[format] ' + refused.message.replace(/\s*\n+\s*/g, ' '));
+    process.exit(LIB_FORMAT.EXIT_REFUSED);
+  }
+  try {
+    const s = LIB_FORMAT.snapshot(ROOT_DIR, PROGRAM);
+    if (s) console.log(`[format] the stores as they were, before UGC Studio ${PROGRAM.version}: ${s.file} (${s.files} files, ${Math.round(s.bytes / 1024)} KB, ${s.ms} ms)`);
+  } catch (e) {
+    console.warn('[format] no snapshot of the stores: ' + e.message);
+  }
+}
 // A library from before layout 6 is upgraded before anything reads a store (lib/library-upgrade.js):
 // files move into project, shelf and category folders, and the stores follow. Stopped halfway,
 // the next start carries on; a failure stops the start rather than open half a library.
@@ -41,6 +59,8 @@ try {
   console.error('[upgrade] the library could not be upgraded:', e.stack || e.message);
   process.exit(1);
 }
+// The format this program writes and the program that opened the library last (lib/library-format.js).
+try { LIB_FORMAT.stamp(ROOT_DIR, PROGRAM); } catch (e) { console.warn('[format] the library was not stamped: ' + e.message); }
 const { generateMissingThumbs } = require('./lib/helpers');
 // The project list and the folders in projects/ agree before anything reads either: a folder
 // carried over from another library joins the list, a listed folder that is gone leaves it.
