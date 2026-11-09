@@ -8,7 +8,7 @@
 
    The owner's library is only READ (copied with robocopy); everything else happens in the copy:
      - not copied: logs\, backups\, cache\ (but its thumbnails - the friend's processor need not make them again for
-       twenty minutes), .env, data\telegram.json and data\tg-inbox.json (the owner's bot);
+       twenty minutes - and the marks of the one-time start steps it has been through), .env, data\telegram.json and data\tg-inbox.json (the owner's bot);
      - data\settings.json: every key, token and secret gone, the Cloudflare / R2 / Telegram fields too - the friend enters
        their own on Admin -> API keys (the owner (о18));
      - the journal of generations and what the chats said: data\alerts.json, mv3-chat.json, mv3-gens.json,
@@ -113,9 +113,11 @@ function forgetOwnerPaths(lib) {
       if (s && s.diskPath && !path.resolve(String(s.diskPath)).toLowerCase().startsWith(root)) { S.remove(s.id, { keepWords: false }); gone++; }
     }
     const f = path.join(DATA_DIR, 'sources.json');
-    const j = JSON.parse(fs.readFileSync(f, 'utf8'));
-    for (const s of (j.sources || [])) if (s && s.intake && s.intake.fromPath) { delete s.intake.fromPath; blank++; }
-    require('./lib/atomic-write').writeFileAtomic(f, JSON.stringify(j, null, 2));
+    if (fs.existsSync(f)) {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+      for (const s of (j.sources || [])) if (s && s.intake && s.intake.fromPath) { delete s.intake.fromPath; blank++; }
+      require('./lib/atomic-write').writeFileAtomic(f, JSON.stringify(j, null, 2));
+    }
     console.log(JSON.stringify({ gone, blank }));`;
   const env = { ...process.env, UGC_DATA_DIR: lib };
   delete env.UGC_HOME; delete env.ELECTRON_RUN_AS_NODE;
@@ -165,6 +167,15 @@ async function cleanCopy({ from, to, withProjects = false, allowOpen = false }) 
   robocopy(src, dest, ['/XD', path.join(src, 'cache'), path.join(src, 'logs'), path.join(src, 'backups'), '/XF', '.env', '*.tmp',
     ...GONE_DATA.map((n) => path.join(src, 'data', n))]);
   if (fs.existsSync(path.join(src, 'cache', 'thumbs'))) robocopy(path.join(src, 'cache', 'thumbs'), path.join(dest, 'cache', 'thumbs'));
+  // The marks of the one-time start steps the library has been through (cache\thumbs-refresh.json and the like): without
+  // them a friend's first start would do them again - thumbnails remade for minutes.
+  const marks = [];
+  for (const e of fs.existsSync(path.join(src, 'cache')) ? fs.readdirSync(path.join(src, 'cache'), { withFileTypes: true }) : []) {
+    if (!e.isFile() || !/\.json$/i.test(e.name)) continue;
+    fs.mkdirSync(path.join(dest, 'cache'), { recursive: true });
+    fs.copyFileSync(path.join(src, 'cache', e.name), path.join(dest, 'cache', e.name));
+    marks.push(e.name);
+  }
   say(`copied in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 
   const gone = cleanSettings(path.join(dest, 'data', 'settings.json'));
@@ -186,7 +197,7 @@ async function cleanCopy({ from, to, withProjects = false, allowOpen = false }) 
   say(`paths of this computer: ${paths.gone} source(s) read from a file outside the library removed, ${paths.blank} "copied from" forgotten`);
   for (const d of ['logs', 'backups']) fs.rmSync(path.join(dest, d), { recursive: true, force: true });
   for (const d of fs.existsSync(path.join(dest, 'cache')) ? fs.readdirSync(path.join(dest, 'cache')) : []) {
-    if (d !== 'thumbs') fs.rmSync(path.join(dest, 'cache', d), { recursive: true, force: true });
+    if (d !== 'thumbs' && !marks.includes(d)) fs.rmSync(path.join(dest, 'cache', d), { recursive: true, force: true });
   }
   say(`a clean copy in ${dest} - ${((Date.now() - t0) / 1000).toFixed(0)} s`);
   return { dest, settingsGone: gone, projects };
