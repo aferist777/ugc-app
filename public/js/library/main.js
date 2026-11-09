@@ -850,7 +850,7 @@ function _open(it, list, follow) {
     // A video is cut into new pieces under the stage; a piece shows its whole video on a tick (js/cut.js).
     underStage: (item, video) => Cut.underStage(item, video, {
       say: (t, err) => _status(t, err ? 'err' : ''),
-      onSaved: (r) => _apply({ reload: true, msg: 'Saved as a new clip in ' + r.where + '.' }),
+      onSaved: (r) => _apply({ reload: true, msg: 'Saved ' + (r.pieces && r.pieces.length > 1 ? r.pieces.length + ' new clips' : 'as a new clip') + ' in ' + r.where + '.' }),
     }),
     videoSrc: Cut.videoSrc,
     // Kind and category belong in the right column rather than the button row: they are

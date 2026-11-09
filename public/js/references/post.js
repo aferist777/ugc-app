@@ -153,6 +153,8 @@ let _v = null;      // { ov, layer, list, at, file, sel: Set, o, armed }
 export function openPost(list, at, o) {
   closePost();
   _hoverOut(true);
+  // (phase V81, (в18)) The fragments drawn over a video live while its viewer is open.
+  Cut.reset();
   const posts = (list || []).filter(x => x && x.kind === 'references');
   if (!posts.length) return;
   const ov = el('div', 'lib-view-ov ref-view-ov');
@@ -307,8 +309,11 @@ function _paintStage() {
     stage.appendChild(v);
     // (block 7) The stretch and "Cut…": a NEW clip wherever it is put; the post keeps this file.
     const said = _v.ov.querySelector('.ref-said');
+    // (phase V81) The fragments start where the piece was in its whole video (a join - each of its pieces).
+    const start = whole ? (Array.isArray(f.original.parts) && f.original.parts.length ? f.original.parts : [f.original]) : null;
     const box = Cut.cutBox(v, {
-      src: whole ? f.original.path : f.path, start: whole ? f.original : null, whole,
+      src: whole ? f.original.path : f.path, start, whole, name: whole ? (f.original.name || it.name || '') : (it.name || ''),
+      key: 'post:' + it.id + ':' + (f.id || _v.file) + (whole ? ':whole' : ''),
       here: { kind: 'references', cat: (it.meta && it.meta.categoryId) || '' },
     }, {
       say: (t, err) => { if (_v && said.isConnected) _setSaid(said, t, err); },

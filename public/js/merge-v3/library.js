@@ -47,7 +47,7 @@ import { madeRows } from '../library/made-rows.js';
 // (phase V58, the owner's (лк7)) New environment / New lookbook - the generators' window (sub-session P's module).
 import { openGenerator } from '../gen-window.js';
 // (phase V54, (зв29)) The Cut window's "to timeline": the piece at the playhead - the timeline's own function (sub-session B).
-import { placeSoundPiece } from './timeline-b.js';
+import { placeSoundPiece, placeVideoPieces } from './timeline-b.js';
 import { setOpenColumn } from './layout.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
@@ -727,8 +727,17 @@ function _underStage(item, video) {
   return Cut.underStage(item, video, {
     say: (t, err) => _status(t, !!err),
     onSaved: (r) => {
-      Promise.resolve(_load()).then(() => _status('Saved as a new clip in ' + r.where + '.'));
+      const n = (r.pieces || []).length;
+      Promise.resolve(_load()).then(() => _status('Saved ' + (n > 1 ? n + ' new clips' : 'as a new clip') + ' in ' + r.where + '.'));
       if (_tree) _tree.load();
+    },
+    // (phase V81) A fragment's right button: "Add to timeline" - each a clip of this video, or the join made first.
+    lay: {
+      pieces: (list, file) => {
+        const r = placeVideoPieces(list, Object.assign({}, file, { thumb: file.thumb || item.thumb || '' }));
+        if (r.ok) _status('Laid ' + (r.n === 1 ? 'a clip' : r.n + ' clips') + ' on main video from ' + Cut.mmss(r.at) + '.');
+        else showError('Not laid on the timeline', { detail: r.why });
+      },
     },
   });
 }

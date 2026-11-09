@@ -2782,6 +2782,56 @@ export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } 
   return { ok: true, lane, at };
 }
 
+/**
+ * (phase V81, the owner 2026-11-09: "правой кнопкой добавить на таймлайн ... добавить раздельно или добавить сразу одним файлом")
+ * FRAGMENTS OF ONE VIDEO laid on main video one after another from the playhead - each a clip of that file cut by `trimIn` and
+ * `dur` (no new file; a join made first is one fragment of its own file), with its sound on main video's paired lane when the
+ * file has one - as a tile let go there: the neighbours are not moved. One step to undo; the last laid is picked. A highlights
+ * project's own timeline takes nothing ("Open a fragment first.").
+ *   parts [{ in, out }] of the file; file { src, name, thumb, dur, kind, libId, sound }
+ * Returns { ok, n, at } or { ok: false, why }.
+ */
+export function placeVideoPieces(parts, file) {
+  if (!_on) return { ok: false, why: 'The timeline is not showing' };
+  const f = file || {};
+  if (!f.src) return { ok: false, why: 'There is no video to lay' };
+  if (Views.isHlHome(Store.key())) { Views.noFragment(); return { ok: false, why: Views.NO_FRAGMENT[0] }; }
+  if (locked()) return { ok: false, why: 'The talking head is being built - the timeline takes nothing until it is done' };
+  const list = (parts || []).filter((p) => p && +p.out - +p.in >= 0.05).sort((a, b) => +a.in - +b.in);
+  if (!list.length) return { ok: false, why: 'Nothing to lay' };
+  const whole = _r2(Math.max(0, +f.dur || 0));
+  const at = _r2(Math.max(0, _playhead));
+  const mm = (s) => { const t = Math.max(0, Math.round(+s || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  const ids = [];
+  const ok = Store.mutate(tl => {
+    const t = tl.tracks || [];
+    const main = t.find(x => x.kind === 'video' && x.main) || t.find(x => x.kind === 'video');
+    if (!main) return;
+    const mate = f.sound && main.linkId ? t.find(x => x.id === main.linkId && x.kind === 'audio') : null;
+    let s = at;
+    for (const p of list) {
+      const tin = _r2(Math.max(0, +p.in)), len = _r2(+p.out - +p.in);
+      const one = list.length === 1 && tin <= 0.01 && (!(whole > 0) || len >= whole - 0.01);
+      const base = {
+        src: String(f.src), thumb: f.thumb || null, name: (String(f.name || '') + (one ? '' : ' · ' + mm(tin) + '–' + mm(tin + len))).slice(0, 200),
+        libId: f.libId || null, start: s, dur: len, srcDur: whole, trimIn: tin,
+        trimOut: whole > 0 ? _r2(Math.max(0, whole - tin - len)) : 0,
+        speed: 1, reversed: false, transition: null, animation: null, filter: null,
+      };
+      const pairId = mate ? 'p' + _id().slice(1) : null;
+      const id = _id();
+      ids.push(id);
+      main.clips.push({ ...base, id, volume: 0, pairId });
+      if (mate) mate.clips.push({ ...base, id: _id(), pairId, volume: String(f.kind || '') === 'birols' ? 0 : 1 });
+      s = _r2(s + len);
+    }
+    if (mate) mate.clips.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  });
+  if (!ok || !ids.length) return { ok: false, why: Store.status() || 'Not laid' };
+  selectClipById(ids[ids.length - 1]);
+  return { ok: true, n: ids.length, at };
+}
+
 // (phase V40, tail (а), the owner 2026-10-24: "Fit / Fill и Shift пересчитывают субтитры на шве") A clip's fit or its frame
 // - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the subtitles' places on the seam are
 // worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch does (framing-ui.js).

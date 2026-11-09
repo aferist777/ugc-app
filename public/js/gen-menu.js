@@ -17,9 +17,13 @@
 
      rowsFor(it, open)  -> [[label, sub, fn]] for js/tile-select.js menuAt; [] when the tile has none
        open(which, o)   the page's way to a chat - 'videos' | 'pictures', o = { attach, as, act, from: 'library' }
+
+   (phase V81, (в2)) A video has "Save audio" too - its sound (the file's first, or default, sound track) into SFX -> My sounds
+   (js/cut.js saveAudio; the viewer's right button offers every track of a file that has several).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { showError } from './notice.js';
+import { saveAudio } from './cut.js';
 
 const PICTURES = new Set(['images', 'environments', 'lookbooks', 'props']);
 const VIDEOS = new Set(['birols', 'uploads', 'hooks', 'heads', 'youtube']);
@@ -73,5 +77,6 @@ export function rowsFor(it, open) {
     }],
     ['As a reference…', 'the video chat · this clip as a reference',
       () => go('videos', { attach: { path: f.path, name, kind: 'video', poster: f.thumb, dur: f.dur }, as: 'clip', act: 'ref' })],
+    ['Save audio', 'its sound · into SFX → My sounds', () => saveAudio({ src: f.path, name })],
   ];
 }
