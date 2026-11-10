@@ -208,6 +208,42 @@ function _mosaic(t, e, tf) {
   return { mosaic: { x: f[0] + 0.005 * f0[2], y: f[1] + 0.005 * f0[3], w: 1.24 * f0[2], h: 1.26 * f0[3] } };
 }
 
+// ── Block 4b: Digital zoom's zoom (its viewfinder - js/fx/overlays.js) ─────────────────────────────────────────────────────
+// video-effects-pack's digitalzoom: in on the face 1.6x, then 2.6x, a sharp way back (Zoom scales it), less the larger the face is;
+// about the face's middle 0.45 of its height down, which a hand's shake moves 24 times a second (Shake); a blur on the way back (the
+// pack's radial one an ordinary one here, as Snap zoom's).
+const DZOOM = [[0, 1.0], [0.12, 1.0], [0.30, 1.6], [0.72, 1.6], [0.88, 2.6], [1.50, 2.62], [1.62, 2.62], [1.80, 1.0], [2.05, 1.0]];
+/** Digital zoom at its own second `t`: { s, ax, ay (shares of the frame), shown - the zoom its viewfinder reads, blur (u) }. */
+export function dzoomAt(t, e) {
+  const o = optsOf(e);
+  const f = faceAt(e && e.path, +((e && e.t0) || 0));
+  const k = Math.max(0.45, Math.min(1, 0.21 / Math.max(1e-3, f[2])));
+  const s0 = kf(t, DZOOM);
+  let jx = 0, jy = 0;
+  if (t > 0.3 && t < 1.7 && o.shake > 0) {
+    const r = _rng((Math.imul(Math.floor(t * 24) + 7, 2654435761) ^ _idSeed(e)) >>> 0);
+    const n = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, r()))) * Math.cos(2 * Math.PI * r());
+    jx = n() * 1.2 * o.shake / 1080;
+    jy = n() * 1.2 * o.shake / 1920;
+  }
+  const bl = t > 1.62 && t < 1.8 ? 0.22 * Math.sin(Math.PI * (t - 1.62) / 0.18) * k : 0;
+  return { s: 1 + (s0 - 1) * k * o.zoom, ax: f[0] + jx, ay: f[1] - 0.05 * f[3] + jy, shown: 1 + (s0 - 1) * o.zoom,
+    blur: bl > 0.02 ? 0.0045 * 1080 * bl / 0.4 : 0 };
+}
+function _dzoom(t, e) {
+  const z = dzoomAt(t, e);
+  return { s: z.s, ax: z.ax, ay: z.ay, blur: z.blur };
+}
+const _none = () => ({});
+function _idSeed(e) {
+  const s = String((e && e.id) || '');
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// Color frame's and Frame break's three colours: #FF5A36 and its lighter and darker shades (the pack's one-accent rule).
+const FRAME_COLORS = [['c1', 'Color 1', '#ff5a36'], ['c2', 'Color 2', '#ffb5a5'], ['c3', 'Color 3', '#b33f26']];
+
 /**
  * Every effect: { name, group, kind, dur, lo, hi, about, face?, at(τ, the effect, the file's second) -> numbers }. The groups are
  * the list's (js/merge-v3/fx-ui.js); `face` - it needs where the face is (its `path`). The order here is the list's order.
@@ -246,6 +282,27 @@ export const EFFECTS = {
     about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },
   mosaic: { name: 'Face mosaic', group: 'face', kind: 'loop', face: true,
     about: 'An oval of blocks hides the face and follows it.', at: _mosaic },
+  // (block 4b) Graphics over the picture - drawn by the page only (js/fx/overlays.js; baked for the render, `engine`), inside the
+  // clip's window (js/fx/box.js, the owner's (б4-11)); their colours and settings are the person's (б4-12, б4-13).
+  sparkle: { name: 'Sparkle', group: 'overlay', kind: 'loop', engine: true, draw: 'sparkle',
+    colors: [['spark', 'Sparkles', '#ffffff']],
+    opts: [['amount', 'Amount', 20, 150, 1, 62, 'n'], ['size', 'Size', 0.5, 2, 0.05, 1, 'x']],
+    about: 'Four-ray sparkles twinkle all over the picture, each at a new place every time.', at: _none },
+  rainbow: { name: 'Rainbow glow', group: 'overlay', kind: 'loop', engine: true, draw: 'rainbow',
+    opts: [['speed', 'Speed', 0, 3, 0.05, 1, 'x'], ['width', 'Width', 0.5, 2, 0.05, 1, 'x'], ['strength', 'Strength', 0.3, 1.5, 0.05, 1, 'x']],
+    about: 'A rainbow glows along the edges and turns round them.', at: _none },
+  colorframe: { name: 'Color frame', group: 'overlay', kind: 'intro', dur: 1.9, lo: 0.8, hi: 2, engine: true, draw: 'colorframe',
+    colors: FRAME_COLORS,
+    opts: [['width', 'Width', 0.5, 3, 0.05, 1, 'x'], ['glow', 'Glow', 0, 2, 0.05, 1, 'x'], ['speed', 'Speed', 0, 3, 0.05, 1, 'x']],
+    about: 'A thin frame of light pops up: its colour flows round it, a bright comet runs along it, a soft glow out and in.', at: _none },
+  framebreak: { name: 'Frame break', group: 'overlay', kind: 'intro', dur: 1.75, lo: 0.8, hi: 2, engine: true, draw: 'framebreak',
+    colors: FRAME_COLORS,
+    opts: [['width', 'Width', 0.5, 3, 0.05, 1, 'x'], ['glow', 'Glow', 0, 2, 0.05, 1, 'x']],
+    about: 'The same frame of light holds a moment, cracks and shatters - its pieces fly and fall, confetti and a ring of light follow.', at: _none },
+  digitalzoom: { name: 'Digital zoom', group: 'overlay', kind: 'intro', dur: 2.05, lo: 0.7, hi: 2, engine: true, draw: 'digitalzoom', face: true,
+    colors: [['accent', 'Accent', '#ff5722'], ['lines', 'Lines', '#ffffff']],
+    opts: [['zoom', 'Zoom', 0.5, 1.5, 0.05, 1, 'x'], ['shake', 'Shake', 0, 2, 0.05, 1, 'x']],
+    about: 'A camera\'s viewfinder - REC, a timecode, the zoom read out - zooms in on the face 1.6x, then 2.6x, with a hand\'s shake, and snaps back.', at: _dzoom },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
@@ -254,7 +311,28 @@ export const SETS = {
     items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
 };
 
-export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face']];
+export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays']];
+
+/** (block 4b) An effect's colours by key - its own (`col`), else the table's - '#rrggbb'. */
+export function colorsOf(e) {
+  const d = effectOf(e && e.k);
+  const out = {};
+  for (const [key, , def] of ((d && d.colors) || [])) {
+    const v = e && e.col && e.col[key];
+    out[key] = /^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : def;
+  }
+  return out;
+}
+/** (block 4b) An effect's settings by key - its own (`opt`, kept in its range), else the table's. */
+export function optsOf(e) {
+  const d = effectOf(e && e.k);
+  const out = {};
+  for (const [key, , lo, hi, , def] of ((d && d.opts) || [])) {
+    const v = e && e.opt ? Number(e.opt[key]) : NaN;
+    out[key] = Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def;
+  }
+  return out;
+}
 
 /** The effect's own description, or null for a key the program does not know. */
 export const effectOf = (k) => (Object.prototype.hasOwnProperty.call(EFFECTS, k) ? EFFECTS[k] : null);

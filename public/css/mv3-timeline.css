@@ -151,6 +151,8 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
    tile's line over its row, the strip's width. */
 .mv3-fx-add{display:block; width:100%; margin-top:var(--sp-1)}
 .mv3-fx-add.is-on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
+/* (phase V84 block 4b) A graphic effect's colours - swatches in one row (js/merge-v3/fx-ui.js). */
+.mv3-fx-colors{display:inline-flex; flex-wrap:wrap; gap:var(--sp-1); align-items:center}
 .mv3-fx-panel{position:relative; margin-top:var(--sp-2)}
 .mv3-fx-chips{margin-bottom:var(--sp-2)}
 .mv3-fx-tiles{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--sp-2)}

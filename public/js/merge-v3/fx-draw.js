@@ -12,7 +12,12 @@
      (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf } from '../fx/effects.js';
+import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf, colorsOf, optsOf } from '../fx/effects.js';
+import { SCENES } from '../fx/overlays.js';
+import { hexRgb, fontsReady } from '../fx/kit.js';
+
+// (block 4b) The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
+fontsReady();
 
 const NS = 'http://www.w3.org/2000/svg';
 let _defs = null;
@@ -144,9 +149,10 @@ const _f = (v) => String(Math.round(v * 1e5) / 1e5);
 
 /**
  * The clip's layer `layer` (a canvas, the frame at PAD) with the effects' numbers `p` (params.js paramsAt for this W x H frame)
- * applied - a canvas of the same size, the layer itself left as it is.
+ * applied - a canvas of the same size, the layer itself left as it is. `box` (block 4b) - the clip's window in the frame
+ * (js/fx/box.js windowOf: { cx, cy, w, h, angle }) where its graphics are drawn; none - the whole frame.
  */
-export function applyFx(layer, p, { W, H, PAD, inFrame }) {
+export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
   _ensureDefs();
   const CW = layer.width, CH = layer.height;
   const u = W / 1080;
@@ -295,6 +301,34 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
     g.fillStyle = g.createPattern(tiles[(Math.random() * tiles.length) | 0], 'repeat');
     g.fillRect(PAD, PAD, W, H);
     g.restore();
+  }
+  // (block 4b) THE GRAPHICS, last - after every number of blocks 1-3, in the order they were added (the owner's (б4-6)) -, each
+  // inside the clip's window (the owner's (б4-11)): (0, 0) its top-left corner, turned with it, clipped to it (js/fx/overlays.js).
+  if (p.scenes && p.scenes.length) {
+    const b = box && box.w > 0 && box.h > 0 ? box : { cx: W / 2, cy: H / 2, w: W, h: H, angle: 0 };
+    const an = (+b.angle || 0) * Math.PI / 180, ca = Math.cos(an), sa = Math.sin(an);
+    const toBox = (x, y) => {
+      const dx = x - b.cx, dy = y - b.cy;
+      return [dx * ca + dy * sa + b.w / 2, -dx * sa + dy * ca + b.h / 2];
+    };
+    for (const sc of p.scenes) {
+      const draw = SCENES[sc.draw];
+      if (!draw) continue;
+      const col = {};
+      for (const [k, v] of Object.entries(colorsOf(sc.e))) col[k] = hexRgb(v);
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.translate(PAD + b.cx, PAD + b.cy);
+      g.rotate(an);
+      g.translate(-b.w / 2, -b.h / 2);
+      g.beginPath();
+      g.rect(0, 0, b.w, b.h);
+      g.clip();
+      try {
+        draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox,
+          canvas: (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))) });
+      } finally { g.restore(); }
+    }
   }
   return cur;
 }

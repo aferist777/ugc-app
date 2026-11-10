@@ -12,6 +12,31 @@
 
 import { paramsAt } from './fx/params.js';
 import { applyFx } from './merge-v3/fx-draw.js';
+import { windowOf } from './fx/box.js';
+import { fontsReady } from './fx/kit.js';
+
+// (block 4b) The size of a clip's file - what its window's shape is made of (js/fx/box.js, the preview's rule): its picture or its
+// film's metadata, as the preview knows it from its own element. Unknown - the window is the frame.
+const PIC_RE = /\.(png|jpe?g|webp|gif|bmp|avif)$/i;
+function _dimsOf(src) {
+  return new Promise((resolve) => {
+    const u = String(src || '');
+    const done = (w, h) => resolve({ w: w || 0, h: h || 0 });
+    if (PIC_RE.test(u.split('?')[0])) {
+      const i = new Image();
+      i.onload = () => done(i.naturalWidth, i.naturalHeight);
+      i.onerror = () => done(0, 0);
+      i.src = u;
+      return;
+    }
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.muted = true;
+    v.onloadedmetadata = () => { done(v.videoWidth, v.videoHeight); v.removeAttribute('src'); v.load(); };
+    v.onerror = () => done(0, 0);
+    v.src = u;
+  });
+}
 
 const stateEl = document.getElementById('bake-state');
 const say = (t) => { if (stateEl) stateEl.textContent = t; };
@@ -52,6 +77,13 @@ async function bake(job) {
   const t0 = performance.now();
   say(`drawing ${n} frames ${W}x${H}${alpha ? ' with its alpha' : ''}`);
   const cfg = await _encoderConfig(W, alpha ? 2 * H : H, fps);
+  // (block 4b) The graphics' fonts before the first frame, and the clip's window (main video - the frame).
+  await fontsReady();
+  let box = null;
+  if (alpha) {
+    const d = await _dimsOf(clip.src);
+    box = windowOf(clip, false, d.w, d.h, W, H);
+  }
   const FS = W * H * 4;
   // Three frame buffers go round between the window and its encoder: a fourth frame waits for one to come back.
   const free = [new Uint8Array(FS), new Uint8Array(FS), new Uint8Array(FS)];
@@ -94,7 +126,7 @@ async function bake(job) {
     lg.drawImage(vin, 0, 0);
     vin.close();
     const p = paramsAt(clip, a + i / fps + 1e-6, W, H, !alpha);
-    const src = p ? applyFx(layer, p, { W, H, PAD: 0, inFrame: true }) : layer;
+    const src = p ? applyFx(layer, p, { W, H, PAD: 0, inFrame: true, box }) : layer;
     const vf = new VideoFrame(src, { timestamp: i * step });
     try { await vf.copyTo(out, { format: 'RGBA' }); } finally { vf.close(); }
     drawMs += performance.now() - q0;

@@ -132,7 +132,7 @@
     { group: "Pictures and video", name: "video-effects-pack",
       url: "https://github.com/neurolena1/video-effects-pack", license: "MIT",
       what: "47 video effects for edits by NeuroLena - zooms, glitches, colour, transitions and scenes - as Python scripts.",
-      how: "Its timings, curves and measured camera paths are written again in JavaScript for Merge's clip effects - Quick zoom, Drop in, Heartbeat, Vignette and the rest - so the preview and the render draw them by one rule (public/js/fx/, lib/fx-render.js). None of its code or Python runs in the app." },
+      how: "Its timings, curves, measured camera paths and the look of its scenes are written again in JavaScript for Merge's clip effects - Quick zoom, Drop in, Heartbeat, Vignette, Sparkle, Color frame, Digital zoom and the rest - so the preview and the render draw them by one rule (public/js/fx/, lib/fx-render.js). None of its code or Python runs in the app." },
     { group: "Pictures and video", name: "MediaPipe",
       url: "https://github.com/google-ai-edge/mediapipe", license: "Apache-2.0",
       what: "Google's on-device machine-learning tasks; its tasks-vision package runs them in a web page through WebAssembly.",

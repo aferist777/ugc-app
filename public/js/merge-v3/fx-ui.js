@@ -17,10 +17,22 @@
      2026-11-10: one row).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { EFFECTS, GROUPS, SETS, effectOf } from '../fx/effects.js';
+import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf } from '../fx/effects.js';
 import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX } from '../fx/params.js';
 import { setClipFields, selectClipById, fxLive } from './timeline-b.js';
+import { setLive } from './place-b.js';
 import * as C from './controls.js';
+
+// (block 4b, the owner's (б4-12)) A graphic effect's colours as chosen last for it - a new one takes them (this computer only).
+const COLORS_KEY = 'mv3_fx_colors_v1';
+function _colorsMem() {
+  try { const m = JSON.parse(localStorage.getItem(COLORS_KEY) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; }
+}
+function _rememberColors(k, col) {
+  const m = _colorsMem();
+  m[k] = col;
+  try { localStorage.setItem(COLORS_KEY, JSON.stringify(m)); } catch (e) { /* a private window */ }
+}
 
 // ── Which effect is open ────────────────────────────────────────────────────
 let _focus = null;              // { clipId, fxId }
@@ -262,6 +274,8 @@ export async function addTo(track, clip, k) {
     const e = newEffect(clip, it.k, 'fx' + Date.now().toString(36) + made.length + Math.floor(Math.random() * 1296).toString(36));
     if (!e) continue;
     if (it.len > 0) e.len = it.len;
+    const mem = effectOf(it.k).colors ? _colorsMem()[it.k] : null;
+    if (mem && typeof mem === 'object') e.col = { ...mem };
     made.push(e);
   }
   if (!made.length) return;
@@ -368,6 +382,36 @@ export function fxRows(g, track, c) {
       onChange: moveTo,
     }));
     g.appendChild(C.hint(d.about + (d.kind === 'intro' ? ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.' : '')));
+    // (block 4b, the owner's (б4-12), (б4-13)) Its colours and its settings: a change is one undo step; a slider held shows on the
+    // preview at once (place-b.js setLive - the clip drawn with the effect as it would be), written on release.
+    const withIt = (next) => list.map((y) => (y.id === e.id ? next : y));
+    const put = (next) => write(normalizeFx(withIt(next)) || []);
+    if (d.colors && d.colors.length) {
+      const now = colorsOf(e);
+      const wrap = document.createElement('span');
+      wrap.className = 'mv3-fx-colors';
+      for (const [key, label] of d.colors) {
+        const sw = C.color(now[key], (v) => {
+          const next = { ...e, col: { ...(e.col || {}), [key]: v } };
+          _rememberColors(e.k, colorsOf(next));
+          put(next);
+        });
+        sw.title = label;
+        sw.setAttribute('aria-label', label);
+        wrap.appendChild(sw);
+      }
+      g.appendChild(C.row(d.colors.length > 1 ? 'Colors' : d.colors[0][1], wrap));
+    }
+    if (d.opts && d.opts.length) {
+      const now = optsOf(e);
+      for (const [key, label, olo, ohi, step, , kind] of d.opts) {
+        const fmt = (v) => (kind === 'n' ? String(Math.round(v)) : (+v).toFixed(2) + '×');
+        const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });
+        g.appendChild(C.row(label, C.slider({ min: olo, max: ohi, step, value: now[key], fmt,
+          onInput: (v) => setLive(new Map([[c.id, { fx: normalizeFx(withIt(withOpt(v))) }]])),
+          onChange: (v) => { setLive(null); put(withOpt(v)); } })));
+      }
+    }
     // (block 1c) Where its face is - and found again on a press (one undo step).
     if (d.face) {
       const main = isMain(track);

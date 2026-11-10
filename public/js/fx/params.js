@@ -60,6 +60,28 @@ export function normalizeFx(list) {
       if (path) one.path = path;
       if (typeof e.pk === 'string' && /^[a-z0-9]{1,12}$/.test(e.pk)) one.pk = e.pk;
     }
+    // (block 4b) The person's colours and settings (the owner's (б4-12), (б4-13)) - only those the table knows and that differ from
+    // its own: `col` '#rrggbb' by key, `opt` numbers in their range.
+    const d = effectOf(one.k);
+    if (d.colors && e.col && typeof e.col === 'object') {
+      const col = {};
+      for (const [key, , def] of d.colors) {
+        const v = String(e.col[key] || '').toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(v) && v !== def) col[key] = v;
+      }
+      if (Object.keys(col).length) one.col = col;
+    }
+    if (d.opts && e.opt && typeof e.opt === 'object') {
+      const opt = {};
+      for (const [key, , lo, hi, step, def] of d.opts) {
+        const v = Number(e.opt[key]);
+        if (!Number.isFinite(v)) continue;
+        const q = Math.round(Math.max(lo, Math.min(hi, v)) / step) * step;
+        const r = Math.round(q * 1000) / 1000;
+        if (Math.abs(r - def) > 1e-9) opt[key] = r;
+      }
+      if (Object.keys(opt).length) one.opt = opt;
+    }
     out.push(one);
     if (out.length >= FX_MAX) break;
   }
@@ -232,6 +254,8 @@ export function paramsAt(c, t, W, H, main) {
   const tf = fileAt(c, t);
   let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
   let blur = 0, mos = null, jitter = null;
+  // (block 4b) The graphics running now, in the order they were added (the owner's (б4-6)): drawn last, by the page.
+  const scenes = [];
   for (const e of c.fx) {
     const d = effectOf(e.k);
     if (!d) continue;
@@ -241,6 +265,7 @@ export function paramsAt(c, t, W, H, main) {
     if (d.kind === 'intro' && sp.len > 0) tau = tau * d.dur / sp.len;
     const n = d.at(Math.max(0, tau), e, tf) || {};
     any = true;
+    if (d.draw) scenes.push({ k: e.k, draw: d.draw, e, tau: Math.max(0, tau), live: Math.max(0, t - sp.a) });
     if (n.blur > blur) blur = +n.blur;
     if (n.mosaic && !mos) mos = n.mosaic;
     // (block 3; block 4a - every lane) What only the page draws: the render lays the copy the app's window baked with this code.
@@ -271,7 +296,7 @@ export function paramsAt(c, t, W, H, main) {
     const sz = mosaicSizeOf(c, W, H) || _evenBox(mos.w * W, mos.h * H);
     mosaic = { x: Math.round(cx - sz.w / 2), y: Math.round(cy - sz.h / 2), w: sz.w, h: sz.h, b: MOSAIC_BLOCK };
   }
-  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic, jitter };
+  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic, jitter, scenes };
 }
 
 /**
@@ -319,5 +344,6 @@ export function isPlain(p) {
   const colId = !p.col || p.col.every((v, i) => Math.abs(v - COL_ID[i]) < 1e-5);
   const chZ = !p.ch || Object.values(p.ch).every((v) => Math.abs(v) < 0.5);
   return still && colId && chZ && !(p.px > 1.5) && !(p.vig > 0.002) && !(p.lines > 0.002)
-    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002) && !(p.blur > 0.05) && !p.mosaic && !p.jitter;
+    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002) && !(p.blur > 0.05) && !p.mosaic && !p.jitter
+    && !(p.scenes && p.scenes.length);
 }

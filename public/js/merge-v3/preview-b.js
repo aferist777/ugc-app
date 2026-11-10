@@ -41,6 +41,8 @@ import { svgOf } from '../overlay/color.js';
 // (phase V84) A clip's effects - one rule with the render (fx/params.js), drawn on its layer (fx-draw.js).
 import { paramsAt as fxParamsAt, isPlain as fxPlain } from '../fx/params.js';
 import { applyFx } from './fx-draw.js';
+// (phase V84 block 4b) Where a clip's graphics are drawn - its window (the owner's (б4-11)), one rule with the bake window.
+import { windowOf as fxWindowOf } from '../fx/box.js';
 // (phase V76) A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
 import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
@@ -875,7 +877,8 @@ function _showAs(el, sw, sh, c, gaps, main) {
   const frame = _ctx;
   _ctx = g;
   try { _show(el, sw, sh, c, gaps, main); } finally { _ctx = frame; }
-  const src = fxOn ? applyFx(_layerCv, fxp, { W, H, PAD, inFrame: main || (!isPlaced(look) && !cropActive(look)) }) : _layerCv;
+  const box = fxOn && fxp.scenes && fxp.scenes.length ? fxWindowOf(look, main, sw, sh, W, H) : null;
+  const src = fxOn ? applyFx(_layerCv, fxp, { W, H, PAD, inFrame: main || (!isPlaced(look) && !cropActive(look)), box }) : _layerCv;
   _ctx.save();
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
   _ctx.globalAlpha = op;

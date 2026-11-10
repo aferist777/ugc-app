@@ -25,7 +25,12 @@
     "glitch": 0.1,
     "snapzoom": 1.6,
     "mosaic": 0.6,
-    "set-hook": 0.1
+    "set-hook": 0.1,
+    "sparkle": 1,
+    "rainbow": 0.6,
+    "colorframe": 0.7,
+    "framebreak": 0.75,
+    "digitalzoom": 1
   },
   "face": [
     [
