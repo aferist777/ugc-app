@@ -107,12 +107,14 @@ async function main() {
       const set = key.startsWith('set-') ? FX.SETS[key.slice(4)] : null;
       const items = set ? set.items : [{ k: key }];
       const intro = items.some((it) => FX.EFFECTS[it.k].kind === 'intro');
-      const longest = Math.max(...items.map((it) => (FX.EFFECTS[it.k].kind === 'intro' ? FX.EFFECTS[it.k].dur : 0)));
+      const longest = Math.max(...items.map((it) => (+it.at || 0) + (FX.EFFECTS[it.k].kind === 'intro' ? FX.EFFECTS[it.k].dur : 0)));
       const lead = intro ? CFG.lead : 0;
       const dur = Math.min(srcDur - 0.05, intro ? lead + longest + CFG.tail : CFG.loop);
       const clip = { id: 'c', src: '/media/work/example.mp4', name: key, start: 0, dur, trimIn: 0, fit: 'fill' };
-      clip.fx = P.normalizeFx(items.map((it, i) => ({
-        id: 'e' + i, k: it.k, t0: lead, ...(it.len > 0 ? { len: it.len } : {}), ...(FX.EFFECTS[it.k].face ? { path: CFG.face } : {}),
+      // (block 4d) A set's effects at their moments after the lead - the app's own rule (fx/params.js setPlacements).
+      const placed = set ? P.setPlacements(set, dur - lead) : [{ k: key, at: 0, len: 0 }];
+      clip.fx = P.normalizeFx(placed.map((it, i) => ({
+        id: 'e' + i, k: it.k, t0: lead + it.at, ...(it.len > 0 ? { len: it.len } : {}), ...(FX.EFFECTS[it.k].face ? { path: CFG.face } : {}),
       })));
       const tl = { format: '9:16', tracks: [{ id: 'v1', kind: 'video', main: true, name: 'main video', clips: [clip] }] };
       const full = path.join(lib, key + '.mp4');

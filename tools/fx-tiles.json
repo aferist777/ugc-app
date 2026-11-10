@@ -34,7 +34,14 @@
     "checklistpop": 1.5,
     "checklist2": 1.6,
     "growthchart": 1.7,
-    "chat": 1.4
+    "chat": 1.4,
+    "phonemock": 0.7,
+    "phonemock2": 1,
+    "screeninscreen": 0.8,
+    "magazine": 1.3,
+    "set-glowup": 1,
+    "set-coverstory": 2.6,
+    "set-aichat": 1.4
   },
   "face": [
     [
@@ -175,6 +182,11 @@
     "checklistpop": 0.45,
     "checklist2": 0.68,
     "growthchart": 0.66,
-    "chat": 0.42
+    "chat": 0.42,
+    "phonemock": 0.5,
+    "phonemock2": 0.5,
+    "magazine": 0.5,
+    "set-coverstory": 0.5,
+    "set-aichat": 0.42
   }
 }

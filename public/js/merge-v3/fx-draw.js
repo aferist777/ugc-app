@@ -15,6 +15,7 @@
 import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf, colorsOf, optsOf } from '../fx/effects.js';
 import { SCENES } from '../fx/overlays.js';
 import { CARDS } from '../fx/cards.js';
+import { SCREENS } from '../fx/screens.js';
 import { hexRgb, fontsReady } from '../fx/kit.js';
 
 // (block 4b) The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
@@ -313,7 +314,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       return [dx * ca + dy * sa + b.w / 2, -dx * sa + dy * ca + b.h / 2];
     };
     for (const sc of p.scenes) {
-      const draw = SCENES[sc.draw] || CARDS[sc.draw];
+      const draw = SCENES[sc.draw] || CARDS[sc.draw] || SCREENS[sc.draw];
       if (!draw) continue;
       const col = {};
       for (const [k, v] of Object.entries(colorsOf(sc.e))) col[k] = hexRgb(v);

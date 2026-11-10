@@ -180,6 +180,25 @@ export function newEffect(c, k, id) {
 }
 
 /**
+ * (block 4d, the owner's (б4-9)) Where a set's effects go on a clip `clipDur` long: [{ k, at, len }] - each at its own moment (`at`,
+ * seconds into the clip); one that would run past the clip's end moved earlier to end with it; `len` an 'intro' its own length
+ * (cut to the clip) or the set's own (Hook's glitch), 0 - a 'loop' to the clip's end.
+ */
+export function setPlacements(set, clipDur) {
+  const out = [];
+  for (const it of ((set && set.items) || [])) {
+    const d = effectOf(it.k);
+    if (!d) continue;
+    let at = Math.max(0, +it.at || 0);
+    let len = it.len > 0 ? +it.len : (d.kind === 'intro' ? d.dur : 0);
+    if (len > 0 && at + len > clipDur) at = Math.max(0, clipDur - len);
+    if (len > 0) len = Math.min(len, Math.max(0.05, clipDur - at));
+    out.push({ k: it.k, at: r3(at), len: len > 0 ? r3(len) : 0 });
+  }
+  return out;
+}
+
+/**
  * The same effect moved to start `from` seconds into the clip and end `to` seconds into it (the inspector's Start / End): t0 the
  * file's second shown there; the length to `to`, kept in its range (an 'intro'); a 'loop' to the clip's end gets no length.
  */

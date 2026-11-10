@@ -326,12 +326,38 @@ export const EFFECTS = {
     colors: [['bg', 'Background', '#eeeeec'], ['card', 'Window', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Accent', '#1a1a1c']],
     opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct']],
     about: 'The clip shrinks into a card and lands in a chat with an AI under the request; the reply ticks its list, then the clip opens back.', at: _none },
+  // (block 4d) Screens: the window turned into a scene with the clip inside it - js/fx/screens.js draws them.
+  phonemock: { name: 'Phone app', group: 'card', kind: 'intro', dur: 1.16, lo: 0.7, hold: 0.9, engine: true, draw: 'phonemock',
+    texts: [['name', 'Name', 'yourname'], ['caption', 'Caption', '20 video effects, all made with AI...']],
+    colors: [['bg', 'Background', '#eeeeec'], ['body', 'Phone', '#0e0e10']], opts: [['size', 'Size', 0.8, 1.2, 0.02, 1, 'x']],
+    about: 'The clip shrinks into a phone\'s screen with a short-video app round it - a heart, comments, a name, a caption.', at: _none },
+  phonemock2: { name: 'Phone', group: 'card', kind: 'intro', dur: 2.0, lo: 0.7, hold: 1.0, engine: true, draw: 'phonemock2',
+    texts: [['caption', 'Caption over it', '']],
+    colors: [['bg', 'Background', '#eeeeec'], ['body', 'Phone', '#1a1a1c']], opts: [['size', 'Size', 0.8, 1.2, 0.02, 1, 'x']],
+    about: 'The clip shrinks into a phone on a plain background and opens back; a caption over the phone when you write one.', at: _none },
+  screeninscreen: { name: 'Screen in screen', group: 'card', kind: 'intro', dur: 1.5, lo: 0.7, hold: 0.8, engine: true, draw: 'screeninscreen', face: true,
+    colors: [['bg', 'Background', '#ffffff'], ['frame', 'Frame', '#242628']], opts: [['border', 'Border', 0, 3, 0.1, 1, 'x']],
+    about: 'The vertical clip turns into a wide screen - from the hair to the chin - on white, and back.', at: _none },
+  magazine: { name: 'Magazine cover', group: 'card', kind: 'intro', dur: 2.15, lo: 0.7, hold: 1.3, engine: true, draw: 'magazine', face: true,
+    texts: [['name', 'Masthead', 'MAGAZINE'], ['head1', 'Line 1', 'VIDEO &'], ['head2', 'Line 2 (plate)', 'EDITING'], ['big', 'Number', '15+'],
+      ['biglabel', 'Under the number', 'EFFECTS'], ['sub1', 'Bottom 1', 'EDITING SECRETS'], ['sub2', 'Bottom 2', 'TITLES · GRAPHICS · TRANSITIONS'],
+      ['issue', 'Issue', 'ISSUE NO. 1'], ['date', 'Date', '']],
+    colors: [['bg', 'Background', '#eeeeec'], ['accent', 'Plate', '#ff5a36'], ['text', 'Text', '#ffffff']],
+    opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct'], ['barcode', 'Barcode', 0, 1, 1, 1, 'bool']],
+    about: 'The clip becomes a magazine cover: the issue and date, the masthead over the hair, a big number and a line on a plate under the chin, a barcode.', at: _none },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
 export const SETS = {
   hook: { name: 'Hook', about: 'An opening with impact: Quick zoom with a short glitch over its first 0.7 s.',
     items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
+  // (block 4d, the owner's (б4-9)) Each at its moment of the pack (`at` - seconds into the clip); a clip too short - earlier, ending with it.
+  glowup: { name: 'Glow-up', about: 'Sparkles over the whole clip and a frame of light from 0.4 s.',
+    items: [{ k: 'sparkle' }, { k: 'colorframe', at: 0.4 }] },
+  coverstory: { name: 'Cover story', about: 'Black & white from the start, then the clip turns into a magazine cover from 2.2 s.',
+    items: [{ k: 'bwframe' }, { k: 'magazine', at: 2.2 }] },
+  aichat: { name: 'AI chat', about: 'The clip lands in a chat with an AI from 0.3 s, then a checklist pops in from 2.8 s.',
+    items: [{ k: 'chat', at: 0.3 }, { k: 'checklistpop', at: 2.8 }] },
 };
 
 export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards']];

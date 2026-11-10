@@ -18,7 +18,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf, textsOf } from '../fx/effects.js';
-import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX, TEXT_MAX } from '../fx/params.js';
+import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX, TEXT_MAX, setPlacements } from '../fx/params.js';
 import { loadFamily } from '../fx/kit.js';
 import { FONTS as CAP_FONTS } from '../captions/fonts.js';
 import { setClipFields, selectClipById, fxLive } from './timeline-b.js';
@@ -273,10 +273,17 @@ async function _findPath(track, c, onFrac) {
 export async function addTo(track, clip, k) {
   const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
   const made = [];
-  for (const it of (set ? set.items : [{ k }])) {
+  // (block 4d, the owner's (б4-9)) A set's effects each at its own moment, moved earlier on a clip too short to end with it.
+  for (const it of (set ? setPlacements(set, +clip.dur || 0) : [{ k, at: 0, len: 0 }])) {
     const e = newEffect(clip, it.k, 'fx' + Date.now().toString(36) + made.length + Math.floor(Math.random() * 1296).toString(36));
     if (!e) continue;
+    if (it.at > 0) e.t0 = Math.round(fileAt(clip, (+clip.start || 0) + it.at) * 1000) / 1000;
     if (it.len > 0) e.len = it.len;
+    // A cover's date - the month it is made in.
+    if (it.k === 'magazine') {
+      const now = new Date();
+      e.txt = { date: now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
+    }
     const mem = effectOf(it.k).colors ? _colorsMem()[it.k] : null;
     if (mem && typeof mem === 'object') e.col = { ...mem };
     made.push(e);
@@ -441,6 +448,8 @@ export function fxRows(g, track, c) {
             : kind === 'pos' ? (Math.abs(v) < 0.005 ? 'as made' : (v < 0 ? 'up ' : 'down ') + Math.round(Math.abs(v) * 100) + ' %')
               : (+v).toFixed(2) + '×');
         const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });
+        // (block 4d) A switch for a setting that is on or off (the cover's barcode).
+        if (kind === 'bool') { g.appendChild(C.row(label, C.toggle(now[key] >= 0.5, (on) => put(withOpt(on ? 1 : 0))))); continue; }
         g.appendChild(C.row(label, C.slider({ min: olo, max: ohi, step, value: now[key], fmt,
           onInput: (v) => live(withOpt(v)),
           onChange: (v) => { setLive(null); put(withOpt(v)); } })));
