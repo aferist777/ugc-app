@@ -765,6 +765,13 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-c-span-track > .u-range{position:absolute; left:0; top:6px; width:100%; background:none; pointer-events:none}
 .mv3-c-span-track > .u-range::-webkit-slider-thumb{pointer-events:auto}
 .mv3-c-span-track > .u-range.is-top{z-index:1}
+/* (the owner 2026-11-10) The stacked form: the name and the numbers over the track, the track the strip's width, its ends under it. */
+.mv3-c-spanbox{display:flex; flex-direction:column; gap:2px; padding:3px 0}
+.mv3-c-spanhead{display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2)}
+.mv3-c-spanhead > .mv3-c-lbl{flex:1 1 auto}
+.mv3-c-spanbox > .mv3-c-span-track{flex:none; width:100%}
+.mv3-c-spanends{display:flex; justify-content:space-between; padding:0 2px;
+  font:400 var(--fs-10)/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums}
 /* (phase V73 block 2) a number of the strip in mono, at the strip's own size */
 .mv3-c-num{
   flex:0 0 auto; min-width:36px; text-align:right;

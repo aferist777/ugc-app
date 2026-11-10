@@ -539,6 +539,8 @@ export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb
 // opens the panel when something is picked, and a lane is something.
 function _afterSelB() {
   const n = _sel.size + (_selTrack ? 1 : 0);
+  // (phase V84) The open effect's frame only on a picked clip.
+  _paintFx();
   for (const cb of _selSubs) { try { cb(n); } catch { /* a listener's own trouble */ } }
   // (phase V44) "cut silence" is live while there is something picked to cut in.
   refreshSilence();
@@ -1726,36 +1728,44 @@ function _fxFrames(el, c) {
   const d = +c.dur || 0;
   if (!(d > 0)) return;
   el.classList.add('has-fx');
-  const rows = [];                // the end of the last frame in each row
-  const made = [];
+  // (the owner 2026-11-10) A frame shows only while its effect is OPEN in the inspector on the picked clip (_paintFx) - the clip's
+  // gold says it has effects; the frame says where the one being set runs, and follows its slider (fxLive).
+  const open = FXUI.focusOf();
   for (const e of c.fx) {
     const fd = fxEffectOf(e.k);
     if (!fd) continue;
     const sp = fxSpanOf(c, e);
     const a = Math.max(0, sp.a - (+c.start || 0)), b = Math.min(d, sp.b - (+c.start || 0));
     if (!(b > a + 1e-3)) continue;
-    let r = rows.findIndex((end) => end <= a + 1e-3);
-    if (r < 0) { r = rows.length; rows.push(b); } else rows[r] = b;
     const f = document.createElement('span');
-    f.className = 'mv3b-fx';
+    f.className = 'mv3b-fx' + (open && open.clipId === String(c.id) && open.fxId === String(e.id) && _sel.has(String(c.id)) ? ' is-cur' : '');
+    f.dataset.clip = c.id;
+    f.dataset.fx = e.id;
+    f.dataset.dur = String(d);
     f.style.left = (a / d * 100).toFixed(3) + '%';
     f.style.width = ((b - a) / d * 100).toFixed(3) + '%';
-    f.title = fd.name + ' · ' + a.toFixed(2) + '–' + b.toFixed(2) + ' s of the clip - press to open it';
+    f.title = fd.name + ' · ' + a.toFixed(2) + '–' + b.toFixed(2) + ' s of the clip';
     f.textContent = fd.name;
-    f.addEventListener('mousedown', () => FXUI.focus(c.id, e.id));
     el.appendChild(f);
-    made.push([f, r]);
   }
-  // As many rows as effects run at once, each a share of the clip's height (three at most - more share the last).
-  const n = Math.min(3, rows.length);
-  if (n > 1) {
-    for (const [f, r] of made) {
-      const k = Math.min(r, n - 1);
-      f.style.top = `calc(${(k / n * 100).toFixed(3)}% + 1px)`;
-      f.style.bottom = 'auto';
-      f.style.height = `calc(${(100 / n).toFixed(3)}% - 2px)`;
-    }
-  }
+}
+
+// The open effect's frame shown, the rest hidden: the effect open in the inspector (fx-ui.js focusOf) on a clip that is picked.
+function _paintFx() {
+  const f = FXUI.focusOf();
+  document.querySelectorAll('.mv3b-fx').forEach((el) => {
+    el.classList.toggle('is-cur', !!f && el.dataset.clip === f.clipId && el.dataset.fx === f.fxId && _sel.has(f.clipId));
+  });
+}
+
+/** (the owner 2026-11-10) The open effect's frame moved while its Start / End slider is held - `a`, `b` seconds into the clip. */
+export function fxLive(clipId, fxId, a, b) {
+  const el = document.querySelector(`.mv3b-fx[data-clip="${CSS.escape(String(clipId))}"][data-fx="${CSS.escape(String(fxId))}"]`);
+  const d = el ? +el.dataset.dur : 0;
+  if (!el || !(d > 0)) return;
+  const x = Math.max(0, Math.min(d, +a || 0)), y = Math.max(x, Math.min(d, +b || 0));
+  el.style.left = (x / d * 100).toFixed(3) + '%';
+  el.style.width = ((y - x) / d * 100).toFixed(3) + '%';
 }
 
 function _clipEl(t, c, over) {
@@ -3597,6 +3607,8 @@ function _letFieldGo() {
 
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
+  // (phase V84) The open effect's frame follows the inspector.
+  FXUI.onFocus(() => _paintFx());
   // (phase V36, T4) The waves follow the scroll and the panel's width, and are drawn when a file's peaks arrive.
   const host = _host();
   if (host) {

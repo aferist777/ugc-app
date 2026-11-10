@@ -88,7 +88,9 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
 // (phase V84, the owner 2026-11-10) A stretch on ONE track - its start and its end, two thumbs, one readout. `fit(a, b, which)` is
 // the caller's rule for the thumb moved ('a' or 'b'): it returns [a, b] as they may be, and the other thumb follows while the hand
 // moves. Nothing is written until the release - one write, one undo step, as a slider's.
-export function span({ min, max, step, a, b, fmt, fit, onChange }) {
+// (the owner 2026-11-10) `label` - its name OVER it and the track the strip's whole width, `ends` - the two numbers under its ends;
+// `onInput(a, b)` - told while a thumb is held (nothing written).
+export function span({ min, max, step, a, b, fmt, fit, onChange, onInput, label, ends }) {
   const wrap = document.createElement('span');
   wrap.className = 'mv3-c-span';
   const track = document.createElement('span');
@@ -119,6 +121,7 @@ export function span({ min, max, step, a, b, fmt, fit, onChange }) {
     cur = fit ? fit(na, nb, which) : [Math.min(na, nb), Math.max(na, nb)];
     if (which === 'a') ib.value = String(cur[1]); else ia.value = String(cur[0]);
     paint();
+    if (onInput) onInput(cur[0], cur[1]);
   };
   ia.addEventListener('input', () => move('a'));
   ib.addEventListener('input', () => move('b'));
@@ -126,8 +129,28 @@ export function span({ min, max, step, a, b, fmt, fit, onChange }) {
   ia.addEventListener('change', done);
   ib.addEventListener('change', done);
   paint();
-  wrap.append(track, out);
-  return wrap;
+  if (!label) { wrap.append(track, out); return wrap; }
+  // The stacked form: the name and the numbers on one line over the track, the ends under it.
+  const box = document.createElement('div');
+  box.className = 'mv3-c-spanbox';
+  const head = document.createElement('div');
+  head.className = 'mv3-c-spanhead';
+  const l = document.createElement('span');
+  l.className = 'mv3-c-lbl';
+  setFigures(l, label);
+  head.append(l, out);
+  box.appendChild(head);
+  box.appendChild(track);
+  if (Array.isArray(ends) && ends.length === 2) {
+    const sc = document.createElement('div');
+    sc.className = 'mv3-c-spanends';
+    const e0 = document.createElement('span'), e1 = document.createElement('span');
+    e0.textContent = ends[0];
+    e1.textContent = ends[1];
+    sc.append(e0, e1);
+    box.appendChild(sc);
+  }
+  return box;
 }
 
 // ── Volume, in decibels ─────────────────────────────────────────────────────

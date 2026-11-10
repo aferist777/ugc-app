@@ -117,16 +117,18 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 
 /* ── A clip's effects (phase V84, the owner's (эф4), (эф5); js/merge-v3/fx-ui.js, timeline-b.js _fxFrames) ─────────────────
    A clip with effects is another colour - a gold wash over its picture and a gold edge -, and each effect is a FRAME on it: its
-   left and right edges where it starts and ends, its name inside; several at once - as many rows (three at most), each its share
-   of the clip's height (timeline-b.js _fxFrames sets them). */
+   left and right edges where it starts and ends, its name inside - shown only while its effect is open in the inspector on the
+   picked clip (the owner 2026-11-10; timeline-b.js _paintFx), following its Start / End slider (fxLive). */
 .mv3b-clip.has-fx{border-color:var(--gold-line)}
 .mv3b-clip.has-fx::after{content:''; position:absolute; inset:0; pointer-events:none; background:var(--gold-soft)}
 .mv3b-fx{
   position:absolute; top:1px; bottom:1px; z-index:1; box-sizing:border-box; min-width:3px;
   border:1.5px solid var(--gold); border-radius:var(--r-2xs); background:oklch(from var(--gold) l c h / .18);
   padding:0 3px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
-  font:600 var(--fs-8)/1.4 var(--font); color:var(--on-media); text-shadow:0 1px 2px var(--scrim-strong); cursor:pointer;
+  font:600 var(--fs-8)/1.4 var(--font); color:var(--on-media); text-shadow:0 1px 2px var(--scrim-strong); pointer-events:none;
+  display:none;
 }
+.mv3b-fx.is-cur{display:block}
 .mv3b-clip.has-fx .mv3b-clip-t{z-index:2; text-align:right; left:auto; max-width:50%}
 
 /* The inspector's group "Effects": a row a effect - its name over where it runs, the ✕; the one open has its Start and End. */

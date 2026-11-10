@@ -12,26 +12,28 @@
      (lib/faces.js, the app's hidden window; "finding the face…" in the group meanwhile) and the face's place in the frame over the
      clip written with it (`path`, `pk`) - one write; none found, it works where a face usually is, and the group says why.
    - THE INSPECTOR'S GROUP "Effects" (fxGroup, after Color): a row a effect - its name, where it runs, ✕; the row pressed opens its
-     Start and End (seconds into the clip; fx/params.js placeEffect). The effect open is the one whose frame was pressed on the
-     timeline (focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span; the owner
+     Start and End (seconds into the clip; fx/params.js placeEffect). The effect open is the one whose row was pressed (its frame shows on the
+     timeline, focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span; the owner
      2026-11-10: one row).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { EFFECTS, GROUPS, SETS, effectOf } from '../fx/effects.js';
 import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX } from '../fx/params.js';
-import { setClipFields, selectClipById } from './timeline-b.js';
+import { setClipFields, selectClipById, fxLive } from './timeline-b.js';
 import * as C from './controls.js';
 
 // ── Which effect is open ────────────────────────────────────────────────────
 let _focus = null;              // { clipId, fxId }
 const _onFocus = [];
-/** Open effect `fxId` of clip `clipId` in the inspector (a frame pressed on the timeline, an effect just added). */
+/** Open effect `fxId` of clip `clipId` in the inspector (its row pressed, an effect just added) - its frame shows on the timeline. */
 export function focus(clipId, fxId) {
   _focus = clipId && fxId ? { clipId: String(clipId), fxId: String(fxId) } : null;
   if (_focus) _openAsk = true;
   for (const cb of _onFocus) { try { cb(); } catch (e) { /* the listener's own trouble */ } }
 }
 export function onFocus(cb) { if (typeof cb === 'function') _onFocus.push(cb); }
+/** The effect open in the inspector - { clipId, fxId } or null (timeline-b.js shows its frame). */
+export function focusOf() { return _focus ? { ..._focus } : null; }
 const _isOpen = (clipId, fxId) => !!(_focus && _focus.clipId === String(clipId) && _focus.fxId === String(fxId));
 
 // ── The panel of tiles (the owner 2026-11-10, (эф13)-(эф16)) ───────────────
@@ -54,7 +56,7 @@ function _panelNow() {
 }
 function _panelSave() { try { localStorage.setItem(PANEL_KEY, JSON.stringify(_panelNow())); } catch (e) { /* a private window */ } }
 
-// The inspector opens its group Effects once when asked (an effect's frame pressed on the timeline, an effect added, the clip's
+// The inspector opens its group Effects once when asked (an effect opened, an effect added, the clip's
 // "Add effect…") - the owner's (эф19); inspector.js takes the ask when it paints.
 let _openAsk = false;
 /** Whether the group Effects is to be opened by this paint (asked once). */
@@ -355,12 +357,16 @@ export function fxRows(g, track, c) {
       return [s, t];
     };
     const moveTo = (na, nb) => write(list.map((y) => (y.id === e.id ? placeEffect(c, e, na, nb) : y)));
-    g.appendChild(C.row('Start – End', C.span({
+    // (the owner 2026-11-10) Its name over it, the strip's whole width, the clip's own length under it; the timeline's frame follows
+    // the thumbs while they are held.
+    g.appendChild(C.span({
+      label: 'Start – End', ends: ['0', _sec(dur)],
       min: 0, max: Math.max(STEP, dur), step: STEP, a: Math.max(0, a), b: Math.min(dur, Math.max(a, b)),
       fit,
       fmt: (s, t) => _num(s) + '–' + (!intro && t >= dur - 0.01 ? 'end' : _num(t) + ' s'),
+      onInput: (s, t) => fxLive(c.id, e.id, s, t),
       onChange: moveTo,
-    })));
+    }));
     g.appendChild(C.hint(d.about + (d.kind === 'intro' ? ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.' : '')));
     // (block 1c) Where its face is - and found again on a press (one undo step).
     if (d.face) {

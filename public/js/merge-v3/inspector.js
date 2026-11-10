@@ -113,7 +113,7 @@ let _title = '';
 // own. ONE GROUP OPEN (phase V84, the owner's (эф18)): a group opened shuts the others of the strip, the open one pressed shuts
 // (all may be shut); which one is open is kept for that KIND of pick (`_kind`, set by the branch) in localStorage
 // (`mv3_ins_open_v1` - the viewer's own convenience) - outside the strip, which every paint rebuilds; never chosen, or not in this
-// strip - the first. The group Effects opens by itself when fx-ui.js asks (an effect's frame pressed on the timeline, an effect
+// strip - the first. The group Effects opens by itself when fx-ui.js asks (an effect opened, an effect
 // added, the clip's "Add effect…" - the owner's (эф19); takeOpenAsk).
 let _kind = '';
 const OPEN_KEY = 'mv3_ins_open_v1';
