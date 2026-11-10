@@ -290,6 +290,8 @@ router.put('/mv3/timeline', (req, res) => {
     // their pieces say is written into the lines in the same tick, so the mirror lays them so again (lib/line-cuts.js).
     const th = /^sv3_(.+)$/.exec(key);
     if (th) require('../lib/line-cuts').fromTimeline(th[1], clean.tracks);
+    // (phase V84 block 3, (б3-2)) An effect the page alone draws, on main video: baked in the background (lib/fx-bake.js).
+    require('../lib/fx-bake').want(rec, key);
     // The STORED tracks go back, not just the version. _sanitize normalises as it writes -
     // a missing field becomes an explicit null, a band number its default - so what the caller
     // sent and what is now here are not byte-identical. The caller needs the stored shape to

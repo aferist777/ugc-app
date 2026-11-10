@@ -29,7 +29,7 @@ const fs = require('fs');
 const path = require('path');
 const { createSupervisor } = require('./supervisor');
 const { openLog } = require('./log');
-const { createFacesWindow } = require('./faces');
+const { createFacesWindow, createBakeWindow } = require('./faces');
 const { createHome } = require('./home');
 const { createUpdater } = require('./updater');
 
@@ -114,6 +114,8 @@ function run() {
   const server = createSupervisor({ appDir: APP_DIR, libraryDir: LIBRARY, log });
   // (phase V33.2) The hidden window that counts the faces of the highlights shorts (desktop/faces.js).
   const faces = createFacesWindow({ log });
+  // (phase V84 block 3) ...and the one that draws the effects the page alone draws, for the render (lib/fx-bake.js).
+  const bake = createBakeWindow({ log });
   // (phase V83, block B2) Started by the launcher: the marks it reads, the old versions tidied, its restart (desktop/home.js).
   const home = createHome({ home: process.env.UGC_HOME, launcher: LAUNCHER, appDir: APP_DIR, log });
   // (phase V83, block B5) ...and the updater: a new version laid down beside this one (desktop/updater.js).
@@ -182,6 +184,7 @@ function run() {
     if (!was) {
       if (mainWindow) mainWindow.loadURL(url + '/');
       faces.open(url);
+      bake.open(url);
       return;
     }
     if (url === was) return;
@@ -193,6 +196,7 @@ function run() {
       } catch { /* a window with no page */ }
     }
     faces.open(url);   // the faces window is among them; this is where it opens again if its page goes
+    bake.open(url);
   });
 
   server.on('failed', async (why) => {
@@ -297,6 +301,7 @@ function run() {
     win.on('closed', () => {
       mainWindow = null;
       faces.close();
+      bake.close();
       app.quit();
     });
     win.loadFile(path.join(__dirname, 'starting.html'));

@@ -6,11 +6,14 @@
    counts only while it is open. So the shell keeps one window that is never shown - public/faces-worker.html - which asks
    the server for films to count and answers with their faces (lib/faces.js). It has the window's graphics card and goes
    on whatever page the person is on. Opened once the server answers; it follows the server to a new port like every
-   other window (main.js); a page that dies is opened again; the app's quit closes it. */
+   other window (main.js); a page that dies is opened again; the app's quit closes it.
+
+   (phase V84 block 3) The BAKE window is one more of the same kind - public/bake-worker.html, which draws the effects the page
+   alone draws for the render (lib/fx-bake.js): createWorkerWindow({ log, page, name }) makes either. */
 
 const { BrowserWindow } = require('electron');
 
-function createFacesWindow({ log }) {
+function createWorkerWindow({ log, page, name }) {
   let win = null;
   let origin = null;
   let closing = false;
@@ -34,12 +37,12 @@ function createFacesWindow({ log }) {
     });
     win.on('closed', () => { win = null; });
     win.webContents.on('render-process-gone', (_e, d) => {
-      log.line(`the faces window's page went (${d.reason}) - opening it again`);
+      log.line(`the ${name} window's page went (${d.reason}) - opening it again`);
       try { if (win && !win.isDestroyed()) win.destroy(); } catch { /* gone */ }
       win = null;
       setTimeout(() => { if (!closing && origin) open(origin); }, 5000);
     });
-    win.loadURL(url + '/faces-worker.html').catch((e) => log.line(`the faces window could not open: ${e.message}`));
+    win.loadURL(url + '/' + page).catch((e) => log.line(`the ${name} window could not open: ${e.message}`));
   }
 
   function close() {
@@ -51,4 +54,8 @@ function createFacesWindow({ log }) {
   return { open, close, get window() { return win; } };
 }
 
-module.exports = { createFacesWindow };
+const createFacesWindow = ({ log }) => createWorkerWindow({ log, page: 'faces-worker.html', name: 'faces' });
+/** (phase V84 block 3) The hidden window that draws the effects the page alone draws, for the render (lib/fx-bake.js). */
+const createBakeWindow = ({ log }) => createWorkerWindow({ log, page: 'bake-worker.html', name: 'bake' });
+
+module.exports = { createFacesWindow, createBakeWindow, createWorkerWindow };

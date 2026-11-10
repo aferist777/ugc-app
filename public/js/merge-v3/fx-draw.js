@@ -7,11 +7,12 @@
      the channels (the picture drawn three times, each through a filter keeping one channel, moved, added up) ->
      the blocks (down to a small canvas and back without smoothing, the grid from the frame's corner) ->
      (block 1c) the face's mosaic (the same blocks inside its oval) and Snap zoom's blur (a canvas blur) ->
+     (block 3) the glitch's column jitter (main video, baked for the render by the app's window with this code) ->
      (block 1b) the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
      (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { vigAt, linesOf, LINES_ALPHA, stripesAt } from '../fx/effects.js';
+import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf } from '../fx/effects.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 let _defs = null;
@@ -236,6 +237,27 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
     h.filter = 'url(#mv3-fx-bv)';
     h.drawImage(cur, 0, 0);
     h.filter = 'none';
+    cur = nx;
+    g = h;
+  }
+  // (block 3) The glitch's column jitter (main video only - params.js): each band of the frame moved down by its own amount, its
+  // edge row repeated into the gap (video-effects-pack's remap with BORDER_REPLICATE). Drawn by the page only - the app's window
+  // bakes it for the render with this very code (js/bake-worker.js).
+  if (p.jitter) {
+    const jt = jitterOf(W, p.jitter.seed);
+    const nx = _canvas('j', CW, CH);
+    const h = nx.getContext('2d');
+    h.save();
+    h.beginPath();
+    h.rect(PAD, PAD, W, H);
+    h.clip();
+    for (let i = 0, x = 0; x < W; i++, x += jt.bw) {
+      const w = Math.min(jt.bw, W - x), dy = jt.dy[i];
+      h.drawImage(cur, PAD + x, PAD, w, H, PAD + x, PAD + dy, w, H);
+      if (dy > 0) h.drawImage(cur, PAD + x, PAD, w, 1, PAD + x, PAD, w, dy);
+      else if (dy < 0) h.drawImage(cur, PAD + x, PAD + H - 1, w, 1, PAD + x, PAD + H + dy, w, -dy);
+    }
+    h.restore();
     cur = nx;
     g = h;
   }

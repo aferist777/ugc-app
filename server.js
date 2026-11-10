@@ -170,6 +170,7 @@ app.use('/api', require('./routes/narrators'));
 app.use('/api', require('./routes/sources'));
 app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts (phase V33.1)
 app.use('/api', require('./routes/faces'));   // the faces of a film, counted by the app's hidden window (phase V33.2)
+app.use('/api', require('./routes/fx-bake'));   // the effects the page alone draws, baked by the app's hidden window (phase V84)
 // The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
 app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
@@ -246,6 +247,10 @@ const server = app.listen(PORT, '127.0.0.1', () => {
       .then(() => require('./lib/thumb-refresh').run())
       .catch(e => console.warn('[thumbs] refresh failed:', e.message));
     require('./lib/thumbs').sweepOldSizes();
+
+    // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go.
+    try { require('./lib/fx-bake').sweep(Object.values((require('./lib/merge-store').read() || {}).timelines || {})); }
+    catch (e) { console.warn('[fx-bake] sweep failed:', e.message); }
 
     // A picture Merge asked for is watched by the server, not by the page - so a watcher is a
     // live loop and cannot survive a restart, while the record of what was asked for is on disk

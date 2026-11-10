@@ -17,6 +17,8 @@
      glow           Soft sway's soft focus 0..1: 0.88 of the picture blurred by 1.3 u and 0.12 of it blurred by 14 u
      blurV          a vertical blur, σ in u;  stripes - the glitch's dark lines 0..1 (stripesAt);  grain - the glitch's grain 0..1
      blur           (block 1c) a blur both ways, σ in u (Snap zoom's snaps)
+     jitter         (block 3) the glitch's column jitter { seed } (jitterOf) - drawn by the page only: an effect with `engine: 'main'`
+                    is BAKED on main video by the app's window (lib/fx-bake.js) and has no such part elsewhere
      mosaic         (block 1c) the face's oval of blocks: { x, y (its middle), w, h (its size) } - shares of the frame
    `kind` 'intro' - a moment of its own length (`dur`), stretched to 0.8-2 (`lo`, `hi`) of it; 'loop' - for as long as it is on.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -137,8 +139,31 @@ function _glitch(t) {
     ch: { gx, gy, bx: -gx, ry: jump },
     col: [1.1, 0, 0, 8 / 255, 0, 1.1, 0, 8 / 255, 0, 0, 1.1, 8 / 255],
     blurV: 2.6, stripes: 1, grain: 1,
+    // (block 3) its column jitter - bands of 7 u, each moved down by its own random amount (σ 5 u), new every two frames: drawn by
+    // the page's code only (fx-draw.js) - on main video baked by the app's window (lib/fx-bake.js), elsewhere left out.
+    jitter: { seed: (i >> 1) + 1 },
   };
 }
+
+// ── Block 3: drawn by the page's code only (the bake engine) ────────────────
+/**
+ * The glitch's column jitter on a frame W wide: { bw (px), dy: [px a band] } - video-effects-pack's vglitch: bands of 7 u (3 px
+ * at least), each moved down by a normal random of σ 5 u, from `seed` (the frame pair's).
+ */
+export function jitterOf(W, seed) {
+  const u = W / 1080;
+  const bw = Math.max(3, Math.round(7 * u));
+  const n = Math.ceil(W / bw);
+  const rnd = _rng((Math.imul(seed, 2246822519) ^ 0x51ED270B) >>> 0);
+  const dy = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(1e-9, rnd()), b = rnd();
+    dy[i] = 5 * u * Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b);
+  }
+  return { bw, dy };
+}
+/** The version of the page-drawn effects - a baked copy made by another is made again (lib/fx-bake.js). */
+export const ENGINE_VERSION = 1;
 
 // ── Block 1c: by the face ──────────────────────────────────────────────────
 // Where the face is, an effect keeps in `path` (js/fx/params.js normalizeFx): [[the file's second, x, y, w, h], ...] five a
@@ -213,8 +238,8 @@ export const EFFECTS = {
     about: 'The whole frame turns to blocks of up to 48 px and back.', at: _pixelate },
   colorswing: { name: 'Color swing', group: 'color', kind: 'loop',
     about: 'The colour swings purple - teal - purple once a second, the camera sways.', at: _swing },
-  glitch: { name: 'Glitch', group: 'color', kind: 'loop',
-    about: 'The colour channels tear apart, dark lines and grain - the light glitch of the Hook set.', at: _glitch },
+  glitch: { name: 'Glitch', group: 'color', kind: 'loop', engine: 'main',
+    about: 'The colour channels tear apart, the columns jitter, dark lines and grain - the glitch of the Hook set.', at: _glitch },
   snapzoom: { name: 'Snap zoom', group: 'face', kind: 'intro', dur: 2.45, lo: 0.7, hi: 2, face: true,
     about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },
   mosaic: { name: 'Face mosaic', group: 'face', kind: 'loop', face: true,

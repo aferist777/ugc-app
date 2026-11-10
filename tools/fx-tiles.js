@@ -11,9 +11,15 @@
    goes on plays `loop` seconds.
 
    Run it by hand when an effect is added or changed - the example clip is read, never written:
-       node tools/fx-tiles.js --src "<library>/projects/<project>/<clip>"     makes every tile
+       node tools/fx-tiles.js --src "<library>/projects/<project>/<clip>" --via <app> --library <its library>
+                                                                              makes every tile
        node tools/fx-tiles.js --check                                         says whether every effect and set has its tile, made
-                                                                              by the effects as they are now */
+                                                                              by the effects as they are now
+
+   (block 3) An effect the page alone draws is baked by the app's hidden window (lib/fx-bake.js), which only a running app has: with
+   `--via http://127.0.0.1:<port> --library <its library folder>` (a test copy of the app run on a throwaway library) every tile is
+   rendered by that app's own Export (POST /api/mv3b/render) and fetched from it; the example clip is copied into its media/work and
+   the renders it made are deleted after. Without `--via` the tiles are rendered here, and an effect needing the window cannot be. */
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -51,11 +57,38 @@ async function main() {
   const src = at > 0 ? process.argv[at + 1] : '';
   if (!src || !fs.existsSync(src)) { console.error('--src <the example clip> is needed (tools/fx-tiles.json says which)'); process.exit(2); }
 
+  const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : ''; };
+  const via = arg('--via').replace(/\/+$/, '');
+  const viaLib = arg('--library');
+  if (via && !(viaLib && fs.existsSync(viaLib))) { console.error('--via needs --library <the folder of the library that app runs on>'); process.exit(2); }
   // A library of its own in the temp folder: the clip copied in, the render's scratch there. Set before the app's modules load.
   const lib = fs.mkdtempSync(path.join(os.tmpdir(), 'ugc-fx-tiles-'));
   process.env.UGC_DATA_DIR = lib;
   fs.mkdirSync(path.join(lib, 'media', 'work'), { recursive: true });
   fs.copyFileSync(src, path.join(lib, 'media', 'work', 'example.mp4'));
+  const viaClip = via ? path.join(viaLib, 'media', 'work', 'example.mp4') : '';
+  const viaHad = !!via && fs.existsSync(viaClip);
+  if (via && !viaHad) {
+    fs.mkdirSync(path.dirname(viaClip), { recursive: true });
+    fs.copyFileSync(src, viaClip);
+  }
+  // Rendered by the running app (its Export, its bake window): the file fetched, the render it made deleted there.
+  const viaRender = async (tl, out) => {
+    const post = await fetch(via + '/api/mv3b/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeline: tl, key: '', adv: null }) });
+    const r = await post.json();
+    if (!r.success) throw new Error(r.error || 'the app did not render it');
+    let st = null;
+    for (let i = 0; i < 1200; i++) {
+      st = await (await fetch(via + '/api/mv3b/render/' + r.jobId)).json();
+      if (st.status !== 'running') break;
+      await new Promise((x) => setTimeout(x, 500));
+    }
+    if (!st || st.status !== 'done' || !st.url) throw new Error((st && st.error) || 'the app did not finish it');
+    const res = await fetch(via + st.url);
+    fs.writeFileSync(out, Buffer.from(await res.arrayBuffer()));
+    const made = path.join(viaLib, ...decodeURIComponent(st.url).split('/').filter(Boolean));
+    for (const f of [made, made.replace(/\.mp4$/i, '.en_US.srt')]) fs.rmSync(f, { force: true });
+  };
   const FFMPEG = require('ffmpeg-static');
   const JOB = require('../lib/mv3b-job');
   const P = await import('../public/js/fx/params.js');
@@ -82,13 +115,16 @@ async function main() {
         id: 'e' + i, k: it.k, t0: lead, ...(it.len > 0 ? { len: it.len } : {}), ...(FX.EFFECTS[it.k].face ? { path: CFG.face } : {}),
       })));
       const tl = { format: '9:16', tracks: [{ id: 'v1', kind: 'video', main: true, name: 'main video', clips: [clip] }] };
-      const p = await JOB.prepare(tl, 'tile_' + key, {}, null);
-      if (p.error) throw new Error(key + ': ' + p.error);
       const full = path.join(lib, key + '.mp4');
-      try {
-        const r = spawnSync(FFMPEG, [...p.args, full], { windowsHide: true, encoding: 'utf8', maxBuffer: 1 << 26 });
-        if (r.status) throw new Error(key + ': ' + (r.stderr || '').slice(-1500));
-      } finally { p.dispose(); }
+      if (via) await viaRender(tl, full);
+      else {
+        const p = await JOB.prepare(tl, 'tile_' + key, {}, null);
+        if (p.error) throw new Error(key + ': ' + p.error);
+        try {
+          const r = spawnSync(FFMPEG, [...p.args, full], { windowsHide: true, encoding: 'utf8', maxBuffer: 1 << 26 });
+          if (r.status) throw new Error(key + ': ' + (r.stderr || '').slice(-1500));
+        } finally { p.dispose(); }
+      }
       // The square: the frame's width, on the face's height.
       const W = 1080, H = 1920;
       const y = Math.round(Math.max(0, Math.min(H - W, CFG.cropY * H - W / 2)));
@@ -103,6 +139,7 @@ async function main() {
     }
   } finally {
     fs.rmSync(lib, { recursive: true, force: true });
+    if (via && !viaHad) fs.rmSync(viaClip, { force: true });
     // The render's scratch for that library (lib/config.js SCRATCH_DIR) goes with it.
     try { const { TEMP_DIR } = require('../lib/config'); if (TEMP_DIR) fs.rmSync(path.dirname(TEMP_DIR), { recursive: true, force: true }); } catch (e) { /* not made */ }
   }

@@ -231,7 +231,7 @@ export function paramsAt(c, t, W, H, main) {
   const anchor = anchorOf(c, main);
   const tf = fileAt(c, t);
   let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
-  let blur = 0, mos = null;
+  let blur = 0, mos = null, jitter = null;
   for (const e of c.fx) {
     const d = effectOf(e.k);
     if (!d) continue;
@@ -243,6 +243,8 @@ export function paramsAt(c, t, W, H, main) {
     any = true;
     if (n.blur > blur) blur = +n.blur;
     if (n.mosaic && !mos) mos = n.mosaic;
+    // (block 3) What only the page draws - on main video, where the app's window bakes it; elsewhere left out.
+    if (n.jitter && main && d.engine === 'main' && !jitter) jitter = n.jitter;
     if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
     if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
     if (n.col) col = colThen(col || COL_ID, n.col);
@@ -269,7 +271,31 @@ export function paramsAt(c, t, W, H, main) {
     const sz = mosaicSizeOf(c, W, H) || _evenBox(mos.w * W, mos.h * H);
     mosaic = { x: Math.round(cx - sz.w / 2), y: Math.round(cy - sz.h / 2), w: sz.w, h: sz.h, b: MOSAIC_BLOCK };
   }
-  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic };
+  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic, jitter };
+}
+
+/**
+ * (block 3) Where clip `c` on MAIN video needs the bake engine: the timeline's stretches [[a, b], ...] of its effects with
+ * `engine: 'main'`, merged - there every effect of the clip is drawn by the page's code in the app's window (lib/fx-bake.js)
+ * and the render lays that copy (lib/mv3b-render.js). None off main video.
+ */
+export function engineSpans(c, main) {
+  if (!main || !hasFx(c)) return [];
+  const out = [];
+  for (const e of c.fx) {
+    const d = effectOf(e.k);
+    if (!d || d.engine !== 'main') continue;
+    const s = spanOf(c, e);
+    if (s.b > s.a + 1e-4) out.push([Math.max(+c.start || 0, s.a), s.b]);
+  }
+  out.sort((x, y) => x[0] - y[0]);
+  const m = [];
+  for (const sp of out) {
+    const l = m[m.length - 1];
+    if (l && sp[0] <= l[1] + 1e-4) l[1] = Math.max(l[1], sp[1]);
+    else m.push(sp.slice());
+  }
+  return m;
 }
 
 const _evenBox = (w, h) => ({ w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) });
@@ -292,5 +318,5 @@ export function isPlain(p) {
   const colId = !p.col || p.col.every((v, i) => Math.abs(v - COL_ID[i]) < 1e-5);
   const chZ = !p.ch || Object.values(p.ch).every((v) => Math.abs(v) < 0.5);
   return still && colId && chZ && !(p.px > 1.5) && !(p.vig > 0.002) && !(p.lines > 0.002)
-    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002) && !(p.blur > 0.05) && !p.mosaic;
+    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002) && !(p.blur > 0.05) && !p.mosaic && !p.jitter;
 }
