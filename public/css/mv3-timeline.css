@@ -114,3 +114,34 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
   font:600 var(--fs-10)/1.35 var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   box-shadow:var(--shadow);   /* (V73 block 5, 5c) the one shadow; 10 px (half sizes down, (к2а)) */
 }
+
+/* ── A clip's effects (phase V84, the owner's (эф4), (эф5); js/merge-v3/fx-ui.js, timeline-b.js _fxFrames) ─────────────────
+   A clip with effects is another colour - a gold wash over its picture and a gold edge -, and each effect is a FRAME on it: its
+   left and right edges where it starts and ends, its name inside; two at once - two rows, each half the clip's height. */
+.mv3b-clip.has-fx{border-color:var(--gold-line)}
+.mv3b-clip.has-fx::after{content:''; position:absolute; inset:0; pointer-events:none; background:var(--gold-soft)}
+.mv3b-fx{
+  position:absolute; top:1px; bottom:1px; z-index:1; box-sizing:border-box; min-width:3px;
+  border:1.5px solid var(--gold); border-radius:var(--r-2xs); background:oklch(from var(--gold) l c h / .18);
+  padding:0 3px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+  font:600 var(--fs-8)/1.4 var(--font); color:var(--on-media); text-shadow:0 1px 2px var(--scrim-strong); cursor:pointer;
+}
+.mv3b-clip.has-fx2 .mv3b-fx{bottom:50%}
+.mv3b-clip.has-fx2 .mv3b-fx.is-r2{top:50%; bottom:1px}
+.mv3b-clip.has-fx .mv3b-clip-t{z-index:2; text-align:right; left:auto; max-width:50%}
+
+/* The inspector's group "Effects": a row a effect - its name over where it runs, the ✕; the one open has its Start and End. */
+.mv3-fx-row{display:flex; align-items:center; gap:var(--sp-1); padding:2px 0}
+.mv3-fx-name{
+  flex:1 1 auto; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-2);
+  padding:4px var(--sp-2); border:1px solid var(--border-soft); border-radius:var(--r-xs); background:none; color:var(--ink);
+  text-align:left; cursor:pointer; font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font);
+}
+.mv3-fx-name small{color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--mono); font-variant-numeric:tabular-nums}
+.mv3-fx-name:hover{background:var(--hover)}
+.mv3-fx-row.is-open .mv3-fx-name{border-color:var(--gold-line); background:var(--gold-soft)}
+.mv3-fx-row.is-out .mv3-fx-name{opacity:.5; cursor:default}
+.mv3-fx-x{flex:0 0 auto}
+/* The list's group names. */
+.mv3-fx-mh{padding:6px var(--sp-2) 2px; color:var(--faint); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font)}
+.mv3-fx-menu{max-height:calc(100vh - 16px); overflow:auto}

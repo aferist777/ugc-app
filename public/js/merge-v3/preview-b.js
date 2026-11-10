@@ -38,6 +38,9 @@ import { opacityOf, blendOf } from '../overlay/look.js';
 import * as PAT from '../overlay/pattern.js';
 // (phase V75) A clip's colour correction - one rule with the render (overlay/color.js).
 import { svgOf } from '../overlay/color.js';
+// (phase V84) A clip's effects - one rule with the render (fx/params.js), drawn on its layer (fx-draw.js).
+import { paramsAt as fxParamsAt, isPlain as fxPlain } from '../fx/params.js';
+import { applyFx } from './fx-draw.js';
 // (phase V76) A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
 import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
@@ -854,7 +857,11 @@ function _showAs(el, sw, sh, c, gaps, main) {
   const op = opacityOf(look);
   const mode = main ? null : blendOf(look);
   const mixed = !!(mode && mode.id !== 'none');
-  if (op >= 1 && !mixed) { _show(el, sw, sh, c, gaps, main); return; }
+  // (phase V84) ITS EFFECTS run now: the clip drawn alone on the layer, the effects applied to the layer (fx-draw.js, the render's
+  // steps - lib/fx-render.js), then laid at its opacity and blend mode. Never on a band (the render's rule too).
+  const fxp = (c.halfer || c.layer) ? null : fxParamsAt(look, _at, W, H, main);
+  const fxOn = !!fxp && !fxPlain(fxp);
+  if (op >= 1 && !mixed && !fxOn) { _show(el, sw, sh, c, gaps, main); return; }
   if (op <= 0) return;
   if (!_layerCv) _layerCv = document.createElement('canvas');
   if (_layerCv.width !== CW || _layerCv.height !== CH) { _layerCv.width = CW; _layerCv.height = CH; }
@@ -868,11 +875,12 @@ function _showAs(el, sw, sh, c, gaps, main) {
   const frame = _ctx;
   _ctx = g;
   try { _show(el, sw, sh, c, gaps, main); } finally { _ctx = frame; }
+  const src = fxOn ? applyFx(_layerCv, fxp, { W, H, PAD, inFrame: main || (!isPlaced(look) && !cropActive(look)) }) : _layerCv;
   _ctx.save();
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
   _ctx.globalAlpha = op;
   if (mixed) _ctx.globalCompositeOperation = mode.canvas;
-  _ctx.drawImage(_layerCv, 0, 0);
+  _ctx.drawImage(src, 0, 0);
   _ctx.restore();
 }
 
@@ -1608,7 +1616,9 @@ function _tick() {
   }
   _at = Math.max(0, _at0 + (now - _t0) / 1000);
   const end = duration();
-  if (_at >= end) { _at = end; pause(); _paint(); _clock(); setPlayhead(_at); return; }
+  if (_at >= end) { _at = end; pause(); _paint(); _clock(); setPlayhead(_at); _stretch = null; return; }
+  // (phase V84, the owner's (эф7)) A stretch played once - an effect just added: at its end the playhead goes back to its start.
+  if (_stretch && _at >= _stretch.b) { const back = _stretch.back; _stretch = null; pause(); seek(back); return; }
   _paint();
   _clock();
   // The line on the timeline is the same moment as the picture. It followed a click on the
@@ -2341,8 +2351,20 @@ export function play() {
   _raf = requestAnimationFrame(_tick);
 }
 
+// (phase V84, the owner's (эф7)) PLAYED ONCE: from `a` to `b` of the timeline, then the playhead stands at `back` - an effect just
+// added is seen at once. Any other pause or press of Play lets the stretch go.
+let _stretch = null;
+export function playStretch(a, b, back) {
+  if (_borrowed || !_on) return;
+  if (_playing) pause();
+  seek(Math.max(0, +a || 0));
+  _stretch = { b: Math.max(+a || 0, +b || 0), back: back == null ? Math.max(0, +a || 0) : +back };
+  play();
+}
+
 export function pause() {
   if (!_on || !_playing) return;
+  _stretch = null;
   _playing = false;
   _holding = false;
   cancelAnimationFrame(_raf);

@@ -71,6 +71,8 @@ import { COLOR_KEYS, COLOR_RANGE, COLOR_LABEL, colorOf } from '../overlay/color.
 import { setLive as setLivePlace } from './place-b.js';
 // (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
 import { blendButton } from './blend-menu.js';
+// (phase V84) A clip's effects - the group after Color (fx-ui.js).
+import { fxRows, onFocus as onFxFocus } from './fx-ui.js';
 import { renderPatterns } from './patterns-ui.js';
 // (phase V73 block 2, step 2b) A lane with nothing on it - the shared "nothing here", a row of the strip.
 import { emptyEl } from '../ui-state.js';
@@ -504,6 +506,7 @@ function _blankFilm(host, track, c, set, pair) {
   // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
   if (!main || c.halfer) _halferRows(pic, c, set);
   _colorGroup(host, [{ track, clip: c }]);
+  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
 
   const snd = _group(host, 'sound', 'Sound');
   if (pair) {
@@ -560,6 +563,7 @@ function _blankStill(host, track, c, set) {
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   if (!main || c.halfer) _halferRows(pic, c, set);
   _colorGroup(host, [{ track, clip: c }]);
+  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
 
   // A band takes none of these: no crop, placement or framing on a band.
   if (!c.halfer) {
@@ -1856,6 +1860,8 @@ export function initInspector() {
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(() => render());
+  // (phase V84) An effect opened by its frame on the timeline.
+  onFxFocus(() => render());
   // A platform's screen over the preview, or none: the strip says which pages lie under it (phase V30, block 3).
   Platforms.onChange(() => render());
 

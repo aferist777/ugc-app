@@ -44,6 +44,10 @@ import { normalize as normalizeCrop } from '../framing/crop.js';
 import { normalizeOpacity, normalizeBlend } from '../overlay/look.js';
 import { normalizeColor } from '../overlay/color.js';
 import { normalizePitch } from '../sound/pitch.js';
+// (phase V84) A clip's effects: the field, its frames on the clip, "Add effect…" at its right button.
+import { normalizeFx, spanOf as fxSpanOf } from '../fx/params.js';
+import { effectOf as fxEffectOf } from '../fx/effects.js';
+import * as FXUI from './fx-ui.js';
 // (phase V74) Main video's patterns - a list on its lane (overlay/pattern.js).
 import { normalizeLayers } from '../overlay/pattern.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
@@ -1718,6 +1722,31 @@ function _overlaps(clips) {
   return out;
 }
 
+function _fxFrames(el, c) {
+  const d = +c.dur || 0;
+  if (!(d > 0)) return;
+  el.classList.add('has-fx');
+  const rows = [];                // the end of the last frame in each row
+  for (const e of c.fx) {
+    const fd = fxEffectOf(e.k);
+    if (!fd) continue;
+    const sp = fxSpanOf(c, e);
+    const a = Math.max(0, sp.a - (+c.start || 0)), b = Math.min(d, sp.b - (+c.start || 0));
+    if (!(b > a + 1e-3)) continue;
+    let r = rows.findIndex((end) => end <= a + 1e-3);
+    if (r < 0) { r = rows.length; rows.push(b); } else rows[r] = b;
+    const f = document.createElement('span');
+    f.className = 'mv3b-fx' + (r ? ' is-r2' : '');
+    f.style.left = (a / d * 100).toFixed(3) + '%';
+    f.style.width = ((b - a) / d * 100).toFixed(3) + '%';
+    f.title = fd.name + ' · ' + a.toFixed(2) + '–' + b.toFixed(2) + ' s of the clip - press to open it';
+    f.textContent = fd.name;
+    f.addEventListener('mousedown', () => FXUI.focus(c.id, e.id));
+    el.appendChild(f);
+  }
+  if (rows.length > 1) el.classList.add('has-fx2');
+}
+
 function _clipEl(t, c, over) {
   const el = document.createElement('div');
   el.className = 'mv3b-clip is-' + t.kind + (c.pairId ? ' is-paired' : '') +
@@ -1768,6 +1797,10 @@ function _clipEl(t, c, over) {
     el.classList.add('has-over');
     el.__over = over;
   }
+  // (phase V84, the owner's (эф4), (эф5)) A CLIP WITH EFFECTS is another colour, and each effect is a FRAME on it - its left and
+  // right edges where it starts and ends, its name in it; two at once - two rows. Pressed, the clip is picked as ever and the
+  // effect opens in the inspector (fx-ui.js).
+  if (t.kind === 'video' && Array.isArray(c.fx) && c.fx.length && !Store.isGone(c)) _fxFrames(el, c);
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
   cap.textContent = (Store.isGone(c) ? 'Deleted · ' : '') + (c.name || '');   // (V73 block 5, 5c; (к17)) sentence case
@@ -2391,7 +2424,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'color',
                              // (phase V76) A sound at another pitch (sound/pitch.js); (тн9) the frame the app gave a highlights
                              // clip, kept while the frame of several is changed (hl-group.js).
-                             'pitch', 'frameWas']);
+                             'pitch', 'frameWas',
+                             // (phase V84) Its effects (fx/params.js).
+                             'fx']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2436,6 +2471,8 @@ function _write(c, key, value) {
   if (key === 'color') { const v = normalizeColor(value); if (v == null) delete c.color; else c.color = v; return; }
   // (phase V76) { st, shift } - semitones and the timbre moving with them; 0 takes the field off.
   if (key === 'pitch') { const v = normalizePitch(value); if (v == null) delete c.pitch; else c.pitch = v; return; }
+  // (phase V84) [{ id, k, t0, len }] - the effects the program knows; none takes the field off.
+  if (key === 'fx') { const v = normalizeFx(value); if (v) c.fx = v; else delete c.fx; return; }
   // (phase V76, (тн9)) { frame } - the app's frame of a highlights clip, null for none; no value takes the field off.
   if (key === 'frameWas') { if (value && typeof value === 'object') c.frameWas = { frame: normalizeFrame(value.frame) || null }; else delete c.frameWas; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
@@ -3499,6 +3536,12 @@ function _clipMenu(e) {
   const at = _playhead;
   const gen = (act) => import('./tl-gen.js').then(G => G.fromClip(act, { trackId: t.id, clipId: c.id, at }))
     .catch(err => showError('The chat did not open', { detail: (err && err.message) || String(err) }));
+  // (phase V84, (р8), (эф4)) An effect on the whole clip - first, the list of effects in the menu's place.
+  if (!c.halfer) {
+    _ctxItem(box, 'Add effect…', 'on the whole clip · its start and end in the inspector',
+      'Add an effect to this clip - it covers the whole clip; its start and end move in the inspector, Ctrl+Z takes it off',
+      () => FXUI.openList(e, (k) => FXUI.addTo(t, c, k)));
+  }
   if (!line && still) {
     _ctxItem(box, 'Animate…', 'the video chat · this picture as the first frame',
       'Open the video chat with this picture as the first frame of a new clip', () => gen('animate'));

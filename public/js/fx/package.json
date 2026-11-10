@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "A clip's effects (phase V84) are ES modules: the page imports them and the server require()s them (Node 24), as the overlay and framing modules are."
+}
