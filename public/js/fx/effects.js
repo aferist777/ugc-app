@@ -123,8 +123,18 @@ function _swing(t) {
     }
   }
   const m = motionAt('colorswing', t);
-  return { col, mv: { a: m.a, b: m.b, e: m.e, f: m.f }, cover: true };
+  // (block 2) Its ECHO - at the purple peaks the pack mixes in a frame from another moment (found by matching its frames to the
+  // source): [t0, t1, from dt0 to dt1 s, at alpha a0 to a1], a 6 s cycle. The frame is the clip's file's (js/fx/kit.js momentAt).
+  const tt = ((t % 6) + 6) % 6;
+  let echo = null;
+  for (const [t0, t1, d0, d1, a0, a1] of SWING_ECHO) {
+    if (tt >= t0 && tt <= t1) { const u2 = (tt - t0) / (t1 - t0); echo = { dt: d0 + (d1 - d0) * u2, a: a0 + (a1 - a0) * u2 }; break; }
+  }
+  return { col, mv: { a: m.a, b: m.b, e: m.e, f: m.f }, cover: true, ...(echo ? { echo } : {}) };
 }
+const SWING_ECHO = [[0.933, 1.167, -0.21, -0.21, 0.4, 0.6], [1.967, 2.1, 0.33, 0.33, 0.1, 0.4], [2.9, 3.2, -0.08, -0.42, 0.3, 0.6],
+  [3.8, 4.13, 0.67, 0.42, 0.5, 0.1], [4.87, 5.1, -0.42, -0.42, 0.3, 0.5]];
+export { SWING_ECHO };
 
 // A seeded random a frame pair (the glitch's own, the same in the page and the file).
 function _rngOf(n) { return _rng((Math.imul(n + 1, 2654435761) ^ 0x9E3779B9) >>> 0); }
@@ -276,9 +286,9 @@ export const EFFECTS = {
     at: (t) => { const k = smooth(0, 0.35, t) * (1 - smooth(1.10, 1.55, t)); return k > 0.003 ? { vig: k } : {}; } },
   pixelate: { name: 'Pixelate', group: 'color', kind: 'intro', dur: 1.8, lo: 0.8, hi: 2,
     about: 'The whole frame turns to blocks of up to 48 px and back.', at: _pixelate },
-  colorswing: { name: 'Color swing', group: 'color', kind: 'loop',
-    about: 'The colour swings purple - teal - purple once a second, the camera sways.', at: _swing },
-  glitch: { name: 'Glitch', group: 'color', kind: 'loop', engine: true,
+  colorswing: { name: 'Color swing', group: 'color', kind: 'loop', engine: true, moments: 'echo',
+    about: 'The colour swings purple - teal - purple once a second, the camera sways, and at its purple peaks a frame from another moment echoes in.', at: _swing },
+  glitch: { name: 'Glitch', group: 'glitch', kind: 'loop', engine: true,
     about: 'The colour channels tear apart, the columns jitter, dark lines and grain - the glitch of the Hook set.', at: _glitch },
   snapzoom: { name: 'Snap zoom', group: 'face', kind: 'intro', dur: 2.45, lo: 0.7, hi: 2, face: true,
     about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },
@@ -345,6 +355,35 @@ export const EFFECTS = {
     colors: [['bg', 'Background', '#eeeeec'], ['accent', 'Plate', '#ff5a36'], ['text', 'Text', '#ffffff']],
     opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct'], ['barcode', 'Barcode', 0, 1, 1, 1, 'bool']],
     about: 'The clip becomes a magazine cover: the issue and date, the masthead over the hair, a big number and a line on a plate under the chin, a barcode.', at: _none },
+  // (block 2) Copies and moments - js/fx/copies.js draws them; Grid dive and PiP delay show other moments of the clip (`moments`).
+  details: { name: 'Details', group: 'copies', kind: 'intro', dur: 3.0, lo: 0.7, hi: 2, engine: true, draw: 'details',
+    about: 'The background blurs, five photo cards of the clip land one after another with a flash, then a flash and back.', at: _none },
+  clasp: { name: 'Clasp', group: 'copies', kind: 'intro', dur: 2.5, lo: 0.7, hi: 2, engine: true, draw: 'clasp',
+    about: 'Black, then black-and-white opens like a zip, a diagonal wipe into colour and a flash.', at: _none },
+  strip: { name: 'Film strip', group: 'copies', kind: 'intro', dur: 3.7, lo: 0.7, hi: 2, engine: true, draw: 'strip',
+    about: 'The clip shrinks into a strip of cards with reflections, rolls away and flies back to full frame.', at: _none },
+  split: { name: 'Split', group: 'copies', kind: 'intro', dur: 3.1, lo: 0.7, hi: 2, engine: true, draw: 'split',
+    about: 'Black, the clip slides in and multiplies into 2, 3 and 4 copies side by side, white bars, and back.', at: _none },
+  griddive: { name: 'Grid dive', group: 'copies', kind: 'intro', dur: 0.85, lo: 0.8, hi: 2, engine: true, draw: 'griddive', moments: 'grid',
+    about: 'The frame pulls back into a tilted wall of tiles - each another moment of the clip - and dives back in.', at: _none },
+  pipdelay: { name: 'PiP delay', group: 'copies', kind: 'intro', dur: 2.1, lo: 0.7, hold: 1.0, engine: true, draw: 'pipdelay', face: true, moments: 'delay',
+    colors: [['accent', 'Bar', '#ff5a36'], ['card', 'Window', '#fcfcfc'], ['ink', 'Border', '#1a1a1c']],
+    opts: [['delay', 'Delay', 0.2, 1.0, 0.05, 0.5, 's'], ['corners', 'Corners', 0, 1, 0.05, 1, 'pct']],
+    about: 'A window with REC in the corner shows the same clip half a second late - the head and the chin - tilting and floating.', at: _none },
+  splitscreen: { name: 'Split screen', group: 'copies', kind: 'intro', dur: 1.9, lo: 0.7, hold: 1.0, engine: true, draw: 'splitscreen', face: true,
+    texts: [['caption', 'Caption on the line', '']],
+    colors: [['card', 'Line', '#fcfcfc'], ['text', 'Text', '#1a1a1c']], opts: [['zoom', 'Zoom', 1.1, 2.0, 0.05, 1.35, 'x']],
+    about: 'The screen splits: the frame on top, the same frame zoomed on the face below, sliding in with a line between them.', at: _none },
+  // (block 5) Glitches - js/fx/glitches.js.
+  cursed: { name: 'Cursed', group: 'glitch', kind: 'loop', engine: true, draw: 'cursed',
+    about: 'A green night-vision tone, a flipped ghost now and then, torn tracking bands, pink dashes and grain.', at: _none },
+  sliceup: { name: 'Slice up', group: 'glitch', kind: 'intro', dur: 3.1, lo: 0.7, hi: 2, engine: true, draw: 'sliceup', face: true,
+    about: 'A 2x zoom on the face; its cut edge creeps up the frame with flickering blocks.', at: _none },
+  slicemerge: { name: 'Slice merge', group: 'glitch', kind: 'loop', engine: true, draw: 'slicemerge',
+    about: 'A warm tone; the frame is cut into four bands zoomed and shifted apart, with flashes - every 3 s.', at: _none },
+  liquidglass: { name: 'Liquid glass', group: 'glitch', kind: 'intro', dur: 1.55, lo: 0.7, hi: 2, engine: true, draw: 'liquidglass', face: true,
+    opts: [['size', 'Size', 0.6, 1.6, 0.05, 1, 'x']],
+    about: 'A big glass lens glides over the face, magnifying and bending the picture, its rim catching the light.', at: _none },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
@@ -358,9 +397,13 @@ export const SETS = {
     items: [{ k: 'bwframe' }, { k: 'magazine', at: 2.2 }] },
   aichat: { name: 'AI chat', about: 'The clip lands in a chat with an AI from 0.3 s, then a checklist pops in from 2.8 s.',
     items: [{ k: 'chat', at: 0.3 }, { k: 'checklistpop', at: 2.8 }] },
+  // (block 5) The pack's party: constant energy over the whole clip.
+  party: { name: 'Party', about: 'Color swing, a beat Pulse and Sparkle over the whole clip.',
+    items: [{ k: 'colorswing' }, { k: 'pulse' }, { k: 'sparkle' }] },
 };
 
-export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards']];
+export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards'],
+  ['copies', 'Copies'], ['glitch', 'Glitches']];
 
 /** (block 4c) An effect's words by key - its own (`txt`; '' - not drawn), else the table's. */
 export function textsOf(e) {

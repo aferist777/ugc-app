@@ -243,3 +243,143 @@ export function sparkGlyph(g, x, y, r, color, alpha = 1) {
   g.stroke();
   g.restore();
 }
+
+// ── Block 2: other moments of a clip ───────────────────────────────────────
+// Frames of the clip's file from other moments (Grid dive's tiles, PiP delay's late copy, Color swing's echo), made once by the
+// server (lib/fx-moments.js, cache/fx-moments/) - the preview and the bake window draw the same pictures. `spec` - { ranges:
+// [[from, to], ...] (the file's seconds), w }. Until they are there, an effect draws the picture it has.
+const STILL_RE = /\.(jpe?g|png|webp|gif|bmp|avif)$/i;
+const _moments = new Map();     // key -> { ready, failed, promise, ranges: [{ from, n, imgs }] }
+const _mKey = (src, spec) => String(src).split('?')[0] + '|' + JSON.stringify(spec.ranges) + '|' + spec.w;
+/** The pictures of `spec` for file `src` - asked for once; resolves when every one has loaded (or could not be). */
+export function loadMoments(src, spec) {
+  if (!src || !spec || !Array.isArray(spec.ranges) || !spec.ranges.length || STILL_RE.test(String(src).split('?')[0])
+    || typeof fetch === 'undefined' || typeof Image === 'undefined') return Promise.resolve(null);
+  const key = _mKey(src, spec);
+  let m = _moments.get(key);
+  if (m) return m.promise;
+  if (_moments.size > 24) _moments.delete(_moments.keys().next().value);
+  m = { ready: false, ranges: [] };
+  m.promise = fetch('/api/fx-moments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ src: String(src).split('?')[0], ranges: spec.ranges, w: spec.w }) })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.success) throw new Error((d && d.error) || 'no moments');
+      const all = [];
+      m.ranges = d.ranges.map((r, i) => {
+        const imgs = [];
+        for (let k = 0; k < r.n; k++) {
+          const im = new Image();
+          all.push(new Promise((ok) => { im.onload = ok; im.onerror = ok; }));
+          im.src = d.url + i + '_' + k + '.jpg';
+          imgs.push(im);
+        }
+        return { from: r.from, n: r.n, imgs };
+      });
+      return Promise.all(all);
+    })
+    .then(() => { m.ready = true; for (const cb of _onFont) { try { cb(); } catch (e) { /* its own */ } } return m; })
+    .catch(() => { m.failed = true; return null; });
+  _moments.set(key, m);
+  return m.promise;
+}
+/** The picture of file second `t` (the nearest frame of its stretch), or null - asked for when it is not there yet. */
+export function momentAt(src, spec, t) {
+  if (!src || !spec) return null;
+  const m = _moments.get(_mKey(src, spec));
+  if (!m) { loadMoments(src, spec); return null; }
+  if (!m.ready) return null;
+  let best = null, bd = Infinity;
+  for (const r of m.ranges) {
+    const k = Math.max(0, Math.min(r.n - 1, Math.round((t - r.from) * 30)));
+    const d = Math.abs(r.from + k / 30 - t);
+    if (d < bd && r.imgs[k] && r.imgs[k].naturalWidth) { bd = d; best = r.imgs[k]; }
+  }
+  return best;
+}
+/** Told when a card's font or a clip's moments have loaded (the preview paints again). */
+export const onLoaded = onFontLoaded;
+
+// ── SVG filters the canvas draws through (blocks 2, 5) ─────────────────────
+// One hidden <svg> of filters; a filter's numbers are set just before the draw that uses it (the canvas reads them then - measured
+// for fx-draw.js's colour matrix, 2026-11-10).
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let _svg = null;
+const _filters = new Map();
+function _filter(id, make) {
+  if (typeof document === 'undefined') return null;
+  if (!_svg) {
+    _svg = document.createElementNS(SVG_NS, 'svg');
+    _svg.setAttribute('width', '0');
+    _svg.setAttribute('height', '0');
+    _svg.setAttribute('aria-hidden', 'true');
+    _svg.style.position = 'absolute';
+    document.body.appendChild(_svg);
+  }
+  let f = _filters.get(id);
+  if (!f) {
+    const el = document.createElementNS(SVG_NS, 'filter');
+    el.id = 'ugc-fx-' + id;
+    el.setAttribute('color-interpolation-filters', 'sRGB');
+    el.setAttribute('x', '-0.1'); el.setAttribute('y', '-0.1'); el.setAttribute('width', '1.2'); el.setAttribute('height', '1.2');
+    f = { el, parts: make(el) };
+    _svg.appendChild(el);
+    _filters.set(id, f);
+  }
+  return f;
+}
+const _n = (v) => String(Math.round(v * 1e5) / 1e5);
+/** A blur along x only, σ px - the canvas filter string. */
+export function hblur(sigma) {
+  const f = _filter('hb', (el) => {
+    const b = document.createElementNS(SVG_NS, 'feGaussianBlur');
+    b.setAttribute('edgeMode', 'duplicate');
+    el.appendChild(b);
+    return { b };
+  });
+  if (!f) return 'none';
+  f.parts.b.setAttribute('stdDeviation', _n(Math.max(0, sigma)) + ' 0');
+  return 'url(#ugc-fx-hb)';
+}
+/** A colour matrix 3 x 4 (rows out R, G, B; columns in R, G, B and an offset 0..255) - the canvas filter string. */
+export function matrix(id, M) {
+  const f = _filter('m-' + id, (el) => {
+    const m = document.createElementNS(SVG_NS, 'feColorMatrix');
+    m.setAttribute('type', 'matrix');
+    el.appendChild(m);
+    return { m };
+  });
+  if (!f) return 'none';
+  f.parts.m.setAttribute('values', [0, 1, 2].map((r) => [M[r][0], M[r][1], M[r][2], 0, M[r][3] / 255].map(_n).join(' ')).join(' ') + ' 0 0 0 1 0');
+  return 'url(#ugc-fx-m-' + id + ')';
+}
+/** Luma -> R, G, B by three tables (Cursed's tone): `tables` [[r...], [g...], [b...]] of 0..1 over the luma 0..1. */
+export function lumaTables(id, tables) {
+  const f = _filter('lt-' + id, (el) => {
+    const m = document.createElementNS(SVG_NS, 'feColorMatrix');
+    m.setAttribute('type', 'matrix');
+    m.setAttribute('values', '0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0');
+    const ct = document.createElementNS(SVG_NS, 'feComponentTransfer');
+    const fs = ['feFuncR', 'feFuncG', 'feFuncB'].map((n) => { const x = document.createElementNS(SVG_NS, n); x.setAttribute('type', 'table'); ct.appendChild(x); return x; });
+    el.append(m, ct);
+    return { fs };
+  });
+  if (!f) return 'none';
+  f.parts.fs.forEach((x, i) => x.setAttribute('tableValues', tables[i].map(_n).join(' ')));
+  return 'url(#ugc-fx-lt-' + id + ')';
+}
+/** The pack's flash: the picture mixed towards a colour by `a` over x, y, w, h. */
+export function flash(g, a, col, x, y, w, h) {
+  if (!(a > 0.003)) return;
+  g.save();
+  g.globalAlpha = Math.min(1, a);
+  g.fillStyle = css(col);
+  g.fillRect(x, y, w, h);
+  g.restore();
+}
+/** Picture `img` (iw x ih) laid over x, y, w, h as `cover` (its middle) - the source rectangle [sx, sy, sw, sh]. */
+export function coverOf(iw, ih, w, h) {
+  const s = Math.max(w / iw, h / ih);
+  const sw = w / s, sh = h / s;
+  return [(iw - sw) / 2, (ih - sh) / 2, sw, sh];
+}

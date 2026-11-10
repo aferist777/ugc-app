@@ -445,6 +445,7 @@ export function fxRows(g, track, c) {
       for (const [key, label, olo, ohi, step, , kind] of d.opts) {
         const fmt = (v) => (kind === 'n' ? String(Math.round(v))
           : kind === 'pct' ? Math.round(v * 100) + ' %'
+            : kind === 's' ? (+v).toFixed(2) + ' s'
             : kind === 'pos' ? (Math.abs(v) < 0.005 ? 'as made' : (v < 0 ? 'up ' : 'down ') + Math.round(Math.abs(v) * 100) + ' %')
               : (+v).toFixed(2) + '×');
         const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });

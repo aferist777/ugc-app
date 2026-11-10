@@ -878,7 +878,7 @@ function _showAs(el, sw, sh, c, gaps, main) {
   const frame = _ctx;
   _ctx = g;
   try { _show(el, sw, sh, c, gaps, main); } finally { _ctx = frame; }
-  const box = fxOn && fxp.scenes && fxp.scenes.length ? fxWindowOf(look, main, sw, sh, W, H) : null;
+  const box = fxOn && ((fxp.scenes && fxp.scenes.length) || fxp.echo) ? fxWindowOf(look, main, sw, sh, W, H) : null;
   const src = fxOn ? applyFx(_layerCv, fxp, { W, H, PAD, inFrame: main || (!isPlaced(look) && !cropActive(look)), box }) : _layerCv;
   _ctx.save();
   _ctx.setTransform(1, 0, 0, 1, 0, 0);

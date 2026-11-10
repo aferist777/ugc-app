@@ -21,7 +21,7 @@
    the middle of its box for an insert (the render knows it from the same fields).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { effectOf, COL_ID, colThen, MOSAIC_BLOCK } from './effects.js';
+import { effectOf, COL_ID, colThen, MOSAIC_BLOCK, SWING_ECHO, optsOf } from './effects.js';
 
 export const FX_MAX = 20;
 /** (block 4c) The longest words a card takes in one field. */
@@ -180,6 +180,38 @@ export function newEffect(c, k, id) {
 }
 
 /**
+ * (block 2) The other moments of its clip's file effect `e` shows - { ranges: [[from, to], ...] (the file's seconds, kept inside the
+ * clip's own), w (px) } or null: Grid dive's tiles (2.2 s round it, small), PiP delay's late copy (its delay before it), Color swing's
+ * echo (round each of its echoes). One rule for the page (js/fx/kit.js loadMoments) and the bake window, which waits for them.
+ */
+export function momentsOf(c, e) {
+  const d = effectOf(e && e.k);
+  if (!d || !d.moments || !c) return null;
+  const sp = spanOf(c, e);
+  const t0 = +c.trimIn || 0, t1 = t0 + (+c.dur || 0) * _sp(c);
+  const fOf = (t) => fileAt(c, t);
+  const clamp = (a, b) => [r3(Math.max(t0, Math.min(a, b))), r3(Math.min(t1, Math.max(a, b)))];
+  const f0 = fOf(sp.a), f1 = fOf(Math.max(sp.a, sp.b - 1e-3));
+  const lo = Math.min(f0, f1), hi = Math.max(f0, f1);
+  let ranges = [];
+  if (d.moments === 'grid') ranges = [clamp(lo - 2.2, hi + 2.2)];
+  else if (d.moments === 'delay') ranges = [clamp(lo - (optsOf(e).delay || 0.5) - 0.05, hi)];
+  else if (d.moments === 'echo') {
+    const len = sp.b - sp.a;
+    for (let k = 0; k * 6 < len; k++) {
+      for (const [a, b, d0, d1] of SWING_ECHO) {
+        if (k * 6 + a >= len) continue;
+        const ta = sp.a + k * 6 + a, tb = Math.min(sp.b, sp.a + k * 6 + b);
+        const fa = fOf(ta), fb = fOf(tb);
+        ranges.push(clamp(Math.min(fa, fb) + Math.min(d0, d1) - 0.05, Math.max(fa, fb) + Math.max(d0, d1) + 0.05));
+      }
+    }
+  }
+  ranges = ranges.filter((r) => r[1] > r[0] + 0.01).slice(0, 60);
+  return ranges.length ? { ranges, w: d.moments === 'grid' ? 216 : 540 } : null;
+}
+
+/**
  * (block 4d, the owner's (б4-9)) Where a set's effects go on a clip `clipDur` long: [{ k, at, len }] - each at its own moment (`at`,
  * seconds into the clip); one that would run past the clip's end moved earlier to end with it; `len` an 'intro' its own length
  * (cut to the clip) or the set's own (Hook's glitch), 0 - a 'loop' to the clip's end.
@@ -301,7 +333,7 @@ export function paramsAt(c, t, W, H, main) {
   const anchor = anchorOf(c, main);
   const tf = fileAt(c, t);
   let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
-  let blur = 0, mos = null, jitter = null;
+  let blur = 0, mos = null, jitter = null, echo = null;
   // (block 4b) The graphics running now, in the order they were added (the owner's (б4-6)): drawn last, by the page.
   const scenes = [];
   for (const e of c.fx) {
@@ -313,7 +345,9 @@ export function paramsAt(c, t, W, H, main) {
     if (d.kind === 'intro' && sp.len > 0) tau = ownTime(d, tau, sp.len);
     const n = d.at(Math.max(0, tau), e, tf) || {};
     any = true;
-    if (d.draw) scenes.push({ k: e.k, draw: d.draw, e, tau: Math.max(0, tau), live: Math.max(0, t - sp.a) });
+    if (d.draw) scenes.push({ k: e.k, draw: d.draw, e, c, tf, tau: Math.max(0, tau), live: Math.max(0, t - sp.a) });
+    // (block 2) Color swing's echo: a frame of the clip's file from another moment, mixed in first (js/merge-v3/fx-draw.js).
+    if (n.echo && !echo && main != null) echo = { src: c.src, spec: momentsOf(c, e), tf: tf + n.echo.dt, a: n.echo.a };
     if (n.blur > blur) blur = +n.blur;
     if (n.mosaic && !mos) mos = n.mosaic;
     // (block 3; block 4a - every lane) What only the page draws: the render lays the copy the app's window baked with this code.
@@ -344,7 +378,7 @@ export function paramsAt(c, t, W, H, main) {
     const sz = mosaicSizeOf(c, W, H) || _evenBox(mos.w * W, mos.h * H);
     mosaic = { x: Math.round(cx - sz.w / 2), y: Math.round(cy - sz.h / 2), w: sz.w, h: sz.h, b: MOSAIC_BLOCK };
   }
-  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic, jitter, scenes };
+  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic, jitter, scenes, echo };
 }
 
 /**

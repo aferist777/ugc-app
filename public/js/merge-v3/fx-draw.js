@@ -16,7 +16,10 @@ import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf, colorsOf, optsOf } fr
 import { SCENES } from '../fx/overlays.js';
 import { CARDS } from '../fx/cards.js';
 import { SCREENS } from '../fx/screens.js';
-import { hexRgb, fontsReady } from '../fx/kit.js';
+import { COPIES } from '../fx/copies.js';
+import { GLITCHES } from '../fx/glitches.js';
+import { momentsOf } from '../fx/params.js';
+import { hexRgb, fontsReady, momentAt, coverOf } from '../fx/kit.js';
 
 // (block 4b) The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
 fontsReady();
@@ -160,6 +163,30 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
   const u = W / 1080;
   // The colour and the move, in one draw. A clip covering the frame stays in it - the render cuts the frame out after the move;
   // an insert hanging over the edge is drawn as it hangs.
+  // (block 2) Color swing's ECHO first: a frame of the clip's file from another moment mixed into its window (js/fx/kit.js momentAt
+  // - the server's pictures, the bake window's too); not there yet - no echo.
+  let src = layer;
+  const bx = box && box.w > 0 && box.h > 0 ? box : { cx: W / 2, cy: H / 2, w: W, h: H, angle: 0 };
+  if (p.echo && p.echo.a > 0.003) {
+    const im = momentAt(p.echo.src, p.echo.spec, p.echo.tf);
+    if (im) {
+      const ec = _canvas('ec', CW, CH);
+      const x = ec.getContext('2d');
+      x.drawImage(layer, 0, 0);
+      x.save();
+      x.translate(PAD + bx.cx, PAD + bx.cy);
+      x.rotate((+bx.angle || 0) * Math.PI / 180);
+      x.beginPath();
+      x.rect(-bx.w / 2, -bx.h / 2, bx.w, bx.h);
+      x.clip();
+      x.globalCompositeOperation = 'source-atop';
+      x.globalAlpha = Math.min(1, p.echo.a);
+      const [sx, sy, sw, sh] = coverOf(im.naturalWidth, im.naturalHeight, bx.w, bx.h);
+      x.drawImage(im, sx, sy, sw, sh, -bx.w / 2, -bx.h / 2, bx.w, bx.h);
+      x.restore();
+      src = ec;
+    }
+  }
   let cur = _canvas('a', CW, CH);
   let g = cur.getContext('2d');
   if (inFrame) { g.save(); g.beginPath(); g.rect(PAD, PAD, W, H); g.clip(); }
@@ -170,7 +197,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
   }
   g.setTransform(1, 0, 0, 1, PAD, PAD);
   if (p.move) { const m = p.move; g.transform(m.a, m.b, -m.b, m.a, m.e, m.f); }
-  g.drawImage(layer, -PAD, -PAD);
+  g.drawImage(src, -PAD, -PAD);
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.filter = 'none';
   if (inFrame) g.restore();
@@ -314,7 +341,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       return [dx * ca + dy * sa + b.w / 2, -dx * sa + dy * ca + b.h / 2];
     };
     for (const sc of p.scenes) {
-      const draw = SCENES[sc.draw] || CARDS[sc.draw] || SCREENS[sc.draw];
+      const draw = SCENES[sc.draw] || CARDS[sc.draw] || SCREENS[sc.draw] || COPIES[sc.draw] || GLITCHES[sc.draw];
       if (!draw) continue;
       const col = {};
       for (const [k, v] of Object.entries(colorsOf(sc.e))) col[k] = hexRgb(v);
@@ -329,6 +356,8 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       try {
         draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox,
           canvas: (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))),
+          // (block 2) The clip's file second now, and its picture at another second (null until the server's pictures are there).
+          tf: sc.tf, frame: (t) => (sc.c ? momentAt(sc.c.src, momentsOf(sc.c, sc.e), t) : null),
           // (block 4c) The window's picture as it is now, upright - what Chat lays in its card.
           picture: () => {
             const pc = _canvas('sc-pic', Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));

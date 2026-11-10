@@ -251,6 +251,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go.
     try { require('./lib/fx-bake').sweep(Object.values((require('./lib/merge-store').read() || {}).timelines || {})); }
     catch (e) { console.warn('[fx-bake] sweep failed:', e.message); }
+    try { require('./lib/fx-moments').sweep(); } catch (e) { console.warn('[fx-moments] sweep failed:', e.message); }
 
     // A picture Merge asked for is watched by the server, not by the page - so a watcher is a
     // live loop and cannot survive a restart, while the record of what was asked for is on disk

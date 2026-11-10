@@ -8,6 +8,7 @@
      POST /api/fx-bake/:id/done          { frames, msPerFrame, codec } - the stream is whole
      POST /api/fx-bake/:id/fail          { error }
      GET  /api/fx-bake/state             is the window there, what is waiting
+     POST /api/fx-moments                { src, ranges, w } - other moments of a clip's file as pictures (lib/fx-moments.js)
 
    Loopback only, like the whole server: the window is the app's own. */
 
@@ -21,5 +22,14 @@ router.post('/fx-bake/:id/chunk', express.raw({ type: 'application/octet-stream'
 router.post('/fx-bake/:id/done', (req, res) => { FXB.done(req, res).catch((e) => res.status(500).json({ success: false, error: e.message })); });
 router.post('/fx-bake/:id/fail', (req, res) => FXB.fail(req, res));
 router.get('/fx-bake/state', (_req, res) => res.json({ success: true, ...FXB.state() }));
+
+// (phase V84 block 2) Other moments of a clip's file for the effects that show them (lib/fx-moments.js): { src, ranges, w } ->
+// { key, url, ranges: [{ from, n }] } - JPEGs 30 a second under that url, made once.
+router.post('/fx-moments', async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ success: true, ...(await require('../lib/fx-moments').make(b.src, b.ranges, b.w)) });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
 
 module.exports = router;
