@@ -16,6 +16,8 @@
                     frame's width and height (tables.js); `cover` - zoomed about the middle just enough to leave no empty corner
      glow           Soft sway's soft focus 0..1: 0.88 of the picture blurred by 1.3 u and 0.12 of it blurred by 14 u
      blurV          a vertical blur, σ in u;  stripes - the glitch's dark lines 0..1 (stripesAt);  grain - the glitch's grain 0..1
+     blur           (block 1c) a blur both ways, σ in u (Snap zoom's snaps)
+     mosaic         (block 1c) the face's oval of blocks: { x, y (its middle), w, h (its size) } - shares of the frame
    `kind` 'intro' - a moment of its own length (`dur`), stretched to 0.8-2 (`lo`, `hi`) of it; 'loop' - for as long as it is on.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -138,9 +140,50 @@ function _glitch(t) {
   };
 }
 
+// ── Block 1c: by the face ──────────────────────────────────────────────────
+// Where the face is, an effect keeps in `path` (js/fx/params.js normalizeFx): [[the file's second, x, y, w, h], ...] five a
+// second over the clip - the face's middle and size in shares of the FRAME, where it shows on the screen (js/merge-v3/fx-ui.js
+// finds it when the effect is added). No path - video-effects-pack's own place of a face in a vertical frame.
+export const FACE_DEFAULT = [0.503, 0.354, 0.352, 0.198];
+/** The face in the path at the file's second `tf` - [x, y, w, h], between two samples on a straight line, held past both ends. */
+export function faceAt(path, tf) {
+  if (!Array.isArray(path) || !path.length) return FACE_DEFAULT;
+  if (!(tf > path[0][0])) return path[0].slice(1, 5);
+  for (let i = 1; i < path.length; i++) {
+    if (tf <= path[i][0]) {
+      const a = path[i - 1], b = path[i];
+      const r = (tf - a[0]) / ((b[0] - a[0]) || 1);
+      return [1, 2, 3, 4].map((j) => a[j] + (b[j] - a[j]) * r);
+    }
+  }
+  return path[path.length - 1].slice(1, 5);
+}
+
+// Snap zoom: three snaps in on the face (video-effects-pack's snapzoom): its zoom by these keys, less the larger the face already
+// is (a face 0.21 of the frame's width is the design's), about the face's middle 0.45 of its height down; a blur on each snap (the
+// sample's radial zoom blur is an ordinary one here - the owner's (эф9) б).
+const SNAP = [[0, 2.1], [0.08, 2.1], [0.30, 1.45], [1.05, 1.58], [1.12, 1.58], [1.22, 1.95], [1.9, 2.05], [1.98, 2.05], [2.08, 1.0], [2.45, 1.0]];
+function _snap(t, e) {
+  const f = faceAt(e && e.path, +((e && e.t0) || 0));
+  const k = Math.max(0.45, Math.min(1, 0.21 / Math.max(1e-3, f[2])));
+  let bl = 0;
+  if (t < 0.3) bl = 0.45 * (1 - t / 0.3);
+  else if (t > 1.1 && t < 1.3) bl = 0.40 * Math.sin(Math.PI * (t - 1.1) / 0.2);
+  else if (t > 1.95 && t < 2.2) bl = 0.45 * Math.sin(Math.PI * (t - 1.95) / 0.25);
+  return { s: 1 + (kf(t, SNAP) - 1) * k, ax: f[0], ay: f[1] - 0.05 * f[3], blur: bl > 0.05 ? 0.0045 * 1080 * bl / 0.4 : 0 };
+}
+// Face mosaic: an oval of blocks over the face (video-effects-pack's mosaic: half-axes 0.62 and 0.63 of the face's box, its middle
+// a little right and down), following the face; its size the face's where the effect starts.
+export const MOSAIC_BLOCK = 26;
+function _mosaic(t, e, tf) {
+  const f0 = faceAt(e && e.path, +((e && e.t0) || 0));
+  const f = faceAt(e && e.path, tf);
+  return { mosaic: { x: f[0] + 0.005 * f0[2], y: f[1] + 0.005 * f0[3], w: 1.24 * f0[2], h: 1.26 * f0[3] } };
+}
+
 /**
- * Every effect: { name, group, kind, dur, lo, hi, about, at(τ) -> numbers }. The groups are the list's (js/merge-v3/fx-ui.js).
- * The order here is the list's order.
+ * Every effect: { name, group, kind, dur, lo, hi, about, face?, at(τ, the effect, the file's second) -> numbers }. The groups are
+ * the list's (js/merge-v3/fx-ui.js); `face` - it needs where the face is (its `path`). The order here is the list's order.
  */
 export const EFFECTS = {
   quickzoom: { name: 'Quick zoom', group: 'motion', kind: 'intro', dur: 1.9, lo: 0.85, hi: 2,
@@ -172,6 +215,10 @@ export const EFFECTS = {
     about: 'The colour swings purple - teal - purple once a second, the camera sways.', at: _swing },
   glitch: { name: 'Glitch', group: 'color', kind: 'loop',
     about: 'The colour channels tear apart, dark lines and grain - the light glitch of the Hook set.', at: _glitch },
+  snapzoom: { name: 'Snap zoom', group: 'face', kind: 'intro', dur: 2.45, lo: 0.7, hi: 2, face: true,
+    about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },
+  mosaic: { name: 'Face mosaic', group: 'face', kind: 'loop', face: true,
+    about: 'An oval of blocks hides the face and follows it.', at: _mosaic },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
@@ -180,7 +227,7 @@ export const SETS = {
     items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
 };
 
-export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light']];
+export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face']];
 
 /** The effect's own description, or null for a key the program does not know. */
 export const effectOf = (k) => (Object.prototype.hasOwnProperty.call(EFFECTS, k) ? EFFECTS[k] : null);

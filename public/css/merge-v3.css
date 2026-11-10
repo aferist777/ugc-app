@@ -753,6 +753,18 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 
 .mv3-c-slider{display:flex; align-items:center; gap:var(--sp-2); width:100%; min-width:0}
 .mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0}
+/* (phase V84) A stretch on one track (controls.js span): two of the shared sliders laid one over the other with no track of their
+   own - only their thumbs take the hand -, the track drawn under them, filled between the thumbs (inset by the thumb's half, so the
+   fill meets their middles). */
+.mv3-c-span{display:flex; align-items:center; gap:var(--sp-2); width:100%; min-width:0}
+.mv3-c-span-track{
+  --a:0%; --b:100%; position:relative; flex:1 1 auto; min-width:0; height:16px;
+  background:linear-gradient(to right, var(--surface-3) 0 var(--a), var(--muted) var(--a) var(--b), var(--surface-3) var(--b) 100%)
+    center / calc(100% - 12px) 4px no-repeat;
+}
+.mv3-c-span-track > .u-range{position:absolute; left:0; top:6px; width:100%; background:none; pointer-events:none}
+.mv3-c-span-track > .u-range::-webkit-slider-thumb{pointer-events:auto}
+.mv3-c-span-track > .u-range.is-top{z-index:1}
 /* (phase V73 block 2) a number of the strip in mono, at the strip's own size */
 .mv3-c-num{
   flex:0 0 auto; min-width:36px; text-align:right;

@@ -12,14 +12,16 @@
    Its clock τ is the timeline's seconds from where it starts (a clip played faster gets through it in fewer seconds of the file).
 
    WHAT THEY ADD UP TO (paramsAt): every effect running at a moment, read at its τ, made ONE set of numbers - always in this order:
-   the colour matrix, then the move, then the channels, the pixels, the vignette, the lines. The move is a similarity in the
+   the colour matrix, then the move, then the channels, the pixels, (block 1c) the face's mosaic and the blur, the vignette, the
+   lines. (block 1c) An effect by the face keeps where the face is in `path` (effects.js faceAt) - found by the page when it is
+   added (js/merge-v3/fx-ui.js), the same numbers for the preview and the render. The move is a similarity in the
    frame's PIXELS - { a, b, e, f }: x' = a·x − b·y + e, y' = b·x + a·y + f - each effect's after the one before it (the list's
    order); colours likewise; channels add up; the pixel block, the vignette and the lines take the largest.
    `anchor` - the clip's middle, shares of the frame: the middle of the frame for a clip of main video or one covering the frame,
    the middle of its box for an insert (the render knows it from the same fields).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { effectOf, COL_ID, colThen } from './effects.js';
+import { effectOf, COL_ID, colThen, MOSAIC_BLOCK } from './effects.js';
 
 export const FX_MAX = 20;
 const r3 = (x) => Math.round(x * 1000) / 1000;
@@ -51,8 +53,34 @@ export function normalizeFx(list) {
       const [lo, hi] = lengthRange(one.k);
       one.len = r3(Math.max(lo, Math.min(hi, +e.len)));
     }
+    // (block 1c) Where the face is - an effect by the face only: [[the file's second, x, y, w, h], ...] (effects.js faceAt), and
+    // `pk` - how the clip lay in the frame when it was found (js/merge-v3/fx-ui.js).
+    if (effectOf(one.k).face) {
+      const path = normalizePath(e.path);
+      if (path) one.path = path;
+      if (typeof e.pk === 'string' && /^[a-z0-9]{1,12}$/.test(e.pk)) one.pk = e.pk;
+    }
     out.push(one);
     if (out.length >= FX_MAX) break;
+  }
+  return out.length ? out : null;
+}
+
+/** (block 1c) A face's path as it is kept: at most PATH_MAX samples in the order of their seconds, each five numbers. */
+export const PATH_MAX = 1500;
+const r4 = (x) => Math.round(x * 10000) / 10000;
+export function normalizePath(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  let last = -1;
+  for (const p of list) {
+    if (!Array.isArray(p) || p.length < 5) continue;
+    const v = p.slice(0, 5).map(Number);
+    if (!v.every(Number.isFinite) || v[0] < 0 || v[0] <= last) continue;
+    if (!(v[3] > 0 && v[4] > 0)) continue;
+    last = v[0];
+    out.push([r3(v[0]), r4(v[1]), r4(v[2]), r4(Math.min(4, v[3])), r4(Math.min(4, v[4]))]);
+    if (out.length >= PATH_MAX) break;
   }
   return out.length ? out : null;
 }
@@ -201,7 +229,9 @@ export function paramsAt(c, t, W, H, main) {
   const s = +c.start || 0, end = s + (+c.dur || 0);
   if (!(t >= s - 1e-6 && t < end)) return null;
   const anchor = anchorOf(c, main);
+  const tf = fileAt(c, t);
   let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
+  let blur = 0, mos = null;
   for (const e of c.fx) {
     const d = effectOf(e.k);
     if (!d) continue;
@@ -209,8 +239,10 @@ export function paramsAt(c, t, W, H, main) {
     if (!(t >= sp.a - 1e-6 && t < sp.b)) continue;
     let tau = t - sp.a;
     if (d.kind === 'intro' && sp.len > 0) tau = tau * d.dur / sp.len;
-    const n = d.at(Math.max(0, tau)) || {};
+    const n = d.at(Math.max(0, tau), e, tf) || {};
     any = true;
+    if (n.blur > blur) blur = +n.blur;
+    if (n.mosaic && !mos) mos = n.mosaic;
     if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
     if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
     if (n.col) col = colThen(col || COL_ID, n.col);
@@ -228,7 +260,28 @@ export function paramsAt(c, t, W, H, main) {
   }
   if (!any) return null;
   if (move && cover > 1) move = moveThen(move, { a: cover, b: 0, e: W / 2 - cover * W / 2, f: H / 2 - cover * H / 2 });
-  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain };
+  // (block 1c) The mosaic's box in pixels: the face's middle carried by the move (the oval sits on the face where the move puts
+  // it), the size the clip's one (mosaicSizeOf - the render has one mask a clip), the corner on a whole pixel.
+  let mosaic = null;
+  if (mos) {
+    let cx = mos.x * W, cy = mos.y * H;
+    if (move) { const x = move.a * cx - move.b * cy + move.e; cy = move.b * cx + move.a * cy + move.f; cx = x; }
+    const sz = mosaicSizeOf(c, W, H) || _evenBox(mos.w * W, mos.h * H);
+    mosaic = { x: Math.round(cx - sz.w / 2), y: Math.round(cy - sz.h / 2), w: sz.w, h: sz.h, b: MOSAIC_BLOCK };
+  }
+  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain, blur, mosaic };
+}
+
+const _evenBox = (w, h) => ({ w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) });
+/**
+ * (block 1c) The size in pixels of a W x H frame of clip `c`'s face mosaic - its first mosaic's, at its start (one size a clip:
+ * the render lays one oval mask, lib/fx-assets.js) - or null when it has none.
+ */
+export function mosaicSizeOf(c, W, H) {
+  const e = (Array.isArray(c && c.fx) ? c.fx : []).find((x) => x && x.k === 'mosaic');
+  if (!e) return null;
+  const n = effectOf('mosaic').at(0, e, +e.t0 || 0).mosaic;
+  return _evenBox(n.w * W, n.h * H);
 }
 
 /** Whether a set of numbers leaves the picture as it is. */
@@ -239,5 +292,5 @@ export function isPlain(p) {
   const colId = !p.col || p.col.every((v, i) => Math.abs(v - COL_ID[i]) < 1e-5);
   const chZ = !p.ch || Object.values(p.ch).every((v) => Math.abs(v) < 0.5);
   return still && colId && chZ && !(p.px > 1.5) && !(p.vig > 0.002) && !(p.lines > 0.002)
-    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002);
+    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002) && !(p.blur > 0.05) && !p.mosaic;
 }

@@ -85,6 +85,51 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   return wrap;
 }
 
+// (phase V84, the owner 2026-11-10) A stretch on ONE track - its start and its end, two thumbs, one readout. `fit(a, b, which)` is
+// the caller's rule for the thumb moved ('a' or 'b'): it returns [a, b] as they may be, and the other thumb follows while the hand
+// moves. Nothing is written until the release - one write, one undo step, as a slider's.
+export function span({ min, max, step, a, b, fmt, fit, onChange }) {
+  const wrap = document.createElement('span');
+  wrap.className = 'mv3-c-span';
+  const track = document.createElement('span');
+  track.className = 'mv3-c-span-track';
+  const mk = (v) => {
+    const i = document.createElement('input');
+    i.type = 'range';
+    i.className = 'u-range';
+    i.min = String(min); i.max = String(max); i.step = String(step);
+    i.value = String(v);
+    return i;
+  };
+  const ia = mk(a), ib = mk(b);
+  track.append(ia, ib);
+  const out = document.createElement('span');
+  out.className = 'mv3-c-num';
+  let cur = [+a, +b];
+  const pc = (v) => (max > min ? Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100)) : 0);
+  const paint = () => {
+    track.style.setProperty('--a', pc(cur[0]).toFixed(2) + '%');
+    track.style.setProperty('--b', pc(cur[1]).toFixed(2) + '%');
+    // Two thumbs in one place: the start's on top in the right half, so the one that can still move is the one under the hand.
+    ia.classList.toggle('is-top', cur[0] > (min + max) / 2);
+    out.textContent = fmt ? fmt(cur[0], cur[1]) : cur[0] + '–' + cur[1];
+  };
+  const move = (which) => {
+    const na = +ia.value, nb = +ib.value;
+    cur = fit ? fit(na, nb, which) : [Math.min(na, nb), Math.max(na, nb)];
+    if (which === 'a') ib.value = String(cur[1]); else ia.value = String(cur[0]);
+    paint();
+  };
+  ia.addEventListener('input', () => move('a'));
+  ib.addEventListener('input', () => move('b'));
+  const done = () => { if (onChange) onChange(cur[0], cur[1]); };
+  ia.addEventListener('change', done);
+  ib.addEventListener('change', done);
+  paint();
+  wrap.append(track, out);
+  return wrap;
+}
+
 // ── Volume, in decibels ─────────────────────────────────────────────────────
 // The number stored stays LINEAR - a multiplier, which is what the renderer and the preview
 // both want - and only the control speaks dB. Migrating the stored unit would have meant

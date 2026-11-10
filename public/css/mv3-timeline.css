@@ -140,6 +140,8 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 .mv3-fx-name:hover{background:var(--hover)}
 .mv3-fx-row.is-open .mv3-fx-name{border-color:var(--gold-line); background:var(--gold-soft)}
 .mv3-fx-row.is-out .mv3-fx-name{opacity:.5; cursor:default}
+/* (V84 block 1c) an effect by the face waiting for its face */
+.mv3-fx-row.is-wait .mv3-fx-name{opacity:.7; cursor:default}
 .mv3-fx-x{flex:0 0 auto}
 /* The list's group names. */
 .mv3-fx-mh{padding:6px var(--sp-2) 2px; color:var(--faint); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font)}

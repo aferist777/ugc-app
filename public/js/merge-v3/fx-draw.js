@@ -6,6 +6,7 @@
      the colour matrix (an SVG feColorMatrix, its values set for the frame) and the move (the layer drawn transformed) ->
      the channels (the picture drawn three times, each through a filter keeping one channel, moved, added up) ->
      the blocks (down to a small canvas and back without smoothing, the grid from the frame's corner) ->
+     (block 1c) the face's mosaic (the same blocks inside its oval) and Snap zoom's blur (a canvas blur) ->
      (block 1b) the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
      (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -195,6 +196,37 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
     g.imageSmoothingEnabled = false;
     g.drawImage(sm, 0, 0, sw, sh, PAD, PAD, sw * b, sh * b);
     g.restore();
+  }
+  // (block 1c) The face's mosaic: the blocks of the frame's own grid (from its corner, as the render's pixelize) that cover the
+  // oval's box, made small and drawn back without smoothing - inside the oval only, and only where the clip has picture.
+  if (p.mosaic) {
+    const m = p.mosaic;
+    const b = Math.max(1, Math.round(m.b * u));
+    const gx0 = Math.floor(m.x / b) * b, gy0 = Math.floor(m.y / b) * b;
+    const gx1 = Math.ceil((m.x + m.w) / b) * b, gy1 = Math.ceil((m.y + m.h) / b) * b;
+    const nw = Math.max(1, (gx1 - gx0) / b), nh = Math.max(1, (gy1 - gy0) / b);
+    const sm = _canvas('m', nw, nh);
+    const s = sm.getContext('2d');
+    s.imageSmoothingQuality = 'high';
+    s.drawImage(cur, PAD + gx0, PAD + gy0, gx1 - gx0, gy1 - gy0, 0, 0, nw, nh);
+    g.save();
+    g.beginPath();
+    g.ellipse(PAD + m.x + m.w / 2, PAD + m.y + m.h / 2, m.w / 2, m.h / 2, 0, 0, 2 * Math.PI);
+    g.clip();
+    g.globalCompositeOperation = 'source-atop';
+    g.imageSmoothingEnabled = false;
+    g.drawImage(sm, 0, 0, nw, nh, PAD + gx0, PAD + gy0, gx1 - gx0, gy1 - gy0);
+    g.restore();
+  }
+  // (block 1c) Snap zoom's blur, both ways.
+  if (p.blur > 0.05) {
+    const nx = _canvas('e', CW, CH);
+    const h = nx.getContext('2d');
+    h.filter = `blur(${_f(p.blur * u)}px)`;
+    h.drawImage(cur, 0, 0);
+    h.filter = 'none';
+    cur = nx;
+    g = h;
   }
   // (block 1b) The vertical smear.
   if (p.blurV > 0.05 && _bv) {
