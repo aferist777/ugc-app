@@ -3547,11 +3547,11 @@ function _clipMenu(e) {
   const at = _playhead;
   const gen = (act) => import('./tl-gen.js').then(G => G.fromClip(act, { trackId: t.id, clipId: c.id, at }))
     .catch(err => showError('The chat did not open', { detail: (err && err.message) || String(err) }));
-  // (phase V84, (р8), (эф4)) An effect on the whole clip - first, the list of effects in the menu's place.
+  // (phase V84, (р8), (эф4)) An effect on the whole clip - first: the clip picked, its group Effects open with the panel of tiles.
   if (!c.halfer) {
-    _ctxItem(box, 'Add effect…', 'on the whole clip · its start and end in the inspector',
-      'Add an effect to this clip - it covers the whole clip; its start and end move in the inspector, Ctrl+Z takes it off',
-      () => FXUI.openList(e, (k) => FXUI.addTo(t, c, k)));
+    _ctxItem(box, 'Add effect…', 'the effects of this clip · in the inspector',
+      'Open the effects of this clip in the inspector - a tile pressed covers the whole clip, Ctrl+Z takes it off',
+      () => FXUI.openPanel(t, c));
   }
   if (!line && still) {
     _ctxItem(box, 'Animate…', 'the video chat · this picture as the first frame',

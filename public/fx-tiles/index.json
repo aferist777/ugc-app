@@ -1,0 +1,70 @@
+{
+  "print": "1a4a430d37c1f773",
+  "source": {
+    "project": "2026-11-06 — Desk setup tour #2 - m - confidence - tech_breakdown  stethoscope medical office desk board — morgan D the doctor · Cole \"Hawk\" Brooks",
+    "clip": "clips/c1b83e22549674d00246eea7bda49c72f_1793991102840.mp4"
+  },
+  "px": 240,
+  "tiles": {
+    "quickzoom": {
+      "seconds": 2.6,
+      "peak": 0.42
+    },
+    "smoothzoomout": {
+      "seconds": 2.15,
+      "peak": 0.45
+    },
+    "dropin": {
+      "seconds": 1.5,
+      "peak": 0.35
+    },
+    "heartbeat": {
+      "seconds": 2,
+      "peak": 0.25
+    },
+    "pulse": {
+      "seconds": 2,
+      "peak": 0.4
+    },
+    "soft": {
+      "seconds": 2,
+      "peak": 1.2
+    },
+    "bwframe": {
+      "seconds": 2.6,
+      "peak": 1.2
+    },
+    "fadeblack": {
+      "seconds": 2.45,
+      "peak": 0.72
+    },
+    "vignette": {
+      "seconds": 2.25,
+      "peak": 1.1
+    },
+    "pixelate": {
+      "seconds": 2.5,
+      "peak": 1
+    },
+    "colorswing": {
+      "seconds": 2,
+      "peak": 0.5
+    },
+    "glitch": {
+      "seconds": 2,
+      "peak": 0.1
+    },
+    "snapzoom": {
+      "seconds": 3.15,
+      "peak": 1.9
+    },
+    "mosaic": {
+      "seconds": 2,
+      "peak": 0.6
+    },
+    "set-hook": {
+      "seconds": 2.6,
+      "peak": 0.4
+    }
+  }
+}

@@ -72,7 +72,7 @@ import { setLive as setLivePlace } from './place-b.js';
 // (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
 import { blendButton } from './blend-menu.js';
 // (phase V84) A clip's effects - the group after Color (fx-ui.js).
-import { fxRows, onFocus as onFxFocus } from './fx-ui.js';
+import { fxRows, onFocus as onFxFocus, takeOpenAsk as takeFxOpenAsk } from './fx-ui.js';
 import { renderPatterns } from './patterns-ui.js';
 // (phase V73 block 2, step 2b) A lane with nothing on it - the shared "nothing here", a row of the strip.
 import { emptyEl } from '../ui-state.js';
@@ -108,37 +108,58 @@ function _fact(k, v) {
 // (merge-v3.html #mv3-over-x). The branch that paints sets `_title`; a block that paints its own title - the highlights
 // group's "· for all N" (hl-group.js) - marks it `data-strip-title`, and the head takes it from there (_paintHead).
 let _title = '';
-// THE GROUPS: the rows of a pick under titles that fold - a clip Picture · Sound · Frame, a sound clip Sound, words Text · Look ·
-// Motion · Place, a lane its own. All open at first; one folded stays folded for that KIND of pick (`_kind`, set by the branch),
-// kept in localStorage (`mv3_ins_folds_v1` - the viewer's own convenience) - outside the strip, which every paint rebuilds.
+// THE GROUPS: the rows of a pick under titles that fold - a clip Picture · Color · Effects · Sound (since phase V84, the owner
+// 2026-11-10 (эф17): Frame's rows are Picture's, under a line), a sound clip Sound, words Text · Look · Motion · Place, a lane its
+// own. ONE GROUP OPEN (phase V84, the owner's (эф18)): a group opened shuts the others of the strip, the open one pressed shuts
+// (all may be shut); which one is open is kept for that KIND of pick (`_kind`, set by the branch) in localStorage
+// (`mv3_ins_open_v1` - the viewer's own convenience) - outside the strip, which every paint rebuilds; never chosen, or not in this
+// strip - the first. The group Effects opens by itself when fx-ui.js asks (an effect's frame pressed on the timeline, an effect
+// added, the clip's "Add effect…" - the owner's (эф19); takeOpenAsk).
 let _kind = '';
-const FOLDS_KEY = 'mv3_ins_folds_v1';
-let _folds = null;
-function _foldsNow() {
-  if (!_folds) {
-    try { _folds = JSON.parse(localStorage.getItem(FOLDS_KEY) || '{}') || {}; } catch (e) { _folds = {}; }
+const OPEN_KEY = 'mv3_ins_open_v1';
+let _opens = null;
+function _opensNow() {
+  if (!_opens) {
+    try { _opens = JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {}; } catch (e) { _opens = {}; }
   }
-  return _folds;
+  return _opens;
 }
-/** A group of the strip: its title (a press folds or opens it) and the box its rows go into - returned. */
+function _opensSave() { try { localStorage.setItem(OPEN_KEY, JSON.stringify(_opensNow())); } catch (e) { /* a private window: kept for this page only */ } }
+let _painted = [];             // the groups of this paint: { id, g, h }
+let _forceOpen = null;         // the group this paint must open ('effects' when fx-ui.js asked)
+/** Which group of the painted strip is open - set once it is all there (render). */
+function _settleGroups() {
+  if (!_painted.length) return;
+  const o = _opensNow();
+  const has = (id) => _painted.some((p) => p.id === id);
+  let id;
+  if (_forceOpen && has(_forceOpen)) { id = _forceOpen; o[_kind] = id; _opensSave(); }
+  else if (Object.prototype.hasOwnProperty.call(o, _kind) && (o[_kind] === '' || has(o[_kind]))) id = o[_kind];
+  else id = _painted[0].id;
+  for (const p of _painted) {
+    const on = p.id === id;
+    p.g.classList.toggle('is-shut', !on);
+    p.h.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+}
+/** A group of the strip: its title (a press opens it and shuts the others, or shuts it) and the box its rows go into - returned. */
 function _group(host, id, title) {
   const kind = _kind;
-  const shut = !!((_foldsNow()[kind] || {})[id]);
-  const g = _el('section', 'mv3-ins-grp' + (shut ? ' is-shut' : ''));
+  const g = _el('section', 'mv3-ins-grp is-shut');
   const h = _el('button', 'mv3-ins-grp-h');
   h.type = 'button';
-  h.setAttribute('aria-expanded', shut ? 'false' : 'true');
+  h.setAttribute('aria-expanded', 'false');
   h.appendChild(iconEl('chevron-down', 14));
   h.appendChild(setFigures(_el('span'), title));
+  const all = _painted;
   h.addEventListener('click', () => {
-    const now = g.classList.toggle('is-shut');
-    h.setAttribute('aria-expanded', now ? 'false' : 'true');
-    const f = _foldsNow();
-    const k = f[kind] || (f[kind] = {});
-    if (now) k[id] = 1; else delete k[id];
-    if (!Object.keys(k).length) delete f[kind];
-    try { localStorage.setItem(FOLDS_KEY, JSON.stringify(f)); } catch (e) { /* a private window: kept for this page only */ }
+    const opening = g.classList.contains('is-shut');
+    for (const p of all) { p.g.classList.add('is-shut'); p.h.setAttribute('aria-expanded', 'false'); }
+    if (opening) { g.classList.remove('is-shut'); h.setAttribute('aria-expanded', 'true'); }
+    _opensNow()[kind] = opening ? id : '';
+    _opensSave();
   });
+  _painted.push({ id, g, h });
   g.appendChild(h);
   const body = _el('div', 'mv3-ins-grp-b');
   g.appendChild(body);
@@ -487,8 +508,9 @@ function _halferRows(host, c, set) {
 // A film. Speed retimes it, reverse runs it backwards, and the level belongs to the sound
 // half rather than to this clip - so that is where the slider writes.
 function _blankFilm(host, track, c, set, pair) {
-  // (phase V73 block 5, 5b, (б5-8) а) THREE GROUPS: Picture - how it runs, how much of it is seen, how it mixes, the band;
-  // Sound - its sound's level; Frame - the crop, how it meets the frame, the PiP. The rows in each as they were.
+  // (phase V73 block 5, 5b, (б5-8) а) THE GROUPS: Picture - how it runs, how much of it is seen, how it mixes, the band, and under a
+  // line (phase V84, the owner's (эф17): Frame's rows joined it) the crop, how it meets the frame, the PiP; Color; Effects; Sound -
+  // its sound's level. The rows in each as they were.
   const main = isMainVideo(track);
   const pic = _group(host, 'picture', 'Picture');
   // Reverse rides beside the speed slider rather than taking a row of its own: the two are
@@ -505,6 +527,20 @@ function _blankFilm(host, track, c, set, pair) {
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
   if (!main || c.halfer) _halferRows(pic, c, set);
+  if (!c.halfer) {
+    const fr = pic;
+    _bsep(fr);
+    // (phase V51, point 1) The crop first: while it is on, the piece is the picture - no Fit / Fill, Framing or Keep.
+    const cropped = cropRows(fr, [{ track, clip: c }]);
+    _bsep(fr);
+    // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
+    // being fitted to anything, so the fit controls would be two settings with nothing to act on.
+    // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
+    if (main) { if (!cropped) { _frameRows(fr, c, set); if (c.pip) _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
+    else if (cropped) _cutRows(fr, track, c);
+    else if (_isPlaced(c)) _pipRows(fr, track, c);
+    else _frameRows(fr, c, set);
+  }
   _colorGroup(host, [{ track, clip: c }]);
   if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
 
@@ -523,20 +559,6 @@ function _blankFilm(host, track, c, set, pair) {
     snd.appendChild(C.hint('No sound attached to this clip.'));
   }
 
-  if (!c.halfer) {
-    const fr = _group(host, 'frame', 'Frame');
-    // (phase V51, point 1) The crop first: while it is on, the piece is the picture - no Fit / Fill, Framing or Keep.
-    const cropped = cropRows(fr, [{ track, clip: c }]);
-    _bsep(fr);
-    // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
-    // being fitted to anything, so the fit controls would be two settings with nothing to act on.
-    // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
-    if (main) { if (!cropped) { _frameRows(fr, c, set); if (c.pip) _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
-    else if (cropped) _cutRows(fr, track, c);
-    else if (_isPlaced(c)) _pipRows(fr, track, c);
-    else _frameRows(fr, c, set);
-  }
-
   _removeRow(host, C.button('Remove from timeline', () => removeB(track.id, c.id), {
     danger: true,
     title: pair ? 'Takes the clip off the timeline, and its sound with it. The library keeps the file.'
@@ -549,7 +571,8 @@ function _blankFilm(host, track, c, set, pair) {
 // Laid out like the other workflow's still panel, because it answers the same question
 // first: which picture is this.
 function _blankStill(host, track, c, set) {
-  // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture · Frame, Remove at the bottom - no columns of
+  // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture (with Frame's rows since V84, (эф17)) · Color ·
+  // Effects, Remove at the bottom - no columns of
   // its own any more. (phase V75, the owner's (кп3)) The picture itself is not shown at the top of Picture any more: it is on the
   // preview.
   // (phase V49) On main video a picture is framed as ever and may be a PiP; it has no Halfer.
@@ -562,12 +585,11 @@ function _blankStill(host, track, c, set) {
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   if (!main || c.halfer) _halferRows(pic, c, set);
-  _colorGroup(host, [{ track, clip: c }]);
-  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
 
-  // A band takes none of these: no crop, placement or framing on a band.
+  // A band takes none of these: no crop, placement or framing on a band. (phase V84, (эф17)) Frame's rows are Picture's, under a line.
   if (!c.halfer) {
-    const fr = _group(host, 'frame', 'Frame');
+    const fr = pic;
+    _bsep(fr);
     cropRows(fr, [{ track, clip: c }]);
     if (cropped) {
       if (!main) { _bsep(fr); _cutRows(fr, track, c); }
@@ -581,6 +603,8 @@ function _blankStill(host, track, c, set) {
     }
     if (main && c.pip) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
   }
+  _colorGroup(host, [{ track, clip: c }]);
+  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
 
   _removeRow(host, C.button('Remove', () => removeB(track.id, c.id), {
     danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
@@ -1634,7 +1658,7 @@ function _renderBlankClip(host, { track, clip }) {
 }
 
 function _renderMany(host, n) {
-  // (phase V73 block 5, 5b) "5 clips" in the strip's head; their rows in the groups Sound · Picture · Frame
+  // (phase V73 block 5, 5b) "5 clips" in the strip's head; their rows in the groups Sound · Picture (Frame's rows in it since V84)
   _kind = 'many';
   _title = n + ' clips';
 
@@ -1654,18 +1678,20 @@ function _renderMany(host, n) {
       _blendRow(pic, above);
       if (above.length < videos.length) pic.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
     }
+    // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once. (phase
+    // V84, (эф17)) In Picture, under a line.
+    const mains = picked.filter(x => isMainVideo(x.track));
+    if (mains.length) {
+      const fr = pic;
+      _bsep(fr);
+      if (mains.length < n) fr.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
+      // (phase V51, (пр44)) One crop frame for all of them.
+      cropRows(fr, mains);
+      if (mains.some(x => x.clip.pip)) { _bsep(fr); _pipSection(fr, mains); }
+    }
     // (phase V75) Their colour - one set of sliders for all the picked video clips.
     _colorGroup(host, videos);
-  }
-  // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
-  const mains = picked.filter(x => isMainVideo(x.track));
-  if (mains.length) {
-    const fr = _group(host, 'frame', 'Frame');
-    if (mains.length < n) fr.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
-    // (phase V51, (пр44)) One crop frame for all of them.
-    cropRows(fr, mains);
-    if (mains.some(x => x.clip.pip)) { _bsep(fr); _pipSection(fr, mains); }
-  } else if (!sounds.length && !videos.length) {
+  } else if (!sounds.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
     p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
@@ -1706,7 +1732,11 @@ function render(force) {
   const top = scroller && pick === _paintedPick ? scroller.scrollTop : 0;
   let cap;
   WordEdit.beforeRepaint();
+  // (phase V84) The groups of this paint, and the one to open if fx-ui.js asked.
+  _painted = [];
+  _forceOpen = takeFxOpenAsk() ? 'effects' : null;
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }
+  _settleGroups();
   if (scroller) scroller.scrollTop = top;
   _paintedPick = pick;
   _paintHead(_overHost());

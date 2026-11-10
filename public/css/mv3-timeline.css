@@ -144,5 +144,25 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 .mv3-fx-row.is-wait .mv3-fx-name{opacity:.7; cursor:default}
 .mv3-fx-x{flex:0 0 auto}
 /* The list's group names. */
-.mv3-fx-mh{padding:6px var(--sp-2) 2px; color:var(--faint); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font)}
-.mv3-fx-menu{max-height:calc(100vh - 16px); overflow:auto}
+/* (V84, the owner 2026-11-10 (эф13)-(эф16)) The panel of tiles under the effects' rows: the full-width "+ Effect" opens and shuts
+   it; chips of the groups, the tiles three a row - a picture made beforehand, its film only under the pointer (fx-ui.js); the
+   tile's line over its row, the strip's width. */
+.mv3-fx-add{display:block; width:100%; margin-top:var(--sp-1)}
+.mv3-fx-add.is-on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
+.mv3-fx-panel{position:relative; margin-top:var(--sp-2)}
+.mv3-fx-chips{margin-bottom:var(--sp-2)}
+.mv3-fx-tiles{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--sp-2)}
+.mv3-fx-tile{display:flex; flex-direction:column; gap:4px; min-width:0; padding:0; border:0; background:none; cursor:pointer; text-align:left}
+.mv3-fx-tile-pic{position:relative; display:block; aspect-ratio:1; overflow:hidden; border-radius:var(--r-xs);
+  border:1px solid var(--border); background:var(--surface-2)}
+.mv3-fx-tile-pic img, .mv3-fx-tile-pic video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
+.mv3-fx-tile-pic video{opacity:0}
+.mv3-fx-tile-pic video.is-on{opacity:1}
+.mv3-fx-tile:hover .mv3-fx-tile-pic{border-color:var(--border-soft)}
+.mv3-fx-tile.is-on .mv3-fx-tile-pic{border-color:var(--gold-line); box-shadow:inset 0 0 0 1px var(--gold-line)}
+.mv3-fx-tile-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font)}
+.mv3-fx-tile:hover .mv3-fx-tile-name, .mv3-fx-tile.is-on .mv3-fx-tile-name{color:var(--ink)}
+.mv3-fx-tip{position:absolute; left:0; right:0; z-index:3; padding:6px var(--sp-2); pointer-events:none;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); box-shadow:var(--shadow);
+  color:var(--muted); font:var(--fw-regular) var(--fs-11)/1.4 var(--font)}
+.mv3-fx-tip b{color:var(--ink); font-weight:var(--fw-medium)}

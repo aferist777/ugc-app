@@ -2,8 +2,10 @@
    A CLIP'S EFFECTS - WHERE THE PERSON PUTS THEM (phase V84, the owner 2026-11-09/10; docs/local-app/plan/, "Подфаза 3 — V84",
    (р8), (эф4)-(эф7)).
 
-   - THE LIST (openList): the effects of public/js/fx/effects.js by their groups, each with its line - at the clip's right button
-     ("Add effect…", timeline-b.js _clipMenu) and at the inspector's "+ Effect".
+   - THE PANEL (the owner 2026-11-10, (эф13)-(эф16); it was a list at the pointer until then): the full-width "+ Effect" under the
+     group's rows opens it, it shuts only by that button - chips of the groups, the chosen group's tiles three a row (pictures and
+     films made beforehand, public/fx-tiles/ by tools/fx-tiles.js, the film playing only under the pointer, the effect's line over
+     its row). The clip's "Add effect…" (timeline-b.js _clipMenu) picks it and opens the group Effects with the panel (openPanel).
    - ADDED TO THE WHOLE CLIP ((эф4)): it starts with the clip (fx/params.js newEffect) - a moment of its own length lasts that
      length, one that goes on lasts to the clip's end -, written in one undo step, and the preview plays its stretch once ((эф7)).
    - (block 1c) BY THE FACE (Snap zoom, Face mosaic - effects.js `face`): added, the clip's film is counted for its faces first
@@ -15,7 +17,6 @@
      2026-11-10: one row).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import * as Layers from '../layers.js';
 import { EFFECTS, GROUPS, SETS, effectOf } from '../fx/effects.js';
 import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX } from '../fx/params.js';
 import { setClipFields, selectClipById } from './timeline-b.js';
@@ -27,77 +28,138 @@ const _onFocus = [];
 /** Open effect `fxId` of clip `clipId` in the inspector (a frame pressed on the timeline, an effect just added). */
 export function focus(clipId, fxId) {
   _focus = clipId && fxId ? { clipId: String(clipId), fxId: String(fxId) } : null;
+  if (_focus) _openAsk = true;
   for (const cb of _onFocus) { try { cb(); } catch (e) { /* the listener's own trouble */ } }
 }
 export function onFocus(cb) { if (typeof cb === 'function') _onFocus.push(cb); }
 const _isOpen = (clipId, fxId) => !!(_focus && _focus.clipId === String(clipId) && _focus.fxId === String(fxId));
 
-// ── The list ────────────────────────────────────────────────────────────────
-let _menu = null;
-function _close() {
-  if (!_menu) return;
-  _menu.el.remove();
-  document.removeEventListener('mousedown', _menu.away, true);
-  window.removeEventListener('scroll', _menu.scroll, true);
-  Layers.close(_menu.layer);
-  _menu = null;
+// ── The panel of tiles (the owner 2026-11-10, (эф13)-(эф16)) ───────────────
+// Under the group's rows, the full-width "+ Effect" opens and shuts the PANEL - it never shuts by itself: the chips of the groups
+// on top (Zoom & motion · Color & light · Face · Sets), the chosen one's TILES under them, three a row. A tile is a picture made
+// beforehand (public/fx-tiles/<key>.webp - tools/fx-tiles.js, the app's own render on the owner's example clip) and a short film
+// (<key>.webm) played only while the pointer is on it; over it, the width of the strip, its line. A press puts the effect on the
+// whole clip at once, opens its row and outlines its tile. Open / shut and the chip are the viewer's convenience (localStorage).
+const PANEL_KEY = 'mv3_fx_panel_v1';
+const CHIPS = [...GROUPS, ['sets', 'Sets']];
+let _panel = null;
+function _panelNow() {
+  if (!_panel) {
+    try { _panel = JSON.parse(localStorage.getItem(PANEL_KEY) || 'null'); } catch (e) { _panel = null; }
+    if (!_panel || typeof _panel !== 'object') _panel = {};
+    if (!CHIPS.some(([g]) => g === _panel.chip)) _panel.chip = CHIPS[0][0];
+    _panel.open = !!_panel.open;
+  }
+  return _panel;
+}
+function _panelSave() { try { localStorage.setItem(PANEL_KEY, JSON.stringify(_panelNow())); } catch (e) { /* a private window */ } }
+
+// The inspector opens its group Effects once when asked (an effect's frame pressed on the timeline, an effect added, the clip's
+// "Add effect…") - the owner's (эф19); inspector.js takes the ask when it paints.
+let _openAsk = false;
+/** Whether the group Effects is to be opened by this paint (asked once). */
+export function takeOpenAsk() { const v = _openAsk; _openAsk = false; return v; }
+
+/** The clip's "Add effect…" (timeline-b.js _clipMenu): the clip picked, its group Effects open with the panel. */
+export function openPanel(track, clip) {
+  _panelNow().open = true;
+  _panelSave();
+  _openAsk = true;
+  selectClipById(clip.id);
+  _say();
+  setTimeout(() => {
+    const el = document.querySelector('.mv3-fx-panel');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, 60);
 }
 
-/** The list of effects at the pointer (`at` - { clientX, clientY }); `onPick(key)` when one is pressed. */
-export function openList(at, onPick) {
-  _close();
+const _tileKey = (k) => (String(k).startsWith('set:') ? 'set-' + String(k).slice(4) : k);
+/** One tile: its picture, its film while the pointer is on it, its name under it. */
+function _tile(key, name, about, on, onPress, tip) {
+  const t = document.createElement('button');
+  t.type = 'button';
+  t.className = 'mv3-fx-tile' + (on ? ' is-on' : '');
+  t.setAttribute('aria-label', name);
+  const pic = document.createElement('span');
+  pic.className = 'mv3-fx-tile-pic';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = '/fx-tiles/' + _tileKey(key) + '.webp';
+  img.addEventListener('error', () => { img.remove(); });
+  pic.appendChild(img);
+  const nm = document.createElement('span');
+  nm.className = 'mv3-fx-tile-name';
+  nm.textContent = name;
+  t.append(pic, nm);
+  let vid = null;
+  t.addEventListener('mouseenter', () => {
+    tip(t, name, about);
+    vid = document.createElement('video');
+    vid.muted = true;
+    vid.loop = true;
+    vid.playsInline = true;
+    vid.src = '/fx-tiles/' + _tileKey(key) + '.webm';
+    vid.addEventListener('playing', () => { if (vid) vid.classList.add('is-on'); });
+    vid.addEventListener('error', () => { if (vid) { vid.remove(); vid = null; } });
+    pic.appendChild(vid);
+    vid.play().catch(() => { /* not ready - the picture stays */ });
+  });
+  t.addEventListener('mouseleave', () => {
+    tip(null);
+    if (vid) { vid.pause(); vid.removeAttribute('src'); vid.remove(); vid = null; }
+  });
+  t.addEventListener('click', onPress);
+  return t;
+}
+
+/** The panel for clip `c` of lane `track` into `g`: the chips and the chosen group's tiles. */
+function _panelEl(g, track, c, onKey) {
+  const st = _panelNow();
   const box = document.createElement('div');
-  box.className = 'mv3-plus-menu u-menu is-float mv3-fx-menu';
-  for (const [g, title] of GROUPS) {
-    const h = document.createElement('div');
-    h.className = 'mv3-fx-mh';
-    h.textContent = title;
-    box.appendChild(h);
-    for (const [k, d] of Object.entries(EFFECTS)) {
-      if (d.group !== g) continue;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'mv3-plus-item u-mi';
-      b.title = d.about;
-      const s = document.createElement('span');
-      s.textContent = d.name;
-      const m = document.createElement('small');
-      m.textContent = d.about;
-      b.append(s, m);
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); _close(); onPick(k); });
-      box.appendChild(b);
-    }
-  }
-  // (block 1b, the owner's (эф8)) Sets: several effects laid at once, each its own afterwards.
-  const sh = document.createElement('div');
-  sh.className = 'mv3-fx-mh';
-  sh.textContent = 'Sets';
-  box.appendChild(sh);
-  for (const [id, set] of Object.entries(SETS)) {
+  box.className = 'mv3-fx-panel';
+  const chips = document.createElement('div');
+  chips.className = 'u-chips mv3-fx-chips';
+  for (const [id, title] of CHIPS) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-plus-item u-mi';
-    b.title = set.about;
-    const s = document.createElement('span');
-    s.textContent = set.name;
-    const m = document.createElement('small');
-    m.textContent = set.about;
-    b.append(s, m);
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); _close(); onPick('set:' + id); });
-    box.appendChild(b);
+    b.className = 'u-chip' + (st.chip === id ? ' is-on' : '');
+    b.textContent = title;
+    b.addEventListener('click', () => { st.chip = id; _panelSave(); _say(); });
+    chips.appendChild(b);
   }
-  document.body.appendChild(box);
-  const w = box.offsetWidth, h = box.offsetHeight;
-  box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, +at.clientX || 0))) + 'px';
-  box.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, +at.clientY || 0))) + 'px';
-  const away = (ev) => { if (!box.contains(ev.target)) _close(); };
-  // The page scrolled under it closes it; the list scrolled in itself (it is taller than a small window) does not.
-  const scroll = (ev) => { if (!(ev.target instanceof Node) || !box.contains(ev.target)) _close(); };
-  const layer = Layers.open(box, { modal: false, name: 'effects', onEsc: _close });
-  _menu = { el: box, away, scroll, layer };
-  document.addEventListener('mousedown', away, true);
-  window.addEventListener('scroll', scroll, true);
+  box.appendChild(chips);
+  // The line of the tile under the pointer, over its row, the width of the strip.
+  const tipEl = document.createElement('div');
+  tipEl.className = 'mv3-fx-tip';
+  tipEl.hidden = true;
+  const tip = (tile, name, about) => {
+    if (!tile) { tipEl.hidden = true; return; }
+    tipEl.textContent = '';
+    const b = document.createElement('b');
+    b.textContent = name;
+    tipEl.append(b, document.createTextNode(' — ' + about));
+    tipEl.hidden = false;
+    tipEl.style.top = Math.max(0, tile.offsetTop - tipEl.offsetHeight - 6) + 'px';
+  };
+  const grid = document.createElement('div');
+  grid.className = 'mv3-fx-tiles';
+  const add = (k) => addTo(track, c, k);
+  if (st.chip === 'sets') {
+    for (const [id, set] of Object.entries(SETS)) {
+      grid.appendChild(_tile('set:' + id, set.name, set.about, onKey === 'set:' + id, () => { _picked = { clipId: c.id, key: 'set:' + id }; add('set:' + id); }, tip));
+    }
+  } else {
+    for (const [k, d] of Object.entries(EFFECTS)) {
+      if (d.group !== st.chip) continue;
+      const lim = d.kind === 'intro' ? ' Its length goes from ' + lengthRange(k).map((v) => v.toFixed(2)).join(' to ') + ' s.' : '';
+      grid.appendChild(_tile(k, d.name, d.about + lim, onKey === k, () => { _picked = { clipId: c.id, key: k }; add(k); }, tip));
+    }
+  }
+  box.append(grid, tipEl);
+  g.appendChild(box);
 }
+let _picked = null;            // { clipId, key } - the tile pressed last (a set's tile stays outlined while its first effect is open)
 
 // ── Where the face is (block 1c, the owner's (эф12)) ────────────────────────
 // The clip's film counted by the app's hidden faces window (lib/faces.js - once a file, kept in cache/faces/; only in the app's
@@ -344,7 +406,21 @@ export function fxRows(g, track, c) {
     row.appendChild(name);
     g.appendChild(row);
   }
-  const add = C.button('+ Effect', (ev) => openList(ev, (k) => addTo(track, c, k)),
-    { title: 'Add an effect to the whole clip - its start and end move here, Ctrl+Z takes it off' });
-  g.appendChild(C.row('', add));
+  // The full-width "+ Effect" opens and shuts the panel of tiles; the panel stays until it is pressed again.
+  const st = _panelNow();
+  const tog = C.button('+ Effect', () => { st.open = !st.open; _panelSave(); _say(); },
+    { title: st.open ? 'Hide the effects' : 'Show the effects - a press on one puts it on the whole clip, Ctrl+Z takes it off' });
+  tog.classList.add('mv3-fx-add');
+  if (st.open) tog.classList.add('is-on');
+  tog.setAttribute('aria-expanded', st.open ? 'true' : 'false');
+  g.appendChild(tog);
+  if (st.open) {
+    const open = list.find((e) => _isOpen(c.id, e.id));
+    let onKey = open ? open.k : null;
+    if (_picked && _picked.clipId === String(c.id) && String(_picked.key).startsWith('set:')) {
+      const set = SETS[String(_picked.key).slice(4)];
+      if (set && open && set.items[0].k === open.k) onKey = _picked.key;
+    }
+    _panelEl(g, track, c, onKey);
+  }
 }

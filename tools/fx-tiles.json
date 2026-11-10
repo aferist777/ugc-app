@@ -1,0 +1,165 @@
+{
+  "about": "The effects panel's tiles (phase V84): made by tools/fx-tiles.js from the example clip below. face - its face found once by the app's faces window: [the file's second, x, y, w, h], shares of the 9:16 frame (the clip is 720x1280, laid filled).",
+  "source": {
+    "project": "2026-11-06 — Desk setup tour #2 - m - confidence - tech_breakdown  stethoscope medical office desk board — morgan D the doctor · Cole \"Hawk\" Brooks",
+    "clip": "clips/c1b83e22549674d00246eea7bda49c72f_1793991102840.mp4"
+  },
+  "px": 240,
+  "fps": 24,
+  "lead": 0.3,
+  "tail": 0.4,
+  "loop": 2,
+  "cropY": 0.3,
+  "peaks": {
+    "quickzoom": 0.12,
+    "smoothzoomout": 0.15,
+    "dropin": 0.05,
+    "heartbeat": 0.25,
+    "pulse": 0.4,
+    "soft": 1.2,
+    "bwframe": 0.9,
+    "fadeblack": 0.42,
+    "vignette": 0.8,
+    "pixelate": 0.7,
+    "colorswing": 0.5,
+    "glitch": 0.1,
+    "snapzoom": 1.6,
+    "mosaic": 0.6,
+    "set-hook": 0.1
+  },
+  "face": [
+    [
+      0,
+      0.328,
+      0.3275,
+      0.148,
+      0.083
+    ],
+    [
+      0.2,
+      0.318,
+      0.321,
+      0.16,
+      0.09
+    ],
+    [
+      0.4,
+      0.354,
+      0.308,
+      0.146,
+      0.082
+    ],
+    [
+      0.6,
+      0.3905,
+      0.2995,
+      0.169,
+      0.095
+    ],
+    [
+      0.8,
+      0.4275,
+      0.2845,
+      0.163,
+      0.091
+    ],
+    [
+      1,
+      0.4675,
+      0.284,
+      0.177,
+      0.1
+    ],
+    [
+      1.2,
+      0.5195,
+      0.2765,
+      0.173,
+      0.097
+    ],
+    [
+      1.4,
+      0.5445,
+      0.281,
+      0.181,
+      0.102
+    ],
+    [
+      1.6,
+      0.5595,
+      0.293,
+      0.181,
+      0.102
+    ],
+    [
+      1.8,
+      0.572,
+      0.2995,
+      0.194,
+      0.109
+    ],
+    [
+      2,
+      0.574,
+      0.2995,
+      0.19,
+      0.107
+    ],
+    [
+      2.2,
+      0.5825,
+      0.299,
+      0.181,
+      0.102
+    ],
+    [
+      2.4,
+      0.592,
+      0.294,
+      0.196,
+      0.11
+    ],
+    [
+      2.6,
+      0.596,
+      0.294,
+      0.2,
+      0.112
+    ],
+    [
+      2.8,
+      0.61,
+      0.2975,
+      0.19,
+      0.107
+    ],
+    [
+      3,
+      0.611,
+      0.2935,
+      0.188,
+      0.105
+    ],
+    [
+      3.2,
+      0.608,
+      0.3005,
+      0.19,
+      0.107
+    ],
+    [
+      3.4,
+      0.6085,
+      0.3045,
+      0.183,
+      0.103
+    ],
+    [
+      3.6,
+      0.6075,
+      0.304,
+      0.185,
+      0.104
+    ]
+  ]
+}
