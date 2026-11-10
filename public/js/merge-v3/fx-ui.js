@@ -12,7 +12,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-import { EFFECTS, GROUPS, effectOf } from '../fx/effects.js';
+import { EFFECTS, GROUPS, SETS, effectOf } from '../fx/effects.js';
 import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange } from '../fx/params.js';
 import { setClipFields, selectClipById } from './timeline-b.js';
 import * as C from './controls.js';
@@ -64,6 +64,24 @@ export function openList(at, onPick) {
       box.appendChild(b);
     }
   }
+  // (block 1b, the owner's (эф8)) Sets: several effects laid at once, each its own afterwards.
+  const sh = document.createElement('div');
+  sh.className = 'mv3-fx-mh';
+  sh.textContent = 'Sets';
+  box.appendChild(sh);
+  for (const [id, set] of Object.entries(SETS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-plus-item u-mi';
+    b.title = set.about;
+    const s = document.createElement('span');
+    s.textContent = set.name;
+    const m = document.createElement('small');
+    m.textContent = set.about;
+    b.append(s, m);
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); _close(); onPick('set:' + id); });
+    box.appendChild(b);
+  }
   document.body.appendChild(box);
   const w = box.offsetWidth, h = box.offsetHeight;
   box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, +at.clientX || 0))) + 'px';
@@ -78,17 +96,28 @@ export function openList(at, onPick) {
 }
 
 // ── Adding one ──────────────────────────────────────────────────────────────
-/** Effect `k` on the whole of clip `clip` of lane `track`: written (one undo step), opened, played once on the preview. */
+/**
+ * Effect `k` on the whole of clip `clip` of lane `track` - or a set's effects, `k` 'set:<id>' (each its own afterwards): written
+ * (one undo step), the first opened, played once on the preview.
+ */
 export function addTo(track, clip, k) {
-  const e = newEffect(clip, k);
-  if (!e) return;
-  const list = normalizeFx([...(clip.fx || []), e]) || [];
-  const kept = list.find((x) => x.k === e.k && Math.abs(x.t0 - e.t0) < 1e-3 && x.id === e.id) || list[list.length - 1];
+  const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
+  const made = [];
+  for (const it of (set ? set.items : [{ k }])) {
+    const e = newEffect(clip, it.k, 'fx' + Date.now().toString(36) + made.length + Math.floor(Math.random() * 1296).toString(36));
+    if (!e) continue;
+    if (it.len > 0) e.len = it.len;
+    made.push(e);
+  }
+  if (!made.length) return;
+  const list = normalizeFx([...(clip.fx || []), ...made]) || [];
+  const first = list.find((x) => x.id === made[0].id) || list[list.length - 1];
   setClipFields(track.id, clip.id, { fx: list });
   selectClipById(clip.id);
-  if (kept) focus(clip.id, kept.id);
-  const sp = spanOf({ ...clip, fx: list }, kept || e);
-  import('./preview-b.js').then((P) => { if (P.playStretch) P.playStretch(Math.max(+clip.start || 0, sp.a - 0.3), sp.b + 0.3, sp.a); })
+  if (first) focus(clip.id, first.id);
+  const spans = made.map((e) => spanOf({ ...clip, fx: list }, list.find((x) => x.id === e.id) || e));
+  const a = Math.min(...spans.map((x) => x.a)), b = Math.max(...spans.map((x) => x.b));
+  import('./preview-b.js').then((P) => { if (P.playStretch) P.playStretch(Math.max(+clip.start || 0, a - 0.3), b + 0.3, a); })
     .catch(() => { /* no preview to play it on */ });
 }
 

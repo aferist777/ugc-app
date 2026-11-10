@@ -152,7 +152,44 @@ function _moveOf(n, W, H, anchor) {
   }
   if (s !== 1) m = moveThen(m, { a: s, b: 0, e: ax - s * ax, f: ay - s * ay });
   if (n.dx || n.dy) m = moveThen(m, { a: 1, b: 0, e: (+n.dx || 0) * W, f: (+n.dy || 0) * H });
+  // (block 1b) A measured camera's move, its e and f shares of the frame.
+  if (n.mv) m = moveThen(m, { a: +n.mv.a, b: +n.mv.b, e: (+n.mv.e || 0) * W, f: (+n.mv.f || 0) * H });
   return m;
+}
+
+/** How much the moved picture must be zoomed about the frame's middle to cover the whole frame (no empty corner) - 1 or more. */
+function _coverFactor(m, W, H) {
+  const inv = (q, k) => {
+    // q through (scale k about the middle ∘ m) backwards: m⁻¹ of the point scaled back about the middle.
+    const x = W / 2 + (q[0] - W / 2) / k, y = H / 2 + (q[1] - H / 2) / k;
+    const det = m.a * m.a + m.b * m.b;
+    const dx = x - m.e, dy = y - m.f;
+    return [(m.a * dx + m.b * dy) / det, (-m.b * dx + m.a * dy) / det];
+  };
+  const inside = (k) => [[0, 0], [W, 0], [0, H], [W, H]].every((q) => {
+    const p = inv(q, k);
+    return p[0] >= -0.5 && p[0] <= W + 0.5 && p[1] >= -0.5 && p[1] <= H + 0.5;
+  });
+  if (inside(1)) return 1;
+  let lo = 1, hi = 1.6;
+  for (let i = 0; i < 24; i++) { const k = (lo + hi) / 2; if (inside(k)) hi = k; else lo = k; }
+  return hi;
+}
+// ONE zoom for the whole effect - the largest its camera ever needs (over its measured path, sampled at 30 a second): the frame
+// does not breathe with the sway, and the render's scaler keeps one size (built once, not at every frame).
+const _covers = new Map();
+function _coverOf(k, W, H) {
+  const key = k + '|' + W + 'x' + H;
+  if (_covers.has(key)) return _covers.get(key);
+  const d = effectOf(k);
+  let most = 1;
+  for (let i = 0; i <= 12 * 30; i++) {
+    const n = d.at(i / 30) || {};
+    if (n.mv) most = Math.max(most, _coverFactor(_moveOf(n, W, H, { x: 0.5, y: 0.5 }), W, H));
+  }
+  most = Math.ceil(most * 1000) / 1000;
+  _covers.set(key, most);
+  return most;
 }
 
 /**
@@ -164,7 +201,7 @@ export function paramsAt(c, t, W, H, main) {
   const s = +c.start || 0, end = s + (+c.dur || 0);
   if (!(t >= s - 1e-6 && t < end)) return null;
   const anchor = anchorOf(c, main);
-  let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, any = false;
+  let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
   for (const e of c.fx) {
     const d = effectOf(e.k);
     if (!d) continue;
@@ -174,7 +211,8 @@ export function paramsAt(c, t, W, H, main) {
     if (d.kind === 'intro' && sp.len > 0) tau = tau * d.dur / sp.len;
     const n = d.at(Math.max(0, tau)) || {};
     any = true;
-    if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
+    if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
+    if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
     if (n.col) col = colThen(col || COL_ID, n.col);
     if (n.ch) {
       ch = ch || { rx: 0, ry: 0, gx: 0, gy: 0, bx: 0, by: 0 };
@@ -183,9 +221,14 @@ export function paramsAt(c, t, W, H, main) {
     if (n.px > px) px = +n.px;
     if (n.vig > vig) vig = +n.vig;
     if (n.lines > lines) lines = +n.lines;
+    if (n.glow > glow) glow = +n.glow;
+    if (n.blurV > blurV) blurV = +n.blurV;
+    if (n.stripes > stripes) stripes = +n.stripes;
+    if (n.grain > grain) grain = +n.grain;
   }
   if (!any) return null;
-  return { move, col, ch, px, vig, lines };
+  if (move && cover > 1) move = moveThen(move, { a: cover, b: 0, e: W / 2 - cover * W / 2, f: H / 2 - cover * H / 2 });
+  return { move, col, ch, px, vig, lines, glow, blurV, stripes, grain };
 }
 
 /** Whether a set of numbers leaves the picture as it is. */
@@ -195,5 +238,6 @@ export function isPlain(p) {
   const still = !m || (Math.abs(m.a - 1) < 1e-6 && Math.abs(m.b) < 1e-6 && Math.abs(m.e) < 1e-3 && Math.abs(m.f) < 1e-3);
   const colId = !p.col || p.col.every((v, i) => Math.abs(v - COL_ID[i]) < 1e-5);
   const chZ = !p.ch || Object.values(p.ch).every((v) => Math.abs(v) < 0.5);
-  return still && colId && chZ && !(p.px > 1.5) && !(p.vig > 0.002) && !(p.lines > 0.002);
+  return still && colId && chZ && !(p.px > 1.5) && !(p.vig > 0.002) && !(p.lines > 0.002)
+    && !(p.glow > 0.002) && !(p.blurV > 0.05) && !(p.stripes > 0.002) && !(p.grain > 0.002);
 }

@@ -6,14 +6,16 @@
      the colour matrix (an SVG feColorMatrix, its values set for the frame) and the move (the layer drawn transformed) ->
      the channels (the picture drawn three times, each through a filter keeping one channel, moved, added up) ->
      the blocks (down to a small canvas and back without smoothing, the grid from the frame's corner) ->
-     the vignette and the speed lines (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop).
+     (block 1b) the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
+     (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { vigAt, linesOf, LINES_ALPHA } from '../fx/effects.js';
+import { vigAt, linesOf, LINES_ALPHA, stripesAt } from '../fx/effects.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 let _defs = null;
 let _colM = null;
+let _bv = null;
 function _ensureDefs() {
   if (_defs || typeof document === 'undefined') return;
   const svg = document.createElementNS(NS, 'svg');
@@ -39,6 +41,15 @@ function _ensureDefs() {
   filter('mv3-fx-r', '1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0');
   filter('mv3-fx-g', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0');
   filter('mv3-fx-b', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0');
+  // (block 1b) The vertical smear: a Gaussian blur down only, its σ set for the frame.
+  const fv = document.createElementNS(NS, 'filter');
+  fv.id = 'mv3-fx-bv';
+  fv.setAttribute('color-interpolation-filters', 'sRGB');
+  _bv = document.createElementNS(NS, 'feGaussianBlur');
+  _bv.setAttribute('stdDeviation', '0 0');
+  _bv.setAttribute('edgeMode', 'duplicate');
+  fv.appendChild(_bv);
+  svg.appendChild(fv);
   document.body.appendChild(svg);
   _defs = svg;
 }
@@ -90,6 +101,41 @@ function _linesMask(W, H) {
   }
   _lines = cv;
   return cv;
+}
+
+let _stripes = null;
+function _stripesMask(W, H) {
+  if (_stripes && _stripes.width === W && _stripes.height === H) return _stripes;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = 1;
+  const g = cv.getContext('2d');
+  const img = g.createImageData(W, 1);
+  for (let x = 0; x < W; x++) img.data[x * 4 + 3] = Math.round(255 * stripesAt(x + 0.5, W));
+  g.putImageData(img, 0, 0);
+  const full = document.createElement('canvas');
+  full.width = W; full.height = H;
+  full.getContext('2d').drawImage(cv, 0, 0, W, H);
+  _stripes = full;
+  return full;
+}
+// The grain: a few tiles of random grey, one picked a frame (random here as ffmpeg's is in the file).
+let _grain = null;
+function _grainTiles() {
+  if (_grain) return _grain;
+  _grain = [0, 1, 2, 3].map(() => {
+    const cv = document.createElement('canvas');
+    cv.width = 160; cv.height = 160;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(160, 160);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = Math.random() < 0.5 ? 0 : 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = Math.round(Math.random() * 40);
+    }
+    g.putImageData(img, 0, 0);
+    return cv;
+  });
+  return _grain;
 }
 
 const _f = (v) => String(Math.round(v * 1e5) / 1e5);
@@ -150,6 +196,31 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
     g.drawImage(sm, 0, 0, sw, sh, PAD, PAD, sw * b, sh * b);
     g.restore();
   }
+  // (block 1b) The vertical smear.
+  if (p.blurV > 0.05 && _bv) {
+    _bv.setAttribute('stdDeviation', '0 ' + _f(p.blurV * u));
+    const nx = _canvas('d', CW, CH);
+    const h = nx.getContext('2d');
+    h.filter = 'url(#mv3-fx-bv)';
+    h.drawImage(cur, 0, 0);
+    h.filter = 'none';
+    cur = nx;
+    g = h;
+  }
+  // (block 1b) Soft sway's soft focus: 0.88 of it blurred by 1.3 u, 0.12 of it by 14 u over that.
+  if (p.glow > 0.002) {
+    const nx = _canvas('c', CW, CH);
+    const h = nx.getContext('2d');
+    h.filter = `blur(${_f(1.3 * u)}px)`;
+    h.drawImage(cur, 0, 0);
+    h.filter = `blur(${_f(14 * u)}px)`;
+    h.globalAlpha = 0.12 * Math.min(1, p.glow);
+    h.drawImage(cur, 0, 0);
+    h.filter = 'none';
+    h.globalAlpha = 1;
+    cur = nx;
+    g = h;
+  }
   // Laid only where the clip has picture.
   const lay = (mask, alpha) => {
     if (!(alpha > 0.002)) return;
@@ -161,5 +232,15 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
   };
   if (p.vig > 0.002) lay(_vigMask(W, H), p.vig);
   if (p.lines > 0.002) lay(_linesMask(W, H), p.lines * LINES_ALPHA);
+  if (p.stripes > 0.002) lay(_stripesMask(W, H), p.stripes);
+  if (p.grain > 0.002) {
+    const tiles = _grainTiles();
+    g.save();
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = Math.min(1, p.grain);
+    g.fillStyle = g.createPattern(tiles[(Math.random() * tiles.length) | 0], 'repeat');
+    g.fillRect(PAD, PAD, W, H);
+    g.restore();
+  }
   return cur;
 }

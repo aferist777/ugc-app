@@ -1727,6 +1727,7 @@ function _fxFrames(el, c) {
   if (!(d > 0)) return;
   el.classList.add('has-fx');
   const rows = [];                // the end of the last frame in each row
+  const made = [];
   for (const e of c.fx) {
     const fd = fxEffectOf(e.k);
     if (!fd) continue;
@@ -1736,15 +1737,25 @@ function _fxFrames(el, c) {
     let r = rows.findIndex((end) => end <= a + 1e-3);
     if (r < 0) { r = rows.length; rows.push(b); } else rows[r] = b;
     const f = document.createElement('span');
-    f.className = 'mv3b-fx' + (r ? ' is-r2' : '');
+    f.className = 'mv3b-fx';
     f.style.left = (a / d * 100).toFixed(3) + '%';
     f.style.width = ((b - a) / d * 100).toFixed(3) + '%';
     f.title = fd.name + ' · ' + a.toFixed(2) + '–' + b.toFixed(2) + ' s of the clip - press to open it';
     f.textContent = fd.name;
     f.addEventListener('mousedown', () => FXUI.focus(c.id, e.id));
     el.appendChild(f);
+    made.push([f, r]);
   }
-  if (rows.length > 1) el.classList.add('has-fx2');
+  // As many rows as effects run at once, each a share of the clip's height (three at most - more share the last).
+  const n = Math.min(3, rows.length);
+  if (n > 1) {
+    for (const [f, r] of made) {
+      const k = Math.min(r, n - 1);
+      f.style.top = `calc(${(k / n * 100).toFixed(3)}% + 1px)`;
+      f.style.bottom = 'auto';
+      f.style.height = `calc(${(100 / n).toFixed(3)}% - 2px)`;
+    }
+  }
 }
 
 function _clipEl(t, c, over) {

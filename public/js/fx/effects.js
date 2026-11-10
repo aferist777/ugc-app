@@ -12,8 +12,14 @@
      px             pixelated in blocks of px u
      vig            the vignette's strength 0..1 (vigAt - its mask)
      lines          the speed lines' strength 0..1 (linesOf - where they lie)
+     mv             (block 1b) a measured camera's move { a, b, e, f }: x' = a·x − b·y + e, y' = b·x + a·y + f, e and f shares of the
+                    frame's width and height (tables.js); `cover` - zoomed about the middle just enough to leave no empty corner
+     glow           Soft sway's soft focus 0..1: 0.88 of the picture blurred by 1.3 u and 0.12 of it blurred by 14 u
+     blurV          a vertical blur, σ in u;  stripes - the glitch's dark lines 0..1 (stripesAt);  grain - the glitch's grain 0..1
    `kind` 'intro' - a moment of its own length (`dur`), stretched to 0.8-2 (`lo`, `hi`) of it; 'loop' - for as long as it is on.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import { MOTION, SWING_PURPLE, SWING_TEAL } from './tables.js';
 
 export const FX_VERSION = 1;
 
@@ -85,6 +91,53 @@ function _heart(t) {
   return { s: 1 + 0.139 * b, col: _addCol(46 / 255 * Math.min(1, b * 1.4)) };
 }
 
+// ── Block 1b: the measured cameras (video-effects-pack's motion_matrix) ──
+/** The camera of `name` at τ - its table played forwards and back - as a similarity, e and f shares of the frame. */
+export function motionAt(name, t) {
+  const tb = MOTION[name];
+  const rows = tb.m, step = tb.step;
+  const dur = (rows.length - 1) * step / tb.fps;
+  let u = t % (2 * dur);
+  if (u > dur) u = 2 * dur - u;
+  const pos = u * tb.fps / step;
+  const i = Math.min(Math.floor(pos), rows.length - 1), fr = pos - i;
+  const a = rows[i], b = rows[Math.min(i + 1, rows.length - 1)];
+  const m = a.map((v, j) => v + (b[j] - v) * fr);
+  // Measured on 270 x 480: its turn and scale as one similarity (the same angle on a frame of any shape), its move in shares.
+  return { a: (m[0] + m[4]) / 2, b: (m[3] - m[1]) / 2, e: m[2] / 270, f: m[5] / 480, raw: m };
+}
+
+const tri = (x) => { const v = ((x % 1) + 1) % 1; return 1 - Math.abs(2 * v - 1); };
+function _swing(t) {
+  const u = tri(t / 1.0);
+  const col = [];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      const v = SWING_PURPLE[r][c] * (1 - u) + SWING_TEAL[r][c] * u;
+      col.push(c === 3 ? v / 255 : v);
+    }
+  }
+  const m = motionAt('colorswing', t);
+  return { col, mv: { a: m.a, b: m.b, e: m.e, f: m.f }, cover: true };
+}
+
+// A seeded random a frame pair (the glitch's own, the same in the page and the file).
+function _rngOf(n) { return _rng((Math.imul(n + 1, 2654435761) ^ 0x9E3779B9) >>> 0); }
+// The glitch of the Hook set - video-effects-pack's vglitch without its per-column jitter (block 5): the green channel along the
+// measured path, the blue the other way, the red jumping down now and then; a little brighter; smeared down; dark lines; grain.
+function _glitch(t) {
+  const i = Math.floor(t * 30 + 1e-6);
+  const m = motionAt('vglitch', t).raw;
+  const gx = m[2] * 4, gy = m[5] * 4;
+  const rnd = _rngOf(i >> 1);
+  const jump = rnd() < 0.6 ? rnd() * 45 : 0;
+  return {
+    ch: { gx, gy, bx: -gx, ry: jump },
+    col: [1.1, 0, 0, 8 / 255, 0, 1.1, 0, 8 / 255, 0, 0, 1.1, 8 / 255],
+    blurV: 2.6, stripes: 1, grain: 1,
+  };
+}
+
 /**
  * Every effect: { name, group, kind, dur, lo, hi, about, at(τ) -> numbers }. The groups are the list's (js/merge-v3/fx-ui.js).
  * The order here is the list's order.
@@ -99,6 +152,12 @@ export const EFFECTS = {
     about: 'The clip drops in from 80 % to its full size over black.', at: (t) => ({ s: kf(t * 30, DROP) }) },
   heartbeat: { name: 'Heartbeat', group: 'motion', kind: 'loop',
     about: 'A zoom pulse to 114 % with a flash of light, twice a second.', at: _heart },
+  pulse: { name: 'Pulse', group: 'motion', kind: 'loop',
+    about: 'A 4 % push in and quick jolts up and down - a camera on the beat.',
+    at: (t) => { const m = motionAt('pulse', t); return { mv: { a: m.a, b: m.b, e: m.e, f: m.f } }; } },
+  soft: { name: 'Soft sway', group: 'motion', kind: 'loop',
+    about: 'A slow sway with a tilt of up to 3.5 degrees and a soft focus.',
+    at: (t) => { const m = motionAt('soft', t); return { mv: { a: m.a, b: m.b, e: m.e, f: m.f }, cover: true, glow: 1 }; } },
   bwframe: { name: 'Black & white', group: 'color', kind: 'intro', dur: 1.9, lo: 0.8, hi: 2,
     about: 'The colour goes in 0.35 s, a little more contrast, and comes back.', at: _bw },
   fadeblack: { name: 'Fade to black', group: 'color', kind: 'intro', dur: 1.75, lo: 0.8, hi: 2,
@@ -109,6 +168,16 @@ export const EFFECTS = {
     at: (t) => { const k = smooth(0, 0.35, t) * (1 - smooth(1.10, 1.55, t)); return k > 0.003 ? { vig: k } : {}; } },
   pixelate: { name: 'Pixelate', group: 'color', kind: 'intro', dur: 1.8, lo: 0.8, hi: 2,
     about: 'The whole frame turns to blocks of up to 48 px and back.', at: _pixelate },
+  colorswing: { name: 'Color swing', group: 'color', kind: 'loop',
+    about: 'The colour swings purple - teal - purple once a second, the camera sways.', at: _swing },
+  glitch: { name: 'Glitch', group: 'color', kind: 'loop',
+    about: 'The colour channels tear apart, dark lines and grain - the light glitch of the Hook set.', at: _glitch },
+};
+
+/** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
+export const SETS = {
+  hook: { name: 'Hook', about: 'An opening with impact: Quick zoom with a short glitch over its first 0.7 s.',
+    items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
 };
 
 export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light']];
@@ -152,3 +221,11 @@ export function linesOf(W, H) {
   return out;
 }
 export const LINES_ALPHA = 0.55;
+
+// ── The glitch's dark lines: one down every 21.5 u, 30 % darker at its middle ──
+/** The darkness of the glitch's lines at column x of a frame W wide, 0..0.3. */
+export function stripesAt(x, W) {
+  const u = W / 1080;
+  const ph = ((x / (21.5 * u)) % 1 + 1) % 1;
+  return 0.30 * clamp01(1 - Math.abs(ph - 0.12) / 0.11);
+}
