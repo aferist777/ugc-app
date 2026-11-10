@@ -29,7 +29,8 @@ const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'fx-tiles.json'), 'u
 const RULE = ['public/js/fx/effects.js', 'public/js/fx/params.js', 'public/js/fx/tables.js', 'lib/fx-render.js', 'lib/fx-assets.js'];
 function rulePrint() {
   const h = crypto.createHash('sha1');
-  for (const f of RULE) h.update(fs.readFileSync(path.join(ROOT, f)));
+  // Line ends left out: git may write them either way.
+  for (const f of RULE) h.update(fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g, '\n'));
   h.update(JSON.stringify(CFG));
   return h.digest('hex').slice(0, 16);
 }
