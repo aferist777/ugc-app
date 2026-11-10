@@ -7,7 +7,7 @@
      the channels (the picture drawn three times, each through a filter keeping one channel, moved, added up) ->
      the blocks (down to a small canvas and back without smoothing, the grid from the frame's corner) ->
      (block 1c) the face's mosaic (the same blocks inside its oval) and Snap zoom's blur (a canvas blur) ->
-     (block 3) the glitch's column jitter (main video, baked for the render by the app's window with this code) ->
+     (block 3) the glitch's column jitter (any video lane, baked for the render by the app's window with this code) ->
      (block 1b) the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
      (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -240,7 +240,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame }) {
     cur = nx;
     g = h;
   }
-  // (block 3) The glitch's column jitter (main video only - params.js): each band of the frame moved down by its own amount, its
+  // (block 3; every video lane since block 4a) The glitch's column jitter: each band of the frame moved down by its own amount, its
   // edge row repeated into the gap (video-effects-pack's remap with BORDER_REPLICATE). Drawn by the page only - the app's window
   // bakes it for the render with this very code (js/bake-worker.js).
   if (p.jitter) {

@@ -1,10 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE BAKE WINDOW (phase V84 block 3, the owner 2026-11-10, (б3-1)-(б3-10); lib/fx-bake.js is the server's side). The app keeps it
-   hidden (desktop/faces.js createBakeWindow). It asks the server for a STRETCH of a clip on main video whose effects the page alone
-   draws, reads its frames as the clip lies in the frame (raw I420 from the render's own graph), draws EVERY effect of the clip on
-   each with the PREVIEW'S code - fx/params.js paramsAt and merge-v3/fx-draw.js applyFx, one rule - encodes H.264 with WebCodecs
-   (the window's graphics card when it has an encoder) and sends the stream back in pieces; the server makes it the copy the render
-   lays over the stretch. One stretch at a time.
+   hidden (desktop/faces.js createBakeWindow). It asks the server for a STRETCH of a clip whose effects the page alone draws, reads
+   its frames as the clip lies in the frame (raw I420 from the render's own graph, read by ffmpeg's matrix), draws EVERY effect of the
+   clip on each with the PREVIEW'S code - fx/params.js paramsAt and merge-v3/fx-draw.js applyFx, one rule -, reads the drawn frame
+   back and hands it to its encoder (js/bake-encoder.js, a worker: turned into YUV by ffmpeg's own rule - block 4a: left to the
+   encoder, the copy came out a little flatter than the render's frames -, encoded H.264 with WebCodecs, sent to the server in
+   pieces); the server makes it the copy the render lays over the stretch. One stretch at a time.
+   (block 4a, the owner's (б4-1)) A clip ABOVE main comes on a transparent frame (`alpha`): its copy is twice as tall - the colour
+   above, the alpha below as grey -, as H.264 keeps no alpha; the render joins the two again (lib/mv3b-render.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { paramsAt } from './fx/params.js';
@@ -21,10 +24,11 @@ async function _json(url, init) {
 const _post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
 // The encoder: H.264 High, Annex B (the parameter sets with every key frame - the server copies the stream into an mp4 as it is),
-// a high rate - it is a copy the render encodes again. The card's encoder first, else the program's.
+// a high rate - it is a copy the render encodes again. The card's encoder first, else the program's. A copy with its alpha is
+// twice as tall - level 6 when 5.1 cannot take it.
 async function _encoderConfig(W, H, fps) {
   const bitrate = Math.round(Math.min(40e6, Math.max(6e6, W * H * fps * 0.35)));
-  for (const codec of ['avc1.640033', 'avc1.64002a', 'avc1.4d0033', 'avc1.42003e']) {
+  for (const codec of ['avc1.640033', 'avc1.64003C', 'avc1.64002a', 'avc1.4d0033', 'avc1.42003e']) {
     for (const hardwareAcceleration of ['prefer-hardware', 'no-preference']) {
       const cfg = { codec, width: W, height: H, bitrate, framerate: fps, latencyMode: 'quality', avc: { format: 'annexb' }, hardwareAcceleration };
       try {
@@ -36,77 +40,95 @@ async function _encoderConfig(W, H, fps) {
   throw new Error('this computer has no H.264 encoder the app window can use');
 }
 
+// The encoder's worker - one for the window's life.
+const _enc = new Worker('/js/bake-encoder.js', { type: 'module' });
+let _onEnc = null;
+_enc.onmessage = (ev) => { if (_onEnc) _onEnc(ev.data || {}); };
+_enc.onerror = (ev) => { if (_onEnc) _onEnc({ error: (ev && ev.message) || 'the encoder stopped' }); };
+
 async function bake(job) {
   const { id, w: W, h: H, fps, n, a, clip } = job;
+  const alpha = !!job.alpha;
   const t0 = performance.now();
-  say(`drawing ${n} frames ${W}x${H}`);
-  const cfg = await _encoderConfig(W, H, fps);
-  let pending = [];
-  let pendingBytes = 0;
+  say(`drawing ${n} frames ${W}x${H}${alpha ? ' with its alpha' : ''}`);
+  const cfg = await _encoderConfig(W, alpha ? 2 * H : H, fps);
+  const FS = W * H * 4;
+  // Three frame buffers go round between the window and its encoder: a fourth frame waits for one to come back.
+  const free = [new Uint8Array(FS), new Uint8Array(FS), new Uint8Array(FS)];
+  let waiter = null;
   let failed = null;
-  const enc = new VideoEncoder({
-    output: (ch) => { const b = new Uint8Array(ch.byteLength); ch.copyTo(b); pending.push(b); pendingBytes += b.length; },
-    error: (e) => { failed = e; },
-  });
-  enc.configure(cfg);
-  const send = async (k) => {
-    if (!pending.length) return;
-    const blob = new Blob(pending, { type: 'application/octet-stream' });
-    pending = [];
-    pendingBytes = 0;
-    const r = await fetch(`/api/fx-bake/${id}/chunk?n=${k}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob });
-    if (!r.ok) throw new Error('the server did not take the drawn frames');
+  let finished = null;
+  const over = new Promise((resolve) => { finished = resolve; });
+  _onEnc = (m) => {
+    if (m.free && m.free.length === FS) { free.push(m.free); if (waiter) { const w = waiter; waiter = null; w(); } }
+    if (m.error) { failed = new Error(m.error); if (waiter) { const w = waiter; waiter = null; w(); } finished(null); }
+    if (m.done) finished(m.done);
   };
-  // The clip's frame as it lies in the frame, drawn here; the effects drawn over it by the preview's code.
+  _enc.postMessage({ start: { id, W, H, alpha, cfg } });
+  const takeBuf = async () => {
+    while (!free.length && !failed) await new Promise((r) => { waiter = r; });
+    if (failed) throw failed;
+    return free.pop();
+  };
+  // The clip's frame as it lies in the frame, put on the layer as it came; the effects drawn over it by the preview's code; the
+  // result read back through a VideoFrame (copyTo - straight RGBA). getImageData on the effects' canvases makes Chromium move them
+  // off the graphics card after a few frames, and their blurs then cost a second a frame (measured 2026-11-11).
   const layer = document.createElement('canvas');
   layer.width = W;
   layer.height = H;
   const lg = layer.getContext('2d');
-  const FS = W * H * 3 / 2;
-  const buf = new Uint8Array(FS);
+  // The frames come as ffmpeg's I420 (with its alpha plane above main) - a third of RGBA's bytes, which the pipe could not carry
+  // fast enough -, read by ffmpeg's own matrix (BT.601, the TV range: the one its conversions use).
+  const IN = W * H * (alpha ? 5 : 3) / 2;
+  const buf = new Uint8Array(IN);
+  const inSpace = { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false };
+  const step = Math.round(1e6 / fps);
   let fill = 0;
   let i = 0;
-  const step = Math.round(1e6 / fps);
+  let drawMs = 0;
   const one = async () => {
-    const ts = i * step;
-    const vf = new VideoFrame(buf, { format: 'I420', codedWidth: W, codedHeight: H, timestamp: ts,
-      colorSpace: { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false } });
-    lg.drawImage(vf, 0, 0);
-    vf.close();
-    const p = paramsAt(clip, a + i / fps + 1e-6, W, H, true);
+    const out = await takeBuf();
+    const q0 = performance.now();
+    const vin = new VideoFrame(buf, { format: alpha ? 'I420A' : 'I420', codedWidth: W, codedHeight: H, timestamp: i * step, colorSpace: inSpace });
+    lg.clearRect(0, 0, W, H);
+    lg.drawImage(vin, 0, 0);
+    vin.close();
+    const p = paramsAt(clip, a + i / fps + 1e-6, W, H, !alpha);
     const src = p ? applyFx(layer, p, { W, H, PAD: 0, inFrame: true }) : layer;
-    const out = new VideoFrame(src, { timestamp: ts, duration: step });
-    enc.encode(out, { keyFrame: i % Math.max(1, Math.round(fps * 2)) === 0 });
-    out.close();
+    const vf = new VideoFrame(src, { timestamp: i * step });
+    try { await vf.copyTo(out, { format: 'RGBA' }); } finally { vf.close(); }
+    drawMs += performance.now() - q0;
+    _enc.postMessage({ frame: { k: i, buf: out } }, [out.buffer]);
     i++;
-    while (enc.encodeQueueSize > 6 && !failed) await sleep(1);
-    if (pendingBytes > 4e6) await send(i);
     if (i % 15 === 0) say(`frame ${i} of ${n}`);
   };
-  const res = await fetch(job.frames);
-  if (!res.ok || !res.body) throw new Error('the clip\'s frames could not be read');
-  const rd = res.body.getReader();
-  for (;;) {
-    const { value, done } = await rd.read();
-    if (done) break;
-    let off = 0;
-    while (off < value.length && i < n) {
-      const take = Math.min(FS - fill, value.length - off);
-      buf.set(value.subarray(off, off + take), fill);
-      fill += take;
-      off += take;
-      if (fill === FS) { fill = 0; await one(); }
-      if (failed) throw failed;
+  try {
+    const res = await fetch(job.frames);
+    if (!res.ok || !res.body) throw new Error('the clip\'s frames could not be read');
+    const rd = res.body.getReader();
+    for (;;) {
+      const { value, done } = await rd.read();
+      if (done) break;
+      let off = 0;
+      while (off < value.length && i < n) {
+        const take = Math.min(IN - fill, value.length - off);
+        buf.set(value.subarray(off, off + take), fill);
+        fill += take;
+        off += take;
+        if (fill === IN) { fill = 0; await one(); }
+        if (failed) throw failed;
+      }
     }
+    if (!i) throw new Error('no frame of the clip arrived');
+    _enc.postMessage({ end: true });
+    const got = await over;
+    if (failed || !got) throw failed || new Error('the encoder stopped');
+    const ms = (performance.now() - t0) / i;
+    await _post(`/api/fx-bake/${id}/done`, { frames: i, msPerFrame: ms, drawMs: drawMs / i, convMs: got.convMs, codec: cfg.codec + ' ' + cfg.hardwareAcceleration });
+    say(`baked ${i} frames, ${ms.toFixed(1)} ms a frame (drawing ${(drawMs / i).toFixed(1)}, converting ${(+got.convMs).toFixed(1)})`);
+  } finally {
+    _onEnc = null;
   }
-  if (!i) throw new Error('no frame of the clip arrived');
-  await enc.flush();
-  if (failed) throw failed;
-  enc.close();
-  await send(i);
-  const ms = (performance.now() - t0) / i;
-  await _post(`/api/fx-bake/${id}/done`, { frames: i, msPerFrame: ms, codec: cfg.codec + ' ' + cfg.hardwareAcceleration });
-  say(`baked ${i} frames, ${ms.toFixed(1)} ms a frame`);
 }
 
 async function loop() {

@@ -17,8 +17,9 @@
      glow           Soft sway's soft focus 0..1: 0.88 of the picture blurred by 1.3 u and 0.12 of it blurred by 14 u
      blurV          a vertical blur, σ in u;  stripes - the glitch's dark lines 0..1 (stripesAt);  grain - the glitch's grain 0..1
      blur           (block 1c) a blur both ways, σ in u (Snap zoom's snaps)
-     jitter         (block 3) the glitch's column jitter { seed } (jitterOf) - drawn by the page only: an effect with `engine: 'main'`
-                    is BAKED on main video by the app's window (lib/fx-bake.js) and has no such part elsewhere
+     jitter         (block 3) the glitch's column jitter { seed } (jitterOf) - drawn by the page only. An effect with `engine: true`
+                    is drawn by the page's code alone, the preview live and the render from a copy the app's window BAKES with
+                    that code (lib/fx-bake.js) - on every video lane (block 4a, the owner's (б4-1): above main with its alpha)
      mosaic         (block 1c) the face's oval of blocks: { x, y (its middle), w, h (its size) } - shares of the frame
    `kind` 'intro' - a moment of its own length (`dur`), stretched to 0.8-2 (`lo`, `hi`) of it; 'loop' - for as long as it is on.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -162,8 +163,9 @@ export function jitterOf(W, seed) {
   }
   return { bw, dy };
 }
-/** The version of the page-drawn effects - a baked copy made by another is made again (lib/fx-bake.js). */
-export const ENGINE_VERSION = 1;
+/** The version of the page-drawn effects and of the bake - a copy made by another is made again (lib/fx-bake.js). 2 - block 4a:
+ *  the window converts the colours itself, as ffmpeg does (the owner's app, 2026-11-11: a copy came out a little flatter). */
+export const ENGINE_VERSION = 2;
 
 // ── Block 1c: by the face ──────────────────────────────────────────────────
 // Where the face is, an effect keeps in `path` (js/fx/params.js normalizeFx): [[the file's second, x, y, w, h], ...] five a
@@ -223,7 +225,7 @@ export const EFFECTS = {
   pulse: { name: 'Pulse', group: 'motion', kind: 'loop',
     about: 'A 4 % push in and quick jolts up and down - a camera on the beat.',
     at: (t) => { const m = motionAt('pulse', t); return { mv: { a: m.a, b: m.b, e: m.e, f: m.f } }; } },
-  soft: { name: 'Soft sway', group: 'motion', kind: 'loop',
+  soft: { name: 'Soft sway', group: 'motion', kind: 'loop', engine: true,
     about: 'A slow sway with a tilt of up to 3.5 degrees and a soft focus.',
     at: (t) => { const m = motionAt('soft', t); return { mv: { a: m.a, b: m.b, e: m.e, f: m.f }, cover: true, glow: 1 }; } },
   bwframe: { name: 'Black & white', group: 'color', kind: 'intro', dur: 1.9, lo: 0.8, hi: 2,
@@ -238,7 +240,7 @@ export const EFFECTS = {
     about: 'The whole frame turns to blocks of up to 48 px and back.', at: _pixelate },
   colorswing: { name: 'Color swing', group: 'color', kind: 'loop',
     about: 'The colour swings purple - teal - purple once a second, the camera sways.', at: _swing },
-  glitch: { name: 'Glitch', group: 'color', kind: 'loop', engine: 'main',
+  glitch: { name: 'Glitch', group: 'color', kind: 'loop', engine: true,
     about: 'The colour channels tear apart, the columns jitter, dark lines and grain - the glitch of the Hook set.', at: _glitch },
   snapzoom: { name: 'Snap zoom', group: 'face', kind: 'intro', dur: 2.45, lo: 0.7, hi: 2, face: true,
     about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },

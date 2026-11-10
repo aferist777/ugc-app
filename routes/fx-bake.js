@@ -3,7 +3,7 @@
 /* fx-bake.js - the bake engine's window side (phase V84 block 3; lib/fx-bake.js does the work).
 
      GET  /api/fx-bake/next?wait=1       the app's hidden bake window asks for a stretch to draw (held open ~25 s)
-     GET  /api/fx-bake/frames/:id        that stretch's frames as the clip lies in the frame, raw I420
+     GET  /api/fx-bake/frames/:id        that stretch's frames as the clip lies in the frame, raw I420 (above main: with its alpha plane)
      POST /api/fx-bake/:id/chunk?n=<k>   a piece of the drawn stretch's H.264 stream (Annex B), raw bytes; k frames done
      POST /api/fx-bake/:id/done          { frames, msPerFrame, codec } - the stream is whole
      POST /api/fx-bake/:id/fail          { error }

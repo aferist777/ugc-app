@@ -243,8 +243,8 @@ export function paramsAt(c, t, W, H, main) {
     any = true;
     if (n.blur > blur) blur = +n.blur;
     if (n.mosaic && !mos) mos = n.mosaic;
-    // (block 3) What only the page draws - on main video, where the app's window bakes it; elsewhere left out.
-    if (n.jitter && main && d.engine === 'main' && !jitter) jitter = n.jitter;
+    // (block 3; block 4a - every lane) What only the page draws: the render lays the copy the app's window baked with this code.
+    if (n.jitter && d.engine && !jitter) jitter = n.jitter;
     if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
     if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
     if (n.col) col = colThen(col || COL_ID, n.col);
@@ -275,16 +275,17 @@ export function paramsAt(c, t, W, H, main) {
 }
 
 /**
- * (block 3) Where clip `c` on MAIN video needs the bake engine: the timeline's stretches [[a, b], ...] of its effects with
- * `engine: 'main'`, merged - there every effect of the clip is drawn by the page's code in the app's window (lib/fx-bake.js)
- * and the render lays that copy (lib/mv3b-render.js). None off main video.
+ * (block 3) Where clip `c` needs the bake engine: the timeline's stretches [[a, b], ...] of its effects with `engine: true`,
+ * merged - there every effect of the clip is drawn by the page's code in the app's window (lib/fx-bake.js) and the render lays
+ * that copy (lib/mv3b-render.js). Block 4a (the owner's (б4-1)): on every video lane - above main the copy carries its alpha.
+ * None on a band (the halfer's) - nothing is drawn there.
  */
-export function engineSpans(c, main) {
-  if (!main || !hasFx(c)) return [];
+export function engineSpans(c) {
+  if (!hasFx(c) || c.halfer || c.layer) return [];
   const out = [];
   for (const e of c.fx) {
     const d = effectOf(e.k);
-    if (!d || d.engine !== 'main') continue;
+    if (!d || !d.engine) continue;
     const s = spanOf(c, e);
     if (s.b > s.a + 1e-4) out.push([Math.max(+c.start || 0, s.a), s.b]);
   }
