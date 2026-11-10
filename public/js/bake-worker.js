@@ -13,7 +13,7 @@
 import { paramsAt } from './fx/params.js';
 import { applyFx } from './merge-v3/fx-draw.js';
 import { windowOf } from './fx/box.js';
-import { fontsReady } from './fx/kit.js';
+import { fontsFor } from './fx/kit.js';
 
 // (block 4b) The size of a clip's file - what its window's shape is made of (js/fx/box.js, the preview's rule): its picture or its
 // film's metadata, as the preview knows it from its own element. Unknown - the window is the frame.
@@ -77,8 +77,8 @@ async function bake(job) {
   const t0 = performance.now();
   say(`drawing ${n} frames ${W}x${H}${alpha ? ' with its alpha' : ''}`);
   const cfg = await _encoderConfig(W, alpha ? 2 * H : H, fps);
-  // (block 4b) The graphics' fonts before the first frame, and the clip's window (main video - the frame).
-  await fontsReady();
+  // (block 4b) The graphics' fonts before the first frame (block 4c: a card's own font and its twin too), and the clip's window (main video - the frame).
+  await fontsFor(clip && clip.fx);
   let box = null;
   if (alpha) {
     const d = await _dimsOf(clip.src);

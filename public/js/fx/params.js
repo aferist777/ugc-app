@@ -24,6 +24,8 @@
 import { effectOf, COL_ID, colThen, MOSAIC_BLOCK } from './effects.js';
 
 export const FX_MAX = 20;
+/** (block 4c) The longest words a card takes in one field. */
+export const TEXT_MAX = 120;
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const STILL_RE = /\.(jpe?g|png|webp|avif|bmp)$/i;
 const _still = (c) => !!c && STILL_RE.test(String(c.src || '').split('?')[0]);
@@ -35,7 +37,23 @@ export function lengthRange(k) {
   const d = effectOf(k);
   if (!d) return [0.3, 3600];
   if (d.kind !== 'intro') return [0.3, 3600];
+  // (block 4c, the owner's (б4-3)) A card stands as long as it is set - to the clip's end.
+  if (d.hold != null) return [r3(d.dur * d.lo), 3600];
   return [r3(d.dur * d.lo), r3(d.dur * d.hi)];
+}
+
+/**
+ * (block 4c) An 'intro' effect's own time at `tau` seconds into its stretch of `len`: shorter than its own length - played faster;
+ * longer - a card's (`hold`) stands at its moment for the time over, its way in and out at their own speed (the owner's (б4-3));
+ * longer without one - played slower, as before.
+ */
+export function ownTime(d, tau, len) {
+  if (!(len > 0)) return tau;
+  if (d.hold != null && len > d.dur) {
+    const extra = len - d.dur;
+    return tau < d.hold ? tau : tau < d.hold + extra ? d.hold : tau - extra;
+  }
+  return tau * d.dur / len;
 }
 
 /** What is stored: every effect the program knows, its numbers valid - or null, and the field is left off the clip. */
@@ -82,6 +100,17 @@ export function normalizeFx(list) {
       }
       if (Object.keys(opt).length) one.opt = opt;
     }
+    // (block 4c) Its words (`txt` - by key, '' not drawn, at most 120 characters) and its font (one of the captions', by name).
+    if (d.texts && e.txt && typeof e.txt === 'object') {
+      const txt = {};
+      for (const [key, , def] of d.texts) {
+        if (typeof e.txt[key] !== 'string') continue;
+        const v = e.txt[key].replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, TEXT_MAX);
+        if (v !== def) txt[key] = v;
+      }
+      if (Object.keys(txt).length) one.txt = txt;
+    }
+    if (d.texts && typeof e.font === 'string' && /^[\w .'&-]{1,60}$/.test(e.font.trim())) one.font = e.font.trim();
     out.push(one);
     if (out.length >= FX_MAX) break;
   }
@@ -262,7 +291,7 @@ export function paramsAt(c, t, W, H, main) {
     const sp = spanOf(c, e);
     if (!(t >= sp.a - 1e-6 && t < sp.b)) continue;
     let tau = t - sp.a;
-    if (d.kind === 'intro' && sp.len > 0) tau = tau * d.dur / sp.len;
+    if (d.kind === 'intro' && sp.len > 0) tau = ownTime(d, tau, sp.len);
     const n = d.at(Math.max(0, tau), e, tf) || {};
     any = true;
     if (d.draw) scenes.push({ k: e.k, draw: d.draw, e, tau: Math.max(0, tau), live: Math.max(0, t - sp.a) });

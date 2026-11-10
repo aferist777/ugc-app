@@ -30,7 +30,11 @@
     "rainbow": 0.6,
     "colorframe": 0.7,
     "framebreak": 0.75,
-    "digitalzoom": 1
+    "digitalzoom": 1,
+    "checklistpop": 1.5,
+    "checklist2": 1.6,
+    "growthchart": 1.7,
+    "chat": 1.4
   },
   "face": [
     [
@@ -166,5 +170,11 @@
       0.185,
       0.104
     ]
-  ]
+  ],
+  "cropYs": {
+    "checklistpop": 0.45,
+    "checklist2": 0.68,
+    "growthchart": 0.66,
+    "chat": 0.42
+  }
 }

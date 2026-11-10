@@ -43,6 +43,7 @@ import { paramsAt as fxParamsAt, isPlain as fxPlain } from '../fx/params.js';
 import { applyFx } from './fx-draw.js';
 // (phase V84 block 4b) Where a clip's graphics are drawn - its window (the owner's (б4-11)), one rule with the bake window.
 import { windowOf as fxWindowOf } from '../fx/box.js';
+import { onFontLoaded as fxOnFontLoaded } from '../fx/kit.js';
 // (phase V76) A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
 import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
@@ -1041,6 +1042,8 @@ function _paint() {
   if (!_shooting && !_borrowed) for (const cb of _paintSubs) { try { cb(); } catch (e) { /* a listener's own trouble */ } }
   return n;
 }
+// (phase V84 block 4c) A card's font just loaded: the frame standing still is painted again in it (playing, the next frame is).
+fxOnFontLoaded(() => { try { if (!_playing && _on && _ctx && !_shooting) _paint(); } catch (e) { /* not ready */ } });
 
 function _paintFrame() {
   if (!_ctx) return 0;

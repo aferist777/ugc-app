@@ -14,6 +14,7 @@
 
 import { vigAt, linesOf, LINES_ALPHA, stripesAt, jitterOf, colorsOf, optsOf } from '../fx/effects.js';
 import { SCENES } from '../fx/overlays.js';
+import { CARDS } from '../fx/cards.js';
 import { hexRgb, fontsReady } from '../fx/kit.js';
 
 // (block 4b) The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
@@ -312,7 +313,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       return [dx * ca + dy * sa + b.w / 2, -dx * sa + dy * ca + b.h / 2];
     };
     for (const sc of p.scenes) {
-      const draw = SCENES[sc.draw];
+      const draw = SCENES[sc.draw] || CARDS[sc.draw];
       if (!draw) continue;
       const col = {};
       for (const [k, v] of Object.entries(colorsOf(sc.e))) col[k] = hexRgb(v);
@@ -326,7 +327,17 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       g.clip();
       try {
         draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox,
-          canvas: (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))) });
+          canvas: (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))),
+          // (block 4c) The window's picture as it is now, upright - what Chat lays in its card.
+          picture: () => {
+            const pc = _canvas('sc-pic', Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));
+            const x = pc.getContext('2d');
+            x.translate(b.w / 2, b.h / 2);
+            x.rotate(-an);
+            x.translate(-(PAD + b.cx), -(PAD + b.cy));
+            x.drawImage(cur, 0, 0);
+            return pc;
+          } });
       } finally { g.restore(); }
     }
   }

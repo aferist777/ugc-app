@@ -235,6 +235,8 @@ function _dzoom(t, e) {
   return { s: z.s, ax: z.ax, ay: z.ay, blur: z.blur };
 }
 const _none = () => ({});
+// (block 4c, the owner's (б4-13) б, в, г) A card's place up or down (a share of its window), its size and its corners.
+const CARD_OPTS = [['place', 'Place', -0.4, 0.4, 0.01, 0, 'pos'], ['size', 'Size', 0.6, 1.5, 0.05, 1, 'x'], ['corners', 'Corners', 0, 1, 0.05, 1, 'pct']];
 function _idSeed(e) {
   const s = String((e && e.id) || '');
   let h = 2166136261;
@@ -303,6 +305,27 @@ export const EFFECTS = {
     colors: [['accent', 'Accent', '#ff5722'], ['lines', 'Lines', '#ffffff']],
     opts: [['zoom', 'Zoom', 0.5, 1.5, 0.05, 1, 'x'], ['shake', 'Shake', 0, 2, 0.05, 1, 'x']],
     about: 'A camera\'s viewfinder - REC, a timecode, the zoom read out - zooms in on the face 1.6x, then 2.6x, with a hand\'s shake, and snaps back.', at: _dzoom },
+  // (block 4c) Cards with the person's words (`texts`), in any of the captions' fonts (`font`), standing as long as they are set
+  // (`hold` - the moment that stands, the owner's (б4-3)); js/fx/cards.js draws them.
+  checklistpop: { name: 'Checklist pop', group: 'card', kind: 'intro', dur: 1.84, lo: 0.7, hold: 1.55, engine: true, draw: 'checklistpop',
+    texts: [['i1', 'Item 1', 'Edit'], ['i2', 'Item 2', 'Captions'], ['i3', 'Item 3', 'Effects'], ['i4', 'Item 4', '']],
+    colors: [['card', 'Card', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Ticks', '#1a1a1c']], opts: CARD_OPTS,
+    about: 'White pills with a tick pop in from the right one after another.', at: _none },
+  checklist2: { name: 'Checklist', group: 'card', kind: 'intro', dur: 2.0, lo: 0.7, hold: 1.68, engine: true, draw: 'checklist2',
+    texts: [['title', 'Title', 'CHECKLIST'], ['i1', 'Item 1', 'TITLES'], ['i2', 'Item 2', 'TRANSITIONS'], ['i3', 'Item 3', 'GRAPHICS'],
+      ['i4', 'Item 4', ''], ['i5', 'Item 5', '']],
+    colors: [['card', 'Card', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Accent', '#ff5a36']], opts: CARD_OPTS,
+    about: 'A card with a title and a list: the circles turn into ticks one after another, sparks, a bar of progress.', at: _none },
+  growthchart: { name: 'Growth chart', group: 'card', kind: 'intro', dur: 2.3, lo: 0.7, hold: 1.8, engine: true, draw: 'growthchart',
+    texts: [['title', 'Title', 'GROWTH'], ['number', 'Number', '120'], ['note', 'Note', 'SAMPLE DATA']],
+    colors: [['card', 'Card', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Line', '#ff5a36']], opts: CARD_OPTS,
+    about: 'A chart card: the line of growth draws itself, a counter runs up to your number, a dot pulses at its end.', at: _none },
+  chat: { name: 'Chat', group: 'card', kind: 'intro', dur: 2.03, lo: 0.7, hold: 1.55, engine: true, draw: 'chat',
+    texts: [['request', 'Request', 'Edit this video, caption every word, then add these effects.'], ['i1', 'Item 1', 'Cut the pauses'],
+      ['i2', 'Item 2', 'Caption every word'], ['i3', 'Item 3', 'Add the effects'], ['name', 'Assistant', 'Assistant']],
+    colors: [['bg', 'Background', '#eeeeec'], ['card', 'Window', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Accent', '#1a1a1c']],
+    opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct']],
+    about: 'The clip shrinks into a card and lands in a chat with an AI under the request; the reply ticks its list, then the clip opens back.', at: _none },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
@@ -311,7 +334,18 @@ export const SETS = {
     items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
 };
 
-export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays']];
+export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards']];
+
+/** (block 4c) An effect's words by key - its own (`txt`; '' - not drawn), else the table's. */
+export function textsOf(e) {
+  const d = effectOf(e && e.k);
+  const out = {};
+  for (const [key, , def] of ((d && d.texts) || [])) {
+    const v = e && e.txt ? e.txt[key] : undefined;
+    out[key] = typeof v === 'string' ? v : def;
+  }
+  return out;
+}
 
 /** (block 4b) An effect's colours by key - its own (`col`), else the table's - '#rrggbb'. */
 export function colorsOf(e) {

@@ -17,8 +17,10 @@
      2026-11-10: one row).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf } from '../fx/effects.js';
-import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX } from '../fx/params.js';
+import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf, textsOf } from '../fx/effects.js';
+import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX, TEXT_MAX } from '../fx/params.js';
+import { loadFamily } from '../fx/kit.js';
+import { FONTS as CAP_FONTS } from '../captions/fonts.js';
 import { setClipFields, selectClipById, fxLive } from './timeline-b.js';
 import { setLive } from './place-b.js';
 import * as C from './controls.js';
@@ -166,7 +168,8 @@ function _panelEl(g, track, c, onKey) {
   } else {
     for (const [k, d] of Object.entries(EFFECTS)) {
       if (d.group !== st.chip) continue;
-      const lim = d.kind === 'intro' ? ' Its length goes from ' + lengthRange(k).map((v) => v.toFixed(2)).join(' to ') + ' s.' : '';
+      const lim = d.kind !== 'intro' ? '' : d.hold != null ? ' It stands for as long as you set it.'
+        : ' Its length goes from ' + lengthRange(k).map((v) => v.toFixed(2)).join(' to ') + ' s.';
       grid.appendChild(_tile(k, d.name, d.about + lim, onKey === k, () => { _picked = { clipId: c.id, key: k }; add(k); }, tip));
     }
   }
@@ -381,11 +384,39 @@ export function fxRows(g, track, c) {
       onInput: (s, t) => fxLive(c.id, e.id, s, t),
       onChange: moveTo,
     }));
-    g.appendChild(C.hint(d.about + (d.kind === 'intro' ? ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.' : '')));
+    g.appendChild(C.hint(d.about + (d.kind !== 'intro' ? ''
+      : d.hold != null ? ' Set it longer than ' + d.dur.toFixed(2) + ' s and the card stands - up to the clip\'s end; shorter - from ' + lo.toFixed(2) + ' s.'
+        : ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.')));
     // (block 4b, the owner's (б4-12), (б4-13)) Its colours and its settings: a change is one undo step; a slider held shows on the
     // preview at once (place-b.js setLive - the clip drawn with the effect as it would be), written on release.
     const withIt = (next) => list.map((y) => (y.id === e.id ? next : y));
     const put = (next) => write(normalizeFx(withIt(next)) || []);
+    const live = (next) => setLive(new Map([[c.id, { fx: normalizeFx(withIt(next)) }]]));
+    // (block 4c, the owner's (б4-2), (б4-13) а) A card's words, a field a line - the preview follows the typing, a field left (or
+    // Enter) writes it, one undo step; and its font, one of the captions' (Inter by default).
+    if (d.texts && d.texts.length) {
+      const now = textsOf(e);
+      for (const [key, label] of d.texts) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'u-in is-s mv3-fx-text';
+        inp.maxLength = TEXT_MAX;
+        inp.value = now[key];
+        inp.placeholder = 'nothing';
+        const withTxt = () => ({ ...e, txt: { ...(e.txt || {}), [key]: inp.value } });
+        inp.addEventListener('input', () => live(withTxt()));
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } });
+        inp.addEventListener('change', () => { setLive(null); put(withTxt()); });
+        inp.addEventListener('blur', () => setLive(null));
+        g.appendChild(C.row(label, inp));
+      }
+      const sel = C.select([['', 'Inter (as made)'], ...CAP_FONTS.map((f) => [f.family, f.label])], e.font || '', async (v) => {
+        if (v) await loadFamily(v);
+        put(v ? { ...e, font: v } : (({ font, ...rest }) => rest)(e));
+      });
+      sel.classList.add('mv3-fx-font');
+      g.appendChild(C.row('Font', sel));
+    }
     if (d.colors && d.colors.length) {
       const now = colorsOf(e);
       const wrap = document.createElement('span');
@@ -405,10 +436,13 @@ export function fxRows(g, track, c) {
     if (d.opts && d.opts.length) {
       const now = optsOf(e);
       for (const [key, label, olo, ohi, step, , kind] of d.opts) {
-        const fmt = (v) => (kind === 'n' ? String(Math.round(v)) : (+v).toFixed(2) + '×');
+        const fmt = (v) => (kind === 'n' ? String(Math.round(v))
+          : kind === 'pct' ? Math.round(v * 100) + ' %'
+            : kind === 'pos' ? (Math.abs(v) < 0.005 ? 'as made' : (v < 0 ? 'up ' : 'down ') + Math.round(Math.abs(v) * 100) + ' %')
+              : (+v).toFixed(2) + '×');
         const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });
         g.appendChild(C.row(label, C.slider({ min: olo, max: ohi, step, value: now[key], fmt,
-          onInput: (v) => setLive(new Map([[c.id, { fx: normalizeFx(withIt(withOpt(v))) }]])),
+          onInput: (v) => live(withOpt(v)),
           onChange: (v) => { setLive(null); put(withOpt(v)); } })));
       }
     }

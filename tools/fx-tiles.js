@@ -127,7 +127,9 @@ async function main() {
       }
       // The square: the frame's width, on the face's height.
       const W = 1080, H = 1920;
-      const y = Math.round(Math.max(0, Math.min(H - W, CFG.cropY * H - W / 2)));
+      // (block 4c) A tile's own height when its effect lies elsewhere in the frame (`cropYs` - a card at the bottom).
+      const cy = CFG.cropYs && CFG.cropYs[key] != null ? +CFG.cropYs[key] : CFG.cropY;
+      const y = Math.round(Math.max(0, Math.min(H - W, cy * H - W / 2)));
       const sq = `crop=${W}:${W}:0:${y},scale=${CFG.px}:${CFG.px}:flags=lanczos`;
       run(['-i', full, '-vf', `${sq},fps=${CFG.fps}`, '-an', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1',
         '-deadline', 'good', '-cpu-used', '2', '-pix_fmt', 'yuv420p', path.join(OUT, key + '.webm')]);

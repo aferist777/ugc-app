@@ -125,3 +125,121 @@ export function rrPath(x0, y0, x1, y1, r, step) {
     return out;
   });
 }
+
+// ── Block 4c: the cards' text ──────────────────────────────────────────────
+// (the owner's (б4-13) а) A card's font may be any of the captions' 101 (js/captions/fonts.js) - a font with no Russian letters draws
+// a Russian line in its twin, as the captions do (drawnFamily). Loaded for the canvas under a name of its own, once; Inter stays
+// behind it for a letter it lacks.
+import { fontOf as capFont, drawnFamily, FONT_DIR } from '../captions/fonts.js';
+const _fams = new Map();
+const _onFont = [];
+/** Told when a card's font has loaded (the preview paints again - js/merge-v3/preview-b.js). */
+export function onFontLoaded(cb) { if (typeof cb === 'function') _onFont.push(cb); }
+const _alias = (family) => 'UGC FX F ' + family;
+/** A caption family loaded for the canvas (once) - resolves true when it is there. */
+export function loadFamily(name) {
+  if (!name || typeof FontFace === 'undefined' || typeof document === 'undefined') return Promise.resolve(false);
+  const f = capFont(name);
+  if (_fams.has(f.family)) return _fams.get(f.family);
+  const file = Object.values(f.files || {})[0];
+  const p = !file ? Promise.resolve(false) : new FontFace(_alias(f.family), `url(${FONT_DIR}${file})`).load()
+    .then((ff) => { document.fonts.add(ff); for (const cb of _onFont) { try { cb(); } catch (e) { /* its own */ } } return true; })
+    .catch(() => false);
+  _fams.set(f.family, p);
+  return p;
+}
+/** Every font the effects `list` draw in, loaded (with their twins) - the bake window waits for it before its first frame. */
+export function fontsFor(list) {
+  const all = [fontsReady()];
+  for (const e of (Array.isArray(list) ? list : [])) {
+    if (!e || !e.font) continue;
+    const f = capFont(e.font);
+    all.push(loadFamily(f.family));
+    if (f.twin) all.push(loadFamily(f.twin));
+  }
+  return Promise.all(all);
+}
+/** The canvas font for `txt` in effect font `name` (none - the sample's Inter at `weight`). */
+export function textFont(name, px, weight, txt) {
+  if (!name) return font(px, weight);
+  const fam = capFont(drawnFamily(name, txt)).family;
+  loadFamily(fam);
+  return `${Math.max(1, Math.round(px * 100) / 100)}px "${_alias(fam)}", "${FAMILY}", sans-serif`;
+}
+
+/** A line of text, its middle at y (PIL's centred text of the pack): { font, color, align, alpha, spacing (px between letters) }. */
+export function text(g, txt, x, y, o) {
+  if (!txt) return;
+  g.save();
+  g.font = o.font;
+  g.letterSpacing = (o.spacing || 0).toFixed(2) + 'px';
+  g.textAlign = o.align || 'left';
+  g.textBaseline = 'middle';
+  g.fillStyle = css(o.color, o.alpha == null ? 1 : o.alpha);
+  g.fillText(txt, x, y);
+  g.restore();
+}
+/** How wide `txt` is in `fnt` with `spacing` px between letters. */
+export function textW(g, txt, fnt, spacing) {
+  g.save();
+  g.font = fnt;
+  g.letterSpacing = (spacing || 0).toFixed(2) + 'px';
+  const w = g.measureText(String(txt || '')).width;
+  g.restore();
+  return w;
+}
+/**
+ * The pack's _fit: the largest size up to `size` at which `txt` fits `maxW`; under `minFrac` of it the text is cut with an ellipsis.
+ * `mk(size)` is the font at a size, `sp(size)` its spacing. -> { txt, size }
+ */
+export function fitText(g, txt, maxW, size, mk, sp, minFrac = 0.55) {
+  if (!txt) return { txt: '', size };
+  const spc = (s) => (sp ? sp(s) : 0);
+  const w = textW(g, txt, mk(size), spc(size));
+  let s = size * Math.min(1, maxW / Math.max(1, w));
+  let t = String(txt);
+  if (s < size * minFrac) {
+    s = size * minFrac;
+    while (t.length > 1 && textW(g, t + '…', mk(s), spc(s)) > maxW) t = t.slice(0, -1);
+    t = t.trimEnd() + '…';
+  }
+  return { txt: t, size: s };
+}
+/** Lines of `txt` wrapped at `maxW` (by words). */
+export function wrapText(g, txt, fnt, maxW) {
+  const rows = [];
+  let cur = '';
+  for (const wd of String(txt || '').split(/\s+/).filter(Boolean)) {
+    if (cur && textW(g, cur + ' ' + wd, fnt) > maxW) { rows.push(cur); cur = wd; } else cur = (cur + ' ' + wd).trim();
+  }
+  if (cur) rows.push(cur);
+  return rows.length ? rows : [''];
+}
+/** A readable colour on a fill (the pack's _on). */
+export const onColor = (c) => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] > 140 ? [20, 20, 22] : [250, 250, 250]);
+/** A soft shadow of the path `pathFn` makes (begun inside), moved by dx, dy, blurred, at `alpha`. */
+export function shadow(g, pathFn, dx, dy, blur, alpha) {
+  if (!(alpha > 0.003)) return;
+  g.save();
+  g.filter = `blur(${Math.max(0.5, blur).toFixed(2)}px)`;
+  g.translate(dx, dy);
+  pathFn();
+  g.fillStyle = `rgba(0,0,0,${Math.min(1, alpha).toFixed(3)})`;
+  g.fill();
+  g.restore();
+}
+/** The pack's spark glyph: ten rays round a point, r its radius. */
+export function sparkGlyph(g, x, y, r, color, alpha = 1) {
+  g.save();
+  g.strokeStyle = css(color, alpha);
+  g.lineWidth = Math.max(1, r * 0.14);
+  g.lineCap = 'round';
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = i * 36 * Math.PI / 180;
+    g.moveTo(x + 0.30 * r * Math.cos(a), y + 0.30 * r * Math.sin(a));
+    g.lineTo(x + 0.95 * r * Math.cos(a), y + 0.95 * r * Math.sin(a));
+  }
+  g.stroke();
+  g.restore();
+}
