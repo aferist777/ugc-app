@@ -9,8 +9,9 @@
    it starts with the first time and after "reset to standard" - its length, count, moods, presets, animations, fonts and title (the
    owner's tables of P5-P11).
    MEMORY - ONE key, `mv3_hl_kinds_v1` (localStorage, mirrored to the library by storage-sync.js - Merge and Home alike):
-   { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims, fonts, title } } } - the kind chosen last and each kind's last
-   settings ((хп19), (хп46); `fonts` since V68 P4, `title` since V69 P12 - a kind that has none yet takes its standard).
+   { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims, fonts, title, fx } } } - the kind chosen last and each kind's last
+   settings ((хп19), (хп46); `fonts` since V68 P4, `title` since V69 P12, `fx` - the agent's effects, 'none' | 'auto' | 1-5, since V90,
+   'auto' by the owner's (аэ13) - a kind that has none yet takes its standard).
    The popup's memory of before (mv3_hl_ask_v1, mv3_hl_caption_picks_v1, mv3_hl_kind_style_v1, mv3_hl_music_v1) is carried over once into every kind - but not the kind itself, so the first opening of this popup shows
    every kind's words ((хп49)); the old keys are left as they are.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -33,10 +34,13 @@ export const ICONS = {
 /** (V69 P12) Every kind's words - the table's. */
 export const ABOUT = Object.fromEntries(Object.entries(TABLE).map(([k, v]) => [k, { short: v.short, long: v.long }]));
 
+/** (phase V90, the owner's (аэ13)) The agent's effects at the cut: 'none', 'auto' or how many - 'auto' unless the kind remembers another. */
+export const FX_STD = 'auto';
+export const okFx = (v) => v === 'none' || v === 'auto' || [1, 2, 3, 4, 5].includes(v);
 /** (V69 P12) Every kind's standard - the table's (the owner's "Итог Пn" of each kind). */
 export const STANDARD = Object.fromEntries(Object.entries(TABLE).map(([k, v]) => [k, {
   length: v.length, count: v.count || 5, moods: v.moods.std.slice(), styles: v.presets.std.slice(), anims: v.anims.std.slice(),
-  fonts: v.fonts.std.slice(), title: v.title,
+  fonts: v.fonts.std.slice(), title: v.title, fx: FX_STD,
 }]));
 const FIRST_STYLE = Object.fromEntries(Object.entries(TABLE).map(([k, v]) => [k, v.presets.std.find((x) => x !== BY_VIDEO) || 'cp-podcast-viral']));
 /** A kind's recommended moods, preset groups, animation pairs and font groups - the table's ({ moods, presets, anims, fonts }). */
@@ -49,7 +53,7 @@ export function recommendedOf(kind) {
 export function standardOf(kind, lengths) {
   const s = STANDARD[kind];
   if (s) return { ...s, moods: s.moods.slice(), styles: s.styles.slice(), anims: s.anims.slice(), fonts: s.fonts.slice() };
-  return { length: Object.keys(lengths || {})[0] || '', count: 5, moods: [], styles: [], anims: [], fonts: [], title: false };
+  return { length: Object.keys(lengths || {})[0] || '', count: 5, moods: [], styles: [], anims: [], fonts: [], title: false, fx: FX_STD };
 }
 
 // ── The memory ──────────────────────────────────────────────────────────────
@@ -111,6 +115,7 @@ export function settingsOf(kind, lengths, counts) {
     anims: Array.isArray(r.anims) ? r.anims.map(String) : std.anims,
     fonts: Array.isArray(r.fonts) ? r.fonts.map(String) : std.fonts,
     title: okTitle(r.title) ? r.title : std.title,
+    fx: okFx(r.fx) ? r.fx : std.fx,
   };
 }
 /** Keep `kind` as the one chosen last, with its settings `s`. */
@@ -118,7 +123,7 @@ export function keep(kind, s) {
   const m = memory();
   m.kind = String(kind || '');
   if (kind && s) m.kinds[kind] = { length: s.length, count: s.count, moods: (s.moods || []).slice(), styles: (s.styles || []).slice(), anims: (s.anims || []).slice(),
-    fonts: (s.fonts || []).slice(), title: s.title };
+    fonts: (s.fonts || []).slice(), title: s.title, fx: okFx(s.fx) ? s.fx : FX_STD };
   _write();
 }
 /** The kind chosen last ('' - none yet: the very first opening, (хп35), (хп49)). */

@@ -930,6 +930,15 @@ function _paintCard() {
     ml.title = 'On the "audio 2" lane, quiet, from the part of the track where it has opened up - move, trim or delete it on the timeline';
     card.appendChild(ml);
   }
+  // (phase V90) The agent's effects laid at its cut - or why none were.
+  if (f.state === 'ready' && (f.fxNote || (f.fx && f.fx.placed))) {
+    const fl = _el('div', 'mv3-hl-cap');
+    fl.appendChild(document.createTextNode('effects: '));
+    if (f.fx && f.fx.placed) fl.appendChild(_el('b', null, '✦ ' + f.fx.placed + ' by the agent'));
+    if (f.fxNote) fl.appendChild(_el('span', 'mv3-hl-cap-ed', (f.fx && f.fx.placed ? ' · ' : '') + f.fxNote));
+    fl.title = 'On its main video - open the fragment and pick the clip: the group Effects lists them ("✦ agent"); "✦ Again" asks anew';
+    card.appendChild(fl);
+  }
   // (phase V33.4) Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
   if (f.state === 'ready') card.appendChild(_renderLine(f));
   // Each piece, in the fragment's order, with its time in the video: a hook taken from later is said so.
