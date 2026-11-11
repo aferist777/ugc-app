@@ -72,7 +72,7 @@ import { setLive as setLivePlace } from './place-b.js';
 // (phase V74) The blend mode's list, and the patterns of main video - picked by ticks, their settings.
 import { blendButton } from './blend-menu.js';
 // (phase V84) A clip's effects - the group after Color (fx-ui.js).
-import { fxRows, onFocus as onFxFocus, takeOpenAsk as takeFxOpenAsk } from './fx-ui.js';
+import { fxRows, fxManyRows, onFocus as onFxFocus, takeOpenAsk as takeFxOpenAsk } from './fx-ui.js';
 import { renderPatterns } from './patterns-ui.js';
 // (phase V73 block 2, step 2b) A lane with nothing on it - the shared "nothing here", a row of the strip.
 import { emptyEl } from '../ui-state.js';
@@ -1691,6 +1691,13 @@ function _renderMany(host, n) {
     }
     // (phase V75) Their colour - one set of sliders for all the picked video clips.
     _colorGroup(host, videos);
+    // (phase V84, the owner's (эф11)) Their effects - a tile puts the effect on each of them, as on each one alone.
+    const fxable = videos.filter(x => !x.clip.halfer);
+    if (fxable.length) {
+      const g = _group(host, 'effects', 'Effects');
+      if (fxable.length < n) g.appendChild(C.hint('Effects are for the ' + fxable.length + ' picked clips of the video lanes.'));
+      fxManyRows(g, fxable);
+    }
   } else if (!sounds.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';

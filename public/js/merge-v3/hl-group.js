@@ -28,6 +28,8 @@
    CHANGED (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)): while a group is ticked the TIMELINE'S PANEL IS COVERED BY THREE
    BUTTONS - Subtitles, main audio, music - for all N (no lanes, no transport; the bubbles and gold names went); a fragment's row in
    the strip shows its own timeline until "‹ all N". (Phase V74: a fourth, "pattern".)
+   (phase V84, the owner's (эф11) «Hook для всех N») Main video's EFFECTS for all: a tile puts the clip effect on every ticked fragment -
+   a moment on the clip at its start, one that goes on over the whole fragment (fx-ui.js laneEffects; the faces found here; POST /fx).
    CHANGED (phase V76, the owner 2026-11-06: «кнопки "for all" в поле таймлайна расположи по горизонтали под верхней границей поля
    таймлайнов. еще нужна там кнопка main video с общими настройками для видео. и pitch так же будет общей настройкой»): the buttons
    are ONE ROW under the timeline's top edge - Subtitles · Main video · Main audio · Music; MAIN VIDEO (in place of "pattern") is
@@ -51,6 +53,10 @@ import { pitchOf } from '../sound/pitch.js';
 import { pitchRows } from './pitch-rows.js';
 // (phase V74) Main video's patterns, picked by ticks - the one lane's block, for all of them.
 import { renderPatterns, nameOf as patternName } from './patterns-ui.js';
+// (phase V84, the owner's (эф11)) Main video's effects - the clip effects' panel, for all of them.
+import { fxGroupRows, laneEffects, facesFor } from './fx-ui.js';
+import { EFFECTS, SETS } from '../fx/effects.js';
+import { normalizeFx } from '../fx/params.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
 import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.js';
@@ -219,6 +225,72 @@ async function _framingAll(mode) {
   _busy = '';
   await _A.load();
   Views.altChanged();
+}
+
+// ── (phase V84, the owner's (эф11) «Hook для всех N») MAIN VIDEO'S EFFECTS for all the ticked ───────────────────────────────────────
+// A tile pressed puts the effect on each ticked fragment's main video taken as one film (fx-ui.js laneEffects - the page's one rule):
+// a moment on the clip at the fragment's start, one that goes on over the whole fragment, a set's at their own moments. The faces of
+// the effects by the face are found here for every fragment (fx-ui.js facesFor - counted when they were cut, so at once), the other
+// fragments' main video read for it; the open one written by the page (one undo step), the rest by the server (POST /fx, `add`). ✕ on
+// a kind takes it off all of them.
+let _fxWait = null;         // { k, i, n, frac } while the faces of the ticked are found
+const _fxName = (k) => (String(k).startsWith('set:') ? ((SETS[String(k).slice(4)] || {}).name || 'The set') : ((EFFECTS[k] || {}).name || 'The effect'));
+/** The kinds of effects a ticked fragment's main video has: the open one's from its timeline, the others' as the server read them. */
+function _fxKindsOf(f) {
+  if (f.n === _A.openN()) { const set = new Set(); for (const c of _mainOpen()) for (const e of (c.fx || [])) set.add(e.k); return [...set]; }
+  return (f.lanes && f.lanes.video && f.lanes.video.fx) || [];
+}
+async function _mainOf(f, open) {
+  if (open && f === open) return mainVideo();
+  let d = null;
+  try { d = await (await fetch('/api/mv3/timeline?peek=1&key=' + _enc(f.key))).json(); } catch (e) { d = null; }
+  return d && d.success && d.found !== false && d.timeline ? ((d.timeline.tracks || []).find((t) => t && t.kind === 'video' && t.main) || null) : null;
+}
+async function _fxAll(k) {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  const { list, open } = _split();
+  _busy = 'fx';
+  _fxWait = null;
+  Views.altChanged();
+  try {
+    const work = [];
+    for (const f of list) {
+      const lane = await _mainOf(f, open);
+      if (lane) for (const w of laneEffects(lane.clips, k)) work.push({ f, track: lane, clip: w.clip, made: w.made });
+    }
+    if (!work.length) throw new Error('Their main video has nothing to put it on.');
+    await facesFor(work, (i, n, frac) => { _fxWait = { k: work[0].made[0].k, i, n, frac }; Views.altChanged(); });
+    _fxWait = null;
+    // The open one by the page (one undo step) - its clips as they are now.
+    const lane = open ? mainVideo() : null;
+    const items = [];
+    for (const w of work) {
+      if (w.f !== open || !lane) continue;
+      const now = (lane.clips || []).find((c) => c.id === w.clip.id);
+      if (now) items.push({ trackId: lane.id, clipId: now.id, patch: { fx: normalizeFx([...(now.fx || []), ...w.made]) || [] } });
+    }
+    if (items.length) setClipsFields(items);
+    // The rest by the server.
+    const add = {};
+    for (const w of work) { if (w.f === open) continue; (add[w.f.n] = add[w.f.n] || {})[w.clip.id] = w.made; }
+    if (Object.keys(add).length) await _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { add });
+    const nf = new Set(work.map((w) => w.f.n)).size;
+    _A.say(_fxName(k) + ' is on ' + nf + (nf === 1 ? ' fragment' : ' fragments'));
+  } catch (e) { _A.say(e.message, true); } finally { _busy = ''; _fxWait = null; }
+  await _A.load();
+  Views.altChanged();
+}
+function _fxOff(k) {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  _forAll('fx', () => {
+    const lane = mainVideo();
+    if (!lane) return;
+    const items = _mainOpen().filter((c) => (c.fx || []).some((e) => e.k === k)).map((c) => {
+      const left = (c.fx || []).filter((e) => e.k !== k);
+      return { trackId: lane.id, clipId: c.id, patch: { fx: left.length ? left : null } };
+    });
+    if (items.length) setClipsFields(items);
+  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { ns, remove: k }), _fxName(k) + ' is off them');
 }
 
 // ── (phase V76, (тн10) а) Main audio's pitch for all the ticked - the open one by the page, the rest by the server (the part changed).
@@ -447,14 +519,27 @@ function renderVideo(host) {
     list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(),
     note: _busy === 'pattern' ? 'Putting them on them…' : 'Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.',
   });
+  // (phase V84, (эф11)) Its effects - a tile on all of them.
+  box.appendChild(_el('div', 'mv3-c-sep'));
+  box.appendChild(_el('div', 'mv3-hlg-each', 'Effects'));
+  const counts = new Map();
+  for (const f of list) for (const k of _fxKindsOf(f)) counts.set(k, (counts.get(k) || 0) + 1);
+  fxGroupRows(box, {
+    n: list.length, kinds: [...counts], off: (k) => _fxOff(k), wait: _fxWait,
+    press: (k) => _fxAll(k),
+    note: _busy === 'fx' ? (_fxWait ? '' : 'Putting it on them…')
+      : 'A tile puts the effect on every ticked fragment: a moment at its start, one that goes on over the whole fragment. Its settings are each fragment\u2019s own - open one to change them.',
+  });
   _each(box);
   const ul = _el('ul', 'mv3-hlg-list');
   list.forEach((f, i) => {
     const mine = f.n === _A.openN() ? patternsOf() : ((f.lanes && f.lanes.patterns) || []);
     const li = _el('li', 'mv3-hlg-item');
     li.appendChild(_el('span', 'mv3-hlg-name', f.title));
+    const fxs = _fxKindsOf(f).map((k) => (EFFECTS[k] || {}).name).filter(Boolean);
     li.appendChild(_el('span', 'mv3-hlg-what', (FRAME_WORDS[states[i]] || states[i]).toLowerCase()
-      + ' · ' + (mine.length ? mine.map((p) => patternName(p.src)).join(', ') : 'no pattern')));
+      + ' · ' + (mine.length ? mine.map((p) => patternName(p.src)).join(', ') : 'no pattern')
+      + (fxs.length ? ' · ' + fxs.join(', ') : '')));
     li.title = 'Open «' + f.title + '» with its own main video';
     li.addEventListener('click', () => _openOwn(f, 'main'));
     ul.appendChild(li);

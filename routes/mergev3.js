@@ -154,7 +154,8 @@ router.get('/mv3/timeline', (req, res) => {
     if (t && !Array.isArray(t.tracks)) t = require('../lib/timeline-convert').convert({ key, ...t }, { root: require('../lib/config').ROOT_DIR }) || t;
     // The proxies this project's preview will ask for, started now - before the page has even
     // drawn its lanes - one ffmpeg at a time, so the first play is not the first transcode.
-    if (t) _warmProxies(t);
+    // (phase V84, (эф11)) `peek` - read for another fragment's effects, not opened: nothing warmed.
+    if (t && !req.query.peek) _warmProxies(t);
     res.json({
       // `found`: false when there is no timeline at all - the empty shape under LOCAL_KEY; the page opens the draft instead.
       success: true, version: _revOf(t), key, found: !!t,

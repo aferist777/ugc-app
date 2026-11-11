@@ -21,6 +21,8 @@
 //   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   (V66) the title on top on / off for several
 //   POST   /api/highlights/:id/volume            { ns, lane: speech | music, volume } -> { n }   (V66) a lane's volume on several
 //   POST   /api/highlights/:id/patterns          { ns, patterns } -> { n }   (V74) main video's patterns on several
+//   POST   /api/highlights/:id/fx                { add: { <n>: { <clip id>: [effects] } } } | { ns, remove: <kind> } -> { n }
+//                                                 (V84, (эф11)) clip effects on several fragments' main video
 //   POST   /api/highlights/:id/music             { ns, moods | none, open } -> { n, open, missed }   (V66) their music dealt again / off
 //   POST   /api/highlights/:id/fragments/:n/music  { how: another | <mood> | none, taken, open } -> { music, clips? }   (V66) one's music
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
@@ -260,6 +262,31 @@ router.post('/highlights/:id/patterns', (req, res) => {
     if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
     if (!Array.isArray(b.patterns)) return res.status(400).json({ success: false, error: 'which patterns?' });
     const out = CUT.setPatterns(frags.map((f) => f.key), b.patterns);
+    res.json({ success: true, n: out.keys.length });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V84, the owner's (эф11) «Hook для всех N») Clip effects on several made fragments' main video: `add` - the page's own effects
+// for each fragment's clips (js/merge-v3/fx-ui.js laneEffects, the faces found there), or `remove` - a kind taken off all of `ns`. The
+// OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want).
+router.post('/highlights/:id/fx', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    let out;
+    if (b.remove) {
+      const frags = _made(rec, b.ns);
+      if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+      out = CUT.fxRemove(frags.map((f) => f.key), String(b.remove));
+    } else {
+      const add = b.add && typeof b.add === 'object' ? b.add : {};
+      const frags = _made(rec, Object.keys(add));
+      if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+      out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])));
+    }
+    const FXB = require('../lib/fx-bake');
+    for (const key of out.keys) { try { FXB.want(MSTORE.one(key), key); } catch (e) { /* baked when Export asks */ } }
     res.json({ success: true, n: out.keys.length });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });

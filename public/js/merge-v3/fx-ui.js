@@ -15,13 +15,16 @@
      Start and End (seconds into the clip; fx/params.js placeEffect). The effect open is the one whose row was pressed (its frame shows on the
      timeline, focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span; the owner
      2026-11-10: one row).
+   - (the owner's (эф11), 2026-11-11) ON SEVERAL AT ONCE: several picked clips (fxManyRows) - a tile puts the effect on each as on it
+     alone, ✕ on a kind takes it off all of them, one undo step; the ticked highlights fragments (hl-group.js, laneEffects) - each
+     fragment's main video as one film: a moment at its start, one that goes on over the whole of it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf, textsOf } from '../fx/effects.js';
 import { normalizeFx, newEffect, placeEffect, spanOf, lengthRange, fileAt, PATH_MAX, TEXT_MAX, setPlacements } from '../fx/params.js';
 import { loadFamily } from '../fx/kit.js';
 import { FONTS as CAP_FONTS } from '../captions/fonts.js';
-import { setClipFields, selectClipById, fxLive } from './timeline-b.js';
+import { setClipFields, setClipsFields, selectClipById, fxLive } from './timeline-b.js';
 import { setLive } from './place-b.js';
 import * as C from './controls.js';
 
@@ -129,8 +132,8 @@ function _tile(key, name, about, on, onPress, tip) {
   return t;
 }
 
-/** The panel for clip `c` of lane `track` into `g`: the chips and the chosen group's tiles. */
-function _panelEl(g, track, c, onKey) {
+/** The panel into `g`: the chips and the chosen group's tiles; `press(key)` - what a tile does (`key` an effect or 'set:<id>'). */
+function _panelEl(g, onKey, press) {
   const st = _panelNow();
   const box = document.createElement('div');
   box.className = 'mv3-fx-panel';
@@ -160,17 +163,16 @@ function _panelEl(g, track, c, onKey) {
   };
   const grid = document.createElement('div');
   grid.className = 'mv3-fx-tiles';
-  const add = (k) => addTo(track, c, k);
   if (st.chip === 'sets') {
     for (const [id, set] of Object.entries(SETS)) {
-      grid.appendChild(_tile('set:' + id, set.name, set.about, onKey === 'set:' + id, () => { _picked = { clipId: c.id, key: 'set:' + id }; add('set:' + id); }, tip));
+      grid.appendChild(_tile('set:' + id, set.name, set.about, onKey === 'set:' + id, () => press('set:' + id), tip));
     }
   } else {
     for (const [k, d] of Object.entries(EFFECTS)) {
       if (d.group !== st.chip) continue;
       const lim = d.kind !== 'intro' ? '' : d.hold != null ? ' It stands for as long as you set it.'
         : ' Its length goes from ' + lengthRange(k).map((v) => v.toFixed(2)).join(' to ') + ' s.';
-      grid.appendChild(_tile(k, d.name, d.about + lim, onKey === k, () => { _picked = { clipId: c.id, key: k }; add(k); }, tip));
+      grid.appendChild(_tile(k, d.name, d.about + lim, onKey === k, () => press(k), tip));
     }
   }
   box.append(grid, tipEl);
@@ -265,29 +267,85 @@ async function _findPath(track, c, onFrac) {
 }
 
 // ── Adding one ──────────────────────────────────────────────────────────────
+const _r3 = (v) => Math.round(v * 1000) / 1000;
+let _idn = 0;
+const _newId = () => 'fx' + Date.now().toString(36) + (_idn++).toString(36) + Math.floor(Math.random() * 1296).toString(36);
+/**
+ * ONE new effect `k` on clip `clip`, `from` seconds into it (0 - its start): its length `len` when given (a set's), else its own,
+ * cut to what is left of the clip from there; a cover's date the month it is made in; a graphic's colours as chosen last for it.
+ */
+function _one(clip, k, from = 0, len = 0) {
+  const e = newEffect(clip, k, _newId());
+  if (!e) return null;
+  if (from > 0) e.t0 = _r3(fileAt(clip, (+clip.start || 0) + from));
+  if (len > 0) e.len = len;
+  else if (from > 0 && e.len > 0) {
+    const [lo, hi] = lengthRange(k);
+    e.len = _r3(Math.max(lo, Math.min(hi, e.len, (+clip.dur || 0) - from)));
+  }
+  if (k === 'magazine') {
+    const now = new Date();
+    e.txt = { date: now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
+  }
+  const mem = effectOf(k).colors ? _colorsMem()[k] : null;
+  if (mem && typeof mem === 'object') e.col = { ...mem };
+  return e;
+}
+/** What `k` (an effect, or 'set:<id>' - each its own afterwards) puts on the whole of clip `clip`: the new effects. */
+function _effectsFor(clip, k) {
+  const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
+  // (block 4d, the owner's (б4-9)) A set's effects each at its own moment, moved earlier on a clip too short to end with it.
+  return (set ? setPlacements(set, +clip.dur || 0) : [{ k, at: 0, len: 0 }]).map((it) => _one(clip, it.k, it.at, it.len)).filter(Boolean);
+}
+/**
+ * (the owner's (эф11), 2026-11-11) What `k` puts on a LANE of clips taken as one film - a highlights fragment's main video: from the
+ * lane's first moment, a set's effects at their own moments; a moment of its own length (or a set's with a length) on the clip
+ * under its moment, from there; one that goes on - on that clip from there and on every clip after it. -> [{ clip, made }]
+ */
+export function laneEffects(clips, k) {
+  const cs = (clips || []).filter((c) => c && c.src && !c.halfer).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  if (!cs.length) return [];
+  const s0 = +cs[0].start || 0;
+  const end = Math.max(...cs.map((c) => (+c.start || 0) + (+c.dur || 0)));
+  const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
+  const by = new Map();
+  const put = (clip, e) => { if (!e) return; const w = by.get(clip.id) || { clip, made: [] }; w.made.push(e); by.set(clip.id, w); };
+  for (const it of (set ? setPlacements(set, end - s0) : [{ k, at: 0, len: 0 }])) {
+    const d = effectOf(it.k);
+    if (!d) continue;
+    const m = s0 + it.at;
+    const i0 = cs.findIndex((c) => m < (+c.start || 0) + (+c.dur || 0) - 1e-3);
+    if (i0 < 0) continue;
+    const c0 = cs[i0];
+    put(c0, _one(c0, it.k, Math.max(0, m - (+c0.start || 0)), it.len));
+    if (!(it.len > 0) && d.kind !== 'intro') for (const c of cs.slice(i0 + 1)) put(c, _one(c, it.k));
+  }
+  return [...by.values()];
+}
+/**
+ * (эф11) The faces of the clips in `work` ([{ track, clip, made }]) whose new effects go by the face, found one clip after another
+ * (`onStep(i, n, frac)`) and written into those effects (`path`, `pk`) - none found, the reason kept for the inspector.
+ */
+export async function facesFor(work, onStep) {
+  const faced = work.filter((w) => w.made.some((e) => effectOf(e.k).face));
+  for (let i = 0; i < faced.length; i++) {
+    if (onStep) onStep(i, faced.length, 0);
+    const r = await _findPath(faced[i].track, faced[i].clip, (f) => { if (onStep) onStep(i, faced.length, f); });
+    for (const e of faced[i].made) {
+      if (!effectOf(e.k).face) continue;
+      if (r.path) { e.path = r.path; e.pk = r.pk; } else _why.set(e.id, r.why);
+    }
+  }
+  return faced.length;
+}
+
 /**
  * Effect `k` on the whole of clip `clip` of lane `track` - or a set's effects, `k` 'set:<id>' (each its own afterwards): written
  * (one undo step), the first opened, played once on the preview. An effect by the face waits for its face first (block 1c) - one
  * write still.
  */
 export async function addTo(track, clip, k) {
-  const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
-  const made = [];
-  // (block 4d, the owner's (б4-9)) A set's effects each at its own moment, moved earlier on a clip too short to end with it.
-  for (const it of (set ? setPlacements(set, +clip.dur || 0) : [{ k, at: 0, len: 0 }])) {
-    const e = newEffect(clip, it.k, 'fx' + Date.now().toString(36) + made.length + Math.floor(Math.random() * 1296).toString(36));
-    if (!e) continue;
-    if (it.at > 0) e.t0 = Math.round(fileAt(clip, (+clip.start || 0) + it.at) * 1000) / 1000;
-    if (it.len > 0) e.len = it.len;
-    // A cover's date - the month it is made in.
-    if (it.k === 'magazine') {
-      const now = new Date();
-      e.txt = { date: now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
-    }
-    const mem = effectOf(it.k).colors ? _colorsMem()[it.k] : null;
-    if (mem && typeof mem === 'object') e.col = { ...mem };
-    made.push(e);
-  }
+  const made = _effectsFor(clip, k);
   if (!made.length) return;
   if (made.some((e) => effectOf(e.k).face)) {
     if (_pending.has(clip.id)) return;
@@ -318,6 +376,117 @@ export async function addTo(track, clip, k) {
   const a = Math.min(...spans.map((x) => x.a)), b = Math.max(...spans.map((x) => x.b));
   import('./preview-b.js').then((P) => { if (P.playStretch) P.playStretch(Math.max(+clip.start || 0, a - 0.3), b + 0.3, a); })
     .catch(() => { /* no preview to play it on */ });
+}
+
+// ── (эф11) Several picked clips at once ────────────────────────────────────
+let _many = null;               // { k, i, n, frac } - the faces being found for an effect going on several clips
+/** Effect `k` (or a set) on EACH of the picked clips `items` ([{ track, clip }]) - as on each one alone; one write, one undo step. */
+export async function addToMany(items, k) {
+  if (_many) return;
+  const work = items.map(({ track, clip }) => ({ track, clip, made: _effectsFor(clip, k) })).filter((w) => w.made.length);
+  if (!work.length) return;
+  if (work.some((w) => w.made.some((e) => effectOf(e.k).face))) {
+    _many = { k: work[0].made[0].k, i: 0, n: 0, frac: 0 };
+    _say();
+    await facesFor(work, (i, n, frac) => { _many = { ..._many, i, n, frac }; _say(); });
+    _many = null;
+  }
+  // The clips as they are now (trimmed or deleted meanwhile).
+  const { timeline } = await import('./store.js');
+  const tl = timeline() || {};
+  const out = [];
+  for (const w of work) {
+    const lane = (tl.tracks || []).find((x) => x.id === w.track.id);
+    const now = lane && (lane.clips || []).find((x) => x.id === w.clip.id);
+    if (now) out.push({ trackId: lane.id, clipId: now.id, patch: { fx: normalizeFx([...(now.fx || []), ...w.made]) || [] } });
+  }
+  if (out.length) setClipsFields(out);
+  _say();
+}
+/** Every effect of kind `k` taken off the picked clips `items` - one undo step. */
+function _removeFromMany(items, k) {
+  const out = items.filter(({ clip }) => (clip.fx || []).some((e) => e.k === k)).map(({ track, clip }) => {
+    const left = (clip.fx || []).filter((e) => e.k !== k);
+    return { trackId: track.id, clipId: clip.id, patch: { fx: left.length ? left : null } };
+  });
+  if (out.length) setClipsFields(out);
+}
+/** A row of the effects some of several have: its name, on how many, and ✕ - `off()` takes it off all of them. */
+function _kindRow(g, k, said, off) {
+  const d = effectOf(k);
+  const row = document.createElement('div');
+  row.className = 'mv3-fx-row';
+  const name = document.createElement('span');
+  name.className = 'mv3-fx-name';
+  name.title = d.about;
+  const nm = document.createElement('span');
+  nm.textContent = d.name;
+  const when = document.createElement('small');
+  when.textContent = said;
+  name.append(nm, when);
+  row.appendChild(name);
+  if (off) {
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'mv3-fx-x u-btn is-s is-icon is-quiet u-x';
+    x.title = 'Take ' + d.name + ' off all of them';
+    x.setAttribute('aria-label', 'Remove the effect from all of them');
+    x.addEventListener('click', off);
+    row.appendChild(x);
+  }
+  g.appendChild(row);
+}
+/** The row of an effect waiting for faces: its name and "finding the faces… i of n". */
+function _waitRow(g, w) {
+  const d = effectOf(w.k);
+  const row = document.createElement('div');
+  row.className = 'mv3-fx-row is-wait';
+  const name = document.createElement('span');
+  name.className = 'mv3-fx-name';
+  const nm = document.createElement('span');
+  nm.textContent = d ? d.name : 'Effect';
+  const when = document.createElement('small');
+  when.textContent = 'finding the faces… ' + (w.n ? (w.i + 1) + ' of ' + w.n : '') + (w.frac > 0 ? ' · ' + Math.round(w.frac * 100) + ' %' : '');
+  name.append(nm, when);
+  row.appendChild(name);
+  g.appendChild(row);
+}
+/** The full-width "+ Effect" and, open, the panel - a tile's press handed to `press(k)`. */
+function _toggleAndPanel(g, press, title) {
+  const st = _panelNow();
+  const tog = C.button('+ Effect', () => { st.open = !st.open; _panelSave(); _say(); }, { title: st.open ? 'Hide the effects' : title });
+  tog.classList.add('mv3-fx-add');
+  if (st.open) tog.classList.add('is-on');
+  tog.setAttribute('aria-expanded', st.open ? 'true' : 'false');
+  g.appendChild(tog);
+  if (st.open) _panelEl(g, null, press);
+}
+/**
+ * (эф11) The group "Effects" of SEVERAL picked clips into `g` (inspector.js): the effects they have, each with how many of them and ✕
+ * (off all of them, one undo step); the panel - a tile puts the effect on each of them, as on each one alone. Settings stay each clip's.
+ */
+export function fxManyRows(g, items) {
+  const n = items.length;
+  const kinds = new Map();
+  for (const { clip } of items) {
+    for (const e of (clip.fx || [])) { if (effectOf(e.k)) { if (!kinds.has(e.k)) kinds.set(e.k, new Set()); kinds.get(e.k).add(clip.id); } }
+  }
+  if (!kinds.size && !_many) g.appendChild(C.hint('None of the ' + n + ' clips has an effect.'));
+  for (const [k, ids] of kinds) _kindRow(g, k, ids.size === n ? 'on all ' + n : 'on ' + ids.size + ' of ' + n, () => _removeFromMany(items, k));
+  if (_many) _waitRow(g, _many);
+  g.appendChild(C.hint('A tile puts the effect on each of the ' + n + ' clips, as on each one alone - a moment from its start, one that goes on to '
+    + 'its end; Ctrl+Z takes it off all of them. Its settings are each clip’s own: pick one clip to change them.'));
+  _toggleAndPanel(g, (k) => addToMany(items, k), 'Show the effects - a press on one puts it on each of the ' + n + ' clips');
+}
+/**
+ * (эф11) The same for a group that is not this page's lanes - the ticked fragments of highlights (hl-group.js): the effects they have
+ * (`kinds` [[k, how many]] of `n`, `off(k)`), the wait (`wait` { k, i, n, frac }), the toggle and the tiles - a press to `press(k)`.
+ */
+export function fxGroupRows(g, { n, kinds, off, wait, press, note }) {
+  for (const [k, m] of kinds || []) if (effectOf(k)) _kindRow(g, k, m === n ? 'on all ' + n : 'on ' + m + ' of ' + n, off ? () => off(k) : null);
+  if (wait) _waitRow(g, wait);
+  if (note) g.appendChild(C.hint(note));
+  _toggleAndPanel(g, press, 'Show the effects - a press on one puts it on each of the ' + n + ' fragments');
 }
 
 // ── The inspector's group ───────────────────────────────────────────────────
@@ -515,6 +684,8 @@ export function fxRows(g, track, c) {
       const set = SETS[String(_picked.key).slice(4)];
       if (set && open && set.items[0].k === open.k) onKey = _picked.key;
     }
-    _panelEl(g, track, c, onKey);
+    _panelEl(g, onKey, (k) => { _picked = { clipId: c.id, key: k }; addTo(track, c, k); });
   }
 }
+/** (эф11) Told when something of the effects' group changed (the faces found for several) - hl-group.js paints again. */
+export const onChange = onFocus;
