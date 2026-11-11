@@ -34,6 +34,8 @@
   --gold-soft:oklch(.78 .12 85 / .14); --gold-line:oklch(.78 .12 85 / .5);
   --warn:var(--gold);
   --main:var(--gold); --main-hover:var(--gold-hover); --on-main:var(--on-fill);
+  /* (phase V84, the owner's (эф22), 2026-11-11) one violet: a clip with effects outlined on the timeline */
+  --fx-ring:oklch(.66 .2 300);
   /* red only for delete and error, toned down; one green for done and on (б1-7) */
   --danger:oklch(.66 .15 25); --danger-soft:oklch(.66 .15 25 / .14); --danger-fill:oklch(.55 .17 25); --on-danger:#fff;
   --success:oklch(.74 .13 158); --success-soft:oklch(.74 .13 158 / .16);

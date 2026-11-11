@@ -17,6 +17,7 @@ import * as A from './actions.js';
 import * as V from './voices.js';
 import * as SC from './scenarios.js';
 import * as RE from './renders.js';
+import { canReveal, revealRender } from './render-view.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
@@ -733,6 +734,8 @@ function _actionsFor(it) {
   }
   // (phase V73, the owner's (rn-3) а) a render's Delete in its viewer takes two presses - "Really?" first (js/really.js)
   if (it.kind === 'renders') {
+    // (phase V84, the owner's (эф26)) Explorer on its folder, the file picked - the app's window only.
+    if (canReveal()) out.push({ id: 'reveal', label: 'Show in folder' });
     const armed = !!(_rArmed && _rArmed.id === it.id);
     out.push({ id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed });
     return out;
@@ -874,6 +877,7 @@ function _open(it, list, follow) {
       return rows;
     },
     onAction: async (id, item) => {
+      if (id === 'reveal') { await revealRender(item.media); return { actionsOnly: true }; }
       // (rn-3) а: a render's Delete here - the first press arms it, the second within a few seconds deletes (no question)
       if (id === 'del' && item.kind === 'renders' && !(_rArmed && _rArmed.id === item.id)) {
         if (_rArmed) clearTimeout(_rArmed.t);
@@ -1147,6 +1151,12 @@ function _card(it, extra) {
     // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
     const many = _pickedWith(it);
     if (many) { _manyMenu(many, e); return; }
+    // (phase V84, the owner's (эф26), 2026-11-11 «в library при клике на рендерах правой кнопкой мыши показывать show in folder»)
+    // A render: one row - Explorer on its folder, the file picked (the app's window only; none in a browser).
+    if (it.kind === 'renders') {
+      if (canReveal()) TS.menuAt(e.clientX, e.clientY, [['Show in folder', '', () => revealRender(it.media)]]);
+      return;
+    }
     // (phase V78, the owner's (лч1)-(лч3)) A picture or a video: the generation chats over the page with it (js/gen-menu.js).
     if (!AUDIO.has(it.kind)) {
       const rows = genRows(it, (which, o) => _openChat(which, o));

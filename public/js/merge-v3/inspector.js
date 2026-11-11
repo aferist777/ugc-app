@@ -288,6 +288,11 @@ function _pipRows(host, track, c) {
 // the whole frame again. Written into EVERY main clip picked at once ((пр9): cut silence leaves 20-30 pieces a minute), one
 // undo step. `items` - [{ track, clip }] of the main lane.
 const isMainVideo = (track) => !!(track && track.kind === 'video' && track.main);
+// (phase V84, the owner's (эф24), 2026-11-11 «параметры fit, tracking и offset не нужны в talkinghead и voiceocer режимах») A talking
+// head's and a voiceover's MAIN video has no framing rows - no Fit / Fill, Tracking, Offset, Align, Punch-ins, nor the lane's Fit,
+// Align and Reset lane (which would put the B-roll's Fill back to Fit): its clips are laid by the app (the lines' takes, the
+// B-roll). What is written stays; the crop, the PiP, opacity, colour and effects are there; the lanes above main keep them all.
+const noFraming = (track) => isMainVideo(track) && WK.isTalking();
 
 // (phase V65, the owner's (пз5), (пз6)) OPACITY - how much of a clip of any video lane is seen, 0-100 %; one slider for
 // every video clip picked ((пз5) a: several picked, one value for all). Held on the preview while it moves - nothing written
@@ -532,14 +537,19 @@ function _blankFilm(host, track, c, set, pair) {
     _bsep(fr);
     // (phase V51, point 1) The crop first: while it is on, the piece is the picture - no Fit / Fill, Framing or Keep.
     const cropped = cropRows(fr, [{ track, clip: c }]);
-    _bsep(fr);
     // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
-    // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
-    if (main) { if (!cropped) { _frameRows(fr, c, set); if (c.pip) _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
-    else if (cropped) _cutRows(fr, track, c);
-    else if (_isPlaced(c)) _pipRows(fr, track, c);
-    else _frameRows(fr, c, set);
+    // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below. ((эф24) Not in a talking head
+    // or a voiceover: the PiP alone.)
+    if (noFraming(track)) {
+      if (c.pip) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
+    } else {
+      _bsep(fr);
+      if (main) { if (!cropped) { _frameRows(fr, c, set); if (c.pip) _bsep(fr); } _pipSection(fr, [{ track, clip: c }]); }
+      else if (cropped) _cutRows(fr, track, c);
+      else if (_isPlaced(c)) _pipRows(fr, track, c);
+      else _frameRows(fr, c, set);
+    }
   }
   _colorGroup(host, [{ track, clip: c }]);
   if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
@@ -596,7 +606,7 @@ function _blankStill(host, track, c, set) {
     } else if (placed) {
       _bsep(fr);
       _pipRows(fr, track, c);
-    } else {
+    } else if (!noFraming(track)) {
       _bsep(fr);
       fr.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
       if (c.fit === 'fill') fr.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
@@ -806,21 +816,24 @@ function _blankVideoTrack(host, track) {
     host.appendChild(emptyEl('Nothing on this lane yet. A setting for the whole lane is written '
       + 'into the clips on it, so there is nothing here to write it into.', { line: true }));
   } else {
-    // (phase V73 block 5, 5b, (б5-8) а) The lane's rows - its one group.
-    const g = _group(host, 'lane', 'Frame');
-    g.appendChild(C.row('Fit', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
-      (v) => stampB(track.id, { fit: v }))));
-    if (_commonOf(track, 'fit') === 'fill') {
-      g.appendChild(C.row('Align', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
-        (v) => stampB(track.id, { cropAlign: v }))));
+    // (phase V73 block 5, 5b, (б5-8) а) The lane's rows - its one group. ((эф24) None on a talking head's or a voiceover's main
+    // video; its colour below stays.)
+    if (!noFraming(track)) {
+      const g = _group(host, 'lane', 'Frame');
+      g.appendChild(C.row('Fit', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
+        (v) => stampB(track.id, { fit: v }))));
+      if (_commonOf(track, 'fit') === 'fill') {
+        g.appendChild(C.row('Align', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
+          (v) => stampB(track.id, { cropAlign: v }))));
+      }
+      // THE WARNING IS GONE FROM THE PANEL, and the behaviour is not: choosing one of these
+      // still writes it into every clip on the lane, over whatever each had. It lives in the
+      // tooltip of the control that does it, and the undo arrow is still the way back.
+      g.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
+        title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
+             + 'placement and levels are left alone.',
+      })));
     }
-    // THE WARNING IS GONE FROM THE PANEL, and the behaviour is not: choosing one of these
-    // still writes it into every clip on the lane, over whatever each had. It lives in the
-    // tooltip of the control that does it, and the undo arrow is still the way back.
-    g.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
-      title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
-           + 'placement and levels are left alone.',
-    })));
     // (phase V75, the owner's (\u043a\u043f5) \u0430) The lane's colour: written into every clip on it, as its Fit is.
     _colorGroup(host, (track.clips || []).filter(c => c && c.src).map(clip => ({ track, clip })));
   }

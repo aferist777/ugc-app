@@ -8,7 +8,9 @@
               lib/relocate.js; " (2)" when the name is taken)
      Delete   by two presses (js/really.js's words and time): the file, its poster, its .srt and its Queue entry
               (DELETE /api/library/item/renders/:id)
-   o.onChanged() after either - the page reads what it shows again (Queue, a highlights card).
+     Show in folder  (phase V84, the owner's (эф26), 2026-11-11) Explorer on the render's folder with the file picked - the
+              shell's reveal (desktop/preload.js), so only in the app's window: in a browser the button is not there.
+   o.onChanged() after Rename or Delete - the page reads what it shows again (Queue, a highlights card).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, repaint } from './viewer.js';
@@ -23,6 +25,20 @@ const _json = async (url, opts) => {
   if (!r || !r.ok || !d || d.success === false) throw new Error((d && d.error) || 'the app did not answer');
   return d;
 };
+
+// (phase V84, (эф26)) Explorer on a render - the app's window only (the shell's reveal); none in a browser.
+const _reveal = () => { const w = window.ugcWindow; return w && typeof w.reveal === 'function' ? w.reveal : null; };
+/** Whether "Show in folder" can be offered here - the app's window. */
+export const canReveal = () => !!_reveal();
+/** Explorer on the render at `url` with the file picked; an error popup when it is not in the library any more. */
+export async function revealRender(url) {
+  const reveal = _reveal();
+  if (!reveal) return false;
+  let ok = false;
+  try { ok = await reveal(_plain(url)); } catch (e) { ok = false; }
+  if (!ok) showError('That render is not in the library any more');
+  return ok;
+}
 
 /** The render at `url` (/media/renders/...) in the viewer. Resolves false when it is not on the shelf any more. */
 export async function openRender(url, o = {}) {
@@ -40,9 +56,11 @@ export async function openRender(url, o = {}) {
   openViewer([it], 0, {
     actionsFor: () => [
       { id: 'rename', label: 'Rename' },
+      ...(canReveal() ? [{ id: 'reveal', label: 'Show in folder', title: 'Explorer on the folder of this render, the file picked' }] : []),
       { id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed: !!armed, title: 'Delete this render - its file, its .srt and its entry in Queue' },
     ],
     onAction: async (id, item) => {
+      if (id === 'reveal') { letGo(); await revealRender(item.media); return { actionsOnly: true }; }
       if (id === 'rename') {
         letGo();
         const btn = [...document.querySelectorAll('.lib-view-acts button')].find(b => b.textContent === 'Rename') || null;

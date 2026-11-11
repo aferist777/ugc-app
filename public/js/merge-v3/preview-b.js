@@ -27,7 +27,7 @@ import * as CapPlace from './cap-place.js';
 import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
-import { setPlayhead, setFormat, liveVolumeOf } from './timeline-b.js';
+import { setPlayhead, setFormat, liveVolumeOf, selectedClips } from './timeline-b.js';
 // (phase V33.2) A filled clip's window over time - the one answer the render reads too.
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
@@ -1664,8 +1664,11 @@ export function borrow(on) {
   if (_film) _film.box = null;
   // The stage stops being a 9:16 window and becomes the whole panel: nothing here is a frame
   // of the film, and a reference being judged should use the room there is.
+  // (the owner's (эф21), 2026-11-11: a voiceover opened had its picture past the TikTok / Reels / Shorts screens until Fit / Fill
+  // was switched) Given BACK, the stage is the film's frame with its margin again at once (_resize): _fit left the panel's size
+  // with no margin, and only the next edit of the timeline put the frame back.
   CW = 0; CH = 0;
-  _fit();
+  _resize();
   if (_on) _paint();
 }
 
@@ -2380,6 +2383,23 @@ export function pause() {
 }
 
 export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
+
+// (phase V84, the owner's (эф23), 2026-11-11 «пока выделен фрагмент, при нажатии пробела проигрывается в превью только выделенный
+// фрагмент») SPACE WITH CLIPS PICKED plays only their stretch - from the first one's start to the last one's end, every lane on it
+// as the film has it - and stops at its end; the playhead then stands where it started, so Space plays the same piece again. It
+// starts at the playhead when the playhead is inside the stretch, else at its start. Playing, Space pauses. Nothing picked - the
+// whole timeline, as Play.
+function _spaceToggle() {
+  if (_borrowed) return;
+  if (_playing) { pause(); return; }
+  const picked = selectedClips().filter(x => x.clip && +x.clip.dur > 0);
+  if (!picked.length) { play(); return; }
+  const a = Math.min(...picked.map(x => +x.clip.start || 0));
+  const b = Math.max(...picked.map(x => (+x.clip.start || 0) + (+x.clip.dur || 0)));
+  if (!(b > a)) { play(); return; }
+  const from = _at >= a - 1e-4 && _at < b - 0.05 ? _at : a;
+  playStretch(from, b, from);
+}
 /** Playing now - the timeline holds it still while its playhead is dragged (phase V41). */
 export const isPlaying = () => _playing;
 
@@ -2530,7 +2550,7 @@ function _wireTransport() {
     // and the preview played).
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || e.target.isContentEditable) return;
     e.preventDefault();
-    toggle();
+    _spaceToggle();
   });
 }
 
