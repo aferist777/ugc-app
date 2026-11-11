@@ -175,7 +175,7 @@ export async function openScenario(summary, hooks = {}) {
       product.value = rec.product || '';
       const r0 = (rec.roles || [])[0] || {};
       role.value = r0.name || '';
-      gender.value = ['male', 'Female'].includes(String(r0.gender || '')) ? r0.gender : '';
+      gender.value = ['male', 'female'].includes(String(r0.gender || '')) ? r0.gender : '';
       lines.value = (rec.lines || []).map(l => l.text || '').join('\n');
       archived = !!rec.archived;
       dressUse();

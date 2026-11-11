@@ -45,7 +45,7 @@ const _hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLower
 /** A pattern's settings (`c.pattern` of an entry of main video's `patterns`), every field filled in. */
 export function of(c) {
   const p = (c && c.pattern) || {};
-  const move = ['rotate', 'Drift'].includes(p.move) ? p.move : 'none';
+  const move = ['rotate', 'drift'].includes(p.move) ? p.move : 'none';
   const lim = move === 'drift' ? DRIFT : ROTATE;
   return {
     scale: Math.round(_num(p.scale, SCALE.min, SCALE.max, 1) * 100) / 100,

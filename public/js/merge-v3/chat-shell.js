@@ -158,7 +158,8 @@ export function refuseHome(anchor, ev) {
   return true;
 }
 export const json = (url, opts) => fetch(url, opts).then(r => r.json()).catch(() => null);
-export const stored = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || '') || fb; } catch (e) { return fb; } };
+// `??`, not `||`: a stored false (the writer switched off) is an answer, not a missing value.
+export const stored = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? fb; } catch (e) { return fb; } };
 export const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
 const _gensOf = (m) => ((m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []));
 
