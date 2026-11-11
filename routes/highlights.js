@@ -7,7 +7,7 @@
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
 //   GET    /api/highlights/offer            -> { lengths, counts, kinds }   (V63) what the popup offers, with no project
 //   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   (V63) made AND started by the press
-//   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio=&count=&fx= -> { price }   what "find moments" is expected to cost
+//   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio=&count= -> { price }   what "find moments" is expected to cost
 //   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
@@ -119,8 +119,7 @@ router.post('/highlights/start', async (req, res) => {
 router.get('/highlights/price', (req, res) => {
   try { res.json({ success: true, price: JOB.price({ seconds: +req.query.seconds || 0, sourceId: String(req.query.source || ''),
     kind: String(req.query.kind || ''), length: String(req.query.length || ''),
-    audio: req.query.audio != null && req.query.audio !== '' ? Number(req.query.audio) : null, count: Number(req.query.count) || 0,
-    fx: String(req.query.fx || '') }) }); }
+    audio: req.query.audio != null && req.query.audio !== '' ? Number(req.query.audio) : null, count: Number(req.query.count) || 0 }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -269,8 +268,7 @@ router.post('/highlights/:id/patterns', (req, res) => {
 
 // (phase V84, the owner's (эф11) «Hook для всех N») Clip effects on several made fragments' main video: `add` - the page's own effects
 // for each fragment's clips (js/merge-v3/fx-ui.js laneEffects, the faces found there), or `remove` - a kind taken off all of `ns`. The
-// OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want). (phase V90) `again` - the agent's
-// "Auto effects" for all: its earlier effects on those fragments' main video taken off first.
+// OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want).
 router.post('/highlights/:id/fx', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
@@ -285,7 +283,7 @@ router.post('/highlights/:id/fx', (req, res) => {
       const add = b.add && typeof b.add === 'object' ? b.add : {};
       const frags = _made(rec, Object.keys(add));
       if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
-      out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])), { again: !!b.again });
+      out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])));
     }
     const FXB = require('../lib/fx-bake');
     for (const key of out.keys) { try { FXB.want(MSTORE.one(key), key); } catch (e) { /* baked when Export asks */ } }

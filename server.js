@@ -171,7 +171,6 @@ app.use('/api', require('./routes/sources'));
 app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts (phase V33.1)
 app.use('/api', require('./routes/faces'));   // the faces of a film, counted by the app's hidden window (phase V33.2)
 app.use('/api', require('./routes/fx-bake'));   // the effects the page alone draws, baked by the app's hidden window (phase V84)
-app.use('/api', require('./routes/fx-auto'));   // a film's clip effects chosen and placed by the agent (phase V90)
 // The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
 app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.

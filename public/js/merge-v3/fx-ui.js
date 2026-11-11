@@ -18,13 +18,6 @@
    - (the owner's (эф11), 2026-11-11) ON SEVERAL AT ONCE: several picked clips (fxManyRows) - a tile puts the effect on each as on it
      alone, ✕ on a kind takes it off all of them, one undo step; the ticked highlights fragments (hl-group.js, laneEffects) - each
      fragment's main video as one film: a moment at its start, one that goes on over the whole of it.
-   - (phase V90, the owner 2026-11-11, (аэ1)-(аэ15)) "✦ AUTO EFFECTS": a row over "+ Effect" in the group of one clip, of several picked
-     and of the ticked highlights fragments - the press and how many (auto · 1-8, kept on this computer). The server asks the agent
-     (POST /api/fx/auto - lib/fx-auto.js, the rule fx/auto.js) with the timeline as it is here; the answer is laid HERE, one undo step,
-     the faces of the effects by the face found as when added by hand (facesFor), a graphic's colours the ones chosen last for it
-     ((аэ12)). The agent's effects are marked (`ai`, "✦ agent" in the row): "✦ Again" puts its new answer in their place, the person's
-     stay ((аэ7)); one the person changes - Start / End, words, colours, settings - is theirs from then on ((аэ15)). While it thinks:
-     "the agent is choosing… N s" and ✕; no Alerts row.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { EFFECTS, GROUPS, SETS, effectOf, colorsOf, optsOf, textsOf } from '../fx/effects.js';
@@ -34,8 +27,6 @@ import { FONTS as CAP_FONTS } from '../captions/fonts.js';
 import { setClipFields, setClipsFields, selectClipById, fxLive } from './timeline-b.js';
 import { setLive } from './place-b.js';
 import * as C from './controls.js';
-import { COUNTS, countOf, isAgent } from '../fx/auto.js';
-import { showError } from '../notice.js';
 
 // (block 4b, the owner's (б4-12)) A graphic effect's colours as chosen last for it - a new one takes them (this computer only).
 const COLORS_KEY = 'mv3_fx_colors_v1';
@@ -306,148 +297,6 @@ function _effectsFor(clip, k) {
   // (block 4d, the owner's (б4-9)) A set's effects each at its own moment, moved earlier on a clip too short to end with it.
   return (set ? setPlacements(set, +clip.dur || 0) : [{ k, at: 0, len: 0 }]).map((it) => _one(clip, it.k, it.at, it.len)).filter(Boolean);
 }
-// ── (phase V90) The agent's effects ────────────────────────────────────────
-const AUTO_KEY = 'mv3_fx_auto_v1';
-/** How many the "Auto effects" row asks for - as chosen last on this computer ('auto' or 1-8). */
-export function autoCount() {
-  try { return countOf(JSON.parse(localStorage.getItem(AUTO_KEY) || '"auto"')); } catch (e) { return 'auto'; }
-}
-function _autoKeep(v) { try { localStorage.setItem(AUTO_KEY, JSON.stringify(countOf(v))); } catch (e) { /* a private window */ } }
-/** An effect of the agent's answer as the page lays it: an id, a graphic's colours chosen last, the cover's date (as `_one`). */
-export function fromAgent(e) {
-  const one = { ...e, id: _newId() };
-  const mem = effectOf(e.k) && effectOf(e.k).colors ? _colorsMem()[e.k] : null;
-  if (mem && typeof mem === 'object') one.col = { ...mem };
-  if (e.k === 'magazine') {
-    const now = new Date();
-    one.txt = { ...(one.txt || {}), date: now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
-  }
-  return one;
-}
-/** The agent asked for the clips `ids` of timeline `tl` (the server's POST /api/fx/auto) - its kept answer, or it throws in words. */
-export async function askAgent(tl, ids, count, signal) {
-  const r = await fetch('/api/fx/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
-    body: JSON.stringify({ timeline: tl, targets: ids, count }) });
-  let j = null;
-  try { j = await r.json(); } catch (e) { j = null; }
-  if (!r.ok || !j || !j.success) throw new Error((j && j.error) || ('the server answered ' + r.status));
-  return j;
-}
-/** An effect the person changed is theirs: the agent's mark comes off ((аэ15)). */
-const _mine = (e) => { if (!e || !e.ai) return e; const { ai: _ai, ...rest } = e; return rest; };
-
-let _auto = null;          // { key, t0, ac, i, n, stage } while the agent is asked - one at a time on the page
-let _autoSaid = null;      // { key, text, warn } - what the last one came to, under its row
-let _autoTick = 0;
-function _autoState() {
-  if (!_auto) return '';
-  const s = Math.round((Date.now() - _auto.t0) / 1000);
-  return (_auto.stage || 'the agent is choosing…') + (_auto.n > 1 ? ' ' + Math.min(_auto.n, _auto.i + 1) + ' of ' + _auto.n : '') + ' · ' + s + ' s';
-}
-const _paintState = () => { for (const el of document.querySelectorAll('.mv3-fx-auto-state.is-run')) el.textContent = _autoState(); };
-/**
- * One "Auto effects" run under the key `key` (what its row is for): `job(signal, step)` asks and lays, `step(i, n, stage)` says where it
- * is, and answers { placed, count, noWords, many }. Its row shows the time and ✕ meanwhile, then what it came to.
- */
-export async function runAuto(key, job) {
-  if (_auto) return;
-  const ac = new AbortController();
-  _auto = { key, t0: Date.now(), ac, i: 0, n: 0, stage: '' };
-  _autoSaid = null;
-  clearInterval(_autoTick);
-  _autoTick = setInterval(_paintState, 1000);
-  _say();
-  try {
-    const r = await job(ac.signal, (i, n, stage) => { if (_auto) { _auto.i = i; _auto.n = n; if (stage != null) _auto.stage = stage; _paintState(); } });
-    const placed = +(r && r.placed) || 0;
-    const want = r && r.count !== 'auto' ? +r.count : 0;
-    _autoSaid = { key, warn: !placed, text: !placed ? 'The agent placed none - press again, or choose another number.'
-      : '✦ ' + placed + (placed === 1 ? ' effect' : ' effects') + ' by the agent' + (want && placed < want && !(r && r.many) ? ' (' + placed + ' of ' + want + ')' : '')
-        + (r && r.noWords ? ' · no words heard - placed without tying them to phrases' : '') + '. Ctrl+Z takes them off.' };
-  } catch (e) {
-    if (ac.signal.aborted || (e && e.name === 'AbortError')) _autoSaid = { key, text: 'Stopped.' };
-    else {
-      _autoSaid = { key, warn: true, text: 'The agent did not answer.' };
-      showError('Auto effects: ' + ((e && e.message) || e));
-    }
-  } finally {
-    clearInterval(_autoTick);
-    _auto = null;
-    _say();
-  }
-}
-/**
- * The row "✦ Auto effects" into `g`: the press (`run(count)`), how many, and while it runs the time and ✕. `again` - the agent's
- * effects are there: "✦ Again" replaces them. `what` - the press's title.
- */
-export function autoRow(g, { key, again, run, what }) {
-  const box = document.createElement('div');
-  box.className = 'mv3-fx-auto';
-  const line = document.createElement('div');
-  line.className = 'mv3-fx-auto-line';
-  const mine = !!(_auto && _auto.key === key);
-  const go = C.button(again ? '✦ Again' : '✦ Auto effects', () => { if (!_auto) run(autoCount()); },
-    { title: (again ? 'Ask the agent again: its new effects take the place of its last ones - yours stay. ' : '') + what });
-  go.classList.add('mv3-fx-auto-go');
-  go.disabled = !!_auto;
-  const sel = C.select(COUNTS.map((v) => [String(v), String(v)]), String(autoCount()), (v) => _autoKeep(v === 'auto' ? 'auto' : +v));
-  sel.classList.add('mv3-fx-auto-n');
-  sel.title = 'How many effects: auto - as many as the agent finds right (a hook at the start, about one on a key line, not more often '
-    + 'than once in 4-6 s); a number - that many';
-  sel.disabled = !!_auto;
-  line.append(go, sel);
-  if (mine) {
-    const x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'mv3-fx-x u-btn is-s is-icon is-quiet u-x';
-    x.title = 'Stop asking the agent';
-    x.setAttribute('aria-label', 'Stop');
-    x.addEventListener('click', () => { if (_auto) _auto.ac.abort(); });
-    line.appendChild(x);
-  }
-  box.appendChild(line);
-  if (mine || (_autoSaid && _autoSaid.key === key)) {
-    const st = document.createElement('small');
-    st.className = 'mv3-fx-auto-state' + (mine ? ' is-run' : '') + (!mine && _autoSaid.warn ? ' is-warn' : '');
-    st.textContent = mine ? _autoState() : _autoSaid.text;
-    box.appendChild(st);
-  }
-  g.appendChild(box);
-}
-const _scopeOf = (ids) => 'clips:' + ids.map(String).sort().join(',');
-/**
- * (аэ1) The agent's effects on the picked clips `items` ([{ track, clip }]) - it sees the whole timeline (аэ2), the number is for all
- * of them together (аэ11); its answer laid in one undo step, its earlier effects on them taken off when it placed any (аэ7).
- */
-export function autoForClips(items) {
-  const ids = items.map((x) => String(x.clip.id));
-  return runAuto(_scopeOf(ids), async (signal, step) => {
-    const { timeline } = await import('./store.js');
-    const r = await askAgent(timeline(), ids, autoCount(), signal);
-    if (!r.placed) return r;
-    const work = items.map(({ track, clip }) => ({ track, clip, made: (r.byClip[clip.id] || []).map(fromAgent) })).filter((w) => w.made.length);
-    if (work.some((w) => w.made.some((e) => effectOf(e.k).face))) await facesFor(work, (i, n) => step(i, n, 'finding the faces…'));
-    if (signal.aborted) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
-    // The clips as they are now (trimmed or deleted meanwhile): the agent's last ones off, the new ones on - one write.
-    const tl = timeline() || {};
-    const out = [];
-    for (const { track, clip } of items) {
-      const lane = (tl.tracks || []).find((x) => x.id === track.id);
-      const now = lane && (lane.clips || []).find((x) => x.id === clip.id);
-      if (!now) continue;
-      const w = work.find((x) => x.clip.id === clip.id);
-      const had = (now.fx || []).filter((e) => !isAgent(e));
-      if (!w && had.length === (now.fx || []).length) continue;
-      const next = normalizeFx([...had, ...(w ? w.made : [])]);
-      out.push({ trackId: lane.id, clipId: now.id, patch: { fx: next && next.length ? next : null } });
-    }
-    if (out.length) setClipsFields(out);
-    if (items.length === 1 && work[0]) focus(work[0].clip.id, work[0].made[0].id);
-    return r;
-  });
-}
-const _hasAgent = (items) => items.some(({ clip }) => (clip.fx || []).some(isAgent));
-
 /**
  * (the owner's (эф11), 2026-11-11) What `k` puts on a LANE of clips taken as one film - a highlights fragment's main video: from the
  * lane's first moment, a set's effects at their own moments; a moment of its own length (or a set's with a length) on the clip
@@ -627,20 +476,16 @@ export function fxManyRows(g, items) {
   if (_many) _waitRow(g, _many);
   g.appendChild(C.hint('A tile puts the effect on each of the ' + n + ' clips, as on each one alone - a moment from its start, one that goes on to '
     + 'its end; Ctrl+Z takes it off all of them. Its settings are each clip’s own: pick one clip to change them.'));
-  autoRow(g, { key: _scopeOf(items.map((x) => x.clip.id)), again: _hasAgent(items), run: () => autoForClips(items),
-    what: 'The agent reads the whole film and puts effects on these ' + n + ' clips - the number is for all of them together.' });
   _toggleAndPanel(g, (k) => addToMany(items, k), 'Show the effects - a press on one puts it on each of the ' + n + ' clips');
 }
 /**
  * (эф11) The same for a group that is not this page's lanes - the ticked fragments of highlights (hl-group.js): the effects they have
  * (`kinds` [[k, how many]] of `n`, `off(k)`), the wait (`wait` { k, i, n, frac }), the toggle and the tiles - a press to `press(k)`.
  */
-export function fxGroupRows(g, { n, kinds, off, wait, press, note, auto }) {
+export function fxGroupRows(g, { n, kinds, off, wait, press, note }) {
   for (const [k, m] of kinds || []) if (effectOf(k)) _kindRow(g, k, m === n ? 'on all ' + n : 'on ' + m + ' of ' + n, off ? () => off(k) : null);
   if (wait) _waitRow(g, wait);
   if (note) g.appendChild(C.hint(note));
-  // (phase V90) The agent's effects for each of them - `auto` { key, again, run }.
-  if (auto) autoRow(g, { ...auto, what: 'The agent reads each fragment and puts effects on its main video - the number is for each fragment.' });
   _toggleAndPanel(g, press, 'Show the effects - a press on one puts it on each of the ' + n + ' fragments');
 }
 
@@ -671,8 +516,7 @@ export function fxRows(g, track, c) {
     const nm = document.createElement('span');
     nm.textContent = d.name;
     const when = document.createElement('small');
-    when.textContent = (isAgent(e) ? '✦ agent · ' : '') + (outside ? 'outside the clip' : (_sec(a) + ' – ' + (sp.whole ? 'end' : _sec(b))));
-    if (isAgent(e)) name.title += ' - laid by the agent; change it and it is yours ("Again" leaves it).';
+    when.textContent = outside ? 'outside the clip' : (_sec(a) + ' – ' + (sp.whole ? 'end' : _sec(b)));
     name.append(nm, when);
     name.addEventListener('click', () => { if (!outside) focus(c.id, open ? null : e.id); });
     const x = document.createElement('button');
@@ -705,7 +549,7 @@ export function fxRows(g, track, c) {
       if (t >= dur - STEP) t = dur;
       return [s, t];
     };
-    const moveTo = (na, nb) => write(list.map((y) => (y.id === e.id ? _mine(placeEffect(c, e, na, nb)) : y)));
+    const moveTo = (na, nb) => write(list.map((y) => (y.id === e.id ? placeEffect(c, e, na, nb) : y)));
     // (the owner 2026-11-10) Its name over it, the strip's whole width, the clip's own length under it; the timeline's frame follows
     // the thumbs while they are held.
     g.appendChild(C.span({
@@ -722,8 +566,7 @@ export function fxRows(g, track, c) {
     // (block 4b, the owner's (б4-12), (б4-13)) Its colours and its settings: a change is one undo step; a slider held shows on the
     // preview at once (place-b.js setLive - the clip drawn with the effect as it would be), written on release.
     const withIt = (next) => list.map((y) => (y.id === e.id ? next : y));
-    // (phase V90, (аэ15)) a change by the person makes an effect of the agent's theirs.
-    const put = (next) => write(normalizeFx(withIt(_mine(next))) || []);
+    const put = (next) => write(normalizeFx(withIt(next)) || []);
     const live = (next) => setLive(new Map([[c.id, { fx: normalizeFx(withIt(next)) }]]));
     // (block 4c, the owner's (б4-2), (б4-13) а) A card's words, a field a line - the preview follows the typing, a field left (or
     // Enter) writes it, one undo step; and its font, one of the captions' (Inter by default).
@@ -826,9 +669,6 @@ export function fxRows(g, track, c) {
     row.appendChild(name);
     g.appendChild(row);
   }
-  // (phase V90) "✦ Auto effects" - the agent reads the whole film and puts effects on this clip.
-  autoRow(g, { key: _scopeOf([c.id]), again: list.some(isAgent), run: () => autoForClips([{ track, clip: c }]),
-    what: 'The agent reads the whole film - its words, its length, where the face is - and puts effects on this clip at their moments. Ctrl+Z takes them off.' });
   // The full-width "+ Effect" opens and shuts the panel of tiles; the panel stays until it is pressed again.
   const st = _panelNow();
   const tog = C.button('+ Effect', () => { st.open = !st.open; _panelSave(); _say(); },

@@ -96,8 +96,6 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     kind: '', length: '', count: 5, moods: [],
     // (phase V49) The styles chosen - one, or several with Shift (пр25) - and the animations (пр26); `style` the first of them.
     style: '', styles: [], anims: [], fonts: [], title: false, capTab: 'presets', price: null, busy: false, said: '', err: false,
-    // (phase V90, the owner's (аэ1), (аэ13)) The agent's clip effects on each fragment at its cut: 'none', 'auto' or how many.
-    fx: KIND.FX_STD,
     // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
     tracks: [], audio: null, tracksFor: '',
     // (V63) 1 - the video and the parts, 2 - the music and the captions.
@@ -244,13 +242,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   cntRow.appendChild(cntChips);
   // (V69 P12) Each kind its own count buttons (30 for most, 50 for stream) - the server's.
   const countsOf = (k) => (kinds[k] && Array.isArray(kinds[k].counts) && kinds[k].counts.length ? kinds[k].counts : counts);
-  // (phase V90, (аэ13)) The agent's effects: none · auto · 1-5 - on each fragment's main video when it is cut.
-  const fxRow = _el('div', 'mv3-hlp-orow');
-  fxRow.appendChild(_el('span', 'mv3-hlp-olab', 'Effects'));
-  const fxChips = _el('div', 'mv3-hlp-chips');
-  fxRow.appendChild(fxChips);
   const fragNote = _el('p', 'mv3-x-note', '');
-  opts.append(lenRow, cntRow, fxRow, fragNote);
+  opts.append(lenRow, cntRow, fragNote);
   P.appendChild(opts);
 
   // ── (V68 P3) The background music - the moods of Music → highlights ──
@@ -365,7 +358,6 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     picker.openFirst();
     // (V69 P12) The title on top, auto's "by the video" in the moods, the kind's recommended moods, animations and font groups.
     st.title = s.title === true || (st.kind === 'auto' && s.title === BY_VIDEO) ? s.title : false;
-    st.fx = KIND.okFx(s.fx) ? s.fx : KIND.FX_STD;
     music.byVideo(st.kind === 'auto');
     if (st.kind === 'auto') { music.set(s.moods || []); st.moods = music.get(); }
     const rec = KIND.recommendedOf(st.kind);
@@ -382,7 +374,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
   function keep() {
     if (!st.kind) return;
-    KIND.keep(st.kind, { length: st.length, count: st.count, moods: st.moods, styles: st.styles, anims: st.anims, fonts: st.fonts, title: st.title, fx: st.fx });
+    KIND.keep(st.kind, { length: st.length, count: st.count, moods: st.moods, styles: st.styles, anims: st.anims, fonts: st.fonts, title: st.title });
   }
 
   function takeFile(f) {
@@ -453,7 +445,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
     // (V43) fragmentation's agent writes every part of the video - its price is the kind's and the length's.
     const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind || 'auto') + '&length=' + encodeURIComponent(st.length)
-      + (isWhole(st.kind) ? '' : '&count=' + st.count) + (st.audio != null ? '&audio=' + st.audio : '') + '&fx=' + encodeURIComponent(String(st.fx));
+      + (isWhole(st.kind) ? '' : '&count=' + st.count) + (st.audio != null ? '&audio=' + st.audio : '');
     try {
       const d = await _api('/api/highlights/price' + q);
       if (seq !== priceSeq || !_win) return;
@@ -599,17 +591,6 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       cntChips.appendChild(b);
     }
     cntRow.hidden = whole;
-    // (phase V90) The agent's effects on each fragment.
-    fxChips.textContent = '';
-    for (const v of ['none', 'auto', 1, 2, 3, 4, 5]) {
-      const b = _el('button', 'mv3-hlp-chip u-chip' + (st.fx === v ? ' is-on' : ''), String(v));
-      b.type = 'button';
-      b.title = v === 'none' ? 'No effects - add them later in the inspector'
-        : v === 'auto' ? 'The agent reads each fragment and puts on its main video as many clip effects as it finds right - a hook at the start, about one on a key line'
-          : 'The agent puts ' + v + (v === 1 ? ' clip effect' : ' clip effects') + ' on each fragment\'s main video, at its moments';
-      b.addEventListener('click', () => { st.fx = v; keep(); paint(); price(); });
-      fxChips.appendChild(b);
-    }
     // (V69 P12, (хп90)) The title on top.
     titleChips.textContent = '';
     for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, 'by the video', 'As the kind auto finds has it']] : []).concat([
@@ -647,10 +628,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
         hear.textContent = 'Words heard by Groq - ' + (p.hear.cost != null ? _usd(p.hear.cost) : '$' + p.hear.perHour.toFixed(2) + ' an hour of video') + '.';
       } else if (p.hear.by === 'local') hear.textContent = 'Words heard on this computer, for nothing - about 40 minutes for an hour of video.';
       else { hear.textContent = p.hear.why || 'Nobody can hear the words.'; hear.classList.add('is-err'); }
-      // (phase V90) the agent's effects - a call a fragment.
-      const fxCost = p.fx ? (+p.fx.cost || 0) : 0;
-      const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0) + fxCost;
-      cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd((p.agent.cost || 0) + fxCost) + ' + the words';
+      const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
+      cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
     // (phase V73 block 4) the price stands by the press, in mono - not inside its words
     goBtn.textContent = st.busy ? 'Starting…' : (whole ? 'Split into parts' : 'Find moments');
@@ -678,7 +657,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     st.busy = true;
     say('');
     const spec = { from: st.from, length: st.length, ...(isWhole(st.kind) ? {} : { count: st.count }), style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
-      moods: music.get(), title: st.title, fx: st.fx };
+      moods: music.get(), title: st.title };
     // (V69 P12, (хп93)) auto's "by the video" - for every kind it may find, that kind's captions, moods and title as it remembers them.
     const sets = st.kind === 'auto' ? KIND.byVideoSets(presetName, (idp) => !!presetName(idp), lengths, counts) : null;
     if (sets && spec.moods.includes(BY_VIDEO)) spec.moodsByKind = sets.moodsByKind;
@@ -731,8 +710,6 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       if (lengthsOf(k0)[ask.length]) s.length = ask.length;
       if (countsOf(k0).includes(+ask.count)) s.count = +ask.count;
       if (Array.isArray(ask.moods) && ask.moods.length) s.moods = ask.moods.map((m) => String((m && m.id) || m));
-      // (phase V90) the effects it asked for - none when it asked none
-      s.fx = KIND.okFx(ask.fx) ? ask.fx : 'none';
     }
     use(s);
   } else {
