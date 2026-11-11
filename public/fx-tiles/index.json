@@ -1,5 +1,5 @@
 {
-  "print": "f2fd2205b25928dd",
+  "print": "01d89366d65f2a40",
   "source": {
     "project": "2026-11-06 — Desk setup tour #2 - m - confidence - tech_breakdown  stethoscope medical office desk board — morgan D the doctor · Cole \"Hawk\" Brooks",
     "clip": "clips/c1b83e22549674d00246eea7bda49c72f_1793991102840.mp4"
@@ -157,6 +157,42 @@
     "liquidglass": {
       "seconds": 2.25,
       "peak": 1.2
+    },
+    "orbit": {
+      "seconds": 2.25,
+      "peak": 1.1
+    },
+    "iconsaround": {
+      "seconds": 2.7,
+      "peak": 1.3
+    },
+    "headlinestorm": {
+      "seconds": 2.75,
+      "peak": 1.7
+    },
+    "headlinestorm2": {
+      "seconds": 2.8,
+      "peak": 1.3
+    },
+    "formulas": {
+      "seconds": 2,
+      "peak": 1.2
+    },
+    "greenscreen": {
+      "seconds": 2.75,
+      "peak": 1.8
+    },
+    "greenbg": {
+      "seconds": 2.8,
+      "peak": 1.5
+    },
+    "papercutout": {
+      "seconds": 2.57,
+      "peak": 1.35
+    },
+    "mix": {
+      "seconds": 3.69,
+      "peak": 2.7
     },
     "set-hook": {
       "seconds": 2.6,

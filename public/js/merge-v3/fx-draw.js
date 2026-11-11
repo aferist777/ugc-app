@@ -18,6 +18,8 @@ import { CARDS } from '../fx/cards.js';
 import { SCREENS } from '../fx/screens.js';
 import { COPIES } from '../fx/copies.js';
 import { GLITCHES } from '../fx/glitches.js';
+import { BEHIND } from '../fx/behind.js';
+import { personOf } from '../fx/person.js';
 import { momentsOf } from '../fx/params.js';
 import { hexRgb, fontsReady, momentAt, coverOf } from '../fx/kit.js';
 
@@ -341,7 +343,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       return [dx * ca + dy * sa + b.w / 2, -dx * sa + dy * ca + b.h / 2];
     };
     for (const sc of p.scenes) {
-      const draw = SCENES[sc.draw] || CARDS[sc.draw] || SCREENS[sc.draw] || COPIES[sc.draw] || GLITCHES[sc.draw];
+      const draw = SCENES[sc.draw] || CARDS[sc.draw] || SCREENS[sc.draw] || COPIES[sc.draw] || GLITCHES[sc.draw] || BEHIND[sc.draw];
       if (!draw) continue;
       const col = {};
       for (const [k, v] of Object.entries(colorsOf(sc.e))) col[k] = hexRgb(v);
@@ -353,21 +355,28 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       g.beginPath();
       g.rect(0, 0, b.w, b.h);
       g.clip();
+      // (block 4c) The window's picture as it is now, upright - what Chat lays in its card.
+      const picture = () => {
+        const pc = _canvas('sc-pic', Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));
+        const x = pc.getContext('2d');
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        x.clearRect(0, 0, pc.width, pc.height);
+        x.translate(b.w / 2, b.h / 2);
+        x.rotate(-an);
+        x.translate(-(PAD + b.cx), -(PAD + b.cy));
+        x.drawImage(cur, 0, 0);
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        return pc;
+      };
+      const canvas = (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
       try {
-        draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox,
-          canvas: (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))),
+        draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox, canvas,
           // (block 2) The clip's file second now, and its picture at another second (null until the server's pictures are there).
           tf: sc.tf, frame: (t) => (sc.c ? momentAt(sc.c.src, momentsOf(sc.c, sc.e), t) : null),
-          // (block 4c) The window's picture as it is now, upright - what Chat lays in its card.
-          picture: () => {
-            const pc = _canvas('sc-pic', Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));
-            const x = pc.getContext('2d');
-            x.translate(b.w / 2, b.h / 2);
-            x.rotate(-an);
-            x.translate(-(PAD + b.cx), -(PAD + b.cy));
-            x.drawImage(cur, 0, 0);
-            return pc;
-          } });
+          picture,
+          // (block 6) The person in the window's picture now - { mask, cut } (js/fx/person.js), null until the segmenter is there.
+          // Asked BEFORE the effect draws, so the person is the picture's, not the effect's.
+          person: () => personOf(picture(), canvas) });
       } finally { g.restore(); }
     }
   }

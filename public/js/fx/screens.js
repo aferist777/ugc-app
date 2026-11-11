@@ -256,8 +256,8 @@ function screeninscreen(g, S) {
 // ── Magazine cover ──────────────────────────────────────────────────────────
 // The clip becomes a cover tilting in from below: the issue and date on top, the masthead over the hair, a big number with its label
 // and a line over a coloured plate under the chin, two small lines and a barcode at the foot - nothing over the face; every text
-// the person's; the whole cover tilts out again. The hair's top is the face's (the pack takes it from the person's mask - it comes
-// with block 6); with no room the masthead lies over the hair.
+// the person's; the whole cover tilts out again. The hair's top is the face's (the pack takes it from the person's mask on its first
+// frame); with no room the masthead lies over the hair and the head stands in front of it (block 6 - the person's mask, js/fx/person.js).
 const _capH = (g, size, fnt) => {
   g.save();
   g.font = fnt;
@@ -296,7 +296,8 @@ function _magLayout(g, S, cw, chh) {
   // The masthead in the band between the strip and the hair (no room - over the hair).
   const bandTop = yS + 0.030 * chh;
   let bandBot = hair - 0.018 * chh;
-  if (bandBot - bandTop < 0.055 * chh) bandBot = bandTop + 0.085 * chh;
+  const overlap = bandBot - bandTop < 0.055 * chh;
+  if (overlap) bandBot = bandTop + 0.085 * chh;
   if (T.name) {
     const szw = 400 * 0.90 * cw / Math.max(1, textW(g, T.name, F(400, 900, T.name)));
     const szh = (bandBot - bandTop) / (cap(100, 900, T.name) / 100);
@@ -344,7 +345,7 @@ function _magLayout(g, S, cw, chh) {
   const plate = t2.txt ? { w: textW(g, t2.txt, F(t2.size, 900, t2.txt)) + 2 * pad, h: plateH, txt: t2.txt, size: t2.size } : null;
   if (plate) { plate.x = xr - plate.w; plate.y = midBot - plateH; }
   if (t1.txt) put(1, t1.txt, xr, midBot - plateH - (t2.txt ? 16 * u * f : 0) - cap(t1.size, 900, t1.txt) / 2, t1.size, 900, 'right', white);
-  return { s, bw, bh, x0, y0, items, plate, bar: barBox, F };
+  return { s, bw, bh, x0, y0, items, plate, bar: barBox, F, overlap };
 }
 function magazine(g, S) {
   const { w, h, u, e, opt } = S;
@@ -356,6 +357,7 @@ function magazine(g, S) {
   const pic = S.picture();
   const cw = 0.89 * w, chh = 0.73 * h;
   const L = _magLayout(g, S, cw, chh);
+  const P = L.overlap ? S.person() : null;
   const ink = [26, 26, 28];
   const C = S.canvas('mag', cw, chh);
   const x = C.getContext('2d');
@@ -379,6 +381,8 @@ function magazine(g, S) {
   };
   darken(0, 0.34 * chh, 0.58, 0);
   draw(0);
+  // (block 6) No room over the hair: the head in front of the masthead, as the picture is (not darkened).
+  if (P) x.drawImage(P.cut, -L.x0, -L.y0, L.bw, L.bh);
   // Under the cover lines - so white words read on a light sweater (a smooth step to 0.66 at the foot).
   const g0 = 0.50 * chh;
   const gr = x.createLinearGradient(0, g0, 0, chh);

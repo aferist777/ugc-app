@@ -8,12 +8,15 @@
    pieces); the server makes it the copy the render lays over the stretch. One stretch at a time.
    (block 4a, the owner's (б4-1)) A clip ABOVE main comes on a transparent frame (`alpha`): its copy is twice as tall - the colour
    above, the alpha below as grey -, as H.264 keeps no alpha; the render joins the two again (lib/mv3b-render.js).
+   (block 6) An effect behind the person waits for the person's segmenter (js/fx/person.js) before the first frame.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { paramsAt, momentsOf } from './fx/params.js';
 import { applyFx } from './merge-v3/fx-draw.js';
 import { windowOf } from './fx/box.js';
 import { fontsFor, loadMoments } from './fx/kit.js';
+import { effectOf } from './fx/effects.js';
+import { personReady } from './fx/person.js';
 
 // (block 4b) The size of a clip's file - what its window's shape is made of (js/fx/box.js, the preview's rule): its picture or its
 // film's metadata, as the preview knows it from its own element. Unknown - the window is the frame.
@@ -81,6 +84,10 @@ async function bake(job) {
   await fontsFor(clip && clip.fx);
   // (block 2) The other moments its effects show - the same pictures the preview draws.
   await Promise.all(((clip && clip.fx) || []).map((e) => { const sp = momentsOf(clip, e); return sp ? loadMoments(clip.src, sp) : null; }));
+  // (block 6) The person's segmenter, for an effect drawn behind the person (js/fx/person.js) - the preview runs the same one.
+  if (((clip && clip.fx) || []).some((e) => { const d = effectOf(e && e.k); return d && d.person; })) {
+    if (!(await personReady())) say('the segmenter of the person could not start - drawn without the person in front');
+  }
   let box = null;
   if (alpha) {
     const d = await _dimsOf(clip.src);

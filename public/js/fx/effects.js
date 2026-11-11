@@ -175,7 +175,8 @@ export function jitterOf(W, seed) {
 }
 /** The version of the page-drawn effects and of the bake - a copy made by another is made again (lib/fx-bake.js). 2 - block 4a:
  *  the window converts the colours itself, as ffmpeg does (the owner's app, 2026-11-11: a copy came out a little flatter). */
-export const ENGINE_VERSION = 2;
+// 3 - block 6: the person's mask (the magazine's head in front of its title).
+export const ENGINE_VERSION = 3;
 
 // ── Block 1c: by the face ──────────────────────────────────────────────────
 // Where the face is, an effect keeps in `path` (js/fx/params.js normalizeFx): [[the file's second, x, y, w, h], ...] five a
@@ -348,7 +349,7 @@ export const EFFECTS = {
   screeninscreen: { name: 'Screen in screen', group: 'card', kind: 'intro', dur: 1.5, lo: 0.7, hold: 0.8, engine: true, draw: 'screeninscreen', face: true,
     colors: [['bg', 'Background', '#ffffff'], ['frame', 'Frame', '#242628']], opts: [['border', 'Border', 0, 3, 0.1, 1, 'x']],
     about: 'The vertical clip turns into a wide screen - from the hair to the chin - on white, and back.', at: _none },
-  magazine: { name: 'Magazine cover', group: 'card', kind: 'intro', dur: 2.15, lo: 0.7, hold: 1.3, engine: true, draw: 'magazine', face: true,
+  magazine: { name: 'Magazine cover', group: 'card', kind: 'intro', dur: 2.15, lo: 0.7, hold: 1.3, engine: true, draw: 'magazine', face: true, person: true,
     texts: [['name', 'Masthead', 'MAGAZINE'], ['head1', 'Line 1', 'VIDEO &'], ['head2', 'Line 2 (plate)', 'EDITING'], ['big', 'Number', '15+'],
       ['biglabel', 'Under the number', 'EFFECTS'], ['sub1', 'Bottom 1', 'EDITING SECRETS'], ['sub2', 'Bottom 2', 'TITLES · GRAPHICS · TRANSITIONS'],
       ['issue', 'Issue', 'ISSUE NO. 1'], ['date', 'Date', '']],
@@ -384,6 +385,40 @@ export const EFFECTS = {
   liquidglass: { name: 'Liquid glass', group: 'glitch', kind: 'intro', dur: 1.55, lo: 0.7, hi: 2, engine: true, draw: 'liquidglass', face: true,
     opts: [['size', 'Size', 0.6, 1.6, 0.05, 1, 'x']],
     about: 'A big glass lens glides over the face, magnifying and bending the picture, its rim catching the light.', at: _none },
+  // (block 6) Behind the person - js/fx/behind.js: what goes behind is drawn first, then the person cut out by their mask (MediaPipe's
+  // segmenter on the window's picture as it is - js/fx/person.js, `person`), then what goes in front.
+  orbit: { name: 'Orbit', group: 'behind', kind: 'intro', dur: 1.55, lo: 0.7, hi: 2, engine: true, draw: 'orbit', face: true, person: true,
+    colors: [['tile', 'Tiles', '#fcfcfc'], ['glyph', 'Icons', '#1a1a1c'], ['ring', 'Ring', '#ffffff']],
+    opts: [['size', 'Size', 0.6, 1.5, 0.05, 1, 'x'], ['speed', 'Speed', 0.3, 2, 0.05, 1, 'x']],
+    about: 'Seven white icons circle round the person on a dotted ring - its back half passes behind them, the front half in front.', at: _none },
+  iconsaround: { name: 'Icons around', group: 'behind', kind: 'intro', dur: 2.0, lo: 0.7, hi: 2, engine: true, draw: 'iconsaround', face: true, person: true,
+    colors: [['c1', 'Color 1', '#ff5a36'], ['c2', 'Color 2', '#111111'], ['c3', 'Color 3', '#8e8e8a']],
+    opts: [['size', 'Size', 0.6, 1.5, 0.05, 1, 'x'], ['speed', 'Speed', 0.3, 2, 0.05, 1, 'x']],
+    about: 'Eight glossy colour icons circle round the head on a flat tilted ring - some behind the person, some in front.', at: _none },
+  headlinestorm: { name: 'Headline storm', group: 'behind', kind: 'intro', dur: 2.05, lo: 0.7, hi: 2, engine: true, draw: 'headlinestorm', face: true, person: true,
+    texts: [['h1', 'Headline 1', 'AI NOW EDITS VIDEO'], ['h2', 'Headline 2', '20 EFFECTS. ONE PROMPT.'], ['h3', 'Headline 3', 'EDITORS ON NOTICE'],
+      ['h4', 'Headline 4', 'EVERY WORD CAPTIONED'], ['h5', 'Headline 5', 'NO TIMELINE NEEDED'], ['h6', 'Headline 6', 'THE AI EDIT IS HERE'],
+      ['h7', 'Headline 7', 'MADE WITH AI'], ['h8', 'Headline 8', '20 EFFECTS INSIDE'], ['h9', 'Headline 9', 'AI EDITS']],
+    colors: [['card', 'Light', '#fcfcfc'], ['ink', 'Dark', '#1a1a1c']],
+    about: 'Black and white news ribbons - BREAKING, JUST IN - fly in from both sides: most behind the person, three in front under the chin.', at: _none },
+  headlinestorm2: { name: 'Headline storm 2', group: 'behind', kind: 'intro', dur: 2.1, lo: 0.7, hi: 2, engine: true, draw: 'headlinestorm2', face: true, person: true,
+    texts: [['h1', 'Headline 1', 'EDITING STARTED'], ['h2', 'Headline 2', 'THIS VIDEO'], ['h3', 'Headline 3', 'ONE MORE EFFECT'], ['h4', 'Headline 4', 'WATCH TILL THE END'],
+      ['h5', 'Headline 5', 'NO TIMELINE'], ['h6', 'Headline 6', 'ALL BY PROMPT'], ['h7', 'Headline 7', 'DONE']],
+    colors: [['c1', 'Color 1', '#ff5a36'], ['c2', 'Color 2', '#fcfcfc'], ['c3', 'Color 3', '#1a1a1c'], ['c4', 'Color 4', '#f0f0f0']],
+    about: 'The screen darkens, three lightning bolts strike, coloured headline plates fly in - some behind the person, some in front - and the frame shakes.', at: _none },
+  formulas: { name: 'Formulas', group: 'behind', kind: 'loop', engine: true, draw: 'formulas', person: true,
+    colors: [['chalk', 'Chalk', '#ffffff']],
+    about: 'Chalk formulas and triangles drift on the background behind the person, each fading in and out on its own.', at: _none },
+  greenscreen: { name: 'Green screen', group: 'behind', kind: 'intro', dur: 2.05, lo: 0.7, hi: 2, engine: true, draw: 'greenscreen', person: true,
+    about: 'A green curtain behind the person, then a sunset sky with a city skyline opens from the bottom in an arc.', at: _none },
+  greenbg: { name: 'Green background', group: 'behind', kind: 'intro', dur: 2.1, lo: 0.7, hi: 2, engine: true, draw: 'greenbg', person: true,
+    colors: [['bg', 'Background', '#26c840'], ['outline', 'Outline', '#ffffff']],
+    about: 'A bright green background with soft lights, growing frames and tracking marks; the person a sticker with a white wavy outline.', at: _none },
+  papercutout: { name: 'Paper cutout', group: 'behind', kind: 'intro', dur: 1.87, lo: 0.7, hi: 2, engine: true, draw: 'papercutout', person: true,
+    colors: [['paper', 'Paper', '#f0eae0'], ['shapes', 'Shapes', '#201e1e'], ['outline', 'Outline', '#fcfcfc']],
+    about: 'The person as a sticker with a white outline on light paper: a dark disc, a star, dots, a torn strip, a stop-motion jitter.', at: _none },
+  mix: { name: 'Mix', group: 'copies', kind: 'intro', dur: 4.2, lo: 0.7, hi: 2, engine: true, draw: 'mix', person: true,
+    about: 'Black and white; diagonal slats of the colour picture close in from both sides, the person turns white, a flash, and the colour is back.', at: _none },
 };
 
 /** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
@@ -403,7 +438,7 @@ export const SETS = {
 };
 
 export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards'],
-  ['copies', 'Copies'], ['glitch', 'Glitches']];
+  ['copies', 'Copies'], ['glitch', 'Glitches'], ['behind', 'Behind']];
 
 /** (block 4c) An effect's words by key - its own (`txt`; '' - not drawn), else the table's. */
 export function textsOf(e) {

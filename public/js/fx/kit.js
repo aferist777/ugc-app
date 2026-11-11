@@ -299,6 +299,8 @@ export function momentAt(src, spec, t) {
 }
 /** Told when a card's font or a clip's moments have loaded (the preview paints again). */
 export const onLoaded = onFontLoaded;
+/** (block 6) Tells everyone listening that something has loaded - the person's segmenter (js/fx/person.js). */
+export function told() { for (const cb of _onFont) { try { cb(); } catch (e) { /* its own */ } } }
 
 // ── SVG filters the canvas draws through (blocks 2, 5) ─────────────────────
 // One hidden <svg> of filters; a filter's numbers are set just before the draw that uses it (the canvas reads them then - measured
@@ -367,6 +369,47 @@ export function lumaTables(id, tables) {
   if (!f) return 'none';
   f.parts.fs.forEach((x, i) => x.setAttribute('tableValues', tables[i].map(_n).join(' ')));
   return 'url(#ugc-fx-lt-' + id + ')';
+}
+/**
+ * (block 6) A mask GROWN by about `r` px - a sticker's outline round the person (video-effects-pack's distance-transform border):
+ * its alpha blurred by r / 1.2 and cut where the blur is 0.115 (a straight edge's r px out), soft over ~1.5 px; its edge then
+ * wobbled as cut by hand - moved by a noise `wob` px at most, its grain `cells` across the `w` px wide picture, `seed` its own.
+ * The canvas filter string: draw the mask through it, then colour it (source-in). The same shape at any size of the picture.
+ */
+export function grow(id, r, w, wob, cells, seed) {
+  const f = _filter('g-' + id, (el) => {
+    el.setAttribute('x', '-0.2'); el.setAttribute('y', '-0.2'); el.setAttribute('width', '1.4'); el.setAttribute('height', '1.4');
+    const b = document.createElementNS(SVG_NS, 'feGaussianBlur');
+    b.setAttribute('in', 'SourceAlpha');
+    b.setAttribute('result', 'b');
+    const ct = document.createElementNS(SVG_NS, 'feComponentTransfer');
+    ct.setAttribute('in', 'b');
+    ct.setAttribute('result', 'd');
+    const fa = document.createElementNS(SVG_NS, 'feFuncA');
+    fa.setAttribute('type', 'linear');
+    ct.appendChild(fa);
+    const tu = document.createElementNS(SVG_NS, 'feTurbulence');
+    tu.setAttribute('type', 'fractalNoise');
+    tu.setAttribute('numOctaves', '2');
+    tu.setAttribute('result', 'n');
+    const dm = document.createElementNS(SVG_NS, 'feDisplacementMap');
+    dm.setAttribute('in', 'd');
+    dm.setAttribute('in2', 'n');
+    dm.setAttribute('xChannelSelector', 'R');
+    dm.setAttribute('yChannelSelector', 'G');
+    el.append(b, ct, tu, dm);
+    return { b, fa, tu, dm };
+  });
+  if (!f) return 'none';
+  const sig = Math.max(0.5, r / 1.2);
+  const slope = sig / 1.5 / 0.194;    // 0 -> 1 over ~1.5 px at the cut (the blur's slope there is 0.194 / σ a px)
+  f.parts.b.setAttribute('stdDeviation', _n(sig));
+  f.parts.fa.setAttribute('slope', _n(slope));
+  f.parts.fa.setAttribute('intercept', _n(0.5 - 0.115 * slope));
+  f.parts.tu.setAttribute('baseFrequency', _n(Math.max(1e-4, cells / Math.max(1, w))));
+  f.parts.tu.setAttribute('seed', String(Math.max(0, Math.round(seed)) % 100000));
+  f.parts.dm.setAttribute('scale', _n(Math.max(0, wob) * 2));
+  return 'url(#ugc-fx-g-' + id + ')';
 }
 /** The pack's flash: the picture mixed towards a colour by `a` over x, y, w, h. */
 export function flash(g, a, col, x, y, w, h) {

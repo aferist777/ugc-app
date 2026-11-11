@@ -20,7 +20,9 @@
        2026-10-21); 28.5 ms a frame on the GPU;
      - (phase V43) the FACE LANDMARKER (float16, version 1), by SHA-256 - fragmentation's frame goes to who speaks (the lips
        moving while words sound) and who reacts (a face's look changing): on the owner's episode it read 68% of the faces of
-       LEGO figures and every frame of a live face, 11 ms a face on a crop around it (PLAN.md V43, block 0, 2026-10-25).
+       LEGO figures and every frame of a live face, 11 ms a face on a crop around it (PLAN.md V43, block 0, 2026-10-25);
+     - (phase V84 block 6, the owner 2026-11-11 "Да") the SELFIE SEGMENTER (float16, version 1, 249 537 bytes), by SHA-256 - the
+       person's mask for the clip effects drawn behind the person (js/fx/person.js; the preview and the bake window run it).
    Licences: MediaPipe is Apache-2.0 (its package.json says so; the package carries no text - a note says which it is);
    the model's card gives Apache-2.0 too. */
 
@@ -46,6 +48,11 @@ const PIN = {
     url: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
     sha256: '64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff',
     file: 'face_landmarker.task',
+  },
+  segment: {
+    url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
+    sha256: '191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b',
+    file: 'selfie_segmenter.tflite',
   },
 };
 const DIR = path.join(__dirname, '..', 'vendor', 'mediapipe');
@@ -94,6 +101,8 @@ async function main() {
   if (crypto.createHash('sha256').update(people).digest('hex') !== PIN.people.sha256) throw new Error(PIN.people.file + ': not the pinned model');
   const marks = await get(PIN.landmarks.url);
   if (crypto.createHash('sha256').update(marks).digest('hex') !== PIN.landmarks.sha256) throw new Error(PIN.landmarks.file + ': not the pinned model');
+  const seg = await get(PIN.segment.url);
+  if (crypto.createHash('sha256').update(seg).digest('hex') !== PIN.segment.sha256) throw new Error(PIN.segment.file + ': not the pinned model');
 
   fs.rmSync(DIR, { recursive: true, force: true });
   const put = (rel, data) => {
@@ -112,6 +121,7 @@ async function main() {
   put(PIN.model.file, model);
   put(PIN.people.file, people);
   put(PIN.landmarks.file, marks);
+  put(PIN.segment.file, seg);
   let declared = 'Apache-2.0';
   try { declared = JSON.parse(take('package.json').toString('utf8')).license || declared; } catch (e) { /* as said above */ }
   put('LICENSES.txt', '@mediapipe/tasks-vision ' + PIN.version + ': ' + declared + ', as its package.json declares; the package carries no licence text.\n'
@@ -121,9 +131,11 @@ async function main() {
     + PIN.people.file + ' (EfficientDet-Lite0, float16, version 1): Apache-2.0, per its model card.\n'
     + 'https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector\n'
     + PIN.landmarks.file + ' (Face Landmarker, float16, version 1): Apache-2.0, per its model card.\n'
-    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker\n');
+    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker\n'
+    + PIN.segment.file + ' (Selfie Segmenter, float16, version 1): Apache-2.0, per its model card.\n'
+    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter\n');
   fs.writeFileSync(MARK, JSON.stringify(PIN, null, 2));
-  console.log('[mediapipe] ' + PIN.version + ', ' + PIN.model.file + ', ' + PIN.people.file + ' and ' + PIN.landmarks.file + ' laid out in vendor/mediapipe/');
+  console.log('[mediapipe] ' + PIN.version + ', ' + PIN.model.file + ', ' + PIN.people.file + ', ' + PIN.landmarks.file + ' and ' + PIN.segment.file + ' laid out in vendor/mediapipe/');
 }
 
 main().catch((e) => {

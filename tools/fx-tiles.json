@@ -53,7 +53,16 @@
     "sliceup": 1,
     "slicemerge": 1,
     "liquidglass": 0.9,
-    "set-party": 0.9
+    "set-party": 0.9,
+    "orbit": 0.8,
+    "iconsaround": 1,
+    "headlinestorm": 1.4,
+    "headlinestorm2": 1,
+    "formulas": 1.2,
+    "greenscreen": 1.5,
+    "greenbg": 1.2,
+    "papercutout": 1.05,
+    "mix": 2.4
   },
   "face": [
     [
@@ -208,6 +217,15 @@
     "splitscreen": 0.5,
     "sliceup": 0.4,
     "slicemerge": 0.4,
-    "liquidglass": 0.35
+    "liquidglass": 0.35,
+    "orbit": 0.45,
+    "iconsaround": 0.35,
+    "headlinestorm": 0.45,
+    "headlinestorm2": 0.35,
+    "formulas": 0.4,
+    "greenscreen": 0.45,
+    "greenbg": 0.4,
+    "papercutout": 0.35,
+    "mix": 0.4
   }
 }
