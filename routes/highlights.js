@@ -268,7 +268,8 @@ router.post('/highlights/:id/patterns', (req, res) => {
 
 // (phase V84, the owner's (эф11) «Hook для всех N») Clip effects on several made fragments' main video: `add` - the page's own effects
 // for each fragment's clips (js/merge-v3/fx-ui.js laneEffects, the faces found there), or `remove` - a kind taken off all of `ns`. The
-// OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want).
+// OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want). (phase V90) `again` - the agent's
+// "Auto effects" for all: its earlier effects on those fragments' main video taken off first.
 router.post('/highlights/:id/fx', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
@@ -283,7 +284,7 @@ router.post('/highlights/:id/fx', (req, res) => {
       const add = b.add && typeof b.add === 'object' ? b.add : {};
       const frags = _made(rec, Object.keys(add));
       if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
-      out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])));
+      out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])), { again: !!b.again });
     }
     const FXB = require('../lib/fx-bake');
     for (const key of out.keys) { try { FXB.want(MSTORE.one(key), key); } catch (e) { /* baked when Export asks */ } }

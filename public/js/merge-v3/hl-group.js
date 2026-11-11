@@ -30,6 +30,8 @@
    the strip shows its own timeline until "‹ all N". (Phase V74: a fourth, "pattern".)
    (phase V84, the owner's (эф11) «Hook для всех N») Main video's EFFECTS for all: a tile puts the clip effect on every ticked fragment -
    a moment on the clip at its start, one that goes on over the whole fragment (fx-ui.js laneEffects; the faces found here; POST /fx).
+   (phase V90, (аэ1), (аэ11), (аэ14)) "✦ Auto effects" for all: the agent asked for EACH fragment - its own words - two at a time, the
+   number for each; the open one laid by the page, the rest by the server (POST /fx `add` with `again` - the agent's last ones off).
    CHANGED (phase V76, the owner 2026-11-06: «кнопки "for all" в поле таймлайна расположи по горизонтали под верхней границей поля
    таймлайнов. еще нужна там кнопка main video с общими настройками для видео. и pitch так же будет общей настройкой»): the buttons
    are ONE ROW under the timeline's top edge - Subtitles · Main video · Main audio · Music; MAIN VIDEO (in place of "pattern") is
@@ -54,7 +56,8 @@ import { pitchRows } from './pitch-rows.js';
 // (phase V74) Main video's patterns, picked by ticks - the one lane's block, for all of them.
 import { renderPatterns, nameOf as patternName } from './patterns-ui.js';
 // (phase V84, the owner's (эф11)) Main video's effects - the clip effects' panel, for all of them.
-import { fxGroupRows, laneEffects, facesFor } from './fx-ui.js';
+import { fxGroupRows, laneEffects, facesFor, runAuto, askAgent, fromAgent, autoCount } from './fx-ui.js';
+import { isAgent } from '../fx/auto.js';
 import { EFFECTS, SETS } from '../fx/effects.js';
 import { normalizeFx } from '../fx/params.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
@@ -279,6 +282,85 @@ async function _fxAll(k) {
   } catch (e) { _A.say(e.message, true); } finally { _busy = ''; _fxWait = null; }
   await _A.load();
   Views.altChanged();
+}
+// ── (phase V90) The agent's effects for all the ticked: each fragment its own call (its words), two at a time ───────────────────
+/** A ticked fragment's whole timeline - the open one as it is on the page, the others as stored - and its main video. */
+async function _tlOf(f, open) {
+  if (open && f === open) { const tl = Store.timeline(); return { tl, lane: mainVideo() }; }
+  let d = null;
+  try { d = await (await fetch('/api/mv3/timeline?peek=1&key=' + _enc(f.key))).json(); } catch (e) { d = null; }
+  const tl = d && d.success && d.found !== false && d.timeline ? d.timeline : null;
+  return { tl, lane: tl ? ((tl.tracks || []).find((t) => t && t.kind === 'video' && t.main) || null) : null };
+}
+const _hasAgentFx = (f) => (f.n === _A.openN() ? _mainOpen().some((c) => (c.fx || []).some(isAgent)) : !!(f.lanes && f.lanes.video && f.lanes.video.ai));
+function _fxAutoAll() {
+  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  const { list, open } = _split();
+  return runAuto('hl:' + _A.pid(), async (signal, step) => {
+    _busy = 'fx';
+    try {
+      const count = autoCount();
+      const work = [];
+      const answers = [];
+      let next = 0, done = 0, placed = 0, noWords = 0;
+      step(0, list.length);
+      const one = async () => {
+        while (next < list.length) {
+          const f = list[next++];
+          const { tl, lane } = await _tlOf(f, open);
+          if (!tl || !lane) { answers.push({ f, err: 'its timeline could not be read' }); continue; }
+          const ids = (lane.clips || []).filter((c) => c && c.src && !c.halfer).map((c) => String(c.id));
+          if (!ids.length) continue;
+          try {
+            const r = await askAgent(tl, ids, count, signal);
+            placed += r.placed || 0;
+            if (r.noWords) noWords++;
+            answers.push({ f, r });
+            for (const c of lane.clips || []) {
+              const made = ((r.byClip || {})[c.id] || []).map(fromAgent);
+              if (made.length) work.push({ f, track: lane, clip: c, made });
+            }
+          } catch (e) {
+            if (signal.aborted) throw e;
+            answers.push({ f, err: e.message });
+          }
+          step(++done, list.length);
+        }
+      };
+      await Promise.all([one(), one()]);
+      const failed = answers.filter((a) => a.err);
+      if (!answers.some((a) => a.r && a.r.placed)) {
+        if (failed.length) throw new Error(failed[0].err);
+        return { placed: 0 };
+      }
+      if (work.some((w) => w.made.some((e) => EFFECTS[e.k] && EFFECTS[e.k].face))) await facesFor(work, (i, n) => step(i, n, 'finding the faces…'));
+      if (signal.aborted) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
+      const got = new Set(answers.filter((a) => a.r && a.r.placed).map((a) => a.f.n));
+      // The open one by the page (one undo step) - its clips as they are now: the agent's last ones off, the new ones on.
+      const lane = open && got.has(open.n) ? mainVideo() : null;
+      if (lane) {
+        const items = [];
+        for (const c of (lane.clips || [])) {
+          const mine = work.filter((w) => w.f === open && w.clip.id === c.id).flatMap((w) => w.made);
+          const had = (c.fx || []).filter((e) => !isAgent(e));
+          if (!mine.length && had.length === (c.fx || []).length) continue;
+          const nx = normalizeFx([...had, ...mine]);
+          items.push({ trackId: lane.id, clipId: c.id, patch: { fx: nx && nx.length ? nx : null } });
+        }
+        if (items.length) setClipsFields(items);
+      }
+      // The rest by the server, the agent's earlier ones taken off them first.
+      const add = {};
+      for (const n of got) if (!open || n !== open.n) add[n] = {};
+      for (const w of work) { if (w.f === open) continue; add[w.f.n][w.clip.id] = w.made; }
+      if (Object.keys(add).length) await _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { add, again: true });
+      if (failed.length) showError('Auto effects: ' + failed.length + ' of ' + list.length + ' fragments got none - ' + failed[0].err);
+      return { placed, count, noWords: noWords === answers.length, many: true };
+    } finally {
+      _busy = '';
+      _A.load().then(() => Views.altChanged());
+    }
+  });
 }
 function _fxOff(k) {
   if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
@@ -527,6 +609,7 @@ function renderVideo(host) {
   fxGroupRows(box, {
     n: list.length, kinds: [...counts], off: (k) => _fxOff(k), wait: _fxWait,
     press: (k) => _fxAll(k),
+    auto: { key: 'hl:' + _A.pid(), again: list.some(_hasAgentFx), run: () => _fxAutoAll() },
     note: _busy === 'fx' ? (_fxWait ? '' : 'Putting it on them…')
       : 'A tile puts the effect on every ticked fragment: a moment at its start, one that goes on over the whole fragment. Its settings are each fragment\u2019s own - open one to change them.',
   });

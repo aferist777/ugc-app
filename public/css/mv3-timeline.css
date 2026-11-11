@@ -150,6 +150,14 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 /* (V84, the owner 2026-11-10 (эф13)-(эф16)) The panel of tiles under the effects' rows: the full-width "+ Effect" opens and shuts
    it; chips of the groups, the tiles three a row - a picture made beforehand, its film only under the pointer (fx-ui.js); the
    tile's line over its row, the strip's width. */
+/* (phase V90) "✦ Auto effects": the press and how many in one line, what it is doing or came to under it (fx-ui.js autoRow). */
+.mv3-fx-auto{margin-top:var(--sp-1)}
+.mv3-fx-auto-line{display:flex; align-items:center; gap:var(--sp-1)}
+.mv3-fx-auto-go{flex:1 1 auto; min-width:0; color:var(--gold); border-color:var(--gold-line)}
+.mv3-fx-auto-go:disabled{opacity:.55}
+.mv3-fx-auto-n{flex:0 0 auto; width:auto}
+.mv3-fx-auto-state{display:block; margin-top:4px; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); font-variant-numeric:tabular-nums}
+.mv3-fx-auto-state.is-warn{color:var(--warn)}
 .mv3-fx-add{display:block; width:100%; margin-top:var(--sp-1)}
 .mv3-fx-add.is-on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
 /* (phase V84 block 4b) A graphic effect's colours - swatches in one row (js/merge-v3/fx-ui.js). */

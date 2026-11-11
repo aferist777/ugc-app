@@ -111,6 +111,8 @@ export function normalizeFx(list) {
       if (Object.keys(txt).length) one.txt = txt;
     }
     if (d.texts && typeof e.font === 'string' && /^[\w .'&-]{1,60}$/.test(e.font.trim())) one.font = e.font.trim();
+    // (phase V90, (аэ7), (аэ15)) Laid by the agent (fx/auto.js): "Again" takes only these off; the person changing one makes it theirs.
+    if (e.ai) one.ai = 1;
     out.push(one);
     if (out.length >= FX_MAX) break;
   }
