@@ -334,7 +334,7 @@ async function _music(rec, f, track, open, later) {
   if (!tl) throw Object.assign(new Error('its timeline is not there'), { status: 409 });
   let clips = [];
   if (track) {
-    clips = await HLM.clipsForMade(track, tl, f.loud || null);
+    clips = await HLM.clipsForMade(track, tl);
     if (!clips.length) throw Object.assign(new Error('"' + track.title + '" is not in Music any more'), { status: 409 });
   }
   const loud = clips.loud || null;

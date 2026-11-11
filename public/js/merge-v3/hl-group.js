@@ -16,7 +16,7 @@
      pattern      (phase V74, the owner's (пт7)) main video's patterns - the set with ticks and the layers with their settings, as the
                   one lane's strip has them (patterns-ui.js): each change puts the WHOLE list on all of them; each fragment its own
                   list, a press opens it with its main video picked.
-     music        the volume for all - the lane's, in dB, so each keeps its own balance ~10 dB under its speech ((хо4)); "deal
+     music        the volume for all - the lane's, in dB, so each keeps its own balance (the bed at -12 dB since V90) ((хо4)); "deal
                   again" from moods, or no music; each fragment its track and a choice of another one of its mood, one of a
                   mood, or none ((хо9)) - the server measures and lays it (routes/highlights.js), only the app's clips replaced
                   ((хо11)). No music lane on the open fragment: "+ music" makes its "audio 2" (the owner: "если нет, то можно
@@ -638,7 +638,7 @@ function renderOneMusic(host) {
   box.appendChild(_el('div', 'mv3-ins-title', 'Music of this fragment'));
   box.appendChild(C.row('Track', _trackChoice(f)));
   box.appendChild(_el('p', 'mv3-ins-note', _busy === 'music' ? 'Laying the track…'
-    : 'Another of the standard tracks of Music → highlights - it goes in place of this one, ~10 dB under the speech. What you put on this lane yourself stays.'));
+    : 'Another of the standard tracks of Music → highlights - it goes in place of this one, at -12 dB. What you put on this lane yourself stays.'));
   box.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(box);
 }
