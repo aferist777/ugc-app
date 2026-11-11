@@ -111,31 +111,24 @@ let _title = '';
 // THE GROUPS: the rows of a pick under titles that fold - a clip Picture · Color · Effects · Sound (since phase V84, the owner
 // 2026-11-10 (эф17): Frame's rows are Picture's, under a line), a sound clip Sound, words Text · Look · Motion · Place, a lane its
 // own. ONE GROUP OPEN (phase V84, the owner's (эф18)): a group opened shuts the others of the strip, the open one pressed shuts
-// (all may be shut); which one is open is kept for that KIND of pick (`_kind`, set by the branch) in localStorage
-// (`mv3_ins_open_v1` - the viewer's own convenience) - outside the strip, which every paint rebuilds; never chosen, or not in this
-// strip - the first. The group Effects opens by itself when fx-ui.js asks (an effect opened, an effect
-// added, the clip's "Add effect…" - the owner's (эф19); takeOpenAsk).
+// (all may be shut). EVERY GROUP SHUT WHEN A PICK IS OPENED (the owner 2026-11-11, «сделай чтобы в инспекторе все группы
+// параметров были свернуты при открытии по умолчанию»; until then the one last open for that kind of pick was kept in localStorage
+// `mv3_ins_open_v1`, else the first opened): the group opened stays open while THE SAME pick is painted again - a slider let go, a
+// list changed -, outside the strip, which every paint rebuilds (`_openId` for `_openFor`, the pick and its `_kind`). The group
+// Effects opens by itself when fx-ui.js asks (an effect opened, an effect added, the clip's "Add effect…" - the owner's (эф19);
+// takeOpenAsk).
 let _kind = '';
-const OPEN_KEY = 'mv3_ins_open_v1';
-let _opens = null;
-function _opensNow() {
-  if (!_opens) {
-    try { _opens = JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {}; } catch (e) { _opens = {}; }
-  }
-  return _opens;
-}
-function _opensSave() { try { localStorage.setItem(OPEN_KEY, JSON.stringify(_opensNow())); } catch (e) { /* a private window: kept for this page only */ } }
+let _openId = '';              // the group open now - '' none
+let _openFor = null;           // the pick it is open for
 let _painted = [];             // the groups of this paint: { id, g, h }
 let _forceOpen = null;         // the group this paint must open ('effects' when fx-ui.js asked)
-/** Which group of the painted strip is open - set once it is all there (render). */
-function _settleGroups() {
+/** Which group of the painted strip is open - set once it is all there (render). `key` - the pick painted. */
+function _settleGroups(key) {
   if (!_painted.length) return;
-  const o = _opensNow();
+  if (key !== _openFor) { _openFor = key; _openId = ''; }
   const has = (id) => _painted.some((p) => p.id === id);
-  let id;
-  if (_forceOpen && has(_forceOpen)) { id = _forceOpen; o[_kind] = id; _opensSave(); }
-  else if (Object.prototype.hasOwnProperty.call(o, _kind) && (o[_kind] === '' || has(o[_kind]))) id = o[_kind];
-  else id = _painted[0].id;
+  if (_forceOpen && has(_forceOpen)) _openId = _forceOpen;
+  const id = has(_openId) ? _openId : '';
   for (const p of _painted) {
     const on = p.id === id;
     p.g.classList.toggle('is-shut', !on);
@@ -144,7 +137,6 @@ function _settleGroups() {
 }
 /** A group of the strip: its title (a press opens it and shuts the others, or shuts it) and the box its rows go into - returned. */
 function _group(host, id, title) {
-  const kind = _kind;
   const g = _el('section', 'mv3-ins-grp is-shut');
   const h = _el('button', 'mv3-ins-grp-h');
   h.type = 'button';
@@ -156,8 +148,7 @@ function _group(host, id, title) {
     const opening = g.classList.contains('is-shut');
     for (const p of all) { p.g.classList.add('is-shut'); p.h.setAttribute('aria-expanded', 'false'); }
     if (opening) { g.classList.remove('is-shut'); h.setAttribute('aria-expanded', 'true'); }
-    _opensNow()[kind] = opening ? id : '';
-    _opensSave();
+    _openId = opening ? id : '';
   });
   _painted.push({ id, g, h });
   g.appendChild(h);
@@ -1756,7 +1747,7 @@ function render(force) {
   _painted = [];
   _forceOpen = takeFxOpenAsk() ? 'effects' : null;
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }
-  _settleGroups();
+  _settleGroups(pick + '|' + _kind);
   if (scroller) scroller.scrollTop = top;
   _paintedPick = pick;
   _paintHead(_overHost());
