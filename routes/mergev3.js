@@ -343,99 +343,6 @@ router.post('/mv3/adv', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── Keeping or discarding a render ──────────────────────────────────────────
-   The render lands in finals/ the moment ffmpeg finishes, which is BEFORE you have
-   looked at it. So:
-
-     keep     makes its thumbnail;
-     discard  deletes the file.
-
-   The renders shelf in the Library is the finals/ directory itself, so discarding really
-   does have to remove the file - there is no record to leave out.
-   ──────────────────────────────────────────────────────────────────────────── */
-const { FINALS_DIR } = require('../lib/config');
-// The video poster maker, not lib/helpers' createThumbnail - that one is sharp, which
-// reads images and cannot open an mp4. This is the same one-frame-at-0.5s grab the media
-// library already uses, so a render's card looks like every other clip's.
-const { makeThumb, thumbUrlFor } = require('../lib/video-thumb');
-
-// A url like /media/renders/<project>/<name>.mp4 -> the absolute path, with nothing able to walk
-// out of the renders folder.
-function _finalPath(url) {
-  const clean = String(url || '').split('?')[0];
-  if (!/\.(mp4|mov|webm|mkv)$/i.test(clean)) return null;
-  return require('../lib/media').toDiskWithin(clean, [FINALS_DIR]);
-}
-
-// ── A finished render: filed, named, kept ────────────────────────────────────
-// Two doors in the order the result window uses them.
-//
-//   finish   the moment a render exists: filed into the queue as ready, so it can be found
-//            again after the window closes;
-//   save     Save & download: the file takes the name typed (renamed in finals/, with its
-//            poster), and gets a poster if it has none.
-const MVQ = require('./mv3q');
-const _ROOT_DIR = require('../lib/config').ROOT_DIR;
-const { toUrl } = require('../lib/media');
-
-router.post('/mv3/render/finish', (req, res) => {
-  try {
-    const b = req.body || {};
-    const abs = _finalPath(b.url);
-    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
-    const item = MVQ.fileFinished({ url: b.url, title: b.title, key: b.key, kind: b.kind, dur: b.dur,
-                                    owner: OWN.uidOf(req), ownerNick: req.user ? req.user.nickname : null });
-    res.json({ success: true, queueId: item.id, srt: _srtUrl(abs) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// Renames the file (and its poster) to `name` in its own project folder, uniquified. Returns the
-// new url.
-// (phase V33.4) THROUGH lib/relocate.js: the file moves with its poster and its subtitles file (phase V30, block 4), and
-// every store that names them follows - the queue's entry, and a highlights fragment's record of its render among them.
-// (phase V73, (rn-2) а) The rule lives in lib/render-files.js now - the viewer's Rename of a render takes it too.
-const _renameFinal = (abs, url, name) => require('../lib/render-files').rename(abs, name);
-
-const JOB = require('../lib/mv3b-job');
-// A render's subtitles file, as an address - or null when it has none.
-const _srtUrl = (abs) => { const s = JOB.srtOf(abs); return fs.existsSync(s) ? toUrl(s) : null; };
-
-router.post('/mv3/render/save', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const abs = _finalPath(b.url);
-    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
-    const name = String(b.name || '').trim().slice(0, 160) || path.basename(abs, '.mp4');
-    const moved = _renameFinal(abs, b.url, name);
-    let thumb = null;
-    try { thumb = await makeThumb(moved.url); } catch (e) { /* a missing poster is not a reason to lose the render */ }
-    const patch = { url: moved.url, title: name };
-    // Its entry - by its id, or by the address it had (or has: the move rewrote the queue's store too).
-    const byUrl = MVQ.findByUrl(b.url) || MVQ.findByUrl(moved.url);
-    const entry = (b.queueId && MVQ.updateEntry(String(b.queueId), patch)) || (byUrl && MVQ.updateEntry(byUrl.id, patch)) || null;
-    res.json({ success: true, url: moved.url, name, thumb: thumb || null, queueId: entry ? entry.id : null, srt: _srtUrl(moved.abs) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-router.post('/mv3/render/discard', (req, res) => {
-  try {
-    const abs = _finalPath((req.body || {}).url);
-    if (!abs) return res.status(400).json({ success: false, error: 'not a render path' });
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-    // Its subtitles file with it (phase V30, block 4).
-    try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open: it stays beside nothing */ }
-    // The queue entry filed at finish goes with the file.
-    try { MVQ.removeByUrl(String((req.body || {}).url || '')); } catch (e) {}
-    // Its poster too, if one was made.
-    try {
-      const turl = thumbUrlFor(toUrl(abs));
-      const tabs = path.join(_ROOT_DIR, String(turl).replace(/^\/+/, ''));
-      if (fs.existsSync(tabs)) fs.unlinkSync(tabs);
-    } catch (e) {}
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 /* ── A new, empty project ────────────────────────────────────────────────────
    POST /api/mv3/timeline/new { title, format? } | { projectId } -> { success, key, version }
 
@@ -457,15 +364,16 @@ router.post('/mv3/timeline/new', (req, res) => {
   try {
     const b = req.body || {};
     const projectId = String(b.projectId == null ? '' : b.projectId).trim();
-    const cur = _read();
-    let key = '';
-    let title = '';
 
-    // (phase V20) THE draft: the one there is, or a new one named for the moment.
+    // (phase V20) THE draft: the one there is, or a new one named for the moment. Before the full read below: the draft
+    // there is is found in the store's index (V76.3), and every chat's first open asks this.
     if (b.draft) {
       const dr = _ensureDraft(req);
       return res.json({ success: true, key: dr.key, version: dr.version, title: dr.title, draft: true });
     }
+    const cur = _read();
+    let key = '';
+    let title = '';
     if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
       if (!p) return res.status(404).json({ success: false, error: 'no such project' });
@@ -726,69 +634,6 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       catch (e) { console.warn('[mv3] delete: its category was not let go of -', e.message); }
     }
     res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files, released });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-/* ── The Scenarios project behind a Merge key ────────────────────────────────
-   GET /api/mv3/timeline/:key/source -> { success, project | null, via }
-
-   The result window fills the parts of a creative's name from the Scenarios record - the
-   vertical, the product, the cast character, the gender. A project imported from Scenarios
-   carries that record's id in its key (sv3_<id>); a COPY does not - it gets a key of its own,
-   and until now it kept nothing about where it came from, so a render out of a copy was named
-   from its title alone. A copy now remembers its source (`from`), and this walks that chain
-   back to the import. Copies made before the field existed are matched by TITLE instead: the
-   import names a project after the record, date first, and a copy adds "(copy)"; both are
-   taken off before comparing, and so is the "(2)" a second import gets.
-   ──────────────────────────────────────────────────────────────────────────── */
-const _titleBase = (s) => String(s || '')
-  .replace(/^local_\d+_/, '')
-  .replace(/^(\d{4}-\d{2}-\d{2}\s*[-—–]\s*)+/, '')
-  .replace(/\s*\(copy(?: \d+)?\)$/i, '')
-  .replace(/\s*\(\d+\)$/, '')
-  .replace(/\s*·\s*stills$/i, '')
-  .trim().toLowerCase();
-
-// The Scenarios projects, for the one thing Merge still asks them about: which project a timeline
-// was made from, for its name. (The require used to sit with the import route that phase G took.)
-const SCEN3 = require('./scen3');
-
-// `loaded` is the scenarios, for a caller resolving a whole list at once: without it every
-// call reads them off disk again.
-function _scenBehind(timelines, key, loaded) {
-  const all = loaded || SCEN3.loadProjects() || [];
-  const byId = (id) => all.find(x => String(x.id) === String(id)) || null;
-  const seen = new Set();
-  let k = String(key || '');
-  while (k && !seen.has(k)) {
-    seen.add(k);
-    const m = /^sv3_(\d+)/.exec(k);
-    if (m) { const p = byId(m[1]); if (p) return { p, via: 'key' }; break; }
-    const t = timelines[k];
-    if (!t || !t.from) break;
-    k = String(t.from);
-  }
-  const t = timelines[String(key || '')];
-  const base = t ? _titleBase(t.title) : '';
-  const p = base ? all.find(x => _titleBase(x.name) === base) : null;
-  return p ? { p, via: 'title' } : null;
-}
-
-router.get('/mv3/timeline/:key/source', (req, res) => {
-  try {
-    const cur = _read();
-    const key = String(req.params.key || '');
-    const rec = cur.timelines[key];
-    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    const hit = _scenBehind(cur.timelines, key);
-    if (!hit) return res.json({ success: true, project: null, via: null });
-    const p = hit.p;
-    const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
-    res.json({ success: true, via: hit.via, project: {
-      id: String(p.id), name: String(p.name || ''), title: String(p.title || ''),
-      vertical: String(p.vertical || ''), product: String(p.product || ''),
-      gender: String(p.gender || ''), characterName: String(cast.characterName || ''),
-    } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

@@ -15,13 +15,14 @@
      - the writer stops for a look (as in the video chat, V16) when it is on, and with it off a light agent puts the
        words into English and names the pictures (the owner's answer (g));
      - a frame that lands is the project's, in its frames folder - `to frames` puts it into the set with the edge it was
-       asked with (`shot`), `to reference` into the `frame` place, a press opens it large (the stage is under the window);
-     - no hover popups (the owner): a picture is opened by a press;
+       asked with (`shot`), `to reference` into the `frame` place;
+     - (V91 block 3, the owner 2026-11-12) a press on a frame or on a message's picture does nothing: ⤢ in its top-right corner
+       opens it large; the pointer resting on a thing in the zone shows it larger over the chat's field, as in the other chats;
      - the almanac at the foot of the column - not yet, dimmed.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { createChat, el, thumbOf, json, money, refCell, almanacSoon, switchRow } from './chat-shell.js';
+import { createChat, el, thumbOf, json, money, refCell, almanacSoon, switchRow, mediaBtn } from './chat-shell.js';
 import { note } from '../ask.js';
 import { closePick } from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
@@ -55,7 +56,7 @@ const NOT_PROP = 'A product comes from IMAGES → Props - add it there with New 
 const SHOTS = [['', 'none'], ['selfie', 'selfie'], ['half', 'half body'], ['full', 'full body']];
 
 let _proj = null;              // the talking head's project record, handed in by every paint
-let _hooks = {};               // { stage(path, name), added(project) } from the panel
+let _hooks = {};               // { added(project) } from the panel
 let _shot = '';                // where the frame's edge is - '' none
 let _shotSel = null;
 let _auto = {};                // { character, place } - what was put into those places from the casting
@@ -156,8 +157,8 @@ function FRAMES(ctx) {
   // by number and field -, then two columns: on the left the PROMPT - with the writer, the field to edit and its variants,
   // `draw`, `write it again`; without it, what went to the model - and on the right THE FRAME: a box of the project's shape
   // where the picture lands - empty, then counting down, then the frame -, its arrows through every frame of this message,
-  // the prompt variant it was drawn from, `to frames` / `in frames` and `to reference`. A press on the frame puts it on the
-  // stage, a right-click opens it large.
+  // the prompt variant it was drawn from, `to frames` / `in frames` and `to reference`. ⤢ in the frame's corner opens the
+  // message's frames large; a press on the frame itself does nothing (V91 block 3).
   const _live = new Map();       // card id -> { m, left, right, progs, ta, ver, go, price, save, patchKey }
   const _cardN = new Map();      // card id -> how many to draw
   const _patchT = new Map();     // a prompt being typed: its save, a moment later
@@ -212,11 +213,10 @@ function FRAMES(ctx) {
       const img = document.createElement('img');
       img.src = thumbOf(g.imagePath, 'strip');
       img.alt = g.prompt || '';
-      img.title = 'Press to see it on the stage · right-click to open it large';
-      img.addEventListener('click', () => { if (_hooks.stage) _hooks.stage(g.imagePath, 'frame from the chat'); });
-      img.addEventListener('contextmenu', (e) => { e.preventDefault(); _view(gens, i); });
-      img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', 'not on the disk any more')); }, { once: true });
-      box.appendChild(img);
+      // (V91 block 3, the owner 2026-11-12) A press on it does nothing: ⤢ in its corner opens the message's frames large.
+      const big = mediaBtn('image', () => _view(gens, i));
+      img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', 'not on the disk any more')); big.remove(); }, { once: true });
+      box.append(img, big);
     } else if (g.state === 'pending') {
       const strip = el('div', 'mv3-ig-prog');
       box.appendChild(strip);
@@ -575,7 +575,6 @@ function FRAMES(ctx) {
   return {
     name: 'frames',
     kind: 'fchat',
-    noPeek: true,
     // (phase V26.6, the owner's check 2026-10-31, (а)) "image 1", "image/2" yellow in the box and in read more.
     markImages: true,
     ids: { root: 'mv3-fc' },
@@ -621,7 +620,6 @@ function FRAMES(ctx) {
           });
         },
       }),
-      sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },
       upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
     },
@@ -698,7 +696,7 @@ function FRAMES(ctx) {
       },
     },
 
-    // A finished frame in the thread: a press shows it on the stage, a right-click opens it large.
+    // A finished frame in the thread: a press on it does nothing, ⤢ in its corner opens the thread's frames large (V91 block 3).
     shot(g, cell, open) {
       const img = document.createElement('img');
       img.className = 'mv3-ig-shot';
@@ -706,10 +704,9 @@ function FRAMES(ctx) {
       img.alt = g.prompt || '';
       img.loading = 'lazy'; img.decoding = 'async';
       img.style.aspectRatio = String(g.aspect || _format()).replace(':', '/');
-      img.title = 'Press to see it on the stage · right-click to open it large';
-      img.addEventListener('click', () => { if (_hooks.stage) _hooks.stage(g.imagePath, 'frame from the chat'); else open(); });
-      img.addEventListener('contextmenu', (e) => { e.preventDefault(); open(); });
       cell.appendChild(img);
+      const big = mediaBtn('image', open);
+      cell.appendChild(big);
       // "to frames" - into the set, where the lines take frames from; "to reference" - into the `frame` place, for the
       // next change.
       const acts = el('div', 'mv3-ig-acts');
@@ -735,6 +732,7 @@ function FRAMES(ctx) {
         const gone = el('div', 'mv3-ig-gone', 'not on the disk any more');
         gone.style.aspectRatio = img.style.aspectRatio;
         img.replaceWith(gone);
+        big.remove();
         add.disabled = true; use.disabled = true;
       }, { once: true });
     },
@@ -817,8 +815,8 @@ const $root = () => _rootEl || (_rootEl = document.getElementById('mv3-fc'));
 export const isOpen = () => !!(_win && _win.alive());
 
 /**
- * The window, over everything open, for the project `p`. `hooks`: { stage(path, name) - a frame pressed,
- * added(project) - a frame went into the set }. Opened again while open - it only takes the project as it is now.
+ * The window, over everything open, for the project `p`. `hooks`: { added(project) - a frame went into the set }. Opened
+ * again while open - it only takes the project as it is now.
  */
 export function open(p, hooks) {
   _proj = p || null;

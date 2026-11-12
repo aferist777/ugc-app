@@ -747,7 +747,7 @@ function _asClips(pages, old, makeId, lane) {
       id: null, src: null, thumb: null,
       name: p.name, start: p.start, dur: Math.max(PAGE.minClip, +p.dur || 0), words: p.words,
       srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-      transition: null, animation: null, filter: null, volume: null, pairId: null,
+      volume: null, pairId: null,
     };
     if (p.style) c.style = p.style;
     if (p.tx != null) c.tx = p.tx;

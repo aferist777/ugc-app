@@ -49,7 +49,7 @@ async function saveThumbPath(it, thumbPath) {
 }
 
 // The cheap half: the thumbnail is already on disk and only the record is behind. No
-// transcode, so this is what runs by itself when the page opens.
+// transcode, so the check (Media's "⋯" -> Thumbnails) does it without asking.
 export async function linkThumb(it, thumbPath) {
   return saveThumbPath(it, thumbPath);
 }
@@ -362,18 +362,6 @@ export async function cleanBroken() {
   } catch (e) { out.looksError = e.message; }
 
   return out;
-}
-
-// ── Duplicates ──────────────────────────────────────────────────────────────
-// Records pointing at the same file, not clips that look alike — so there is nothing to
-// compare visually. Reporting is free; cleaning drops the redundant records and never touches
-// a file, because the copy that stays needs the same video and the same thumbnail.
-export async function findDupes() {
-  return _json('/api/library/dupes');
-}
-
-export async function cleanDupes() {
-  return _json('/api/library/dupes/clean', { method: 'POST' });
 }
 
 // Media records live under their kind (birols / uploads / hooks); the file shelves are

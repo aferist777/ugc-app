@@ -184,7 +184,7 @@ async function publish() {
   if (!stand) {
     const appKey = String(require('../desktop/update-key').PUBLIC_KEY || '').trim();
     if (appKey !== pub.trim()) throw new Error('desktop/update-key.js does not hold the public half of this signing key - friends would refuse the update');
-    if (git(['status', '--porcelain', '--', 'desktop', 'lib', 'routes', 'public', 'presets-src', 'server.js', 'package.json'])) {
+    if (git(['status', '--porcelain', '--', 'desktop', 'lib', 'routes', 'public', 'server.js', 'package.json'])) {
       say('note: there are uncommitted changes - they are NOT in this release (it is built from the last commit)');
     }
   }

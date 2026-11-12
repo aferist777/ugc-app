@@ -29,18 +29,16 @@ const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
 // '/' opens Home and '/character' lands on the Library's Characters shelf - both answered by redirects.
-const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d', '/lab/ui'];
-const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
-const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
+const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
+const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  // New Character's modules, moved out of the Character page's folder in phase H8
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
                  '/css/char-make.css',
-                 // what is known about a made environment or lookbook (phase V58: the making chats' page went, their routes stay
-                 // for the old Alerts rows), and the links module
-                 '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css', '/api/makechat/environments', '/api/makechat/lookbooks',
+                 // what is known about a made environment or lookbook, and the links module
+                 '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css',
                  // the pictures chat (phase J), on the shell both chats share (phase V1)
-                 '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/js/merge-v3/vcatalog.js', '/css/mv3-catalog.css', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
+                 '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
                  // the captions' one style module, the page's and the server's (phase K0)
                  '/js/captions/style.js', '/js/captions/ass.js',
                  // the fonts captions are drawn in (phase K5)
@@ -62,8 +60,8 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/admin-local.js',
                  // Admin -> Thanks: the repositories the app is built on
                  '/js/admin-thanks.js',
-                 // the interface showcase /lab/ui of phase V73: the new look's sheet, its icons and its fonts
-                 '/css/ui-v73.css', '/js/lab-ui.js', '/js/icons.js', '/js/ui-range.js', '/js/really.js', '/js/references/news.js', '/js/ask.js', '/js/ui-state.js', '/icons/LICENSE-lucide.txt',
+                 // the shared parts of phase V73: the icons, the slider, "really?", the question at a button, and the fonts
+                 '/js/icons.js', '/js/ui-range.js', '/js/really.js', '/js/references/news.js', '/js/ask.js', '/js/ui-state.js', '/icons/LICENSE-lucide.txt',
                  '/fonts/ui/Inter-Regular.woff2', '/fonts/ui/JetBrainsMono-Regular.woff2',
                  // the 3D Studio (PLAN "3D Studio"): its modules, three.js, a mannequin, a motion library, a piece of furniture
                  '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
@@ -84,6 +82,13 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
                      'telegramBotToken', 'telegramChatId', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
 const REMOVED = [
                  // dead routes the V91 cleanup took away (block 2)
+                 // the Render finished window's routes (block 3, Ch2)
+                 ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'], ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
+                 ['GET', '/api/scen3/frame-sets'], ['GET', '/api/scen3/poses'], ['POST', '/api/scen3/frames/plan'], ['GET', '/api/obrazy/main-images'],
+                 ['GET', '/api/library/dupes'], ['POST', '/api/library/dupes/clean'],
+                 ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
+                 ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],
+                 ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],
                  ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
                  ['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],

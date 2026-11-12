@@ -10,15 +10,15 @@
 //                                       turn - at the press - and the work behind the answer
 //   POST /api/mv3/video/upload          a clip from this computer into VIDEO -> Uploads (or the person's folder there)
 //
-// The step-by-step builder (phase V6) - a recipe chosen, the writer and the video are two presses:
-//   POST  /api/mv3/video/write              the recipe's request, its places filled: the recipe card and a prompt card
-//                                           at the press, the writer behind the answer
-//   PATCH /api/mv3/video/card/:id           the person's edit of a prompt card
-//   POST  /api/mv3/video/card/:id/rewrite   the writer again for a card not made yet (a failed one, another model)
+// A message's CARD (phase V16: the writer stopping for a look, the column's storyboard, Kling's first frame) - the writer
+// and the video are presses of their own:
+//   PATCH /api/mv3/video/card/:id           the person's edit of a card
+//   POST  /api/mv3/video/card/:id/rewrite   the writer again for a card (another variant, a failed one, another model)
 //   POST  /api/mv3/video/card/:id/make      the video from the card: a record and an Alerts row per clip, at the press
-//   POST  /api/mv3/video/card/:id/again     a new card with a made card's prompt, to make it once more or change it
-//   POST  /api/mv3/video/card/:id/board     (phase V8) a two-step card's STORYBOARD: a picture of the pictures chat's
-//                                           store (nano-banana-2, 4K) with its Alerts row, at the press
+//   POST  /api/mv3/video/card/:id/board     (phase V8) a card's STORYBOARD (Kling's first frame: its picture): a picture of
+//                                           the pictures chat's store (nano-banana-2, 4K) with its Alerts row, at the press
+//   POST  /api/mv3/video/card/:id/video     (phase V16) the storyboard card's video prompt, from the sheet chosen
+// (The recipes' builder - POST /write, /card/:id/again - went with the catalog in phase V91.)
 //
 // The thread itself is GET /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': old libraries
 // hold 'video' messages of a strip that was removed, and a live 'video' would bring them back.
@@ -45,19 +45,6 @@ const { toDiskExisting } = require('../lib/media');
 
 const KIND = 'clip';
 const AT_ONCE = 3;                 // sends per project at once - a clip can take ten minutes
-const SKILL_KINDS = ['template', 'case', 'example', 'preset'];
-
-// The catalog's skill a send carries (phase V5): the recipe the writer follows, as the person left it - kept on the
-// record with where it came from and whether it was edited.
-function _skill(s) {
-  if (!s || typeof s !== 'object') return null;
-  const text = String(s.text || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
-  if (!text) return null;
-  return {
-    id: String(s.id || '').slice(0, 120), kind: SKILL_KINDS.includes(s.kind) ? s.kind : 'template',
-    title: String(s.title || '').slice(0, 160), v: String(s.v || '').slice(0, 40), edited: !!s.edited, text,
-  };
-}
 const COUNTS = [1, 2];
 const KINDS = ['image', 'video', 'audio'];
 
@@ -145,9 +132,6 @@ router.post('/mv3/video/send', async (req, res) => {
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    // A catalog's skill is the writer's recipe: none with the pen off, nor for Kling motion control - its video has no
-    // writer, and its first frame's writer (V17) follows the person's words, not a recipe.
-    const skill = (isMC || b.write === false) ? null : _skill(b.skill);
     // (phase V29, the owner 2026-10-14) No 中文 any more: every prompt goes in English (the column's box of V15 went).
 
     // What is attached, each checked to be in the library; who can take it.
@@ -204,12 +188,10 @@ router.post('/mv3/video/send', async (req, res) => {
     if (fw) return res.status(400).json({ success: false, error: fw });
     const sheet = media.some(m => m.kind === 'image' && m.role === 'storyboard');
     // (phase V15, the owner 2026-10-07) The column's storyboard: the writer writes the sheet's prompt from this message,
-    // the sheet is drawn, and it stops there - the video is made from the storyboard's card. Seedance's and the writer's;
-    // a recipe draws its own storyboard on its card.
+    // the sheet is drawn, and it stops there - the video is made from the storyboard's card. Seedance's and the writer's.
     if (b.storyboard) {
       if (_family(model) !== 'seedance') return res.status(400).json({ success: false, error: 'a storyboard is drawn for Seedance - pick a Seedance model' });
       if (b.write === false) return res.status(400).json({ success: false, error: 'the storyboard is written by the writer - switch the writer on' });
-      if (skill) return res.status(400).json({ success: false, error: 'a recipe decides its own steps - a two-step recipe draws its storyboard on its card' });
       if (sheet) return res.status(400).json({ success: false, error: 'a storyboard is among the pictures already - make the video from its card, or take it off to draw a new one' });
       const wrong = _twoStepWrong(model, b.agg, params, media);
       if (wrong) return res.status(400).json({ success: false, error: wrong });
@@ -262,14 +244,14 @@ router.post('/mv3/video/send', async (req, res) => {
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
         project, send: msgId, kick, where, stage: first,
-        model, agg: fits[0].agg, prompt: text, said: text, params, media, skill,
+        model, agg: fits[0].agg, prompt: text, said: text, params, media,
       }).id);
     }
     // (phase V18.3) The answer carries what was asked - the words and the attachments - and is drawn as the one message.
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path), asked: text, media });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
-    _work({ project, text, model, isMC, asTyped, media, params, skill, ids, kick, before, pair: fits[0], frames: fr });
+    _work({ project, text, model, isMC, asTyped, media, params, ids, kick, before, pair: fits[0], frames: fr });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/send]', err.message);
@@ -293,7 +275,7 @@ async function _work(o) {
       // (phase V16) Frames: the writer writes them with the words or without, and our opening goes before its prompt.
       const open = VR.framesOpening(o.frames);
       const t = await AGENT.thinkVideo({ model: o.model, text: o.text || (o.frames ? NO_WORDS_FRAMES : ''), media: o.media, picUrls: sees.urls, seen: sees.seen,
-                                         thread: o.before, skill: o.skill, params: o.params, max: _roomFor(o.pair.promptMax, open), frames: o.frames || null });
+                                         thread: o.before, params: o.params, max: _roomFor(o.pair.promptMax, open), frames: o.frames || null });
       if (t.ask) {
         for (const id of o.ids) VGENS.refuse(id, 'the writer asked a question instead', o.kick);
         CHAT.add({ project: o.project, kind: KIND, role: 'agent', text: t.ask });
@@ -317,24 +299,17 @@ async function _work(o) {
   }
 }
 
-// ── The step-by-step builder (phase V6, the owner 2026-10-06) ───────────────
-// A recipe chosen, the chat is a builder and the person writes in its cards, not in a box. The recipe's REQUEST - the
-// first paragraph of its text - has PLACES, [like this], the person fills in; the press sends it to the WRITER alone:
-// the frozen recipe card and a prompt card are written at once, and the writer works behind the answer - the request
-// is its message, the rest of the recipe its template, and it never asks back. The prompt it makes is the person's to
-// edit, and only then is the video made from it (make: the records and their Alerts rows at the press, their prompt
-// READY - a retry from Alerts sends it as it is). No Alerts row for the writer: it is a text, seconds - the card is its
-// record, and a card left 'writing' by an app that closed fails when the thread is read (lib/mv3-chat.js).
+// ── The cards (phase V6; the writer stopping for a look since V16) ──────────
+// The writer works behind the answer into a CARD - a prompt card, the storyboard's, Kling's first frame's - and the prompt
+// it makes is the person's to edit; only then is the video made from it (make: the records and their Alerts rows at the
+// press, their prompt READY - a retry from Alerts sends it as it is). No Alerts row for the writer: it is a text, seconds
+// - the card is its record, and a card left 'writing' by an app that closed fails when the thread is read
+// (lib/mv3-chat.js).
 const WRITE_AT_ONCE = 3;
-const GAP = /\[([^\[\]\n]{1,600})\]/g;
 // A reference however it was written - {{image:1}}, {{ Image : 1 }} - is rendered for the model the same
 // (lib/video-models.js render): every check and the translator read it in ONE form, so it is put in that form first.
 const REF_ANY = /\{\{\s*(image|video|audio)\s*:\s*(\d+)\s*\}\}/gi;
 const _strictRefs = (p) => String(p || '').replace(REF_ANY, (all, k, n) => '{{' + k.toLowerCase() + ':' + (+n) + '}}');
-// A place that only says how long and what shape the clip is (the page fills it from the column) - not a name.
-const SIZE_WORDS = /\b(total|length|duration|long|about|around|in|of|a|the|and|sec|secs|second|seconds|s|vertical|horizontal|square|portrait|landscape|aspect|ratio|format|frame|clip)\b/gi;
-const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+/g, ' ').replace(/\d+(\.\d+)?/g, ' ')
-  .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
 // (phase V23) Counted on the raw thread - the whole read folded in every record just to count cards.
 const _writingIn = (project) => CHAT.writingCount(project);
 
@@ -360,7 +335,7 @@ function _boardInfo(quality) {
   };
 }
 
-// ── Kling motion control's FIRST FRAME (phase V7.6 as a recipe; the chat's own way since V17, the owner 2026-10-08) ──
+// ── Kling motion control's FIRST FRAME (phase V17, the owner 2026-10-08; phase V7.6 before it) ──────────────────────
 // 1 · a PICTURE - a frame of the clip redrawn with the person's character in the pose there (nano-banana-2 at 2K - the
 // owner's answer 2 of V7.6: Kling takes 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that
 // picture with the part of the clip. It rides on the storyboard's machinery (`board`, its records, its row, `boardsOf`,
@@ -496,31 +471,6 @@ function _twoStepWrong(model, agg, params, media) {
   return _seatWrong(model, agg, params, list);
 }
 
-// Whether a recipe is a two-step one is the CATALOG's to say (review V8): a draft saved before V8 carries no flag, and a
-// recipe whose first step is not a storyboard - a character sheet made first - is one step here (lib/cookbook-lib.js
-// twoStepOf). The page's word stands only where the catalog cannot answer.
-function _twoStepOf(recipe, claimed) {
-  const r = recipe || {};
-  const story = (ts) => !!(ts && (ts.kind || 'storyboard') === 'storyboard');
-  try {
-    if (r.kind === 'example') return false;
-    const VC = require('../lib/video-catalog');
-    if (r.kind === 'template') {
-      const t = ((VC.vendor() || {}).templates || []).find(x => x && x.id === r.id);
-      if (t) return story(t.twoStep);
-    }
-    if (r.kind === 'case') {
-      const c = (VC.index().cases || []).find(x => x && x.s === r.id);
-      if (c) return !!c.ts;
-    }
-    if (r.kind === 'preset') {
-      const p = require('../lib/video-presets-store').get(r.id);
-      if (p) return story(p.twoStep);
-    }
-  } catch (e) { /* the catalog cannot answer */ }
-  return !!claimed;
-}
-
 // The storyboard prompt goes to a PICTURE model, which reads references as words (review V8): the card's pictures,
 // {{image:N}}, become "Image N" (the way lib/mv3-prompt-rules.js has them named); what a picture model cannot see - the
 // sheet itself, a clip, a sound - goes.
@@ -556,10 +506,8 @@ const _restState = (x) => {
   if (B && B.kind === 'frame') return (B.versions || []).length || B.prompt ? 'ready' : 'failed';
   return (x.card.versions || []).length || x.card.prompt || (B && ((B.versions || []).length || B.prompt)) ? 'ready' : 'failed';
 };
-// (phase V16.6) A card written before its prompts had variants has its one prompt and no list: that prompt becomes
-// variant 1 when the next writing lands, so nothing written is lost.
-const _seedVers = (c) => (Array.isArray(c.versions) && c.versions.length ? c.versions
-  : c.prompt ? [{ id: _verId(), at: c.startedAt || '', model: c.model, agg: c.agg, params: c.params, prompt: c.prompt, writer: c.writer || '', fell: c.fell || '', edited: !!c.edited }] : []);
+// (phase V16.6) A card written before its picture's prompts had variants has its one prompt and no list: that prompt
+// becomes variant 1 when the next writing lands, so nothing written is lost.
 const _seedBoardVers = (B) => (Array.isArray(B.versions) && B.versions.length ? B.versions
   : B.prompt ? [{ id: _verId(), at: '', prompt: B.prompt, aspect: B.aspect || '', writer: '', edited: !!B.edited }] : []);
 // The card writing its sheet's prompt - a new one, or `o.card` written again. { card, kick }.
@@ -714,23 +662,6 @@ async function _watchFor(cardId, kick, model, media, words) {
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
 
-// The request with its places: each one the person changed in its words, each one left as it came - the example - as
-// it stands (a request too); the brackets go.
-function _fill(head, values) {
-  let i = 0;
-  return String(head || '').replace(GAP, (all, ex) => {
-    const v = values[i++];
-    return (v == null || !String(v).trim()) ? ex : String(v).trim();
-  });
-}
-
-// The recipe as a send carries it: what it is, and whether the person edited it.
-function _recipeOf(r) {
-  const o = (r && typeof r === 'object') ? r : {};
-  return { id: String(o.id || '').slice(0, 120), kind: SKILL_KINDS.includes(o.kind) ? o.kind : 'template',
-           title: String(o.title || '').slice(0, 160), v: String(o.v || '').slice(0, 40), edited: !!o.edited };
-}
-
 // The thread's own card, or why not. `type` - one, or a list (phase V15: a storyboard card draws as a two-step one).
 function _cardOf(id, project, type) {
   const m = CHAT.get(id);
@@ -738,57 +669,6 @@ function _cardOf(id, project, type) {
   // (phase V21) In the thread of the project asked from - the drafts' conversation for the draft, whatever draft wrote it.
   if (!m || String(m.project || '') !== CHAT.threadOf(project) || !m.card || !types.includes(m.card.type)) return null;
   return m;
-}
-
-// The writer for one card, behind the answer: what it wrote is filed into the card only while the card is still
-// waiting for THIS writer (a card written again, made, or cleared meanwhile is left alone).
-// (phase V16.6) Every writing is a VARIANT, as the plain chat's are (V16.3): of the video prompt, and of a two-step card's
-// storyboard prompt with it - the newest chosen; one that fails leaves the variants there were, and says why.
-async function _writeCard(cardId, kick, o) {
-  let out;
-  try {
-    const watched = await _watchFor(cardId, kick, o.model, o.media, o.filled);
-    const sees = await _writerSees(o.media, 'write', watched);
-    const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
-                                       skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep, watched });
-    out = t.prompt ? { prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '' }
-      : { error: t.fail || 'the writer answered nothing usable - write it again' };
-    if (t.prompt && o.twoStep) {
-      const pics = o.media.filter(m => m.kind === 'image').length;
-      const k = pics + 1;
-      // The video follows its sheet (review V8): a prompt that does not name it gets the sentence that does, and one
-      // that names a picture the video will not have fails here - before the sheet is paid for, not at the make.
-      if (!_namesSheet(out.prompt, k)) out.prompt = (out.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
-      const wrong = _refsWrong(out.prompt, o.media.concat([BOARD_SEAT]));
-      if (wrong) out = { error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' (the storyboard is picture ' + k + ') - write it again' };
-      else {
-        out.boardPrompt = _boardWords(t.board, pics);
-        out.boardAspect = t.boardAspect || (VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9');
-      }
-    }
-  } catch (e) {
-    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
-  }
-  try {
-    CHAT.update(cardId, (m) => {
-      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
-      if (out.prompt) {
-        const at = new Date().toISOString();
-        const v = { id: _verId(), at, model: o.model, agg: o.agg || m.card.agg, params: o.params, prompt: out.prompt,
-                    writer: out.writer, fell: out.fell, edited: false };
-        m.card.versions = _seedVers(m.card).concat([v]).slice(-10);
-        Object.assign(m.card, { cur: v.id, prompt: v.prompt, model: v.model, agg: v.agg, params: v.params, writer: v.writer, fell: v.fell,
-                                edited: false, error: '' });
-        if (m.card.board && out.boardPrompt != null) {
-          const B = m.card.board;
-          const bv = { id: _verId(), at, prompt: out.boardPrompt, aspect: out.boardAspect, writer: out.writer, edited: false };
-          B.versions = _seedBoardVers(B).concat([bv]).slice(-10);
-          Object.assign(B, { cur: bv.id, prompt: bv.prompt, aspect: bv.aspect, edited: false });
-        }
-      } else m.card.error = out.error;
-      m.card.state = _restState(m);
-    });
-  } finally { CHAT.writing.delete(kick); }
 }
 
 // (phase V16, the owner 2026-10-07) Seedance's FRAMES ("pictures are"): the first frame - and the last - by their roles,
@@ -910,53 +790,6 @@ function _settings(b) {
   return { model, params, agg: String(b.agg || '') };
 }
 
-router.post('/mv3/video/write', async (req, res) => {
-  const b = req.body || {};
-  let kick = '';
-  try {
-    const project = String(b.project || '').trim();
-    if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
-    const s = _settings(b);
-    if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'a recipe is not written for Kling motion control - send your pictures and the clip from the box' });
-    const twoStep = _twoStepOf(b.recipe, b.twoStep);
-    if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
-    const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
-    if (!head) return res.status(400).json({ success: false, error: 'the recipe has no request to fill in' });
-    const body = String(b.body || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
-    const values = (Array.isArray(b.values) ? b.values : []).slice(0, 24).map(v => (v == null ? null : String(v).slice(0, 2000)));
-    const filled = _fill(head, values).slice(0, 8000);
-    const mm = _mediaOf(b.media);
-    if (mm.error) return res.status(400).json({ success: false, error: mm.error });
-    const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
-    if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-    const seat = twoStep ? _twoStepWrong(s.model, s.agg, s.params, mm.media) : '';
-    if (seat) return res.status(400).json({ success: false, error: seat });
-    // (review V7) The clips and sounds as the first rung would take them - before the writer (and a sheet) is paid.
-    const fw = await _filesWrong(rt.fits[0], mm.media);
-    if (fw) return res.status(400).json({ success: false, error: fw });
-    if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
-
-    const recipe = _recipeOf(b.recipe);
-    kick = 'w' + crypto.randomBytes(8).toString('hex');
-    // The kick is alive BEFORE its card exists: a read in between must not take the card for a dead writer's.
-    CHAT.writing.add(kick);
-    const refs = mm.media.map(m => m.path);
-    const rc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs, media: mm.media,
-                          card: { type: 'recipe', recipe, head, values, filled, body } });
-    const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs, media: mm.media,
-                          card: { type: 'prompt', state: 'writing', kick, startedAt: new Date().toISOString(), from: rc.id, recipe,
-                                  model: s.model, agg: rt.fits[0].agg, params: s.params,
-                                  board: twoStep ? { prompt: '', aspect: '', genIds: [], chosen: '' } : undefined } });
-    res.json({ success: true, recipe: rc.id, card: pc.id });
-    _writeCard(pc.id, kick, { model: s.model, agg: rt.fits[0].agg, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax, twoStep });
-  } catch (err) {
-    if (kick) CHAT.writing.delete(kick);
-    console.error('[mv3-video/write]', err.message);
-    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // The person's edit of a prompt card - while it is not made yet.
 router.patch('/mv3/video/card/:id', (req, res) => {
   const b = req.body || {};
@@ -994,7 +827,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
-      // (phase V16) A storyboard's prompt by variant - the column's storyboard and (V16.6) a two-step recipe's.
+      // (phase V16) A storyboard's prompt by variant - the column's storyboard, and Kling's first frame's picture prompt.
       if (x.card.board && Array.isArray(x.card.board.versions) && x.card.board.versions.length) {
         const B = x.card.board;
         const pickB = (id) => B.versions.find(v => v.id === id);
@@ -1137,32 +970,8 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       _writePlain(m.id, kick, { model: s.model, agg: rt.fits[0].agg, text: m.card.text, media: mm.media, params: s.params, max: rt.fits[0].promptMax, before: [] });
       return;
     }
-    const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
-    if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
-    const s = _settings(b);
-    if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'a recipe is not written for Kling motion control - send your pictures and the clip from the box' });
-    if (m.card.board && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - pick a Seedance model' });
-    const mm = _mediaOf(m.media);
-    if (mm.error) return res.status(400).json({ success: false, error: mm.error });
-    const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
-    if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-    const seat = m.card.board ? _twoStepWrong(s.model, s.agg, s.params, mm.media) : '';
-    if (seat) return res.status(400).json({ success: false, error: seat });
-    if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
-    kick = 'w' + crypto.randomBytes(8).toString('hex');
-    CHAT.writing.add(kick);
-    // (phase V16.6) Another VARIANT: the ones there are stay, and the card shows the chosen one until the new one lands.
-    const ok = CHAT.update(m.id, (x) => {
-      if (!x.card || x.card.state === 'writing') return false;
-      Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), error: '' });
-      // Its sheets stay on the card, none chosen: the new prompts may be for another sheet (review V8).
-      if (x.card.board) x.card.board.chosen = '';
-    });
-    if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
-    res.json({ success: true, card: m.id });
-    _writeCard(m.id, kick, { model: s.model, agg: rt.fits[0].agg, filled: rc.card.filled, body: rc.card.body, media: mm.media, params: s.params,
-                             max: rt.fits[0].promptMax, twoStep: !!m.card.board });
+    // An older card of the recipes' builder (the catalog went in phase V91): nothing to write it again from.
+    return res.status(410).json({ success: false, error: 'this card cannot be written again - send the message again' });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/rewrite]', err.message);
@@ -1179,15 +988,6 @@ function _refsWrong(prompt, media) {
     if (+n < 1 || +n > have[k]) return 'the prompt names ' + word[k] + ' ' + n + ', and ' + (have[k] ? 'only ' + have[k] + (have[k] === 1 ? ' is' : ' are') : 'none is') + ' attached';
   }
   return '';
-}
-
-// A short name for what a card makes - the Alerts row and the shelf say it: the first place the person changed,
-// else the recipe's title.
-function _saidOf(rc, prompt) {
-  const gaps = [...String((rc && rc.card && rc.card.head) || '').matchAll(GAP)].map(g => g[1]);
-  const vals = ((rc && rc.card && rc.card.values) || []).map((v, i) => (gaps[i] != null && _isSize(gaps[i]) ? '' : String(v || '').trim())).filter(Boolean);
-  const title = rc && rc.card && rc.card.recipe ? rc.card.recipe.title : '';
-  return (vals[0] || title || String(prompt || '')).replace(/\s+/g, ' ').slice(0, 200);
 }
 
 // The video from a card: what it says now (the person's edit), the settings of the column, the attachments it was
@@ -1272,14 +1072,9 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
-    const recipe = m.card.recipe || (rc && rc.card.recipe) || null;
-    const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
-    // A card with no recipe card of its own (V7.6's frame-swap) is said by its recipe's title; a plain one (V16) by the
-    // person's words.
+    // Said by the person's words (phase V16) - a card with none by its prompt.
     const said = frame && m.card.plain && !String(m.card.text || '').trim() ? 'motion control from its first frame'
-      : m.card.plain || m.card.type === 'board' ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
-      : rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
+      : String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200);
     // (phase V16) The variant of the prompt the person made it from - chosen, and kept with the attempt.
     const ver = Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
     const where = (b.where && typeof b.where === 'object') ? b.where : {
@@ -1296,7 +1091,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
         project, send: m.id, part, kick, where, stage: AGENT.english(prompt) ? 'asking ' + rt.fits[0].aggLabel : 'translating the prompt',
-        model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, skill, ready: true,
+        model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, ready: true,
       }).id);
     }
     CHAT.update(m.id, (x) => {
@@ -1404,7 +1199,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     // (phase V15) A storyboard of the column is said by the words it was drawn for.
     // (phase V17) Kling's first frame is said by the person's words too, or as what it is.
     const title = m.card.type === 'board' ? _short(m.card.text)
-      : frame && m.card.plain ? (_short(m.card.text) || 'first frame') : ((m.card.recipe && m.card.recipe.title) || 'video');
+      : frame && m.card.plain ? (_short(m.card.text) || 'first frame') : 'video';
     // (review V7) The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
     // the card is read again and the count asked again here, in the tick the record is written.
     const m2 = _cardOf(req.params.id, project, ['prompt', 'board']);
@@ -1488,28 +1283,6 @@ router.post('/mv3/video/card/:id/video', async (req, res) => {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/video]', err.message);
     if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// A made card's prompt in a new card, ready to change and make again - the made one stays what was sent.
-router.post('/mv3/video/card/:id/again', (req, res) => {
-  const b = req.body || {};
-  try {
-    const project = String(b.project || '').trim();
-    const m = _cardOf(req.params.id, project, 'prompt');
-    if (!m) return res.status(404).json({ success: false, error: 'no such card' });
-    if (m.card.state !== 'sent') return res.status(409).json({ success: false, error: 'it is not made yet - make it, or edit it as it is' });
-    const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: m.refs || [], media: m.media || [],
-                          card: { type: 'prompt', state: 'ready', from: m.card.from || '', copyOf: m.id, recipe: m.card.recipe,
-                                  model: m.card.model, agg: m.card.agg, params: m.card.params, prompt: m.card.prompt,
-                                  writer: m.card.writer || '', edited: !!m.card.edited,
-                                  // (phase V48) What the agent saw of its clips goes with it, as the person left it.
-                                  watch: Array.isArray(m.card.watch) ? m.card.watch.filter(w => w && w.state === 'done') : undefined,
-                                  // Its storyboards go with it - those asked for again from Alerts too.
-                                  board: m.card.board ? Object.assign({}, m.card.board, { genIds: CHAT.boardsOf(m).map(g => g.id).slice(-20) }) : undefined } });
-    res.json({ success: true, card: pc.id });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 

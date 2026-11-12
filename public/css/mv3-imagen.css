@@ -150,9 +150,7 @@
 .mv3-ig-shot{
   width:0; min-width:100%; max-height:320px; height:auto; object-fit:contain;
   border:1px solid var(--border); border-radius:var(--r-xs);
-  cursor:zoom-in;
 }
-.mv3-ig-shot:hover{ border-color:var(--sel-line) }
 /* A picture taken off the shelf since: the place it stood in, said in words. */
 .mv3-ig-gone{
   width:132px; display:flex; align-items:center; justify-content:center; padding:6px;
@@ -166,7 +164,7 @@
 }
 /* The frame the picture will fill, at the shape that was asked for - and Kling's first frame waiting (V18.1). */
 .mv3-ig-shot.is-busy{
-  min-width:0; width:132px; max-width:100%; height:auto; cursor:default;
+  min-width:0; width:132px; max-width:100%; height:auto;
 }
 .mv3-ig-shot.is-busy, .vc-board.is-frame.is-waiting{
   background:repeating-linear-gradient(135deg,
@@ -218,7 +216,8 @@
 .mv3-ig-att-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
 
 /* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
-   Each part grows one empty place at a time and scrolls sideways; with a recipe every cell wears its slot's name. */
+   Each part grows one empty place at a time and scrolls sideways; a cell of a slot (a frame's place, the frames chat's
+   person, place and products) wears its slot's name. */
 .mv3-ig-atts.is-zone{ flex-wrap:nowrap; align-items:stretch; gap:0; padding:7px 12px 6px }
 .mv3-ig-part{ flex:1 1 0; min-width:74px; display:flex; flex-direction:column; gap:4px; padding:0 8px }
 .mv3-ig-part:first-child{ padding-left:0 }
@@ -327,14 +326,28 @@
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
 .mv3-ig-card.is-fail .sp{ font:500 10px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
-/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in the corner plays it large; a sound - a row with
+/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in its middle plays it large; a sound - a row with
    ▶ to listen, its name and its length. One the model cannot take (too short) is dimmed, and says why under the pointer. */
 .mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
-.mv3-ig-cplay{
-  position:absolute; left:4px; top:4px; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
-  background:var(--scrim); color:var(--on-media); font:500 10px/22px var(--font); cursor:pointer; opacity:.85;
+/* (V91 block 3, the owner 2026-11-12) THE ROUND BUTTON on a chat's picture or clip (chat-shell.js mediaBtn) - ⤢ in a picture's
+   top-right corner opens it large, ▶ in a clip's middle plays it in the Library's viewer; a press on the thing itself does
+   nothing. Smaller on a message's attachments. */
+.mv3-ig-mb{
+  position:absolute; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--scrim); color:var(--on-media); font:500 10px/1 var(--font); cursor:pointer; opacity:.85;
 }
-.mv3-ig-cplay:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
+.mv3-ig-mb:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
+.mv3-ig-mb.is-big{ top:4px; right:4px; font-size:14px }
+.mv3-ig-mb.is-play{ left:50%; top:50%; transform:translate(-50%,-50%) }
+.mv3-vc-shot > .mv3-ig-mb.is-play{ width:30px; height:30px; font-size:12px }   /* the thread's clip: its ▶ as large as before */
+.mv3-ig-msg-ref .mv3-ig-mb{ width:18px; height:18px; font-size:8px }
+.mv3-ig-msg-ref .mv3-ig-mb.is-big{ top:2px; right:2px; font-size:12px }
+.vm-refs-s .mv3-ig-mb{ width:16px; height:16px }
+/* A clip playing in its tile while the pointer rests there, without its sound (hover-play.js) - under the tile's ▶, its
+   seconds and its number. */
+.mv3-ig-hbox{ position:absolute; inset:0; overflow:hidden; pointer-events:none }
+.mv3-ig-hvid{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; pointer-events:none }
 .mv3-ig-card.is-sound{
   display:flex; align-items:center; gap:6px; min-height:0; height:30px; padding:0 7px 0 4px; box-sizing:border-box;
 }
@@ -344,42 +357,32 @@
 .mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round, as before */
 .mv3-ig-card.is-short{ opacity:.45 }
 
-/* Hovering shows the picture larger, at one fixed place over the conversation. */
+/* Hovering a thing in the zone shows it larger, at one fixed place over the conversation - a clip playing in it without its
+   sound, over its poster (V91 block 3). */
 .mv3-ig-peek{
   position:fixed; z-index:9450; pointer-events:none;     /* (V64) over a chat's window (8900) */
   padding:4px; border:1px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface); box-shadow:var(--shadow);
 }
 .mv3-ig-peek img{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
+.mv3-ig-peek .mv3-ig-hvid{ inset:4px; width:calc(100% - 8px); height:calc(100% - 8px); object-fit:contain }
 
 /* ── The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own few pieces ── */
-/* The line above the thread: what the chosen model does and what to attach. */
-.mv3-ig-banner{
-  flex:0 0 auto; padding:7px 12px; border-bottom:1px solid var(--border-soft);
-  background:var(--surface); font:500 11px/1.45 var(--font); color:var(--muted);
-}
-.mv3-ig-banner[hidden]{ display:none }
 /* A finished clip: its poster at the clip's own shape, a play mark over it, its length in the corner. */
 .mv3-vc-shot{
   position:relative; width:180px; max-width:100%; max-height:320px;
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
-  background:var(--surface-2); cursor:pointer;
+  background:var(--surface-2);
 }
-.mv3-vc-shot:hover{ border-color:var(--sel-line) }
 .mv3-vc-shot .mv3-ig-shot{ width:100%; height:100%; min-width:0; max-height:none; object-fit:cover; border:0; border-radius:0 }
-.mv3-ig-play{
-  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  background:var(--scrim); color:var(--on-media); font:600 12px/1 var(--font); pointer-events:none;
-}
 .mv3-ig-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
   background:var(--scrim); color:var(--on-media); font:500 10px/1.3 var(--font); pointer-events:none;
 }
 /* Dragged onto a lane (phase V13). */
 .mv3-vc-shot.is-dragging{ opacity:.5 }
-/* A clip or a sound in the zone: its poster or a note, the seconds that go; pressed, the part is chosen. */
-.mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ cursor:pointer; display:flex; align-items:center; justify-content:center }
+/* A clip or a sound in the zone: its poster or a note, the seconds that go - pressed, the part is chosen. */
+.mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ display:flex; align-items:center; justify-content:center }
 .mv3-ig-att .ic{ font:600 11px/1 var(--font); color:var(--muted) }
 .mv3-ig-att .dur{
   position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
@@ -389,8 +392,6 @@
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
 /* Only a part of it goes: its seconds in gold. */
 .mv3-ig-att .dur.is-cut{ color:var(--gold) }
-/* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
-.mv3-ig-att.is-swap{ cursor:pointer }
 .mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
 .mv3-ig-att button.dur:hover{ background:var(--scrim-strong); color:var(--on-media) }
 /* An empty NUMBERED place - a thing taken out keeps its number: dashed, "+" to fill it, the cross to close it. */
@@ -435,60 +436,34 @@ audio.vtrim-media{ background:none; height:32px }
 .vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
 .vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
-/* What the chosen model does, under its dropdown (phase V6 - the line above the thread is the recipe's). */
+/* What the chosen model does and what to attach, under its dropdown (phase V6). */
 .mv3-vc-brief{ margin:1px 0 6px; font:500 10px/1.45 var(--font); color:var(--muted) }
 .mv3-pc.is-narrow .mv3-vc-brief{ flex:1 0 100%; order:99; margin:0 }
 .mv3-vc-params{ display:flex; flex-direction:column }
 .mv3-pc.is-narrow .mv3-vc-params{ flex-direction:row; flex-wrap:wrap; gap:4px 8px }
 
-/* The row just above the box that a chat fills with its own (phase V5: the video chat's catalog and the recipe in use). */
-.mv3-ig-over{ flex:0 0 auto; display:flex; align-items:center; gap:6px; min-width:0; padding:5px 10px 0 }
-.mv3-ig-over[hidden]{ display:none }
-.mv3-ig-over .mv3-c-btn{ padding:2px 8px }
-
-/* ── The video chat's step-by-step builder (phase V6, the owner 2026-10-06) ──
-   A recipe chosen, the input line goes and the person writes in the cards: the recipe's request at the thread's foot -
-   its places in GOLD (asked for by the owner: an exception to "gold once per surface"), dashed while a place holds the
-   recipe's example, solid once it is the person's - and the writer's prompt card, edited before the video is made. */
-.mv3-ig-bar[hidden]{ display:none }
-.mv3-ig-foot:empty{ display:none }
-.mv3-ig-foot{ display:flex; flex-direction:column }
+/* ── The video chat's cards (phase V6, the owner 2026-10-06; the writer's message since V16): the writer's prompt card,
+   edited before the video is made, its presses under it. ── */
 .vc-card{ max-width:min(640px, 100%); width:100% }
 .vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
 .vc-card-h .k{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted) }
 .vc-card-h .k::first-letter{ text-transform:uppercase }
-.vc-card-h .t{ flex:0 1 auto; min-width:0; font:600 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
-.vc-card-h i{ font:500 10px/1 var(--font); font-style:normal; color:var(--muted) }
-.vc-req{ font:500 12px/1.75 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
-.vc-place{
-  padding:1px 5px; margin:0 1px; border-radius:var(--r-xs);
-  border:1px dashed var(--gold); background:var(--gold-soft); outline:none;
-  -webkit-box-decoration-break:clone; box-decoration-break:clone;
-}
-.vc-place.is-example{ color:var(--muted) }
-.vc-place.is-changed{ border-style:solid; color:var(--ink); background:var(--gold-soft) }
-.vc-place[contenteditable]{ cursor:text }
-.vc-place[contenteditable]:focus{ border-style:solid; box-shadow:0 0 0 2px var(--gold-soft); color:var(--ink) }
-/* The length and the shape - the column's, filled in by the code: grey, not a place to write in. */
-.vc-place.is-auto{ border:1px solid var(--border); background:var(--surface-2); color:var(--muted) }
 .vc-card-note{ font:500 10px/1.45 var(--font); color:var(--muted) }
-.vc-fold-row{ display:flex; align-items:center; gap:12px }
-.vc-fold{
-  padding:0; border:0; background:none; cursor:pointer;
-  font:600 10px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted; text-underline-offset:2px;
+/* (moved from the catalog's sheet, css/mv3-catalog.css, when it went in phase V91) A press that reads as a link -
+   "write it again", "attachments back to the zone" (the video chat and the frames chat). */
+.vc-link{
+  padding:0; border:0; background:none; color:var(--ink); font:600 10.5px/1.4 var(--font);
+  cursor:pointer; text-decoration:underline; text-underline-offset:2px;
 }
-.vc-fold:hover{ color:var(--ink) }
-.vc-back{ font-size:10px }
-.vc-req-body{ display:block; width:100%; min-height:160px; resize:vertical; font-family:var(--mono) }
+.vc-link:hover{ color:var(--ink) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
 
 .vc-prompt-ta{ display:block; width:100%; min-height:90px; resize:vertical }
-.vc-card.is-sent .vc-req{ opacity:.92 }
 /* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
-   the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
+   the words (folded after three lines), the attachments. The message drawn at the press says
    "sending…" until its answer takes its place. */
 .vc-asked{ display:flex; flex-direction:column; gap:6px; min-width:0 }
 .vc-asked-t{
@@ -1085,7 +1060,7 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .mv3-fc-shotbox.is-empty{ border-style:dashed; border-color:color-mix(in oklch, var(--gold) 55%, transparent) }
 .mv3-fc-shotbox.is-empty span{ padding:0 10px; text-align:center; font:500 10px/1.35 var(--font); color:var(--muted) }
-.mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; cursor:pointer; display:block }
+.mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; display:block }
 .mv3-fc-shotbox .mv3-ig-prog{ position:absolute; left:6px; right:6px; bottom:6px }
 .mv3-fc-shotbox .mv3-ig-bad{ padding:8px; font-size:10px }
 .mv3-fc-shotnav{ justify-content:space-between }

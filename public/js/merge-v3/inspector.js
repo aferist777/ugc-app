@@ -31,7 +31,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB,
          selectTrackById as selectTrackB, patternsOf as patternsB, setPatterns as setPatternsB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
-// (phase V76) A sound's pitch - presets, semitones, keep timbre.
+// (phase V76) A sound's pitch - semitones, keep timbre.
 import { pitchRows } from './pitch-rows.js';
 import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
@@ -179,12 +179,6 @@ function _paintHead(over) {
   el.title = t;
 }
 
-// THE THREE EFFECTS ARE NOT OFFERED (phase V49, point 5, the owner's (пр14) а: "убираем эти параметры (transition, animation
-// и filter). эти штуки я добавлю в другой фазе"). After cut silence a lane is 20-30 pieces a minute, and a transition picked
-// for the lane played at both ends of every piece and broke the render's runs. The pickers of the clip, the picture and the
-// lane are gone; values already in a project stay in its file and nothing applies them (fx-b.js, lib/mv3b-render.js
-// EFFECTS_ON) - the code that draws and renders them is kept for the phase that brings them back.
-
 // NOT WHILE A CONTROL IS BEING HELD. The panel is rebuilt wholesale, so a repaint that
 // lands mid-gesture replaces the very slider under the pointer with a new element - the
 // drag then continues against a detached node. Observed, not theorised: a repaint
@@ -225,7 +219,7 @@ function _freshenField() {
 //
 // CUT TO WHAT THE RENDERER ACTUALLY READS. Every control here has its filter in
 // lib/mv3b-render.js and its arithmetic in preview-b.js - speed, reverse, how a clip meets
-// the frame, level, the three effects. A control the export ignored would be worse than a
+// the frame, level. A control the export ignored would be worse than a
 // missing one: the missing one is visible, and the ignored one is only discovered by watching
 // the file.
 const _bsep = (host) => host.appendChild(_el('div', 'mv3-c-sep'));

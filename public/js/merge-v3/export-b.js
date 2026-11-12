@@ -436,8 +436,8 @@ function _window(o) {
   const go = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render');
   go.type = 'button';
   go.disabled = !s.end;
-  // The window becomes the progress and then the result - and may be closed meanwhile: the render is an entry of the queue
-  // (phase V73 block 4, (б4-2) а).
+  // The window becomes the progress, closed by the render's popup when it is done - and may be closed meanwhile: the render
+  // is an entry of the queue (phase V73 block 4, (б4-2) а).
   go.addEventListener('click', async () => {
     go.disabled = true; queue.disabled = true;
     const a = await save();

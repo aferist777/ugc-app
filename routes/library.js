@@ -491,7 +491,8 @@ function _mediaShelf(opts) {
 // The categories of the media shelf (`cats`). `kind` is the kind asked for, or '' for every kind.
 //
 // Counts are scoped to that kind. Uncategorized is pinned first because it is
-// furniture rather than a category: it cannot be renamed, moved or deleted.
+// furniture rather than a category: it cannot be renamed, moved or deleted. The rest go in the tree's order (LC.listFor) -
+// the attachment window's dropdown of folders shows them so.
 function _mediaCats(items, kind, labelFor) {
   const scope = kind ? items.filter(i => i.kind === kind) : items;
   const counts = {};
@@ -2018,8 +2019,8 @@ function _deleteOne(kindIn, idIn, filesIn) {
       if (turl) _unlink(turl);
       // Its subtitles file beside it (phase V30, block 4).
       try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open */ }
-      // (phase V73, the owner's (rn-4) а) and its entry in Queue, as /mv3/render/discard takes it - Queue -> open would open
-      // a file that is gone
+      // (phase V73, the owner's (rn-4) а) and its entry in Queue (routes/mv3q.js removeByUrl) - Queue -> open would open a
+      // file that is gone
       try { require('./mv3q').removeByUrl(url); } catch (e) { /* no queue */ }
       return _r(200, { success: true, kind, id, removed });
     }
@@ -2564,103 +2565,6 @@ router.post('/library/broken/clean', (_req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// DUPLICATES — two records, one file
-//
-//   GET  /api/library/dupes          what would go, changing nothing
-//   POST /api/library/dupes/clean    drop the redundant records. FILES ARE NEVER TOUCHED.
-//
-// These are records pointing at the SAME videoPath, not clips that merely look alike — so
-// nothing here compares pixels. Real data has 81 such pairs in the archive, the residue of a
-// restore that ran twice: 55 pairs differ only in `id` and `date`, and the copies all carry
-// one batch timestamp.
-//
-// Which copy stays is decided by how much it knows, because a restored copy knows less: a
-// `prompt` is the strongest sign this is the record the generator itself wrote, then an
-// `imagePath`, then a favourite, and finally the EARLIER date — the original rather than the
-// copy made later.
-// ════════════════════════════════════════════════════════════════════════════
-
-const _dupScore = (e) => [e.prompt ? 1 : 0, e.imagePath ? 1 : 0, e.favorite ? 1 : 0];
-function _dupRank(a, b) {
-  const sa = _dupScore(a), sb = _dupScore(b);
-  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return sb[i] - sa[i];
-  return _ts(a.date) - _ts(b.date);            // earlier first
-}
-
-// Groups are found WITHIN a store, never across: birols and uploads share one file and one
-// localStorage key, hooks are their own, and a record cannot be deduplicated into a different
-// store without changing what kind of thing it is.
-function _dupeGroups() {
-  const out = [];
-  for (const kind of ['birols', 'hooks']) {
-    const store = RECORD_STORES[kind];
-    let list = [];
-    try { list = store.read(); } catch (e) { continue; }
-    const by = new Map();
-    for (const e of list) {
-      if (!e || !e.videoPath) continue;
-      const k = String(e.videoPath).split('?')[0];
-      if (!by.has(k)) by.set(k, []);
-      by.get(k).push(e);
-    }
-    for (const [videoPath, recs] of by) {
-      if (recs.length < 2) continue;
-      const sorted = [...recs].sort(_dupRank);
-      const brief = (e) => ({ id: String(e.id), name: String(e.name || ''), categoryId: e.categoryId || '',
-        categoryLabel: e.categoryLabel || '', date: e.date || null, hasPrompt: !!e.prompt });
-      out.push({
-        store: kind, videoPath,
-        file: videoPath.split('/').pop(),
-        keep: brief(sorted[0]),
-        drop: sorted.slice(1).map(brief),
-        // Worth surfacing: the copies disagreed on category, so the clip will appear under the
-        // kept record's one from now on.
-        categoryChanges: new Set(recs.map(e => e.categoryId || '')).size > 1,
-      });
-    }
-  }
-  return out;
-}
-
-router.get('/library/dupes', (_req, res) => {
-  try {
-    const groups = _dupeGroups();
-    res.json({
-      success: true,
-      groups,
-      total: groups.reduce((n, g) => n + g.drop.length, 0),
-      categoryChanges: groups.filter(g => g.categoryChanges).length,
-    });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-router.post('/library/dupes/clean', (_req, res) => {
-  try {
-    const groups = _dupeGroups();
-    const dropped = [];
-    for (const kind of ['birols', 'hooks']) {
-      const mine = groups.filter(g => g.store === kind);
-      if (!mine.length) continue;
-      const doomed = new Set();
-      for (const g of mine) for (const d of g.drop) doomed.add(d.id);
-      const store = RECORD_STORES[kind];
-      const list = store.read();
-      const next = list.filter(e => !(e && doomed.has(String(e.id))));
-      // Refuse rather than half-apply: the count has to match what was planned, or the store
-      // changed underneath us and the plan is stale.
-      if (list.length - next.length !== doomed.size) {
-        return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
-      }
-      store.write(next);
-      for (const id of doomed) dropped.push({ id, store: kind });
-    }
-    // No file is unlinked here, by design: every dropped record shares its video and its
-    // thumbnail with the copy that stays.
-    res.json({ success: true, dropped, count: dropped.length });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 // A clip that is on disk but in no store is invisible, so an upload is two steps:
 // POST /api/biroly/upload puts the file in media/work/ and makes its thumbnail, then this
 // files it on the shelf. source:'upload' is what tells the shelf it is an upload rather
@@ -2820,8 +2724,9 @@ function _subtree(kind, id) {
   return ids.length ? ids : [String(id)];
 }
 
-// Every list in one request, in the tree's order (the locked first, then A-Z, a folder's own after it), each folder
-// with where it is: `parent`, `trail`. A card's dropdown offers its OWN kind's list, by path - "Товары / Обувь / Лето".
+// Every list in one request, in the tree's order (lib/library-cats.js listFor: the locked first, then A-Z, a folder's own
+// after it), each folder with where it is: `parent`, `trail`. A card's dropdown offers its OWN kind's list, by path -
+// "Товары / Обувь / Лето".
 router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
@@ -2837,10 +2742,9 @@ router.get('/library/cats', (_req, res) => {
         parent: c.parent || '', trail: c.trail || [c.title], ...(LC.closedWhy(k, c.id, state) ? { closed: true } : {}),
         ...(k === 'birols' ? { model: MF.modelOfCat(state, c.id) } : {}) }))
         .filter(c => !(k === 'birols' && MF.isModelCat(c.id) && !bUsed.has(c.model)));
-      const kids = (p) => list.filter(c => c.parent === p)
-        .sort((a, b) => (Number(!!b.locked) - Number(!!a.locked)) || _abc(a.title || a.label, b.title || b.label));
+      // listFor's order is the tree's already; walked again so that a folder left out takes the folders under it along.
       const out = [];
-      const walk = (p) => { for (const c of kids(p)) { out.push(c); walk(c.id); } };
+      const walk = (p) => { for (const c of list) if (c.parent === p) { out.push(c); walk(c.id); } };
       walk('');
       byKind[k] = out;
     }

@@ -18,25 +18,21 @@ export const derived = (path, v) => path
   ? '/api/thumb?src=' + encodeURIComponent(String(path).split('?')[0]) + '&v=' + (v || 'frame')
   : path;
 
-// Which image represents an obraz. v2 prefers a server-computed earliest-mtime
-// map, then obraz.char, then the first usable variation / pool file.
-function _obrazMain(o, mainMap) {
-  const cached = mainMap && mainMap[String(o.id)];
-  if (cached) return cached;
-  if (typeof o.char === 'string' && o.char) return o.char;
-  const v = (Array.isArray(o.variations) ? o.variations : []).find(x => typeof x === 'string' && x && x !== 'error');
-  if (v) return v;
-  const p = (Array.isArray(o.pool) ? o.pool : []).map(x => x && x.file).find(Boolean);
-  return p || '';
+// Which image represents an obraz: the one chosen for it (`char`) - the picture the Library shows, by the Library's own
+// answer (`looks`: routes/library.js _looks - the chosen picture, on disk). A look the Library does not show is not
+// offered either. Fails OPEN like the characters below: without that answer, the chosen picture as the record says.
+function _obrazMain(o, looks) {
+  if (looks) return looks.get(String(o.id)) || '';
+  return (typeof o.char === 'string' && o.char) ? o.char : '';
 }
 
 export async function loadCharacters(force) {
   if (_chars && !force) return _chars;
 
-  const [cd, od, md, sd] = await Promise.all([
+  const [cd, od, ld, sd] = await Promise.all([
     _get('/api/char-store/list'),
     _get('/api/userdata/obrazy'),
-    _get('/api/obrazy/main-images'),
+    _get('/api/library/shelf/looks'),
     // WHO IS ACTUALLY ON THE SHELF. The character store answers with every record that is
     // not a draft, including ones whose reference sheet was never made or has since been
     // deleted - on real data, four of forty-six. The Library shows none of those, because it
@@ -46,7 +42,7 @@ export async function loadCharacters(force) {
   ]);
   const chars   = (cd && cd.chars) || [];
   const obrazy  = (od && od.list)  || [];
-  const mainMap = (md && md.mainImages) || {};
+  const looks = (ld && Array.isArray(ld.items)) ? new Map(ld.items.map(x => [String(x.id), String(x.media || '')])) : null;
   // Fails OPEN: if the shelf cannot be read, everybody is shown rather than nobody. A column
   // that empties itself because one request failed is worse than one that shows too much.
   const shelf = (sd && Array.isArray(sd.items)) ? new Set(sd.items.map(x => String(x.id))) : null;
@@ -56,7 +52,7 @@ export async function loadCharacters(force) {
   obrazy.forEach(o => {
     const cid = String(o.charId || '');
     if (!cid || cid === 'null') return;          // orphans belong to no character
-    const main = _obrazMain(o, mainMap);
+    const main = _obrazMain(o, looks);
     if (!main) return;
     const photos = Array.from(new Set([]
       .concat((Array.isArray(o.pool) ? o.pool : []).map(p => p && p.file).filter(Boolean))

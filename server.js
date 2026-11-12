@@ -139,9 +139,8 @@ app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
 // (The audio lab /lab/audio of V34.D went in V34.F: its chat is the sound window now, its tree the media tree's.)
-// /lab/ui is the interface showcase of phase V73 (not in the top strip; Admin -> This computer links to it).
-const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html',
-  '/lab/ui': 'lab-ui.html' };
+// (The interface showcase /lab/ui of phase V73 went in V91.)
+const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -188,7 +187,6 @@ app.use('/api', require('./routes/library'));   // the Library: its shelves, the
 app.use('/api', require('./routes/scen3'));   // the scenarios store, and the talking head and voiceover projects
 app.use('/api', require('./routes/broll'));   // (phase V62) a voiceover's B-roll engine
 app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat (phase V26.5)
-app.use('/api', require('./routes/makechat'));   // the Library's chats that make environments and lookbooks (phase I)
 app.use('/api', require('./routes/character-v2'));   // making a character: the portrait, read and drawn (Library, New Character)
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
@@ -202,7 +200,6 @@ app.use('/api', require('./routes/mv3q'));   // the render queue - Export's Rend
 // from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
 app.use('/api', require('./routes/mv3-video'));   // the video chat's server (phase V2)
-app.use('/api', require('./routes/mv3-catalog'));   // its catalog (cookbook, examples) and the person's presets (phase V4)
 app.use('/api', require('./routes/studio3d'));   // the 3D Studio's scenes (PLAN "3D Studio")
 
 // ── Start ─────────────────────────────────────────────────────────────────────

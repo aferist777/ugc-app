@@ -247,7 +247,7 @@ function _lay(w, j) {
       const cell = {
         id: _acc.newId(), src: j.src, name, thumb: null, poster: null, libId: null,
         start: r3(m.s0), dur, srcDur: dur, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-        transition: null, animation: null, filter: null, volume: null, pairId,
+        volume: null, pairId,
         ...(mergeOf ? mergeOf.cell(lane.kind, first) : {}),
       };
       lane.clips = lane.clips.filter((c) => !gone.has(c.id));

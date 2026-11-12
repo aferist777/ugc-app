@@ -11,7 +11,7 @@
    What it makes (default %TEMP%\ugcb\<version>, short and outside OneDrive - ten thousand files would sync):
      UGC Studio.exe                Electron's own exe under the app's name (node_modules/electron/dist)
      *.dll, *.pak, locales\ ...    the rest of Electron, as it is
-     resources\app\                the app: desktop\ lib\ routes\ public\ presets-src\ server.js package.json - from the
+     resources\app\                the app: desktop\ lib\ routes\ public\ server.js package.json - from the
                                    LAST COMMIT (`git archive HEAD`), never the working tree: other sessions keep half-made
                                    edits in it -, vendor\ (laid out by tools/fetch-*.js, checked here without --optional:
                                    a build with no network must fail, not ship without yt-dlp), node_modules\ - only the
@@ -30,8 +30,8 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const REPO = path.join(__dirname, '..');
-const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'presets-src', 'server.js', 'package.json'];
-const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-cookbook', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
+const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'server.js', 'package.json'];
+const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
 
 const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt; };
 const say = (s) => console.log('[build] ' + s);

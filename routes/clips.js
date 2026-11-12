@@ -43,7 +43,7 @@ const _upload = multer({
 // The media shelf draws 72px cards. Most of the library had no thumbnail (so the
 // card loaded the VIDEO to show one frame) or a "thumbnail" that was the full
 // 720x1280 frame - 14MB across the shelf. These two endpoints let the page fix
-// that on load, incrementally.
+// that at the press of Media's "⋯" -> Thumbnails, incrementally.
 //
 // The server only MAKES files here. Remembering the thumbnail on the clip's record is the page's
 // next call (saveThumbPath in public/js/library/actions.js, through routes/library.js).
@@ -61,7 +61,7 @@ const _upload = multer({
 //   ok    the record points at a real, small thumbnail - nothing to do
 //   link  a good file exists but the record does not point at it - a write, no ffmpeg
 //   need  no usable file at all, or the one there is a full frame - a transcode
-// `link` is the cheap majority and is what makes the automatic pass on page open safe.
+// `link` is the cheap majority - done at the press without a question.
 router.post('/media/thumbs/audit', async (req, res) => {
   try {
     const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
@@ -120,8 +120,8 @@ router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
     || path.basename(req.file.filename, path.extname(req.file.filename));
-  // A failed thumbnail is not a failed upload: the clip is already on disk, and the
-  // sweep will pick it up on the next page load.
+  // A failed thumbnail is not a failed upload: the clip is already on disk, and
+  // Media's "⋯" -> Thumbnails makes it.
   let thumbPath = null;
   try { thumbPath = (await VT.makeThumb(videoPath)).thumb; }
   catch (e) { console.warn('[biroly/upload] thumb failed:', e.message); }

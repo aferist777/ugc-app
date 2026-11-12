@@ -126,7 +126,6 @@
 }
 .lib-bar .sp{ flex:1; }
 .lib-status{ flex:0 1 auto; min-width:0; }   /* the shared status line (.u-status.is-line) */
-.lib-svc{ display:none !important; }   /* the checks' own buttons: the rows of "⋯" */
 
 /* ── The grid, and the right column about the selected tile (phase B) ──────────
    The column is a third of the width and ONE scroller - its body - so the picture, the voices and

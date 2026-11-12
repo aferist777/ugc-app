@@ -34,8 +34,8 @@
      foot    "from this computer…" (and a clip by a link), what the chat says, "done"; files let go over the window come
              in as before.
 
-   A press attaches or takes off, and the window stays open while the place has room - as before. Opened on a thing in
-   the zone, it opens where the thing is: its row, else its folder (folder-column.js locateFile).
+   A press attaches or takes off, and the window stays open while the place has room - as before. (V91 block 3, the owner's
+   (чк19г): it is no longer opened on a thing in the zone - the zone's "put another in its place" went.)
 
    PHASE V56 (the owner's check of V55 2026-10-28, п. 1, 2, 9; (ги1)-(ги4), (ги8)):
      - "characters & looks" pressed: in place of the tree, the CHARACTERS - the ones with the most looks first, the first
@@ -63,9 +63,8 @@
      - (V57's openChoose for talking head's who / where moved into their own windows in phase V58 - js/merge-v3/wk-setup.js,
        wk-env.js on js/gen-window.js.)
 
-   PHASE V58 (the owner's check of V57 2026-10-29, п. 6; (лк1), (лк2)): a ✕ in the corner of every picture of a folder,
-   pressed twice ("really?" - "used in N projects"), deletes it from the library as its shelf does (js/del-x.js); the window
-   reads itself again and the chat lets go of it (`removed`).
+   (V91 block 3, the owner's (чк19е): "из чата мы не можем удалять из библиотеки") Nothing is deleted from the window - the ✕
+   of phase V58 ((лк1)) on its pictures went; files are deleted in the Library.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -73,8 +72,7 @@ import * as Layers from '../layers.js';
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
-import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../folder-column.js';
-import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from '../del-x.js';
+import { nodeFiles, folderIndex, pruneTree, filesUnder } from '../folder-column.js';
 // (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts, the reason a popup in the
 // corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own, б1-13а).
 import { emptyEl, loadingEl, failedEl, cap } from '../ui-state.js';
@@ -139,8 +137,6 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *   sources   [{ id, label, load() -> Promise<{ items, cats?, why? }>, empty? }]; an item is
  *             { path, name, sub?, cat?, thumb?, big?, poster?, aspect?, dur?, src? }
  *   start     the source to open on ('' - the one this kind was last taken from, else `first`)
- *   select    (phase V15) { srcs, path } - opened on a thing in the zone: the first of `srcs` that holds it is shown,
- *             in its category, the thing in view
  *   left()    how many more go into the place; mark(path) what it is in the zone ('' - not in it); room() the words
  *             of the place, when it is one that is there ('' - "N more go here")
  *   press(it) attach it, or take it off; why(it) why it cannot go ('' - it can)
@@ -150,14 +146,13 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *   make      (phase V26.6) { label, title, on() } - the place's own way to make what goes into it, a button in the foot
  *             (the frames chat's product place: "+ new prop")
  *   onClose()
- *   removed(path)  (V58) a picture of the window deleted by its ✕ - the chat lets go of it
  *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
  *             tree's top nodes, the key it remembers its branches under, the node opened the first time, what of a folder
  *             is shown ('photo' | 'video' | 'audio'), how one of its files becomes an item and (V56) the node a file brought
  *             in lies in. Then `sources` are the rows above the tree (`unless`: a path in the tree that makes the row
  *             needless; a loader may answer `groups` [{ key, label, sub, n, items }] - shown in place of the tree, V56),
- *             `start` is a list of 'row:<id>' / 'node:<key>[/<label>…]' tried in order, `select.srcs` the rows that may
- *             hold the thing, and `anchor` the chat the window stands over. (V57) `fit(it)` - only what it takes is shown and
+ *             `start` is a list of 'row:<id>' / 'node:<key>[/<label>…]' tried in order, and `anchor` the chat the window
+ *             stands over. (V57) `fit(it)` - only what it takes is shown and
  *             counted (a clip by its seconds, `it.dur`); `note` - what the window says of that beside the slot's words.
  */
 export function openPick(o) {
@@ -168,9 +163,8 @@ export function openPick(o) {
   _cache.clear();
   const last = _stored()[o.kind];
   const has = (id) => !!id && o.sources.some(s => s.id === id);
-  const sel = o.select && o.select.path ? { path: o.select.path, srcs: (o.select.srcs || []).filter(has) } : null;
-  const src = sel && sel.srcs.length ? sel.srcs[0] : has(o.start) ? o.start : has(last) ? last : has(o.first) ? o.first : (o.sources[0] || {}).id;
-  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: false, sel: sel && sel.srcs.length ? sel : null };
+  const src = has(o.start) ? o.start : has(last) ? last : has(o.first) ? o.first : (o.sources[0] || {}).id;
+  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: false };
   _build();
   _paintHead();
   _paintSources();
@@ -484,19 +478,7 @@ async function _load(keepCat) {
   _st.cats = (got.cats || []).filter(c => c && c.id && (+c.count > 0 || c.id === _st.cat));
   _st.why = got.why || '';
   _st.failed = _failedAs(got, s.label || 'The shelf', () => _load(keepCat));
-  // (phase V15) Opened on a thing in the zone: on its shelf - the next that may hold it when this one does not -, in its
-  // category, the thing in view.
-  let it = null;
-  if (_st.sel) {
-    it = _st.items.find(x => x.path === _st.sel.path) || null;
-    if (!it) {
-      const next = _st.sel.srcs[_st.sel.srcs.indexOf(_st.src) + 1];
-      if (next) { _st.src = next; _paintSources(); _load(); return; }
-      _st.sel = null;
-    }
-  }
-  if (it) _st.cat = it.cat && _st.cats.some(c => c.id === it.cat) ? it.cat : ALL;
-  else if (!keepCat) {
+  if (!keepCat) {
     // The category last shown here in this project, else the project's own, else all of them.
     const was = _catMemo.get(_memoKey());
     const own = _st.cats.find(c => c.id !== UNCAT && _lc(c.name) === _lc(_o.project.title));
@@ -504,10 +486,9 @@ async function _load(keepCat) {
   } else if (_st.cat !== ALL && !_st.cats.some(c => c.id === _st.cat)) _st.cat = ALL;
   _paintCats();
   _paintGrid();
-  if (it) { _st.sel = null; _reveal(it.path); }
 }
 
-// The thing the window was opened on: drawn, in view, blinking once.
+// A file brought in (phase V56, (ги4)): drawn, in view, blinking once.
 function _reveal(path) {
   if (!_w) return;
   const i = _st.list.findIndex(x => x.path === path);
@@ -667,19 +648,6 @@ function _tile(it) {
     hit.addEventListener('pointerenter', () => _peekShow(it.big, t));
     hit.addEventListener('pointerleave', _peekHide);
   }
-  // (phase V58, (лк1), (лк2)) A picture of a folder: its ✕ - pressed twice, it goes from the library.
-  if (_t && _t.tree && _o.kind === 'image' && it._f && canDelete(it._f)) {
-    const f = it._f;
-    t.appendChild(delX({
-      host: t, title: titleOf(f),
-      ask: () => usageWords(delFiles(f)),
-      run: () => deleteFile(f),
-      done: () => {
-        if (typeof _o.removed === 'function') { try { _o.removed(f.path); } catch (e) { /* the chat's */ } }
-        _refreshTree(false);
-      },
-    }));
-  }
   _paintMark(t, it.path);
   return t;
 }
@@ -741,7 +709,7 @@ function _openTree(o) {
   // index - the files of this kind in every folder (folder-column.js folderIndex), shapeOn - the tree deals them itself
   // (createTree `shape`); groups / group / all - a row read in groups (characters & looks) and the group shown.
   _t = { tree: null, node: null, index: null, shapeOn: false, groups: null, group: '', all: [], qT: 0 };
-  _st = { src: '', cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: true, sel: null };
+  _st = { src: '', cat: ALL, q: '', items: [], cats: [], why: '', failed: null, list: [], drawn: 0, loading: true };
   _buildTree();
   _paintHead();
   _paintGrid();
@@ -993,8 +961,8 @@ function _paintPath() {
   } else if (_t.node) P.appendChild(_t.tree.crumbsEl(_t.node));
 }
 
-// A file of a folder as the window's item - its file kept (`_f`), for its ✕ (phase V58).
-const _itemOf = (f) => { const it = _o.tree.map(f); return it ? Object.assign(it, { _f: f }) : null; };
+// A file of a folder as the window's item.
+const _itemOf = (f) => _o.tree.map(f) || null;
 
 // (phase V57, (ок1)) What the window may show at all: everything, unless the tree says what it takes (`fit`).
 const _fits = (x) => !(_o && _o.tree && typeof _o.tree.fit === 'function') || !!_o.tree.fit(x);
@@ -1026,8 +994,8 @@ async function _freshIndex() {
   if (_t === t) { t.index = idx; t.indexError = idx ? '' : why; if (idx) t.indexSaid = false; }
 }
 
-// Where the window opens: on the thing it was opened on - its row, else its folder -, else the first of `start` that is
-// there, else where this kind was last taken from (a row, or the tree's own node).
+// Where the window opens: on the first of `start` that is there, else where this kind was last taken from (a row, or the
+// tree's own node).
 async function _startTree() {
   const o = _o;
   await _t.tree.load();
@@ -1035,19 +1003,6 @@ async function _startTree() {
   await _freshIndex();
   if (!_w || _o !== o) return;
   _paintRows();
-  const path = o.select && o.select.path;
-  if (path) {
-    for (const id of o.select.srcs || []) {
-      const s = _rows().find(x => x.id === id);
-      if (!s) continue;
-      const got = await _rowItems(s);
-      if (!_w || _o !== o) return;
-      if ((got.items || []).some(x => x.path === path)) { _openRow(id, path); return; }
-    }
-    const key = await locateFile(path, o.tree.roots).catch(() => '');
-    if (!_w || _o !== o) return;
-    if (key && _t.tree.node(key)) { _t.tree.select(key, false); _openNode(_t.tree.node(key), path); return; }
-  }
   for (const s of [].concat(o.start || [])) if (s && _go(s)) return;
   const last = String(_stored()[o.kind] || '');
   if (last.startsWith('row:') && _go(last)) return;
@@ -1075,8 +1030,8 @@ function _go(s) {
 }
 
 // A row: its things - or, read in groups (characters & looks), its groups on the left in place of the tree, the first
-// shown (the one holding `reveal`, the one shown before a reading again); the thing `reveal` in view.
-async function _openRow(id, reveal) {
+// shown (the one shown before a reading again).
+async function _openRow(id) {
   const s = _rows().find(x => x.id === id);
   if (!s || !_t) return;
   _st.src = id;
@@ -1095,18 +1050,16 @@ async function _openRow(id, reveal) {
   if (!_w || mine !== _seq || _st.src !== id) return;
   _st.loading = false;
   _st.why = got.why || '';
-  _st.failed = _failedAs(got, s.label || 'The shelf', () => _openRow(id, reveal));
+  _st.failed = _failedAs(got, s.label || 'The shelf', () => _openRow(id));
   _t.all = got.items || [];
   _t.groups = Array.isArray(got.groups) && got.groups.length ? got.groups : null;
   if (_t.groups) {
-    const g = (reveal && _t.groups.find(x => x.items.some(i => i.path === reveal)))
-      || _t.groups.find(x => x.key === _t.group) || _t.groups[0];
+    const g = _t.groups.find(x => x.key === _t.group) || _t.groups[0];
     _t.group = g.key;
   }
   _paintSide();
   _paintPath();
   _rowShow();
-  if (reveal) _reveal(reveal);
 }
 
 // What the open row shows: the group shown - or, while a search is typed, everything of the row.

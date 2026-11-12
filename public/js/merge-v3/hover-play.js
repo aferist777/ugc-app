@@ -1,11 +1,14 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a clip that plays in its tile while the pointer rests there (phase V5, the owner 2026-10-06): the picker
-   of attachments (phase V13, chat-pick.js).
+   MERGE — a clip that plays in its tile while the pointer rests there (the owner, 2026-10-06), in the picker of
+   attachments (phase V13, chat-pick.js) - and (V91 block 3, the owner 2026-11-12: "при наведении курсора на видео без
+   клика - проигрывание без звука") on the chats' clips: a result in the thread, a message's attachment, a tile of the
+   right column and the zone's enlarged view (chat-shell.js hoverClip, peekShow).
 
    One at a time per window, nothing fetched before it starts (350 ms on the tile), and it plays ON: left and come
    back to within a moment, it goes on where it was; come back later, and it starts from where it was left rather
    than from the beginning again - the moment is remembered for the last hundred clips, whichever window showed them.
    ▶ on a tile (the picker's) plays it at once WITH its sound, and leaving the tile does not stop that one.
+   `grace: 0` (the chats) - the pointer leaving lets go at once: the tile shows its poster again.
    ════════════════════════════════════════════════════════════════════════════ */
 
 const HOVER_MS = 350;
@@ -17,8 +20,10 @@ function _keepAt(h) {
   while (_at.size > 100) _at.delete(_at.keys().next().value);
 }
 
-/** A player for one window; `cls` is the class of the <video> it lays over the tile's box. */
-export function hoverPlayer(cls) {
+/** A player for one window; `cls` is the class of the <video> it lays over the tile's box. `o.grace` - how long a clip
+ *  left stays paused in its tile before it goes (ms; 1.5 s by default). */
+export function hoverPlayer(cls, o) {
+  const grace = o && o.grace != null ? Math.max(0, +o.grace || 0) : GRACE_MS;
   let _h = null;               // { tile, src, video, timer, gone, loud }
 
   function _start(h, box, loud) {
@@ -59,9 +64,10 @@ export function hoverPlayer(cls) {
     clearTimeout(h.timer);
     h.timer = 0;
     if (!h.video) { _h = null; return; }          // left before it started
+    if (!grace) { stop(); return; }
     try { h.video.pause(); } catch (e) { /* gone */ }
     _keepAt(h);
-    h.gone = setTimeout(() => { if (_h === h) stop(); }, GRACE_MS);
+    h.gone = setTimeout(() => { if (_h === h) stop(); }, grace);
   }
 
   function stop() {

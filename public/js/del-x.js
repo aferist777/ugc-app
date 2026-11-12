@@ -1,10 +1,10 @@
 // ✕ IN THE CORNER OF A PICTURE, PRESSED TWICE (phase V58, the owner 2026-10-29: "добавь в правый верхний угол картинок
-// крестик для удаления файла с даблкликом "really?""). ONE module for every place a picture is pointed at to delete it:
-// the folder column (the right column of the pictures chat and the video chat - js/folder-column.js), the
-// attachment window (js/merge-v3/chat-pick.js), the looks and environments of talking head (js/merge-v3/wk-setup.js,
-// wk-env.js) and the generators' shelves (js/gen-window.js).
+// крестик для удаления файла с даблкликом "really?""). ONE module for the who / where windows of talking head: the looks
+// and environments they choose from (js/merge-v3/wk-maker.js paintChoose, given by wk-setup.js and wk-env.js), a lookbook
+// to dress in (wk-setup.js) and the generators' shelves (js/gen-window.js). (V91 block 3, the owner's (чк19е): nothing is
+// deleted from a chat - its ✕ on the folder column and the attachment window went.)
 //
-// The first press asks "really?" in its place - with what the deleting touches (`ask`: "used in 2 projects", (лк2)) - and
+// The first press asks "really?" in its place - with what the deleting touches when the caller says it (`ask`) - and
 // the second deletes; it goes back to ✕ after 3 s, when the pointer leaves the tile, or on Escape. A refusal (a look cast
 // in a talking head, (лк3)) is said in the corner of the window (js/notice.js).
 //
@@ -80,57 +80,4 @@ export function delX(o) {
     },
   });
   return x;
-}
-
-const _json = (url, opt) => fetch(url, opt).then(r => r.json()).catch(() => null);
-
-/** "used in N projects" for some files (POST /api/library/usage - the projects whose timelines hold them), '' for none. */
-export async function usageWords(paths) {
-  const media = [].concat(paths || []).filter(Boolean);
-  if (!media.length) return '';
-  const d = await _json('/api/library/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ media }) });
-  const n = (d && d.success && Array.isArray(d.projects)) ? d.projects.length : 0;
-  return n ? 'used in ' + n + (n === 1 ? ' project' : ' projects') : '';
-}
-
-/**
- * Whether a file of the media tree (js/folder-column.js filesOf) can be deleted from where it is shown, and how: a
- * picture of IMAGES (its record), a made environment or lookbook (its file), a REFERENCES post (the whole post - its
- * files with it).
- */
-export function canDelete(f) {
-  if (!f) return false;
-  if (f.kind === 'images') return !!f.libId;
-  if (f.kind === 'environments' || f.kind === 'lookbooks') return !!f.path;
-  if (f.kind === 'references') return !!(f.item && f.item.id);
-  return false;
-}
-
-/** The files a delete takes with it - what "used in N projects" is asked about. */
-export function filesOf(f) {
-  if (f && f.kind === 'references' && f.item) {
-    const m = f.item.meta || {};
-    return (Array.isArray(m.items) ? m.items : []).map(x => x && x.path).filter(Boolean).concat(f.path ? [f.path] : []);
-  }
-  return f && f.path ? [f.path] : [];
-}
-
-/** Deletes it the way its shelf does (routes/library.js _deleteOne, routes/references.js). -> '' | words */
-export async function deleteFile(f) {
-  let url = '';
-  if (f.kind === 'images') url = '/api/library/item/images/' + encodeURIComponent(f.libId);
-  else if (f.kind === 'environments' || f.kind === 'lookbooks') url = '/api/library/item/' + f.kind + '/' + encodeURIComponent(String(f.path).split('?')[0].split('/').pop());
-  else if (f.kind === 'references') url = '/api/references/' + encodeURIComponent(f.item.id);
-  if (!url) return 'it cannot be deleted from here';
-  const d = await _json(url, { method: 'DELETE' });
-  return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
-}
-
-/** What the ✕ says under the pointer for such a file. */
-export function titleOf(f) {
-  if (f && f.kind === 'references') {
-    const n = filesOf(f).length;
-    return n > 1 ? 'Delete this post from REFERENCES - all ' + n + ' of its files' : 'Delete this post from REFERENCES';
-  }
-  return 'Delete it from the library';
 }

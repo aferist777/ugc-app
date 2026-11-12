@@ -4,7 +4,7 @@
    Every repository the app uses - the npm packages, what they carry inside (libvips in sharp, the
    codecs in our FFmpeg build), what is fetched at install (yt-dlp, JASSUB, whisper.cpp) or on demand
    (the Whisper model), the caption fonts and presets, the projects whose rules our captions follow, and
-   the video chat's cookbook (awesome-seedance, goodcase.ai, YouMind's Grok prompts - phase V4) -
+   the video chat's almanac (AI Camera Movements) -
    each with its license, what it is, and what it does HERE. Checked against the files themselves (the
    packages' package.json and LICENSE, the vendor pins, the font licenses) on 2026-10-03.
 
@@ -645,22 +645,10 @@
       url: "https://github.com/lyger/Aegisub_automation_scripts", license: "MIT",
       what: "Scripts for Aegisub, the subtitle editor, that draw effects in plain ASS.",
       how: "How soft edges are made in plain ASS: the glow of the text presets is a wide border blurred under the letters (public/js/captions/text-fx.js)." },
-    { group: "Video cookbook", name: "awesome-seedance",
-      url: "https://github.com/LearnPrompt/awesome-seedance", license: "MIT code · CC BY 4.0 curation · prompts and media © their authors",
-      what: "A cookbook of Seedance video prompts by LearnPrompt and goodcase.ai: 27 prompt templates in 6 categories, and 670 real cases filed under them.",
-      how: "The video chat's catalog (phase V4). The templates, categories, tags and case filing are its CC BY 4.0 curation, credited to awesome-seedance / goodcase.ai and changed by us: each template rendered as an instruction for our writer agent, with our reading of what it needs attached (vendor/cookbook/, tools/fetch-cookbook.js; https://creativecommons.org/licenses/by/4.0/). The code we ported to do that is MIT. The cases' prompts, posters and videos stay their authors': never shipped, fetched into the library's cache when the catalog first asks, and shown with each author, their X post and the goodcase.ai page, for learning." },
-    { group: "Video cookbook", name: "goodcase.ai",
-      url: "https://goodcase.ai", license: "case media © their authors",
-      what: "The site that collects, retests and hosts the cases of awesome-seedance.",
-      how: "A case's poster is fetched once from goodcase into the library's cache and its video plays from goodcase when you point at it; each case links to its goodcase page (lib/video-catalog.js)." },
-    { group: "Video cookbook", name: "AI Camera Movements",
+    { group: "Video almanac", name: "AI Camera Movements",
       url: "https://aicameramovements.com", license: "a free reference - no license stated · prompts and previews © their author",
       what: "A free visual library of camera movement prompts for AI filmmakers: 46 moves in 7 categories, each with a prompt and a looping example.",
       how: "The first section of the video chat's prompt reference, its Almanac (phase V14): the 46 moves with their categories and prompts as the site writes them, and each example made small - a still and a looping WebP (public/presets/helper/, tools/fetch-camera.js). Credited here and in the reference; any one is removed at its author's request." },
-    { group: "Video cookbook", name: "YouMind awesome-grok-imagine-prompts",
-      url: "https://github.com/YouMind-OpenLab/awesome-grok-imagine-prompts", license: "CC BY 4.0 compilation · prompts © their authors",
-      what: "YouMind's collection of Grok Imagine video prompts.",
-      how: "40 b-roll prompts were picked from it by hand once and ship as the catalog's Grok examples, each with its author, X post and YouMind page; any one is removed at its author's request (presets-src/video/examples-grok.json)." },
     { group: "3D Studio", name: "three.js", npm: "three",
       url: "https://github.com/mrdoob/three.js", license: "MIT",
       what: "The most widely used 3D library for the web, drawing with WebGL.",

@@ -367,7 +367,6 @@ function _drop(trackId, want, data, make) {
       start: at, dur: Math.round(dur * 100) / 100,
       srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
       trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-      transition: null, animation: null, filter: null,
     };
 
     // Dropped straight onto an audio lane: sound only, and audible - somebody putting a file
@@ -2428,7 +2427,6 @@ export function selectedOne() {
 // misspelt one would otherwise sit on the clip forever as a property nothing reads, and the
 // control that wrote it would look like it worked.
 const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign', 'frame',
-                             'transition', 'animation', 'filter',
                              'tx', 'ty', 'tw', 'angle', 'feather',
                              'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation',
                              // (phase V49, point 3) A main clip as a picture in the picture, its corners and outline.
@@ -2534,14 +2532,6 @@ function _write(c, key, value) {
   if (key === 'halferPos' || key === 'halferKeep') { c[key] = Math.round(Math.max(0, Math.min(100, +value || 0))); return; }
   if (key === 'halferThick') { c.halferThick = Math.round(Math.max(5, Math.min(100, +value || 0))); return; }
   if (key === 'rotation') { c.rotation = [0, 90, 180, 270].indexOf(+value) >= 0 ? +value : 90; return; }
-  // THE THREE EFFECTS, taken as names rather than checked against a list. The list lives in
-  // two places already - the panel that offers them and the graph that builds them - and a
-  // third copy here would be the one that goes stale. An unknown name is harmless by
-  // construction: every switch that reads these falls through to no effect at all.
-  if (key === 'transition' || key === 'animation' || key === 'filter') {
-    const v = String(value || 'none').slice(0, 24);
-    c[key] = (v === 'none') ? null : v;
-  }
 }
 
 // ── The timeline's media into the generation chats and back (phase V77, js/merge-v3/tl-gen.js) ─────────────────────────────
@@ -2646,7 +2636,6 @@ export async function genBack(o, item) {
   const base = (at, len) => ({
     src: item.src, thumb: item.thumb || (video ? null : item.src), name: String(item.name || '').slice(0, 200), libId: item.libId || null,
     start: _r2(at), dur: _r2(len), srcDur: video ? dur : 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-    transition: null, animation: null, filter: null,
   });
   // A film on `track` at `at`: its picture there, its sound on the lane paired with it (as a drop lays one).
   const layFilm = (tracks, track, at, len, look) => {
@@ -2770,7 +2759,7 @@ export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } 
     to.clips.push({
       id, src: String(src), thumb: null, name: String(name || '').slice(0, 200), libId: libId || null,
       start: at, dur: len, srcDur: whole, trimIn: tin, trimOut: whole > 0 ? _r2(Math.max(0, whole - tin - len)) : 0,
-      speed: 1, reversed: false, transition: null, animation: null, filter: null, pairId: null,
+      speed: 1, reversed: false, pairId: null,
       volume: k === 'music' ? 0.5 : 1,
       ...(k === 'music' ? { bed: true } : (k === 'sfx' || k === 'sounds') ? { sfx: true } : {}),
     });
@@ -2817,7 +2806,7 @@ export function placeVideoPieces(parts, file) {
         src: String(f.src), thumb: f.thumb || null, name: (String(f.name || '') + (one ? '' : ' · ' + mm(tin) + '–' + mm(tin + len))).slice(0, 200),
         libId: f.libId || null, start: s, dur: len, srcDur: whole, trimIn: tin,
         trimOut: whole > 0 ? _r2(Math.max(0, whole - tin - len)) : 0,
-        speed: 1, reversed: false, transition: null, animation: null, filter: null,
+        speed: 1, reversed: false,
       };
       const pairId = mate ? 'p' + _id().slice(1) : null;
       const id = _id();
@@ -2945,8 +2934,7 @@ export function setClipField(trackId, clipId, key, value) {
 //
 // Volume is NOT stamped and never will be: it is a master that multiplies, so the lane and the
 // clip both mean something. Anything on this list means the same thing on a lane as on a clip,
-// which is the test for whether stamping it makes sense at all.
-// (phase V49, (пр14) а) The three effects are no longer offered - nor stamped: what a lane offers is its framing.
+// which is the test for whether stamping it makes sense at all. What a lane offers is its framing.
 const STAMP_FIELDS = new Set(['fit', 'cropAlign']);
 
 export function stampTrack(trackId, patch) {
@@ -3000,7 +2988,7 @@ export function addCaption(trackId, at, text) {
       id: _id(), src: null, thumb: null, name: String(text || 'New line'),
       start: Math.max(0, Math.round((+at || 0) * 100) / 100), dur: CAP_DUR,
       srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-      transition: null, animation: null, filter: null, volume: null, pairId: null,
+      volume: null, pairId: null,
     }]).sort((a, b) => a.start - b.start);
   });
 }

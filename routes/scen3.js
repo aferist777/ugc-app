@@ -594,36 +594,32 @@ router.delete('/scen3/scenarios/:id', (req, res) => {
 
 const CFG = require('../lib/config');
 const { toDiskWithin, toDiskExisting, toUrl } = require('../lib/media');
-// The mannequins ship with the program, under the static root; everything else is the library's media.
-const POSES_DIR = path.join(CFG.PUBLIC_DIR, 'poses');
 
 // Map a public URL to an absolute file, refusing anything outside the library's media and
-// project folders and the shipped mannequins (so a crafted ../ path cannot reach anything else).
+// project folders (so a crafted ../ path cannot reach anything else).
 // `exts` defaults to stills, which is what every caller but a Kling avatar clip wants —
 // that one also has to hand over the read's sound, and widening the default would quietly let any
 // file type through the other paths.
 const MEDIA_IMG = /\.(jpg|jpeg|png|webp)$/i;
 function _resolveMedia(urlPath, exts) {
-  const roots = [CFG.MEDIA_DIR, CFG.PROJECTS_DIR, POSES_DIR];
+  const roots = [CFG.MEDIA_DIR, CFG.PROJECTS_DIR];
   const abs = toDiskWithin(String(urlPath || '').split('?')[0], roots);
   if (!abs) return null;
   if (!(exts || MEDIA_IMG).test(abs)) return null;
   const root = roots.find(r => abs.startsWith(path.resolve(r) + path.sep));
-  const shipped = root === POSES_DIR;
   const rel = path.relative(root, abs).split(path.sep).join('/');
-  return { abs, shipped, rel, root };
+  return { abs, rel, root };
 }
 
 const { needsPreview, makePreview } = require('../lib/thumbs');
 
 // Where the preview of a file is written, and the URL it answers at: beside its source, in
-// a preview/ folder. The mannequins are the exception - they ship with the program in public/poses,
-// which an update replaces - so theirs are made again into the library's cache/poses/.
+// a preview/ folder.
 function _previewTarget(hit) {
   const base = path.basename(hit.rel).replace(/\.[^.]+$/, '') + '.jpg';
   const sub  = path.posix.dirname(hit.rel);
   const relOut = path.posix.join(sub === '.' ? '' : sub, 'preview', base);
-  const abs = path.resolve(hit.shipped ? CFG.POSES_CACHE_DIR : hit.root, relOut);
+  const abs = path.resolve(hit.root, relOut);
   return { abs, url: toUrl(abs) };
 }
 
@@ -990,18 +986,10 @@ async function _i2i(prompt, urls, aspect, quality) {
 // does has to be callable without a request. It answers what was submitted, and what filing the
 // result will need later; the agent's refusal is thrown with `refused` on it, because that is an
 // answer to the person rather than a fault.
-//
-// `hooks` (phase I, the Library's chats, which write the Alerts row at the press and do this behind
-// it; Merge and "try again" pass none): stage(words) says what it is doing now, stop() is asked just
-// before the money - true when the row was let go of meanwhile, and then nothing is asked for -
-// and asked({taskId, engine, file}) hears the task the moment it exists.
-const _stopped = () => Object.assign(new Error('let go of before it was asked for'), { stopped: true });
-async function _submitLookbook(b, hooks) {
-  const hk = hooks || {};
-  const say = (w) => { if (hk.stage) hk.stage(w); };
+async function _submitLookbook(b) {
   const note = String(b.prompt || '').trim();
   const b64  = String(b.imageBase64 || '');
-  // A picture the library already holds - another lookbook as the base, or (the Library's chat) any
+  // A picture the library already holds - another lookbook as the base, or (an old row's "try again") any
   // picture on its shelves as the photo. Sent as a PATH rather than as bytes: it is on this disk, and
   // pulling it through the browser as base64 only to upload it again would be a round trip for nothing.
   const ref  = String(b.imagePath || '').trim();
@@ -1018,7 +1006,6 @@ async function _submitLookbook(b, hooks) {
   let photoUrl = '';
   let fresh = false;
   try {
-    if (b64 || refToken || ref) say('sending the picture');
     if (b64) {
       fresh = true;
       const up = await _takeUpload(b64);
@@ -1032,14 +1019,11 @@ async function _submitLookbook(b, hooks) {
 
     // The agent goes first, and it is the cheap half: if what it is given is not something to
     // wear, nothing is generated and nothing is spent.
-    say(photoUrl ? 'reading the picture' : 'reading your words');
     const plan = await _readLookbookIdea(note, photoUrl);
     if (!plan.ok) throw Object.assign(new Error(plan.why), { status: 400, refused: true });
 
     const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
     const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
-    if (hk.stop && hk.stop()) throw _stopped();
-    say('asking for the picture');
     const taskId = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     // What filing it will need when it lands - the fields _fileGenerated reads. A
@@ -1049,10 +1033,6 @@ async function _submitLookbook(b, hooks) {
       prompt, description: plan.description, refToken,
       refName: String(b.refName || ''), ...(ref && !refToken ? { from: ref } : {}),
     };
-    // The task exists and is paid for: whoever holds the row writes it down now, before the gender
-    // is asked for - an app closed in those two seconds must not lose a task it can still collect.
-    if (hk.asked) hk.asked({ taskId, engine: IMG_ENGINE, file });
-
     // The task is already submitted, so this ~2s call overlaps with the rendering.
     const gender = await _detectGender(note, photoUrl);
     console.log(`[scen3/gen/lookbook] mode=${mode} kind=${plan.kind} gender=${gender || 'unknown'}`);
@@ -1083,199 +1063,6 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
   }
 });
 
-// ── Frame parameter presets (global) ───────────────────────────────────────
-// Camera options carry OPTICS ONLY — how the body is posed or framed is chosen
-// separately, so the two never fight each other in the prompt.
-const FRAME_OPT_FILE = path.join(DATA_DIR, 'scen3-frame-options.json');
-
-// Camera presets lead with FOCAL LENGTH and APERTURE, not with a brand: image
-// models learned these terms from photo captions, so focal length reliably steers
-// facial geometry and background compression while a camera-body name is close to
-// decorative. The label is for the human; the payload is what the model reads.
-const FRAME_OPT_DEFAULTS = {
-  // `summary` is the short technical digest shown under the dropdown; `prompt` is
-  // the full wording the model reads.
-  cameras: [
-    { id: 'phone-selfie', label: 'Phone selfie',     summary: '24mm equiv · f/2.2 · deep focus · slight barrel distortion',
-      prompt: '24mm equivalent, f/2.2, deep focus with the face and the background both acceptably sharp, slight barrel distortion toward the frame edges, small-sensor rendering with mild luminance noise in the shadows' },
-    { id: 'phone-rear',   label: 'Phone rear cam',   summary: '26mm equiv · f/1.8 · deep focus · crisp edge to edge',
-      prompt: '26mm equivalent, f/1.8, deep focus, natural perspective, crisp corner-to-corner detail, clean small-sensor rendering' },
-    { id: 'doc-35',       label: '35mm documentary', summary: '35mm · f/2.8 · mild background separation',
-      prompt: '35mm, f/2.8, honest geometry with mild background separation, full-frame rendering' },
-    { id: 'nat-50',       label: '50mm natural',     summary: '50mm · f/2.0 · eye-level perspective · moderate falloff',
-      prompt: '50mm, f/2.0, perspective closest to the human eye, moderate background falloff' },
-    { id: 'port-85',      label: '85mm portrait',    summary: '85mm · f/1.8 · compressed · shallow depth of field',
-      prompt: '85mm, f/1.8, compressed perspective that flatters the face, shallow depth of field, background dissolving into smooth bokeh' },
-    { id: 'webcam',       label: 'Webcam',           summary: '30mm equiv · f/2.4 · soft optics · visible noise',
-      prompt: '30mm equivalent, f/2.4, soft low-contrast optics, visible sensor noise, slightly flat colour' },
-  ],
-  // Framing is a GROUP: every mannequin belongs to exactly one of these, so a
-  // pose can never carry a crop that contradicts the chosen framing.
-  // `crop` states where the frame CUTS, in terms anyone could check by looking at
-  // the result. It leads the prompt, because naming the shot size ('medium-close')
-  // was not enough on its own — the generator kept pulling back to full length.
-  framings: [
-    { id: 'closeup',     label: 'Close-up',    prompt: 'head-and-shoulders framing',
-      crop: 'the bottom edge of the frame cuts across the CHEST, just below the shoulders. Nothing below the chest is visible — no waist, no hips, no legs, no feet. The head reaches close to the top of the frame' },
-    { id: 'half-body',   label: 'Half body',   prompt: 'framed from the head down to just below the waist',
-      crop: 'the bottom edge of the frame cuts just below the WAIST. No hips below the belt, no legs and no feet are visible' },
-    { id: 'knees-up',    label: 'Knees up',    prompt: 'framed from the head down to the knees',
-      crop: 'the bottom edge of the frame cuts across the KNEES. The lower legs and the feet are outside the frame' },
-    { id: 'full-height', label: 'Full height', prompt: 'the whole figure in frame from head to feet, with room above and below',
-      crop: 'the WHOLE figure is inside the frame, from the top of the head to the feet, with a little empty room above the head and below the feet' },
-  ],
-};
-
-function _normOptList(arr, fallback) {
-  const byId = new Map((fallback || []).map(o => [o.id, o]));
-  const list = Array.isArray(arr) ? arr.map(o => {
-    const id = String((o && o.id) || '').trim();
-    const def = byId.get(id) || {};
-    return {
-      id,
-      label:   String((o && o.label) || '').trim(),
-      prompt:  String((o && o.prompt) || '').trim(),
-      summary: String((o && o.summary) || '').trim(),
-      // `crop` was added after the first presets were written to disk, so a stored
-      // option without one inherits the default for its id rather than losing it.
-      crop:    String((o && o.crop) || def.crop || '').trim(),
-    };
-  }).filter(o => o.id && o.label) : [];
-  return list.length ? list : fallback.slice();
-}
-
-// Read-only since phase G: the page that edited these went, and what is left reads the file (or
-// the defaults it is seeded from) for the camera and the shot size of a set.
-function _loadFrameOpts() {
-  const cur = _read(FRAME_OPT_FILE);
-  // An older file carried `shots` instead of `framings`; the fallback quietly
-  // migrates it by re-seeding the group list.
-  const out = {
-    cameras:  _normOptList(cur && cur.cameras,  FRAME_OPT_DEFAULTS.cameras),
-    framings: _normOptList(cur && cur.framings, FRAME_OPT_DEFAULTS.framings),
-  };
-  if (!cur || !Array.isArray(cur.framings)) {
-    try { fs.mkdirSync(DATA_DIR, { recursive: true }); writeFileAtomic(FRAME_OPT_FILE, JSON.stringify(out, null, 2)); } catch (e) {}
-  }
-  return out;
-}
-
-
-// ── Mannequin poses (v3's own store) ────────────────────────────────────────
-// Each pose belongs to exactly ONE framing group. The grey mannequins ship with the program
-// in public/poses/scen3/; `desc` is what the compose prompt reads - a mannequin has no face,
-// so the wording carries the pose, and static pose wording steers a model far better than
-// motion verbs do.
-const POSE_FILE = path.join(DATA_DIR, 'scen3-poses.json');
-
-const POSE_SEED = [
-  // Every mannequin is named here explicitly. That is deliberate: the store is reseeded from
-  // this array whenever data/scen3-poses.json is missing, and a seed that omitted `file`
-  // silently dropped eight finished mannequins - the images stayed on disk but the library
-  // forgot them.
-
-  // Close-up — self-filming: the arm reaches TOWARD the lens and is cut by the frame edge,
-  // so the hand and phone stay outside the picture.
-  { id: 'closeup-selfie-r', group: 'closeup', label: 'Selfie, right arm',
-    desc: 'filming themselves with the right arm, the arm reaching toward the lens across the lower left of frame, hand and phone outside the picture',
-    file:  '/poses/scen3/closeup-selfie-r_replw5r98en2m4_1786200891960.jpg',
-    thumb: '/poses/scen3/thumbs/closeup-selfie-r_replw5r98en2m4_1786200891960.jpg' },
-  { id: 'closeup-selfie-l', group: 'closeup', label: 'Selfie, left arm',
-    desc: 'filming themselves with the left arm, the arm reaching toward the lens across the lower right of frame, hand and phone outside the picture',
-    file:  '/poses/scen3/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg',
-    thumb: '/poses/scen3/thumbs/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg' },
-
-  // Half body.
-  { id: 'half-standing', group: 'half-body', label: 'Standing, facing camera',
-    desc: 'standing squarely, shoulders level, arms relaxed at the sides, looking into the lens',
-    file:  '/poses/scen3/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg',
-    thumb: '/poses/scen3/thumbs/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg' },
-  { id: 'half-arms-crossed', group: 'half-body', label: 'Standing, arms crossed',
-    desc: 'standing with the forearms folded across the chest, shoulders square to the lens',
-    file:  '/poses/scen3/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg',
-    thumb: '/poses/scen3/thumbs/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg' },
-  { id: 'half-hands-pockets', group: 'half-body', label: 'Hands in pockets',
-    desc: 'standing at a slight angle with both hands in the pockets, shoulders loose, weight on one leg',
-    file:  '/poses/scen3/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg',
-    thumb: '/poses/scen3/thumbs/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg' },
-
-  // Knees up. The first two show no knees at all, which is fine: the mannequin supplies the
-  // BODY and the framing group supplies the crop.
-  { id: 'knees-seated-table', group: 'knees-up', label: 'Seated at a table',
-    desc: 'seated behind a table facing the lens, one forearm resting on the tabletop with the hand loosely closed, the other arm raised with the forearm upright and the hand closed at chest height',
-    file:  '/poses/scen3/knees-seated-table_tabled_1786278401276.jpg',
-    thumb: '/poses/scen3/thumbs/knees-seated-table_tabled_1786278401276.jpg' },
-  { id: 'knees-sofa-back', group: 'knees-up', label: 'Sofa, leaning back',
-    desc: 'sitting well back into a sofa, reclined against the backrest with both arms raised and bent behind the head, elbows out wide, shoulders relaxed',
-    file:  '/poses/scen3/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg',
-    thumb: '/poses/scen3/thumbs/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg' },
-  { id: 'knees-desk-edge', group: 'knees-up', label: 'Half-seated on a desk',
-    desc: 'half-seated on the front edge of a desk with one hip taking the weight, torso upright and turned slightly toward the lens, arms folded across the chest',
-    file:  '/poses/scen3/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg',
-    thumb: '/poses/scen3/thumbs/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg' },
-  { id: 'knees-elbows-knees', group: 'knees-up', label: 'Elbows on knees',
-    desc: 'seated on a low stool with the knees apart, torso tipped forward toward the lens, both elbows resting on the knees and the fingers interlocked between them',
-    file:  '/poses/scen3/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg',
-    thumb: '/poses/scen3/thumbs/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg' },
-  { id: 'knees-wall-shoulder', group: 'knees-up', label: 'Shoulder against a wall',
-    desc: 'standing at a slight angle with one shoulder and upper arm resting back against a wall, one hand in the pocket, the other arm raised with the hand up near the shoulder',
-    file:  '/poses/scen3/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg',
-    thumb: '/poses/scen3/thumbs/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg' },
-  { id: 'knees-weight-hip', group: 'knees-up', label: 'Weight on one hip',
-    desc: 'standing with the weight thrown onto one leg and that hip pushed out, one hand resting on the hip with the elbow out, the other arm hanging relaxed at the side',
-    file:  '/poses/scen3/knees-weight-hip_cropped_1786277518467.jpg',
-    thumb: '/poses/scen3/thumbs/knees-weight-hip_cropped_1786277518467.jpg' },
-
-  // Full height, 9:16 - the same shape as the frame the mannequin composes.
-  { id: 'full-hands-clasped', group: 'full-height', label: 'Hands clasped in front',
-    desc: 'standing upright facing the lens with both hands clasped together low in front of the body, elbows relaxed and close to the sides, feet apart',
-    file:  '/poses/scen3/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg',
-    thumb: '/poses/scen3/thumbs/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg' },
-  { id: 'full-straight', group: 'full-height', label: 'Standing straight',
-    desc: 'standing upright and squarely facing the lens, both arms hanging relaxed at the sides, shoulders level, feet a little apart',
-    file:  '/poses/scen3/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg',
-    thumb: '/poses/scen3/thumbs/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg' },
-  { id: 'full-contrapposto', group: 'full-height', label: 'Contrapposto',
-    desc: 'standing in contrapposto with the weight on one leg and the other knee bent and relaxed, that hip pushed out and the shoulders tilted the opposite way, head turned slightly aside',
-    file:  '/poses/scen3/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg',
-    thumb: '/poses/scen3/thumbs/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg' },
-  { id: 'full-turned-back', group: 'full-height', label: 'Looking over the shoulder',
-    desc: 'standing with the back to the lens, the torso turned away, the head turned back over one shoulder to look into the camera, arms hanging at the sides',
-    file:  '/poses/scen3/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg',
-    thumb: '/poses/scen3/thumbs/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg' },
-  { id: 'full-mirror-selfie', group: 'full-height', label: 'Mirror selfie',
-    desc: 'standing at a slight angle filming itself in a mirror, one arm raised holding a phone at chest to head height toward the lens, the other arm relaxed, weight on one leg',
-    file:  '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg',
-    thumb: '/poses/scen3/thumbs/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg' },
-];
-
-function _normPose(p) {
-  const s = p || {};
-  return {
-    id:      String(s.id || '').trim(),
-    group:   String(s.group || '').trim(),
-    label:   String(s.label || '').trim(),
-    desc:    String(s.desc || '').trim(),
-    file:    String(s.file || ''),             // the mannequin
-    thumb:   String(s.thumb || ''),
-    active:  s.active !== false,
-  };
-}
-
-function _loadPoses() {
-  const cur = _read(POSE_FILE);
-  if (Array.isArray(cur)) return cur.map(_normPose).filter(p => p.id && p.group);
-  const seeded = POSE_SEED.map(_normPose);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); writeFileAtomic(POSE_FILE, JSON.stringify(seeded, null, 2)); } catch (e) {}
-  console.log(`[scen3] seeded ${seeded.length} mannequin poses across 4 framing groups`);
-  return seeded;
-}
-
-router.get('/scen3/poses', (_req, res) => {
-  try { res.json({ success: true, poses: _loadPoses().filter(p => p.active) }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 // Crop a generated frame into a NEW file. Generation is not always obedient — a
 // half-body request can come back knees-up — and a crop fixes the shot for nothing
 // and instantly, where a re-roll costs money and throws the dice again.
@@ -1286,19 +1073,6 @@ router.get('/scen3/poses', (_req, res) => {
 const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
 
 const _cleanText = (s) => String(s || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
-
-// The pose whose mannequin should ride along, or null — resolved server-side so the
-// client cannot ask for a pose belonging to a different framing group than it chose.
-// Returns the record, because its `desc` is fed to the reading pass as a hint.
-function _poseFor(poseId, framingId) {
-  const pose = _loadPoses().find(p => p.id === String(poseId || ''));
-  if (!pose || !pose.file) return null;
-  const opts    = _loadFrameOpts();
-  const framing = opts.framings.find(f => f.id === String(framingId || '')) || null;
-  if (framing && pose.group !== framing.id) return null;
-  const hit = _resolveMedia(pose.file);
-  return (hit && fs.existsSync(hit.abs)) ? pose : null;
-}
 
 // Pull the labelled blocks out of the analysis. Anything the model puts before the
 // first label is kept as LIGHTING, which is what a label-less answer used to be.
@@ -1630,12 +1404,9 @@ async function _fileRef(token, kind, name) {
 // `choices` present - even empty - says the page can show a choice of places. Absent, the agent
 // picks a place itself.
 //
-// `photoPath` (phase I, the Library's chat): a picture already in the library - on the Images shelf,
-// say - read as a PHOTO, the place taken out of it; `imagePath` is an environment to CHANGE. `hooks`
-// as for _submitLookbook.
-async function _submitEnv(b, hooks) {
-  const hk = hooks || {};
-  const say = (w) => { if (hk.stage) hk.stage(w); };
+// `photoPath`: a picture already in the library - on the Images shelf, say - read as a PHOTO, the place taken out of it
+// (sent now only by "try again" of a row of the old Library chat, gone in V91); `imagePath` is an environment to CHANGE.
+async function _submitEnv(b) {
   let token = '';
   let fresh = false;                             // the photo came in THIS call
   const note = String(b.prompt || '').trim();
@@ -1656,7 +1427,6 @@ async function _submitEnv(b, hooks) {
     let url = '';
     let source = '';
     let shape = null;
-    if (b.imageBase64 || b.refToken || photoPath || saved) say('sending the picture');
     if (b.imageBase64 || b.refToken) {
       fresh = !!b.imageBase64;
       const up = fresh ? await _takeUpload(b.imageBase64) : await _reuseUpload(String(b.refToken));
@@ -1679,7 +1449,6 @@ async function _submitEnv(b, hooks) {
       shape = _envShape(s.w, s.h);
     }
 
-    say(url ? 'reading the picture' : 'reading your words');
     const plan = await _readEnvironmentIdea({ note, imageUrl: url, source, shape, choices, canChoose });
     if (!plan.ok) {
       if (token) _unstash(token);
@@ -1694,8 +1463,6 @@ async function _submitEnv(b, hooks) {
       + (mode === 'edit' ? ENV_KEEP + ENV_EDIT_TAIL + _envEditFrame(shape) : '')
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
       + (mode === 'edit' ? '' : ENV_TAIL);
-    if (hk.stop && hk.stop()) throw _stopped();
-    say('asking for the picture');
     const taskId = await _envTask(prompt, url ? [url] : []);
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
@@ -1892,26 +1659,16 @@ function _charNameOf(id) {
 const _pollTask = (rec) => H.resolveTask(rec.taskIds[0], CFG.MEDIA.work, 'generated');
 const _fileParams = (rec) => ((rec.job || {}).params || {}).file || {};
 
-// A ROW WRITTEN AT THE PRESS (phase I, the Library's chats): it exists before the agent has read
-// anything and before there is a task, and is told the task when it is asked for. Until then it is
-// "not started yet" - as long as the asking is still going on in this process. Its `kick` is the
-// token of that asking: one that is not here any more died with the app, and the row says so at once
-// instead of waiting out its time limit for a task nobody asked for. A row from Merge has its task
-// from the start and never gets here.
-const _asking = new Set();
+// A maker's row has its task from the start (Merge, "try again"). One with none is a row of the old Library chats (gone in
+// V91), written at the press before its task was asked for and left so when the app closed: it fails in words, never asked
+// for again by itself.
 function _pollMaker(rec) {
   if (rec.taskIds && rec.taskIds[0]) return _pollTask(rec);
-  const kick = ((rec.job || {}).params || {}).kick;
-  if (kick && _asking.has(kick)) return { state: 'pending' };
   return { state: 'failed', error: 'the app was closed before the picture was asked for - try again' };
 }
 
-// A chat's row whose first asking is still going on is not asked for again yet (lib/gen-jobs.js retry).
-const _stillAsking = (rec) => _asking.has(((rec.job || {}).params || {}).kick);
-
 JOBS.register('lookbook', {
   poll: _pollMaker,
-  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('lookbook', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
@@ -1924,7 +1681,6 @@ JOBS.register('lookbook', {
 
 JOBS.register('environment', {
   poll: _pollMaker,
-  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('environment', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
@@ -2140,7 +1896,7 @@ async function _fileGenerated(kind, src, b) {
   }
 
   if (kind === 'environment') {
-    // The same for a place: what the agent wrote about it is what the first frames will be
+    // The same for a place: what the agent wrote about it is what its frames will be
     // composed from later, and it is filed under the path the shelf knows it by.
     const description = String(b.description || '').trim();
     const prompt = String(b.prompt || '').trim();
@@ -3207,16 +2963,14 @@ function _normMix(m) {
         ? { x: +v.crop.x || 0, y: +v.crop.y || 0, w: +v.crop.w || 0, h: +v.crop.h || 0 } : null,
       size:    (v && v.size && typeof v.size === 'object')
         ? { w: +v.size.w || 0, h: +v.size.h || 0 } : null,
-      // A frame of a SET (docs/local-app/PLAN.md, phase W2) says which set, which shot size and its
-      // number in it - so the pool keeps the order the frames were asked in, and the lines take
-      // from it in turn. Frames from the old pool have none of it and simply come first.
+      // The shot size a frame was drawn to (`framing` - the frames chat's edge); a frame of a set an agent planned before
+      // phase V61 also says which set and its number in it - so the pool keeps the order the frames were asked in.
       set:     String((v && v.set) || ''),
       framing: String((v && v.framing) || ''),
       n:       Number.isInteger(v && v.n) ? v.n : 0,
-      // The one sentence that makes this frame different from the others in its set - the head,
-      // the hands, the gaze at that instant. Written by the agent that planned the set (phase W2)
-      // and read by the one that writes the animation prompts (W3b), which is what a clip made from
-      // this frame has to continue. Frames drawn before it carry none and are read from the picture.
+      // The one sentence that made a frame of such a set different from the others - the head, the hands, the gaze at
+      // that instant - read by the writer of the animation prompts (W3b), which is what a clip made from this frame has
+      // to continue. Every other frame carries none and is read from the picture.
       moment:  String((v && v.moment) || ''),
       // (phase V26.5) A frame made to order in the frames chat: 'chat', and the chat's record it came from.
       made:    (v && v.made === 'chat') ? 'chat' : '',
@@ -3234,10 +2988,6 @@ function _normMix(m) {
     banned:       Array.isArray(s.banned)   ? s.banned.map(String)   : [],
     activeId:     s.activeId == null ? '' : String(s.activeId),   // '' = the two sources are active
     note:         String(s.note || ''),
-    // frame parameters: camera optics, the framing group, and its mannequin pose
-    camera:       String(s.camera  == null ? 'phone-rear'    : s.camera),
-    framing:      String(s.framing == null ? 'half-body'     : s.framing),
-    poseId:       String(s.poseId  == null ? 'half-standing' : s.poseId),
     distribution: MIX_MODES.includes(s.distribution) ? s.distribution : 'same',
   };
 }
@@ -3452,14 +3202,12 @@ function _normShot(sh) {
 // upstream does not leave old projects pointing at a model that no longer exists.
 //
 // CHOSEN, NOT ASSUMED (phase V24, the owner 2026-10-09). A project made since carries `v: 2`, and its
-// choices start at NONE - '' for the mood, the quality, the shot size and the spread, 0 for how many -
-// until the person makes them; the panel's fields are red while one is missing and nothing fills it
+// choices start at NONE - '' for the mood, the quality, the shot size and the spread - until the person makes them; the panel's fields are red while one is missing and nothing fills it
 // in here. An older project keeps the defaults it was always read with: 70 of the owner's 80 had no
 // mood stored and were marked up in 'sincere'.
 const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const chosen = s.v === 2;
-  const n = parseInt(s.frames, 10);
   // WHAT FILMS IT (phase V26.8, lib/th-video.js): Kling avatar - a clip per line - or one of the Seedance models. Chosen
   // like the rest since V24: a project made since starts at none - except one that already chose a quality, which was
   // Kling's (the only model there was), so a project halfway through on Kling stays on it. An older project is Kling.
@@ -3481,12 +3229,10 @@ const _normVideo = (v) => {
     // The lines are never merged (the owner 2026-10-15: "Удаляем эту функцию по объединению фрагментов"): `merge` goes.
     sound:    TH.soundById(s.sound) ? s.sound : '',
     gestures: MP.moodById(s.gestures) ? s.gestures : '',
-    // The set of first frames (docs/local-app/PLAN.md, phase W2): the shot size it is made in (the
-    // ids of FRAME_SETS below), how many, and what the person asked for in words.
+    // The shot size (an id of FRAME_SETS below) of a frame that does not say its own - an older project's; the frames
+    // chat's frames carry theirs (`framing`).
     framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : (chosen ? '' : 'half'),
-    frames:  n >= 1 ? Math.min(5, n) : (chosen ? 0 : 4),
-    wish:    String(s.wish || '').slice(0, 600),
-    // How the lines take frames from that set (the owner, 2026-09-21): the pool in turn, or a
+    // How the lines take frames from the project's set (the owner, 2026-09-21): the pool in turn, or a
     // frame drawn for each line - drawn once and always the same one, so a repaint does not
     // reshuffle the video (_frameOfLine).
     spread:  (s.spread === 'random' || s.spread === 'cycle') ? s.spread : (chosen ? '' : 'cycle'),
@@ -3528,9 +3274,6 @@ function _unchosen(video, which) {
   const v = video || {};
   const words = {
     mood: !v.mood && 'the mood (field 1)',
-    framing: !v.framing && 'the shot size (field 2)',
-    frames: !v.frames && 'how many frames (field 2)',
-    spread: !v.spread && 'how the fragments take their frames (field 2)',
     model: !v.model && 'the model of the clips (field 3)',
     quality: !v.quality && 'the quality of the clips (field 3)',
   };
@@ -3783,12 +3526,7 @@ router.post('/scen3/projects', async (req, res) => {
    The ✕ (`clear`) takes the look off and puts nothing aside: the same look cast again finds everything as it was ((об1)).
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 function _castBusy(id) {
-  const busy = _scriptBusy(id);
-  if (busy) return busy;
-  // A set's frame (/scen3/frames/plan - old rows tried again) files itself into the set it was asked for.
-  const frame = ALERTS.list().some(r => r.state === 'running' && r.what === 'frame'
-    && String((((r.job || {}).params || {}).request || {}).projectId || '') === String(id));
-  return frame ? 'a frame is being drawn' : '';
+  return _scriptBusy(id);
 }
 
 // (phase V67, the owner 2026-11-01: "в имена проектов нужно вписывать имена используемых персонажей"; (об6)-(об8)) WHO IS IN
@@ -3897,7 +3635,7 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
       vertical: src.vertical, product: src.product, roles: src.roles,
       video: src.video,
       voice: { ...((src.voice && typeof src.voice === 'object') ? src.voice : {}), pick: null },
-      mix: { settings: m.settings, camera: m.camera, framing: m.framing, poseId: m.poseId, distribution: m.distribution },
+      mix: { settings: m.settings, distribution: m.distribution },
       casting: { ...look, locationId: place.locationId, locationImage: place.locationImage },
       workOf: look, cast0: look,
       createdAt: now, updatedAt: now,
@@ -4898,43 +4636,30 @@ router.post('/scen3/fragments/shot', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// THE FIRST FRAMES - a SET for the whole video (the setup step, docs/local-app/PLAN.md, phase W2)
+// THE FRAMES - a SET for the whole video, the pool the lines take theirs from
 //
-// Not a frame per line (F3, gone with the directing agent of F2): ONE shot size, chosen by the
-// person - selfie, half body, full body - and N variations of it, the same person in the same place
-// and the same base pose with a different MOMENT in each: the head, the hands, the face. A vision
-// agent writes the moments from the look, the place, the mannequin, the mood and whatever the person
-// asked for; every moment is then one frame on kie - nano-banana-2 at 2K (the owner, after the A/B),
-// in the timeline's shape, the references in a fixed order: the mannequin, the look, the place - a
-// row in Alerts of its own, drawn side by side with the others, and the runner files it into the
-// project's frames. That pool is what the lines take their frames from, in turn
-// (js/merge-v3/wk-fragments.js, _frameFor); no line is written by a frame - which one a line opens
-// on is a rule, until the person picks one by hand (pick-frame).
+// Not a frame per line: a pool of frames, each made in the frames chat (routes/scen3-fchat.js) and put into the set
+// with "to frames" (_addChatFrame). That pool is what the lines take their frames from, in turn
+// (js/merge-v3/wk-fragments.js, _frameFor); no line is written by a frame - which one a line opens on is a rule, until
+// the person picks one by hand (pick-frame). Frames of an older project may carry `set`, `n` and `moment` - the set an
+// agent planned for them before phase V61, which the writer of the animation prompts still reads.
 //
 // NO GAZE RULE (the owner): in a frame the person does not have to look into the lens - they can be
 // caught mid-thought. Where the eyes go is the moment's business, and the animation prompt brings
 // them to the lens while the line is spoken.
 // ════════════════════════════════════════════════════════════════════════════
 
-const FRAG_FRAME_ENGINE = 'nano-banana-2';
-const FRAG_FRAME_RES = '2K';
 const FRAG_FORMATS = ['9:16', '16:9'];
-const FRAME_SET_MAX = 5;
 const FRAME_SHOW_MAX = 10;              // (phase V61) the frames one animation request may show its writer
-// How generations of a project's own pictures leave here: five together, then a second's pause,
-// then five more (the owner, 2026-09-21). The engine takes a burst well enough, but a set - and,
-// when they come, the clips of a whole script - is a queue rather than a shout.
-const SUBMIT_BATCH = 5;
+// How a script's clips leave here: one a second (the owner, 2026-09-21). The engine takes a burst well enough, but the
+// clips of a whole script are a queue rather than a shout.
 const SUBMIT_GAP_MS = 1000;
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-// The three shot sizes a set is made in (the owner, 2026-09-21). `poseId` is the mannequin that sets
-// the base body and the camera angle (data/scen3-poses.json, its `group`); `camera` the lens from
-// the frame options; `rule` is what the engine and the agent are told first; `about` the one line
-// under the menu.
+// The three shot sizes - the EDGE a frame is drawn to in the frames chat (the owner, 2026-09-21). `rule` is what the
+// engine and the writers are told first.
 const FRAME_SETS = [
-  { id: 'selfie', label: 'selfie', group: 'closeup', poseId: 'closeup-selfie-r', camera: 'phone-selfie',
-    about: 'Filmed at arm’s length: the phone in one outstretched hand, the face and the shoulders close, straight to the viewer.',
+  { id: 'selfie', label: 'selfie',
     rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.',
     // Where the frame CUTS. A shot size said as a name is a suggestion; said as what is outside the
     // picture it is a rule (the owner, 2026-09-21: half-body sets kept coming out head to toe).
@@ -4943,60 +4668,16 @@ const FRAME_SETS = [
     // the stance of a body the frame cuts off is a moment that pulls the picture wider (the owner,
     // 2026-09-21: a half-body set came out full height).
     visible: 'the head, the face, the eyes, the shoulders and the free hand when it comes up near the face - never the legs, the feet, the floor or the whole stance' },
-  { id: 'half', label: 'half body', group: 'half-body', poseId: 'half-standing', camera: 'nat-50',
-    about: 'From the waist up, somebody else holding the camera: room for the hands, the place behind.',
+  { id: 'half', label: 'half body',
     rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.',
     cut: 'The bottom edge of the picture cuts at the waist, just below the belt. The hips, the legs, the knees, the feet and the floor are NOT in the picture at all.',
     visible: 'the head, the face, the eyes, the shoulders, the arms and both hands - never the legs, the feet, the floor, or how the weight sits on the feet' },
-  { id: 'full', label: 'full body', group: 'full-height', poseId: 'full-straight', camera: 'phone-rear',
-    about: 'Head to toe, standing in the place: the whole figure, the floor under their feet.',
+  { id: 'full', label: 'full body',
     rule: 'FULL BODY, the whole figure from head to toe: standing on the floor of the place, filmed from a natural distance, the person in the middle of the frame with the place around them, the feet and the floor in the frame.',
     cut: 'The whole figure is inside the picture: the head with room above it, and the feet with the floor under them.',
     visible: 'the whole figure - the head, the face, the arms and hands, the stance, the weight on the feet and the floor under them' },
 ];
 const _frameSet = (id) => FRAME_SETS.find(s => s.id === String(id || '')) || null;
-
-router.get('/scen3/frame-sets', (_req, res) => {
-  res.json({ success: true, max: FRAME_SET_MAX, sets: FRAME_SETS.map(s => ({ id: s.id, label: s.label, about: s.about, poseId: s.poseId })) });
-});
-
-// The references rule, for a frame of the set. Written from the old page's frame rule, with the one change the
-// owner asked for: the eyes are the moment's, not a rule's.
-// THIS IS AN EDIT, NOT A COMPOSITION (the owner, 2026-09-21, after two sets came out head to toe with
-// a face that was not the character's).
-//
-// Asked to build a picture out of three references, the model composes freely and the shot size is
-// one sentence against three pictures - it lost every time. Asked to EDIT the first picture, it
-// keeps that picture's frame: what changes is what it is told to change. So the mannequin, which is
-// the only reference photographed at the shot size we want, is the picture being edited; the person
-// is painted onto it and the place behind it. The references are named by what they are as well as
-// by their place, because we cannot see the order the model reads them in.
-const FRAG_RULE_POSED =
-  'EDIT THE FIRST PICTURE. It is a photograph of a blue artist mannequin, and it is already framed'
-  + ' exactly as the result must be framed: keep its crop, its camera height, angle and distance, how'
-  + ' much of the body is inside the picture, and where the figure stands in the frame. Do not zoom out,'
-  + ' do not add space below, do not reframe it in any way.'
-  + ' TURN THE MANNEQUIN INTO A REAL PERSON: the person on the reference sheet (the large portrait with'
-  + ' several full-length views beside it) - exactly that face, those features and proportions, that'
-  + ' hair, that skin, and the clothes they are wearing in it. Nothing of the mannequin may be left:'
-  + ' no blue material, no ball joints, no seams, no faceless head. One person in the picture and no'
-  + ' other. Take nothing else from the sheet: not its framing, not its full-length views, not its'
-  + ' white backdrop.'
-  + ' REPLACE THE GREY STUDIO BACKDROP with the empty place in the last picture: its architecture,'
-  + ' furniture, colours and depth behind the person, and its light falling on them. Keep the camera'
-  + ' where the mannequin\'s camera is; never take the distance of the place photograph.'
-  + ' The body keeps the mannequin\'s pose. The head, the face, the eyes and the hands do what the'
-  + ' MOMENT below says.'
-  + ' Natural perspective and contact shadows. No text, no logos, no watermark.';
-
-// For a pose whose mannequin is missing: two references, the body in words.
-const FRAG_RULE_PLAIN =
-  'Create ONE photorealistic photograph: the person from IMAGE 1, in the location from IMAGE 2.'
-  + ' IMAGE 1 is a character reference sheet - take ONLY the person from it and keep the same face, hair,'
-  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
-  + ' more than ONE person in the result.'
-  + ' IMAGE 2 is the location - keep its architecture, furniture, colours and depth.'
-  + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
 
 // The person belongs to the place: the light that falls on them is the place's light (the owner's
 // realism marker for frames, beside the person one of S1).
@@ -5099,199 +4780,6 @@ function _fchatRead(projectId) {
   return run;
 }
 
-// The moments: N variations of the one shot, written by the agent that sees the look, the place and
-// the mannequin. Two or three sentences each about the body, the hands, the head and the face at
-// the frozen instant - never about the camera, the place or the clothes, which are fixed.
-async function _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, poseUrl }) {
-  const m = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
-  const text = [
-    'You are the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a camera in one real place. You are planning the FIRST FRAMES - the still pictures the clips of the video start from: one shot size, and ' + n + ' variations of it.',
-    'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet). IMAGE 2 is the place, photographed empty.'
-      + (poseUrl ? ' IMAGE 3 is a blue mannequin, photographed at exactly this shot size: the base body position, the camera angle, and how much of the body the frame holds.' : ''),
-    'THE SHOT SIZE: ' + set.rule,
-    // The mannequin in words as well as in the picture (the owner, 2026-09-21): the moments are
-    // written FROM this pose, and an agent that has read it does not plan around a body the frame
-    // does not show.
-    (poseUrl && pose && pose.desc) ? 'THE BASE POSE, the one every variation keeps: the person is ' + pose.desc + '.' : '',
-    'WHAT A MOMENT MAY DESCRIBE - only what this shot size actually shows: ' + set.visible + '.',
-    'THE MOOD OF THE VIDEO is "' + m.label + '". The face: ' + m.face + ' The body: ' + m.gestures,
-    // THE PERSON, AS READ (phase N, the owner 2026-09-23). The planner could see the look sheet
-    // and still wrote "a wide grin, crinkling the corners of their eyes" for a face under a
-    // balaclava: a picture does not assert an absence, and the sentence that was read from that
-    // very sheet does. It was on the project all along and only the place's half of it was used.
-    ref.character ? 'THE PERSON, as read from the sheet - plan only what this face and these clothes'
-      + ' can actually do: ' + ref.character : '',
-    ref.environment ? 'THE PLACE, as read: ' + ref.environment : '',
-    wish ? 'WHAT THE PERSON MAKING THE VIDEO ASKS FOR - follow it in every variation: ' + wish : '',
-    'Write ' + n + ' variations of this ONE shot: the same person, the same place, the same shot size and the same base pose, and in each a DIFFERENT moment - the tilt and the turn of the head, what the hands do'
-      + (set.id === 'selfie' ? ' (the hand with the phone stays where it is; the other hand is free)' : '')
-      + ', the expression, where the eyes go (into the lens, or caught mid-thought). Every moment physically possible in this place and true to the mood, and the variations clearly different from one another.',
-    'A moment is two or three concrete sentences describing that frozen instant: the head, the face, the hands, the upper body. Nothing about the camera, the framing, the place or the clothes - those are fixed. Everything in English.',
-    'Answer with JSON only: {"frames":[{"n":1,"moment":"..."},{"n":2,"moment":"..."}]} - exactly ' + n + ' entries.',
-  ].filter(Boolean).join('\n');
-  const content = [
-    { type: 'text', text },
-    { type: 'image_url', image_url: { url: lookUrl } },
-    { type: 'image_url', image_url: { url: placeUrl } },
-  ];
-  if (poseUrl) content.push({ type: 'image_url', image_url: { url: poseUrl } });
-  const raw = await _ask([{ role: 'user', content }]);
-  const mt = String(raw || '').match(/\{[\s\S]*\}/);
-  if (!mt) throw new Error('the agent did not answer with the frames');
-  let plan;
-  try { plan = JSON.parse(mt[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
-  const moments = (Array.isArray(plan && plan.frames) ? plan.frames : [])
-    .map(f => String((f && f.moment) || '').trim()).filter(Boolean);
-  if (!moments.length) throw new Error('the agent planned no frames');
-  // Fewer than asked is the set that came; more is the first n.
-  return moments.slice(0, n);
-}
-
-// One frame of the set, on kie. What it is made of - the moment, the shot size, its number in the
-// set - travels with the journal row, so "try again" makes the same frame again (lib/gen-jobs.js).
-async function _submitSetFrame(b) {
-  const id = String(b.projectId || '').trim();
-  const proj = _loadProjects().find(p => String(p.id) === id);
-  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
-  const cast = _normCasting(proj.casting);
-  if (!cast.obrazImage || !cast.locationImage) {
-    throw Object.assign(new Error('cast the character in a look and set the place first'), { status: 400 });
-  }
-  const set = _frameSet(b.set);
-  if (!set) throw Object.assign(new Error('no such shot size'), { status: 400 });
-  const moment = String(b.moment || '').trim();
-  const n = Math.max(1, parseInt(b.n, 10) || 1);
-  const aspect = FRAG_FORMATS.includes(b.format) ? b.format : '9:16';
-
-  const pose = _poseFor(set.poseId, set.group);
-  const cam = _loadFrameOpts().cameras.find(c => c.id === set.camera) || null;
-  // What the look and the place LOOK like is not read here any more: the pictures are in the
-  // references, and the words about them were what the model drew from (the diet below). The
-  // reading itself stays - the agent that plans the moments still gets the place in words.
-  // The references, hosted once for a whole set by the plan and handed in (`refs`); a frame made
-  // again on its own hosts them itself.
-  const refs = (b.refs && typeof b.refs === 'object') ? b.refs : {};
-  const urls = [];
-  if (pose) urls.push(refs.pose || await _hostLocal(pose.file));
-  urls.push(refs.look || await _hostLocal(cast.obrazImage), refs.place || await _hostLocal(cast.locationImage));
-
-  // THE DIET (the owner, 2026-09-21). What the pictures already say is not said again in words: the
-  // face is the sheet's, the room is the photograph's. (The CLOTHES came back in 2026-09-23 as a
-  // checklist - see N7 below - because their small details drifted without words to hold them.) Only the LIGHT is kept in
-  // words - a compositing instruction, not a description - and only when there is one. What is left
-  // is the shot size, the roles of the references, the pose, the moment, and the shot size again.
-  // The shot size is named at the top and SPELLED OUT at the end: saying the whole rule twice was a
-  // fifth of the prompt for one instruction.
-  // The edit first, because the first line is the job; the shot size is the check at the end, said
-  // as what is OUTSIDE the picture - a name is a suggestion, an edge is a rule.
-  const parts = [pose ? FRAG_RULE_POSED : 'SHOT SIZE - obey it before anything else: ' + set.rule + ' ' + FRAG_RULE_PLAIN];
-  // WHAT THE SHEET CANNOT SAY FOR ITSELF (phase N). The diet stands - the clothes and the face are
-  // the sheet's and are not described again - but an ABSENCE is not something a picture asserts,
-  // and "turn the mannequin into a real person, exactly that face, no faceless head" is read by the
-  // engine as an instruction to invent one. So when the look covers the face, that one fact is said
-  // in words and outranks those sentences. Nothing else of the look is quoted.
-  const covered = _faceCovered(proj);
-  if (covered) parts.push('THE FACE IS COVERED, and this outranks anything above about the face: ' + covered
-    + ' Keep that covering exactly as it is on the reference sheet, over the whole face it covers.'
-    + ' Do NOT invent a face, do not uncover it, do not show a mouth or a nose that the sheet does not show,'
-    + ' and do not treat the covered head as the mannequin\'s faceless head to be replaced.');
-  // THE CLOTHES, AS A CHECKLIST (phase N7, the owner 2026-09-23). The diet kept every word about the
-  // look out of this prompt, and the small things drifted - three frames of three drew the red
-  // lettering on a grey hoodie black, or not at all. The sheet is still the source; these words only
-  // name what must survive it. And only what this shot size SHOWS: trainers named in a waist-up
-  // frame pull the picture back to full height, which is what the framing check below exists to stop.
-  const wear = _clothesShown(proj, set.id);
-  if (wear) parts.push('THE CLOTHES - copy them from the reference sheet exactly as they are there;'
-    + ' these words are only a checklist of what must survive: ' + wear
-    + ' Every logo, print and lettering keeps its colour, its content and its place on the garment.');
-  if (pose && pose.desc) parts.push('The pose being kept - the person is ' + pose.desc + '.');
-  if (cam) parts.push('The lens of the shot: ' + cam.prompt + '.');
-  if (moment) parts.push('THE MOMENT - this frozen instant: ' + moment);
-  parts.push('FRAMING CHECK, the last word on it: ' + set.rule + ' ' + (set.cut || ''));
-  const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
-
-  const taskId = await _i2i(prompt, urls, aspect, FRAG_FRAME_RES);
-  if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
-  console.log('[scen3/frames] ' + set.id + ' ' + n + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
-    + ' refs=' + urls.length + (pose ? ' +mannequin' : ''));
-  return {
-    taskId, engine: FRAG_FRAME_ENGINE, prompt,
-    file: { projectId: id, set: String(b.setId || ''), framing: set.id, n, prompt, moment },
-  };
-}
-
-/* ── The set: plan the moments, ask for every frame ─────────────────────────
-   POST /api/scen3/frames/plan  { projectId, set, n, wish?, format?, where }
-                                -> { success, setId, alerts: [{ alertId, taskId, n }] }
-
-   One agent call for the moments, then a journal row per frame, asked for one after another - kie
-   draws them side by side. The runner files each into the project's frames as it comes.
-   ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/frames/plan', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const cast = _normCasting(proj.casting);
-    if (!cast.obrazImage || !cast.locationImage) {
-      return res.status(400).json({ success: false, error: 'cast the character in a look and set the place first' });
-    }
-    // A choice not made yet is said, never filled in (phase V24): the frames are drawn in the mood,
-    // the shot size, the number and the spread the person chose.
-    const video = _normVideo(proj.video);
-    const missing = _unchosen(video, ['mood', 'framing', 'frames', 'spread']);
-    if (missing) return res.status(400).json({ success: false, error: missing });
-    const set = _frameSet(b.set);
-    if (!set) return res.status(400).json({ success: false, error: 'no such shot size' });
-    const n = Math.max(1, Math.min(FRAME_SET_MAX, parseInt(b.n, 10) || video.frames || 4));
-    const wish = String(b.wish || '').trim().slice(0, 600);
-    const mood = video.mood;
-
-    const ref = await _frameRef(id, cast);
-    const pose = _poseFor(set.poseId, set.group);
-    const [lookUrl, placeUrl, poseUrl] = await Promise.all([
-      _hostLocal(cast.obrazImage, { verify: true }),
-      _hostLocal(cast.locationImage, { verify: true }),
-      pose ? _hostLocal(pose.file) : Promise.resolve(''),
-    ]);
-    const moments = await _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, poseUrl });
-
-    // FIVE AT A TIME, a second apart (the owner, 2026-09-21). Every frame of a batch goes together -
-    // the references were hosted once above and ride along - and the next batch waits a second, so a
-    // set larger than a handful does not arrive at the engine as one burst. The retry of a single
-    // frame (the row's "try again") carries its own request without them.
-    const setId = 's' + Date.now();
-    const refs = { look: lookUrl, place: placeUrl, pose: poseUrl };
-    const outs = [];
-    for (let at = 0; at < moments.length; at += SUBMIT_BATCH) {
-      if (at) await _wait(SUBMIT_GAP_MS);
-      const batch = moments.slice(at, at + SUBMIT_BATCH);
-      const done = await Promise.all(batch.map((moment, k) =>
-        _submitSetFrame({ projectId: id, set: set.id, setId, n: at + k + 1, moment, format: b.format, refs })));
-      outs.push(...done);
-    }
-    const alerts = outs.map((out, k) => {
-      const request = { projectId: id, set: set.id, setId, n: k + 1, moment: moments[k], format: b.format };
-      const rec = JOBS.submitted({
-        kind: 'image', what: 'frame',
-        title: 'Frame · ' + set.label + ' ' + (k + 1) + '/' + moments.length,
-        where: b.where || null,
-        engine: out.engine,
-        taskIds: [out.taskId],
-        job: { type: 'frame', params: { request, file: out.file } },
-      });
-      return { alertId: rec.id, taskId: out.taskId, n: k + 1 };
-    });
-    console.log('[scen3/frames/plan] ' + id + ' ' + set.id + ' x' + moments.length + ' mood=' + mood);
-    res.json({ success: true, setId, alerts });
-  } catch (e) {
-    console.error('[scen3/frames/plan]', e.message);
-    res.status(e.status || 502).json({ success: false, error: e.message });
-  }
-});
-
 /* ── Which frame a line opens on ─────────────────────────────────────────────
    POST /api/scen3/fragments/pick-frame  { projectId, line, frameId } -> { success, project }
 
@@ -5327,7 +4815,7 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
    POST /api/scen3/video/prompts  { projectId, only? } -> { success, project, report }
 
    What the person DOES while a line is spoken - the expression, the head, the hands, the gaze -
-   written for every line at once by one agent that sees the set of first frames (phase W3b). It is
+   written for every line at once by one agent that sees the set of frames (phase W3b). It is
    what the clip of that line is made from (F4): Kling hears the frame, the read and this, and
    nothing else.
 
@@ -5850,42 +5338,6 @@ async function _addChatFrame(projectId, o) {
   if (!already) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T'): a frame added
   return { project: _projFull(saved), frameId: variant.id, already };
 }
-
-// The runner's side: wait for kie, land the picture in the project's frames/ once, make its preview
-// and add it to the project's frames - in one burst against the project as it is by then. No line is
-// touched: the lines take from the pool by the rule.
-JOBS.register('frame', {
-  timeoutMs: 15 * 60 * 1000,
-  poll: (rec) => {
-    const p = _fileParams(rec);
-    return H.resolveTask(rec.taskIds[0], PROJECTS.dirOf(p.projectId, 'frames'), 'frame_' + (p.framing || 'set') + '_' + (Number(p.n) || 1));
-  },
-  file: async (rec, landed) => {
-    const p = _fileParams(rec);
-    const preview = await _framePreview(landed.imagePath);
-    const list = _loadProjects();
-    const proj = list.find(x => String(x.id) === String(p.projectId));
-    if (!proj) throw new Error('the project is gone');
-    proj.mix = _normMix(proj.mix);
-    const variant = {
-      // Several frames of one set are filed in the same tick, so the clock alone is not an id.
-      id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      path: landed.imagePath, preview, prompt: p.prompt || '',
-      at: new Date().toISOString(), taskId: rec.taskIds[0],
-      set: String(p.set || ''), framing: String(p.framing || ''), n: Number(p.n) || 0,
-      moment: String(p.moment || ''),
-    };
-    if (!proj.mix.variants.some(v => v.taskId === variant.taskId)) proj.mix.variants.unshift(variant);
-    proj.updatedAt = variant.at;
-    _saveProjects(list);
-    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a frame filed
-    return { path: landed.imagePath, preview, frameId: variant.id, set: variant.set, n: variant.n, media: 'image' };
-  },
-  submit: async (request) => {
-    const out = await _submitSetFrame(request);
-    return { taskId: out.taskId, engine: out.engine, file: out.file };
-  },
-});
 
 /* ── Which take of a fragment is ITS clip ────────────────────────────────────
    POST /api/scen3/fragments/pick-clip  { projectId, line, clipId } -> { success, project }
@@ -6421,7 +5873,6 @@ router.post('/scen3/voices/take', async (req, res) => {
   }
 });
 
-router.FRAME_SETS = FRAME_SETS;
 router.loadProjects = _loadProjects;
 // The frame rule, for the timeline mirror (lib/frag-mirror.js): the pool in the order the frames
 // stand in, and which of them a line opens on. One rule, read by the page, by the agent that writes
@@ -6437,12 +5888,4 @@ router.sdCuts = _sdCuts;
 // (phase V30, block 1) Is the script being read now? Its captions are heard by themselves after the last read lands
 // (lib/captions-auto.js).
 router.readsRunning = (id) => !!((_reads.get(String(id)) || {}).running);
-// The two makers' work and what the Library's chats need around it (routes/makechat.js, phase I): the
-// same submit Merge and "try again" use, the media door, the kicks of the rows written at the press,
-// and the retry request a row keeps.
-router.makers = {
-  submitEnv: _submitEnv, submitLookbook: _submitLookbook, resolveMedia: _resolveMedia,
-  asking: _asking, retryRequest: _retryRequest, engine: IMG_ENGINE,
-};
-
 module.exports = router;
