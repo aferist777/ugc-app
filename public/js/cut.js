@@ -376,6 +376,8 @@ async function _places(anchor, piece, parts, join, go) {
   openPlaces(anchor, {
     title, tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
     places: { images: false, refHome: 'its site\'s folder (no folder of yours)', newCats: ['references', 'uploads', 'birols'] },
+    // (the owner 2026-11-12) A folder is chosen first; "Save here" saves.
+    confirm: 'Save here',
     onPick: go,
   });
 }
