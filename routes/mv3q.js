@@ -52,13 +52,36 @@ const { DATA_DIR } = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
+// (V50 speed, J) THE BADGE'S NUMBER without the list: every page asks it every 5 s, and the file is megabytes (a finished
+// entry keeps its timeline). Counted whenever this module reads or writes the file; read again only when the file on the disk
+// is not the one counted - another writer (relocate rewrites its addresses) or none counted yet.
+let _count = null;   // { stamp, waiting, running }
+const _stamp = () => { try { const st = fs.statSync(FILE); return st.mtimeMs + ':' + st.size; } catch (e) { return ''; } };
+function _countOf(s, stamp) {
+  let waiting = 0, running = 0;
+  for (const x of ((s && s.items) || [])) {
+    if (x.status === 'running') running++;
+    if (x.status === 'queued' || x.status === 'running') waiting++;
+  }
+  _count = { stamp, waiting, running };
+}
+function _counted() {
+  if (!_count || _count.stamp !== _stamp()) read();
+  return _count;
+}
+
 function read() {
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); }
-  catch (e) { return { items: [], running: false }; }
+  const stamp = _stamp();
+  let s;
+  try { s = JSON.parse(fs.readFileSync(FILE, 'utf8')); }
+  catch (e) { s = { items: [], running: false }; }
+  _countOf(s, stamp);
+  return s;
 }
 function write(s) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   writeFileAtomic(FILE, JSON.stringify(s, null, 2));
+  _countOf(s, _stamp());
 }
 
 // ── Running one entry ───────────────────────────────────────────────────────
@@ -286,6 +309,14 @@ function _canSee(it, req) {
 }
 
 router.get('/mv3q', (req, res) => {
+  // (V50 speed, J) ?count=1 - the strip's badge: the number alone, from the count kept above. Every entry is the person's here
+  // (lib/ownership.js), so it is the list's `waiting`. A row marked running with nothing running is a leftover the full read
+  // below puts back first.
+  const countOnly = !!req.query.count;
+  if (countOnly) {
+    const c = _counted();
+    if (!(c.running && !_active)) return res.json({ success: true, waiting: c.waiting, running: !!_active, busy: BUSY.busy() });
+  }
   const s = read();
   // Same leftover, shown honestly: a row cannot be rendering when nothing is.
   if (!_active && s.items.some(x => x.status === 'running')) {
@@ -305,10 +336,13 @@ router.get('/mv3q', (req, res) => {
     if (!names.has(id)) { let e = null; try { e = require('../lib/highlights-store').entry(id); } catch (err) { /* no store */ } names.set(id, e ? e.name : ''); }
     return names.get(id);
   };
+  // (V50 speed, J) Without its `timeline` - the frozen job is for the runner; no page reads it from the list (Queue's window,
+  // Export's follow, the shell's question before quitting), and it was nearly all of a 2 MB answer.
   const items = s.items.filter(it => _canSee(it, req))
-    .map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
+    .map(it => ({ ...it, timeline: undefined, ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
+  if (countOnly) return res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy() });
   // `running` is the machine's, not the person's: the encoder is busy for everyone.
   // `busy`: any render at all - routes/mv3b.js renders outside the queue (lib/render-busy.js); the shell asks about it before
   // the app stops (desktop/main.js, phase V23).

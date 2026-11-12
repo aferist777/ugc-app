@@ -51,19 +51,20 @@ function _viewerCss() {
   document.head.appendChild(link);
 }
 
-async function _get() {
-  try { return await fetch('/api/mv3q').then(r => r.json()); }
+// `count`: the badge's number alone (V50 speed, J) - the list is megabytes on a long history, and the badge asks every 5 s.
+async function _get(count) {
+  try { return await fetch('/api/mv3q' + (count ? '?count=1' : '')).then(r => r.json()); }
   catch (e) { return { success: false, items: [], waiting: 0, error: e.message }; }
 }
 let _failing = false;         // (phase V73 block 2) the list's last read failed - said once, not at every beat
 
 // The badge counts what is still to happen - queued and running - not the whole history.
 // A number that only grows is not something anybody acts on.
-async function _paintBadge() {
+// `known`: the number a list just read gave - not asked again.
+async function _paintBadge(known) {
   const b = $('mv3-queue');
   if (!b) return;
-  const d = await _get();
-  const n = d.waiting || 0;
+  const n = known != null ? known : ((await _get(true)).waiting || 0);
   let dot = b.querySelector('.mv3-qbadge');
   if (!n) { if (dot) dot.remove(); return; }
   if (!dot) {
@@ -343,7 +344,7 @@ async function _paintList() {
     }
   }
   _pop.appendChild(list);
-  _paintBadge();
+  _paintBadge(d.waiting || 0);
 }
 
 // ── A highlights project's row (phase V33.4) ────────────────────────────────
