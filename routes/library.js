@@ -1812,7 +1812,8 @@ function _cutTo(b) {
  * own in REFERENCES. -> { kind, id, item, src, thumb, dur, name } (src..name - what a lane needs, phase V81's "Add to
  * timeline"). A piece that cannot be filed goes, with its poster.
  */
-async function _filePiece(made, to) {
+async function _filePiece(made, to, o) {
+  const original = o && o.noOriginal ? null : made.original;
   let thumbPath = null;
   try {
     try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
@@ -1830,7 +1831,7 @@ async function _filePiece(made, to) {
         linkKey: '', caption: '', note: '', origin: from ? (from.origin || '') : '', postedAt: from ? (from.postedAt || '') : '',
         from: 'cut', poster: thumbPath, remote: null,
         media: [{ id: require('crypto').randomBytes(4).toString('hex'), type: 'video', path: made.videoPath, thumb: thumbPath,
-          w: made.w, h: made.h, dur: Math.round(made.dur * 10) / 10, size, original: made.original }],
+          w: made.w, h: made.h, dur: Math.round(made.dur * 10) / 10, size, original }],
       });
       REFS.placePosts([REFS.read().find(p => p && p.id === post.id)]);
       const item = REFS.read().find(p => p && p.id === post.id) || post;
@@ -1841,7 +1842,7 @@ async function _filePiece(made, to) {
     const { item } = _fileRecord({
       videoPath: made.videoPath, thumbPath, name: made.name, kind: to.kind, categoryId: to.cat,
       categoryLabel: to.kind === 'hooks' ? '' : to.label,
-      original: made.original, duration: made.dur, w: made.w, h: made.h, link: made.root.link || '',
+      original, duration: made.dur, w: made.w, h: made.h, link: made.root.link || '',
     });
     console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's ->', to.kind, item.videoPath);
     return { kind: to.kind, id: item.id, ...lane(item.videoPath, item) };
@@ -1853,11 +1854,15 @@ async function _filePiece(made, to) {
 }
 
 /* ── Several pieces at once, and the scenes (phase V81) ───────────────────────
-   POST   /api/library/cuts { src, parts: [{ in, out, label? }], join, to }   -> { job }
+   POST   /api/library/cuts { src, parts: [{ in, out, label? }], join, to, drop? }   -> { job }
           the fragments drawn over a video (js/cuts/parts.js): `join` - ONE new clip of them all in the order of time, else
-          each a new clip of its own, filed as it is made (lib/cuts.js cutMany, _filePiece) - all into the one place chosen
+          each a new clip of its own, filed as it is made (lib/cuts.js cutMany, _filePiece) - all into the one place chosen;
+          `drop: { kind, id }` - the video's own record (B-rolls, Uploads, Hooks): once every piece is filed it is deleted the
+          shelf's way (_deleteOne) and the pieces keep no `original` - unless a project's timeline or THIS PROJECT holds it:
+          then it stays, the pieces keep their original, and the job says where (`kept`) (V81 amendment, the owner's (нк2),
+          (нк3), 2026-11-12)
    GET    /api/library/cuts/:job      -> { state: working | done | stopped | failed, done, total, pieces: [{ kind, id, src,
-                                         thumb, dur, name }], error }
+                                         thumb, dur, name }], error, dropped, kept }
    DELETE /api/library/cuts/:job      stop: the pieces made stay, the rest are not made (the owner's (в17))
    A job lives in the server's memory - it goes on while the viewer is closed; the app closed midway, the rest is simply not
    made (nothing is paid: no row in Alerts). Kept an hour after it ends.
@@ -1866,6 +1871,25 @@ async function _filePiece(made, to) {
                                       known -> { state: working, pct } | { state: done, scenes: [{ in, out }], dur } | failed
    DELETE /api/library/scenes?src=    the search stopped */
 const _cutJobs = new Map();
+
+// "Delete original" of a cut: the video's own record, checked against `src`; `kept` - in words, why it stays (a project's
+// timeline or THIS PROJECT holds it), '' - it goes once the pieces are filed.
+function _dropOf(d, src) {
+  const kind = String((d && d.kind) || '');
+  const id = String((d && d.id) || '');
+  const bad = (m) => Object.assign(new Error(m), { status: 400 });
+  if (!['birols', 'uploads', 'hooks'].includes(kind) || !id) throw bad('which video to delete?');
+  const store = RECORD_STORES[kind === 'uploads' ? 'birols' : kind];
+  const rec = store.read().find(e => e && String(e.id) === id);
+  const file = String(src || '').split('?')[0];
+  if (!rec || !(store.files(rec) || []).some(p => String(p || '').split('?')[0] === file)) throw bad('that is not this video\'s record');
+  const names = require('../lib/timeline-media').usage([file]).map(p => (p.draft ? 'the draft' : '"' + p.title + '"'))
+    .concat(PLINKS.usage([file]).map(p => '"' + p.title + '" (this project)'));
+  const kept = names.length ? 'The original stays: it is used in ' + [...new Set(names)].slice(0, 4).join(', ')
+    + (names.length > 4 ? ' and ' + (names.length - 4) + ' more' : '') + '.' : '';
+  // Uploads live in the B-rolls' store (`source` says which): deleted as a record of that store.
+  return { kind: kind === 'uploads' ? 'birols' : kind, id, kept };
+}
 const CUT_JOB_KEEP_MS = 3600 * 1000;
 
 router.post('/library/cuts', (req, res) => {
@@ -1874,9 +1898,14 @@ router.post('/library/cuts', (req, res) => {
   try { to = _cutTo(b); } catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
   const parts = Array.isArray(b.parts) ? b.parts.slice(0, 2000) : [];
   if (!parts.length) return res.status(400).json({ success: false, error: 'draw a fragment over the bar first' });
+  let drop = null;
+  if (b.drop) {
+    try { drop = _dropOf(b.drop, b.src); } catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
+  }
   for (const [k, j] of _cutJobs) if (j.endAt && Date.now() - j.endAt > CUT_JOB_KEEP_MS) _cutJobs.delete(k);
   const id = 'cj' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const job = { state: 'working', done: 0, total: 0, pieces: [], error: '', ctl: new AbortController(), endAt: 0 };
+  const job = { state: 'working', done: 0, total: 0, pieces: [], error: '', ctl: new AbortController(), endAt: 0,
+    dropped: false, kept: drop ? drop.kept : '' };
   _cutJobs.set(id, job);
   (async () => {
     try {
@@ -1884,12 +1913,18 @@ router.post('/library/cuts', (req, res) => {
         join: !!b.join, signal: job.ctl.signal,
         onTotal: (n) => { job.total = n; },
         onPart: async (made) => {
-          const r = await _filePiece(made, to);
+          const r = await _filePiece(made, to, { noOriginal: !!(drop && !drop.kept) });
           job.pieces.push({ kind: r.kind, id: r.id, src: r.src, thumb: r.thumb, dur: r.dur, name: r.name });
           job.done++;
         },
       });
       job.state = 'done';
+      // Every piece filed: the video goes, the shelf's way.
+      if (drop && !drop.kept) {
+        const r = _deleteOne(drop.kind, drop.id);
+        if (r.status === 200 && r.body && r.body.success) job.dropped = true;
+        else job.kept = 'The original stays: ' + ((r.body && r.body.error) || 'it could not be deleted') + '.';
+      }
     } catch (e) {
       job.state = (e && e.stopped) || job.ctl.signal.aborted ? 'stopped' : 'failed';
       if (job.state === 'failed') { job.error = e.message; console.warn('[library/cuts]', e.message); }
@@ -1903,7 +1938,8 @@ router.post('/library/cuts', (req, res) => {
 router.get('/library/cuts/:job', (req, res) => {
   const j = _cutJobs.get(String(req.params.job || ''));
   if (!j) return res.status(404).json({ success: false, error: 'no such work' });
-  res.json({ success: true, state: j.state, done: j.done, total: j.total, pieces: j.pieces, error: j.error });
+  res.json({ success: true, state: j.state, done: j.done, total: j.total, pieces: j.pieces, error: j.error,
+    dropped: !!j.dropped, kept: j.kept || '' });
 });
 
 router.delete('/library/cuts/:job', (req, res) => {
