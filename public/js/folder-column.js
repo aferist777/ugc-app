@@ -203,6 +203,36 @@ export async function typedTree(roots, type, cache, fit, plinks) {
   return { nodes, byKey, parentOf, index };
 }
 
+// (V50 speed) The tree as the column offers it: every folder the index has counted cut down to those holding the type, each
+// counting them (pruneTree); a folder not counted yet stays as read - never offered (`_valid` asks the index) until the whole
+// tree is counted. With the whole index this is typedTree's answer.
+function _shaped(nodes, idx) {
+  const cut = (list) => (list || []).flatMap((n) => {
+    if (idx.total.has(n.key)) return pruneTree([n], idx);
+    const c = Object.assign({}, n);
+    if (n.children) c.children = cut(n.children);
+    return [c];
+  });
+  const out = cut(nodes);
+  const byKey = new Map();
+  const parentOf = new Map();
+  const walk = (list, p) => { for (const n of list) { byKey.set(n.key, n); if (p) parentOf.set(n.key, p.key); if (n.children) walk(n.children, n); } };
+  walk(out, null);
+  return { nodes: out, byKey, parentOf, index: idx };
+}
+
+// Resolves once the pictures in `box` have loaded (or failed), or after `ms` - whichever is first.
+function _settled(box, ms) {
+  return new Promise((done) => {
+    const wait = [...box.querySelectorAll('img')].filter(i => !i.complete);
+    let left = wait.length;
+    if (!left) { done(); return; }
+    const t = setTimeout(done, ms);
+    const one = () => { if (--left <= 0) { clearTimeout(t); done(); } };
+    for (const i of wait) { i.addEventListener('load', one, { once: true }); i.addEventListener('error', one, { once: true }); }
+  });
+}
+
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 
 // Whether a shelf record lies DIRECTLY in a node of the query `q` - the server's rule (routes/library.js _inNode), for the
@@ -257,7 +287,8 @@ export function createFolderColumn(host, o) {
   const opt = Object.assign({ files: 'photo', empty: 'Nothing in this folder.', title: 'Show' }, o || {});
   const OWN = 'own';
   const PL = 'plinks';            // (phase V78) THIS PROJECT's node - one with the own row
-  let tree = null;              // typedTree's answer - only the folders holding files of `files`, and their files
+  let tree = null;              // _shaped's answer - only the folders holding files of `files`, and their files; `partial`
+                                // while only the folder open is counted, `failed` when the rest could not be
   let sel = '';                 // OWN or a node's key
   let wanted = '';              // a folder asked for while it held nothing of the type - opened once it does (an upload)
   let ownItems = [];
@@ -265,6 +296,7 @@ export function createFolderColumn(host, o) {
   let state = 'idle';           // 'reading' | 'ready' | 'error'
   let loads = 0;
   let menu = null;              // the dropdown, while open
+  let full = null;              // (V50 speed) while the whole count waits for the pictures: starts it at once
 
   host.textContent = '';
   const root = el('div', 'fc');
@@ -287,6 +319,9 @@ export function createFolderColumn(host, o) {
 
   const stored = () => { if (!opt.lsKey) return ''; try { return String(JSON.parse(localStorage.getItem(opt.lsKey) || '""') || ''); } catch (e) { return ''; } };
   const remember = () => { if (!opt.lsKey) return; try { localStorage.setItem(opt.lsKey, JSON.stringify(sel)); } catch (e) { /* a private window */ } };
+  // (V50 speed) The own row needs no tree: when nothing else is asked for it is open from the start, so the caller's own
+  // pictures show as soon as it gives them (setOwn), before the tree is read.
+  { const k = [opt.start, stored()].find(Boolean) || ''; if (opt.own && (!k || k === OWN || k === PL)) sel = OWN; }
   const node = (k) => (tree ? tree.byKey.get(k) || null : null);
   // (phase V78) THIS PROJECT's folders are the own row's: their parent at the top is the own row.
   const parentKey = (k) => { const p = tree ? tree.parentOf.get(k) || '' : ''; return p === PL && opt.own ? OWN : p; };
@@ -311,36 +346,84 @@ export function createFolderColumn(host, o) {
     return paths.size;
   };
 
-  function _valid(k) { return ((k === OWN || k === PL) && !!opt.own) || !!node(k); }
+  // A folder is offered once it is counted and holds files of the type (a tree only partly counted has others as read).
+  function _valid(k) { return ((k === OWN || k === PL) && !!opt.own) || (!!node(k) && (tree.index.total.get(k) || 0) > 0); }
   function _fallback() { return opt.own ? OWN : ((tree && tree.nodes[0]) || {}).key || ''; }
 
   async function load() {
     const mine = ++loads;
     // The first reading says so; a reading again keeps what is shown until the answer is in.
     if (!tree && sel !== OWN) { state = 'reading'; paint(); }
-    let t = null;
     let err = '';
     const roots = typeof opt.roots === 'function' ? opt.roots() : opt.roots;
     // (phase V78, (лч16)) THIS PROJECT too, when the caller names the project (`plinks`) - only its files of the column's types.
     const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
-    try { t = await typedTree(roots, opt.files, null, typeof opt.fit === 'function' ? opt.fit : null, pk); } catch (e) { err = e.message || 'the folders could not be read'; }
+    const fit = typeof opt.fit === 'function' ? opt.fit : null;
+    const raw = await readTree(roots, pk);
     if (mine !== loads) return;
     // (phase V73 block 2, (б2-19)) No answer is a failed reading too (readTree answers null), never an empty column. The reason
     // goes to the corner (js/notice.js); a column read before keeps what it shows.
-    if (!t) { err = err || 'the folders could not be read'; showError(err); }
-    if (t) tree = t;
-    if (wanted && _valid(wanted)) { sel = wanted; remember(); }
+    const failed = (why) => { showError(why || 'the folders could not be read'); if (!tree) { state = 'error'; paint(); } };
+    if (!raw) { failed(); return; }
+    // (V50 speed, the owner 2026-11-12: "моментально показывать чат и затем сразу подгружать медиа") The folder that opens is
+    // counted FIRST - its own folders only, one shelf read for most - and drawn; the whole tree is counted after (below). The
+    // cache keeps every shelf's answer for both, so nothing is read twice.
+    const cache = new Map();
+    const idx = { direct: new Map(), total: new Map() };
+    const rootOf = (k) => { let x = k; while (raw.parentOf.get(x)) x = raw.parentOf.get(x); return x; };
+    const count = async (k) => {
+      const r = rootOf(k);
+      const part = await folderIndex([raw.byKey.get(k)], typeof opt.files === 'function' ? () => opt.files(r) : opt.files, cache, fit);
+      for (const [key, v] of part.direct) idx.direct.set(key, v);
+      for (const [key, v] of part.total) idx.total.set(key, v);
+    };
+    // The folders tried in today's order - one asked for, the one open, the start or the one remembered, then the own row or the
+    // first root holding the type -, read again after every count: a press meanwhile is kept. The own row is THIS PROJECT's.
+    const order = () => [wanted, sel].concat(sel ? [] : [opt.start, stored()], opt.own ? [OWN] : raw.nodes.map(n => n.key));
+    let want = '';
+    try {
+      for (;;) {
+        let need = '';
+        want = '';
+        for (const k0 of order()) {
+          const k = (k0 === OWN || k0 === PL) && opt.own ? PL : k0;
+          if (!k) continue;
+          if (k === PL && opt.own && !raw.byKey.has(PL)) { want = OWN; break; }
+          if (!raw.byKey.has(k)) continue;
+          if (!idx.total.has(k)) { need = k; break; }
+          if (k === PL && opt.own) { want = OWN; break; }
+          if (idx.total.get(k) > 0) { want = k; break; }
+        }
+        if (!need) break;
+        await count(need);
+        if (mine !== loads) return;
+      }
+    } catch (e) { if (mine === loads) failed(e.message); return; }
+    if (wanted && (want === wanted || (want === OWN && wanted === PL))) { sel = want; remember(); }
     wanted = '';
-    if (!sel) {
-      const want = [opt.start, stored()].find(k => k && _valid(k));
-      sel = want || _fallback();
-    } else if (!_valid(sel)) {
-      // A folder deleted or renamed elsewhere, or with nothing of the type left: the nearest that is still there.
-      sel = _fallback();
-    }
-    _paintHead();
-    if (!t && !tree) { state = 'error'; paint(); return; }
+    sel = want;
+    tree = Object.assign(_shaped(raw.nodes, idx), { partial: true });
     _read();
+
+    // The whole tree counted - for the dropdown and "up" - once the pictures shown are in (their requests go first), at once
+    // when the dropdown opens or a folder not counted yet is asked for. A count stopped here is a reading left behind.
+    await new Promise((go) => { full = go; _settled(list, 1500).then(go); });
+    if (mine !== loads) return;
+    full = null;
+    let index = null;
+    try { index = await folderIndex(raw.nodes, opt.files, cache, fit); } catch (e) { err = e.message || 'the folders could not be read'; }
+    if (mine !== loads) return;
+    if (!index) { showError(err); tree.failed = true; if (menu) menu.paint(); return; }
+    const shownNow = () => (sel === OWN ? _ownShown() : files).map(f => f && f.path).join('\n');
+    const was = shownNow();
+    tree = _shaped(raw.nodes, index);
+    if (wanted && _valid(wanted)) { sel = wanted === PL && opt.own ? OWN : wanted; remember(); body.scrollTop = 0; }
+    wanted = '';
+    if (!_valid(sel)) sel = _fallback();
+    if (sel !== OWN) files = tree.index.direct.get(sel) || [];
+    // The folder open drawn again only when what it shows changed (another folder asked for meanwhile) - its pictures stay.
+    if (shownNow() !== was) paint(); else { _paintHead(); _paintFolders(); }
+    if (menu) menu.paint();
   }
 
   async function reload() {
@@ -358,8 +441,9 @@ export function createFolderColumn(host, o) {
 
   function select(k) {
     if (k === PL && opt.own) k = OWN;
-    // A folder with nothing of the type is not offered; asked for (where an upload went), it opens at the next reading.
-    if (!_valid(k)) { if (k) wanted = k; return; }
+    // A folder with nothing of the type is not offered; asked for (where an upload went), it opens at the next reading - or,
+    // not counted yet, once the whole tree is.
+    if (!_valid(k)) { if (k) { wanted = k; if (full) full(); } return; }
     const same = k === sel;
     sel = k;
     remember();
@@ -375,9 +459,10 @@ export function createFolderColumn(host, o) {
     const path = own ? [opt.own.label] : pathOf(sel);
     pickName.textContent = path.length ? path[path.length - 1] : '…';
     pick.title = (path.join(' / ') || '') + ' - press to choose another folder';
-    pickN.textContent = own ? String(_ownCount()) : n ? String(n.count || 0) : '';
+    pickN.textContent = own ? (tree ? String(_ownCount()) : '') : n ? String(n.count || 0) : '';
     const p = own ? '' : parentKey(sel);
-    up.hidden = !p;
+    // (V50 speed) a parent not counted yet shows once the whole tree is
+    up.hidden = !p || !_valid(p);
     up.title = p ? 'Up to ' + (p === OWN ? opt.own.label : node(p).label) : '';
   }
 
@@ -415,7 +500,8 @@ export function createFolderColumn(host, o) {
     const lead = typeof opt.lead === 'function' ? opt.lead() : null;
     // (phase V73 block 2) reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
     // are the shared parts (js/ui-state.js); `fc-none` is their place in the list
-    if (state === 'reading' && !own) { list.replaceChildren(loadingEl('reading…', { cls: 'fc-none' })); return; }
+    // (V50 speed) the own row's pictures show before the tree is read - "reading…" only while it has none
+    if ((state === 'reading' || state === 'idle') && !(own && shown.length)) { list.replaceChildren(loadingEl('reading…', { cls: 'fc-none' })); return; }
     if (state === 'error' && !own) { list.replaceChildren(failedEl('the folders', () => { state = 'reading'; paint(); load(); }, { cls: 'fc-none' })); return; }
     if (!shown.length) {
       const n = own ? null : node(sel);
@@ -455,7 +541,7 @@ export function createFolderColumn(host, o) {
 
   function _openMenu() {
     if (menu) { _closeMenu(); return; }
-    if (!tree && !opt.own) return;
+    if (!tree && !opt.own && state === 'error') return;
     const open = new Set();
     for (let k = parentKey(sel); k; k = parentKey(k)) open.add(k);
     const box = el('div', 'ref-move mtp-box fc-menu u-menu is-float');
@@ -489,9 +575,19 @@ export function createFolderColumn(host, o) {
       b.addEventListener('click', () => { _closeMenu(); select(key); });
       return b;
     };
+    let waited = false;
     function paintMenu() {
       const top = lst.scrollTop;
       lst.textContent = '';
+      // (V50 speed; phase V56's rule - only the folders holding the type, with their numbers) Offered once the whole tree is
+      // counted: until then a line that says so, and the count starts at once.
+      if (!tree || tree.partial) {
+        lst.appendChild(tree && tree.failed ? failedEl('the folders', () => { _closeMenu(); load(); }, { line: true })
+          : loadingEl('counting the folders…', { line: true }));
+        waited = true;
+        if (full) full();
+        return;
+      }
       const walk = (n, d) => { lst.appendChild(row(n, d)); if (n.children && open.has(n.key)) for (const c of n.children) walk(c, d + 1); };
       if (opt.own) {
         lst.appendChild(row({}, 0, true));
@@ -500,6 +596,7 @@ export function createFolderColumn(host, o) {
       }
       for (const n of (tree ? tree.nodes : [])) if (!(opt.own && n.key === PL)) walk(n, 0);
       lst.scrollTop = top;
+      if (waited) { waited = false; const here = lst.querySelector('.is-here'); if (here) here.scrollIntoView({ block: 'nearest' }); }
     }
     paintMenu();
     document.body.appendChild(box);
@@ -515,7 +612,7 @@ export function createFolderColumn(host, o) {
     if (here) here.scrollIntoView({ block: 'nearest' });
     const away = (e) => { if (box.contains(e.target) || pick.contains(e.target)) return; _closeMenu(); };
     document.addEventListener('mousedown', away, true);
-    menu = { box, away, layer: Layers.open(box, { modal: false, name: 'folder column', onEsc: _closeMenu }) };
+    menu = { box, away, paint: paintMenu, layer: Layers.open(box, { modal: false, name: 'folder column', onEsc: _closeMenu }) };
     pick.classList.add('is-open');
   }
 
