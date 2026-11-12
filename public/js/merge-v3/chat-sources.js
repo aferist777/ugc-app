@@ -35,13 +35,6 @@ export async function people() {
   return { items: groups.flatMap(g => g.items), groups };
 }
 
-/** Where a picture is, by its folder - the picker opens there, on it: a character's or a look's on characters & looks; any
- *  other (IMAGES, REFERENCES, Environments, Lookbooks) is found in the tree by the window itself. */
-export function pictureSourceOf(path) {
-  const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
-  return at('characters') || at('looks') ? ['people'] : [];
-}
-
 // ── The attachment window with the tree (phase V55, chat-pick.js `tree`) ─────
 // What of the media tree each kind shows (its top nodes), the key the tree remembers its branches under, the folder opened
 // the first time, how a file of a folder (js/folder-column.js filesOf) becomes the window's item, and (phase V56, (ги4))

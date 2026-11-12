@@ -150,9 +150,7 @@
 .mv3-ig-shot{
   width:0; min-width:100%; max-height:320px; height:auto; object-fit:contain;
   border:1px solid var(--border); border-radius:var(--r-xs);
-  cursor:zoom-in;
 }
-.mv3-ig-shot:hover{ border-color:var(--sel-line) }
 /* A picture taken off the shelf since: the place it stood in, said in words. */
 .mv3-ig-gone{
   width:132px; display:flex; align-items:center; justify-content:center; padding:6px;
@@ -166,7 +164,7 @@
 }
 /* The frame the picture will fill, at the shape that was asked for - and Kling's first frame waiting (V18.1). */
 .mv3-ig-shot.is-busy{
-  min-width:0; width:132px; max-width:100%; height:auto; cursor:default;
+  min-width:0; width:132px; max-width:100%; height:auto;
 }
 .mv3-ig-shot.is-busy, .vc-board.is-frame.is-waiting{
   background:repeating-linear-gradient(135deg,
@@ -328,14 +326,28 @@
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
 .mv3-ig-card.is-fail .sp{ font:500 10px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
-/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in the corner plays it large; a sound - a row with
+/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in its middle plays it large; a sound - a row with
    ▶ to listen, its name and its length. One the model cannot take (too short) is dimmed, and says why under the pointer. */
 .mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
-.mv3-ig-cplay{
-  position:absolute; left:4px; top:4px; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
-  background:var(--scrim); color:var(--on-media); font:500 10px/22px var(--font); cursor:pointer; opacity:.85;
+/* (V91 block 3, the owner 2026-11-12) THE ROUND BUTTON on a chat's picture or clip (chat-shell.js mediaBtn) - ⤢ in a picture's
+   top-right corner opens it large, ▶ in a clip's middle plays it in the Library's viewer; a press on the thing itself does
+   nothing. Smaller on a message's attachments. */
+.mv3-ig-mb{
+  position:absolute; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--scrim); color:var(--on-media); font:500 10px/1 var(--font); cursor:pointer; opacity:.85;
 }
-.mv3-ig-cplay:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
+.mv3-ig-mb:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
+.mv3-ig-mb.is-big{ top:4px; right:4px; font-size:14px }
+.mv3-ig-mb.is-play{ left:50%; top:50%; transform:translate(-50%,-50%) }
+.mv3-vc-shot > .mv3-ig-mb.is-play{ width:30px; height:30px; font-size:12px }   /* the thread's clip: its ▶ as large as before */
+.mv3-ig-msg-ref .mv3-ig-mb{ width:18px; height:18px; font-size:8px }
+.mv3-ig-msg-ref .mv3-ig-mb.is-big{ top:2px; right:2px; font-size:12px }
+.vm-refs-s .mv3-ig-mb{ width:16px; height:16px }
+/* A clip playing in its tile while the pointer rests there, without its sound (hover-play.js) - under the tile's ▶, its
+   seconds and its number. */
+.mv3-ig-hbox{ position:absolute; inset:0; overflow:hidden; pointer-events:none }
+.mv3-ig-hvid{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; pointer-events:none }
 .mv3-ig-card.is-sound{
   display:flex; align-items:center; gap:6px; min-height:0; height:30px; padding:0 7px 0 4px; box-sizing:border-box;
 }
@@ -345,36 +357,32 @@
 .mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round, as before */
 .mv3-ig-card.is-short{ opacity:.45 }
 
-/* Hovering shows the picture larger, at one fixed place over the conversation. */
+/* Hovering a thing in the zone shows it larger, at one fixed place over the conversation - a clip playing in it without its
+   sound, over its poster (V91 block 3). */
 .mv3-ig-peek{
   position:fixed; z-index:9450; pointer-events:none;     /* (V64) over a chat's window (8900) */
   padding:4px; border:1px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface); box-shadow:var(--shadow);
 }
 .mv3-ig-peek img{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
+.mv3-ig-peek .mv3-ig-hvid{ inset:4px; width:calc(100% - 8px); height:calc(100% - 8px); object-fit:contain }
 
 /* ── The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own few pieces ── */
 /* A finished clip: its poster at the clip's own shape, a play mark over it, its length in the corner. */
 .mv3-vc-shot{
   position:relative; width:180px; max-width:100%; max-height:320px;
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
-  background:var(--surface-2); cursor:pointer;
+  background:var(--surface-2);
 }
-.mv3-vc-shot:hover{ border-color:var(--sel-line) }
 .mv3-vc-shot .mv3-ig-shot{ width:100%; height:100%; min-width:0; max-height:none; object-fit:cover; border:0; border-radius:0 }
-.mv3-ig-play{
-  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  background:var(--scrim); color:var(--on-media); font:600 12px/1 var(--font); pointer-events:none;
-}
 .mv3-ig-dur{
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
   background:var(--scrim); color:var(--on-media); font:500 10px/1.3 var(--font); pointer-events:none;
 }
 /* Dragged onto a lane (phase V13). */
 .mv3-vc-shot.is-dragging{ opacity:.5 }
-/* A clip or a sound in the zone: its poster or a note, the seconds that go; pressed, the part is chosen. */
-.mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ cursor:pointer; display:flex; align-items:center; justify-content:center }
+/* A clip or a sound in the zone: its poster or a note, the seconds that go - pressed, the part is chosen. */
+.mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ display:flex; align-items:center; justify-content:center }
 .mv3-ig-att .ic{ font:600 11px/1 var(--font); color:var(--muted) }
 .mv3-ig-att .dur{
   position:absolute; left:0; right:0; bottom:0; padding:0 2px; background:var(--scrim); color:var(--on-media);
@@ -384,8 +392,6 @@
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
 /* Only a part of it goes: its seconds in gold. */
 .mv3-ig-att .dur.is-cut{ color:var(--gold) }
-/* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
-.mv3-ig-att.is-swap{ cursor:pointer }
 .mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
 .mv3-ig-att button.dur:hover{ background:var(--scrim-strong); color:var(--on-media) }
 /* An empty NUMBERED place - a thing taken out keeps its number: dashed, "+" to fill it, the cross to close it. */
@@ -1054,7 +1060,7 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .mv3-fc-shotbox.is-empty{ border-style:dashed; border-color:color-mix(in oklch, var(--gold) 55%, transparent) }
 .mv3-fc-shotbox.is-empty span{ padding:0 10px; text-align:center; font:500 10px/1.35 var(--font); color:var(--muted) }
-.mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; cursor:pointer; display:block }
+.mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; display:block }
 .mv3-fc-shotbox .mv3-ig-prog{ position:absolute; left:6px; right:6px; bottom:6px }
 .mv3-fc-shotbox .mv3-ig-bad{ padding:8px; font-size:10px }
 .mv3-fc-shotnav{ justify-content:space-between }

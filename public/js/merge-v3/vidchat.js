@@ -29,7 +29,7 @@
 
 import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome, switchRow } from './chat-shell.js';
+import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome, switchRow, mediaBtn, hoverClip } from './chat-shell.js';
 import { chatWindow } from './chat-window.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -846,13 +846,6 @@ function VIDEOS(ctx) {
   function _startFor(kind, s) {
     if (kind !== 'image' || !s || !s.key) return '';
     return Src.pictureStart(s.role);
-  }
-  // (phase V15) Where a thing in the zone is - the rows that may hold it; the window finds the rest in the tree itself.
-  function _sourceOf(path, kind) {
-    const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
-    if (kind === 'image') return Src.pictureSourceOf(path);
-    if (kind === 'video') return at('birols') ? ['made'] : [];
-    return at('voice') ? ['voices'] : [];
   }
   // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
   // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
@@ -2040,7 +2033,7 @@ function VIDEOS(ctx) {
     for (const a of media) {
       const k = count[a.kind] != null ? a.kind : 'image';
       count[k]++;
-      const cell = refCell(a, k, count[k], { show: ctx.peekShow, hide: ctx.peekHide });
+      const cell = refCell(a, k, count[k], media);
       cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
       const wrap = el('div', 'vc-ref' + (a.gone ? ' is-gone' : ''));
       if (a.gone) cell.title += ' - not in this library';
@@ -2454,8 +2447,10 @@ function VIDEOS(ctx) {
     // (phase V60.3, (вс9б)) The row of presses stays one line: the price gives way, whole under the pointer.
     l.price.title = l.price.textContent;
   }
-  // A finished clip: its poster - a press plays it, and it can be dragged onto a lane (phase V13). (phase V60.2) At its
-  // message's head, 180 px wide at its shape. (phase V60.3, the owner's (вс1б)) No "to timeline" under it: the drag lays it.
+  // A finished clip: its poster - dragged onto a lane (phase V13). (phase V60.2) At its message's head, 180 px wide at its
+  // shape. (phase V60.3, the owner's (вс1б)) No "to timeline" under it: the drag lays it. (V91 block 3, the owner
+  // 2026-11-12) A press on it does nothing: ▶ in its middle plays the thread's clips in the Library's viewer, and the pointer
+  // resting on it plays it in place without its sound.
   function _shotOf(g, cell, open) {
     const box = el('div', 'mv3-vc-shot');
     const shape = (g.w && g.h) ? g.w + '/' + g.h : String((g.params || {}).aspect || '9:16').replace(':', '/');
@@ -2470,10 +2465,10 @@ function VIDEOS(ctx) {
       img.addEventListener('error', () => { img.remove(); }, { once: true });
       box.appendChild(img);
     }
-    box.appendChild(el('span', 'mv3-ig-play', '▶'));
+    box.appendChild(mediaBtn('video', open));
     if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', (+g.duration).toFixed(1) + 's'));
-    box.title = 'Play it · drag it onto a lane';
-    box.addEventListener('click', open);
+    box.title = 'Drag it onto a lane';
+    hoverClip(box, g.videoPath);
     const item = {
       clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
       name: String(g.said || g.prompt || '').slice(0, 60), dur: +g.duration || 0, group: 'videochat',
@@ -2560,7 +2555,6 @@ function VIDEOS(ctx) {
       // Read again when what it offers changes with the model: clips or not, sounds or not, the longest clip.
       sig: () => [_colTakes('video'), _colTakes('audio'), _clipFit().note || ''].join('|'),
       group: 'images', home: 'images',
-      play: (it) => openViewer([{ id: it.libId || it.path, kind: 'birols', media: it.path, thumb: it.thumb || it.path, name: it.name || '' }], 0),
     },
     // (phase V13, the owner 2026-10-07) Every "+" of the zone opens the picker on its place.
     pick: {
@@ -2571,7 +2565,6 @@ function VIDEOS(ctx) {
       tree: (kind) => (kind === 'video' && Src.TREE.video ? Object.assign({}, Src.TREE.video, _clipFit()) : Src.TREE[kind] || null),
       start: _startFor,
       why: _pickWhy,
-      sourceOf: _sourceOf,
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {

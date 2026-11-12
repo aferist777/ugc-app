@@ -13,7 +13,13 @@
    sash (`column`: since phase V55 the folder column, js/folder-column.js - the pictures chat; since V60.2 the video chat's
    too), the picker behind
    every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
-   V55 the window with the tree), the hover peek, and the narrow layout.
+   V55 the window with the tree), the zone's enlarged view under the pointer, and the narrow layout.
+
+   (V91 block 3, the owner 2026-11-12, (чк19в)-(чк19е): "клик по самому медиа ничего не делает") A press on a picture or a
+   clip - a result in the thread, a message's attachment, a thing in the zone - does nothing; a picture has ⤢ in its
+   top-right corner that opens it large, a clip ▶ in its middle that plays it in the Library's viewer, and the pointer
+   resting on a clip plays it in place without its sound. The right column's press attaches, as before. Only the zone
+   shows a thing larger under the pointer (peekShow).
 
    (phase V64 block 3, the owner 2026-10-31) Every chat lives in a generation's window now - the frames chat since V61, the
    pictures chat and the video chat since V64 (chat-window.js): no crumb, no room, no view remembered per
@@ -62,6 +68,8 @@ import { twoPress } from '../really.js';
 import { emptyEl } from '../ui-state.js';
 import { markField, markText } from './image-words.js';
 import { icon } from '../icons.js';
+import { hoverPlayer } from './hover-play.js';
+import { openViewer } from '../library/viewer.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -84,11 +92,51 @@ export const posterOf = (p) => {
   const i = c.lastIndexOf('/');
   return c.slice(0, i) + '/thumbs/' + c.slice(i + 1).replace(/\.[^.]+$/, '') + '_thumb.jpg';
 };
+
+// ── A chat's pictures and clips (V91 block 3, the owner 2026-11-12) ─────────────
+// A press on the thing itself does nothing (the right column's attaches): ⤢ in a picture's top-right corner opens it large,
+// ▶ in a clip's middle plays it in the Library's viewer, and the pointer resting on a clip plays it in place without its
+// sound - one at a time, the poster again the moment the pointer leaves (hover-play.js).
+const _hp = hoverPlayer('mv3-ig-hvid', { grace: 0 });
+
+/** The round button on a chat's picture ('image': ⤢, its top-right corner) or clip ('video': ▶, its middle): `open()` on its
+ *  press, the clip playing in a tile stopped first. */
+export function mediaBtn(kind, open) {
+  const clip = kind === 'video';
+  const b = el('button', 'mv3-ig-mb ' + (clip ? 'is-play' : 'is-big'), clip ? '▶' : '⤢');
+  b.type = 'button';
+  b.title = clip ? 'Play full screen' : 'Open large';
+  b.draggable = false;
+  b.addEventListener('click', (e) => { e.stopPropagation(); _hp.stop(); open(); });
+  return b;
+}
+/** A clip's tile plays `src` in place, without its sound, while the pointer rests on it - on a layer under what the tile
+ *  shows over it (its ▶, its seconds, its number). */
+export function hoverClip(tile, src) {
+  if (!tile || !src) return;
+  const layer = el('span', 'mv3-ig-hbox');
+  tile.insertBefore(layer, tile.firstChild);
+  tile.addEventListener('pointerenter', () => _hp.on(tile, layer, src));
+  tile.addEventListener('pointerleave', () => _hp.off(tile));
+  tile.addEventListener('dragstart', () => _hp.stop());
+}
+/** Pictures ({ path, name }) large in the Library's viewer, from the 2048px tier, arrows between them - on the one at `path`. */
+export function viewPictures(list, path) {
+  const items = (list || []).filter(x => x && x.path).map(x => ({ id: x.path, kind: 'images', media: x.path, thumb: x.path, name: x.name || '' }));
+  openViewer(items, Math.max(0, items.findIndex(x => x.media === path)), { showSrc: (it) => thumbOf(it.media, 'main') });
+}
+/** One clip played in the Library's viewer. */
+export function viewClip(path, name, thumb) {
+  if (path) openViewer([{ id: path, kind: 'birols', media: path, thumb: thumb || path, name: name || '' }], 0);
+}
+
 // One attachment of a message as it went: a picture's miniature, a clip's poster or a sound's note, its number - per
-// kind, the way the prompt names them - and for a clip or a sound the seconds of it that went (phase V7). `peek` is
-// the chat's enlarged view ({ show, hide }).
-export function refCell(a, k, n, peek) {
+// kind, the way the prompt names them - and for a clip or a sound the seconds of it that went (phase V7). `all` - the
+// message's attachments: given, a picture has ⤢ (the message's pictures large, from this one) and a clip ▶ in its middle,
+// playing in place under the pointer; one not in this library has neither.
+export function refCell(a, k, n, all) {
   const c = el('div', 'mv3-ig-msg-ref' + (k !== 'image' ? ' is-' + k : ''));
+  const live = !!(all && a.path && !a.gone);
   if (k === 'image' || k === 'video') {
     const src = k === 'image' ? a.path : posterOf(a.path);
     const img = document.createElement('img');
@@ -96,13 +144,14 @@ export function refCell(a, k, n, peek) {
     img.loading = 'lazy'; img.decoding = 'async';
     img.addEventListener('error', () => img.remove(), { once: true });
     c.appendChild(img);
-    if (peek) {
-      c.addEventListener('mouseenter', () => peek.show(thumbOf(src, 'main'), c));
-      c.addEventListener('mouseleave', peek.hide);
-    }
   }
-  if (k !== 'image') {
-    c.appendChild(el('span', 'ic', k === 'audio' ? '♪' : '▶'));
+  if (k === 'image') {
+    if (live) c.appendChild(mediaBtn('image', () => viewPictures(all.filter(x => x && (x.kind || 'image') === 'image' && !x.gone), a.path)));
+  } else {
+    if (k === 'video' && live) {
+      c.appendChild(mediaBtn('video', () => viewClip(a.path, a.name || a.label || '', posterOf(a.path))));
+      hoverClip(c, a.path);
+    } else c.appendChild(el('span', 'ic', k === 'audio' ? '♪' : '▶'));
     const secs = Math.max(0, (+a.out || 0) - (+a.in || 0));
     if (secs) c.appendChild(el('span', 'dur', secs.toFixed(1) + 's'));
   }
@@ -236,8 +285,6 @@ export function createChat(make) {
     reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
-    peekShow: (src, anchor) => peekShow(src, anchor),
-    peekHide: () => peekHide(),
     // (phase V3) The words in the box - a description may put its standard prompt there - and its hint.
     text: () => (_ui ? _ui.ta.value : ''),
     setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
@@ -283,6 +330,7 @@ export function createChat(make) {
     if (!_chat) {
       _stop();
       peekHide();
+      _hp.stop();
       // The picker goes with the chat, and the description lets go of what floats over it.
       if (_picking) Pick.closePick();
       if (_col) _col.close();
@@ -521,7 +569,7 @@ export function createChat(make) {
     const att = { path, name: name || '', kind, slot };
     for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
     if (into) {
-      // Its place and its number: what stood there - empty, or the thing the picker was opened on - is replaced.
+      // Its place and its number: the empty numbered place that stood there is filled.
       _atts[_atts.indexOf(into)] = att;
       if (_pickAt && _pickAt.target === into) { _pickAt.target = att; _pickAt.filled = true; }
     } else {
@@ -715,7 +763,7 @@ export function createChat(make) {
       const inS = mine.filter(a => a.slot === sl.key);
       const must = inS.filter(a => !a.hole).length < (sl.min || 0);
       const lab = g.labels === false ? '' : (sl.label || sl.key);
-      for (const a of inS) row.appendChild(a.hole ? _holeCell(p, a, num(a), sl, must) : _cell(_filled(a, num(a), p, sl), lab, sl.hint));
+      for (const a of inS) row.appendChild(a.hole ? _holeCell(p, a, num(a), sl, must) : _cell(_filled(a, num(a), p), lab, sl.hint));
       if (!inS.some(a => a.hole) && inS.length < sl.max && all.length < p.room) row.appendChild(_empty(p, sl, false, must));
     }
     _sideways(row);
@@ -767,7 +815,7 @@ export function createChat(make) {
     // (phase V15) A voice and a storyboard wear their word, so the message can say what each is by its number.
     const tag = (a) => (a.role === 'voice' || a.role === 'storyboard' ? a.role : '');
     const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
-      : _cell(_filled(a, num(a), p, s), tag(a) || (s ? (s.label || s.key) : ''),
+      : _cell(_filled(a, num(a), p), tag(a) || (s ? (s.label || s.key) : ''),
         a.role === 'voice' ? a.label : a.role === 'storyboard' ? 'The storyboard - the video follows it panel by panel' : s && s.hint));
     if (p.slots) {
       for (const s of p.slots) {
@@ -796,13 +844,15 @@ export function createChat(make) {
   }
 
   // An attached thing: its picture, its NUMBER - with more than one, the message has to say which is which - and a cross.
-  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go. (phase V15) In the zone
-  // (`p` given, with a picker) a press opens the picker on its place, on it; a clip's or a sound's seconds open the part
-  // that goes (S.trimFor).
-  function _filled(a, n, p, s) {
+  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go; a clip's or a sound's
+  // seconds open the part that goes (S.trimFor). (V91 block 3, the owner's (чк19г)) A press on it does nothing - another
+  // in its place is its cross, then the "+" of the place that stays with its number -, and it has no buttons but those:
+  // the pointer resting on a picture or a clip shows it larger over the chat's field (peekShow), a clip playing there
+  // without its sound.
+  function _filled(a, n, p) {
     const kind = _kindOf(a);
-    const swap = !!(p && S.pick);
-    const cell = el('div', 'mv3-ig-att' + (kind === 'video' ? ' is-clip' : kind === 'audio' ? ' is-sound' : '') + (swap ? ' is-swap' : ''));
+    const zoned = !!(p && S.pick);
+    const cell = el('div', 'mv3-ig-att' + (kind === 'video' ? ' is-clip' : kind === 'audio' ? ' is-sound' : ''));
     cell.dataset.path = a.path;
     if (kind === 'image') {
       const img = document.createElement('img');
@@ -812,9 +862,9 @@ export function createChat(make) {
       // Gone from the library since it was attached: it goes from the row, and the row says so.
       img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
       cell.appendChild(img);
-      cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
+      cell.addEventListener('mouseenter', () => peekShow({ img: thumbOf(a.path, 'main') }, cell));
       cell.addEventListener('mouseleave', peekHide);
-      cell.title = (a.name || '') + (swap ? (a.name ? ' - ' : '') + 'press to put another in its place' : '');
+      cell.title = a.name || '';
       // (phase V16) A picture that does not go as things are - dimmed, its cross kept, the reason on it (the video
       // chat: one beyond the frames' places).
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
@@ -827,9 +877,11 @@ export function createChat(make) {
         img.loading = 'lazy';
         img.decoding = 'async';
         cell.appendChild(img);
-        cell.addEventListener('mouseenter', () => peekShow(a.still || thumbOf(a.poster, 'main'), cell));
-        cell.addEventListener('mouseleave', peekHide);
       } else cell.appendChild(el('span', 'ic', kind === 'audio' ? '♪' : '▶'));
+      if (kind === 'video') {
+        cell.addEventListener('mouseenter', () => peekShow({ img: a.still || (a.poster ? thumbOf(a.poster, 'main') : ''), clip: a.path }, cell));
+        cell.addEventListener('mouseleave', peekHide);
+      }
       const secs = (+a.out > +a.in) ? (+a.out - +a.in) : 0;
       // What the description says of it: `bad` - it cannot go like this, and why; `cut` - only a part of it goes.
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
@@ -845,19 +897,12 @@ export function createChat(make) {
         cell.appendChild(d);
       }
       if (st.bad) { cell.classList.add('is-bad'); cell.title = st.bad; }
-      else cell.title = (a.name || '') + (swap ? (a.name ? ' - ' : '') + 'press to put another in its place, its seconds to choose the part' : '');
-    }
-    if (swap) {
-      cell.addEventListener('click', (ev) => {
-        if (ev.target.closest('.x, .dur')) return;
-        peekHide();
-        _openPick(p, s, a);
-      });
+      else cell.title = a.name || '';
     }
     cell.appendChild(el('span', 'n', String(n)));
     const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
-    x.title = swap ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
+    x.title = zoned ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
     x.addEventListener('click', (ev) => { ev.stopPropagation(); _detach(a.path); });
     cell.appendChild(x);
     return cell;
@@ -945,8 +990,9 @@ export function createChat(make) {
   // ── The picker (phase V13, the owner 2026-10-07) ──────────────────────────
   // For ONE place: its part, and in a part with slots its slot - "other" ('') for what no slot asks for, null for a
   // part without slots. The slot is armed while the window is open; the window closes by itself once the place is full.
-  // (phase V15) `target`: a place that is there - a thing in the zone, or an empty numbered place. The window opens on
-  // the thing's shelf, on it, and what is pressed there takes that place and its number.
+  // (phase V15) `target`: an empty numbered place - what is pressed there takes that place and its number. (V91 block 3, the
+  // owner's (чк19г)) A thing in the zone pressed no longer opens the window on it: another in its place is its cross, then
+  // this "+".
   let _picking = false;
   let _pickAt = null;           // { kind, slot, target, filled } of the place the picker is open on
   function _openPick(p, s, target) {
@@ -972,13 +1018,9 @@ export function createChat(make) {
       anchor: _ui ? _ui.root : null,
       start: P.start(kind, s),
       first: (P.first || {})[kind] || '',
-      select: target && target.path && typeof P.sourceOf === 'function' ? { srcs: P.sourceOf(target.path, kind), path: target.path } : null,
       left: _pickLeft,
-      room: () => (!_pickAt || !_pickAt.target || _pickAt.filled ? ''
-        : _pickAt.target.hole ? 'its place is empty - one goes here' : 'press another to put it in its place'),
+      room: () => (_pickAt && _pickAt.target && !_pickAt.filled ? 'its place is empty - one goes here' : ''),
       mark: _markOf,
-      // (phase V58) A picture deleted in the window by its ✕ leaves the zone too.
-      removed: (path) => { if (_atts.some(a => a.path === path)) _detach(path); },
       press: (it) => {
         const here = _atts.find(a => a.path === it.path);
         if (here) {
@@ -1482,7 +1524,7 @@ export function createChat(make) {
       for (const a of sent) {
         const k = count[a.kind] != null ? a.kind : 'image';
         count[k]++;
-        row.appendChild(refCell(a, k, count[k], { show: peekShow, hide: peekHide }));
+        row.appendChild(refCell(a, k, count[k], sent));
       }
       b.appendChild(row);
     }
@@ -1500,7 +1542,7 @@ export function createChat(make) {
   function _shot(g, progs) {
     const cell = el('div', 'mv3-ig-shot-wrap');
     if (g.state === 'done' && _path(g)) {
-      // The description draws a finished one - and a press on it opens the thread's finished ones large.
+      // The description draws a finished one - its ⤢ or ▶ opens the thread's finished ones large (a press on it does nothing).
       S.shot(g, cell, () => _view(g));
     } else if (g.state === 'pending') {
       const ghost = el('div', 'mv3-ig-shot is-busy');
@@ -1805,14 +1847,14 @@ export function createChat(make) {
         t.classList.add('is-dragging');
       });
       t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
-      t.addEventListener('mouseenter', () => peekShow(thumbOf(it.path, 'main'), t));
-      t.addEventListener('mouseleave', peekHide);
-      // A press ATTACHES, and a second one takes it back off.
+      // A press ATTACHES, and a second one takes it back off; ⤢ in its corner opens it large - the folder's pictures, from it
+      // (V91 block 3, the owner's (чк19в)).
       t.addEventListener('click', () => {
-        peekHide();
         if (_atts.some(a => a.path === it.path)) _detach(it.path);
         else _attach(it.path, it.name);
       });
+      t.appendChild(mediaBtn('image', () => viewPictures((_col ? _col.items() : [it])
+        .filter(x => x && x.path && (x.state || 'done') === 'done' && x.ftype !== 'video' && x.ftype !== 'audio'), it.path)));
     } else if (it.state === 'pending') {
       t.appendChild(el('span', 'sp', 'making…'));
     } else {
@@ -1844,7 +1886,8 @@ export function createChat(make) {
   }
   const _secsOf = (v) => (+v > 0 ? (+v).toFixed(1) + 's' : '');
 
-  // A clip: its poster at its shape, its length, ▶ in the corner plays it large (`column.play`).
+  // A clip: its poster at its shape, its length; ▶ in its middle plays it in the Library's viewer and the pointer resting on
+  // it plays it in place without its sound (V91 block 3, the owner's (чк19в)).
   function _clipTile(it) {
     const t = el('div', 'mv3-ig-card is-clip'
       + (it.state === 'pending' ? ' is-busy' : it.state === 'failed' ? ' is-fail' : '')
@@ -1868,14 +1911,8 @@ export function createChat(make) {
     if (secs) t.appendChild(el('span', 'mv3-ig-dur', secs));
     const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, 'video') : '';
     if (why) { t.classList.add('is-short'); t.title = (it.name ? it.name + ' - ' : '') + why; }
-    if (S.column && typeof S.column.play === 'function') {
-      const play = el('button', 'mv3-ig-cplay', '▶');
-      play.type = 'button';
-      play.title = 'Play it';
-      play.draggable = false;
-      play.addEventListener('click', (e) => { e.stopPropagation(); S.column.play(it); });
-      t.appendChild(play);
-    }
+    t.appendChild(mediaBtn('video', () => viewClip(it.path, it.name, it.thumb)));
+    hoverClip(t, it.path);
     _colDrag(t, {
       libId: it.libId || '', src: it.path, thumb: poster, name: (it.name || '').slice(0, 60),
       group: it.group || (it.kind === 'references' ? 'uploads' : it.kind || 'uploads'), dur: +it.dur || 0, bed: false,
@@ -1956,22 +1993,26 @@ export function createChat(make) {
     });
   }
 
-  // ── Hover peek ────────────────────────────────────────────────────────────
+  // ── The zone's enlarged view ──────────────────────────────────────────────
   // ONE PLACE, ALWAYS THE SAME: the bottom right of the conversation, over the thread - learnt once.
   // It closes itself the moment the pointer is anywhere but what opened it, or that thing is repainted
-  // away; a wheel and a press close it too.
+  // away; a wheel and a press close it too. (V91 block 3, the owner's (чк19г)) Only the zone's things have it - every
+  // chat's, the frames chat's too: `what` { img, clip } - a picture larger, a clip playing in it without its sound, over its
+  // poster (hover-play.js).
   let _peek = null;
   let _peekOn = null;
   let _peekOff = null;
 
-  function peekShow(src, anchor) {
+  function peekShow(what, anchor) {
     peekHide();
-    // (phase V26.5) A description without the peek: a picture is opened by a press (the owner - no hover popups).
-    if (!_ui || S.noPeek) return;
+    if (!_ui || !what || !(what.img || what.clip)) return;
     const box = el('div', 'mv3-ig-peek');
-    const img = document.createElement('img');
-    img.src = src;
-    box.appendChild(img);
+    let img = null;
+    if (what.img) {
+      img = document.createElement('img');
+      img.src = what.img;
+      box.appendChild(img);
+    }
     document.body.appendChild(box);
     _peek = box;
     const t = _ui.thread.getBoundingClientRect();
@@ -1979,10 +2020,13 @@ export function createChat(make) {
     const h = Math.max(120, Math.min(520, t.height - 16));
     box.style.width = w + 'px';
     box.style.maxHeight = h + 'px';
-    img.style.maxHeight = (h - 8) + 'px';
+    // A clip with no poster: the box at its largest, the clip inside it at its own shape.
+    if (img) img.style.maxHeight = (h - 8) + 'px';
+    else box.style.height = h + 'px';
     box.style.left = Math.round(Math.max(8, t.right - w - 12)) + 'px';
     box.style.bottom = Math.round(Math.max(8, window.innerHeight - t.bottom + 8)) + 'px';
     _peekOn = anchor;
+    if (what.clip) _hp.on(anchor, box, what.clip);
     _peekOff = (e) => {
       const a = _peekOn;
       if (!a || !a.isConnected) return peekHide();
@@ -2001,6 +2045,8 @@ export function createChat(make) {
       document.removeEventListener('mousedown', peekHide, true);
       _peekOff = null;
     }
+    // A clip playing in it lets go.
+    if (_peekOn) _hp.off(_peekOn);
     _peekOn = null;
     if (_peek) { _peek.remove(); _peek = null; }
   }
@@ -2111,8 +2157,6 @@ export function createChat(make) {
           get empty() { return Store.isDraft() ? 'Nothing made in this draft yet.' : 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.'; },
         },
         tile: _tile, lead: _plusTile,
-        // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
-        onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },
         // "this project" opened: its own results are read now, not at the next tick.
         onChange: (sel) => { if (sel.own) _reload(); },
       });

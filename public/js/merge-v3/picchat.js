@@ -22,7 +22,7 @@
 
 import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, thumbOf, almanacSoon, refuseHome } from './chat-shell.js';
+import { createChat, el, thumbOf, almanacSoon, refuseHome, mediaBtn } from './chat-shell.js';
 import { chatWindow } from './chat-window.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
@@ -100,7 +100,6 @@ function PICTURES(ctx) {
       tree: () => Src.TREE.image,
       start: () => '',
       why: () => '',
-      sourceOf: (path) => Src.pictureSourceOf(path),
       lands: { image: 'images' },
       upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
     },
@@ -121,8 +120,9 @@ function PICTURES(ctx) {
       body: M.body,
     },
 
-    // A finished picture in the thread: a miniature - hovering shows it properly, a press opens it over
-    // everything - with "to reference" under it. (phase V60.3, the owner's (вс1б)) No "to timeline": it is dragged onto a lane.
+    // A finished picture in the thread: a miniature with "to reference" under it - a press on it does nothing, ⤢ in its
+    // top-right corner opens it large (V91 block 3, the owner 2026-11-12). (phase V60.3, the owner's (вс1б)) No "to timeline":
+    // it is dragged onto a lane.
     shot(g, cell, open) {
       const img = document.createElement('img');
       img.className = 'mv3-ig-shot';
@@ -130,21 +130,19 @@ function PICTURES(ctx) {
       img.alt = g.prompt || '';
       img.loading = 'lazy'; img.decoding = 'async';
       img.style.aspectRatio = String(g.aspect || '9:16').replace(':', '/');
-      img.title = 'Open it large · drag it onto a lane';
-      img.addEventListener('mouseenter', () => ctx.peekShow(thumbOf(g.imagePath, 'main'), img));
-      img.addEventListener('mouseleave', ctx.peekHide);
-      img.addEventListener('click', open);
+      img.title = 'Drag it onto a lane';
       // Dragged onto a lane as a tile of the right column is - the shelf's own payload.
       img.draggable = true;
       img.addEventListener('dragstart', (ev) => {
         if (refuseHome(img, ev)) return;
-        ctx.peekHide();
         ev.dataTransfer.effectAllowed = 'copy';
         ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
           libId: g.imageId || '', src: g.imagePath, thumb: g.imagePath, name: (g.prompt || '').slice(0, 60), group: 'images', dur: 0,
         }));
       });
       cell.appendChild(img);
+      const big = mediaBtn('image', open);
+      cell.appendChild(big);
       const acts = el('div', 'mv3-ig-acts');
       const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
       use.type = 'button';
@@ -161,6 +159,7 @@ function PICTURES(ctx) {
         const gone = el('div', 'mv3-ig-gone', 'not in the Library any more');
         gone.style.aspectRatio = img.style.aspectRatio;
         img.replaceWith(gone);
+        big.remove();
         use.disabled = true;
       }, { once: true });
     },

@@ -12,20 +12,18 @@
 //     in columns. A REFERENCES post gives its pictures one by one (`files`).
 //   - (phase V56, (ги2), (ги3)) only the folders holding files of that type - in them or under them - are offered, and
 //     their number is how many of those (typedTree: the shelf read once per kind, its answer dealt to the folders).
-//   - (phase V58, (лк1), (лк2)) a ✕ in the corner of every picture of a folder, pressed twice ("really?" - "used in N
-//     projects" when timelines hold it), deletes it from the library the way its shelf does (js/del-x.js); the column
-//     reads itself again and tells the caller (`onDeleted`).
+//   - (V91 block 3, the owner's (чк19е): "из чата мы не можем удалять из библиотеки") nothing is deleted from here - the ✕ of
+//     phase V58 ((лк1)) went; files are deleted in the Library.
 //
 //   - (phase V60.2, the owner's (вч1б)) the video chat's right column too: this project's clips, REFERENCES, IMAGES, VIDEO and
 //     AUDIO - each top node its own type of files (`files` as a function), clips the model cannot take left out (`fit`).
 //
 // The tiles are the caller's (`tile(it)`): what a press does, its mark, a drag. Nothing is remembered unless `lsKey`.
 //
-// The helpers under it - readTree, folderIndex, pruneTree, filesUnder, filesOf, locateFile - are the attachment window's
+// The helpers under it - readTree, folderIndex, pruneTree, filesUnder, filesOf - are the attachment window's
 // too (js/merge-v3/chat-pick.js, phase V55): a node's files are read by its `q`, never by a list of the app's folders.
 
 import * as Layers from './layers.js';
-import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from './del-x.js';
 import { showError } from './notice.js';
 import { emptyEl, loadingEl, failedEl } from './ui-state.js';
 
@@ -205,13 +203,6 @@ export async function typedTree(roots, type, cache, fit, plinks) {
   return { nodes, byKey, parentOf, index };
 }
 
-// Which shelf kind a library address is read from, by its folder (lib/layout.js MEDIA) - '' when none of the tree's.
-const _KIND_DIR = [['/media/images/', 'images'], ['/media/references/', 'references'], ['/media/birols/', 'birols'],
-  ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music'],
-  // (phase V55, sub-session Q) the generated environments and lookbooks - IMAGES -> Environments / Lookbooks
-  ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks'],
-  // (phase V26.6) the products - IMAGES -> Props
-  ['/media/props/', 'props']];
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 
 // Whether a shelf record lies DIRECTLY in a node of the query `q` - the server's rule (routes/library.js _inNode), for the
@@ -232,26 +223,6 @@ function _inQ(i, q, foldersOf) {
   if (q.aroot === '1' ? !m.inAudio : q.aroot === '0' ? !!m.inAudio : false) return false;
   if (q.cat) { const c = m.categoryId || ''; if (q.cat === ANYCAT || (q.cat === UNCAT ? !!c : c !== q.cat)) return false; }
   return true;
-}
-
-/**
- * The folder of the media tree (only `roots`) a file lies directly in -> its key, or '' when it is not found there. A
- * picture of a REFERENCES post is found by its post.
- */
-export async function locateFile(path, roots) {
-  const want = String(path || '').split('?')[0];
-  const kind = (_KIND_DIR.find(([d]) => want.startsWith(d)) || [])[1] || '';
-  if (!kind) return '';
-  const [t, d] = await Promise.all([readTree(roots), _json('/api/library/shelf/media?filter=' + kind)]);
-  if (!t || !d || !d.success) return '';
-  const rec = (d.items || []).find(i => String(i.media || '').split('?')[0] === want
-    || (i.kind === 'references' && ((i.meta || {}).items || []).some(f => f && f.path === want)));
-  if (!rec) return '';
-  const foldersOf = (s) => (((t.byKey.get('references:' + s) || {}).children) || []).map(c => String(c.ref || '').split('/')[1]).filter(Boolean);
-  let hit = '';
-  const walk = (n) => { if (hit) return; if (n.q && _inQ(rec, n.q, foldersOf)) { hit = n.key; return; } for (const c of n.children || []) walk(c); };
-  t.nodes.forEach(walk);
-  return hit;
 }
 
 // ── The column ──────────────────────────────────────────────────────────────
@@ -278,7 +249,6 @@ export async function locateFile(path, roots) {
  *   o.empty        words for an empty folder (default 'Nothing in this folder.')
  *   o.onChange(sel)  what is open changed - sel { own: true } or { node }
  *   o.title        the dropdown's first line (default 'Show')
- *   o.del          false - no ✕ on the pictures (V58: there is one by default); o.onDeleted(file) after one went
  * -> { el, load(), reload(), paint(), setOwn(items), select(key), selected(), isOwn(), items(), close() }
  *    load()   reads the tree (and what is open); reload() - the tree and what is open read again (after an upload);
  *    paint()  the pictures drawn again - the caller's marks changed, or the column's width.
@@ -466,14 +436,6 @@ export function createFolderColumn(host, o) {
       for (let j = 1; j < n; j++) if (H[j] < H[k]) k = j;
       H[k] += 1 / _ratio(it.aspect);
       const t = opt.tile(it);
-      if (t && !own && opt.del !== false && canDelete(it)) {
-        t.appendChild(delX({
-          host: t, title: titleOf(it),
-          ask: () => usageWords(delFiles(it)),
-          run: () => deleteFile(it),
-          done: () => { reload(); if (typeof opt.onDeleted === 'function') opt.onDeleted(it); },
-        }));
-      }
       if (t) boxes[k].appendChild(t);
     }
     list.replaceChildren(...boxes);

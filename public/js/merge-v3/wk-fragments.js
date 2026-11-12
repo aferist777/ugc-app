@@ -927,12 +927,11 @@ function _splitSash(host, col) {
 
 // (phase V61, the owner 2026-10-30: "кнопка с открытием чата для создания frames давай будет открывать попап с чатом для
 // создания фреймов"; (т7) - as New Character) THE FRAMES CHAT, A WINDOW over the page for this project (js/merge-v3/fchat.js).
-// A frame pressed there opens large - the stage is under the window; a frame put into the set lands on the frames field.
+// A frame's ⤢ there opens it large (V91 block 3); a frame put into the set lands on the frames field.
 export function openChat() {
   const p = _ctx && _ctx.project;
   if (!p) return;
   FCHAT.open(p, {
-    stage: (path, name) => showPicture({ src: path, name: name || 'frame from the chat' }),
     added: (project) => { _adopt({ project }); _ctx.repaint(); },
   });
 }
