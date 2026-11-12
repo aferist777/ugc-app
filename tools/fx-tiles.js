@@ -6,7 +6,7 @@
    saying what they were made from.
 
    A tile is what Export gives: the app's own render (lib/mv3b-job.js prepare, lib/fx-render.js) on the owner's example clip - a
-   clip of the project named in tools/fx-tiles.json (its face path found once by the app's faces window, written there) - the
+   talking head's clip, its file named in tools/fx-tiles.json (its face path found once by the app's faces window, written there) - the
    9:16 frame cut to a square on the face's height. A moment of its own length plays from a short lead to a short tail; one that
    goes on plays `loop` seconds.
 
@@ -32,8 +32,12 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'public', 'fx-tiles');
 const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'fx-tiles.json'), 'utf8'));
 
-// What the tiles are made by: the effects' rule and the render's chain - a change to any of them is a tile to make again.
-const RULE = ['public/js/fx/effects.js', 'public/js/fx/params.js', 'public/js/fx/tables.js', 'lib/fx-render.js', 'lib/fx-assets.js'];
+// What the tiles are made by: the effects' rule, the render's chain and what the page draws (and the bake window bakes) -
+// a change to any of them is a tile to make again.
+const RULE = ['public/js/fx/effects.js', 'public/js/fx/params.js', 'public/js/fx/tables.js', 'lib/fx-render.js', 'lib/fx-assets.js',
+  'public/js/merge-v3/fx-draw.js', 'public/js/fx/kit.js', 'public/js/fx/box.js', 'public/js/fx/overlays.js', 'public/js/fx/cards.js',
+  'public/js/fx/screens.js', 'public/js/fx/copies.js', 'public/js/fx/glitches.js', 'public/js/fx/behind.js', 'public/js/fx/person.js',
+  'lib/fx-bake.js', 'lib/fx-moments.js', 'public/js/bake-worker.js', 'public/js/bake-encoder.js'];
 function rulePrint() {
   const h = crypto.createHash('sha1');
   // Line ends left out: git may write them either way.

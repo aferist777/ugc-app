@@ -7,17 +7,15 @@
    (stamp a value onto every clip in a track, trim, move, delete) are exactly the
    kind whose inverse is fiddly to write and easy to get subtly wrong.
 
-   WHY THIS EXISTS AT ALL, and this early: applying an effect from a track STAMPS
-   it onto every clip in that track, overwriting whatever each clip had. That is
-   the behaviour that was asked for, and it destroys per-clip work in one click.
-   In the old editor that was survivable only because Ctrl+Z sat next to it - and
-   the report is that Ctrl+Z did not actually work there. So the history is being
-   built with the stamp rather than after it, and it is driven by two buttons that
-   show their own true state instead of a shortcut nobody can see.
+   WHY THIS EXISTS AT ALL: a lane's Fit or Align STAMPS it onto every clip in that
+   lane, overwriting whatever each clip had (timeline-b.js stampTrack). That is the
+   behaviour that was asked for, and it destroys per-clip work in one click. So the
+   history was built with the stamp rather than after it, and it is driven by two
+   buttons that show their own true state, with Ctrl+Z / Ctrl+Y as their shortcut
+   (js/merge-v3/bar.js).
 
-   Nothing is bound yet: the timeline store lands in the next phase. Until bind()
-   is called canUndo()/canRedo() are false, and the buttons are correctly disabled
-   rather than pretending.
+   Until the timeline store calls bind() (js/merge-v3/store.js) canUndo()/canRedo()
+   are false, and the buttons are correctly disabled rather than pretending.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // Deep enough for a working session, bounded so a long one cannot grow without

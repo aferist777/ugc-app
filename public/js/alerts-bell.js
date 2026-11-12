@@ -177,10 +177,11 @@ function _ago(iso) {
 const _running = (r) => r.state === 'running';
 const _canOpen = (r) => r.state === 'done' && r.result && r.result.path;
 
-// WHERE A ROW TAKES YOU: back to where it was started - except a picture from Merge's pictures
-// window that has landed, which is shown on its shelf in the Library, lit (phase L4, the owner
-// 2026-09-23; js/merge-v3/main.js, ?reveal=). While it runs, or when it failed, the window is still
-// the place: that is where it is waited for, or asked again.
+// WHERE A ROW TAKES YOU: back to where it was started - except what has landed, which is shown
+// where it was filed, outlined (phase L4, the owner 2026-09-23; the cases below - ?reveal= or ?sel=
+// in the Library, js/library/main.js; ?reveal= in Merge's Library panel, js/merge-v3/main.js). While
+// it runs, or when it failed, the place it was started from is still the place: that is where it is
+// waited for, or asked again.
 function _hrefOf(rec) {
   const w = rec.where || {};
   const spot = w.spot || {};
@@ -216,7 +217,7 @@ function _hrefOf(rec) {
       + '&sel=' + encodeURIComponent(path.split('/').pop());
   }
   // (phase V59, the owner 2026-10-29: "клик по alerts будет вести не в окно попап, а в папку с выделением сгенерированного
-  // файла музыки") Music made in the Library's window (js/library/music-window.js; since phase V64 the sound window, js/sound/sound-window.js - a
+  // файла музыки") Music made in the Library's sound window (js/sound/sound-window.js - a
   // sound's row leads to SFX → My sounds → Generated the same way): the folder under Music its tracks went into
   // (`spot.key` - the tree's key), both tracks outlined once they are filed (the result's `ids`, lib/audio-gens.js); while it
   // runs, or when it failed, that folder alone.
@@ -450,7 +451,8 @@ function _open(rec) {
 // The address of a place is read when its page loads (js/merge-v3/workshop.js and wk-setup.js),
 // so standing on that address already and pressing the row means: go there again. The page is
 // asked first: one that can show the place where it stands takes the event and nothing is loaded
-// again (Merge, for a picture of the project it has open - js/merge-v3/main.js).
+// again (Merge, for what it made in the project it has open - js/merge-v3/main.js, library.js,
+// wk-setup.js; the Library - js/library/main.js).
 function _goTo(href) {
   const ask = new CustomEvent('ugc:goto', { detail: { href }, cancelable: true });
   if (!window.dispatchEvent(ask)) return;
@@ -598,8 +600,7 @@ export function mountAlerts(nav) {
   _btn.addEventListener('click', _toggle);
   // ANCHORED ON ADMIN (phase R): Admin is the last thing in the strip on every page and is put
   // there before this runs (initNav), so the bell lands at the right-hand end wherever it is. It
-  // used to hang off the Library link, which is on the LEFT of the strip since phase R - and on
-  // the Character page there was none, so the bell ended up after Admin.
+  // used to hang off the Library link, which is on the LEFT of the strip since phase R.
   const at = nav.querySelector('a[href="/admin"]');
   // The wait stands to the LEFT of the button, so the two read as one thing: what is running, and
   // how long it has to go (the owner, 2026-09-22).

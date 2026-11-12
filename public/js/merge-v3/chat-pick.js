@@ -1,8 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — a chat's PICKER of attachments (phase V13, the owner 2026-10-07; docs/local-app/PLAN.md "Фаза V13").
 
-   The video chat has no right column: every "+" of its attachment zone opens this window for ONE place - a part
-   of the zone (pictures | clips | sounds) and, with a recipe, its slot - and it shows only that kind:
+   The first window - the 3D Studio's now; the chats open the window with the tree (below). It is opened for ONE
+   place - a part of the zone (pictures | clips | sounds) and, in a part with slots, its slot - and it shows only that
+   kind:
 
      left    where it comes from - the Library's shelves of that kind, as the chat's description lists them - and
              "from this computer": files of this kind through the chat's own door, and every file let go over the
@@ -14,7 +15,7 @@
    A press puts the thing into the place the window was opened for (the shell keeps that slot armed while it is
    open), a second press takes it back off, and what is in the zone already wears the name of its place. The window
    stays open while the place has room and closes by itself when it has none (the owner's answer 2); Escape, the
-   cross, `done` and a press beside it close it too. It is as big as the catalog (the owner's answer 3).
+   cross, `done` and a press beside it close it too. It fills the page, up to 1720 px wide (the owner's answer 3).
 
    It knows nothing of the chat: the shell opens it with what to show and what a press does (`openPick`), tells it
    when the zone changed (`pickChanged`) and what the chat has to say (`pickSay`).

@@ -1,9 +1,9 @@
-/* ── The Library's music window (phase V59, V59.1; js/library/music-window.js) - since phase V64 THE SOUND WINDOW of both
-   pages (js/sound/sound-window.js; Merge loads this sheet too) ──
-   Suno's generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1100×720: the mode's name and its "?" in
-   the head, the settings column on the left, the sash, the right column - the gold card (drawn by Merge's css/mv3-audio.css,
-   .au-*, linked on the Library's page too, as are the "?" and the almanac's window since phase V60) and under it the foot:
-   ALMANAC, the line of the last press, where the tracks go, the price, "generate". What Merge's own sheets give its view and
+/* ── The Library's music window (phase V59, V59.1) - since phase V64 THE SOUND WINDOW of both
+   pages (js/sound/sound-window.js; Merge and Home load this sheet too) ──
+   The generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1280×800: the mode's name and its "?" in
+   the head, the settings column on the left, the sash, the right column - the gold card (drawn by css/mv3-audio.css,
+   .au-*, linked on every page that opens the window, as are the "?" and the almanac's window) and under it the foot:
+   ALMANAC, the line of the last press, where the tracks go, the price, "generate". What Merge's own sheets give and
    the Library does not load is here, kept to this window: the chats' settings column (css/mv3-imagen.css .mv3-ig-*), the
    almanac's gold button (.mv3-vc-almanac), the chips (css/merge-v3.css .mv3-chip). */
 .gw-body.au-win{ flex-direction:row }

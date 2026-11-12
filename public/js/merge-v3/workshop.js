@@ -7,11 +7,10 @@
    this panel; it is ONE step now, `setup`, with `timeline` beside it (decided with the
    owner 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало", phase M).
 
-   WHICH PROJECTS. Only those with a scenario behind them, and the key says so: a cut
-   sent from Scenarios, and now a project made from a scenario here, is keyed
-   sv3_<project id> (lib/merge-store.js puts its file in that project's folder). A
-   blank project has no scenario, no fragments and nothing to step through, so it
-   never sees any of this.
+   WHICH PROJECTS. Only those with a scenario project behind them - a talking head or a
+   voiceover - and the key says so: sv3_<project id> (lib/merge-store.js puts its file in
+   that project's folder). A blank project has no scenario, no fragments and nothing to
+   step through, so it never sees any of this.
 
    THE BUILD STEP IS LOADED WHEN IT IS OPENED, a module of its own. It is the biggest thing
    on this page - characters, looks, environments, frames - and most visits to Merge never
@@ -20,8 +19,9 @@
 
    WHILE SETUP IS OPEN THE TIMELINE IS LOCKED AND THE LIBRARY FOLDED (js/merge-v3/layout.js):
    the cut is laid from the fragments, so until there is one there is nothing to edit. The
-   folded Library is the way to the timeline, and it waits for the first read laid (phase L,
-   the owner 2026-09-23; decided with the owner 2026-09-21, docs/local-app/PLAN.md "Сцена,
+   crumbs in setup's head are the way to the timeline, and they wait - a talking head for every
+   fragment's video, a voiceover for its first read laid (_ready, below; decided with the owner
+   2026-09-21, docs/local-app/PLAN.md "Сцена,
    setup и таймлайн-зеркало").
 
    WHAT IS STORED WHERE. What has been CHOSEN - the character, the look, the place,
@@ -37,10 +37,10 @@ import { isRead, isLive } from './scen-api.js';
 import { hint } from '../bubble.js';
 
 // TWO STEPS (decided with the owner 2026-09-21): `setup` builds the project, `timeline` edits the
-// result. There are NO CHIPS for them any more (phase L, the owner 2026-09-23): the pair of panels
-// is the switch. The Setup panel open is the setup step; the Library spine pressed is the timeline
-// step - the timeline unlocked, the Library open, the settings of a clip sliding over it - and the
-// Setup spine pressed is setup again (_ask below).
+// result. There are NO CHIPS for them any more (phase L, the owner 2026-09-23): the crumbs are the
+// switch. The Setup panel open is the setup step; a crumb of setup's way on (_paintOn, below) is the
+// timeline step - the timeline unlocked, the Library open, the settings of a clip sliding over it - and
+// the crumb "setup /" first in the Library panel's head is setup again (initWorkshop, below).
 const STEPS = ['setup', 'timeline'];
 // What a step used to be called, so an address in an old journal row and a step remembered in this
 // browser still land somewhere (lib/alerts.js, and `mv3_step_v1` below).
@@ -92,7 +92,7 @@ const _lend = () => {
   if (_pid) setOpenColumn(active() ? 'inspector' : 'library');
 };
 
-// How far the script has got - what the Library spine says while it waits (below, _paintSpines).
+// How far the script has got - what the way on says while it waits (below, _paintOn).
 function _readCount() {
   // The lines that are IN the video: one taken off is not waited for (phase Z, scen-api.js).
   const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
@@ -211,18 +211,17 @@ function _stepToUrl(id) {
 // Which step an opened project lands on. A project with a cut on its timeline is one
 // being edited, so it opens on the timeline; an empty one has nothing to edit yet and
 // opens where the work starts. A remembered choice beats both - unless it is the timeline
-// and the timeline is not open to this project yet (the Library spine says why).
+// and the timeline is not open to this project yet (setup's way on says why).
 function _firstStep() {
   const want = _urlStep() || _remembered() || (_hasCut() ? 'timeline' : 'setup');
   return want === 'timeline' && !_mayEdit() ? 'setup' : want;
 }
 
 // ── The spines ──────────────────────────────────────────────────────────────
-// What the two folded panels say, which in a talking head is what the steps say (phase L). The
-// Library spine is dead until the timeline has something on it - the first clip laid is enough (V61) -
-// and says how far the script has got; a blank project has no Setup spine at all (the body class
-// lets the stylesheet hide it). (phase V64) No project shows either spine any more - the body classes, the
-// lock's softness and "setup /" are what is left of this paint that anybody sees.
+// In a talking head the two folded panels said what the steps said (phase L): the Library spine dead
+// until the timeline had something on it, and how far the script had got. (phase V64) No project shows
+// either spine any more - the body classes, the lock's softness and "setup /" are what is left of this
+// paint that anybody sees.
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
   // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back -
@@ -257,7 +256,7 @@ function _paintRoute() {
   const head = _head();
   if (!head) return;
   let bar = head.querySelector('.mv3-wk-steps');
-  // THE ROUTE INSIDE SETUP, and only that (phase L): no step chips, the spines switch the steps.
+  // THE ROUTE INSIDE SETUP, and only that (phase L): no step chips, the crumbs switch the steps.
   // At the hub there is no route - the panel's own title says where you are - and on a shelf it
   // reads "setup → looks → …", its first word being the way back to the hub.
   const mod = _loaded.setup;
@@ -380,7 +379,7 @@ async function _adopt() {
       const first = _firstStep();
       if (first !== _step) { _leave(); _step = first; _paintRoute(); _lend(); }
       // WHATEVER STEP IT LANDED ON IS THE ONE IT IS STANDING ON (phase R): remembered here and not
-      // only when a spine is pressed, so a walk to another page and back comes home to the same
+      // only when a crumb is pressed, so a walk to another page and back comes home to the same
       // place. Without it a project opened by its address came back on whichever step the rule
       // picks for a project with a cut - the timeline - however long you had been in setup.
       _remember(_step);

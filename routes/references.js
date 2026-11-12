@@ -5,7 +5,7 @@
 //
 //   GET /api/references   -> { sources: [{ id, label, folders }], posts: [post] }   newest first
 //
-// The page (the media tree's REFERENCES branch, the post viewer, moving and trimming) is block 5.
+// The page is the media tree's REFERENCES branch and the post viewer (js/references/post.js); pieces are cut by js/cut.js.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');

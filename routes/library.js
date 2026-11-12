@@ -3,24 +3,24 @@
 // ════════════════════════════════════════════════════════════════════════════
 // LIBRARY — one endpoint per shelf, one shape for every kind.
 //
-//   GET /api/library/shelf/:kind        kind: characters | lookbooks |
-//                                             environments | media
+//   GET /api/library/shelf/:kind        kind: a key of SHELVES (below) - characters,
+//                                             media, voices, renders, scenarios...
 //   GET /api/library/info/:kind/:id     what the right column says about one tile
 //   GET /api/library/counts             one number per shelf, for the switcher
-//   GET /api/library/tree               the media tree: Video, Images, Audio with their kinds and categories (V28.4)
+//   GET /api/library/tree               the media tree: REFERENCES, VIDEO, IMAGES, AUDIO with their folders (V28.4)
 //   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
 //
 // `thumb` is what the grid draws and `media` is what the viewer opens. They are
 // never the same file unless no thumbnail exists — the old shelf drew full frames
 // and even whole videos into 72px cards, which is the mistake this shape prevents.
 //
-// `filters` and `cats` are what the page's filter rows offer for that shelf: for
-// Media the kind (birols / uploads / hooks / images) and then the category within it.
-// The server sends them because only the server knows what is actually in the data.
+// `cats` are the categories of a Media kind with their counts, Uncategorized first (the
+// 3D Studio's picture picker reads them). The server sends them because only the server
+// knows what is actually in the data.
 //
 // Looks are not a shelf: they belong to a character and show beside it.
 //
-// Reads the same stores the popup read; it owns none of them and writes nothing.
+// Besides the shelves it renames, stars, files, moves and deletes their items and folders (below).
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -86,7 +86,7 @@ const _onDisk = (webPath) => {
   try { return fs.existsSync(path.join(ROOT_DIR, String(webPath).split('?')[0].replace(/^\/+/, ''))); }
   catch (e) { return false; }
 };
-// The chip for birols that were never filed under a category.
+// What a query asks with for the records filed under no category - what lies directly in a node.
 const UNCAT = '__uncat__';
 
 // Sort key for a date that may be missing. Not `Date.parse(d || 0)`: that coerces 0 to
@@ -205,9 +205,9 @@ function _looks() {
   return { items };
 }
 
-// ── Media (birols + uploads + hooks + images) ───────────────────────────────
-// Birols and uploads live in one archive, split by a flag the client sets; hooks
-// have their own, and so do images. One shelf, four filters — they are all "something
+// ── Media (birols + uploads + hooks + images + sounds; the rest when asked) ──
+// Birols and uploads live in one archive, split by a flag on the record (`source`); hooks
+// have their own, and so do images and sounds. One shelf — they are all "something
 // on a shelf that a timeline can take".
 //
 // Images are stills rather than clips, and two fields say so. `thumb` goes through
@@ -307,9 +307,7 @@ function _mediaShelf(opts) {
     thumb: _posterOf(h.thumbPath, h.videoPath),
     // `favorite` and `categoryId` are read back here on purpose: the star and the category
     // dropdown write them, so leaving either out would let you set it and see no change.
-    // Hook records already carried a category — public/js/scen-hooks.js has always written
-    // categoryId/categoryLabel — so this reads existing data, it does not invent a field.
-    // Hook records have never carried a duration; 0 means "ask the file", which is what
+    // An older hook record carries no duration; 0 means "ask the file", which is what
     // the timeline falls back to.
     dur: +h.duration || 0,
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
@@ -477,7 +475,7 @@ function _mediaShelf(opts) {
   const n = (k) => items.filter(i => i.kind === k).length;
 
   // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
-  // note. Reading it from the record is the only way to name such a chip.
+  // note. Reading it from the record is the only way to name such a category.
   const fromRecords = {};
   for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read()).concat(SND.read()).concat(MUSIC.read())) {
     if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
@@ -492,18 +490,16 @@ function _mediaShelf(opts) {
       { id: 'images',  label: 'Images · ' + n('images') },
       { id: 'sounds',  label: 'Sounds · ' + n('sounds') },
     ],
-    // The chips depend on WHICH kind is open, and only the route handler knows that, so the
-    // shelf hands back the ingredients instead of a finished row.
+    // The categories depend on WHICH kind is asked for, and only the route handler knows that, so
+    // the shelf hands back the ingredients instead of a finished list.
     labelFor: (id) => fromRecords[id] || '',
   };
 }
 
-// The chip row for the media shelf. `kind` is the open kind filter, or '' for All.
+// The categories of the media shelf (`cats`). `kind` is the kind asked for, or '' for every kind.
 //
-// Counts are scoped to that kind, so the number on a chip is exactly what clicking it
-// yields — and, since deleting a category acts on the same scope, exactly what a delete
-// would affect. Uncategorized is pinned first (the page puts All to its left) because it is
-// furniture rather than a category: it cannot be renamed, reordered or deleted.
+// Counts are scoped to that kind. Uncategorized is pinned first because it is
+// furniture rather than a category: it cannot be renamed, moved or deleted.
 function _mediaCats(items, kind, labelFor) {
   const scope = kind ? items.filter(i => i.kind === kind) : items;
   const counts = {};
@@ -580,8 +576,8 @@ function _musicNode(list, folders) {
   const rootN = list.filter(i => !i.meta.categoryId && i.meta.folder !== 'highlights').length;
   // (phase V59.1, (мз6а)) Lyrics - beside highlights, after it: the app's (locked), only texts, no folders of its own.
   const lyrics = _lyricsNode();
-  // (phase V59, the owner 2026-10-29: "сделать music в дереве золотым") `make`: its name gold in the Library's tree, and its
-  // "+" (and its menu) opens the Library's music window - in Merge's panel its own "/ generate audio" (js/media-tree.js onMake).
+  // (phase V59, the owner 2026-10-29: "сделать music в дереве золотым") `make`: its
+  // "Generate music" in its menu opens the sound window on Music, on both pages (js/media-tree.js onMake).
   const node = { key: 'music', kind: 'music', label: 'Music', count: list.length + lyrics.count, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
     loose: 'music', direct: rootN, make: 'music', makeLabel: 'Generate music' };
   const own = folders || [];
@@ -1276,8 +1272,8 @@ router.get('/library/shelf/:kind', (req, res) => {
         lyrics: f === 'lyrics' })
       : build();
     const { items, filters, labelFor, labelKeys, running } = built;
-    // Built from the kind but BEFORE the category filter, so choosing a category does not
-    // make every other chip read 0.
+    // Built from the kind but BEFORE the category filter, so every category keeps its count
+    // whichever one is asked for.
     const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
     let shown = items;
     if (grp) shown = shown.filter(i => grp.includes(i.kind));
@@ -1495,21 +1491,11 @@ router.get('/library/info/:kind/:id', (req, res) => {
 // MUTATIONS — rename, favourite, category, delete
 //
 //   PATCH  /api/library/item/:kind/:id   { name?, favorite?, categoryId? }
-//   DELETE /api/library/item/:kind/:id   ?files=1 to unlink the media too
+//   DELETE /api/library/item/:kind/:id   the media unlinked too, unless ?files=0
 //
-// Ownership is the whole problem here. data/biroly.json, hooks-archive.json and
-// obrazy.json are written by the BROWSER: biroly-server-sync.js and friends push
-// a whole-localStorage snapshot every 2s, so a naive server-side write gets
-// overwritten by the next push from any open tab.
-//
-// Two things make this safe:
-//   - the write here is read-modify-write inside ONE request, so it cannot
-//     interleave with itself;
-//   - the page patches the SAME localStorage keys after a successful call, and
-//     localStorage is shared by every tab of this origin. The sync loops hash
-//     localStorage each tick and push only on change, so a stale tab either
-//     agrees already or pushes what this endpoint just wrote. Either way nothing
-//     is resurrected.
+// The stores (data/biroly.json, hooks-archive.json, obrazy.json...) are written by the
+// server only. A write here is read-modify-write inside ONE request, so it cannot
+// interleave with itself.
 //
 // `characters` is absent on purpose: the page calls /api/char-store/:id, which
 // already knows to clean up the character's ElevenLabs voice on delete. Two paths
@@ -1851,7 +1837,7 @@ function _patchOne(kindIn, idIn, bodyIn) {
         item = store.read().find(x => x && String(x.id) === id) || it;
       }
     }
-    // The page needs this to patch localStorage, so send back what to look for.
+    // What was set and the record as it is now - its files may have moved with its category.
     return _r(200, { success: true, kind, id, patch, item });
 }
 router.patch('/library/item/:kind/:id', (req, res) => {
@@ -2057,10 +2043,8 @@ function _deleteOne(kindIn, idIn, filesIn) {
       return _r(200, { success: true, kind, id, removed });
     }
 
-    // Renders. No record to remove - the file IS the entry - so this unlinks the video and its
-    // poster and nothing else. The finals archive (data/finals-meta.json) is left alone on purpose:
-    // GET /api/finals/list already drops entries whose file has gone, so it heals itself rather
-    // than needing a second writer here.
+    // Renders. No record to remove - the file IS the entry - so this unlinks the video, its
+    // poster and what lies beside it (below).
     if (kind === 'renders') {
       const base = path.basename(id);
       if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: 'not a render' });
@@ -2717,10 +2701,9 @@ router.post('/library/dupes/clean', (_req, res) => {
 });
 
 // A clip that is on disk but in no store is invisible, so an upload is two steps:
-// POST /api/biroly/upload puts the file in uploads/ and makes its thumbnail, then this
-// files it on the shelf. Same record shape the Merge uploads tab wrote — source:'upload'
-// is what tells the shelf it is an upload rather than a generated birol — and unshift,
-// so a clip you just added is the first card you see.
+// POST /api/biroly/upload puts the file in media/work/ and makes its thumbnail, then this
+// files it on the shelf. source:'upload' is what tells the shelf it is an upload rather
+// than a generated birol — and unshift, so a clip you just added is the first card you see.
 router.post('/library/media/record', (req, res) => {
   try {
     const { item, kind } = _fileRecord(req.body || {});
@@ -2735,8 +2718,8 @@ function _fileRecord(b) {
   const { videoPath, thumbPath, name, refImage, prompt, categoryLabel, categoryId } = b;
   if (!videoPath || !_onDisk(videoPath)) throw _no(400, 'videoPath must be a file that exists');
   // Which kind the clip is filed as follows what the page had open, so uploading while
-  // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
-  // means, and it is where a file you brought in belongs when nothing says otherwise.
+  // looking at Hooks puts it among the hooks. Uploads is the default: it is where a file
+  // you brought in belongs when nothing says otherwise.
   const kind = ['birols', 'uploads', 'hooks'].includes(String(b.kind)) ? String(b.kind) : 'uploads';
   const store = RECORD_STORES[kind];
   const list = store.read();
@@ -2757,8 +2740,8 @@ function _fileRecord(b) {
   }
   // FILED UNDER A NAME, not an id. The caller knows it wants "grok-imagine" and has no way
   // to know which id that resolved to - and LC.add is idempotent by label, handing back the
-  // existing chip rather than making a second one with the same name, so asking for it every
-  // time is the same as asking whether it exists. Hooks have no category machinery.
+  // existing category rather than making a second one with the same name, so asking for it every
+  // time is the same as asking whether it exists. A hook is filed by id only.
   // (phase V54 block 6) A folder chosen by its id - with folders in folders a name may be in several places.
   const byId = categoryId ? LC.find(kind, String(categoryId)) : null;
   if (byId) {
@@ -2832,7 +2815,7 @@ function _fileRecord(b) {
 // (phase V54 block 6, the owner 2026-10-27/28) Folders in folders, with no limit of depth - (зв19)-(зв22), (зв27), (зв33)-(зв46).
 // ════════════════════════════════════════════════════════════════════════════
 
-// The records that a chip of this kind actually stands for. birols and uploads share one
+// The records that a category of this kind actually stands for. birols and uploads share one
 // file and are told apart by a flag, so "the records of this kind" is a filter, not a store.
 function _kindRecords(kind) {
   const store = RECORD_STORES[kind];

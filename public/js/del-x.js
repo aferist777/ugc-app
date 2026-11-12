@@ -1,6 +1,6 @@
 // ✕ IN THE CORNER OF A PICTURE, PRESSED TWICE (phase V58, the owner 2026-10-29: "добавь в правый верхний угол картинок
 // крестик для удаления файла с даблкликом "really?""). ONE module for every place a picture is pointed at to delete it:
-// the folder column (the pictures chat's right column, the Images column of the generators - js/folder-column.js), the
+// the folder column (the right column of the pictures chat and the video chat - js/folder-column.js), the
 // attachment window (js/merge-v3/chat-pick.js), the looks and environments of talking head (js/merge-v3/wk-setup.js,
 // wk-env.js) and the generators' shelves (js/gen-window.js).
 //

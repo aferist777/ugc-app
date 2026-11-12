@@ -1,7 +1,7 @@
 'use strict';
 
-// The library folder is settled before anything else (lib/config.js), so a .env kept there -
-// beside the exe, in the desktop build - is read before any module looks at process.env.
+// The library folder is settled before anything else (lib/config.js), so a .env kept in it is
+// read before any module looks at process.env.
 require('dotenv').config({ path: require('path').join(require('./lib/config').ROOT_DIR, '.env') });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -88,10 +88,8 @@ app.use(express.json({ limit: '50mb' }));
 // A save from a page opened before a file moved still carries the old address: rewritten here,
 // before any route reads the body (lib/moves.js).
 app.use('/api', require('./lib/moves').rewriteBodies);
-// Root → Merge (phase H8, the owner 2026-10-01: the app opens on Merge). The Character page is gone -
-// making a character is the Library's Characters shelf now - and its old address, which older Alerts
-// rows still lead to, lands there.
-// (the owner 2026-10-22) The app opens on Home - what is going on, what is new, how the keys stand.
+// (the owner 2026-10-22) The app opens on Home. The Character page is gone - making a character is
+// the Library's Characters shelf now - and its old address lands there.
 app.get('/', (_req, res) => res.redirect('/home'));
 app.get('/character', (_req, res) => res.redirect('/library?shelf=characters'));
 // The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
@@ -105,7 +103,6 @@ app.use('/projects',     express.static(PROJECTS_DIR));
 app.use('/media',        express.static(MEDIA_DIR));
 app.use('/cache',        express.static(CACHE_DIR));
 app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
-// Scratch, in the system temp folder.
 // JASSUB, libass in the page for the captions' preview (phase K4): laid out by tools/fetch-jassub.js,
 // part of the program, not of the library.
 app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {
@@ -131,8 +128,8 @@ app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
 app.use('/sfx', express.static(require('./lib/media').SFX_DIR, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// (phase V65) The built-in patterns - IMAGES -> Patterns: laid out by tools/fetch-patterns.js, part of the program, read
-// only, addressed the same way (lib/media.js toDisk).
+// (phase V65) The built-in patterns, picked in Merge's strip of the main video lane: laid out by tools/fetch-patterns.js,
+// part of the program, read only, addressed the same way (lib/media.js toDisk).
 app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
@@ -141,7 +138,7 @@ app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
-// (The audio lab /lab/audio of V34.D went in V34.F: its chat is Merge's "generate audio", its tree the media tree's.)
+// (The audio lab /lab/audio of V34.D went in V34.F: its chat is the sound window now, its tree the media tree's.)
 // /lab/ui is the interface showcase of phase V73 (not in the top strip; Admin -> This computer links to it).
 const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html',
   '/lab/ui': 'lab-ui.html' };
@@ -173,11 +170,11 @@ app.use('/api', require('./routes/faces'));   // the faces of a film, counted by
 app.use('/api', require('./routes/fx-bake'));   // the effects the page alone draws, baked by the app's hidden window (phase V84)
 // The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
 app.use('/api', require('./routes/links'));
-// Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
+// Script generation - hooks, script, and saving into the scenarios store.
 app.use('/api', require('./routes/scriptgen'));
-app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
+app.use('/api', require('./routes/music'));   // AUDIO -> Music: a track brought in, Music -> highlights, where a track lies
 app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
-app.use('/api', require('./routes/audio-lib'));   // a piece of a sound, and the online CC0 search (Openverse)
+app.use('/api', require('./routes/audio-lib'));   // a piece of a sound, and the online CC0 search (Freesound, else Openverse)
 app.use('/api', require('./routes/lyrics'));   // saved lyrics - AUDIO -> Music -> Lyrics (phase V59.1)
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/track-peaks'));   // a sound's peaks for its waveform on Merge's lanes (phase V36)
@@ -187,8 +184,8 @@ app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
 // Captions from the sound: the server listens to a project and lays the lines (phase K1).
 app.use('/api', require('./routes/mv3-captions'));
-app.use('/api', require('./routes/library'));   // Library page — read-only shelves
-app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
+app.use('/api', require('./routes/library'));   // the Library: its shelves, the media tree, moving and deleting
+app.use('/api', require('./routes/scen3'));   // the scenarios store, and the talking head and voiceover projects
 app.use('/api', require('./routes/broll'));   // (phase V62) a voiceover's B-roll engine
 app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat (phase V26.5)
 app.use('/api', require('./routes/makechat'));   // the Library's chats that make environments and lookbooks (phase I)
@@ -196,13 +193,11 @@ app.use('/api', require('./routes/character-v2'));   // making a character: the 
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
 app.use('/api', require('./routes/images'));   // still pictures: upload, and the record that files one
-// Merge v3 - the timeline store. Version-checked: a write quoting a stale version is
-// refused, which is the thing timeline_data_v2 could not do.
+// Merge - the timeline store. Version-checked: a write quoting a stale version is refused.
 app.use('/api', require('./routes/mergev3'));
-// The blank-project render. Its own file for the same reason it has its own timeline and
-// its own preview: nothing it does can reach the scenario renderer.
+// A timeline rendered directly, outside the queue - what tools/fx-tiles.js --via asks for.
 app.use('/api', require('./routes/mv3b'));
-app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both workflows
+app.use('/api', require('./routes/mv3q'));   // the render queue - Export's Render and Add to queue
 // Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
 // from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
@@ -303,9 +298,9 @@ server.on('error', (e) => {
   process.exit(1);
 });
 
-// Allow long-running uploads (large ZIP imports). Node 18+ defaults of
-// requestTimeout=300s (5 min) and headersTimeout=60s abort multi-GB uploads
-// over slow upstream links half-way through. 0 = no timeout.
+// Allow long-running uploads (a large file brought into the library). Node 18+ defaults of
+// requestTimeout=300s (5 min) and headersTimeout=60s abort a multi-GB upload
+// half-way through. 0 = no timeout.
 server.requestTimeout = 0;
 server.headersTimeout = 0;
 server.keepAliveTimeout = 120_000;

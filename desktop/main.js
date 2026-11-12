@@ -273,7 +273,8 @@ function run() {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        // The window's buttons the pages draw (phase V19) - three actions, nothing else.
+        // What the pages may ask of their window (phase V19) - its buttons, a restart, a picked file's path,
+        // "show in folder" - nothing else.
         preload: path.join(__dirname, 'preload.js'),
         // Pages poll their generations; a minimised window keeps polling, as an app should.
         backgroundThrottling: false,

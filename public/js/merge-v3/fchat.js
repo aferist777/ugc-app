@@ -8,7 +8,8 @@
    chat's conversation (chat-shell.js) with the pictures chat's model column (pic-models.js), and what is its own is here:
      - no right column: the row above the box is a ZONE of named places - `character` and `place` (the project's look
        and environment, put there when the chat opens), `frame` (a frame to edit: "to reference" under a result, or the
-       picker), up to three `prop`s and `other` - and every empty place opens the picker, as in the video chat;
+       picker), up to two `product`s of IMAGES -> Props and up to four `extra` - and every empty place opens the picker, as
+       in the video chat;
      - no shape to choose: a frame is drawn in the project's shape, or it would go to the clip with bars (phase V);
        `shot` - none / selfie / half body / full body - is where the frame's EDGE is, the pose is the words';
      - the writer stops for a look (as in the video chat, V16) when it is on, and with it off a light agent puts the

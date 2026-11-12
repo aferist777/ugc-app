@@ -139,8 +139,8 @@ export const takeOf = (l) => {
 /**
  * Is this line READ - its take there, and spoken from the words the line has now? `said` is
  * written with the take (routes/scen3.js, /scen3/voice/speak), so editing a line makes its read
- * stale by itself. One rule for the counters (js/merge-v3/wk-fragments.js), the voice stage
- * (js/merge-v3/wk-voice.js) and the Library spine, which waits for the first read (js/merge-v3/workshop.js).
+ * stale by itself. One rule for the fields of setup (js/merge-v3/wk-fragments.js) and the voice
+ * stage (js/merge-v3/wk-voice.js).
  */
 export const isRead = (l) => {
   const { take, said } = takeOf(l);
@@ -151,7 +151,7 @@ export const isRead = (l) => {
  * IS THIS LINE IN THE VIDEO (phase Z, the owner 2026-09-22)? A line is never deleted - it is
  * TAKEN OFF: it keeps its place in the script (which is what stops the frames and the clips of
  * the lines below it moving), the panel dims it and puts it at the foot of the list with a
- * `restore`, and nothing else reads it - not the counters, not the reads, not the clips, not the
+ * `restore`, and nothing else reads it - not the counts, not the reads, not the clips, not the
  * prompts, not the timeline mirror. The server keeps the same rule (routes/scen3.js, _normLine).
  */
 export const isLive = (l) => !(l && l.removed);
@@ -165,8 +165,7 @@ export const plainWords = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ')
 
 // ── Dressing a character ────────────────────────────────────────────────────
 // A LOOK is made by showing the engine two pictures - this person, that outfit - and filing
-// the answer under the character. The call is the one the old page makes; what is new here is
-// where it is made from.
+// the answer under the character (routes/scen3.js, /scen3/gen/dress).
 
 /** The outfits to dress FROM: every picture on the lookbooks shelf. */
 export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files || []);

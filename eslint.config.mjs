@@ -1,12 +1,13 @@
 import globals from 'globals';
 
 // Flat config for a no-build, vanilla-JS project.
-// The pages (public/js) are ES modules, apart from three classic scripts loaded with a plain
-// <script> tag. `no-undef` is off there: a page's modules share state through window, and those
+// The pages (public/js) are ES modules, apart from the classic scripts loaded with a plain <script>
+// tag (Admin's four and storage-sync.js). `no-undef` is off there: a page's modules share state through window, and those
 // globals would all be false positives. The highest-value signal is parse/syntax errors (always
-// reported) plus unused locals and unreachable code.
+// reported) plus unused locals and unreachable code. An unused `catch (e)` is not reported: the
+// app's catches name their error by habit.
 const PAGE_RULES = {
-  'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_' }],
+  'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
   'no-undef': 'off',
   'no-unreachable': 'warn',
   'no-dupe-keys': 'warn',
@@ -29,7 +30,8 @@ export default [
     rules: PAGE_RULES,
   },
   {
-    files: ['public/js/admin-keys.js', 'public/js/data-io.js', 'public/js/storage-sync.js'],
+    files: ['public/js/admin-ai.js', 'public/js/admin-keys.js', 'public/js/admin-local.js', 'public/js/admin-thanks.js',
+      'public/js/storage-sync.js'],
     languageOptions: { sourceType: 'script' },
   },
   {
@@ -40,7 +42,7 @@ export default [
       globals: { ...globals.node },
     },
     rules: {
-      'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
       'no-undef': 'warn',
       'no-unreachable': 'warn',
       // The desktop window has no console, so on Windows a console program started without

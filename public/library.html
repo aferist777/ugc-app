@@ -6,7 +6,7 @@
 <base href="/">
 <title>Library</title>
 <!-- FIRST: hydrate localStorage from the server before page code runs, so UI state
-     (the open shelf, its filter) survives a browser or device change. -->
+     (the open shelf, the tree's width) survives a browser or device change. -->
 <script src="/js/storage-sync.js"></script>
 <link rel="stylesheet" href="css/app-shell.css">
 <link rel="stylesheet" href="css/app-nav.css">
@@ -28,8 +28,8 @@
 <!-- (phase V58) The generators' windows (js/gen-window.js) - linked here so the first window opens dressed; data-gw tells the
      module it is in. -->
 <link rel="stylesheet" href="css/gen-window.css" data-gw="1">
-<!-- (phase V59) The music window over Media (js/library/music-window.js): Suno's constructor is Merge's "/ generate audio"
-     (css/mv3-audio.css), and what Merge's own sheets give it besides is css/music-window.css. -->
+<!-- The sound window over Media (js/sound/sound-window.js) - one with Merge's: css/mv3-audio.css and
+     css/music-window.css. -->
 <link rel="stylesheet" href="css/mv3-audio.css">
 <link rel="stylesheet" href="css/music-window.css">
 <!-- (phase V34.E) Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->

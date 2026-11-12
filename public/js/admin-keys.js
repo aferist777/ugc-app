@@ -6,8 +6,8 @@
 
    EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
    provider accepted it, amber when it is there but the provider refused it (the reason sits
-   under the field), red when it is missing. The check is the same one the Character page
-   runs (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Cloudflare); the keys it
+   under the field), red when it is missing. The check is the same one Home's block "The app"
+   reads (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Pixabay, Cloudflare); the keys it
    does not probe - the separate R2 fields - are green when present, with "not probed" said.
 
    THE ONE CLOUDFLARE KEY (phase TG): saved, it is checked step by step at once (POST /api/cloudflare/check - the key,

@@ -9,10 +9,9 @@
      a lane         what applies to the whole lane
      a clip         that clip's own settings; several clips - removing them
 
-   The panel that used to show them is Setup now: the build of a talking head
-   (js/merge-v3/workshop.js). A project that is not a talking head has nothing in it and no spine
-   for it - the scenarios a talking head is made from are a view of the Library (phase V28.3,
-   js/merge-v3/scen-pick.js).
+   The panel that used to show them is Setup now: the build of a talking head or a voiceover
+   (js/merge-v3/workshop.js). Any other project has no Setup - the scenarios a talking head is
+   made from are a view of the Library (phase V28.3, js/merge-v3/scen-pick.js).
 
    Lane settings are a STAMP, not an inherited default: choosing a value on a lane writes it
    into every clip on it, overwriting whatever each clip had. The undo arrow is the way back.
@@ -192,7 +191,7 @@ function _paintHead(over) {
 // triggered by a store change did exactly that during testing.
 //
 // Normally the sequence is safe (a slider writes on release, so the repaint follows the
-// gesture), but a repaint can also come from outside - another tab's write being adopted,
+// gesture), but a repaint can also come from outside - the server's change being adopted,
 // or a save status changing. So a held control defers the repaint until it is let go.
 let _held = false;
 let _pending = false;
@@ -272,12 +271,10 @@ function _pipRows(host, track, c) {
 }
 
 // ── A main clip as a picture in the picture (phase V49, point 3) ─────────────
-// The owner's (пр8)-(пр11): main video has no Halfer but a PiP. Switched on, what the frame shows of the clip NOW becomes the
-// picture - a filled clip's crop with its Keep side, a fitted clip's whole picture, a framed clip's window (still moving inside
-// it) - where and as big as it already is; the yellow corners on the preview then size THAT picture about its middle, a drag
-// moves it, and behind it the same clip is blurred over the whole frame (preview-b.js _pipRect, lib/mv3b-render.js). Off:
-// the whole frame again. Written into EVERY main clip picked at once ((пр9): cut silence leaves 20-30 pieces a minute), one
-// undo step. `items` - [{ track, clip }] of the main lane.
+// The owner's (пр8)-(пр11): main video has no Halfer but a PiP, made by the clip's Crop (crop-box.js, phase V75 - see
+// _pipSection below): the yellow corners on the preview size THAT picture about its middle, a drag moves it, and behind it
+// the same clip is blurred over the whole frame (preview-b.js _pipRect, lib/mv3b-render.js). Its rows are written into EVERY
+// main clip picked at once ((пр9): cut silence leaves 20-30 pieces a minute), one undo step.
 const isMainVideo = (track) => !!(track && track.kind === 'video' && track.main);
 // (phase V84, the owner's (эф24), 2026-11-11 «параметры fit, tracking и offset не нужны в talkinghead и voiceocer режимах») A talking
 // head's and a voiceover's MAIN video has no framing rows - no Fit / Fill, Tracking, Offset, Align, Punch-ins, nor the lane's Fit,
@@ -446,20 +443,19 @@ function _frameRows(host, c, set) {
 }
 
 // ── A halfer band ───────────────────────────────────────────────────────────
-// The other editor's Halfers lane as a section on any picture: switched on, the clip is a band
-// across the frame instead of a picture on it. Closed while it is off - its numbers mean nothing
-// to a clip that is not a band - and open while it is on, in place of the framing, placement and
-// effects that do not apply to one (lib/mv3b-render.js renders none of them on a band).
+// A section on a picture of a lane above main: switched on, the clip is a band across the frame instead of a
+// picture on it. Closed while it is off - its numbers mean nothing to a clip that is not a band -
+// and open while it is on, in place of the framing, placement and effects that do not apply to
+// one (lib/mv3b-render.js renders none of them on a band).
 //
-// The controls and their words are that editor's, so a band brought over from there reads the
-// same here. The defaults are its defaults: against the top, two fifths of the frame, turned 90.
+// The defaults: against the top, two fifths of the frame, turned 90.
 function _halferRows(host, c, set) {
   const on = !!c.halfer;
   const head = C.row('Halfer', C.toggle(on, (v) => set('halfer', v)));
   head.classList.add('mv3-c-fold');
   if (on) head.classList.add('is-open');
   head.title = on ? 'A band across the frame. Switch off to make it a picture again - the band keeps its settings.'
-                  : 'Make this clip a band across the frame, like the Halfers lane in the other editor';
+                  : 'Make this clip a band across the frame';
   host.appendChild(head);
   if (!on) return;
 
@@ -569,8 +565,6 @@ function _blankFilm(host, track, c, set, pair) {
 
 // A picture: one frame and a length the timeline gave it. No speed, no reverse, no level -
 // it has none of those, and offering them would be three controls that quietly do nothing.
-// Laid out like the other workflow's still panel, because it answers the same question
-// first: which picture is this.
 function _blankStill(host, track, c, set) {
   // (phase V73 block 5, 5b, the owner's (б5-10) а) THE CLIP'S FORM: the groups Picture (with Frame's rows since V84, (эф17)) · Color ·
   // Effects, Remove at the bottom - no columns of

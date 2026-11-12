@@ -16,9 +16,8 @@
    undo works at all - a snapshot taken afterwards would record the result.
 
    On a 409 the save does NOT retry with the same body. The server sends its current
-   state back with the refusal, so this adopts it and says so out loud. Overwriting is
-   what the old store did; being told you lost a write is the price of never silently
-   destroying someone else's.
+   state back with the refusal, and the edit made here is replayed on top of it (save(),
+   _merge) - neither side is dropped.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as History from './history.js';
@@ -33,7 +32,7 @@ const SAVE_DEBOUNCE = 500;
 // upload path and the timeline path can never claim each other's drops.
 export const DRAG_TYPE = 'application/x-mv3-clip';
 // (phase V28.4) WHAT a dragged tile is - 'video', 'image' or 'audio' - in a type of its own: a lane reads the types while
-// the tile hangs over it (the data only at the drop) and takes only its own (timeline-b.js laneTakes).
+// the tile hangs over it (the data only at the drop) and takes only its own (timeline-b.js _laneTakes).
 export const DRAG_MEDIA = 'application/x-mv3-media-';
 
 // A clip whose source is a PICTURE rather than a film. Three modules have to agree about
@@ -215,8 +214,8 @@ export function adv() { return _adv; }
 // again shows what was just used rather than what the project was loaded with.
 export function setAdv(a) { _adv = (a && typeof a === 'object') ? a : null; }
 
-// The picker's list, newest first. Not cached: it changes when a project is imported from
-// Scenarios by something that is not this page.
+// The picker's list, newest first. Not cached: it changes when a project is made by something
+// that is not this page (Home, the Library, the server).
 export async function listFull() {
   const d = await fetch('/api/mv3/timelines').then(r => r.json());
   if (!d || !d.success) throw new Error((d && d.error) || 'could not list projects');
@@ -259,7 +258,7 @@ export async function openBlank() {
 
 export async function load(k) {
   let want = k;
-  // ?p=<key> is Scenarios handing over a project it has just written. It is also what a
+  // ?p=<key> is another page handing over a project (Home, the Library, an Alerts row). It is also what a
   // reload reads, because opening one from the picker puts it in the URL.
   if (!want) {
     try {
@@ -299,8 +298,8 @@ export async function load(k) {
 
   const r = await fetch('/api/mv3/timeline?key=' + encodeURIComponent(want));
   const d = await r.json();
-  // A REMEMBERED project that is no longer there must not stop the page: it was deleted in
-  // another tab, or the app was pointed at another library. Forget it and open empty (R6).
+  // A REMEMBERED project that is no longer there must not stop the page: it was deleted, or
+  // the app was pointed at another library. Forget it and open empty (R6).
   if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
   if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
   // (phase V20) A project that is not there any more - one deleted, an old Alerts link - opens the draft, not whichever
@@ -346,19 +345,20 @@ export async function load(k) {
   return _timeline;
 }
 
-// ── Merging someone else's changes ──────────────────────────────────────────
-// A SECOND DEVICE IS NOT A CONFLICT TO LOSE. The old behaviour on a refused write was to
+// ── Merging the server's changes ────────────────────────────────────────────
+// A CHANGE FROM THE SERVER IS NOT A CONFLICT TO LOSE - the lines heard from the sound, a talking
+// head's mirror, the B-roll, music laid under a clip. The old behaviour on a refused write was to
 // adopt the server's state and drop the edit that had just been made - honest, but it threw
 // away work. Nothing is thrown away now: the local change is replayed on top of whatever
-// arrived, and the timeline says what came in from elsewhere.
+// arrived, and a lay of the server's own is said in the status (_serverOnly).
 //
 // Three states are needed for that, not two. `_base` is the timeline as it was last agreed
 // with the server, so "what did I change" is answerable at all - without it, local and remote
 // merely differ and there is no way to tell an addition here from a deletion there.
 //
 // Deletions ARE honoured, from both sides. A delete is a click, not a disagreement, and a
-// merge that resurrected it would mean never being able to remove a clip while another tab is
-// open. What never happens is dropping a clip because the two states simply disagree.
+// merge that resurrected it would bring a clip back whenever the server saved while it was being
+// removed. What never happens is dropping a clip because the two states simply disagree.
 let _base = null;
 
 const _byId = (clips) => {
@@ -409,7 +409,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   for (const c of (mine.clips || [])) if (fixed.has(c.id) && b.has(c.id)) out.push(c);
   // Start order only where the order means nothing. On a lane whose clips may cover one another
   // the order is the stacking order, and a merge that tidied it would restack the picture as a
-  // side effect of another device having saved. Captions are put in time order the moment one of mine
+  // side effect of the server having saved. Captions are put in time order the moment one of mine
   // was put back among a lay's.
   if (sortByStart || mineTyped.length || fixed.size || unlaid.size) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
@@ -479,7 +479,7 @@ function _applyMarks(lane, marks, mineIds) {
   }
 }
 
-// Returns the merged timeline plus what arrived from the other device, for the notice.
+// Returns the merged timeline plus how many clips arrived from the server and went.
 function _merge(base, mine, theirs) {
   if (!base || !theirs || !Array.isArray(theirs.tracks)) return { timeline: mine, added: 0, removed: 0 };
   return _mergeBlank(base, mine, theirs);
@@ -639,14 +639,13 @@ export async function save(_merges = 0) {
     });
     const d = await r.json();
     if (r.status === 409) {
-      // Somebody else changed it while this copy was being edited. Replay this change on top
-      // of theirs and save that, rather than dropping either side. The retry quotes THEIR
+      // The server changed it while this copy was being edited. Replay this change on top
+      // of the server's and save that, rather than dropping either side. The retry quotes THEIR
       // version, so if a third write landed in between it 409s again and merges again.
       // The version is this project's own. It was one number for the whole file once, so
       // editing a DIFFERENT project refused this write too; the byte-identical case is kept
       // for the one save after that change, when a number from the old scheme meets a rev
-      // that starts from 0 - nothing to report there, and saying "changed on another device"
-      // about a project nobody touched would be as misleading as saying nothing when they did.
+      // that starts from 0 - nothing to report there.
       const untouched = _same(d.timeline, _base);
       const who = untouched ? null : _serverOnly(_base, d.timeline);
       const { timeline } = _merge(_base, _timeline, d.timeline);
@@ -732,15 +731,15 @@ try {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 } catch (e) {}
 
-// ── Watching for the other device ───────────────────────────────────────────
+// ── Watching for the server's changes ───────────────────────────────────────
 // Finding out at SAVE time that a project moved is finding out late: you have already spent
 // ten minutes editing a timeline that is not the current one. So the version number - which is
-// one small number, not the timeline - is checked periodically and when the tab is looked at
+// one small number, not the timeline - is checked periodically and when the window is looked at
 // again after being away.
 //
 // Clean copy: adopt the newer state outright. There is no local edit to weigh against it, so
-// this is just being up to date, and it is said out loud because clips appearing on their own
-// otherwise reads as a bug.
+// this is just being up to date, and a lay of the server's own is said out loud because clips
+// appearing on their own otherwise read as a bug.
 // Dirty copy: say what happened and leave it. The merge on save is where the two are
 // reconciled, and pulling the rug mid-drag would be worse than telling you.
 const WATCH_MS = 20000;
@@ -775,7 +774,7 @@ async function _checkRemote() {
   try { d = await fetch('/api/mv3/timeline?key=' + encodeURIComponent(_key)).then(r => r.json()); }
   catch (e) { return; }
   if (!d || !d.success || d.key !== _key) return;
-  if (_same(d.timeline, _base)) { _version = d.version; return; }   // someone else's project
+  if (_same(d.timeline, _base)) { _version = d.version; return; }   // only the title or the export settings moved
 
   // WHO CHANGED IT. The server lays two kinds of cell itself: a talking head's fragments
   // (lib/frag-mirror.js, phase T' - a read spoken or a clip filed re-lays the cells that carry `frag`)
@@ -796,7 +795,7 @@ async function _checkRemote() {
   }
   // The lines laid from the sound are ONE step to undo, as they were when the page laid them itself:
   // the step is taken before the new state comes in. A mirror lay is not - undoing it would only fight
-  // the mirror, which lays it again - and neither is somebody else's edit. (V54) Nor is the music laid under a clip: one step.
+  // the mirror, which lays it again - and neither is any other change. (V54) Nor is the music laid under a clip: one step.
   const undoable = !!who && (who.heard || who.laid) && !who.frag;
   if (undoable) History.push();
   _timeline = d.timeline;

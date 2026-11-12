@@ -4,9 +4,9 @@
    (js/merge-v3/library.js) - and one is laid on a lane by dragging it there, as it is, from where it is let go; two of
    them overlapping cross into each other by themselves (js/sound/fades.js).
 
-   (phase V34.E, the owner's (м10)) The generator went from here: music and sounds are made in the Library panel's
-   "/ generate audio" (js/merge-v3/audchat.js) - Suno and ElevenLabs, for the open project. A clip's fades stay in its
-   own settings.
+   (phase V34.E, the owner's (м10)) The generator went from here: music and sounds are made in the sound window
+   (js/sound/sound-window.js, Merge's host js/merge-v3/audchat.js) - Suno and ElevenLabs, for the open project. A clip's
+   fades stay in its own settings.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';

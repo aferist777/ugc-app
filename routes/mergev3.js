@@ -13,18 +13,17 @@
        folder, projects/<folder>/merge/<title>.json (lib/merge-store.js);
      • every read carries a `version`, every write must quote the version it is
        replacing, and a write quoting an old one is REFUSED with 409 rather than
-       applied. A stale tab loses its write instead of everyone losing their work;
+       applied. A stale copy is refused instead of writing over newer work;
      • every file is written atomically, so a crash mid-write cannot truncate one.
 
    MANY TIMELINES, one per project, and one kind of project: an ordered list of lanes - video,
-   audio, subtitles, text - made in Merge (`mv3_<stamp>`) or sent from Scenarios
-   (`sv3_<scenariosProjectId>[_n]`). The talking-head editor's six fixed lanes are gone
-   (docs/local-app/PLAN.md, phase 3); lib/timeline-convert.js rewrote its projects at startup.
+   audio, subtitles, text - made in Merge (`mv3_<stamp>`), a talking head's or a voiceover's
+   (`sv3_<scenariosProjectId>[_n]`) or a highlights project's (`hl_<id>[_n]`). The talking-head
+   editor's six fixed lanes are gone (docs/local-app/PLAN.md, phase 3); lib/timeline-convert.js rewrote its projects at startup.
 
-   THE VERSION IS THE PROJECT'S. It was the file's - one counter, written whole - which
-   was enough for one editor and wrong for a team: two people on two different projects
-   refused each other's every save, and each refusal was a merge against a timeline the
-   other had never touched. Each timeline now carries its own `rev`, bumped by the save
+   THE VERSION IS THE PROJECT'S. It was the file's - one counter, written whole - so a
+   write to one project refused every save to another, and each refusal was a merge
+   against a timeline nobody had touched. Each timeline now carries its own `rev`, bumped by the save
    that changes its tracks, and that is the number a save has to quote. The file-level
    `version` still ticks on every write, as a cheap "did anything change" for whoever
    asks without naming a project.
@@ -104,7 +103,7 @@ function _write(state) {
 }
 
 
-// The picker's list. Newest first, so an imported project is at the top - under THE draft, which is always first and always
+// The picker's list. Newest first, so a project just made is at the top - under THE draft, which is always first and always
 // there (phase V49: made here when the list is read without one).
 router.get('/mv3/timelines', (req, res) => {
   try {
@@ -218,7 +217,7 @@ router.get('/mv3/blank', (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Cheap enough to poll. Kept separate so watching for someone else's change does not
+// Cheap enough to poll. Kept separate so watching for the server's change does not
 // pull the whole timeline every few seconds. With a key it answers for that one project;
 // without one, the file's counter, which moves on every write to anything.
 router.get('/mv3/timeline/version', (req, res) => {
@@ -293,7 +292,7 @@ router.put('/mv3/timeline', (req, res) => {
     if (th) require('../lib/line-cuts').fromTimeline(th[1], clean.tracks);
     // (phase V84 block 3, (б3-2)) An effect the page alone draws, on main video: baked in the background (lib/fx-bake.js).
     require('../lib/fx-bake').want(rec, key);
-    // The STORED tracks go back, not just the version. _sanitize normalises as it writes -
+    // The STORED tracks go back, not just the version. _sanitizeBlank normalises as it writes -
     // a missing field becomes an explicit null, a band number its default - so what the caller
     // sent and what is now here are not byte-identical. The caller needs the stored shape to
     // compare against later: a merge that measures "what did I change" against the version it
@@ -327,8 +326,8 @@ router.post('/mv3/merge/:id/cancel', (req, res) => {
   res.json({ success: true, job: require('../lib/merge-clips').cancel(req.params.id) });
 });
 
-// Export settings for one project. Their own endpoint on purpose: pressing Apply in the
-// export dialog must not rewrite the timeline, and a timeline save must not rewrite them.
+// Export settings for one project. Their own endpoint on purpose: saving the export window's
+// settings must not rewrite the timeline, and a timeline save must not rewrite them.
 router.post('/mv3/adv', (req, res) => {
   try {
     const b = req.body || {};
@@ -437,25 +436,20 @@ router.post('/mv3/render/discard', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Delete one project's timeline. The confirmation is the page's job (the button turns into
-// "really?"), so this just does it - a second confirmation here would be theatre.
-/* ── A project that did not come from Scenarios ──────────────────────────────
+/* ── A new, empty project ────────────────────────────────────────────────────
    POST /api/mv3/timeline/new { title, format? } | { projectId } -> { success, key, version }
 
-   Every project until now arrived with a cut behind it: Scenarios writes sv3_<projectId> and
-   fills the Main track. This makes an empty one, and there are two ways to be empty:
+   This makes an empty one, and there are two ways to be empty:
 
      { title }      a project of Merge's own, keyed mv3_<stamp> so the origin is readable from
                     the key alone. The caller opens it and builds the timeline by hand.
-     { projectId }  a TALKING HEAD, keyed sv3_<projectId>. The scenario project already exists
-                    (it was made from a scenario); this gives it the timeline it will be
-                    assembled into, empty, so it is in the picker from the moment it exists
-                    rather than appearing only after the first send.
+     { projectId }  a TALKING HEAD or a VOICEOVER, keyed sv3_<projectId>. The scenario project
+                    already exists; this gives it the timeline it will be assembled into, empty,
+                    so it is in the picker from the moment it exists.
 
-   THE TITLE IS TAKEN, NOT DEFAULTED, and the reason is that nothing in this app can rename a
-   project. An "Untitled" made here would stay Untitled forever, so a blank title is refused
-   rather than quietly accepted. A talking head has a name already - the project's - so it
-   passes none.
+   THE TITLE IS TAKEN, NOT DEFAULTED: an "Untitled" made here would stay Untitled until someone
+   renamed it, so a blank title is refused rather than quietly accepted. A talking head has a
+   name already - the project's - so it passes none.
 
    `format` (phase V63, P14, the owner's (хп31)): '9:16' or '16:9' - Home's quick start of a blank project asks it; anything
    else is 9:16, as before. */
@@ -475,12 +469,11 @@ router.post('/mv3/timeline/new', (req, res) => {
     if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
       if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-      // The FIRST free one, the same way a send numbers them: sv3_<id>, then _2, _3. An empty
-      // timeline made here is the one the first assembly fills, so in practice this is _1.
+      // The FIRST free one: sv3_<id>, then _2, _3 - in practice sv3_<id> itself.
       const base = 'sv3_' + projectId;
       key = base;
       for (let n = 2; cur.timelines[key]; n++) key = base + '_' + n;
-      // Named after the project and the day, like a send names its cut. Uniqueness is not
+      // Named after the project and the day. Uniqueness is not
       // checked: for an sv3_ key the folder is the PROJECT's folder (lib/merge-store.js), so
       // two same-named timelines cannot collide over a folder the way Merge's own do.
       title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || p.name || '').trim() || 'talking head'}`;
@@ -635,6 +628,8 @@ function _forgetChats(keys) {
   }
 }
 
+// Delete one project's timeline. The confirmation is the page's job (the button turns into
+// "really?"), so this just does it - a second confirmation here would be theatre.
 router.delete('/mv3/timeline/:key', (req, res) => {
   try {
     const key = String(req.params.key || '');

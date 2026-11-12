@@ -14,7 +14,7 @@
 //   (phase V81) "Save audio" of a video:
 //   GET  /api/audio/tracks?src=                    the video's sound tracks [{ k, label }] - none: it has no sound
 //   POST /api/audio/from-video { src, track?, in?, out?, name? }
-//                                                  one track, whole or [in, out), as a sound in My sounds' root
+//                                                  one track, whole or [in, out), as a sound in AUDIO's own root
 //                                                  (lib/audio-cut.js fromVideo) -> { item }
 // ════════════════════════════════════════════════════════════════════════════
 

@@ -1,12 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — "/ generate audio" (phase V34.E; js/merge-v3/audchat.js): the Library panel's view of music and sounds, the
-   audio lab's constructor moved into Merge. Its box is a chat's (.mv3-pc, shown by lib-views.js), its settings column the
-   chats' (.mv3-ig-set, css/mv3-imagen.css); this file draws the middle - the constructor of the open mode and, under it,
-   the open project's presses (phase V60, (пп12а): "Made here" and its column went) - and, in Video to Music, the VIDEO
-   tree on the right. Narrower than 900 px the tree goes under the gold card (.au-tight), narrower than 620 the settings
-   column goes above the rest (.au-narrow) - not the chats' .is-narrow, which folds their settings into one row.
-   Linked on the Library's page too (its music window): the "?" of a parameter (js/sound/qmark.js) and the almanac's
-   window (phase V60) are here for both pages.
+   THE SOUND WINDOW's middle (js/sound/sound-window.js; it began as Merge's "/ generate audio" view, phase V34.E). Its
+   settings column is the chats' (.mv3-ig-set, css/mv3-imagen.css; css/music-window.css); this file draws the middle - the constructor of the open mode and, under it, the open project's presses (phase V60, (пп12а):
+   "Made here" and its column went) - and, in Video to Music, the VIDEO tree on the right.
+   Linked on every page that opens the window: the "?" of a parameter (js/sound/qmark.js) and the almanac's
+   window (phase V60) are here too.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* Four crumbs now: the chats' read "image" / "video" / "audio" a little sooner. In a highlights project too (phase V49, the

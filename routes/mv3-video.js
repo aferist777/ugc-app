@@ -8,7 +8,7 @@
 //   GET  /api/mv3/video/feed?project=   the project's video records, newest first
 //   POST /api/mv3/video/send            a message: its turn, a record and an Alerts row per clip, the answering
 //                                       turn - at the press - and the work behind the answer
-//   POST /api/mv3/video/upload          a clip from this computer onto Uploads, under the project's category
+//   POST /api/mv3/video/upload          a clip from this computer into VIDEO -> Uploads (or the person's folder there)
 //
 // The step-by-step builder (phase V6) - a recipe chosen, the writer and the video are two presses:
 //   POST  /api/mv3/video/write              the recipe's request, its places filled: the recipe card and a prompt card
@@ -339,8 +339,8 @@ const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+
 const _writingIn = (project) => CHAT.writingCount(project);
 
 // ── The storyboard (phase V8, PLAN V-G; the owner 2026-10-06: 4K, and always a stop after it) ──────────────────
-// A two-step recipe draws a STORYBOARD SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
-// Alerts row of type 'picture', filed on Images in the project's category) - and the video is made from it: the
+// A storyboard draws a SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
+// Alerts row of type 'picture', filed in IMAGES -> Generated) - and the video is made from it: the
 // sheet chosen on the card goes as the LAST picture of the clip, after the card's own.
 const BOARD_ENGINE = 'nano-banana-2';
 const BOARD_QUALITY = '4K';

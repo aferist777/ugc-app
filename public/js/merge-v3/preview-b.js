@@ -7,7 +7,7 @@
 
    LAYER ORDER COMES FROM THE PROJECT. The video lanes are listed top layer first, so
    painting runs through them backwards - main video, then whatever sits above it, in
-   the order the lanes are in. The renderer for these projects will read the same list
+   the order the lanes are in. The renderer (lib/mv3b-render.js) reads the same list
    the same way; that is the one thing the two must agree on, or the screen and the
    file will show different pictures.
 
@@ -136,9 +136,8 @@ export function duration() {
 // time - the picture stalls and the clock runs on without it, which reads as a broken
 // preview rather than as a slow one.
 //
-// The proxy endpoint is shared with the other workflow deliberately. It is a transcoder,
-// not editing logic: the same argument as the library, which is also shared. Nothing about
-// how a blank project is composed passes through it.
+// The proxy endpoint (routes/proxies.js) is a transcoder, not editing logic: nothing about
+// how a project is composed passes through it.
 //
 // Stills are left alone. They decode once and a derivative would be a round trip for nothing.
 const PROXY_H = [360, 480, 720];
@@ -1345,7 +1344,7 @@ let _soonVideo = [];         // (V49) held at Play: the films of pieces starting
 let _soonAudio = [];         // ...and the sounds
 
 // Every audible sound at this moment. A clip at volume 0 is SKIPPED - that is what a muted
-// birol is, and what the subtitle pass will read to decide what to transcribe. Track volume
+// birol is, and the server's hearing skips it too (lib/captions-job.js). Track volume
 // multiplies, so a lane can be quietened without touching the clips on it.
 function _sounds(tl, t) {
   const out = [];

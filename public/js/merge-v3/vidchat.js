@@ -1,17 +1,17 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — making clips, as a conversation, IN THE LIBRARY PANEL (phase V3, docs/local-app/PLAN.md "Фаза V").
+   MERGE — making clips, as a conversation, in a window (phase V3, docs/local-app/PLAN.md "Фаза V").
 
-   The pictures chat's shell (chat-shell.js) with its own description: "LIBRARY / generate video" in the panel's
-   header, its own crumb, buttons and box, its own conversation (kind 'clip'). The server is phase V2
+   The pictures chat's shell (chat-shell.js) with its own description: its own window (chat-window.js), column and
+   box, its own conversation (kind 'clip'). The server is phase V2
    (routes/mv3-video.js): a press writes the turn, a record and an Alerts row for each clip asked for, and the
-   work - the writer, the references hosted, the aggregator asked, the clip fetched and filed as a B-roll with no
-   category (VIDEO -> Generated) - goes on behind it.
+   work - the writer, the references hosted, the aggregator asked, the clip fetched and filed as a B-roll in its
+   model's folder (VIDEO -> Generated -> <model>) - goes on behind it.
 
    What is this chat's own (the owner, 2026-10-05):
    - ONE dropdown of every model, each its own line with its price; the chosen model shows ITS OWN parameters
      (duration, quality, shape, sound, Grok's mode, how Seedance reads the pictures, Kling's orientation) and the
      price of this send; the aggregator beside it with its own rate - the cheapest with a working key by default.
-   - A line ABOVE THE THREAD says what the chosen model does and what to attach.
+   - A line under the model's dropdown says what the chosen model does and what to attach.
    - Kling motion control's VIDEO has no writer - Kling gets its own prompt. With the writer off the box IS that prompt
      (empty: the standard one); with it on the box says what to take from which picture, and the first frame is drawn
      before the video (phase V17).
@@ -1806,7 +1806,7 @@ function VIDEOS(ctx) {
       if (l) _freshenOne(m.id, l);
     }
   }
-  // A sheet: a press shows the card's sheets large, hovering shows it bigger.
+  // A sheet: a press shows the card's sheets large.
   // (phase V18.1, the owner 2026-10-08) `how`: 'big' - the storyboard at the message's width, from the 1280px tier (the
   // 440px miniature stretched to 600 came out in squares); 'frame' - Kling's first frame at its own shape, at most 320px
   // high, its box set before the picture loads. No popup under the pointer: the press opens it large. (phase V60.3) 'row' -
@@ -2535,8 +2535,8 @@ function VIDEOS(ctx) {
   // Every prompt of a message - a clip's description, the storyboard's or the first frame's prompt, the video's - is one
   // line: its word and ▸, its first words, how many characters, and its variants' "‹ 2 of 3 ›" at the right end. A press
   // opens it in place, to read and edit, as tall as its text. What is open stays open while the person stays in the chat -
-  // the thread's repaints, another variant, a make -, and everything folds again when anything hides the chat (another view
-  // of the panel, another project, another page, a reload).
+  // the thread's repaints, another variant, a make -, and everything folds again when anything hides the chat (its window
+  // closed, another project, another page, a reload).
   // (phase V60.3, the owner 2026-10-30, (вс3а), (вс6а)) Only the clips' descriptions on the storyboard's step are folded now:
   // every other text of a step is a field down to the bottom of the video (`_field` below).
   const _open = new Set();       // message id + ':' + line key - the lines open now

@@ -10,7 +10,7 @@
    the right column), with four actions in its head:
      Copy           the text into the clipboard
      Use in Custom  the viewer closes and the page is told - window event `ugc:lyric-use` { id, title, text }; Generate
-                    music opens Custom with that text (the Library's music window, Merge's "/ generate audio")
+                    music opens Custom with that text (the sound window, js/sound/sound-window.js, on either page)
      Rename         the app's name box, PATCH /api/audio/lyrics/:id
      Delete         as every tile is deleted: the question (js/library/actions.js deleteQuestion), then
                     DELETE /api/library/item/lyrics/:id

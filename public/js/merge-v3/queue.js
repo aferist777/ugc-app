@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the render queue, as the page sees it.
 
-   Shared by both workflows on purpose, unlike the timeline, the preview and the render:
-   a queue that only knew about one of them would be two queues, and the whole point is one
-   place to leave work and come back to it.
+   One queue for every project, on every page (js/app-nav.js puts its button on the pages
+   that have none): one place to leave work and come back to it.
 
    The list is the SERVER'S. This module shows it and asks it to do things; it holds no copy
-   worth trusting, because a second tab is allowed to add to the same queue and a browser
+   worth trusting, because other pages and the server add to the same queue and a page's
    copy would quietly be wrong.
 
    A finished entry STAYS. It is the record of what was rendered and where the file went, and
@@ -155,7 +154,7 @@ function _row(it, refresh) {
   const acts = document.createElement('div');
   acts.className = 'mv3-qrow-acts';
 
-  // A ready render opens in the result window - playable, named, kept, sent - not in a tab.
+  // A ready render opens in the Library's viewer - Rename and Delete there - not in a tab.
   if (it.status === 'done' && it.url) {
     const a = document.createElement('button');
     a.type = 'button';
@@ -487,7 +486,7 @@ function _away(e) {
   }
 }
 
-/** Put the open project into the queue. Called by the render window of either workflow. */
+/** Put the open project into the queue. Called by Merge's render window (export-b.js). */
 export async function addCurrent(adv) {
   const Store = await import('./store.js');   // Merge's own, loaded already there
   const tl = Store.timeline();
@@ -504,7 +503,7 @@ export function initQueue() {
   const b = $('mv3-queue');
   if (b) b.addEventListener('click', (e) => { e.stopPropagation(); _pop ? _close() : _open(); });
   _paintBadge();
-  // Someone else's tab may be rendering, so the badge is refreshed on a slow beat rather than
+  // Another page or the server may add to it, so the badge is refreshed on a slow beat rather than
   // only when this page does something.
   setInterval(_paintBadge, 5000);
 }

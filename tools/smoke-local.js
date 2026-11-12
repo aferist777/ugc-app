@@ -8,8 +8,7 @@
 
    What it asks:
      - every page, a few shipped assets, and every GET route that takes no parameters;
-     - a thumbnail of a shipped preset, and a 1K preview of a shipped mannequin - filed in the
-       library's cache/poses/, and removed again at the end if this run made it;
+     - a thumbnail of a shipped preset;
      - the settings view: no secret and no retired key reaches the page;
      - the routes that were removed still answer 404;
      - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js);
@@ -29,7 +28,7 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-// '/' opens Merge and '/character' lands on the Library's Characters shelf - both answered by redirects.
+// '/' opens Home and '/character' lands on the Library's Characters shelf - both answered by redirects.
 const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d', '/lab/ui'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
@@ -40,7 +39,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // what is known about a made environment or lookbook (phase V58: the making chats' page went, their routes stay
                  // for the old Alerts rows), and the links module
                  '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css', '/api/makechat/environments', '/api/makechat/lookbooks',
-                 // the pictures chat in Merge's Library panel (phase J), on the shell both chats share (phase V1)
+                 // the pictures chat (phase J), on the shell both chats share (phase V1)
                  '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/js/merge-v3/vcatalog.js', '/css/mv3-catalog.css', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
                  // the captions' one style module, the page's and the server's (phase K0)
                  '/js/captions/style.js', '/js/captions/ass.js',
@@ -77,7 +76,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // generate audio and sound on the shelves (phases V34.C-F)
                  '/js/merge-v3/audchat.js', '/css/mv3-audio.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
-// Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
+// Where an address must land: the app opens on Home, the old Character page (phase H8) on the shelf.
 const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',

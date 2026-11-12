@@ -5,10 +5,9 @@
    (во25) "всегда"; (во22) а - only what is laid is downloaded).
 
    A press on a piece of the B-roll on main video (a cell `br_…`, lib/broll.js) opens this view of the Library panel - from the
-   shelf, a chat, the captions, whatever showed; its crumb "/ b-roll" is lit, and the panel's other crumbs lead back. It shows
+   shelf, the scenarios, the captions, whatever showed; its crumb "b-roll /" is lit, and the panel's other crumbs lead back. It shows
    the piece's SENTENCE - its words, the agent's queries - and its BATCH: the videos, then the pictures, each a tile: ✓ when it
-   is laid somewhere on the timeline, outlined when it is in this very piece; the pointer resting on one shows it larger - a video
-   plays muted (the file once it is in the library, else the stock's own preview), a picture big. A press puts it into the
+   is laid somewhere on the timeline, outlined when it is in this very piece. A press puts it into the
    piece, in its place and length (POST /api/broll/:id/swap) - downloaded first when it is not in the library - chosen BY HAND,
    so a mode changed in field 2 does not take it out; the one it replaces stays in the library.
 
@@ -168,7 +167,7 @@ function _tile(it) {
   t.appendChild(_el('span', 'mv3-brv-by', [_site(it.site), it.author].filter(Boolean).join(' · ')));
   if (_busy === it.id) t.appendChild(_el('span', 'mv3-brv-wait', 'putting it in…'));
   // (the owner 2026-10-31: "когда пользователь выбирает бирол, не показывай текстовую системную всплывашку") No browser tooltip:
-  // the tile and its preview say it all.
+  // the tile says it all.
   t.setAttribute('aria-label', it.here ? 'In this piece now' : 'Put it into this piece');
   t.disabled = !!_busy;
   t.addEventListener('click', () => { if (!it.here) _swap(it); });

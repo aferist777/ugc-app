@@ -1,9 +1,7 @@
-// LIBRARY — shelves, filters, and on the picture shelves the right column about the selected tile.
+// LIBRARY — shelves, the media tree beside Media, and on the picture shelves the right column about the selected tile.
 //
-// The page is deliberately its own thing: none of the legacy gallery / obrazy / refs
-// modules load here. Every shelf arrives from /api/library/shelf/:kind in one shape,
-// along with the filter rows that shelf offers, so the page never has to know where a
-// particular kind of thing is stored.
+// Every shelf arrives from /api/library/shelf/:kind in one shape, so the page never has
+// to know where a particular kind of thing is stored.
 //
 // Cards are always <img>. A clip with no thumbnail shows a striped tile — the old shelf
 // downloaded whole videos to paint small cards, which is what made it heavy.
@@ -29,7 +27,7 @@ import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V58, the owner's (лк6)) New environment / New lookbook - the generators' window (sub-session P's module).
 import { openGenerator } from '../gen-window.js';
-// (phase V59) Generate music - Suno's window over Media (js/library/music-window.js, sub-session P's); (phase V64 block 5) the
+// (phase V59) Generate music - a window over Media; (phase V64 block 5) the
 // sound window - one for both pages, music and sounds (js/sound/sound-window.js), told the Library's own (_soundHost, below).
 import * as SW from '../sound/sound-window.js';
 // (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
@@ -100,7 +98,7 @@ const _mcat = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 // since phase V56 took the Lookbooks and Environments shelves away.)
 const PICKABLE = new Set(['characters']);
 let _sel = '';
-// (phase V59) More tiles outlined beside _sel on Media - a press of the music window made TWO tracks, and its Alerts row
+// (phase V59) More tiles outlined beside _sel on Media - a press of the sound window made TWO tracks, and its Alerts row
 // leads to both (?sel=<id>&sel=<id>).
 let _selAlso = new Set();
 let _items = [];
@@ -278,10 +276,10 @@ function _genLanded(kind, path) {
   }
 }
 
-// (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge ... в library") GENERATE MUSIC - Suno's
-// window over Media (js/library/music-window.js; since phase V64 the sound window, js/sound/sound-window.js), the gallery and
+// (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge ... в library") GENERATE MUSIC - the
+// sound window over Media (js/sound/sound-window.js), the gallery and
 // the tree staying behind it.
-// From Music's "+" in the tree (and its menu, and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
+// From Music's "Generate music" in its menu in the tree (and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
 // the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
 // moods take only a mood's preset - the window and the server say so). `lyric` (phase V59.1) - a saved text's "use in custom"
 // (the event `ugc:lyric-use`, sub-session Q's tile and viewer): the window on Custom with it, the gallery staying where it is.
@@ -566,7 +564,7 @@ function _initTree() {
       if (_shelf === 'media') _load({ checks: false });
     },
     // (phase V55, (гн10)) Environments / Lookbooks / Props' "create": their generator's window (phase V58).
-    // (phase V59) Music's "Generate music" (in its menu since V64): the music window, on Music itself.
+    // (phase V59) Music's "Generate music" (in its menu since V64): the sound window, on Music itself.
     onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make, true); },
     // (phase V64 blocks 1, 4) A root's "generate": IMAGES - the pictures chat, VIDEO - the video chat (their windows, the
     // unbound draft's conversation), AUDIO - the sound window.
@@ -711,9 +709,7 @@ const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds', 'mus
 // starred: an image and a clip are different files in different stores, and there is no
 // meaning to turning a picture into a birol. The server refuses it too - see the /kind route.
 const _KINDABLE = new Set(['birols', 'uploads', 'hooks']);
-// All three kinds can be filed under a category. Hook records already carried categoryId —
-// public/js/scen-hooks.js has always written it — so this offers a control for data that
-// was already there.
+// The kinds whose items can be filed under a category - the three video kinds, images and sounds.
 const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 
 // (second round) A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
@@ -1629,9 +1625,8 @@ async function _counts() {
   } catch (e) { /* the counts are a nicety, not the page */ }
 }
 
-// Switching shelves KEEPS the kind and category. They only mean anything on Media, and
-// clearing them on the way past every other shelf is what made the page forget where you
-// were: leave Media, come back, and you were staring at everything again.
+// Switching shelves leaves the media tree as it is; the Media shelf pressed opens it on its
+// roots (_pressShelf, below).
 function _select(kind) {
   if (!SHELVES[kind]) return;
   // The open shelf's button pressed while its making area shows goes back to the shelf, as "← …" does
@@ -2157,7 +2152,7 @@ function _placeOf(u) {
   if (!SHELVES[kind]) return null;
   // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
   const mkind = kind === 'media' ? (q.get('kind') || '') : '';
-  // (phase V59) ?shelf=media&kind=music&make=1 - the music window, over Music.
+  // (phase V59) ?shelf=media&kind=music&make=1 - the sound window, over Music.
   return { kind, sel: q.get('sel') || '', also, make, src: q.get('src') || '', draft: q.get('draft') || '', mkind,
     made: make && (MADE_KINDS.has(mkind) || mkind === 'music') ? mkind : '' };
 }
@@ -2342,7 +2337,7 @@ function boot() {
   _wireTreeSash();
   _wireScSash();
   _initTree();
-  // (phase V59) The music window's presses still being made (a reload) - the gallery read again when they land.
+  // (phase V59) The sound window's presses still being made (a reload) - the gallery read again when they land.
   SW.configure(_soundHost);
   SW.follow();
   // (phase V59.1) "use in custom" on a saved text - its tile or its viewer (js/sound/lyrics.js, which closes the viewer first).
@@ -2355,7 +2350,7 @@ function boot() {
       active: () => _shelf === 'media' && !_makingOn,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x))), _lastPicked(keys)),
       // (phase V64 block 0, the owner 2026-10-31) The outline of a tile arrived at - an Alerts row, "show", the tracks the
-      // music window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
+      // sound window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
       // on a tile only that one (its own pick). A track in the player still glows while it plays (js/sound/player.js).
       onPress: _dropArrived,
       // (phase V64, fix (а)) The player is there while its track is picked.

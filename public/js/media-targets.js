@@ -2,7 +2,7 @@
 // picker (js/place-tree.js, phase V39): the window "save the piece to" after a stretch is chosen in any video (js/cut.js,
 // phase TG block 7) and "move to…" of a REFERENCES post (js/references/post.js, block 5b).
 //
-//   { key, label, count, locked, to?, newCat?, children? }
+//   { key, label, count, locked, to?, newIn?, children? }
 //     to       the node is a place itself: { kind, cat, label, text } - a kind and its category ('' - none), the
 //              category's name, the whole path in words ("Generated · B-rolls · Reels")
 //     newIn    (phase V54, (зв44)) the row "+ new folder…" - the last of a kind's branch AND of every folder's: { kind,

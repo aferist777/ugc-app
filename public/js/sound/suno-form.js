@@ -1,12 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SUNO'S FORM (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge. конкретно suno взять") -
-   ONE constructor of Suno's music for two places:
-     - Merge's "/ generate audio" (js/merge-v3/audchat.js) - which adds what is Merge's own: the engine switch and
-       ElevenLabs, Sounds, Video to Music, the project's presses under the card, "by the video", the mode a project was
-       left on;
-     - the Library's window (js/library/music-window.js) - Simple, Custom and Lyrics, nothing else.
-   (phase V64 block 5) Both are ONE window now - js/sound/sound-window.js, music and sounds on both pages; this form is its
-   Suno's part (Simple, Custom, Lyrics, the rows, the chips, the almanac).
+   ONE constructor of Suno's music. (phase V64 block 5) It is the Suno part of the sound window, js/sound/sound-window.js -
+   music and sounds, the same on both pages: Simple, Custom, Lyrics, the rows, the chips, the almanac. The window adds the
+   rest - ElevenLabs, Sounds, Video to Music, and in Merge (js/merge-v3/audchat.js) the project's presses under the card
+   and "by the video".
 
    What is here:
      the state of a page's form    remembered in the browser under the page's own key (Merge `mv3_audio_v1` as before)

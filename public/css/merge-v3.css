@@ -185,9 +185,8 @@
 .mv3-panel-body{flex:1; min-width:0; min-height:0; overflow:auto; padding:var(--sp-2)}
 
 /* ── A switchable column ────────────────────────────────────────────────────
-   Same idiom as the Scenarios columns: collapsed is a narrow clickable spine with
-   a vertical label. `order` is the only addition, and it is what keeps that spine
-   on the left. */
+   Collapsed is a narrow clickable spine with a vertical label. `order` is what keeps
+   that spine on the left. */
 .mv3-col{min-width:0}
 /* A FOLDED PANEL IS A BUTTON (phase L2, the owner 2026-09-23): a gold outline all the way round
    and rounded corners, with room around it so the corners show - it used to be a strip with one
@@ -421,8 +420,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-pf-btn svg{width:13px; height:13px; fill:currentColor; display:block}
 .mv3-pf-over{position:absolute; pointer-events:none; overflow:visible}
 
-/* ── Transport ────────────────────────────────────────────────────────────────
-   Bottom left, with the resolution picker immediately right of the buttons. */
+/* ── The preview's bar ────────────────────────────────────────────────────────
+   Bottom left: the time, the format, the quality, enlarge and save this frame. The
+   transport is in the timeline's header. */
 .mv3-pv-bar{
   display:flex; align-items:center; gap:var(--sp-1); flex:0 0 auto;
   padding:var(--sp-1) var(--sp-2); background:var(--surface); border-top:1px solid var(--border-soft);
@@ -630,7 +630,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-ins-k{flex:0 0 76px; color:var(--muted)}
 .mv3-ins-v{flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; font-variant-numeric:tabular-nums}
 
-/* Said out loud because a track setting overwrites every clip on the track. */
+/* A note in the inspector: what a group of settings does, or what is being done. */
 .mv3-ins-note{
   margin:0 0 8px; padding:8px;
   border:1px solid var(--border); border-left:2px solid var(--border); border-radius:var(--r-xs);
@@ -1186,7 +1186,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
   font:600 9px/1.5 var(--font); letter-spacing:.03em; text-transform:uppercase; white-space:nowrap;
 }
 .mv3-wk-step.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg)}
-/* While a build step holds the stage the transport has nothing to drive: the preview is
+/* While a build step holds the stage the preview's bar has nothing to act on: the preview is
    showing that step's work, not the cut. Dimmed and dead rather than hidden - it comes
    back the moment the timeline step is picked, and a control that vanishes and returns
    is harder to trust than one that is plainly asleep. */

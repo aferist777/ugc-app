@@ -2,9 +2,9 @@
    MERGE v3 — the timeline.
 
    Merge's one editor (docs/local-app/PLAN.md, phase 3): a project is an ordered list of lanes,
-   created and deleted by hand, and their order is the layer order. A project sent from Scenarios
-   arrives as its cut on the main lanes; the talking-head editor's projects were rewritten into
-   this shape at startup (lib/timeline-convert.js).
+   created and deleted by hand, and their order is the layer order. A talking head's or a
+   voiceover's lines are laid on its main lanes by the server (lib/frag-mirror.js); the
+   talking-head editor's projects were rewritten into this shape at startup (lib/timeline-convert.js).
 
    How the lanes are arranged, and why it is not decorative:
 
@@ -373,7 +373,7 @@ function _drop(trackId, want, data, make) {
     // Dropped straight onto an audio lane: sound only, and audible - somebody putting a file
     // on the audio side means to hear it. A TRACK OF MUSIC (phase V28.4) lies as it is, from where it was let go: a bed
     // under the voices - half volume, never transcribed (captions/heard.js isBed) - and where two beds overlap on
-    // one lane they cross into each other by themselves (js/merge-v3/fades.js).
+    // one lane they cross into each other by themselves (js/sound/fades.js).
     if (track.kind === 'audio') {
       if (data.bed) track.clips.push({ ...base, id: vidId, volume: 0.5, bed: true, pairId: null });
       // (phase V34.E) A sound of SFX - own or built-in: full volume, never transcribed (captions/heard.js isBed).
@@ -1729,7 +1729,7 @@ function _fxFrames(el, c) {
   if (!(d > 0)) return;
   el.classList.add('has-fx');
   // (the owner 2026-11-10) A frame shows only while its effect is OPEN in the inspector on the picked clip (_paintFx) - the clip's
-  // gold says it has effects; the frame says where the one being set runs, and follows its slider (fxLive).
+  // violet outline says it has effects; the frame says where the one being set runs, and follows its slider (fxLive).
   const open = FXUI.focusOf();
   for (const e of c.fx) {
     const fd = fxEffectOf(e.k);
@@ -2475,8 +2475,7 @@ function _write(c, key, value) {
   if (key === 'speed') {
     // Same content, faster = shorter. What stays put is the SLICE OF SOURCE in play; what
     // the number changes is how long it takes to get through it. Nothing is clamped against
-    // the neighbour the way the other timeline clamps: clips here may overlap, and the one
-    // in front simply wins.
+    // the neighbour: clips here may overlap, and the one in front simply wins.
     const sp = Math.max(0.25, Math.min(4, +value || 1));
     const srcLen = (+c.dur || 0) * (+c.speed || 1);
     c.speed = sp;
@@ -2990,11 +2989,10 @@ export function setClipField(trackId, clipId, key, value) {
 }
 
 // ── A value written onto every clip of a lane ───────────────────────────────
-// THE STAMP, and it is a stamp rather than an inherited default: choosing a filter for a lane
-// writes it into each clip on it, overwriting whatever each one had. That is what the other
-// editor does, it is what people expect of a track setting, and it destroys per-clip work in
-// one click - which is why Store.mutate takes a history snapshot first and the panel says so
-// out loud above the controls.
+// THE STAMP, and it is a stamp rather than an inherited default: choosing a lane's Fit or Align
+// writes it into each clip on it, overwriting whatever each one had. That is what people expect
+// of a track setting, and it destroys per-clip work in one click - which is why Store.mutate
+// takes a history snapshot first: the undo arrow is the way back.
 //
 // Volume is NOT stamped and never will be: it is a master that multiplies, so the lane and the
 // clip both mean something. Anything on this list means the same thing on a lane as on a clip,
@@ -3129,7 +3127,7 @@ const DOC_GONE = 'That line is not on the lane any more';
 /**
  * Lines of a lane of words rewritten from the document (captions/doc.js): `ids` - the lines, next to each other in the
  * document; `painted` - their texts as the document showed them (a line that reads otherwise now was changed meanwhile,
- * by a lay or another device, and nothing is written over it); `op(track, from, makeId)` - doc.js editLine, splitLine,
+ * by a lay of the server's, and nothing is written over it); `op(track, from, makeId)` - doc.js editLine, splitLine,
  * joinLines or rewrite with its texts. ONE mutation, one step to undo; nothing changes when it refuses.
  *
  * THE PICK STAYS ON A LINE. The captions view - and the document in it - follows the pick, so a picked line that went
@@ -3484,12 +3482,12 @@ function _laneMenu(e) {
     if (on) b.addEventListener('click', (ev) => { ev.stopPropagation(); _closeCtx(); on(); });
     box.appendChild(b);
   };
-  // The pictures chat, in the Library panel's place (phase J).
+  // The pictures chat, in its window (js/merge-v3/chat-window.js).
   item('generate image', 'the pictures chat · drag a picture onto a lane',
     'Make a picture with a model - it lands on the images shelf; drag it from the chat onto a lane',
     () => import('./picchat.js').then(m => m.openPictures())
       .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
-  // The video chat, the same place (phase V3).
+  // The video chat, the same way (phase V3).
   item('generate video', 'the video chat · drag a clip onto a lane',
     'Make a clip with a model - it lands on the B-roll shelf; drag it from the chat onto a lane',
     () => import('./vidchat.js').then(m => m.openVideos())

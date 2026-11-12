@@ -4,7 +4,7 @@
 // SOURCES — bring a long video in, get its words out.
 //
 //   GET    /api/sources                  -> { sources: [summary + progress] }
-//   GET    /api/sources/:id              -> { source, transcriptChars }
+//   GET    /api/sources/:id              -> { source }
 //   POST   /api/sources/:id/transcribe   -> { jobId } | { alertId } (its way in is retried - phase V28.1)
 //   POST   /api/sources/:id/topics       -> { jobId } | { alertId }   409 with the running job while one runs
 //   DELETE /api/sources/:id              -> { success, removed, draftsDetached }   ?keepWords=1 (V43): its transcripts stay
@@ -216,7 +216,7 @@ router.post('/sources/:id/transcribe', async (req, res) => {
   (async () => {
     try {
       const saved = await _process(id, job);
-      // Read again and no topics yet: they are found now, on the generator's model the press sent (phase V28.1).
+      // Read again and no topics yet: they are found now, by the agents' ladder (phase V28.1).
       if (!(saved.topics || []).length) _startMining(id, req.body || {});
       job.state = 'done';
       job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
@@ -256,8 +256,8 @@ router.post('/sources/:id/topics', async (req, res) => {
   res.json({ success: true, jobId: _startMining(id, req.body || {}) });
 });
 
-// A job finding the topics, on the generator's model (`body`: provider, model, effort) - the button's, or after a
-// transcription read again. Answers its id.
+// A job finding the topics, by the agents' ladder - the button's, or after a transcription read again.
+// Answers its id.
 function _startMining(id, body) {
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: 'reading the transcript', at: Date.now(), error: null, sourceId: id };

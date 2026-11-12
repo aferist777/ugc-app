@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — captions for a BLANK project, on this side of the wire.
+   MERGE v3 — captions drawn by the page itself, on this side of the wire.
 
-   This file draws the words on the preview canvas until libass in the page is up (captions/layer.js).
+   This file draws the words on the preview canvas until libass in the page is up, or when it did not
+   start (captions/layer.js).
    HOW A CAPTION LOOKS - the fields, the defaults, where it sits - is public/js/captions/style.js, the
    one module the server's builder reads too (phase K0), so the screen and the file cannot disagree
    over a default.

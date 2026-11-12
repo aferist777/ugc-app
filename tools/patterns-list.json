@@ -1,7 +1,7 @@
 {
   "version": 1,
   "built": "2026-10-31",
-  "note": "IMAGES -> Patterns (phase V65). Every file is a seamless tile, white on transparent; made in the V65 sub-session and approved by the owner 2026-10-31 in the folder 'Паттерны — просмотр' on the desktop. `from` is the file's name there. `changed` says what was done to the source. Ids never change: a project points at /patterns/<id>.png.",
+  "note": "The app's built-in patterns (phase V65), picked in the strip of Merge's main video lane. Every file is a seamless tile, white on transparent; made in the V65 sub-session and approved by the owner 2026-10-31 in the folder 'Паттерны — просмотр' on the desktop. `from` is the file's name there. `changed` says what was done to the source. Ids never change: a project points at /patterns/<id>.png.",
   "sources": {
     "hero": { "title": "Hero Patterns", "author": "Steve Schoger", "page": "https://heropatterns.com/", "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/" },
     "own": { "title": "UGC Studio", "author": "UGC Studio", "page": "", "license": "made for UGC Studio", "licenseUrl": "" }

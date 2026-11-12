@@ -143,7 +143,8 @@ function _offPatch(it, d) {
   return { crop, ...pl };
 }
 
-/** The crop's patch when a main clip's PiP goes off: the frame remembered, not applied ((пр43)) - or nothing to add. */
+/** The crop's patch when a cropped clip above main takes the whole frame again ("Full frame", inspector.js): the frame
+ *  remembered, not applied ((пр43)) - or nothing to add. */
 export const pipOffCrop = (c) => (active(c) ? { crop: { ...active(c), off: true } } : {});
 
 /** Crop on or off for every clip of `items` ([{ track, clip }]), one undo step. */

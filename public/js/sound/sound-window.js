@@ -3,7 +3,7 @@
    попап с генератором музыки, а на звуки можно переключить в левом столбце над выбором simple, custom и lyrics. по умолчанию
    открываем music simple") - ONE window for music and sounds, the same on both pages: the Library's AUDIO -> "generate"
    (and Music's "Generate music") and Merge's AUDIO -> "generate", the lane's "Video to Music…", ?open=audio. It took the
-   place of the Library's music window (V59, js/library/music-window.js) and of Merge's "/ generate audio" view of the Library
+   place of the Library's music window (V59) and of Merge's "/ generate audio" view of the Library
    panel (V34.E, js/merge-v3/audchat.js - Merge's adapter now). A generation's window (js/gen-window.js, GEN_SIZE 1280×800):
 
      head     the engine and the MODE - "Suno · Simple · background, no vocals" - and a "?" right of it: how the mode works

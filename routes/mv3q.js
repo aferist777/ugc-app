@@ -310,7 +310,7 @@ router.get('/mv3q', (req, res) => {
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   // `running` is the machine's, not the person's: the encoder is busy for everyone.
-  // `busy`: any render at all - Export -> Render runs outside the queue (lib/render-busy.js); the shell asks about it before
+  // `busy`: any render at all - routes/mv3b.js renders outside the queue (lib/render-busy.js); the shell asks about it before
   // the app stops (desktop/main.js, phase V23).
   res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy(), admin: OWN.isAdmin(req.user), items });
 });
@@ -363,7 +363,7 @@ router.delete('/mv3q/:id', (req, res) => {
 });
 
 // Render all: arm the caller's waiting entries and start the runner if it is idle. Pressing
-// it while the encoder is busy with somebody else's render is fine - the entries are armed
+// it while the encoder is busy with another render is fine - the entries are armed
 // and take their turn. Pressing it twice does not start a second runner.
 router.post('/mv3q/run', (req, res) => {
   // (phase V33.4, the owner's (х44а)) `hl`: only that highlights project's entries - interrupted or failed - go on; nobody

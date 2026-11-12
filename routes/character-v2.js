@@ -155,9 +155,7 @@ JOBS.register('portrait', {
 // -> { taskId, alertId }: the page follows the Alerts row (lib/gen-jobs.js files the portrait)
 //
 // One route for both directions of the page: a reference makes it an edit, no reference makes it
-// a text-to-image. Both live here rather than in the older character-creator route because that
-// one hands every engine a fixed 9:16 - correct for the page it was written for, and the exact
-// opposite of what this one needs.
+// a text-to-image.
 // The asking itself, as a function: the server asks again when somebody presses retry in the
 // Alerts list, and that has to be the same request. `hooks` are the ladder's onAsk / onStep.
 async function _submitPortrait(b, hooks) {

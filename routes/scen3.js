@@ -1,14 +1,16 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SCENARIOS V3 — scenario library store (talking head only).
+// SCENARIOS V3 — the scenario library store, and the server side of the talking
+// head and voiceover projects: casting, voices and reads, frames, clips, and the
+// New environment / New lookbook / dressing generators.
 //
-// Deliberately standalone: this module owns its own JSON store and its own record
-// shape, which is why the old scenarios backend could be deleted without touching v3.
+// The scenario store is standalone: its own JSON file and its own record shape,
+// which is why the old scenarios backend could be deleted without touching v3.
 //
-// Record — nothing else is stored:
-//   { id, title, lines:[{text}], type:'talking_head', vertical, product, roles,
-//     createdAt, updatedAt }
+// Scenario record (_norm) — nothing else is stored:
+//   { id, title, lines:[{text}], type, archived, vertical, product, roles,
+//     origin, narrator, createdAt, updatedAt }
 //
 // lineCount is DERIVED from lines.length on read, never stored, so it cannot
 // drift away from the actual content. There is one text track per line (no
@@ -191,7 +193,7 @@ function _loadOptions() {
       roles:     Array.isArray(cur.roles)     ? cur.roles     : [],
     };
   }
-  // First boot: derive the suggestions from whatever the migrated scenarios
+  // No options file yet: derive the suggestions from whatever the stored scenarios
   // already carry, so the dropdowns are not empty on day one.
   const seeded = { verticals: [], products: [], roles: [] };
   try {
@@ -303,8 +305,8 @@ const _summary = (s, titles) => ({
   gender: _genderOf(s),
   lib: _libOf(s),
   narrator: effectiveLabels(s).narrator,
-  // The source it was written from, by id (phase E7): Merge groups the generated ones by it. By id,
-  // not by title - the title here is a snapshot, and renaming a source must not split its group.
+  // The source it was written from, by id (phase E7) - the id the list's ?source= filter and its
+  // source groups go by, not the title, which here is a snapshot.
   sourceId: (s.origin && s.origin.sourceId) || '',
   // Enough of the provenance for a row to say where it came from, without the hook and the
   // model ids a list has no use for.
@@ -316,8 +318,7 @@ const _summary = (s, titles) => ({
   lineCount: (s.lines || []).length,
   createdAt: s.createdAt, updatedAt: s.updatedAt,
 });
-// The full record carries the WHOLE provenance, not the three fields a list row needs: opening
-// one scenario is exactly when the hook, the tone and the model become worth reading.
+// The full record carries the WHOLE provenance, not just the three fields a list row needs.
 const _full = s => {
   const titles = _sourceTitles();
   return { ..._summary(s, titles), lines: s.lines || [], origin: _liveOrigin(s.origin, titles) };
@@ -587,12 +588,11 @@ router.delete('/scen3/scenarios/:id', (req, res) => {
 //
 // Three sizes exist per asset:
 //   thumbs/<name>.jpg   600px  — grids and cards (lib/helpers.js createThumbnail)
-//   preview/<name>.jpg  2048px — the popup's centre image (lib/thumbs.js PREVIEW)
+//   preview/<name>.jpg  2048px — a picture shown large (lib/thumbs.js PREVIEW)
 //   <name>.jpg          full 4K — only ever loaded on purpose
 //
-// A still no bigger than a preview is its own. Built on demand and cached on disk, so
-// assets that existed before this tier get one the first time they are viewed. Dressing
-// results have theirs written right after generation. The route keeps its old name.
+// A still no bigger than a preview is its own. A preview is written when a picture is
+// filed - a look, a generated lookbook or environment, a frame (_framePreview).
 // ════════════════════════════════════════════════════════════════════════════
 
 const CFG = require('../lib/config');
@@ -602,8 +602,8 @@ const POSES_DIR = path.join(CFG.PUBLIC_DIR, 'poses');
 
 // Map a public URL to an absolute file, refusing anything outside the library's media and
 // project folders and the shipped mannequins (so a crafted ../ path cannot reach anything else).
-// `exts` defaults to stills, which is what every caller but the lipsync render wants —
-// that one also has to hand over an mp3, and widening the default would quietly let any
+// `exts` defaults to stills, which is what every caller but a Kling avatar clip wants —
+// that one also has to hand over the read's sound, and widening the default would quietly let any
 // file type through the other paths.
 const MEDIA_IMG = /\.(jpg|jpeg|png|webp)$/i;
 function _resolveMedia(urlPath, exts) {
@@ -770,7 +770,7 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
 }
 
 // The agents' ladder (lib/agents.js, phase V25: Admin -> AI settings) - the one New Character reads photos with and the
-// chats' writers write with, instead of a cascade of this popup's own. One place decides which models look at an image,
+// chats' writers write with, instead of a cascade of this file's own. One place decides which models look at an image,
 // and every step listed there answered a live call with a real photo. It also reports what went wrong per step.
 const _ask = (messages) => H.callAIVisionWithFallback(messages, { timeout: 60000 });
 
@@ -1069,7 +1069,7 @@ async function _submitLookbook(b, hooks) {
     say('asking for the picture');
     const taskId = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
-    // What filing it will need when it lands - the same fields the old page sends to finalize. A
+    // What filing it will need when it lands - the fields _fileGenerated reads. A
     // picture that came by its path is where it was made from; one that came as bytes is filed in
     // Images when the lookbook lands (_fileRef) and says so then.
     const file = {
@@ -1312,11 +1312,6 @@ router.get('/scen3/poses', (_req, res) => {
 // own pixels: no upscale, no interpolation, and the honest size comes back with it.
 const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
 
-// The pixel size of a stored asset. The centre preview shows a DERIVATIVE, so the
-// page cannot read the real dimensions off the <img> it is displaying — labelling a
-// selection from that reported a size several times smaller than the crop it produced.
-
-
 const _cleanText = (s) => String(s || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
 
 // The pose whose mannequin should ride along, or null — resolved server-side so the
@@ -1370,17 +1365,6 @@ function _splitBlocks(raw) {
   });
   return out;
 }
-
-// Step 1 of every generation, as its own call so the popup can honestly show
-// "Reading 1/2" and then "Generating 2/2" instead of one opaque wait.
-//
-//   compose (no basePath)  -> reads the location's light, and turns the user's note
-//                             into clean direction when there is one
-//   edit    (basePath)     -> reads THAT frame against the note
-//
-// Whatever comes back is creative wording only. The invariants — identity lock,
-// one person, no watermark — stay on the server so a rewrite cannot drop them.
-
 
 // ── Environments ────────────────────────────────────────────────────────────
 // ONE place, photographed empty, that a person is later put into to speak to the camera. Made
@@ -1476,8 +1460,8 @@ async function _sizeOf(input) {
  * WHY IT ASKS INSTEAD OF INVENTING. A cup, a logo or a drawing suits a dozen places, and which one
  * the agent would reach for is exactly the unpredictable part (the owner, 2026-09-17). So it names
  * a few; the person picks any number; this is called again with those, and only that call writes
- * a prompt. A page that cannot show the choice (the old Scenarios popup) does not offer it, and
- * then the agent picks the single best place itself.
+ * a prompt. A caller that cannot show the choice does not offer it, and then the agent picks the
+ * single best place itself.
  *
  * CONTINUING A PICTURE. The model has no mask, so "extend this" is said in words - and said
  * briefly: the part of the picture that exists is kept as it is, and it goes on in the same style,
@@ -1670,8 +1654,8 @@ async function _fileRef(token, kind, name) {
 //   -> 200 { choose:true, why, options, refToken }      pick places first; nothing was paid for
 //   -> 200 { mode, taskId, prompt, description, refToken }
 //
-// `choices` present - even empty - says the page can show a choice of places. Absent (the old
-// Scenarios popup, the Library's chat) the agent picks a place itself.
+// `choices` present - even empty - says the page can show a choice of places. Absent, the agent
+// picks a place itself.
 //
 // `photoPath` (phase I, the Library's chat): a picture already in the library - on the Images shelf,
 // say - read as a PHOTO, the place taken out of it; `imagePath` is an environment to CHANGE. `hooks`
@@ -2224,26 +2208,23 @@ async function _fileGenerated(kind, src, b) {
 }
 
 // ── voice moods ─────────────────────────────────────────────────────────────
-// A mood is what the user picks in Montage; its `tags` are the ONLY ones the tagging
-// pass may insert. The set is deliberately small: a short vocabulary is placed far
-// more consistently than a menu of two hundred, and a tag the model does not know
-// risks being SPOKEN instead of performed.
-//
-// Seeded from lib/voice-tags.js, then editable on disk like the frame presets. Every
-// tag is checked against that library's tts-safe list, so an edit cannot smuggle in
-// an accent or a stage direction — neither of which a TTS model can act on.
+// A mood (lib/motion-presets.js, MOODS) is what the person picks in setup's mood & voice;
+// its `tags` are the ONLY ones the tagging pass may insert. The set is deliberately small:
+// a short vocabulary is placed far more consistently than a menu of two hundred, and a tag
+// the model does not know risks being SPOKEN instead of performed.
 const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
 const SDP = require('../lib/sd-prompt');
-// (phase V26.8) The writer of a Seedance fragment's performance (thinkTalk).
+// (phase V26.8) The writer of a Seedance fragment's performance (thinkTalk), and the
+// English check and translation of typed lines and prompts (english, toEnglish, toEnglishLines).
 const AGENT = require('../lib/mv3-agent');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
 const VSHELF = require('../lib/voice-shelf');
 
 
-// What the general zone's menus offer: the models of the clips, each with its qualities and what a
+// What the menus of setup and Home's quick start offer: the models of the clips, each with its qualities and what a
 // second of them costs (phase V26.8, lib/th-video.js), Seedance's ways of voicing a clip, and the
 // moods - with a few words on how each moves the body, for the gestures menu. No defaults (phase
 // V24): a project made since starts at none and the person chooses.
@@ -2255,10 +2236,6 @@ router.get('/scen3/motion-presets', (_req, res) => {
     moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about, gloss: m.gloss })),
   });
 });
-
-// The whole tag library, for the help panel. Read-only: it is reference material,
-// and it carries which tags are delivery instructions, which are voice casting and
-// which are body language for the video prompt rather than the spoken text.
 
 // ── the casting director: inserting voice tags ──────────────────────────────
 // One call over the WHOLE script, never line by line: the mood briefs describe an arc
@@ -2470,7 +2447,7 @@ async function _tagRoute(req, res) {
       for (const i of touch) if (fresh.lines[i]) fresh.lines[i].tagged = lines[i].tagged;
       fresh.voice = _normVoice({ ...(fresh.voice || {}), ...voice });
       if (merge) {
-        // v3 from here on: the tagged read is what the counters read and what every line is spoken from.
+        // v3 from here on: the tagged read is what every line is spoken from.
         fresh.voice.tagsOn = true;
         fresh.voice.variant = 'tagged';
       } else if (report.tagged > 0 && lines.some(l => l.tagged)) {
@@ -2961,7 +2938,7 @@ router.get('/scen3/voice/state', (req, res) => {
 });
 
 // Build the preview for a freshly generated frame. The frame stays where it is;
-// only the preview is made, exactly as POST /scen3/finalize does for the page.
+// only the preview is made, exactly as _fileGenerated makes one for what it files.
 async function _framePreview(finalUrl) {
   try {
     const fh = _resolveMedia(finalUrl);
@@ -3033,12 +3010,10 @@ async function _clipPoster(absVideo, name) {
 // ── Resubmit a clip the renderer could not fetch ─────────────────────────────
 // "audio upload failed" is not a failed render: the task never started, no credits were
 // consumed (measured: creditsConsumed 0, costTime 15s), and the file it could not read is
-// sitting on our disk. Every clip's audio went to catbox.moe because imgbb refuses mp3, and
-// catbox is exactly what kie.ai could not fetch - so the only useful answer is to put the
-// file somewhere else and ask again. Free, and it fixes the common case without the user
-// pressing anything.
+// sitting on our disk - so the useful answer is to put the files up again with fresh links
+// and ask again. Free, and it fixes the common case without the user pressing anything.
 //
-// ONE retry, recorded on the render marker so a restart cannot reset the count.
+// ONE retry, recorded on the Alerts row (`refetch`) so a restart cannot reset the count.
 const _FETCH_FAIL_RE = /upload failed|fetch failed|download failed|cannot (?:be )?(?:fetch|download|access)|invalid url|url is not accessible/i;
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3049,9 +3024,6 @@ const _FETCH_FAIL_RE = /upload failed|fetch failed|download failed|cannot (?:be 
 // is already in production. `scenarioId` is kept purely as a back-reference to
 // where it came from. Several projects may come from one scenario (same script,
 // different characters) — creating one never reuses an existing one.
-//
-// The shape is deliberately thin and will grow as Casting / Fragments / Montage
-// land on top of it.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Writes only the records that changed; a record missing from `list` is NOT deleted - that is
@@ -3230,9 +3202,9 @@ function _shelfSplice(p, at) {
 }
 
 // ── Mix workspace ───────────────────────────────────────────────────────────
-// The whole state of the Build-mix popup lives on the project, so closing it and
-// coming back — even in another session — restores exactly what was there. Each
-// project therefore has its own independent workspace.
+// The project's frames: every frame made for it, the order they were dragged into,
+// the banned ones and the format they are drawn in. Kept on the project, so closing
+// the app and coming back restores exactly what was there.
 const MIX_AGGS      = ['kie', 'replicate'];
 const MIX_MODELS    = ['nano-banana-2', 'nano-banana-2-lite'];
 const MIX_FORMATS   = ['9:16', '2:3', '3:4', '1:1', '16:9'];
@@ -3262,9 +3234,8 @@ function _normMix(m) {
       preview: String((v && v.preview) || ''),
       prompt:  String((v && v.prompt) || ''),
       at:      String((v && v.at) || ''),
-      // Which generation produced it. The page and the server watcher can BOTH
-      // file a finished frame, so this is the key that makes the second one a
-      // no-op instead of a duplicate.
+      // Which generation produced it: the key that makes filing the same task a
+      // second time a no-op instead of a duplicate.
       taskId:  String((v && v.taskId) || ''),
       // Where a cropped frame came from, and which part of it was taken. Without this
       // two near-identical frames in the strip are indistinguishable a day later.
@@ -3294,8 +3265,7 @@ function _normMix(m) {
     // The order the frames were dragged into (the owner, 2026-09-21), by id. A frame not named
     // here - a new one - keeps its natural place, after the ones that were arranged.
     order: Array.isArray(s.order) ? s.order.map(String).filter(Boolean) : [],
-    // A generation the server is watching on the project's behalf, so it lands even
-    // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
+    // A frame generation's last error; nothing sets it now, a cast only clears it.
     lastError: String(s.lastError || ''),
     approved:     Array.isArray(s.approved) ? s.approved.map(String) : [],
     banned:       Array.isArray(s.banned)   ? s.banned.map(String)   : [],
@@ -3426,7 +3396,7 @@ function _normLine(l) {
     // No per-line variant: ONE switch in the voice settings picks the take for the
     // whole project. Per line it could drift, and two lines showing different takes
     // of the same read has no meaning.
-    frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
+    frameId: String(s.frameId || ''),       // the first frame picked by hand (/fragments/pick-frame)
     // (phase V26.8) THE NUMBER THE LINE TAKES ITS FRAME BY, kept: given to every line when one is put in above some of
     // them (/line/insert), so the lines that moved down a place stay on their frames. Absent - its place in the list.
     ...(Number.isInteger(s.slot) && s.slot >= 0 ? { slot: s.slot } : {}),
@@ -3475,9 +3445,6 @@ function _normLine(l) {
     // (phase V45) THE LINES MERGED INTO ONE FILE FROM THIS ONE ON - the file, its length, and each line's take and pieces
     // (lib/line-cuts.js): written by a save of the timeline, laid by the mirror as one cell while those takes stand.
     ...(require('../lib/line-cuts').normalizeMerge(s.merge) ? { merge: require('../lib/line-cuts').normalizeMerge(s.merge) } : {}),
-    // A clip being rendered right now. It cannot live in `video` above, which only
-    // accepts a take that already has a file — and it has to be on the PROJECT rather
-    // than in memory, so a render survives a reload and even a server restart.
   };
 }
 
@@ -3519,8 +3486,8 @@ function _normShot(sh) {
 // Voice settings live on the PROJECT: one read for the whole ad.
 const VOICE_PROVIDERS = ['elevenlabs'];
 
-// How the fragments are turned into clips. Three choices and no more: the lipsync model,
-// how the character moves, and how sharp the result is. The kie model id is deliberately
+// How the fragments are turned into clips: the model that films them, the mood, how the
+// character moves, how sharp the result is, and Seedance's own settings. The kie model id is deliberately
 // NOT stored — it is derived from the quality at render time, so a tier being renamed
 // upstream does not leave old projects pointing at a model that no longer exists.
 //
@@ -3628,8 +3595,8 @@ const _normVoice = (v) => {
     } : null,
     tagsOn:    !!s.tagsOn,                  // off -> v2, on -> v3 with tags
     mood:      String(s.mood || ''),        // which mood's tag set the tagger may use
-    // The one switch. It decides what the cards show, what Voice all produces, and
-    // which take the counters read. Locked to plain while there is nothing tagged.
+    // The one switch. It decides which words are read, which take the fragments show
+    // and which take a clip is made from. Locked to plain while there is nothing tagged.
     variant:   s.variant === 'tagged' ? 'tagged' : 'plain',
     ttsParams: _ttsParams(p),
   };
@@ -3664,15 +3631,14 @@ const _projSummary = p => ({
 // The mix workspace is heavy (every generated frame), so it rides on the full
 // record only — the dropdown list stays light.
 // Lines go through the normaliser on the way OUT too: a project saved before voice
-// existed has bare {text, frameId}, and the montage column would read undefined for
+// existed has bare {text, frameId}, and the page would read undefined for
 // every audio and video pair.
 // Whether the CAST CHARACTER has a voice, worked out at read time from the character
 // record. Derived and never stored: a copy on the project would go stale the moment a
-// voice is set in the Character tab, and the page would keep refusing to read.
+// voice is set on the Library's Characters shelf, and the page would keep refusing to read.
 //
-// The page needs this to say so BEFORE anything is pressed — without it Voice all fires a
-// request per line, every one of them refused for the same reason, and the column reports
-// ten failures without ever naming the cause.
+// The page needs this to say so BEFORE anything is pressed — without it every line's read
+// would be refused for the same reason without ever naming the cause.
 function _castVoice(p) {
   const cv = _castVoiceOf(p);
   // (phase V26.8, sixth round) Whether the voice has a demo - what Seedance takes its timbre from by the voice sample.
@@ -3729,7 +3695,7 @@ router.get('/scen3/projects/:id', (req, res) => {
 });
 
 // Create from a scenario ({ scenarioId }), or upsert an existing project by id
-// so later phases can persist casting / montage onto it.
+// (the page's saves of its fields).
 // (phase V63, P14, the owner's (хп32), (хп58)) Or a TALKING HEAD FROM ONE'S OWN TEXT ({ lines, name }) - Home's quick start:
 // the lines as the window cut them (by paragraphs - every Enter a line), never put on the scenarios shelf; another language is
 // made English first, as a scenario's is (V29). Named after `name`, else its first words.
@@ -5677,21 +5643,12 @@ router.post('/scen3/video/prompts', async (req, res) => {
   }
 });
 
-/* ── The prompt a frame was drawn from ───────────────────────────────────────
-   POST /api/scen3/frames/prompt  { projectId, frameId, prompt } -> { success, project }
-
-   Every frame of a set keeps the prompt it was made from, and the open fragment shows it beside the
-   picture (the owner, 2026-09-21). It is EDITABLE there: the picture on screen does not change - it
-   is already drawn - but what is written here is what a later redraw of this frame will be asked
-   for, so a wording somebody fixed by hand is not lost.
-   ──────────────────────────────────────────────────────────────────────────── */
 /* ── A frame switched off ────────────────────────────────────────────────────
    POST /api/scen3/frames/ban  { projectId, frameId, banned } -> { success, project }
 
-   The ✕ on a frame in the general zone (the owner, 2026-09-21): the frame stays in the project and
+   The ✕ on a frame of the frames shelf (the owner, 2026-09-21): the frame stays in the project and
    on the strip - dimmed, and first, so it is out of the way - but no line takes it any more. The ✓
-   in the same corner brings it back. `mix.banned` is the list that already meant exactly this
-   ("the user hid it in the project", _frameState), so it is the one used.
+   in the same corner brings it back. The list of them is `mix.banned`.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/frames/ban', (req, res) => {
   try {
@@ -5838,6 +5795,13 @@ router.post('/scen3/frames/crop', async (req, res) => {
   }
 });
 
+/* ── The prompt a frame was drawn from ───────────────────────────────────────
+   POST /api/scen3/frames/prompt  { projectId, frameId, prompt } -> { success, project }
+
+   Every frame keeps the prompt it was made from, and the open fragment shows it beside the
+   picture (the owner, 2026-09-21). It is EDITABLE there: the picture on screen does not change - it
+   is already drawn - and the words written here are kept with the frame.
+   ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/frames/prompt', async (req, res) => {
   try {
     const b = req.body || {};
@@ -6011,11 +5975,11 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
 
    EVERY REFUSAL IS BEFORE THE MONEY. What cannot be rendered is said plainly - no words, no frame,
    no read, a read that no longer matches the words, a read longer than the model takes - and
-   answered as `skipped`, not as an error: a chain walking eight lines must be able to step over one.
+   answered as `skipped`, not as an error: /fragments/clips, walking every line, must be able to step over one.
    ──────────────────────────────────────────────────────────────────────────── */
 
-// What a clip of this line would be made of, or why it cannot be. One reading, used by the route,
-// by "try again" and by the price the page shows.
+// What a clip of this line would be made of, or why it cannot be. One reading, used by the routes,
+// by "try again" and by _clipDone.
 function _clipPlan(proj, i) {
   const lines = (proj.lines || []).map(_normLine);
   const line = lines[i];
@@ -6310,10 +6274,9 @@ router.post('/scen3/fragments/clips', (req, res) => {
   }
 });
 
-// The runner's side. `poll` is the same reader the old watcher uses, so a clip lands the same way it
-// always has: downloaded once, normalised, postered, measured. A "fetch failed" from kie means the
-// task never started and nothing was charged - the files are re-hosted and the task asked again,
-// once, exactly as the Scenarios path does.
+// The runner's side. `poll` reads the task with _fetchClip, so a clip lands downloaded once,
+// normalised, postered, measured. A "fetch failed" from kie means the task never started and
+// nothing was charged - the files are re-hosted and the task asked again, once.
 JOBS.register('clip', {
   timeoutMs: 15 * 60 * 1000,
   poll: async (rec) => {

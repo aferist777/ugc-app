@@ -1,11 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — making pictures, as a conversation, IN THE LIBRARY PANEL (phase J, the owner 2026-10-02).
+   MERGE — making pictures, as a conversation, in a window (phase J, the owner 2026-10-02).
 
-   It used to be a window over the whole page. Now the Library panel has its views: the shelf, and this
-   chat - "LIBRARY / generate image" in the panel's header, a press on "Library" back to the shelf, and
-   while the open project has a conversation a pale "/ generate image" beside the title on the shelf,
-   back to it in one press. Which view a project was left on is remembered per project; so is what was
-   being written and attached, so leaving for the shelf, another project or a reload loses nothing.
+   What was being written and attached is remembered per project, so closing the window, another project or a
+   reload loses nothing.
 
    Since phase V1 this file is the chat's DESCRIPTION: the conversation itself - the thread, the countdowns,
    the attachment row, sending, the right column, the narrow layout - is chat-shell.js, shared with the
@@ -201,7 +198,7 @@ function PICTURES(ctx) {
 const CHAT = createChat(PICTURES);
 const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', name: 'pictures chat', title: 'generate image' });
 
-/** Every way in - IMAGES' "generate", "+" on the Images shelf, the lane's right-click, ?open=pictures: its window. */
+/** Every way in - IMAGES' "generate", the gallery's "+" on IMAGES, the lane's right-click, ?open=pictures: its window. */
 export async function openPictures(o) {
   await WIN.open();
   // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).

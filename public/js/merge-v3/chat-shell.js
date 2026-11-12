@@ -1,13 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a chat IN THE LIBRARY PANEL: the shell (phase V1, docs/local-app/PLAN.md "V-A").
+   MERGE — a chat in its window: the shell (phase V1, docs/local-app/PLAN.md "V-A").
 
    The pictures chat (phase J) was one module; the video chat (phase V3) is the same conversation with other
    settings and other results, so what they share lives here and each is `createChat(DESCRIPTION)` -
    picchat.js and (V3) vidchat.js. A copy would have meant every later change made twice.
 
    ── What the shell does ─────────────────────────────────────────────────────
-   The views (the shelf or this chat - lib-views.js holds the base, the room and the view each project was
-   left on), following the open project, what was being written and attached per project, the thread read
+   Following the open project, what was being written and attached per project, the thread read
    from the server every few seconds with each countdown drawn from its record's real age and its cross
    letting go of the row, "the result becomes the reference", sending (a project started for a send from
    "no project"), the attachment row, bringing files in, the right column of things to point at behind a
@@ -45,7 +44,7 @@
    visibly, with a number and a cross.
 
    ── The layout ──────────────────────────────────────────────────────────────
-   Three columns when the panel is wide: what to make it WITH, the conversation, and a narrow column of
+   Three columns when the window is wide: what to make it WITH, the conversation, and a narrow column of
    everything to point at behind a sash (two with a picker: the conversation takes the column's width).
    Narrower than 700px, the settings fold into one row above the input.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -147,7 +146,7 @@ export const ratioOf = (ar) => {
 };
 /**
  * (phase V49, the owner's (пр6)) A chat's result is not laid on a highlights project's own timeline - nothing on it is rendered:
- * "to timeline" and a drag (its `dragstart` event, cancelled) say "open a fragment" - since V49.1 ((пр33)) in the corner of
+ * a drag (its `dragstart` event, cancelled) says "open a fragment" - since V49.1 ((пр33)) in the corner of
  * popups with "to highlights" (lib-views.js noFragment), as a drop on the home's lanes does. True when refused. `anchor` is
  * kept for the callers; the popup does not stand at it.
  */
@@ -172,7 +171,7 @@ const DRAFT_LK = 'draft';
 export function createChat(make) {
   // ── State ─────────────────────────────────────────────────────────────────
   let _ui = null;            // the chat, built the first time it is shown
-  let _chat = false;         // the panel shows this chat
+  let _chat = false;         // this chat shows (its window is open)
   let _key = null;           // whose conversation this is - '' before a project exists
   let _thread = [];
   let _feed = [];            // this project's own results - the right column's "this project"
@@ -192,7 +191,7 @@ export function createChat(make) {
   const _nodes = new Map();     // message id -> { el, sig, progs: Map(genId -> countdown), away }
   let _adopt = false;           // a project is being made for a send from "no project"
   // (phase V21) The open project is the draft: what is kept here per project - the words and attachments being
-  // written, which view the panel was left on - is the drafts' own (DRAFT_LK), as their conversation is.
+  // written - is the drafts' own (DRAFT_LK), as their conversation is.
   let _draftHere = false;
   let _draftT = 0;
   // Per project, what "the result becomes the reference" needs across a trip to another project: the
@@ -208,7 +207,7 @@ export function createChat(make) {
   const ctx = {
     ui: () => _ui,
     key: () => _key,
-    // In the order their numbers count (phase V6: per part of the zone, per slot of a recipe, then the rest) - what goes:
+    // In the order their numbers count (phase V6: per part of the zone, per slot of the part, then the rest) - what goes:
     // the empty numbered places (phase V15) left out.
     atts: () => _real(),
     // (phase V26.5) The zone as it is laid out - its empty numbered places too, each with its slot.
@@ -231,9 +230,10 @@ export function createChat(make) {
     // measured (a value of null or '' takes the field away) - or taken back off.
     setAtt: (path, patch) => _setAtt(path, patch),
     detach: (path) => _detach(path),
-    // Whether the chat is what the panel shows.
+    // Whether the chat shows.
     shown: () => _chat,
-    // (phase V6) A recipe came or went: what is attached finds its slots again, and nothing stays armed.
+    // (phase V6) The zone's slots changed (the video chat's "pictures are"): what is attached finds its slots again, and
+    // nothing stays armed.
     reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
@@ -293,8 +293,11 @@ export function createChat(make) {
   _write = stored(S.keys.write, true) !== false;
   const _path = (g) => S.resultPath(g);
 
-  // ── The two views ─────────────────────────────────────────────────────────
-  /** Every way in: the generate menu, "+" on the shelf, the lane's right-click, ?open=<name>. */
+  // ── Shown and hidden ──────────────────────────────────────────────────────
+  /**
+   * Every way in - a root's "generate", the gallery's "+", the lane's right-click, ?open=<name> - opens the chat's window
+   * (chat-window.js), which shows the chat here.
+   */
   async function open() {
     if (!HOSTED) {
       Views.toBase();
@@ -317,15 +320,14 @@ export function createChat(make) {
       if (_col) _col.close();
       _hearStop();
       if (typeof S.onHide === 'function') S.onHide();
-      // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
+      // Every message is away while the chat is hidden: what lands meanwhile does not time its countdown.
       for (const n of _nodes.values()) n.away = true;
       // The shelf was read before the chat came forward: what was made or added since is not on it yet.
       if (_made) { _made = false; window.dispatchEvent(new CustomEvent('mv3:lib-reload')); }
       return;
     }
     _build();
-    // The corner goes as far left and down as it can (phase J7, the owner) - only while the chat can be
-    // SEEN: lib-views takes the room for it, and gives it back when the Library folds (K6b).
+    // Laid out for its width (narrow or not) only once the chat can be SEEN.
     _fit();
     set.load();
     _loadColumn();
@@ -444,8 +446,9 @@ export function createChat(make) {
   // (phase V6, the owner 2026-10-06) A description may lay it out as a ZONE - set.zone(): { parts: [{ kind, word, room,
   // off, none, slots }] }, the video chat's pictures, clips and sounds side by side. A part shows ONE empty place, and
   // the next appears beside it as things are attached, up to what the model takes - thirty places are never drawn at
-  // once - and scrolls sideways. With a recipe a part holds its SLOTS: every cell wears the slot's name, a slot shows one
-  // empty place at a time up to its most, and "other" closes the part for what the recipe did not ask for. An empty
+  // once - and scrolls sideways. A part may hold SLOTS (the video chat's first and last frames, the frames chat's person,
+  // place and products): every cell wears the slot's name, a slot shows one empty place at a time up to its most, and
+  // "other" closes the part for what no slot asks for. An empty
   // place pressed opens the picker on it (phase V13) - its slot ARMED while the picker is open, so whatever is pressed
   // or brought in there goes into it. Without a zone it is the one row it always was.
   //
@@ -455,7 +458,7 @@ export function createChat(make) {
   // opens the picker on itself when pressed, and closes with its cross: then the numbers after it move up. One at the
   // END of its part's numbers holds nothing up and goes by itself. A send waits while one is open (ctx.holeWhy). A thing
   // in the zone pressed opens the picker on ITS place, on it - another pressed there takes its place and its number; a
-  // clip's or a sound's seconds open the part that goes. The pictures chat has no zone: its row takes a thing out.
+  // clip's or a sound's seconds open the part that goes. The pictures chat's zone has one part and no slots.
   let _armed = null;            // { kind, slot } - the slot the next attachment goes into, while the picker is open
   let _grew = '';               // the part something was just attached to - its row comes to its end
   let _holeSeq = 0;
@@ -501,7 +504,7 @@ export function createChat(make) {
   }
 
   // (phase V15) The place a new thing of this kind goes into, when it is not a new one at the end: the one the picker is
-  // open on, else the first empty numbered place it fits (in the armed slot, with a recipe).
+  // open on, else the first empty numbered place it fits (in the armed slot, while one is armed).
   function _placeFor(kind) {
     if (_pickAt && _pickAt.target) {
       const t = _pickAt.target;
@@ -668,8 +671,8 @@ export function createChat(make) {
     _draftLater();
   }
 
-  // A recipe came or went: what lies in no slot of it finds one, in the order it was attached. The numbers are counted
-  // anew - its empty places go.
+  // The zone's slots changed: what lies in no slot of them finds one, in the order it was attached. The numbers are
+  // counted anew - the empty places go.
   function _reslot(o) {
     _armed = null;
     const z = _zone();
@@ -780,7 +783,7 @@ export function createChat(make) {
     box.appendChild(head);
     const row = el('div', 'mv3-ig-part-row');
     if (!p.room || p.off) {
-      // Nothing taken here - or not yet: the recipe's cells stand dimmed so it is clear what it wanted.
+      // Nothing taken here - or not yet: the part's slots stand dimmed so it is clear what goes there.
       const why = !p.room ? p.none : p.off;
       box.title = why || '';
       box.classList.add('is-off');
@@ -815,8 +818,8 @@ export function createChat(make) {
       const other = { key: '', label: p.otherLabel || 'other', hint: p.other || '' };
       const rest = mine.filter(x => !keys.includes(x.slot));
       for (const a of rest) put(a, other, false);
-      // "other" only where the room is more than the recipe's own places can still take (phase V7.5: Kling's one clip
-      // is the recipe's "moves" - an "other" beside it offered a second clip the model does not take).
+      // "other" only where the room is more than the part's own slots can still take - an "other" beside a slot that
+      // takes all the room would offer a thing the model does not take (phase V7.5).
       const open = p.slots.reduce((n, s) => n + Math.max(0, s.max - mine.filter(a => a.slot === s.key).length), 0);
       if (!rest.some(a => a.hole) && mine.length < p.room && p.room - mine.length > open) row.appendChild(_empty(p, other, false, false));
     } else {
@@ -898,7 +901,7 @@ export function createChat(make) {
     return cell;
   }
 
-  // A cell of the zone: the thing (or its empty place) and, with a recipe, the slot's name under it.
+  // A cell of the zone: the thing (or its empty place) and, in a part with slots, the slot's name under it.
   function _cell(inner, label, hint) {
     const c = el('div', 'mv3-ig-cell');
     c.appendChild(inner);
@@ -910,7 +913,7 @@ export function createChat(make) {
     return c;
   }
 
-  // An empty place - a slot's, with a recipe: pressed, the picker opens on it (phase V13), or - for a description
+  // An empty place - a slot's, in a part with slots: pressed, the picker opens on it (phase V13), or - for a description
   // without one - this computer is asked for a file.
   function _empty(p, s, dim, must) {
     const key = s ? s.key : '';
@@ -978,7 +981,7 @@ export function createChat(make) {
   }
 
   // ── The picker (phase V13, the owner 2026-10-07) ──────────────────────────
-  // For ONE place: its part, and with a recipe its slot - "other" ('') for what the recipe did not ask for, null for a
+  // For ONE place: its part, and in a part with slots its slot - "other" ('') for what no slot asks for, null for a
   // part without slots. The slot is armed while the window is open; the window closes by itself once the place is full.
   // (phase V15) `target`: a place that is there - a thing in the zone, or an empty numbered place. The window opens on
   // the thing's shelf, on it, and what is pressed there takes that place and its number.
@@ -1060,7 +1063,7 @@ export function createChat(make) {
   }
 
   // How many more go into a place: its part's room, less - for a slot - what the slot has, and for "other" the places
-  // the recipe's own slots still hold. An empty numbered place there is one more that goes (it is filled first).
+  // the part's own slots still hold. An empty numbered place there is one more that goes (it is filled first).
   function _leftIn(kind, slot) {
     const z = _zone();
     const p = z && z.parts.find(x => x.kind === kind);

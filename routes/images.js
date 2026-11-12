@@ -5,11 +5,10 @@
 //   POST /api/images/upload     multipart, field `image`  -> files it and returns the record
 //
 // One step, unlike a video upload. That one is two calls (POST /api/biroly/upload puts the
-// file down, POST /api/library/media/record files it) because biroly.json is browser-owned:
-// the server may make files for it but must never write the store, or the next localStorage
-// push would overwrite what it wrote. data/images.json has no browser copy, so the record can
-// be written in the same request that receives the file - and lib/images-store makes the
-// thumbnails on the way through, so nothing arrives on a shelf without them.
+// file down, POST /api/library/media/record files it into whichever video kind is open -
+// public/js/library/actions.js). A picture has one store, so the record is written in the
+// same request that receives the file - and lib/images-store makes the thumbnails on the way
+// through, so nothing arrives on a shelf without them.
 
 const express = require('express');
 const fs      = require('fs');
