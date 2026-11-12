@@ -364,15 +364,16 @@ router.post('/mv3/timeline/new', (req, res) => {
   try {
     const b = req.body || {};
     const projectId = String(b.projectId == null ? '' : b.projectId).trim();
-    const cur = _read();
-    let key = '';
-    let title = '';
 
-    // (phase V20) THE draft: the one there is, or a new one named for the moment.
+    // (phase V20) THE draft: the one there is, or a new one named for the moment. Before the full read below: the draft
+    // there is is found in the store's index (V76.3), and every chat's first open asks this.
     if (b.draft) {
       const dr = _ensureDraft(req);
       return res.json({ success: true, key: dr.key, version: dr.version, title: dr.title, draft: true });
     }
+    const cur = _read();
+    let key = '';
+    let title = '';
     if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
       if (!p) return res.status(404).json({ success: false, error: 'no such project' });
