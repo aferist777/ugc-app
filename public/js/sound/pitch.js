@@ -11,23 +11,10 @@
    rubberband in the app's ffmpeg (filterOf), as long as the file to the sample (lib/pitch-copy.js, kept in cache/pitch/); the
    preview plays it and the render takes it as the clip's input. A copy is made once per file, pitch and timbre.
 
-   The presets ((тн2), the owner: «оставить») from the lowest up: Giant and Chipmunk move the timbre, the rest keep it. No
-   "male <-> female": rubberband does not move the timbre apart from the pitch - it would be the same person, higher. */
+   No presets (the owner's (тн-п1), 2026-11-11: the list only repeated the slider) - the semitones and the timbre are all. */
 
 export const PITCH_MIN = -12;
 export const PITCH_MAX = 12;
-
-export const PRESETS = [
-  { id: 'giant', label: 'Giant', st: -12, shift: true },
-  { id: 'deep', label: 'Deep', st: -7 },
-  { id: 'lower', label: 'Lower', st: -4 },
-  { id: 'bitlower', label: 'A bit lower', st: -2 },
-  { id: 'original', label: 'Original', st: 0 },
-  { id: 'bithigher', label: 'A bit higher', st: 2 },
-  { id: 'higher', label: 'Higher', st: 4 },
-  { id: 'bright', label: 'Bright', st: 7 },
-  { id: 'chipmunk', label: 'Chipmunk', st: 12, shift: true },
-];
 
 /** What is stored: { st } or { st, shift: true } - or null at 0, and the field is then left off the clip. */
 export function normalizePitch(v) {
@@ -46,20 +33,6 @@ export function pitchOf(c) {
 
 /** Whether a clip sounds at another pitch than its file. */
 export const isPitched = (c) => !!normalizePitch(c && c.pitch);
-
-/** The preset a pitch is - its id - or 'custom'. */
-export function presetOf(p) {
-  const st = Math.round(+((p && p.st) || 0));
-  const shift = !!(p && p.shift);
-  const hit = PRESETS.find((x) => x.st === st && (st === 0 || !!x.shift === shift));
-  return hit ? hit.id : 'custom';
-}
-
-/** A preset's pitch, as a clip stores it (null for Original). */
-export function presetPitch(id) {
-  const p = PRESETS.find((x) => x.id === id);
-  return p ? normalizePitch({ st: p.st, shift: p.shift }) : null;
-}
 
 /** The slider's words: "+4 st", "0 st", "−7 st". */
 export const stLabel = (st) => (+st > 0 ? '+' : +st < 0 ? '−' : '') + Math.abs(Math.round(+st || 0)) + ' st';
