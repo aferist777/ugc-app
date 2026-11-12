@@ -37,7 +37,7 @@ function _parking() {
 }
 
 // (phase V64 block 4) The chats' look is Merge's sheets - the Library loads them the first time a chat opens there.
-const CHAT_CSS = ['merge-v3.css', 'mv3-imagen.css', 'mv3-catalog.css', 'folder-column.css'];
+const CHAT_CSS = ['merge-v3.css', 'mv3-imagen.css', 'folder-column.css'];
 export function ensureChatCss() {
   const have = new Set([...document.querySelectorAll('link[rel="stylesheet"]')].map(l => String(l.getAttribute('href') || '').split('/').pop()));
   for (const name of CHAT_CSS) {

@@ -242,39 +242,19 @@ export function createChat(make) {
     text: () => (_ui ? _ui.ta.value : ''),
     setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
     placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
-    // (phase V3) The line above the thread. Empty hides it. (phase V6) The video chat fills it itself - the recipe in
-    // use - through bannerBox().
-    banner: (v) => { if (!_ui) return; _ui.banner.textContent = String(v || ''); _ui.banner.hidden = !v; },
-    bannerBox: () => (_ui ? _ui.banner : null),
-    // (phase V5) The row just above the box that a description fills (the video chat: its catalog and the skill in
-    // use), and whether the writer is on.
-    over: () => (_ui ? _ui.over : null),
+    // Whether the writer is on.
     writing: () => _write,
     // (phase V15) The writer switched from the description's own control (the video chat's column).
     setWriting: (v) => _setWriting(v),
     saveDraft: () => _draftLater(),
-    // (phase V6) The video chat's builder: the thread's FOOT - its own step, the last thing in the thread -, the input
-    // line shown or hidden, the thread as read, read again, a project for a press made from "no project", and the
-    // results of a message drawn the shell's way inside a card the description draws.
-    foot: () => (_ui ? _ui.foot : null),
-    bar: (show) => { if (_ui) _ui.bar.hidden = !show; },
-    thread: () => _thread,
+    // (phase V6) The thread read again - a card the description draws changed on the server.
     reload: (toEnd) => _reload(toEnd),
-    // The key the conversation is kept under (phase V49: a highlights fragment's is its project's home).
-    ensureProject: async () => {
-      if (Store.key()) return Views.chatKey(Store.key());
-      _adopt = true;
-      try { await _ensureProject(); } catch (e) { _adopt = false; throw e; }
-      return Views.chatKey(Store.key());
-    },
-    shots: (m, progs) => _shots(m, progs),
     // (phase V60.2) A result's "read more" on its own, and every finished one of the thread large from it - for a description
     // that lays its result out itself (the video chat's field at a message's head).
     facts: (g) => _facts(g),
     view: (g) => _view(g),
     // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
     stageWords: (g) => _stageWords(g),
-    footChanged: () => { if (_ui) _paintThread(true); },
     // (phase V60.2) What the right column offers may have changed - the video chat's model takes no clips, or shorter ones:
     // it is read again when its description's `sig` says so.
     columnChanged: () => _columnChanged(),
@@ -394,7 +374,7 @@ export function createChat(make) {
     const k = _lk(k0);
     const d = stored(S.keys.draft, {});
     const text = _ui ? _ui.ta.value : ((d[k] || {}).text || '');
-    // What the description keeps of its own with the draft (phase V5: the video chat's skill in use).
+    // What the description keeps of its own with the draft (phase V26.5: the frames chat's shot and its choices).
     const extra = typeof set.draftExtra === 'function' ? set.draftExtra() : null;
     if (text.trim() || _atts.length || extra) d[k] = Object.assign({ text, atts: _atts.slice(0, S.maxAtts) }, extra ? { extra } : {});
     else delete d[k];
@@ -1355,7 +1335,7 @@ export function createChat(make) {
   function _paintThread(toEnd) {
     const host = _ui.thread;
     const atEnd = toEnd || host.scrollTop + host.clientHeight >= host.scrollHeight - 40;
-    // (phase V6) The description lays its foot for the thread as it is now - before the empty line is decided.
+    // (phase V6) The description follows the thread as it is now (the video chat: its working messages, painted in place).
     if (typeof S.onThread === 'function') S.onThread(_thread);
     const ids = new Set(_thread.map(m => m.id));
     for (const [id, n] of _nodes) {
@@ -1365,10 +1345,7 @@ export function createChat(make) {
       _nodes.delete(id);
     }
     let empty = host.querySelector('.mv3-ig-empty');
-    // (phase V6) The foot - a description's own step at the end of the thread (the video chat's recipe card) - stands
-    // for the conversation too: with it there is no "describe a clip".
-    const footed = !!(_ui.foot && _ui.foot.childNodes.length);
-    if (!_thread.length && !footed && !_pend && !_notice) {
+    if (!_thread.length && !_pend && !_notice) {
       // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
       const said = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
       // (phase V73 block 2, step 2b) The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
@@ -1376,7 +1353,7 @@ export function createChat(make) {
       if (!empty || empty.dataset.said !== said) {
         const e = emptyEl(said, { icon: T.emptyIcon || 'image', cls: 'mv3-ig-empty' });
         e.dataset.said = said;
-        if (empty) empty.replaceWith(e); else host.insertBefore(e, _ui.foot);
+        if (empty) empty.replaceWith(e); else host.appendChild(e);
         empty = e;
       }
     } else if (empty) empty.remove();
@@ -1414,7 +1391,7 @@ export function createChat(make) {
       if (n.el !== want) host.insertBefore(n.el, want);
       prev = n.el;
     }
-    // (phase V77) The page's word after the messages, before the foot.
+    // (phase V77) The page's word after the messages.
     let word = host.querySelector(':scope > .mv3-ig-notice');
     if (!_notice) { if (word) word.remove(); }
     else {
@@ -1428,8 +1405,6 @@ export function createChat(make) {
       const after = prev ? prev.nextSibling : host.firstChild;
       if (word !== after) host.insertBefore(word, after);
     }
-    // The foot stays the last thing in the thread.
-    if (_ui.foot && host.lastChild !== _ui.foot) host.appendChild(_ui.foot);
     if (atEnd) host.scrollTop = host.scrollHeight;
   }
 
@@ -1478,18 +1453,6 @@ export function createChat(make) {
       if (busy) { out.add(m.id); if (turn) out.add(turn.id); }
     }
     return out;
-  }
-
-  // (phase V6) What a message's results look like - the shots, their countdowns and the facts - for a description that
-  // draws the rest of the bubble itself (the video chat's prompt card).
-  function _shots(m, progs) {
-    const gens = _gensOf(m);
-    if (!gens.length) return null;
-    const box = document.createDocumentFragment();
-    const wrap = el('div', 'mv3-ig-shots' + (gens.length > 1 ? ' is-many' : ''));
-    for (const g of gens) wrap.appendChild(_shot(g, progs));
-    box.append(wrap, _facts(gens[0]));
-    return box;
   }
 
   function _bubble(m, progs, asked) {
@@ -1633,7 +1596,7 @@ export function createChat(make) {
         const host = _ui.thread;
         const empty = host.querySelector('.mv3-ig-empty');
         if (empty) empty.remove();
-        host.insertBefore(pe, _ui.foot && _ui.foot.parentNode === host ? _ui.foot : null);
+        host.appendChild(pe);
         host.scrollTop = host.scrollHeight;
       }
     }
@@ -2075,12 +2038,8 @@ export function createChat(make) {
     setBox.append(left, said, ...(typeof S.columnFoot === 'function' ? S.columnFoot() : []));
 
     const chat = el('div', 'mv3-ig-chat');
-    const banner = el('div', 'mv3-ig-banner');
-    banner.hidden = true;
     const thread = el('div', 'mv3-ig-thread');
     const atts = el('div', 'mv3-ig-atts');
-    const over = el('div', 'mv3-ig-over');
-    over.hidden = true;
     // A door from this computer for every kind the description takes (phase V7) - pictures' is `file`, as it was.
     const files = {};
     for (const k of ['image', 'video', 'audio']) {
@@ -2118,9 +2077,6 @@ export function createChat(make) {
     // (phase V26.6, the owner's check 2026-10-31, (а)) A description with `markImages` (the frames chat) has the pictures'
     // numbers - "image 1" - yellow in its box (js/merge-v3/image-words.js).
     if (S.markImages) markField(ta);
-    // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
-    const foot = el('div', 'mv3-ig-foot');
-    thread.appendChild(foot);
     // (phase V26.5) What a description stands right of the attachment row - the frames chat's `ideas`.
     const side = typeof S.attsSide === 'function' ? S.attsSide() : [];
     let attsAt = atts;
@@ -2128,7 +2084,7 @@ export function createChat(make) {
       attsAt = el('div', 'mv3-ig-attsrow');
       attsAt.append(atts, ...side);
     }
-    chat.append(banner, thread, attsAt, over, ...Object.values(files), bar);
+    chat.append(thread, attsAt, ...Object.values(files), bar);
 
     // The right column - for a description that has one (`column`: the pictures chat; since phase V60.2 the video chat too,
     // the owner's (вч1б) - its pictures, clips and sounds, `column.multi`).
@@ -2140,7 +2096,7 @@ export function createChat(make) {
       main.append(setBox, chat, sash, stripBox);
     } else main.append(setBox, chat);
 
-    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, price, go, stripBox, narrow: null };
+    _ui = { root, main, set: setBox, left, said, chat, thread, atts, attsAt, file, files, bar, ta, pen, nBtn, price, go, stripBox, narrow: null };
     _paintN();
     if (stripBox) {
       _col = createFolderColumn(stripBox, {

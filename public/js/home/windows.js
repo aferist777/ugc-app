@@ -44,7 +44,7 @@ function _css(names) {
 /** (phase V63) The same for Home's quick-start popups (js/home/start.js) - the sheets a window needs, put in once and waited for. */
 export const sheets = (names) => _css(names);
 // The chats: Merge's sheets (chat-window.js CHAT_CSS), the attachment window's tree, the viewer's rows, a REFERENCES post.
-const CHAT_SHEETS = ['merge-v3.css', 'mv3-imagen.css', 'mv3-catalog.css', 'folder-column.css', 'media-tree.css', 'dialog.css',
+const CHAT_SHEETS = ['merge-v3.css', 'mv3-imagen.css', 'folder-column.css', 'media-tree.css', 'dialog.css',
   'references.css', 'made-rows.css'];
 // The sound window: the Library's sheets of it (library.html) - and Video to Music's VIDEO tree.
 const SOUND_SHEETS = ['sound-window.css', 'sound.css', 'media-tree.css', 'dialog.css'];

@@ -218,7 +218,8 @@
 .mv3-ig-att-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
 
 /* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
-   Each part grows one empty place at a time and scrolls sideways; with a recipe every cell wears its slot's name. */
+   Each part grows one empty place at a time and scrolls sideways; a cell of a slot (a frame's place, the frames chat's
+   person, place and products) wears its slot's name. */
 .mv3-ig-atts.is-zone{ flex-wrap:nowrap; align-items:stretch; gap:0; padding:7px 12px 6px }
 .mv3-ig-part{ flex:1 1 0; min-width:74px; display:flex; flex-direction:column; gap:4px; padding:0 8px }
 .mv3-ig-part:first-child{ padding-left:0 }
@@ -353,12 +354,6 @@
 .mv3-ig-peek img{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
 
 /* ── The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own few pieces ── */
-/* The line above the thread: what the chosen model does and what to attach. */
-.mv3-ig-banner{
-  flex:0 0 auto; padding:7px 12px; border-bottom:1px solid var(--border-soft);
-  background:var(--surface); font:500 11px/1.45 var(--font); color:var(--muted);
-}
-.mv3-ig-banner[hidden]{ display:none }
 /* A finished clip: its poster at the clip's own shape, a play mark over it, its length in the corner. */
 .mv3-vc-shot{
   position:relative; width:180px; max-width:100%; max-height:320px;
@@ -435,60 +430,34 @@ audio.vtrim-media{ background:none; height:32px }
 .vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
 .vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
-/* What the chosen model does, under its dropdown (phase V6 - the line above the thread is the recipe's). */
+/* What the chosen model does and what to attach, under its dropdown (phase V6). */
 .mv3-vc-brief{ margin:1px 0 6px; font:500 10px/1.45 var(--font); color:var(--muted) }
 .mv3-pc.is-narrow .mv3-vc-brief{ flex:1 0 100%; order:99; margin:0 }
 .mv3-vc-params{ display:flex; flex-direction:column }
 .mv3-pc.is-narrow .mv3-vc-params{ flex-direction:row; flex-wrap:wrap; gap:4px 8px }
 
-/* The row just above the box that a chat fills with its own (phase V5: the video chat's catalog and the recipe in use). */
-.mv3-ig-over{ flex:0 0 auto; display:flex; align-items:center; gap:6px; min-width:0; padding:5px 10px 0 }
-.mv3-ig-over[hidden]{ display:none }
-.mv3-ig-over .mv3-c-btn{ padding:2px 8px }
-
-/* ── The video chat's step-by-step builder (phase V6, the owner 2026-10-06) ──
-   A recipe chosen, the input line goes and the person writes in the cards: the recipe's request at the thread's foot -
-   its places in GOLD (asked for by the owner: an exception to "gold once per surface"), dashed while a place holds the
-   recipe's example, solid once it is the person's - and the writer's prompt card, edited before the video is made. */
-.mv3-ig-bar[hidden]{ display:none }
-.mv3-ig-foot:empty{ display:none }
-.mv3-ig-foot{ display:flex; flex-direction:column }
+/* ── The video chat's cards (phase V6, the owner 2026-10-06; the writer's message since V16): the writer's prompt card,
+   edited before the video is made, its presses under it. ── */
 .vc-card{ max-width:min(640px, 100%); width:100% }
 .vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
 .vc-card-h .k{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted) }
 .vc-card-h .k::first-letter{ text-transform:uppercase }
-.vc-card-h .t{ flex:0 1 auto; min-width:0; font:600 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
-.vc-card-h i{ font:500 10px/1 var(--font); font-style:normal; color:var(--muted) }
-.vc-req{ font:500 12px/1.75 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
-.vc-place{
-  padding:1px 5px; margin:0 1px; border-radius:var(--r-xs);
-  border:1px dashed var(--gold); background:var(--gold-soft); outline:none;
-  -webkit-box-decoration-break:clone; box-decoration-break:clone;
-}
-.vc-place.is-example{ color:var(--muted) }
-.vc-place.is-changed{ border-style:solid; color:var(--ink); background:var(--gold-soft) }
-.vc-place[contenteditable]{ cursor:text }
-.vc-place[contenteditable]:focus{ border-style:solid; box-shadow:0 0 0 2px var(--gold-soft); color:var(--ink) }
-/* The length and the shape - the column's, filled in by the code: grey, not a place to write in. */
-.vc-place.is-auto{ border:1px solid var(--border); background:var(--surface-2); color:var(--muted) }
 .vc-card-note{ font:500 10px/1.45 var(--font); color:var(--muted) }
-.vc-fold-row{ display:flex; align-items:center; gap:12px }
-.vc-fold{
-  padding:0; border:0; background:none; cursor:pointer;
-  font:600 10px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted; text-underline-offset:2px;
+/* (moved from the catalog's sheet, css/mv3-catalog.css, when it went in phase V91) A press that reads as a link -
+   "write it again", "attachments back to the zone" (the video chat and the frames chat). */
+.vc-link{
+  padding:0; border:0; background:none; color:var(--ink); font:600 10.5px/1.4 var(--font);
+  cursor:pointer; text-decoration:underline; text-underline-offset:2px;
 }
-.vc-fold:hover{ color:var(--ink) }
-.vc-back{ font-size:10px }
-.vc-req-body{ display:block; width:100%; min-height:160px; resize:vertical; font-family:var(--mono) }
+.vc-link:hover{ color:var(--ink) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
 
 .vc-prompt-ta{ display:block; width:100%; min-height:90px; resize:vertical }
-.vc-card.is-sent .vc-req{ opacity:.92 }
 /* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
-   the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
+   the words (folded after three lines), the attachments. The message drawn at the press says
    "sending…" until its answer takes its place. */
 .vc-asked{ display:flex; flex-direction:column; gap:6px; min-width:0 }
 .vc-asked-t{

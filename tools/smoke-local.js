@@ -38,7 +38,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  // what is known about a made environment or lookbook, and the links module
                  '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css',
                  // the pictures chat (phase J), on the shell both chats share (phase V1)
-                 '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/js/merge-v3/vcatalog.js', '/css/mv3-catalog.css', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
+                 '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
                  // the captions' one style module, the page's and the server's (phase K0)
                  '/js/captions/style.js', '/js/captions/ass.js',
                  // the fonts captions are drawn in (phase K5)
@@ -83,6 +83,7 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
 const REMOVED = [
                  // dead routes the V91 cleanup took away (block 2)
                  // the Render finished window's routes (block 3, Ch2)
+                 ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'], ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
                  ['GET', '/api/scen3/frame-sets'], ['GET', '/api/scen3/poses'], ['POST', '/api/scen3/frames/plan'], ['GET', '/api/obrazy/main-images'],
                  ['GET', '/api/library/dupes'], ['POST', '/api/library/dupes/clean'],
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],

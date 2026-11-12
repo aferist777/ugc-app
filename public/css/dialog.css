@@ -1,7 +1,7 @@
 /* THE DIALOG FRAME AND ITS BUTTONS - shared by Merge and the Library (phase V28.2: the scenario window,
    js/scen-window.js, opens on both pages). Moved here whole out of css/merge-v3.css, and loaded RIGHT AFTER
    it on Merge, so every rule keeps its place in the cascade: what merge-v3.css says before these still loses
-   to them, what the files after it say (mv3-imagen.css, mv3-catalog.css) still wins. A dialog's own variants
+   to them, what the files after it say (mv3-imagen.css) still wins. A dialog's own variants
    (.mv3-x-go, .mv3-x-sum ...) stay in merge-v3.css. */
 
 /* ── The frame ───────────────────────────────────────────────────────────────── */
