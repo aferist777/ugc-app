@@ -22,7 +22,7 @@
 
 import * as Store from './store.js';
 import { createChat, el, thumbOf, json, money, refCell, almanacSoon, switchRow } from './chat-shell.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { closePick } from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
@@ -55,7 +55,7 @@ const NOT_PROP = 'A product comes from IMAGES → Props - add it there with New 
 const SHOTS = [['', 'none'], ['selfie', 'selfie'], ['half', 'half body'], ['full', 'full body']];
 
 let _proj = null;              // the talking head's project record, handed in by every paint
-let _hooks = {};               // { close, stage(path, name) } from the panel
+let _hooks = {};               // { stage(path, name), added(project) } from the panel
 let _shot = '';                // where the frame's edge is - '' none
 let _shotSel = null;
 let _auto = {};                // { character, place } - what was put into those places from the casting
@@ -575,7 +575,6 @@ function FRAMES(ctx) {
   return {
     name: 'frames',
     kind: 'fchat',
-    host: true,
     noPeek: true,
     // (phase V26.6, the owner's check 2026-10-31, (а)) "image 1", "image/2" yellow in the box and in read more.
     markImages: true,
@@ -591,7 +590,6 @@ function FRAMES(ctx) {
     // A frame that lands goes into the `frame` place only when asked ("to reference").
     landAsRef: false,
     text: {
-      title: 'frames chat',
       placeholder: 'Describe the frame - where the person is, the pose, the hands, where they look.',
       empty: 'Describe a frame of this video in words. The person and the place are attached already; what comes back is this project\'s, and "to frames" puts it into the set.',
       emptyNoProject: 'Open a talking head first.',
@@ -819,7 +817,7 @@ const $root = () => _rootEl || (_rootEl = document.getElementById('mv3-fc'));
 export const isOpen = () => !!(_win && _win.alive());
 
 /**
- * The window, over everything open, for the project `p`. `hooks`: { close, stage(path, name) - a frame pressed,
+ * The window, over everything open, for the project `p`. `hooks`: { stage(path, name) - a frame pressed,
  * added(project) - a frame went into the set }. Opened again while open - it only takes the project as it is now.
  */
 export function open(p, hooks) {
@@ -859,7 +857,6 @@ function _park() {
   if (root && home && root.parentNode !== home) home.appendChild(root);
   CHAT.close();
   _win = null;
-  if (_hooks.closed) _hooks.closed();
 }
 
 /**

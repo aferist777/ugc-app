@@ -32,7 +32,7 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
-import { lock, softLock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
+import { lock, softLock, setOpenColumn, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 import { hint } from '../bubble.js';
 
@@ -42,10 +42,7 @@ import { hint } from '../bubble.js';
 // timeline step - the timeline unlocked, the Library open, the settings of a clip sliding over it - and
 // the crumb "setup /" first in the Library panel's head is setup again (initWorkshop, below).
 const STEPS = ['setup', 'timeline'];
-// What a step used to be called, so an address in an old journal row and a step remembered in this
-// browser still land somewhere (lib/alerts.js, and `mv3_step_v1` below).
-const WAS = { setting: 'setup', fragments: 'setup', frames: 'setup', voice: 'setup', video: 'setup' };
-const _stepId = (id) => { const s = WAS[String(id || '')] || String(id || ''); return STEPS.includes(s) ? s : ''; };
+const _stepId = (id) => { const s = String(id || ''); return STEPS.includes(s) ? s : ''; };
 const KEY = 'mv3_step_v1';               // { <timeline key>: <step id> }
 
 let _key = '';                           // the open timeline's key
@@ -173,22 +170,6 @@ export function setStep(id) {
   requestAnimationFrame(() => { if (id === 'timeline') roomForTimeline(); else roomForWork(); });
 }
 
-// THE SPINES WERE THE SWITCH (phase L). A press on the folded Library, in a talking head, is the way
-// to the timeline - refused, and the spine says why, until there is something on it; a press on the
-// folded Setup is the way back. A press that asks for the step already open is an ordinary "open
-// this panel", and so is anything outside a talking head. (phase V62 hid the Library spine in setup, and
-// phase V64 the Setup spine everywhere: the switch is the crumbs now - setup's way on (_paintOn) and the
-// Library panel's "setup /". No spine of a project with setup is seen; this answer stays for a folded
-// column pressed all the same.)
-onColumnAsk((col) => {
-  if (!_pid) return false;
-  const want = col === 'library' ? 'timeline' : col === 'inspector' ? 'setup' : '';
-  if (!want || want === _step) return false;
-  if (want === 'timeline' && !_mayEdit()) return true;
-  setStep(want);
-  return true;
-});
-
 // ?step= in the address, which is how the Alerts list takes somebody back to the place a
 // generation was started from (js/alerts-bell.js). It is read once, when the project is adopted,
 // and it beats what was remembered - it is the more recent instruction of the two.
@@ -218,10 +199,9 @@ function _firstStep() {
 }
 
 // ── The spines ──────────────────────────────────────────────────────────────
-// In a talking head the two folded panels said what the steps said (phase L): the Library spine dead
-// until the timeline had something on it, and how far the script had got. (phase V64) No project shows
-// either spine any more - the body classes, the lock's softness and "setup /" are what is left of this
-// paint that anybody sees.
+// (phase V64) No project shows either spine any more - the switch is the crumbs: setup's way on (_paintOn)
+// and the Library panel's "setup /". What is left of this paint is the body classes, the lock's softness
+// and whether "setup /" is there.
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
   // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back -
@@ -231,16 +211,6 @@ function _paintSpines() {
   const back = document.getElementById('mv3-lib-setup');
   if (back) back.hidden = !_pid;
   softLock(_isVo() && _hasCut());
-  const lib = document.getElementById('mv3-library');
-  if (!lib) return;
-  const off = !!_pid && _step === 'setup' && !_mayEdit();
-  lib.classList.toggle('is-off', off);
-  const n = _readCount();
-  lib.title = !_pid ? ''
-    : off ? (!_project ? 'Reading the project…'
-      : _isVo() ? 'Read the lines first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
-        : 'Every fragment needs its video first · ' + n.clips + '/' + n.total)
-      : _step === 'setup' ? 'The timeline and the Library · ' + (_isVo() ? n.read + '/' + n.total + ' read' : n.clips + '/' + n.total + ' with a clip') : '';
 }
 
 // ── The route, in the panel's own header ────────────────────────────────────
@@ -256,15 +226,10 @@ function _paintRoute() {
   const head = _head();
   if (!head) return;
   let bar = head.querySelector('.mv3-wk-steps');
-  // THE ROUTE INSIDE SETUP, and only that (phase L): no step chips, the crumbs switch the steps.
-  // At the hub there is no route - the panel's own title says where you are - and on a shelf it
-  // reads "setup → looks → …", its first word being the way back to the hub.
-  const mod = _loaded.setup;
-  const crumbs = (_pid && _step === 'setup' && mod && typeof mod.crumbs === 'function') ? (mod.crumbs() || []) : [];
-  // (phase V64, fix (ж)) SETUP is blue while it is where you are - not a place inside it, not the timeline step.
+  // (phase V64, fix (ж)) SETUP is blue while it is where you are - not the timeline step.
   const setupTitle = head.querySelector('.mv3-panel-title');
-  if (setupTitle) setupTitle.classList.toggle('is-on', !!_pid && _step === 'setup' && !crumbs.some(c => c.here));
-  // (phase V62) In setup the bar is always there: "setup", the route inside it, and the way on (_paintOn).
+  if (setupTitle) setupTitle.classList.toggle('is-on', !!_pid && _step === 'setup');
+  // (phase V62) In setup the bar is always there: "setup" and the way on (_paintOn).
   if (!(_pid && _step === 'setup')) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
@@ -276,29 +241,13 @@ function _paintRoute() {
   bar.textContent = '';
   // (phase V62, the owner 2026-10-31, items 8 and 14: "\u043d\u0443\u0436\u043d\u043e \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043a\u0440\u043e\u0448\u043a\u0438, \u043a\u0430\u043a \u0443 \u043f\u0440\u043e\u0435\u043a\u0442\u043e\u0432 \u0442\u0438\u043f\u0430 highlights") THE CRUMBS OF
   // HIGHLIGHTS' LOOK - the Library panel's own (`.mv3-lib-crumb`): words in capitals after a "/", no pill, no outline. The panel's
-  // title, SETUP, is the first of them; a place inside setup follows it lit, then the way on (_paintOn).
+  // title, SETUP, is the first of them, then the way on (_paintOn).
   const wrap = document.createElement('div');
   wrap.className = 'mv3-wk-crumbs';
-  for (const c of crumbs) {
-    const sb = document.createElement('button');
-    sb.type = 'button';
-    sb.className = 'mv3-lib-crumb is-post' + (c.here ? ' is-on is-here' : '');
-    sb.textContent = _cap(c.label);
-    sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
-    if (!c.here) sb.addEventListener('click', (e) => { e.stopPropagation(); mod.goCrumb(c.id); });
-    wrap.appendChild(sb);
-  }
   _paintOn(wrap);
   bar.appendChild(wrap);
-  // A route longer than the panel is wide scrolls sideways (css/merge-v3.css), and its END is
-  // where you are - so that is the part kept in view. The start is a flick away; the current
-  // place hidden past the edge would be the one word on the row that could not be read.
+  // A route longer than the panel is wide scrolls sideways (css/merge-v3.css), from its start.
   bar.scrollLeft = 0;
-  const here = bar.querySelector('.is-here');
-  if (here) {
-    const over = here.getBoundingClientRect().right - bar.getBoundingClientRect().right;
-    if (over > 0) bar.scrollLeft = Math.ceil(over) + 2;
-  }
 }
 
 // THE WAY ON (phase V62): after "setup", the Library panel's own crumbs - each one the timeline step with that view of the panel
@@ -336,7 +285,7 @@ function _paintOn(wrap) {
     c.type = 'button';
     c.className = 'mv3-lib-crumb is-post mv3-wk-on' + (ok ? '' : ' is-off');
     c.textContent = _cap(label);
-    // Never reaching the panel's head: a press there is the column's (it would ask for the setup step back).
+    // Never reaching the panel's head: a press there is the column's (it would open Setup again).
     c.addEventListener('click', (e) => { e.stopPropagation(); if (ok) _goOn(id); });
     if (ok) c.title = what;
     else {

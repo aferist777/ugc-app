@@ -9,7 +9,6 @@
 //   POST   /api/audio/lyrics        { title, text, from, gen? } -> { success, item, already? } - the same `gen` with the same
 //                                                                  text: `already` and the one saved before, no second
 //   PATCH  /api/audio/lyrics/:id    { title?, text? }           -> { success, item }
-//   DELETE /api/audio/lyrics/:id                                -> { success, id }
 //
 // A refusal is { success: false, error } in words, with its status.
 // ════════════════════════════════════════════════════════════════════════════
@@ -34,10 +33,6 @@ router.post('/audio/lyrics', (req, res) => {
 
 router.patch('/audio/lyrics/:id', (req, res) => {
   try { res.json({ success: true, item: LY.patch(req.params.id, req.body || {}) }); } catch (e) { _fail(res, e); }
-});
-
-router.delete('/audio/lyrics/:id', (req, res) => {
-  try { const it = LY.remove(req.params.id); res.json({ success: true, id: it.id }); } catch (e) { _fail(res, e); }
 });
 
 module.exports = router;

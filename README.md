@@ -92,7 +92,7 @@ server.js   Express, bound to 127.0.0.1 only
 routes\     one file per API area; ffmpeg.js is the renderer
 lib\        config.js (the two roots: program and library), media paths, stores, generation
 public\     the pages; js\<page>\ holds that page's ES modules
-tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, migrate-library.js, upgrade-library.js, warm-thumbs.js
+tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, migrate-library.js, upgrade-library.js
 ```
 
 `yt-dlp` ships with the app (`vendor/yt-dlp/`, fetched and checked by `npm install`).

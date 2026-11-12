@@ -149,9 +149,6 @@
 .thx-body{ max-width:none; }   /* (phase V73 block 6) the whole width - it stopped at 860 */
 .thx-intro{ margin:0 0 14px; font:var(--fw-regular) var(--fs-12)/1.5 var(--font); color:var(--muted); }
 .thx-group{ margin:0 0 18px; }
-.thx-gh{ display:flex; align-items:baseline; gap:8px; margin:0 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
-.thx-gt{ font:var(--fw-strong) var(--fs-12)/1.2 var(--font); color:var(--ink); }   /* (к17) sentence case */
-.thx-gn{ font:var(--fw-regular) var(--fs-11)/1.2 var(--mono); color:var(--muted); }
 .thx-row{ padding:7px 0 8px; border-bottom:1px solid var(--border-soft); }
 .thx-row:last-child{ border-bottom:0; }
 .thx-top{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }

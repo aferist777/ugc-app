@@ -108,7 +108,6 @@
 .mv3-hl-stage.is-now{color:var(--ink); font-weight:600}
 .mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--ink)}
 .mv3-hl-stage.is-now .mv3-hl-stage-m .u-ico{animation:u-spin 1s linear infinite}   /* the turning loader while it works - the blink went */
-@keyframes mv3-hl-beat{50%{opacity:.35}}
 .mv3-hl-stage.is-next{opacity:.7}
 .mv3-hl-stage.is-failed, .mv3-hl-stage.is-failed .mv3-hl-stage-m{color:var(--danger)}
 .mv3-hl-prep-bar{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}

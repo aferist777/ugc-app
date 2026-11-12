@@ -623,11 +623,10 @@ export function markAt(words, i, on) {
 
 /**
  * Word `i`'s start ('s') or end ('e') moved to `t` (seconds from the line's start). A boundary the word
- * shares with its neighbour (touching, or overlapping) moves both - unless `alone` (Alt): then only this
- * word's edge moves, never over its neighbour. Nothing goes past the line's edges; no word is left shorter
- * than WORD_MIN. `dur` is the line's length.
+ * shares with its neighbour (touching, or overlapping) moves both. Nothing goes past the line's edges; no
+ * word is left shorter than WORD_MIN. `dur` is the line's length.
  */
-export function edgeAt(words, i, side, t, dur, alone) {
+export function edgeAt(words, i, side, t, dur) {
   const ws = _copy(words);
   const w = _at(ws, i);
   if (!w) return NO_WORD;
@@ -636,7 +635,7 @@ export function edgeAt(words, i, side, t, dur, alone) {
   let T = cs(t);
   if (side === 's') {
     const p = _at(ws, i - 1);
-    const shared = !!p && !alone && cs(p.e) >= S - 1;
+    const shared = !!p && cs(p.e) >= S - 1;
     const lo = p ? (shared ? cs(p.s) + MINC : Math.min(cs(p.e), S)) : 0;
     const hi = E - MINC;
     if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
@@ -653,7 +652,7 @@ export function edgeAt(words, i, side, t, dur, alone) {
     if (shared) { p.e = T / 100; p.h = true; }
   } else if (side === 'e') {
     const n = _at(ws, i + 1);
-    const shared = !!n && !alone && cs(n.s) <= E + 1;
+    const shared = !!n && cs(n.s) <= E + 1;
     const lo = S + MINC;
     const hi = n ? (shared ? Math.max(cs(n.s), cs(n.e)) - MINC : Math.max(cs(n.s), E)) : Math.max(end, E);
     if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };

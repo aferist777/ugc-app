@@ -6,9 +6,8 @@
    place when it closes, so what is typed, attached and waited for is the same nodes. Closing the window hides the chat;
    nothing it asked for stops (the server waits, files, announces in Alerts).
 
-   The chat is a HOSTED one (chat-shell.js `host`): no crumb, no room of the panel, no view remembered per project - the
-   window is its owner. Its conversation is the open project's, as before (the store's key; a highlights fragment's is its
-   home's). A result dragged out of the window (a picture, a clip, a tile of the right column) lays the window aside until
+   The window is the chat's owner (chat-shell.js): no crumb, no room of the panel, no view remembered per project. Its
+   conversation is the open project's, as before (the store's key; a highlights fragment's is its home's). A result dragged out of the window (a picture, a clip, a tile of the right column) lays the window aside until
    it is let go on a lane (`passDrags`, (зг4)); on a highlights project's own timeline the drag says "Open a fragment
    first." (chat-shell.js refuseHome, (зг7)).
 

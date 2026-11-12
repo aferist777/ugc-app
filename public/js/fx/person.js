@@ -8,7 +8,7 @@
      personReady()            the segmenter loaded, once - resolves true, or false where it cannot run (the bake window waits)
      personOf(pic, canvas)    -> { mask, cut } | null for a picture (a canvas w x h): `mask` the person's alpha (white), `cut` the
                               picture inside it, both w x h on canvases `canvas(name, w, h)` gives; null until the segmenter is
-                              there (asked for then - the preview paints again when it comes, js/fx/kit.js onLoaded)
+                              there (asked for then - the preview paints again when it comes, js/fx/kit.js told)
    Page only.
    ═══════════════════════════════════════════════════════════════════════════ */
 

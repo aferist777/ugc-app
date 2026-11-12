@@ -16,7 +16,7 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
 
 /* ── Cut silence (phase V44) ─────────────────────────────────────────────────
    The button in its own group right of play (dim with nothing picked - a press then says what to pick), its panel above it
-   (fixed to the viewport, as the timeline's questions open - js/merge-v3/ask.js), and the glow of what will go over every lane.
+   (fixed to the viewport, as the timeline's questions open - js/ask.js), and the glow of what will go over every lane.
    (phase V73 block 5, 5c; the owner's (б5-16) б) A PANEL AT ITS BUTTON, as the queue and the part of a clip: the frame's edges
    (`u-win is-float`), its head row of 40 px (`u-win-head`: "Cut silence" 13 / 500, the 28-px ✕), no backdrop; the rows under it,
    the one status line at the left of the foot and the gold "cut" at its right. */

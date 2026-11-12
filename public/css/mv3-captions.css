@@ -13,8 +13,7 @@
 .mv3-col.is-collapsed .mv3-cap{ display:none !important }
 #mv3-library.is-captions .mv3-lib-row,
 #mv3-library.is-captions .mv3-libstatus,
-#mv3-library.is-captions .mv3-pc,
-#mv3-library.is-captions .mv3-pc-head{ display:none !important }
+#mv3-library.is-captions .mv3-pc{ display:none !important }
 
 /* The categories, and how far the making is. */
 .mv3-cap-top{ flex:0 0 auto; padding:8px 10px 6px; border-bottom:1px solid var(--border-soft) }
@@ -82,8 +81,6 @@
 .mv3-fnt-tw{ flex:0 0 auto; font-size:var(--fs-9); color:var(--muted); opacity:.8 }   /* "Lat", 9 px */
 
 /* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
-.mv3-cap-head{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 6px }
-.mv3-cap-what{ font:800 11px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink) }
 /* (phase V73 block 5, 5b) what the settings apply to, under the strip's head (its title is the head's); figures in mono */
 .mv3-cap-sub{ margin:0 0 6px; font:500 var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
 .mv3-cap-preset{

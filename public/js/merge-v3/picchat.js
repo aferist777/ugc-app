@@ -16,7 +16,7 @@
    project, REFERENCES (pictures), IMAGES with all its folders -, the open folder's folders as tiles, then its pictures.
 
    (phase V64 block 3, the owner 2026-10-31) A WINDOW, no view of the Library panel any more (js/merge-v3/chat-window.js):
-   a hosted chat (`host`) opened by IMAGES' "generate" in the tree, the lane's right button, the gallery's "+" and
+   opened by IMAGES' "generate" in the tree, the lane's right button, the gallery's "+" and
    ?open=pictures; a picture dragged out of it lays the window aside until it is let go on a lane.
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -60,8 +60,6 @@ function PICTURES(ctx) {
   return {
     name: 'pictures',
     kind: 'image',
-    // (phase V64 block 3) Its window is its owner (chat-window.js): no crumb, no head of the panel.
-    host: true,
     ids: { root: 'mv3-pc' },
     keys: { draft: 'mv3_pc_draft_v1', write: 'mv3_pc_write_v1', strip: 'mv3-ig-strip-w' },
     maxAtts: MAX_ATTS,
@@ -84,7 +82,6 @@ function PICTURES(ctx) {
       slot: 'A picture to work from - from the Library or this computer',
       plus: 'Add a picture from this computer. It goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself - and straight into the row above the message box.',
       cat: 'This project\'s pictures, or a folder of the Library',
-      crumb: 'The pictures chat - pictures made with a model',
     },
     // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in (phase V24).
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
@@ -204,6 +201,5 @@ export async function openPictures(o) {
   // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) _api.fromTimeline(o);
 }
-export const closePictures = () => WIN.close();
 
 export function initPicChat() { CHAT.init(); }

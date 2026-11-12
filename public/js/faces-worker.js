@@ -96,7 +96,6 @@ function peopleIn(img, fw, fh) {
 const MARKS_MODEL = '/vendor/mediapipe/face_landmarker.task';
 const OBJ_SCORE = 0.3;
 const OBJ_MIN_AREA = 0.01;
-const BS = ['jawOpen', 'mouthSmileLeft', 'mouthSmileRight', 'browInnerUp', 'eyeWideLeft', 'eyeWideRight'];
 const NOISE = 14, MAXS = 24, MAXT = 12;     // a pixel changed by more than NOISE (of 255) moved; the camera's move searched up to MAXS/MAXT px
 let mdet = null, mdelegate = '';
 let odet = null, odelegate = '';

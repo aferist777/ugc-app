@@ -8,7 +8,7 @@
 //   GET /api/library/info/:kind/:id     what the right column says about one tile
 //   GET /api/library/counts             one number per shelf, for the switcher
 //   GET /api/library/tree               the media tree: REFERENCES, VIDEO, IMAGES, AUDIO with their folders (V28.4)
-//   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
+//   -> { items: [{ id, name, kind, media, thumb, meta }], cats }
 //
 // `thumb` is what the grid draws and `media` is what the viewer opens. They are
 // never the same file unless no thumbnail exists — the old shelf drew full frames
@@ -166,7 +166,7 @@ function _charactersShelf() {
   // By looks, most first: the characters you have actually dressed are the ones you come
   // back to, and a character with none is a card you scroll past. Date breaks the ties.
   items.sort((a, b) => (b.meta.looks - a.meta.looks) || (_ts(b.meta.date) - _ts(a.meta.date)));
-  return { items, filters: [] };
+  return { items };
 }
 
 // ── Looks ───────────────────────────────────────────────────────────────────
@@ -415,7 +415,7 @@ function _mediaShelf(opts) {
   // kept as tiles, and come with REFERENCES. `ytKeys` - their links' keys: a tile of the same video is not shown twice.
   const SRCS = require('../lib/sources-store');
   const ytKeys = new Set();
-  if (opts && (opts.youtube || opts.refs)) {
+  if (opts && opts.refs) {
     for (const s of SRCS.list()) {
       if (!s || !s.videoPath || !_onDisk(s.videoPath) || !SRCS.fromYouTube(s)) continue;
       if (s.linkKey) ytKeys.add(s.linkKey);
@@ -472,7 +472,6 @@ function _mediaShelf(opts) {
     // REFERENCES after the rest - its posts and its downloaded YouTube videos as one, by date.
     || (Number(a.kind === 'references' || a.kind === 'youtube') - Number(b.kind === 'references' || b.kind === 'youtube'))
     || (_ts(b.meta.date) - _ts(a.meta.date)));
-  const n = (k) => items.filter(i => i.kind === k).length;
 
   // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
   // note. Reading it from the record is the only way to name such a category.
@@ -483,13 +482,6 @@ function _mediaShelf(opts) {
 
   return {
     items,
-    filters: [
-      { id: 'birols',  label: 'Birols · ' + n('birols') },
-      { id: 'uploads', label: 'Uploads · ' + n('uploads') },
-      { id: 'hooks',   label: 'Hooks · ' + n('hooks') },
-      { id: 'images',  label: 'Images · ' + n('images') },
-      { id: 'sounds',  label: 'Sounds · ' + n('sounds') },
-    ],
     // The categories depend on WHICH kind is asked for, and only the route handler knows that, so
     // the shelf hands back the ingredients instead of a finished list.
     labelFor: (id) => fromRecords[id] || '',
@@ -621,7 +613,7 @@ function _lyricItems() {
 // folders (VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES) has no `q`. `count` is still all under it.
 // Nothing moves on the disk: what has no category stays in its `nocat/` folder.
 function _tree(opts) {
-  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true });
+  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, sfx: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   // A kind's categories, as folders: the locked first, then those with something in them, then the empty ones (pale) -
@@ -771,7 +763,7 @@ function _tree(opts) {
 // Every item a link may name: the media shelf's whole set with what the generators of IMAGES made - a link is found by
 // 'kind:id', else by its address. Anything not found is a file deleted from the library: its link goes ((лч14)).
 function _linkables(items) {
-  const all = (items || _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true }).items).slice();
+  const all = (items || _mediaShelf({ music: true, heads: true, refs: true, sfx: true }).items).slice();
   for (const k of MADE_KINDS) { try { all.push(..._madeItems(k)); } catch (e) { /* that shelf did not read */ } }
   const byKey = new Map(), byMedia = new Map();
   for (const i of all) {
@@ -1056,7 +1048,7 @@ function _voicesShelf() {
   // name, so the free ones underneath read as a catalogue rather than an arrival order.
   items.sort((a, b) => (b.meta.characters.length ? 1 : 0) - (a.meta.characters.length ? 1 : 0)
     || a.name.localeCompare(b.name));
-  return { items, filters: [], labelKeys: VS.LABEL_KEYS };
+  return { items, labelKeys: VS.LABEL_KEYS };
 }
 
 // ── Renders ─────────────────────────────────────────────────────────────────
@@ -1132,7 +1124,7 @@ function _rendersShelf() {
     });
   const running = RP.want(work);
   RP.tidy(files);
-  return { items, filters: [], running };
+  return { items, running };
 }
 
 // ── Scenarios ───────────────────────────────────────────────────────────────
@@ -1159,7 +1151,7 @@ function _scenariosShelf() {
   // folded "Archive" at the bottom of the list; the archive is Merge's too (PATCH `archived`, routes/scen3.js).
   const items = list.filter(s => !s.archived).map(_scRow);
   const archived = list.filter(s => s.archived).map(_scRow);
-  return { items, archived, filters: [] };
+  return { items, archived };
 }
 
 // One scenario as a row of the shelf.
@@ -1190,7 +1182,7 @@ function _scRow(s) {
   };
 }
 
-// How many lookbooks or environments are being made right now (phase I) - a chat's, or Merge's maker's.
+// How many environments are being made right now (phase I) - a chat's, or Merge's maker's.
 // The page asks the shelf again while there are any, so what lands shows up on the grid by itself.
 function _makingNow(type) {
   try {
@@ -1201,63 +1193,28 @@ function _makingNow(type) {
 
 const SHELVES = {
   characters:   _charactersShelf,
-  lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR), 'lookbooks'), filters: [], running: _makingNow('lookbook') }),
-  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), filters: [], running: _makingNow('environment') }),
+  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), running: _makingNow('environment') }),
   // Every character's looks in one list - read, not a shelf of the Library page: the video chat's right column offers
   // them for a "person" cell of a recipe (phase V6), each with its character (meta.charId) to group them by.
-  looks:        () => ({ items: _looks().items.filter(x => x.media && _onDisk(x.media)), filters: [] }),
+  looks:        () => ({ items: _looks().items.filter(x => x.media && _onDisk(x.media)) }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
   renders:      _rendersShelf,
   scenarios:    _scenariosShelf,
 };
 
-// The one category REFERENCES' pictures are under among Images, in the pickers.
-const REF_CAT = '__references__';
-
-// (phase TG, block 5d) THE FILES OF REFERENCES' POSTS, one item each, for what takes a file - the chats' pickers and the
-// pictures chat's column: `type` 'video' or 'photo'; a post's folder (or own category) is the item's category. A long
-// video kept as a tile has no file and is not here.
-function _refFiles(type) {
-  const REFS = require('../lib/references-store');
-  const items = [];
-  const cats = new Map();
-  for (const p of REFS.read()) {
-    if (!p || !Array.isArray(p.media)) continue;
-    const files = p.media.filter(m => m && m.path && m.type === type && _onDisk(m.path));
-    const catId = p.categoryId ? p.categoryId : 'ref:' + p.source + (p.folder ? '/' + p.folder : '');
-    const catName = p.categoryId ? (p.categoryLabel || 'REFERENCES') : REFS.labelOf(p.source, p.folder);
-    files.forEach((m, i) => {
-      if (!cats.has(catId)) cats.set(catId, { id: catId, name: catName, label: catName, count: 0 });
-      cats.get(catId).count++;
-      items.push({
-        id: p.id + ':' + m.id, name: String(p.title || 'post') + (files.length > 1 ? ` · ${i + 1} of ${files.length}` : ''),
-        kind: 'references', media: m.path, thumb: m.thumb || null, dur: +m.dur || 0,
-        meta: { categoryId: catId, date: p.receivedAt || null, w: m.w || 0, h: m.h || 0, post: p.id, author: p.author || '' },
-      });
-    });
-  }
-  return { items, cats: [...cats.values()] };
-}
-
 router.get('/library/shelf/:kind', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    // (phase TG, block 5d) REFERENCES' videos for the video chat's picker, by its folders and categories.
     // (phase V78) THIS PROJECT: what lies directly in one of its folders (`plfolder`, '' - itself) - the library's items, each
-    // with its `link`; `accept` (kinds, comma-separated) - only those (a chat's own kinds, (лч16)).
+    // with its `link`.
     if (kind === 'media' && req.query.plinks) {
       const folder = String(req.query.plfolder || '');
-      const accept = String(req.query.accept || '').split(',').map(x => x.trim()).filter(Boolean);
       const all = _linkedItems(String(req.query.plinks), null).items;
-      const items = all.filter(i => (req.query.plfolder == null || (i.meta.linkFolder || '') === folder) && (!accept.length || accept.includes(i.kind)));
-      return res.json({ success: true, kind, items, total: items.length, shown: items.length, filters: [], cats: [], labelKeys: null, running: 0 });
-    }
-    if (kind === 'media' && String(req.query.filter || '') === 'refvideos') {
-      const { items, cats } = _refFiles('video');
-      return res.json({ success: true, kind, items, total: items.length, shown: items.length, filters: [], cats, labelKeys: null, running: 0 });
+      const items = all.filter(i => req.query.plfolder == null || (i.meta.linkFolder || '') === folder);
+      return res.json({ success: true, kind, items, cats: [], labelKeys: null, running: 0 });
     }
     // Filtering happens here rather than in the page, so the count the page shows is the
     // count it received. Media takes two: the kind, and the category within it - or (phase V28.4) a GROUP of kinds,
@@ -1268,10 +1225,10 @@ router.get('/library/shelf/:kind', (req, res) => {
     const built = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
-        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '',
+        sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '',
         lyrics: f === 'lyrics' })
       : build();
-    const { items, filters, labelFor, labelKeys, running } = built;
+    const { items, labelFor, labelKeys, running } = built;
     // Built from the kind but BEFORE the category filter, so every category keeps its count
     // whichever one is asked for.
     const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
@@ -1304,31 +1261,19 @@ router.get('/library/shelf/:kind', (req, res) => {
         return words.every(w => hay.includes(w));
       });
     }
-    // (phase TG, block 5d) Images, and REFERENCES' pictures as one more category - for the pictures' pickers and the
-    // pictures chat's column (`refs=1`); the media tree's IMAGES never asks for them.
-    let cats2 = cats;
-    if (kind === 'media' && f === 'images' && String(req.query.refs || '') === '1' && (!cat || cat === REF_CAT)) {
-      const r = _refFiles('photo');
-      for (const i of r.items) i.meta.categoryId = REF_CAT;
-      // The column of the pictures chat asks for one category at a time (`cat`); the pickers read the whole shelf.
-      shown = cat === REF_CAT ? r.items : shown.concat(r.items);
-      if (r.items.length) cats2 = cats.concat([{ id: REF_CAT, name: 'REFERENCES', label: 'REFERENCES · ' + r.items.length, count: r.items.length }]);
-    }
-    res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats: cats2, labelKeys: labelKeys || null, running: running || 0,
+    res.json({ success: true, kind, items: shown,
+      cats, labelKeys: labelKeys || null, running: running || 0,
       // (phase V60) Scenarios: the archived ones beside the live (_scenariosShelf).
       ...(Array.isArray(built.archived) ? { archived: built.archived } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── The right column: what one tile is (phase B, the owner 2026-09-29) ───────
-// The Library page selects a tile on the Characters, Lookbooks and Environments shelves and shows
+// The Library page selects a tile on the Characters shelf and shows
 // what it is beside the grid - read here in one go, on every selection, so a voice given or a look
 // made elsewhere shows up the next time the tile is pressed.
 //   characters    { media, voices: [{ voiceId, name, tags, demo, dur, main }], looks }
 //   lookbooks     { media, looks }            - the looks dressed in it (a look's `lb`)
-//   environments  { media, description, motion } - what the place is and how it moves
-//                                              (lib/shelf-meta.js; the video field animates by it)
 function _voicesOf(c) {
   // The one every read uses first, then the rest of those saved for the character. The voice shelf
   // fills in what the character's own copy lacks: a character that only ever had `voice` carries no
@@ -1392,12 +1337,6 @@ const INFO = {
       media, looks: _looks().items.filter(l => l.meta.lookbook === media),
       gender: String(m.gender || ''), description: String(m.description || ''), from: String(m.from || ''),
     };
-  },
-  environments: (id) => {
-    const media = _flatEntry(ENVIRONMENTS_DIR, id);
-    if (!media) return null;
-    const m = SM.read('environments')[media] || {};
-    return { media, description: String(m.description || ''), motion: String(m.motion || ''), from: String(m.from || '') };
   },
   // (phase V26.6) A product: its name, the person's own words and the agent's description - and whether it is being read.
   props: (id) => {
@@ -1846,8 +1785,6 @@ router.patch('/library/item/:kind/:id', (req, res) => {
 });
 
 /* ── Cutting a piece out of a video (phase TG, block 7) ──────────────────────
-   POST /api/library/cut { src, in, out, to: { kind, cat, label } } -> { success, kind, id, item }
-
    A PIECE IS A NEW FILE AND A NEW TILE (the owner 2026-10-21, "вариант Б"): cut from `src` between `in` and `out` (its
    own seconds), filed where the person chose in the window after choosing the stretch - a kind of VIDEO (birols,
    uploads, hooks; a category by its label, made when new) or REFERENCES (a post of its own: an own category `cat`, or
@@ -1914,18 +1851,6 @@ async function _filePiece(made, to) {
     throw e;
   }
 }
-
-router.post('/library/cut', async (req, res) => {
-  const b = req.body || {};
-  try {
-    const to = _cutTo(b);
-    const made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
-    const r = await _filePiece(made, to);
-    res.json({ success: true, kind: r.kind, id: r.id, item: r.item });
-  } catch (e) {
-    res.status(e.status || 500).json({ success: false, error: e.message });
-  }
-});
 
 /* ── Several pieces at once, and the scenes (phase V81) ───────────────────────
    POST   /api/library/cuts { src, parts: [{ in, out, label? }], join, to }   -> { job }
@@ -2761,7 +2686,7 @@ function _fileRecord(b) {
   if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
   if (prompt) rec.prompt = String(prompt).slice(0, 2000);
   // `trimmable` - a file brought in by hand - is still written by the ways in, and read by nobody since phase TG
-  // block 7: every video of the shelf may be cut into new pieces (POST /library/cut).
+  // block 7: every video of the shelf may be cut into new pieces (POST /library/cuts).
   if (b.trimmable === true) rec.trimmable = true;
   // (phase V27) A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
   // spelling of it (lib/ytdlp.js info().key), so the same video is not fetched onto the shelf twice.
@@ -3022,14 +2947,17 @@ router.post('/library/usage', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Counts for every shelf at once, for the switcher — cheap enough to do on load and
-// it means the page never shows a shelf without saying how much is in it.
+// Counts for every shelf of the Library page at once, for the switcher — cheap enough to do on load and
+// it means the page never shows a shelf without saying how much is in it. (Environments and looks are
+// shelves only other pages read; no number of theirs is shown.)
+const COUNTED = ['characters', 'media', 'voices', 'renders', 'scenarios'];
 router.get('/library/counts', (_req, res) => {
   try {
     const out = {};
-    for (const [kind, build] of Object.entries(SHELVES)) {
+    for (const kind of COUNTED) {
+      const build = SHELVES[kind];
       // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
-      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true, youtube: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
+      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

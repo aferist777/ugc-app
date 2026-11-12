@@ -74,7 +74,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // ...and cut silence (phase V44), and clips in a row merged (phase V45)
                  '/js/merge-v3/tl-silence.js', '/js/merge-v3/tl-merge.js',
                  // generate audio and sound on the shelves (phases V34.C-F)
-                 '/js/merge-v3/audchat.js', '/css/mv3-audio.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
+                 '/js/merge-v3/sound-host.js', '/css/sound-window.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
 // Where an address must land: the app opens on Home, the old Character page (phase H8) on the shelf.
 const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
@@ -82,7 +82,10 @@ const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl',
                      'telegramBotToken', 'telegramChatId', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
-const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
+const REMOVED = [
+                 // dead routes the V91 cleanup took away (block 2)
+                 ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
+                 ['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
                  ['POST', '/api/restart'], ['GET', '/birols'],

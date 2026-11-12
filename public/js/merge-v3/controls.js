@@ -224,37 +224,6 @@ export function toggleNamed(label, on, onChange, title, ico) {
   return b;
 }
 
-// A typed number, for values a slider cannot land on exactly - the picture-in-picture
-// position is the case: you want 50%, not 49 or 51. Commits on `change`, which fires on
-// blur or Enter, so half-typed input is never written.
-export function number({ value, min, max, step, suffix, onChange }) {
-  const wrap = document.createElement('span');
-  wrap.className = 'mv3-c-numrow';
-  const inp = document.createElement('input');
-  inp.type = 'number';
-  if (min != null) inp.min = String(min);
-  if (max != null) inp.max = String(max);
-  inp.step = String(step == null ? 1 : step);
-  inp.value = String(value);
-  inp.className = 'mv3-c-inp u-in is-s';
-  inp.addEventListener('change', () => {
-    let v = parseFloat(inp.value);
-    if (isNaN(v)) { inp.value = String(value); return; }
-    if (min != null) v = Math.max(min, v);
-    if (max != null) v = Math.min(max, v);
-    inp.value = String(v);
-    if (onChange) onChange(v);
-  });
-  wrap.appendChild(inp);
-  if (suffix) {
-    const s = document.createElement('span');
-    s.className = 'mv3-c-suf';
-    s.textContent = suffix;
-    wrap.appendChild(s);
-  }
-  return wrap;
-}
-
 // A colour. The browser's own input is a fat grey button with a stripe, which looks like
 // nothing else on this panel, so it is styled down to a swatch. Commits on `change` - the
 // picker fires `input` on every drag through the wheel.

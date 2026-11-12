@@ -24,7 +24,7 @@ import * as Store from './store.js';
 import { initBar } from './bar.js';
 import { initPicChat, openPictures } from './picchat.js';
 import { initVidChat, openVideos } from './vidchat.js';
-import { initAudChat, openAudio } from './audchat.js';
+import { initAudChat, openAudio } from './sound-host.js';
 import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
@@ -104,16 +104,15 @@ const _OPENERS = { pictures: _pictures, videos: _videos, audio: _audio };
 // highlights project with its popup open and the link written in. Its tile STAYS (after block 8, the owner's (Y2)): the
 // project downloads the video, and the server lets the tile go then - the downloaded video is in its place
 // (lib/sources-store.js update). From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
-// (`ref` of older addresses is not used any more.)
-async function _highlightsFrom(url, _ref, sourceId) {
+async function _highlightsFrom(url, sourceId) {
   const HL = await import('./highlights.js');
   await HL.createHighlights({ url, sourceId });
 }
-window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref, sourceId).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
+window.__ugcHighlightsFrom = (url, sourceId) => { _highlightsFrom(url, sourceId).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
 (() => {
   // (block 6) ?highlights=&source=<id> - a video of YOUTUBE (a source of the Library) chosen in the popup already.
-  let url = '', ref = '', source = '';
-  try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; ref = q.get('ref') || ''; source = q.get('source') || ''; } catch (e) { return; }
+  let url = '', source = '';
+  try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; source = q.get('source') || ''; } catch (e) { return; }
   if (!url && !source) return;
   let done = false;
   Store.onChange(() => {
@@ -122,11 +121,10 @@ window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref,
     try {
       const u = new URL(location.href);
       u.searchParams.delete('highlights');
-      u.searchParams.delete('ref');
       u.searchParams.delete('source');
       history.replaceState({}, '', u);
     } catch (e) { /* a reload would make another project */ }
-    _highlightsFrom(url, ref, source).catch(e => console.warn('[merge-v3] highlights:', e.message));
+    _highlightsFrom(url, source).catch(e => console.warn('[merge-v3] highlights:', e.message));
   });
 })();
 
@@ -226,6 +224,3 @@ Store.onChange(() => {
 // notifies whoever subscribed when it does. A failure here leaves the page working with an
 // empty ruler rather than a blank panel and no explanation.
 Store.load().catch(e => console.warn('[merge-v3] timeline store:', e.message));
-
-// For the browser console - nothing on the page reads window.MV3.
-window.MV3 = Store;

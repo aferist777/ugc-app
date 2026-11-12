@@ -127,14 +127,6 @@ export async function addFolder(kind, label, parent) {
   });
 }
 
-export async function addCat(kind, label) {
-  const d = await _json('/api/library/cats', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind, label }),
-  });
-  return d;                            // { cat, created } — created:false means it existed
-}
-
 // The server renames the folder in place - its folder on the disk with everything under it, and
 // the copies of its name on the records; a category only its records name becomes a real one first.
 export async function renameCat(kind, id, label) {

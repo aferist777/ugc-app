@@ -148,7 +148,7 @@ function _hoverShow(tile, it, open, opts) {
 }
 
 // ── the viewer ───────────────────────────────────────────────────────────────
-let _v = null;      // { ov, layer, list, at, file, sel: Set, o, armed }
+let _v = null;      // { ov, layer, list, at, file, sel: Set, o }
 
 export function openPost(list, at, o) {
   closePost();
@@ -190,7 +190,7 @@ export function openPost(list, at, o) {
   document.body.appendChild(ov);
   wireInfoSash(ov);
   const layer = Layers.open(ov, { name: 'post-view', onEsc: closePost });
-  _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, armed: null, whole: false };
+  _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, whole: false };
   ov.querySelector('[data-x="close"]').addEventListener('click', closePost);
   ov.querySelector('[data-x="prev"]').addEventListener('click', () => _step(-1));
   ov.querySelector('[data-x="next"]').addEventListener('click', () => _step(1));
@@ -215,7 +215,6 @@ export function closePost() {
   _v.ov.remove();
   Layers.close(_v.layer);
   document.removeEventListener('keydown', _onKey);
-  clearTimeout(_v.armed);
   _v = null;
 }
 
@@ -445,7 +444,7 @@ function _paintActs(it) {
       // The tile stays until its video is downloaded for the project (after block 8, the owner's (Y2)).
       const u = '/merge?highlights=' + encodeURIComponent(it.meta.link);
       closePost();
-      if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link, '');
+      if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link);
       else location.href = u;
     });
     box.appendChild(hl);

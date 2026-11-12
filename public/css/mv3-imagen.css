@@ -8,7 +8,7 @@
    (.is-narrow).
 
    Colour follows the rest of the page: --primary fills the one action and marks the one
-   selection, --accent stays ink, --danger is worn only by what removes something.
+   selection, --danger is worn only by what removes something.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* A chat's root: hidden until it shows, then it fills its window (`.gw-body > .mv3-pc.is-shown`, below). */
@@ -389,8 +389,6 @@
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
 /* Only a part of it goes: its seconds in gold. */
 .mv3-ig-att .dur.is-cut{ color:var(--gold) }
-/* (phase V15) The column's storyboard card: its sheet's prompt under the fold, as it was written. */
-.vc-story-prompt{ white-space:pre-wrap; font:500 10.5px/1.45 var(--font); color:var(--muted); max-height:240px; overflow:auto }
 /* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
 .mv3-ig-att.is-swap{ cursor:pointer }
 .mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
@@ -1025,23 +1023,15 @@ audio.vtrim-media{ background:none; height:32px }
 
 /* ── THE FRAMES CHAT of a talking head (phase V26.5, js/merge-v3/fchat.js) ──
    In the Setup panel, laid over the place the fields column leaves for it - outside the panel's body, which every
-   paint empties; fchat.js measures that place and puts the chat on it. Its own head line over its two columns. */
+   paint empties; fchat.js measures that place and puts the chat on it. */
 #mv3-inspector{ position:relative }
 #mv3-fc.is-shown{ display:flex; flex-direction:column; position:absolute; z-index:4; overflow:hidden }
-/* (phase V61, the owner's (т7)) IN ITS WINDOW (js/gen-window.js, as New Character): the window's whole body, and its own head
-   line hidden - the window's crumbs and ✕ say what it is. */
+/* (phase V61, the owner's (т7)) IN ITS WINDOW (js/gen-window.js, as New Character): the window's whole body - the window's
+   crumbs and ✕ say what it is. */
 .gw-body > #mv3-fc.is-shown{ position:relative; inset:auto; z-index:auto; flex:1 1 auto; min-height:0; width:100%; height:100% }
-.gw-body > #mv3-fc > .mv3-ig-top{ display:none }
 /* (phase V64 block 3) The pictures chat and the video chat in their windows (js/merge-v3/chat-window.js) - the same: the
-   window's whole body, their own head line hidden. */
+   window's whole body. */
 .gw-body > .mv3-pc.is-shown{ display:flex; flex-direction:column; position:relative; flex:1 1 auto; min-height:0; width:100%; height:100% }
-.gw-body > .mv3-pc > .mv3-ig-top{ display:none }
-.mv3-ig-top{
-  flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:4px 8px 4px 12px;
-  border-bottom:1px solid var(--border-soft); background:var(--surface);
-}
-.mv3-ig-top .sp{ flex:1 1 auto }
-.mv3-ig-top-t{ font:700 9.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold) }
 .mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
 /* The shape, said rather than chosen: always the project's. */
 .mv3-ig-shape{ display:flex; align-items:baseline; gap:6px; padding:6px 0 2px; font:600 10px/1.3 var(--font); color:var(--muted) }

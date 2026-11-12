@@ -167,8 +167,6 @@ export function lanesChanged() {
 /** (phase V66.1) The timeline fitted to what it shows now - its lanes, or a highlights group's buttons - and following it again. */
 export function fitTimeline() { _fitLanes(); _placeCross(); }
 
-/** The timeline's floor now, in px - for a test. */
-export const timelineFloor = () => _clampTl(0);
 function _applyTl(px, hand) {
   const el = document.getElementById('mv3-timeline');
   if (el) el.style.height = _clampTl(px, hand) + 'px';
@@ -199,9 +197,9 @@ function _tlNow() {
 // the Library are not where the work is: the cut is laid from the fragments, and until then a clip
 // dragged in from the Library would be a clip on a timeline nobody is editing. So the timeline is
 // locked - blurred (css/merge-v3.css, body.mv3-locked), inert to the pointer and the keyboard - and
-// the Library is folded, Setup open in its place, and cannot be opened by anything but its own
-// spine, which is the step switch and lifts the lock first (phase L; decided with the owner
-// 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
+// the Library is folded, Setup open in its place, and it opens only with the timeline step, which
+// lifts the lock first (phase L; decided with the owner 2026-09-21, docs/local-app/PLAN.md
+// "Сцена, setup и таймлайн-зеркало").
 let _locked = false;
 
 export function lock(on) {
@@ -209,9 +207,7 @@ export function lock(on) {
   if (want === _locked) return;
   _locked = want;
   document.body.classList.toggle('mv3-locked', want);
-  // The timeline sleeps. The Library is not frozen but FOLDED: folded, it is only its spine, and
-  // in a talking head its spine is the way to the timeline step (phase L) - freezing it would
-  // freeze the switch.
+  // The timeline sleeps. The Library is not frozen but FOLDED.
   const tl = document.getElementById('mv3-timeline');
   if (tl) tl.inert = want;
   if (want) setOpenColumn('inspector');
@@ -233,14 +229,6 @@ export function softLock(on) {
   if (tl) tl.inert = _locked && !want;
 }
 
-// ── A SPINE MAY MEAN MORE THAN "OPEN THIS PANEL" (phase L, the owner 2026-09-23) ──
-// In a talking head the two spines are the step switch: the Library spine is the way to the
-// timeline, the Setup spine the way back (js/merge-v3/workshop.js). So a press on a folded panel
-// is offered first to the one handler registered for it; only if it does not take the press does
-// the panel simply open.
-let _ask = null;
-export function onColumnAsk(fn) { _ask = typeof fn === 'function' ? fn : null; }
-
 // ── Which panel came forward ────────────────────────────────────────────────
 // Told to whoever cares which of the pair is open: the Library's views take the room only while the
 // panel can be seen (js/merge-v3/lib-views.js).
@@ -253,7 +241,7 @@ export function onColumnOpen(fn) { if (typeof fn === 'function') _opened.push(fn
 // keep working.
 export function setOpenColumn(which) {
   // Not the Library while the lock is on: setup is open, and the Library comes with the timeline
-  // step - its spine asks the workshop first (onColumnAsk), which lifts the lock before it opens it.
+  // step, which lifts the lock before it opens it.
   if (which === 'library' && _locked) return;
   const was = document.querySelector('.mv3-col:not(.is-collapsed)');
   document.querySelectorAll('.mv3-col').forEach(c => {
@@ -471,8 +459,7 @@ export function initLayout() {
   // purpose - collapsing it would leave the left side with no panel at all.
   document.querySelectorAll('.mv3-col').forEach(col => {
     col.addEventListener('click', () => {
-      if (!col.classList.contains('is-collapsed') || col.classList.contains('is-off')) return;
-      if (_ask && _ask(col.dataset.col)) return;          // the step switch took it (phase L)
+      if (!col.classList.contains('is-collapsed')) return;
       setOpenColumn(col.dataset.col);
     });
   });

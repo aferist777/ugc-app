@@ -8,7 +8,7 @@
    over a default.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
+import { renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
   from '../captions/style.js';
 import { cssWeight, fontOf } from '../captions/fonts.js';
 import { fitText, tokensOf } from '../captions/pages.js';
@@ -20,7 +20,7 @@ import { pageBox, rowsPlan, pageKey } from '../captions/place.js';
 const _css = (st, px) => (st.italic ? 'italic ' : '') + cssWeight(st.font, st.bold) + ' ' + px + 'px "'
   + st.font + '", "Liberation Sans", sans-serif';
 
-export { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes };
+export { autoSize, autoWordsPerLine };
 
 /**
  * The style as everything downstream should read it, with the automatic parts filled in - the lane's,

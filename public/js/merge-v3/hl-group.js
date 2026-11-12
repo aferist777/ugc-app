@@ -828,8 +828,6 @@ function _sync() {
 /** highlights.js lends what it knows of the project; the lanes' names are taken over while a group is ticked. */
 export function initGroup(api) {
   _A = api;
-  // The bubbles of V66 are gone (V66.1, (хо27)): what they remembered goes too.
-  try { localStorage.removeItem('mv3_hlg_tips_v1'); } catch (e) { /* nothing kept */ }
   Views.laneAlt({
     // A lane's name - a button of the panel - while a group is ticked; not on a fragment shown on its own from its row ((хо26)).
     wants: (track) => {

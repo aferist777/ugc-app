@@ -49,9 +49,6 @@ export function active(clip) {
   return (k && !k.off && +k.w > 0 && +k.h > 0) ? k : null;
 }
 
-/** The piece's own shape in pixels, width over height - `fileAr` is the file's (its width over its height). */
-export const pieceAr = (k, fileAr) => ((+k.w || 1) * fileAr) / (+k.h || 1);
-
 /**
  * THE LARGEST FRAME OF A FORM ((пр39)): `ar` of the piece's pixels, as big as the file allows, its middle where the frame's
  * middle (`cx`, `cy`, shares) is - moved back inside the file where it would hang over an edge.

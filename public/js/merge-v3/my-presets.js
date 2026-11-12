@@ -16,12 +16,10 @@ import { PRESETS } from '../captions/presets.js';
 import { TEXT_PRESETS } from '../captions/presets-text.js';
 
 let _list = [];
-let _loaded = false;
 const _subs = new Set();
 
 function _take(list) {
   _list = (Array.isArray(list) ? list : []).filter((p) => p && p.id && p.style);
-  _loaded = true;
   setMine(_list);
   for (const fn of _subs) { try { fn(_list); } catch (e) { console.warn('[my presets]', e); } }
 }
@@ -31,7 +29,6 @@ function _take(list) {
 // captions view, which shows each gallery's own.
 /** The person's caption presets (for subtitles), newest first. */
 export const list = () => _list.filter((p) => p.kind !== 'text');
-export const loaded = () => _loaded;
 export const byId = (id) => list().find((p) => p.id === id) || null;
 /** Every preset of the person's, both kinds, newest first. */
 export const all = () => _list;

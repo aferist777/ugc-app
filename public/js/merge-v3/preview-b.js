@@ -1007,7 +1007,6 @@ export function mapsOf(c, main, sw, sh, t) {
   return { W, H, maps: _mapsOf(r, sw, sh) };
 }
 
-/** (phase V51) The preview's own element for a clip on screen, decoded - what the crop's field shows while the playhead is on it. */
 /**
  * (phase V75 fix) The SIZE of a clip's file from any element the preview holds for it - ready to draw or not (one being sought,
  * another quality, a slot): its size is known once its metadata is. Null when none knows it.
@@ -1023,23 +1022,12 @@ export function mediaDims(c) {
   }
   return null;
 }
-export function shownElement(c) {
-  const el = c && c.src ? _media.get(_keyOf(c)) : null;
-  if (!el) return null;
-  return (el.tagName === 'VIDEO' ? (el.videoWidth && el.readyState >= 2 && !el.seeking) : el.naturalWidth) ? el : null;
-}
 
 /** (phase V51) The address a clip's picture is played from - its preview copy (forwards), or the picture itself. */
 export const frameSrc = (c) => _srcFor(c.src, false);
 
-// (phase V51) Told after each paint: the crop's field follows the frame under the playhead.
-const _paintSubs = [];
-export function onPaint(cb) { if (typeof cb === 'function') _paintSubs.push(cb); }
-
 function _paint() {
-  const n = _paintFrame();
-  if (!_shooting && !_borrowed) for (const cb of _paintSubs) { try { cb(); } catch (e) { /* a listener's own trouble */ } }
-  return n;
+  return _paintFrame();
 }
 // (phase V84 block 4c) A card's font just loaded: the frame standing still is painted again in it (playing, the next frame is).
 fxOnFontLoaded(() => { try { if (!_playing && _on && _ctx && !_shooting) _paint(); } catch (e) { /* not ready */ } });
@@ -2552,8 +2540,6 @@ function _wireTransport() {
     _spaceToggle();
   });
 }
-
-export const isMounted = () => _on;
 
 // ANOTHER TIMELINE OPENED STARTS STILL, AT ITS START (phase V36, T1; the owner 2026-10-23: "при проигрывании одного хайлайта
 // я переключаюсь на другой и плейхед без остановки продолжает двигаться"): a project, a highlights fragment, the draft -

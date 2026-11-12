@@ -503,7 +503,7 @@ export function paginate(words, opts) {
       const x = span[i];
       if (x.end - x.start >= PAGE.minClip - 1e-9) continue;
       const prev = span[i - 1];
-      const wallEnd = walls.reduce((m, [a, b]) => (b <= x.start + 1e-9 && b > m ? b : m), 0);
+      const wallEnd = walls.reduce((m, [, b]) => (b <= x.start + 1e-9 && b > m ? b : m), 0);
       const want = Math.max(up2(Math.max(prev ? prev.start + PAGE.minClip : 0, wallEnd)), down2(x.end - PAGE.minClip));
       if (want < x.start) {
         x.start = want;

@@ -43,7 +43,7 @@ import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
 import { listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
-import { askDelete, note } from './ask.js';
+import { askDelete, note } from '../ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
 import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS, rowsOn } from '../captions/style.js';
@@ -1839,7 +1839,6 @@ export function initInspector() {
     WordEdit.leave();
     const a = document.activeElement;
     if (a && a.closest && a.closest('#mv3-over') && _isTextField(a)) a.blur();
-    M.resetView();
     render(true);
   });
   WK.onChange(() => render());

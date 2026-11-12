@@ -21,13 +21,9 @@ function _lightCurrent(nav) {
   let best = null, bestLen = -1;
   nav.querySelectorAll('a[href]').forEach(a => {
     a.classList.remove('cur');
-    // `data-also` lets one entry own more than one address - a page reached through another one
-    // lights that one's entry. Without it a page whose link is not in the nav lights nothing.
-    for (const raw of [a.getAttribute('href') || ''].concat((a.getAttribute('data-also') || '').split(/\s+/))) {
-      const p = raw.replace(/\/+$/, '');
-      // longest matching prefix wins, so a longer address beats its own prefix
-      if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
-    }
+    const p = (a.getAttribute('href') || '').replace(/\/+$/, '');
+    // longest matching prefix wins, so a longer address beats its own prefix
+    if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
   });
   if (best) best.classList.add('cur');
 }
@@ -134,7 +130,4 @@ export function initNav() {
   // (phase V23) A new version in the program folder: a chip left of the wait and Alerts, in the app window only.
   mountUpdate(nav);
   _windowButtons(nav);
-  // (phase V49, the owner's (пр13)) The window's close asks nothing about the draft any more (the question of phase V20,
-  // js/draft-ask.js, went): it stays as it is. The shell asks the page `window.__ugcDraftAsk`, which no page defines now -
-  // the answer is 'none' at once (desktop/main.js draftAsked).
 }

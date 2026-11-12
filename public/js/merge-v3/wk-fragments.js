@@ -42,7 +42,7 @@ import { takeOf, isRead, isLive, liveLines } from './scen-api.js';
 import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
-import { askDelete, note as askNote } from './ask.js';
+import { askDelete, note as askNote } from '../ask.js';
 import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
@@ -70,7 +70,7 @@ const SPLIT_PART = 0.62;                 // ...and the fields keep at least the 
 let _splitW = (() => { try { return parseInt(localStorage.getItem(SPLIT_KEY) || '', 10) || 0; } catch (e) { return 0; } })();
 
 let _ctx = null;
-let _api = null;                          // what the step lends: the character cast and the voice
+let _api = null;                          // what the step lends: the voice module's api
 // The open line, 0-based. -1 is NONE open - the right column then speaks for every fragment at
 // once (owner, 2026-09-18). null is "not decided yet", before the project is known.
 let _open = null;
@@ -849,8 +849,8 @@ async function _saveVideo(patch) {
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
-// `host` is the step's scroll box, under its title; `api` is what the step lends - the character
-// cast (the voice row is theirs) and the voice module's api.
+// `host` is the step's scroll box, under its title; `api` is what the step lends - the voice
+// module's api.
 export function paint(host, ctx, api) {
   _ctx = ctx;
   _api = api;
@@ -884,7 +884,7 @@ export function paint(host, ctx, api) {
     + (_isVo(p) ? ' is-vo' + (_live(lines).length ? ' is-lit' : '') : ''));
   host.appendChild(right);
   _applySplit(host, left);
-  _keepScroll(right, 'r' + _open + ':' + api.view());
+  _keepScroll(right, 'r' + _open);
 
   _pickUpDrawing();
   _pickUpClips();
@@ -899,7 +899,6 @@ export function paint(host, ctx, api) {
   FCHAT.update(p);
   // (phase V61, (т9)) No counters and no `generate all` in a header any more - the setup has no header of its own; the
   // fields go one after another, each opening when the one before it has done its work.
-  if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   _notes(right);
   // (phase V62) A voiceover draft with no script yet still has its fields - blurred until there is one (_all; the owner 2026-10-31).
   if (!lines.length && !_isVo(p)) {
@@ -1725,7 +1724,7 @@ function _stageVideo(host, p, lines) {
   body.appendChild(sets);
   const about = (_modelOf() || {}).about;
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
-  if (_seedance()) _seedanceSettings(body, p);
+  if (_seedance()) _seedanceSettings(body);
   // (phase V61) WAITING FOR THE VOICE, the field's choices stay free: what films the video - and by Seedance's voice
   // sample nothing is read at all, so that choice cannot wait for a read. What makes waits.
   if (lock) body.querySelectorAll('.mv3-wk-fsets').forEach(r => r.classList.add('is-free'));
@@ -1820,7 +1819,7 @@ function _stageVideo(host, p, lines) {
 // moves, the camera. Each says what it does on the line under it (the owner's answer (ш):
 // "пояснение нужно, что это за параметры"). They are kept on the project as they are chosen; the clips that use them
 // come with the later parts of the phase.
-function _seedanceSettings(body, p) {
+function _seedanceSettings(body) {
   const v = _video();
   const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
   const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));

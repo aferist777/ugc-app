@@ -2,7 +2,7 @@
    SUNO'S FORM (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge. конкретно suno взять") -
    ONE constructor of Suno's music. (phase V64 block 5) It is the Suno part of the sound window, js/sound/sound-window.js -
    music and sounds, the same on both pages: Simple, Custom, Lyrics, the rows, the chips, the almanac. The window adds the
-   rest - ElevenLabs, Sounds, Video to Music, and in Merge (js/merge-v3/audchat.js) the project's presses under the card
+   rest - ElevenLabs, Sounds, Video to Music, and in Merge (js/merge-v3/sound-host.js) the project's presses under the card
    and "by the video".
 
    What is here:
@@ -103,7 +103,6 @@ export async function loadSaved() {
   try { SAVED = (await api('/api/audio/lyrics')).items || []; } catch (e) { /* not there yet */ }
   return SAVED;
 }
-export const savedLyrics = () => SAVED.slice();
 /** A text is saved when Music -> Lyrics holds the same text. */
 export const isSaved = (text) => !!_norm(text) && SAVED.some(x => _norm(x.text) === _norm(text));
 /** A text into Music -> Lyrics: { title, text, from, gen? } -> the item (the one there already when it was). */

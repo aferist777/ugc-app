@@ -42,7 +42,7 @@ export const CUTS = ['pages', 'sentences'];
 // A TEXT line's entrance and exit (phase V42, the owner's (о15); captions/text-fx.js draws them, its ENTER / LEAVE are keyed by
 // these names): what moves - the whole line, its rows, its words or its letters - and how; `enterDur` / `leaveDur` their
 // lengths, s. A SUBTITLE page has In and Out too since phase V49 (the owner's (пр16)-(пр18)): whole-page motions only, drawn by
-// captions/page-fx.js (its PAGE_ENTERS / PAGE_LEAVES), lengths automatic. On a subtitle lane `none` is "not chosen": the
+// captions/page-fx.js, lengths automatic. On a subtitle lane `none` is "not chosen": the
 // preset's own way of arriving (`appear`) - and `at-once`, chosen, arrives with nothing, whatever the preset does ((пр20)).
 export const ENTERS = ['none', 'fade', 'pop', 'zoom', 'grow', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'stretch', 'swing',
   'wipe', 'mask-rise', 'rows', 'words', 'words-pop', 'letters', 'letters-pop', 'letters-drop', 'typewriter', 'glitch', 'flicker',
