@@ -63,9 +63,9 @@ const AGENT = require('../lib/mv3-agent');
 
 const router = express.Router();
 
-// The scenarios store refuses a new scenario with fewer than this many lines, so a script
-// shorter than it cannot be saved. Named here because the wizard has to say so BEFORE spending
-// a generation, not after.
+// The fewest lines a generated script is written and saved with. The scenarios store itself
+// takes three (routes/scen3.js MIN_LINES); this is the generator's own rule. Named here because
+// the wizard has to say so BEFORE spending a generation, not after.
 const MIN_LINES = 5;
 
 const _jobs = {};
@@ -225,7 +225,7 @@ function _keeper(b, build) {
     drafts.save({
       id: id || undefined,
       ...(now ? { sourceId, topicId, sourceTitle: now.sourceTitle, topicTitle: now.topicTitle } : {}),
-      // Only when the stage was sent one: the cleaning pass is not, and must not blank the topic.
+      // Only when the stage was sent one: a stage sent without it must not blank the topic.
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
         ...((cur && cur.settings) || {}),

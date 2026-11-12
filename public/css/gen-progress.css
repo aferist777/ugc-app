@@ -2,9 +2,8 @@
    blurs in place behind a spinner, a label, a bar and a countdown that learns from how long
    the same kind of job took last time. js/progress.js draws these classes.
 
-   Shared: it started on the scenarios page and character-v2 reuses the same module, so the
-   rules live here rather than in either page's stylesheet. Both pages link it. Colours come
-   from app-shell.css variables, so load it after that. */
+   Shared: Home, the Library and Merge all link it, so the rules live here rather than in
+   any page's stylesheet. Colours come from app-shell.css variables, so load it after that. */
 @keyframes gp-spin{to{transform:rotate(360deg)}}
 
 /* ── Generation progress: the host's own content blurs in place ───────────── */

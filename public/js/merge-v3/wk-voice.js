@@ -4,12 +4,11 @@
 
    Two faces, and they are the same question one level apart:
 
-     the voice row      which voice this character speaks in, chosen from the ones they already
-                        have - a demo to listen to and a dropdown to change it - at the top of the
-                        voice field of the setup (js/merge-v3/wk-fragments.js)
-     voice              the sub-level: the saved voices in full, and under them the ElevenLabs
-                        shared library with its filters, to take a new one; painted into the right
-                        column beside the script
+     the voice row      which voice this character speaks in - our demo to listen to and a menu of
+                        the voices to choose from (paintRow) - in field 1 of the setup
+                        (js/merge-v3/wk-fragments.js)
+     the voices window  the saved voices in full, and under them the ElevenLabs shared library with
+                        its filters, to take a new one (openVoices, paintPicker)
 
    THE READS ARE SPOKEN FROM HERE (generate, readLine, readAll, saveText): the fragments pane shows
    the lines and their buttons, and this module is what those buttons call - a take is the voice's
@@ -20,8 +19,8 @@
 
    A VOICE BELONGS TO THE CHARACTER, not to this project (decided with the owner): changing the
    voice here is ADDING one to that character. `voices` is everything they have, `voice` is the
-   one every read uses, and both are written through the Character page's own door
-   (PATCH /api/char-store/:id) - so a voice taken here is on the Character page the moment it
+   one every read uses, and both are written through the door the Library's Characters shelf uses
+   (PATCH /api/char-store/:id) - so a voice taken here is on that shelf the moment it
    is taken, and the two cannot disagree.
 
    BEFORE THERE IS A CHARACTER the project may choose a voice of its own (the owner, 2026-09-21,
@@ -675,7 +674,7 @@ async function _take(api, card) {
 // A take is STALE when the words are no longer the ones that were spoken - the server keeps what
 // it said in each take (routes/scen3.js, /scen3/voice/speak) - so nothing has to be marked by
 // hand, and editing a line makes its read stale by itself. Unread or stale is the one rule,
-// shared with the counters and the Library spine (js/merge-v3/scen-api.js, isRead).
+// shared with the fragments pane (js/merge-v3/scen-api.js, isRead).
 //
 // The read is ElevenLabs v3 by the tags of the mood (phase W), with the project's stability and
 // speed (V26.1, below). A setting changed after a read does not make the read stale - it is still

@@ -146,7 +146,6 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 /* (V84 block 1c) an effect by the face waiting for its face */
 .mv3-fx-row.is-wait .mv3-fx-name{opacity:.7; cursor:default}
 .mv3-fx-x{flex:0 0 auto}
-/* The list's group names. */
 /* (V84, the owner 2026-11-10 (эф13)-(эф16)) The panel of tiles under the effects' rows: the full-width "+ Effect" opens and shuts
    it; chips of the groups, the tiles three a row - a picture made beforehand, its film only under the pointer (fx-ui.js); the
    tile's line over its row, the strip's width. */

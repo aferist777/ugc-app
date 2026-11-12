@@ -2,8 +2,8 @@
    FINDING SOUNDS ONLINE (phase V34.D-E; the owner 2026-10-22, (з1), (н9)-(н11): "пользователь может подключаться к
    библиотеке в попапе и добавлять себе в библиотеку другие звуки из наборов, так же поиском по библиотекам"; "только cc0
    берем. обойдемся openverse"; 2026-10-23, (р3): "когда пользователь что-то написал в поиск и не нашел в библиотеке, то
-   подставлять написаное в поиск в попап поиска онлайн") - one window for Merge's Library panel, the Library's Media shelf
-   and the lab.
+   подставлять написаное в поиск в попап поиска онлайн") - one window for Merge's Library panel and the Library's Media
+   shelf.
 
    The search (CC0 only; GET /api/audio/online - since phase V54 Freesound directly with the owner's key, else Openverse,
    which searches Freesound and Wikimedia Commons with no key; the answer says which, `via`), a result played by

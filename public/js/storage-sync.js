@@ -2,17 +2,17 @@
    (last open project, UI prefs, engine/voice defaults, drafts) survives a
    different browser/device or a cache clear.
 
-   MUST be the FIRST <script> in <head> on every app page: it hydrates
-   localStorage from the server synchronously, before page code reads it.
+   MUST be the FIRST <script> in <head> of every page that loads it (Home,
+   Library, Merge): it hydrates localStorage from the server synchronously,
+   before page code reads it.
 
    - Boot: sync GET /api/ui-state -> apply server values to LS; push local-only
      keys up once (migration; the current browser seeds the server on first run).
    - localStorage.setItem/removeItem are patched -> debounced POST of only the
      changed keys ({set,del} per-key merge; no whole-blob writes -> no clobber).
    - Flush on pagehide/hidden via sendBeacon so the last edit isn't lost.
-   - Keys already owned by a dedicated sync layer (edit / biroly / hooks / geni /
-     obrazy / projects) or pure caches are NOT mirrored here (double-ownership
-     would race). Server unreachable -> silently falls back to plain localStorage.
+   - The keys in BLOCK below are NOT mirrored.
+     Server unreachable -> silently falls back to plain localStorage.
 */
 (function () {
   var API = '/api/ui-state';

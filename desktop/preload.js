@@ -1,10 +1,10 @@
 'use strict';
 
 /* What the app's pages may ask of their window (phase V19, the owner 2026-10-08) - and nothing else: minimise it, take
-   (phase V23) restart the app for a new version, or
    it out of full screen or back (what F11 does), close it - the same close as the window's own, so a running render is
-   asked about first. The pages draw the buttons themselves (public/js/app-nav.js); in a browser there is no `ugcWindow`
-   and no buttons. The main process answers only the app's own pages (desktop/main.js).
+   asked about first - or (phase V23) restart the app for a new version. The pages draw the buttons themselves
+   (public/js/app-nav.js); in a browser there is no `ugcWindow` and no buttons. The main process answers only the
+   app's own pages (desktop/main.js).
    (phase V28.1) And where a file the person picked lies on this computer: a source added from a file is copied by
    the server from there (lib/source-intake.js), so leaving the page cuts nothing off. A browser has no such thing.
    (phase V33.4) And a file or folder of the library shown in Explorer ("show in folder"). */

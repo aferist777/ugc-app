@@ -11,7 +11,7 @@
    - (block 1c) BY THE FACE (Snap zoom, Face mosaic - effects.js `face`): added, the clip's film is counted for its faces first
      (lib/faces.js, the app's hidden window; "finding the face…" in the group meanwhile) and the face's place in the frame over the
      clip written with it (`path`, `pk`) - one write; none found, it works where a face usually is, and the group says why.
-   - THE INSPECTOR'S GROUP "Effects" (fxGroup, after Color): a row a effect - its name, where it runs, ✕; the row pressed opens its
+   - THE INSPECTOR'S GROUP "Effects" (fxRows, after Color): a row a effect - its name, where it runs, ✕; the row pressed opens its
      Start and End (seconds into the clip; fx/params.js placeEffect). The effect open is the one whose row was pressed (its frame shows on the
      timeline, focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span; the owner
      2026-11-10: one row).
@@ -55,7 +55,7 @@ const _isOpen = (clipId, fxId) => !!(_focus && _focus.clipId === String(clipId) 
 
 // ── The panel of tiles (the owner 2026-11-10, (эф13)-(эф16)) ───────────────
 // Under the group's rows, the full-width "+ Effect" opens and shuts the PANEL - it never shuts by itself: the chips of the groups
-// on top (Zoom & motion · Color & light · Face · Sets), the chosen one's TILES under them, three a row. A tile is a picture made
+// on top (the effects' groups - fx/effects.js GROUPS - and Sets), the chosen one's TILES under them, three a row. A tile is a picture made
 // beforehand (public/fx-tiles/<key>.webp - tools/fx-tiles.js, the app's own render on the owner's example clip) and a short film
 // (<key>.webm) played only while the pointer is on it; over it, the width of the strip, its line. A press puts the effect on the
 // whole clip at once, opens its row and outlines its tile. Open / shut and the chip are the viewer's convenience (localStorage).

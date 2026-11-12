@@ -13,7 +13,7 @@
 
    A PAGE NEVER LEAVES THE FRAME (the owner's (с34)): a rectangle that runs past an edge is moved back
    inside by just that much - ass.js writes the moved place into the page's \pos, the preview's painter
-   (subs-b.js) draws it there, so the screen, the render and the screenshot agree. A page that fits is
+   (subs-b.js) draws it there, so the screen and the render agree. A page that fits is
    written exactly as before.
 
    TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29)-(хо31), 2026-11-03; style.js `rows`): rowsPlan says, for every page of such a

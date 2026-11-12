@@ -1,8 +1,8 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// GENERATE AUDIO (phase V34.C, the owner 2026-10-22) - the server of the "generate audio" constructor: Merge's view
-// "/ generate audio" (V34.E, js/merge-v3/audchat.js; the lab page /lab/audio of V34.D went in V34.F). The records and the journal are lib/audio-gens.js; the
+// GENERATE AUDIO (phase V34.C, the owner 2026-10-22) - the server of the sound window (js/sound/sound-window.js, on both
+// pages; it began as Merge's view "/ generate audio", V34.E). The records and the journal are lib/audio-gens.js; the
 // engines' field names lib/audio-engines.js.
 //
 //   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
@@ -42,7 +42,7 @@ router.get('/audio/catalog', (_req, res) => {
 // (phase V54) Video to Music: `video` - a file of the library, or `clip` { key, clipId } - one clip of a timeline as it is
 // seen, made into a file by the server when it is asked and the track laid under the clip; over ten minutes or 200 MB it is
 // refused here in words, before anything is paid.
-// (phase V59) `into` - the id of the folder under Music open in the Library's music window: its tracks lie there
+// (phase V59) `into` - the id of the folder under Music open in the sound window in the Library: its tracks lie there
 // (lib/audio-gens.js `_intoOf` - a folder of kind 'music' that is there, never with a highlights mood).
 router.post('/audio/gen', async (req, res) => {
   const b = req.body || {};

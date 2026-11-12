@@ -25,7 +25,7 @@
    (js/sound/menu.js). Over the grid of SFX: the search and "find online…" (js/sound/shelf.js, js/sound/online.js).
 
    (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - opened, laid on a lane as a picture,
-   deleted, never moved (no star) - and their "+" (the tree's row, the gallery's "+" tile) opens New environment / New
+   deleted, never moved (no star) - and their "create" (the tree's row) or the gallery's "+" tile opens New environment / New
    lookbook - (phase V58, the owner's (лк7)) the generator's WINDOW over the page, the one a talking head's "where" / "who"
    open (openMaker, below).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -833,7 +833,7 @@ function _plusMenu(anchor) {
 
   if (_isImages()) {
     item('load from local', 'pictures from this computer', () => _pickFiles());
-    // The pictures chat, in this panel's place (phase J).
+    // The pictures chat, in its window (js/merge-v3/chat-window.js).
     item('generate', 'make one with a model', () => openPictures());
   } else if (_isAudio()) {
     if (_kind() !== 'sounds' && !SS.isSfx(_node)) item('music from this computer', 'a track - mp3, wav, m4a…', () => _pickFiles('music'));
@@ -1331,19 +1331,19 @@ export async function reveal(path) {
 }
 
 // ── New environment / New lookbook (phase V55, (гн11); phase V58, the owner's (лк6), (лк7)) ──
-// The "+" of IMAGES -> Environments / Lookbooks - their row in the tree, their menu, the gallery's "+" tile - opens the
+// The "create" of IMAGES -> Environments / Lookbooks - their row in the tree, their menu, the gallery's "+" tile - opens the
 // generator's WINDOW over the page, the size of the almanac: the same window a talking head's "where" / "who" open
 // (sub-session P's module), one for the whole app. The panel stays as it is, the gallery and the tree where they were; what
 // the window makes lands in its folder, and the tree and the gallery are read again. (Until V58 it was the Library's chat
-// as a view of this panel - js/library/makechat.js, gone.) An Alerts row of that old chat sent from here still leads here,
-// `?open=envmake|lbmake` (routes/makechat.js), and opens the window.
+// as a view of this panel - js/library/makechat.js, gone.) The Alerts row of the window opened here leads back here,
+// `?open=envmake|lbmake` (`where`, below), and opens the window again.
 const MAKE_VIEW = { environments: 'envmake', lookbooks: 'lbmake' };
 const MAKE_KIND = { environments: 'environment', lookbooks: 'lookbook' };
 const MAKE_LABEL = { environments: 'New environment', lookbooks: 'New lookbook' };
 const _makeWins = {};         // the window open per kind - pressed again, the same one stays
 
-/** Open the generator of 'environments' or 'lookbooks' - its window, over the page; (phase V59) of 'music' - this panel's own
- *  "/ generate audio" on Simple (js/merge-v3/audchat.js; the Library's music window is the Library's). */
+/** Open the generator of 'environments' or 'lookbooks' - its window, over the page; (phase V59) of 'music' - the sound
+ *  window on Simple (js/merge-v3/audchat.js openMusicMaker). */
 export async function openMaker(kind) {
   if (kind === 'music') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
   // (phase V26.6) IMAGES -> Props: the New prop window; a product added - the tree and the gallery read again.
@@ -1381,7 +1381,7 @@ export async function openGenerate(root) {
 }
 
 function _initMakers() {
-  // ?open=envmake|lbmake - where the Alerts row of the old chat's send made here leads: the window, once the page has its
+  // ?open=envmake|lbmake - where the Alerts row of the window opened here leads: the window, once the page has its
   // project. Said once: the address forgets it.
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { want = ''; }

@@ -57,8 +57,8 @@ initInspector();
 initWorkshop();
 initProjects();
 initBar();
-// (phase V30, block 1) The speech model for captions, offered once when the program first starts (js/merge-v3/model-ask.js) -
-// a moment after the page, so a draft left by an app that closed without asking is asked about first.
+// (phase V30, block 1) The speech model for captions, offered once, the first time Merge opens in a library
+// (js/merge-v3/model-ask.js) - a moment after the page.
 setTimeout(() => { askModelOnce().catch(() => {}); }, 2500);
 
 // ?open=pictures in the address, which is how the Alerts list takes somebody back to the chat a

@@ -4,15 +4,15 @@
 
    Captions are heard by Groq when there is a key, and on this computer when there is not (the owner's (с22)); a talking
    head's new lines are heard by themselves - and on this computer that needs the speech model, 574 MB, which is never
-   downloaded by itself. So Merge - the first page the program opens - asks once, in a library where it was never asked:
-   the recognition program is there, the model is not and is not being downloaded.
+   downloaded by itself. So Merge asks once, the first time it opens in a library where it was never asked: the
+   recognition program is there, the model is not and is not being downloaded.
 
      Download   the app fetches it in the background (lib/whisper-local.js: Hugging Face, a pinned commit, checked by
                 SHA-256, a broken download goes on from where it stopped); Admin -> This computer shows how far it is
      Not now    the lane of subtitles and Admin offer it later, as before
 
    Asked once: the answer is kept in localStorage, which the library mirrors (data/ui-state.json, js/storage-sync.js) - a
-   new library is a new start. A question already on screen (the draft's, at the start) is answered first.
+   new library is a new start. A question already on screen (the update's) is answered first.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -32,7 +32,7 @@ export async function askModelOnce() {
   let st = null;
   try { st = (await fetch('/api/speech/local').then((r) => r.json())).state; } catch (e) { return; }
   if (!st || !st.platform || !st.program || !st.program.present || !st.model || st.model.present || st.model.downloading) return;
-  for (let i = 0; i < 1200 && document.querySelector('.dr-box'); i++) await _sleep(500);   // the draft's question first
+  for (let i = 0; i < 1200 && document.querySelector('.dr-box'); i++) await _sleep(500);   // a question on screen first
   const mb = Math.round((+st.model.bytes || 574041195) / 1e6);
 
   const back = _el('div', 'dr-back');

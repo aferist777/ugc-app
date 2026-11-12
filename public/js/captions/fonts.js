@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CAPTIONS — the fonts the app ships, and only those (phase K5, 2026-10-03).
 
-   They live in public/fonts/captions/ (static TTFs, unmodified, OFL or Apache-2.0 - licences beside them) and
-   every one draws the whole Russian alphabet - but the five display faces of the text presets (phase V42,
-   the owner's (ц2)): Anton, Bebas Neue, Bangers, Luckiest Guy and Permanent Marker have no Cyrillic, and
-   libass would quietly fill the missing letters from Arial, the word coming out in two fonts. Each of them
+   They live in public/fonts/captions/ (static TTFs, OFL or Apache-2.0 - licences beside them; how the owner's 80
+   were made is below). A font with no Cyrillic - the five display faces of the text presets (phase V42, the
+   owner's (ц2)): Anton, Bebas Neue, Bangers, Luckiest Guy and Permanent Marker, and 41 of the owner's 80 - would
+   have libass quietly fill the missing letters from Arial, the word coming out in two fonts. Each of them
    names its `twin`, a shipped font with Cyrillic: a line that holds a Cyrillic letter is drawn WHOLE in the
    twin (drawnFamily below - ass.js, place.js and text-fx.js all ask it), never a word in two fonts. The
    render hands the folder to the `ass` filter (fontsdir), the page declares them with @font-face

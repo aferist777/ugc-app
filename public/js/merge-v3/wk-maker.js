@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — what talking head's setup and its windows share: the owner's twenty characters and the
-   keyboard-mess test (the generators' benches, js/gen-window.js, and the Library's makechat.js), the
+   keyboard-mess test (the generators' benches, js/gen-window.js), the
    viewer for one picture, a tile's menu, the gentler wheel, the countdown of the script on the
    whole stage (holdProgress) and - since phase V58 - the countdowns of the casting on the stage's
    halves (holdHalf) and the list "who" and "where" choose from (paintChoose). The benches

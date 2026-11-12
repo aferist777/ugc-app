@@ -111,13 +111,13 @@ export async function toggleFavorite(it) {
 }
 
 // ── Category ────────────────────────────────────────────────────────────────
-// Every list at once, keyed by kind. A card's dropdown must offer its OWN kind's list, and
-// the All filter shows all three kinds in one grid, so one request beats one per card.
+// Every list at once, keyed by kind. A dropdown must offer an item its OWN kind's list, and
+// one gallery can hold several kinds, so one request beats one per item.
 export async function loadCats() {
   try { return (await _json('/api/library/cats')).byKind || {}; } catch (e) { return {}; }
 }
 
-// ── Category vocabulary: create, rename, reorder, delete ─────────────────────
+// ── Category vocabulary: create, rename, delete ──────────────────────────────
 // (phase V54 block 6) A folder made where the person asked: in `parent` ('' - the kind itself). A name already there gives
 // that one (created:false); a path too long is refused in words.
 export async function addFolder(kind, label, parent) {
@@ -135,9 +135,8 @@ export async function addCat(kind, label) {
   return d;                            // { cat, created } — created:false means it existed
 }
 
-// Two outcomes, decided by the server: a Library category renames in place, while a
-// Birols-tab category FORKS — a Library category takes the new name and the clips move into
-// it, leaving the Birols tab's own category untouched.
+// The server renames the folder in place - its folder on the disk with everything under it, and
+// the copies of its name on the records; a category only its records name becomes a real one first.
 export async function renameCat(kind, id, label) {
   const d = await _json('/api/library/cats/' + encodeURIComponent(id), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -146,8 +145,8 @@ export async function renameCat(kind, id, label) {
   return d;
 }
 
-// mode 'move' clears the category off its clips; mode 'delete' removes the clips and their
-// files. The caller is responsible for having said which, in words, before getting here.
+// mode 'move' puts what is in it one level up; mode 'delete' removes what is in it and in every
+// folder under it, with their files. The caller is responsible for having said which, in words, before getting here.
 export async function deleteCat(kind, id, mode) {
   const d = await _json('/api/library/cats/' + encodeURIComponent(id)
     + '?kind=' + encodeURIComponent(kind) + '&media=' + (mode === 'delete' ? 'delete' : 'move'),

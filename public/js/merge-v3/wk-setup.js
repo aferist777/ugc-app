@@ -37,23 +37,24 @@
    "where" asks the page first (js/alerts-bell.js `ugc:goto`); this step opens that window over what
    is open, and closing it shows the one under it as it was.
 
-   The look belongs to the CHARACTER when it is done (obraz-save), not to this project. The
+   The look belongs to the CHARACTER when it is done (routes/scen3.js _saveObraz), not to this project. The
    server puts one made for this project on it (routes/scen3.js), so the next talking head cast
    with the same person finds the wardrobe already there.
 
    THE PANEL IS THE SCRIPT (the hub of this step - js/merge-v3/wk-fragments.js, decided
    with the owner 2026-09-21, phase M): the voice it is read in over one list of lines,
    each with its read, its shot, its frame and its clip; on the right the open line, or
-   the settings of the whole video, the voices (wk-voice.js) or the frames chat (fchat.js).
+   the settings of the whole video. The voices (wk-voice.js) and the frames chat (fchat.js)
+   are windows over it.
 
    THE READ BELONGS TO THE CHARACTER (decided with the owner 2026-09-18): a voice is a
    property of the one speaking, not a stage of its own - js/merge-v3/wk-voice.js keeps
-   the voices and speaks the lines; this file only decides when its faces are showing.
+   the voices and speaks the lines; this file only opens its window (_openVoices).
 
    WHAT IS SAVED. Only ids, and on the scenario project, where casting has always
    lived: characterId / characterName, then obrazId / obrazImage, then the location
    pair (routes/scen3.js, _normCasting). Nothing here owns a character or a look -
-   they belong to the Character tab and to the looks library, and this only points
+   they belong to the Library's Characters shelf and to the looks, and this only points
    at them.
 
    Built in phases C4, C5, V1-V3, F1-F3, S, M, V57 and V58 (docs/local-app/PLAN.md).
@@ -557,8 +558,8 @@ function _envApi() {
 }
 
 // THE VOICE LEVEL (js/merge-v3/wk-voice.js). All it may reach in here is the character whose
-// voice it is and the one door that edits a character - the Character page's own endpoint, so a
-// voice taken here is on that page the moment it is taken and the two cannot disagree - and,
+// voice it is and the one door that edits a character - PATCH /api/char-store/:id, the one the Library's
+// Characters shelf uses, so a voice taken here is there the moment it is taken and the two cannot disagree - and,
 // with nobody cast, the project's own voice (`voice.pick`, routes/scen3.js).
 function _voiceApi(chosen) {
   const setProject = (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); };

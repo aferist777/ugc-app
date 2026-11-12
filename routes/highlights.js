@@ -10,7 +10,7 @@
 //   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio=&count= -> { price }   what "find moments" is expected to cost
 //   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
-//   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
+//   POST   /api/highlights/:id/start        { from, url | path | sourceId, audio, kind, length, count, style, moods, title } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
 //   POST   /api/highlights/:id/retry        the same as the row's retry in Alerts -> { alertId }
 //   POST   /api/highlights/:id/fragments/:n/delete   hidden until the next start (Ctrl+Z brings it back)

@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE "?" OF A PARAMETER (phase V60, the owner 2026-10-29: "добавь символы вопросиков справа от названий параметров при
-   наведении на которые показываем всплывашки с инструкциями и описанием"; (пп10а), (пп11а)) - ONE rule for Merge's
-   "/ generate audio" and the Library's music window, the form they share (js/sound/suno-form.js) and the almanac.
+   наведении на которые показываем всплывашки с инструкциями и описанием"; (пп10а), (пп11а)) - ONE rule for the sound
+   window of both pages (js/sound/sound-window.js), the form in it (js/sound/suno-form.js) and the almanac.
 
    A small "?" right of a parameter's name. The pointer resting on it opens a popup - what the parameter is and how to use
    it, where the grey notes under the rows and the ♪ block of the gold card used to be. Since phase V61 ((т4а)) the popup

@@ -1,6 +1,6 @@
 'use strict';
 
-/* build-patterns.js - builds the app's built-in pattern set, IMAGES -> Patterns (phase V65; docs/local-app/plan/,
+/* build-patterns.js - builds the app's built-in pattern set (phase V65; docs/local-app/plan/,
    "Фаза V65"), from tools/patterns-list.json and the folder of finished files the owner chose: one folder laid out as
    vendor/patterns/ is, and ONE archive of it - the archive tools/fetch-patterns.js installs. Run by hand when the set
    changes; npm install never runs it:

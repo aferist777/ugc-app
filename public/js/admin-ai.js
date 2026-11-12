@@ -63,7 +63,7 @@
       + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place); highlights (finding the '
       + 'moments of a long video); the scenario generator (the hooks, the script, rewriting a paragraph or a '
       + 'fragment of one, a scenario of the shelf in its narrator\'s voice), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, '
-      + 'and the generator, the topics, the narrator and highlights think at effort medium (the rest at low).');
+      + 'and the generator, the topics and the narrator think at effort medium, highlights at high (the rest at low).');
     p('<b>The ladder:</b> the first step is asked. If it answers nothing, refuses or runs out of time, the next one '
       + 'is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the '
       + 'last check, is stepped over - and such an aggregator cannot be chosen until its key works. Every model here '

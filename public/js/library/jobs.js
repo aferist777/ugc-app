@@ -4,7 +4,7 @@
 // (js/library/narrators.js): transcribing a source, finding its topics, writing hooks and a script,
 // reading a narrator's voice. Each is a job on the server that the page polls; nothing is held open.
 // The rows teach themselves how long a kind of job takes (js/progress.js keeps a running average
-// per key) - and the keys are the ones Library 2 used, so what it learned carries over.
+// per key).
 
 import { startInlineProgress } from '../progress.js';
 

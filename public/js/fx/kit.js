@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE GRAPHICS' KIT (phase V84 block 4b) - what every effect that draws on the frame shares: the preview and the app's bake window
-   draw with this one code (js/merge-v3/fx-draw.js applyFx -> js/fx/overlays.js and the blocks to come). Page only (canvas).
+   draw with this one code (js/merge-v3/fx-draw.js applyFx -> js/fx/overlays.js, cards.js, screens.js, copies.js, glitches.js,
+   behind.js). Page only (canvas).
      fontsReady()          Inter in four weights for the canvas ('UGC FX Inter': 400, 500 - the interface's files; 700, 900 - the
                            captions') - the bake window waits for it before its first frame, the preview draws once it is there
      font(px, weight)      the canvas's font string

@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   LIBRARY — page-specific styles. Tokens, the body reset and the top nav come
-   from css/app-shell.css, shared with Scenarios v3.
+   LIBRARY — page-specific styles. Tokens and the body reset come from
+   css/app-shell.css, the top nav from css/app-nav.css - both shared with every page.
 
    Two columns: the shelf list on the left (fixed), the grid on the right. The
    grid is the only thing that scrolls.
@@ -424,7 +424,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-vchar:hover{ border-color:var(--sel-line); }
 /* Gold is the character's ONE voice, the id every read uses; a plain border is one of
-   their saved others. Same language as the stars in the character page. */
+   their saved others. */
 .lib-vchar.is-gold{ border-color:var(--sel-line); }
 .lib-vchar > img{ display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; }
 .lib-vchar-n{

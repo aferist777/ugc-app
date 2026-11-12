@@ -7,9 +7,9 @@
 // The countdown is an EMA kept in ui-state, so the second run of a given job already shows a
 // believable estimate instead of a bare spinner.
 //
-// It lives in js/ rather than in one page's folder because three of them import it - Character,
-// the Library (the scenario generator) and Merge - and a page reaching sideways into another
-// page's folder to get it.
+// It lives in js/ rather than in one page's folder because more than one page uses it - the
+// Library, Merge and Home (New Character's window opens there too) - and a page should not reach
+// sideways into another page's folder to get it.
 
 const EMA_KEY = 'sv3_gen_ema_v1';
 const EMA_ALPHA = 0.35;

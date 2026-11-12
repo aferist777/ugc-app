@@ -9,19 +9,13 @@
      ask(anchor, q, o) -> Promise<boolean>      a question that WAITS for its answer - the browser's confirm() of the
                                                 pages before 2b; true on the verb, false on Cancel, Escape, a press away
 
-   The chrome is the talking-head timeline's, down to the class names: a narrow strip that
-   opens above the X, Yes coloured as the destructive answer and No plain. Two editors on one
-   page asking the same question two different ways is the kind of difference that reads as
-   two different programs.
+   It opens above the button that asked. A popup rather than an armed second click. An armed
+   button says nothing about what it is about to remove, and on lanes that look alike - four
+   video tracks, four audio tracks mirrored - that is exactly the thing worth saying.
 
-   A popup rather than an armed second click. An armed button says nothing about what it is
-   about to remove, and on lanes that look alike - four video tracks, four audio tracks
-   mirrored - that is exactly the thing worth saying.
-
-   The one addition is a SECOND LINE for a consequence. The other timeline never needs it:
-   removing a clip there removes that clip. Here a picture takes its sound with it and a video
-   track takes its audio track, and a person who finds that out afterwards has lost work they
-   did not offer up.
+   It has a SECOND LINE for a consequence: on the timeline a picture takes its sound with it and
+   a video track takes its audio track, and a person who finds that out afterwards has lost work
+   they did not offer up.
 
    (phase V73 block 2) The look is the shared part `.u-ask.is-float` (css/app-shell.css): the question in <b>, what goes
    with it in <p>, the answers as the shared buttons - Cancel LEFT, the verb right (б2-4, б2-8); the red fill only on an

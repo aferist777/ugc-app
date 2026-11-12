@@ -151,7 +151,7 @@ function _glitch(t) {
     col: [1.1, 0, 0, 8 / 255, 0, 1.1, 0, 8 / 255, 0, 0, 1.1, 8 / 255],
     blurV: 2.6, stripes: 1, grain: 1,
     // (block 3) its column jitter - bands of 7 u, each moved down by its own random amount (σ 5 u), new every two frames: drawn by
-    // the page's code only (fx-draw.js) - on main video baked by the app's window (lib/fx-bake.js), elsewhere left out.
+    // the page's code only (fx-draw.js) - for the render baked by the app's window (lib/fx-bake.js) on every video lane.
     jitter: { seed: (i >> 1) + 1 },
   };
 }

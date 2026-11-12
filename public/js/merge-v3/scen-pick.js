@@ -4,8 +4,8 @@
    A talking-head project starts from a SCENARIO - a title and the lines that will be spoken.
    The scenario library is a VIEW of the Library panel (phase V28.3, the owner 2026-10-12): the
    crumb "scenarios /" left of "Library", in the draft and in a blank project - never in a talking
-   head, where "scenarios" would read as its own script. It is one of lib-views.js's bases, like
-   the chats: the gallery and the tree give way to it, the corner of the sashes goes left and
+   head, where "scenarios" would read as its own script. It is one of lib-views.js's bases: it
+   takes the gallery's place with the media tree on its right, the corner of the sashes goes left and
    down, the view is remembered per project, and "Library" goes back to the shelf. "+ new project
    -> talking head" opens it in the project that is open (a talking head goes to the draft for it).
    It used to take the Setup panel over, the Library folded to its spine beside it; that went.

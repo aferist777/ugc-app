@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the preset styles (phase K3, 2026-10-03). MADE BY A TOOL - not edited by hand.
+   CAPTIONS — the preset styles (phase K3, 2026-10-03). Made once by a converter (not in the repository).
 
    From CapShorts (github.com/thealiraza2/CapShorts, MIT, (c) 2026 Ali Raza - templates.json) and Capite
    (github.com/muneebkhan08/Capite, MIT, (c) 2026 Capite Contributors - caption-styles.config.json),

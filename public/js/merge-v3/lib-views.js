@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the Library panel's views, ONE owner (phase K6b, 2026-10-03; several chats since V1).
 
-   The panel shows the shelf, a CHAT (the pictures chat of phase J - and, from phase V3, the video chat:
-   each is chat-shell.js with its own description), the scenarios a talking head is made from (phase V28.3,
-   scen-pick.js - registered the way a chat is, its crumb "scenarios /" left of "Library" and hidden in a
+   The panel shows the shelf, a view registered the way a chat is (below - among them the scenarios a talking
+   head is made from, phase V28.3, scen-pick.js, its crumb "scenarios /" left of "Library" and hidden in a
    talking head), or the captions view (phase K6: preset tiles beside the settings of the captions picked on
    the timeline). Two kinds of state, kept apart:
      the BASE      the shelf or one chat - remembered per project HERE (viewOf / rememberView), told by
@@ -30,7 +29,7 @@ import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
-// Which view each project was left on: { projectKey: 'pictures' | 'videos' }. It was the pictures chat's own
+// Which view each project was left on: { projectKey: <a view's name> }. It was the pictures chat's own
 // ('mv3_pc_view_v1', { key: 'chat' }) until V1; read once into this one and dropped.
 const LS_VIEW = 'mv3_lib_view_v1';
 const LS_VIEW_OLD = 'mv3_pc_view_v1';
@@ -41,8 +40,8 @@ let _held = false;           // the room is taken
 let _frame = 0;
 let _capsBack = null;        // what letting go of the captions does (the pick released)
 let _capsOpen = null;        // what the "captions" crumb does from another view (the subtitle lane picked)
-// The chats, by name: { root, head, headL, crumb } element ids (headL: buttons right beside the crumb - the video
-// chat's catalog, phase V6), onBack (leave it for the shelf), onYield (another chat took the base), onCrumb (its crumb
+// The views registered the way a chat is, by name: { root, head, headL, crumb } element ids (headL: buttons right
+// beside the crumb), onBack (leave it for the shelf), onYield (another view took the base), onCrumb (its crumb
 // pressed from another view).
 const _chats = new Map();
 

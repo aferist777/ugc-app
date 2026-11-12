@@ -4,8 +4,8 @@
 
    `crop: { x, y, w, h }` - a piece of the clip's FILE in shares of its width and height, cut FIRST:
    past it the clip behaves as if the file were that piece - no Fit / Fill, Framing, Keep or punch-ins.
-   `off: true` - the frame is remembered and not applied (PiP switched off takes the crop with it, the
-   Crop tick brings it back - (пр43)). `shape` - the form the frame keeps while it is moved ((пр39):
+   `off: true` - the frame is remembered and not applied (Crop switched off, or "Full frame" on a cropped
+   clip above main; Crop switched on brings it back - (пр43)). `shape` - the form the frame keeps while it is moved ((пр39):
    9:16, 1:1, 16:9, 4:5 of the piece's own pixels; none - free).
 
    A crop is shown where the piece already was ((пр40): "остается там же, без подстраивания"): the

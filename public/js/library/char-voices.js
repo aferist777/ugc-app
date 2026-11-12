@@ -4,7 +4,7 @@
 // THE GENDER is two words and one press: female | male, written onto the character at once. It is
 // what the casting and the voice search go by.
 //
-// THE VOICES: the main one - the voice every read uses - first and in gold, then the others saved for
+// THE VOICES: the main one - the voice every read uses - first and marked "Main", then the others saved for
 // the character, each with our demo. A grey star makes a voice the main one; the cross that shows on
 // hover UNBINDS it - not a delete: the voice stays on the Voices shelf with its demo, and only its
 // ElevenLabs slot is given back (routes/char-store.js). Under them, the search of the ElevenLabs

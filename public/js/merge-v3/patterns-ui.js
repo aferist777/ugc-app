@@ -4,7 +4,7 @@
    docs/local-app/plan/, "Фаза V74").
 
    In the strip of the MAIN VIDEO lane (inspector.js _blankVideoTrack) - and in the common settings of a highlights project's
-   ticked fragments, "pattern · for all N" (hl-group.js) - under the lane's own rows:
+   ticked fragments, "Main video · for all N" (hl-group.js) - under the lane's own rows:
      the set     every pattern of the app (GET /api/patterns - vendor/patterns/, lib/patterns-builtin.js) as a tile WITH A TICK,
                  under the fold «Patterns · N ▸» (phase V74.1: opened in the strip, kept as it was left); a tick lays the pattern
                  over the ones ticked already (70 %, no blend mode - look.js PATTERN_OPACITY), untick takes it off;

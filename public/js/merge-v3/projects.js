@@ -1,16 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the project bar.
 
-   One timeline per project, and a project is a Scenarios project: its approved cut is
-   what fills the Main track, so its key is `sv3_<scenariosProjectId>`. The timeline
-   that existed before projects did is listed as `local` / "Untitled".
+   One timeline per project. A talking head's or a voiceover's key is `sv3_<project id>` - its
+   lines are laid on its main lanes by the server (lib/frag-mirror.js); a project made here, the
+   draft and a highlights project (its own timeline, and one per fragment) have keys of their own.
 
-   Newest first. An import from Scenarios therefore lands at the top of the list, which
-   is where you look for the thing you just sent.
+   The draft first, then the voiceover draft, then newest first. A project just made therefore
+   lands near the top of the list, which is where you look for the thing you just made.
 
-   The list is re-read after a switch rather than kept in memory: a project can appear
-   without this page doing anything - Scenarios writes it - and a cached list would show
-   yesterday's projects until a reload.
+   The list is read again at every press on the picker rather than kept: a project can appear
+   without this page doing anything - Home's quick start or the Library's "use" makes one - and
+   a cached list would show yesterday's projects until a reload.
 
    ONE PERSON. The desktop app has one, so every project is theirs (lib/ownership.js answers so) and
    the picker lists them all - the owner picker, "copy to my profile" and the read-only lock of the
@@ -231,8 +231,8 @@ export function initProjects() {
 
   // Refreshed when the list is about to be READ, not on every store change: a clip drag
   // changes the store several times a second and none of those change which projects
-  // exist. Opening the dropdown is also the moment a project imported from Scenarios has
-  // to appear without reloading the page.
+  // exist. Opening the dropdown is also the moment a project made elsewhere (Home, the Library)
+  // has to appear without reloading the page.
   // (phase V67, second round (д)) The press opens the list with its filter (_openList), not the select's own - which is
   // read again there first.
   sel.addEventListener('mousedown', (e) => {
@@ -292,24 +292,23 @@ function _delLook(x, draft) {
   x.classList.toggle('is-quiet', !!draft);
 }
 
-// ── New: an empty project, made here rather than sent from Scenarios ────────
-// The name is ASKED FOR, with a prompt, because nothing in this app renames a project: a name
-// skipped now is a project called Untitled for as long as it exists. The default offered is
-// today's date, which is how imported projects are titled, so a hand-made one sorts and reads
-// beside them instead of standing out.
+// ── New: an empty project, made here ────────────────────────────────────────
+// The name is ASKED FOR, with a prompt: a name skipped now is a project called Untitled until
+// someone renames it. The default offered is today's date, which is how a talking head's name
+// begins, so a hand-made one sorts and reads beside them instead of standing out.
 //
-// An empty project also means the Main track is empty, and the buttons that need a cut stay
-// disabled until clips are dragged in - that is main.js's NEEDS_PROJECT doing its job, not a
-// half-made project.
+// An empty project also means the Main track is empty, and Split - it needs a clip under the
+// playhead (js/merge-v3/bar.js) - stays disabled until clips are dragged in: not a half-made
+// project.
 function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
   // (phase V73 block 5, 5a) the "+" is Lucide's plus, the words stay (their case is block 7's)
   b.innerHTML = icon('plus', 14) + '<span>New project</span>';
-  // Two kinds of project, so the button asks which. A blank project is an empty timeline and
-  // is made here; a talking head starts from a scenario: the Library's "scenarios" view opens in the
-  // project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is made when one
-  // is used.
+  // Several kinds of project, so the button asks which (_kindMenu). A blank project is an empty
+  // timeline and is made here; a talking head starts from a scenario: the Library's "scenarios" view
+  // opens in the project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is
+  // made when one is used; a voiceover opens its draft, highlights its popup.
   b.addEventListener('click', () => _kindMenu(b));
   // (Home, the owner 2026-10-22) ?new=menu | blank | talking | highlights - Home's "+" buttons do what this menu's items do,
   // once the page has its project. Said once: the address forgets it.

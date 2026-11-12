@@ -1,7 +1,8 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — rendering a project, from Export -> Render.
+   MERGE v3 — rendering a timeline directly, outside the queue. Export renders through the queue
+   (routes/mv3q.js); this is what tools/fx-tiles.js --via asks for.
 
    The graph is lib/mv3b-render.js; getting a render ready (captions, inputs, arguments) and its
    poster afterwards are lib/mv3b-job.js, shared with the render queue (routes/mv3q.js) so the two
@@ -11,7 +12,7 @@
                                 folder of the project the timeline belongs to; adv is the export
                                 settings as the window shows them (lib/render-finish.js)
      GET  /api/mv3b/render/:id  -> status, phase (render | speeding | poster), url, percent,
-                                remaining seconds, and a warning when an extra could not be added
+                                remaining seconds, and a warning when a part of it could not be made
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');

@@ -1,13 +1,13 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   THE AUDIO ALMANAC - the data of the "generate audio" chat's prompt reference (phase V34.A; the owner 2026-10-22:
+   THE AUDIO ALMANAC - the data of the sound window's prompt reference (phase V34.A; the owner 2026-10-22:
    "для чата sounds тоже нужно будет собрать свой альманах по стилям ... упор больше по форумам, так как там более
    информация из первых уст"). The research behind every note, with its sources and how sure each finding is:
    docs/local-app/audio-almanac.md.
 
-   DATA ONLY. The chat (the lab /lab/audio first, Merge later) draws it the way the video chat draws its almanac
-   (merge-v3/vhelp.js): the SECTIONS on the left in two groups (Music, Sounds), the open one's categories under it, its
-   NOTES on the right; a press puts a note's `text` into the field it is for and applies its `set` to the mode's
-   controls. lib/audio-writer-rules.js reads CHIPS, CHIPS_DEFAULT and HIGHLIGHT_PRESETS from here, so the page and the
+   DATA ONLY. The sound window's almanac (public/js/sound/suno-form.js) draws it: the SECTIONS on the left in two groups
+   (Music, Sounds), the open one's notes as chips under their categories on the right; a chip pressed shows its note -
+   "+ add" puts its `text` into the prompt, which goes into the field it is for, and its `set` is shown as knobs to set
+   by hand. lib/audio-writer-rules.js reads CHIPS, CHIPS_DEFAULT and HIGHLIGHT_PRESETS from here, so the page and the
    writer speak one vocabulary. The server require()s this file (Node 24; ./package.json says "module").
 
    THE SHAPE (ALMANAC_VERSION 1) - docs/local-app/PLAN.md, "V34.A — ход", is the contract for the chat:

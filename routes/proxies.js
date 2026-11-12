@@ -31,9 +31,9 @@ const _hearing = () => { try { return require('../lib/whisper-local').hearing();
 // ── GET /api/ffmpeg/preview-proxy?src=<webPath> ───────────────────────────────
 // Lightweight ~480p transcode of a clip for the BROWSER PREVIEW only (the final
 // render still reads the full-res files server-side). Cached on disk keyed by
-// path+mtime; supports HTTP Range (sendFile) so the preview can seek. On a slow
-// connection this lets the preview stream a small file instead of the full
-// 1080x1920 source. Concurrent requests for the same proxy share one transcode.
+// path+mtime; supports HTTP Range (sendFile) so the preview can seek. This lets
+// the preview decode a small file instead of the full 1080x1920 source.
+// Concurrent requests for the same proxy share one transcode.
 // Where a copy lives and how it is encoded are lib/preview-proxy.js's: the highlights cut makes a piece's copy in
 // the pass that cuts it (phase V33.2 block 0).
 const PREVIEW_CACHE_DIR = PP.CACHE_DIR;
@@ -63,10 +63,10 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low, entry) {
 }
 // ONE QUEUE FOR EVERY PROXY, one ffmpeg at a time. A proxy transcode takes about three
 // cores for a second or two; started as they were asked for - one per request, in parallel -
-// four people opening four projects were forty ffmpegs at once, and on four cores that is
-// everybody's preview stalling together. Two priorities: LIVE is a proxy a player is waiting
+// a project of forty clips opened was forty ffmpegs at once, and on four cores that is
+// every preview stalling together. Two priorities: LIVE is a proxy a player is waiting
 // for right now (the /preview-proxy request) and goes to the front; WARM is one made ahead
-// (open, import, the sweep) and goes to the back - and waits altogether while an export
+// (open, a file filed, the sweep) and goes to the back - and waits altogether while an export
 // holds the cores, since the export is the one thing here that takes minutes.
 //
 // Concurrent callers for the same proxy share one entry; asking live for one that is queued
@@ -205,11 +205,12 @@ function warmProxies(srcs, h) {
 router.warmProxies = warmProxies;
 
 // ── THE SWEEP: every film the previews might play, made ahead ──────────────────
-// The birols and hooks libraries, every Merge timeline, every take a Scenarios line has:
+// The birols and hooks libraries, every Merge timeline, every take a talking head's line has:
 // anything without a proxy at the default quality is queued warm. Once at boot (a little
 // after, so the start is quiet) and every ten minutes after that, so a clip added some other
-// way has its proxy before anyone drops it on a lane - the pages that make files also ask
-// directly (routes/clips.js, routes/scen3.js, routes/library.js), the sweep is the net under them. Nothing is remade: a cached proxy is
+// way has its proxy before anyone drops it on a lane - what makes files also asks
+// directly (lib/birols-store.js, routes/scen3.js, routes/library.js, and routes/mergev3.js when a
+// timeline opens), the sweep is the net under them. Nothing is remade: a cached proxy is
 // one stat, and the queue itself refuses duplicates.
 const SWEEP_H = 480;
 const SWEEP_EVERY_MS = 10 * 60 * 1000;

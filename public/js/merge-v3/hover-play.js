@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a clip that plays in its tile while the pointer rests there: the video chat's catalog (phase V5, the
-   owner 2026-10-06) and its picker of attachments (phase V13).
+   MERGE — a clip that plays in its tile while the pointer rests there (phase V5, the owner 2026-10-06): the picker
+   of attachments (phase V13, chat-pick.js).
 
    One at a time per window, nothing fetched before it starts (350 ms on the tile), and it plays ON: left and come
    back to within a moment, it goes on where it was; come back later, and it starts from where it was left rather
