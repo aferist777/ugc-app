@@ -348,7 +348,7 @@ function _magLayout(g, S, cw, chh) {
   return { s, bw, bh, x0, y0, items, plate, bar: barBox, F, overlap };
 }
 function magazine(g, S) {
-  const { w, h, u, e, opt } = S;
+  const { w, h, u, opt } = S;
   const t = S.tau;
   const k = smooth(0.0, 0.18, t) * (1 - smooth(1.85, 2.1, t));
   if (k <= 0.003) return;

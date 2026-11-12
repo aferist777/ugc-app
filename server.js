@@ -4,7 +4,7 @@
 // read before any module looks at process.env.
 require('dotenv').config({ path: require('path').join(require('./lib/config').ROOT_DIR, '.env') });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('[CRASH] Unhandled Rejection:', reason?.stack || reason);
 });
 process.on('uncaughtException', (err) => {

@@ -29,9 +29,7 @@ const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
 const OWN = require('../lib/ownership');
 
-// Only engine offered for now. NOTE: lib/helpers' "…Pro…" helpers are legacy
-// NAMES — they all post to Replicate 'google/nano-banana-2', so nothing here
-// runs a pro model.
+// The engine a new look's record names when its caller named none (_saveObraz).
 const DEFAULT_ENGINE = 'nano-banana-2';
 
 const { DATA_DIR } = require('../lib/config');
@@ -344,9 +342,8 @@ function _bySource(live) {
     groups.set(id, g);
   }
   const sources = [...groups.values()]
-    .map(g => ({ id: g.id, title: g.gone ? (g.title || 'deleted source') : (titles.get(g.id) || g.title || 'untitled source'), n: g.n, gone: g.gone, last: g.last }))
     .sort((a, b) => b.last.localeCompare(a.last))
-    .map(({ last, ...g }) => g);
+    .map(g => ({ id: g.id, title: g.gone ? (g.title || 'deleted source') : (titles.get(g.id) || g.title || 'untitled source'), n: g.n, gone: g.gone }));
   return { sources, noSource };
 }
 
@@ -857,8 +854,8 @@ const DRESS_RES = '4K';
 const LB_RES = '2K';
 
 const _lbTask = (prompt, urls) => (urls && urls.length
-  ? _i2i(IMG_ENGINE, prompt, urls, '1:1', LB_RES)
-  : _t2i(IMG_ENGINE, prompt, '1:1', LB_RES));
+  ? _i2i(prompt, urls, '1:1', LB_RES)
+  : _t2i(prompt, '1:1', LB_RES));
 
 // ── Lookbook gender ─────────────────────────────────────────────────────────
 // Which gender an outfit suits, judged from the INPUT (the description and/or the
@@ -919,22 +916,16 @@ async function _hostLocal(urlPath, opts) {
 }
 
 // ── engine dispatch ─────────────────────────────────────────────────────────
-// The AGGREGATOR decides which service the task is created on; kie.ai is the
-// default and hosts both models, Replicate hosts nano-banana-2 only.
-//
-// On kie the two models' input schemas DIFFER, and the difference is easy to get
-// wrong (verified against docs.kie.ai/market/google/nanobanana2 and
-// .../nano-banana-2-lite):
+// Every picture made here is nano-banana-2 on kie.ai. Its input on kie (verified against
+// docs.kie.ai/market/google/nanobanana2):
 //
 //   nano-banana-2       image_input (<=14 urls, 30MB total) | resolution 1K/2K/4K | output_format
-//   nano-banana-2-lite  image_urls  (<=10 urls)             | no resolution field | no output_format
 //
-// Both take aspect_ratio. A kie taskId has no 'repl:' prefix and a Replicate one
-// does, so the shared resolveTask routes either by itself.
+// and aspect_ratio. A kie taskId has no 'repl:' prefix, so the shared resolveTask routes
+// it by itself.
 const axios = require('axios');
 
 async function _kieTask(model, input) {
-  console.log('[scen3/kie] createTask', model, '| input keys:', Object.keys(input).join(','));
   const r = await axios.post(
     `${CFG.KIE_BASE}/api/v1/jobs/createTask`,
     { model, input },
@@ -945,18 +936,11 @@ async function _kieTask(model, input) {
   return id;
 }
 
-// `quality` maps onto nano-banana-2's resolution input; lite has no such field.
+// `quality` maps onto nano-banana-2's resolution input.
 const _resOf = (q) => (['1K', '2K', '4K'].includes(q) ? q : '2K');
-const _isLite = (e) => String(e) === 'nano-banana-2-lite';
-// kie unless Replicate is asked for by name, and lite only exists on kie
-const _isRepl = (agg, engine) => String(agg) === 'replicate' && !_isLite(engine);
 
-async function _t2i(engine, prompt, aspect, quality, agg) {
+async function _t2i(prompt, aspect, quality) {
   const ar = aspect || '1:1';
-  if (_isRepl(agg, engine)) {
-    return await H.createNanoBananaProTask(prompt, null, ar, { resolution: _resOf(quality) });
-  }
-  if (_isLite(engine)) return await _kieTask('nano-banana-2-lite', { prompt, aspect_ratio: ar });
   return await _kieTask('nano-banana-2', {
     prompt, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
   });
@@ -979,7 +963,6 @@ async function _ratioOf(urlPath) {
     const r = m.width / m.height;
     let best = RATIOS[0];
     for (const c of RATIOS) if (Math.abs(c[1] - r) < Math.abs(best[1] - r)) best = c;
-    console.log(`[scen3] base ${m.width}x${m.height} (${r.toFixed(3)}) -> aspect ${best[0]}`);
     return best[0];
   } catch (e) {
     console.warn('[scen3] ratio probe failed:', e.message);
@@ -987,21 +970,11 @@ async function _ratioOf(urlPath) {
   }
 }
 
-// The two models name their image array differently — image_urls on lite,
-// image_input on the full model. Sending the wrong one is silently ignored and
-// comes back as a text-to-image result, so the key is chosen per engine.
-async function _i2i(engine, prompt, urls, aspect, quality, agg) {
+// The model's image array is `image_input`: a wrong name is silently ignored and comes back
+// as a text-to-image result.
+async function _i2i(prompt, urls, aspect, quality) {
   const ar = aspect || '1:1';
   const imgs = (urls || []).filter(Boolean);
-  if (_isRepl(agg, engine)) {
-    return await H.createMultiRefEditTask(
-      'nano-banana-2', prompt, imgs, ar, undefined, { resolution: _resOf(quality) },
-    );
-  }
-  if (_isLite(engine)) {
-    if (imgs.length > 10) throw new Error(`lite takes at most 10 reference images, got ${imgs.length}`);
-    return await _kieTask('nano-banana-2-lite', { prompt, image_urls: imgs, aspect_ratio: ar });
-  }
   if (imgs.length > 14) throw new Error(`nano-banana-2 takes at most 14 reference images, got ${imgs.length}`);
   return await _kieTask('nano-banana-2', {
     prompt, image_input: imgs, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
@@ -1542,8 +1515,8 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
 }
 
 const _envTask = (prompt, urls) => (urls.length
-  ? _i2i(IMG_ENGINE, prompt, urls, ENV_ASPECT, ENV_RES)
-  : _t2i(IMG_ENGINE, prompt, ENV_ASPECT, ENV_RES));
+  ? _i2i(prompt, urls, ENV_ASPECT, ENV_RES)
+  : _t2i(prompt, ENV_ASPECT, ENV_RES));
 
 // ── The picture somebody brought ────────────────────────────────────────────
 // A photo uploaded into a maker is kept for two reasons: a second pass must not send it again
@@ -1649,7 +1622,7 @@ async function _fileRef(token, kind, name) {
 }
 
 //   POST /api/scen3/gen/env
-//     { prompt, imageBase64 | refToken | imagePath (basePath), choices? }
+//     { prompt, imageBase64 | refToken | imagePath, choices? }
 //   -> 400 { error, refused }                           the agent said there is nothing to make
 //   -> 200 { choose:true, why, options, refToken }      pick places first; nothing was paid for
 //   -> 200 { mode, taskId, prompt, description, refToken }
@@ -1667,7 +1640,7 @@ async function _submitEnv(b, hooks) {
   let fresh = false;                             // the photo came in THIS call
   const note = String(b.prompt || '').trim();
   const photoPath = String(b.photoPath || '').trim();
-  const saved = photoPath ? '' : String(b.imagePath || b.basePath || '').trim();
+  const saved = photoPath ? '' : String(b.imagePath || '').trim();
   const canChoose = Array.isArray(b.choices);
   const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
   if (!note && !b.imageBase64 && !b.refToken && !saved && !photoPath) {
@@ -1712,10 +1685,7 @@ async function _submitEnv(b, hooks) {
       if (token) _unstash(token);
       throw Object.assign(new Error(plan.why), { status: 400, refused: true });
     }
-    if (plan.choose) {
-      console.log(`[scen3/gen/env] choose: ${plan.options.length} places offered`);
-      return { choose: true, why: plan.why, options: plan.options, refToken: token };
-    }
+    if (plan.choose) return { choose: true, why: plan.why, options: plan.options, refToken: token };
 
     // A place picked for a picture that had none keeps the picture only for its atmosphere.
     const mode = choices.length ? 'picked' : source === 'saved' ? 'edit' : source === 'photo' ? 'photo' : 'draw';
@@ -1819,7 +1789,6 @@ function _askEnvMotion(url) {
       { type: 'image_url', image_url: { url: imageUrl } },
     ] }])).slice(0, 600);
     if (!motion) throw new Error('the agent said nothing about this place');
-    console.log('[scen3/env/motion] ' + String(url).split('/').pop() + ' -> ' + motion.length + 'ch');
     return _keepEnvMotion(url, motion);
   })().finally(() => { _envMotionAsking.delete(key); });
   _envMotionAsking.set(key, p);
@@ -2016,11 +1985,11 @@ async function _submitDress(b) {
     prompt = 'Re-dress the person in the image according to this note: ' + note + '.' + DRESS_LOCK;
   }
 
-  // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
-  const aspect = (await _ratioOf(base)) || 'match_input_image';
+  // keep the output in the base image's shape (a 16:9 sheet must stay 16:9); kie calls "follow the input" `auto`
+  const aspect = (await _ratioOf(base)) || 'auto';
   // 4K (the owner): the result is a reference sheet every frame of the ad is built from, so it is
-  // the one picture in the chain that must not be soft. kie calls "follow the input" `auto`.
-  const taskId = await _i2i(IMG_ENGINE, prompt, urls, aspect === 'match_input_image' ? 'auto' : aspect, DRESS_RES);
+  // the one picture in the chain that must not be soft.
+  const taskId = await _i2i(prompt, urls, aspect, DRESS_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
   console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
   return {
@@ -2113,7 +2082,7 @@ async function _saveObraz(b) {
     seed: null, slotTasks: {}, projectId: null, voice: null,
   });
   writeFileAtomic(OBRAZY_JSON, JSON.stringify(list, null, 2));
-  console.log(`[scen3/obraz-save] char=${charId} obraz=${id} -> ${rel} (library now ${list.length})`);
+  console.log(`[scen3/look] char=${charId} obraz=${id} -> ${rel} (library now ${list.length})`);
   return { obrazId: id, path: rel, preview };
 }
 
@@ -2127,33 +2096,27 @@ async function _fileGenerated(kind, src, b) {
   const hit = _resolveMedia(src);
   if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('result not found'), { status: 400 });
 
-  let finalUrl = src;
-
   // A generated environment or lookbook is filed into its shared library folder.
   const LIB = kind === 'environment'
     ? { dir: CFG.ENVIRONMENTS_DIR, mount: toUrl(CFG.ENVIRONMENTS_DIR), prefix: 'env_' }
-    : kind === 'lookbook'
-      ? { dir: CFG.LOOKBOOKS_DIR, mount: toUrl(CFG.LOOKBOOKS_DIR), prefix: 'lb_' }
-      : null;
+    : { dir: CFG.LOOKBOOKS_DIR, mount: toUrl(CFG.LOOKBOOKS_DIR), prefix: 'lb_' };
 
-  if (LIB) {
-    const name = LIB.prefix + path.basename(hit.abs).replace(/\.[^.]+$/, '') + '.jpg';
-    const dest = path.resolve(LIB.dir, name);
-    fs.mkdirSync(LIB.dir, { recursive: true });
-    if (!fs.existsSync(dest)) fs.copyFileSync(hit.abs, dest);
-    finalUrl = LIB.mount + '/' + name;
-    try { await H.createThumbnail(dest, path.resolve(LIB.dir, 'thumbs', name)); } catch (e) {}
-  }
+  const name = LIB.prefix + path.basename(hit.abs).replace(/\.[^.]+$/, '') + '.jpg';
+  const dest = path.resolve(LIB.dir, name);
+  fs.mkdirSync(LIB.dir, { recursive: true });
+  if (!fs.existsSync(dest)) fs.copyFileSync(hit.abs, dest);
+  const finalUrl = LIB.mount + '/' + name;
+  try { await H.createThumbnail(dest, path.resolve(LIB.dir, 'thumbs', name)); } catch (e) {}
 
   // The photo it was made from, now that there is something made from it: into Images, and its
   // address beside the description, so the viewer can say what this came from.
   let from = '';
-  if (LIB && b.refToken) {
+  if (b.refToken) {
     try { from = await _fileRef(String(b.refToken), kind, String(b.refName || '')); }
-    catch (e) { console.warn('[scen3/finalize] could not file the reference:', e.message); }
+    catch (e) { console.warn('[scen3/file] could not file the reference:', e.message); }
   }
   // A picture that came by its path is in the library already (phase I).
-  if (LIB && !from && b.from) from = String(b.from);
+  if (!from && b.from) from = String(b.from);
 
   if (kind === 'lookbook') {
     // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
@@ -2202,7 +2165,7 @@ async function _fileGenerated(kind, src, b) {
       if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
       previewUrl = out.url;
     }
-  } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
+  } catch (e) { console.warn('[scen3/file] preview failed:', e.message); }
 
   return { path: finalUrl, preview: previewUrl, ...(from ? { from } : {}) };
 }
@@ -2212,7 +2175,6 @@ async function _fileGenerated(kind, src, b) {
 // its `tags` are the ONLY ones the tagging pass may insert. The set is deliberately small:
 // a short vocabulary is placed far more consistently than a menu of two hundred, and a tag
 // the model does not know risks being SPOKEN instead of performed.
-const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
 const SDP = require('../lib/sd-prompt');
@@ -2249,6 +2211,14 @@ router.get('/scen3/motion-presets', (_req, res) => {
 //   2. Any tag outside the chosen mood's list is removed. An unknown tag is not a
 //      harmless extra: ElevenLabs v3 will SPEAK it.
 
+// The role the tagging pass is given. A model told to "add tags" decorates; a model
+// told it is casting a performance asks what each line is DOING first.
+const CASTING_DIRECTOR_ROLE =
+  'You are a casting director preparing a script for ElevenLabs v3 text-to-speech. '
+  + 'You hear a performance in your head and you mark it up so a voice actor could hit it. '
+  + 'You are not decorating the text: every tag you place must earn its place by changing '
+  + 'how a specific phrase is delivered. Sentences that read fine plainly stay plain.';
+
 const _stripTags = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ');
 // what the comparison actually compares: the words, with spacing made irrelevant
 const _words = (s) => _stripTags(s).replace(/\s+/g, ' ').trim();
@@ -2268,7 +2238,7 @@ function _keepAllowedTags(text, allowed) {
 
 function _tagPrompt(mood, lines) {
   const tags = mood.tags.map(t => '[' + t + ']').join(' ');
-  return VT.CASTING_DIRECTOR_ROLE
+  return CASTING_DIRECTOR_ROLE
     + `\n\nMOOD: ${mood.label}\n${mood.brief}`
     + `\n\nYou may use ONLY these tags, spelled exactly like this: ${tags}`
     + '\n\nRules:'
@@ -2315,7 +2285,7 @@ function _retagPrompt(mood, lines, want) {
     const mark = want.includes(i) ? '  <-- RE-TAG THIS LINE' : '';
     return `${i + 1}. ${cur}${mark}`;
   }).join('\n');
-  return VT.CASTING_DIRECTOR_ROLE
+  return CASTING_DIRECTOR_ROLE
     + `\n\nMOOD: ${mood.label}\n${mood.brief}`
     + `\n\nYou may use ONLY these tags, spelled exactly like this: ${tags}`
     + '\n\nThe script below is already marked up, except for the lines flagged RE-TAG.'
@@ -2389,7 +2359,6 @@ async function _tagRoute(req, res) {
     // page in phase G, and its list went with it.
     const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
     if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'a mood is needed' });
-    const merge = true;
     const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags, voiceover: proj.type === 'voiceover' };
 
     // `only` re-tags just those lines, leaving every approved line untouched. Sent
@@ -2436,7 +2405,7 @@ async function _tagRoute(req, res) {
       const kept = _keepAllowedTags(cand, mood.tags);
       if (kept.dropped.length) report.dropped.push({ line: i + 1, tags: [...new Set(kept.dropped)] });
       const has = /\[[^\]]*\]/.test(kept.text);
-      l.tagged = (has || merge) ? kept.text : '';
+      l.tagged = kept.text;
       if (has) report.tagged++; else report.plain++;
     });
 
@@ -2446,15 +2415,9 @@ async function _tagRoute(req, res) {
       fresh.lines = (fresh.lines || []).map(_normLine);
       for (const i of touch) if (fresh.lines[i]) fresh.lines[i].tagged = lines[i].tagged;
       fresh.voice = _normVoice({ ...(fresh.voice || {}), ...voice });
-      if (merge) {
-        // v3 from here on: the tagged read is what every line is spoken from.
-        fresh.voice.tagsOn = true;
-        fresh.voice.variant = 'tagged';
-      } else if (report.tagged > 0 && lines.some(l => l.tagged)) {
-        // The take on show follows the work: after a pass that produced tags, the tagged read is
-        // what the user asked to see.
-        fresh.voice.variant = 'tagged';
-      }
+      // v3 from here on: the tagged read is what every line is spoken from.
+      fresh.voice.tagsOn = true;
+      fresh.voice.variant = 'tagged';
       fresh.updatedAt = new Date().toISOString();
     });
     const out = saved || proj;
@@ -2948,7 +2911,7 @@ async function _framePreview(finalUrl) {
     if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
     return out.url;
   } catch (e) {
-    console.warn('[scen3/watch] preview failed:', e.message);
+    console.warn('[scen3/frame] preview failed:', e.message);
     return finalUrl;
   }
 }
@@ -3483,9 +3446,6 @@ function _normShot(sh) {
   };
 }
 
-// Voice settings live on the PROJECT: one read for the whole ad.
-const VOICE_PROVIDERS = ['elevenlabs'];
-
 // How the fragments are turned into clips: the model that films them, the mood, how the
 // character moves, how sharp the result is, and Seedance's own settings. The kie model id is deliberately
 // NOT stored — it is derived from the quality at render time, so a tier being renamed
@@ -3577,13 +3537,14 @@ function _unchosen(video, which) {
   const miss = which.map(k => words[k]).filter(Boolean);
   return miss.length ? 'choose ' + miss.join(', ') + ' first' : '';
 }
+// Voice settings live on the PROJECT: one read for the whole ad.
 const _normVoice = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const p = (s.ttsParams && typeof s.ttsParams === 'object') ? s.ttsParams : {};
   return {
     // Which service speaks the lines. Every field below belongs to it, so a second
     // provider brings its own set rather than borrowing these.
-    provider:  VOICE_PROVIDERS.includes(s.provider) ? s.provider : 'elevenlabs',
+    provider:  'elevenlabs',
     // The read uses the CAST CHARACTER's voice when there is one. Before a character is cast
     // the project may choose a voice of its own (the owner, 2026-09-21, phase W2.5): `pick` is
     // that voice - the entry the picker took, as a character's voice list keeps it - and the
@@ -4771,7 +4732,7 @@ function _sdClipsRoute(req, res, proj) {
     if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
     const plan = _sdClipPlan(proj, i);
     if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
-    if (!b.again && f.clip) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
+    if (f.clip) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
     const request = { projectId: id, line: i };
     const rec = JOBS.submitted({
       kind: 'video', what: 'clip', title: 'Clip · fragment ' + f.n, where: _whereClip(key, title, i, f.n),
@@ -5118,9 +5079,6 @@ async function _frameRef(projectId, cast) {
   const list = _loadProjects();
   const q = list.find(x => String(x.id) === String(projectId));
   if (q) { q.frameRef = ref; _saveProjects(list); }
-  console.log('[scen3/frames] read the look and the place: character ' + ref.character.length + 'ch, clothes '
-    + (ref.clothes ? ref.clothes.split('\n').length : 0) + ' lines, environment '
-    + ref.environment.length + 'ch, lighting ' + ref.lighting.length + 'ch');
   return ref;
 }
 
@@ -5252,7 +5210,7 @@ async function _submitSetFrame(b) {
   parts.push('FRAMING CHECK, the last word on it: ' + set.rule + ' ' + (set.cut || ''));
   const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
 
-  const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
+  const taskId = await _i2i(prompt, urls, aspect, FRAG_FRAME_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
   console.log('[scen3/frames] ' + set.id + ' ' + n + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
     + ' refs=' + urls.length + (pose ? ' +mannequin' : ''));
@@ -5786,8 +5744,6 @@ router.post('/scen3/frames/crop', async (req, res) => {
       fresh.updatedAt = variant.at;
     });
     MIRROR.touch(p.id, { project: saved || p });   // the timeline mirrors the lines (T'): a frame added
-    console.log('[scen3/frames/crop] ' + base + ' ' + meta.width + 'x' + meta.height
-      + ' -> ' + w + 'x' + h + ' at ' + left + ',' + top);
     res.json({ success: true, project: _projFull(saved || p), frameId: variant.id });
   } catch (e) {
     console.error('[scen3/frames/crop]', e.message);
@@ -6137,7 +6093,6 @@ router.post('/scen3/fragments/clip', async (req, res) => {
           taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
           job: { type: 'clip', params: { request, file: out.file } },
         });
-        console.log('[scen3/clip] fragment ' + (i + 1) + ' -> ' + String(out.taskId).slice(0, 24));
       })
       .catch((e) => {
         console.error('[scen3/fragments/clip]', e.message);
@@ -6150,7 +6105,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
 });
 
 /* ── EVERY CLIP OF A PROJECT, ASKED FOR BY THE SERVER (phase X1) ───────────────
-   POST /api/scen3/fragments/clips  { projectId, key, again? }
+   POST /api/scen3/fragments/clips  { projectId, key }
        -> { success, queued: [{ line, alertId }], skipped: [{ line, why }] }
 
    WHY THIS EXISTS. The page used to walk the fragments itself: five at once, and the next five only
@@ -6163,7 +6118,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
    the whole list is visible from the press - answers, and then sends them one a second without
    waiting for any to finish. A fragment that refuses (no words, no frame, a stale read, a read
    longer than the model takes) is named in `skipped` and stepped over; one that is already being
-   made is left alone; one that already has its clip is not paid for twice unless `again` says so.
+   made is left alone; one that already has its clip is not paid for twice.
 
    A FAILURE STOPS NOTHING (decided with the owner 2026-09-22). A render that fails is already paid
    for and says nothing about its neighbours, so it fails its own row and the rest go on. Nor does
@@ -6217,7 +6172,6 @@ async function _clipQueue(queued) {
           taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
           job: { type: 'clip', params: { request: q.request, file: out.file } },
         });
-        console.log('[scen3/clips] fragment ' + q.line + ' -> ' + String(out.taskId).slice(0, 24));
       })
       .catch((e) => {
         console.error('[scen3/clips] fragment ' + q.line + ':', e.message);
@@ -6252,7 +6206,7 @@ router.post('/scen3/fragments/clips', (req, res) => {
       if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
       const plan = _clipPlan(proj, i);
       if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
-      if (!b.again && _clipDone(proj, i)) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
+      if (_clipDone(proj, i)) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
       const request = { projectId: id, line: i };
       const no = _lineNo(lines, i);
       const rec = JOBS.submitted({
@@ -6426,7 +6380,6 @@ router.post('/scen3/voices/take', async (req, res) => {
       sample = knownDemo;
       dur = known.dur || 0;
       reused = true;
-      console.log('[scen3/voices] already known:', id, '- keeping its demo', knownDemo.split('/').pop());
     } else try {
       const buf = await _speakLine(key, id, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
       const dir = path.join(CFG.MEDIA.voice, 'demos');

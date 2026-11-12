@@ -63,7 +63,7 @@
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
 import * as API from './scen-api.js';
 import * as Store from './store.js';
-import { askChoice } from './ask.js';
+import { askChoice } from '../ask.js';
 import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
@@ -87,26 +87,19 @@ let _host = null;                        // the panel - the windows stand over i
 let _active = false;                     // this step is the one painted (for `ugc:goto`)
 let _saving = false;
 let _picShown = false;                   // the stage shows a line's frame or clip - not the halves
-// Where in the step the panel is. The hub is the script (js/merge-v3/wk-fragments.js); beside it:
-//
-//   hub      the voice, the lines, the open line
-//   voice    the voice this character is read in
-//
-// The character, the environment and their makers are WINDOWS since phase V57, and so is the frames chat since phase V61
-// (js/merge-v3/fchat.js, opened by js/merge-v3/wk-fragments.js openChat). ?view= in the address opens one of the places
-// directly - that is how the Alerts list takes somebody back to where a generation was started (js/alerts-bell.js); the old
-// shelves' names open their windows: cast "who", lookbooks "new look", newlb "create lookbook", env "where", newenv "new
-// environment", fchat the frames chat. Read once, when this module is first loaded - which is when the step is opened.
-const VIEWS = ['hub', 'voice'];
+// The panel is the script (js/merge-v3/wk-fragments.js). The character, the environment and their makers are WINDOWS since
+// phase V57, and so is the frames chat since phase V61 (js/merge-v3/fchat.js, opened by js/merge-v3/wk-fragments.js
+// openChat). ?view= in the address opens one of them directly - that is how the Alerts list takes somebody back to where a
+// generation was started (js/alerts-bell.js); the old shelves' names open their windows: cast "who", lookbooks "new look",
+// newlb "create lookbook", env "where", newenv "new environment", fchat the frames chat, voice the voices. Read once, when
+// this module is first loaded - which is when the step is opened.
 const WINDOWS = ['cast', 'lookbooks', 'newlb', 'env', 'newenv', 'fchat'];
-let _view = 'hub';
 let _ask = '';                           // a window the address asked for, opened at the first paint
 (function _urlView() {
   let v = '';
   try { v = new URLSearchParams(location.search).get('view') || ''; } catch (e) { v = ''; }
   // (phase V62, (во17)) The voices are a window now: an address that asks for them opens it.
   if (v === 'voice' || WINDOWS.includes(v)) _ask = v;
-  else if (VIEWS.includes(v)) _view = v;
 })();
 let _lbs = null;                          // the lookbooks to dress in, read when that page opens - false: they did not load
 let _lbPick = '';                         // the outfit picked to dress in
@@ -309,17 +302,13 @@ export function paint(host, ctx) {
 
 const _castChar = () => (_chars || []).find(c => c.id === String(_casting().characterId || '')) || null;
 
-// Every move inside the step goes through here.
+// The voice row's way to the voices (js/merge-v3/wk-voice.js, "ElevenLabs library…").
 function _go(view) {
-  if (WINDOWS.includes(view)) { _openAsked(view); return; }
   // (phase V62, (во17)) The voices open in a window over the setup - a talking head's and a voiceover's alike.
-  if (view === 'voice') { _openVoices(); return; }
-  if (view === 'hub' && _voiceOpen()) { VOICE.closeVoices(); return; }
-  _view = VIEWS.includes(view) ? view : 'hub';
-  _ctx.repaint();
+  if (view === 'voice') _openVoices();
 }
 
-// An old shelf's name - from the address, a row of Alerts, a crumb - opens its window, over what is open.
+// An old shelf's name - from the address, a row of Alerts - opens its window, over what is open.
 function _openAsked(v) {
   if (!_ctx || !_ctx.project) return;
   // (phase V62) A voiceover has no who, where or frames chat - only the voices.
@@ -352,16 +341,11 @@ function _paintVoices(chosen) {
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
-// Painted by js/merge-v3/wk-fragments.js. What it may reach in here: the character cast (the
-// voice row is theirs), the voice module's api (the row and the reads speak through it), and the
-// way to the other places of the step.
+// Painted by js/merge-v3/wk-fragments.js. What it may reach in here: the voice module's api (the
+// row and the reads speak through it).
 function _fragApi(chosen) {
   return {
-    char: () => chosen || null,
     voiceApi: () => _voiceApi(chosen),
-    go: _go,
-    // 'hub' or 'voice': the fields, or the voices being chosen.
-    view: () => _view,
   };
 }
 
@@ -606,26 +590,6 @@ function _voiceApi(chosen) {
   };
 }
 
-
-// ── Where you are inside the step ───────────────────────────────────────────
-// The route in the panel header: `setup`, then the place inside it, drawn by the workshop on one
-// tint (js/merge-v3/workshop.js, _paintRoute). At the hub there is none - the panel's own title says
-// where you are. The character and the environment are windows (V57), not places of the panel.
-const WHERE = { voice: 'voice' };
-const PATH = { hub: [], voice: ['voice'] };
-
-/** The route from the top of the step to where you are - the workshop paints it. */
-export function crumbs() {
-  return (PATH[_view] || []).map((id, i, all) => ({ id, label: WHERE[id], here: i === all.length - 1 }));
-}
-
-/** Pressing one of them - or `setup` at the start of the route, which is the hub. */
-export function goCrumb(id) {
-  const want = id === 'hub' ? 'hub' : id;
-  if (want !== 'hub' && !WHERE[want] && !WINDOWS.includes(want)) return;
-  if (want === _view) return;
-  _go(want);
-}
 
 // ── "WHO": THE WINDOW (phase V57; V58 - crumbs, the ✕ of a look, a new look in the same window) ──
 /** The window of "who" on `page` ('list' | 'look' | 'lookbook'), for `char` on the pages after the list - over everything

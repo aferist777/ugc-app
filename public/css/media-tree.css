@@ -118,20 +118,29 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
    "Save the piece to" (js/cut.js) and "move to…" of a post (js/references/post.js): the window is the move menu's
    (css/references.css .ref-move), its list these rows - buttons, so they are reset to the row's look. A place lights its
    name under the pointer; a branch only opens. Grey - it cannot go there (why in the tooltip), its ▸ still opens;
-   "+ new category…" muted; the place it is in now in the accent, on top under "BESIDE IT" and in the tree. */
+   "+" on a row makes a folder in it; the place it is in now in the accent, on top under "Beside it" and in the tree. */
 .mt.mtp{height:auto; padding:3px 4px 5px; position:relative}
 .mtp-row{
   width:100%; margin:0; border:0; background:none; box-sizing:border-box;
   font:inherit; color:inherit; text-align:left;
 }
-.mtp-row.is-place:not(.is-off):hover .mt-name, .mtp-row.is-newcat:hover .mt-name{color:var(--ink)}
-.mtp-row.is-newcat .mt-name{color:var(--muted)}
+.mtp-row.is-place:not(.is-off):hover .mt-name{color:var(--ink)}
 .mtp-row.is-here .mt-name{color:var(--ink); font-weight:var(--fw-strong)}
 .mtp-row.is-off .mt-name, .mtp-row.is-off .mt-n, .mtp-row.is-off .mt-lock{opacity:.4}
 .mtp-row.is-off:not([aria-expanded]){cursor:default}
 .mtp-row.is-off:not([aria-expanded]):hover{background:none}
 .mtp .ref-move-head{padding:4px 6px 2px}
 .mtp-sep{height:1px; margin:4px 3px; background:var(--border)}
+/* (2026-11-12) "+" on a folder's row - a new folder in it; with `confirm` the chosen place is lit and the foot picks it. */
+.mtp-add{margin-left:auto; flex:0 0 auto; width:18px; height:18px; border-radius:var(--r-xs); display:flex; align-items:center;
+  justify-content:center; font:600 13px/1 var(--font); color:var(--muted); cursor:pointer}
+.mtp-add:hover{background:var(--surface-3, var(--surface-2)); color:var(--ink)}
+.mtp-row .mt-lock + .mtp-add{margin-left:4px}
+.mtp-row.is-sel{background:var(--sel-bg)}
+.mtp-row.is-sel .mt-name{color:var(--ink); font-weight:var(--fw-strong)}
+.mtp-foot{flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px 8px; border-top:1px solid var(--border)}
+.mtp-chosen{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis}
 
 /* (phase V54 block 5) Several tiles picked (js/tile-select.js) - in the Library's Media and Merge's Library panel. */
 .lib-card.is-picked, .mv3-tile.is-picked{

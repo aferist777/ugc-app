@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    "ARE YOU SURE?", anchored to the button that asked - ONE module for every page (phase V73 block 2, step 2b: it was
-   js/merge-v3/ask.js, which now only passes this on; its look is the shared part in css/app-shell.css, so the Library,
+   js/merge-v3/ask.js; its look is the shared part in css/app-shell.css, so the Library,
    Home and Admin, which never load merge-v3.css, ask the same way).
 
      askDelete(anchor, text, sub, onYes, yes)   Cancel · the verb in red

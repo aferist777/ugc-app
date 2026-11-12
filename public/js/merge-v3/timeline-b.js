@@ -29,7 +29,7 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import * as Views from './lib-views.js';
-import { askDelete, short, note } from './ask.js';
+import { askDelete, short, note } from '../ask.js';
 import { DRAG_TYPE, DRAG_MEDIA, isStill, STILL_DUR } from './store.js';
 import { locked, lanesChanged } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
@@ -741,7 +741,7 @@ function _onWave(e, el) {
   return e.clientY - el.getBoundingClientRect().top >= WAVE_TOP;
 }
 
-function _beginRange(e, t, c, el) {
+function _beginRange(e, t, c) {
   _ranging = { x0: e.clientX, t0: _timeAtX(e.clientX), moved: false, id: c.id, lane: t.id };
   e.preventDefault();
 }
@@ -925,7 +925,7 @@ function _silenceCut(cuts) {
 function _beginDrag(e, t, c, el) {
   if (e.button !== 0) return;
   // (phase V36, T5) On a sound's wave the press draws a stretch of time, not the clip.
-  if (t.kind === 'audio' && _onWave(e, el)) { _beginRange(e, t, c, el); return; }
+  if (t.kind === 'audio' && _onWave(e, el)) { _beginRange(e, t, c); return; }
   const tl = Store.timeline();
   const tracks = (tl && tl.tracks) || [];
   const mateTrack = c.pairId
@@ -2544,62 +2544,6 @@ function _write(c, key, value) {
   }
 }
 
-/**
- * Several fields on one clip, in ONE mutation - which is what a placement is: putting a
- * picture on the frame sets its middle, its width and sometimes its turn, and that is one
- * thing the person did, not four.
- */
-/**
- * A PICTURE FROM THE PICTURE WINDOW, onto the lane directly above main video at the playhead -
- * over whatever is already there at that moment: clips on a lane may cover one another, and the
- * later one in the lane is drawn on top, so the one underneath stays where it was. With no lane
- * above main (only main exists) one is made in the same step, as + would make it. One mutation,
- * one undo. The new clip is selected, so its panel is the one open.
- *
- * Returns { ok, lane, at } or { ok: false, why }.
- */
-export function placeAbove(data, opts) {
-  if (!_on) return { ok: false, why: 'The timeline is not showing' };
-  const at = _r2(Math.max(0, _playhead));
-  const id = _id();
-  let lane = '';
-  const ok = Store.mutate(tl => {
-    const t = tl.tracks || [];
-    const vids = t.filter(x => x.kind === 'video');
-    let over = vids.length > 1 ? vids[vids.length - 2] : null;
-    if (!over) over = _newVideoLane(t);
-    if (!over) return;
-    over.clips.push({
-      id, src: data.src, thumb: data.thumb || data.src, name: String(data.name || '').slice(0, 200),
-      libId: data.libId || null, start: at, dur: STILL_DUR, srcDur: 0, trimIn: 0, trimOut: 0,
-      speed: 1, reversed: false, transition: null, animation: null, filter: null,
-      volume: 0, pairId: null,
-    });
-    lane = over.name;
-  });
-  if (!ok || !lane) return { ok: false, why: Store.status() || 'The picture could not be placed' };
-  if (!opts || opts.select !== false) selectClipById(id);
-  return { ok: true, lane, at };
-}
-
-// A CLIP onto the same lane a picture goes to (phase V3, the video chat's "to timeline"): placed by _drop, so it
-// arrives at its real length with its sound twin on the lane's linked audio lane, as a clip dropped from the shelf
-// does. The lane is made first when there is none - a second step only then; otherwise one undo takes the clip off.
-export function placeClipAbove(data) {
-  if (!_on) return { ok: false, why: 'The timeline is not showing' };
-  const at = _r2(Math.max(0, _playhead));
-  let laneId = '', lane = '';
-  const find = (t) => { const vids = t.filter(x => x.kind === 'video'); return vids.length > 1 ? vids[vids.length - 2] : null; };
-  const now = find((Store.timeline() || {}).tracks || []);
-  if (now) { laneId = now.id; lane = now.name; }
-  else {
-    Store.mutate(tl => { const over = _newVideoLane(tl.tracks || []); if (over) { laneId = over.id; lane = over.name; } });
-  }
-  if (!laneId) return { ok: false, why: Store.status() || 'The clip could not be placed' };
-  _drop(laneId, at, data || {});
-  return { ok: true, lane, at };
-}
-
 // ── The timeline's media into the generation chats and back (phase V77, js/merge-v3/tl-gen.js) ─────────────────────────────
 // A moment of the timeline inside a clip -> the moment of its FILE (played backwards, the clip's start is its window's end).
 function _fileAt(c, t) {
@@ -2895,6 +2839,11 @@ export function placeVideoPieces(parts, file) {
 // (phase V51) So do a crop, a PiP and a placement (`tw`) - put on, taken off or sized: a cropped or placed clip covers nothing.
 const SPLIT_KEYS = new Set(['fit', 'frame', 'crop', 'pip', 'tw']);
 
+/**
+ * Several fields on one clip, in ONE mutation - which is what a placement is: putting a
+ * picture on the frame sets its middle, its width and sometimes its turn, and that is one
+ * thing the person did, not four.
+ */
 export function setClipFields(trackId, clipId, patch) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);
@@ -3438,11 +3387,9 @@ export function mateOf(clipId) {
 export const deleteMulti = () => _deleteSelected();
 
 // ── The right-click on bare lane (phase L3, the owner 2026-09-23) ───────────
-// The playhead goes to the moment under the pointer, and a menu asks what to make THERE. A picture:
-// the pictures chat (phase J), whose `to timeline` lays what it makes at the playhead - and what it makes is
-// on the images shelf either way (lib/mv3-gens.js). A video: not yet - its window is being rebuilt
-// around what a clip is made from (words, a picture), so the row is there, says so and does nothing.
-// A right-click on a clip or on a lane's name is not this menu's.
+// The playhead goes to the moment under the pointer, and a menu asks what to make THERE: a picture in the pictures
+// chat, a clip in the video chat - each lands on its shelf (lib/mv3-gens.js, lib/mv3-video-gens.js) and is dragged from
+// the chat onto a lane. A right-click on a clip or on a lane's name is not this menu's.
 let _ctx = null;
 function _closeCtx() {
   if (!_ctx) return;
@@ -3516,7 +3463,7 @@ function _showCtx(box, e) {
 // chat); a film - "Continue…" (its last frame as the video chat's first frame), "As a reference…" (the part the timeline plays)
 // and "Frame to the pictures chat…" (the frame at the playhead, else the first one it shows). A talking head's line has none of
 // them (the mirror's, (тч11а)). (phase V54) A film's "Video to Music…" puts THIS clip, as it is seen, into the sound window's
-// Video to Music (js/merge-v3/audchat.js); the server makes the clip into a file and lays the track under it on a lane of its
+// Video to Music (js/merge-v3/sound-host.js); the server makes the clip into a file and lays the track under it on a lane of its
 // own (V77, (тч14)). A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
 function _ctxItem(box, label, sub, title, on) {
   const b = document.createElement('button');
@@ -3582,7 +3529,7 @@ function _clipMenu(e) {
       'Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes', () => {
         // The strip of a pick would cover the Library panel the clip goes to.
         _clearSel();
-        import('./audchat.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
+        import('./sound-host.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
           .catch(err => showError('Video to Music did not open', { detail: (err && err.message) || String(err) }));
       });
   }

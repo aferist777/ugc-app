@@ -5,7 +5,7 @@
    them overlapping cross into each other by themselves (js/sound/fades.js).
 
    (phase V34.E, the owner's (м10)) The generator went from here: music and sounds are made in the sound window
-   (js/sound/sound-window.js, Merge's host js/merge-v3/audchat.js) - Suno and ElevenLabs, for the open project. A clip's
+   (js/sound/sound-window.js, Merge's host js/merge-v3/sound-host.js) - Suno and ElevenLabs, for the open project. A clip's
    fades stay in its own settings.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -29,9 +29,6 @@ function _lane(tl) {
   if (!tl || !Array.isArray(tl.tracks) || !_dest) return null;
   return tl.tracks.find(t => t && t.id === _dest) || null;
 }
-
-/** Kept for the inspector: the panel has nothing of its own to forget. */
-export function resetView() {}
 
 // (phase V76) `more(host)` - rows of the lane's own under its volume (its pitch, inspector.js).
 export function renderMusicTrack(host, track, more) {

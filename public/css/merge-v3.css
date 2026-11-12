@@ -204,10 +204,6 @@
 .mv3-col.is-collapsed .mv3-panel-head,
 .mv3-col.is-collapsed .mv3-panel-body,
 .mv3-col.is-collapsed .mv3-lib-row{display:none}
-/* Not yet: the Library spine of a talking head before anything is on its timeline. Dashed, like a
-   field with work still in it, and it says why on hover. */
-.mv3-col.is-collapsed.is-off{border-style:dashed; opacity:.55; cursor:default}
-.mv3-col.is-collapsed.is-off:hover{background:none}
 /* A project that is not a talking head has no setup, so no Setup spine: the pair is the Library. */
 body:not(.mv3-talking) #mv3-inspector.is-collapsed{display:none}
 /* (phase V62, the owner's (во38)) Nor a Library spine in setup - a talking head's or a voiceover's: the way on is the crumbs in
@@ -300,27 +296,6 @@ body.mv3-noproject .mv3-tl::after{
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
   font:600 11px/1 var(--font); color:var(--muted);
 }
-
-/* The picture at the top of a still's inspector. This panel has no waveform, no source
-   length and no playback to describe, so showing WHICH picture is the most useful thing it
-   can put there. Contained, not cropped: the point is to recognise it, and a cover-crop of
-   a wide photograph into a narrow column can hide the very part you are looking for.
-
-   The chequerboard shows through a cut-out PNG, so "this one has no background" is visible
-   rather than a claim in a hint - and it cannot be mistaken for a white or black picture. */
-/* Half the panel for the picture, half for what belongs to it. The settings sit BESIDE
-   the picture rather than under it: full width, a portrait still pushed the duration and
-   the effects off the fold on any reasonably tall panel. min-width:0 on both because a
-   flex item defaults to its content's width, and a wide select would otherwise refuse to
-   shrink and force the picture out of its half. */
-.mv3-c-still-top{ display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; }
-.mv3-c-still-left{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; gap:6px; }
-.mv3-c-still-left > .mv3-c-still{ margin:0; }
-.mv3-c-still-side{ flex:1 1 50%; min-width:0; }
-/* One column beside the picture rather than two: at half a 240px panel, two controls abreast
-   leave no room for either. */
-.mv3-c-still-stack{ display:flex; flex-direction:column; gap:5px; min-width:0; }
-.mv3-c-still-stack > .mv3-ins-fx3-cell{ min-width:0; }
 
 /* (phase V75, the owner's (кп3)) The picture at the top of the group Picture went: it is on the preview. */
 
@@ -599,22 +574,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* ── Inspector ────────────────────────────────────────────────────────────────
    One narrow column, so everything is a full-width row and nothing sits side by side:
    at 240px a two-column form is two truncated columns. */
-/* Exactly two lines, each clipped to one. The header used to be six rows of facts, which
-   is a lot of the panel spent on the thing you look at least. */
-/* Name on the left, the panel's one action on the right. The text side shrinks so a long
-   track name gives way to the button rather than pushing it off the panel. */
-.mv3-ins-head{margin-bottom:8px; display:flex; align-items:center; gap:6px}
-.mv3-ins-head-txt{flex:1 1 auto; min-width:0}
-.mv3-ins-head-act{flex:0 0 auto; display:flex; align-items:center}
-.mv3-ins-head-act .mv3-c-btn{padding:3px 8px; font-size:9.5px; white-space:nowrap}
 /* (phase V73 block 5, 5b) a section's title in the strip ("Music of this fragment"); the strip's own title is its head */
 .mv3-ins-title{
   font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); color:var(--ink);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.mv3-ins-sub{
-  font:600 10px/1.35 var(--font); color:var(--muted);
-  font-variant-numeric:tabular-nums;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
@@ -709,10 +671,6 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* "Setup" with a place inside it lit: quiet, as a word of the route that is not where you are */
 #mv3-inspector .mv3-panel-head:has(.mv3-wk-crumbs) .mv3-panel-title:not(.is-on){color:var(--muted)}
 #mv3-library .mv3-panel-head{gap:0; container:libhead / inline-size}
-/* (phase V18.2) The crumbs are always there: in a narrow panel the chats' read "image" / "video". */
-@container libhead (max-width: 620px){ .mv3-lib-crumb .lg{display:none} }
-.mv3-pc-head{display:flex; align-items:center; gap:5px; flex:0 0 auto}
-.mv3-pc-head[hidden]{display:none}
 #mv3-library.is-chat .mv3-lib-row,
 #mv3-library.is-chat .mv3-libstatus{display:none}
 
@@ -829,10 +787,6 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* The one control here that holds prose. */
 .mv3-c-area{ width:100%; min-width:0; resize:vertical }
 
-/* A typed number plus its unit. */
-.mv3-c-numrow{display:flex; align-items:center; gap:5px; min-width:0}
-.mv3-c-inp{ width:56px; min-width:0; font-variant-numeric:tabular-nums; }
-.mv3-c-suf{font:600 9.5px/1 var(--font); color:var(--muted)}
 
 /* The control plus a small button beside it (clear an override, back to full frame). */
 .mv3-c-pair{display:flex; align-items:center; gap:6px; width:100%; min-width:0}
@@ -857,57 +811,10 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-crop-shape.u-chip{padding:0 4px}   /* equal widths in the strip */
 
 
-/* ── Music library rows ───────────────────────────────────────────────────────
-   A scrolling list rather than a growing one: the library only ever gets longer, and
-   pushing the controls below it off the panel would hide the Remove button. */
-/* Generate | Saved. Two halves of one control rather than two buttons, so it reads as a
-   choice between views and not as two things that could both happen. */
-.mv3-mus-tabs{display:flex; gap:0; margin:0 0 8px}
-.mv3-mus-tab{
-  flex:1; padding:5px 0; cursor:pointer;
-  border:1px solid var(--border-soft); background:transparent; color:var(--muted);
-  font:600 11px/1 var(--font);
-}
-.mv3-mus-tab:first-child{border-radius:5px 0 0 5px}
-.mv3-mus-tab:last-child{border-radius:0 5px 5px 0; border-left:0}
-.mv3-mus-tab:hover:not([disabled]):not(.on){color:var(--ink)}
-.mv3-mus-tab.on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
-.mv3-mus-tab[disabled]{opacity:.4; cursor:default}
-
 /* The prompt, as things to press. Wrapping rows of small pills: a backing track is picked
    by recognising words, not by reading a list, so they are all visible at once. */
-.mv3-mus-gh{margin:8px 0 4px; font:600 10px/1 var(--font); letter-spacing:.04em;
-  text-transform:uppercase; color:var(--muted)}
 .mv3-chips{display:flex; flex-wrap:wrap; gap:4px}
 /* .mv3-chip is the shared chip (.u-chip, phase V73 block 2) */
-
-/* Where the button is, and where the timer stands instead while it runs. Fixed height so
-   the swap does not shift the panel under the cursor.
-   POSITION:RELATIVE IS LOAD-BEARING. .sv3-inline-prog is `position:absolute; inset:0` - it
-   is built to fill its host - so without a positioned ancestor here it filled the nearest
-   one there was and covered the page. */
-.mv3-mus-foot{position:relative; display:flex; align-items:center; min-height:28px; margin:9px 0 2px}
-.mv3-mus-foot > .mv3-c-btn{flex:1}
-.mv3-mus-foot > .sv3-inline-prog{border-radius:var(--r-xs)}
-
-.mv3-mus-list{max-height:190px; overflow-y:auto; margin:2px 0 4px}
-.mv3-mus-row{
-  display:flex; align-items:center; gap:4px; padding:3px 0;
-  border-bottom:1px solid var(--border-soft);
-}
-.mv3-mus-name{
-  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:600 10px/1.3 var(--font); color:var(--ink);
-}
-.mv3-mus-btn{
-  flex:0 0 auto; min-width:20px; height:19px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--muted);
-  font:600 10px/17px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.mv3-mus-btn:hover:not([disabled]){color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
-.mv3-mus-btn[disabled]{opacity:.4; cursor:default}
-.mv3-mus-btn.danger:hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
 
 /* ════════════════════════════════════════════════════════════════════════════
    BLANK-PROJECT TIMELINE (js/merge-v3/timeline-b.js)
@@ -1180,12 +1087,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    its own to take up the height it just saved. */
 .mv3-wk-steps{display:flex; align-items:center; gap:3px; margin-left:8px; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none}
 .mv3-wk-steps::-webkit-scrollbar{display:none}
-.mv3-wk-step{
-  padding:2px 7px; border:1px solid transparent; border-radius:999px;
-  background:transparent; color:var(--muted); cursor:pointer;
-  font:600 9px/1.5 var(--font); letter-spacing:.03em; text-transform:uppercase; white-space:nowrap;
-}
-.mv3-wk-step.is-on{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg)}
 /* While a build step holds the stage the preview's bar has nothing to act on: the preview is
    showing that step's work, not the cut. Dimmed and dead rather than hidden - it comes
    back the moment the timeline step is picked, and a control that vanishes and returns
@@ -1224,97 +1125,18 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 #mv3-lib-br.is-off:hover{text-decoration:none}
 
 /* ── The workshop's first step ───────────────────────────────────────────────
-   Casting in a 280px column (js/merge-v3/wk-setup.js). Three faces to a row is the
-   most that leaves a name legible under them; the enlargement on hover is what makes
-   that size enough to choose by. */
+   js/merge-v3/wk-setup.js. */
 /* The step lays the panel out itself: a grid that scrolls and a drawer that does not, so the
    body's own padding and scrolling stand down for it. */
 .mv3-panel-body.is-wk{padding:0; overflow:hidden}
 .mv3-wk-setup{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
-.mv3-ins-head.is-wk{margin:0; padding:9px 9px 6px; gap:8px; align-items:flex-start; flex-wrap:wrap}
-/* THE BUTTONS ON THE LEFT, THE TITLE ON THE RIGHT (phase V24, the owner 2026-10-09): a shelf's tabs -
-   "create look", "create lookbook", the environments' two - or the script's `generate all` and its
-   counters come first, the step's title stands at the right end of the row, and a shelf's cross
-   stays at the far right where it was (js/merge-v3/wk-maker.js shelfHead, wk-fragments.js _counters). */
-.mv3-ins-head.is-wk.is-tabs-left > .mv3-ins-head-txt{text-align:right}
-.mv3-ins-head.is-wk.is-tabs-left > .mv3-wk-bar{margin-left:0}
-.mv3-ins-head.is-wk.is-tabs-left > .mv3-iconbtn{flex:0 0 auto}
 .mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
-.mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
-.mv3-wk-lbl{font:700 8.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
-.mv3-wk-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(74px, 1fr)); gap:5px; padding:0 9px 4px}
-.mv3-wk-tile{
-  display:flex; flex-direction:column; gap:3px; padding:0; cursor:pointer;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); overflow:hidden;
-}
-.mv3-wk-tile:hover{border-color:var(--ink)}
-/* The chosen tile is GOLD and thick (owner, 2026-09-21): gold is what marks state everywhere else
-   on these pages - the kept take, the character's voice - and a one-pixel blue line was not read
-   as a choice. */
-.mv3-wk-tile.is-on{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset}
-.mv3-wk-face{width:100%; aspect-ratio:3/4; object-fit:cover; object-position:center top; display:block; background:var(--bg)}
-/* No portrait: the 4K sheet is three bodies side by side, and the head this is being
-   chosen by is at the left end of it. */
-.mv3-wk-face.is-left{object-position:left center}
-.mv3-wk-name{
-  padding:0 4px 4px; font:600 9px/1.3 var(--font); color:var(--muted);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
-}
-.mv3-wk-tile.is-on .mv3-wk-name{color:var(--gold)}
 /* The tile's own button - `select` on the picked look and on the picked environment (owner,
-   2026-09-21): the act stands on the thing it acts on. (The dressing's `apply` stood here too; since
-   phase V24 it stands on the stage, .mv3-wk-apply.) */
+   2026-09-21): the act stands on the thing it acts on. */
 .mv3-wk-tileact{
   position:absolute; left:50%; bottom:7px; transform:translateX(-50%); z-index:2; box-shadow:var(--shadow); white-space:nowrap;
 }
 
-/* The shelf of outfits, shown in place of the faces while a look is being made. Wider tiles
-   than a face: an outfit is judged by the whole picture, not by a head. */
-/* The same size as a face - one grid, one rhythm - and SQUARE, which is the shape a
-   lookbook is generated in. */
-.mv3-wk-tile.is-lb .mv3-wk-face{aspect-ratio:1/1; object-position:center}
-/* The outfit picked for a dressing is dimmed a little (phase V24, the owner 2026-10-09): it is on the
-   stage now, with its `apply`, and the shelf stays readable around it. */
-.mv3-wk-tile.is-lb.is-dim .mv3-wk-face{filter:brightness(.55)}
-.mv3-wk-tile.is-add{
-  aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
-  color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
-}
-.mv3-wk-tile[disabled]{opacity:.55; cursor:default}
-/* An environment: LANDSCAPE, the shape they are made in (3:2), and shown whole - an older upright
-   one sits inside the tile on the dark ground instead of being cut down to a strip of itself. */
-.mv3-wk-grid.is-env{grid-template-columns:repeat(auto-fill, minmax(118px, 1fr))}
-.mv3-wk-tile.is-env .mv3-wk-face{aspect-ratio:3/2; object-fit:contain; object-position:center}
-.mv3-wk-grid.is-env .mv3-wk-tile.is-add{aspect-ratio:3/2}
-/* WHERE YOU ARE INSIDE SETUP: after the word `setup`, in the same row. In the row and not
-   under it, because a second line would make the header taller the moment you went one level
-   deeper, and move everything below it while it was being read.
-   THE WHOLE ROUTE IS ONE THING. `setup` and every place after it sit on a shared tint, so the
-   step reads as a block from its name down to wherever you are in it. Arrow and place are
-   spaced alike and tight - equal gaps are what make it read as one sequence and not as pills
-   that happen to have arrows near them. */
-/* No vertical padding: `setup` is the tallest thing in the row and the tint is exactly its
-   height, so going a level deeper adds a tail to the pill and never a pixel to the header.
-   None on the left either - its own outline IS the start of the pill. The 2px on the right is
-   the gap again, which puts the last word as far from the end as the first. */
-.mv3-wk-stepwrap{
-  display:flex; align-items:center; gap:2px; flex:0 0 auto;
-  padding:0 2px 0 0; border-radius:999px; background:var(--sel-bg);
-}
-/* Between the places on the route: what led to what, read left to right. */
-.mv3-wk-arrow{color:var(--ink); font:600 9px/1 var(--font); opacity:.75; padding:0; margin:0}
-/* Every place on the route is LIT - it is the path you took. */
-.mv3-wk-sub{
-  padding:1px 5px; border:1px solid transparent; border-radius:999px;
-  background:transparent; color:var(--ink); cursor:pointer;
-  font:600 8.5px/1.5 var(--font); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap;
-}
-.mv3-wk-sub:hover{color:var(--ink)}
-/* The places already passed through keep a dashed outline - the trail. The one you are on is
-   lit and nothing more: `setup` at the start has the solid outline, the trail is dashed,
-   and where you stand needs no box to be found, because it is where the trail ends. */
-.mv3-wk-sub.is-trail{border-style:dashed; border-color:var(--sel-line)}
-.mv3-wk-sub.is-here{cursor:default}
 /* (phase V62, (во39), (во40); the owner 2026-10-31: "как у проектов типа highlights") The crumbs after SETUP - the Library panel's
    own look (.mv3-lib-crumb): words in capitals after a "/", no pill; the way on pale until the script is done, then as any
    crumb, the bubble over a pale one saying what is left. */
@@ -1323,32 +1145,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-crumbs .mv3-lib-crumb{flex:0 0 auto; overflow:visible}
 .mv3-lib-crumb.mv3-wk-on.is-off{opacity:.35; cursor:default}
 .mv3-lib-crumb.mv3-wk-on.is-off:hover{opacity:.35; text-decoration:none}
-
-/* The sentence and its button, at the foot of the right half and ON the panel's bottom edge:
-   the half that holds it gives up the padding every other half keeps under its content. */
-.mv3-wk-half.is-make{padding-bottom:0}
-.mv3-wk-foot{flex:0 0 auto; margin-top:auto; border-top:1px solid var(--border); background:var(--surface); padding:7px 9px 9px}
-.mv3-wk-foot .mv3-sc-lines.is-short{margin:0; width:100%; min-height:56px}
-/* The button under the field and at its right edge, the width of the word: a full-width
-   button reads as the only thing to do, and this is the last of several. */
-.mv3-wk-footrow{display:flex; align-items:center; gap:8px; margin-top:6px}
-.mv3-wk-create{
-  margin-left:auto; padding:5px 16px; border-radius:var(--pill); cursor:pointer;
-  border:1px solid var(--main); background:var(--main); color:var(--on-main);
-  font:700 10.5px/1 var(--font); letter-spacing:.03em;
-  transition:filter .12s var(--ease), opacity .12s var(--ease);
-}
-.mv3-wk-create:hover:not([disabled]){filter:brightness(1.1)}
-.mv3-wk-create[disabled]{opacity:.45; cursor:default; background:transparent; color:var(--muted); border-color:var(--border)}
-/* What is missing, said beside the button rather than after pressing it. */
-.mv3-wk-mode.is-why{color:var(--gold)}
-/* What the agent answered, or what failed - above the sentence it is about. */
-.mv3-wk-said{margin:0 0 6px; font:400 10.5px/1.45 var(--font); color:var(--gold)}
-/* A picture with no place in it: the places the agent offers, as chips over the sentence. Any
-   number can be on; together they are made into one place. */
-.mv3-wk-choice{margin:0 0 7px}
-.mv3-wk-choice-why{margin:0 0 5px; font:400 10.5px/1.45 var(--font); color:var(--ink)}
-.mv3-wk-chips{display:flex; flex-wrap:wrap; gap:4px}
 
 /* ── The hub of setting & voice ───────────────────────────────────────────────────────────────
    One column: the voice and the script read in it (js/merge-v3/wk-voice.js). Who and where are on
@@ -1383,107 +1179,14 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    and it held the lookbook maker's sentence off the edge it belongs on. */
 .mv3-wk-scroll.is-split{display:flex; gap:0; align-items:stretch; padding-bottom:0}
 .mv3-wk-half{flex:1 1 50%; min-width:0; display:flex; flex-direction:column; padding-bottom:8px}
-.mv3-wk-half.is-shelf{border-right:1px solid var(--border-soft); overflow-y:auto}
-.mv3-wk-half.is-shelf .mv3-wk-grid{grid-template-columns:repeat(auto-fill, minmax(62px, 1fr)); padding:8px 7px}
-.mv3-wk-half.is-shelf .mv3-wk-grid.is-env{grid-template-columns:repeat(auto-fill, minmax(96px, 1fr))}
-/* The cross on a tile. Shown on hover only - a grid of forty crosses is a grid that looks
-   like it is about to lose something. */
-.mv3-wk-tilex{
-  position:absolute; top:3px; right:3px; width:17px; height:17px; padding:0; z-index:2; opacity:0;
-  border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
-  background:var(--surface); color:var(--muted); font:600 9px/1 var(--font);
-  transition:opacity .12s var(--ease);
-}
-.mv3-wk-tile{position:relative}
-.mv3-wk-tile:hover .mv3-wk-tilex{opacity:1}
-.mv3-wk-tilex:hover{color:var(--danger); border-color:var(--danger)}
-
-/* Where the reference for a new lookbook lands. A drop target that is also a picker, and
-   once it holds something it shows the picture rather than a file name - the picture is the
-   thing being judged. */
-.mv3-wk-drop{
-  position:relative; margin:8px 9px 0; min-height:96px; display:flex; align-items:center;
-  justify-content:center; text-align:center; cursor:pointer; overflow:hidden;
-  border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface);
-  color:var(--muted); font:400 10px/1.4 var(--font); padding:10px;
-}
-.mv3-wk-drop:hover, .mv3-wk-drop.is-over{border-color:var(--sel-line); color:var(--ink)}
-/* Holding a picture, a click opens it large (js/merge-v3/wk-maker.js) - the pointer says so. */
-.mv3-wk-drop.is-full{padding:0; border-style:solid; cursor:zoom-in}
-.mv3-wk-drop img{width:100%; max-height:190px; object-fit:contain; display:block}
-.mv3-wk-dropx{
-  position:absolute; top:5px; right:5px; width:20px; height:20px; padding:0; z-index:2;
-  border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
-  background:var(--surface); color:var(--muted); font:600 10px/1 var(--font);
-}
-.mv3-wk-dropx:hover{color:var(--ink); border-color:var(--ink)}
-/* The sentence. Shorter than the scenario's box: this is a line about clothes, not a script. */
-.mv3-sc-lines.is-short{min-height:74px; margin:8px 9px 0; width:calc(100% - 18px); font-size:11px}
-.mv3-wk-mode{flex:1 1 auto; min-width:0}
-
-/* The stage carries the crosses (.mv3-wk-clear below) and, while an outfit is picked for a dressing,
-   its `apply` (phase V24, the owner 2026-10-09): gold, at the SEAM between the person above and the
-   outfit below - the act between the two things it joins. `select` stays on the picked look and on
-   the picked environment (.mv3-wk-tileact above). */
-.mv3-wk-apply{
-  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:3;
-  padding:6px 18px; border-radius:var(--pill); cursor:pointer;
-  border:1px solid var(--gold); background:var(--gold); color:var(--bg);
-  font:600 11px/1 var(--font); letter-spacing:.02em; box-shadow:var(--shadow); white-space:nowrap;
-}
-.mv3-wk-apply:hover{filter:brightness(1.08)}
-.mv3-wk-apply[disabled]{opacity:.6; cursor:default}
 
 /* The one row that spends money sits under what it will spend it on. Scoped: the inspector
    has a .mv3-ins-row of its own, and this is a different thing in a different place. */
 .mv3-wk-setup .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
 
-/* The drawer at the foot of the panel. Shut it is a strip that still names itself; open it
-   stands OVER the faces, because both cannot have the height and the faces are what you
-   scroll. Absolute rather than a third flex row for that reason - a row would push the grid
-   up every time somebody was cast. */
-.mv3-wk-drawer{
-  position:absolute; left:0; right:0; bottom:0; z-index:2; height:24px; overflow:hidden;
-  display:flex; flex-direction:column;
-  background:var(--surface); border-top:1px solid var(--border);
-  transition:height .18s var(--ease);
-}
-.mv3-wk-drawer.is-open{height:112px; box-shadow:0 -10px 24px -14px oklch(0 0 0 / .8)}
-.mv3-wk-strip{display:flex; align-items:center; gap:6px; flex:0 0 auto; height:24px; padding:0 9px}
-/* The looks themselves: one row that scrolls sideways - a wardrobe is a shelf. */
-.mv3-wk-row{display:flex; gap:5px; overflow-x:auto; padding:4px 9px 9px; scrollbar-width:thin}
-/* 16:9, and wide: a look is an outfit on a body, and a tall sliver of one says nothing about
-   which outfit it is. */
-.mv3-wk-look{
-  position:relative;
-  flex:0 0 auto; width:124px; aspect-ratio:16/9; padding:0; cursor:pointer; overflow:hidden;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
-}
 /* `select` on the picked look, inside the thumbnail: smaller than the lookbook's `apply`, because
    a 16:9 strip 124px wide has room for a word and not for a button. */
 .mv3-wk-tileact.is-look{bottom:5px; padding:3px 10px; font-size:var(--fs-10)}
-.mv3-wk-look img{width:100%; height:100%; object-fit:cover; display:block}
-.mv3-wk-look:hover{border-color:var(--ink)}
-.mv3-wk-look.is-on{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset}
-.mv3-wk-look.is-add{
-  width:44px; display:flex; align-items:center; justify-content:center;
-  color:var(--muted); font:400 18px/1 var(--font); border-style:dashed;
-}
-/* The only thing in the drawer: a full thumbnail, not a dash next to nothing. */
-.mv3-wk-look.is-add.is-only{width:124px}
-.mv3-wk-look[disabled]{opacity:.5; cursor:default}
-
-/* The enlargement under the pointer. Fixed to the viewport and parked on the body: the
-   panel scrolls and clips its own children, and this has to stand outside them. */
-.mv3-wk-peek{
-  position:fixed; z-index:9600; pointer-events:none;
-  display:flex; flex-direction:column; gap:4px; padding:5px;
-  border:1px solid var(--border); border-radius:var(--r-sm);
-  background:var(--surface); box-shadow:var(--shadow);
-}
-.mv3-wk-peek img{width:210px; aspect-ratio:3/4; object-fit:cover; object-position:center top; border-radius:var(--r-xs); display:block}
-.mv3-wk-peek img.is-left{object-position:left center}
-.mv3-wk-peek span{font:600 10px/1.3 var(--font); color:var(--ink); text-align:center}
 
 /* ── The voice (js/merge-v3/wk-voice.js) ───────────────────────────────────────────────────────
    Two places, one shape: a row is a play button, a name with its tags, and the one thing that
@@ -1569,7 +1272,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 #mv3-library:has(.mv3-over.is-open) #mv3-br.is-shown{margin-right:min(350px, 100%)}
 /* (phase V62, block 2) A B-roll piece's batch in the Library panel (js/merge-v3/broll-view.js): its sentence, then the videos and
    the pictures as tiles - ✓ laid on the timeline, the white ring in this very piece. (phase V73 block 5, 5d) No preview under the
-   pointer any more ((б5-19) а) - the `.mv3-brv-pop` rules below wait for V50's list. */
+   pointer any more ((б5-19) а). */
 .mv3-brv-head{flex:0 0 auto; padding:9px 11px 6px; border-bottom:1px solid var(--border-soft)}
 /* (the owner 2026-10-31) The sentence, the keywords it was searched by under it. (phase V73 block 5, 5d; plan 3.5) Plain text 12 px
    with a thin gold line at its left ("your sentence"), the keywords in the second colour at 400. */
@@ -1593,13 +1296,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
   background:linear-gradient(var(--scrim), transparent); color:var(--on-media); font:500 var(--fs-9)/1.3 var(--font); text-align:left}
 .mv3-brv-src{color:var(--muted)}
 .mv3-brv-wait{position:absolute; inset:auto 0 0 0; padding:3px; background:var(--scrim); color:var(--on-media); font:600 9px/1.3 var(--font); text-align:center}
-.mv3-brv-pop{
-  position:fixed; z-index:9500; width:240px; padding:6px; pointer-events:none;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
-}
-.mv3-brv-pop.is-wide{width:360px}
-.mv3-brv-pop img, .mv3-brv-pop video{display:block; width:100%; border-radius:var(--r-xs); background:var(--media-bg)}
-.mv3-brv-popcap{margin-top:5px; font:400 9.5px/1.3 var(--font); color:var(--muted)}
 .mv3-wk-vhead.is-lib{border-top:1px solid var(--border-soft); padding-top:9px}
 /* Six vocabularies and a search box. They wrap: the panel is narrow when the sash is left
    alone and wide when it is not, and a fixed grid would be wrong in both. */
@@ -1618,8 +1314,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* Armed: the second press is the one that spends. Same shape, so the button does not jump - the shared part's light step
    (.u-btn.is-armed, (б2-10)); its gold of its own went in V73 block 5, 5d. */
 
-/* The voice level's own bar - its tab and the way back - stands at the top of its column. */
-.mv3-wk-bar.is-own{margin:0 0 7px; display:flex; align-items:center; gap:5px}
 /* The sentence takes the width that is left and gives it back when the row needs it: with
    `auto` it set its own floor and pushed the button beside it onto a line of its own. */
 .mv3-wk-vsub.is-grow{flex:1 1 0; min-width:0; white-space:normal}
@@ -1629,11 +1323,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    gold and three zones in gold, one above the other - voice, first frames, video - each a drawer
    with its own `generate` at the foot. Gold because a field is a state the person sets, the same
    gold as a chosen tile. */
-/* Where the whole script stands is IN THE STEP'S HEADER (the owner, 2026-09-22): `generate all` and
-   the three boxes - on the left of the row since phase V24, the name of the step on the right
-   (.is-tabs-left above). In the header the boxes do not stretch - the title has the width - and the
-   title drops to its own line when the panel is too narrow to hold both (the header wraps). */
-.mv3-wk-mood-about{margin:4px 2px 0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
 /* FOUR FIELDS, TWO BY TWO, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): 1 mood - which is
    also where the script is marked up - 2 voice, 3 first frames, 4 video. They do not open and shut:
    all four stand open, and THE FRAME SAYS WHERE EACH ONE IS - dashed gold while there is work left
@@ -1666,21 +1355,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
   max-width:calc(100% + 2px); border-radius:1px; background:var(--muted);
   transition:width .25s linear; pointer-events:none;
 }
-/* ...and when there is nothing left in it, the word stands beside the number and STAYS (the owner:
-   a mark that flashes for two seconds is a mark you miss). The background cuts the frame's line
-   behind it, the way the number does. */
-.mv3-wk-zdone{
-  position:absolute; left:13px; top:-8px; z-index:2; padding:0 5px;
-  background:var(--bg); color:var(--muted);
-  font:700 8.5px/16px var(--font); letter-spacing:.1em; text-transform:uppercase;
-}
-.mv3-wk-znum{
-  position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border); background:var(--surface-3); color:var(--ink);
-  font:700 9px/1 var(--font); font-variant-numeric:tabular-nums;
-}
-.mv3-wk-stage.is-blocked .mv3-wk-znum{filter:grayscale(1)}
 /* Half a row is not wide enough for a name and a summary on one line - nor for what the
    `generate` is about beside the button, so that gets a line of its own and wraps. */
 /* What the field is stays BESIDE its name (the owner, 2026-09-22) - it wrapped under it while
@@ -1860,7 +1534,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-fedited{color:var(--muted); text-transform:none; letter-spacing:0; font-weight:400}   /* quiet: it informs, it does not warn */
 .mv3-wk-ftext-in{ width:100%; resize:vertical }
 .mv3-wk-fwhy{margin:4px 0 2px; font:400 10px/1.45 var(--font); color:var(--muted)}   /* plain, not italic (V73 block 5, 5d) */
-.mv3-wk-vmore.is-busy{border-color:var(--sel-line); color:var(--ink)}
 
 /* The open fragment as a grid of two rows, and each row is a picture with the words it is made of
    beside it (the owner, 2026-09-21): the frame with the prompt it was drawn from, the clip with the
@@ -1870,25 +1543,8 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* The prompt of a frame is long - the shot size, the mannequin, the look, the place, the light - so
    it scrolls inside the height of its picture instead of pushing the clip row down the column. */
 .mv3-wk-fcol.is-prompt .mv3-wk-ftext-in.is-tall{height:164px; min-height:164px; resize:none}
-/* The set of first frames in the general zone: the mannequin of the shot size beside its menus and
-   the wishes - one block, the mannequin as tall as the two together (the owner, 2026-09-21) - and
-   the pool as a strip under it, the full width, every frame a door to the stage. */
-.mv3-wk-fsetrow{display:flex; gap:9px; align-items:stretch}
-/* The mannequin stands on the RIGHT of the menus (the owner, 2026-09-21), as tall as the three
-   of them and as WIDE as the `generate` button at the foot of the field (2026-09-22), so the
-   field has one right-hand edge instead of two. */
-.mv3-wk-fpose{flex:0 0 auto; width:76px; min-height:92px; border-radius:var(--r-xs); overflow:hidden; background:#dfe3e8; border:1px solid var(--border-soft)}
-.mv3-wk-fpose.is-empty{background:var(--bg)}
-.mv3-wk-fpose img{width:100%; height:100%; object-fit:cover; object-position:center top; display:block}
-.mv3-wk-fsetcol{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px}
 /* The wishes stand under the menus AND the mannequin, the whole width of the field. */
 .mv3-wk-stage .mv3-wk-ftext-in.is-wish{min-height:58px}
-/* A line that holds a sentence and the button that acts on it: the mood's field. */
-.mv3-wk-fwishrow{display:flex; align-items:center; flex-wrap:wrap; gap:9px; min-width:0}
-/* Squeezed narrower than this the sentence becomes a ribbon one word wide, so the button drops
-   to its own line instead. */
-.mv3-wk-fwishrow.is-mood .mv3-wk-mood-about{flex:1 1 150px; min-width:0; margin:0}
-.mv3-wk-fwishrow.is-mood .mv3-wk-gen{margin-left:auto}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
 /* The frames of the shelf are the mannequin's width (the owner, 2026-09-23): the shelf has the
    whole column now, and these were sized for the half-row field they used to live in. */
@@ -1931,8 +1587,7 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-ftick:hover{color:var(--ink)}
 /* LETTING GO of something that is being made (phase N1): the cross in its top-right corner. Red,
    because it is the one control here that ends something, and small, because it is not the thing
-   you are meant to press. Its own class (phase I0): it was .mv3-wk-drop, the name the makers' photo
-   field already had, and coming later in the file it turned that field into this cross. */
+   you are meant to press. */
 .mv3-wk-letgo{position:absolute; right:3px; top:3px; z-index:3}
 .mv3-wk-letgo.u-onpic{width:16px; height:16px; border-radius:var(--r-xs); --x-size:11px}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
@@ -2050,11 +1705,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* THE VOICE FIELD'S ONE ROW (phase V26.1, the owner 2026-10-10): the stability and the speed on the
    left and `generate` on the right, never wrapping. What the press will do is in its tooltip. */
 .mv3-wk-stage-foot.is-voice{flex-direction:column; align-items:stretch; container-type:inline-size}
-.mv3-wk-vctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; row-gap:4px}
-/* A narrow field: the two words go (they are in the tooltips), so the row still holds the button; narrower
-   still, the button drops under the menus rather than out of the field. */
-@container (max-width: 330px){ .mv3-wk-vctl .mv3-wk-vlab > span{display:none} .mv3-wk-vctl{gap:6px} }
-.mv3-wk-vctl .mv3-wk-gen{margin-left:auto}
 .mv3-wk-vlab{flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 .mv3-wk-vlab .mv3-wk-vsel.is-small{flex:0 0 auto; width:auto}
 .mv3-wk-vnum{ width:52px }

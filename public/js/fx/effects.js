@@ -6,7 +6,6 @@
    its measured camera paths, written again in JS. Each effect is a set of NUMBERS AS A FUNCTION OF ITS OWN TIME τ (seconds from
    its start; a stretched one is read at τ × its length / the length given):
      s, ax, ay      the picture scaled by s about the point (ax, ay) - shares of the frame; none - the clip's middle
-     dx, dy         then moved, shares of the frame's width and height
      col            a colour matrix in RGB, 3 rows of [r, g, b, offset], channels 0..1, clamped after
      ch             the channels moved apart: { rx, ry, gx, gy, bx, by } - pixels of a frame 1080 wide (u)
      px             pixelated in blocks of px u

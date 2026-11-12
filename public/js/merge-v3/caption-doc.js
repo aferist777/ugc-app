@@ -31,7 +31,7 @@ import * as History from './history.js';
 import * as Layers from '../layers.js';
 import { rewriteLines, rewriteEach, selectClipById, selectTrackById, selectedIds, selectedTrack, onSelChange } from './timeline-b.js';
 import { seek } from './preview-b.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { linesOf, textOfLine, isWordsLane, editLine, splitLine, joinLines, rewrite, matcher, matchesIn, replaceIn } from '../captions/doc.js';
 import { isHeard } from '../captions/heard.js';
 import { isCorrected } from '../captions/words.js';

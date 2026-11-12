@@ -37,7 +37,7 @@ import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
 import { openHelp, closeHelp } from './vhelp.js';
 import { stepCard } from './vsteps.js';
-import { note, askDelete } from './ask.js';
+import { note, askDelete } from '../ask.js';
 // (phase V73 block 2, step 2b) The model table being read or not read - the shared parts (a row of the column); the reason a popup.
 import { emptyEl, loadingEl, failedEl, cap as capFirst } from '../ui-state.js';
 import { showError } from '../notice.js';
@@ -3001,8 +3001,6 @@ function VIDEOS(ctx) {
   return {
     name: 'videos',
     kind: 'clip',
-    // (phase V64 block 3) A WINDOW, no view of the Library panel (chat-window.js): its window is its owner.
-    host: true,
     ids: { root: 'mv3-vc' },
     keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
     maxAtts: MAX_ATTS,
@@ -3025,7 +3023,6 @@ function VIDEOS(ctx) {
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
       slot: 'From the Library or this computer',
-      crumb: 'The video chat - clips made with a model',
       plus: 'Add a picture, a clip or a sound from this computer - into the folder open here when it is one of yours of its kind (IMAGES, VIDEO → Uploads, My sounds), else into the root of its kind - and straight into the zone.',
       cat: 'This project\'s clips, or a folder of the Library',
     },
@@ -3193,6 +3190,5 @@ export async function openVideos(o) {
   // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) await _api.fromTimeline(o);
 }
-export const closeVideos = () => WIN.close();
 
 export function initVidChat() { CHAT.init(); }

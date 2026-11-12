@@ -3,7 +3,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // HIGHLIGHTS - a long video into vertical shorts (phase V33.1; lib/highlights-store.js, lib/highlights-job.js).
 //
-//   GET    /api/highlights                  -> { projects: [view] }
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
 //   GET    /api/highlights/offer            -> { lengths, counts, kinds }   (V63) what the popup offers, with no project
 //   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   (V63) made AND started by the press
@@ -81,11 +80,6 @@ function offer() {
     kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, counts: HL.countsOf(k),
       ...(v.inDev ? { inDev: true } : {}), ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])) };
 }
-
-router.get('/highlights', (_req, res) => {
-  try { res.json({ success: true, projects: HL.list().map(view) }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 router.post('/highlights', (req, res) => {
   try {
@@ -337,11 +331,10 @@ async function _music(rec, f, track, open, later) {
     clips = await HLM.clipsForMade(track, tl);
     if (!clips.length) throw Object.assign(new Error('"' + track.title + '" is not in Music any more'), { status: 409 });
   }
-  const loud = clips.loud || null;
   const laid = open ? CUT.bedClips(clips, CUT.filmEnd(tl)) : null;
   // (phase V76.1) `later` - a Map the clips wait in, written with the others' in one pass (POST /music).
   if (!open) { if (later) later.set(String(f.key), clips); else CUT.setMusic(f.key, clips); }
-  return { track: _trackOf(track), loud, laid };
+  return { track: _trackOf(track), laid };
 }
 function _keepMusic(id, results) {
   HL.apply(id, (r) => {
@@ -350,7 +343,6 @@ function _keepMusic(id, results) {
       if (!m) continue;
       x.music = m.track;
       x.musicNote = '';
-      if (m.loud) x.loud = m.loud;
     }
   });
 }

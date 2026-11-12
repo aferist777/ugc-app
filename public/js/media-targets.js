@@ -5,8 +5,9 @@
 //   { key, label, count, locked, to?, newIn?, children? }
 //     to       the node is a place itself: { kind, cat, label, text } - a kind and its category ('' - none), the
 //              category's name, the whole path in words ("Generated · B-rolls · Reels")
-//     newIn    (phase V54, (зв44)) the row "+ new folder…" - the last of a kind's branch AND of every folder's: { kind,
-//              parent, label } - the folder made there is the place
+//     newIn    (phase V54, (зв44)) a new folder in this node - the picker draws it as the "+" of the node's row (a row of
+//              its own until 2026-11-12), for a kind's node AND every folder of it: { kind, parent, label } - the folder made
+//              there is the place
 //     a node with neither only opens.
 //
 // REFERENCES - back to the post's own source folder (no category: the sources' folders themselves are not places, a post
@@ -27,7 +28,7 @@ const ANYCAT = '__cat__';
 
 /**
  * opts { images: false - without IMAGES; audio: true - with AUDIO (V54); refHome - the words for REFERENCES' "no category";
- *        newCats - the kinds whose branches end in "+ new folder…" - a kind's and every folder's of it }
+ *        newCats - the kinds whose nodes take a new folder (their "+") - a kind's and every folder's of it }
  * -> the roots: REFERENCES, VIDEO, IMAGES (, AUDIO)
  */
 export function placesOf(tree, opts) {
@@ -44,7 +45,7 @@ export function placesOf(tree, opts) {
     else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label, ...(n.aroot ? { aroot: true } : {}) };
     else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
     const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
-    // A kind's own node (its key is the kind) and every folder of it (phase V54) end in "+ new folder…" - not the app's
+    // A kind's own node (its key is the kind) and every folder of it (phase V54) take a new folder - not the app's
     // (highlights, its moods, the sources' folders: `noAdd`).
     const holds = adds.has(n.kind) && HOLDS.has(n.kind) && !n.noAdd && !n.project && (n.key === n.kind || (n.cat && (n.own || n.locked)));
     if (holds) kids.push({ key: 'new:' + n.key, label: '+ new folder…', newIn: { kind: n.kind, parent: n.cat || '', label: n.label } });

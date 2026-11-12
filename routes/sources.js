@@ -217,7 +217,7 @@ router.post('/sources/:id/transcribe', async (req, res) => {
     try {
       const saved = await _process(id, job);
       // Read again and no topics yet: they are found now, by the agents' ladder (phase V28.1).
-      if (!(saved.topics || []).length) _startMining(id, req.body || {});
+      if (!(saved.topics || []).length) _startMining(id);
       job.state = 'done';
       job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
       job.source = store.summary(store.get(id) || saved);
@@ -253,18 +253,18 @@ router.post('/sources/:id/topics', async (req, res) => {
     const alertId = await INTAKE.retryOf(id);
     if (alertId) return res.json({ success: true, alertId });
   } catch (e) { return res.status(409).json({ success: false, error: e.message }); }
-  res.json({ success: true, jobId: _startMining(id, req.body || {}) });
+  res.json({ success: true, jobId: _startMining(id) });
 });
 
 // A job finding the topics, by the agents' ladder - the button's, or after a transcription read again.
 // Answers its id.
-function _startMining(id, body) {
+function _startMining(id) {
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: 'reading the transcript', at: Date.now(), error: null, sourceId: id };
   _mining.set(id, { kind: 'topics', jobId, startedAt: job.at });
   (async () => {
     try {
-      const { found, topics, saved } = await INTAKE.mineSource(id, { mineWith: body, onStep: (st) => { job.step = st; } });
+      const { found, topics, saved } = await INTAKE.mineSource(id, { onStep: (st) => { job.step = st; } });
       job.state = 'done';
       job.step = `${found.topics.length} topics from ${found.blocks} blocks`;
       job.topics = topics.map(x => ({ id: x.id, title: x.title, start: x.start, end: x.end }));

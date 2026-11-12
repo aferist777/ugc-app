@@ -380,25 +380,8 @@ async function _useSaved(api, it) {
   _repaint(api);
 }
 
-// ── The sub-level ───────────────────────────────────────────────────────────
-function _bar(host, api) {
-  const acts = el('div', 'mv3-wk-bar is-own');
-  const tab = el('button', 'mv3-sc-tab u-tab is-on', 'Voice');
-  tab.type = 'button';
-  tab.disabled = true;
-  tab.title = 'The voices of this character, and the library';
-  acts.appendChild(tab);
-  const x = el('button', 'u-btn is-s is-icon is-quiet u-x', '');
-  x.type = 'button';
-  x.title = 'Back to the script';
-  x.addEventListener('click', () => api.go('hub'));
-  acts.appendChild(x);
-  host.appendChild(acts);
-}
-
+// (phase V62) In its window (openVoices, below) the window's own ✕ closes it - no bar of its own.
 export function paintPicker(host, api) {
-  // (phase V62) In its window (js/merge-v3/wk-setup.js) the window's own ✕ closes it - no bar of its own.
-  if (!api.inWindow) _bar(host, api);
   const rec = api.char();
   if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl('reading the filters…')); return; }
 
@@ -416,12 +399,12 @@ export function paintPicker(host, api) {
   // The project's own pick, when it is what the reads use: no character, or one without a voice.
   if (own && !mine.length) {
     const row = el('div', 'mv3-wk-vrow is-on');
-    row.appendChild(_playBtn(own.sample || '', 'our own demo', api.inWindow));
+    row.appendChild(_playBtn(own.sample || '', 'our own demo', true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', own.name || own.voiceId));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || 'no tags'));
     row.appendChild(txt);
-    row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'The voice'));
+    row.appendChild(el('span', 'mv3-wk-vtag', 'Selected'));
     host.appendChild(row);
     host.appendChild(api.note(rec
       ? 'Every line is read in it until ' + (rec.name || 'the character') + ' is given a voice of their own.'
@@ -431,15 +414,15 @@ export function paintPicker(host, api) {
   }
   for (const v of mine) {
     const row = el('div', 'mv3-wk-vrow' + (String(v.voiceId) === now ? ' is-on' : ''));
-    row.appendChild(_playBtn(v.sample || '', 'our own demo', api.inWindow));
+    row.appendChild(_playBtn(v.sample || '', 'our own demo', true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voiceId));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
     row.appendChild(txt);
     if (String(v.voiceId) === now) {
-      row.appendChild(el('span', 'mv3-wk-vtag', api.inWindow ? 'Selected' : 'The voice'));
+      row.appendChild(el('span', 'mv3-wk-vtag', 'Selected'));
     } else {
-      const use = el('button', 'mv3-wk-vuse u-btn is-s' + (api.inWindow ? ' is-quiet' : ''), 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s is-quiet', 'use');
       use.type = 'button';
       use.title = 'Read every line in this one';
       use.disabled = !!_busy;
@@ -507,7 +490,7 @@ export function paintPicker(host, api) {
   // filters as they stand - and its pages, 20 voices each, are always at the window's foot (`api.pagerHost`).
   const pagerHost = api.pagerHost || null;
   if (pagerHost) pagerHost.textContent = '';
-  if (!_asked && api.inWindow && !_busy) { _asked = true; setTimeout(() => _search(api, 1), 0); }
+  if (!_asked && !_busy) { _asked = true; setTimeout(() => _search(api, 1), 0); }
   if (!_asked) {
     host.appendChild(api.note('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.'));
     if (pagerHost) _pager(pagerHost, api);
@@ -524,7 +507,7 @@ export function paintPicker(host, api) {
   const have = new Set(mine.map(v => String(v.voiceId)));
   for (const v of found) {
     const row = el('div', 'mv3-wk-vrow');
-    row.appendChild(_playBtn(v.preview_url || '', 'the owner’s sample', api.inWindow));
+    row.appendChild(_playBtn(v.preview_url || '', 'the owner’s sample', true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voice_id));
     txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
@@ -1012,7 +995,7 @@ export function paintVoices(api) {
   const box = el('div', 'mv3-wk-vwin');
   const foot = el('div', 'mv3-wk-vwinfoot');
   body.append(box, foot);
-  paintPicker(box, { ..._vwin.api, inWindow: true, pagerHost: foot });
+  paintPicker(box, { ..._vwin.api, pagerHost: foot });
   if (at) box.scrollTop = at;
 }
 export function closeVoices() {

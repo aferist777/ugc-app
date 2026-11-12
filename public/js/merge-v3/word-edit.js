@@ -30,7 +30,7 @@ import { editWords, playhead, onPlayhead, selectClipById, revealSelection, nextC
 import { seek } from './preview-b.js';
 import { replaceAt, insertAt, removeAt, joinAt, cutAt, markAt, edgeAt, LIMITS } from '../captions/words.js';
 import { timedWords } from '../captions/pages.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { icon } from '../icons.js';
 
 const S = {

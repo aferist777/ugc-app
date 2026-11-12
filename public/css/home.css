@@ -5,18 +5,9 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* (phase V73 block 6) The sub-header (.hm-sub, its one tab "Overview" and "reset layout") went: one tab is not tabs. "Reset
-   layout" is a quiet button in the corner under the blocks (.hm-foot). ITS RULES BELOW ARE UNUSED - kept for the V50
-   inventory, which deletes what is dead with the owner's answer. */
+   layout" is a quiet button in the corner under the blocks (.hm-foot). */
 .hm-sub{flex:0 0 auto; display:flex; align-items:stretch; gap:2px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--border-soft)}
-.hm-tab{position:relative; display:flex; align-items:center; gap:6px; padding:9px 12px 8px; border:0; background:none; cursor:pointer;
-  color:var(--muted); font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase}
-.hm-tab:hover{color:var(--ink)}
-.hm-tab.cur{color:var(--ink)}
-.hm-tab.cur::after{content:''; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; border-radius:2px; background:var(--ink)}
 .hm-sub .sp{flex:1}
-.hm-side{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted)}
-.hm-link{border:0; background:none; padding:0; cursor:pointer; color:var(--muted); font:11px var(--font)}
-.hm-link:hover{color:var(--ink)}
 
 /* ── the body scrolls; the shell's body does not ── */
 .hm-body{flex:1 1 auto; min-height:0; overflow-y:auto}

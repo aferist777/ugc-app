@@ -10,7 +10,7 @@
    by hand. lib/audio-writer-rules.js reads CHIPS, CHIPS_DEFAULT and HIGHLIGHT_PRESETS from here, so the page and the
    writer speak one vocabulary. The server require()s this file (Node 24; ./package.json says "module").
 
-   THE SHAPE (ALMANAC_VERSION 1) - docs/local-app/PLAN.md, "V34.A — ход", is the contract for the chat:
+   THE SHAPE - docs/local-app/PLAN.md, "V34.A — ход", is the contract for the chat:
      FIELDS    { <field>: { label, max, join, about } }
                the constructor fields a note can go into: words (the simple mode's box), style, negative, lyrics (Suno
                custom), idea (Suno Generate Lyrics), sound (Suno sounds), sfx (ElevenLabs Sound Effects), music
@@ -39,7 +39,6 @@
                (the rules add them), `negative` what would clash with this style, `name` ends the track's title.
    ════════════════════════════════════════════════════════════════════════════ */
 
-export const ALMANAC_VERSION = 1;
 export const UPDATED = '2026-10-22';
 
 // ── Fields ──────────────────────────────────────────────────────────────────

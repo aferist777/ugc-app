@@ -14,7 +14,7 @@
   /* Media clips are 9:16, so that is the default. A media card also carries a category
      dropdown on a second line, which is why it is a little wider than the rest: a 68px
      select cannot show a category name. */
-  --card-w:78px; --card-h:139px; --card-total:181px;
+  --card-w:78px; --card-h:139px;
 }
 /* (phase V73 block 6) Media's tiles are of TWO shapes, larger: 9:16 (a clip, a picture) and a square (a sound, a track, a product, a
    wide video, a saved text) - five sizes before. The box is inside the card's 1px border. */
@@ -36,7 +36,6 @@
      this shelf whatever is selected, so the count does not jump */
   grid-template-columns:repeat(auto-fill, minmax(168px, 1fr));
   grid-auto-rows:max-content;
-  --card-total:auto;
 }
 /* Height comes from the RATIO here, not a fixed value: the cards change width when the
    looks pane opens, and a fixed height would crop a 16:9 character sheet to a strip. The
@@ -217,7 +216,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-cv-pager{ display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; }
 .lib-cv-at{ font:var(--fw-regular) var(--fs-10) var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
 .lib-info-looks{
-  --card-w:120px; --card-h:68px; --card-total:86px;
+  --card-w:120px; --card-h:68px;
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content;
   gap:8px; padding:10px 12px; align-content:start; justify-content:start;
 }
@@ -227,13 +226,6 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   white-space:normal; overflow-wrap:anywhere;
   display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; text-wrap:balance;
 }
-/* What is known about a place, as text: the label over it, the words under. */
-.lib-info-text{ padding:8px 12px 2px; font-size:11px; line-height:1.5; color:var(--ink); }
-.lib-info-text b{
-  display:block; margin-bottom:2px;
-  font:var(--fw-medium) var(--fs-10)/var(--lh-10) var(--font); color:var(--muted);
-}
-.lib-info-text.is-none{ color:var(--muted); }
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .lib-grid{
   flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;
@@ -488,12 +480,6 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 /* The scenario column is a column: its parts keep their height. */
 .lib-info-body.is-scenarios{ display:flex; flex-direction:column; }
 .lib-info-body.is-scenarios > *{ flex:0 0 auto; }
-/* "Where it came from", folding (phase F5): the section's own name is the switch. */
-.lib-sc-origin > summary{ cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; }
-.lib-sc-origin > summary::-webkit-details-marker{ display:none; }
-.lib-sc-origin > summary::before{ content:'▸'; font-size:9px; transition:transform .12s var(--ease); }
-.lib-sc-origin[open] > summary::before{ transform:rotate(90deg); }
-.lib-sc-origin > summary:hover{ color:var(--ink); }
 .lib-sc-status{ font-size:10.5px; color:var(--muted); }
 .lib-sc-status.ok{ color:var(--success); }
 .lib-sc-status.err{ color:var(--danger); }
@@ -978,7 +964,6 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-cell.is-wide{ grid-column:1 / -1; }
 .lib-sc-cl{ font:var(--fw-medium) var(--fs-10) var(--font); color:var(--muted); }   /* (phase V73 block 6) the column's labels in sentence case (к17) */
 .lib-sc-cl::first-letter{ text-transform:uppercase; }
-.lib-sc-cv{ font-size:10.5px; color:var(--ink); overflow-wrap:anywhere; }
 .lib-sc-fbtn{ display:flex; gap:6px; width:100%; min-width:0; text-align:left }
 .lib-sc-fbtn-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lib-sc-fbtn.is-none .lib-sc-fbtn-t{ color:var(--muted); }

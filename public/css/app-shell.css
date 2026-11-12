@@ -24,7 +24,7 @@
   --mono:"UGC Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
   /* THE LOOK OF PHASE V73 (block 1 stage C1; the owner 2026-11-03/04, (к15)-(к21а), (б1-1)-(б1-14); the rules of unslop by
      Damir Sokolovsky, CC BY 4.0): graphite of the old steps' lightness with no blue; three text roles; hairlines - the text at
-     8 % and, for a control's edge, 12 %. The blue (--primary) and the cyan (--accent) are gone: every place took its role. */
+     8 % and, for a control's edge, 12 %. The blue (--primary) and the cyan are gone: every place took its role. */
   --bg-deep:#0a0a0b; --bg:#0f0f10; --surface:#19191b; --surface-2:#232325; --surface-3:#2c2c2f;
   --ink:#ededed; --muted:#a1a1a6; --faint:#85858b;
   --border-soft:rgb(237 237 237 / .08); --border:rgb(237 237 237 / .12);
@@ -74,7 +74,7 @@
   --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
   --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
   --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
-  --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
+  --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
   --font:"Segoe UI",system-ui,-apple-system,sans-serif;
   --bg-deep:oklch(.13 .012 265); --surface-3:oklch(.29 .02 265); --faint:oklch(.71 .012 265);
   --warn:oklch(.72 .15 75);

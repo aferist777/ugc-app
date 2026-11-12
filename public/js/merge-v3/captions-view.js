@@ -57,7 +57,7 @@ import { fontPicker } from './font-tiles.js';
 import * as MyPresets from './my-presets.js';
 import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { menuIcons } from '../icons.js';
 // (phase V73 block 2, step 2b) An empty `Mine` - the shared "nothing here".
 import { emptyEl } from '../ui-state.js';

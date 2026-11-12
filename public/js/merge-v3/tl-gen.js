@@ -26,7 +26,7 @@
 import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import { unbound } from './chat-owner.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { showError } from '../notice.js';
 
 const LS = 'mv3_tl_gen_v1';

@@ -83,8 +83,7 @@ const OUT = {
   fall: { a: [0.45, 1], f: (p) => ({ dy: lerp(0, 3, inC(p)) }) },
   blur: { a: [0, 1], f: (p) => ({ blur: lerp(0, 12, p), s: lerp(100, 106, p) }) },
 };
-/** The In and Out a subtitle page can wear, in the order the strip and the tiles offer them. */
-export const PAGE_ENTERS = ['fade', 'pop', 'zoom', 'grow', 'from-top', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'swing'];
+/** The Out a subtitle page can wear, in the order the strip and the tiles offer them. */
 export const PAGE_LEAVES = ['fade', 'pop', 'shrink', 'zoom', 'rise', 'sink', 'to-left', 'to-right', 'fall', 'blur'];
 const IN_LEN = 0.25, OUT_LEN = 0.2;
 

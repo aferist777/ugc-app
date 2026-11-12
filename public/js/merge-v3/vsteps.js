@@ -48,8 +48,8 @@ const _sets = (s) => [{ key: s.key, word: s.word, variants: s.variants || [], pi
   .concat((s.more || []).filter(Boolean).map(x => Object.assign({ variants: [] }, x)));
 
 /**
- * The frame of one working message: its parts to put into the message (`parts`), `paint(spec)` on every read, `goTo`
- * a step by its key, `destroy()` when the message is drawn anew. `progs` are the countdowns of the step shown.
+ * The frame of one working message: its parts to put into the message (`parts`), `paint(spec)` on every read,
+ * `destroy()` when the message is drawn anew. `progs` are the countdowns of the step shown.
  */
 export function stepCard(id) {
   const top = el('div', 'vc-steps');
@@ -168,12 +168,6 @@ export function stepCard(id) {
     slot.hidden = top.parentNode !== slot || top.hidden;
   }
 
-  function goTo(key) {
-    const m = mem();
-    if (!stepsOf().some(s => s.key === key)) return;
-    m.step = key;
-    paint();
-  }
   function step(d) {
     const steps = stepsOf();
     const m = mem();
@@ -202,5 +196,5 @@ export function stepCard(id) {
   }
   // The variant shown of a set, as the person left it (null - the set's own pick, or the newest).
   const shown = (key) => mem().vars[key] || null;
-  return { parts: [slot, body, acts], paint, goTo, destroy, progs, shown };
+  return { parts: [slot, body, acts], paint, destroy, progs, shown };
 }

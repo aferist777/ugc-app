@@ -28,7 +28,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
-import { note } from './ask.js';
+import { note } from '../ask.js';
 import { cutsOfPauses } from './tl-cut.js';
 import { wire as wireRange, fill as fillRange } from '../ui-range.js';
 import { setFigures } from '../num.js';
@@ -341,6 +341,3 @@ function _paintGlow() {
     p.appendChild(frag);
   }
 }
-
-/** Is the window open (tests). */
-export const isOpen = () => !!_win;

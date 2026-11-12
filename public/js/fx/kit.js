@@ -298,8 +298,6 @@ export function momentAt(src, spec, t) {
   }
   return best;
 }
-/** Told when a card's font or a clip's moments have loaded (the preview paints again). */
-export const onLoaded = onFontLoaded;
 /** (block 6) Tells everyone listening that something has loaded - the person's segmenter (js/fx/person.js). */
 export function told() { for (const cb of _onFont) { try { cb(); } catch (e) { /* its own */ } } }
 

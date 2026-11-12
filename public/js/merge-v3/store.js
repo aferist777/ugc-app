@@ -143,7 +143,6 @@ export function timeline() { return _timeline; }
 // The kind every project has now - an ordered list of lanes. The talking-head editor's projects
 // were rewritten into it at startup (lib/timeline-convert.js).
 export const BLANK_KIND = 'blank';
-export function kind() { return BLANK_KIND; }
 export function version() { return _version; }
 export function status() { return _status; }
 // WHAT KIND OF NEWS the status is. Red is for "an edit of yours is not on the server"; the server laying
@@ -278,7 +277,7 @@ export async function load(k) {
     }).then(r => r.json()).catch(() => null);
     if (dr && dr.success && dr.key) return load(dr.key);
     // The draft could not be had: the empty timeline, nothing open - edits wait for a project.
-    const d = await fetch('/api/mv3/blank?kind=blank').then(r => r.json());
+    const d = await fetch('/api/mv3/blank').then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the blank timeline');
     _timeline = d.timeline;
     _gone = new Set();

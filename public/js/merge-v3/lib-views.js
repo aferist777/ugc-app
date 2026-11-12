@@ -40,9 +40,8 @@ let _held = false;           // the room is taken
 let _frame = 0;
 let _capsBack = null;        // what letting go of the captions does (the pick released)
 let _capsOpen = null;        // what the "captions" crumb does from another view (the subtitle lane picked)
-// The views registered the way a chat is, by name: { root, head, headL, crumb } element ids (headL: buttons right
-// beside the crumb), onBack (leave it for the shelf), onYield (another view took the base), onCrumb (its crumb
-// pressed from another view).
+// The views registered the way a chat is, by name: { root, crumb } element ids, onBack (leave it for the shelf), onYield
+// (another view took the base), onCrumb (its crumb pressed from another view).
 const _chats = new Map();
 
 /** What shows: 'captions', the name of a chat, or 'shelf'. */
@@ -51,9 +50,9 @@ export const isCaptions = () => _caps;
 /** A chat is the base (whether or not the captions are over it) - the shelf's own drop stands down. */
 export const isChat = () => _base !== 'shelf';
 
-/** A chat says who it is, where its box, buttons and crumb are, and what pressing back and the crumb do. */
+/** A view says who it is, where its box and crumb are, and what pressing back and the crumb do. */
 export function registerChat(name, o) {
-  const c = Object.assign({ root: '', head: '', headL: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null }, o || {});
+  const c = Object.assign({ root: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null }, o || {});
   _chats.set(name, c);
   // Its crumb opens it from any view - the shelf, the other chat, the captions (the chat's own open lets go of
   // them); pressed while the chat shows, it does nothing - and never reaches the panel header, whose press folds
@@ -96,11 +95,11 @@ const HL_FRAG = /^(hl_[a-z0-9]+)_\d+$/;
 export const chatKey = (key) => { const k = String(key || ''); const m = HL_FRAG.exec(k); return m ? m[1] : k; };
 /** The open timeline is a highlights project's own (no fragment open). */
 export const isHlHome = (key) => /^hl_[a-z0-9]+$/.test(String(key || ''));
-/** What "to timeline" and a drag of a chat's result say there. */
+/** What a drag of a chat's result says there. */
 export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
 /**
- * (phase V49.1, the owner's (пр33)) Said wherever something would be laid on the home - a chat's result ("to timeline", its
- * drag) and a drop on its lanes, refused on release: a popup (js/notice.js) with "to highlights", which brings the tiles back
+ * (phase V49.1, the owner's (пр33)) Said wherever something would be laid on the home - a chat's result dragged
+ * there and a drop on its lanes, refused on release: a popup (js/notice.js) with "to highlights", which brings the tiles back
  * (the highlights view's own crumb, highlights.js) and lets the popup go.
  */
 export function noFragment() {
@@ -247,10 +246,6 @@ function _paint() {
       crumb.classList.toggle('is-on', on);
       crumb.title = on ? '' : (c.crumbTitle || '');
     }
-    const head = $(c.head);
-    if (head) head.hidden = !on;
-    const headL = c.headL ? $(c.headL) : null;
-    if (headL) headL.hidden = !on;
   }
   const cap = $('mv3-lib-cap');
   if (cap) {

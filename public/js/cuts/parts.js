@@ -11,7 +11,6 @@
                              before the one before it ends starts where it ends; shorter than MIN_PART - none. Fragments edge to
                              edge stay two (scenes are) - a join plays them on anyway.
      joinedLen(parts)        how long they are, one after another
-     joinedAt(parts, t)      the file's moment at second t of the join: { i, at } - null past its end
      scenesOf(changes, dur)  [{ in, out }] edge to edge from the changes of shot (scdet's times): changes closer than
                              SCENE_MERGE are one (as js/framing/active.js reads a podcast's), a scene shorter than SCENE_MIN
                              joins the one before it (the first - the one after)
@@ -47,17 +46,6 @@ export function normParts(parts, dur) {
 
 export function joinedLen(parts) {
   return r2((parts || []).reduce((s, p) => s + Math.max(0, (+p.out || 0) - (+p.in || 0)), 0));
-}
-
-export function joinedAt(parts, t) {
-  let acc = 0;
-  const list = parts || [];
-  for (let i = 0; i < list.length; i++) {
-    const len = Math.max(0, +list[i].out - +list[i].in);
-    if (t < acc + len - EPS) return { i, at: +list[i].in + Math.max(0, t - acc) };
-    acc += len;
-  }
-  return null;
 }
 
 export function scenesOf(changes, dur) {

@@ -30,7 +30,7 @@
 
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
-import { askDelete } from './ask.js';
+import { askDelete } from '../ask.js';
 import { setOpenColumn, roomForWork } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';

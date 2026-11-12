@@ -6,10 +6,13 @@
 //
 //   - everything is folded each time it opens, nothing is remembered (the owner's (о1));
 //   - ▸, or a press on a branch that is not a place itself, opens or folds it;
-//   - a press on a place picks it: the window closes and the caller gets { kind, cat, label, text };
-//   - "+ new folder…" is the last row of a kind's branch and of every folder's (phase V54, (зв44)): the name asked, the
-//     folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that one), and that is
-//     the place;
+//   - a press on a place picks it: the window closes and the caller gets { kind, cat, label, text } - or, with `confirm`
+//     (the cut's "save the pieces to", the owner 2026-11-12), it is only CHOSEN (lit, its path at the foot) and the
+//     foot's button picks it;
+//   - "+" at the right of a kind's row and of every folder's that can hold a new folder (phase V54, (зв44); a "+ new
+//     folder…" row until 2026-11-12, the owner: "рядом с папкой в которой можно создать папку будет стоять плюсик"): the
+//     name asked, the folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that
+//     one), and that is the place - with `confirm` it is chosen, shown in its branch;
 //   - where the thing is now: a row on top ("Beside it"), marked in the tree too (.is-here);
 //   - a place that cannot take it is grey, why in its tooltip - and so is a branch whose every place cannot.
 //
@@ -51,7 +54,8 @@ export function closePlaces() {
  *   o.alignRight   right edges together (else left edges)
  *   o.cls          a class of the caller's for the window
  *   o.name         its layer's name
- *   o.onPick(to)   a place chosen - the window is closed already
+ *   o.confirm      the foot's button (`'Save here'`): a press on a place only chooses it, the button picks
+ *   o.onPick(to)   a place picked - the window is closed already
  */
 export function openPlaces(anchor, o) {
   closePlaces();
@@ -80,17 +84,40 @@ export function openPlaces(anchor, o) {
   roots.forEach(mark);
 
   const open = new Set();
+  let chosen = null;                 // { to, key } - with `confirm`: the place chosen, not yet picked
   const box = el('div', 'ref-move mtp-box u-menu is-float' + (opt.cls ? ' ' + opt.cls : ''));
   box.appendChild(el('div', 'ref-move-title', opt.title || 'Where to?'));
   const list = el('div', 'ref-move-list mt mtp');
   list.setAttribute('role', 'tree');
   box.appendChild(list);
+  // With `confirm`: the foot - the place chosen, in words, and the button that picks it.
+  let footText = null, footGo = null;
+  if (opt.confirm) {
+    const foot = el('div', 'mtp-foot');
+    footText = el('span', 'mtp-chosen', 'Choose a folder');
+    footGo = el('button', 'u-btn is-s is-main', opt.confirm);
+    footGo.type = 'button';
+    footGo.disabled = true;
+    footGo.addEventListener('click', () => { if (!chosen) return; const to = chosen.to; closePlaces(); opt.onPick(to); });
+    foot.append(footText, footGo);
+    box.appendChild(foot);
+  }
+  const choose = (p) => {
+    chosen = { to: p.to, key: p.key };
+    if (footText) { footText.textContent = p.to.text || p.to.label || ''; footText.title = footText.textContent; }
+    if (footGo) footGo.disabled = false;
+    paint();
+  };
+  // The folders a row holds besides its "+" (a `newIn` child is the row's "+", never a row of its own).
+  const kidsOf = (p) => (p.children || []).filter(c => !c.newIn);
+  const addOf = (p) => (p.children || []).find(c => c.newIn) || null;
 
   function row(p, depth, top) {
-    const has = !top && !!(p.children && p.children.length);
+    const has = !top && kidsOf(p).length > 0;
     const no = off.get(p.key) || '';
     const b = el('button', 'mt-row mtp-row' + (depth === 0 && !top ? ' is-group' : '') + (p.to ? ' is-place' : '')
-      + (p.newIn ? ' is-newcat' : '') + (p.to && isHere(p.to) ? ' is-here' : '') + (no ? ' is-off' : ''));
+      + (p.to && isHere(p.to) ? ' is-here' : '') + (no ? ' is-off' : '')
+      + (chosen && p.to && chosen.to.kind === p.to.kind && (chosen.to.cat || '') === (p.to.cat || '') ? ' is-sel' : ''));
     b.type = 'button';
     b.dataset.key = p.key;
     b.dataset.depth = String(depth);
@@ -113,14 +140,24 @@ export function openPlaces(anchor, o) {
       lock.innerHTML = LOCK_SVG;
       b.appendChild(lock);
     }
-    b.title = no || (p.newIn ? 'Make a new folder in ' + (p.newIn.label || KIND_WORD[p.newIn.kind] || p.newIn.kind) + ' - and that is the place'
-      : p.to ? p.to.text : (open.has(p.key) ? 'Fold ' : 'Open ') + p.label);
+    // "+": a new folder in this one.
+    const add = top ? null : addOf(p);
+    if (add) {
+      const plus = el('span', 'mtp-add', '+');
+      plus.setAttribute('role', 'button');
+      plus.title = 'New folder in ' + (add.newIn.label || KIND_WORD[add.newIn.kind] || add.newIn.kind);
+      plus.addEventListener('click', (e) => { e.stopPropagation(); if (e.detail < 2) _newFolder(add.newIn, plus, p); });
+      b.appendChild(plus);
+    }
+    b.title = no || (p.to ? p.to.text : (open.has(p.key) ? 'Fold ' : 'Open ') + p.label);
     // The second press of a double one (the media tree's way to open a branch) does nothing: it would fold what the first
     // opened, or pick a row that came under the pointer.
     b.addEventListener('click', (e) => {
       if (e.detail > 1) return;
-      if (p.newIn) { _newFolder(p.newIn, b); return; }
-      if (p.to && !no) { closePlaces(); opt.onPick(p.to); return; }
+      if (p.to && !no) {
+        if (opt.confirm) { choose(p); return; }
+        closePlaces(); opt.onPick(p.to); return;
+      }
       if (has) toggle(p.key);
     });
     return b;
@@ -136,7 +173,7 @@ export function openPlaces(anchor, o) {
     }
     const walk = (p, d) => {
       list.appendChild(row(p, d));
-      if (p.children && open.has(p.key)) for (const c of p.children) walk(c, d + 1);
+      if (open.has(p.key)) for (const c of kidsOf(p)) walk(c, d + 1);
     };
     roots.forEach(p => walk(p, 0));
     list.scrollTop = top;
@@ -158,7 +195,7 @@ export function openPlaces(anchor, o) {
     if (to > list.scrollTop + list.clientHeight) list.scrollTop = Math.min(from, to - list.clientHeight);
   }
 
-  async function _newFolder(at, b) {
+  async function _newFolder(at, b, parentNode) {
     const kind = at.kind;
     const cat = await askName({
       anchor: b, title: 'New folder in ' + (at.label || KIND_WORD[kind] || kind), okLabel: 'Create', maxLength: 60,
@@ -170,8 +207,21 @@ export function openPlaces(anchor, o) {
       },
     });
     if (!cat) return;
-    closePlaces();
-    opt.onPick({ kind, cat: cat.id, label: cat.label, text: cat.label });
+    const to = { kind, cat: cat.id, label: cat.label, text: ((parentNode && (parentNode.to ? parentNode.to.text : parentNode.label)) || KIND_WORD[kind] || kind) + ' · ' + cat.label };
+    if (!opt.confirm) { closePlaces(); opt.onPick(to); return; }
+    // Chosen, and shown where it was made: a row of its own in the opened branch.
+    if (parentNode) {
+      const node = { key: 'made:' + kind + ':' + cat.id, label: cat.label, count: 0, locked: false, to,
+        children: [{ key: 'new:made:' + cat.id, label: '+', newIn: { kind, parent: cat.id, label: cat.label } }] };
+      if (!(parentNode.children || []).some(c => c.to && c.to.kind === kind && c.to.cat === cat.id)) {
+        parentNode.children = parentNode.children || [];
+        const at2 = parentNode.children.findIndex(c => c.newIn);
+        parentNode.children.splice(at2 < 0 ? parentNode.children.length : at2, 0, node);
+        byKey.set(node.key, node);
+      }
+      open.add(parentNode.key);
+      choose((parentNode.children || []).find(c => c.to && c.to.kind === kind && c.to.cat === cat.id) || node);
+    } else choose({ key: 'made:' + cat.id, to });
   }
 
   paint();
@@ -181,7 +231,7 @@ export function openPlaces(anchor, o) {
   // reserved now - as tall as everything opened would be, as far as there is room.
   if (above) {
     const room = parseFloat(box.style.maxHeight) || 460;
-    for (const [k, p] of byKey) if (p.children) open.add(k);
+    for (const [k, p] of byKey) if (kidsOf(p).length) open.add(k);
     paint();
     box.style.maxHeight = 'none';
     const full = box.offsetHeight;
@@ -191,7 +241,7 @@ export function openPlaces(anchor, o) {
     box.style.height = Math.min(full, room) + 'px';
   }
   const away = (e) => {
-    if (box.contains(e.target) || anchor.contains(e.target) || (e.target.closest && e.target.closest('.nm-box'))) return;
+    if (box.contains(e.target) || anchor.contains(e.target) || (e.target.closest && e.target.closest('.nm-box, .bub'))) return;
     closePlaces();
   };
   document.addEventListener('mousedown', away, true);

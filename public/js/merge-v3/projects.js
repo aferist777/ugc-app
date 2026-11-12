@@ -21,7 +21,7 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
-import { askChoice } from './ask.js';
+import { askChoice } from '../ask.js';
 import { openScenarios, openVoiceover } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
 // (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).

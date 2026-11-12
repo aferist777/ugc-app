@@ -75,12 +75,6 @@ function _laneAt(tracks, kind, n) {
   return null;
 }
 
-/** What the buffer holds now: { n, key } or null - for the tests and anyone who asks. */
-export function buffered() {
-  const b = _read();
-  return b && b.items.length ? { n: b.items.length, key: b.key } : null;
-}
-
 // ── Ctrl+C ──────────────────────────────────────────────────────────────────
 /**
  * The picked clips and text lines into the buffer, with the other halves of their pairs. Subtitle lines are left out (said

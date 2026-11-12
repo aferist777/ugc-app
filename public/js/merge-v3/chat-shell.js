@@ -15,8 +15,8 @@
    every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
    V55 the window with the tree), the hover peek, and the narrow layout.
 
-   (phase V64 block 3, the owner 2026-10-31) Every chat is HOSTED now - the frames chat since V26.5, the pictures chat and the
-   video chat since V64 - and lives in a generation's window (chat-window.js): no crumb, no room, no view remembered per
+   (phase V64 block 3, the owner 2026-10-31) Every chat lives in a generation's window now - the frames chat since V61, the
+   pictures chat and the video chat since V64 (chat-window.js): no crumb, no room, no view remembered per
    project; the window shows and hides it, and its conversation is still the open project's - in the Library (block 4) THE
    draft's, the unbound one: whose it is, chat-owner.js says (the store's words, either way).
 
@@ -51,13 +51,12 @@
 
 // (phase V64 block 4) Whose conversation it is - the open project in Merge, the unbound draft's in the Library.
 import * as Store from './chat-owner.js';
-import { setOpenColumn } from './layout.js';
 import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
 import { createFolderColumn } from '../folder-column.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
-import { closeAsk, note } from './ask.js';
+import { note } from '../ask.js';
 import { twoPress } from '../really.js';
 // (phase V73 block 2, step 2b) The empty conversation - the shared "nothing here".
 import { emptyEl } from '../ui-state.js';
@@ -237,7 +236,6 @@ export function createChat(make) {
     reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
-    place: (item, anchor) => _place(item, anchor),
     peekShow: (src, anchor) => peekShow(src, anchor),
     peekHide: () => peekHide(),
     // (phase V3) The words in the box - a description may put its standard prompt there - and its hint.
@@ -286,10 +284,6 @@ export function createChat(make) {
   const S = make(ctx);
   const T = S.text;
   const set = S.settings;
-  // (phase V26.5) A chat that lives OUTSIDE the Library panel - the frames chat of a talking head, in Setup: no crumb,
-  // no room, no view remembered per project. Its owner shows and hides it (open / close), it carries a head line of its
-  // own over its columns, and a project switch leaves it as it is.
-  const HOSTED = !!S.host;
   _write = stored(S.keys.write, true) !== false;
   const _path = (g) => S.resultPath(g);
 
@@ -299,18 +293,12 @@ export function createChat(make) {
    * (chat-window.js), which shows the chat here.
    */
   async function open() {
-    if (!HOSTED) {
-      Views.toBase();
-      setOpenColumn('library');
-    } else if (_chat) return;
+    if (_chat) return;
     await _show(true);
   }
 
-  // `remember` is false when another chat took the base (onYield): this chat's _key may still be the project
-  // being LEFT - the other chat's store listener can run first - and its mark there must stay.
-  async function _show(on, remember = true) {
+  async function _show(on) {
     _chat = !!on;
-    if (remember && !HOSTED) Views.rememberView(_lk(_key), _chat ? S.name : null, S.name);
     _paintHead();
     if (!_chat) {
       _stop();
@@ -335,10 +323,10 @@ export function createChat(make) {
     if (_chat && _ui) _ui.ta.focus();
   }
 
-  // The header, the panel's class and the room are lib-views' (K6b): it is told the base.
+  // The root shows while the chat does - in its window.
   function _paintHead() {
-    if (HOSTED) { const r = $(S.ids.root); if (r) r.classList.toggle('is-shown', _chat); return; }
-    Views.setBase(S.name, _chat);
+    const r = $(S.ids.root);
+    if (r) r.classList.toggle('is-shown', _chat);
   }
 
   // ── The project the conversation belongs to ──────────────────────────────
@@ -349,13 +337,12 @@ export function createChat(make) {
     // pressing another fragment is no project switch here - the thread, the view and what is being written stay.
     const k = Views.chatKey(Store.key());
     // (phase V21) The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
-    // none of them), it stays on the chat it was on, and its conversation is read again (the project's copy). The next
-    // draft opens on the chat the drafts were left on.
+    // none of them), and its conversation is read again (the project's copy).
     if (k && k === _key && _draftHere && !Store.isDraft()) {
       _draftHere = false;
       const d = stored(S.keys.draft, {});
       if (d[DRAFT_LK]) { d[k] = d[DRAFT_LK]; delete d[DRAFT_LK]; keep(S.keys.draft, d); }
-      if (_chat) { if (!HOSTED) Views.rememberView(k, S.name); _reload(true); }
+      if (_chat) _reload(true);
       return;
     }
     if (k === _key) return;
@@ -367,7 +354,7 @@ export function createChat(make) {
       _saveDraft(was);
       _memo.set(was, { pending: _pending, attSeq: _attSeq });
     }
-    // A send from "no project" made this project: what was being written comes along, and so does the chat.
+    // A send from "no project" made this project: what was being written comes along.
     const adopt = _adopt && was === '';
     _adopt = false;
     if (adopt) {
@@ -388,13 +375,8 @@ export function createChat(make) {
     // This project's own results are another project's; a folder is the same whatever is open.
     _feed = [];
     if (_col) _col.setOwn([]);
-    if (adopt && !HOSTED) { Views.rememberView(k, S.name); Views.rememberView('', null, S.name); }
-    // A hosted chat stays as it was: its owner shows it for the project it holds.
-    const want = HOSTED ? _chat : (adopt || Views.viewOf(_lk(k)) === S.name);
-    if (want !== _chat) _show(want);
-    else if (_chat) _reload(true);
-    // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
-    else if (!HOSTED) Views.sync();
+    // The chat stays as it was: its window shows it for the project it holds.
+    if (_chat) _reload(true);
     _paintHead();
   }
 
@@ -1605,19 +1587,6 @@ export function createChat(make) {
     S.view(done, Math.max(0, done.findIndex(x => x.id === g.id)));
   }
 
-  // On the lane above main video, at the playhead (js/merge-v3/timeline-b.js placeAbove) - not on a highlights project's own
-  // timeline (phase V49, (пр6)): a fragment is opened first.
-  async function _place(item, anchor) {
-    if (refuseHome(anchor)) return;
-    const Tl = await import('./timeline-b.js');
-    // Not picked on the timeline: a picked clip slides its settings over the Library - over this chat.
-    // A clip (the video chat) goes with its length and its sound; a picture as a still.
-    const r = item && item.clip ? Tl.placeClipAbove(item, { select: false }) : Tl.placeAbove(item, { select: false });
-    if (!r.ok) { note(anchor, 'Not added.', r.why); return; }
-    note(anchor, 'Added to ' + r.lane + '.', 'At the playhead, ' + r.at.toFixed(1) + 's.');
-    setTimeout(() => closeAsk(), 2400);
-  }
-
   // The cross on a countdown: the row is let go of - what was asked for is paid for, and it says so.
   async function _letGo(g) {
     await json('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', { method: 'POST' });
@@ -1684,7 +1653,7 @@ export function createChat(make) {
         body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or (phase V26.5)
-          // the place a hosted chat's description names.
+          // the place the description names (the frames chat's).
           // (phase V64 block 4) From the Library's unbound chat - the Library (chat-owner.js whereOf).
           where: typeof S.where === 'function' ? S.where(key) : Store.whereOf(key, S.name),
         })),
@@ -2095,16 +2064,9 @@ export function createChat(make) {
     const root = $(S.ids.root);
     if (!root) return;
     root.textContent = '';
-    // (phase V26.5) A hosted chat has a head line of its own - its name and its buttons - over its columns.
-    let main = root, ownHead = null;
-    if (HOSTED) {
-      const top = el('div', 'mv3-ig-top');
-      top.append(el('span', 'mv3-ig-top-t', T.title || S.name), el('span', 'sp'));
-      ownHead = el('span', 'mv3-pc-head');
-      top.appendChild(ownHead);
-      main = el('div', 'mv3-ig-main');
-      root.append(top, main);
-    }
+    // The columns, side by side - the window's head says what the chat is.
+    const main = el('div', 'mv3-ig-main');
+    root.appendChild(main);
 
     const setBox = el('div', 'mv3-ig-set');
     const left = el('div', 'mv3-ig-scroll');
@@ -2177,20 +2139,6 @@ export function createChat(make) {
       stripBox = el('div', 'mv3-ig-strip');
       main.append(setBox, chat, sash, stripBox);
     } else main.append(setBox, chat);
-
-    // The panel header's own buttons while the chat shows - or a hosted chat's own head line. No chat clears its
-    // conversation any more (phase V25, the owner: "везде уходит").
-    const head = HOSTED ? ownHead : $(S.ids.head);
-    if (head) {
-      head.textContent = '';
-      head.append(...(typeof S.headButtons === 'function' ? S.headButtons() : []));
-    }
-    // (phase V6) Buttons right beside the chat's crumb - the video chat's catalog.
-    const headL = S.ids.headL ? $(S.ids.headL) : null;
-    if (headL && typeof S.crumbButtons === 'function') {
-      headL.textContent = '';
-      headL.append(...S.crumbButtons());
-    }
 
     _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, price, go, stripBox, narrow: null };
     _paintN();
@@ -2283,14 +2231,6 @@ export function createChat(make) {
   }
 
   function init() {
-    // "Library" in the header leaves the chat; the pale crumb on the shelf opens it; another chat coming
-    // forward lets this one go (lib-views wires all three). A hosted chat is its owner's to show.
-    if (!HOSTED) {
-      Views.registerChat(S.name, {
-        root: S.ids.root, head: S.ids.head, headL: S.ids.headL || '', crumb: S.ids.crumb, crumbTitle: T.crumb,
-        onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => open(),
-      });
-    }
     // Back from another tab or window: the countdowns catch up at once rather than at the next tick.
     document.addEventListener('visibilitychange', () => { if (!document.hidden && _chat) _reload(); });
     window.addEventListener('beforeunload', () => { if (_key !== null) _saveDraft(_key); });
@@ -2298,6 +2238,6 @@ export function createChat(make) {
     _paintHead();
   }
 
-  // (phase V26.5) `close` - a hosted chat's owner hides it; `fit` - its place changed size.
+  // (phase V26.5) `close` - its window hides it; `fit` - its place changed size.
   return { open, init, isOpen: () => _chat, close: () => { if (_chat) _show(false); }, fit: () => _fit(), ctx };
 }

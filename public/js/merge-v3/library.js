@@ -9,7 +9,7 @@
    is asked (none for a node that only holds folders):
 
      GET /api/library/shelf/media?filter=<kind>[&cat=<id>|__uncat__][&src=…][&folder=…&mood=…] | group=sfxall&q=<words>
-       -> { items, shown, total, filters, cats }
+       -> { items, cats }
 
    Thumbnails ONLY. The grid points an <img> at `thumb` and nothing loads the full media until the viewer opens. A
    SOUND or a TRACK has no picture: its tile is a note with its length, and a press plays it right there - no window
@@ -57,7 +57,7 @@ import * as LK from '../library/links.js';
 import { showError } from '../notice.js';
 // (phase V73 block 2, step 2b) The question at the button, waiting for its answer, and the parts that say a folder is empty,
 // is being read or could not be read.
-import { ask } from './ask.js';
+import { ask } from '../ask.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V34.E) Sound on the shelf: the waveform, the menu under the right button, the search and the online libraries.
@@ -570,7 +570,7 @@ const _viewerOptsOf = () => ({
     }
     if (id !== 'hl') return null;
     closeViewer();
-    if (window.__ugcHighlightsFrom) window.__ugcHighlightsFrom('', '', (it.meta && it.meta.source) || it.id);
+    if (window.__ugcHighlightsFrom) window.__ugcHighlightsFrom('', (it.meta && it.meta.source) || it.id);
     return null;
   },
   showSrc: (it) => ((it.kind === 'images' || MADE.has(it.kind)) ? '/api/thumb?src=' + encodeURIComponent(it.media) + '&v=main' : null),
@@ -1343,9 +1343,9 @@ const MAKE_LABEL = { environments: 'New environment', lookbooks: 'New lookbook' 
 const _makeWins = {};         // the window open per kind - pressed again, the same one stays
 
 /** Open the generator of 'environments' or 'lookbooks' - its window, over the page; (phase V59) of 'music' - the sound
- *  window on Simple (js/merge-v3/audchat.js openMusicMaker). */
+ *  window on Simple (js/merge-v3/sound-host.js openMusicMaker). */
 export async function openMaker(kind) {
-  if (kind === 'music') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
+  if (kind === 'music') { const A = await import('./sound-host.js'); return A.openMusicMaker(); }
   // (phase V26.6) IMAGES -> Props: the New prop window; a product added - the tree and the gallery read again.
   if (kind === 'props') {
     const { openNewProp } = await import('../prop-window.js');
@@ -1377,7 +1377,7 @@ function _makerLanded() { _reload(); }
 export async function openGenerate(root) {
   if (root === 'images') return openPictures();
   if (root === 'video') { const V = await import('./vidchat.js'); return V.openVideos(); }
-  if (root === 'audio') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
+  if (root === 'audio') { const A = await import('./sound-host.js'); return A.openMusicMaker(); }
 }
 
 function _initMakers() {

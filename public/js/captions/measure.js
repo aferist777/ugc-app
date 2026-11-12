@@ -101,6 +101,3 @@ export function meter(st) {
   const space = _adv(t, fb, ' ');
   return { em, space, run, width, text: (s) => { const r = run(s); return width(r.a, r.n); } };
 }
-
-/** The width, in frame pixels, a line saying `text` is drawn at in style `st`. */
-export const textWidth = (text, st) => meter(st).text(text);

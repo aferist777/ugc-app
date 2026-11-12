@@ -270,18 +270,12 @@ function moveThen(A, B) {
     f: B.b * A.e + B.a * A.f + B.f,
   };
 }
-/** One effect's move in pixels of a W x H frame: scaled by s about (ax, ay), turned by rot degrees about the middle, moved. */
+/** One effect's move in pixels of a W x H frame: scaled by s about (ax, ay), then a measured camera's move. */
 function _moveOf(n, W, H, anchor) {
   const s = n.s != null ? +n.s : 1;
-  const rot = +n.rot || 0;
   const ax = (n.ax != null ? +n.ax : anchor.x) * W, ay = (n.ay != null ? +n.ay : anchor.y) * H;
   let m = { ...MOVE_ID };
-  if (rot) {
-    const th = rot * Math.PI / 180, c = Math.cos(th), si = Math.sin(th), cx = W / 2, cy = H / 2;
-    m = { a: c, b: si, e: cx - (c * cx - si * cy), f: cy - (si * cx + c * cy) };
-  }
   if (s !== 1) m = moveThen(m, { a: s, b: 0, e: ax - s * ax, f: ay - s * ay });
-  if (n.dx || n.dy) m = moveThen(m, { a: 1, b: 0, e: (+n.dx || 0) * W, f: (+n.dy || 0) * H });
   // (block 1b) A measured camera's move, its e and f shares of the frame.
   if (n.mv) m = moveThen(m, { a: +n.mv.a, b: +n.mv.b, e: (+n.mv.e || 0) * W, f: (+n.mv.f || 0) * H });
   return m;
@@ -352,7 +346,7 @@ export function paramsAt(c, t, W, H, main) {
     if (n.mosaic && !mos) mos = n.mosaic;
     // (block 3; block 4a - every lane) What only the page draws: the render lays the copy the app's window baked with this code.
     if (n.jitter && d.engine && !jitter) jitter = n.jitter;
-    if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.rot || n.dx || n.dy || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
+    if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
     if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
     if (n.col) col = colThen(col || COL_ID, n.col);
     if (n.ch) {

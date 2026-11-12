@@ -161,7 +161,7 @@ function _halo(f, src, sigma, k) {
   f.restore();
 }
 function _cfDraw(g, S, t, pop, op) {
-  const { w, h, u, opt } = S;
+  const { w, h, opt } = S;
   const acc = _frameCols(S.col);
   const pts = _framePts(w, h);
   const n = pts.length;
@@ -363,7 +363,7 @@ function framebreak(g, S) {
 // Corners, REC with its dot, a running timecode, the zoom read out in a pill, and for a moment a focus box on the eyes (the pack's
 // stands at one place; here on the face found).
 function digitalzoom(g, S) {
-  const { w, h, u, e, col, opt } = S;
+  const { w, h, u, e, col } = S;
   const t = S.tau;
   const env = smooth(0.04, 0.2, t) * (1 - smooth(1.9, 2.05, t));
   if (env < 0.01) return;

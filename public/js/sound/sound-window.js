@@ -4,7 +4,7 @@
    открываем music simple") - ONE window for music and sounds, the same on both pages: the Library's AUDIO -> "generate"
    (and Music's "Generate music") and Merge's AUDIO -> "generate", the lane's "Video to Music…", ?open=audio. It took the
    place of the Library's music window (V59) and of Merge's "/ generate audio" view of the Library
-   panel (V34.E, js/merge-v3/audchat.js - Merge's adapter now). A generation's window (js/gen-window.js, GEN_SIZE 1280×800):
+   panel (V34.E, js/merge-v3/sound-host.js - Merge's adapter now). A generation's window (js/gen-window.js, GEN_SIZE 1280×800):
 
      head     the engine and the MODE - "Suno · Simple · background, no vocals" - and a "?" right of it: how the mode works
      left     MUSIC | SOUNDS - the switch on top; under it the mode of that group (Music: Simple, Custom, Lyrics, From a
@@ -24,7 +24,7 @@
    folder of highlights - Simple makes that mood's preset (V60), Custom goes into highlights' root (V60.2), and there only
    Simple and Custom of Music are offered.
 
-   The page says how it works through a HOST (configure(h)) - Merge's (js/merge-v3/audchat.js) and the Library's
+   The page says how it works through a HOST (configure(h)) - Merge's (js/merge-v3/sound-host.js) and the Library's
    (js/library/main.js):
      page, view       where the Alerts row says it was started ('merge', 'audio' | 'library', 'musicmake')
      store            the browser's key of the form's state
@@ -268,7 +268,7 @@ function paintCol() {
     return r;
   };
   // MUSIC | SOUNDS ((зг6)): over the mode. (fix (з), the owner 2026-11-01: "переключатель MUSIC | SOUND сделай аккуратней, как
-  // пилюля тумблер айфоновская") A pill with a thumb that slides under the group chosen (css/music-window.css .au-switch) - drawn
+  // пилюля тумблер айфоновская") A pill with a thumb that slides under the group chosen (css/sound-window.css .au-switch) - drawn
   // where it was, then moved, so the column painted again still shows the slide.
   const g = groupOf(S().mode);
   // (phase V73 block 4, (б2-12)) the shared segment (css/app-shell.css .u-seg): the group lit is the selected look
@@ -453,7 +453,7 @@ async function _uploadVideo(file) {
 
 // ── The VIDEO tree of Video to Music (phase V54, (зв23), (зв24), (зв31)) - beside the middle, in that mode only ──
 // (phase V64, fix (к)) Only VIDEO's FOLDERS are seen - the path over them, the folder tiles, the videos; the tree that walks
-// them is built in a column that is never shown (css/music-window.css).
+// them is built in a column that is never shown (css/sound-window.css).
 let _vtree = null;
 let _vseq = 0;
 let _vRead = 0;

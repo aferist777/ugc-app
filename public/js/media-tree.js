@@ -198,9 +198,8 @@ function _target(n) {
   // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
   // its source's folder.
   if (n.kind === 'references') { const c = n.cat && n.cat !== UNCAT ? n.cat : ''; return { kind: 'references', cat: c, name: c ? (n.name || n.label) : '' }; }
-  // (block 6) YOUTUBE is the Sources' - nothing is filed into it, nothing of it moves.
   // (phase V34.E) Built-in (kind `sfx`) is the program's: nothing is filed into it.
-  if (!n.kind || n.kind === 'heads' || n.kind === 'youtube' || n.kind === 'sfx') return null;
+  if (!n.kind || n.kind === 'heads' || n.kind === 'sfx') return null;
   const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
   return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
 }

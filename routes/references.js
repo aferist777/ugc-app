@@ -3,8 +3,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // REFERENCES (phase TG) - what the Telegram bot brought in (lib/references-store.js, lib/references-intake.js).
 //
-//   GET /api/references   -> { sources: [{ id, label, folders }], posts: [post] }   newest first
-//
 // The page is the media tree's REFERENCES branch and the post viewer (js/references/post.js); pieces are cut by js/cut.js.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -59,11 +57,6 @@ router.get('/references/youtube', (_req, res) => {
     items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
     res.json({ success: true, items });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-router.get('/references', (_req, res) => {
-  try { res.json({ success: true, sources: REFS.SOURCES, posts: REFS.read() }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // POST /api/references/:id/move { files: [media ids] | 'all', to: { kind, cat, label } }

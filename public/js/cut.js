@@ -12,11 +12,14 @@
 // ONE module for every viewer of a video: the Library's and Merge's (js/library/viewer.js - `underStage`, `videoSrc`, a row of
 // `extraRows`) and the post viewer of REFERENCES (js/references/post.js, `cutBox` per file of a post).
 //
-//   under the video   the bar of fragments (js/ranges.js; the rule js/cuts/parts.js) and a row: ▶ (only the fragments, one
-//                     after another), "Scenes" (lib/scenes.js lays a video's scenes edge to edge - one step back), how many
-//                     and how long, "Save…" - "Join into one" / "Each separately", then ONE window "save the pieces to" (the
-//                     place picker js/place-tree.js over js/media-targets.js, the clip's own place on top) and the work
-//                     (POST /api/library/cuts) with its count and "stop". The video itself stays as it is.
+//   under the video   a line saying how to mark a fragment, the bar of fragments (js/ranges.js; the rule js/cuts/parts.js) and
+//                     a row: ▶ (only the fragments, one after another), "Scenes" (lib/scenes.js lays a video's scenes edge to
+//                     edge - one step back; grey while fragments lie on the bar, its bubble says why), how many and how long,
+//                     "Delete original" (off at every opening) and "Save…" - the fragments as ONE new clip, nothing asked, in
+//                     ONE window "save the pieces to" (the place picker js/place-tree.js over js/media-targets.js, the clip's own
+//                     place on top) and the work (POST /api/library/cuts) with its count and "stop". The video stays - or,
+//                     with "Delete original" on, goes once the pieces are saved, unless a project uses it (the server says
+//                     where; V81 amendment, the owner's (нк1)-(нк4), 2026-11-12).
 //   right button      on the video: "Save audio" (a row per sound track - into the root of AUDIO since 2026-11-09, the
 //                     owner's (в19)-(в21); POST /api/audio/from-video)
 //                     and "Save video as…" (what the shell's own menu had); on a fragment: "Save this fragment…" / "Save N
@@ -34,6 +37,7 @@ import { whereText } from './media-targets.js';
 import { openPlaces, closePlaces } from './place-tree.js';
 import { menuAt } from './tile-select.js';
 import { showError, showToast } from './notice.js';
+import { hint } from './bubble.js';
 import * as Layers from './layers.js';
 
 const CUTTABLE = new Set(['birols', 'uploads', 'hooks', 'youtube']);
@@ -169,7 +173,7 @@ export function cutBox(video, piece, o) {
   });
   _bars.add(bar);
   _wireKeys();
-  wrap.appendChild(bar.el);
+  wrap.append(el('div', 'cut-how', 'Drag across the wave to mark a fragment - again for one more; drag an edge to change it.'), bar.el);
 
   const row = el('div', 'cut-row');
   const play = el('button', 'cut-play u-btn is-s', '▶');
@@ -177,23 +181,44 @@ export function cutBox(video, piece, o) {
   play.title = 'Play - only the fragments, one after another (as the join will be); with none, the whole video';
   const scenes = el('button', 'cut-scenes u-btn is-s', 'Scenes');
   scenes.type = 'button';
-  scenes.title = 'Find where the shots change and lay every scene as a fragment - what is drawn goes (Ctrl+Z brings it back)';
+  const SCENES_TIP = 'Find where the shots change and lay every scene as a fragment';
+  hint(scenes, () => (scenes.classList.contains('is-off') ? 'Delete your fragments to lay the scenes' : ''));
   const info = el('span', 'cut-info');
+  // "Delete original": only for the video's own record of B-rolls, Uploads or Hooks, shown as itself.
+  const drop = piece.here && !piece.whole && piece.libId ? el('button', 'cut-drop u-btn is-s is-quiet', 'Delete original') : null;
+  if (drop) {
+    drop.type = 'button';
+    drop.setAttribute('aria-pressed', 'false');
+    drop.addEventListener('click', () => {
+      const on = drop.getAttribute('aria-pressed') !== 'true';
+      drop.setAttribute('aria-pressed', on ? 'true' : 'false');
+      paint();
+    });
+  }
+  const dropOn = () => !!(drop && drop.getAttribute('aria-pressed') === 'true');
   const save = el('button', 'cut-save u-btn is-s is-main', 'Save…');
   save.type = 'button';
-  row.append(play, scenes, info, save);
+  row.append(play, scenes, info);
+  if (drop) row.appendChild(drop);
+  row.appendChild(save);
   wrap.appendChild(row);
 
   function paint() {
     const parts = bar.parts();
     const n = parts.length;
-    if (!_busy) {
-      info.textContent = n ? plural(n, 'fragment') + ' · ' + mmss(joinedLen(parts)) : 'Sweep over the bar to mark a fragment';
-      info.classList.toggle('is-hint', !n);
-    }
+    if (!_busy) info.textContent = n ? plural(n, 'fragment') + ' · ' + mmss(joinedLen(parts)) : '';
     save.disabled = !n || !!_busy;
-    save.title = n ? 'Save the fragments as new clips - joined into one, or each of its own; this video stays as it is'
-      : 'Draw a fragment over the bar first';
+    save.title = !n ? 'Draw a fragment over the bar first'
+      : 'Save the fragments as one new clip' + (dropOn() ? ' - then this video is deleted, unless a project uses it' : '; this video stays');
+    // Your own fragments on the bar: no scenes laid over them until they go.
+    scenes.classList.toggle('is-off', n > 0);
+    scenes.setAttribute('aria-disabled', n > 0 ? 'true' : 'false');
+    scenes.title = n > 0 ? '' : SCENES_TIP;
+    if (drop) {
+      drop.disabled = !!_busy;
+      drop.title = dropOn() ? 'On: after Save this video is deleted from the library - unless a project uses it. Press to keep it'
+        : 'Off: this video stays after Save. Press to delete it once the pieces are saved';
+    }
   }
   const playPaint = () => { play.textContent = video.paused ? '▶' : '❚❚'; };
   play.addEventListener('click', () => { if (video.paused) video.play().catch(() => {}); else video.pause(); });
@@ -212,11 +237,12 @@ export function cutBox(video, piece, o) {
     }
   };
 
-  async function run(parts, join, to) {
+  async function run(parts, join, to, dropIt) {
     if (_busy) return null;
     const res = await fetch('/api/library/cuts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ src: piece.src, parts, join, to: { kind: to.kind, cat: to.cat || '', label: to.label || '' } }),
+      body: JSON.stringify({ src: piece.src, parts, join, to: { kind: to.kind, cat: to.cat || '', label: to.label || '' },
+        drop: dropIt ? { kind: piece.kind, id: piece.libId } : null }),
     }).then((x) => x.json()).catch((e) => ({ success: false, error: e.message }));
     if (!res || !res.success) { say('Not saved: ' + ((res && res.error) || 'no answer'), true); return null; }
     const job = res.job;
@@ -238,27 +264,30 @@ export function cutBox(video, piece, o) {
     const where = whereText(to);
     if (st.state === 'failed') say('Not saved: ' + (st.error || 'the cut failed') + (pieces.length ? ' (' + plural(pieces.length, 'clip') + ' saved first)' : ''), true);
     else if (st.state === 'stopped') say('Stopped - ' + plural(pieces.length, 'clip') + ' saved in ' + where + '.');
-    else say('Saved ' + (join ? 'as one clip' : plural(pieces.length, 'clip')) + ' in ' + where + '.');
-    if (pieces.length && typeof opt.onSaved === 'function') { try { opt.onSaved({ where, pieces, to }); } catch (e) { /* the page's */ } }
+    else say('Saved ' + (join ? 'as one clip' : plural(pieces.length, 'clip')) + ' in ' + where + '.'
+      + (st.dropped ? ' The original is deleted.' : st.kept ? ' ' + st.kept : ''));
+    if (pieces.length && typeof opt.onSaved === 'function') { try { opt.onSaved({ where, pieces, to, dropped: !!st.dropped }); } catch (e) { /* the page's */ } }
+    // The video is gone: its viewer with it.
+    if (st.dropped) {
+      _states.delete(key);
+      import('./library/viewer.js').then((V) => V.closeViewer()).catch(() => {});
+      showToast({ mark: '✂', title: 'Saved · the original is deleted', where });
+    } else if (st.kept) showToast({ mark: '✂', title: st.kept, where, ms: 9000 });
     return { state: st.state, pieces };
   }
 
-  // "Join into one" / "Each separately" - then one window of places for all of them.
-  function saveMenu(anchor, parts, x, y) {
+  // Save: the fragments as ONE new clip, nothing asked (the owner's (нк2)) - one window of places; "Delete original" goes with
+  // this press only. The right button on a fragment keeps its own choices and never deletes the video.
+  save.addEventListener('click', () => {
+    const parts = bar.parts();
     if (!parts.length || _busy) return;
-    const many = parts.length > 1;
-    const ask = (join) => _places(anchor, piece, parts, join, (to) => run(parts, join, to));
-    if (!many) { ask(false); return; }
-    const r = anchor.getBoundingClientRect();
-    menuAt(x != null ? x : r.left, y != null ? y : r.bottom + 4, [
-      ['Join into one', 'one new clip of the ' + parts.length + ' fragments, in the order of time', () => ask(true)],
-      ['Each separately', parts.length + ' new clips, each its own', () => ask(false)],
-    ]);
-  }
-  save.addEventListener('click', () => saveMenu(save, bar.parts()));
+    const join = parts.length > 1;
+    const dropIt = dropOn();
+    _places(save, piece, parts, join, (to) => run(parts, join, to, dropIt));
+  });
 
   scenes.addEventListener('click', async () => {
-    if (_busy) return;
+    if (_busy || scenes.classList.contains('is-off')) return;
     const src = clean(piece.src);
     let cancelled = false;
     const stop = () => { cancelled = true; fetch('/api/library/scenes?src=' + encodeURIComponent(src), { method: 'DELETE' }).catch(() => {}); };
@@ -291,7 +320,7 @@ export function cutBox(video, piece, o) {
     const n = list.length;
     const rows = [];
     if (n === 1) {
-      rows.push(['Save this fragment…', mmss(list[0].in) + '–' + mmss(list[0].out) + ' as a new clip', () => saveMenu(save, list, e.clientX, e.clientY)]);
+      rows.push(['Save this fragment…', mmss(list[0].in) + '–' + mmss(list[0].out) + ' as a new clip', () => _places(save, piece, list, false, (to) => run(list, false, to))]);
       rows.push(['Save its audio', 'its sound · into AUDIO', () => saveAudio({ src: piece.src, name: piece.name, in: list[0].in, out: list[0].out, say })]);
     } else {
       rows.push(['Save ' + n + ' fragments · joined…', 'one new clip of them, in the order of time', () => _places(save, piece, list, true, (to) => run(list, true, to))]);
@@ -347,6 +376,8 @@ async function _places(anchor, piece, parts, join, go) {
   openPlaces(anchor, {
     title, tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
     places: { images: false, refHome: 'its site\'s folder (no folder of yours)', newCats: ['references', 'uploads', 'birols'] },
+    // (the owner 2026-11-12) A folder is chosen first; "Save here" saves.
+    confirm: 'Save here',
     onPick: go,
   });
 }

@@ -687,5 +687,3 @@ export function fxRows(g, track, c) {
     _panelEl(g, onKey, (k) => { _picked = { clipId: c.id, key: k }; addTo(track, c, k); });
   }
 }
-/** (эф11) Told when something of the effects' group changed (the faces found for several) - hl-group.js paints again. */
-export const onChange = onFocus;
