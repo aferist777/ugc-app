@@ -84,6 +84,7 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
 const REMOVED = [
                  // dead routes the V91 cleanup took away (block 2)
                  // the Render finished window's routes (block 3, Ch2)
+                 ['GET', '/api/library/dupes'], ['POST', '/api/library/dupes/clean'],
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
                  ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],
                  ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],

@@ -104,9 +104,6 @@ let _selAlso = new Set();
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
-// Media's three checks are owed once a read asked for them, and are run by whichever read lands
-// last - a newer read that overtakes the one that asked must not drop them.
-let _checksDue = false;
 // THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
 // shelf - Scenarios the generator (Environments' and Lookbooks' generators are WINDOWS since phase V58 - _openGen, below;
 // so is New Character since phase V60 - _openChar). "New …" at the LEFT of the header opens it,
@@ -170,8 +167,7 @@ function _paintShelves() {
   document.querySelectorAll('.lib-shelf').forEach(b => b.classList.toggle('cur', b.dataset.kind === _shelf));
   _paintUpload();
   _paintMake();
-  // Media's three checks show their buttons only there; leaving Media puts them away at once.
-  if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
+  // Media's checks, in "⋯" - only there; leaving Media puts it away at once.
   _paintMore();
   // Media's tree, beside its grid.
   // (V38.6) Scenarios: the list at its own width on the left, a sash, the selected one on the right - a scenario's
@@ -242,7 +238,7 @@ async function _openGen(kind, fromTree) {
   if (_shelf === 'media' && _tree && (!_node || _node.key !== kind)) {
     _tree.select(kind, false);
     _node = _tree.selected();
-    await _load({ checks: false });
+    await _load();
   }
   if (_genWins[kind] && _genWins[kind].alive()) return;
   try {
@@ -260,7 +256,7 @@ async function _openProp() {
   if (_shelf === 'media' && _tree && (!_node || _node.key !== 'props')) {
     _tree.select('props', false);
     _node = _tree.selected();
-    await _load({ checks: false });
+    await _load();
   }
   const { openNewProp } = await import('../prop-window.js');
   openNewProp({ onAdded: (it) => _genLanded('props', it && it.media) });
@@ -272,7 +268,7 @@ function _genLanded(kind, path) {
   _counts();
   if (_shelf === 'media' && _node && _node.key === kind) {
     if (path) { _sel = String(path).split('/').pop(); _selAlso = new Set(); _scrollSel = true; }
-    _load({ keepScroll: true, checks: false });
+    _load({ keepScroll: true });
   }
 }
 
@@ -289,7 +285,7 @@ async function _openMusic(fromTree, lyric, stay) {
   if (!stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music')) {
     _tree.select('music', false);
     _node = _tree.selected();
-    await _load({ checks: false });
+    await _load();
   }
   const at = _musicish(_node) ? _node : null;
   try {
@@ -340,7 +336,7 @@ async function _revealPath(path) {
   _sel = String(it.id);
   _selAlso = new Set();
   _scrollSel = true;
-  await _load({ checks: false });
+  await _load();
 }
 async function _arrived(p) {
   if (!p || _shelf !== 'media') return;
@@ -372,7 +368,7 @@ const _soundHost = {
 async function _lyricsSaved() {
   if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
   _counts();
-  if (_shelf === 'media' && _node && _node.key === 'music:lyrics') await _load({ keepScroll: true, checks: false });
+  if (_shelf === 'media' && _node && _node.key === 'music:lyrics') await _load({ keepScroll: true });
 }
 // The folder the window puts its tracks into, as the window wants it: its key, its folder's id, and its path under Music.
 function _musicPlace(n) {
@@ -398,7 +394,7 @@ async function _musicLanded(gen, dest) {
     _selAlso = new Set(ids.slice(1));
     _scrollSel = true;
   }
-  await _load({ keepScroll: true, checks: false });
+  await _load({ keepScroll: true });
 }
 
 // ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
@@ -561,7 +557,7 @@ function _initTree() {
       _sel = '';
       _selAlso = new Set();
       if (_tsel) _tsel.clear();         // another folder: nothing picked
-      if (_shelf === 'media') _load({ checks: false });
+      if (_shelf === 'media') _load();
     },
     // (phase V55, (гн10)) Environments / Lookbooks / Props' "create": their generator's window (phase V58).
     // (phase V59) Music's "Generate music" (in its menu since V64): the sound window, on Music itself.
@@ -573,8 +569,8 @@ function _initTree() {
       if (n.key === 'audio') _openMusic(false);
       else if (n.key === 'images' || n.key === 'video') _openChat(n.key === 'video' ? 'videos' : 'pictures');
     },
-    onChanged: (what) => (_shelf === 'media'
-      ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
+    onChanged: () => (_shelf === 'media'
+      ? _load({ keepScroll: true }).then(() => _counts()) : null),
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => _shelf === 'media' && !!SS.filesTo(n),
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
@@ -794,10 +790,10 @@ async function _runAction(id, it, anchor) {
 // and would swallow a message set before it.
 async function _apply(r) {
   if (!r) return;
-  // Something gone - deleted, or moved to another kind - is what can change Media's checks; and the tree's numbers.
+  // Something gone - deleted, or moved to another kind - changes the tree's numbers.
   if (r.reload || r.removed) {
     if (_shelf === 'media' && _tree) await _tree.load();
-    await _load({ keepScroll: true, checks: !!r.removed });
+    await _load({ keepScroll: true });
     _counts();
   }
   else if (r.changed) { _renderGrid(); _showSelected(); }
@@ -810,7 +806,7 @@ async function _apply(r) {
 window.addEventListener('ugc-references', () => {
   if (_tree) _tree.load();
   _counts();
-  if (_shelf === 'media' && !_makingOn) _load({ keepScroll: true, checks: false });
+  if (_shelf === 'media' && !_makingOn) _load({ keepScroll: true });
 });
 
 // (phase TG) A post of REFERENCES in the post viewer (js/references/post.js), paging through the posts on view; a post
@@ -828,7 +824,7 @@ function _openPost(it, file) {
 function _openLyric(it) {
   LYR.openLyrics(_items, it, {
     status: (t, bad) => _status(t, bad ? 'err' : ''),
-    changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true, checks: false }); _counts(); },
+    changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
   });
 }
 
@@ -1196,7 +1192,7 @@ function _picked() {
 async function _afterMany(d, verb, deleted) {
   if (deleted && _player) for (const x of _picked()) _player.forget(x.id);
   if (_tree) await _tree.load();
-  await _load({ keepScroll: true, checks: !!deleted });
+  await _load({ keepScroll: true });
   _counts();
   if (d) _status(TS.saidOf(d, verb), !d.done && (d.skipped || []).length ? 'err' : '');
 }
@@ -1273,7 +1269,7 @@ function _paintSndHead() {
   host.textContent = '';
   if (!on) return;
   host.appendChild(SS.searchHead({ q: _q, found: _items.length > 0,
-    onSearch: (q) => { _q = q; _load({ checks: false }); }, onOnline: (q) => _online(q) }));
+    onSearch: (q) => { _q = q; _load(); }, onOnline: (q) => _online(q) }));
 }
 async function _online(q) {
   openOnline({ cats: await myCats(), cat: _node && _node.kind === 'sounds' && _mcat() ? _mcat() : '', q,
@@ -1532,7 +1528,6 @@ function _watchShelf() {
 async function _load(opts) {
   const grid0 = $('lib-grid');
   const scroll = (opts && opts.keepScroll && grid0) ? grid0.scrollTop : null;
-  if (opts && opts.checks) _checksDue = true;
   const my = ++_reqId;
   _status('Reading…');
   _paintShelves();
@@ -1566,12 +1561,6 @@ async function _load(opts) {
     _shelfRunning = d.running || 0;
     _renderGrid();
     _showSelected();       // the column follows the shelf it was read with
-    // MEDIA'S CHECKS ONLY WHEN THEY CAN HAVE CHANGED (phase D3, the owner 2026-09-29): entering Media,
-    // and after an upload, a delete, a kind change, a category deleted with its clips, a clean or a
-    // repair. They used to run on every read - every filter chip, every star - and twice as the
-    // page opened; Thumbnails re-reads the whole shelf and opens every poster's header, and the
-    // tiles' own pictures waited behind all of it.
-    if (_checksDue) { _checksDue = false; _runChecks(); }
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     if (_scrollSel) {
       _scrollSel = false;
@@ -1649,7 +1638,7 @@ function _select(kind) {
   _selAlso = new Set();
   if (_tsel) _tsel.clear();
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
-  _load({ checks: kind === 'media' });
+  _load();
 }
 
 // (phase V60, the owner 2026-10-29, (пп1а): "чтобы не рандомная папка открывалась при нажатии полки, а показывались все
@@ -1669,28 +1658,25 @@ function _pressShelf(kind) {
   _toRoots();
   if (!here) { _select('media'); return; }
   _stopHearing();
-  _load({ checks: false });
+  _load();
 }
 
-// All three at once. Each one looks at the shelf again after its answer: one that lands after
-// Media was left must not show its button on another shelf.
-function _runChecks() {
-  return Promise.all([_checkDupes(), _checkBroken(), _checkThumbs()]).finally(_paintMore);
-}
-
-// ── The menu "⋯" (phase V73 block 6) ────────────────────────────────────────────────────────────────────────────
-// The three checks are not buttons of the bar any more: their buttons stay as they were (hidden in .lib-svc, each shown
-// or hidden by its check, its words saying how much) and "⋯" at the bar's end shows while any of them would - its rows
-// are theirs, a press runs the same work; the question of each is asked at "⋯".
-const SVC = ['lib-dupes', 'lib-broken', 'lib-thumbs'];
+// ── The menu "⋯" (phase V73 block 6; V91, the owner's (чк19а)) ─────────────────────────────────────────────────────
+// Media's two checks of the library, as rows of "⋯" at the bar's end (shown on Media only). Neither runs by itself: a
+// row pressed looks across the WHOLE library (never the filtered view - a repair whose number moved with the folder open
+// would be worse than useless), then asks at "⋯" what to do with what it found, or says there is nothing.
+const CHECKS = [
+  { name: 'Broken records', about: 'Records whose file is not on disk - found, then removed', run: _checkBroken },
+  { name: 'Thumbnails', about: 'Clips with no thumbnail, or a full frame as one - found, then made', run: _checkThumbs },
+];
 let _morePop = null;
+let _checking = false;          // one check at a time: the rows wait while one runs
 function _paintMore() {
   const more = $('lib-more');
   if (!more) return;
   if (!more.firstChild) more.innerHTML = icon('ellipsis', 16);
-  const any = SVC.some(id => { const b = $(id); return b && !b.hidden; });
-  more.hidden = !any;
-  if (!any) _closeMore();
+  more.hidden = _shelf !== 'media';
+  if (more.hidden) _closeMore();
 }
 function _closeMore() {
   if (!_morePop) return;
@@ -1704,19 +1690,17 @@ function _moreMenu() {
   const anchor = $('lib-more');
   const menu = document.createElement('div');
   menu.className = 'mv3-plus-menu u-menu is-float';
-  for (const id of SVC) {
-    const src = $(id);
-    if (!src || src.hidden) continue;
+  for (const c of CHECKS) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'mv3-plus-item u-mi';
-    b.disabled = src.disabled;
+    b.disabled = _checking;
     const t = document.createElement('span');
-    t.textContent = src.textContent;
+    t.textContent = c.name;
     const s = document.createElement('small');
-    s.textContent = src.title || '';
+    s.textContent = c.about;
     b.append(t, s);
-    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMore(); src.click(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMore(); _runCheck(c.run); });
     menu.appendChild(b);
   }
   document.body.appendChild(menu);
@@ -1727,165 +1711,82 @@ function _moreMenu() {
   _morePop = { el: menu, away, layer: Layers.open(menu, { modal: false, name: 'library checks', onEsc: _closeMore }) };
   document.addEventListener('mousedown', away, true);
 }
+async function _runCheck(run) {
+  if (_checking) return;
+  _checking = true;
+  try { await run(); } finally { _checking = false; }
+}
 
 // ── Broken records ──────────────────────────────────────────────────────────
 // Invisible until you notice the count: every shelf hides a record whose file is gone, so it
 // shows up only as the gap between "shown" and "total".
-let _broken = null;
 async function _checkBroken() {
-  const btn = $('lib-broken');
-  if (!btn) return;
-  if (_shelf !== 'media') { btn.hidden = true; return; }
-  try { _broken = await A.findBroken(); } catch (e) { _broken = null; }
-  if (_shelf !== 'media') { btn.hidden = true; return; }
-  const n = _broken && _broken.total;
-  btn.hidden = !n;
-  if (n) {
-    btn.textContent = 'Broken: ' + n;
-    btn.title = n + ' record' + (n === 1 ? '' : 's') + ' whose file is not on disk';
-  }
-}
-
-async function _cleanBroken() {
-  if (!_broken || !_broken.total) return;
+  _status('Looking for broken records…');
+  let found;
+  try { found = await A.findBroken(); } catch (e) { _status(e.message, 'err'); return; }
+  if (_shelf !== 'media') return;                       // Media was left meanwhile
+  if (!found.total) { _status('No broken records'); return; }
   const NL = String.fromCharCode(10);
   const lines = ['Records pointing at a file that is not there.', ''];
   for (const kind of ['birols', 'uploads', 'hooks']) {
-    const b = (_broken.media || {})[kind];
+    const b = (found.media || {})[kind];
     if (!b) continue;
     for (const e of b.missingFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why);
     for (const e of b.noFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why + (e.status ? ' (status ' + e.status + ')' : ''));
   }
-  for (const l of (_broken.looks || [])) lines.push('  look: ' + l.name + '   - every image is gone');
+  for (const l of (found.looks || [])) lines.push('  look: ' + l.name + '   - every image is gone');
   lines.push('');
   lines.push('The records are removed. There is no file to delete - that is the point.');
   lines.push('A generation still running is never swept.');
   lines.push('', 'Go ahead?');
-  // At the button; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
+  _status('');
+  // At "⋯"; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
   if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
 
-  const btn = $('lib-broken');
-  if (btn) btn.disabled = true;
   try {
     const r = await A.cleanBroken();
     await _load();
     _counts();
-    await _runChecks();
     const parts = [];
     if (r.media) parts.push(r.media + ' media record' + (r.media === 1 ? '' : 's'));
     if (r.looks) parts.push(r.looks + ' look' + (r.looks === 1 ? '' : 's'));
     if (r.geni) parts.push(r.geni + ' history entr' + (r.geni === 1 ? 'y' : 'ies'));
     _status(parts.length ? ('Removed ' + parts.join(', ') + '; no files were deleted') : 'Nothing to remove');
   } catch (e) { _status(e.message, 'err'); }
-  if (btn) btn.disabled = false;
-}
-
-// ── Duplicates ──────────────────────────────────────────────────────────────
-// Only shows itself when there is something to clean, and says how much. Two records on one
-// file is not a normal state, so a permanent control would be clutter.
-let _dupes = null;
-async function _checkDupes() {
-  const btn = $('lib-dupes');
-  if (!btn) return;
-  if (_shelf !== 'media') { btn.hidden = true; return; }
-  try { _dupes = await A.findDupes(); } catch (e) { _dupes = null; }
-  if (_shelf !== 'media') { btn.hidden = true; return; }
-  const n = _dupes && _dupes.total;
-  btn.hidden = !n;
-  if (n) {
-    btn.textContent = 'Duplicates: ' + n;
-    btn.title = n + ' record' + (n === 1 ? '' : 's') + ' point at a file another record already uses';
-  }
-}
-
-async function _cleanDupes() {
-  if (!_dupes || !_dupes.total) return;
-  const g = _dupes.groups;
-  const moves = _dupes.categoryChanges;
-  const NL = String.fromCharCode(10);
-  // Built as lines and joined, so the message stays readable in the source.
-  const lines = [
-    _dupes.total + ' record' + (_dupes.total === 1 ? '' : 's') + ' share a file with another record.',
-    '',
-    'The extra records are removed. NO file is deleted - the copy that stays uses',
-    'the same video and the same thumbnail.',
-    '',
-    'Keeping the record that knows more (a prompt first, then the earlier one):',
-  ];
-  for (const x of g.slice(0, 6)) {
-    lines.push('  keep ' + x.keep.name + '   -   drop ' + x.drop.map(d => d.name).join(', '));
-  }
-  if (g.length > 6) lines.push('  … and ' + (g.length - 6) + ' more');
-  if (moves) {
-    lines.push('');
-    lines.push(moves + ' clip' + (moves === 1 ? '' : 's') + ' will show in a different folder,');
-    lines.push('because the copies disagreed and the kept one wins.');
-  }
-  lines.push('', 'Go ahead?');
-  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove copies', danger: true, stay: true })) return;
-  const btn = $('lib-dupes');
-  if (btn) btn.disabled = true;
-  try {
-    const d = await A.cleanDupes();
-    await _load();
-    _counts();
-    await _runChecks();
-    _status('Removed ' + d.count + ' duplicate record' + (d.count === 1 ? '' : 's') + '; no files were deleted');
-  } catch (e) { _status(e.message, 'err'); }
-  if (btn) btn.disabled = false;
 }
 
 // ── Thumbnails ──────────────────────────────────────────────────────────────
-// Same shape as Broken and Duplicates: invisible until there is something to fix, and the
-// count is the whole message. A clip qualifies when it has no thumbnail, or when what it
-// calls a thumbnail is really the full frame - both make the shelf cost megabytes to draw.
-let _thumbs = null, _linked = false;
+// A clip qualifies when it has no thumbnail, or when what it calls a thumbnail is really the full frame - both make the
+// shelf cost megabytes to draw.
 async function _checkThumbs() {
-  const btn = $('lib-thumbs');
-  if (!btn) return;
-  if (_shelf !== 'media') { btn.hidden = true; return; }
+  _status('Looking at the thumbnails…');
+  let audit, byId;
   try {
-    // The WHOLE shelf, not the filtered view. Duplicates and Broken both count across the
-    // library, and a repair whose number moved with the selected chip would be worse than
-    // useless: "fix the thumbnails" has to mean all of them, not the 21 currently on screen.
     const d = await (await fetch('/api/library/shelf/media')).json();
     const all = (d && d.items) || [];
-    _thumbs = await A.auditThumbs(all);
-    _thumbs.byId = new Map(all.map(it => [String(it.id), it]));
+    audit = await A.auditThumbs(all);
+    byId = new Map(all.map(it => [String(it.id), it]));
+  } catch (e) { _status(e.message, 'err'); return; }
+  if (_shelf !== 'media') return;                       // Media was left meanwhile
 
-    // The blank cards are mostly not missing thumbnails - they are thumbnails the record
-    // lost track of, and pointing at one costs a write, not a transcode. That is cheap
-    // enough to just do, and leaving it behind a button meant staring at an empty grid
-    // in both this page and Merge, which reads the same records. Generation stays on the
-    // button: a hundred ffmpeg runs on page open, while a render is going, is not repair.
-    const link = (_thumbs.link || []).filter(x => _thumbs.byId.has(String(x.id)));
-    if (link.length && !_linked) {
-      _linked = true;                                   // once per page - a failure must not loop
-      _status('Reconnecting ' + link.length + ' thumbnail' + (link.length === 1 ? '' : 's') + '...');
-      let done = 0;
-      for (const x of link) {
-        try { await A.linkThumb(_thumbs.byId.get(String(x.id)), x.thumb); done++; } catch (e) {}
-      }
-      _status(done ? ('Reconnected ' + done + ' thumbnail' + (done === 1 ? '' : 's')) : '');
-      // Redraws the grid with the new posters - only if Media is still what is open: a reload of
-      // another shelf would repaint Scenarios' column over lines being typed.
-      if (_shelf === 'media') await _load({ keepScroll: true });
-      return _checkThumbs();                            // and counts again; _linked stops a loop
+  // Most blank cards are not missing thumbnails - they are thumbnails the record lost track of, and pointing at one
+  // costs a write, not a transcode: done at once, asking nothing. Making one stays behind the question below.
+  const link = (audit.link || []).filter(x => byId.has(String(x.id)));
+  let linked = 0;
+  if (link.length) {
+    _status('Reconnecting ' + link.length + ' thumbnail' + (link.length === 1 ? '' : 's') + '…');
+    for (const x of link) {
+      try { await A.linkThumb(byId.get(String(x.id)), x.thumb); linked++; } catch (e) {}
     }
-  } catch (e) { _thumbs = null; }
-  if (_shelf !== 'media') { btn.hidden = true; return; }
-  const n = _thumbs && _thumbs.need ? _thumbs.need.length : 0;
-  btn.hidden = !n;
-  if (n) {
-    btn.textContent = 'Thumbnails: ' + n;
-    btn.title = n + ' clip' + (n === 1 ? '' : 's') + ' with no thumbnail, or one that is really a full frame';
+    // The grid with the new posters - only while Media is open.
+    if (linked && _shelf === 'media') await _load({ keepScroll: true });
   }
-}
-
-async function _fixThumbs() {
-  const need = (_thumbs && _thumbs.need) || [];
-  if (!need.length) return;
-  const btn = $('lib-thumbs');
+  const said = linked ? 'Reconnected ' + linked + ' thumbnail' + (linked === 1 ? '' : 's') : '';
+  const need = audit.need || [];
+  if (!need.length || _shelf !== 'media') {
+    _status(said ? said + '; every clip has one now' : 'Every clip has its thumbnail');
+    return;
+  }
   const NL = String.fromCharCode(10);
   const lines = [
     need.length + ' clip' + (need.length === 1 ? ' needs' : 's need') + ' a thumbnail.',
@@ -1893,33 +1794,30 @@ async function _fixThumbs() {
     'Each one is read once and a 320px poster is written next to it. Nothing is',
     'deleted and no clip is re-encoded.',
   ];
+  if (said) lines.unshift(said + ' the records had lost.', '');
   // Said up front rather than discovered halfway: a clip whose file lives on another
   // machine cannot be fixed here, and its card will stay as it is.
-  const gone = (_thumbs.missing || []).length;
+  const gone = (audit.missing || []).length;
   if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
   lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
+  _status(said);
   // Nothing is deleted - a plain answer (б2-5).
   if (!await ask($('lib-more'), lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
 
-  if (btn) btn.disabled = true;
-  const byId = _thumbs.byId || new Map(_items.map(it => [String(it.id), it]));
   let done = 0, failed = 0;
   for (const n of need) {
     const it = byId.get(String(n.id));
     if (!it) { failed++; continue; }
     try { await A.fixThumb(it); done++; } catch (e) { failed++; }
-    if (btn) btn.textContent = 'Thumbnails ' + (done + failed) + '/' + need.length;
-    _status('Making thumbnails · ' + (done + failed) + ' of ' + need.length);   // its button is a row of "⋯" now
+    _status('Making thumbnails · ' + (done + failed) + ' of ' + need.length);
   }
   await _load();
   _counts();
-  await _runChecks();
   _status(
     'Made ' + done + ' thumbnail' + (done === 1 ? '' : 's') +
     (failed ? ('; ' + failed + ' could not be read') : ''),
     failed && !done ? 'err' : '',
   );
-  if (btn) btn.disabled = false;
 }
 
 // ── Upload ──────────────────────────────────────────────────────────────────
@@ -2038,7 +1936,7 @@ async function _addLinks(urls, kind) {
       if (fresh.length) {
         fresh.forEach(j => _linking.landed.add(j.id));
         if (_shelf === 'media') _showLanded(_linking.kind);
-        _linking.reading = (_tree ? _tree.load() : Promise.resolve()).then(() => _load({ checks: true })).then(() => _counts());
+        _linking.reading = (_tree ? _tree.load() : Promise.resolve()).then(() => _load()).then(() => _counts());
       }
       if (stop) { stop.hidden = !run; stop.dataset.id = run ? run.id : ''; }
       if (run) _status('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step));
@@ -2070,7 +1968,7 @@ async function _upload(files) {
   const btn = $('lib-upload');
   if (btn) btn.disabled = true;
   const kind = _mkind();
-  const landed = async (k) => { _showLanded(k); if (_tree) await _tree.load(); await _load({ checks: true }); _counts(); };
+  const landed = async (k) => { _showLanded(k); if (_tree) await _tree.load(); await _load(); _counts(); };
   if (kind === 'images') {
     const ri = await A.uploadImages(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
     if (btn) btn.disabled = false;
@@ -2100,7 +1998,7 @@ async function _upload(files) {
     const cat = kind === 'sounds' ? _mcat() : '';
     const rs = await A.uploadSounds(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), cat);
     if (btn) btn.disabled = false;
-    if (rs.ok) { if (_tree) await _tree.load(); await _load({ checks: true }); _counts(); }
+    if (rs.ok) { if (_tree) await _tree.load(); await _load(); _counts(); }
     _status(rs.ok === rs.total
       ? ('Uploaded ' + rs.ok + (rs.ok === 1 ? ' sound' : ' sounds'))
       : (rs.ok + ' of ' + rs.total + ' uploaded - only sound files are taken'), rs.ok === rs.total ? '' : 'err');
@@ -2248,12 +2146,6 @@ function boot() {
     b.addEventListener('click', () => _pressShelf(b.dataset.kind));
   });
 
-  const dup = $('lib-dupes');
-  if (dup) dup.addEventListener('click', _cleanDupes);
-  const brk = $('lib-broken');
-  if (brk) brk.addEventListener('click', _cleanBroken);
-  const thb = $('lib-thumbs');
-  if (thb) thb.addEventListener('click', _fixThumbs);
   const more = $('lib-more');
   if (more) more.addEventListener('click', _moreMenu);
 
@@ -2396,7 +2288,7 @@ function boot() {
       _player.toggle();
     });
   }
-  Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
+  Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load(); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).
     if (arrive && arrive.make && arrive.kind === 'characters' && _shelf === 'characters') _openChar();
@@ -2411,7 +2303,7 @@ function boot() {
   window.addEventListener('mv3:lib-reload', async () => {
     if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
     _counts();
-    if (_shelf === 'media') _load({ keepScroll: true, checks: false });
+    if (_shelf === 'media') _load({ keepScroll: true });
   });
   _counts();
 }
