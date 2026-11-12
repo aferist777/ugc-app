@@ -13,11 +13,14 @@
      openProp()                        New prop (js/prop-window.js)
    (New Character is main.js's - its window was on Home since phase V60.1.)
 
-   Home loads none of their sheets up front: each window's are put in at its first opening, waited for, then it opens.
+   Home loads none of their sheets up front: each window's are put in at its first opening, waited for, then it opens - a
+   chat's window shows at once with "loading…" meanwhile (V50, chat-window.js openEarly).
+     preload()       (V50, (сп2)) Home drawn and idle: the chats' and the sound window's code and sheets read beforehand
      setOnMade(fn)   something a window made landed - Home's blocks read again
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { openGenerator } from '../gen-window.js';
+import * as W from '../merge-v3/chat-window.js';
 import { showError } from '../notice.js';
 
 let _onMade = () => {};
@@ -50,24 +53,25 @@ const CHAT_SHEETS = ['merge-v3.css', 'mv3-imagen.css', 'folder-column.css', 'med
 const SOUND_SHEETS = ['sound-window.css', 'sound.css', 'media-tree.css', 'dialog.css'];
 
 // ── the chats ────────────────────────────────────────────────────────────────
+// The window at once (its frame, "loading…"); the sheets, the code and the conversation into it; closed meanwhile - nothing.
 const _chatOn = {};
 export async function openChat(which) {
+  W.openEarly(which);
   try {
     await _css(CHAT_SHEETS);
-    const W = await import('../merge-v3/chat-window.js');
-    W.ensureChatCss();
+    await W.ensureChatCss();
     const O = await import('../merge-v3/chat-owner.js');
     await O.useDraft();
     if (which === 'videos') {
       const V = await import('../merge-v3/vidchat.js');
       if (!_chatOn.videos) { _chatOn.videos = true; V.initVidChat(); }
-      await V.openVideos();
+      if (W.wanted(which)) await V.openVideos();
     } else {
       const P = await import('../merge-v3/picchat.js');
       if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
-      await P.openPictures();
+      if (W.wanted(which)) await P.openPictures();
     }
-  } catch (e) { showError('The chat did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { W.dropEarly(which); showError('The chat did not open: ' + ((e && e.message) || e)); }
 }
 
 // ── the sound window ─────────────────────────────────────────────────────────
@@ -104,9 +108,21 @@ export async function openSound() {
       SW = await import('../sound/sound-window.js');
       SW.configure(HOST);
     }
-    await _soundsGen();
     await SW.open({ place: () => ({ key: 'music', label: 'Music' }) });
+    // (V50) The key is wanted only by a sound's Alerts row, and the tree is a long read: asked once the window shows.
+    _soundsGen();
   } catch (e) { showError('The sound window did not open: ' + ((e && e.message) || e)); }
+}
+
+// (V50, (сп2)) Home drawn and idle: the chats' and the sound window's code and sheets read beforehand, so a first opening is
+// like a second. Code and CSS only - the conversation is asked for at a press (useDraft).
+export function preload() {
+  const quiet = () => {};
+  _css(CHAT_SHEETS.concat(SOUND_SHEETS)).then(() => W.ensureChatCss()).catch(quiet);
+  import('../merge-v3/chat-owner.js').catch(quiet);
+  import('../merge-v3/picchat.js').catch(quiet);
+  import('../merge-v3/vidchat.js').catch(quiet);
+  import('../sound/sound-window.js').catch(quiet);
 }
 
 // ── New environment, New lookbook ────────────────────────────────────────────

@@ -464,12 +464,18 @@ $('#hm-reset').addEventListener('click', () => { place(FIRST); keep(); });
 // Each block paints at once; the ones about work in flight again on their own beat, while the page is looked at.
 // (phase V73 block 2, (б2-19) а) A block that throws while it draws is said - a popup, once per block - not lost.
 const _drawn = (id) => (e) => showError('A block of Home could not be drawn', { detail: id + ': ' + ((e && e.message) || e), key: 'home-paint-' + id });
-const _paint = (id) => { const b = made[id]; if (b) b.paint().catch(_drawn(id)); };
+const _paint = (id) => { const b = made[id]; return b ? b.paint().catch(_drawn(id)) : null; };
+const _first = [];
 for (const id of Object.keys(made)) {
   const b = made[id];
-  _paint(id);
+  _first.push(_paint(id));
   if (b.every) setInterval(() => { if (!document.hidden) _paint(id); }, b.every);
 }
+// (V50, (сп2)) The blocks drawn (or 4 s gone) and the page idle: the windows' code and sheets read beforehand (js/home/windows.js).
+Promise.race([Promise.allSettled(_first), new Promise((res) => setTimeout(res, 4000))]).then(() => {
+  if (window.requestIdleCallback) requestIdleCallback(() => WIN.preload(), { timeout: 2000 });
+  else setTimeout(() => WIN.preload(), 300);
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   for (const id of Object.keys(made)) _paint(id);

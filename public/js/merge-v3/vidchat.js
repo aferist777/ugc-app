@@ -30,7 +30,7 @@
 import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome, switchRow, mediaBtn, hoverClip } from './chat-shell.js';
-import { chatWindow } from './chat-window.js';
+import { chatWindow, CHAT_WIN } from './chat-window.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openTrim, closeTrim } from './vtrim.js';
@@ -2677,7 +2677,7 @@ function VIDEOS(ctx) {
 }
 
 const CHAT = createChat(VIDEOS);
-const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', name: 'video chat', title: 'generate video' });
+const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', ...CHAT_WIN.videos });
 
 /** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window (phase V64 block 3). */
 export async function openVideos(o) {

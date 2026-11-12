@@ -30,6 +30,8 @@ import { openGenerator } from '../gen-window.js';
 // (phase V59) Generate music - a window over Media; (phase V64 block 5) the
 // sound window - one for both pages, music and sounds (js/sound/sound-window.js), told the Library's own (_soundHost, below).
 import * as SW from '../sound/sound-window.js';
+// (V50) A chat's window at once, "loading…" in it, while its sheets, code and conversation come (_openChat).
+import { openEarly, wanted, dropEarly, ensureChatCss } from '../merge-v3/chat-window.js';
 // (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
 // - the same modules as Merge's Library panel.
 import { waveEl } from '../sound/wave.js';
@@ -235,31 +237,32 @@ async function _openGen(kind, fromTree) {
   if (kind === 'music') return _openMusic(fromTree);
   if (!MADE_KINDS.has(kind)) return;
   if (kind === 'props') return _openProp();
-  if (_shelf === 'media' && _tree && (!_node || _node.key !== kind)) {
-    _tree.select(kind, false);
-    _node = _tree.selected();
-    await _load();
+  // (V50) The window first; its folder is selected and the gallery read behind it.
+  if (!(_genWins[kind] && _genWins[kind].alive())) {
+    try {
+      _genWins[kind] = openGenerator({
+        kind: GEN_KIND[kind],
+        where: () => GEN_WHERE[kind],
+        onMade: (path) => _genLanded(kind, path),
+        onClose: () => { _genWins[kind] = null; },
+      });
+    } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
   }
-  if (_genWins[kind] && _genWins[kind].alive()) return;
-  try {
-    _genWins[kind] = openGenerator({
-      kind: GEN_KIND[kind],
-      where: () => GEN_WHERE[kind],
-      onMade: (path) => _genLanded(kind, path),
-      onClose: () => { _genWins[kind] = null; },
-    });
-  } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
+  await _selectBehind(kind);
+}
+// The folder a window opened over puts what it makes into: selected, the gallery read for it.
+async function _selectBehind(key) {
+  if (_shelf !== 'media' || !_tree || (_node && _node.key === key)) return;
+  _tree.select(key, false);
+  _node = _tree.selected();
+  await _load();
 }
 // (phase V26.6) NEW PROP - its window over Media, Props selected behind it; a product added is outlined there, and the gallery
 // is read again when its description lands (its name may come from the agent).
 async function _openProp() {
-  if (_shelf === 'media' && _tree && (!_node || _node.key !== 'props')) {
-    _tree.select('props', false);
-    _node = _tree.selected();
-    await _load();
-  }
   const { openNewProp } = await import('../prop-window.js');
   openNewProp({ onAdded: (it) => _genLanded('props', it && it.media) });
+  await _selectBehind('props');
 }
 // Something the window made landed (whether or not the window is still open): the numbers, and - while the gallery shows
 // that folder - the gallery, the new picture outlined (its id there is its file name).
@@ -282,39 +285,48 @@ function _genLanded(kind, path) {
 async function _openMusic(fromTree, lyric, stay) {
   if (_shelf !== 'media' || !_tree) return;
   // `stay` (phase V64) - an Alerts row led to a folder (SFX → My sounds → Generated too): the window opens over it as it is.
-  if (!stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music')) {
-    _tree.select('music', false);
-    _node = _tree.selected();
-    await _load();
-  }
-  const at = _musicish(_node) ? _node : null;
-  try {
-    await SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric });
-  } catch (e) { _status((e && e.message) || 'The music generator did not open', 'err'); }
+  const toMusic = !stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music');
+  const at = toMusic ? _tree.node('music') : _musicish(_node) ? _node : null;
+  // (V50) The window first; Music is selected and the gallery read behind it.
+  const shown = SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric })
+    .catch((e) => { _status((e && e.message) || 'The music generator did not open', 'err'); });
+  if (toMusic) await _selectBehind('music');
+  await shown;
 }
 // (phase V64 block 4, the owner 2026-10-31, (зг6), (зг11): "давай там сделаем тоже чаты в попапах - это будут черновые ...
 // обычные ни к чему непривязанные чаты ... они будут общие как для merge так и для library") THE PICTURES CHAT AND THE VIDEO
 // CHAT IN THE LIBRARY: the same windows as Merge's (js/merge-v3/chat-window.js), on THE DRAFT's conversation - the unbound one,
 // the same as Merge's draft's (js/merge-v3/chat-owner.js useDraft) - with no "this project". What they make lies in IMAGES →
 // Generated and VIDEO → Generated → <model>, as from Merge; the gallery is read again when a window closes on something made.
+// (V50) The window at once (its frame, "loading…"); the sheets - waited for, never a bare chat -, the code and the
+// conversation into it; closed meanwhile - nothing opens.
 const _chatOn = {};
 async function _openChat(which, o) {
+  openEarly(which);
   try {
-    const W = await import('../merge-v3/chat-window.js');
-    W.ensureChatCss();
+    await ensureChatCss();
     const O = await import('../merge-v3/chat-owner.js');
     await O.useDraft();
     if (which === 'videos') {
       const V = await import('../merge-v3/vidchat.js');
       if (!_chatOn.videos) { _chatOn.videos = true; V.initVidChat(); }
       // (phase V78) With a thing of the Library in its zone (js/gen-menu.js), or as it is.
-      await V.openVideos(o);
+      if (wanted(which)) await V.openVideos(o);
     } else {
       const P = await import('../merge-v3/picchat.js');
       if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
-      await P.openPictures(o);
+      if (wanted(which)) await P.openPictures(o);
     }
-  } catch (e) { _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
+  } catch (e) { dropEarly(which); _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
+}
+// (V50, (сп2)) The Library drawn and idle: the chats' code and sheets read beforehand, so a first opening is like a second.
+// Code and CSS only - the conversation is asked for at a press (useDraft). The sound window's are the page's own.
+function _preloadChats() {
+  const quiet = () => {};
+  ensureChatCss().catch(quiet);
+  import('../merge-v3/chat-owner.js').catch(quiet);
+  import('../merge-v3/picchat.js').catch(quiet);
+  import('../merge-v3/vidchat.js').catch(quiet);
 }
 // (phase V64 block 4, (зг12)) An Alerts row of a chat's result made here: ?reveal=<its file> - its folder open, it outlined;
 // ?open=pictures|videos|audio - the window again over it.
@@ -2298,6 +2310,8 @@ function boot() {
     else if (arrive && arrive.made && _shelf === 'media' && _node && _node.key === arrive.made) _openGen(arrive.made);
     // (phase V64) A chat's or the sound window's result: its folder, it outlined, the window again.
     if (arrive && (arrive.open || arrive.reveal)) _arrived(arrive);
+    if (window.requestIdleCallback) requestIdleCallback(_preloadChats, { timeout: 2000 });
+    else setTimeout(_preloadChats, 300);
   });
   // (phase V64 block 4) A chat's window closed on something made: the tree and the gallery read again.
   window.addEventListener('mv3:lib-reload', async () => {

@@ -42,6 +42,8 @@ body.gw-sizing, body.gw-sizing *{ user-select:none !important }
    .u-empty, .u-loading, .u-failed) - `gw-note` only their place; a note not made by them (talking head's who / where) keeps its look. */
 .gw-note:is(.u-empty, .u-loading, .u-failed){ margin:10px }
 .gw-note:not(.u-empty, .u-loading, .u-failed){ padding:14px 12px; color:var(--muted); font:600 11px/1.5 var(--font) }
+/* (V50) A chat's window shown before the chat is loaded (js/merge-v3/chat-window.js openEarly): "Loading…" in its middle. */
+.gw-wait.u-loading{ flex:1 1 auto; border:0; border-radius:0 }
 
 /* The bench: the shelf on the left, what is being made on the right. */
 .gw-body.gw-bench{ flex-direction:row }

@@ -23,7 +23,7 @@
 import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, thumbOf, almanacSoon, refuseHome, mediaBtn } from './chat-shell.js';
-import { chatWindow } from './chat-window.js';
+import { chatWindow, CHAT_WIN } from './chat-window.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -192,7 +192,7 @@ function PICTURES(ctx) {
 }
 
 const CHAT = createChat(PICTURES);
-const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', name: 'pictures chat', title: 'generate image' });
+const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', ...CHAT_WIN.pictures });
 
 /** Every way in - IMAGES' "generate", the gallery's "+" on IMAGES, the lane's right-click, ?open=pictures: its window. */
 export async function openPictures(o) {
