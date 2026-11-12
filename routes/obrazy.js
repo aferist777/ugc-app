@@ -1,8 +1,7 @@
 'use strict';
 
-// The looks' folders: their main pictures (GET /obrazy/main-images) and the looks whose files are all gone
-// (POST /obrazy/prune-missing). A look is deleted through DELETE /library/item/:kind/:id, which moves its
-// files through lib/relocate.js; the old DELETE /obrazy/:id, which wiped the folder past it, went in phase C.
+// The looks whose files are all gone (POST /obrazy/prune-missing). A look is deleted through
+// DELETE /library/item/:kind/:id, which moves its files through lib/relocate.js; the old DELETE /obrazy/:id, which wiped the folder past it, went in phase C.
 
 const express = require('express');
 const fs      = require('fs');
@@ -10,57 +9,7 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { ROOT_DIR, DATA_DIR } = require('../lib/config');
-const { toUrl } = require('../lib/media');
-const { obrazAbsFolder } = require('../lib/obrazy-store');
-
-// Return the relative web path of the earliest-mtime image inside an obraz folder.
-// Skips the thumbs/ subdir and anything that isn't an image. Returns null when
-// the folder doesn't exist or has no images.
-function _earliestImageInFolder(absFolder) {
-  if (!fs.existsSync(absFolder)) return null;
-  let earliest = null;
-  let earliestMtime = Infinity;
-  try {
-    for (const f of fs.readdirSync(absFolder)) {
-      if (f === 'thumbs') continue;
-      if (!/\.(jpg|jpeg|png|webp)$/i.test(f)) continue;
-      try {
-        const st = fs.statSync(path.join(absFolder, f));
-        if (st.mtimeMs < earliestMtime) {
-          earliestMtime = st.mtimeMs;
-          earliest = f;
-        }
-      } catch {}
-    }
-  } catch { return null; }
-  if (!earliest) return null;
-  return toUrl(path.join(absFolder, earliest));
-}
-
-// ── GET /api/obrazy/main-images ─────────────────────────────────────────────
-// Returns { obrazId: '/media/looks/<folder>/<earliest>.jpg', ... } for every obraz
-// in data/obrazy.json. The earliest-by-mtime file inside each obraz folder is
-// treated as the "main look image" — by design the look-image is saved first,
-// the posevars are auto-generated after, so the earliest mtime is always the
-// look-image. Filesystem metadata is more reliable than the timestamp encoded
-// in filenames (which can be re-set by copy operations).
-const { OBRAZY_FILE } = require('../lib/config');
-router.get('/obrazy/main-images', (_req, res) => {
-  try {
-    const list = JSON.parse(fs.readFileSync(OBRAZY_FILE, 'utf8'));
-    const out = {};
-    for (const o of list) {
-      if (!o.id) continue;
-      const folder = obrazAbsFolder(o.name, o.id);
-      const main = _earliestImageInFolder(folder);
-      if (main) out[o.id] = main;
-    }
-    res.json({ success: true, mainImages: out });
-  } catch (e) {
-    res.json({ success: true, mainImages: {} });
-  }
-});
+const { ROOT_DIR, DATA_DIR, OBRAZY_FILE } = require('../lib/config');
 
 // ── POST /api/obrazy/prune-missing ──────────────────────────────────────────
 // Removes "orphan" obrazy whose image files are ALL missing on disk (left behind

@@ -1505,7 +1505,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    it scrolls inside the height of its picture instead of pushing the clip row down the column. */
 .mv3-wk-fcol.is-prompt .mv3-wk-ftext-in.is-tall{height:164px; min-height:164px; resize:none}
 /* The wishes stand under the menus AND the mannequin, the whole width of the field. */
-.mv3-wk-stage .mv3-wk-ftext-in.is-wish{min-height:58px}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
 /* The frames of the shelf are the mannequin's width (the owner, 2026-09-23): the shelf has the
    whole column now, and these were sized for the half-row field they used to live in. */
@@ -1540,7 +1539,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-fsetlab.is-tight{flex:0 0 auto}
 .mv3-wk-fsetlab.is-tight .mv3-wk-vsel.is-small{flex:0 0 auto; width:46px}
 .mv3-wk-fsetlabw{flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
-.mv3-wk-fsetfr.is-busy{border-style:dashed; border-color:var(--sel-line); display:flex; align-items:center; justify-content:center; animation:mv3-wk-pulse 1.1s ease-in-out infinite}
 /* (phase V61) FIELD 2's FOOT: the tick "scattered" on the left, "frames chat" on the right. */
 .mv3-wk-stage-foot.is-frames{justify-content:space-between}
 .mv3-wk-ftick{display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--font); color:var(--muted); cursor:pointer; user-select:none}

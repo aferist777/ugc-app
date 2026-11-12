@@ -30,8 +30,7 @@ const base = `http://127.0.0.1:${port}`;
 
 // '/' opens Home and '/character' lands on the Library's Characters shelf - both answered by redirects.
 const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
-const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
-const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
+const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  // New Character's modules, moved out of the Character page's folder in phase H8
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
@@ -84,6 +83,7 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
 const REMOVED = [
                  // dead routes the V91 cleanup took away (block 2)
                  // the Render finished window's routes (block 3, Ch2)
+                 ['GET', '/api/scen3/frame-sets'], ['GET', '/api/scen3/poses'], ['POST', '/api/scen3/frames/plan'], ['GET', '/api/obrazy/main-images'],
                  ['GET', '/api/library/dupes'], ['POST', '/api/library/dupes/clean'],
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
                  ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],

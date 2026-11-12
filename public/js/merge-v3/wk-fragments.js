@@ -10,8 +10,8 @@
    AFTER ANOTHER: until the character and the place are chosen on the stage they are blurred and take no press (the
    script is there to be read, its rows do nothing); then 1 "mood & voice" - one line, one `generate` that marks the
    script up and reads it -; 2 the frames - the set the lines take theirs from, and the door to the FRAMES CHAT, a window
-   (js/merge-v3/fchat.js) - and 3 the video, red until every line is read (_voiceLock). No counters, no `generate all`, no
-   set of first frames drawn by an agent: a project is made step by step, its frames asked for in words. The list never goes away while a line is open: the script is one
+   (js/merge-v3/fchat.js) - and 3 the video, red until every line is read (_voiceLock). No counters, no `generate all`: a
+   project is made step by step, its frames asked for in words. The list never goes away while a line is open: the script is one
    thing, and judging a line means seeing the ones around it. Who and where are on the stage, not here.
 
    THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
@@ -19,9 +19,8 @@
    made of other words is stale until the line is read again or the words are put back. The
    speaking itself is js/merge-v3/wk-voice.js.
 
-   THE FRAMES are a SET for the whole video, not a frame per line - since phase V61 made in the frames chat, each with the
-   edge it was asked with (`framing`); a set planned by an agent in the first-frames field (W2, routes/scen3.js frames/plan)
-   is what older projects have, and its rows in Alerts are still followed here. THE LINES TAKE FROM THE POOL IN TURN
+   THE FRAMES are a SET for the whole video, not a frame per line - made in the frames chat, each with the edge it was
+   asked with (`framing`); an older project's may be a set an agent planned before phase V61. THE LINES TAKE FROM THE POOL IN TURN
    (_frameFor): the first line the first frame, the second the second, round again - or, ticked "scattered", one drawn for
    each line - until a line is given a frame by hand, which it keeps.
 
@@ -89,8 +88,6 @@ let _said = '';
 let _listAt = 0;                          // where the list stood, put back after every repaint
 let _readErr = '';
 const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
-// Frames of the set being drawn, by journal row: { startedAt, n } - asked from here or found in the journal.
-const _drawing = new Map();
 // What is known about the places on the shelf, by address (routes/scen3.js, /scen3/env-meta): the
 // description, and - phase W3a - how the place MOVES. Read once; what is written is put into it from
 // the answer. The animation belongs to the place, so it is the same map for every project.
@@ -100,7 +97,6 @@ let _armedVideo = false;                  // ...and the video zone's, which pays
 let _dragging = '';                       // the frame being dragged along the strip
 let _picking = false;                     // the open fragment's frame list is down
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
-let _lookedAt = '';                       // the project the journal was last asked about
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
 // (phase V26.5) The frames chat: a frame of it pressed - on the stage - and whether the script is folded away beside it.
 // WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING (phase X4, the owner 2026-09-22): its clip, playing,
@@ -109,12 +105,11 @@ let _setPick = '';                        // a frame of the pool pressed in the 
 // fragment is opened - each is looked at on its own terms.
 let _stagePick = '';                      // '' | 'clip' | 'frame'
 let _stageFor = -2;                       // the fragment _stagePick belongs to
-const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 // ── HOW LONG THIS USUALLY TAKES (phase N, the owner 2026-09-23) ─────────────
 // Two of the four fields cannot count their own progress - the tagging is ONE call to an agent,
 // and a single line being spoken is one call to ElevenLabs - so their border fills by an estimate.
-// An estimate that never learns is a lie the second time, so a finished frame or clip leaves its
+// An estimate that never learns is a lie the second time, so a finished clip leaves its
 // length here and the next one is drawn from the last few; the tagging and a read keep their first
 // guesses (_paceFirst). It is an observation of how fast the world is today, not a setting, and
 // nothing else should read it (storage-sync.js mirrors it to the server like any other key).
@@ -123,7 +118,7 @@ const PACE_KEEP = 5;
 // Read when they are asked for, not at load: a clip's estimate is declared with the clips, far
 // below this, and naming it here would be reaching into its dead zone.
 const _paceFirst = (kind) => (kind === 'tag' ? 20000 : kind === 'read' ? 9000
-  : kind === 'frame' ? FRAME_ESTIMATE_MS : kind === 'clip' ? CLIP_ESTIMATE_MS : 30000);
+  : kind === 'clip' ? CLIP_ESTIMATE_MS : 30000);
 function _paceAll() {
   try { return JSON.parse(localStorage.getItem(PACE_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
@@ -367,7 +362,6 @@ function _playBtn(src, what, then) {
 }
 
 // ── The kit: the models and their qualities, the moods ──────────────────────
-// (phase V61) The mannequins and the shot sizes of a set went with the first-frames field.
 function _loadKit(repaint) {
   if (_kitState !== 'idle') return;
   _kitState = 'loading';
@@ -403,41 +397,6 @@ async function _post(url, body) {
   }
   if (!r.success) throw new Error(r.error || 'refused');
   return r;
-}
-
-// ── The frames of a set being drawn ─────────────────────────────────────────
-// (phase V61) Nothing here asks for a set any more - the first-frames field went; a set asked for before (or its rows tried
-// again from Alerts) is still followed. The row is the truth: whatever happened to the page in between, it says done or failed.
-async function _follow(alertId) {
-  try {
-    await API.follow(alertId);
-    if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
-  } catch (e) {
-    if (!_dropped.has(alertId)) _readErr = 'A frame failed: ' + e.message;
-  }
-  _dropped.delete(alertId);
-  const was = _drawing.get(alertId);
-  if (was && was.startedAt) _paceSaw('frame', Date.now() - was.startedAt);   // the next estimate (N3)
-  _drawing.delete(alertId);
-  if (!_drawing.size) endProgress('frames', _readErr ? _readErr : undefined);
-  if (_ctx) _ctx.repaint();
-}
-
-// Coming back to the step, or to the page: any frame of this project still drawing is found in the
-// journal and followed again, with its real start time.
-function _pickUpDrawing() {
-  const key = (_ctx && _ctx.key) || '';
-  if (!key || _lookedAt === key) return;
-  _lookedAt = key;
-  API.alerts().then((d) => {
-    for (const r of (d && d.items) || []) {
-      const spot = (r.where && r.where.spot) || {};
-      if (r.state !== 'running' || r.what !== 'frame' || spot.key !== key || _drawing.has(r.id)) continue;
-      _drawing.set(r.id, { startedAt: Date.parse(r.startedAt) || Date.now(), n: 0 });
-      _follow(r.id);
-    }
-    if (_ctx) _ctx.repaint();
-  }).catch(() => { /* without the list, nothing shows as drawing */ });
 }
 
 // Is the line's animation written, and written for the words it has now? The same shape as a read:
@@ -886,7 +845,6 @@ export function paint(host, ctx, api) {
   _applySplit(host, left);
   _keepScroll(right, 'r' + _open);
 
-  _pickUpDrawing();
   _pickUpClips();
   VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint (X2)
   // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
@@ -909,20 +867,15 @@ export function paint(host, ctx, api) {
   else if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
   // The countdown belongs to whatever is being made where you are looking: the clip of the open
-  // fragment, or - with no fragment open - the set being drawn in the general zone.
+  // fragment.
   // The read that is playing keeps its ❚❚ (Y5). The buttons are built fresh by every paint and the
   // audio element is not, so without this a repaint - and pressing play is now one - draws every
   // button idle while the sound goes on.
   _mark();
   const mine = _open >= 0 ? _clipping.get(_open) : null;
-  const place = mine ? 'clip' : (_open < 0 && _drawing.size ? 'frames' : null);
+  const place = mine ? 'clip' : null;
   onlyHere(place);
-  if (place === 'clip') {
-    holdProgress(place, { label: 'Making the clip', estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
-  } else if (place) {
-    const first = [..._drawing.values()].reduce((a, d) => Math.min(a, d.startedAt), Date.now());
-    holdProgress(place, { label: 'Drawing ' + _drawing.size + (_drawing.size === 1 ? ' frame' : ' frames'), estimateMs: FRAME_ESTIMATE_MS, startedAt: first });
-  }
+  if (place) holdProgress(place, { label: 'Making the clip', estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
 }
 
 // WHERE THE RIGHT COLUMN STOOD (the owner, 2026-09-22). Every repaint rebuilds the column, and a
@@ -1184,17 +1137,8 @@ function _genButton(foot, spec) {
   return b;
 }
 
-// HOW FAR THE SET HAS GOT: the frames that have landed, and for each one still being drawn, its
-// own share by the estimate. The whole is what was asked for.
-function _framesPart(p) {
-  const s = _standing(p);
-  const asked = Math.max(1, s.framesAsked);
-  let got = s.frames;
-  for (const d of _drawing.values()) got += _byTime(d.startedAt, 'frame');
-  return Math.min(1, got / asked);
-}
-// ...and the same for the clips. The place and the prompts happen before any clip is asked for,
-// and they are short: they hold the first tenth.
+// HOW FAR THE CLIPS HAVE GOT: the clips that have landed, and for each one still being made, its own share by the
+// estimate. The place and the prompts happen before any clip is asked for, and they are short: they hold the first tenth.
 function _clipsPart(p, lines) {
   const live = _live(lines);
   const want = live.length || 1;
@@ -1204,22 +1148,19 @@ function _clipsPart(p, lines) {
   return Math.min(1, got / want);
 }
 
-// Where the script stands. The frames are a set, not a line each: what the pool holds over what
-// was asked for - the dropdown's number, or more once the pool has grown past it (owner,
-// 2026-09-21); "done" is a pool at least that big with nothing still drawing.
+// Where the script stands. The frames are a set, not a line each: how many the pool holds.
 function _standing(p) {
   // The lines of the VIDEO, each still knowing its real place in the script (phase Z) - `i` is what
   // the frames, the clips and the journal are addressed by, and it must not become the position in
   // a filtered list.
   const live = liveLines(p.lines);
   const have = _pool(p).length;
-  const asked = Math.max(have + _drawing.size, ((p.video || {}).frames) || 0);
   return {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
-    // (phase V26.5, the owner 2026-10-10) Done as soon as the set has a frame and nothing is being drawn - how many were
-    // asked for is the field's business while it draws, not a debt the frames chat leaves.
-    frames: have, framesAsked: asked, framesDone: have > 0 && !_drawing.size,
+    // (phase V26.5, the owner 2026-10-10) Done as soon as the set has a frame - how many there are is not a debt the frames
+    // chat leaves.
+    frames: have, framesDone: have > 0,
     clips: live.filter(x => _clipSettled(p, x.l, x.i)).length,
   };
 }
@@ -1555,15 +1496,14 @@ function _stageBroll(host, p, lines) {
 // it on the stage, ✕ to take it out of the rotation, drag to reorder, right-click to see it large - and at its foot the tick
 // "scattered" (off: the lines take the frames in turn, in this order; on: one drawn for each line by its number, never
 // reshuffled) and "frames chat", the window where frames are asked for in words. Red, like the video, until the lines are
-// read; done once the set has a frame and nothing is being drawn.
+// read; done once the set has a frame.
 function _stageFrames(host, p) {
   const s = _standing(p);
   const v = _video();
   const { body, foot } = _stage(host, 'frames', {
     step: 2, half: true, lock: _voiceLock(p),
-    work: _drawing.size ? () => _framesPart(p) : null,
     name: 'frames', sub: 'the set the lines take theirs from', done: s.framesDone,
-    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '')
+    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames')
       : 'none yet - ask for one in the frames chat',
   });
   const strip = el('div', 'mv3-wk-fset');
@@ -1626,13 +1566,7 @@ function _stageFrames(host, p) {
     b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }); });
     strip.appendChild(b);
   }
-  // One tile per frame in flight - and each one knows its own row, so it can be let go of (N1).
-  for (const [alertId] of _drawing) {
-    const tile = el('div', 'mv3-wk-fsetfr is-busy', 'drawing…');
-    tile.appendChild(_dropX(alertId, 'this frame'));
-    strip.appendChild(tile);
-  }
-  if (shown.length || _drawing.size) body.appendChild(strip);
+  if (shown.length) body.appendChild(strip);
   // The tick and the door, along the foot.
   foot.classList.add('is-frames');
   const tick = el('label', 'mv3-wk-ftick');
@@ -2568,9 +2502,7 @@ function _framePromptCol(p, l, i) {
     ? _textField('f', fr.id, fr.prompt || '', 7,
       'This frame was drawn before the prompt was kept with it.',
       (v) => _saveFramePrompt(p, fr.id, v))
-    : _dead(7, _drawing.size
-      ? 'The set is being drawn - the prompt of this line’s frame appears with the picture.'
-      : 'No frame yet. The set of first frames is made in the general zone - press this fragment again to get there.');
+    : _dead(7, 'No frame yet. Frames are asked for in the frames chat, in the general zone - press this fragment again to get there.');
   box.classList.add('is-tall');
   col.appendChild(box);
   return col;
@@ -2613,7 +2545,7 @@ function _frameCol(p, l, i) {
       showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] });
     });
   } else {
-    box.appendChild(el('span', '', _drawing.size ? 'drawing…' : 'no frames yet'));
+    box.appendChild(el('span', '', 'no frames yet'));
   }
   col.appendChild(box);
   // No caption under the picture (the owner, 2026-09-22): whether the frame came from the rule or
