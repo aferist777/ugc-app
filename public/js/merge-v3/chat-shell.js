@@ -345,9 +345,20 @@ export function createChat(make) {
     _build();
     // Laid out for its width (narrow or not) only once the chat can be SEEN.
     _fit();
-    set.load();
-    _loadColumn();
-    await _reload(true);
+    // (V50 speed, the owner 2026-11-12) The settings and the thread are asked first, the right column after them: the server
+    // answers one request at a time and the column's reading is the long one - asked together, the conversation waited behind
+    // it. The video chat's column follows its models, so it waits for them too and is read once (`_colWait`); never more
+    // than a second.
+    const mine = ++_opens;
+    _colWait = true;
+    const settings = set.load();
+    const thread = _reload(true);
+    Promise.race([Promise.all([settings, thread]).catch(() => null), new Promise(r => setTimeout(r, 1000))]).then(() => {
+      if (mine !== _opens) return;
+      _colWait = false;
+      if (_chat) _loadColumn();
+    });
+    await thread;
     if (_chat && _ui) _ui.ta.focus();
   }
 
@@ -1744,6 +1755,8 @@ export function createChat(make) {
   // (phase V60.2) A description's `sig` says what its column offers now (the video chat: which tops, the longest clip): read
   // again only when it changed.
   let _colSig = null;
+  let _colWait = false;      // (V50 speed) the window has just opened: the column is read once the settings are in (_show)
+  let _opens = 0;
   const _sigNow = () => (S.column && typeof S.column.sig === 'function' ? String(S.column.sig()) : '');
   function _loadColumn() {
     if (!_col) return;
@@ -1751,7 +1764,7 @@ export function createChat(make) {
     _col.reload();
   }
   function _columnChanged() {
-    if (!_col || _sigNow() === _colSig) return;
+    if (!_col || _colWait || _sigNow() === _colSig) return;
     _loadColumn();
   }
 
