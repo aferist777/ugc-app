@@ -380,8 +380,8 @@ function _row(rec) {
         return;
       }
       _armed = null;
-      // Said to the page as well (phase I): a panel that shows this row's end - the Library's chats -
-      // reads itself again, because nothing of its own was waiting any more.
+      // Said to the page as well (phase I): a panel that shows this row's end - the scenario generator's sources, the
+      // highlights panel - reads itself again, because nothing of its own was waiting any more.
       _json('/api/alerts/' + encodeURIComponent(rec.id) + '/retry', { method: 'POST' })
         .then(() => { try { window.dispatchEvent(new CustomEvent('ugc:alert-retried', { detail: { id: rec.id } })); } catch (e) { /* only a hint */ } })
         .then(_poll);

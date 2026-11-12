@@ -188,7 +188,6 @@ app.use('/api', require('./routes/library'));   // the Library: its shelves, the
 app.use('/api', require('./routes/scen3'));   // the scenarios store, and the talking head and voiceover projects
 app.use('/api', require('./routes/broll'));   // (phase V62) a voiceover's B-roll engine
 app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat (phase V26.5)
-app.use('/api', require('./routes/makechat'));   // the Library's chats that make environments and lookbooks (phase I)
 app.use('/api', require('./routes/character-v2'));   // making a character: the portrait, read and drawn (Library, New Character)
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
