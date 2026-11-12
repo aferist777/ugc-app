@@ -986,18 +986,10 @@ async function _i2i(prompt, urls, aspect, quality) {
 // does has to be callable without a request. It answers what was submitted, and what filing the
 // result will need later; the agent's refusal is thrown with `refused` on it, because that is an
 // answer to the person rather than a fault.
-//
-// `hooks` (phase I, the Library's chats, which write the Alerts row at the press and do this behind
-// it; Merge and "try again" pass none): stage(words) says what it is doing now, stop() is asked just
-// before the money - true when the row was let go of meanwhile, and then nothing is asked for -
-// and asked({taskId, engine, file}) hears the task the moment it exists.
-const _stopped = () => Object.assign(new Error('let go of before it was asked for'), { stopped: true });
-async function _submitLookbook(b, hooks) {
-  const hk = hooks || {};
-  const say = (w) => { if (hk.stage) hk.stage(w); };
+async function _submitLookbook(b) {
   const note = String(b.prompt || '').trim();
   const b64  = String(b.imageBase64 || '');
-  // A picture the library already holds - another lookbook as the base, or (the Library's chat) any
+  // A picture the library already holds - another lookbook as the base, or (an old row's "try again") any
   // picture on its shelves as the photo. Sent as a PATH rather than as bytes: it is on this disk, and
   // pulling it through the browser as base64 only to upload it again would be a round trip for nothing.
   const ref  = String(b.imagePath || '').trim();
@@ -1014,7 +1006,6 @@ async function _submitLookbook(b, hooks) {
   let photoUrl = '';
   let fresh = false;
   try {
-    if (b64 || refToken || ref) say('sending the picture');
     if (b64) {
       fresh = true;
       const up = await _takeUpload(b64);
@@ -1028,14 +1019,11 @@ async function _submitLookbook(b, hooks) {
 
     // The agent goes first, and it is the cheap half: if what it is given is not something to
     // wear, nothing is generated and nothing is spent.
-    say(photoUrl ? 'reading the picture' : 'reading your words');
     const plan = await _readLookbookIdea(note, photoUrl);
     if (!plan.ok) throw Object.assign(new Error(plan.why), { status: 400, refused: true });
 
     const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
     const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
-    if (hk.stop && hk.stop()) throw _stopped();
-    say('asking for the picture');
     const taskId = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     // What filing it will need when it lands - the fields _fileGenerated reads. A
@@ -1045,10 +1033,6 @@ async function _submitLookbook(b, hooks) {
       prompt, description: plan.description, refToken,
       refName: String(b.refName || ''), ...(ref && !refToken ? { from: ref } : {}),
     };
-    // The task exists and is paid for: whoever holds the row writes it down now, before the gender
-    // is asked for - an app closed in those two seconds must not lose a task it can still collect.
-    if (hk.asked) hk.asked({ taskId, engine: IMG_ENGINE, file });
-
     // The task is already submitted, so this ~2s call overlaps with the rendering.
     const gender = await _detectGender(note, photoUrl);
     console.log(`[scen3/gen/lookbook] mode=${mode} kind=${plan.kind} gender=${gender || 'unknown'}`);
@@ -1420,12 +1404,9 @@ async function _fileRef(token, kind, name) {
 // `choices` present - even empty - says the page can show a choice of places. Absent, the agent
 // picks a place itself.
 //
-// `photoPath` (phase I, the Library's chat): a picture already in the library - on the Images shelf,
-// say - read as a PHOTO, the place taken out of it; `imagePath` is an environment to CHANGE. `hooks`
-// as for _submitLookbook.
-async function _submitEnv(b, hooks) {
-  const hk = hooks || {};
-  const say = (w) => { if (hk.stage) hk.stage(w); };
+// `photoPath`: a picture already in the library - on the Images shelf, say - read as a PHOTO, the place taken out of it
+// (sent now only by "try again" of a row of the old Library chat, gone in V91); `imagePath` is an environment to CHANGE.
+async function _submitEnv(b) {
   let token = '';
   let fresh = false;                             // the photo came in THIS call
   const note = String(b.prompt || '').trim();
@@ -1446,7 +1427,6 @@ async function _submitEnv(b, hooks) {
     let url = '';
     let source = '';
     let shape = null;
-    if (b.imageBase64 || b.refToken || photoPath || saved) say('sending the picture');
     if (b.imageBase64 || b.refToken) {
       fresh = !!b.imageBase64;
       const up = fresh ? await _takeUpload(b.imageBase64) : await _reuseUpload(String(b.refToken));
@@ -1469,7 +1449,6 @@ async function _submitEnv(b, hooks) {
       shape = _envShape(s.w, s.h);
     }
 
-    say(url ? 'reading the picture' : 'reading your words');
     const plan = await _readEnvironmentIdea({ note, imageUrl: url, source, shape, choices, canChoose });
     if (!plan.ok) {
       if (token) _unstash(token);
@@ -1484,8 +1463,6 @@ async function _submitEnv(b, hooks) {
       + (mode === 'edit' ? ENV_KEEP + ENV_EDIT_TAIL + _envEditFrame(shape) : '')
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
       + (mode === 'edit' ? '' : ENV_TAIL);
-    if (hk.stop && hk.stop()) throw _stopped();
-    say('asking for the picture');
     const taskId = await _envTask(prompt, url ? [url] : []);
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
@@ -1682,26 +1659,16 @@ function _charNameOf(id) {
 const _pollTask = (rec) => H.resolveTask(rec.taskIds[0], CFG.MEDIA.work, 'generated');
 const _fileParams = (rec) => ((rec.job || {}).params || {}).file || {};
 
-// A ROW WRITTEN AT THE PRESS (phase I, the Library's chats): it exists before the agent has read
-// anything and before there is a task, and is told the task when it is asked for. Until then it is
-// "not started yet" - as long as the asking is still going on in this process. Its `kick` is the
-// token of that asking: one that is not here any more died with the app, and the row says so at once
-// instead of waiting out its time limit for a task nobody asked for. A row from Merge has its task
-// from the start and never gets here.
-const _asking = new Set();
+// A maker's row has its task from the start (Merge, "try again"). One with none is a row of the old Library chats (gone in
+// V91), written at the press before its task was asked for and left so when the app closed: it fails in words, never asked
+// for again by itself.
 function _pollMaker(rec) {
   if (rec.taskIds && rec.taskIds[0]) return _pollTask(rec);
-  const kick = ((rec.job || {}).params || {}).kick;
-  if (kick && _asking.has(kick)) return { state: 'pending' };
   return { state: 'failed', error: 'the app was closed before the picture was asked for - try again' };
 }
 
-// A chat's row whose first asking is still going on is not asked for again yet (lib/gen-jobs.js retry).
-const _stillAsking = (rec) => _asking.has(((rec.job || {}).params || {}).kick);
-
 JOBS.register('lookbook', {
   poll: _pollMaker,
-  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('lookbook', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
@@ -1714,7 +1681,6 @@ JOBS.register('lookbook', {
 
 JOBS.register('environment', {
   poll: _pollMaker,
-  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('environment', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
@@ -5922,12 +5888,4 @@ router.sdCuts = _sdCuts;
 // (phase V30, block 1) Is the script being read now? Its captions are heard by themselves after the last read lands
 // (lib/captions-auto.js).
 router.readsRunning = (id) => !!((_reads.get(String(id)) || {}).running);
-// The two makers' work and what the Library's chats need around it (routes/makechat.js, phase I): the
-// same submit Merge and "try again" use, the media door, the kicks of the rows written at the press,
-// and the retry request a row keeps.
-router.makers = {
-  submitEnv: _submitEnv, submitLookbook: _submitLookbook, resolveMedia: _resolveMedia,
-  asking: _asking, retryRequest: _retryRequest, engine: IMG_ENGINE,
-};
-
 module.exports = router;
