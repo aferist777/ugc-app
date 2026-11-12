@@ -96,7 +96,7 @@
 /* ════════════════════════════════════════════════════════════════════════════
    THE SHARED PARTS (phase V73 block 2, step 2a; the owner 2026-11-05, (б2-1)-(б2-27)): ONE button, tab row, chip, close,
    switch, check, field, slider, menu, question at a button and focus ring for every page - the parts the owner approved on
-   the showcase /lab/ui (block 1), moved here from css/ui-v73.css. A part's class sits NEXT TO the place's own class
+   the showcase of block 1 (/lab/ui, removed in V91). A part's class sits NEXT TO the place's own class
    (`class="mv3-c-btn u-btn is-s"`): the part draws, the own class only places (margins, width, flex, position) - its look
    rules are gone. A part carries no width: the place gives it.
    Every rule sits under ONE guard, so the 3D Studio's page (the one that loads css/studio3d.css) never gets them and keeps
@@ -150,10 +150,6 @@
   .u-link{ color:var(--ink); text-decoration:underline; text-decoration-color:rgb(237 237 237 / .35); text-decoration-thickness:1px;
     text-underline-offset:3px; cursor:pointer; transition:text-decoration-color var(--dur-1) var(--ease) }
   .u-link:hover{ text-decoration-color:var(--ink) }
-  .u-key{ display:inline-flex; align-items:center; height:16px; padding:0 var(--sp-1); border:1px solid var(--border); border-radius:var(--r-2xs);
-    color:var(--muted); font:var(--fw-regular) var(--fs-10)/1 var(--mono) }
-  .u-count{ display:inline-flex; align-items:center; height:16px; padding:0 5px; border-radius:var(--r-2xs); background:var(--surface-3);
-    color:var(--ink); font:var(--fw-medium) var(--fs-10)/1 var(--mono) }
 
   /* ── THE ONE ✕ (б2-11): Lucide's "x" in the text's colour, drawn by the part (a mask) - a cross only says `u-x`. Three roles,
      one cross: close (a quiet icon button), take out of a row (.is-del: red under the pointer), delete on a picture
@@ -212,11 +208,6 @@
   .u-sel{ position:relative; display:block }
   .u-sel > select{ appearance:none; padding-right:28px; cursor:pointer }
   .u-sel > .u-ico{ position:absolute; right:8px; top:6px; color:var(--muted); pointer-events:none }
-  .u-with{ position:relative; display:block }
-  .u-with > .u-ico{ position:absolute; left:8px; top:6px; color:var(--faint); pointer-events:none }
-  .u-with > .u-in{ padding-left:30px }
-  .u-with > .u-unit{ position:absolute; right:10px; top:0; height:28px; display:flex; align-items:center; color:var(--faint); font:var(--fs-11)/1 var(--mono); pointer-events:none }
-  .u-with > .u-in.is-unit{ padding-left:10px; padding-right:34px; font-family:var(--mono) }
   .u-area{ height:auto; padding:6px 10px; line-height:var(--lh-12) }
   /* dense rows (б2-2): the same field at 24 */
   .u-in.is-s, .u-sel.is-s > select{ height:24px; padding-left:8px; border-radius:var(--r-xs); font-size:var(--fs-11) }
@@ -239,13 +230,9 @@
   .u-check:checked::after{ content:''; position:absolute; left:5px; top:2px; width:4px; height:8px; border:solid var(--on-fill);
     border-width:0 1.5px 1.5px 0; transform:rotate(45deg) }
   .u-check:disabled{ opacity:.45; cursor:default }
-  .u-opt{ display:inline-flex; align-items:center; gap:var(--sp-2); color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); cursor:pointer }
 
   /* ── A slider: its track filled up to the thumb (--p, set by js/ui-range.js), its value in mono with the unit ── */
-  .u-slide{ display:grid; grid-template-columns:72px 1fr 64px; align-items:center; gap:var(--sp-3); height:28px }
-  .u-slide > span:first-child{ color:var(--muted); font-size:var(--fs-12) }
-  .u-slide output, .u-range-v{ color:var(--ink); font:var(--fw-regular) var(--fs-12)/1 var(--mono); white-space:nowrap }
-  .u-slide output{ justify-self:end }
+  .u-range-v{ color:var(--ink); font:var(--fw-regular) var(--fs-12)/1 var(--mono); white-space:nowrap }
   .u-range{ --p:50%; appearance:none; height:4px; margin:0; border-radius:var(--pill); cursor:pointer; accent-color:auto;
     background:linear-gradient(to right, var(--muted) 0 var(--p), var(--surface-3) var(--p) 100%) }
   .u-range::-webkit-slider-thumb{ appearance:none; width:12px; height:12px; border-radius:50%; background:var(--ink);
@@ -271,7 +258,7 @@
   .u-mi.is-danger:hover:where(:not([disabled])){ background:var(--danger-soft) }
   .u-mi.is-on, .u-mi.is-cur{ background:var(--sel-bg) }
   .u-mi[disabled]{ opacity:.45; cursor:default }
-  .u-mi .u-mono, .u-mi .u-key{ justify-self:end; color:var(--faint); font-size:var(--fs-11) }
+  .u-mi .u-mono{ justify-self:end; color:var(--faint); font-size:var(--fs-11) }
   .u-menu hr, .u-menu .u-sep{ height:1px; margin:var(--sp-1) 0; border:0; background:var(--border-soft) }
 
   /* ── The question at a button: a title, a quiet line, the answers at the right - Cancel first, the dangerous one red ── */
@@ -306,7 +293,6 @@
     white-space:nowrap; overflow:hidden }
   .u-crumbs .is-cur{ color:var(--ink) }
   .u-crumbs i{ font-style:normal; color:var(--faint) }
-  .u-win-body{ flex:1; min-height:0; padding:var(--sp-4) }
   .u-win-foot{ display:flex; align-items:center; gap:var(--sp-2); height:52px; flex:0 0 auto; padding:0 var(--sp-3);
     border-top:1px solid var(--border-soft); background:var(--surface) }
   .u-win-foot > .sp{ flex:1 1 auto }
@@ -330,28 +316,14 @@
 
   /* ── THE PANEL (phase V73 block 5, part 5a; (к15), the owner's (б5-1) а, (б5-2) а - the showcase's zones, moved here from
      css/ui-v73.css): a zone of a page is a panel on the dark base, one step lighter (`--surface`), a hairline, the panel's
-     radius (`--r-panel` 14, the showcase's - (5а-1)), with a 6 px gap of the base between panels (`--gap-zone`; `.u-base` lays panels out on a grid). Its head is 40 px
-     with the name (`.u-panel-name`, 13 px 500, sentence case) and the panel's own buttons - no figures in it ((б5-2) а;
-     `.u-panel-meta` is the showcase's). Inside: sections `.u-sec` with a small title `.u-sec-t`; the field that waits for the
-     person `.u-yourmove` (the gold dashed line) and a done one `.u-done` (a hairline, a green tick and "Done"). ── */
-  .u-base{ display:grid; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); border-radius:var(--r-panel) }
+     radius (`--r-panel` 14, the showcase's - (5а-1)), with a 6 px gap of the base between panels (`--gap-zone`). Its head is 40 px
+     with the name (`.u-panel-name`, 13 px 500, sentence case) and the panel's own buttons - no figures in it ((б5-2) а). ── */
   .u-panel{ display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel); overflow:hidden }
   .u-panel-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-2) 0 var(--sp-4);
     border-bottom:1px solid var(--border-soft) }
   .u-panel-name{ flex:0 1 auto; min-width:0; color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .u-panel-meta{ color:var(--faint); font:var(--fs-11)/1 var(--mono) }
   .u-panel-head > .sp{ flex:1 }
-  .u-panel-body{ padding:var(--sp-4); min-width:0 }
-  .u-sec + .u-sec{ margin-top:var(--sp-6) }
-  .u-sec-t{ margin:0 0 var(--sp-2); color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); letter-spacing:0; text-transform:none }
-  .u-yourmove{ padding:var(--sp-3) var(--sp-4); border:1px dashed var(--gold); border-radius:var(--r) }
-  .u-yourmove b{ display:block; color:var(--ink); font-weight:var(--fw-medium); font-size:var(--fs-12) }
-  .u-yourmove span{ color:var(--muted); font-size:var(--fs-11) }
-  .u-done{ padding:var(--sp-3) var(--sp-4); border:1px solid var(--border-soft); border-radius:var(--r) }
-  .u-done b{ display:flex; align-items:center; gap:6px; color:var(--ink); font-weight:var(--fw-medium); font-size:var(--fs-12) }
-  .u-done b .u-ico{ color:var(--success) }
-  .u-done span{ color:var(--muted); font-size:var(--fs-11) }
 
   /* ── Empty, loading, did not load (б2-17): in a big body - a gallery, a list - the dashed frame with an icon and the
      place's own words; in a row, a strip or a menu `.is-line` - the same words with no frame (empty: no icon either).

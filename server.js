@@ -139,9 +139,8 @@ app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
 // (The audio lab /lab/audio of V34.D went in V34.F: its chat is the sound window now, its tree the media tree's.)
-// /lab/ui is the interface showcase of phase V73 (not in the top strip; Admin -> This computer links to it).
-const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html',
-  '/lab/ui': 'lab-ui.html' };
+// (The interface showcase /lab/ui of phase V73 went in V91.)
+const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
