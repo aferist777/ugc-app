@@ -84,6 +84,8 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
                      'telegramBotToken', 'telegramChatId', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
 const REMOVED = [
                  // dead routes the V91 cleanup took away (block 2)
+                 // the Render finished window's routes (block 3, Ch2)
+                 ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],
                  ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
                  ['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],

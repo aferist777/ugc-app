@@ -15,8 +15,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
-import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
-         softened } from './fx-b.js';
+import { softened } from './fx-b.js';
 import { paintCaptions } from './subs-b.js';
 // The captions, drawn by libass itself over the frame (phase K4) - the painter above draws only while
 // that is not up yet.
@@ -736,12 +735,8 @@ function _srcTime(c, at, elDur) {
   return (+c.trimIn || 0) + into;
 }
 
-// One clip onto the canvas, with whatever the three effects ask for. A clip with none of
-// them - which is most of them - takes the same single drawImage it always did: the whole
-// block below is skipped rather than run with neutral values.
-// The picture itself onto the canvas, turned and softened if it was placed that way. Kept
-// apart from the effects around it so that the common case - a full-frame clip with nothing
-// set - is still one drawImage and no state to save and restore.
+// The picture itself onto the canvas, turned and softened if it was placed that way. The common
+// case - a full-frame clip with nothing set - is one drawImage and no state to save and restore.
 function _draw(el, r) {
   // (phase V33.2) A framed clip drawn in more than one piece: the whole frame over its blur, two bands.
   if (r.parts) {
@@ -775,39 +770,6 @@ function _draw(el, r) {
   _ctx.restore();
 }
 
-function _blit(el, r, c, gaps) {
-  if (!hasFx(c)) { _draw(el, r); return; }
-  const fx = fxAt(c, _at);
-  if (fx.gap) gaps.push(fx.gap);
-  const z = zoomRect(r, fx.zoom);
-  _ctx.save();
-  // A blur reaches past the edges of what it is drawn from, so the picture is clipped to its
-  // own rectangle - otherwise a blurred insert would smear over the layer beneath it. Not on a
-  // turned insert: the rectangle is no longer where the picture is, and clipping to it would
-  // cut the corners off.
-  if (fx.css) {
-    if (!r.angle) {
-      _ctx.beginPath();
-      _ctx.rect(r.dx, r.dy, r.dw, r.dh);
-      _ctx.clip();
-    }
-    _ctx.filter = fx.css;
-  }
-  _draw(el, z);
-  _ctx.restore();
-  // Turned with the picture, because they are ON the picture: a veil over the upright
-  // rectangle of a tilted insert would be a rectangle in the wrong place.
-  if (r.angle) { _ctx.save(); _ctx.translate(r.cx, r.cy); _ctx.rotate(r.angle * Math.PI / 180); }
-  const box = r.angle ? { dx: -r.dw / 2, dy: -r.dh / 2, dw: r.dw, dh: r.dh } : r;
-  paintTint(_ctx, fx, box);
-  paintVignette(_ctx, fx, box);
-  // Last, over everything else this clip has been given: a fade is the final word on a frame,
-  // and a grade painted after it would lift the black back out again - which is the order the
-  // render uses too.
-  paintVeil(_ctx, fx, box);
-  if (r.angle) _ctx.restore();
-}
-
 // (phase V73 block 0) The words the stage draws for itself - a note, a picture's size, a half's caption or what it waits
 // for - are in the INTERFACE's font, the page's --font (css/app-shell.css), asked for once. They named "Inter", and "Inter"
 // on these pages is the bold caption file of css/caption-fonts.css - the stage spoke in a caption's face.
@@ -818,20 +780,6 @@ function _uiFont() {
     if (!_uiFontName) _uiFontName = '"Segoe UI", system-ui, sans-serif';
   }
   return _uiFontName;
-}
-
-// What is chosen but cannot be drawn. Named on the canvas rather than left to be discovered
-// in the export - the same thing the other preview does for a reverse it cannot show.
-function _note(text) {
-  if (!text) return;
-  _ctx.save();
-  _ctx.font = '600 11px ' + _uiFont();
-  const w = _ctx.measureText(text).width;
-  _ctx.fillStyle = 'rgba(0,0,0,.55)';
-  _ctx.fillRect(8, H - 26, w + 16, 18);
-  _ctx.fillStyle = 'rgba(255,255,255,.92)';
-  _ctx.fillText(text, 16, H - 13);
-  _ctx.restore();
 }
 
 // One clip onto the frame: a band, or a picture placed or fitted with its effects.
@@ -853,7 +801,7 @@ function _fileTime(el, c) {
 // (phase V65, (пз7), (пз10)) A clip of a lane ABOVE main laid by its blend mode too - the canvas's (overlay/look.js BLENDS);
 // held on hover in the inspector's list (place-b.js liveOf), so the frame shows the mode before it is chosen.
 let _layerCv = null;
-function _showAs(el, sw, sh, c, gaps, main) {
+function _showAs(el, sw, sh, c, main) {
   const lv = liveOf(c.id);
   const look = lv ? Object.assign({}, c, lv) : c;
   const op = opacityOf(look);
@@ -863,7 +811,7 @@ function _showAs(el, sw, sh, c, gaps, main) {
   // steps - lib/fx-render.js), then laid at its opacity and blend mode. Never on a band (the render's rule too).
   const fxp = (c.halfer || c.layer) ? null : fxParamsAt(look, _at, W, H, main);
   const fxOn = !!fxp && !fxPlain(fxp);
-  if (op >= 1 && !mixed && !fxOn) { _show(el, sw, sh, c, gaps, main); return; }
+  if (op >= 1 && !mixed && !fxOn) { _show(el, sw, sh, c, main); return; }
   if (op <= 0) return;
   if (!_layerCv) _layerCv = document.createElement('canvas');
   if (_layerCv.width !== CW || _layerCv.height !== CH) { _layerCv.width = CW; _layerCv.height = CH; }
@@ -876,7 +824,7 @@ function _showAs(el, sw, sh, c, gaps, main) {
   g.setTransform(1, 0, 0, 1, PAD, PAD);
   const frame = _ctx;
   _ctx = g;
-  try { _show(el, sw, sh, c, gaps, main); } finally { _ctx = frame; }
+  try { _show(el, sw, sh, c, main); } finally { _ctx = frame; }
   const box = fxOn && ((fxp.scenes && fxp.scenes.length) || fxp.echo) ? fxWindowOf(look, main, sw, sh, W, H) : null;
   const src = fxOn ? applyFx(_layerCv, fxp, { W, H, PAD, inFrame: main || (!isPlaced(look) && !cropActive(look)), box }) : _layerCv;
   _ctx.save();
@@ -926,15 +874,15 @@ function _drawPattern(el, sw, c) {
   _rects.set(c.id, { dx: 0, dy: 0, dw: W, dh: H, cx: W / 2, cy: H / 2, angle: 0, nogrip: true, nopick: true });
 }
 
-function _show(el, sw, sh, c, gaps, main) {
+function _show(el, sw, sh, c, main) {
   // (phase V74) A pattern of main video is no picture placed: its tiles cover the frame.
   if (c.layer) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
   // (phase V75) Its colour correction, the slider's while one is held (place-b.js liveOf), for every draw of its file.
   const lv = liveOf(c.id);
   _cc = _ccFilter(lv ? Object.assign({}, c, lv) : c);
-  try { _showClip(el, sw, sh, c, gaps, main); } finally { _cc = ''; }
+  try { _showClip(el, sw, sh, c, main); } finally { _cc = ''; }
 }
-function _showClip(el, sw, sh, c, gaps, main) {
+function _showClip(el, sw, sh, c, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
   // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.
@@ -960,7 +908,7 @@ function _showClip(el, sw, sh, c, gaps, main) {
   // (phase V49) A main clip is moved and sized only as a PiP (its switch in the inspector): picked, it has no grips.
   if (main && !isPlaced(c)) r.nogrip = true;
   _rects.set(c.id, r);
-  _blit(el, r, c, gaps);
+  _draw(el, r);
 }
 
 // ── What a clip shows of its file, for the crop (phase V51, point 1) ────────
@@ -1068,7 +1016,6 @@ function _paintFrame() {
   const tl = Store.timeline();
   const alive = new Set();        // the elements kept (the rest are let go of)
   const shown = new Set();        // (phase V44) the elements on screen this frame
-  const gaps = [];
   _liveVideo = [];
   // (phase V49) The bottom layer is main video - a clip of it may be a PiP (_show).
   const lanes = _layers(tl);
@@ -1120,13 +1067,13 @@ function _paintFrame() {
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
       if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens (V23)
         const pic = _shooting ? null : _posterOf(c);
-        if (pic) _showAs(pic, pic.naturalWidth, pic.naturalHeight, c, gaps, main);
+        if (pic) _showAs(pic, pic.naturalWidth, pic.naturalHeight, c, main);
         continue;
       }
-      _showAs(el, el.videoWidth, el.videoHeight, c, gaps, main);
+      _showAs(el, el.videoWidth, el.videoHeight, c, main);
     } else {
       if (!el.naturalWidth) { missing++; continue; }
-      _showAs(el, el.naturalWidth, el.naturalHeight, c, gaps, main);
+      _showAs(el, el.naturalWidth, el.naturalHeight, c, main);
     }
   }
   // (phase V74, the owner's (пт1)-(пт3)) THE PATTERNS OF MAIN VIDEO - over every video lane, under the words: the bottom layer
@@ -1138,7 +1085,7 @@ function _paintFrame() {
     shown.add(_keyOf(p));
     const el = _el(p.src, false, 0);
     if (!el.naturalWidth) { missing++; continue; }
-    _showAs(el, el.naturalWidth, el.naturalHeight, p, gaps, false);
+    _showAs(el, el.naturalWidth, el.naturalHeight, p, false);
   }
   // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
   // frame, the nearest piece first; an element on screen, or waiting for a nearer piece, is left alone.
@@ -1199,7 +1146,6 @@ function _paintFrame() {
     try { CapPlace.paint(_ctx); } catch (e) {}
   }
 
-  _note(gapNote(gaps));
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
   // and is somewhere else entirely by the time it is needed again.
   for (const [key, el] of _media) {

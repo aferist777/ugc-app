@@ -53,7 +53,7 @@ export function putTitle(tl, text, seconds, makeId) {
     id: 'x' + k, kind: 'text', name: 'text ' + (texts.length + 1), linkId: null, main: false, volume: null, speed: null,
     style: { ...TITLE_STYLE },
     clips: [{ id: makeId(), src: null, thumb: null, name: words, start: 0, dur: Math.round(dur * 100) / 100,
-      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false, transition: null, animation: null, filter: null, volume: null, pairId: null }],
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false, volume: null, pairId: null }],
   };
   let at = tracks.findIndex((t) => t && t.kind === 'subs');
   if (at < 0) at = tracks.length;

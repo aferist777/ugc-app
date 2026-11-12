@@ -463,25 +463,7 @@ router.post('/mv3q/clear', (req, res) => {
              waiting: s.items.filter(x => x.status === 'queued' && _canSee(x, req)).length });
 });
 
-// ── Renders made outside the queue ──────────────────────────────────────────
-// Export -> Render on either editor makes a file without ever queuing. It is filed in here as
-// ready the moment it exists, so the person can come back to it: play it, name it, send it.
-// No payload - there is nothing to retry; the file is the whole of it. Owned like any entry.
-function fileFinished({ url, title, key, kind, dur, owner, ownerNick }) {
-  const s = read();
-  const item = {
-    id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
-    key: String(key || ''), title: String(title || 'Untitled').slice(0, 120),
-    kind: kind === 'blank' ? 'blank' : 'talking', status: 'done', addedAt: new Date().toISOString(),
-    timeline: null, payload: null, url: String(url || ''), error: null,
-    owner: owner || null, ownerNick: ownerNick || null, armed: true,
-    dur: Number(dur) > 0 ? Number(dur) : null, summary: 'rendered from Export', sent: null,
-  };
-  s.items.push(item);
-  write(s);
-  return item;
-}
-// A named, sent or moved render: the entry follows the file.
+// A render renamed: its entry follows the file (routes/library.js, lib/highlights-render.js).
 function updateEntry(id, patch) {
   if (!id) return null;
   const s = read();
@@ -614,7 +596,6 @@ try {
 try { JOB.sweepDrafts(); } catch (e) { console.warn('[mv3q] could not clear unfinished renders:', e.message); }
 
 module.exports = router;
-module.exports.fileFinished = fileFinished;
 module.exports.updateEntry = updateEntry;
 module.exports.findByUrl = findByUrl;
 module.exports.removeByUrl = removeByUrl;

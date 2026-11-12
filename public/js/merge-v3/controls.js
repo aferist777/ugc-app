@@ -268,24 +268,5 @@ export function button(label, onClick, opts) {
   return b;
 }
 
-// ── The effect lists ────────────────────────────────────────────────────────
-// Copied verbatim from js/mergev2-tab.js rather than reinvented: these values are what
-// the ffmpeg side already knows how to render, so a prettier name here would be a
-// setting that silently does nothing.
-export const TRANSITIONS = [
-  ['none', 'None'], ['fade', 'Fade (black)'], ['fadewhite', 'Fade (white)'],
-  ['blur', 'Blur In/Out'], ['whip-pan-h', 'Whip Pan ↔'], ['whip-pan-v', 'Whip Pan ↕'],
-  ['zoom-punch-in', 'Zoom Punch In'], ['zoom-punch-out', 'Zoom Punch Out'],
-  ['flash-white', 'Flash (white)'], ['glitch', 'Glitch'],
-];
-export const ANIMATIONS = [
-  ['none', 'None'], ['zoom_in', 'Zoom In (slow)'], ['zoom_out', 'Zoom Out (slow)'],
-];
-export const FILTERS = [
-  ['none', 'None'], ['vignette', 'Vignette'], ['sharpen', 'Sharpen'],
-  ['warm', 'Warm tone'], ['cool', 'Cool tone'], ['glitch', 'Glitch'],
-  ['bw', 'B&W'], ['vhs', 'VHS / Vintage'], ['cinematic', 'Cinematic'], ['sepia', 'Sepia'],
-];
-
 export const pct = (v) => Math.round(v * 100) + '%';
 export const times = (v) => v.toFixed(2) + 'x';
