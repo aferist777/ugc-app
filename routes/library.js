@@ -53,7 +53,7 @@ const LY = require('../lib/lyrics-store');
 const FOLDERS = require('../lib/folders');
 
 // (phase V28.4) The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
-// folded into the first - before anything reads a category. The library has been upgraded by now (server.js).
+// folded into the first - before anything reads a category.
 try {
   const RC = require('../lib/required-cats');
   const r = RC.ensure();
@@ -61,12 +61,6 @@ try {
     console.log('[library] required categories:' + (r.made.length ? ' made ' + r.made.join(', ') + ';' : '')
       + r.merged.map(m => ' folded a second ' + m.kind + '/' + m.label + ' into the first (' + m.records + ' records)').join(';'));
   }
-  // And, once per library, what the chats made before V28.4 into "Generated" (pictures) or no category (clips).
-  const g = RC.moveChatMade();
-  if (g && (g.images || g.birols)) console.log('[library] made by the chats: ' + g.images + ' picture(s) into Generated, ' + g.birols + ' clip(s) to no category');
-  // (second round) B-roll's "Generated" of the first round let go of, once.
-  const rb = RC.releaseBrollGenerated();
-  if (rb && rb.had) console.log('[library] B-roll\'s "Generated" let go of: ' + rb.records + ' clip(s) to no category');
 } catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
 // (phase V60.2, the owner's (дг4а)) Every B-roll in the folder of the model that made it: the first time, the library is moved
 // into the models' folders (its stores copied into backups/ first); after that a clip lying outside them goes into its
@@ -140,12 +134,7 @@ function _charactersShelf() {
   const perChar = {};
   looks.forEach(l => { const k = l.meta.charId; perChar[k] = (perChar[k] || 0) + 1; });
 
-  // Drafts are not characters yet, so they belong on no shelf - not here and not in the Library.
-  // They leaked in for two reasons at once: this is a SECOND reader of characters.json and knew
-  // nothing about the flag, and the media fallback below accepts `baseFace` when there is no
-  // sheet - which is exactly the shape a draft has, so it passed the on-disk check and looked
-  // finished. char-store's own list has always filtered them; this one now agrees with it.
-  const items = (Array.isArray(chars) ? chars : []).filter(Boolean).filter(c => !c.draft).map(c => {
+  const items = (Array.isArray(chars) ? chars : []).filter(Boolean).map(c => {
     const sheet = String(c.sheet || c.baseFace || '');
     const thumb = sheet ? sheet.replace(/\/([^/]+)$/, '/thumbs/$1').replace(/\.[^.]+$/, '.jpg') : '';
     return {
@@ -173,7 +162,7 @@ function _charactersShelf() {
 // Not a shelf of its own any more: looks belong to a character and show beside it.
 function _looks() {
   const list = _read(path.join(DATA_DIR, 'obrazy.json'), []);
-  const arr = Array.isArray(list) ? list : (list.obrazy || Object.values(list || {}));
+  const arr = Array.isArray(list) ? list : [];
   const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
   const charName = {};
   (Array.isArray(chars) ? chars : []).forEach(c => { if (c && c.id != null) charName[String(c.id)] = String(c.name || ''); });
@@ -214,8 +203,7 @@ function _looks() {
 // /api/thumb instead of naming a stored file: an original can be a 4K screenshot, and no
 // grid should ever load one. `dur` is 0, because a picture has no length of its own — the
 // 10s a dropped image gets is the timeline's decision, not the shelf's.
-const UPLOADS_CAT = '__uploads__';
-const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === UPLOADS_CAT));
+const _isUpload = (it) => !!(it && it.source === 'upload');
 
 // (phase TG, block 7) A PIECE CUT OUT OF A VIDEO keeps its whole video (lib/cuts.js) - shown to the viewer only while
 // that file is on disk: its "original" tick shows it and cuts from it again.
@@ -289,8 +277,8 @@ function _mediaShelf(opts) {
       // Present only on clips animated out of a picture; the viewer draws it beside them.
       refImage: (e.refImage && _onDisk(e.refImage)) ? e.refImage : null,
       prompt: e.prompt || '',
-      // What an old one-time trim cut it to (before phase TG); a piece cut since keeps its whole video instead.
-      trimmed: e.trimmed || null, original: _origMeta(e.original),
+      // A piece cut out of a video keeps its whole video.
+      original: _origMeta(e.original),
       // (phase V7) The video chat's column lays a clip out at its own shape.
       w: +e.w || 0, h: +e.h || 0,
       // (phase V27) Where it came from, when it came by a link; the viewer shows it.
@@ -311,7 +299,7 @@ function _mediaShelf(opts) {
     // the timeline falls back to.
     dur: +h.duration || 0,
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
-            trimmed: h.trimmed || null, original: _origMeta(h.original), link: h.link || '' },
+            original: _origMeta(h.original), link: h.link || '' },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -365,7 +353,6 @@ function _mediaShelf(opts) {
             // (phase V54) a piece cut out of a track names the track and the stretch (lib/audio-cut.js)
             original: t.original || null },
   }));
-  if (fromMusic.some(m => !(m.dur > 0))) MUSIC.fillLengths();
   // (phase V34.E) SFX -> Built-in: the program's set (lib/sfx-builtin.js, vendor/sfx/ at /sfx/) - read only, only when
   // asked; a built-in sound's star is kept by its address (lib/sfx-favorites.js).
   let fromSfx = [];
@@ -498,7 +485,7 @@ function _mediaCats(items, kind, labelFor) {
   const counts = {};
   for (const i of scope) {
     const c = (i.meta || {}).categoryId;
-    if (c && c !== UPLOADS_CAT) counts[c] = (counts[c] || 0) + 1;
+    if (c) counts[c] = (counts[c] || 0) + 1;
   }
   const uncat = scope.filter(i => !(i.meta || {}).categoryId).length;
   const cats = LC.listFor(kind || null, counts, labelFor).map(c => ({
@@ -626,7 +613,7 @@ function _tree(opts) {
     let uncat = 0;
     for (const i of list) {
       const c = (i.meta || {}).categoryId;
-      if (c && c !== UPLOADS_CAT) counts[c] = (counts[c] || 0) + 1;
+      if (c) counts[c] = (counts[c] || 0) + 1;
       else uncat++;
     }
     const cats = LC.listFor(kind, counts, labelFor);
@@ -913,8 +900,8 @@ function _inNode(i, q) {
   if (q.aroot && !_aroot(i, q.aroot)) return false;
   if (q.cat) {
     const c = m.categoryId || '';
-    if (q.cat === UNCAT) { if (c && c !== UPLOADS_CAT) return false; }
-    else if (q.cat === ANYCAT) { if (!c || c === UPLOADS_CAT) return false; }
+    if (q.cat === UNCAT) { if (c) return false; }
+    else if (q.cat === ANYCAT) { if (!c) return false; }
     else if (c !== q.cat) return false;
   }
   return true;
@@ -988,7 +975,7 @@ router.post('/plinks/unlink', (req, res) => {
 // WHO USES A VOICE IS COMPUTED, never stored. The shelf entry knows nothing about
 // characters; this reads characters.json and turns it inside out. A stored copy would be
 // a second answer to the same question and would go stale the first time a voice was
-// unbound - the same mistake the drafts leak was.
+// unbound.
 //
 // `thumb` is null on purpose. A voice has no picture, so the page draws rows for this
 // shelf instead of cards; the pictures in the info column are the CHARACTERS' sheets,
@@ -996,7 +983,7 @@ router.post('/plinks/unlink', (req, res) => {
 function _voicesShelf() {
   const shelf = VS.read();
   const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
-  const arr = (Array.isArray(chars) ? chars : []).filter(Boolean).filter(c => !c.draft);
+  const arr = (Array.isArray(chars) ? chars : []).filter(Boolean);
 
   const users = {};
   for (const c of arr) {
@@ -1249,7 +1236,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     if (aroot) shown = shown.filter(i => _aroot(i, aroot));
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
-      : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
+      : cat === ANYCAT ? !!(i.meta || {}).categoryId
       : (i.meta || {}).categoryId === cat);
     // (phase V34.E) SFX -> Favorites: the starred ones. And the search over a sound shelf: every word in the name, the
     // tags or the category.
@@ -1319,7 +1306,7 @@ function _flatEntry(dir, id) {
 const INFO = {
   characters: (id) => {
     const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
-    const c = (Array.isArray(chars) ? chars : []).find(x => x && !x.draft && String(x.id) === id);
+    const c = (Array.isArray(chars) ? chars : []).find(x => x && String(x.id) === id);
     if (!c) return null;
     const sheet = String(c.sheet || c.baseFace || '');
     return {
@@ -1792,8 +1779,7 @@ router.patch('/library/item/:kind/:id', (req, res) => {
    the folder of the site its whole video came from, Files when none). The video it was cut from is not touched.
 
    The piece keeps its whole video (`original`, lib/cuts.js): a piece of a piece names the first one, so its viewer's
-   "original" always shows the whole video and cuts from it again. This replaces the old rule "an upload is trimmed
-   ONCE and its file cut" - a clip trimmed that way keeps what it had (`trimmed`) and has no "original". */
+   "original" always shows the whole video and cuts from it again. */
 const CUTS = require('../lib/cuts');
 const CUT_KINDS = ['birols', 'uploads', 'hooks', 'references'];
 
@@ -2137,7 +2123,6 @@ function _kindOne(fromIn, idIn, toIn) {
     if (src.file === dst.file) {
       if (to === 'uploads') it.source = 'upload';
       else delete it.source;
-      if (it.categoryId === UPLOADS_CAT) it.categoryId = '';       // the legacy marker is not a category
       // (phase V60.2) A B-roll lies in its model's folder (a clip of before told by its file's name); out of B-rolls, out of
       // it - a folder of B-rolls is no folder of Uploads.
       if (to === 'birols') {
@@ -2164,12 +2149,7 @@ function _kindOne(fromIn, idIn, toIn) {
       date: now,
       uploadedAt: it.uploadedAt || it.date || now,
     };
-    // The one-time trim travels with the clip. Rebuilding the record for the other store used
-    // to drop it: an upload moved to Hooks before it was trimmed lost the trim it was owed, and
-    // one moved after lost the note of what it was cut to. Its length goes too, so a drop onto a
-    // lane lands at the right width instead of reading the file first.
-    if (it.trimmable) moved.trimmable = true;
-    if (it.trimmed) moved.trimmed = it.trimmed;
+    // Its length travels with the clip, so a drop onto a lane lands at the right width instead of reading the file first.
     if (it.duration) moved.duration = it.duration;
     // (phase TG, block 7) A piece keeps its whole video wherever it is filed - and where it came from by a link.
     if (it.original) moved.original = it.original;
@@ -2298,7 +2278,7 @@ function _moveOne(it, to) {
   }
   if (_BVIDEO.has(from) && _BVIDEO.has(to.kind)) {
     // Off its own kind's category first, as one tile let go does: a category is one kind's.
-    if (rec.categoryId && rec.categoryId !== UPLOADS_CAT) {
+    if (rec.categoryId) {
       const r0 = _patchOne(from, it.id, { categoryId: '', categoryLabel: '' });
       if (r0.status !== 200) return _whyOf(r0);
     }
@@ -2486,12 +2466,7 @@ router.post('/library/batch/delete', (req, res) => {
 // Two shapes, kept apart because they mean different things:
 //   missingFile - it had a video and the file is gone
 //   noFile      - it never produced one, a generation that failed
-//
-// A record still GENERATING is deliberately spared: it legitimately has no file yet, and
-// sweeping it would delete a job in flight.
 // ════════════════════════════════════════════════════════════════════════════
-
-const _IN_FLIGHT = new Set(['generating', 'pending', 'queued', 'running']);
 
 function _brokenIn(kind) {
   const store = RECORD_STORES[kind];
@@ -2509,15 +2484,14 @@ function _brokenIn(kind) {
   const missingFile = [], noFile = [];
   for (const e of list) {
     if (!e || !inKind(e)) continue;
-    if (_IN_FLIGHT.has(String(e.status || '').toLowerCase())) continue;   // a job in flight
     if (!e.videoPath) noFile.push(brief(e, 'never produced a file'));
     else if (!_onDisk(e.videoPath)) missingFile.push(brief(e, 'file is gone from disk'));
   }
   return { missingFile, noFile };
 }
 
-// Looks are counted here but cleaned by POST /api/obrazy/prune-missing, which already does it
-// (and sweeps geni.json alongside). Counting them in one place lets the page show one number.
+// Looks are counted here but cleaned by POST /api/obrazy/prune-missing, which already does it.
+// Counting them in one place lets the page show one number.
 function _brokenLooks() {
   const list = _read(OBRAZY_FILE, []);
   const arr = Array.isArray(list) ? list : [];
@@ -2625,9 +2599,6 @@ function _fileRecord(b) {
   // Only set when given: every other way of filing a record leaves it absent.
   if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
   if (prompt) rec.prompt = String(prompt).slice(0, 2000);
-  // `trimmable` - a file brought in by hand - is still written by the ways in, and read by nobody since phase TG
-  // block 7: every video of the shelf may be cut into new pieces (POST /library/cuts).
-  if (b.trimmable === true) rec.trimmable = true;
   // (phase V27) A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
   // spelling of it (lib/ytdlp.js info().key), so the same video is not fetched onto the shelf twice.
   if (b.link) rec.link = String(b.link).slice(0, 2000);
@@ -2709,9 +2680,6 @@ function _reassign(kind, fromId, toId, toLabel) {
     if (!inKind(e) || String(e.categoryId || '') !== String(fromId)) continue;
     e.categoryId = toId || '';
     e.categoryLabel = toLabel || '';
-    // An upload used to be recognisable by categoryId === '__uploads__' alone. Clearing the
-    // category would turn such a record back into a birol, so make the flag explicit.
-    if (kind === 'uploads') e.source = 'upload';
     n++;
   }
   if (n) store.write(list);
@@ -2878,7 +2846,7 @@ router.post('/library/usage', (req, res) => {
       for (const e of store.read()) {
         if (!e || !inKind(e)) continue;
         const c = String(e.categoryId || '');
-        if (cat === UNCAT ? (c && c !== UPLOADS_CAT) : !under.has(c)) continue;
+        if (cat === UNCAT ? c : !under.has(c)) continue;
         for (const p of (store.files ? store.files(e) : [])) if (p) media.push(String(p));
       }
     }

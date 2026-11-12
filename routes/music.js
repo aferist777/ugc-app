@@ -31,36 +31,6 @@ const MUSIC = require('../lib/music-store');
 
 const router = express.Router();
 
-// ── Suno music library ────────────────────────────────────────────────────────
-const _loadSunoLib = () => MUSIC.read();
-function _saveSunoLib(list) {
-  try { MUSIC.write(list); } catch (e) { console.warn('[music] the list was not written:', e.message); }
-}
-
-// ONE RECORD PER FILE (phase V23). Until then the music panel wrote a second record of every track the server had
-// filed already (`suno_<time>` beside `suno_<task>`): the one named after its file stays, the others go. At start.
-function _dedupeSunoLib() {
-  const list = _loadSunoLib();
-  if (!Array.isArray(list) || !list.length) return 0;
-  const stem = (p) => String(p || '').split('/').pop().replace(/\.[^.]+$/, '');
-  const best = new Map();
-  for (const t of list) {
-    if (!t || !t.audioPath) continue;
-    const was = best.get(t.audioPath);
-    if (!was || (t.id === stem(t.audioPath) && was.id !== stem(was.audioPath))) best.set(t.audioPath, t);
-  }
-  const keep = list.filter(t => !t || !t.audioPath || best.get(t.audioPath) === t);
-  if (keep.length === list.length) return 0;
-  _saveSunoLib(keep);
-  console.log('[music] ' + (list.length - keep.length) + ' second record(s) of the same track removed');
-  return list.length - keep.length;
-}
-try { _dedupeSunoLib(); } catch (e) { console.warn('[music] the music list was not tidied:', e.message); }
-
-// (phase V34.E, the owner's (м10)) POST /api/audio/suno/generate went with the generator of the audio lane's inspector:
-// music is made in Merge's "/ generate audio" (routes/audio-gen.js). Its rows from before are followed and asked again by
-// lib/audio-gens.js (`legacyBody`).
-
 // ── A track from this computer (phase V28.4, the owner 2026-10-12: "музыка - пока тоже файл") ─────────────
 // Into media/work first (multer), then lib/music-store.js measures it, moves it into media/audio/ and files it first.
 const MUSIC_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus'];

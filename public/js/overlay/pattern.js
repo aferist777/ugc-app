@@ -13,8 +13,7 @@
    below, its opacity and blend mode by overlay/look.js's rules, only what differs from the defaults kept (normalizeLayer); one
    entry per pattern of the set, with no limit of how many. It covers the WHOLE main video, from 0 to its end (mainEnd),
    following it, OVER EVERY VIDEO LANE and under the text and the subtitles: the preview and the render both draw layersOf() -
-   the bottom layer first, each as a clip of that stretch, known by its layer id. No lane of its own. (A pattern clip of V65 was
-   made one of these at start, lib/timeline-patterns.js.)
+   the bottom layer first, each as a clip of that stretch, known by its layer id. No lane of its own.
 
    `pattern: { scale, color, angle, move, speed, dir }`, every field optional (absent = the default):
      scale  0.25..4 (25-400 %, (пз14)), 1: a 2160 px file then covers the frame's long side; a 1080 px tile (noise,

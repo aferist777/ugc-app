@@ -100,7 +100,6 @@ export function down(e, p) {
   e.preventDefault();
   // (V66) The sample: moved up and down, nothing picked.
   if (_sample) {
-    if (!Store.canEdit()) return true;
     _drag = { what: { kind: 'sample' }, hit, from: _placeOf(resolveStyle(hit.track.style)), p0: p, pg0: { x: e.clientX, y: e.clientY }, moved: false, r: null };
     return true;
   }
@@ -120,7 +119,6 @@ export function down(e, p) {
     what = { kind: 'lane', track: hit.track.id };
   }
   if (_api.repaint) _api.repaint();
-  if (!Store.canEdit()) return true;
   const st = what.kind === 'lane' ? resolveStyle(hit.track.style) : resolveStyle(hit.track.style, hit.clip.style);
   _drag = { what, hit, from: _placeOf(st), p0: p, pg0: { x: e.clientX, y: e.clientY }, moved: false, r: null };
   return true;

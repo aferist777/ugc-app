@@ -111,7 +111,7 @@ export function offerMerge() {
   if (_win && _win.job) return;                 // a merge is being made: its window stays
   closeMerge();
   const m = mergeable(Store.timeline(), _acc.ids());
-  if (!m || !Store.canEdit()) return;
+  if (!m) return;
   const last = (m.video || m.audio).clips[m.n - 1];
   const anchor = document.querySelector(`.mv3b-clip[data-clip="${CSS.escape(last.id)}"]`);
   if (!anchor) return;
@@ -245,7 +245,7 @@ function _lay(w, j) {
       const at = lane.clips.findIndex((c) => gone.has(c.id));
       const first = set.clips[0];
       const cell = {
-        id: _acc.newId(), src: j.src, name, thumb: null, poster: null, libId: null,
+        id: _acc.newId(), src: j.src, name, thumb: null, libId: null,
         start: r3(m.s0), dur, srcDur: dur, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
         volume: null, pairId,
         ...(mergeOf ? mergeOf.cell(lane.kind, first) : {}),

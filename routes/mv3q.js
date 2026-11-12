@@ -10,16 +10,8 @@
    they were when it was queued. The render is what the person saw when they queued it, not what
    the project drifted into while five other things rendered ahead of it.
 
-   Entries of the talking-head editor, which is gone (docs/local-app/PLAN.md, phase 3), carry that
-   editor's payload and nothing can render it any more: one still waiting fails with the reason,
-   and the project - converted - can be queued again.
-
    The queue runs ONE AT A TIME. Rendering is the heaviest thing this machine does, and four
    at once is four renders that all finish late rather than one that finishes soon.
-
-   WHOSE ENTRY. Each one still names who queued it, from the server version, where the list a
-   person saw was their own. The desktop app has one person (lib/ownership.js), so every entry
-   is theirs, whoever's name an old one carries.
 
    RENDER ALL. Queuing something does not start it. Render all ARMS the waiting entries, and
    the runner takes armed entries in the order they were queued; each row says how many are
@@ -45,7 +37,6 @@ const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const JOB = require('../lib/mv3b-job');
 const BUSY = require('../lib/render-busy');
-const OWN = require('../lib/ownership');
 
 const router = express.Router();
 const { DATA_DIR } = require('../lib/config');
@@ -103,18 +94,6 @@ function next() {
   s.running = true;
   write(s);
   _active = item.id;
-
-  if (item.kind !== 'blank') {
-    const s2 = read();
-    const it = s2.items.find(x => x.id === item.id);
-    if (it) {
-      it.status = 'failed';
-      it.error = 'queued in the editor that has been removed - open the project and add it to the queue again';
-    }
-    write(s2);
-    _active = null;
-    return next();
-  }
   return runBlank(item);
 }
 
@@ -301,17 +280,9 @@ function summarise(item) {
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
-// Yours, or the admin's - see the header. An entry with no owner is the admin's.
-function _canSee(it, req) {
-  if (OWN.isAdmin(req.user)) return true;
-  const me = OWN.uidOf(req);
-  return !!it.owner && !!me && it.owner === me;
-}
-
 router.get('/mv3q', (req, res) => {
-  // (V50 speed, J) ?count=1 - the strip's badge: the number alone, from the count kept above. Every entry is the person's here
-  // (lib/ownership.js), so it is the list's `waiting`. A row marked running with nothing running is a leftover the full read
-  // below puts back first.
+  // (V50 speed, J) ?count=1 - the strip's badge: the number alone, from the count kept above - the list's `waiting`. A row
+  // marked running with nothing running is a leftover the full read below puts back first.
   const countOnly = !!req.query.count;
   if (countOnly) {
     const c = _counted();
@@ -323,8 +294,7 @@ router.get('/mv3q', (req, res) => {
     for (const it of s.items) if (it.status === 'running') _interrupted(it);
     write(s);
   }
-  // How many are in line before each armed entry - across everyone, because the encoder is
-  // shared and that is what the wait actually depends on.
+  // How many are in line before each armed entry - that is what the wait actually depends on.
   const ahead = new Map();
   let line = 0;
   for (const it of s.items) {
@@ -338,22 +308,19 @@ router.get('/mv3q', (req, res) => {
   };
   // (V50 speed, J) Without its `timeline` - the frozen job is for the runner; no page reads it from the list (Queue's window,
   // Export's follow, the shell's question before quitting), and it was nearly all of a 2 MB answer.
-  const items = s.items.filter(it => _canSee(it, req))
-    .map(it => ({ ...it, timeline: undefined, ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
+  const items = s.items.map(it => ({ ...it, timeline: undefined,
+    ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   if (countOnly) return res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy() });
-  // `running` is the machine's, not the person's: the encoder is busy for everyone.
   // `busy`: any render at all - routes/mv3b.js renders outside the queue (lib/render-busy.js); the shell asks about it before
   // the app stops (desktop/main.js, phase V23).
-  res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy(), admin: OWN.isAdmin(req.user), items });
+  res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy(), items });
 });
 
 router.post('/mv3q/add', (req, res) => {
   try {
     const b = req.body || {};
-    // One kind of entry now: a project's timeline and its export settings.
-    const kind = 'blank';
     if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
       return res.status(400).json({ success: false, error: 'an entry needs its timeline' });
     }
@@ -367,13 +334,12 @@ router.post('/mv3q/add', (req, res) => {
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
       key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
-      kind, status: 'queued', addedAt: new Date().toISOString(),
+      status: 'queued', addedAt: new Date().toISOString(),
       timeline: b.timeline,
       // The export settings, frozen with the timeline: the render is of what was queued.
       adv: b.adv && typeof b.adv === 'object' ? b.adv : null,
       url: null, error: null,
-      owner: OWN.uidOf(req), ownerNick: req.user ? (req.user.nickname || null) : null,
-      // Starts only when its owner presses Render all - see the header.
+      // Starts only when Render all is pressed - see the header.
       armed: false,
       dur: Number(b.dur) > 0 ? Number(b.dur) : null,
     };
@@ -381,7 +347,7 @@ router.post('/mv3q/add', (req, res) => {
     s.items.push(item);
     write(s);
     res.json({ success: true, id: item.id,
-               waiting: s.items.filter(x => x.status === 'queued' && _canSee(x, req)).length });
+               waiting: s.items.filter(x => x.status === 'queued').length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -389,14 +355,13 @@ router.delete('/mv3q/:id', (req, res) => {
   const s = read();
   const id = String(req.params.id || '');
   const it = s.items.find(x => x.id === id);
-  if (it && !_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it && it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
   s.items = s.items.filter(x => x.id !== id);
   write(s);
   res.json({ success: true });
 });
 
-// Render all: arm the caller's waiting entries and start the runner if it is idle. Pressing
+// Render all: arm the waiting entries and start the runner if it is idle. Pressing
 // it while the encoder is busy with another render is fine - the entries are armed
 // and take their turn. Pressing it twice does not start a second runner.
 router.post('/mv3q/run', (req, res) => {
@@ -415,7 +380,7 @@ router.post('/mv3q/run', (req, res) => {
     // Left alone it sits at the head of the list for ever and everything behind it waits on
     // a render that finished, failed or was never going to happen.
     if (it.status === 'running' && !_active) { _interrupted(it); freed++; }
-    if (it.status === 'queued' && !it.armed && _canSee(it, req)) { it.armed = true; it.interrupted = false; armed++; }
+    if (it.status === 'queued' && !it.armed) { it.armed = true; it.interrupted = false; armed++; }
   }
   write(s);
   // (phase V23) Whether one was ALREADY rendering - read before this call starts one, or a render it just started
@@ -454,7 +419,6 @@ router.post('/mv3q/stop/:id', (req, res) => {
   const id = String(req.params.id || '');
   const it = read().items.find(x => x.id === id);
   if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
-  if (!_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it.status === 'done' || it.status === 'failed') return res.json({ success: true, removed: 0, stopping: false, finished: true });
   const r = stopWhere(x => x.id === id);
   res.json({ success: true, removed: r.removed, stopping: r.stopping, finishing: !r.removed && !r.stopping });
@@ -472,7 +436,6 @@ router.post('/mv3q/retry/:id', (req, res) => {
   const s = read();
   const it = s.items.find(x => x.id === String(req.params.id || ''));
   if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
-  if (!_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
   // Trying again is asking for it: armed, and started at once if the encoder is idle.
   it.status = 'queued'; it.armed = true;
@@ -488,13 +451,12 @@ router.post('/mv3q/clear', (req, res) => {
   const before = s.items.length;
   s.items = s.items.filter(x => {
     if (x.status === 'running') return true;          // never pull the rug out from the encoder
-    if (!_canSee(x, req)) return true;                 // somebody else's: not this person's to clear
     if (mode === 'all') return false;
     return x.status !== 'done' && x.status !== 'failed';
   });
   write(s);
   res.json({ success: true, removed: before - s.items.length,
-             waiting: s.items.filter(x => x.status === 'queued' && _canSee(x, req)).length });
+             waiting: s.items.filter(x => x.status === 'queued').length });
 });
 
 // A render renamed: its entry follows the file (routes/library.js, lib/highlights-render.js).
@@ -530,9 +492,9 @@ function addArmed(list) {
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
       key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
-      kind: 'blank', status: 'queued', addedAt: new Date().toISOString(),
+      status: 'queued', addedAt: new Date().toISOString(),
       timeline: b.timeline, adv: b.adv && typeof b.adv === 'object' ? b.adv : null,
-      url: null, error: null, owner: OWN.uidOf(), ownerNick: null,
+      url: null, error: null,
       armed: true, dur: Number(b.dur) > 0 ? Number(b.dur) : null,
       ...(b.hl ? { hl: { id: String(b.hl.id), n: Number(b.hl.n) } } : {}),
       ...(b.rev != null ? { rev: Number(b.rev) || 0 } : {}),

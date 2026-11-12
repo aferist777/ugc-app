@@ -475,8 +475,7 @@ function _label(b, text) {
 export function paintExportButton() {
   const b = document.getElementById('mv3-export');
   if (!b) return;
-  // Somebody else's project counts as none: rendering writes export settings (js/merge-v3/main.js).
-  const can = Store.hasProject() && Store.canEdit();
+  const can = Store.hasProject();
   const st = _target ? _target.state() : null;
   _label(b, st ? st.label : 'Export');
   b.title = st ? st.title : _busy ? 'Rendering - it is in Queue, where it can be stopped' : 'Render this timeline with FFmpeg';

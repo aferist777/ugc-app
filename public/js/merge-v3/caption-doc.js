@@ -182,7 +182,6 @@ export function paint() {
     const secs = [];
     const order = [];
     const seen = new Set();
-    const canEdit = Store.canEdit();
     for (const t of lanes) {
       let sec = _secs.get(t.id);
       if (!sec) {
@@ -201,7 +200,7 @@ export function paint() {
       for (const c of lines) {
         let r = _rows.get(c.id);
         if (!r) { r = _makeRow(); _rows.set(c.id, r); }
-        _fill(r, c, t, canEdit);
+        _fill(r, c, t);
         // Where one line of the script gives way to the next: a talking head's captions never join across it.
         const v = String(c.voice || '');
         r.el.classList.toggle('is-seam', voice != null && !!v && !!voice && v !== voice);
@@ -235,7 +234,6 @@ export function paint() {
   }
   _search(false);
   _paintSel(false);
-  _ui.one.disabled = _ui.all.disabled = !Store.canEdit();
 }
 
 function _makeRow() {
@@ -261,7 +259,7 @@ function _makeRow() {
   return r;
 }
 
-function _fill(r, c, t, canEdit) {
+function _fill(r, c, t) {
   r.c = c;
   r.trackId = t.id;
   r.heard = isHeard(c);
@@ -273,7 +271,6 @@ function _fill(r, c, t, canEdit) {
   r.t.title = _fmt2(start) + ' → ' + _fmt2(end) + (r.heard ? ' · heard' + (fixed ? ', corrected by hand' : '') : ' · typed');
   r.el.classList.toggle('is-fix', fixed);
   r.el.classList.toggle('is-typed', !r.heard);
-  r.ta.readOnly = !canEdit;
   const text = textOfLine(c);
   // Never over typing not written yet - unless it is our own change being written from this very line.
   const dirty = r.ta.__painted != null && r.ta.value !== r.ta.__painted;
@@ -482,13 +479,13 @@ function _rowKeys(e, r) {
       // A typed line takes a line break of its own (Shift+Enter); a heard one has none.
       if (e.shiftKey) { if (r.heard) e.preventDefault(); return; }
       e.preventDefault();
-      if (!ta.readOnly) _split(r);
+      _split(r);
       return;
     case 'Delete':
-      if (collapsed && ta.selectionStart === ta.value.length && !ta.readOnly) { e.preventDefault(); _join(r, 1); }
+      if (collapsed && ta.selectionStart === ta.value.length) { e.preventDefault(); _join(r, 1); }
       return;
     case 'Backspace':
-      if (collapsed && ta.selectionStart === 0 && !ta.readOnly) { e.preventDefault(); _join(r, -1); }
+      if (collapsed && ta.selectionStart === 0) { e.preventDefault(); _join(r, -1); }
       return;
     case 'Tab':
       e.preventDefault();
@@ -654,7 +651,6 @@ function _step(d) {
 }
 
 function _replaceOne() {
-  if (!Store.canEdit()) return;
   _search(false);
   const h = _cur >= 0 ? _hits[_cur] : null;
   const r = h && _rows.get(h.id);
@@ -673,7 +669,6 @@ function _replaceOne() {
 }
 
 function _replaceAll() {
-  if (!Store.canEdit()) return;
   _search(false);
   const re = _re();
   if (!re || !_hits.length) return;

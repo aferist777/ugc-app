@@ -29,10 +29,8 @@ import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
-// Which view each project was left on: { projectKey: <a view's name> }. It was the pictures chat's own
-// ('mv3_pc_view_v1', { key: 'chat' }) until V1; read once into this one and dropped.
+// Which view each project was left on: { projectKey: <a view's name> }.
 const LS_VIEW = 'mv3_lib_view_v1';
-const LS_VIEW_OLD = 'mv3_pc_view_v1';
 
 let _base = 'shelf';         // 'shelf' or the name of a chat
 let _caps = false;           // the captions view is up
@@ -170,12 +168,6 @@ export const laneExtraFor = (track, clip) => (_laneExtra && track && _laneExtra.
 function _views() {
   let v = {};
   try { v = JSON.parse(localStorage.getItem(LS_VIEW) || '') || {}; } catch (e) { v = {}; }
-  let old = null;
-  try { old = JSON.parse(localStorage.getItem(LS_VIEW_OLD) || 'null'); } catch (e) { old = null; }
-  if (old && typeof old === 'object') {
-    for (const k of Object.keys(old)) if (old[k] === 'chat' && !(k in v)) v[k] = 'pictures';
-    try { localStorage.setItem(LS_VIEW, JSON.stringify(v)); localStorage.removeItem(LS_VIEW_OLD); } catch (e) { /* a private window */ }
-  }
   return v;
 }
 

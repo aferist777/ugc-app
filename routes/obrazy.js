@@ -9,12 +9,11 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { ROOT_DIR, DATA_DIR, OBRAZY_FILE } = require('../lib/config');
+const { ROOT_DIR, OBRAZY_FILE } = require('../lib/config');
 
 // ── POST /api/obrazy/prune-missing ──────────────────────────────────────────
 // Removes "orphan" obrazy whose image files are ALL missing on disk (left behind
-// by a partial import or deleted media) so they stop 404-ing in the Looks row.
-// Also drops geni gallery entries whose file is gone. Conservative: an obraz is
+// by deleted media) so they stop 404-ing in the Looks row. Conservative: an obraz is
 // KEPT if ANY of its images (char or a variation) still exists on disk.
 function _existsUnderRoot(url) {
   if (!url || typeof url !== 'string') return false;
@@ -47,17 +46,7 @@ router.post('/obrazy/prune-missing', (_req, res) => {
     });
     if (removedObrazy.length) writeFileAtomic(OBRAZY_FILE, JSON.stringify(keptObrazy, null, 2));
 
-    // geni.json — drop history entries whose file is gone
-    const geniFile = path.join(DATA_DIR, 'geni.json');
-    let geni = [];
-    try { geni = JSON.parse(fs.readFileSync(geniFile, 'utf8')); } catch {}
-    let removedGeni = 0, keptGeni = Array.isArray(geni) ? geni : [];
-    if (Array.isArray(geni)) {
-      keptGeni = geni.filter(g => { const ok = _existsUnderRoot(g && g.path); if (!ok) removedGeni++; return ok; });
-      if (removedGeni) writeFileAtomic(geniFile, JSON.stringify(keptGeni, null, 2));
-    }
-
-    res.json({ success: true, removedObrazy, removedGeniCount: removedGeni, obrazy: keptObrazy, geni: keptGeni });
+    res.json({ success: true, removedObrazy, obrazy: keptObrazy });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

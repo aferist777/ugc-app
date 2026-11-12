@@ -28,8 +28,8 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-// '/' opens Home and '/character' lands on the Library's Characters shelf - both answered by redirects.
-const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
+// '/' opens Home - answered by a redirect.
+const PAGES = ['/', '/home', '/merge', '/library', '/admin', '/3d'];
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  // New Character's modules, moved out of the Character page's folder in phase H8
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
@@ -74,112 +74,27 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  // generate audio and sound on the shelves (phases V34.C-F)
                  '/js/merge-v3/sound-host.js', '/css/sound-window.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
-// Where an address must land: the app opens on Home, the old Character page (phase H8) on the shelf.
-const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
-// Every key routes/settings.js keeps out of the page, secret or retired.
-const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
-                     'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl',
-                     'telegramBotToken', 'telegramChatId', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
+// Where an address must land: the app opens on Home.
+const REDIRECTS = [['/', '/home']];
+// Every key routes/settings.js keeps out of the page.
+const HIDDEN_KEYS = ['anthropicApiKey', 'kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
+                     'r2SecretAccessKey', 'telegramBotToken', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
+// What the V91 cleanup took away still answers 404 (the earlier removals - the server version, phases A-V49 - are not
+// listed any more: their code is long gone).
 const REMOVED = [
-                 // dead routes the V91 cleanup took away (block 2)
-                 // the Render finished window's routes (block 3, Ch2)
-                 ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'], ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
+                 // block 2: dead routes
+                 ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
+                 // block 3: the Render finished window (Ch2), makechat (Ch5), the agent's set of first frames (Ch4), Media's
+                 // duplicates, the /lab/ui showcase (Ch12), the video chat's recipe catalog (Ch1)
+                 ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],
+                 ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],
                  ['GET', '/api/scen3/frame-sets'], ['GET', '/api/scen3/poses'], ['POST', '/api/scen3/frames/plan'], ['GET', '/api/obrazy/main-images'],
                  ['GET', '/api/library/dupes'], ['POST', '/api/library/dupes/clean'],
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
-                 ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],
-                 ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],
-                 ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
-                 ['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
-                 ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
-                 ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
-                 ['POST', '/api/restart'], ['GET', '/birols'],
-                 // Library 2, whose generator moved into the Library's Scenarios shelf in phase E
-                 ['GET', '/library2'], ['GET', '/api/library2/counts'], ['GET', '/api/library2/drafts'],
-                 // the Scenarios page and what only it called, removed in phase G
-                 ['POST', '/api/scen3/options/delete'], ['POST', '/api/scen3/preview1k'], ['GET', '/api/scen3/frame-options'],
-                 ['POST', '/api/scen3/frame-options'], ['POST', '/api/scen3/media-size'], ['POST', '/api/scen3/frame/crop'],
-                 ['POST', '/api/scen3/gen/frame/analyze'], ['POST', '/api/scen3/gen/frame'], ['POST', '/api/scen3/gen/mix'],
-                 ['POST', '/api/scen3/obraz-save'], ['POST', '/api/scen3/obraz-delete'], ['POST', '/api/scen3/finalize'],
-                 ['GET', '/api/scen3/moods'], ['GET', '/api/scen3/voice-tags'], ['POST', '/api/scen3/video/render'],
-                 ['POST', '/api/scen3/video/cancel'], ['GET', '/api/scen3/video/state/x'], ['GET', '/api/scen3/cast-face/x'],
-                 ['POST', '/api/scen3/reel/save'], ['POST', '/api/scen3/scenarios/x/duplicate'], ['POST', '/api/scen3/projects/x/copy'],
-                 ['POST', '/api/mv3/import/scen3'], ['GET', '/scenarios'],
-                 // old versions, removed in the cleanup of 2026-09-15 - one route per removed file
-                 ['GET', '/api/balance'], ['POST', '/api/public-host'], ['GET', '/api/recover-tasks'],
-                 ['GET', '/api/edit-state'], ['GET', '/api/gen-timings'], ['GET', '/api/hooks/state'],
-                 ['GET', '/api/custom-options'], ['POST', '/api/finals/save'], ['GET', '/api/lookbooks'],
-                 ['POST', '/api/asset-interact/generate'], ['POST', '/api/mv3/voice/speak'],
-                 ['GET', '/api/mv3/vid/feed'], ['POST', '/api/biroly/gen-broll-prompt'], ['GET', '/merge-v2'],
-                 ['GET', '/studio'], ['POST', '/api/studio/gen-object'], ['POST', '/api/generate'],
-                 ['GET', '/api/audio/voices'], ['POST', '/api/biroly/generate'], ['GET', '/api/biroly/state'],
-                 ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules'],
-                 // phase J: the pictures window's own steps - the server sends a message now
-                 ['POST', '/api/mv3/img/think'], ['POST', '/api/mv3/img/gen'], ['POST', '/api/mv3/chat'],
-                 ['GET', '/js/merge-v3/chatwin.js'], ['GET', '/js/merge-v3/imagen.js'],
-                 // phase K1: the page's own listening job - the server listens to the project now
-                 ['POST', '/api/stt/timeline'], ['GET', '/api/stt/timeline/x'],
-                 // phase C: routes nothing called - a write that replaced every look, a delete
-                 // that wiped a look's folder past lib/relocate.js
-                 ['POST', '/api/userdata/obrazy'], ['DELETE', '/api/obrazy/x'],
-                 // ...and the probably dead: a list for a gone dropdown, a rename with no page, two reads the
-                 // page makes elsewhere, and scratch served over HTTP
-                 ['GET', '/api/scen3/projects'], ['PATCH', '/api/narrators/x'], ['GET', '/api/sources/cookies'],
-                 // phase V38 / V38.1: one voice read by "Read new samples"; the cleaning pass, the enrichment and the
-                 // narrator's vocabulary and phrases went
-                 ['POST', '/api/narrators/x/analyse'], ['DELETE', '/api/narrators/x/readings/y'], ['POST', '/api/scriptgen/humanize'],
-                 ['POST', '/api/scriptgen/enrich'], ['POST', '/api/narrators/x/vocabulary'], ['POST', '/api/narrators/x/pending/phrases/all/keep'],
-                 // phase V38.9: a scenario of the shelf rewritten in its narrator's voice went with its button (V38.7)
-                 ['POST', '/api/scriptgen/from-scenario'],
-                 ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
-                 // phase C3: the server version's 'copy to my profile' - one person owns every project here
-                 ['POST', '/api/mv3/timeline/x/copy'], ['DELETE', '/api/scen3/projects/x'],
-                 // phase C4: Animate, its window and its routes
-                 ['GET', '/api/video/engines'], ['POST', '/api/video/animate'], ['GET', '/api/video/animate/status/x'],
-                 ['POST', '/api/video/think'], ['POST', '/api/video/reference'],
-                 // phase V28.1: a source comes in through /api/sources/add/* - the upload and the page-followed link went
-                 ['POST', '/api/sources/upload'], ['POST', '/api/sources/link'],
-                 // phase V28.4: the Music shelf is Media -> Audio -> Music; its list and delete went with it and the chips
-                 ['GET', '/api/library/shelf/music'], ['GET', '/api/audio/suno/library'], ['DELETE', '/api/audio/suno/library/x'],
-                 ['GET', '/js/library/music.js'], ['GET', '/js/library/cats-bar.js'],
-                 // ...and, in its second round, the hand order of the categories (alphabetical now)
-                 ['POST', '/api/library/cats/order'],
-                 // phase V54: Import / Export went (the owner 2026-10-28) - its routes and the Admin tab's script
-                 ['GET', '/api/data/groups'], ['POST', '/api/data/export'], ['GET', '/api/data/export/x/status'],
-                 ['GET', '/api/data/export/x/part/1/download'], ['POST', '/api/data/import'], ['POST', '/api/data/import/finish'],
-                 ['GET', '/js/data-io.js'],
-                 // phase V25: the pictures chat's gear, its window and its settings; no chat clears its conversation
-                 ['GET', '/js/merge-v3/gear.js'], ['GET', '/css/mv3-gear.css'], ['GET', '/api/mv3/img/settings'],
-                 ['PUT', '/api/mv3/img/settings'], ['DELETE', '/api/mv3/chat'],
-                 ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
-                 // phase V34.E: the audio lane's own Suno generator - music is made in "generate audio" now
-                 ['POST', '/api/audio/suno/generate'],
-                 // phase V34.F: the audio lab - its page, its modules and the routes only it read
-                 ['GET', '/lab/audio'], ['GET', '/js/lab/audio.js'], ['GET', '/css/lab-audio.css'], ['GET', '/api/audio/lanes'],
-                 ['GET', '/api/audio/projects'], ['GET', '/api/audio/lib/tree'], ['GET', '/api/audio/lib/items'], ['POST', '/api/audio/lib/fav'],
-                 // phase 2: the per-clip audio extraction nothing read
-                 ['POST', '/api/scen3/reel/audio'],
-                 // phase V17: the picture-then-video recipe's start - Kling motion control's own way since
-                 ['POST', '/api/mv3/video/frameswap'],
-                 // phase V26.8, sixth round: a Seedance line is a fragment of its own - the merge tick went
-                 ['POST', '/api/scen3/fragments/merge'],
-                 // phase 3: the talking-head editor - its render, its progress, and the overlay
-                 // arrangement it handed back to a scenario
-                 ['POST', '/api/ffmpeg/render'], ['GET', '/api/ffmpeg/status/x'],
-                 ['POST', '/api/ffmpeg/cancel/x'], ['GET', '/api/ffmpeg/proxy-status'],
-                 ['GET', '/api/mv3/overlays'], ['GET', '/api/mv3/overlays/x'],
-                 ['POST', '/api/mv3/overlays/hide'], ['POST', '/api/mv3/overlays/save'],
-                 // phase H8: the Character page, its settings popup, the attempt log, the rescued list,
-                 // the prompt editor, its own poll, and what only it showed
-                 ['GET', '/character-v2.html'], ['GET', '/js/character-v2/main.js'], ['GET', '/css/character-v2.css'],
-                 ['GET', '/js/character-v2/create-panel.js'],
-                 ['GET', '/css/cv2-settings.css'], ['GET', '/api/character-v2/ladders'], ['POST', '/api/character-v2/ladders'],
-                 ['POST', '/api/character-v2/recover'], ['GET', '/api/character-v2/recovered'], ['GET', '/api/character-v2/trace'],
-                 ['GET', '/api/prompts'], ['GET', '/api/status/x'], ['GET', '/api/char-store/ref-status/x'],
-                 ['GET', '/api/library/looks/x'], ['GET', '/api/scen3/look-frames/x'],
-                 // phase V27: the YouTube cookie jar and the lock it kept on links - links go without a login
-                 ['POST', '/api/sources/cookies'], ['POST', '/api/sources/cookies/verify'], ['DELETE', '/api/sources/cookies'],
-                 ['GET', '/api/sources/ytdlp']];
+                 ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'],
+                 ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
+                 // block 4: the old Character page's address (Ch20)
+                 ['GET', '/character']];
 
 async function call(method, url, body) {
   const t0 = Date.now();
@@ -233,7 +148,7 @@ function getRoutes() {
   try { shown = Object.keys(JSON.parse(st.text).settings || {}); } catch (e) { shown = null; }
   const leaked = shown ? HIDDEN_KEYS.filter(k => shown.includes(k)) : null;
   if (!leaked || leaked.length) failed++;
-  console.log('settings view:', st.status, !leaked ? 'unreadable' : leaked.length ? 'LEAKS ' + leaked.join(', ') : 'no secret or retired key in it');
+  console.log('settings view:', st.status, !leaked ? 'unreadable' : leaked.length ? 'LEAKS ' + leaked.join(', ') : 'no secret key in it');
 
   for (const [m, u] of REMOVED) {
     const r = await call(m, u, m === 'POST' ? {} : undefined);

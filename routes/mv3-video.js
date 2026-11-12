@@ -132,7 +132,7 @@ router.post('/mv3/video/send', async (req, res) => {
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    // (phase V29, the owner 2026-10-14) No 中文 any more: every prompt goes in English (the column's box of V15 went).
+    // (phase V29, the owner 2026-10-14) Every prompt goes to the model in English.
 
     // What is attached, each checked to be in the library; who can take it.
     const mm = _mediaOf(b.media);
@@ -164,7 +164,9 @@ router.post('/mv3/video/send', async (req, res) => {
         clipDur = Math.round((+pr.duration || 0) * 100) / 100;
         const seen = require('../lib/video-prep').seen(pr);
         shape = _shapeOf(seen.w, seen.h);
-      } catch (e) { /* the default shape; the slider stays within the part */ }
+      } catch (e) { /* the default shape */ }
+      // Read just above (_filesWrong) - a clip whose length cannot be read is refused there, in the same words.
+      if (!(clipDur > 0)) return res.status(400).json({ success: false, error: 'a clip cannot go to ' + rt0.fits[0].label + ' - the clip could not be read' });
       const turn = CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
       const kickF = 'w' + crypto.randomBytes(8).toString('hex');
       CHAT.writing.add(kickF);
@@ -506,10 +508,6 @@ const _restState = (x) => {
   if (B && B.kind === 'frame') return (B.versions || []).length || B.prompt ? 'ready' : 'failed';
   return (x.card.versions || []).length || x.card.prompt || (B && ((B.versions || []).length || B.prompt)) ? 'ready' : 'failed';
 };
-// (phase V16.6) A card written before its picture's prompts had variants has its one prompt and no list: that prompt
-// becomes variant 1 when the next writing lands, so nothing written is lost.
-const _seedBoardVers = (B) => (Array.isArray(B.versions) && B.versions.length ? B.versions
-  : B.prompt ? [{ id: _verId(), at: '', prompt: B.prompt, aspect: B.aspect || '', writer: '', edited: !!B.edited }] : []);
 // The card writing its sheet's prompt - a new one, or `o.card` written again. { card, kick }.
 function _startBoard(o) {
   const kick = 'w' + crypto.randomBytes(8).toString('hex');
@@ -556,10 +554,8 @@ async function _writeBoard(cardId, kick, o) {
       if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
       const B = m.card.board || (m.card.board = { prompt: '', aspect: '', genIds: [], chosen: '' });
       if (out.board) {
-        // A card written before V16 has its one prompt and no list: that one is the first variant.
-        const was = (B.versions || []).length ? B.versions : (B.prompt ? [{ id: _verId(), at: '', prompt: B.prompt, aspect: B.aspect, writer: '', edited: !!B.edited }] : []);
         const v = { id: _verId(), at: new Date().toISOString(), prompt: out.board, aspect: out.aspect, writer: out.writer, edited: false };
-        B.versions = was.concat([v]).slice(-10);
+        B.versions = (B.versions || []).concat([v]).slice(-10);
         Object.assign(B, { cur: v.id, prompt: v.prompt, aspect: v.aspect, edited: false });
         m.card.error = '';
       } else m.card.error = out.error;
@@ -728,7 +724,7 @@ async function _writeFrame(cardId, kick, o) {
       const B = m.card.board;
       if (out.prompt) {
         const v = { id: _verId(), at: new Date().toISOString(), prompt: out.prompt, aspect: B.aspect || '', writer: out.writer, edited: false };
-        B.versions = _seedBoardVers(B).concat([v]).slice(-10);
+        B.versions = (B.versions || []).concat([v]).slice(-10);
         Object.assign(B, { cur: v.id, prompt: v.prompt, edited: false });
         m.card.error = '';
       } else m.card.error = out.error;
@@ -804,7 +800,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const cur = b.cur == null ? null : String(b.cur);
     const bver = b.bver == null ? null : String(b.bver);
     const bcur = b.bcur == null ? null : String(b.bcur);
-    // A first frame's moment (V17: where the part starts; on a V7.6 card within the part).
+    // A first frame's moment (V17): where the part starts.
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
     // (phase V48, кл5) The person's correction of what the agent saw in clip `n`: the next writing reads it as it stands.
     const wEdit = b.watch && typeof b.watch === 'object' && Number.isFinite(+b.watch.n)
@@ -840,7 +836,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
           const v = pickB(bver || B.cur);
           if (v && v.prompt !== board) { Object.assign(v, { prompt: board, edited: true }); if (v.id === B.cur) Object.assign(B, { prompt: board, edited: true }); changed = true; }
         }
-      } else if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
+      }
       if (Array.isArray(x.card.versions) && x.card.versions.length) {
         const pick = (id) => x.card.versions.find(v => v.id === id);
         if (cur != null) {
@@ -860,7 +856,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
             changed = true;
           }
         }
-      } else if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
+      }
       // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
       if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
         const W = x.card.board.kind === 'frame' ? 'picture' : 'storyboard';
@@ -873,22 +869,15 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       if (x.card.board && x.card.board.kind === 'frame' && at != null) {
         const clip = (x.media || []).find(y => y.kind === 'video') || {};
         const B = x.card.board;
-        if (+B.dur > 0) {
-          // (phase V17) The moment IS where the part starts: the part follows it with the length the person chose (`len`),
-          // 3 s at least in the clip.
-          const len = Math.max(3, +B.len || ((+clip.out || 0) - (+clip.in || 0)));
-          const v = Math.round(Math.max(0, Math.min(B.dur - 3, at)) * 100) / 100;
-          if (B.at !== v || +clip.in !== v) {
-            B.at = v;
-            clip.in = v;
-            clip.out = Math.round(Math.min(B.dur, v + len) * 100) / 100;
-            changed = true;
-          }
-        } else {
-          // An older card (V7.6): its moment lies within the part that goes.
-          const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
-          const v = Math.round(Math.max(lo, Math.min(hi, at)) * 100) / 100;
-          if (B.at !== v) { B.at = v; changed = true; }
+        // (phase V17) The moment IS where the part starts: the part follows it with the length the person chose (`len`),
+        // 3 s at least in the clip.
+        const len = Math.max(3, +B.len || ((+clip.out || 0) - (+clip.in || 0)));
+        const v = Math.round(Math.max(0, Math.min(B.dur - 3, at)) * 100) / 100;
+        if (B.at !== v || +clip.in !== v) {
+          B.at = v;
+          clip.in = v;
+          clip.out = Math.round(Math.min(B.dur, v + len) * 100) / 100;
+          changed = true;
         }
       }
       if (!changed) return false;
@@ -946,32 +935,27 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
       res.json({ success: true, card: m.id });
       const clip = mm.media.find(x => x.kind === 'video') || {};
-      _writeFrame(m.id, kick, { text: m.card.text || '', media: mm.media, at: +m.card.board.dur > 0 ? (+clip.in || 0) : (+m.card.board.at || +clip.in || 0) });
+      _writeFrame(m.id, kick, { text: m.card.text || '', media: mm.media, at: +clip.in || 0 });
       return;
     }
     // (phase V16) A plain card written again: another variant of its prompt, from the person's words and its attachments.
-    if (m.card.plain) {
-      const s = _settings(b);
-      if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-      if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control takes its own prompt - send your pictures and the clip from the box' });
-      const mm = _mediaOf(m.media);
-      if (mm.error) return res.status(400).json({ success: false, error: mm.error });
-      const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
-      if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
-      kick = 'w' + crypto.randomBytes(8).toString('hex');
-      CHAT.writing.add(kick);
-      const ok = CHAT.update(m.id, (x) => {
-        if (!x.card || x.card.state === 'writing') return false;
-        Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), error: '' });
-      });
-      if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
-      res.json({ success: true, card: m.id });
-      _writePlain(m.id, kick, { model: s.model, agg: rt.fits[0].agg, text: m.card.text, media: mm.media, params: s.params, max: rt.fits[0].promptMax, before: [] });
-      return;
-    }
-    // An older card of the recipes' builder (the catalog went in phase V91): nothing to write it again from.
-    return res.status(410).json({ success: false, error: 'this card cannot be written again - send the message again' });
+    const s = _settings(b);
+    if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
+    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control takes its own prompt - send your pictures and the clip from the box' });
+    const mm = _mediaOf(m.media);
+    if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+    const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
+    if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+    if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+    kick = 'w' + crypto.randomBytes(8).toString('hex');
+    CHAT.writing.add(kick);
+    const ok = CHAT.update(m.id, (x) => {
+      if (!x.card || x.card.state === 'writing') return false;
+      Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), error: '' });
+    });
+    if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
+    res.json({ success: true, card: m.id });
+    _writePlain(m.id, kick, { model: s.model, agg: rt.fits[0].agg, text: m.card.text, media: mm.media, params: s.params, max: rt.fits[0].promptMax, before: [] });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/rewrite]', err.message);
@@ -1081,10 +1065,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
     };
-    // The attempts the card had - an old card made before attempts were kept counts its clips as the first.
-    const _was = (x) => (Array.isArray(x.card.sends) ? x.card.sends : ((x.genIds || []).length
-      ? [{ at: (x.card.sent && x.card.sent.at) || '', n: (x.card.sent && x.card.sent.n) || x.genIds.length, zh: !!(x.card.sent && x.card.sent.zh),
-           boardId: (x.card.board && x.card.board.chosen) || '', genIds: x.genIds.slice(0, 4) }] : []));
+    // The attempts the card had.
+    const _was = (x) => (Array.isArray(x.card.sends) ? x.card.sends : []);
     const part = String(_was(m).length + 1);
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
@@ -1179,16 +1161,13 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
       const fw = await _filesWrong(vr.fits[0], all.media);
       if (fw) return res.status(400).json({ success: false, error: fw });
     }
-    // The first frame's still: the clip's frame at the moment (cut once, `_stillOf`) - on a card that knows its clip's
-    // length (phase V17) the moment is where the part starts; on an older one (V7.6) it lies within the part. The picture
-    // model gets the still and then every picture of the person, in their numbers.
+    // The first frame's still: the clip's frame at the moment (cut once, `_stillOf`) - the moment is where the part
+    // starts (phase V17). The picture model gets the still and then every picture of the person, in their numbers.
     let refs = pics.map(x => x.path);
     let at = null;
     if (frame) {
       const clip = all.media.find(x => x.kind === 'video');
-      const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
-      at = +m.card.board.dur > 0 ? lo
-        : Math.round(Math.max(lo, Math.min(hi, b.at != null && Number.isFinite(+b.at) ? +b.at : (+m.card.board.at || lo))) * 100) / 100;
+      at = +clip.in || 0;
       let still;
       try { still = await _stillOf(m.id, clip, at); }
       catch (e) { return res.status(400).json({ success: false, error: e.message }); }

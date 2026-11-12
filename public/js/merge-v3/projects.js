@@ -11,10 +11,6 @@
    The list is read again at every press on the picker rather than kept: a project can appear
    without this page doing anything - Home's quick start or the Library's "use" makes one - and
    a cached list would show yesterday's projects until a reload.
-
-   ONE PERSON. The desktop app has one, so every project is theirs (lib/ownership.js answers so) and
-   the picker lists them all - the owner picker, "copy to my profile" and the read-only lock of the
-   server version went in phase C.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -422,11 +418,7 @@ function _kindMenu(anchor) {
 }
 
 // ── Rename ──────────────────────────────────────────────────────────────────
-// Projects could not be renamed, and the new-project prompt used to say so. They can now, and
-// the reason is the library: a project's generations are filed under a category named after it,
-// so a project stuck with a bad name is a shelf stuck with one too.
-//
-// IN PLACE OF THE PICKER rather than beside it. The name is already there; opening a dialog to
+// A project renamed IN PLACE OF THE PICKER rather than beside it. The name is already there; opening a dialog to
 // change a string that is on screen is a trip to another room to move a chair.
 let _editing = false;
 
@@ -481,7 +473,6 @@ function _wireRename() {
     if (_editing) { _saveRename(); return; }
     const key = Store.key();
     if (!key) { _fail('open a project first'); return; }
-    if (!Store.canEdit()) { _fail('this project cannot be changed here'); return; }
     _editing = true;
     // (phase V20) A draft is named the way a new project is: the day, then its name.
     const draft = Store.isDraft();
@@ -558,7 +549,7 @@ function _wireDelete() {
 }
 
 // (phase V49, the owner's (пр12)) "clear": the draft's lanes emptied to a new timeline's, one step to undo (store.js
-// clearDraft); its name, folder, category and chats stay, and so does what it made - on the shelves.
+// clearDraft); its name, folder and chats stay, and so does what it made - on the shelves.
 async function _clear() {
   _note('clearing…');
   try {
@@ -600,13 +591,10 @@ async function _delete(key, files, heads) {
     // Back to nothing open rather than to whatever is left. Deleting a project and finding
     // yourself editing a different one is how the wrong video gets edited.
     const kept = d.files && d.files.kept;
-    // (phase V28.4) What it filed under its name on the shelves is in Uncategorized now.
-    const loose = Object.values(d.released || {}).includes('released');
     // (phase V61) Not `heads`: that name is the parameter ('keep' | 'delete') the address above reads, and a const of the
     // same name in this block made that read throw before the request ("Cannot access 'heads' before initialization").
     const keptHeads = d.files && d.files.heads;
     _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
-      loose ? 'what it filed is in the Library, at the top of its kind' : '',
       keptHeads ? keptHeads + (keptHeads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _fail(e.message); }

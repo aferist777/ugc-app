@@ -8,7 +8,7 @@
 
    The owner's library is only READ (copied with robocopy); everything else happens in the copy:
      - not copied: logs\, backups\, cache\ (but its thumbnails - the friend's processor need not make them again for
-       twenty minutes - and the marks of the one-time start steps it has been through), .env, data\telegram.json and data\tg-inbox.json (the owner's bot);
+       twenty minutes - and its small records, cache\*.json), .env, data\telegram.json and data\tg-inbox.json (the owner's bot);
      - data\settings.json: every key, token and secret gone, the Cloudflare / R2 / Telegram fields too - the friend enters
        their own on Admin -> API keys (the owner (о18));
      - the journal of generations and what the chats said: data\alerts.json, mv3-chat.json, mv3-gens.json,
@@ -167,8 +167,8 @@ async function cleanCopy({ from, to, withProjects = false, allowOpen = false }) 
   robocopy(src, dest, ['/XD', path.join(src, 'cache'), path.join(src, 'logs'), path.join(src, 'backups'), '/XF', '.env', '*.tmp',
     ...GONE_DATA.map((n) => path.join(src, 'data', n))]);
   if (fs.existsSync(path.join(src, 'cache', 'thumbs'))) robocopy(path.join(src, 'cache', 'thumbs'), path.join(dest, 'cache', 'thumbs'));
-  // The marks of the one-time start steps the library has been through (cache\thumbs-refresh.json and the like): without
-  // them a friend's first start would do them again - thumbnails remade for minutes.
+  // The small records the app keeps in cache\ (render-posters.json - the renders' posters already made): without them
+  // a friend's first start would do that work again.
   const marks = [];
   for (const e of fs.existsSync(path.join(src, 'cache')) ? fs.readdirSync(path.join(src, 'cache'), { withFileTypes: true }) : []) {
     if (!e.isFile() || !/\.json$/i.test(e.name)) continue;

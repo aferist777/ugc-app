@@ -18,8 +18,7 @@
 
    MANY TIMELINES, one per project, and one kind of project: an ordered list of lanes - video,
    audio, subtitles, text - made in Merge (`mv3_<stamp>`), a talking head's or a voiceover's
-   (`sv3_<scenariosProjectId>[_n]`) or a highlights project's (`hl_<id>[_n]`). The talking-head
-   editor's six fixed lanes are gone (docs/local-app/PLAN.md, phase 3); lib/timeline-convert.js rewrote its projects at startup.
+   (`sv3_<scenariosProjectId>[_n]`) or a highlights project's (`hl_<id>[_n]`).
 
    THE VERSION IS THE PROJECT'S. It was the file's - one counter, written whole - so a
    write to one project refused every save to another, and each refusal was a merge
@@ -28,20 +27,14 @@
    `version` still ticks on every write, as a cheap "did anything change" for whoever
    asks without naming a project.
 
-   WHO MAY WRITE. Each timeline names its `owner` - the person who created it. Anyone can
-   open anything; only the owner or the admin can change it, and everybody else copies
-   it (POST .../copy) and works on the copy. Timelines that predate ownership carry
-   `owner: null`: shared, and the admin's to edit. The rule lives in lib/ownership.js.
-
    Endpoints:
-     GET    /api/mv3/timelines             -> { success, version, list, owners, me } newest first
-     GET    /api/mv3/timeline?key=…        -> { success, version, key, timeline, owner, canEdit }
+     GET    /api/mv3/timelines             -> { success, version, list, open } newest first
+     GET    /api/mv3/timeline?key=…        -> { success, version, key, timeline }
      GET    /api/mv3/timeline/version?key= -> { success, version }  this project's rev
      PUT    /api/mv3/timeline              { version, key, timeline } -> { success, version }
                                            409 { success:false, version, timeline } on a
                                            stale version, so the caller can reconcile
                                            rather than guess.
-                                           403 when the project is somebody else's.
                                            404 { gone: true } when it is not there any more -
                                            a save never makes a project (phase V49).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -50,7 +43,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
-const OWN = require('../lib/ownership');
 
 const MSTORE = require('../lib/merge-store');
 
@@ -62,9 +54,8 @@ const { BLANK_KIND, emptyBlank: _emptyBlank, sanitizeBlank: _sanitizeBlank } = S
 // The key a page asks for when it has nothing to ask for and the store is empty.
 const LOCAL_KEY = 'local';
 
-// The whole store as one state - { version, updatedAt, timelines, hidden, snapshots, volRule }:
-// frozen overlay arrangements (written only when a render is kept), and which timelines have had
-// their track volumes reset for the master rule. lib/merge-store.js assembles it from the files.
+// The whole store as one state - { version, updatedAt, timelines }; lib/merge-store.js assembles it
+// from the files.
 function _read() {
   return MSTORE.read();
 }
@@ -96,8 +87,7 @@ function _newestKey(timelines) {
 // file-counter days is stale against it - one 409, one merge, and the tab is on the new rule.
 const _revOf = (t) => Number(t && t.rev) || 0;
 
-// Only what changed is written; side data (hidden, snapshots, volRule) a caller leaves out is
-// kept as it was.
+// Only what changed is written.
 function _write(state) {
   MSTORE.write(state);
 }
@@ -107,7 +97,7 @@ function _write(state) {
 // there (phase V49: made here when the list is read without one).
 router.get('/mv3/timelines', (req, res) => {
   try {
-    _ensureDraft(req);
+    _ensureDraft();
     const s = _read();
     const own = _folderFiles(Object.keys(s.timelines));
     // (phase V33.1) A highlights project is ONE line - its own timeline; its fragments' timelines open from its tiles.
@@ -124,15 +114,12 @@ router.get('/mv3/timelines', (req, res) => {
       // (phase V62, (во35)) THE voiceover draft: "draft · voiceover", under Merge's draft.
       const vod = vo && !!pr.draft;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
-               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t),
+               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft,
                ...(HLS.ofKey(key) ? { highlights: true } : {}), ...(vo ? { voiceover: true } : {}), ...(vod ? { vodraft: true } : {}) };
     // (phase V20) The draft first, then (phase V62) the voiceover draft, then newest first.
     }).sort((a, b) => (b.draft - a.draft) || ((b.vodraft ? 1 : 0) - (a.vodraft ? 1 : 0))
       || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    // Everyone sees every owner. The picker groups by them; which entries the caller may
-    // change is answered per project, from its `owner` against `me`.
-    res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines),
-               owners: OWN.ownersOf(Object.values(s.timelines), req.user), me: OWN.meView(req.user) });
+    res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -148,9 +135,6 @@ router.get('/mv3/timeline', (req, res) => {
       key = _newestKey(s.timelines) || LOCAL_KEY;
       t = s.timelines[key];
     }
-    // One still in the talking-head shape (nothing should be: the upgrade rewrites them at start)
-    // is shown rewritten rather than handed to an editor that cannot read it; its next save stores it.
-    if (t && !Array.isArray(t.tracks)) t = require('../lib/timeline-convert').convert({ key, ...t }, { root: require('../lib/config').ROOT_DIR }) || t;
     // The proxies this project's preview will ask for, started now - before the page has even
     // drawn its lanes - one ffmpeg at a time, so the first play is not the first transcode.
     // (phase V84, (эф11)) `peek` - read for another fragment's effects, not opened: nothing warmed.
@@ -159,7 +143,6 @@ router.get('/mv3/timeline', (req, res) => {
       // `found`: false when there is no timeline at all - the empty shape under LOCAL_KEY; the page opens the draft instead.
       success: true, version: _revOf(t), key, found: !!t,
       title: t ? t.title : 'Untitled', draft: !!(t && t.draft),
-      ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
       timeline: t ? { kind: BLANK_KIND, format: t.format || '9:16', tracks: t.tracks } : _emptyBlank(),
       // (phase V28.4) The clips whose file is not on the disk - deleted from the library, most often: red on the
@@ -174,17 +157,16 @@ router.get('/mv3/timeline', (req, res) => {
 // timeline and the chats work from the first press, with nothing to name first. There is ONE, and always one: made when
 // Merge opens with nothing to open (POST /mv3/timeline/new {draft}), when the list is read without one (GET
 // /mv3/timelines) and the moment the draft is saved under a name (PATCH .../title) - first in the list every time. What
-// its chats MAKE goes into "Generated" (phase V28.4) and stays there whatever becomes of it; what is BROUGHT INTO them is
-// filed in the category of its name, as any project's. Saved, it is renamed (the categories and the folder follow), the
-// mark goes and a new empty draft takes its place. Nothing is asked about it and nothing deletes it (V49): it stays as it
-// is - its lanes, its category, the drafts' conversation; "clear" on the picker empties its lanes on the page (one step to
-// undo, public/js/merge-v3/store.js clearDraft), and DELETE refuses it.
+// its chats MAKE goes into "Generated" (phase V28.4) and stays there whatever becomes of it. Saved, it is renamed (its
+// folder follows), the mark goes and a new empty draft takes its place. Nothing is asked about it and nothing deletes it
+// (V49): it stays as it is - its lanes, the drafts' conversation; "clear" on the picker empties its lanes on the page (one
+// step to undo, public/js/merge-v3/store.js clearDraft), and DELETE refuses it.
 const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines[k] && timelines[k].draft) || '';
 
 // The draft there is, or a new empty one written at once -> { key, title, version, made }. `avoid`: a name it must not
-// take - the draft just saved under a name had it, and its folder and category have just moved away from it (an old
-// address of that folder is redirected to the new one, lib/moves.js, so a new folder must not take it back).
-function _ensureDraft(req, avoid) {
+// take - the draft just saved under a name had it, and its folder has just moved away from it (an old address of that
+// folder is redirected to the new one, lib/moves.js, so a new folder must not take it back).
+function _ensureDraft(avoid) {
   // (phase V76.3) The draft there is found in the store's index (MSTORE.draftKey) - every timeline is read only to make one.
   const there = MSTORE.draftKey();
   const had = there ? MSTORE.one(there) : null;
@@ -202,10 +184,10 @@ function _ensureDraft(req, avoid) {
   let key = 'mv3_' + Date.now();
   for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
   const now = d.toISOString();
-  cur.timelines[key] = { title, createdAt: now, updatedAt: now, adv: null, owner: OWN.uidOf(req), rev: 1, kind: BLANK_KIND,
+  cur.timelines[key] = { title, createdAt: now, updatedAt: now, adv: null, rev: 1, kind: BLANK_KIND,
     format: '9:16', tracks: _emptyBlank().tracks, draft: true };
   const version = cur.version + 1;
-  _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+  _write({ version, updatedAt: now, timelines: cur.timelines });
   return { key, title, version, made: true };
 }
 
@@ -247,9 +229,6 @@ router.put('/mv3/timeline', (req, res) => {
     // and wrote the whole store (299 timelines in the owner's library, ~0.2 s, the server answering nothing else meanwhile).
     const prev = MSTORE.one(key);
     if (!prev) return res.status(404).json({ success: false, gone: true, key, error: 'this project is not there any more - the edit was not saved' });
-    // Somebody else's project: refused before the version is even looked at. The page shows
-    // it read-only and should never send this; this is for the page that did not know.
-    if (!OWN.canEdit(prev, req.user)) return OWN.refuse(res, prev);
     // The refusal that makes this store different, checked against THIS project's rev - see
     // the top of the file. The current state goes back with it, so the caller can reconcile
     // in one round trip instead of two.
@@ -274,9 +253,7 @@ router.put('/mv3/timeline', (req, res) => {
       updatedAt: now,
       adv: prev.adv || null,
       from: prev.from || null,
-      // Whose it is, set once at creation and carried across every save after; and how many
-      // saves there have been, which is the number the next one must quote.
-      owner: prev.owner || null,
+      // How many saves there have been, which is the number the next one must quote.
       rev: _revOf(prev) + 1,
       kind: BLANK_KIND,
       format: clean.format,
@@ -310,8 +287,6 @@ router.put('/mv3/timeline', (req, res) => {
 router.post('/mv3/merge', (req, res) => {
   try {
     const b = req.body || {};
-    const t = _read().timelines[String(b.key || '')];
-    if (t && !OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
     const r = require('../lib/merge-clips').start(b);
     if (r.error) return res.status(r.code || 400).json({ success: false, error: r.error });
     res.json({ success: true, job: r.job });
@@ -335,10 +310,9 @@ router.post('/mv3/adv', (req, res) => {
     const cur = _read();
     const t = cur.timelines[key];
     if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
     t.adv = (b.adv && typeof b.adv === 'object') ? b.adv : null;
     t.updatedAt = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: t.updatedAt, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    _write({ version: cur.version + 1, updatedAt: t.updatedAt, timelines: cur.timelines });
     res.json({ success: true, version: _revOf(t) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -368,7 +342,7 @@ router.post('/mv3/timeline/new', (req, res) => {
     // (phase V20) THE draft: the one there is, or a new one named for the moment. Before the full read below: the draft
     // there is is found in the store's index (V76.3), and every chat's first open asks this.
     if (b.draft) {
-      const dr = _ensureDraft(req);
+      const dr = _ensureDraft();
       return res.json({ success: true, key: dr.key, version: dr.version, title: dr.title, draft: true });
     }
     const cur = _read();
@@ -389,8 +363,8 @@ router.post('/mv3/timeline/new', (req, res) => {
       title = String(b.title || '').trim();
       if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
       if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
-      // Two projects with one name are two shelves with one label in the library. The rename
-      // route refuses it; creation has to as well, or the rule only holds half the time.
+      // Two projects with one name cannot be told apart in the picker. The rename route refuses
+      // it; creation has to as well, or the rule only holds half the time.
       if (_titleTaken(cur.timelines, title, null)) {
         return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
       }
@@ -407,20 +381,19 @@ router.post('/mv3/timeline/new', (req, res) => {
       createdAt: now,
       updatedAt: now,
       adv: null,
-      owner: OWN.uidOf(req),
       rev: 1,
       kind: BLANK_KIND,
       format: b.format === '16:9' ? '16:9' : '9:16',
       tracks: _emptyBlank().tracks,
     };
     const version = cur.version + 1;
-    _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    _write({ version, updatedAt: now, timelines: cur.timelines });
     res.json({ success: true, key, version, title, draft: false });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Case-insensitive, because two projects called "Rome" and "rome" are two projects nobody can
-// tell apart in a picker - and they would share a library category exactly.
+// tell apart in a picker.
 function _titleTaken(timelines, title, exceptKey) {
   const want = String(title || '').trim().toLowerCase();
   return Object.keys(timelines || {}).some(k =>
@@ -430,13 +403,8 @@ function _titleTaken(timelines, title, exceptKey) {
 /**
  * PATCH /api/mv3/timeline/:key/title   { title } -> { success, title }
  *
- * Projects could not be renamed, and the picker said so in its own error message. They can now,
- * and the reason it is worth the route is the library: a project's generations are filed under a
- * category named after it, so a project stuck with a bad name is a shelf stuck with one too.
- *
- * THE CATEGORY MOVES WITH IT. Renaming only the project would leave the pictures filed under a
- * name that no longer exists anywhere - which is worse than not renaming at all, because the
- * shelf would still look right until somebody went looking for the project it names.
+ * The project renamed; its folder follows (lib/merge-store.js). A folder of the Library that has the
+ * project's name is the person's and is left as it is.
  */
 router.patch('/mv3/timeline/:key/title', (req, res) => {
   try {
@@ -448,7 +416,6 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     const cur = _read();
     const rec = cur.timelines[key];
     if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
     // (phase V20) A draft named is a draft saved - even under the name it had.
     if (String(rec.title || '') === title && !rec.draft) return res.json({ success: true, title, version: _revOf(rec) });
     if (_titleTaken(cur.timelines, title, key)) {
@@ -460,33 +427,17 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     rec.title = title;
     delete rec.draft;
     const now = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-
-    // Found by the name the filing used, and shortened by the same rule - see catLabelFor.
-    // A failure here is not a failure to rename: the project has the name asked for, and a
-    // category left behind is a tidying problem rather than lost work.
-    // The project's category on every shelf its chats file into - Images (pictures), B-roll (clips) and Uploads
-    // (clips brought in) - each on its own, merged into a category of the new name where the shelf has one
-    // (lib/project-cats.js, review V2r).
-    let moved = false;
-    try {
-      const GENS = require('../lib/mv3-gens');
-      const oldLabel = GENS.catLabelFor(was);
-      if (oldLabel !== GENS.LOOSE_CAT) {
-        const out = require('../lib/project-cats').follow(oldLabel, GENS.catLabelFor(title));
-        moved = Object.values(out).some(v => v === 'renamed' || v === 'merged');
-      }
-    } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines });
 
     // (phase V21, the owner: answer A) A draft saved takes a copy of the drafts' conversation as its own, and talks in its
     // own from then on.
     let copied = 0;
     if (wasDraft) { try { copied = require('../lib/mv3-chat').copyDraftTo(key); } catch (e) { console.warn('[mv3] draft: its conversation was not copied -', e.message); } }
     // (phase V49, the owner's (пр12)) A draft saved leaves a new empty draft in its place, first in the list - written after
-    // the rename and its category's move, and under another name than the one the saved draft had.
+    // the rename, and under another name than the one the saved draft had.
     let draft = '';
-    if (wasDraft) { try { draft = _ensureDraft(req, was).key; } catch (e) { console.warn('[mv3] draft: a new one was not made -', e.message); } }
-    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved, copied, ...(draft ? { draft } : {}) });
+    if (wasDraft) { try { draft = _ensureDraft(was).key; } catch (e) { console.warn('[mv3] draft: a new one was not made -', e.message); } }
+    res.json({ success: true, key, title, was, version: _revOf(rec), copied, ...(draft ? { draft } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -543,9 +494,6 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     const key = String(req.params.key || '');
     const cur = _read();
     if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    // Deleting is the one write nobody but the owner should be able to undo their way out of,
-    // so it is held to the same line as the rest - and the admin's on anything.
-    if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
     // (phase V49) THE DRAFT is not deleted: "clear" empties its lanes, "save" names it - there is always one.
     if (cur.timelines[key].draft) return res.status(409).json({ success: false, error: 'the draft is not deleted - "clear" empties its lanes, "save" gives it a name' });
     // (phase V33.1) A HIGHLIGHTS PROJECT is deleted whole by its own timeline: its work stopped, its folder - the fragments'
@@ -559,29 +507,16 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const row = rec && rec.work && rec.work.alertId;
       if (row) require('../lib/alerts').cancel(row, 'stopped - the project was deleted');
       const talks = _hlChatKeys(hk.id, cur.timelines);
-      // (phase V49, point 2) What was BROUGHT INTO its chats is filed under the project's name - its own timeline's title
-      // (lib/mv3-gens.js catLabelFor): read before the timelines go, and let go of after, as any project's (below) - not
-      // when a timeline of another project keeps the same name, never a required category (lib/project-cats.js).
-      const GENS = require('../lib/mv3-gens');
-      const label = GENS.catLabelFor(cur.timelines[key].title);
-      const shared = Object.keys(cur.timelines).some(k => cur.timelines[k] && (HLS.ofKey(k) || {}).id !== hk.id
-        && GENS.catLabelFor(cur.timelines[k].title).toLowerCase() === label.toLowerCase());
       const { moved } = HLS.remove(hk.id);
       // (phase V49, point 2) Its chats' conversations and the finished records of what they made go too, as any project's
       // (below) - under every key they may have talked: its own and each fragment's.
       _forgetChats(talks);
-      let released = {};
-      if (!shared) {
-        try { released = require('../lib/project-cats').release(label); }
-        catch (e) { console.warn('[mv3] delete: the highlights project\'s category was not let go of -', e.message); }
-      }
-      return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 }, released });
+      return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 } });
     }
     // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
     // clips - goes with its last timeline (PROJECTS.remove: what another project, timeline or shelf still points
-    // at is moved to media/work first). The Library's categories named after the project are not in that folder: what
-    // is in them goes to Uncategorized (phase V28.4, below). Refused while something is still being made for the project: a
-    // clip landing in a folder that is gone would be lost, and it was paid for.
+    // at is moved to media/work first). Refused while something is still being made for the project: a clip landing in a
+    // folder that is gone would be lost, and it was paid for.
     let proj = null;
     if (String(req.query.files || '') === '1') {
       const at = MSTORE.locate(key);
@@ -605,17 +540,9 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     // deleted; what was made stays on the shelves. Asked before the timeline goes: a draft's is the drafts' conversation.
     const CHAT = require('../lib/mv3-chat');
     const talk = CHAT.threadOf(key) === CHAT.DRAFT ? null : key;
-    // (phase V28.4, the owner 2026-10-12: "раскидывать медиа удаленного проекта по типу медиа в категории uncategorized")
-    // What was brought into its chats and filed under its name on the shelves goes to Uncategorized of its kind, the
-    // category with it (what its chats MADE is in "Generated" and stays). Not when another
-    // project keeps the same name (the category is that one's too), and never a required category (lib/project-cats.js).
-    const GENS = require('../lib/mv3-gens');
-    const label = GENS.catLabelFor(cur.timelines[key].title);
-    const shared = Object.keys(cur.timelines).some(k => k !== key && cur.timelines[k]
-      && GENS.catLabelFor(cur.timelines[k].title).toLowerCase() === label.toLowerCase());
     delete cur.timelines[key];
     const now = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines });
     if (talk) { try { CHAT.forget(talk); } catch (e) { console.warn('[mv3] the chats of a deleted project were not cleared -', e.message); } }
     let files = null;
     if (proj) {
@@ -628,12 +555,7 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const { moved } = require('../lib/projects-store').remove(proj.id);
       files = { removed: true, kept: moved, heads };
     }
-    let released = {};
-    if (!shared) {
-      try { released = require('../lib/project-cats').release(label); }
-      catch (e) { console.warn('[mv3] delete: its category was not let go of -', e.message); }
-    }
-    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files, released });
+    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

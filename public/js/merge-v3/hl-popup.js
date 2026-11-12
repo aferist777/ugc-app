@@ -252,9 +252,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   M.appendChild(musicSec);
   const music = moodPicker(musicSec, {
     onChange: (moods) => { st.moods = moods; keep(); },
-    // The ticked tracks of before as their moods, once (хп49) - then what the kind chosen remembers.
-    onReady: (moodOf) => {
-      KIND.settleOldMusic(moodOf);
+    // Once Music → highlights is read: what the kind chosen remembers.
+    onReady: () => {
       if (st.kind) { music.set(st.moods.length ? st.moods : KIND.settingsOf(st.kind, lengthsOf(st.kind), counts).moods); st.moods = music.get(); }
     },
   });
@@ -701,7 +700,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   // A project stopped before its video was in keeps what it asked: that kind, its length, count and moods. Else the kind
   // chosen last - none at the very first opening (хп35), (хп48), (хп49).
   const ask = rec && rec.ask ? rec.ask : null;
-  const askKind = ask && kinds[ask.kind] ? ask.kind : (ask && ask.kind === 'facts' && kinds.documentary ? 'documentary' : '');
+  const askKind = ask && kinds[ask.kind] ? ask.kind : '';
   const k0 = askKind || (kinds[KIND.lastKind()] && !kinds[KIND.lastKind()].inDev ? KIND.lastKind() : '');
   if (k0) {
     st.kind = k0;

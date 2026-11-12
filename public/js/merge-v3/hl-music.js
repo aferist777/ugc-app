@@ -21,8 +21,7 @@ import { showError } from '../notice.js';
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 /**
- * The mood buttons in `host`. `onChange(moods)` on a press; `onReady(moodOf)` once Music -> highlights is read - `moodOf(trackId)`
- * gives a track's mood (YOURS for the root, '' for none). Returns { set(moods), get(), have(id), byVideo(on), recommend(ids) }.
+ * The mood buttons in `host`. `onChange(moods)` on a press; `onReady()` once Music -> highlights is read. Returns { set(moods), get(), have(id), byVideo(on), recommend(ids) }.
  */
 export function moodPicker(host, { onChange, onReady } = {}) {
   let data = null;          // { moods: [{ id, label, about, tracks }], root: [tracks] }
@@ -95,12 +94,7 @@ export function moodPicker(host, { onChange, onReady } = {}) {
       err = e.message || SAID;
       showError(SAID, err === SAID ? {} : { detail: err });
     }
-    if (data && onReady) {
-      const of = new Map();
-      for (const m of data.moods) for (const t of (m.tracks || [])) of.set(String(t.id), m.id);
-      for (const t of data.root) of.set(String(t.id), YOURS);
-      onReady((id) => of.get(String(id)) || '');
-    }
+    if (data && onReady) onReady();
     paint();
   }
   read();

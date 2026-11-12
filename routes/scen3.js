@@ -26,8 +26,6 @@ const sharp   = require('sharp');
 const IMGIN   = require('../lib/image-in');
 
 const router = express.Router();
-// Who may change a project - the same rule Merge timelines answer to.
-const OWN = require('../lib/ownership');
 
 // The engine a new look's record names when its caller named none (_saveObraz).
 const DEFAULT_ENGINE = 'nano-banana-2';
@@ -132,9 +130,6 @@ function _normOrigin(o) {
     tone:       String(s.tone       || ''),
     provider:   String(s.provider   || ''),
     model:      String(s.model      || ''),
-    // (phase V38) A scenario of the shelf it was rewritten from, in a narrator's voice.
-    fromId:     String(s.fromId     || ''),
-    fromTitle:  String(s.fromTitle  || ''),
     at:         String(s.at || ''),
   };
   // An object of empty strings is not provenance.
@@ -490,44 +485,6 @@ router.getScenario = function getScenario(id) {
   const s = _load().find(x => String(x.id) === String(id));
   return s ? _full(s) : null;
 };
-
-// THE SUGGESTION LISTS REBUILT FROM WHAT SCENARIOS USE, once per library (phase F7, the owner
-// 2026-09-30: "delete all the junk you find"). Typed-and-abandoned values ("fesdfsd", "dsfsdfds")
-// go; values scenarios carry but the lists lacked ("history", "social") come in. The old file is
-// kept in backups/, and a mark in cache/ stops it running twice.
-function _rebuildOptionsOnce() {
-  const CFGX = require('../lib/config');
-  const mark = require('path').join(CFGX.CACHE_DIR, 'scen3-options-rebuilt.json');
-  if (fs.existsSync(mark)) return;
-  // Only a store that could be READ drives this one-time rewrite: an unreadable file is not "no
-  // scenarios", and rebuilding from it would empty the lists for good.
-  const list = _read(FILE);
-  if (!Array.isArray(list)) return;
-  const was = _read(OPT_FILE);
-  const used = { verticals: [], products: [], roles: [] };
-  for (const s of list) {
-    _pushUniq(used.verticals, s.vertical);
-    _pushUniq(used.products, s.product);
-    (s.roles || []).forEach(r => _pushUniq(used.roles, r && r.name));
-  }
-  const gone = [];
-  if (was && typeof was === 'object') {
-    for (const k of ['verticals', 'products', 'roles']) {
-      for (const v of (Array.isArray(was[k]) ? was[k] : [])) {
-        if (!used[k].some(x => String(x).toLowerCase() === String(v).trim().toLowerCase())) gone.push(k + ': ' + v);
-      }
-    }
-    const day = new Date().toISOString().slice(0, 10);
-    const dir = require('path').join(CFGX.BACKUPS_DIR, day + ' options');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.copyFileSync(OPT_FILE, require('path').join(dir, 'scen3-options.json'));
-  }
-  _saveOptions(used);
-  fs.mkdirSync(CFGX.CACHE_DIR, { recursive: true });
-  writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), removed: gone }, null, 2));
-  if (gone.length) console.log('[scen3] suggestion lists rebuilt from the scenarios; removed: ' + gone.join(', '));
-}
-try { _rebuildOptionsOnce(); } catch (e) { console.warn('[scen3] could not rebuild the suggestion lists:', e.message); }
 
 // A source about to be deleted leaves its CURRENT name in the scenarios written from it (phase F2):
 // the name is read live while the source exists, and once it is gone this copy is all there is.
@@ -1351,13 +1308,11 @@ async function _takeUpload(dataUrl) {
 async function _reuseUpload(token) {
   const file = _stashed(token);
   if (!file) throw Object.assign(new Error('the photo is no longer here - add it again'), { status: 400, gone: true });
-  let buf = fs.readFileSync(file);
+  const buf = fs.readFileSync(file);
   let url = _refUrls.get(token);
   if (!url) {
-    // A photo stashed before phase V24 may be in a format the aggregators refuse: made sendable now.
-    const pic = await IMGIN.sendable(buf);
-    buf = pic.buf;
-    url = await H.uploadToPublicHost(buf, { ext: pic.ext });
+    // Stashed by _takeUpload, so already in a format the aggregators take.
+    url = await H.uploadToPublicHost(buf, { ext: path.extname(file).slice(1) });
     _refUrls.set(token, url);
   }
   return { token, url, buf };
@@ -1404,17 +1359,15 @@ async function _fileRef(token, kind, name) {
 // `choices` present - even empty - says the page can show a choice of places. Absent, the agent
 // picks a place itself.
 //
-// `photoPath`: a picture already in the library - on the Images shelf, say - read as a PHOTO, the place taken out of it
-// (sent now only by "try again" of a row of the old Library chat, gone in V91); `imagePath` is an environment to CHANGE.
+// `imagePath` is an environment to CHANGE.
 async function _submitEnv(b) {
   let token = '';
   let fresh = false;                             // the photo came in THIS call
   const note = String(b.prompt || '').trim();
-  const photoPath = String(b.photoPath || '').trim();
-  const saved = photoPath ? '' : String(b.imagePath || '').trim();
+  const saved = String(b.imagePath || '').trim();
   const canChoose = Array.isArray(b.choices);
   const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
-  if (!note && !b.imageBase64 && !b.refToken && !saved && !photoPath) {
+  if (!note && !b.imageBase64 && !b.refToken && !saved) {
     throw Object.assign(new Error('describe a place or add a photo'), { status: 400 });
   }
   if (saved && !note && !b.imageBase64 && !b.refToken) {
@@ -1422,8 +1375,8 @@ async function _submitEnv(b) {
   }
 
   try {
-    // The picture, and where it came from: a photo brought now, the same photo again, a picture of
-    // the library's read as a photo, or an environment already on the shelf.
+    // The picture, and where it came from: a photo brought now, the same photo again, or an environment
+    // already on the shelf.
     let url = '';
     let source = '';
     let shape = null;
@@ -1434,12 +1387,6 @@ async function _submitEnv(b) {
       url = up.url;
       source = 'photo';
       const s = await _sizeOf(up.buf);
-      shape = _envShape(s.w, s.h);
-    } else if (photoPath) {
-      url = await _hostLocal(photoPath, { verify: true });
-      source = 'photo';
-      const hit = _resolveMedia(photoPath);
-      const s = hit ? await _sizeOf(hit.abs) : { w: 0, h: 0 };
       shape = _envShape(s.w, s.h);
     } else if (saved) {
       url = await _hostLocal(saved, { verify: true });
@@ -1467,9 +1414,9 @@ async function _submitEnv(b) {
     if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
       + (shape && shape.extend && mode !== 'picked' ? ` extend=${shape.extend}` : '') + (choices.length ? ` picked=${choices.length}` : ''));
-    // A picture that came by its path is where the place was made from (a photo as bytes is filed
+    // An environment changed by its path is where the place was made from (a photo as bytes is filed
     // in Images when the place lands, _fileRef, and says so then).
-    const from = photoPath || saved;
+    const from = saved;
     return {
       taskId, mode, prompt, description: plan.description, refToken: token,
       engine: IMG_ENGINE,
@@ -1649,7 +1596,7 @@ function _castMade(projectId, look) {
 // A character's name as the Characters shelf has it now.
 function _charNameOf(id) {
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const arr = Array.isArray(chars) ? chars : [];
   const ch = arr.find(c => String(c.id) === String(id || ''));
   return ch ? String(ch.name || '') : '';
 }
@@ -2097,7 +2044,6 @@ async function _tagRoute(req, res) {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     // A line TAKEN OFF the script (phase Z) is tagged with the rest, and deliberately: tags belong
     // to the WORDS, not to the cut, so a line put back comes back already marked and needs no
@@ -2198,7 +2144,7 @@ const EL_TTS_BASE = 'https://api.elevenlabs.io/v1/text-to-speech';
 
 const _elKey = () => {
   const s = _read(path.join(DATA_DIR, 'settings.json')) || {};
-  return String(s.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY || '').trim();
+  return String(s.elevenLabsApiKey || '').trim();
 };
 
 // Duration straight out of ffmpeg's own header dump — no ffprobe dependency. The clip length
@@ -2494,7 +2440,6 @@ async function _speakRoute(req, res) {
     if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const ctx = _readCtx(proj);
     if (!ctx.cast.has) return res.status(400).json({ success: false, error: ctx.cast.reason });
@@ -2557,7 +2502,6 @@ router.post('/scen3/voice/speak-all', (req, res) => {
     if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const now = _reads.get(id);
     if (now && now.running) return res.json({ success: true, queued: 0, already: true, state: now });
 
@@ -2605,7 +2549,6 @@ async function _speedRoute(req, res) {
     if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const hasLine = b.line !== undefined && b.line !== null;
     const li = parseInt(b.line, 10);
     if (hasLine && !(li >= 0 && li < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
@@ -2783,13 +2726,13 @@ function _normCasting(c) {
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 const SHELF_READ = ['audio', 'cuts', 'merge'];                              // a line's, kept by the character
 const SHELF_LOOK = ['video', 'pick', 'chosen', 'sd', 'shot', 'frameId'];    // a line's, kept by the look
-const SHELF_MIX = ['variants', 'order', 'approved', 'banned', 'activeId'];  // the set's, kept by the look
+const SHELF_MIX = ['variants', 'order', 'banned'];                         // the set's, kept by the look
 // What a line holds when that part of it is put aside - a missing key is the line's own default (_normLine).
 const SHELF_EMPTY = {
   audio: () => ({ plain: null, tagged: null }), video: () => ({ plain: [], tagged: [] }),
   pick: () => ({ plain: '', tagged: '' }), chosen: () => ({ plain: '', tagged: '' }), shot: () => null, frameId: () => '',
 };
-const SHELF_MIX_EMPTY = { variants: () => [], order: () => [], approved: () => [], banned: () => [], activeId: () => '' };
+const SHELF_MIX_EMPTY = { variants: () => [], order: () => [], banned: () => [] };
 
 // A look cast, as `workOf` and `cast0` keep it - null without a character.
 function _normLook(c) {
@@ -2924,29 +2867,16 @@ function _shelfSplice(p, at) {
 // The project's frames: every frame made for it, the order they were dragged into,
 // the banned ones and the format they are drawn in. Kept on the project, so closing
 // the app and coming back restores exactly what was there.
-const MIX_AGGS      = ['kie', 'replicate'];
-const MIX_MODELS    = ['nano-banana-2', 'nano-banana-2-lite'];
-const MIX_FORMATS   = ['9:16', '2:3', '3:4', '1:1', '16:9'];
-const MIX_QUALITIES = ['1K', '2K', '4K'];
-const MIX_MODES     = ['same', 'cycle', 'random', 'manual'];
+const MIX_FORMATS = ['9:16', '2:3', '3:4', '1:1', '16:9'];
 
 function _normMix(m) {
   const s   = (m && typeof m === 'object') ? m : {};
   const set = (s.settings && typeof s.settings === 'object') ? s.settings : {};
-  const model = MIX_MODELS.includes(set.model) ? set.model : 'nano-banana-2';
-  const q     = MIX_QUALITIES.includes(set.quality) ? set.quality : '2K';
   return {
     settings: {
-      // kie.ai is the default aggregator; projects saved before it existed get it too
-      aggregator: MIX_AGGS.includes(set.aggregator) ? set.aggregator : 'kie',
-      model,
-      format:  MIX_FORMATS.includes(set.format) ? set.format : '9:16',
-      // The user's CHOICE is kept as-is. A model that cannot deliver it (lite only
-      // renders 1K) is clamped where the value is used, not here — otherwise a
-      // glance at lite would silently downgrade a 2K/4K preference for good.
-      quality: q,
+      format: MIX_FORMATS.includes(set.format) ? set.format : '9:16',
     },
-    // every frame ever generated here; approving or banning only tags it
+    // every frame ever generated here; banning one only tags it (`banned`)
     variants: Array.isArray(s.variants) ? s.variants.map(v => ({
       id:      String((v && v.id) || ''),
       path:    String((v && v.path) || ''),
@@ -2984,11 +2914,7 @@ function _normMix(m) {
     order: Array.isArray(s.order) ? s.order.map(String).filter(Boolean) : [],
     // A frame generation's last error; nothing sets it now, a cast only clears it.
     lastError: String(s.lastError || ''),
-    approved:     Array.isArray(s.approved) ? s.approved.map(String) : [],
-    banned:       Array.isArray(s.banned)   ? s.banned.map(String)   : [],
-    activeId:     s.activeId == null ? '' : String(s.activeId),   // '' = the two sources are active
-    note:         String(s.note || ''),
-    distribution: MIX_MODES.includes(s.distribution) ? s.distribution : 'same',
+    banned: Array.isArray(s.banned) ? s.banned.map(String) : [],
   };
 }
 
@@ -2996,9 +2922,6 @@ function _normProject(p, now) {
   const src = p || {};
   return {
     id:         String(src.id != null ? src.id : Date.now()),
-    // Whose it is - see lib/ownership.js. Null on anything made before there were people to
-    // own things: shared, read by everyone, the admin's to edit.
-    owner:      src.owner ? String(src.owner) : null,
     casting:    _normCasting(src.casting),
     // (phase V67) Whose work the fields hold, the first look cast, and the work of the others put aside (_applyCast).
     ...(_normLook(src.workOf) ? { workOf: _normLook(src.workOf) } : {}),
@@ -3076,16 +2999,12 @@ function _normTake(t) {
 // different one. Nothing is silently replaced: these are paid seconds of video, and
 // judging two of them side by side is the whole point of keeping both.
 const CLIPS_PER_FRAGMENT = 10;
-function _normClips(v, frameId, pickId) {
+function _normClips(v, pickId) {
   const arr = Array.isArray(v) ? v : (v ? [v] : []);
   const byId = new Map();
   arr.forEach(t => {
     const c = _normTake(t);
     if (!c) return;
-    // A clip made before the frame was recorded belongs to the frame its line points at.
-    // That is measured, not assumed: comparing every existing poster against each frame
-    // in the pool matched it to its own line's current frame by a factor of four.
-    if (!c.fromFrame) c.fromFrame = String(frameId || '');
     byId.set(c.id, c);          // an id twice is a double-write, not a second variant
   });
   const all = [...byId.values()];
@@ -3130,8 +3049,8 @@ function _normLine(l) {
     // clip for each frame it has been tried on, and paying twice to see one again would
     // be absurd.
     video:   {
-      plain:  _normClips((s.video || {}).plain,  s.frameId, (s.pick || {}).plain),
-      tagged: _normClips((s.video || {}).tagged, s.frameId, (s.pick || {}).tagged),
+      plain:  _normClips((s.video || {}).plain,  (s.pick || {}).plain),
+      tagged: _normClips((s.video || {}).tagged, (s.pick || {}).tagged),
     },
     // Which variant this fragment is SET to, per take. An id and not an index: variants
     // come and go, and an index would quietly come to mean a different clip.
@@ -3330,7 +3249,6 @@ const _projSummary = p => ({
   casting: _normCasting(p.casting),
   lineCount: (p.lines || []).length,
   createdAt: p.createdAt, updatedAt: p.updatedAt,
-  ...OWN.ownerView(p),
 });
 // The mix workspace is heavy (every generated frame), so it rides on the full
 // record only — the dropdown list stays light.
@@ -3356,7 +3274,7 @@ function _castVoiceOf(p) {
   const own = pick ? { has: true, id: pick.voiceId, character: '', index: 1, count: 1, own: true, name: pick.name } : null;
   if (!cast.characterId && !cast.characterName) return own || { has: false, reason: 'no character cast yet' };
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const arr = Array.isArray(chars) ? chars : [];
   const ch = arr.find(c => String(c.id) === cast.characterId)
           || arr.find(c => String(c.name) === cast.characterName);
   if (!ch) return own || { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
@@ -3433,7 +3351,6 @@ router.post('/scen3/projects', async (req, res) => {
     if (b.id != null) {
       const i = list.findIndex(x => String(x.id) === String(b.id));
       if (i < 0) return res.status(404).json({ success: false, error: 'not found' });
-      if (!OWN.canEdit(list[i], req.user)) return OWN.refuse(res, list[i]);
       // CASTING IS MERGED, not replaced. The server can write a finished look into it while a page
       // is open (lib/gen-jobs.js), and that page's next save - which carries its own older copy of
       // the casting - must not put the old one back. Every caller sends the keys it changed.
@@ -3447,10 +3364,10 @@ router.post('/scen3/projects', async (req, res) => {
       // and the reads write the rest on the server.
       const voice = (b.voice && typeof b.voice === 'object')
         ? { ...(list[i].voice || {}), ...b.voice } : undefined;
-      // The owner is pinned like the id: a save cannot hand a project to somebody else.
+      // The id and the moment it was made are pinned: a save cannot change them.
       const merged = _normProject({
         ...list[i], ...b, ...(casting ? { casting } : {}), ...(video ? { video } : {}), ...(voice ? { voice } : {}),
-        id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
+        id: list[i].id, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;
       const was = _normVideo(list[i].video);
@@ -3476,7 +3393,7 @@ router.post('/scen3/projects', async (req, res) => {
       const title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120)
         || texts[0].split(' ').slice(0, 6).join(' ').slice(0, 120) || 'talking head';
       const rec = _normProject({
-        id: _newId(list), owner: OWN.uidOf(req), name: `${now.slice(0, 10)} — ${title}`,
+        id: _newId(list), name: `${now.slice(0, 10)} — ${title}`,
         scenarioId: '', gender: '', title, lines: texts.map(text => ({ text })),
         // Its choices start at none and are made by the person (phase V24, _normVideo).
         video: { v: 2 }, createdAt: now, updatedAt: now,
@@ -3496,7 +3413,6 @@ router.post('/scen3/projects', async (req, res) => {
     const day = now.slice(0, 10);
     const rec = _normProject({
       id: _newId(list),
-      owner: OWN.uidOf(req),
       name: `${day} — ${scen.title}`,
       scenarioId: scen.id,
       gender,
@@ -3573,7 +3489,6 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     if (proj.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
     const b = req.body || {};
     const next = b.clear ? null : _normLook(b);
@@ -3616,7 +3531,6 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
     const list = _loadProjects();
     const src = list.find(p => String(p.id) === id);
     if (!src) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(src, req.user)) return OWN.refuse(res, src);
     if (src.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
     const look = _normLook(req.body || {});
     if (!(look && look.obrazId)) return res.status(400).json({ success: false, error: 'a look is needed' });
@@ -3629,13 +3543,12 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
     const place = _normCasting(src.casting);
     const rec = _normProject({
       id: _newId(list),
-      owner: OWN.uidOf(req),
       name: `${now.slice(0, 10)} — ${String(src.title || '').trim() || 'talking head'} · ${look.characterName}`,
       scenarioId: src.scenarioId, gender: src.gender, title: src.title, lines,
       vertical: src.vertical, product: src.product, roles: src.roles,
       video: src.video,
       voice: { ...((src.voice && typeof src.voice === 'object') ? src.voice : {}), pick: null },
-      mix: { settings: m.settings, distribution: m.distribution },
+      mix: { settings: m.settings },
       casting: { ...look, locationId: place.locationId, locationImage: place.locationImage },
       workOf: look, cast0: look,
       createdAt: now, updatedAt: now,
@@ -3670,7 +3583,7 @@ router.post('/scen3/voiceover/draft', (req, res) => {
     let rec = _voDraftOf(list);
     if (!rec) {
       rec = _normProject({
-        id: _newId(list), owner: OWN.uidOf(req), type: 'voiceover', draft: true,
+        id: _newId(list), type: 'voiceover', draft: true,
         name: VO_DRAFT_NAME, title: '', lines: [], video: { v: 2 }, createdAt: now, updatedAt: now,
       }, now);
       list.unshift(rec);
@@ -3686,7 +3599,6 @@ router.post('/scen3/projects/:id/script', async (req, res) => {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     if (proj.type !== 'voiceover' || !proj.draft) {
       return res.status(409).json({ success: false, error: 'its voices are read - the script is this project\'s now; another one is a new voiceover' });
     }
@@ -3773,7 +3685,6 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === String(req.params.id));
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const lines = (proj.lines || []).map(_normLine);
     const i = parseInt((req.body || {}).index, 10);
@@ -3833,7 +3744,6 @@ router.post('/scen3/projects/:id/line/state', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const lines = (proj.lines || []).map(_normLine);
     const i = parseInt((req.body || {}).index, 10);
@@ -3902,7 +3812,6 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const b = req.body || {};
     let text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
     if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
@@ -4125,7 +4034,6 @@ router.post('/scen3/sd/prompts', async (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const only = Array.isArray(b.lines) ? b.lines.map(n => parseInt(n, 10)).filter(n => n >= 0) : null;
     const out = await _writeSdPrompts(id, only);
     res.json({ success: true, project: _projFull(out.project), report: out.report });
@@ -4142,7 +4050,6 @@ router.post('/scen3/sd/prompt', async (req, res) => {
     const i = parseInt(b.line, 10);
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const f = (_sdView(proj) || []).find(x => x.line === i);
     if (!f) return res.status(400).json({ success: false, error: 'no such line, or it is not read yet' });
     let text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
@@ -4205,7 +4112,7 @@ function _voiceLabels(voiceId) {
   const shelf = VSHELF.get(voiceId);
   if (shelf && shelf.labels) return shelf.labels;
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const arr = Array.isArray(chars) ? chars : [];
   for (const ch of arr) {
     const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
     if (v && v.labels) return v.labels;
@@ -4217,7 +4124,7 @@ function _sampleOf(voiceId) {
   const shelf = VSHELF.get(voiceId);
   if (shelf && shelf.demo && there(shelf.demo)) return String(shelf.demo);
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const arr = Array.isArray(chars) ? chars : [];
   for (const ch of arr) {
     const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
     if (v && v.sample && there(v.sample)) return String(v.sample);
@@ -4263,7 +4170,6 @@ router.post('/scen3/voice/demo', async (req, res) => {
     const id = String((req.body || {}).projectId || '').trim();
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const cv = _castVoiceOf(proj);
     if (!cv.has || !cv.id) return res.status(400).json({ success: false, error: 'choose a voice first' });
     let made = false;
@@ -4496,7 +4402,6 @@ router.post('/scen3/sd/pick', (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const i = parseInt(b.line, 10);
     const clipId = String(b.clipId || '');
     const saved = PROJECTS.apply(id, (fresh) => {
@@ -4613,7 +4518,6 @@ router.post('/scen3/fragments/shot', async (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
@@ -4792,7 +4696,6 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
@@ -5080,7 +4983,6 @@ router.post('/scen3/video/prompts', async (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const out = await _writePrompts(id, b.only);
     res.json({ success: true, project: _projFull(out.project), report: out.report });
   } catch (e) {
@@ -5102,7 +5004,6 @@ router.post('/scen3/frames/ban', (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.mix = _normMix(p.mix);
     const id = String(b.frameId || '');
     if (!p.mix.variants.some(v => v.id === id)) return res.status(404).json({ success: false, error: 'no such frame' });
@@ -5135,7 +5036,6 @@ router.post('/scen3/frames/order', (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.mix = _normMix(p.mix);
     const have = new Set(p.mix.variants.map(v => String(v.id)));
     const want = [...new Set((Array.isArray(b.order) ? b.order : []).map(String))].filter(id => have.has(id));
@@ -5171,7 +5071,6 @@ router.post('/scen3/frames/crop', async (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.mix = _normMix(p.mix);
     const src = p.mix.variants.find(x => x.id === String(b.frameId || ''));
     if (!src) return res.status(404).json({ success: false, error: 'no such frame' });
@@ -5255,7 +5154,6 @@ router.post('/scen3/frames/prompt', async (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.mix = _normMix(p.mix);
     const v = p.mix.variants.find(x => x.id === String(b.frameId || ''));
     if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
@@ -5352,7 +5250,6 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
@@ -5507,7 +5404,6 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     // (phase V26.8, part 5) A project filmed by Seedance: the fragment's Seedance clip.
     if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipRoute(req, res, proj);
     const i = parseInt(b.line, 10);
@@ -5638,7 +5534,6 @@ router.post('/scen3/fragments/clips', (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     // (phase V26.8, part 5) A project filmed by Seedance: its fragments' Seedance clips.
     if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipsRoute(req, res, proj);
     const key = String(b.key || '');

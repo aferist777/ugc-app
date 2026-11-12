@@ -269,9 +269,7 @@ export async function uploadVideos(files, kind, onEach) {
       const up = await _json('/api/biroly/upload', { method: 'POST', body: fd });
       await _json('/api/library/media/record', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        // trimmable: a file brought in by hand may be trimmed once, in the viewer. Nothing
-        // generated carries this - those are trimmed on the timeline without a new file.
-        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind, trimmable: true }),
+        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind }),
       });
       ok++;
     } catch (e) { /* one bad file must not stop the batch */ }
@@ -343,14 +341,14 @@ export async function uploadMusic(files, onEach, categoryId) {
 // they are invisible but still counted - the "128 total, 127 shown" gap.
 //
 // Cleaning is two calls on purpose. Media records are this module's own store, but looks are
-// already handled by POST /api/obrazy/prune-missing, which drops looks with no surviving image
-// AND sweeps geni.json alongside; reusing it beats writing that logic twice.
+// already handled by POST /api/obrazy/prune-missing, which drops looks with no surviving image;
+// reusing it beats writing that logic twice.
 export async function findBroken() {
   return _json('/api/library/broken');
 }
 
 export async function cleanBroken() {
-  const out = { media: 0, looks: 0, geni: 0 };
+  const out = { media: 0, looks: 0 };
 
   const d = await _json('/api/library/broken/clean', { method: 'POST' });
   out.media = d.count || 0;
@@ -358,7 +356,6 @@ export async function cleanBroken() {
   try {
     const p = await _json('/api/obrazy/prune-missing', { method: 'POST' });
     out.looks = (p.removedObrazy || []).length;
-    out.geni = p.removedGeniCount || 0;
   } catch (e) { out.looksError = e.message; }
 
   return out;

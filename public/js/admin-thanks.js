@@ -56,7 +56,7 @@
     { group: "App and server", name: "dotenv", npm: "dotenv",
       url: "https://github.com/motdotla/dotenv", license: "BSD-2-Clause",
       what: "Loads settings from a .env file.",
-      how: "Reads the .env kept inside the library when the app starts (server.js). The migration tool also uses it to carry an old server install's API keys into the library's settings (tools/migrate-library.js)." },
+      how: "Reads the .env kept inside the library when the app starts (server.js)." },
     { group: "Desktop", name: "Electron", npm: "electron",
       url: "https://github.com/electron/electron", license: "MIT",
       what: "A framework for desktop apps that bundles Chromium and Node.js.",

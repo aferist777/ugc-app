@@ -412,10 +412,7 @@ BLOCKS.app = () => {
 };
 
 // ── the layout: two columns, a block anywhere, kept ──────────────────────────
-// (phase V70) A new key: the places kept under the first one (`ugc_home_layout_v1` - Continue, Now) do not fit these blocks;
-// it is wiped once, the library's mirror with it (js/storage-sync.js).
 const LAYOUT = 'ugc_home_layout_v2';
-try { localStorage.removeItem('ugc_home_layout_v1'); } catch (e) { /* a private window */ }
 const FIRST = [['start', 'generate', 'library', 'projects', 'new'], ['steps', 'app']];
 const cols = [...document.querySelectorAll('#hm-cols .hm-col')];
 const made = {};

@@ -14,18 +14,16 @@ const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.jso
 // the HTTP view changes no behaviour. Even on one machine with one person a
 // raw key in the page is a key in a screen-share or a browser extension's reach.
 //
-// r2SecretAccessKey is here; r2AccountId, r2AccessKeyId, r2Bucket and r2PublicBase are not.
-// Those four are identifiers, not credentials - useless without the secret, and worth seeing at
-// a glance to check which bucket an install is pointed at. Masking them would only hide whether
-// the field is filled in correctly.
+// r2AccountId and r2Bucket (written by the Cloudflare key's check) are identifiers, not credentials, and stay in view.
 const SECRET_KEYS = [
   'anthropicApiKey', 'kieApiKey', 'replicateApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
+  // The secret of the R2 fields Admin had before the one Cloudflare key: nothing reads it any more, and a library that
+  // still holds it never shows it (the key's check wipes it, lib/cloudflare.js).
   'r2SecretAccessKey',
   // (phase TG) the one Cloudflare key - R2 and the Telegram receiver (lib/cloudflare.js)
   'cloudflareApiToken',
-  // (phase TG, block 2) the owner's own bot, made at @BotFather (lib/telegram.js) - back from RETIRED_KEYS, where the
-  // server version's reporting bot had left it
+  // (phase TG, block 2) the owner's own bot, made at @BotFather (lib/telegram.js)
   'telegramBotToken',
   // (phase V54) the owner's Freesound account - finding CC0 sound effects online (lib/freesound.js)
   'freesoundApiKey',
@@ -35,12 +33,6 @@ const SECRET_KEYS = [
 // Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
 // its pair from. A page cannot set it, and a key replaced or removed drops it: a new key is R2's only once IT passed.
 const SERVER_ONLY = ['cloudflareTokenId'];
-
-// Keys of services this app no longer talks to: imgBB, Partner's ingest, and the chat the server version's
-// Telegram bot reported to (its key, telegramBotToken, is the owner's own bot again since phase TG). A library carried over from the server version can still
-// hold them, and they are not in SECRET_KEYS - so they are kept out of the page by name, and
-// dropped from the file on the next save.
-const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl', 'telegramChatId'];
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
@@ -63,27 +55,6 @@ function maskPreview(v) {
   return s.slice(0, 6) + '…' + s.slice(-4);
 }
 
-// R2 is the one provider that can also be configured through the environment, because it was
-// there before the popup had fields for it. A field left empty here is therefore ambiguous -
-// unset, or covered by .env - so the view says which, and the popup can stop looking broken on
-// an install that works. Only whether each is present; never the value.
-const R2_ENV = {
-  r2AccountId:       'R2_ACCOUNT_ID',
-  r2AccessKeyId:     'R2_ACCESS_KEY_ID',
-  r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
-  r2Bucket:          'R2_BUCKET',
-  r2PublicBase:      'R2_PUBLIC_BASE',
-};
-
-function envFallback(s) {
-  const out = {};
-  for (const [field, envName] of Object.entries(R2_ENV)) {
-    const stored = s[field] && String(s[field]).trim();
-    out[field] = !stored && !!String(process.env[envName] || '').trim();
-  }
-  return out;
-}
-
 // A browser-safe projection: every non-secret field verbatim, and for each secret only
 // whether it is set (secretsSet) plus a masked hint (secretsPreview) — never the value.
 function safeView(s) {
@@ -95,8 +66,7 @@ function safeView(s) {
     secretsPreview[k] = maskPreview(s[k]);
     delete settings[k];
   }
-  for (const k of RETIRED_KEYS) delete settings[k];
-  return { success: true, settings, secretsSet, secretsPreview, envFallback: envFallback(s) };
+  return { success: true, settings, secretsSet, secretsPreview };
 }
 
 // A masked hint that safeView produced must never be written back as if it were a real key:
@@ -120,7 +90,7 @@ router.post('/settings', async (req, res) => {
     const clean = {};
     const gone = [];
     for (const [k, v] of Object.entries(incoming)) {
-      if (RETIRED_KEYS.includes(k) || SERVER_ONLY.includes(k)) continue;
+      if (SERVER_ONLY.includes(k)) continue;
       if (SECRET_KEYS.includes(k)) {
         if (looksMasked(v)) continue; // ignore echoed masks
         // An empty value is a removal, not a key that happens to be empty.
@@ -137,7 +107,7 @@ router.post('/settings', async (req, res) => {
       catch (e) { console.warn('[settings] the Telegram receiver could not be taken down:', e.message); }
     }
     const updated = { ...loadSettings(), ...clean };
-    for (const k of [...gone, ...RETIRED_KEYS]) delete updated[k];
+    for (const k of gone) delete updated[k];
     if (changed('cloudflareApiToken')) delete updated.cloudflareTokenId;
     saveSettings(updated);
     res.json(safeView(updated));

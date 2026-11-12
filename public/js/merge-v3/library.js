@@ -584,9 +584,6 @@ function _viewerRows(item) {
   // A piece: its whole video, shown on a tick (js/cut.js).
   const orig = Cut.originalRow(item, repaintViewer);
   if (orig) rows.push(orig);
-  // A clip trimmed the old way, once (before phase TG): what it was cut to.
-  const tr = item.meta && item.meta.trimmed;
-  if (tr) rows.push(['trimmed', (+tr.in).toFixed(1) + 's – ' + (+tr.out).toFixed(1) + 's of the upload']);
   // (phase V55) A made environment or lookbook: what is known about it, as its shelf's column says.
   rows.push(...madeRows(item));
   return rows;
@@ -1474,14 +1471,7 @@ export function initLibrary() {
   // Back from the pictures chat with something made or added: the shelf reads again (phase J).
   window.addEventListener('mv3:lib-reload', () => _reload());
 
-  // (phase V28.4) The shelf buttons the panel had (birols / hooks / uploads / images) were remembered as `mv3_lib_tab`:
-  // the first time, the tree opens on the same one; the old keys go.
-  let fallback = 'birols';
-  try {
-    const old = localStorage.getItem('mv3_lib_tab');
-    if (old && ['birols', 'hooks', 'uploads', 'images'].includes(old)) fallback = old;
-    for (const k of Object.keys(localStorage)) if (k === 'mv3_lib_tab' || k.startsWith('mv3_lib_cat_')) localStorage.removeItem(k);
-  } catch (e) { /* a private window */ }
+  const fallback = 'birols';
 
   const host = document.getElementById('mv3-lib-tree');
   if (!host) return;
@@ -1495,7 +1485,7 @@ export function initLibrary() {
   }, true);
   // (phase V60.2, the owner's (дг1а)-(дг3а)) The panel has ROOTS - "Library" pressed leads there (lib-views.js) - with no word
   // in the path; Merge opened, reloaded or another project opened: the panel on the folder it was left on - or the roots, when
-  // it was left there (`mv3_tree_sel_v1` '') - and the old shelf button's kind the first time ever.
+  // it was left there (`mv3_tree_sel_v1` '') - and B-rolls the first time ever.
   let start = fallback;
   try { const kept = localStorage.getItem('mv3_tree_sel_v1'); if (kept != null) start = String(JSON.parse(kept) || ''); } catch (e) { /* a private window */ }
   _tree = createTree(host, {

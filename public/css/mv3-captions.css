@@ -199,7 +199,6 @@
 .mv3-doc-row.is-typed .mv3-doc-in{ color:var(--ink) }
 .mv3-doc-in:hover{ border-color:var(--border-soft) }
 .mv3-doc-in:focus{ border-color:var(--focus); background:oklch(0 0 0 / .18) }
-.mv3-doc-in[readonly]{ cursor:default }
 .mv3-doc-msg{ flex:0 0 auto; padding:6px 10px; border-top:1px solid var(--border-soft); font:500 var(--fs-10)/1.4 var(--font); color:var(--danger) }
 .mv3-doc-msg[hidden]{ display:none }
 .mv3-doc-help{ flex:0 0 auto; padding:5px 10px 7px; border-top:1px solid var(--border-soft); font:400 var(--fs-10)/1.45 var(--font); color:var(--muted) }

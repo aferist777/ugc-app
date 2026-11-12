@@ -5,18 +5,17 @@
 //   POST   /api/char-store/create            create a character + kick off its 4K sheet (a row in Alerts)
 //   POST   /api/char-store/regen-ref         draw the sheet again (one at a time per character)
 //   GET    /api/char-store/list              list all chars
-//   PATCH  /api/char-store/:id               edit name/gender/voice/voices/notes
+//   PATCH  /api/char-store/:id               edit name/gender/voice/voices
 //   DELETE /api/char-store/:id               remove char + its folder (not while its sheet runs)
 //   DELETE /api/char-store/:id/voice/:vid    unbind one voice, its slot freed
 // ════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 const fs      = require('fs');
-const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR, CACHE_DIR, BACKUPS_DIR } = require('../lib/config');
+const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
   uploadToPublicHost, resolveTask, resolveLocalMedia,
@@ -29,36 +28,6 @@ const {
   charFolderName, charAbsFolderRec,
   loadChars, findChar, upsertChar, patchChar, deleteChar,
 } = require('../lib/char-store');
-const CHAR_DRAFTS = require('../lib/char-drafts');
-
-// WHAT THE CHARACTER PAGE LEFT BEHIND (phase H8, the owner 2026-10-01). Its own logs - the attempt log
-// (cv2-trace.jsonl and its rotations), the rescued list (cv2-recovered.json), the prompt edits
-// (prompts.json) - which nothing reads any more, set aside ONCE per library (marked in cache/). And
-// drafts, on EVERY start (lib/char-drafts.js). Both into backups/<date> character page/.
-function _tidyAfterTheCharacterPage() {
-  try {
-    const drafts = CHAR_DRAFTS.setAside(ROOT_DIR, BACKUPS_DIR);
-    if (drafts.length) console.log('[char-store] ' + drafts.length + ' draft(s) set aside in ' + CHAR_DRAFTS.backupDir(BACKUPS_DIR));
-  } catch (e) { console.warn('[char-store] drafts could not be set aside:', e.message); }
-  const mark = path.join(CACHE_DIR, 'char-drafts-dropped.json');
-  if (fs.existsSync(mark)) return;
-  try {
-    const dir = CHAR_DRAFTS.backupDir(BACKUPS_DIR);
-    const logs = fs.existsSync(DATA_DIR) ? fs.readdirSync(DATA_DIR)
-      .filter(f => /^cv2-trace\.jsonl(\.\d+)?$/.test(f) || f === 'cv2-recovered.json' || f === 'prompts.json') : [];
-    const moved = [];
-    for (const f of logs) {
-      try { fs.mkdirSync(dir, { recursive: true }); fs.renameSync(path.join(DATA_DIR, f), path.join(dir, f)); moved.push(f); }
-      catch (e) { console.warn('[char-store] ' + f + ' left where it was:', e.message); }
-    }
-    if (moved.length) console.log('[char-store] the Character page logs set aside in ' + dir + ': ' + moved.join(', '));
-    // Not marked while one could not be moved (a Windows lock): the next start tries again.
-    if (moved.length < logs.length) return;
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), logs: moved }, null, 2));
-  } catch (e) { console.warn('[char-store] the Character page logs could not be set aside:', e.message); }
-}
-_tidyAfterTheCharacterPage();
 
 // The reference sheet is a long-lived canonical asset, and which engine draws it, through
 // whom, and at which tier is now the `sheet` ladder in lib/cv2-ladders.js - a setting, not
@@ -69,27 +38,17 @@ _tidyAfterTheCharacterPage();
 // its best. The ladder stores each step's own tier already spelt the way its engine accepts,
 // which is what made the translator unnecessary rather than merely relocated.
 // One sheet, through every aggregator that carries the engine, starting with the chosen one.
-// `charId` is how the attempt in progress reaches the page: each failure writes a line onto the
-// record, and the page reads it while it waits - so a Replicate that cannot fetch the reference
-// reads as "trying kie.ai" rather than as an error.
 //
 // PAID ONCE (phase V22, the owner 2026-10-09: "as in the chats"): the row is marked `asked` just
 // before each create that costs money, and the mark is taken back when the aggregator ANSWERS no;
 // a create with no answer stops the ladder (lib/cv2-run.js). There is no retry around it any more:
 // the old one read a status off the ladder's own error, which has none, so it never fired - and on
 // a 5xx it would have paid for the same sheet twice.
-function _sheetTask(prompt, imageUrl, charId, alertId) {
+function _sheetTask(prompt, imageUrl, alertId) {
   return RUN.runImageLadder('sheet', {
     prompt, imageUrls: [imageUrl], aspect: '16:9',
     onAsk: () => { if (alertId) ALERTS.update(alertId, { params: { asked: true } }); },
-    onStep: ({ label, error, next }) => {
-      if (alertId) ALERTS.update(alertId, { params: { asked: false } });
-      if (!charId) return;
-      const note = next
-        ? (label + ' could not: ' + String(error).slice(0, 160) + ' — trying ' + next + '…')
-        : (label + ' could not: ' + String(error).slice(0, 160));
-      try { patchChar(charId, { sheetNote: note }); } catch (e) {}
-    },
+    onStep: () => { if (alertId) ALERTS.update(alertId, { params: { asked: false } }); },
   });
 }
 
@@ -129,11 +88,10 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
       if (gone()) return _sheetLetGo(charId, '');
     }
     stage('asking the engines');
-    const sub = await _sheetTask(prompt, imageUrl, charId, alertId);
-    // What actually drew it, not what the ladder hoped for: a step can be skipped or refuse,
-    // and the record is what Regenerate later reads. sheetJob is what makes the SECOND half of
-    // the walk possible - a task that is accepted and then fails resumes below the steps that
-    // have already had their turn, without asking the framing agent anything again.
+    const sub = await _sheetTask(prompt, imageUrl, alertId);
+    // sheetJob is what makes the SECOND half of the walk possible - a task that is accepted and
+    // then fails resumes below the steps that have already had their turn, without asking the
+    // framing agent anything again.
     patchChar(charId, _sheetPatch(sub, prompt, imageUrl));
     // Let go of while the ladder was answering: the task exists and was paid for, but nobody waits.
     if (gone()) return _sheetLetGo(charId, sub.taskId);
@@ -206,7 +164,7 @@ function _openSheetRow(charId, where, name) {
 // (_resolveSheet reads `sheetLetGo`). What was already asked for is paid for.
 function _sheetLetGo(charId, taskId) {
   try {
-    patchChar(charId, { sheetTask: null, sheetJob: null, sheetNote: null,
+    patchChar(charId, { sheetTask: null, sheetJob: null,
       sheetError: 'the sheet was let go of', sheetLetGo: taskId ? String(taskId) : null });
   } catch (e) { /* the character is gone */ }
 }
@@ -222,20 +180,15 @@ function _sheetPatch(sub, prompt, imageUrl) {
   const done = (sub.steps || []).filter(s => s.state !== 'skipped').map(s => String(s.label));
   return {
     sheetTask: sub.taskId,
-    imageEngine: sub.engine,
-    imageProvider: sub.provider,
-    sheetQuality: sub.quality,
     sheetError: null,
-    sheetNote: null,
     sheetJob: { engine: sub.engine, quality: sub.quality, prompt, imageUrl, tried: done.length ? done : [RUN.stepLabel(sub)] },
     sheetLetGo: null,
   };
 }
 
 // The sheet prompt is assembled in lib/char-sheet.js: it asks the framing agent whether the
-// reference actually contains a body, and says either "preserve it" or "build it like this",
-// then appends the user's Create realism chips as it always did. Both callers here go through
-// it, so there is one assembly.
+// reference actually contains a body, and says either "preserve it" or "build it like this".
+// Both callers here go through it, so there is one assembly.
 
 // The identity source, written into the character's own folder.
 //
@@ -246,8 +199,8 @@ function _sheetPatch(sub, prompt, imageUrl) {
 // speaking. A face is one small jpg and the sheet is the asset it exists to produce, so the
 // source that produced it stays.
 //
-// Returns the public path. `previous` is the record's current baseFace, if any: finishing a
-// draft writes a new one, and the old file would otherwise sit in the folder forever.
+// Returns the public path. `previous` is the record's current baseFace, if any: a new face
+// replaces it, and the old file would otherwise sit in the folder forever.
 // ── The preset shortcut ──────────────────────────────────────────────────────
 // A preset ships with its 4K sheet already drawn, so taking one unchanged costs nothing and
 // waits for nothing.
@@ -290,7 +243,7 @@ function _keepFace(folder, folderNm, buf, previous) {
 // regenerated from what made it.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { name, gender, faceImagePath, faceImageBase64, realismMarkers, figure } = req.body || {};
+    const { name, gender, faceImagePath, faceImageBase64, figure } = req.body || {};
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
     // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
@@ -341,16 +294,11 @@ router.post('/char-store/create', async (req, res) => {
       // engine, a throttle that outlasts the retries - this is what Regenerate works from, and
       // without it that button can only apologise.
       baseFace:     _keepFace(folder, folderNm, faceBuffer, null),
-      // imageEngine / imageProvider / sheetQuality are written by _sheetPatch when the ladder
-      // actually lands on a step. Guessing them here would put the step we HOPED for on the
-      // record next to the taskId of the one that took it.
       // Cleared explicitly: upsert MERGES onto whatever is under this id, so a failure recorded
       // on the last attempt would otherwise still be sitting there while this one is in flight -
       // and the page reads that field to decide a wait is hopeless.
       sheetError:   null,
       voice:        null,
-      notes:        '',
-      voiceDescription: '',
       date:         new Date().toISOString(),
     };
     upsertChar(rec);
@@ -368,7 +316,7 @@ router.post('/char-store/create', async (req, res) => {
 
     // Background: the combined sheet. Its Alerts row (opened above) is what the page follows;
     // lib/gen-jobs.js resolves the task into the character's folder.
-    _kickoffSheets(charId, { buf: faceBuffer }, { realismMarkers, figure }, alertId, row.kick)
+    _kickoffSheets(charId, { buf: faceBuffer }, { figure }, alertId, row.kick)
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -377,9 +325,9 @@ router.post('/char-store/create', async (req, res) => {
 });
 
 // ── GET /api/char-store/list ─────────────────────────────────────────────
-// Every character. A draft left in a library the one-time tidy-up has not reached yet is not one.
+// Every character.
 router.get('/char-store/list', (_req, res) => {
-  res.json({ success: true, chars: loadChars().filter(c => !c.draft) });
+  res.json({ success: true, chars: loadChars() });
 });
 
 // Read a stored path as a buffer, or null if it is not there. Records outlive files.
@@ -394,30 +342,13 @@ function _readRel(rel) {
 //
 // The sheet leads: regenerating from it preserves the build the character already has. But a
 // missing sheet is precisely the case this exists for - a sheet that never generated is WHY
-// anyone presses Regenerate - so below it come the face the page is still holding, then whatever
-// the record kept, then anything at all in the character's own folder. The old code stopped at
-// the first four and answered "no identity source to regenerate from", which is a true statement
-// about a character nobody could rescue.
-function _identitySource(c, body) {
-  const b = body || {};
+// anyone presses Regenerate - so below it comes the face the record kept, then anything at all
+// in the character's own folder.
+function _identitySource(c) {
   const stored = (rel, from) => { const buf = _readRel(rel); return buf ? { buf, from } : null; };
 
-  let hit = stored(c.sheet, 'the current sheet');
+  const hit = stored(c.sheet, 'the current sheet') || stored(c.baseFace, 'the saved face');
   if (hit) return hit;
-
-  // What the page has in the middle column right now: after a failed sheet that is the only
-  // picture of this person that definitely exists.
-  if (b.faceImageBase64) {
-    const buf = Buffer.from(String(b.faceImageBase64).replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
-    if (buf.length) return { buf, from: 'the page' };
-  }
-  hit = stored(b.faceImagePath, 'the page');
-  if (hit) return hit;
-
-  for (const [rel, from] of [[c.baseFace, 'the saved face'], [c.portrait, 'the legacy portrait'], [c.tpose, 'the legacy t-pose']]) {
-    hit = stored(rel, from);
-    if (hit) return hit;
-  }
 
   // Last resort: any picture in the character's folder. A record can point at files an older
   // version of this route renamed, and one of those is still a picture of this person - which
@@ -434,11 +365,10 @@ function _identitySource(c, body) {
 }
 
 // ── POST /api/char-store/regen-ref ───────────────────────────────────────
-// Body: { charId, imageEngine?, imageProvider?, sheetQuality?, faceImageBase64?, faceImagePath? }
+// Body: { charId, figure?, where? }
 // Re-submits the combined reference sheet. The identity source is the current
 // sheet when there is one, and otherwise everything else that could be one —
-// see _identitySource. Unstated engine/aggregator/tier fall back to whatever the
-// character was last made with. Answers the Alerts row the page follows.
+// see _identitySource. Answers the Alerts row the page follows.
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
     const { charId } = req.body || {};
@@ -447,7 +377,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
     // One sheet at a time per character (review H): the one running is answered, for the page to follow.
     const busy = _runningSheet(charId);
     if (busy) return res.status(409).json({ success: false, running: true, alertId: busy.id, error: 'its 4K sheet is already being made' });
-    const src = _identitySource(c, req.body);
+    const src = _identitySource(c);
     if (!src) {
       return res.status(404).json({ success: false,
         error: 'nothing to draw it from - this character has no sheet, no saved face and no files. Make it again with New Character on the Characters shelf.' });
@@ -462,14 +392,13 @@ router.post('/char-store/regen-ref', async (req, res) => {
 
     // ANSWERED FIRST, generated after — the same shape create has always had, and for the same
     // reason, only more so now that there is a cascade. The work behind this call is a vision
-    // call for the prompt plus a submit that may walk three aggregators, and OpenRouter's submit
-    // IS the generation: at 4K it can hold the socket for minutes. Doing all of that inside the
-    // request is how "Regenerate" becomes a page waiting on one fetch with nothing to show.
+    // call for the prompt plus a submit that may walk more than one aggregator. Doing all of that
+    // inside the request is how "Regenerate" becomes a page waiting on one fetch with nothing to show.
     //
-    // Everything the page needs to follow it lives on the record: sheetNote while it hops,
-    // sheetTask once something is accepted, sheetError only when nowhere is left. `was` is this
-    // character's CURRENT sheet, so the page knows which picture means "still the old one".
-    patchChar(charId, { sheetTask: null, sheetError: null, sheetNote: 'Preparing the sheet…', sheetLetGo: null });
+    // The page follows the Alerts row; the record keeps sheetTask once something is accepted and
+    // sheetError only when nowhere is left. `was` is this character's CURRENT sheet, so the page
+    // knows which picture means "still the old one".
+    patchChar(charId, { sheetTask: null, sheetError: null, sheetLetGo: null });
     const row = _openSheetRow(charId, req.body && req.body.where, c.name);
     const alertId = row.id;
     res.json({
@@ -485,7 +414,6 @@ router.post('/char-store/regen-ref', async (req, res) => {
     // The same kickoff the first attempt used - the same stages, the same row - so a regeneration and a
     // first sheet cannot drift apart.
     _kickoffSheets(charId, { buf: src.buf }, {
-      realismMarkers: req.body && req.body.realismMarkers,
       figure: req.body && req.body.figure,
     }, alertId, row.kick).catch(e => console.warn('[char-store/regen-ref] sheet kickoff failed:', e.message));
   } catch (err) {
@@ -536,18 +464,13 @@ async function _retrySheetElsewhere(c, why) {
     const sub = await RUN.runImageLadder('sheet', {
       prompt: job.prompt, imageUrls: [imageUrl], aspect: '16:9', skip: tried,
       onAsk: (agg) => { try { patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: agg } }); } catch (e) {} },
-      onStep: ({ label, error, next }) => {
-        try {
-          patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: null }, sheetNote: label + ' could not: '
-            + String(error).slice(0, 160) + (next ? ' — trying ' + next + '…' : '') });
-        } catch (e) {}
-      },
+      onStep: () => { try { patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: null } }); } catch (e) {} },
     });
     const note = (tried[tried.length - 1] || 'the last step') + ' failed: ' + String(why).slice(0, 120)
       + ' — retrying on ' + sub.provider + '…';
     const done = (sub.steps || []).filter(s => s.state !== 'skipped').map(s => String(s.label));
     patchChar(c.id, {
-      sheetTask: sub.taskId, imageProvider: sub.provider, imageEngine: sub.engine, sheetNote: note,
+      sheetTask: sub.taskId,
       // imageUrl too: it may have moved host on the way here, and the NEXT hop should start from
       // where this one actually got to.
       sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [RUN.stepLabel(sub)]),
@@ -579,26 +502,25 @@ function _refusedEverywhere(e) {
 // while the page polled - filing the picture into the character's folder, patching the record, and
 // the walk to the next aggregator when a task is accepted and then fails - happens here, so it
 // happens either way.
-async function _resolveSheet(taskId, charId, kind) {
-  const field = (kind === 'tpose') ? 'tpose' : (kind === 'portrait') ? 'portrait' : 'sheet';
+async function _resolveSheet(taskId, charId) {
   const c = charId ? findChar(charId) : null;
   if (!c) throw Object.assign(new Error('char not found'), { status: 404 });
 
   // Let go of (the cross in Alerts): whatever this task brings is not filed onto the character.
-  const letGo = (rec) => field === 'sheet' && rec && rec.sheetLetGo && String(rec.sheetLetGo) === String(taskId);
+  const letGo = (rec) => rec && rec.sheetLetGo && String(rec.sheetLetGo) === String(taskId);
   if (letGo(c)) return { state: 'failed', error: 'the sheet was let go of' };
 
   const folder = charAbsFolderRec(c);
   if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
 
-  const result = await resolveTask(taskId, folder, field);
+  const result = await resolveTask(taskId, folder, 'sheet');
   // Read again after the wait: a cancel that landed meanwhile, or a character deleted meanwhile.
   const now = findChar(charId);
   if (!now) return { state: 'failed', error: 'the character was deleted' };
   if (letGo(now)) return { state: 'failed', error: 'the sheet was let go of' };
   if (result.state === 'success') {
     patchChar(charId, {
-      [field]: result.imagePath, [field + 'Task']: null, sheetError: null, sheetNote: null, sheetJob: null,
+      sheet: result.imagePath, sheetTask: null, sheetError: null, sheetJob: null,
     });
   } else if (result.state === 'failed') {
     // A task can be accepted and fail LATER - ModelRateLimitError arrives a minute after the
@@ -606,9 +528,9 @@ async function _resolveSheet(taskId, charId, kind) {
     // and the caller is still sitting here waiting, so it is retried on the next aggregator
     // rather than reported. sheetJob carries everything needed for that: the same prompt, the
     // same reference, and who has already been asked.
-    const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
+    const next = await _retrySheetElsewhere(c, result.error);
     if (next && next.taskId) return { state: 'pending', taskId: next.taskId, note: next.note };
-    // Refused: every step said no to the content (a sheet asked for before V10.2, or a T-pose, by its own words).
+    // Refused: every step said no to the content (a sheet asked for before V10.2, by its own words).
     const refused = next && !next.unsure && next.refused !== undefined ? !!next.refused : REFUSAL.isRefusal(result.error);
     // The next aggregator gave no answer (V22): it may have started the sheet - said so, not the
     // first task's error.
@@ -617,7 +539,7 @@ async function _resolveSheet(taskId, charId, kind) {
     // Kept on the record as well as answered here: whoever opens this character next deserves
     // to know why it has no sheet, not just that it has none.
     patchChar(charId, {
-      [field + 'Task']: null, sheetJob: null,
+      sheetTask: null, sheetJob: null,
       sheetError: String(why),
     });
     if (next && next.unsure) return { state: 'failed', error: next.unsure, refused: false };
@@ -642,7 +564,7 @@ JOBS.register('sheet', {
   // hands it a task it is "not started", not a failure.
   poll: (rec) => {
     const p = (rec.job || {}).params || {};
-    if (rec.taskIds[0]) return _resolveSheet(rec.taskIds[0], p.charId, 'sheet');
+    if (rec.taskIds[0]) return _resolveSheet(rec.taskIds[0], p.charId);
     if (_kicking.has(p.kick)) return { state: 'pending' };
     return { state: 'failed', error: p.asked ? SHEET_MAYBE_PAID : 'the app was closed before the sheet was asked for - try again' };
   },
@@ -664,11 +586,11 @@ JOBS.register('sheet', {
     if (!c) throw new Error('that character is gone');
     if (_runningSheet(id, rec && rec.id)) throw new Error('another 4K sheet for this character is being made - wait for it, or let it go first');
     const job = c.sheetJob;
-    const src = (job && job.prompt && job.imageUrl) ? { prompt: job.prompt, imageUrl: job.imageUrl } : _identitySource(c, {});
+    const src = (job && job.prompt && job.imageUrl) ? { prompt: job.prompt, imageUrl: job.imageUrl } : _identitySource(c);
     if (!src) throw new Error('nothing to draw it from - this character has no sheet, no saved face and no files');
     const kick = _kickToken();
     _kicking.add(kick);
-    patchChar(c.id, { sheetError: null, sheetNote: 'Preparing the sheet…', sheetLetGo: null });
+    patchChar(c.id, { sheetError: null, sheetLetGo: null });
     return {
       stage: 'starting',
       params: { charId: String(c.id), kick, asked: false, request: { charId: String(c.id) } },
@@ -680,14 +602,14 @@ JOBS.register('sheet', {
 
 
 // ── PATCH /api/char-store/:id ────────────────────────────────────────────
-// Body may contain { name, gender, voice, notes }. Folder is NOT renamed on a
+// Body may contain { name, gender, voice, voices }. Folder is NOT renamed on a
 // name change — the stored `folder` field keeps every file path stable.
 router.patch('/char-store/:id', (req, res) => {
   const allowed = {};
   // `voices` is the list the voice studio keeps for a character: every voice taken for them,
   // with its labels, description and our own sample. `voice` stays what it always was — the
   // ONE id every read uses — so the starred entry and that field are the same fact.
-  for (const k of ['name', 'gender', 'voice', 'voices', 'notes']) {
+  for (const k of ['name', 'gender', 'voice', 'voices']) {
     if (k in (req.body || {})) allowed[k] = req.body[k];
   }
   const c = patchChar(req.params.id, allowed);

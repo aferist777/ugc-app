@@ -1749,7 +1749,6 @@ async function _checkBroken() {
   for (const l of (found.looks || [])) lines.push('  look: ' + l.name + '   - every image is gone');
   lines.push('');
   lines.push('The records are removed. There is no file to delete - that is the point.');
-  lines.push('A generation still running is never swept.');
   lines.push('', 'Go ahead?');
   _status('');
   // At "⋯"; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
@@ -1762,7 +1761,6 @@ async function _checkBroken() {
     const parts = [];
     if (r.media) parts.push(r.media + ' media record' + (r.media === 1 ? '' : 's'));
     if (r.looks) parts.push(r.looks + ' look' + (r.looks === 1 ? '' : 's'));
-    if (r.geni) parts.push(r.geni + ' history entr' + (r.geni === 1 ? 'y' : 'ies'));
     _status(parts.length ? ('Removed ' + parts.join(', ') + '; no files were deleted') : 'Nothing to remove');
   } catch (e) { _status(e.message, 'err'); }
 }
@@ -2128,15 +2126,6 @@ function boot() {
   try {
     const saved = localStorage.getItem(LS_SHELF);
     if (saved && SHELVES[saved]) _shelf = saved;
-    // (phase V28.5) The Music shelf is Media -> Audio -> Music now; (phase V56) Lookbooks and Environments are IMAGES'
-    // folders on Media - a remembered shelf of theirs opens there, once.
-    else if (saved === 'music' || MADE_KINDS.has(saved)) {
-      _shelf = 'media';
-      localStorage.setItem(LS_SHELF, 'media');
-      _treeStart = saved;
-    }
-    // (phase V60) The kind and category rows of before V28.5 are forgotten: Media opens on its roots.
-    for (const k of ['library_filter_v1', 'library_cat_v1', 'library_cats_h_v1']) localStorage.removeItem(k);
   } catch (e) {}
   // The address wins over the remembered shelf, and is then taken off it: a reload is not a second
   // arrival from Alerts.
