@@ -7,7 +7,6 @@
 
      the program      whisper.cpp with OpenBLAS - ships with the app (npm install), nothing to do here
      the model        574 MB - the first local recognition downloads it anyway; here it can be done ahead
-     no field about the graphics card - another computer has another one
 
    GET /api/speech/local is read when the pane shows, and every second while something downloads.
 
@@ -240,8 +239,6 @@
       : (m.error ? 'The last download failed: ' + m.error : 'Not downloaded yet. The first recognition on this computer downloads it anyway; here it can be done ahead of time.'),
     mright));
 
-    // No field about the graphics card: another computer has another one. A build for
-    // NVIDIA cards already fetched is still used by the server when a card answers (lib/whisper-local.js).
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status', msg);
     body.appendChild(s);
@@ -260,7 +257,7 @@
   function schedule() {
     if (timer) clearTimeout(timer);
     timer = null;
-    if (!shown || !state || !(state.model.downloading || state.cuda.downloading)) return;
+    if (!shown || !state || !state.model.downloading) return;
     timer = setTimeout(function () { load().then(schedule); }, 1000);
   }
 

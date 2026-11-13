@@ -133,7 +133,7 @@ const _sub = (v) => [v.descriptive, v.gender, v.age && String(v.age).replace(/_/
 const _saved = (rec) => (rec && Array.isArray(rec.voices) ? rec.voices : []);
 // What the character HAS, as the panel shows it: their list - and a `voice` the list does not hold
 // as itself, with no demo of ours. The server reads
-// in it (routes/scen3.js, _castVoice), so the panel must not say they have none and paint the field
+// in it (routes/scen3.js, _castVoiceOf), so the panel must not say they have none and paint the field
 // red. Shown only: what is written back is the list as it is (_take).
 const _mine = (rec) => {
   const list = _saved(rec);
@@ -197,7 +197,7 @@ export function paintRow(host, api, o) {
 export const hasVoice = (rec) => !!_active(rec);
 /** Is there a voice to read in at all - the character's, or the project's own pick? The field's
  *  `generate` and every read button wait for one. The server applies the same rule
- *  (routes/scen3.js, _castVoice). */
+ *  (routes/scen3.js, _castVoiceOf). */
 export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 
 // THE LIBRARY'S LANGUAGE, BY THE TEXT: the window's language filter starts at the language of
@@ -804,16 +804,14 @@ export async function generate(api) {
 /**
  * THE ONE `generate` of the field "mood & voice": the script marked up by
  * the mood when any line of the video has no [tags], then every line that needs it read - the two stages, one after the
- * other. A mark-up that fails stops here, said in words, and nothing is read. `o.read`
- * false - by Seedance's voice sample nothing is read: the mark-up alone.
+ * other. A mark-up that fails stops here, said in words, and nothing is read.
  */
-export async function markAndRead(api, o) {
+export async function markAndRead(api) {
   if (_tagging || _reading.length || _batch) return;
   if (untagged(api.project() || {}).length) {
     await tagAll(api);
     if (_rbad || untagged(api.project() || {}).length) return;
   }
-  if (o && o.read === false) return;
   await generate(api);
 }
 

@@ -13,11 +13,10 @@
    processor than the plain build, the same words), pinned by the release AND by SHA-256 - the release
    publishes no checksum file, so the hash is the one GitHub shows for the asset, checked here, and an
    asset swapped after the fact is refused. Only what whisper-cli needs is unpacked: the program, its
-   DLLs, the processor variants ggml picks from at run time, and OpenBLAS. The build for NVIDIA cards is
-   NOT shipped: it is 674 MB and is fetched by a button on Admin into the library's cache.
+   DLLs, the processor variants ggml picks from at run time, and OpenBLAS.
 
-   To move the pin: RELEASE, VERSION and the asset's SHA-256 and size below - and the same release in
-   lib/whisper-local.js, whose NVIDIA build must match this one. */
+   To move the pin: RELEASE, VERSION and the asset's SHA-256 and size below - and the same release and version in
+   lib/whisper-local.js, which shows them on Admin. */
 
 const crypto = require('crypto');
 const fs = require('fs');

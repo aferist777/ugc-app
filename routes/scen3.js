@@ -396,7 +396,7 @@ router.get('/scen3/scenarios/:id', (req, res) => {
 async function _englishLines(texts) {
   try { return await AGENT.toEnglishLines(texts); } catch (e) { return { fail: 'the lines could not be translated: ' + e.message }; }
 }
-// The same for ONE prompt typed in a field - a fragment's Seedance prompt, a line's motion, a place's "how it moves", a
+// The same for ONE prompt typed in a field - a line's motion or OmniHuman prompt, a place's "how it moves", a
 // dressing note: English goes as typed, another language is translated (quoted words too). { text } or { fail }.
 async function _englishText(text) {
   const t = String(text || '').trim();
@@ -1871,9 +1871,9 @@ async function _fileGenerated(kind, src, b) {
 // the model does not know risks being SPOKEN instead of performed.
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
-const SDP = require('../lib/sd-prompt');
-// The writer of a Seedance fragment's performance (thinkTalk), and the
-// English check and translation of typed lines and prompts (english, toEnglish, toEnglishLines).
+// The rules and the limit of an OmniHuman line's prompt.
+const OMNI = require('../lib/omni-prompt');
+// The English check and translation of typed lines and prompts (english, toEnglish, toEnglishLines).
 const AGENT = require('../lib/mv3-agent');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
@@ -1881,15 +1881,13 @@ const VSHELF = require('../lib/voice-shelf');
 
 
 // What the menus of setup and Home's quick start offer: the models of the clips, each with its qualities and what a
-// second of them costs (lib/th-video.js), Seedance's ways of voicing a clip, and the
-// moods - with a few words on how each moves the body, for the gestures menu. No defaults:
-// a new project starts at none and the person chooses.
+// second of them costs (lib/th-video.js), and the moods. No defaults: a new project starts at none and the person
+// chooses.
 router.get('/scen3/motion-presets', (_req, res) => {
   res.json({
     success: true,
     models: TH.models(),
-    sounds: TH.SOUNDS,
-    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about, gloss: m.gloss })),
+    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about })),
   });
 });
 
@@ -2253,8 +2251,8 @@ function _readCtx(proj) {
     model: voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN,
     // The cast character's voice when they have one; the project's own pick before a character is
     // cast, or for a character without a voice. One ad, one voice, and the same rule
-    // the page shows (_castVoice). Saying plainly what is missing beats a 404 from ElevenLabs.
-    cast: _castVoice(proj),
+    // the page shows (_castVoiceOf). Saying plainly what is missing beats a 404 from ElevenLabs.
+    cast: _castVoiceOf(proj),
     dir: PROJECTS.dirOf(proj.id, 'voice'),
   };
 }
@@ -2605,7 +2603,7 @@ async function _framePreview(finalUrl) {
 
 // resolveTask cannot be reused here: it names every download .jpg, compresses it as an
 // image and builds a thumbnail. A clip needs its own extension and its real duration.
-async function _fetchClip(taskId, projectId) {
+async function _fetchClip(taskId, projectId, cutTo) {
   const r = await axios.get(`${CFG.KIE_BASE}/api/v1/jobs/recordInfo`,
     { params: { taskId }, headers: H.kieHeaders(), timeout: 15000 });
   // One reader for every kie answer - see H.readKieRecord: kie says 'fail', not 'failed', and a
@@ -2633,8 +2631,17 @@ async function _fetchClip(taskId, projectId) {
   // H.264 + yuv420p + faststart, so the browser plays it and the concat demuxer can
   // later join these clips without a re-encode. A failure here is not worth losing the
   // clip over — the file is already on disk and playable in most cases.
-  try { await H.normalizeVideoForBrowser(abs); }
-  catch (e) { console.warn('[scen3/clip] normalize failed:', e.message); }
+  // A clip of a read padded to the model's shortest sound (lib/th-video.js padSecs) is cut back to the read itself in
+  // the same pass. Left whole when the cut fails: the timeline lays a clip only as long as its read anyway.
+  let cut = false;
+  if (+cutTo > 0) {
+    try { await TH.cutTo(abs, +cutTo); cut = true; }
+    catch (e) { console.warn('[scen3/clip] the cut to ' + cutTo + 's failed:', e.message); }
+  }
+  if (!cut) {
+    try { await H.normalizeVideoForBrowser(abs); }
+    catch (e) { console.warn('[scen3/clip] normalize failed:', e.message); }
+  }
   // same ffmpeg-header trick the reads use — it reports any container's duration
   return {
     state: 'success', path: toUrl(abs), dur: await _audioDur(abs),
@@ -2707,12 +2714,12 @@ function _normCasting(c) {
    THE PROJECT ITSELF (`shelf`): the files stay in its folder, nothing is deleted, and it all comes back as it was
    when that character in that look is cast again. Another look of the SAME character puts aside its frames and clips only
    - the voice is the same. The CHOICES stay: the mood and the [tags] it marked, stability and speed, the
-   model, the quality, the shot size, the spread, Seedance's settings; the voice follows the character by itself
+   model, the quality, the shot size, the spread; the voice follows the character by itself
    (_castVoiceOf). `workOf` - the look the fields' work was made for (the cast look when it is missing); `cast0` - the first
    look cast. Asked before it moves anything (POST /scen3/projects/:id/cast, below).
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 const SHELF_READ = ['audio', 'cuts', 'merge'];                              // a line's, kept by the character
-const SHELF_LOOK = ['video', 'pick', 'chosen', 'sd', 'shot', 'frameId'];    // a line's, kept by the look
+const SHELF_LOOK = ['video', 'pick', 'chosen', 'shot', 'omni', 'frameId'];  // a line's, kept by the look
 const SHELF_MIX = ['variants', 'order', 'banned'];                         // the set's, kept by the look
 // What a line holds when that part of it is put aside - a missing key is the line's own default (_normLine).
 const SHELF_EMPTY = {
@@ -2757,7 +2764,7 @@ function _workCount(p) {
   return {
     reads: lines.filter(l => (l.audio.plain && l.audio.plain.path) || (l.audio.tagged && l.audio.tagged.path)).length,
     frames: _normMix(p.mix).variants.length,
-    clips: lines.reduce((n, l) => n + l.video.plain.length + l.video.tagged.length + ((l.sd && l.sd.clips) || []).length, 0),
+    clips: lines.reduce((n, l) => n + l.video.plain.length + l.video.tagged.length, 0),
   };
 }
 
@@ -2797,8 +2804,8 @@ function _applyCast(p, next, plan, now) {
     const n = _normMix(mix);
     const b = { characterId: work.characterId, name: work.characterName, image: work.obrazImage, at: now,
       lines: lines.map(l => take(l, SHELF_LOOK)), mix: Object.fromEntries(SHELF_MIX.map(k => [k, n[k]])) };
-    const any = b.mix.variants.length || lines.some(l => l.video.plain.length || l.video.tagged.length || l.sd
-      || (l.shot && l.shot.motion) || l.frameId || l.pick.plain || l.pick.tagged || l.chosen.plain || l.chosen.tagged);
+    const any = b.mix.variants.length || lines.some(l => l.video.plain.length || l.video.tagged.length
+      || (l.shot && l.shot.motion) || (l.omni && l.omni.prompt) || l.frameId || l.pick.plain || l.pick.tagged || l.chosen.plain || l.chosen.tagged);
     if (any) { shelf.looks[work.obrazId] = b; moved = true; }
     lines.forEach(l => clear(l, SHELF_LOOK));
     for (const k of SHELF_MIX) mix[k] = SHELF_MIX_EMPTY[k]();
@@ -2932,7 +2939,6 @@ function _normProject(p, now) {
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
-    // What Seedance keeps is on each LINE (`sd`, _normLine) - a project's `sd.frags` is not carried over.
     createdAt:  src.createdAt || now,
     updatedAt:  src.updatedAt || now,
   };
@@ -2969,6 +2975,9 @@ function _normTake(t) {
     // on an audio take, which has neither.
     preset:  String(s.preset || ''),
     quality: String(s.quality || ''),
+    // ...and the model that made it (lib/th-video.js) - absent on a clip made before a second model was offered:
+    // Kling avatar's.
+    ...(s.model ? { model: String(s.model) } : {}),
     // A clip's poster frame. The cards show stills only — the clip itself belongs to a
     // viewer, not to a list of ten of them all decoding at once.
     thumb:   String(s.thumb || ''),
@@ -3054,9 +3063,8 @@ function _normLine(l) {
     // The line's OWN speed, set in its fragment: the project's speed does not
     // touch it. Absent - the line reads at the project's speed.
     ...(Number(s.speed) > 0 ? { speed: _ttsParams({ speed: s.speed }).speed } : {}),
-    // WHAT SEEDANCE KEEPS FOR THIS LINE - always one line at a time: a
-    // line is a fragment of its own: its prompt and its clips (_normSdLine). Absent until it has either.
-    ...(s.sd && typeof s.sd === 'object' ? { sd: _normSdLine(s.sd) } : {}),
+    // THE LINE'S OMNIHUMAN PROMPT (_normOmni), kept apart from Kling's `shot.motion`. Absent until it is written.
+    ...(_normOmni(s.omni) ? { omni: _normOmni(s.omni) } : {}),
     // WHAT CUT SILENCE TOOK OUT OF THE LINE'S SOUND - stretches of its file, bound to the take they were cut in
     // (lib/line-cuts.js): written by a save of its timeline, laid by the mirror. Absent - the line plays whole.
     ...(require('../lib/line-cuts').normalize(s.cuts) ? { cuts: require('../lib/line-cuts').normalize(s.cuts) } : {}),
@@ -3100,8 +3108,23 @@ function _normShot(sh) {
   };
 }
 
+// A line's OMNIHUMAN prompt (lib/omni-prompt.js), the same way as Kling's above: the prompt that goes (`prompt`, at most
+// 300 characters), the agent's own last text (`agent`), whether it was edited by hand, and what it was written FROM -
+// the words (`said`) and how the place moves (`place`, a fingerprint of the place's sentence) - so another wording or
+// another movement of the place makes it stale (_omniStale). null while nothing is written.
+function _normOmni(o) {
+  if (!o || typeof o !== 'object') return null;
+  const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const prompt = OMNI.fit(o.prompt);
+  const agent = OMNI.fit(o.agent);
+  if (!prompt && !agent) return null;
+  return { prompt, agent, edited: !!o.edited, said: String(o.said || ''), place: str(o.place, 40), mood: str(o.mood, 40), at: str(o.at, 40) };
+}
+// The fingerprint of a place's movement an OmniHuman prompt was written with ('' - none).
+const _placeSig = (motion) => (motion ? require('crypto').createHash('sha1').update(String(motion)).digest('hex').slice(0, 12) : '');
+
 // How the fragments are turned into clips: the model that films them, the mood, how the
-// character moves, how sharp the result is, and Seedance's own settings. The kie model id is deliberately
+// character moves and how sharp the result is. The kie model id is deliberately
 // NOT stored — it is derived from the quality at render time, so a tier being renamed
 // upstream does not leave old projects pointing at a model that no longer exists.
 //
@@ -3112,27 +3135,23 @@ function _normShot(sh) {
 const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const chosen = s.v === 2;
-  // WHAT FILMS IT (lib/th-video.js): Kling avatar - a clip per line - or one of the Seedance models. Chosen
-  // like the rest: a `v: 2` project starts at none - except one that already chose a quality with no model, which is
-  // Kling's quality, so a project halfway through on Kling stays on it. An older project is Kling.
-  const model = TH.byId(s.model) ? s.model : (chosen && !s.quality ? '' : 'kling');
+  // WHAT FILMS IT (lib/th-video.js): Kling avatar or OmniHuman 2.0 - a clip per line either way. Chosen like the rest:
+  // a `v: 2` project starts at none - except one that already chose a quality with no model, which is Kling's quality,
+  // so a project halfway through on Kling stays on it. An older project is Kling, and so is one that was filmed by a
+  // Seedance model when the talking head offered it (sd2mini, sd2, sd25).
+  const model = TH.byId(s.model) ? s.model
+    : /^sd/.test(String(s.model || '')) ? 'kling'
+      : (chosen && !s.quality ? '' : 'kling');
   return {
     ...(chosen ? { v: 2 } : {}),
     model,
-    // The family of the model, kept for whatever reads `mode`.
-    mode:    TH.isSeedance(model) ? 'seedance' : 'kling',
     // The emotion of the whole video (lib/motion-presets.js, MOODS): what the directing agent reads
     // every shot and animation prompt from.
     mood:    MP.moodById(s.mood) ? s.mood : (chosen ? '' : MP.DEFAULT_MOOD),
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
-    // A quality the model makes - another model's is no choice at all (720p is Kling's and Seedance's, 1080p not mini's).
+    // A quality the model makes - another model's is no choice at all (1080p is Kling's alone).
     quality: TH.qualityOf(model, s.quality) ? s.quality
       : (chosen || model !== 'kling' ? '' : MP.DEFAULT_QUALITY),
-    // SEEDANCE'S OWN SETTINGS (read only while a Seedance model films it). `sound` - how the clip is voiced
-    // (lib/th-video.js SOUNDS; '' = SOUND_DEFAULT); `gestures` - whose mood the body moves by ('' = the project's mood).
-    // The lines are never merged: a `merge` field is dropped.
-    sound:    TH.soundById(s.sound) ? s.sound : '',
-    gestures: MP.moodById(s.gestures) ? s.gestures : '',
     // The shot size (an id of FRAME_SETS below) of a frame that does not say its own - an older project's; the frames
     // chat's frames carry theirs (`framing`).
     framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : (chosen ? '' : 'half'),
@@ -3142,35 +3161,6 @@ const _normVideo = (v) => {
     spread:  (s.spread === 'random' || s.spread === 'cycle') ? s.spread : (chosen ? '' : 'cycle'),
   };
 };
-// WHAT SEEDANCE KEEPS FOR A LINE: the prompt as it goes, the
-// writer's own to go back to, whether it was edited by hand, what it was written for (`sig`, lib/sd-prompt.js), who
-// wrote it and when; its clips - every take kept, as Kling's - and the one chosen by hand, whatever it was made from.
-function _normSdLine(f) {
-  const s = (f && typeof f === 'object') ? f : {};
-  return {
-    prompt: String(s.prompt || '').slice(0, 20000), agent: String(s.agent || '').slice(0, 20000),
-    edited: !!s.edited, sig: String(s.sig || ''), writer: String(s.writer || ''), at: String(s.at || ''),
-    clips: (Array.isArray(s.clips) ? s.clips : []).map(_normSdClip).filter(Boolean),
-    chosen: String(s.chosen || ''),
-  };
-}
-// One take of a line filmed by Seedance: the file, its poster and length, and what it was made from - the frame, the
-// sound it was voiced with (`read` / `sample`), the read it heard (`take`, with `read`), the words (`words`, their
-// fingerprint) and the voice (`voice`, with `sample`) - which is what decides whether it is still the line's
-// (_sdFresh) - the model and the quality.
-function _normSdClip(c) {
-  if (!c || typeof c !== 'object' || !c.path) return null;
-  const p = String(c.path);
-  return {
-    id: String(c.id || path.basename(p).replace(/\.[^.]+$/, '')), path: p, thumb: String(c.thumb || ''),
-    dur: +c.dur > 0 ? Math.round(+c.dur * 100) / 100 : 0, frameId: String(c.frameId || ''),
-    sound: TH.soundById(c.sound) ? c.sound : 'read', model: String(c.model || ''), quality: String(c.quality || ''),
-    secs: +c.secs > 0 ? +c.secs : 0, at: String(c.at || ''),
-    take: String(c.take || ''), words: String(c.words || ''), voice: String(c.voice || ''),
-    // Where the speech ends in its own sound (lib/speech-end.js) - 0 when it runs to the end.
-    speechEnd: +c.speechEnd > 0 ? Math.round(+c.speechEnd * 100) / 100 : 0,
-  };
-}
 
 // What a project has not chosen yet, of the choices a step needs, in words -
 // '' when nothing is missing (a project without `v: 2` never misses any: its defaults stand).
@@ -3246,11 +3236,6 @@ const _projSummary = p => ({
 //
 // The page needs this to say so BEFORE anything is pressed — without it every line's read
 // would be refused for the same reason without ever naming the cause.
-function _castVoice(p) {
-  const cv = _castVoiceOf(p);
-  // Whether the voice has a demo - what Seedance takes its timbre from by the voice sample.
-  return cv.has ? { ...cv, demo: !!_sampleOf(cv.id) } : cv;
-}
 function _castVoiceOf(p) {
   const cast = _normCasting((p || {}).casting);
   // The project's own pick reads when there is no character to read for, or the character has
@@ -3281,12 +3266,11 @@ const _projFull = p => ({
   ..._projSummary(p),
   // The first look cast - the stage's way back to it (js/merge-v3/wk-setup.js _stageBack).
   ...(_normLook(p.cast0) ? { cast0: _normLook(p.cast0) } : {}),
-  castVoice: _castVoice(p),
+  castVoice: _castVoiceOf(p),
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),
   video: _normVideo(p.video),
   mix:   _normMix(p.mix),
-  sdFrags: _sdView(p),
 });
 
 router.get('/scen3/projects/:id', (req, res) => {
@@ -3355,13 +3339,8 @@ router.post('/scen3/projects', async (req, res) => {
         id: list[i].id, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;
-      const was = _normVideo(list[i].video);
       list[i] = merged;
       _saveProjects(list);
-      // The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut -
-      // and another sound (by the voice sample, the reads are not laid).
-      const nowV = _normVideo(merged.video);
-      if (video && (nowV.model !== was.model || nowV.sound !== was.sound)) MIRROR.touch(merged.id, { project: merged });
       return res.json({ success: true, project: _projFull(merged) });
     }
 
@@ -3505,7 +3484,7 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
    POST /api/scen3/projects/:id/fork  { characterId, characterName, obrazId, obrazImage }   -> { success, project }
    A new talking head of THIS project's script as it is now - the lines' words and their [tags], the lines taken off and put in,
    their numbers kept - with its place and its choices (the mood, stability and speed, the model, the quality, the shot size,
-   the spread, Seedance's settings, the frames' settings), the look given cast; no reads, frames or clips. This project is not
+   the spread, the frames' settings), the look given cast; no reads, frames or clips. This project is not
    touched. Named "<day> — <title> · <character>"; the page makes its timeline (/mv3/timeline/new) and names it with the cast
    route (js/merge-v3/scen-api.js forkHead), then opens it.
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -3839,661 +3818,28 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE LINES SEEDANCE FILMS, AND THEIR PROMPTS ──────────
-   POST /api/scen3/sd/prompts  { projectId, lines? }               -> { success, project, report: { written, failed } }
-   POST /api/scen3/sd/prompt   { projectId, line, prompt }          a prompt edited by hand
-                               { projectId, line, useAgent: true }  back to the writer's own   -> { success, project }
-
-   A LINE IS A FRAGMENT OF ITS OWN, never merged with others - one clip per line, as Kling. Its prompt is written by ONE
-   request of its own
-   (lib/mv3-agent.js thinkTalk, lib/sd-prompt.js assemble) - the writer sees the frame the line opens on and the
-   character's sheet, and is told the line, the mood and the way of moving - and kept on the line (`sd`, _normSdLine).
-   `lines` names the lines to write; without it, every line that has no prompt, or one written for other settings and
-   not edited by hand. A few at once. Text in seconds and fractions of a cent: no Alerts row, as the animation prompts
-   of Kling. The prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
-   ──────────────────────────────────────────────────────────────────────────── */
-const SD_WRITE_AT_ONCE = 3;
-
-// What every line's prompt is written FOR, as things stand: the effective sound and way of moving, the place.
-function _sdSetting(p) {
-  const video = _normVideo(p.video);
-  return {
-    video,
-    sound: video.sound || TH.SOUND_DEFAULT,
-    gestures: SDP.gesturesOf(video),
-    place: _envMotionOf(_normCasting(p.casting).locationImage) || '',
-  };
-}
-
-// A take of a line is FRESH while the line opens on the frame it was made from and says the words it was made of -
-// and, by the rule of the sound it was made with (a take made the other way stays the line's
-// until a new one), with `read` by the read it heard (one that recorded no read counts as fresh, as Kling's),
-// with `sample` in the voice it was made in.
-function _sdFresh(c, frameId, take, words, voice) {
-  if (c.frameId !== frameId) return false;
-  if (c.words && c.words !== words) return false;
-  if (c.sound === 'sample') return !c.voice || !voice || c.voice === voice;
-  return !c.take || !take || c.take === take.path;
-}
-// A line too long for a clip of the model's length can only be guessed at by `sample` - no
-// length is estimated: it goes as it is, and the open line says so. English is spoken at about 2.5 words a second.
-const SD_WORDS_A_SECOND = 2.5;
-const _wordCount = (l) => String((l && l.text) || '').replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
-
-// THE LINES OF A SEEDANCE PROJECT, for the page and for the clips, each with its place in the video (`n`), the frame
-// it opens on, the seconds its clip is asked for, its prompt - edited by hand, written for other settings (`stale`) - or
-// none yet, and its takes (`clip` - chosen by hand, else the newest fresh). BY THE SOUND: with `read`
-// every live line that is read - its read is what Seedance hears, and its length the clip's; with `sample` every live
-// line with words - nothing is read (no voices are generated), and the clip's length is Seedance's own
-// (`secs` -1). null for Kling.
-function _sdView(p) {
-  const st = _sdSetting(p);
-  if (!TH.isSeedance(st.video.model)) return null;
-  const sample = st.sound === 'sample';
-  const pool = _framePool(p);
-  const cap = TH.maxSecs(st.video.model);
-  const voice = String((_castVoice(p) || {}).id || '');
-  const out = [];
-  let n = 0;
-  (p.lines || []).map(_normLine).forEach((l, i) => {
-    if (l.removed) return;
-    n++;
-    const take = MIRROR.readOf(l);
-    // With `read` a line not read is no fragment - unless it has takes, made by the voice sample before (a take
-    // made the other way stays the line's, and on the timeline, until a new one is made).
-    const noRead = !sample && !take;
-    if (sample ? !String(l.text || '').trim() : (noRead && !(l.sd && l.sd.clips.length))) return;
-    const fr = _frameOfLine(pool, l, i, st.video.spread, p.id);
-    const frameId = fr ? fr.id : '';
-    const words = SDP.wordsSig(l);
-    const dur = !sample && take ? Math.round((+take.dur || 0) * 100) / 100 : 0;
-    // The products whose pictures go with the clip - another set of them makes the prompt stale.
-    const prodSig = _frameProds(fr).filter(x => x.have).map(x => x.path).join('|');
-    const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words,
-      take: take && !sample ? take.path : '', voice: sample ? voice : '', props: prodSig });
-    const k = l.sd || null;
-    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: _sdFresh(c, frameId, take, words, voice) }));
-    const clip = (k && k.chosen && clips.find(c => c.id === k.chosen)) || clips.filter(c => c.fresh).pop() || null;
-    out.push({
-      n, line: i, dur, tooLong: !sample && dur > cap + 1e-6, audio: take && !sample ? take.path : '', frameId, noRead,
-      secs: sample ? -1 : noRead ? 0 : SDP.clipSecs(dur), sig, words,
-      long: sample && _wordCount(l) > cap * SD_WORDS_A_SECOND,
-      prompt: k ? k.prompt : '', edited: !!(k && k.edited), stale: !!(k && k.prompt && k.sig !== sig),
-      hasAgent: !!(k && k.agent), writer: k ? k.writer : '',
-      clips, clip, chosen: !!(k && k.chosen && clip && clip.id === k.chosen),
-    });
-  });
-  return out;
-}
-
-// A picture the writer can look at: its public address (R2, as Kling's writer), or - with nowhere to host it - the
-// picture itself, made small, inside the request.
-async function _seeable(url) {
-  try { return await _hostLocal(url); }
-  catch (e) {
-    const abs = toDiskExisting(url);
-    if (!abs || !fs.existsSync(abs)) return '';
-    const buf = await require('sharp')(abs).resize(1024, 1024, { fit: 'inside' }).jpeg({ quality: 80 }).toBuffer();
-    return 'data:image/jpeg;base64,' + buf.toString('base64');
-  }
-}
-
-async function _writeSdPrompts(id, only) {
-  const free = _holdLines(id);
-  try { return await _writeSdPromptsNow(id, only); } finally { free(); }
-}
-async function _writeSdPromptsNow(id, only) {
-  const proj0 = _loadProjects().find(x => String(x.id) === String(id));
-  if (!proj0) throw Object.assign(new Error('no such project'), { status: 404 });
-  const st = _sdSetting(proj0);
-  if (!TH.isSeedance(st.video.model)) throw Object.assign(new Error('this project is not filmed by Seedance'), { status: 400 });
-  const missing = _unchosen(st.video, ['mood']);
-  if (missing) throw Object.assign(new Error(missing), { status: 400 });
-  const cast = _normCasting(proj0.casting);
-  if (!cast.obrazImage) throw Object.assign(new Error('choose the character in a look first - its sheet goes with every clip'), { status: 400 });
-  const pool = _framePool(proj0);
-  if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip begins on one'), { status: 400 });
-  const view = _sdView(proj0) || [];
-  const want = view.filter(f => !f.tooLong && !f.noRead && (Array.isArray(only) ? only.includes(f.line) : (!f.prompt || (f.stale && !f.edited))));
-  const report = { written: 0, failed: [] };
-  if (!want.length) return { project: proj0, report };
-
-  const lines = (proj0.lines || []).map(_normLine);
-  const mood = MP.moodById(st.video.mood);
-  const covered = _faceCovered(proj0);
-  const facts0 = { mood: { label: mood.label, face: mood.face }, gestures: st.gestures, covered };
-  // The shot of the line's OWN frame - from the frames chat, each with its edge; the project's shot size (`video.framing`)
-  // for a frame without one: whether it is a selfie, and which garments it shows.
-  const shotOf = (fr) => String((fr && fr.framing) || st.video.framing || '');
-  const sheet = await _seeable(cast.obrazImage);
-  // Who speaks and, by the voice sample, the voice in words and the mood's own tone - the
-  // caption of a piece of the line that has no [tag] (lib/sd-prompt.js captioned).
-  const cv = _castVoiceOf(proj0);
-  const labels = cv.has ? _voiceLabels(cv.id) : null;
-  const gender = (labels && labels.gender) || String(proj0.gender || '');
-  const said = { gender, voiceWords: SDP.voiceWords(labels, gender), moodTone: (mood.tags || [])[0] || '' };
-  const write = new Map();                  // line -> what is written for it
-  const one = async (f) => {
-    try {
-      const fr = pool.find(v => v.id === f.frameId);
-      const frame = fr ? await _seeable(fr.preview || fr.path) : '';
-      const rows = SDP.rows(lines[f.line]);
-      const shot = shotOf(fr);
-      // The products of the line's frame: told to the writer, and their pictures go with the clip
-      // after the sheet ({{image:3}} on) - each said in the prompt.
-      const prods = _frameProds(fr).filter(x => x.have);
-      const prodPics = await Promise.all(prods.map(x => _seeable(x.path)));
-      const t = await AGENT.thinkTalk({ facts: { ...facts0, selfie: shot === 'selfie', clothes: _clothesShown(proj0, _frameSet(shot) ? shot : 'full'),
-        dur: f.secs > 0 ? f.dur : 0, lines: rows, products: prods.map(x => ({ name: x.name, label: x.label, held: x.held })) },
-      picUrls: [frame, sheet].concat(prodPics).filter(Boolean) });
-      if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
-      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place, ...said,
-        products: prods.map(x => ({ name: x.name, what: x.what })) });
-      write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
-      report.written++;
-    } catch (e) { report.failed.push({ n: f.n, error: e.message }); }
-  };
-  for (let k = 0; k < want.length; k += SD_WRITE_AT_ONCE) await Promise.all(want.slice(k, k + SD_WRITE_AT_ONCE).map(one));
-  // The writer took a while and other things write this project meanwhile: read again, and only these prompts touched -
-  // each line's takes and hand choice stay as they are.
-  const saved = PROJECTS.apply(id, (fresh) => {
-    fresh.lines = (fresh.lines || []).map(_normLine);
-    for (const [i, w] of write) {
-      if (!fresh.lines[i]) continue;
-      fresh.lines[i].sd = { ...(fresh.lines[i].sd || _normSdLine(null)), ...w };
-    }
-    fresh.updatedAt = new Date().toISOString();
-  });
-  console.log('[scen3/sd/prompts] ' + id + ' written=' + report.written + ' failed=' + report.failed.length);
-  return { project: saved || proj0, report };
-}
-
-router.post('/scen3/sd/prompts', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const proj = _loadProjects().find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const only = Array.isArray(b.lines) ? b.lines.map(n => parseInt(n, 10)).filter(n => n >= 0) : null;
-    const out = await _writeSdPrompts(id, only);
-    res.json({ success: true, project: _projFull(out.project), report: out.report });
-  } catch (e) {
-    console.error('[scen3/sd/prompts]', e.message);
-    res.status(e.status || 502).json({ success: false, error: e.message });
-  }
-});
-
-router.post('/scen3/sd/prompt', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const i = parseInt(b.line, 10);
-    const proj = _loadProjects().find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const f = (_sdView(proj) || []).find(x => x.line === i);
-    if (!f) return res.status(400).json({ success: false, error: 'no such line, or it is not read yet' });
-    let text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
-    // Written by hand in another language, it is kept - and sent - in English.
-    if (text && !b.useAgent) {
-      const t = await _englishText(text);
-      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
-      text = String(t.text || '').trim().slice(0, 20000);
-    }
-    const saved = PROJECTS.apply(id, (fresh) => {
-      fresh.lines = (fresh.lines || []).map(_normLine);
-      const line = fresh.lines[i];
-      if (!line) return;
-      const was = line.sd || _normSdLine(null);
-      if (b.useAgent) {
-        if (!was.agent) return;
-        line.sd = { ...was, prompt: was.agent, edited: false };
-      } else {
-        // Written by hand it is the line's as things stand now; the same words as the writer's are the writer's.
-        line.sd = { ...was, prompt: text, edited: !!text && text !== was.agent, sig: text === was.agent ? was.sig : f.sig, at: new Date().toISOString() };
-      }
-      fresh.updatedAt = new Date().toISOString();
-    });
-    res.json({ success: true, project: _projFull(saved || proj) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-/* ── THE CLIP OF A LINE FILMED BY SEEDANCE ──
-   Asked for through the clip routes of a fragment (/scen3/fragments/clip and /clips hand a Seedance project here),
-   addressed by the line. The video chat's way to Seedance (lib/video-models.js, the only place a field is written;
-   lib/video-task.js): kie first - Replicate refused our AI faces on Seedance - each rung's references made to its
-   limits (lib/video-prep.js) and hosted fresh on R2.
-
-   What goes: the frame the line opens on (@Image1), the character's 4K sheet (@Image2), the sound (@Audio1 - the
-   line's read, or a 10 s sample of the voice), the prompt; the clip as long as the read, rounded up to the whole
-   second; Seedance's own sound always on - it voices the line itself (a read laid under a silent clip has lips that
-   drift from the read).
-
-   EVERYTHING IS SETTLED BEFORE THE MONEY, and said when it cannot be: the model, the quality and the mood chosen, a
-   line read and not longer than the model takes, a frame, the look, a voice sample when one is wanted; the place
-   analysed and the prompt written - each a stage of the row. PAID ONCE: `asked` is written just
-   before each paid create; a create with no answer stops the ladder (lib/task-started.js `unsure`); a row found at
-   start with `asked` and no task "may have been paid for" and is not asked again by itself.
-   ─────────────────────────────────────────────────────────────────────────── */
-const VMOD = require('../lib/video-models');
-const VTASK = require('../lib/video-task');
-const SPEECH = require('../lib/speech-end');
-const FAKE = require('../lib/fake-agg');
-const _sdAsking = new Set();              // the rows being asked for now, in this process - their poll waits
-const SD_BOOT_AT = Date.now();            // ...and every row made since this process started is this process's
-
-// The voice sample for `sample`: the cast voice's demo on the Voices shelf, else the character's own record of it -
-// a file that is on disk.
-function _sdSample(p) {
-  const cv = _castVoiceOf(p);
-  return cv && cv.has && cv.id ? _sampleOf(cv.id) : '';
-}
-// A voice's labels (gender, age, accent, descriptive) - the Voices shelf's, else the character's record of the voice.
-function _voiceLabels(voiceId) {
-  const shelf = VSHELF.get(voiceId);
-  if (shelf && shelf.labels) return shelf.labels;
-  const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : [];
-  for (const ch of arr) {
-    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
-    if (v && v.labels) return v.labels;
-  }
-  return null;
-}
-function _sampleOf(voiceId) {
-  const there = (u) => { const abs = u ? toDiskExisting(String(u)) : ''; return !!(abs && fs.existsSync(abs)); };
-  const shelf = VSHELF.get(voiceId);
-  if (shelf && shelf.demo && there(shelf.demo)) return String(shelf.demo);
-  const chars = _read(path.join(DATA_DIR, 'characters.json'));
-  const arr = Array.isArray(chars) ? chars : [];
-  for (const ch of arr) {
-    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
-    if (v && v.sample && there(v.sample)) return String(v.sample);
-  }
-  return '';
-}
-
-/* ── A VOICE'S DEMO, MADE WHEN IT HAS NONE ──────────
-   POST /api/scen3/voice/demo  { projectId }  -> { success, made, project }
-
-   By the voice sample Seedance takes the timbre of the voice's demo. A voice taken from the ElevenLabs library gets its
-   demo when it is taken (/scen3/voices/take); a character's voice set another way may have none. The page asks for
-   it the moment a voice without one is chosen in a project filmed by the voice sample, and its generate buttons wait
-   until it is ready. The same phrase a take reads (lib/voice-demo.js) - ElevenLabs credits, about ten seconds - filed into
-   media/voice/demos/ and onto the Voices shelf, so it is made once for every project the voice is in. One at a time
-   per voice: a second ask waits for the first.
-   ──────────────────────────────────────────────────────────────────────────── */
-const _demoMaking = new Map();            // voiceId -> the making under way
-function _makeDemo(voiceId, name) {
-  const live = _demoMaking.get(voiceId);
-  if (live) return live;
-  const run = (async () => {
-    const key = _elKey();
-    if (!key) throw Object.assign(new Error('no ElevenLabs key in settings - the voice demo cannot be made'), { status: 400 });
-    const buf = await _speakLine(key, voiceId, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
-    const dir = path.join(CFG.MEDIA.voice, 'demos');
-    fs.mkdirSync(dir, { recursive: true });
-    const file = 'demo_' + voiceId + '_' + Date.now() + '.mp3';
-    fs.writeFileSync(path.join(dir, file), buf);
-    const demo = '/media/voice/demos/' + file;
-    const dur = await _audioDur(path.join(dir, file));
-    await VSHELF.register({ voiceId, name, demo, dur });
-    console.log('[scen3/voice/demo] made for', voiceId, dur.toFixed(1) + 's');
-    return demo;
-  })();
-  _demoMaking.set(voiceId, run);
-  run.then(() => _demoMaking.delete(voiceId), () => _demoMaking.delete(voiceId));
-  return run;
-}
-router.post('/scen3/voice/demo', async (req, res) => {
-  try {
-    const id = String((req.body || {}).projectId || '').trim();
-    const proj = _loadProjects().find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const cv = _castVoiceOf(proj);
-    if (!cv.has || !cv.id) return res.status(400).json({ success: false, error: 'choose a voice first' });
-    let made = false;
-    if (!_sampleOf(cv.id)) {
-      await _makeDemo(cv.id, cv.name || (cv.character ? cv.character + ' - voice ' + cv.index : ''));
-      made = true;
-    }
-    res.json({ success: true, made, project: _projFull(_loadProjects().find(x => String(x.id) === id) || proj) });
-  } catch (e) {
-    const d = (e.response && e.response.data) || {};
-    const msg = (d.detail && (d.detail.message || d.detail)) || e.message;
-    console.error('[scen3/voice/demo]', msg);
-    res.status(e.status || 502).json({ success: false, error: String(msg) });
-  }
-});
-
-// What a clip of line `i` would be made of, or why it cannot be.
-function _sdClipPlan(proj, i) {
-  const video = _normVideo(proj.video);
-  const missing = _unchosen(video, ['model', 'quality', 'mood']);
-  if (missing) return { skipped: missing };
-  const f = (_sdView(proj) || []).find(x => x.line === i);
-  if (!f || f.noRead) return { skipped: video.sound === 'sample' ? 'this line has no words' : 'this line is not read yet - Seedance hears its read' };
-  const model = TH.byId(video.model);
-  if (f.tooLong) return { skipped: 'this line is ' + f.dur.toFixed(1) + ' s - longer than ' + (model ? model.label : 'the model') + ' takes' };
-  if (!f.frameId) return { skipped: 'no frame for this line - make one in the frames chat' };
-  const cast = _normCasting(proj.casting);
-  if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
-  const sound = video.sound || TH.SOUND_DEFAULT;
-  const sample = sound === 'sample' ? _sdSample(proj) : '';
-  if (sound === 'sample' && !sample) return { skipped: 'the voice has no demo yet - it is made in field 1, mood & voice' };
-  const quality = TH.qualityOf(video.model, video.quality);
-  if (!quality) return { skipped: 'choose the quality of the clips (field 3) first' };
-  const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
-  // With `sample` Seedance picks the length (-1) and bills what it made: no price beforehand.
-  return { frag: f, video, sound, sample, voice, quality, cast, cost: f.secs > 0 ? +(quality.pricePerSec * f.secs).toFixed(4) : null };
-}
-function _sdPlanAgain(id, i) {
-  const proj = _loadProjects().find(p => String(p.id) === String(id));
-  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
-  const plan = _sdClipPlan(proj, i);
-  if (plan.skipped) throw Object.assign(new Error(plan.skipped), { status: 400 });
-  return { proj, plan };
-}
-
-// One Seedance clip asked for: the place, the prompt and the sound made sure of, the references prepared and hosted,
-// the ladder walked. `onAsk(true|false)` marks the row's `asked` around each paid create.
-async function _submitSdClip(b, onStage, onAsk) {
-  const say = typeof onStage === 'function' ? onStage : () => {};
-  const ask = typeof onAsk === 'function' ? onAsk : () => {};
-  const id = String(b.projectId || '').trim();
-  const i = parseInt(b.line, 10);
-  let { proj, plan } = _sdPlanAgain(id, i);
-  const place = _normCasting(proj.casting).locationImage;
-  if (place && !_envMotionOf(place)) {
-    say('analysis · the place');
-    try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/sdclip] the place was not analysed:', e.message); }
-    ({ proj, plan } = _sdPlanAgain(id, i));
-  }
-  if (!plan.frag.prompt || (plan.frag.stale && !plan.frag.edited)) {
-    say('writing the prompt');
-    const out = await _writeSdPrompts(id, [i]);
-    if (out.report.failed.length) throw new Error('the prompt was not written: ' + out.report.failed[0].error);
-    ({ proj, plan } = _sdPlanAgain(id, i));
-    if (!plan.frag.prompt) throw new Error('the prompt was not written');
-  }
-  const f = plan.frag;
-  const fr = _framePool(proj).find(v => v.id === f.frameId);
-  const srcs = { frame: fr && fr.path, sheet: plan.cast.obrazImage, sound: plan.sound === 'sample' ? plan.sample : f.audio };
-  // The products of the frame go as pictures after the sheet - as many as the prompt was
-  // written for (its fingerprint holds them); a prompt naming a picture that is not sent is refused in words.
-  const prods = _frameProds(fr).filter(x => x.have);
-  prods.forEach((x, k) => { srcs['prop' + k] = x.path; });
-  const named = Math.max(0, ...[...String(f.prompt || '').matchAll(/@Image(\d+)/g)].map(m => +m[1]));
-  if (named > 2 + prods.length) throw new Error('the prompt names a product picture that is not in Props any more - write the prompt again');
-  const abs = {};
-  for (const [k, u] of Object.entries(srcs)) {
-    abs[k] = u ? toDiskExisting(u) : '';
-    if (!abs[k] || !fs.existsSync(abs[k])) throw new Error('a reference of this clip is not in the library any more: ' + (u || k));
-  }
-  const ladder = VMOD.ladder(plan.video.model, 'kie');
-  if (!ladder.length) throw new Error(VMOD.noRoute(plan.video.model));
-  const format = _normMix(proj.mix).settings.format;
-  const reasons = [];
-  let hosted = null;
-  for (const pair of ladder) {
-    if (!hosted) {
-      say('sending the references');
-      if (FAKE.on()) {
-        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) : f.dur,
-          props: prods.map((x, k) => FAKE.host(srcs['prop' + k])) };
-      } else {
-        const VP = require('../lib/video-prep');
-        const one = await VP.image(abs.frame, pair);
-        const two = await VP.image(abs.sheet, pair);
-        // The sample as long as the model takes a reference sound - all of it when it is shorter (15 s on 2.0).
-        const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample'
-          ? { from: 0, to: Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) } : { from: 0, to: f.dur });
-        try {
-          const props = [];
-          for (let k = 0; k < prods.length; k++) {
-            const pic = await VP.image(abs['prop' + k], pair);
-            props.push(await H.uploadToPublicHost(pic.buf, { ext: pic.ext, verify: true, forceFresh: true }));
-          }
-          hosted = {
-            frame: await H.uploadToPublicHost(one.buf, { ext: one.ext, verify: true, forceFresh: true }),
-            sheet: await H.uploadToPublicHost(two.buf, { ext: two.ext, verify: true, forceFresh: true }),
-            sound: await H.uploadToPublicHost(snd.file, { ext: 'mp3', verify: true, forceFresh: true }),
-            secs: snd.secs, props,
-          };
-        } finally { if (typeof snd.drop === 'function') snd.drop(); }
-      }
-    }
-    // The prompt is kept in kie's names (@Image1); another aggregator gets its own ([Image1] on Replicate).
-    const prompt = pair.agg === 'kie' ? f.prompt : f.prompt.replace(/@(Image|Video|Audio)(\d+)/g, '[$1$2]');
-    const req = {
-      prompt,
-      media: [{ kind: 'image', url: hosted.frame }, { kind: 'image', url: hosted.sheet }]
-        .concat((hosted.props || []).map(url => ({ kind: 'image', url })), [{ kind: 'audio', url: hosted.sound, in: 0, out: hosted.secs }]),
-      params: { resolution: plan.video.quality, duration: f.secs, aspect: FRAG_FORMATS.includes(format) ? format : '9:16', audio: true },
-    };
-    try { VMOD.check(pair, req); } catch (e) { reasons.push(pair.aggLabel + ': ' + e.message); continue; }
-    say('asking ' + pair.aggLabel);
-    ask(true);                                    // THE PAID MOMENT
-    let sub;
-    try {
-      sub = await VTASK.submit(pair, req);
-    } catch (e) {
-      const why = String((e && e.message) || e).slice(0, 300);
-      console.warn('[scen3/sdclip]', pair.key, e.unsure ? 'no answer:' : 'refused:', why);
-      if (e.unsure) throw new Error(why + ' - it may have been paid for and not followed; look at ' + pair.aggLabel + '’s own history before asking again');
-      ask(false);
-      reasons.push(pair.aggLabel + ': ' + why);
-      if (REFUSAL.isRefusal(why)) break;            // another aggregator would refuse the same content too
-      continue;
-    }
-    console.log('[scen3/sdclip] ' + id + ' line ' + (i + 1) + ' ' + pair.key + ' ' + plan.video.quality + ' ' + f.secs + 's -> ' + String(sub.taskId).slice(0, 24));
-    return {
-      taskId: sub.taskId, engine: pair.key,
-      // What the take is made of - what later tells whether it is still the line's (_sdFresh).
-      file: { projectId: id, line: i, frameId: f.frameId, sound: plan.sound, model: plan.video.model, quality: plan.video.quality, secs: f.secs,
-        take: plan.sound === 'read' ? f.audio : '', words: f.words, voice: plan.sound === 'sample' ? plan.voice : '' },
-    };
-  }
-  throw new Error(reasons.join(' · ') || 'no aggregator could take it');
-}
-
-// The row is written first; the rest goes on without the page, and what comes of it is written into the row.
-function _sdStartClip(rec, request) {
-  _sdAsking.add(rec.id);
-  const mark = (asked) => {
-    const row = ALERTS.get(rec.id);
-    if (row && row.job) ALERTS.update(rec.id, { job: { ...row.job, params: { ...(row.job.params || {}), asked } } });
-  };
-  return _submitSdClip(request, (s) => ALERTS.update(rec.id, { stage: s }), mark)
-    .then((out) => {
-      ALERTS.update(rec.id, {
-        taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
-        job: { type: 'sdclip', params: { request, file: out.file, asked: true } },
-      });
-    })
-    .catch((e) => {
-      console.error('[scen3/sdclip]', e.message);
-      ALERTS.fail(rec.id, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
-    })
-    .finally(() => _sdAsking.delete(rec.id));
-}
-function _sdRunning(id) {
-  return new Set(ALERTS.list()
-    .filter(r => r.state === 'running' && r.what === 'clip' && r.job && r.job.params && r.job.params.file
-      && String(r.job.params.file.projectId) === String(id))
-    .map(r => Number(r.job.params.file.line)));
-}
-
-// POST /scen3/fragments/clip for a Seedance project.
-function _sdClipRoute(req, res, proj) {
-  const b = req.body || {};
-  const id = String(proj.id);
-  const i = parseInt(b.line, 10);
-  const plan = _sdClipPlan(proj, i);
-  if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
-  if (_sdRunning(id).has(i)) return res.json({ success: true, skipped: 'this line is already being filmed' });
-  const request = { projectId: id, line: i };
-  const rec = JOBS.submitted({
-    kind: 'video', what: 'clip', title: 'Clip · fragment ' + plan.frag.n, where: b.where || null,
-    stage: 'getting ready', taskIds: [],
-    job: { type: 'sdclip', params: { request, file: { projectId: id, line: i } } },
-  });
-  res.json({ success: true, alertId: rec.id });
-  _sdStartClip(rec, request);
-}
-
-// POST /scen3/fragments/clips for a Seedance project: every line that needs its clip, a row each at once, then asked a
-// second apart.
-function _sdClipsRoute(req, res, proj) {
-  const b = req.body || {};
-  const id = String(proj.id);
-  const key = String(b.key || '');
-  const title = String(proj.name || proj.title || 'talking head');
-  const busy = _sdRunning(id);
-  const queued = [], skipped = [];
-  for (const f of _sdView(proj) || []) {
-    const i = f.line;
-    if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
-    const plan = _sdClipPlan(proj, i);
-    if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
-    if (f.clip) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
-    const request = { projectId: id, line: i };
-    const rec = JOBS.submitted({
-      kind: 'video', what: 'clip', title: 'Clip · fragment ' + f.n, where: _whereClip(key, title, i, f.n),
-      stage: 'getting ready', taskIds: [],
-      job: { type: 'sdclip', params: { request, file: { projectId: id, line: i } } },
-    });
-    queued.push({ line: i + 1, alertId: rec.id, request, rec });
-  }
-  console.log('[scen3/sdclips] ' + id + ' queued=' + queued.length + ' skipped=' + skipped.length);
-  res.json({ success: true, queued: queued.map(q => ({ line: q.line, alertId: q.alertId })), skipped });
-  (async () => {
-    for (let k = 0; k < queued.length; k++) {
-      if (k) await _wait(SUBMIT_GAP_MS);
-      _sdStartClip(queued[k].rec, queued[k].request);
-    }
-  })().catch(e => console.error('[scen3/sdclips]', e.message));
-}
-
-// A take chosen by hand (the line's Seedance takes, or none - back to the newest fresh one). The timeline follows.
-router.post('/scen3/sd/pick', (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const proj = _loadProjects().find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const i = parseInt(b.line, 10);
-    const clipId = String(b.clipId || '');
-    const saved = PROJECTS.apply(id, (fresh) => {
-      fresh.lines = (fresh.lines || []).map(_normLine);
-      const sd = fresh.lines[i] && fresh.lines[i].sd;
-      if (!sd || (clipId && !sd.clips.some(c => c.id === clipId))) return;
-      sd.chosen = clipId;
-      fresh.updatedAt = new Date().toISOString();
-    });
-    if (saved) MIRROR.touch(saved.id, { project: saved });
-    res.json({ success: true, project: _projFull(saved || proj) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// The runner's side: wait for the task, download it ONCE into the project's clips/, make it play in the browser, its
-// poster, its length - and file it as a take of its line, the line's clip from now on.
-JOBS.register('sdclip', {
-  timeoutMs: 45 * 60 * 1000,
-  poll: async (rec) => {
-    if (!rec.taskIds || !rec.taskIds[0]) {
-      // Still being asked for, in this process: the stage says what is happening. A row made since this process started
-      // is this process's - its asking writes the task into it or fails it (the runner polls a row the moment it is made,
-      // before the asking has begun).
-      if (_sdAsking.has(rec.id) || (Date.parse(rec.startedAt) || 0) >= SD_BOOT_AT) return { state: 'pending' };
-      // Not being asked for and no task: the app was closed meanwhile. Asked - it may have been paid for.
-      const asked = !!(((rec.job || {}).params || {}).asked);
-      return { state: 'failed', error: asked
-        ? 'the app closed while Seedance was being asked - it may have been paid for: look at kie.ai’s history before trying again'
-        : 'the app closed before Seedance was asked - nothing was paid; try again' };
-    }
-    const r = await VTASK.poll(rec.taskIds[0]);
-    if (r.state === 'pending') return { state: 'pending' };
-    if (r.state === 'failed') return { state: 'failed', error: String(r.error || 'Seedance did not make it') };
-    const p = _fileParams(rec);
-    const dir = PROJECTS.dirOf(p.projectId, 'clips');
-    if (!dir) return { state: 'failed', error: 'the project is gone' };
-    const name = 'sd' + String(rec.taskIds[0]).replace(/[^a-z0-9]/gi, '').slice(-20) + '_' + Date.now() + '.mp4';
-    const abs = path.join(dir, name);
-    if (r.local) fs.copyFileSync(toDiskExisting(r.local) || r.local, abs);   // the fake aggregator's clip: a library address
-    else await VTASK.fetchTo(r.url, abs);   // a download that fails throws: the next tick asks and fetches again
-    try { await H.normalizeVideoForBrowser(abs); } catch (e) { console.warn('[scen3/sdclip] normalize failed:', e.message); }
-    return { state: 'success', path: toUrl(abs), dur: await _audioDur(abs), thumb: await _clipPoster(abs, name), speechEnd: await SPEECH.speechEnd(abs) };
-  },
-  file: async (rec, landed) => {
-    const p = _fileParams(rec);
-    const clip = _normSdClip({
-      path: landed.path, thumb: landed.thumb, dur: landed.dur, frameId: p.frameId, sound: p.sound,
-      model: p.model, quality: p.quality, secs: p.secs, at: new Date().toISOString(),
-      take: p.take, words: p.words, voice: p.voice, speechEnd: landed.speechEnd,
-    });
-    const i = Number(p.line);
-    let filed = false;
-    const saved = PROJECTS.apply(p.projectId, (fresh) => {
-      fresh.lines = (fresh.lines || []).map(_normLine);
-      const line = fresh.lines[i];
-      if (!line) return;
-      const sd = line.sd || _normSdLine(null);
-      sd.clips = sd.clips.filter(c => c.id !== clip.id).concat([clip]);
-      sd.chosen = '';                           // a new clip is the line's: it is what was just paid for
-      line.sd = sd;
-      fresh.updatedAt = clip.at;
-      filed = true;
-    });
-    if (!saved) throw new Error('the project is gone');
-    if (!filed) throw new Error('line ' + (i + 1) + ' is not in the project any more');
-    MIRROR.touch(saved.id, { project: saved });
-    try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
-    return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
-  },
-  // TRY AGAIN from Alerts: the row restarts at once and the asking goes on behind it - the place, the prompt and the
-  // references take a while, and the person should see the row running from the press (lib/gen-jobs.js `later`).
-  submit: async (request, rec) => ({
-    stage: 'getting ready', params: { asked: false },
-    later: () => _sdStartClip(ALERTS.get(rec.id) || rec, request),
-  }),
-  busy: (rec) => _sdAsking.has(rec.id),
-});
-
-// For the timeline mirror (lib/frag-mirror.js): a Seedance project's lines that HAVE a clip, in order - the line, its
-// clip (whose own sound the timeline hears) and how long it lies. null for a project that is not filmed by Seedance.
-// THE CELL ENDS WHERE THE SPEECH ENDS, with a breath after it, never past the
-// clip - no fade. A take with no speech end measured: voiced from the read, a breath past the read;
-// by the voice sample, the clip's own length.
-const SD_BREATH = 0.3;
-function _sdCuts(proj) {
-  const view = _sdView(proj);
-  if (!view) return null;
-  return view.filter(f => f.clip).map(f => {
-    const c = f.clip;
-    const len = c.speechEnd > 0 ? Math.min(c.dur || Infinity, c.speechEnd + SD_BREATH)
-      : c.sound === 'read' && f.dur > 0 ? Math.min(c.dur || f.dur, f.dur + 0.6) : (c.dur || 0);
-    return { line: f.line, clip: c, audio: f.audio, dur: f.dur, len: Math.round(len * 100) / 100 };
-  });
-}
-
 /* ── A line's animation prompt, by hand ──────────────────────────────────────
-   POST /api/scen3/fragments/shot  { projectId, line, patch: { motion?, useAgentMotion? } }
+   POST /api/scen3/fragments/shot  { projectId, line, patch: { motion?, useAgentMotion?, omni?, useAgentOmni? } }
                                    -> { success, project }
 
    A prompt written by hand is marked so a new pass leaves it alone, and
    useAgentMotion puts the agent's back. Written for the words as they are now and the mood as it is
-   now, so it is fresh.
+   now, so it is fresh. `omni` / `useAgentOmni` are the same for the line's OmniHuman prompt (_normOmni) - cut to
+   its 300 characters at the last whole sentence.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/fragments/shot', async (req, res) => {
   try {
     const b = req.body || {};
-    // A motion written by hand in another language is kept - and sent - in English. First, then the project.
-    let motion = null;
-    if (b.patch && typeof b.patch === 'object' && !b.patch.useAgentMotion && 'motion' in b.patch) {
-      const t = await _englishText(String(b.patch.motion || ''));
-      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
-      motion = t.text;
-    }
+    // A prompt written by hand in another language is kept - and sent - in English. First, then the project.
+    const english = async (key, back) => {
+      if (!(b.patch && typeof b.patch === 'object' && !b.patch[back] && key in b.patch)) return { text: null };
+      return _englishText(String(b.patch[key] || ''));
+    };
+    const tm = await english('motion', 'useAgentMotion');
+    if (tm.fail) return res.status(502).json({ success: false, error: tm.fail });
+    const to = await english('omni', 'useAgentOmni');
+    if (to.fail) return res.status(502).json({ success: false, error: to.fail });
+    const motion = tm.text;
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
@@ -4501,18 +3847,30 @@ router.post('/scen3/fragments/shot', async (req, res) => {
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
     const patch = (b.patch && typeof b.patch === 'object') ? b.patch : {};
-    const was = p.lines[i].shot || {};
-    const next = { ...was };
-    if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
-    else if ('motion' in patch) {
-      next.motion = motion != null ? motion : String(patch.motion || '');
-      next.motionEdited = next.motion.trim() !== String(was.motionAgent || '').trim();
+    const at = new Date().toISOString();
+    const mood = _normVideo(p.video).mood;
+    if (patch.useAgentMotion || 'motion' in patch) {
+      const was = p.lines[i].shot || {};
+      const next = { ...was };
+      if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
+      else {
+        next.motion = motion != null ? motion : String(patch.motion || '');
+        next.motionEdited = next.motion.trim() !== String(was.motionAgent || '').trim();
+      }
+      next.said = p.lines[i].text;
+      next.mood = mood;
+      next.at = at;
+      p.lines[i].shot = _normShot(next);
     }
-    next.said = p.lines[i].text;
-    next.mood = _normVideo(p.video).mood;
-    next.at = new Date().toISOString();
-    p.lines[i].shot = _normShot(next);
-    p.updatedAt = next.at;
+    if (patch.useAgentOmni || 'omni' in patch) {
+      const was = p.lines[i].omni || {};
+      const text = patch.useAgentOmni ? String(was.agent || '') : OMNI.fit(to.text != null ? to.text : patch.omni);
+      const place = _placeSig(_envMotionOf(_normCasting(p.casting).locationImage));
+      p.lines[i].omni = _normOmni({ ...was, prompt: text, edited: !patch.useAgentOmni && text !== String(was.agent || ''),
+        said: p.lines[i].text, place, mood, at });
+      if (!p.lines[i].omni) delete p.lines[i].omni;
+    }
+    p.updatedAt = at;
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -4814,9 +4172,20 @@ function _motionStale(line, envMotion) {
   if (String(shot.motion).indexOf(MOTION_LIPS) < 0) return true;
   return !!envMotion && String(shot.motion).indexOf(envMotion) < 0;
 }
+// The same question of a line's OmniHuman prompt: never written, written for other words, or for another movement of
+// the place (its prompt holds no sentence of ours, so what it was written with is kept beside it - `place`).
+function _omniStale(line, envMotion) {
+  const o = line && line.omni;
+  if (!o || !o.prompt) return true;
+  if (String(o.said || '') !== String((line && line.text) || '')) return true;
+  return !!envMotion && o.place !== _placeSig(envMotion);
+}
+// Is the line's prompt for this model written by hand - left alone by a new pass?
+const _promptEdited = (line, omni) => (omni ? !!(line && line.omni && line.omni.edited) : !!(line && line.shot && line.shot.motionEdited));
 
 /**
- * Write the animation prompts of a project's lines. The route below is one caller; a clip about
+ * Write the animation prompts of a project's lines - Kling avatar's (`shot.motion`), or for a project filmed by
+ * OmniHuman its own (`omni`, by lib/omni-prompt.js's rules). The route below is one caller; a clip about
  * to be rendered is the other, asking for the one line it is about. The
  * prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
  */
@@ -4834,6 +4203,7 @@ async function _writePromptsNow(id, want) {
     const pool = _framePool(proj);
     if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip is made from one'), { status: 400 });
     const video = _normVideo(proj.video);
+    const omni = video.model === 'omnihuman';
     // The person moves in the mood they chose: not chosen yet is said, not assumed.
     const missing = _unchosen(video, ['mood']);
     if (missing) throw Object.assign(new Error(missing), { status: 400 });
@@ -4850,9 +4220,10 @@ async function _writePromptsNow(id, want) {
     // Which lines this touches: the ones named, or every line whose prompt is stale - and never one
     // edited by hand unless named.
     const live = (i) => !lines[i].removed;               // a line taken off is not written for
+    const stale = (l) => (omni ? _omniStale(l, envMotion) : _motionStale(l, envMotion));
     const only = Array.isArray(want)
       ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].filter(live).sort((a, c) => a - c)
-      : lines.map((_, i) => i).filter(i => live(i) && _motionStale(lines[i], envMotion) && !(lines[i].shot && lines[i].shot.motionEdited));
+      : lines.map((_, i) => i).filter(i => live(i) && stale(lines[i]) && !_promptEdited(lines[i], omni));
     if (!only.length) return { project: proj, report: { written: 0, skipped: [] } };
 
     // The frames themselves, in the order the lines take them: the agent writes movement that starts
@@ -4878,7 +4249,14 @@ async function _writePromptsNow(id, want) {
     // The products the line's frame was drawn with: said in the line's row, and one rule.
     const prodsOf = (i) => _frameProds(where(i).fr);
     const anyProd = only.some(i => prodsOf(i).length);
-    const ask = 'You are directing a talking-head video: one person, one place, spoken'
+    const ask = omni ? OMNI.ask({
+      shown: shown.length, mood, sets, envMotion,
+      lines: only.map((i) => {
+        const w = where(i);
+        return { n: i + 1, at: w.at + 1, shot: setOf(w.fr).label, moment: (w.fr && w.fr.moment) || '',
+          products: prodsOf(i).map(p => ({ name: p.name, label: p.label })), words: lines[i].text };
+      }),
+    }) : 'You are directing a talking-head video: one person, one place, spoken'
       + ' straight to camera. IMAGE 1' + (shown.length > 1 ? ' to ' + shown.length : '') + ' are the first'
       + ' frames of this video - the instants the lines open on.'
       + '\n\nTHE FEEL OF THE WHOLE VIDEO: ' + mood.label + '. ' + mood.brief
@@ -4908,19 +4286,27 @@ async function _writePromptsNow(id, want) {
     const content = [{ type: 'text', text: ask }];
     for (const url of urls) content.push({ type: 'image_url', image_url: { url } });
     const raw = await _ask([{ role: 'user', content }]);
-    const mt = String(raw || '').match(/\{[\s\S]*\}/);
-    if (!mt) throw new Error('the agent did not answer with the prompts');
-    let parsed;
-    try { parsed = JSON.parse(mt[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
-    const got = (parsed && Array.isArray(parsed.lines)) ? parsed.lines : [];
+    if (!String(raw || '').match(/\{[\s\S]*\}/)) throw new Error('the agent did not answer with the prompts');
+    // [{ n, prompt }] - Kling's writer answers `motion`, OmniHuman's `prompt`; both are read here.
+    const got = OMNI.read(raw);
     if (!got.length) throw new Error('the agent wrote nothing usable');
 
     const now = new Date().toISOString();
     const report = { written: 0, skipped: [] };
-    const write = {};                     // line -> the shot to put on it
+    const write = {};                     // line -> the shot (or the OmniHuman prompt) to put on it
     for (const i of only) {
-      const hit = got.find(x => (parseInt(x && x.n, 10) || 0) === i + 1);
-      const said = _cleanText((hit && hit.motion) || '').slice(0, 900);
+      const hit = got.find(x => x.n === i + 1);
+      // OMNIHUMAN: the agent's text alone, cut to its 300 characters at the last whole sentence - no sentence of ours
+      // goes around it (the voice moves the mouth by itself; the place is said by the agent, if at all).
+      if (omni) {
+        const text = OMNI.fit(_cleanText((hit && hit.prompt) || ''));
+        if (!text) { report.skipped.push(i + 1); continue; }
+        write[i] = _normOmni({ prompt: text, agent: text, edited: false, said: String(lines[i].text || ''),
+          place: _placeSig(envMotion), mood: mood.id, at: now });
+        report.written++;
+        continue;
+      }
+      const said = _cleanText((hit && hit.prompt) || '').slice(0, 900);
       if (!said) { report.skipped.push(i + 1); continue; }
       // ONE TEXT, THE PERSON AND THE PLACE. The agent is told how the place
       // moves and told not to describe it again, so what it writes is the person alone. The place's own sentence is added
@@ -4942,12 +4328,12 @@ async function _writePromptsNow(id, want) {
     // carry back whatever landed meanwhile and undo it.
     const saved = PROJECTS.apply(id, (fresh) => {
       fresh.lines = (fresh.lines || []).map(_normLine);
-      for (const [k, shot] of Object.entries(write)) {
-        if (fresh.lines[k]) fresh.lines[k].shot = shot;
+      for (const [k, w] of Object.entries(write)) {
+        if (fresh.lines[k]) fresh.lines[k][omni ? 'omni' : 'shot'] = w;
       }
       fresh.updatedAt = now;
     });
-    console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + sets.map(s => s.id).join('+') + ' frames=' + shown.length
+    console.log('[scen3/video/prompts] ' + id + (omni ? ' omnihuman ' : ' ') + mood.id + ' ' + sets.map(s => s.id).join('+') + ' frames=' + shown.length
       + ' written=' + report.written + ' skipped=' + report.skipped.length);
     return { project: saved || proj, report };
   }
@@ -5171,7 +4557,7 @@ function _framePropsOf(list) {
 
 // The products of a line's frame as its clip's writers are told of them: the name and
 // the description as kept in Props now (lib/props.js), else as the frame remembered them (a product deleted); its
-// LABEL and HOW IT IS HELD read out of the description; `have` - its picture is still in Props (Seedance is sent it).
+// LABEL and HOW IT IS HELD read out of the description.
 const _descPart = (d, key) => {
   const m = new RegExp('^' + key + ':\\s*(.+)$', 'mi').exec(String(d || ''));
   return m ? m[1].trim().replace(/[.\s]+$/, '') : '';
@@ -5180,9 +4566,7 @@ function _frameProds(fr) {
   const P = require('../lib/props');
   return _framePropsOf(fr && fr.props).map((p) => {
     const n = P.facts(p.path, p);
-    const abs = toDiskExisting(p.path);
-    return { path: p.path, name: n.name, label: _descPart(n.description, 'LABEL'), held: _descPart(n.description, 'HOW IT IS HELD'),
-      what: _descPart(n.description, 'WHAT IT IS'), have: !!(abs && fs.existsSync(abs)) };
+    return { path: p.path, name: n.name, label: _descPart(n.description, 'LABEL'), held: _descPart(n.description, 'HOW IT IS HELD') };
   });
 }
 
@@ -5248,16 +4632,20 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
    POST /api/scen3/fragments/clip  { projectId, line, where } -> { success, alertId, taskId }
                                                               -> { success, skipped: '<why>' }
 
-   The frame of the line speaks its read: Kling avatar hears the picture, the take and the
-   animation prompt, and nothing else. This is the journalled path - a row in Alerts from the
-   moment it is asked for, and the SERVER sees it through (lib/gen-jobs.js): it polls kie, downloads
-   the clip once into the project's clips/, makes a poster, normalises it for the browser, measures
-   it and files it as a take of that line. Leaving the page loses nothing.
+   The frame of the line speaks its read: the model the project is filmed by (lib/th-video.js - Kling avatar or
+   OmniHuman 2.0) hears the picture, the take and the line's prompt, and nothing else. This is the journalled path - a
+   row in Alerts from the moment it is asked for, and the SERVER sees it through (lib/gen-jobs.js): it polls kie,
+   downloads the clip once into the project's clips/, makes a poster, normalises it for the browser, measures it and
+   files it as a take of that line, with the model that made it. Leaving the page loses nothing.
 
-   EVERY REFUSAL IS BEFORE THE MONEY. What cannot be rendered is said plainly - no words, no frame,
+   EVERY REFUSAL IS BEFORE THE MONEY. What cannot be rendered is said plainly - no key, no words, no frame,
    no read, a read that no longer matches the words, a read longer than the model takes - and
    answered as `skipped`, not as an error: /fragments/clips, walking every line, must be able to step over one.
+   PAID ONCE: `asked` is written on the row just before the paid create; a create that got no answer stops there
+   (lib/task-started.js `unsure`), and a row found at start with `asked` and no task "may have been paid for" and is
+   not asked again by itself.
    ──────────────────────────────────────────────────────────────────────────── */
+const TS = require('../lib/task-started');
 
 // What a clip of this line would be made of, or why it cannot be. One reading, used by the routes,
 // by "try again" and by _clipDone.
@@ -5273,10 +4661,9 @@ function _clipPlan(proj, i) {
   // one is a fragment skipped in words.
   const missing = _unchosen(video, ['model', 'quality']);
   if (missing) return { skipped: missing };
-  // A project filmed by Seedance is clipped by its fragments (_sdClipPlan) - never by a Kling clip it did
-  // not ask for.
-  if (TH.isSeedance(video.model)) return { skipped: 'this project is filmed by Seedance - its fragments are clipped by it' };
-  const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
+  const model = video.model;
+  const quality = TH.qualityOf(model, video.quality);
+  if (!quality) return { skipped: 'choose the quality of the clips (field 3) first' };
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
   if (!said.trim()) return { skipped: 'this fragment has no words' };
   const frame = _frameOfLine(_framePool(proj), line, i, video.spread, proj.id);
@@ -5285,14 +4672,19 @@ function _clipPlan(proj, i) {
   if (!take || !take.path) return { skipped: 'this fragment is not read yet' };
   if (take.said !== said) return { skipped: 'the read is of other words - read it again' };
   if (take.dur > quality.maxAudioSec) {
-    return { skipped: 'the read is ' + take.dur.toFixed(1) + 's and the model takes ' + quality.maxAudioSec + 's at most' };
+    return { skipped: 'the read is ' + take.dur.toFixed(1) + 's and ' + ((TH.byId(model) || {}).label || 'the model') + ' takes '
+      + quality.maxAudioSec + 's at most' };
   }
+  // The line's own prompt for this model - Kling's animation prompt, or OmniHuman's (_normOmni). A Kling line that has
+  // none falls back to the project's motion preset rather than refusing to render at all; an OmniHuman clip is not asked
+  // for without its own writer's prompt (_readyForClip) - the preset is only what a price or a dry request shows.
+  const own = model === 'omnihuman' ? String((line.omni || {}).prompt || '').trim() : String((line.shot || {}).motion || '').trim();
   return {
-    variant, quality, said, frame, take, line,
-    // The animation prompt of this line is what Kling is told. A line that has none falls back to
-    // the project's motion preset rather than refusing to render at all.
-    prompt: String((line.shot || {}).motion || '').trim() || MP.promptFor(video.preset),
-    motionFrom: (line.shot || {}).motion ? 'line' : 'preset',
+    variant, model, quality, said, frame, take, line,
+    prompt: model === 'omnihuman' ? OMNI.fit(own || MP.promptFor(video.preset)) : (own || MP.promptFor(video.preset)),
+    motionFrom: own ? 'line' : 'preset',
+    // A read shorter than the model takes is padded to this many seconds (lib/th-video.js padSecs) - 0: as it is.
+    pad: TH.padSecs(model, take.dur),
   };
 }
 
@@ -5317,12 +4709,13 @@ async function _readyForClip(id, i, onStage) {
   if (!proj) return;
   const place = _normCasting(proj.casting).locationImage;
   const line = (proj.lines || []).map(_normLine)[i];
+  const omni = _normVideo(proj.video).model === 'omnihuman';
   const wantPlace = !!(place && !_envMotionOf(place));
   // The same staleness rule the writer uses, so a prompt written before the place was analysed
   // is written again before this clip is paid for. A place about to be analysed for the FIRST time
-  // makes every prompt stale by definition: its sentence cannot be in any of them yet.
-  const stale = !line || wantPlace || _motionStale(line, _envMotionOf(place));
-  const wantLine = stale && !(line && line.shot && line.shot.motionEdited);
+  // makes every prompt stale by definition: its movement cannot be in any of them yet.
+  const stale = !line || wantPlace || (omni ? _omniStale(line, _envMotionOf(place)) : _motionStale(line, _envMotionOf(place)));
+  const wantLine = stale && !_promptEdited(line, omni);
   const n = (wantPlace ? 1 : 0) + (wantLine ? 1 : 0);
   let at = 0;
   if (wantPlace) {
@@ -5331,14 +4724,81 @@ async function _readyForClip(id, i, onStage) {
   }
   if (wantLine) {
     say('analysis ' + (++at) + '/' + n + ' · this fragment');
-    try { await _writePrompts(id, [i]); } catch (e) { console.warn('[scen3/clip] the animation was not written:', e.message); }
+    try { await _writePrompts(id, [i]); }
+    catch (e) {
+      // OmniHuman is told what its own writer wrote: no prompt, no clip - refused here, before the money.
+      if (omni) throw new Error('the OmniHuman prompt was not written: ' + e.message + ' - try again');
+      console.warn('[scen3/clip] the animation was not written:', e.message);
+    }
   }
+  if (omni) {
+    const now = ((_loadProjects().find(p => String(p.id) === id) || {}).lines || []).map(_normLine)[i];
+    if (!(now && String((now.omni || {}).prompt || '').trim())) throw new Error('the OmniHuman prompt was not written - try again');
+  }
+}
+
+// The keys a clip cannot be asked for without, said before any row is written: kie.ai's, and the public host the
+// frame and the read go up to (R2, made from the Cloudflare key). '' when both are there.
+function _clipKeysMissing() {
+  const st = _read(path.join(DATA_DIR, 'settings.json')) || {};
+  if (!String(st.kieApiKey || '').trim()) return 'no kie.ai key - add it on Admin -> API keys';
+  if (!require('../lib/r2').isConfigured()) return 'nowhere to host the frame and the read for kie.ai - a checked Cloudflare key on Admin -> API keys';
+  return '';
+}
+
+// THE PAID CREATE of a clip on kie.ai. An answer that says no started nothing; NO ANSWER - a timeout, a reset, a 5xx, a
+// 200 without a task number - may have started a task nobody will hear of, and is thrown `unsure` (lib/task-started.js).
+async function _kieClip(model, input) {
+  let r;
+  try {
+    r = await axios.post(`${CFG.KIE_BASE}/api/v1/jobs/createTask`, { model, input }, { headers: H.kieHeaders(), timeout: 30000 });
+  } catch (e) { throw TS.notStarted('kie.ai', e); }
+  const d = (r && r.data) || {};
+  const taskId = d.data && d.data.taskId;
+  if (taskId) return String(taskId);
+  // kie answers a refusal INSIDE a 200: { code, msg } - an answer, so nothing was started.
+  if (d.code != null && Number(d.code) !== 200) throw Object.assign(new Error('kie.ai did not start it: ' + (TS.said(d) || ('code ' + d.code))), { unsure: false });
+  throw Object.assign(new Error('kie.ai answered without a task number - it may have started it all the same'), { unsure: true });
+}
+
+// The read as it goes up: as it is, or - shorter than the model takes - padded with silence (lib/th-video.js padTo) into
+// a scratch file that is deleted once it is hosted.
+async function _hostRead(plan) {
+  const src = toDiskExisting(plan.take.path);
+  if (!src || !fs.existsSync(src)) throw new Error('the read of this line is not in the library any more');
+  if (!plan.pad) {
+    const why = TH.readRefusal(plan.model, fs.statSync(src).size);
+    if (why) throw Object.assign(new Error(why), { status: 400 });
+    return _hostLocal(plan.take.path, { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
+  }
+  fs.mkdirSync(CFG.TEMP_DIR, { recursive: true });
+  const tmp = path.join(CFG.TEMP_DIR, 'pad_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.wav');
+  try {
+    await TH.padTo(src, tmp, plan.pad);
+    const why = TH.readRefusal(plan.model, fs.statSync(tmp).size);
+    if (why) throw Object.assign(new Error(why), { status: 400 });
+    return await H.uploadToPublicHost({ path: tmp }, { ext: 'wav', forceFresh: true, verify: true });
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (e) { /* already gone */ }
+  }
+}
+
+/**
+ * WHAT ONE CLIP OF A LINE SENDS - the model's request as it would go to kie.ai, built from the plan with the frame and
+ * the read already hosted. Nothing is asked here.
+ */
+function _clipRequest(plan, imageUrl, audioUrl) {
+  return { model: plan.quality.model, input: TH.input(plan.model, { image: imageUrl, audio: audioUrl, prompt: plan.prompt }) };
 }
 
 // One clip on kie. The picture and the sound go up FRESH every time: kie fetches them itself, and a
 // link that has been sitting around comes back as "fetch failed" long after the money is committed.
-async function _submitClip(b, onStage) {
+// `onAsk(true|false)` marks the row's `asked` around the paid create.
+async function _submitClip(b, onStage, onAsk) {
   const say = typeof onStage === 'function' ? onStage : () => {};
+  const ask = typeof onAsk === 'function' ? onAsk : () => {};
+  const keys = _clipKeysMissing();
+  if (keys) throw Object.assign(new Error(keys), { status: 400 });
   const id = String(b.projectId || '').trim();
   {
     const first = _loadProjects().find(p => String(p.id) === id);
@@ -5347,29 +4807,75 @@ async function _submitClip(b, onStage) {
     // refused anyway is a call nobody asked for.
     if (first && !_clipPlan(first, i0).skipped) await _readyForClip(id, i0, say);
   }
-  say('rendering');
   const proj = _loadProjects().find(p => String(p.id) === id);
   if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
   const i = parseInt(b.line, 10);
   const plan = _clipPlan(proj, i);
   if (plan.skipped) throw Object.assign(new Error(plan.skipped), { status: 400 });
 
+  // What the model takes of a picture, before anything is sent.
+  if (plan.model === 'omnihuman') {
+    const abs = toDiskExisting(plan.frame.path);
+    if (!abs || !fs.existsSync(abs)) throw new Error('the frame of this line is not in the library any more');
+    let meta = {};
+    try { meta = await sharp(abs).metadata(); } catch (e) { meta = {}; }
+    const why = TH.frameRefusal(plan.model, { width: meta.width, height: meta.height, bytes: fs.statSync(abs).size });
+    if (why) throw Object.assign(new Error(why), { status: 400 });
+  }
+  say('sending the frame and the read');
   const imageUrl = await _hostLocal(plan.frame.path, { forceFresh: true, verify: true });
-  const audioUrl = await _hostLocal(plan.take.path,
-    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
-  const taskId = await _kieTask(plan.quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt: plan.prompt });
-  if (!taskId) throw Object.assign(new Error('the renderer did not accept the task'), { status: 502 });
-  console.log('[scen3/clip] line ' + (i + 1) + ' ' + plan.quality.id + ' ' + plan.take.dur.toFixed(1) + 's'
-    + ' motion=' + plan.motionFrom + ' -> ' + String(taskId).slice(0, 24));
+  const audioUrl = await _hostRead(plan);
+  const req = _clipRequest(plan, imageUrl, audioUrl);
+  say('asking kie.ai');
+  ask(true);                                    // THE PAID MOMENT
+  let taskId;
+  try {
+    taskId = await _kieClip(req.model, req.input);
+  } catch (e) {
+    if (e.unsure) throw new Error(e.message + ' - it may have been paid for and not followed; look at kie.ai’s own history before asking again');
+    ask(false);
+    throw e;
+  }
+  console.log('[scen3/clip] line ' + (i + 1) + ' ' + plan.model + ' ' + plan.quality.id + ' ' + plan.take.dur.toFixed(1) + 's'
+    + (plan.pad ? ' padded to ' + plan.pad + 's' : '') + ' motion=' + plan.motionFrom + ' -> ' + String(taskId).slice(0, 24));
   return {
     taskId, engine: plan.quality.model,
     file: {
       projectId: id, line: i, variant: plan.variant, said: plan.said,
       fromFrame: plan.frame.id, fromAudio: plan.take.path,
-      quality: plan.quality.id, preset: _normVideo(proj.video).preset,
+      model: plan.model, quality: plan.quality.id, preset: _normVideo(proj.video).preset,
       dur: plan.take.dur,
+      // OmniHuman's clip is cut to the read's own length when it is filed: a padded read's, and any other - kie gives
+      // the clip in whole seconds (a 4.28 s read comes back 5.02 s long).
+      ...(plan.pad || plan.model === 'omnihuman' ? { cutTo: plan.take.dur } : {}),
     },
   };
+}
+
+// The rows being asked for now, in this process - their poll waits; every row made since this process started is
+// this process's.
+const _clipAsking = new Set();
+const CLIP_BOOT_AT = Date.now();
+// The row is written first; the asking goes on without the page, and what comes of it is written into the row - the
+// task number and "rendering", or the failure.
+function _startClip(rec, request) {
+  _clipAsking.add(rec.id);
+  const mark = (asked) => {
+    const row = ALERTS.get(rec.id);
+    if (row && row.job) ALERTS.update(rec.id, { job: { ...row.job, params: { ...(row.job.params || {}), asked } } });
+  };
+  return _submitClip(request, (st) => ALERTS.update(rec.id, { stage: st }), mark)
+    .then((out) => {
+      ALERTS.update(rec.id, {
+        taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
+        job: { type: 'clip', params: { request, file: out.file, asked: true } },
+      });
+    })
+    .catch((e) => {
+      console.error('[scen3/clip] fragment ' + (Number(request.line) + 1) + ':', e.message);
+      ALERTS.fail(rec.id, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
+    })
+    .finally(() => _clipAsking.delete(rec.id));
 }
 
 router.post('/scen3/fragments/clip', async (req, res) => {
@@ -5379,11 +4885,11 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    // A project filmed by Seedance: the fragment's Seedance clip.
-    if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipRoute(req, res, proj);
     const i = parseInt(b.line, 10);
     const plan = _clipPlan(proj, i);
     if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
+    const keys = _clipKeysMissing();
+    if (keys) return res.json({ success: true, skipped: keys });
     // One clip per fragment at a time: the journal is asked rather than a flag on the project, so a
     // reload or a second tab cannot start the same clip twice.
     const running = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
@@ -5403,24 +4909,14 @@ router.post('/scen3/fragments/clip', async (req, res) => {
       where: b.where || null,
       stage: 'getting ready',
       taskIds: [],
-      job: { type: 'clip', params: { request, file: { projectId: id, line: i } } },
+      job: { type: 'clip', params: { request, file: { projectId: id, line: i }, asked: false } },
     });
     res.json({ success: true, alertId: rec.id });
 
     // And the rest happens without the page: the analyses, the hosting and the task go on here, and
     // whatever comes of them is written into that row. The page follows the row, so a closed tab
     // loses nothing - and an answer that waited for all of this would be a minute of silence.
-    _submitClip(request, (s) => ALERTS.update(rec.id, { stage: s }))
-      .then((out) => {
-        ALERTS.update(rec.id, {
-          taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
-          job: { type: 'clip', params: { request, file: out.file } },
-        });
-      })
-      .catch((e) => {
-        console.error('[scen3/fragments/clip]', e.message);
-        ALERTS.fail(rec.id, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
-      });
+    _startClip(rec, request);
   } catch (e) {
     console.error('[scen3/fragments/clip]', e.message);
     if (!res.headersSent) res.status(e.status || 502).json({ success: false, error: e.message });
@@ -5483,22 +4979,11 @@ function _lineNo(lines, i) {
 }
 
 // The queue itself: a start a second, and nobody waits for anybody. What comes of each start is
-// written into the row it belongs to - the task number and "rendering", or the failure.
+// written into the row it belongs to - the task number and "rendering", or the failure (_startClip).
 async function _clipQueue(queued) {
   for (let k = 0; k < queued.length; k++) {
     if (k) await _wait(SUBMIT_GAP_MS);
-    const q = queued[k];
-    _submitClip(q.request, (st) => ALERTS.update(q.alertId, { stage: st }))
-      .then((out) => {
-        ALERTS.update(q.alertId, {
-          taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
-          job: { type: 'clip', params: { request: q.request, file: out.file } },
-        });
-      })
-      .catch((e) => {
-        console.error('[scen3/clips] fragment ' + q.line + ':', e.message);
-        ALERTS.fail(q.alertId, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
-      });
+    _startClip(queued[k].rec, queued[k].request);
   }
 }
 
@@ -5508,8 +4993,6 @@ router.post('/scen3/fragments/clips', (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    // A project filmed by Seedance: its fragments' Seedance clips.
-    if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipsRoute(req, res, proj);
     const key = String(b.key || '');
     const title = String(proj.name || proj.title || 'talking head');
     const lines = (proj.lines || []).map(_normLine);
@@ -5521,6 +5004,9 @@ router.post('/scen3/fragments/clips', (req, res) => {
         && String(r.job.params.file.projectId) === id)
       .map(r => Number(r.job.params.file.line)));
 
+    // No line without the keys - said once, before any row.
+    const keys = _clipKeysMissing();
+    if (keys) return res.status(400).json({ success: false, error: keys });
     // Every line that needs a clip.
     const queued = [], skipped = [];
     for (let i = 0; i < lines.length; i++) {
@@ -5536,9 +5022,9 @@ router.post('/scen3/fragments/clips', (req, res) => {
         where: _whereClip(key, title, i, no),
         stage: 'getting ready',
         taskIds: [],
-        job: { type: 'clip', params: { request, file: { projectId: id, line: i } } },
+        job: { type: 'clip', params: { request, file: { projectId: id, line: i }, asked: false } },
       });
-      queued.push({ line: i + 1, alertId: rec.id, request });
+      queued.push({ line: i + 1, alertId: rec.id, request, rec });
     }
     console.log('[scen3/clips] ' + id + ' queued=' + queued.length + ' skipped=' + skipped.length);
     res.json({ success: true, queued: queued.map(q => ({ line: q.line, alertId: q.alertId })), skipped });
@@ -5555,17 +5041,28 @@ router.post('/scen3/fragments/clips', (req, res) => {
 JOBS.register('clip', {
   timeoutMs: 15 * 60 * 1000,
   poll: async (rec) => {
-    // Nothing to poll yet: the row was written at the press and the analyses are still running
-    // (the stage says which). The runner simply looks again next tick.
-    if (!rec.taskIds || !rec.taskIds[0]) return { state: 'pending' };
+    if (!rec.taskIds || !rec.taskIds[0]) {
+      // Nothing to poll yet: the row was written at the press and the analyses, the hosting or the asking are still
+      // going on in this process (the stage says which) - a row made since this process started is this process's.
+      if (_clipAsking.has(rec.id) || (Date.parse(rec.startedAt) || 0) >= CLIP_BOOT_AT) return { state: 'pending' };
+      // Nobody is asking and there is no task: the app was closed meanwhile. Asked - it may have been paid for.
+      const asked = !!(((rec.job || {}).params || {}).asked);
+      return { state: 'failed', error: asked
+        ? 'the app closed while kie.ai was being asked - it may have been paid for: look at kie.ai’s history before trying again'
+        : 'the app closed before kie.ai was asked - nothing was paid; try again' };
+    }
     const p = _fileParams(rec);
-    const s = await _fetchClip(rec.taskIds[0], p.projectId);
+    const s = await _fetchClip(rec.taskIds[0], p.projectId, p.cutTo);
     if (s.state !== 'failed') return s;
     const tries = Number((rec.job.params || {}).refetch || 0);
     if (!_FETCH_FAIL_RE.test(String(s.error || '')) || tries >= 1) return s;
     // Nothing rendered, nothing charged: fresh links and one more ask.
     try {
-      const again = await _submitClip(rec.job.params.request, (st) => ALERTS.update(rec.id, { stage: st }));
+      const mark = (asked) => {
+        const row = ALERTS.get(rec.id);
+        if (row && row.job) ALERTS.update(rec.id, { job: { ...row.job, params: { ...(row.job.params || {}), asked } } });
+      };
+      const again = await _submitClip(rec.job.params.request, (st) => ALERTS.update(rec.id, { stage: st }), mark);
       ALERTS.update(rec.id, { job: { ...rec.job, params: { ...rec.job.params, refetch: tries + 1, file: again.file } } });
       console.log('[scen3/clip] re-asked with fresh links ->', String(again.taskId).slice(0, 24));
       return { state: 'pending', taskId: again.taskId };
@@ -5584,7 +5081,7 @@ JOBS.register('clip', {
     const clip = _normTake({
       path: landed.path, dur: landed.dur, thumb: landed.thumb, at: new Date().toISOString(),
       said: p.said, fromAudio: p.fromAudio, fromFrame: p.fromFrame,
-      preset: p.preset, quality: p.quality,
+      preset: p.preset, quality: p.quality, model: p.model || 'kling',
     });
     // A new TAKE, not a replacement: earlier ones stay browsable, and the fresh one is what the
     // fragment is set to - it is what was just paid for.
@@ -5602,10 +5099,17 @@ JOBS.register('clip', {
     try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
     return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
   },
+  // TRY AGAIN from Alerts: the row restarts at once and the asking goes on behind it - the analyses and the hosting take
+  // a while, and the person should see the row running from the press (lib/gen-jobs.js `later`).
   submit: async (request, rec) => {
-    const out = await _submitClip(request, rec ? (s) => ALERTS.update(rec.id, { stage: s }) : null);
-    return { taskId: out.taskId, engine: out.engine, file: out.file };
+    const keys = _clipKeysMissing();
+    if (keys) throw new Error(keys);
+    return {
+      stage: 'getting ready', params: { asked: false, refetch: 0 },
+      later: () => _startClip(ALERTS.get(rec.id) || rec, request),
+    };
   },
+  busy: (rec) => _clipAsking.has(rec.id),
 });
 
 // ── the voice library ────────────────────────────────────────────────────────
@@ -5752,8 +5256,14 @@ router.fchatFacts = _fchatFacts;
 router.fchatRead = _fchatRead;
 router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
-// A Seedance project's fragments with their clips, for the timeline mirror.
-router.sdCuts = _sdCuts;
+// THE REQUEST one clip of line `i` would send to kie.ai, with the frame and the read as already hosted at `urls`
+// ({ image, audio }) - for the stands: nothing is hosted, padded or asked. { skipped } when the line cannot be clipped.
+router.clipRequest = (proj, i, urls) => {
+  const plan = _clipPlan(proj, i);
+  if (plan.skipped) return { skipped: plan.skipped };
+  const u = urls || {};
+  return { ..._clipRequest(plan, u.image, u.audio), pad: plan.pad, cutTo: plan.pad || plan.model === 'omnihuman' ? plan.take.dur : 0 };
+};
 // Is the script being read now? Its captions are heard by themselves after the last read lands
 // (lib/captions-auto.js).
 router.readsRunning = (id) => !!((_reads.get(String(id)) || {}).running);

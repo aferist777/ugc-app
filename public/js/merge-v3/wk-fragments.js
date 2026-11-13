@@ -24,8 +24,9 @@
    each line - until a line is given a frame by hand, which it keeps.
 
    THE ANIMATION of a line - the prompt the video model hears - is written by the video stage
-   and edited here; a prompt written by hand survives the next pass. The CLIPS are asked for here
-   too - Kling avatar's, or a Seedance model's - and the server sees each through (routes/scen3.js).
+   and edited here; a prompt written by hand survives the next pass. A project filmed by OmniHuman has a prompt of its
+   own on each line (`omni`, at most 300 characters). The CLIPS are asked for here
+   too - Kling avatar's or OmniHuman's - and the server sees each through (routes/scen3.js).
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
    scenario project's (routes/scen3.js). Written from here: the video's
@@ -54,7 +55,7 @@ import { figures, int } from '../num.js';
 const _cap = (s) => { const t = String(s == null ? '' : s); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // The one ceiling a read has for the chosen model, from its quality (lib/th-video.js: Kling avatar's
-// tiers, Seedance's lengths) - read from the kit when it has arrived, this only until then.
+// tiers, OmniHuman's) - read from the kit when it has arrived, this only until then.
 const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
@@ -80,7 +81,7 @@ let _insDraft = '';
 let _insSaving = false;
 let _key = '';                            // the project it belongs to
 let _asked = _urlLine();                  // ?line=N (1-based) - how the Alerts list comes back here
-let _kit = null;                          // the models with their qualities, Seedance's sounds and the moods, read once
+let _kit = null;                          // the models with their qualities and the moods, read once
 let _kitState = 'idle';
 let _saving = false;
 let _said = '';
@@ -273,22 +274,17 @@ function _frameFor(p, l, i) {
 // against the untagged words here would hide a clip that was made, filed and laid on the timeline.
 const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged' : 'plain');
 const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
-// A Seedance project shows none of the Kling clips it may have - the timeline lays none of them either
-// (lib/frag-mirror.js); it shows the line's Seedance takes.
-const _sdFragOfLine = (p, l) => _sdFragOf(p, ((p && p.lines) || []).indexOf(l));
-const _clipsOf = (p, l) => (_seedance() ? ((_sdFragOfLine(p, l) || {}).clips || []) : (((l && l.video) || {})[_variant(p)] || []));
+const _clipsOf = (p, l) => (((l && l.video) || {})[_variant(p)] || []);
 
 // A clip CHOSEN BY HAND in the takes is the line's clip whatever it was made
 // from - the timeline lays it too (lib/frag-mirror.js) - and the line counts as settled: making the project's clips
 // leaves it (routes/scen3.js, _clipDone).
 // A new clip or a new read clears the choice (routes/scen3.js).
 const _chosenOf = (p, l) => {
-  if (_seedance()) { const f = _sdFragOfLine(p, l); return f && f.chosen ? f.clip : null; }
   const id = String(((l && l.chosen) || {})[_variant(p)] || '');
   return id ? (_clipsOf(p, l).find(c => c.id === id) || null) : null;
 };
 function _clipOf(p, l, i) {
-  if (_seedance()) return (_sdFragOf(p, i) || {}).clip || null;     // chosen by hand, else the newest fresh
   const clips = _clipsOf(p, l);
   if (!clips.length) return null;
   const hand = _chosenOf(p, l);
@@ -304,7 +300,6 @@ function _clipOf(p, l, i) {
 // read again is another performance; a clip that names no read - `fromAudio` - counts as fresh).
 function _clipFresh(p, l, i, c) {
   if (!c) return false;
-  if (_seedance()) return !!c.fresh;      // of the frame, the words and the read the line has now (routes/scen3.js _sdFresh)
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   const take = _take(l);
   return !!fr && c.fromFrame === fr && c.said === _saidOf(p, l) && (!c.fromAudio || !take || c.fromAudio === take.path);
@@ -365,11 +360,8 @@ function _loadKit(repaint) {
   const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
   get('/api/scen3/motion-presets').then((m) => {
     _kit = {
-      // The models of the clips, each with its qualities - Kling avatar and the Seedances - and
-      // Seedance's ways of voicing a clip (lib/th-video.js). An answer with `qualities` and no `models` (an older server
-      // still running) is read as Kling's alone, so the field still works until the app is restarted.
-      models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'Kling avatar', family: 'kling', qualities: m.qualities }] : []),
-      sounds: (m && m.sounds) || [],
+      // The models of the clips, each with its qualities - Kling avatar and OmniHuman 2.0 (lib/th-video.js).
+      models: (m && m.models) || [],
       moods: (m && m.moods) || [],
     };
     _kitState = 'done';
@@ -396,12 +388,18 @@ async function _post(url, body) {
   return r;
 }
 
-// Is the line's animation written, and written for the words it has now? The same shape as a read:
-// a prompt made from other words is stale until it is written again.
+// Is the line's prompt for the project's model written, and written for the words it has now? The same shape as a
+// read: a prompt made from other words is stale until it is written again. Kling's is the line's `shot.motion`,
+// OmniHuman's its `omni` (routes/scen3.js _normOmni).
 const _animated = (l) => {
-  const sh = (l && l.shot) || null;
-  return !!(sh && sh.motion && String(sh.said || '') === String((l && l.text) || ''));
+  const sh = _omni() ? ((l && l.omni) || null) : ((l && l.shot) || null);
+  const text = _omni() ? sh && sh.prompt : sh && sh.motion;
+  return !!(sh && text && String(sh.said || '') === String((l && l.text) || ''));
 };
+// ...and is it written by hand - left alone by the agent's next pass?
+const _handWritten = (l) => (_omni()
+  ? !!(l && l.omni && l.omni.edited && l.omni.prompt)
+  : !!(l && l.shot && l.shot.motionEdited && l.shot.motion));
 
 // ── How the place moves ─────────────────────────────────────────────────────
 // One or two sentences about what is alive in the background - a curtain, steam, traffic far
@@ -442,10 +440,15 @@ let _writeAt = 0;                         // ...since when
 // How fast they leave is the SERVER's business: one a second, and it does not wait
 // for any of them. The page only asks for the list and follows the rows.
 
-// What a clip of a read this long costs: kie bills Kling avatar by the WHOLE seconds, rounded down - a read
-// of 7.97 s is billed 7 s.
-const _billSecs = (dur) => Math.max(1, Math.floor((+dur || 0) + 0.001));
-const _clipCost = (dur, tier) => (tier ? _billSecs(dur) * tier.pricePerSec : 0);
+// What a clip of a read this long is billed for (lib/th-video.js billSecs, the quality's `bill`): Kling avatar the WHOLE
+// seconds rounded down - a read of 7.97 s is billed 7 s; OmniHuman whole seconds rounded up, its shortest sound
+// (`minAudioSec`, 4 s) at least - a shorter read is padded to it.
+const _billSecs = (dur, tier) => {
+  const d = +dur || 0;
+  if (tier && tier.bill === 'up') return Math.ceil(Math.max(+tier.minAudioSec || 0, d) - 0.001);
+  return Math.max(1, Math.floor(d + 0.001));
+};
+const _clipCost = (dur, tier) => (tier ? _billSecs(dur, tier) * tier.pricePerSec : 0);
 
 // Can this line be clipped at all, and what would it cost? The same ladder the server refuses by
 // (routes/scen3.js, _clipPlan), so the page never asks for what will be turned down.
@@ -453,14 +456,6 @@ function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
   if (!_video().quality) return null;       // the quality is the person's to choose
-  // A line filmed by Seedance: billed by the whole seconds asked for, its read rounded up
-  // (lib/sd-prompt.js clipSecs).
-  if (_seedance()) {
-    const f = _sdFragOf(p, i);
-    if (!f || f.noRead || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
-    // By the voice sample the length is Seedance's (-1): no price.
-    return f.secs > 0 ? { dur: f.secs, cost: f.secs * ((tier && tier.pricePerSec) || 0) } : { dur: 0, cost: 0, auto: true };
-  }
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
   if (take.dur > _ceiling()) return null;
@@ -499,8 +494,6 @@ async function _makeClips(p) {
 
 async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
-  // The animation prompts and the clips here are Kling's; a Seedance project writes its fragments' own.
-  if (_seedance()) return _writeSdVideo(p, opts);
   const withClips = !!(opts && opts.clips);
   _readErr = '';
   if (!_envMotion(p)) {
@@ -510,7 +503,7 @@ async function _writeVideo(p, opts) {
     if (_readErr) { _writing = ''; return _ctx.repaint(); }
   }
   const lines = Array.isArray(p.lines) ? p.lines : [];
-  if (_live(lines).some(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion))) {
+  if (_live(lines).some(l => !_animated(l) && !_handWritten(l))) {
     _writing = 'lines';
     if (!_writeAt) _writeAt = Date.now();
     _ctx.repaint();
@@ -526,39 +519,6 @@ async function _writeVideo(p, opts) {
   if (withClips && !_readErr) {
     const now = _ctx.project || p;
     const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines);
-    if (want.length) {
-      _writing = 'clips';
-      _ctx.repaint();
-      await _makeClips(now);
-    }
-  }
-  _writing = '';
-  _writeAt = 0;
-  _ctx.repaint();
-}
-
-// THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
-// prompt of every line that needs one - one request each, a few at once - then, asked with `clips`, the clips of the
-// lines that have none.
-async function _writeSdVideo(p, opts) {
-  const withClips = !!(opts && opts.clips);
-  _readErr = '';
-  if (!_envMotion(p)) {
-    _writing = 'place';
-    _writeAt = Date.now();
-    _ctx.repaint();
-    await _writeEnvMotion(p);
-    if (_readErr) { _writing = ''; return _ctx.repaint(); }
-  }
-  if (_sdNeeds(_ctx.project || p).length) {
-    _writing = 'lines';
-    if (!_writeAt) _writeAt = Date.now();
-    _ctx.repaint();
-    await _writeSd(_ctx.project || p, null);
-  }
-  if (withClips && !_readErr) {
-    const now = _ctx.project || p;
-    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : []);
     if (want.length) {
       _writing = 'clips';
       _ctx.repaint();
@@ -722,54 +682,10 @@ async function _saveShot(i, patch) {
   _ctx.repaint();
 }
 const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
-// What films the clips - Kling avatar or a Seedance, for the whole video - and the qualities it makes.
+// What films the clips - Kling avatar or OmniHuman 2.0, for the whole video - and the qualities it makes.
 const _modelOf = () => ((_kit && _kit.models) || []).find(m => m.id === _video().model) || null;
-// Seedance is the project's mode: asked of the model when the menus are read, else of the server's own word for it.
-const _seedance = () => { const m = _modelOf(); return m ? m.family === 'seedance' : _video().mode === 'seedance'; };
-// Filmed by Seedance FROM THE VOICE'S SAMPLE: nothing is read - the voice field only chooses the voice -
-// and Seedance picks each clip's length, so no price is said beforehand.
-const _bySample = () => _seedance() && (_video().sound || 'read') === 'sample';
-
-// THE VOICE'S DEMO, BY THE VOICE SAMPLE: made once the voice is chosen; generating waits until it is ready, and a popup
-// says the demo is being made. The server says
-// whether the voice has one (`castVoice.demo`); one without is asked for at once (routes/scen3.js /scen3/voice/demo -
-// ElevenLabs, about ten seconds), once per voice in this page - a failure says so in the voice field, with a way to ask
-// again. While it is missing the voice field is red and the clips wait.
-let _demoFor = '';                        // the voice whose demo is being made now
-let _demoAsked = '';                      // ...the last one asked for (not asked again by itself)
-let _demoErr = '';
-const _demoMissing = (p) => {
-  const cv = (p && p.castVoice) || {};
-  return _bySample() && !!cv.has && !cv.demo;
-};
-function _demoWanted(p) {
-  if (!_demoMissing(p) || _demoFor) return;
-  const id = String(p.castVoice.id || '');
-  if (!id || _demoAsked === id) return;
-  _askDemo(p);
-}
-async function _askDemo(p) {
-  const id = String(p.castVoice.id || '');
-  _demoFor = id;
-  _demoAsked = id;
-  _demoErr = '';
-  _demoPopup(true);
-  _ctx.repaint();
-  try { _adopt(await _post('/api/scen3/voice/demo', { projectId: p.id })); }
-  catch (e) { _demoErr = 'The voice demo was not made: ' + e.message; }
-  _demoFor = '';
-  _demoPopup(false);
-  _ctx.repaint();
-}
-// The popup: over the page's foot, gold, while the demo is being made. It takes no keys and no presses.
-let _demoPop = null;
-function _demoPopup(on) {
-  if (!on) { if (_demoPop) { _demoPop.remove(); _demoPop = null; } return; }
-  if (_demoPop) return;
-  _demoPop = el('div', 'mv3-wk-popup', 'The voice demo is being made - about ten seconds. Seedance takes the voice from it; the clips wait for it.');
-  _demoPop.setAttribute('role', 'status');
-  document.body.appendChild(_demoPop);
-}
+const _omni = () => _video().model === 'omnihuman';
+const _modelName = () => ((_modelOf() || {}).label) || 'the model';
 const _qualities = () => ((_modelOf() || {}).qualities) || [];
 const _tier = () => _qualities().find(q => q.id === _video().quality) || _qualities()[0] || null;
 const _ceiling = () => ((_tier() || {}).maxAudioSec) || CEILING_FALLBACK;
@@ -790,10 +706,6 @@ async function _saveVideo(patch) {
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     p.video = r.project.video;
-    // What the server works out from these settings comes with them: every line's
-    // Seedance prompt - written for these settings or not - and how long the model takes. Taking only `video` would leave
-    // the old state on screen until a reload.
-    p.sdFrags = r.project.sdFrags;
   } catch (e) {
     _said = 'Could not save it: ' + e.message;
   }
@@ -810,7 +722,6 @@ export function paint(host, ctx, api) {
   const p = ctx.project;
   if (!p) { host.appendChild(_note('Reading the project…')); return; }
   if (_kit === null) _loadKit(ctx.repaint);
-  _demoWanted(p);
   const lines = Array.isArray(p.lines) ? p.lines : [];
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
@@ -959,7 +870,7 @@ function _missing(p) {
   return out;
 }
 // Is there a voice to read in - the character's, or the project's own pick? The same rule the
-// server applies (routes/scen3.js, _castVoice), read here from what the panel holds, because a
+// server applies (routes/scen3.js, _castVoiceOf), read here from what the panel holds, because a
 // voice just taken is on the character record and the project copy before either is read again.
 const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 
@@ -972,9 +883,7 @@ function _needs(p) {
   const out = {};
   if (!v.mood) out.mood = 'a mood';
   if (!_canRead()) out.voice = 'a voice';
-  // By the voice sample the voice is there once its demo is.
-  else if (_demoMissing(p)) out.voice = 'a voice with its demo';
-  // The model first - Kling avatar or a Seedance - then the quality it makes. A voiceover makes no clips.
+  // The model first - Kling avatar or OmniHuman - then the quality it makes. A voiceover makes no clips.
   if (_isVo(p)) return out;
   if (!v.model) out.video = 'the model';
   else if (!v.quality) out.video = 'the quality';
@@ -985,11 +894,10 @@ const _isVo = (p) => !!(p && p.type === 'voiceover');
 // THE FRAMES AND THE VIDEO WAIT FOR THE VOICE: red, and a press on them says why, until
 // every line of the video has been read once - a line rewritten later keeps its old take and opens nothing again; only
 // its own clip waits for the new read. A project already past it - a frame in its pool, a clip made - is never shut again.
-// By Seedance's voice sample nothing is read: they wait for a voice with its demo. '' - open.
+// '' - open.
 const _everRead = (l) => { const a = (l && l.audio) || {}; return !!((a.tagged && a.tagged.path) || (a.plain && a.plain.path)); };
 function _voiceLock(p) {
   if (_missing(p).length) return '';                // the whole zone waits for who and where first
-  if (_bySample()) return _needs(p).voice ? 'Choose a voice with its demo first - field 1, mood & voice.' : '';
   const live = liveLines(p.lines);
   if (!live.length || _pool(p).length || live.some(x => _clipsOf(p, x.l).length)) return '';
   return live.every(x => _everRead(x.l)) ? '' : 'Voice the lines first - field 1, mood & voice.';
@@ -1154,17 +1062,16 @@ function _standing(p) {
 // face in the frames, the movement in the clips), and the script is marked up by it; the voice reads the marked-up words,
 // ElevenLabs v3. The one `generate` does both, one after the other (VOICE.markAndRead): the mark-up when a line of the video
 // has no [tags], then every line that needs a read - and says on itself which it is doing. A mark-up that fails stops there
-// and says so under the line. By Seedance's voice sample nothing is read: `generate` marks up, and the voice needs its demo.
+// and says so under the line.
 function _stageMoodVoice(host, p, lines) {
   const v = _video();
   const g = VOICE.reading();
   const live = _live(lines);
-  const sample = _bySample();
   const untagged = VOICE.untagged(p).length;
   const read = live.filter(isRead).length;
   // Read with other settings than the project's now: still read, but work left in this field.
-  const redo = sample ? [] : live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
-  const will = sample ? 0 : live.filter(l => !isRead(l)).length;
+  const redo = live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
+  const will = live.filter(l => !isRead(l)).length;
   const has = _canRead();
   const needs = _needs(p);
   const need = [needs.mood, needs.voice].filter(Boolean).join(' and ');
@@ -1176,14 +1083,13 @@ function _stageMoodVoice(host, p, lines) {
     work: g.tagging ? () => _byTime(g.tagAt, 'tag')
       : g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
         : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
-    name: 'mood & voice', sub: sample ? 'the voice\'s sample, for Seedance' : 'ElevenLabs v3', done, need,
+    name: 'mood & voice', sub: 'ElevenLabs v3', done, need,
     summary: [untagged ? untagged + (untagged === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
-      sample ? (!has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen')
-        : read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
+      read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
   });
   // TWO LINES: the names of the controls on top, each with its bubble,
   // the controls under them - `generate` at the end of that second line. One grid, so a name stands over its control.
-  const row = el('div', 'mv3-wk-mvrow' + (sample ? ' is-sample' : ''));
+  const row = el('div', 'mv3-wk-mvrow');
   body.appendChild(row);
   const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', _cap(word)), tip);
   // The mood. What it means is said in the bubble of its name.
@@ -1201,20 +1107,18 @@ function _stageMoodVoice(host, p, lines) {
   const voice = el('div', 'mv3-wk-mvvoice');
   const notes = el('div', 'mv3-wk-mvnotes');
   VOICE.paintRow(voice, _api.voiceApi(), { notes });
-  // How it is spoken - not by the voice sample, where nothing is read.
-  const how = sample ? null : _voiceSettings(p, g.busy);
+  // How it is spoken.
+  const how = _voiceSettings(p, g.busy);
   row.append(
     name('mood', () => {
       const m = ((_kit && _kit.moods) || []).find(x => x.id === mood.value) || null;
       return (m ? m.label + (m.about ? ' - ' + m.about : '') + '\n' : '')
         + 'The emotion of the whole video: the script is marked up by it, and the read, the frames and the clips all follow it.';
     }),
-    name('voice', sample
-      ? 'The voice Seedance takes its timbre from - its demo. Nothing is read: Seedance says the lines itself.'
-      : 'The voice every line is read in - ElevenLabs v3. The character’s own when they have one, else the one chosen here for the project. "change" opens the saved voices and the ElevenLabs library.'),
-    ...(how ? [name('stability', STAB_TIP), name('speed', SPEED_TIP)] : []),
+    name('voice', 'The voice every line is read in - ElevenLabs v3. The character’s own when they have one, else the one chosen here for the project. "change" opens the saved voices and the ElevenLabs library.'),
+    name('stability', STAB_TIP), name('speed', SPEED_TIP),
     el('span', 'mv3-wk-mvname'),
-    mood, voice, ...(how ? [how.stab, how.speed] : []),
+    mood, voice, how.stab, how.speed,
   );
   const ctl = el('div', 'mv3-wk-mvgo');
   row.appendChild(ctl);
@@ -1224,7 +1128,7 @@ function _stageMoodVoice(host, p, lines) {
   const wait = !live.length ? 'This script has no lines'
     : !v.mood ? 'Choose the mood first - the script is marked up by it'
       : !has ? 'Choose a voice first - a character with one, or one for the project'
-        : (!untagged && !will && !redo.length) ? (sample ? 'Marked up - nothing is read by the voice sample' : 'Every line is marked up and read, with these settings')
+        : (!untagged && !will && !redo.length) ? 'Every line is marked up and read, with these settings'
           : '';
   const again = redo.filter(w => w === 'stability').length;
   const retime = redo.length - again;
@@ -1238,21 +1142,9 @@ function _stageMoodVoice(host, p, lines) {
       retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
       redo.length && 'A line with a clip keeps it on the timeline until a new one is made.',
     ].filter(Boolean).join(' '),
-    on: () => VOICE.markAndRead(_api.voiceApi(), { read: !sample }),
+    on: () => VOICE.markAndRead(_api.voiceApi()),
   });
   body.appendChild(notes);
-  // By the voice sample: the voice's demo, made once.
-  if (sample && has) {
-    if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
-    else if (_demoMissing(p)) {
-      notes.appendChild(_note(_demoErr || 'This voice has no demo yet - Seedance takes its timbre from it.', !!_demoErr));
-      const mk = el('button', 'mv3-wk-vuse u-btn is-s', 'Make the demo');
-      mk.type = 'button';
-      mk.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
-      mk.addEventListener('click', () => _askDemo(p));
-      notes.appendChild(mk);
-    }
-  }
 }
 
 // THE STABILITY AND THE SPEED of the read - one each for the
@@ -1361,16 +1253,6 @@ async function _saveVoice(ttsParams) {
   }
   _saving = false;
   _ctx.repaint();
-}
-
-// A menu with its name to the left of it, and the name carries the explanation. A `label` rather
-// than a `span`, so pressing the word opens the menu.
-function _labelled(word, sel, tip, tight) {
-  const box = el('label', 'mv3-wk-fsetlab' + (tight ? ' is-tight' : ''));
-  box.title = tip;
-  box.appendChild(el('span', 'mv3-wk-fsetlabw', _cap(word)));
-  box.appendChild(sel);
-  return box;
 }
 
 // ── A VOICEOVER'S LINE, AT MOST VO_MAX CHARACTERS ──
@@ -1581,9 +1463,6 @@ function _stageVideo(host, p, lines) {
   // Done when every line of the video HAS ITS CLIP - fresh, or chosen by hand - and
   // nothing is being made; the prompts are only the way there.
   const s = _standing(p);
-  // A Seedance project (`soon`) counts its fragments' prompts; the Kling clips a project may already have are not
-  // Seedance's, so they do not make it done.
-  const soon = _seedance();
   const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
   const lock = _voiceLock(p);
@@ -1593,13 +1472,12 @@ function _stageVideo(host, p, lines) {
     // first and are quick, go by the estimate of a clip.
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
-    summary: soon ? 'clips ' + s.clips + '/' + s.n + ' · prompts ' + _sdFrags(p).filter(f => f.prompt && (!f.stale || f.edited)).length + '/' + _sdFrags(p).length
-      : 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated',
+    summary: 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated',
   });
   _needEnvMeta();
   const v = _video();
-  // WHAT FILMS IT AND HOW SHARP, one row: the model of the whole video - Kling avatar,
-  // a clip per line, or one of the three Seedances - and the qualities that model makes, each with its price a second.
+  // WHAT FILMS IT AND HOW SHARP, one row: the model of the whole video - Kling avatar or OmniHuman 2.0, a clip per line
+  // either way - and the qualities that model makes, each with its price a second.
   // Neither is chosen for a new project: both say none, and the field is red until they are.
   const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
@@ -1637,9 +1515,8 @@ function _stageVideo(host, p, lines) {
   body.appendChild(sets);
   const about = (_modelOf() || {}).about;
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
-  if (_seedance()) _seedanceSettings(body);
-  // WAITING FOR THE VOICE, the field's choices stay free: what films the video - and by Seedance's voice
-  // sample nothing is read at all, so that choice cannot wait for a read. What makes waits.
+  // WAITING FOR THE VOICE, the field's choices stay free: what films the video can be chosen before a read. What
+  // makes waits.
   if (lock) body.querySelectorAll('.mv3-wk-fsets').forEach(r => r.classList.add('is-free'));
   // How the PLACE moves has no field here: `generate` and
   // a clip have the agent write it first, and its sentence goes into every prompt word for word. It is put right in the
@@ -1648,15 +1525,14 @@ function _stageVideo(host, p, lines) {
   // `generate`: the place first when it has nothing written, then the animation of every line that
   // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no
   // second press to confirm, as with the reads.
-  const willWrite = live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
+  const willWrite = live.filter(l => !_animated(l) && !_handWritten(l)).length;
   const clips = _clipWork(p, lines);
   const clipCost = clips.reduce((a, x) => a + x.cost, 0);
   // HOW LONG THE VIDEO IS, beside what is left to make: the reads of the
   // lines that are in it, added up - which is exactly the length the cut comes to, because a clip
   // is trimmed to its read (lib/frag-mirror.js). A line not read yet has no length to add.
   const secs = live.reduce((a, l) => a + (isRead(l) ? (_take(l) || {}).dur || 0 : 0), 0);
-  // By the voice sample the length is Seedance's, clip by clip: not known beforehand.
-  const whole = secs && !_bySample() ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
+  const whole = secs ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
   // A clip in flight does not shut this button: the planner skips the fragments that are
   // already being made, so `generate` here starts the others.
   const busy = !!_writing || _envWriting;
@@ -1666,40 +1542,6 @@ function _stageVideo(host, p, lines) {
   // What the press still waits for: the field is open, its `generate` is not - the
   // character and the place, a first frame to animate, the quality, and the mood the person moves in.
   const wait = [lock && lock.replace(/\.$/, ''), why, need, _needs(p).mood].filter(Boolean);
-  // SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
-  // credits - then the clips of the fragments that have none, priced, on a second press.
-  if (soon) {
-    // By the voice sample the clips wait for the voice and its demo too.
-    if (_bySample() && _needs(p).voice) wait.push(_needs(p).voice);
-    const sdWant = _sdNeeds(p).length;
-    const sample = _bySample();
-    const many = (n) => n + (n === 1 ? ' clip' : ' clips');
-    _genButton(foot, {
-      label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…'
-        : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + _standing(p).n + '…'
-          : armed ? (sample ? 'go?' : _money(clipCost) + ' · go?') : done ? 'again' : 'generate',
-        armed,
-      cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
-        sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : '',
-        _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
-        clips.length ? many(clips.length) + (sample ? '' : ' · ' + _money(clipCost)) : '',
-        whole,
-      ].filter(Boolean).join(' · '),
-      disabled: busy || wait.length > 0 || !_place(p) || !_sdFrags(p).length || (!!motion && !sdWant && !clips.length),
-      title: wait.length ? 'First: ' + wait.join(', ')
-        : !_sdFrags(p).length ? (sample ? 'Write the lines first' : 'Read the lines first - Seedance hears a line\'s read')
-          : 'The place, then the Seedance prompt of every line that has none (one request each, credits), then the clips of'
-            + ' the lines that have none - ' + (clips.length ? many(clips.length) + (sample ? ', each as long as Seedance makes it' : ' for ' + _money(clipCost)) : 'none to make')
-            + '. A prompt edited by hand is left alone; a line that has its clip is not paid for twice.'
-            + (clips.length ? ' Press again to confirm.' : ''),
-      on: () => {
-        if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
-        _armedVideo = false;
-        _writeVideo(p, { clips: true });
-      },
-    });
-    return;
-  }
   _genButton(foot, {
     label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
       : _writing === 'lines' ? 'writing…'
@@ -1717,7 +1559,7 @@ function _stageVideo(host, p, lines) {
     disabled: busy || wait.length > 0 || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
     title: wait.length ? 'First: ' + wait.join(', ')
       : 'The place, then how the person moves on every line, then the clips of the fragments that'
-        + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
+        + ' have none - ' + _modelName() + ', ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
         + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
         + (clips.length ? ' Press again to confirm.' : ''),
     on: () => {
@@ -1726,62 +1568,6 @@ function _stageVideo(host, p, lines) {
       _writeVideo(p, { clips: true });
     },
   });
-}
-
-// SEEDANCE'S OWN SETTINGS, under the model: how the clip is voiced, how the body
-// moves, the camera. Each says what it does on the line under it. They are kept on the project as they are chosen.
-function _seedanceSettings(body) {
-  const v = _video();
-  const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
-  const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));
-
-  // THE SOUND - what Seedance hears to voice the line itself (lib/th-video.js SOUNDS): the line's read, or the voice's
-  // sample. Not chosen, it is the read.
-  const sounds = (_kit && _kit.sounds) || [];
-  const cur = v.sound || 'read';
-  const sound = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
-  for (const s of sounds) {
-    const o = el('option', '', s.label);
-    o.value = s.id;
-    o.title = s.about;
-    if (s.id === cur) o.selected = true;
-    sound.appendChild(o);
-  }
-  sound.disabled = _saving || !_kit;
-  sound.addEventListener('change', () => _saveVideo({ sound: sound.value }));
-  row(_labelled('sound', sound, 'How the clip is voiced'));
-  const said = sounds.find(s => s.id === cur);
-  if (said) why(said.about);
-
-  // GESTURES - how the head, the hands and the body move: one way per mood, the project's mood
-  // until another is picked; the face follows the mood always. Picking the mood itself follows it again.
-  const moods = (_kit && _kit.moods) || [];
-  const gest = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
-  const curG = v.gestures || v.mood || '';
-  if (!curG) _noneOption(gest, 'as the mood');
-  for (const md of moods) {
-    const o = el('option', '', md.label + (md.gloss ? ' - ' + md.gloss : '') + (md.id === v.mood ? ' (the mood)' : ''));
-    o.value = md.id;
-    if (md.id === curG) o.selected = true;
-    gest.appendChild(o);
-  }
-  gest.disabled = _saving || !_kit;
-  gest.addEventListener('change', () => _saveVideo({ gestures: gest.value === v.mood ? '' : gest.value }));
-  row(_labelled('gestures', gest, 'How the head, the hands and the body move'));
-  why('How the head, the hands and the body move while speaking. It follows the mood (field 1) until you pick another;'
-    + ' the face always follows the mood.');
-
-  // THE CAMERA - one continuous shot; several shots in one clip are in development.
-  const cam = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
-  const one = el('option', '', 'One continuous shot');
-  one.value = 'one';
-  const more = el('option', '', 'Several shots · soon');
-  more.value = 'more';
-  more.disabled = true;
-  cam.append(one, more);
-  cam.value = 'one';
-  row(_labelled('camera', cam, 'How the clip is shot'));
-  why('One shot from the first word to the last, the camera moving a little.');
 }
 
 function _list(host, p, lines) {
@@ -1827,90 +1613,6 @@ function _list(host, p, lines) {
   if (_listAt) list.scrollTop = _listAt;
 }
 
-// ── SEEDANCE'S PROMPTS ──────────────────────────────────────────────────────
-// The lines Seedance films, as the server works them out (routes/scen3.js _sdView): every read line - by the voice
-// sample, every line with words - a line is a fragment of its own - each with its frame, the seconds
-// of its clip, its prompt and its takes.
-const _sdFrags = (p) => (Array.isArray(p && p.sdFrags) ? p.sdFrags : []);
-const _sdFragOf = (p, i) => _sdFrags(p).find(f => f.line === i) || null;
-// The ones whose prompt is to be written: none yet, or written for other settings and not edited by hand. A line too long
-// for the model's clip is not filmed at all.
-const _sdNeeds = (p) => _sdFrags(p).filter(f => !f.tooLong && !f.noRead && (!f.prompt || (f.stale && !f.edited)));
-const _sdWriting = new Set();             // the lines being written now ('*' - the field's whole run)
-
-async function _writeSd(p, only) {
-  const tag = only ? only.join(',') : '*';
-  if (_sdWriting.has(tag)) return;
-  _sdWriting.add(tag);
-  _readErr = '';
-  _ctx.repaint();
-  try {
-    const r = await _post('/api/scen3/sd/prompts', only ? { projectId: p.id, lines: only } : { projectId: p.id });
-    _adopt(r);
-    const bad = ((r.report || {}).failed || [])[0];
-    if (bad) _readErr = 'The prompt of fragment ' + bad.n + ' was not written: ' + bad.error;
-  } catch (e) {
-    _readErr = 'The prompts were not written: ' + e.message;
-  }
-  _sdWriting.delete(tag);
-  _ctx.repaint();
-}
-async function _saveSdPrompt(p, line, body) {
-  try { _adopt(await _post('/api/scen3/sd/prompt', { projectId: p.id, line, ...body })); }
-  catch (e) { _readErr = 'The prompt was not saved: ' + e.message; }
-  _ctx.repaint();
-}
-const _sdBusy = (f) => _sdWriting.has('*') || _sdWriting.has(String(f.line));
-
-// THE SEEDANCE PROMPT of a line, beside its clip: the whole prompt as it goes to Seedance - the pictures named
-// (@Image1 the frame, @Image2 the sheet, @Audio1 the sound), the words with their seconds, the performance, the camera,
-// the place - editable; one edited by hand is never written over; `write` asks the writer for this fragment alone.
-function _sdPromptCol(p, f) {
-  const col = el('div', 'mv3-wk-fcol is-motion');
-  if (!f) {
-    col.appendChild(_colHead('seedance prompt'));
-    const dead = _dead(9, _bySample() ? 'This line has no words yet.' : 'Read this line first - Seedance hears its read, and the clip is as long as it.');
-    dead.classList.add('is-tall');
-    col.appendChild(dead);
-    return col;
-  }
-  const busy = _sdBusy(f);
-  const act = el('span', 'mv3-wk-fedited-row');
-  if (f.edited) act.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
-  if (f.stale) {
-    const s = el('span', 'mv3-wk-fstale', 'Written for other settings');
-    s.title = 'The frame, the mood, the gestures, the sound, the place, the words, the read or the voice changed since it was written';
-    act.appendChild(s);
-  }
-  if (f.edited && f.hasAgent) {
-    const back = el('button', 'mv3-wk-flink', 'Use the writer’s');
-    back.type = 'button';
-    back.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _saveSdPrompt(p, f.line, { useAgent: true }); });
-    act.appendChild(back);
-  }
-  const w = el('button', 'mv3-wk-flink', busy ? 'writing…' : f.prompt ? 'write again' : 'write');
-  w.type = 'button';
-  w.disabled = busy || f.tooLong || f.noRead || !_video().mood;
-  w.title = f.tooLong ? 'This line is longer than the model takes - it is not filmed'
-    : f.noRead ? 'Read this line first - Seedance hears its read'
-      : !_video().mood ? 'Choose the mood first (field 1)'
-        : 'The writer looks at the frame and the character’s sheet and writes this line’s prompt - credits, seconds'
-        + (f.edited ? '. It replaces what was edited by hand.' : '');
-  w.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _writeSd(p, [f.line]); });
-  act.appendChild(w);
-  col.appendChild(_colHead('seedance prompt', act));
-  const box = _textField('sd', f.line, f.prompt || '', 9,
-    busy ? 'The writer is writing this fragment’s prompt…'
-      : 'Not written yet. Press write - or generate in the video field writes every line’s. '
-        + (f.secs > 0 ? 'Its clip is ' + f.secs + ' s. ' : 'Seedance picks its length. ')
-        + 'It is written from the line, the frame it opens on, the character’s sheet, the mood and the gestures.',
-    (v) => _saveSdPrompt(p, f.line, { prompt: v }));
-  box.classList.add('is-tall');
-  box.disabled = busy;
-  col.appendChild(box);
-  return col;
-}
-
 // WHAT A LINE IS CALLED. Its place among the lines of the VIDEO, counted from one with no gaps -
 // not its place in the script, which still holds the lines that were taken off. Everything
 // under the panel - the frames, the clips, the journal, ?line=N - is addressed by the real index;
@@ -1928,18 +1630,15 @@ function _row(p, l, i, n) {
 
   const meta = el('div', 'mv3-wk-lmeta');
   meta.appendChild(el('span', 'mv3-wk-lnum', String(n)));
-  meta.appendChild(el('span', 'mv3-wk-ldur', !_bySample() && take && take.dur ? take.dur.toFixed(1) + 's' : ''));
+  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
   // The read, playable from the row: hearing a line is how it is judged, and
   // the row is where the eye already is. It PLAYS AND NOTHING ELSE: the
   // fragment does not open and the stage does not change - listening down the script must not
   // open every line of it.
-  // By the voice sample a line is not read: no play, no read.
-  if (!_bySample()) {
-    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
-    // ...and READ IT, beside its play.
-    row.appendChild(_rowRead(p, l, i));
-  }
+  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+  // ...and READ IT, beside its play.
+  row.appendChild(_rowRead(p, l, i));
 
   // No thumbnail between the number and the words: the frame is judged in the fragment,
   // and the row is read for its words.
@@ -1952,7 +1651,7 @@ function _row(p, l, i, n) {
     d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
-  if (!_bySample()) dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
+  dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
   dot(fr ? 'ok' : 'none', 'frame');
   dot(_clipping.has(i) ? 'busy' : _clipState(p, l, i), 'clip');
   row.appendChild(dots);
@@ -2291,7 +1990,7 @@ function _rowMenu(ev, row, p, l, i, n) {
 //
 //   | frame  (from the pool, or picked)  |  frame prompt                         |
 //   | the frames to pick from                                                   |
-//   | clip   + make clip                 |  animation prompt (or Seedance's)    |
+//   | clip   + make clip                 |  animation prompt (or OmniHuman's)   |
 //
 // and every take the line has under them.
 function _fragment(host, p, l, i) {
@@ -2353,22 +2052,19 @@ function _fragment(host, p, l, i) {
         : 'This line has no [tags] yet: mark it up by the mood of the video - it is read from them';
     mb.addEventListener('click', () => { if (!mb.disabled) { mb.disabled = true; VOICE.tagLine(va, i); } });
     row.appendChild(mb);
-    // By the voice sample a line is not read: its read, its speed and its play are not here.
-    if (!_bySample()) {
-      const ra = _readAct(p, l, i);
-      const reading = (VOICE.reading().lines || []).includes(i);
-      const rb = el('button', 'mv3-wk-fread u-btn is-s' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
-      rb.type = 'button';
-      rb.disabled = !ra.on || reading;
-      rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
-        : (ra.label === 'Read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
-      if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
-      row.appendChild(rb);
-      // THE LINE'S OWN SPEED and its play, between the read and the words: a new
-      // speed retimes this read at once - the timeline and the play follow.
-      row.appendChild(_lineSpeed(p, l, i));
-      row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
-    }
+    const ra = _readAct(p, l, i);
+    const reading = (VOICE.reading().lines || []).includes(i);
+    const rb = el('button', 'mv3-wk-fread u-btn is-s' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+    rb.type = 'button';
+    rb.disabled = !ra.on || reading;
+    rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
+      : (ra.label === 'Read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
+    if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
+    row.appendChild(rb);
+    // THE LINE'S OWN SPEED and its play, between the read and the words: a new
+    // speed retimes this read at once - the timeline and the play follow.
+    row.appendChild(_lineSpeed(p, l, i));
+    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
     const words = el('div', 'mv3-wk-fwords is-edit');
     _sayWords(words, shown || '…');
     words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');
@@ -2379,13 +2075,7 @@ function _fragment(host, p, l, i) {
     const fail = VOICE.failed();
     if (fail) host.appendChild(_note(fail, true));
   }
-  // A long line by the voice sample: a word, no refusal - its length is not estimated.
-  const sdl = _seedance() ? _sdFragOf(p, i) : null;
-  if (sdl && sdl.long) {
-    host.appendChild(_note('A long line - Seedance may not say all of it in one clip of ' + _ceiling() + ' s'
-      + (_ceiling() < 30 ? ' (seedance 2.5 takes up to 30 s)' : '') + '. It goes as it is.', true));
-  }
-  if (rs === 'stale' && !_bySample()) {
+  if (rs === 'stale') {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
     const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'Put the words back');
     back.type = 'button';
@@ -2412,14 +2102,14 @@ function _fragment(host, p, l, i) {
   const grid2 = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid2);
   grid2.appendChild(_clipCol(p, l, i, rs, take));
-  // Filmed by Seedance, a line is a fragment of its own: its Seedance prompt in place of Kling's.
-  grid2.appendChild(_seedance() ? _sdPromptCol(p, _sdFragOf(p, i)) : _motionCol(l, i, hasFrame));
+  // Filmed by OmniHuman, the line's OmniHuman prompt stands in place of Kling's.
+  grid2.appendChild(_omni() ? _omniCol(l, i, hasFrame) : _motionCol(l, i, hasFrame));
 
   _takes(host, p, l, i);
 }
 
 // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
-// and one of them is the fragment's. Pressing a row makes it that one. A Seedance line's takes too.
+// and one of them is the fragment's. Pressing a row makes it that one. Each says the model that made it.
 function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
@@ -2439,7 +2129,9 @@ function _takes(host, p, l, i) {
         img.src = c.thumb;
         r.appendChild(img);
       }
-      r.appendChild(el('span', 'mv3-wk-vname')).appendChild(figures('Take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
+      const by = ((_kit && _kit.models) || []).find(m => m.id === (c.model || 'kling'));
+      r.appendChild(el('span', 'mv3-wk-vname')).appendChild(figures('Take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')
+        + (by ? ' · ' + by.label : '')));
       if (stale) r.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
       if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
       if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
@@ -2627,9 +2319,72 @@ function _motionCol(l, i, hasFrame) {
   return col;
 }
 
+// The OmniHuman prompt: what OmniHuman 2.0 is told about the expression, the head, the hands, the body and the
+// camera - at most 300 characters (the server cuts a longer one at its last whole sentence). Written by its own
+// agent; a version written by hand stays through the next writing, and the agent's own is one press away. A line
+// without one goes with the project's motion preset.
+const OMNI_MAX = 300;
+function _omniCol(l, i, hasFrame) {
+  const col = el('div', 'mv3-wk-fcol is-motion');
+  const o = l.omni || null;
+  if (!hasFrame) {
+    col.appendChild(_colHead('omnihuman prompt'));
+    const dead = _dead(7, 'The clip is made from the frame: this fills in once this line has one.');
+    dead.classList.add('is-tall');
+    col.appendChild(dead);
+    return col;
+  }
+  const staleWords = !!(o && o.prompt && !_animated(l));
+  let action = null;
+  if ((o && o.edited) || staleWords) {
+    action = el('span', 'mv3-wk-fedited-row');
+    if (o && o.edited) action.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
+    if (staleWords) {
+      const st = el('span', 'mv3-wk-fstale', 'The words changed');
+      st.title = 'It was written for: “' + String(o.said || '').slice(0, 120) + '”';
+      action.appendChild(st);
+    }
+    if (o && o.edited && o.agent) {
+      const back = el('button', 'mv3-wk-flink', 'Use the agent’s');
+      back.type = 'button';
+      back.title = o.agent;
+      back.addEventListener('click', () => { delete _drafts[i + ':omni']; _saveOmni(i, { useAgentOmni: true }); });
+      action.appendChild(back);
+    }
+  }
+  col.appendChild(_colHead('omnihuman prompt', action));
+  const box = _textField(i, 'omni', (o && o.prompt) || '', 7,
+    'How the person performs while speaking - the expression, the gaze, the head, the hands, the body, a calm camera.'
+    + ' At most ' + OMNI_MAX + ' characters, written for every line by the video zone; without it the motion preset goes.',
+    (v) => _saveOmni(i, { omni: v }));
+  box.maxLength = OMNI_MAX;
+  box.classList.add('is-tall');
+  col.appendChild(box);
+  const count = el('div', 'mv3-wk-fcap');
+  const say = () => { count.textContent = box.value.length + ' / ' + OMNI_MAX; };
+  box.addEventListener('input', say);
+  say();
+  col.appendChild(count);
+  return col;
+}
+// The OmniHuman prompt changed by hand: shown at once, then the server's answer (it is kept in English, cut to its
+// 300 characters).
+async function _saveOmni(i, patch) {
+  const p = _ctx && _ctx.project;
+  if (!p || !p.lines[i]) return;
+  if ('omni' in patch) p.lines[i].omni = { ...(p.lines[i].omni || {}), prompt: patch.omni, edited: true };
+  _ctx.repaint();
+  try {
+    _adopt(await _post('/api/scen3/fragments/shot', { projectId: p.id, line: i, patch }));
+  } catch (e) {
+    _readErr = 'Could not save it: ' + e.message;
+  }
+  _ctx.repaint();
+}
+
 // ── The clip of a fragment ──────────────────────────────────────────────────
-// The frame speaks the read: the picture, the take and the line's animation prompt go to Kling avatar
-// (a Seedance project's line goes with its Seedance prompt) and the SERVER sees it through
+// The frame speaks the read: the picture, the take and the line's prompt go to the project's model - Kling avatar,
+// or OmniHuman 2.0 with its own prompt - and the SERVER sees it through
 // (routes/scen3.js, /scen3/fragments/clip). This panel only asks and
 // follows the row, which is why walking away loses nothing.
 const _clipping = new Map();              // line -> { alertId, startedAt }
@@ -2714,9 +2469,7 @@ let _lookedClips = '';
 async function _pickClip(i, clipId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
-  // A Seedance take is chosen among the line's Seedance takes (/scen3/sd/pick).
-  const route = _seedance() ? '/api/scen3/sd/pick' : '/api/scen3/fragments/pick-clip';
-  try { _adopt(await _post(route, { projectId: p.id, line: i, clipId })); }
+  try { _adopt(await _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId })); }
   catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
   _ctx.repaint();
 }
@@ -2759,26 +2512,21 @@ function _clipCol(p, l, i, rs, take) {
   let cap;
   let ready = false;
   let price = '';
-  // A line filmed by Seedance: its own reasons, its seconds and its price.
-  const sf = _seedance() ? _sdFragOf(p, i) : null;
   const vlock = _voiceLock(p);
   if (vlock) cap = vlock.replace(/\.$/, '').toLowerCase();
-  else if (_seedance()) {
-    if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
-    else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 1)';
-    else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
-    else if (!fr) cap = 'make a frame in the frames chat first';
-    else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
-    else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
-    else if (sf.secs > 0) { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
-    else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price
-  } else if (rs !== 'ok') cap = 'read this line first';
+  else if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make a frame in the frames chat first';
   else if (!_video().model) cap = 'choose the model of the clips first (field 3)';
   else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
-  else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
-  else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
-  if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
+  else if (take.dur > _ceiling()) cap = 'too long for ' + _modelName() + ' (' + take.dur.toFixed(1) + ' s) - split the line';
+  else {
+    ready = true;
+    // A read shorter than the model's shortest sound is padded to it, and billed for it.
+    const billed = _billSecs(take.dur, tier);
+    cap = take.dur.toFixed(1) + ' s' + (tier && tier.bill === 'up' && billed > take.dur + 0.05 ? ' · billed ' + billed + ' s' : '')
+      + ' · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…');
+  }
+  if (ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
   const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go' : ''),
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
@@ -2787,15 +2535,15 @@ function _clipCol(p, l, i, rs, take) {
   if (_armedClip === i && !busy) make.classList.add('is-armed');   // paid, armed: the light step
   // What the press will actually do: with nothing written yet it is two analyses and then the
   // clip, and that is worth saying before it takes half a minute.
-  const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));
+  const needsWords = !_animated(l) || !_envMotion(p);
+  const padded = !!(tier && tier.minAudioSec && take && take.dur < tier.minAudioSec);
   make.title = !ready ? cap
-    : sf ? (needsWords ? 'First the place and this line’s prompt are written (credits), then the clip. ' : '')
-      + 'Seedance: the frame this line opens on, the character’s sheet and its sound go with its prompt. '
-      + (sf.secs > 0 ? sf.secs + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + ' = ' + price + '.'
-        : 'Seedance picks the length and bills the seconds it makes.') + ' Press again to confirm.'
     : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
-      + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
-      + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
+      + (_omni() ? 'OmniHuman 2.0: this frame speaks this read, performing as its OmniHuman prompt says. '
+        : 'Kling avatar: this frame speaks this read, moving as the animation prompt says. ')
+      + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur, tier) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?')
+      + (padded ? ' (the read is padded with silence to ' + tier.minAudioSec + ' s and the clip cut back to it)' : '')
+      + '. Press again to confirm.';
   make.addEventListener('click', () => {
     if (_armedClip !== i) { _armedClip = i; _ctx.repaint(); return; }
     _armedClip = -1;
@@ -2806,7 +2554,7 @@ function _clipCol(p, l, i, rs, take) {
   // "rendering" - so the half-minute before anything is sent to Kling is not silence.
   const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'))).appendChild(figures(
-    busy ? (stage || 'making the clip…') : (ready && needsWords) ? (sf ? 'the prompt, then ' : 'analysis, then ') + cap : cap));
+    busy ? (stage || 'making the clip…') : (ready && needsWords) ? 'analysis, then ' + cap : cap));
   return col;
 }
 

@@ -176,12 +176,14 @@ export function switchRow(word, on, off, onChange) {
   row.append(b, el('span', null, word));
   return row;
 }
-/** The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
+/** The almanac of a chat that has none yet, at the foot of the column: the video chat's gold button, blurred and dimmed
+ *  as the strip's 3D Studio entry (css/app-nav.css .is-soon), not pressed, "In development" under the pointer. */
 export function almanacSoon() {
-  const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'Almanac');
+  const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen is-soon', 'Almanac');
   b.type = 'button';
-  b.disabled = true;
-  b.title = 'In development: how to ask for pictures, and references to place the person by';
+  b.title = 'In development';
+  b.setAttribute('aria-disabled', 'true');
+  b.tabIndex = -1;
   return b;
 }
 /** A shape ('9:16') as width over height. */

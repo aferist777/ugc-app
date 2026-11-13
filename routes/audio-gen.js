@@ -5,8 +5,7 @@
 // pages). The records and the journal are lib/audio-gens.js; the
 // engines' field names lib/audio-engines.js.
 //
-//   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
-//                                     the writer's rules are there
+//   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys are there
 //   POST   /api/audio/gen             { mode, ...the mode's fields, where, project?, into? } -> { gen }   a press: the record and
 //                                     its Alerts row NOW, the asking behind the answer. Simple with a highlights mood's
 //                                     `preset` may bring `presetEdit: { style, negative }` - that preset changed for this
@@ -20,9 +19,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { PUBLIC_DIR } = require('../lib/config');
 const ENG = require('../lib/audio-engines');
 const AG = require('../lib/audio-gens');
 
@@ -31,9 +27,6 @@ const router = express.Router();
 router.get('/audio/catalog', (_req, res) => {
   try {
     const c = ENG.catalog();
-    // The almanac and the writer's rules, read when they exist: the gold almanac button and the simple mode's writer.
-    c.almanac = fs.existsSync(path.join(PUBLIC_DIR, 'js', 'audio', 'almanac-data.js'));
-    c.writerRules = fs.existsSync(path.join(__dirname, '..', 'lib', 'audio-writer-rules.js'));
     c.fake = require('../lib/fake-agg').on();
     res.json({ success: true, ...c });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

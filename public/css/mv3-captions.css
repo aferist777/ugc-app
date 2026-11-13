@@ -89,15 +89,6 @@
   background:var(--surface);
 }
 .mv3-cap-based{ font:500 var(--fs-11)/1.3 var(--font); color:var(--muted) }
-/* The person's own presets: "save as my preset" at the right of the row (alone on a look made from no
-   preset), the hint of an empty Mine, and a tile just saved, marked for a moment. */
-.mv3-cap-preset.is-plain{ border-left-color:var(--border) }
-.mv3-cap-preset .mv3-cap-save{ margin-left:auto }
-.mv3-cap-preset.is-plain .mv3-cap-save{ margin-left:0 }
-/* An empty `Mine` is the shared part (js/ui-state.js emptyEl); here only where it sits. */
-.mv3-cap-empty{ grid-column:1 / -1 }
-.mv3-cap-empty[hidden]{ display:none }
-.mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--sel-line); box-shadow:0 0 0 3px var(--sel-bg) }   /* just saved: the selected look, not gold */
 .mv3-c-marks{ display:inline-flex; gap:4px }
 
 /* ── A heard line's words, one by one (word-edit.js) ─────────────────────────

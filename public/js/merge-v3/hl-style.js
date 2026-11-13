@@ -3,7 +3,7 @@
    off only once a style is chosen.
 
    The captions view's own tiles (captions-view.js), in a picker of their own: the categories over them -
-   All, Mine, Viral, Pop… -, every preset of the app and every one of the person's, each showing its STILL and playing its
+   All, Viral, Pop… -, every preset of the app, each showing its STILL and playing its
    loop only under the cursor (the loop asked for at the first hover, from its start each time, its round finished
    when the cursor leaves). A press CHOOSES - nothing is applied to any lane here: the style goes to every fragment of
    the project. The tiles are the server's (lib/caption-tiles.js); one not made yet shows the preset's name in
@@ -21,12 +21,10 @@
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
-import * as MyPresets from './my-presets.js';
 import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { BY_VIDEO, styleFor as _styleFor, settingsOf, standardOf, BY_VIDEO_KINDS } from './hl-kinds.js';
 import { KINDS as TABLE } from '../highlights/kinds.js';
 
-const MINE = 'mine';
 const REC = 'rec';
 
 // The caption groups recommended for a kind of video - first among the chips, marked
@@ -39,7 +37,7 @@ export const RECOMMENDED = Object.fromEntries(Object.entries(TABLE).filter(([, v
 // "By the video": not a preset - the kind auto finds gives its own captions (hl-kinds.js byVideoSets); `styleFor` is a
 // kind's first style (hl-kinds.js styleFor).
 export { BY_VIDEO };
-const _known = (id) => !!(PRESETS.find((x) => x.id === id) || MyPresets.byId(id));
+const _known = (id) => PRESETS.some((x) => x.id === id);
 /** The style a kind gives "by the video" - the first it remembers, or the app's first answer (Podcast Viral, Classic White). */
 export const styleFor = (kind) => _styleFor(kind, _known);
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -55,10 +53,10 @@ function _loopOf(url) {
   return p;
 }
 
-/** A preset's name, the app's or the person's ('' for none); "by the video" for that choice. */
+/** A preset's name ('' for none); "by the video" for that choice. */
 export function presetName(id) {
   if (id === BY_VIDEO) return 'by the video';
-  const p = PRESETS.find((x) => x.id === id) || MyPresets.byId(id);
+  const p = PRESETS.find((x) => x.id === id);
   return p ? p.name : '';
 }
 
@@ -184,16 +182,15 @@ export function stylePicker(host, { onPick, kind } = {}) {
   const grid = _el('div', 'mv3-cap-grid mv3-hls-grid');
   host.append(top, grid);
 
-  const mine = MyPresets.list();
   const countOf = (id) => PRESETS.filter((p) => p.category === id).length;
-  // The chips: the kind's recommended groups first - one chip "recommended" for all of them -, then All, Mine and
+  // The chips: the kind's recommended groups first - one chip "recommended" for all of them -, then All and
   // the groups, the recommended ones first, each marked.
   function paintChips() {
     top.textContent = '';
     const recCats = rec ? rec.cats.filter((c) => CATEGORIES.some((x) => x.id === c)) : [];
     const cats = recCats.map((id) => CATEGORIES.find((x) => x.id === id)).concat(CATEGORIES.filter((c) => !recCats.includes(c.id)));
     const chips = (recCats.length || (rec && rec.byVideo) ? [[REC, 'recommended', recCats.reduce((n, c) => n + countOf(c), rec.byVideo ? 1 : 0)]] : [])
-      .concat([['', 'All', PRESETS.length + mine.length], [MINE, 'Mine', mine.length]])
+      .concat([['', 'All', PRESETS.length]])
       .concat(cats.map((c) => [c.id, c.label, countOf(c.id)]));
     for (const [id, label, n] of chips) {
       const b = _el('button', 'mv3-cap-cat' + (id === REC ? ' is-rec' : '') + (recCats.includes(id) ? ' is-rec-cat' : ''), label);
@@ -205,15 +202,15 @@ export function stylePicker(host, { onPick, kind } = {}) {
       b.addEventListener('click', () => { cat = id; _spot(grid, null); paintCat(); });
       top.appendChild(b);
     }
-    // The tiles in the same order: the person's, the recommended groups', the rest.
+    // The tiles in the same order: the recommended groups', the rest.
     const order = [...grid.children].sort((a, b) => _rank(a) - _rank(b));
     for (const el of order) grid.appendChild(el);
   }
   const _rank = (btn) => {
     const c = btn.dataset.cat;
     if (c === BY_VIDEO) return -20000;
-    const i = c === MINE ? -1 : (rec ? rec.cats.indexOf(c) : -1);
-    return (c === MINE ? -1 : i >= 0 ? i : 100) * 10000 + (+btn.dataset.i || 0);
+    const i = rec ? rec.cats.indexOf(c) : -1;
+    return (i >= 0 ? i : 100) * 10000 + (+btn.dataset.i || 0);
   };
 
   // The "by the video" tile: shown under "recommended" while the kind is auto; it says the sets it chooses from.
@@ -245,13 +242,11 @@ export function stylePicker(host, { onPick, kind } = {}) {
     byBtn.title = 'The agent finds out what the video is, and the fragments get that kind\'s captions as you last chose them for it: ' + said.join('; ');
   }
 
-  // The person's first, newest first (as in the captions view), then the app's.
-  for (const p of mine.concat(PRESETS)) {
-    const isMine = !!MyPresets.byId(p.id);
+  for (const p of PRESETS) {
     const btn = _el('button', 'mv3-cap-tile');
     btn.type = 'button';
     btn.dataset.id = p.id;
-    btn.dataset.cat = isMine ? MINE : p.category;
+    btn.dataset.cat = p.category;
     btn.dataset.i = String(tiles.size);
     btn.title = p.name + ' - the captions of every fragment; Shift adds it to those chosen - each page one of them';
     const box = _el('div', 'mv3-cap-box');
@@ -292,7 +287,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     paintChips();
     paintCat();
   }
-  // The group a chosen tile is in: "by the video" under "recommended"; the person's under Mine; else its category.
+  // The group a chosen tile is in: "by the video" under "recommended"; else its category.
   const groupOf = (id) => (id === BY_VIDEO ? REC : (tiles.get(id) ? tiles.get(id).btn.dataset.cat : ''));
   /** Open on the group of the first one chosen - none chosen: "recommended" when the kind has it, else All. */
   function openFirst() {

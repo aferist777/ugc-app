@@ -855,7 +855,7 @@ function VIDEOS(ctx) {
     return cards[cards.length - 1] || null;
   }
   function _almanacBtn() {
-    const b = el('button', 'mv3-vc-almanac u-btn is-l', 'Almanac');
+    const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen', 'Almanac');
     b.type = 'button';
     b.title = 'The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt';
     b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, note: _helpNote }); });

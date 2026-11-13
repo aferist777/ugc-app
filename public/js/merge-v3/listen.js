@@ -49,7 +49,7 @@ const FELL = { 'no-key': 'No Groq key', network: 'Groq could not be reached', do
   refused: 'Groq refused this sound', 'too-large': 'Groq refused this sound' };
 
 // ── This computer's ear ─────────────────────────────────────────────────────
-// Read once when a page asks, again after a model download: the program, the model, the NVIDIA build.
+// Read once when a page asks, again after a model download: the program and the model.
 let _local = null;
 let _localAsked = null;
 export function local() { return _local; }
