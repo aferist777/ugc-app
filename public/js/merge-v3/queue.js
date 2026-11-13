@@ -129,7 +129,7 @@ function _row(it, refresh) {
 
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = (it.hl ? 'fragment' : it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
+  sub.textContent = (it.hl ? 'fragment' : 'blank') + ' · ' + (it.summary || '');
   main.appendChild(sub);
 
   // The bar, only while the encoder is on this one. Indeterminate when the phase reports no

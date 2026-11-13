@@ -212,7 +212,7 @@ function _schedule() {
 /** Press: save, then ask the server to listen to the open project. `opts.download` - yes to the model. */
 export async function start(opts) {
   const k = Store.key();
-  if (!k || !Store.canEdit()) return;
+  if (!k) return;
   const s = _get(k);
   s.refused = '';
   if (!soundPieces(Store.timeline()).length) {

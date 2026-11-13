@@ -92,14 +92,13 @@ server.js   Express, bound to 127.0.0.1 only
 routes\     one file per API area; ffmpeg.js is the renderer
 lib\        config.js (the two roots: program and library), media paths, stores, generation
 public\     the pages; js\<page>\ holds that page's ES modules
-tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, migrate-library.js, upgrade-library.js
+tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, build-app.js and release.js (a version for friends)
 ```
 
 `yt-dlp` ships with the app (`vendor/yt-dlp/`, fetched and checked by `npm install`).
 
 After a change: `node tools/smoke-local.js` against a running server - every page and every
-parameterless GET route, key redaction, removed routes still 404, '/' and '/character' landing where
-they should. It spends nothing.
+parameterless GET route, key redaction, removed routes still 404, '/' landing on Home. It spends nothing.
 
 ---
 

@@ -134,7 +134,7 @@ router.post('/references/:id/move', async (req, res) => {
         if (m.type === 'video') {
           if (!VIDEO_KINDS.includes(kind)) { skipped.push({ id: m.id, why: 'a video does not go into IMAGES' }); continue; }
           fileRecord({ videoPath: m.path, thumbPath: m.thumb || null, name, kind, categoryLabel: kind === 'hooks' ? '' : label,
-            trimmable: true, link: post.link || '', original: m.original || null, duration: m.dur || 0, w: m.w || 0, h: m.h || 0 });
+            link: post.link || '', original: m.original || null, duration: m.dur || 0, w: m.w || 0, h: m.h || 0 });
         } else {
           if (kind !== 'images') { skipped.push({ id: m.id, why: 'a picture does not go into VIDEO' }); continue; }
           await IMG.add(m.path, { categoryId: cat, categoryLabel: label, name, source: 'upload',

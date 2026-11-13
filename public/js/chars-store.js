@@ -69,7 +69,7 @@ export async function loadCharacters(force) {
     name:   String(c.name || 'unnamed'),
     gender: String(c.gender || '').toLowerCase(),
     // the combined 4K reference sheet — the base image dressing targets
-    sheet:  c.sheet || c.tpose || '',
+    sheet:  c.sheet || '',
     // The PORTRAIT this character was built from. A sheet is three full bodies side by side
     // in 16:9, so at thumbnail size it is a strip of three tiny people and no face at all -
     // which is the one thing you are looking for when picking who to cast. Not everyone has

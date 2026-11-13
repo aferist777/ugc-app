@@ -11,8 +11,6 @@
    MEMORY - ONE key, `mv3_hl_kinds_v1` (localStorage, mirrored to the library by storage-sync.js - Merge and Home alike):
    { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims, fonts, title } } } - the kind chosen last and each kind's last
    settings ((хп19), (хп46); `fonts` since V68 P4, `title` since V69 P12 - a kind that has none yet takes its standard).
-   The popup's memory of before (mv3_hl_ask_v1, mv3_hl_caption_picks_v1, mv3_hl_kind_style_v1, mv3_hl_music_v1) is carried over once into every kind - but not the kind itself, so the first opening of this popup shows
-   every kind's words ((хп49)); the old keys are left as they are.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { KINDS as TABLE, BY_VIDEO as BYV, FOUND, acting } from '../highlights/kinds.js';
@@ -54,42 +52,15 @@ export function standardOf(kind, lengths) {
 
 // ── The memory ──────────────────────────────────────────────────────────────
 const LS = 'mv3_hl_kinds_v1';
-const OLD = { ask: 'mv3_hl_ask_v1', picks: 'mv3_hl_caption_picks_v1', kindStyle: 'mv3_hl_kind_style_v1', music: 'mv3_hl_music_v1' };
 const _read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const _obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
 
-// The popup's memory of before, carried into every kind once (хп49): the lengths, the count, the caption picks (a style kept for
-// a kind where "by the video" was the pick), the ticked tracks - their moods once Music -> highlights is read (`oldMusic`).
-function _migrate() {
-  const ask = _obj(_read(OLD.ask)) || {};
-  const picks = _obj(_read(OLD.picks)) || {};
-  const kindStyle = _obj(_read(OLD.kindStyle)) || {};
-  const music = Array.isArray(_read(OLD.music)) ? _read(OLD.music).map(String) : [];
-  const out = { v: 1, kind: '', kinds: {} };
-  const styles = Array.isArray(picks.styles) ? picks.styles.map(String).filter(Boolean) : [];
-  const anims = Array.isArray(picks.anims) ? picks.anims.map(String).filter(Boolean) : [];
-  if (!Object.keys(ask).length && !styles.length && !anims.length && !music.length && !Object.keys(kindStyle).length) return out;
-  for (const k of Object.keys(STANDARD)) {
-    const r = {};
-    const len = k === 'fragmentation' ? ask.flength : ask.length;
-    if (len) r.length = String(len);
-    if (+ask.count) r.count = +ask.count;
-    if (styles.length) r.styles = styles.includes(BY_VIDEO) && k !== 'auto' ? [kindStyle[k] || FIRST_STYLE[k]] : styles.slice();
-    else if (kindStyle[k]) r.styles = [String(kindStyle[k])];
-    if (anims.length) r.anims = anims.slice();
-    out.kinds[k] = r;
-  }
-  if (music.length) out.oldMusic = music;
-  return out;
-}
-
 let _mem = null;
-/** The memory - read once a page, carried over from the old keys when it is not there yet. */
+/** The memory - read once a page; none yet - nothing chosen. */
 export function memory() {
   if (_mem) return _mem;
   const m = _obj(_read(LS));
-  if (m && m.v === 1 && _obj(m.kinds)) _mem = m;
-  else { _mem = _migrate(); _write(); }
+  _mem = m && m.v === 1 && _obj(m.kinds) ? m : { v: 1, kind: '', kinds: {} };
   return _mem;
 }
 function _write() { try { localStorage.setItem(LS, JSON.stringify(_mem)); } catch (e) { /* a private window */ } }
@@ -125,32 +96,12 @@ export function keep(kind, s) {
 export const lastKind = () => String(memory().kind || '');
 
 /**
- * The old ticked tracks as moods, once Music -> highlights is read: `moodOf(id)` -> a mood id, YOURS, or '' (gone). Every kind
- * that has no moods of its own yet takes them. Returns true when the memory changed.
- */
-export function settleOldMusic(moodOf) {
-  const m = memory();
-  if (!Array.isArray(m.oldMusic)) return false;
-  const moods = [...new Set(m.oldMusic.map(moodOf).filter(Boolean))];
-  for (const k of Object.keys(m.kinds)) {
-    const r = _obj(m.kinds[k]);
-    if (r && !Array.isArray(r.moods)) r.moods = moods.slice();
-  }
-  delete m.oldMusic;
-  _write();
-  return true;
-}
-
-/**
- * (phase V33.8, (в1)) The first style a kind remembers, else the one kept before V68 (mv3_hl_kind_style_v1), else its standard's
- * first. `known(id)` - is it a preset.
+ * (phase V33.8, (в1)) The first style a kind remembers, else its standard's first. `known(id)` - is it a preset.
  */
 export function styleFor(kind, known) {
   const r = _obj(memory().kinds[kind]);
   const mine = r && Array.isArray(r.styles) ? r.styles.find((id) => id !== BY_VIDEO && known(id)) : '';
-  if (mine) return mine;
-  const old = _obj(_read(OLD.kindStyle)) || {};
-  return old[kind] && known(old[kind]) ? String(old[kind]) : (FIRST_STYLE[kind] || FIRST_STYLE.podcast);
+  return mine || FIRST_STYLE[kind] || FIRST_STYLE.podcast;
 }
 
 /** (phase V69 P12) The kinds auto may find, as their sets "by the video" go: a kind in development (stream) cuts as other. */

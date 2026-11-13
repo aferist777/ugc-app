@@ -104,7 +104,7 @@ function _split() {
   // Enabled only when there is something to cut, so the button reports the state instead of
   // accepting a click and doing nothing. The playhead moves far more often than the selection.
   const paint = () => {
-    const r = Store.hasProject() && Store.canEdit() ? canSplit() : { ok: false, why: 'Open a project of your own to edit it' };
+    const r = Store.hasProject() ? canSplit() : { ok: false, why: 'Open a project to edit it' };
     b.disabled = !r.ok;
     b.title = r.ok ? 'Cut the selected clip at the playhead' : r.why;
   };

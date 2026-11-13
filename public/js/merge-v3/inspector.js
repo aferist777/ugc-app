@@ -511,8 +511,8 @@ function _blankFilm(host, track, c, set, pair) {
   )));
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
-  // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
-  if (!main || c.halfer) _halferRows(pic, c, set);
+  // (phase V49, (пр8)) No Halfer on main video.
+  if (!main) _halferRows(pic, c, set);
   if (!c.halfer) {
     const fr = pic;
     _bsep(fr);
@@ -573,7 +573,7 @@ function _blankStill(host, track, c, set) {
   const pic = _group(host, 'picture', 'Picture');
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
-  if (!main || c.halfer) _halferRows(pic, c, set);
+  if (!main) _halferRows(pic, c, set);
 
   // A band takes none of these: no crop, placement or framing on a band. (phase V84, (эф17)) Frame's rows are Picture's, under a line.
   if (!c.halfer) {
@@ -948,7 +948,7 @@ function _blankWordsTrack(host, track) {
         + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are. In a talking head '
         + 'every line is heard by itself, its words taken from the script, and a line with a new take is heard by itself.',
     });
-    gen.disabled = v.busy || !Store.key() || !Store.canEdit();
+    gen.disabled = v.busy || !Store.key();
     // BACK TO WHAT WAS HEARD (K2): the pages laid again from the answers this project keeps - the hand
     // cuts, trims and word edits of the heard lines go, the typed lines stay; nothing is asked or paid.
     let back = null, fixed = 0;
@@ -960,7 +960,7 @@ function _blankWordsTrack(host, track) {
           + 'corrections of them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound '
           + 'has changed since, Generate from the sound hears the new part.',
       });
-      back.disabled = v.busy || !Store.canEdit();
+      back.disabled = v.busy;
     }
     // The ways a line gets onto this lane - heard, typed, heard again - in ONE row (phase S2, the owner
     // 2026-10-05; a labelled row held only two).
@@ -1012,7 +1012,7 @@ function _blankWordsTrack(host, track) {
       title: 'Cuts the heard words into pages again by the rules, without changing anything else - for a '
         + 'lane cut before, or after cuts of your own',
     });
-    recut.disabled = !heard || !Store.canEdit();
+    recut.disabled = !heard;
     // HOW THE LANE IS CUT (phase V30, block 4, (с12), (с42)): a few words a page, or classic subtitles - a sentence or a
     // part of one in two lines of up to 42 characters. Changing it cuts the heard words again in the same step.
     const sent = raw.cut === 'sentences';
@@ -1070,7 +1070,7 @@ function _blankWordsTrack(host, track) {
     if (isSubs && o && o.shift) return _shiftAnim(track, raw, st, pair);
     set(Object.assign(pairOf(pair), anims ? { anims: [] } : {}));
   };
-  return { preset: mix ? '' : (raw.preset || ''), edited: !mix && !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
+  return { preset: mix ? '' : (raw.preset || ''), edited: !mix && !!raw.preset && editedKeys(raw).length > 0, apply,
     presets: mix ? mix.map(e => e.preset).filter(Boolean) : null, editedIds: mix ? mix.filter(_entryEdited).map(e => e.preset) : null,
     kind: isSubs ? 'subs' : 'text', anims: anims ? anims.slice() : [pairNow(st)], anim,
     fonts: fontsOf(raw) ? fontsOf(raw).slice() : [], font: (list) => _laneFonts(track, raw, list) };
@@ -1090,7 +1090,6 @@ function _fontsRow(host, track, raw) {
   const x = C.button('', () => _laneFonts(track, raw, []), { title: 'Takes the fonts away - the preset\'s own font again' });
   x.classList.add('is-icon', 'is-quiet', 'is-del', 'u-x');   // (phase V73 block 5, 5b) the one ✕
   x.setAttribute('aria-label', 'Take the fonts away');
-  x.disabled = !Store.canEdit();
   host.appendChild(C.row(list.length > 1 ? list.length + ' fonts' : 'Font tab', C.pair(said, x)));
 }
 function _laneFonts(track, raw, list) {
@@ -1186,7 +1185,6 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     if (edited) {
       const base = presetStyle(e.preset);
       const b = C.button('Back to the preset', () => put(_lookEntry(base), true), { title: 'Takes away what was changed in this look' });
-      b.disabled = !Store.canEdit();
       body.appendChild(C.row('', b));
     }
     _lookRows(body, stK, setK, { fmt, textLane: false, motion: false, marks, setBehind: (v) => setK(_behind(v, stK)) });
@@ -1216,7 +1214,6 @@ function _presetLine(host, style, back, editedAny, save, kind) {
     row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
     if (edited) {
       const b = C.button('Back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
-      b.disabled = !Store.canEdit();
       row.appendChild(b);
     }
   }
@@ -1266,7 +1263,7 @@ function _placeRows(host, st, set, o) {
   const centre = C.button('Center', () => set({ tx: 0 }), {
     title: across ? 'Moved ' + across + ' on the preview - back to the middle across' : 'In the middle across - drag it on the preview to move it sideways',
   });
-  centre.disabled = !across || !Store.canEdit();
+  centre.disabled = !across;
   const sideBox = _el('span', 'mv3-c-marks');
   if (across) sideBox.appendChild(_el('span', 'mv3-c-num', across));
   sideBox.appendChild(centre);
@@ -1393,7 +1390,6 @@ function _rowsRow(host, raw, set) {
   const sel = C.select(ROWS_OPTS, rowsOn(raw) ? '2' : '1', (v) => set({ rows: v === '2' ? 2 : undefined }));
   sel.title = 'Two: a page is whole while its words are spoken - its In before the first word, its Out after its end, '
     + 'at least 0.8 s - and every other page stands in a second row, so the next one does not flash in its place';
-  sel.disabled = !Store.canEdit();
   host.appendChild(C.row('Rows', sel));
 }
 
@@ -1476,7 +1472,7 @@ function _renderCaptions(host, items) {
     { danger: true, title: 'Also on the Delete key' }));
   // The pair they all wear is lit (V49); a press puts one on each.
   const pairs = new Set(items.map(x => pairNow(styleOf(x.track, fmt, x.clip))));
-  return { preset: common, edited: anyEdited, apply: wear, readOnly: !Store.canEdit(),
+  return { preset: common, edited: anyEdited, apply: wear,
     kind: items.every(x => x.track.kind === 'text') ? 'text' : 'subs',
     anims: pairs.size === 1 ? [...pairs] : [], anim: (pair) => setCapStyleB(ids, pairOf(pair), { cut: false }),
     // (V68 P4) The fonts tab on lines: the font pressed is each line's own, as the Font row above puts it.
@@ -1597,7 +1593,7 @@ function _blankCaption(host, track, clip) {
   // ITS tiles lit (V49, (пр17)): the preset it is drawn with - its own, the one its lane's mix dealt it, or its lane's.
   const s = own ? clip.style : null;
   return { preset: s ? (s.preset || '') : (drawn.preset || ''), edited: !!(s && s.preset) && editedKeys(withoutRefs(s)).length > 0,
-    apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs',
+    apply: (id) => wear(id, heard), kind: track.kind === 'text' ? 'text' : 'subs',
     anims: [pairNow(styleOf(track, fmt, clip))], anim: (pair) => setCapStyleB([clip.id], pairOf(pair), { cut: false }),
     fonts: _ownFonts([clip]),
     font: (list, o) => { if (o && o.family) setCapStyleB([clip.id], { font: o.family }, { cut: heard }); } };

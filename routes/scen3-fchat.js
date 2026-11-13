@@ -32,7 +32,6 @@ const MV = require('../lib/mv3-img');
 const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
-const OWN = require('../lib/ownership');
 const { toDiskExisting } = require('../lib/media');
 
 const KIND = 'fchat';
@@ -78,7 +77,6 @@ router.post('/scen3/fchat/send', (req, res) => {
   try {
     const { key, id, proj } = _projectOf(b);
     if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const text = String(b.text || '').trim().slice(0, 20000);
     if (!text) return res.status(400).json({ success: false, error: 'say what the frame is' });
     const engine = String(b.engine || '');
@@ -286,7 +284,6 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
     const key = String(m.project || '');
     const { id, proj } = _projectOf({ project: key });
     if (!proj) return res.status(400).json({ success: false, error: 'the project of this card is gone' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const refs = (Array.isArray(m.media) ? m.media : []).map(a => String(a.path || '')).filter(Boolean);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
@@ -355,7 +352,6 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     const b = req.body || {};
     const { key, id, proj } = _projectOf(b);
     if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
     const pr = _products(refs, refs.map((x, i) => _roleOf((b.roles || [])[i])));
     const roles = pr.roles;
@@ -393,7 +389,6 @@ router.post('/scen3/fchat/ideas/again', async (req, res) => {
   try {
     const { key, id, proj } = _projectOf(b);
     if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const m = CHAT.get(b.id);
     if (!m || !Array.isArray(m.ideas) || String(m.project || '') !== String(key)) return res.status(404).json({ success: false, error: 'those ideas are gone' });
     if (!(i >= 0 && i < m.ideas.length)) return res.status(400).json({ success: false, error: 'no such idea' });
@@ -437,7 +432,6 @@ router.post('/scen3/fchat/to-set', async (req, res) => {
     if (!g || !g.frame || g.state !== 'done' || !g.imagePath) return res.status(400).json({ success: false, error: 'this frame is not ready' });
     const proj = SCEN().loadProjects().find(p => String(p.id) === String(g.scen || ''));
     if (!proj) return res.status(404).json({ success: false, error: 'the project of this frame is gone' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const abs = toDiskExisting(g.imagePath);
     if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'the frame is not on the disk any more' });
     // (phase V61) The frame keeps the edge it was asked with - the clip's writer reads its shot from it.

@@ -29,7 +29,7 @@ import * as SW from '../sound/sound-window.js';
 
 const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
 const _hl = (k) => /^hl_/.test(String(k || ''));
-const _allowed = () => Store.isReady() && !!Store.key() && Store.canEdit();
+const _allowed = () => Store.isReady() && !!Store.key();
 const _kind = () => (_hl(Store.key()) ? 'highlights' : isTalking() ? 'talking head' : Store.isDraft() ? 'draft' : 'blank');
 const _key = () => Views.chatKey(Store.key() || '');
 

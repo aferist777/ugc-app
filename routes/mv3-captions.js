@@ -31,7 +31,6 @@
 
 const express = require('express');
 const router = express.Router();
-const OWN = require('../lib/ownership');
 const MSTORE = require('../lib/merge-store');
 const JOB = require('../lib/captions-job');
 const AUTO = require('../lib/captions-auto');
@@ -51,7 +50,6 @@ router.post('/mv3/captions/transcribe', (req, res) => {
     // The project asked for, never the newest one the way an open falls back to.
     const t = MSTORE.read().timelines[key];
     if (!t) return res.status(404).json({ success: false, error: 'No project "' + key + '".' });
-    if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
     const lane = (Array.isArray(t.tracks) ? t.tracks : []).find((x) => x && x.kind === 'subs');
     const here = (HEARD.listenOf(lane) || {}).engine === 'local';
     // "Back to what was heard" (K2) asks nobody: neither the key nor the program is needed.

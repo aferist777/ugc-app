@@ -246,7 +246,7 @@ function _hrefOf(rec) {
 // for an hour would pull a mean of six far out. A row of the fake aggregator ("FAKE ·" in its title) is twenty
 // seconds of nothing and is not counted.
 const KEEP_FOR_AVERAGE = 6;
-const GUESS_MS = { clip: 5 * 60000, video: 5 * 60000, frame: 90000, picture: 75000, lookbook: 60000, environment: 60000, music: 2 * 60000,
+const GUESS_MS = { clip: 5 * 60000, video: 5 * 60000, picture: 75000, lookbook: 60000, environment: 60000, music: 2 * 60000,
   highlights: 10 * 60000 };
 const GUESS_OTHER_MS = 2 * 60000;
 

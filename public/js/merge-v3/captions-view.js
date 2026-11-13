@@ -75,9 +75,6 @@ const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
 const POLL_MS = 1500;
 const MINE = 'mine';
 
-// The `presets` switch's memory (K6), forgotten once - here and, through storage-sync, in ui-state.
-try { if (localStorage.getItem('mv3_cap_tiles_v1') != null) localStorage.removeItem('mv3_cap_tiles_v1'); } catch (e) { /* a private window */ }
-
 const _store = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? fb : v; } catch (e) { return fb; } };
 const _keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };

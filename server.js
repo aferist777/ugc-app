@@ -50,15 +50,6 @@ const PROGRAM = require('./lib/app-version').current();
     console.warn('[format] no snapshot of the stores: ' + e.message);
   }
 }
-// A library from before layout 6 is upgraded before anything reads a store (lib/library-upgrade.js):
-// files move into project, shelf and category folders, and the stores follow. Stopped halfway,
-// the next start carries on; a failure stops the start rather than open half a library.
-try {
-  require('./lib/library-upgrade').upgrade(ROOT_DIR, { log: (line) => console.log(line) });
-} catch (e) {
-  console.error('[upgrade] the library could not be upgraded:', e.stack || e.message);
-  process.exit(1);
-}
 // The format this program writes and the program that opened the library last (lib/library-format.js).
 try { LIB_FORMAT.stamp(ROOT_DIR, PROGRAM); } catch (e) { console.warn('[format] the library was not stamped: ' + e.message); }
 const { generateMissingThumbs } = require('./lib/helpers');
@@ -76,22 +67,13 @@ const { generateMissingThumbs } = require('./lib/helpers');
   if (d.added) console.log(`[projects] ${d.added} 3D Studio scene folder(s) joined the list`);
 }
 
-// ── One person ──────────────────────────────────────────────────────────────
-// The desktop app has no sign-in: whoever opens the window is its user. Routes still read
-// req.user - a queue entry names who queued it, a trim who made it - so every request carries
-// the one local user. lib/ownership.js says why every project answers to them.
-const { LOCAL_USER } = require('./lib/ownership');
-app.use((req, _res, next) => { req.user = LOCAL_USER; next(); });
-
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
 // A save from a page opened before a file moved still carries the old address: rewritten here,
 // before any route reads the body (lib/moves.js).
 app.use('/api', require('./lib/moves').rewriteBodies);
-// (the owner 2026-10-22) The app opens on Home. The Character page is gone - making a character is
-// the Library's Characters shelf now - and its old address lands there.
+// (the owner 2026-10-22) The app opens on Home.
 app.get('/', (_req, res) => res.redirect('/home'));
-app.get('/character', (_req, res) => res.redirect('/library?shelf=characters'));
 // The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
 // stale script: 'no-cache' uses ETag/Last-Modified - an unchanged file is a cheap 304.
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -226,18 +208,12 @@ const server = app.listen(PORT, '127.0.0.1', () => {
           .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
       } catch { return []; }
     };
-    // Each shelf's archive/ sits inside it (media/<kind>/archive).
-    const archiveDirs = [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].map(d => path.join(d, 'archive'));
-    // Then the thumbnails still at the server's smaller sizes are made again (once per library),
-    // and /api/thumb's cache of an earlier size table is cleared.
+    // And /api/thumb's cache of an earlier size table is cleared.
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
       ...subdirs(MEDIA.images),
       ...subdirs(PROJECTS_DIR, 'frames'),
-      ...archiveDirs,
-    ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message))
-      .then(() => require('./lib/thumb-refresh').run())
-      .catch(e => console.warn('[thumbs] refresh failed:', e.message));
+    ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
     require('./lib/thumbs').sweepOldSizes();
 
     // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go.
@@ -263,11 +239,6 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     try { require('./lib/gen-jobs').resume(); }
     catch (e) { console.warn('[gen-jobs] could not resume:', e.message); }
 
-    // (phase V23) The old recovery of unfinished tasks is gone: the Alerts rows above see every portrait and sheet
-    // through, into the character's folder. Its store is left over in older libraries, and nothing reads it.
-    try { require('fs').rmSync(require('path').join(require('./lib/config').DATA_DIR, 'pending-tasks.json'), { force: true }); }
-    catch (e) { /* held open: it stays, unread */ }
-
     // (phase V27) yt-dlp on the nightly channel, kept current: a check now and once a day (lib/ytdlp.js).
     try { require('./lib/ytdlp').startChecks(); }
     catch (e) { console.warn('[yt-dlp] could not start its checks:', e.message); }
@@ -277,12 +248,6 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // ...and what it was sent, worked through into REFERENCES (blocks 3-4): what the app closed in the middle of, again.
     try { require('./lib/references-intake').start(); }
     catch (e) { console.warn('[references] could not start:', e.message); }
-    // And no login: the YouTube cookie jar is gone (the owner, 2026-10-12). One left in an older library is a live
-    // session nothing reads any more - it goes.
-    for (const f of ['yt-cookies.txt', 'yt-cookies.json']) {
-      try { require('fs').rmSync(require('path').join(require('./lib/config').DATA_DIR, f), { force: true }); }
-      catch (e) { /* held open: it stays, unread */ }
-    }
   }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });
 

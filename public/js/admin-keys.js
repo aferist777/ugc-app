@@ -7,12 +7,12 @@
    EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
    provider accepted it, amber when it is there but the provider refused it (the reason sits
    under the field), red when it is missing. The check is the same one Home's block "The app"
-   reads (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Pixabay, Cloudflare); the keys it
-   does not probe - the separate R2 fields - are green when present, with "not probed" said.
+   reads (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Pixabay, Telegram,
+   Cloudflare).
 
    THE ONE CLOUDFLARE KEY (phase TG): saved, it is checked step by step at once (POST /api/cloudflare/check - the key,
    the account, the bucket, an upload), the steps shown under it with a "check" of its own and "How to get this key"
-   under them; once it has passed, R2 is spoken to with it and the R2 fields are hidden (their values wiped).
+   under them; once it has passed, R2 is spoken to with it. It is the only way R2 is set up.
 
    EDITING. Focusing a filled field clears it for typing; leaving it empty puts the mask back.
    Typing replaces on Save. The × beside a field removes the key on Save - the button asks
@@ -84,35 +84,11 @@ const ROWS = [
   {
     // (phase TG, the owner 2026-10-21: "хочу решить вопрос одним ключом") ONE key for Cloudflare: R2 is spoken to with the
     // pair made from it, and (block 2) the Telegram receiver is set up with it. Checked step by step once saved
-    // (lib/cloudflare.js); the R2 fields below go when it has passed.
+    // (lib/cloudflare.js).
     group: 'Cloudflare · where reference media are hosted (R2)',
     label: 'Cloudflare API token:', settingsKey: 'cloudflareApiToken', probe: 'cloudflare', cloudflare: true,
     placeholder: 'cfut_••• (one key for R2)',
-    desc: 'One key in place of the R2 fields: the app finds your account and its bucket (or makes one), and hosts every reference image and clip the models fetch there.',
-  },
-  {
-    group: 'R2 · separate keys (only while there is no checked Cloudflare token)',
-    label: 'R2 account ID:', settingsKey: 'r2AccountId', plain: true, r2: true,
-    placeholder: '32 hex characters (Cloudflare dashboard)',
-    link: 'https://dash.cloudflare.com/?to=/:account/r2/api-tokens', linkText: 'dash.cloudflare.com → R2',
-    desc: 'Every generated reference image is uploaded here so Replicate and kie can fetch it over https. Without R2 the providers refuse the image and generation fails.',
-  },
-  {
-    label: 'R2 access key ID:', settingsKey: 'r2AccessKeyId', plain: true, r2: true,
-    placeholder: 'the ID half of the R2 API token',
-  },
-  {
-    label: 'R2 secret key:', settingsKey: 'r2SecretAccessKey', r2: true,
-    placeholder: '••• (the secret half, shown once at creation)',
-  },
-  {
-    label: 'R2 bucket:', settingsKey: 'r2Bucket', plain: true, r2: true,
-    placeholder: 'bucket name',
-  },
-  {
-    label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true, optional: true, r2: true,
-    placeholder: 'https://pub-••••.r2.dev  (optional)',
-    desc: 'The bucket\'s own public address. Left empty, links are presigned instead - longer, and they expire, but nothing has to be switched on in the dashboard.',
+    desc: 'One key for R2: the app finds your account and its bucket (or makes one), and hosts every reference image and clip the models fetch there. Without it the models cannot be handed a reference.',
   },
 ];
 
@@ -275,24 +251,24 @@ function buildRow(r) {
 
   const row = {
     wrap, field, x, state, key: r.settingsKey, probe: r.probe || null,
-    plain: !!r.plain, optional: !!r.optional, hint: r.placeholder || '',
-    present: false, mask: '', fromEnv: false,
+    hint: r.placeholder || '',
+    present: false, mask: '',
     mode: 'shown',          // shown | editing | typed | cleared
     health: null,           // { state, detail } from the probe, when there is one
-    r2: !!r.r2, steps, again, tg,
+    steps, again, tg,
   };
   if (again) again.addEventListener('click', () => cfCheck());
 
   // Focusing a filled field clears it for typing; leaving it empty puts the mask back.
   field.addEventListener('focus', () => {
-    if (row.mode === 'shown' && (row.present || row.fromEnv)) { row.mode = 'editing'; field.value = ''; field.classList.remove('is-mask'); }
+    if (row.mode === 'shown' && row.present) { row.mode = 'editing'; field.value = ''; field.classList.remove('is-mask'); }
   });
   field.addEventListener('input', () => { row.mode = field.value ? 'typed' : 'editing'; paint(row); });
   field.addEventListener('blur', () => { if (row.mode === 'editing' && !field.value) { row.mode = 'shown'; paint(row); } });
   field.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); row.mode = 'shown'; paint(row); field.blur(); } });
   x.addEventListener('click', () => {
     if (row.mode === 'cleared') { row.mode = 'shown'; paint(row); return; }
-    if (!row.present && !row.fromEnv && row.mode !== 'typed') return;    // nothing to remove
+    if (!row.present && row.mode !== 'typed') return;    // nothing to remove
     row.mode = 'cleared';
     paint(row);
   });
@@ -329,23 +305,22 @@ function paint(row) {
   x.classList.toggle('u-x', row.mode !== 'cleared');
   x.classList.toggle('bk-undo', row.mode === 'cleared');
   x.title = row.mode === 'cleared' ? 'Keep it after all' : 'Remove this key (on Save)';
-  x.disabled = !(row.present || row.fromEnv || row.mode === 'typed' || row.mode === 'cleared') || (row.fromEnv && !row.present && row.mode !== 'typed');
+  x.disabled = !(row.present || row.mode === 'typed' || row.mode === 'cleared');
 
   if (row.mode === 'cleared') {
     field.value = '';
     field.placeholder = 'removed on Save';
     field.classList.add('is-cleared');
     state.textContent = 'will be removed when you press Save'
-      + (row.key === 'cloudflareApiToken' ? ' - uploads to R2 stop until a new key (or the R2 fields)' : '');
+      + (row.key === 'cloudflareApiToken' ? ' - uploads to R2 stop until a new key' : '');
     state.className = 'bk-state missing';
     return;
   }
   if (row.mode === 'shown') {
     if (row.present) { field.value = row.mask; field.classList.add('is-mask'); field.placeholder = ''; }
-    else if (row.fromEnv) { field.value = 'set in .env'; field.classList.add('is-mask'); field.placeholder = ''; }
     else { field.value = ''; field.placeholder = row.hint; }
   }
-  const have = row.present || row.fromEnv || row.mode === 'typed';
+  const have = row.present || row.mode === 'typed';
   const h = row.health;
   let cls = '', text = '';
   if (h && row.mode !== 'typed') {
@@ -354,10 +329,10 @@ function paint(row) {
     else { cls = 'is-missing'; text = 'no key'; }
   } else if (have) {
     cls = 'is-ok';
-    text = row.mode === 'typed' ? 'new value · saved and checked on Save' : (row.fromEnv && !row.present ? 'present in .env · not probed' : (row.probe ? 'present · checking…' : 'present · not probed'));
+    text = row.mode === 'typed' ? 'new value · saved and checked on Save' : 'present · checking…';
   } else {
-    cls = row.optional ? '' : 'is-missing';
-    text = row.optional ? 'optional' : 'no key';
+    cls = 'is-missing';
+    text = 'no key';
   }
   if (cls) field.classList.add(cls);
   state.textContent = text;
@@ -370,16 +345,8 @@ async function load() {
     const d = await fetch('/api/settings').then(r => r.json());
     const set      = (d && d.secretsSet) || {};
     const preview  = (d && d.secretsPreview) || {};
-    const settings = (d && d.settings) || {};
-    const fromEnv  = (d && d.envFallback) || {};
     for (const [key, row] of byKey) {
-      if (row.plain) {
-        const v = String(settings[key] ?? '').trim();
-        row.present = !!v; row.mask = v;
-      } else {
-        row.present = !!set[key]; row.mask = preview[key] || '';
-      }
-      row.fromEnv = !!fromEnv[key];
+      row.present = !!set[key]; row.mask = preview[key] || '';
       row.mode = 'shown';
       paint(row);
     }
@@ -419,12 +386,10 @@ async function health(force) {
 }
 
 // ── the Cloudflare key's check (phase TG) ─────────────────────────────────
-// Its steps under the field, in green or red; the R2 fields hidden while the key is R2's (checked).
+// Its steps under the field, in green or red.
 function cfPaint(v) {
   const row = byKey.get('cloudflareApiToken');
   if (!row || !row.steps) return;
-  const inUse = !!(v && v.inUse);
-  for (const r of rows) if (r.r2) r.wrap.hidden = inUse;
   row.steps.textContent = '';
   row.again.hidden = !(v && v.tokenSet);
   row.again.disabled = !!(v && v.checking);
@@ -450,7 +415,7 @@ function cfPaint(v) {
   if (c.ok) {
     const e = document.createElement('div');
     e.className = 'bk-step ok';
-    e.textContent = 'R2 works with this key - the separate R2 fields are gone';
+    e.textContent = 'R2 works with this key';
     row.steps.appendChild(e);
   }
 }

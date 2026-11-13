@@ -43,12 +43,8 @@ export const DRAG_MEDIA = 'application/x-mv3-media-';
 //
 // Read off the source rather than stored on the clip: a path ending in .png is a picture
 // whatever wrote it, so this needs no field, no default and no migration.
-//
-// NOT the same as a Main clip's `poster`. That is a still standing in for a fragment whose
-// source is an mp3 - the clip still has a length of its own, from the voice. A still clip
-// has no length at all until the timeline gives it one.
 const STILL_RE = /\.(jpe?g|png|webp|avif|bmp)$/i;
-export const isStill = (c) => !!c && !c.poster && STILL_RE.test(String(c.src || '').split('?')[0]);
+export const isStill = (c) => !!c && STILL_RE.test(String(c.src || '').split('?')[0]);
 
 // How long a picture is when it lands. A film brings its own length; a still has none, so
 // this is a decision rather than a measurement - long enough to read, short enough to trim
@@ -72,12 +68,6 @@ let _draft = false;        // (phase V20) it is THE draft - not saved yet
 let _misses = 0;           // projects asked for that were not there, one after another (load)
 let _adv = null;          // the project's export settings, as the server holds them
 
-// WHETHER IT MAY BE CHANGED. Read with the project and never changed here: the server decides (in the desktop
-// app every project is the one person's, lib/ownership.js), and a refused project would have every edit
-// refused at mutate() with a message rather than accepted here and thrown back one save later.
-let _canEdit = true;
-export function canEdit() { return _canEdit; }
-
 /** (phase V28.4) This clip's file is not on the disk - it is red, to be replaced or removed. */
 export const isGone = (c) => !!(c && c.src && _gone.has(_srcKey(c.src)));
 /** How many pieces of media of the open project have no file - a clip and its sound below it are one. */
@@ -94,7 +84,6 @@ export function markGone(src) {
   _gone.add(k);
   _emit();
 }
-function _roMessage() { return 'Read only - this project cannot be changed here.'; }
 
 // (phase V20, the owner 2026-10-08) NOTHING OPEN IS THE DRAFT: Merge with no project to open opens THE draft - one
 // at a time, made when there is none - so the timeline and the chats work from the first press, and naming it waits
@@ -106,7 +95,7 @@ export function markSaved(t) { _draft = false; if (t != null) _title = String(t)
 /**
  * (phase V49, the owner's (пр12)) THE DRAFT CLEARED: its lanes become a new timeline's - main video, main audio and
  * Subtitles, empty (the server's shape, GET /api/mv3/blank: lib/timeline-shape.js emptyBlank) - as ONE step to undo, so
- * Ctrl+Z brings the clips back; its frame stays. The draft itself stays as it is: its key, folder, title, category and
+ * Ctrl+Z brings the clips back; its frame stays. The draft itself stays as it is: its key, folder, title and
  * the drafts' conversation. Done here, through mutate(), and not by the server: the edit goes up the way every edit does,
  * quoting its version, with nothing for a save in the air to fight. -> 'cleared' | 'empty' (nothing on it to clear).
  */
@@ -140,8 +129,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export function timeline() { return _timeline; }
 
-// The kind every project has now - an ordered list of lanes. The talking-head editor's projects
-// were rewritten into it at startup (lib/timeline-convert.js).
+// The kind every project has now - an ordered list of lanes.
 export const BLANK_KIND = 'blank';
 export function version() { return _version; }
 export function status() { return _status; }
@@ -165,7 +153,7 @@ const _INFO = new Set([
   'The B-roll was laid while you edited - your edit was kept and merged in.',
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
-// (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, read only, a rule of the lanes) or
+// (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, a rule of the lanes) or
 // not saved: popped up once (bar.js, js/notice.js), and red in the timeline's header while it lasts.
 // (phase V62, the owner 2026-10-31: "этого уведомления не должно быть в приложении. потому что девайс только тот на котором
 // происходит работа") There is no "another device": a change that came from elsewhere - the app's own server - is merged in or
@@ -286,7 +274,6 @@ export async function load(k) {
     _title = '';
     _draft = false;
     _adv = null;
-    _canEdit = true;
     _base = null;
     _dirty = false;
     _status = null;
@@ -325,7 +312,6 @@ export async function load(k) {
   _title = d.title || '';
   _draft = !!d.draft;
   _adv = d.adv || null;
-  _canEdit = d.canEdit !== false;
   _base = clone(d.timeline);        // the floor a later merge measures "what did I change" against
   // The URL follows what is actually open, so a reload comes back to the same project while a
   // fresh /merge-v3 still starts empty. The server picks for an unknown key, so this stores
@@ -573,7 +559,6 @@ function _bindHistory() {
   History.bind({
     read: () => _timeline,
     write: (state) => {
-      if (!_canEdit) { _status = _roMessage(); _emit(); return; }
       // An edit like any other (K10b): without the count, a save already on its way when Ctrl+Z was pressed
       // took itself for the latest and put the undone state back on screen - and the undo was never saved.
       _timeline = state; _dirty = true; _edits++; _emit(); _schedule();
@@ -593,9 +578,6 @@ export function mutate(fn, opts) {
   // With no project open the blank timeline is a prompt, not a workspace: there is nowhere to
   // save an edit to, so it is refused out loud instead of being accepted and then lost.
   if (!_key) { _status = 'Choose a project first - there is nothing open to edit.'; _emit(); return false; }
-  // Somebody else's, open to look at. Refused here, at the one door every edit comes
-  // through, so the lanes and the inspector need no rule of their own.
-  if (!_canEdit) { _status = _roMessage(); _emit(); return false; }
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
   // A change that changes nothing (a re-cut that comes out the same, a value set to itself) is no step to
@@ -619,7 +601,7 @@ function _schedule() {
 
 export async function save(_merges = 0) {
   if (_timer) { clearTimeout(_timer); _timer = null; }
-  if (!_timeline || !_dirty || _saving || !_key || !_canEdit) return;
+  if (!_timeline || !_dirty || _saving || !_key) return;
   // A bound on the merge-and-retry loop. Three rounds means three writes from elsewhere landed
   // during one save; a fourth is a server that refuses everything, and hammering it is worse
   // than stopping and saying so.

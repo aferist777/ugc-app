@@ -141,7 +141,7 @@ export function titleOf(text) {
 export function createSunoForm(o) {
   const S = Object.assign({ mode: 'simple', model: 'V6' }, o.base || {}, ls(o.store, {}));
   S.f = Object.assign({
-    simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [], pSeconds: 120, presetN: {} },
+    simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, pSeconds: 120, presetN: {} },
     custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
     lyrics: { idea: '' },
   }, o.fields || {}, S.f || {});
@@ -206,30 +206,21 @@ export function createSunoForm(o) {
   function resetEdit() { _edit = null; }
 
   function chipGroups() {
-    // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
-    if (ALM && ALM.CHIPS && Array.isArray(ALM.CHIPS.genre)) {
-      return [['genre', 'Genre'], ['mood', 'Mood'], ['sound', 'Sound']]
-        .map(([k, label]) => ({ key: k, label, chips: (ALM.CHIPS[k] || []).map(c => ({ id: c.id, label: c.label, style: c.style || c.label })) }))
-        .filter(g => g.chips.length);
-    }
-    return ((CAT && CAT.chips) || []).map(g => ({ key: '', label: g.label, chips: g.chips.map(c => ({ id: c, label: c, style: c })) }));
+    // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }).
+    if (!(ALM && ALM.CHIPS && Array.isArray(ALM.CHIPS.genre))) return [];
+    return [['genre', 'Genre'], ['mood', 'Mood'], ['sound', 'Sound']]
+      .map(([k, label]) => ({ key: k, label, chips: (ALM.CHIPS[k] || []).map(c => ({ id: c.id, label: c.label, style: c.style || c.label })) }))
+      .filter(g => g.chips.length);
   }
   function isPicked(group, c) {
-    const f = S.f.simple;
-    return group ? ((f.picked || {})[group] || []).includes(c.id) : (f.flat || []).includes(c.label);
+    return ((S.f.simple.picked || {})[group] || []).includes(c.id);
   }
   function pick(group, c) {
     const f = S.f.simple;
-    if (group) {
-      f.picked = f.picked || {};
-      const l = f.picked[group] || (f.picked[group] = []);
-      const i = l.indexOf(c.id);
-      if (i >= 0) l.splice(i, 1); else l.push(c.id);
-    } else {
-      f.flat = f.flat || [];
-      const i = f.flat.indexOf(c.label);
-      if (i >= 0) f.flat.splice(i, 1); else f.flat.push(c.label);
-    }
+    f.picked = f.picked || {};
+    const l = f.picked[group] || (f.picked[group] = []);
+    const i = l.indexOf(c.id);
+    if (i >= 0) l.splice(i, 1); else l.push(c.id);
     save();
   }
   function pickedLabels() {
@@ -348,7 +339,7 @@ export function createSunoForm(o) {
     // Lit: in Simple the chips picked; on a mood folder those whose words are in the mood's Style.
     const lit = (g, c) => (mood ? moodHas(mood, c) : S.mode === 'simple' && isPicked(g.key, c));
     for (const g of chipGroups()) {
-      const gk = g.key || g.label;
+      const gk = g.key;
       const open = _chipOpen === gk;
       const picked = mood || S.mode === 'simple' ? g.chips.filter(c => lit(g, c)).map(c => c.label) : [];
       const head = el('button', 'au-chips-h' + (open ? ' is-open' : '') + (picked.length ? ' has-picked' : ''));
@@ -679,8 +670,7 @@ export function createSunoForm(o) {
       b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);
       b.chips = {}; b.words = ''; b.projectKind = 'highlights';
     } else if (S.mode === 'simple') {
-      const groups = chipGroups();
-      b.chips = groups.length && groups[0].key ? { genre: (f.picked || {}).genre || [], mood: (f.picked || {}).mood || [], sound: (f.picked || {}).sound || [] } : (f.flat || []);
+      b.chips = { genre: (f.picked || {}).genre || [], mood: (f.picked || {}).mood || [], sound: (f.picked || {}).sound || [] };
       b.words = f.words; b.seconds = f.seconds || 0; b.writer = f.writer !== false;
       b.projectKind = writerKind || 'blank';
     } else if (S.mode === 'custom') {

@@ -3,8 +3,7 @@
 
    Merge's one editor (docs/local-app/PLAN.md, phase 3): a project is an ordered list of lanes,
    created and deleted by hand, and their order is the layer order. A talking head's or a
-   voiceover's lines are laid on its main lanes by the server (lib/frag-mirror.js); the
-   talking-head editor's projects were rewritten into this shape at startup (lib/timeline-convert.js).
+   voiceover's lines are laid on its main lanes by the server (lib/frag-mirror.js).
 
    How the lanes are arranged, and why it is not decorative:
 

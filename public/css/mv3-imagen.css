@@ -484,7 +484,7 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V23) Not in this library any more - a card's character or place deleted since. */
 .vc-ref.is-gone > :first-child{ outline:1.5px solid var(--danger); outline-offset:1px; opacity:.55 }
 .vc-ref.is-gone .lab{ color:var(--danger) }
-/* (phase V15) The video chat's switches in its column - the writer and the storyboard (checkboxes since V16; 中文 went in V29) - and
+/* (phase V15) The video chat's switches in its column - the writer and the storyboard (checkboxes since V16) - and
    the almanac at its foot. */
 .mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
 .mv3-vc-switches:empty{ display:none }

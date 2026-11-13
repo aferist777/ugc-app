@@ -209,12 +209,9 @@ Store.onChange(() => {
 const NEEDS_PROJECT = ['mv3-project-del'];
 Store.onChange(() => {
   const has = Store.hasProject();
-  // Somebody else's project counts as none for these: rendering writes export settings, and
-  // deleting is refused. Copy it first.
-  const can = has && Store.canEdit();
   for (const id of NEEDS_PROJECT) {
     const el = document.getElementById(id);
-    if (el) el.disabled = !can;
+    if (el) el.disabled = !has;
   }
   paintExportButton();
   document.body.classList.toggle('mv3-noproject', !has);
