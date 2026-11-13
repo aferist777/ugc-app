@@ -463,9 +463,9 @@ function _folderFiles(keys) {
 // (hl_<id>_<n>) - the timelines there are and any key a message or a record of the chats still names (a fragment deleted
 // before, a conversation shared by the project).
 function _hlChatKeys(id, timelines) {
-  const re = new RegExp('^hl_' + String(id).replace(/[^a-z0-9]/g, '') + '(?:_\\d+)?$');
-  const keys = new Set(['hl_' + id]);
-  const take = (k) => { if (k && re.test(String(k))) keys.add(String(k)); };
+  const KEYS = require('../public/js/highlights/keys.js');
+  const keys = new Set([KEYS.homeKey(id)]);
+  const take = (k) => { const p = KEYS.parseKey(k); if (p && p.id === String(id)) keys.add(String(k)); };
   for (const k of Object.keys(timelines || {})) take(k);
   try {
     const raw = JSON.parse(fs.readFileSync(require('../lib/mv3-chat').FILE, 'utf8'));

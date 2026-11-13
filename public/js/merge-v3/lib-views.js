@@ -26,6 +26,7 @@
 
 import { panelRoom, onColumnOpen } from './layout.js';
 import { showError } from '../notice.js';
+import { homeOf, isHome } from '../highlights/keys.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -88,11 +89,10 @@ export function toShelf() {
 // Its own timeline hl_<id> - its home, open while no fragment is - and a fragment's hl_<id>_<n> (highlights.js KEY_RE). The chats
 // talk in ONE conversation per highlights project: a fragment's key is its home's wherever a chat keys by project (the thread,
 // what it made, the view it was left on, what was being written); and nothing is laid on the home, which is never rendered.
-const HL_FRAG = /^(hl_[a-z0-9]+)_\d+$/;
 /** The key a chat's conversation is kept under: a highlights fragment's is its project's home, any other key is itself. */
-export const chatKey = (key) => { const k = String(key || ''); const m = HL_FRAG.exec(k); return m ? m[1] : k; };
+export const chatKey = homeOf;
 /** The open timeline is a highlights project's own (no fragment open). */
-export const isHlHome = (key) => /^hl_[a-z0-9]+$/.test(String(key || ''));
+export const isHlHome = isHome;
 /** What a drag of a chat's result says there. */
 export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
 /**

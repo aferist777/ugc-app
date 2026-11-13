@@ -26,6 +26,9 @@ import * as CapPlace from './cap-place.js';
 import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
+// (V91 block 6) The rules the render answers the same: js/timeline/rules.js, a halfer band js/framing/band.js.
+import { isPlaced as placedRule, endOf, gainOf } from '../timeline/rules.js';
+import { bandGeom } from '../framing/band.js';
 import { setPlayhead, setFormat, liveVolumeOf, selectedClips } from './timeline-b.js';
 // (phase V33.2) A filled clip's window over time - the one answer the render reads too.
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
@@ -119,11 +122,7 @@ function _clipsAt(track, t) {
 export function duration() {
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return 0;
-  let end = 0;
-  for (const tr of tl.tracks) {
-    for (const c of (tr.clips || [])) end = Math.max(end, (+c.start) + (+c.dur));
-  }
-  return Math.round(end * 100) / 100;
+  return Math.round(endOf(tl) * 100) / 100;
 }
 
 // ── Media, held between draws ───────────────────────────────────────────────
@@ -366,7 +365,7 @@ function _sweep(alive) {
 // PLACED, and by its MIDDLE - the same anchor lib/mv3b-render.js overlays by, and for the
 // same reason: a turned rectangle is bigger than the one it came from, and only its centre
 // stays where it was put.
-export const isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
+export const isPlaced = placedRule;
 
 // WHERE EVERY CLIP WAS LAST DRAWN, kept for the gesture layer - placed or not, because a clip
 // becomes an insert by being dragged and the drag has to start from where it already is. The
@@ -648,7 +647,7 @@ function _drawPip(el, r, sw, sh, bg = true) {
 }
 
 // ── A halfer band ───────────────────────────────────────────────────────────
-// A strip across the whole frame, read exactly as bandGeom() and bandChain() read it in
+// A strip across the whole frame, its numbers js/framing/band.js's as the render's bandChain() reads them in
 // lib/mv3b-render.js: the source turned first (clockwise, 90 unless told otherwise), then scaled
 // to cover the strip, then cut at the render's own offsets - down from the top at 0 and 180,
 // across from the left at 90 and 270 - and the edges facing into the frame faded.
@@ -657,27 +656,10 @@ function _drawPip(el, r, sw, sh, bg = true) {
 // cut a hole through the layers below instead of letting them show through.
 //
 // No placement, framing or effects - the render applies none to a band.
-const _bpct = (v, dflt, lo = 0) => {
-  const n = Number(v);
-  return (v != null && Number.isFinite(n)) ? Math.max(lo, Math.min(100, n)) : dflt;
-};
-
-function _bandGeom(c) {
-  let band = Math.round(H * _bpct(c.halferThick, 40, 5) / 100);
-  if (band % 2) band++;
-  band = Math.max(2, Math.min(H, band));
-  const y = Math.round((H - band) * (1 - _bpct(c.halferPos, 100) / 100));
-  const keep = _bpct(c.halferKeep, 100) / 100;
-  const rot = [0, 90, 180, 270].includes(+c.rotation) && c.rotation != null ? +c.rotation : 90;
-  const soft = (c.feather == null || !Number.isFinite(+c.feather)) ? 0.03 : Math.max(0, Math.min(0.4, +c.feather));
-  const fade = soft > 0 ? Math.max(1, Math.round(band * soft)) : 0;
-  return { band, y, keep, rot, fade, softTop: fade > 0 && y > 0, softBot: fade > 0 && y + band < H };
-}
-
 let _bandCv = null;
 
 function _drawBand(el, sw, sh, c) {
-  const b = _bandGeom(c);
+  const b = bandGeom(c, W, H);
   if (!_bandCv) _bandCv = document.createElement('canvas');
   if (_bandCv.width !== W || _bandCv.height !== b.band) { _bandCv.width = W; _bandCv.height = b.band; }
   const g = _bandCv.getContext('2d');
@@ -1287,12 +1269,9 @@ function _sounds(tl, t) {
   const fades = fadesOf(tl);
   for (const tr of tl.tracks) {
     if (tr.kind !== 'audio') continue;
-    const master = (tr.volume == null) ? 1 : +tr.volume;
-    if (!(master > 0)) continue;
     for (const c of (tr.clips || [])) {
       // (phase V54) A level shift held in the inspector is heard before it is written (timeline-b.js setLiveVolumes).
-      const lv = liveVolumeOf(c.id);
-      const v = (lv != null ? lv : (c.volume == null) ? 1 : +c.volume) * master;
+      const v = gainOf(tr, c, liveVolumeOf(c.id));
       if (!(v > 0)) continue;
       const s = +c.start, e = s + (+c.dur);
       if (t < s - 0.0001 || t >= e) continue;

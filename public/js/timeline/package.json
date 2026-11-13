@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The timeline's shared rules are ES modules: the page imports them and the server require()s them (Node 24) - one answer for the preview and the render."
+}

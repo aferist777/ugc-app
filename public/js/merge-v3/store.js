@@ -21,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as History from './history.js';
+import { isStillSrc, endOf } from '../timeline/rules.js';
 import { isHeard } from '../captions/heard.js';
 import { recutClips, recutWithLooks, lookOf, CUT_KEYS, timedWords } from '../captions/pages.js';
 import { isCorrected } from '../captions/words.js';
@@ -42,9 +43,9 @@ export const DRAG_MEDIA = 'application/x-mv3-media-';
 // disagreed about clip stacking order and the render did not match the preview.
 //
 // Read off the source rather than stored on the clip: a path ending in .png is a picture
-// whatever wrote it, so this needs no field, no default and no migration.
-const STILL_RE = /\.(jpe?g|png|webp|avif|bmp)$/i;
-export const isStill = (c) => !!c && STILL_RE.test(String(c.src || '').split('?')[0]);
+// whatever wrote it, so this needs no field, no default and no migration. The render asks the same rule
+// (js/timeline/rules.js isStillSrc).
+export const isStill = (c) => !!c && isStillSrc(c.src);
 
 // How long a picture is when it lands. A film brings its own length; a still has none, so
 // this is a decision rather than a measurement - long enough to read, short enough to trim
@@ -175,15 +176,7 @@ function _emit() { for (const cb of _subs) { try { cb(); } catch (e) {} } }
 // and deriving it beats storing it - a stored duration is one more thing that can
 // disagree with the clips it is supposed to describe.
 export function duration() {
-  if (!_timeline) return 0;
-  let end = 0;
-  for (const k of Object.keys(_timeline.tracks || {})) {
-    for (const c of (_timeline.tracks[k].clips || [])) {
-      const e = (+c.start || 0) + (+c.dur || 0);
-      if (e > end) end = e;
-    }
-  }
-  return end;
+  return _timeline ? endOf(_timeline) : 0;
 }
 
 export function key() { return _key; }

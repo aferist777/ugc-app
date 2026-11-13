@@ -32,6 +32,7 @@ import { selectedOne, selectClipById, setClipFields, setClipsFields, selectedCli
 // through setLive, written on release - one undo step; several main clips picked are cut by one frame.
 import { active as cropActive, SHAPES, normalize as cropNormalize, dragFrame, panFrame } from '../framing/crop.js';
 import { cropBases, cropPatches } from './crop-box.js';
+import { isPlaced as _isPlaced } from '../timeline/rules.js';
 
 const HANDLE = 9;      // half-width of a corner grip, in canvas pixels
 const SIDES = new Set(['n', 's', 'e', 'w']);
@@ -59,8 +60,6 @@ export function setLive(patches) {
   _ext = patches && patches.size ? patches : null;
   if (_api && _api.repaint) _api.repaint();
 }
-
-const _isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
 
 // The selected clip, but only one that is a picture AND on screen right now: the grips belong
 // to something you can see, not to something three seconds away.

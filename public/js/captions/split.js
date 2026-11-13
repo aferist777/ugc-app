@@ -28,6 +28,7 @@
 import { isFramed, windowW } from '../framing/path.js';
 import { ownPlace } from './place.js';
 import { active as cropActive } from '../framing/crop.js';
+import { isPlaced } from '../timeline/rules.js';
 
 /** The rule's mark: a page in the middle with exactly this offset down was put there by the rule. */
 export const MARK = 0.0001;
@@ -40,7 +41,7 @@ const _video = (tl) => ((tl && tl.tracks) || []).filter((t) => t && t.kind === '
 // An insert on the frame (PiP): covers nothing. (phase V51) Nor does a cropped clip, placed or not: it is drawn as its piece -
 // never framed into bands (lib/mv3b-render.js isFramedClip) - a PiP of it on main, an insert of it on a lane above.
 // A PiP NOT sized (no `tw`) is not on this list: it shows the frame's own picture - the bands too - as big as the frame.
-const _placed = (c) => !!(c && ((c.tw != null && +c.tw > 0) || cropActive(c)));
+const _placed = (c) => !!(c && (isPlaced(c) || cropActive(c)));
 
 /** Is this clip one whose picture follows a framing record that can split it (as the render frames it: mv3b-render.js isFramedClip)? */
 function _canSplit(c, aspect, kind = 'bands') {
