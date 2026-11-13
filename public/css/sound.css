@@ -1,12 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   SOUND ON THE SHELVES (phase V34.E) - what js/sound/ draws in Merge's Library panel and on the Library's Media shelf:
+   SOUND ON THE SHELVES - what js/sound/ draws in Merge's Library panel and on the Library's Media shelf:
    a sound's waveform on its tile, the search over SFX, the menu under the right button, "About", the cut window and the
-   online search; (phase V59.1) the tiles of Music -> Lyrics. Loaded by both pages after their own sheets.
+   online search; the tiles of Music -> Lyrics. Loaded by both pages after their own sheets.
    ════════════════════════════════════════════════════════════════════════════ */
 
 .snd-muted{color:var(--muted)}
-/* (phase V73 block 2) the online search's empty / searching / did not load are the shared parts (js/ui-state.js, css/app-shell.css);
-   the cut window's and the search's errors are popups in the corner (js/notice.js) - .snd-err and .snd-empty went */
+/* the online search's empty / searching / did not load are the shared parts (js/ui-state.js, css/app-shell.css);
+   the cut window's and the search's errors are popups in the corner (js/notice.js) */
 .snd-win .sp, .snd-shelf-head .sp{flex:1}
 
 /* the waveform (js/sound/wave.js) */
@@ -23,9 +23,9 @@
 /* the search over SFX, and "find online…" (the panel's body; the Library's shelf header) */
 .snd-shelf-head{display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap}
 .snd-search{ flex:1 1 180px; min-width:140px }
-/* (phase V73 block 2) Every .snd-btn is the shared part (.u-btn): search the gold fill, "find online" the gold line. */
+/* Every .snd-btn is the shared part (.u-btn): search the gold fill, "find online" the gold line. */
 
-/* (phase V54) "?" right of the search, and its popup of sites (js/sound/sites.js) */
+/* "?" right of the search, and its popup of sites (js/sound/sites.js) */
 
 .snd-sites{width:320px; z-index:9310}
 .snd-sites-sub{font-size:11px; color:var(--muted); margin:-3px 0 6px}
@@ -41,11 +41,11 @@
 .snd-about-row a{color:var(--ink)}
 
 /* windows: the cut and the online search */
-/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+/* The page under it darkened and blurred - the one rule of css/app-shell.css. */
 .snd-back{position:fixed; inset:0; z-index:9280; background:var(--ov-dim, oklch(0 0 0 / .45)); backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
-/* (phase V73 block 4, rule 5) Both wear the one frame (`.u-win`, a head band of 40 px - `.u-win-title`, the sound or the
-   source as `.u-win-sub`, the shared ✕ of 28 px with "Close (Esc)" - no longer the almanac's `hp-x` of block 0; css/app-shell.css):
-   here only the place, and the body that holds what the window's own padding did. */
+/* Both wear the one frame (`.u-win`, a head band of 40 px - `.u-win-title`, the sound or the
+   source as `.u-win-sub`, the shared ✕ of 28 px with "Close (Esc)"; css/app-shell.css):
+   here only the place, and the body's own padding. */
 .snd-win{position:fixed; z-index:9290; left:50%; top:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:86vh;
   display:flex; flex-direction:column}
 .snd-win-body{flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:12px 16px 16px}
@@ -54,24 +54,24 @@
 .snd-cut-row{display:flex; align-items:center; gap:8px}
 .snd-cut-row .sp{flex:1}
 
-/* .snd-cut-said - the window's one status line (`.u-status`, phase V73 block 4) */
+/* .snd-cut-said - the window's one status line (`.u-status`) */
 
-/* (phase V54) the wave with its ruler (js/sound/scrub.js) - the Cut window's and the music player's */
+/* the wave with its ruler (js/sound/scrub.js) - the Cut window's and the music player's */
 .snd-scrub{position:relative; width:100%; min-width:0}
 .snd-scrub-cv{display:block; width:100%; touch-action:none; user-select:none}
-/* (phase V59) "Cut" on the ruler by the right flag, while a piece is marked - its place set by scrub.js */
+/* "Cut" on the ruler by the right flag, while a piece is marked - its place set by scrub.js */
 .snd-scrub-cut{position:absolute; top:0; left:0; z-index:1; margin:0}
 .snd-scrub-cut.u-btn{padding:0 8px; border-radius:var(--r-2xs); font-size:10px}   /* the ruler's height (scrub.js) */
 .snd-scrub-cut[hidden]{display:none}
 
 .snd-clock{font:500 11px/1 var(--font); color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
 
-/* (phase V54) the music player - under the Library's gallery only (not under the tree's column) while Music is open (js/sound/player.js) */
+/* the music player - under the Library's gallery only (not under the tree's column) while Music is open (js/sound/player.js) */
 .snd-player{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; flex:0 0 auto; padding:7px 12px; border-top:1px solid var(--border); background:var(--surface); container-type:inline-size}
 .snd-player[hidden]{display:none}
 .snd-pl-play{flex:0 0 auto}
-.snd-pl-play.u-btn{border-radius:50%; font-size:12px}   /* round, as before */
-/* (phase V59) the name over the wave, one column */
+.snd-pl-play.u-btn{border-radius:50%; font-size:12px}   /* round */
+/* the name over the wave, one column */
 .snd-pl-mid{flex:1 1 200px; min-width:140px; display:flex; flex-direction:column; gap:3px}
 .snd-pl-name{min-width:0; font:600 12px/1.3 var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .snd-pl-wave{min-width:0}
@@ -102,10 +102,10 @@
 .snd-on-gal{display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:11px}
 .snd-on-credit{font-size:10.5px; color:var(--muted)}
 .snd-play{flex:0 0 auto}
-.snd-play.u-btn{border-radius:50%; font-size:10px}   /* round, as before */
-.snd-play.on{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
+.snd-play.u-btn{border-radius:50%; font-size:10px}   /* round */
+.snd-play.on{border-color:var(--sel-line); color:var(--ink)}   /* playing: the selected look */
 
-/* (phase V59.1) Music -> Lyrics: a saved text's tile - its title, its first lines, where it came from (js/sound/lyrics.js);
+/* Music -> Lyrics: a saved text's tile - its title, its first lines, where it came from (js/sound/lyrics.js);
    on the Library's Media a card of text, in Merge's panel a wider tile. A press opens it whole in the viewer. */
 .lyr-face{position:absolute; inset:0; display:flex; flex-direction:column; gap:3px; padding:7px 8px 6px; box-sizing:border-box;
   overflow:hidden; text-align:left; pointer-events:none}
@@ -115,7 +115,7 @@
 .lyr-lines span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lyr-from{flex:0 0 auto; font:600 8.5px/1 var(--font); color:var(--gold); opacity:.85}
 .lyr-from:empty{display:none}
-.lib-grid.is-text{--card-w:132px; --card-h:130px}   /* (phase V73 block 6) Media's one square size */
+.lib-grid.is-text{--card-w:132px; --card-h:130px}   /* Media's one square size */
 .lib-thumb-box.lib-thumb-text{background:linear-gradient(180deg, var(--surface-2), var(--surface))}
 .mv3-grid.is-text{grid-template-columns:repeat(auto-fill, minmax(124px, 1fr))}
 .mv3-grid.is-text .mv3-tile{aspect-ratio:3 / 2}

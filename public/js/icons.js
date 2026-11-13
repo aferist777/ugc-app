@@ -1,12 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   THE INTERFACE'S ICONS (phase V73 block 1, the owner 2026-11-04, (к18), (б1-4)).
+   THE INTERFACE'S ICONS.
 
-   Lucide's line icons - lucide-static 1.60.0 (2026-10-20), ISC, some derived from Feather (MIT): the licence
+   Lucide's line icons - lucide-static 1.60.0, ISC, some derived from Feather (MIT): the licence
    is public/icons/LICENSE-lucide.txt. Only the icons the app draws are here, each one's inner markup copied
    from the package's icons/<name>.svg as it is; nothing is installed (no package.json line, nothing in
-   node_modules). A new icon is copied the same way from the same version (phase V73 block 5, part 5b: arrow-down, arrow-down-left,
-   arrow-down-right, arrow-left, arrow-right-to-line, arrow-up-left, arrow-up-right, bold, italic, rotate-cw - from the same
-   tarball, its SHA-256 feb647af...7d75 checked again).
+   node_modules). A new icon is copied the same way from the same version - the same tarball, its SHA-256
+   feb647af...7d75.
 
    One size and one stroke everywhere: 16 px, stroke 1.5, the colour of the text it sits in (currentColor).
      icon('x')              the <svg> as a string
@@ -87,7 +86,7 @@ export function iconEl(name, size = 16) {
   return t.content.firstChild;
 }
 
-// ── The one menu's icons (phase V73 block 2, (б2-16)) ──
+// ── The one menu's icons ──
 // Only a row whose action is obvious gets one: ★ - star, Delete - trash-2, Rename - pencil, Cut… - scissors, Move to - folder,
 // New folder - folder-plus. A menu with such a row gets the icon column (`.u-menu.has-icons`, css/app-shell.css) and its
 // other rows keep their words in the second column; a menu with none has no empty column. A leading ★ in the words goes -

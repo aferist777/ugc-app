@@ -5,15 +5,15 @@
 //
 //   GET    /api/sources                  -> { sources: [summary + progress] }
 //   GET    /api/sources/:id              -> { source }
-//   POST   /api/sources/:id/transcribe   -> { jobId } | { alertId } (its way in is retried - phase V28.1)
+//   POST   /api/sources/:id/transcribe   -> { jobId } | { alertId } (its way in is retried)
 //   POST   /api/sources/:id/topics       -> { jobId } | { alertId }   409 with the running job while one runs
-//   DELETE /api/sources/:id              -> { success, removed, draftsDetached }   ?keepWords=1 (V43): its transcripts stay
-//   GET    /api/sources/:id/video        (phase V43) the video of a source that stays on the disk - by its id, never a path
-//   POST   /api/sources/:id/relink       { path } (phase V43) the same video pointed at again where it lies now
+//   DELETE /api/sources/:id              -> { success, removed, draftsDetached }   ?keepWords=1: its transcripts stay
+//   GET    /api/sources/:id/video        the video of a source that stays on the disk - by its id, never a path
+//   POST   /api/sources/:id/relink       { path } the same video pointed at again where it lies now
 //   GET    /api/sources/jobs/:jobId      -> { state, step, error, source }
 //
-// ADDING ONE (phase V28.1, lib/source-intake.js - the frame decides, the whole way in is an Alerts row):
-//   POST   /api/sources/add/link         { url } -> { read }    (V37: an old page's `mineWith` is kept, not read)
+// ADDING ONE (lib/source-intake.js - the frame decides, the whole way in is an Alerts row):
+//   POST   /api/sources/add/link         { url } -> { read }    (a `mineWith` in the body is not read)
 //   POST   /api/sources/add/file         { path, title } -> { read }   (the app's window hands the path over)
 //   GET    /api/sources/add              -> { asks: [read] }     the questions still waiting
 //   GET    /api/sources/add/:id          -> { read }             reading | ask | source | uploads | audio | error | dropped
@@ -21,7 +21,7 @@
 //   POST   /api/sources/:id/stop         the cross on a source being added
 //   POST   /api/sources/:id/to-uploads   a source with nothing to write from -> onto Uploads in Media
 //
-// WHAT RUNS IS SAID (phase E5): a source being read is 'stored' / 'downloading' / 'transcribing'
+// WHAT RUNS IS SAID: a source being read is 'stored' / 'downloading' / 'transcribing'
 // in its record, and finding its topics is `job` on it - so a page opened later shows the wait
 // instead of offering to pay again, and a second start is refused. A restart ends every job, so
 // the records it left mid-way are marked 'interrupted' when the server starts, with the file kept
@@ -58,8 +58,8 @@ const _withJob = (rec) => (_mining.has(String(rec.id)) ? { ...rec, job: _mining.
 // When the server starts, no job is running - so a record still saying it is being read was cut
 // off by the app closing. It says so, and keeps its file for "transcribe again".
 //
-// A failed source whose transcript still says 'running' (a link that failed while being read, from
-// before its catch set the transcript too) is repaired here as well: the page would keep calling it
+// A failed source whose transcript still says 'running' (left so by an older program) is repaired
+// here as well: the page would keep calling it
 // "being read" and never offer to read it again.
 function _markInterrupted() {
   // A source cut off on its way in says so first, in its own words, and waits for its retry (lib/source-intake.js).
@@ -101,7 +101,7 @@ async function _process(id, job) {
 
 router.get('/sources', (_req, res) => {
   try {
-    // A source being added carries how far along it is (phase V28.1) - the Sources column draws its bar from it.
+    // A source being added carries how far along it is - the Sources column draws its bar from it.
     const sources = store.summaries().map(_withJob).map(x => (INTAKE.live(x.id) ? { ...x, progress: INTAKE.progress(x.id) } : x));
     res.json({ success: true, sources, maxChars: store.MAX_TRANSCRIPT_CHARS });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -114,7 +114,7 @@ router.get('/sources/jobs/:jobId', (req, res) => {
   res.json({ success: true, ...job });
 });
 
-// ── adding one (phase V28.1) ───────────────────────────────────────────────
+// ── adding one ──────────────────────────────────────────────────────────────
 const _mineOf = (b) => (b && typeof b.mineWith === 'object' ? b.mineWith : {});
 
 router.post('/sources/add/link', async (req, res) => {
@@ -161,10 +161,9 @@ router.get('/sources/:id', (req, res) => {
 });
 
 // ── reading again ───────────────────────────────────────────────────────────
-// (phase V28.1) A source comes in through POST /sources/add/* (lib/source-intake.js) - the multipart upload and the
-// page-followed link that were here are gone with the page's own ingest.
+// A source comes in through POST /sources/add/* (lib/source-intake.js).
 
-// ── (phase V43, the owner's (ё17), (ё17а)) A video that stays on the disk ───
+// ── A video that stays on the disk ──────────────────────────────────────────
 // Played by the source's id: the path is the record's, never the request's (the app only reads that file).
 router.get('/sources/:id/video', (req, res) => {
   const rec = store.get(req.params.id);
@@ -198,10 +197,10 @@ router.post('/sources/:id/transcribe', async (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
-  // (V43) Its file, in the library or where it stays on the disk.
+  // Its file, in the library or where it stays on the disk.
   if (!store.fileOf(rec)) return res.status(400).json({ success: false, error: rec.diskPath ? 'The video is not where it was: ' + rec.diskPath : 'this source has no file' });
   if (LIVE.has(rec.state) || INTAKE.live(id)) return res.status(409).json({ success: false, error: 'this source is being read already' });
-  // Its way in was cut off or failed (phase V28.1): the same retry as its row in Alerts - one piece of work, not two.
+  // Its way in was cut off or failed: the same retry as its row in Alerts - one piece of work, not two.
   try {
     const alertId = await INTAKE.retryOf(id);
     if (alertId) return res.json({ success: true, alertId });
@@ -216,7 +215,7 @@ router.post('/sources/:id/transcribe', async (req, res) => {
   (async () => {
     try {
       const saved = await _process(id, job);
-      // Read again and no topics yet: they are found now, by the agents' ladder (phase V28.1).
+      // Read again and no topics yet: they are found now, by the agents' ladder.
       if (!(saved.topics || []).length) _startMining(id);
       job.state = 'done';
       job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
@@ -248,7 +247,7 @@ router.post('/sources/:id/topics', async (req, res) => {
   if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
     return res.status(409).json({ success: false, error: 'the topics of this source are being found already', ...busy });
   }
-  // Its way in was cut off while the topics were found (phase V28.1): the row's retry.
+  // Its way in was cut off while the topics were found: the row's retry.
   try {
     const alertId = await INTAKE.retryOf(id);
     if (alertId) return res.json({ success: true, alertId });
@@ -306,7 +305,7 @@ router.delete('/sources/:id', (req, res) => {
     }
     // The scenarios written from it keep the name it has now, not the one it had when they were saved.
     try { require('./scen3').keepSourceTitle(id, rec.title || rec.originalName || ''); } catch (e) { /* a name, not the delete */ }
-    // (phase V43, (ё17а)) A source whose video stays on the disk: its file is never touched; `keepWords` keeps its transcripts
+    // A source whose video stays on the disk: its file is never touched; `keepWords` keeps its transcripts
     // for the same file added again.
     const removed = store.remove(id, { keepWords: String(req.query.keepWords || '') === '1' });
     let draftsDetached = 0;

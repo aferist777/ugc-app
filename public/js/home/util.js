@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   HOME'S SMALL TOOLS (phase V70, P13 - moved out of main.js when the blocks became several modules): an element, a JSON
+   HOME'S SMALL TOOLS: an element, a JSON
    read, the browser's memory, "when" in words, and a block's FRAME - the gold frame with its head (its name, what it says
    about itself, a link at the right) and a body the block paints.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -39,7 +39,7 @@ export function frame(id, name) {
   const st = el('section', 'hm-st');
   st.dataset.block = id;
   const head = el('div', 'hm-head');
-  // (phase V73 block 6) the handle is the interface's grip icon, "Drag" under the pointer; the name in sentence case
+  // the handle is the interface's grip icon, "Drag" under the pointer; the name in sentence case
   const grip = el('span', 'hm-grip');
   grip.innerHTML = icon('grip-vertical', 14);
   grip.title = 'Drag';
@@ -57,10 +57,10 @@ export function frame(id, name) {
 }
 
 /**
- * A row of TILES (phase V70): a filled gold icon and its word under it, each a link - a plain press runs `run` when it is
+ * A row of TILES: a filled gold icon and its word under it, each a link - a plain press runs `run` when it is
  * given (a window over Home), a press with a modifier follows the link as any link.
  *   tiles([{ icon, label, href, title, run }]) -> the row
- * (phase V73 block 0) As many places a row as it has tiles (css/home.css --hm-cols): Generate's three fill their row.
+ * As many places a row as it has tiles (css/home.css --hm-cols): Generate's three fill their row.
  */
 export function tiles(list) {
   const row = el('div', 'hm-tiles');

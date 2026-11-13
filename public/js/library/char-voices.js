@@ -1,5 +1,4 @@
-// LIBRARY - a character's voices and gender, in its right column (phase H7, the owner 2026-10-01: "в
-// правый столбец персонажа"). What the Character page's view mode did, moved here with it.
+// LIBRARY - a character's voices and gender, in its right column.
 //
 // THE GENDER is two words and one press: female | male, written onto the character at once. It is
 // what the casting and the voice search go by.
@@ -16,13 +15,13 @@
 // in the column while it runs.
 
 import { startInlineProgress } from '../progress.js';
-// (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "no voice yet" as the
+// the question at the button in place of the browser's confirm(); "no voice yet" as the
 // shared part, a row
 import { ask } from '../ask.js';
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
 
-// (phase V73 block 6, (к18)) play and pause as the interface's icons
+// play and pause as the interface's icons
 const PLAY = icon('play', 12), PAUSE = icon('pause', 12);
 
 const PAGE = 20;
@@ -147,7 +146,7 @@ export function paint(body, it, voices, hooks) {
       txt.appendChild(_el('div', 'lib-vname', v.name || 'Not on the Voices shelf'));
       txt.appendChild(_el('div', 'lib-vsub', (v.tags || []).map(_pretty).join(' · ') || v.voiceId));
       row.appendChild(txt);
-      // (phase V73, (б1-18)) the main voice: a neutral label "Main" in the column of the star, not gold
+      // the main voice: a neutral label "Main" in the column of the star, not gold
       if (v.main) row.appendChild(_el('span', 'lib-info-main', 'Main'));
       else {
         const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet');

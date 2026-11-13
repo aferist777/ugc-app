@@ -1,15 +1,14 @@
-// "THE APP WAS UPDATED" (phase V23, the owner 2026-10-09).
+// "THE APP WAS UPDATED".
 //
 // A new commit lands in the program folder while the app is open (the server says so - lib/app-update.js): a chip
 // stands in the strip LEFT of the wait and Alerts, a short notice says it once, and the chip opens a window to restart
-// and update. Only in the app window (the owner's answer 5): the restart is the desktop shell's (desktop/preload.js
+// and update. Only in the app window: the restart is the desktop shell's (desktop/preload.js
 // `restart`, desktop/main.js) - it asks about a running render first, as closing the window does - and in a browser
 // there is nothing to restart from a page.
 //
-// (phase V83, block B5, (н3); the owner 2026-11-09: (о11а) "обновления внутри приложения в правом верхнем углу update со
-// всплывающим окном") A friend's copy has no .git: there the news is a new VERSION the updater laid down (d.release:
+// An installed copy has no .git: there the news is a new VERSION the updater laid down (d.release:
 // { version, notes, important }) - the chip says "Update <version>", the window shows the release notes as they were
-// written; an important one (the owner (о6): nothing forced) has a gold chip and a notice that stays until it is closed.
+// written; an important one (nothing is forced) has a gold chip and a notice that stays until it is closed.
 
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
@@ -80,7 +79,7 @@ function _ask() {
   if (_open) return;
   _open = true;
   const back = _el('div', 'dr-back');
-  const box = _el('div', 'nm-box dr-box u-ask is-float');   // (phase V73 block 2) the shared question, in the middle
+  const box = _el('div', 'nm-box dr-box u-ask is-float');   // the shared question, in the middle
   box.setAttribute('role', 'dialog');
   const d = _state || {};
   const rel = d.release;
@@ -99,7 +98,7 @@ function _ask() {
   const go = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Restart and update');
   const later = _el('button', 'nm-b u-btn is-s', 'Later');
   for (const b of [go, later]) b.type = 'button';
-  // "Later" left, the verb right (б2-8); the 3D Studio's page keeps its old order
+  // "Later" left, the verb right; the 3D Studio's page keeps an order of its own
   if (document.querySelector('link[href="css/studio3d.css"]')) row.append(go, later); else row.append(later, go);
   box.appendChild(row);
   document.body.append(back, box);

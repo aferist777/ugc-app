@@ -1,17 +1,13 @@
-// THE PLACE PICKER (phase V39, the owner 2026-10-24: "когда пользователь нажимает CUT показывать деревом со
-// сворачиванием категорий. и в "move to" тоже - и чтобы основные категории были свернуты, а не полным списком
-// показывались"). ONE small window for both: "save the piece to" after a stretch is chosen in any video (js/cut.js) and
+// THE PLACE PICKER - a folded tree. ONE small window for both: "save the piece to" after a stretch is chosen in any video (js/cut.js) and
 // "move to…" of a REFERENCES post (js/references/post.js). Its rows wear the media tree's look (css/media-tree.css
 // .mt-row) and do nothing else - no "+", ✕, menu or rename:
 //
-//   - everything is folded each time it opens, nothing is remembered (the owner's (о1));
+//   - everything is folded each time it opens, nothing is remembered;
 //   - ▸, or a press on a branch that is not a place itself, opens or folds it;
 //   - a press on a place picks it: the window closes and the caller gets { kind, cat, label, text } - or, with `confirm`
-//     (the cut's "save the pieces to", the owner 2026-11-12), it is only CHOSEN (lit, its path at the foot) and the
+//     (the cut's "save the pieces to"), it is only CHOSEN (lit, its path at the foot) and the
 //     foot's button picks it;
-//   - "+" at the right of a kind's row and of every folder's that can hold a new folder (phase V54, (зв44); a "+ new
-//     folder…" row until 2026-11-12, the owner: "рядом с папкой в которой можно создать папку будет стоять плюсик"): the
-//     name asked, the folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that
+//   - "+" at the right of a kind's row and of every folder's that can hold a new folder: the name asked, the folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that
 //     one), and that is the place - with `confirm` it is chosen, shown in its branch;
 //   - where the thing is now: a row on top ("Beside it"), marked in the tree too (.is-here);
 //   - a place that cannot take it is grey, why in its tooltip - and so is a branch whose every place cannot.
@@ -66,7 +62,7 @@ export function openPlaces(anchor, o) {
   const isHere = (to) => !!(here && to && to.kind === here.kind && (to.cat || '') === (here.cat || ''));
 
   // Every node by its key; why each cannot be pressed to pick (a branch with no place of its own: when all its places
-  // cannot take it - "+ new category…" always can); the place the thing is in now.
+  // cannot take it - a `newIn` child, the "+", always can); the place the thing is in now.
   const byKey = new Map();
   const off = new Map();
   let hereNode = null;
@@ -133,7 +129,7 @@ export function openPlaces(anchor, o) {
     }
     b.appendChild(tw);
     b.appendChild(el('span', 'mt-name', top ? p.to.text : p.label));
-    // (phase V73 block 2, (б2-22)) The count in brackets right after the name, the lock at the right edge - the media tree's way.
+    // The count in brackets right after the name, the lock at the right edge - the media tree's way.
     if (!top && !p.newIn && p.count != null) b.appendChild(el('span', 'mt-n', '(' + p.count + ')'));
     if (p.locked && !top) {
       const lock = el('span', 'mt-lock');
@@ -167,7 +163,7 @@ export function openPlaces(anchor, o) {
     const top = list.scrollTop;
     list.textContent = '';
     if (hereNode) {
-      list.appendChild(el('div', 'ref-move-head', 'Beside it'));   // (phase V73 block 4, (к17)) sentence case
+      list.appendChild(el('div', 'ref-move-head', 'Beside it'));
       list.appendChild(row(hereNode, 0, true));
       list.appendChild(el('div', 'mtp-sep'));
     }

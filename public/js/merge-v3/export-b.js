@@ -3,23 +3,22 @@
 
    The third piece of the editor, after its timeline and its preview. What the window is for:
    saying what is about to be made before it is made - shape, length, how many pieces - and the
-   export settings the owner renders with (docs/local-app/PLAN.md, phase 3; they came from the
-   talking-head editor's Export): the size and quality of the file and a playback speed (phase V75: the colour correction
-   is each clip's, overlay/color.js; the Extras are gone). What each of them does is lib/render-finish.js.
+   export settings: the size and quality of the file and a playback speed (the colour correction
+   is each clip's, overlay/color.js). What each of them does is lib/render-finish.js.
 
    The settings belong to the PROJECT (POST /api/mv3/adv) and are saved when Render or Add to queue
    is pressed; the render is made from the numbers on screen, and a queued one keeps them.
 
-   SEVERAL AT ONCE (phase V33.4, the owner's (х38), (х39), (х43)). Something else may own the button for a while -
+   SEVERAL AT ONCE. Something else may own the button for a while -
    a highlights project, whose ticked fragments it renders (merge-v3/highlights.js, setRenderTarget): it says what the
    button reads ("Render 3", "✕ stop"), whether it can be pressed, and what a press does. Its window is THIS one, the same
    fields, for N fragments (openMany): "N fragments · 3:47 in all", no "Add to queue" - one Render, at once.
 
-   RENDER IS AN ENTRY OF THE QUEUE (phase V73 block 4, the owner's (б4-2) а, (б4-3) а): one entry, armed and started at
+   RENDER IS AN ENTRY OF THE QUEUE: one entry, armed and started at
    once (routes/mv3q.js POST /mv3q/render); the window can be closed while it goes, Stop is in it and in Queue, and a render
    that finishes with the window closed says so in a popup with "open" (_run, _follow).
 
-   NO RESULT WINDOW (phase V73, the owner's (рф-1) а - (рф-4) а): a finished render closes this window if it is open, and
+   NO RESULT WINDOW: a finished render closes this window if it is open, and
    says so in the corner - "Rendered · <its name>" with Open (the Library's viewer of it) and Show in folder
    (merge-v3/render-done.js).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -35,22 +34,21 @@ import { figures } from '../num.js';
 
 let _busy = false;
 
-// What a project that has never been exported starts from - the numbers the render used before
-// there were settings, so an old project renders as it did.
+// What a project that has never been exported starts from.
 const DEFAULTS = {
   resolution: '', fps: 30, crf: 20, preset: 'veryfast', audioBitrate: '192k',
   playbackSpeed: 1, srt: true,
 };
 
 // The timeline's header line ("Added to the queue."); an error ("Not queued: …", "Rendered, but …") is a popup instead
-// (phase V49.1, the owner's (пр28), (пр29); js/notice.js).
+// (js/notice.js).
 function _say(msg, kind) {
   if (msg && kind === 'err') { showError(msg); return; }
   const el = document.getElementById('mv3-tl-status');
   if (!el) return;
   el.hidden = !msg;
   el.textContent = msg || '';
-  // (phase V73 block 5, 5c) the one status line (`.u-status`): `info` quiet, anything else red as before
+  // the one status line (`.u-status`): `info` quiet, anything else red
   el.className = 'mv3-tl-status u-status is-line' + (kind === 'info' ? '' : ' is-bad');
 }
 
@@ -75,7 +73,7 @@ function _row(label, control) {
 
 function _select(opts, value) {
   const s = document.createElement('select');
-  s.className = 'u-in is-s';                         // (phase V73 block 2) the shared field, at the rows' 24
+  s.className = 'u-in is-s';                         // the shared field, at the rows' 24
   for (const [v, l] of opts) {
     const o = document.createElement('option');
     o.value = String(v); o.textContent = l;
@@ -90,7 +88,7 @@ function _slider(min, max, step, value, fmt) {
   const wrap = _el('span', 'mv3-x-sl');
   const i = document.createElement('input');
   i.type = 'range'; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(value);
-  wireRange(i);                                     // (phase V73 block 2) the shared slider; its value in mono (.u-range-v)
+  wireRange(i);                                     // the shared slider; its value in mono (.u-range-v)
   const out = _el('span', 'mv3-x-slv u-range-v', fmt(+value));
   i.addEventListener('input', () => { out.textContent = fmt(+i.value); });
   wrap.appendChild(i); wrap.appendChild(out);
@@ -99,12 +97,12 @@ function _slider(min, max, step, value, fmt) {
 }
 
 // ── Running the job ─────────────────────────────────────────────────────────
-// (phase V73 block 4, the owner's (б4-2) а, (б4-3) а) THE RENDER GOES THROUGH THE QUEUE: ONE entry, armed and started at once
+// THE RENDER GOES THROUGH THE QUEUE: ONE entry, armed and started at once
 // (POST /api/mv3q/render, routes/mv3q.js addArmed) - as a highlights project's Render. The window's body becomes the
 // progress, phase by phase - in line, the film, then what is done to the finished file -, its foot the line that says it
 // goes on and "Stop" (POST /api/mv3q/stop/:id - Queue has the same). The window may be closed while it goes (✕, Escape, a
 // press beside it): the page follows the entry all the same (_follow, GET /api/mv3q). Done - the window closes if it is open
-// and a popup says so, with Open and Show in folder ((рф-1) а, merge-v3/render-done.js). Failed with it closed - a popup.
+// and a popup says so, with Open and Show in folder (merge-v3/render-done.js). Failed with it closed - a popup.
 const PHASES = {
   render: 'Rendering',
   speeding: 'Changing the speed',
@@ -221,7 +219,7 @@ async function _follow(job) {
       }
       if (it.status === 'failed') { _failed(ui, it.error || 'ffmpeg failed'); return; }
       if (it.status === 'done' && it.url) {
-        // (рф-1) а: the window closes if it is open; the popup either way - the render is on the Renders shelf and in Queue too
+        // The window closes if it is open; the popup either way - the render is on the Renders shelf and in Queue too
         if (ui && ui.body.isConnected) _close();
         renderDone(it.url);
         if (it.warning) _say('Rendered, but ' + it.warning + '.', 'err');
@@ -242,7 +240,7 @@ let _ov = null;
 let _layer = null;
 
 function _close() {
-  // (phase V73 block 4) a render going on stays followed - its window is only not there to say it
+  // a render going on stays followed - its window is only not there to say it
   if (_job) _job.ui = null;
   if (_ov) { _ov.remove(); _ov = null; }
   if (_layer) { Layers.close(_layer); _layer = null; }
@@ -275,8 +273,8 @@ function _open() {
 }
 
 /**
- * (phase V33.4) The same window for SEVERAL timelines at once - a highlights project's ticked fragments: one set of
- * settings on all, one Render, no "Add to queue" (the owner's (х39)). `go(adv)` puts them in line and resolves with a
+ * The same window for SEVERAL timelines at once - a highlights project's ticked fragments: one set of
+ * settings on all, one Render, no "Add to queue". `go(adv)` puts them in line and resolves with a
  * word for the status line; the window closes on the press.
  * @param {{ count: number, seconds: number, adv: object|null, wide?: boolean, go: (adv: object) => Promise<{ text: string, err?: boolean }> }} o
  */
@@ -298,14 +296,14 @@ function _window(o) {
   const many = o.many || null;
 
   _ov = _el('div', 'mv3-x-ov');
-  // (phase V73 block 4) the one window frame: its head of 40 px, the 28 px ✕, the foot of 52 px (css/app-shell.css .u-win)
+  // the one window frame: its head of 40 px, the 28 px ✕, the foot of 52 px (css/app-shell.css .u-win)
   const box = _el('div', 'mv3-x u-win is-float');
   const head = _el('div', 'mv3-x-head u-win-head');
   head.appendChild(_el('h3', 'u-win-title', many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
   const x = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
   x.title = 'Close (Esc)';
-  x.addEventListener('click', _close);     // (phase V73 block 4) a render going on goes on in Queue
+  x.addEventListener('click', _close);     // a render going on goes on in Queue
   head.appendChild(x);
   box.appendChild(head);
 
@@ -344,9 +342,7 @@ function _window(o) {
   const ab = _select([['128k', '128 kbps'], ['192k', '192 kbps'], ['320k', '320 kbps']], adv.audioBitrate);
   body.appendChild(_row('Audio bitrate', ab));
 
-  // (phase V75, the owner's (кп5)) The colour correction is each clip's now - its strip and its lane's (overlay/color.js).
-
-  // THE SUBTITLES FILE (phase V30, block 4, the owner's (с11)): on unless turned off - the Subtitles lane as classic
+  // THE SUBTITLES FILE: on unless turned off - the Subtitles lane as classic
   // subtitles beside the video (lib/mv3b-job.js, public/js/captions/srt.js).
   body.appendChild(_el('div', 'mv3-x-hdr', 'Subtitles'));
   const srt = document.createElement('input');
@@ -366,7 +362,6 @@ function _window(o) {
       + '(Meta reads the language from that name). The text lanes are not in it.'
     : 'The Subtitles lane is empty - no file will be written.'));
 
-  // (phase V75, the owner's (кп7)) No Extras: neither a black tail nor a noise under the sound.
   box.appendChild(body);
 
   const collect = () => ({
@@ -396,7 +391,7 @@ function _window(o) {
   const cancel = _el('button', 'mv3-c-btn u-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });
-  // (phase V33.4) Several fragments: one Render, at once - the settings go up with them (the server keeps them on each
+  // Several fragments: one Render, at once - the settings go up with them (the server keeps them on each
   // one and on the project), and the window closes; their tiles show the way along.
   if (many) {
     const all = _el('button', 'mv3-c-btn mv3-x-go u-btn is-main', 'Render ' + many.count);
@@ -429,7 +424,7 @@ function _window(o) {
     const a = await save();
     const d = await addCurrent(a);
     _close();
-    // (phase V73 block 0) News in the line's calm color (is-info): with no kind the line is red, the color of a refused save.
+    // News in the line's calm color (is-info): with no kind the line is red, the color of a refused save.
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
          d && d.success ? 'info' : 'err');
   });
@@ -437,7 +432,7 @@ function _window(o) {
   go.type = 'button';
   go.disabled = !s.end;
   // The window becomes the progress, closed by the render's popup when it is done - and may be closed meanwhile: the render
-  // is an entry of the queue (phase V73 block 4, (б4-2) а).
+  // is an entry of the queue.
   go.addEventListener('click', async () => {
     go.disabled = true; queue.disabled = true;
     const a = await save();
@@ -447,13 +442,13 @@ function _window(o) {
   box.appendChild(foot);
 
   _ov.appendChild(box);
-  // Escape, the ✕ and a press beside it close it - a render in flight too: it goes on in Queue (phase V73 block 4).
+  // Escape, the ✕ and a press beside it close it - a render in flight too: it goes on in Queue.
   _ov.addEventListener('mousedown', (e) => { if (e.target === _ov) _close(); });
   document.body.appendChild(_ov);
   _layer = Layers.open(_ov, { name: 'render', onEsc: _close });
 }
 
-// ── Who owns the button (phase V33.4) ───────────────────────────────────────
+// ── Who owns the button ─────────────────────────────────────────────────────
 // null: it is Export, for the open timeline. Otherwise { state() -> { label, title, enabled, stop, armed }, click() }.
 let _target = null;
 
@@ -463,7 +458,7 @@ export function setRenderTarget(t) {
   paintExportButton();
 }
 
-// (phase V73 block 5, 5a) The button's words: a figure in mono ("Render 3", (к21а) - js/num.js), a leading "✕ " as Lucide's x.
+// The button's words: a figure in mono ("Render 3" - js/num.js), a leading "✕ " as Lucide's x.
 function _label(b, text) {
   b.textContent = '';
   let t = String(text || '');
@@ -481,7 +476,7 @@ export function paintExportButton() {
   b.title = st ? st.title : _busy ? 'Rendering - it is in Queue, where it can be stopped' : 'Render this timeline with FFmpeg';
   b.disabled = !can || (st ? !st.enabled : _busy);
   b.classList.toggle('is-stop', !!(st && st.stop));
-  // (phase V73 block 2) "✕ stop" is the part's danger button; Export / Render N its gold one
+  // "✕ stop" is the part's danger button; Export / Render N its gold one
   b.classList.toggle('is-danger', !!(st && st.stop));
   b.classList.toggle('is-main', !(st && st.stop));
   b.classList.toggle('is-armed', !!(st && st.armed));

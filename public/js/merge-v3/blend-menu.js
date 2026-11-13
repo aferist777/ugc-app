@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — THE BLEND MODE'S LIST (phase V65, the owner's (пз7), (пз10); moved out of inspector.js in phase V74 so the
-   patterns of main video - js/merge-v3/patterns-ui.js - take the same list as the clips of lanes above main).
+   MERGE v3 — THE BLEND MODE'S LIST (a module of its own so the patterns of main video - js/merge-v3/patterns-ui.js - take
+   the same list as the clips of lanes above main).
 
    A list of its own, not a <select> (which never says which option the pointer is over): the pointer resting on a mode shows
    it on the preview at once (`live(id)` - the caller holds it with place-b.js setLive, nothing written), a press chooses it
@@ -64,7 +64,7 @@ export function blendButton({ current, title, live, write }) {
   b.type = 'button';
   b.className = 'mv3-blend-btn u-btn is-s is-field';
   const now = BLENDS.find((m) => m.id === current);
-  // (phase V73 block 5, 5b) the field's chevron, Lucide's - not "▾"
+  // the field's chevron, Lucide's - not "▾"
   b.appendChild(document.createTextNode(now ? now.label : 'mixed'));
   b.appendChild(iconEl('chevron-down', 14));
   if (title) b.title = title;

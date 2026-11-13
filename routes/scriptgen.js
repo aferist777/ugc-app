@@ -3,11 +3,11 @@
 // ════════════════════════════════════════════════════════════════════════════
 // SCRIPT GENERATION — the calls, in the order they run.
 //
-//   GET  /api/scriptgen/models              -> tones, scenes and the agents' ladder that writes (V37)
-//   POST /api/scriptgen/hooks               -> { jobId }  1-10 openings, one per type picked at random (V38.4)
-//   POST /api/scriptgen/hooks/remake        -> { jobId }  one hook written again in its own type (V38.4)
+//   GET  /api/scriptgen/models              -> tones, scenes and the agents' ladder that writes
+//   POST /api/scriptgen/hooks               -> { jobId }  1-10 openings, one per type picked at random
+//   POST /api/scriptgen/hooks/remake        -> { jobId }  one hook written again in its own type
 //   POST /api/scriptgen/script              -> { jobId }  title + paragraphs
-//   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle - or a fragment of one (V38)
+//   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle - or a fragment of one
 //   POST /api/scriptgen/save                -> { scenario }  into the scenarios store
 //   GET  /api/scriptgen/jobs/:jobId         -> { state, step, error, result }
 //   GET  /api/scriptgen/drafts              -> { drafts: [summary + running] }
@@ -15,7 +15,7 @@
 //   POST /api/scriptgen/drafts              -> { draft }   create or update
 //   DELETE /api/scriptgen/drafts/:id        -> { success }  refused while a stage writes into it
 //
-// ONE STAGE AT A TIME PER DRAFT (phase E5). A stage that is running is marked on its draft, a second
+// ONE STAGE AT A TIME PER DRAFT. A stage that is running is marked on its draft, a second
 // start of anything on that draft is refused with 409 and the job that IS running, and the drafts
 // list carries the mark - so a page opened later follows the job instead of paying for it twice.
 //
@@ -31,28 +31,24 @@
 // the slice of transcript it was mined from, and letting the client send it would mean the model
 // could be given text no source contains, then have facts "taken only from the transcript".
 //
-// BY THE AGENTS' LADDER (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице"):
-// every stage is asked of Admin -> AI settings' ladder at effort medium (lib/llm-json.js callLadder) - no model is
-// chosen in the form any more. What WROTE it is the step that answered (`written`, the scenario's `origin`); a draft
-// or scenario from before keeps the model its form chose. Paid once: a step that did not finish stops the ladder.
+// BY THE AGENTS' LADDER: every stage is asked of Admin -> AI settings' ladder at effort medium (lib/llm-json.js
+// callLadder) - no model is chosen in the form. What WROTE it is the step that answered (`written`, the scenario's
+// `origin`); a draft or scenario that names a model keeps it. Paid once: a step that did not finish stops the ladder.
 //
-// THE VOICE ALONE WRITES (V38.1, the owner 2026-10-23: "используем только the voice для генерации сценария"): the
-// cleaning pass "Clean to the narrator" (/scriptgen/humanize) and V38's enrichment by the narrator's words and phrases
-// (/scriptgen/enrich, the form's "Words & phrases") are gone, and what they left in the owner's stores was taken out
-// (V38.2).
+// THE VOICE ALONE WRITES: a script is written in the narrator's voice only; there is no cleaning pass after it.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 
 const P = require('../lib/writing-prompts');
-// (V38.4) The forty hook types - one module with the page.
+// The forty hook types - one module with the page.
 const HT = require('../public/js/library/hook-types.js');
 const WM = require('../lib/writing-models');
 const { callLadder } = require('../lib/llm-json');
 const AGENTS = require('../lib/agents');
 
-// (V37) The effort every stage is asked at (the owner's (л1)), and the ladder's first step - what a stage is expected to
-// take, for the page's countdown (the owner's (л7)).
+// The effort every stage is asked at, and the ladder's first step - what a stage is expected to
+// take, for the page's countdown.
 const EFFORT = 'medium';
 const _first = () => { const l = AGENTS.ladder(); return (l && l[0]) || { provider: '', model: '' }; };
 const narrators = require('../lib/narrators-store');
@@ -63,7 +59,7 @@ const AGENT = require('../lib/mv3-agent');
 
 const router = express.Router();
 
-// (V91 block 6, the owner's (чк16)) The fewest lines a scenario is saved with is the scenarios store's (routes/scen3.js
+// The fewest lines a scenario is saved with is the scenarios store's (routes/scen3.js
 // MIN_LINES, three) - one number. The form offers scripts of FORM_LINES lines and up: a choice of the form, not a gate.
 const MIN_LINES = scen3.MIN_LINES;
 const FORM_LINES = 5;
@@ -88,7 +84,7 @@ function _sweep() {
 //
 // `run` marks the draft the stage writes into: { key, what, ... } - see _runKey.
 //
-// A STAGE CAN BE CANCELLED (phase G1, /scriptgen/jobs/:id/cancel): `work` gets an AbortSignal as its
+// A STAGE CAN BE CANCELLED (/scriptgen/jobs/:id/cancel): `work` gets an AbortSignal as its
 // second argument and hands it to callLadder. A cancelled job keeps state 'cancelled' whatever its call
 // does afterwards - an answer that arrives anyway is not kept - and its draft is free at once.
 function _start(res, step, work, keep, run, extra) {
@@ -137,8 +133,8 @@ const _aborts = new Map();
 // scenes, index }. In memory, like the jobs themselves: a restart ends both.
 const _running = new Map();
 
-// The draft a stage writes into. By id; a stage sent with a source and topic but no id (the retired Library 2
-// did that) is keyed by the draft that source and topic already have, so both ways in meet.
+// The draft a stage writes into. By id; a stage sent with a source and topic but no id is keyed by the draft that
+// source and topic already have, so both ways in meet.
 function _runKey(b) {
   const id = String((b && b.draftId) || '');
   if (id) return 'd:' + id;
@@ -159,8 +155,7 @@ function _runningFor(d) {
 // narrator that has no profile yet is not an error - it means "write plainly", which is what
 // neutral is - but it IS worth saying which one was used, so the answer carries the name.
 //
-// ONE NARRATOR, ONE VOICE (phase V38, the owner 2026-10-23): no reading is drawn or pinned any more - the narrator's
-// voice is the block.
+// ONE NARRATOR, ONE VOICE: the narrator's voice is the block.
 function _narrator(id) {
   if (!id || id === 'neutral') {
     return { block: P.NEUTRAL_BLOCK, name: 'Neutral', id: 'neutral', rec: null };
@@ -170,9 +165,9 @@ function _narrator(id) {
   return { block: P.narratorBlock(rec), name: rec.name, id: rec.id, ready: narrators.hasVoice(rec), rec };
 }
 
-// (V38.1) The ad a person typed into the form's "Advertise" - worked into two paragraphs of the script (lib/writing-prompts.js
-// adBlock); empty, the script carries no advertising. And what of it goes into the scenario's Product when that is empty
-// (the owner's (к8)): its first line, short - Product is a label the shelf filters by.
+// The ad a person typed into the form's "Advertise" - worked into two paragraphs of the script (lib/writing-prompts.js
+// adBlock); empty, the script carries no advertising. And what of it goes into the scenario's Product when that is empty:
+// its first line, short - Product is a label the shelf filters by.
 const _ad = (s) => String(s || '').trim().slice(0, 1500);
 const _productOf = (s) => String(s || '').trim().split(/\r?\n/)[0].replace(/[.;:,\s]+$/, '').slice(0, 80);
 
@@ -202,7 +197,7 @@ function _sourceText(sourceId, topicId) {
 //
 // WHERE IT IS WRITTEN FROM is decided when the answer lands, not when the stage started: a draft
 // detached meanwhile - its source deleted, its topic gone with a new reading of the topics - stays
-// detached (phase E), or the ids this stage started with would point it at nothing again.
+// detached, or the ids this stage started with would point it at nothing again.
 function _whereNow(sourceId, topicId) {
   const rec = sourceId ? sources.get(sourceId) : null;
   if (!rec) return null;
@@ -244,7 +239,7 @@ function _keeper(b, build) {
 router.get('/scriptgen/models', (_req, res) => {
   res.json({
     success: true,
-    // (V37) No models to choose: the agents' ladder writes, its first step first - for the countdown and the form's line.
+    // No models to choose: the agents' ladder writes, its first step first - for the countdown and the form's line.
     ladder: AGENTS.ladder(), effort: EFFORT,
     tones: WM.TONES,
     scenes: { min: Math.max(WM.SCENES_MIN, FORM_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
@@ -260,7 +255,7 @@ router.get('/scriptgen/jobs/:jobId', (req, res) => {
   res.json({ success: true, ...job });
 });
 
-// The cross beside the countdown (phase G1). The job is marked at once and its draft let go - it can be
+// The cross beside the countdown. The job is marked at once and its draft let go - it can be
 // started again straight away, from this page or another - and the call is told to stop. What was
 // already asked for is paid for: kie may finish the request anyway, Replicate bills the seconds it ran.
 // A job that has already ended is left as it is, and the answer says which way it went.
@@ -293,7 +288,7 @@ router.post('/scriptgen/hooks', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  // (V38.4, the owner 2026-10-24) As many hooks as the form's count says, each of a type picked at random from the
+  // As many hooks as the form's count says, each of a type picked at random from the
   // forty (public/js/library/hook-types.js) - picked here, so what the writer is asked for is what the draft keeps.
   const count = HT.hookCount(b.hookCount);
   const types = HT.pickTypes(count);
@@ -316,17 +311,16 @@ router.post('/scriptgen/hooks', (req, res) => {
     });
     if (!hooks.length) throw new Error('No hooks came back.');
     return { hooks, narrator: nar.name, model: by.model, by };
-  // (V38.5, the owner's (ш6)) New hooks leave the chosen one where it is - in box 2 - until another is picked.
+  // New hooks leave the chosen one where it is - in box 2 - until another is picked.
   }, _keeper(b, (r) => ({ hooks: r.hooks })),
   { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT, hookCount: count });
 });
 
-// ── one hook, written again in its own type (phase V38.4) ─────────────────────
-// "remake" beside "use hook" (the owner 2026-10-24: "чтобы выбранный хук переделался в том типе хука, которым он уже
-// является. и после нажатия хук переписывается в соответствии с темой сценария"): a NEW hook of the row's type, by the
+// ── one hook, written again in its own type ──────────────────────────────────
+// "remake" beside "use hook": a NEW hook of the row's type, by the
 // topic, the source, the narrator and the tone, not like the row's text nor the other rows; it replaces the row's text,
-// a hand edit too ((э5)). A job like the hooks - one at a time per draft, cancellable. Filed into the draft's row only
-// while that row still holds a hook of the same type; the chosen hook (box 2, V38.5) is its own copy and stays.
+// a hand edit too. A job like the hooks - one at a time per draft, cancellable. Filed into the draft's row only
+// while that row still holds a hook of the same type; the chosen hook (box 2) is its own copy and stays.
 router.post('/scriptgen/hooks/remake', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
@@ -372,7 +366,7 @@ router.post('/scriptgen/script', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
   const hook = String(b.hook || '').trim();
-  // (V38.4) The chosen hook's type: the script is carried the way that opening works (none for a hook typed by hand).
+  // The chosen hook's type: the script is carried the way that opening works (none for a hook typed by hand).
   const hookType = HT.hookType(b.hookType);
   if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
   if (!hook) return res.status(400).json({ success: false, error: 'pick or write a hook first' });
@@ -410,7 +404,7 @@ router.post('/scriptgen/script', (req, res) => {
     };
   }, _keeper(b, (r) => ({
     paragraphs: r.paragraphs, title: r.title, hook, hookType: hookType ? hookType.id : '',
-    // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
+    // What wrote it - the step of the ladder that answered - for the save to record.
     written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
   })),
   { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes });
@@ -430,11 +424,11 @@ router.post('/scriptgen/rewrite', (req, res) => {
   let m;
   try { m = WM.normalise(b); } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
   const topic = String(b.topic || '').trim();
-  // (V38, the owner's (д13)) The narrator goes with it - the same voice as the script. A narrator deleted since writes
+  // The narrator goes with it - the same voice as the script. A narrator deleted since writes
   // plainly rather than refusing a rewrite.
   let nar;
   try { nar = _narrator(b.narratorId); } catch (e) { nar = _narrator('neutral'); }
-  // (V38) A FRAGMENT of the paragraph, selected on the page: only it is written again, the rest stays word for word.
+  // A FRAGMENT of the paragraph, selected on the page: only it is written again, the rest stays word for word.
   // Found by its words - at the place the page names when they are there, else their first occurrence.
   const para = script[index];
   let frag = null;
@@ -491,9 +485,8 @@ router.post('/scriptgen/rewrite', (req, res) => {
 });
 
 // ── drafts ──────────────────────────────────────────────────────────────────
-// Here since the generator moved into the Library (phase E); /api/library2/drafts went with Library 2.
 
-// A draft names its source by the source's CURRENT title (phase F2), as the scenarios do.
+// A draft names its source by the source's CURRENT title, as the scenarios do.
 function _liveSource(d, titles) {
   if (!d || !d.sourceId) return d;
   const t = titles.get(String(d.sourceId));
@@ -561,7 +554,7 @@ router.post('/scriptgen/save', async (req, res) => {
   if (!['male', 'female'].includes(gender)) {
     return res.status(400).json({ success: false, error: 'a narrator gender is required (male or female)' });
   }
-  // (phase V29, the owner 2026-10-14: "набранное переводится") A paragraph typed or edited in another language goes into
+  // A paragraph typed or edited in another language goes into
   // the scenario in English - the writer writes English, so it is a hand's. A stage started meanwhile still stops it.
   if (paragraphs.some(p => !AGENT.english(p))) {
     let t;
@@ -572,8 +565,8 @@ router.post('/scriptgen/save', async (req, res) => {
     if (run2) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run2.what}) - save when it has landed.`, ...run2 });
   }
 
-  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the form as it is now: the step of the
-  // agents' ladder that wrote it (V37).
+  // WHAT WROTE IT comes from the draft the stages kept, not from the form as it is now: the step of the
+  // agents' ladder that wrote it.
   let kept = null;
   try { kept = b.draftId ? drafts.get(String(b.draftId)) : null; } catch (e) { kept = null; }
   const wrote = (kept && kept.written) || null;
@@ -586,7 +579,7 @@ router.post('/scriptgen/save', async (req, res) => {
     title,
     lines: paragraphs.map(text => ({ text })),
     vertical: String(b.vertical || ''),
-    // (V38.1, the owner's (к8)) An ad typed in "Advertise" names the product when the form's Product was left empty.
+    // An ad typed in "Advertise" names the product when the form's Product was left empty.
     product: String(b.product || '').trim() || _productOf(b.advertise),
     roles: Array.isArray(b.roles) && b.roles.length ? b.roles
       : [{ id: 'r0', name: String(b.role || 'narrator'), gender }],
@@ -595,7 +588,7 @@ router.post('/scriptgen/save', async (req, res) => {
       topicId: String(b.topicId || ''), topicTitle: srcTitles.topicTitle,
       narratorId: nar.id, narratorName: nar.name,
       hook: paragraphs[0] || '', tone: String(b.tone || ''),
-      // Which aggregator too (phase F3): the same model id can run on two of them.
+      // Which aggregator too: the same model id can run on two of them.
       provider: String((wrote && wrote.provider) || ''),
       model: String((wrote && wrote.model) || ''), at: new Date().toISOString(),
     },

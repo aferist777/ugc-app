@@ -1,23 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — CUT SILENCE (phase V44, the owner 2026-10-24).
+   MERGE v3 — CUT SILENCE.
 
-   A button right of ⏩ in the timeline's header (and the key S - "Ы" in the Russian layout, by the key's place): live
-   when there is something to cut in (ы1) - a stretch drawn over a wave, or picked clips (the time they take); dim with
-   nothing picked. Pressed, a small panel opens above it (phase V73 block 5, 5c: the panels' frame at their button, `u-win
-   is-float`, its head "Cut silence" with the ✕) - TWO SLIDERS that work together ((ы12)):
+   A button right of ⏩ in the timeline's header (and the key S - by the key's place, whatever the layout): live
+   when there is something to cut in - a stretch drawn over a wave, or picked clips (the time they take); dim with
+   nothing picked. Pressed, a small panel opens above it (the panels' frame at their button, `u-win
+   is-float`, its head "Cut silence" with the ✕) - TWO SLIDERS that work together:
 
-     Keep pauses up to  [0.01-1.00 s, 0.30 at first]       a pause longer than this is shortened to it (ы2)
+     Keep pauses up to  [0.01-1.00 s, 0.30 at first]       a pause longer than this is shortened to it
      Silent below       [−60 … −20 dB]  [auto]             quieter than this is silence; auto - the stretch's own noise
-                                                            floor + 6 dB, never above −36 (V33.5), each clip its own
+                                                            floor + 6 dB, never above −36, each clip its own
      14 pauses · −6.2 s                       [cut]
 
-   The sound is heard in MAIN AUDIO only (ы3), ONCE, when the window opens: GET /api/track-pauses (lib/track-pauses.js)
+   The sound is heard in MAIN AUDIO only, ONCE, when the window opens: GET /api/track-pauses (lib/track-pauses.js)
    answers each clip's stretch with its auto threshold and the loudness itself (a byte a 10 ms window), and moving either
-   slider only finds the pauses and plans again, here. Above −36 dB is allowed by hand ((ы13): under music the music
-   counts as silence then). The length is kept while the page is open; the decibels start at auto every time ((ы14)).
-   What will go glows red on the lanes before anything is cut (ы8). "cut" or Enter cuts - every lane at once, one step to
+   slider only finds the pauses and plans again, here. Above −36 dB is allowed by hand (under music the music
+   counts as silence then). The length is kept while the page is open; the decibels start at auto every time.
+   What will go glows red on the lanes before anything is cut. "cut" or Enter cuts - every lane at once, one step to
    undo (js/merge-v3/tl-cut.js silenceCut: music under the film stays put, sound effects move with the picture, the seams
-   faded); Escape or a press anywhere else closes it and changes nothing. A talking head's lines are cut too ((ы5)): the
+   faded); Escape or a press anywhere else closes it and changes nothing. A talking head's lines are cut too: the
    save of the timeline writes their pieces into the lines (lib/line-cuts.js).
 
    timeline-b.js owns the pick and the lanes and hands this its accessors (wireSilence):
@@ -70,7 +70,7 @@ export function refreshSilence() {
 function _mainSounds(tl) {
   const t = ((tl && tl.tracks) || []).find((x) => x && x.kind === 'audio' && x.main);
   if (!t || (t.volume != null && !(+t.volume > 0))) return [];
-  // (phase V45) Not a talking head's lines merged into one file: they are cut before merging (tl-cut.js refuses).
+  // Not a talking head's lines merged into one file: they are cut before merging (tl-cut.js refuses).
   return (t.clips || []).filter((c) => c && c.src && !c.reversed && (c.volume == null || +c.volume > 0) && !(Array.isArray(c.merge) && c.merge.length))
     .map((c) => ({ c, s: +c.start || 0, e: (+c.start || 0) + (+c.dur || 0) }));
 }
@@ -90,8 +90,8 @@ export function openSilence() {
     return;
   }
   const box = document.createElement('div');
-  // (phase V73 block 5, 5c; the owner's (б5-16) б) a panel at its button: the frame's edges, its 40-px head with the name and
-  // the 28-px ✕, no backdrop; the rows in its body, the one status line left of the gold "cut"; labels in sentence case (к17)
+  // A panel at its button: the frame's edges, its 40-px head with the name and
+  // the 28-px ✕, no backdrop; the rows in its body, the one status line left of the gold "cut"; labels in sentence case
   box.className = 'mv3-silence u-win is-float';
   box.innerHTML =
     '<div class="mv3-silence-h u-win-head"><span class="u-win-title">Cut silence</span>' +
@@ -112,7 +112,7 @@ export function openSilence() {
   const k = box.querySelector('.mv3-silence-k');
   const d = box.querySelector('.mv3-silence-d');
   k.value = String(_keep);
-  wireRange(k);                                     // (phase V73 block 2) the shared slider
+  wireRange(k);                                     // the shared slider
   wireRange(d);
   box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
   document.body.appendChild(box);
@@ -180,7 +180,7 @@ function _place() {
 function _say(text, bad) {
   if (!_win) return;
   const n = _win.box.querySelector('.mv3-silence-n');
-  setFigures(n, text);                              // (phase V73 block 5, 5c) its figures in mono - "14 pauses · −6.2 s"
+  setFigures(n, text);                              // its figures in mono - "14 pauses · −6.2 s"
   n.classList.toggle('is-bad', !!bad);
 }
 
@@ -212,7 +212,7 @@ async function _listen() {
   }
   w.walls = walls;
   if (!asks.length) {
-    // (phase V45) Only a talking head's merged lines under the pick: they are one file now.
+    // Only a talking head's merged lines under the pick: they are one file now.
     const t = ((Store.timeline() || {}).tracks || []).find((x) => x && x.kind === 'audio' && x.main);
     const merged = ((t && t.clips) || []).some((c) => Array.isArray(c.merge) && c.merge.length
       && w.span.some(([a, b]) => (+c.start || 0) < b && (+c.start || 0) + (+c.dur || 0) > a));

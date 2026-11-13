@@ -26,7 +26,7 @@ let _io = null;          // { read(), write(state) } - supplied by the store
 let _undo = [];
 let _redo = [];
 let _subs = [];
-// A SERIES OF ONE GESTURE is one step (K10b): the word editor's [ and ] move an edge a hundredth at a time,
+// A SERIES OF ONE GESTURE is one step: the word editor's [ and ] move an edge a hundredth at a time,
 // and twenty presses are one thing to take back. A push with the same tag as the last one, soon after it and
 // with nothing undone in between, keeps the snapshot taken before the series.
 const SERIES_MS = 1500;

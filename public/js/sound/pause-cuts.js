@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE PAUSES SHORTENED - the cuts of "cut silence" (phase V44, the owner 2026-10-24: every pause longer than X shortened to
-   X - half kept after the sound before it, half before the sound after), as ONE rule for the page and the server (phase V69
-   P12b: a lecture's pieces are cut by it as highlights lays them - lib/highlights-pauses.js; the owner's (хп76), (хп99)).
+   THE PAUSES SHORTENED - the cuts of "cut silence" (every pause longer than X shortened to X - half kept after the sound
+   before it, half before the sound after), as ONE rule for the page and the server (a lecture's pieces are cut by it as
+   highlights lays them - lib/highlights-pauses.js).
    Merge's button S plans by it (js/merge-v3/tl-silence.js, js/merge-v3/tl-cut.js silenceCut, which re-exports these); where
    the sound is silent is lib/track-pauses.js's. Pure.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -9,7 +9,7 @@
 const r2 = (v) => Math.round(v * 100) / 100;
 const EPS = 1e-6;
 
-/** How long a sound fades into and out of a seam cut silence leaves - the measurement of V33.5: no click, nothing heard. */
+/** How long a sound fades into and out of a seam cut silence leaves - measured: no click, nothing heard. */
 export const SEAM_FADE = 0.015;
 /** A cut shorter than this is not made - a hundredth on the timeline's own grid. */
 export const MIN_SILENCE_CUT = 0.02;
@@ -18,7 +18,7 @@ export const MIN_SILENCE_CUT = 0.02;
 export const MIN_KEEP = 0.1;
 
 /**
- * The cuts that shorten every pause longer than `keep` to `keep` (ы2): [[a, b], ...] timeline seconds in -> [{ a, b }] out,
+ * The cuts that shorten every pause longer than `keep` to `keep`: [[a, b], ...] timeline seconds in -> [{ a, b }] out,
  * in order, on the timeline's hundredths, each at least MIN_SILENCE_CUT. `walls` - the moments main audio's clips start and
  * end: no piece left between a cut and a wall, or between two cuts, is shorter than MIN_KEEP.
  */

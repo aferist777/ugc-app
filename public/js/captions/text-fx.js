@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — A TEXT LINE WITH ITS ENTRANCE AND ITS EXIT (phase V42; the owner's (о14)-(о17), (ц1)-(ц4), 2026-10-24).
+   CAPTIONS — A TEXT LINE WITH ITS ENTRANCE AND ITS EXIT.
 
    A line of a TEXT lane (a title, a hook, a label) that wears an entrance, an exit, a plate, a tilt or a glow is drawn here;
-   any other is drawn by ass.js as it always was (usesFx). ONE module for the render, the preview's libass (JASSUB) and the
+   any other is drawn by ass.js (usesFx). ONE module for the render, the preview's libass (JASSUB) and the
    preset tiles (lib/caption-tiles.js), like the rest of captions/.
 
    A line is drawn as UNITS: the whole block, its rows, its words or its letters - whatever its motions move (the finer of
@@ -71,7 +71,7 @@ export const ENTER = {
   'from-left': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), dx: lerp(-2.2, 0, outC(p)) }) },
   'from-right': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), dx: lerp(2.2, 0, outC(p)) }) },
   drop: { by: 'block', f: (p) => ({ a: seg(p, 0, 0.15), dy: lerp(-2.5, 0, outBounce(p)) }) },
-  // (phase V49) From the top with no bounce - the subtitles' new In; a text line wearing it moves the same way.
+  // From the top with no bounce - one of the subtitles' Ins; a text line wearing it moves the same way.
   'from-top': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.8)), dy: lerp(-0.7, 0, outC(p)) }) },
   blur: { by: 'block', f: (p) => ({ a: outC(p), blur: lerp(14, 0, outC(p)), s: lerp(106, 100, outC(p)) }) },
   stretch: { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), fsp: lerp(0.55, 0, outC(p)), sx: lerp(118, 100, outC(p)) }) },
@@ -117,11 +117,11 @@ export const LEAVE = {
   flicker: { by: 'block', steps: 24, f: (p) => ({ a: p <= 0 ? 1 : [1, 0.3, 1, 0, 0.8, 0, 0, 0.5, 0, 0][Math.min(9, Math.floor(p * 10))] }) },
 };
 
-// The old way a text line arrived (`appear`, K3), read as an entrance when the line has none of the new (page-fx.js APPEAR_AS).
-// `at-once` (phase V49): an entrance chosen to be none - the old way goes too.
+// The style's simpler way of arriving (`appear`), read as an entrance when the line has none of its own (page-fx.js
+// APPEAR_AS). `at-once`: an entrance chosen to be none - `appear` goes too.
 const enterOf = (st) => (st.enter === 'at-once' ? 'none' : st.enter && st.enter !== 'none' ? st.enter : APPEAR_AS[st.appear] || 'none');
 
-/** Is this text line drawn here (an entrance, an exit, a plate, a tilt or a glow) - or by ass.js, as it always was? */
+/** Is this text line drawn here (an entrance, an exit, a plate, a tilt or a glow) - or by ass.js? */
 export function usesFx(st) {
   const s = st || {};
   return (!!s.enter && s.enter !== 'none' && s.enter !== 'at-once') || (!!s.leave && s.leave !== 'none') || (!!s.plate && s.plate !== 'none')

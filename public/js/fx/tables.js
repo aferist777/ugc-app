@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S EFFECTS - THE MEASURED CAMERA PATHS (phase V84, block 1b; docs/local-app/plan/, "Подфаза 3 — V84").
+   A CLIP'S EFFECTS - THE MEASURED CAMERA PATHS.
 
    DATA from video-effects-pack (NeuroLena, MIT - github.com/neurolena1/video-effects-pack, scripts/fx.py `_MOTION`, `_CS_PURPLE`,
    `_CS_TEAL`): the camera's affine matrix [m0, m1, m2, m3, m4, m5] of each frame of a reference edit, measured on a 270 x 480 frame

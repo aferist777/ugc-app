@@ -1,5 +1,5 @@
-/* keys.js - A HIGHLIGHTS PROJECT'S TIMELINE KEYS (V91 cleanup block 6, the owner's (чк16): the rule was written in thirteen
-   places of the page and the server). The page imports it, the server require()s it, as kinds.js.
+/* keys.js - A HIGHLIGHTS PROJECT'S TIMELINE KEYS - one rule for the page and the server. The page imports it, the server
+   require()s it, as kinds.js.
 
    A highlights project <id> has its own timeline `hl_<id>` - its HOME, one line in the picker - and one per fragment n,
    `hl_<id>_<n>` (lib/highlights-store.js). A fragment talks in its home's conversation, keeps its home's links. */

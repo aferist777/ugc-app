@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the FRAMES CHAT of a talking head (phase V26.5, the owner 2026-10-10; docs/local-app/PLAN.md "V26.5").
+   MERGE — the FRAMES CHAT of a talking head.
 
-   A first frame asked for in words. Since phase V61 (the owner 2026-10-30, (т7): "как у new character") it is a WINDOW over
-   the page - js/gen-window.js openFrame, 1280×800 since phase V64 (1100×720 before), as every generation's window: its root (#mv3-fc) is MOVED into
+   A first frame asked for in words. It is a WINDOW over the page, as New Character's is - js/gen-window.js openFrame,
+   1280×800 as every generation's window: its root (#mv3-fc) is MOVED into
    the window and back to its parking place in the Setup panel, so what is typed, picked and waited for stays - opened by
    "frames chat" in the frames field of setup (js/merge-v3/wk-fragments.js) and by its rows of Alerts. It is the pictures
    chat's conversation (chat-shell.js) with the pictures chat's model column (pic-models.js), and what is its own is here:
@@ -10,13 +10,13 @@
        and environment, put there when the chat opens), `frame` (a frame to edit: "to reference" under a result, or the
        picker), up to two `product`s of IMAGES -> Props and up to four `extra` - and every empty place opens the picker, as
        in the video chat;
-     - no shape to choose: a frame is drawn in the project's shape, or it would go to the clip with bars (phase V);
+     - no shape to choose: a frame is drawn in the project's shape, or it would go to the clip with bars;
        `shot` - none / selfie / half body / full body - is where the frame's EDGE is, the pose is the words';
-     - the writer stops for a look (as in the video chat, V16) when it is on, and with it off a light agent puts the
-       words into English and names the pictures (the owner's answer (g));
+     - the writer stops for a look (as in the video chat) when it is on, and with it off a light agent puts the
+       words into English and names the pictures;
      - a frame that lands is the project's, in its frames folder - `to frames` puts it into the set with the edge it was
        asked with (`shot`), `to reference` into the `frame` place;
-     - (V91 block 3, the owner 2026-11-12) a press on a frame or on a message's picture does nothing: ⤢ in its top-right corner
+     - a press on a frame or on a message's picture does nothing: ⤢ in its top-right corner
        opens it large; the pointer resting on a thing in the zone shows it larger over the chat's field, as in the other chats;
      - the almanac at the foot of the column - not yet, dimmed.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -34,7 +34,7 @@ import { markText, markField } from './image-words.js';
 
 const MAX_ATTS = 6;
 const LS_LAST = 'mv3-fc-last';           // the model choice of this chat
-// THE ZONE IS TWO FIELDS (the owner, 2026-10-10, after the first look): the BASE - the person and the place, or the frame
+// THE ZONE IS TWO FIELDS: the BASE - the person and the place, or the frame
 // being changed once one is put there with "to reference" - and the EXTRA pictures, up to four, whatever the person
 // wants in the frame, said in words what each is. The numbers count across both: the base first.
 const BASE_CAST = [
@@ -45,7 +45,7 @@ const BASE_FRAME = [
   { key: 'frame', label: 'frame', max: 1, min: 0, hint: 'The frame being changed - its cross puts the person and the place back' },
 ];
 const EXTRA = { key: 'extra', label: 'extra', max: 4, min: 0, hint: 'Anything else for the frame - an object, a pose to copy, a look; say in the message what it is' };
-// (phase V26.6, the owner 2026-10-30, (п5), (пр2)) THE PRODUCT - up to two products of IMAGES -> Props, between the base and
+// THE PRODUCT - up to two products of IMAGES -> Props, between the base and
 // the extra pictures; each goes with its name and description, drawn exactly as on its picture. It stays from message to
 // message until taken off (the zone is never emptied by a send). The pictures stay at most 6: the extra ones take the rest.
 const PRODUCT = { key: 'product', label: 'product', max: 2, min: 0, hint: 'A product of IMAGES → Props - drawn exactly as on its picture; its description goes with it' };
@@ -80,7 +80,7 @@ function FRAMES(ctx) {
     defEngine: 'nano-banana-2',
     aspect: () => (_format() === '16:9' ? '16:9' : '9:16'),
     extra: (host) => {
-      // WHERE THE EDGE IS (the owner, 2026-10-10: a dropdown, words only, `none` first and by default).
+      // WHERE THE EDGE IS: a dropdown, words only, `none` first and by default.
       const r = el('div', 'mv3-ig-row');
       const l = el('label', null, 'shot');
       const s = document.createElement('select');
@@ -98,8 +98,8 @@ function FRAMES(ctx) {
       r.append(l, s);
       host.appendChild(r);
       _shotSel = s;
-      // The writer, a switch of the column (as in the video chat, V15/V16).
-      // (phase V73 block 4) the shared switch (.u-switch), its word beside it
+      // The writer, a switch of the column (as in the video chat).
+      // the shared switch (.u-switch), its word beside it
       const wr = switchRow('Writer', ctx.writing(), false, (v) => ctx.setWriting(v));
       wr.title = 'On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. '
         + 'Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.';
@@ -144,7 +144,7 @@ function FRAMES(ctx) {
       .map(g => Src.pic(g.imagePath, String(g.prompt || '').slice(0, 60), 'from the chat', { aspect: g.aspect || ar }));
     return { items: set.concat(made) };
   }
-  // (phase V55) The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
+  // The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
   const SOURCES = [
     { id: 'frames', label: 'This project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
     Src.PEOPLE_ROW,
@@ -152,13 +152,13 @@ function FRAMES(ctx) {
   const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'],
     product: ['node:images/Props', 'node:images'] };
 
-  // ── A message of this chat (the owner, 2026-10-10, after the first look) ──
-  // ONE MESSAGE PER SEND, all of one kind (the owner's answer (g)): what was asked at its head - the words and the pictures,
+  // ── A message of this chat ──
+  // ONE MESSAGE PER SEND, all of one kind: what was asked at its head - the words and the pictures,
   // by number and field -, then two columns: on the left the PROMPT - with the writer, the field to edit and its variants,
   // `draw`, `write it again`; without it, what went to the model - and on the right THE FRAME: a box of the project's shape
   // where the picture lands - empty, then counting down, then the frame -, its arrows through every frame of this message,
   // the prompt variant it was drawn from, `to frames` / `in frames` and `to reference`. ⤢ in the frame's corner opens the
-  // message's frames large; a press on the frame itself does nothing (V91 block 3).
+  // message's frames large; a press on the frame itself does nothing.
   const _live = new Map();       // card id -> { m, left, right, progs, ta, ver, go, price, save, patchKey }
   const _cardN = new Map();      // card id -> how many to draw
   const _patchT = new Map();     // a prompt being typed: its save, a moment later
@@ -213,7 +213,7 @@ function FRAMES(ctx) {
       const img = document.createElement('img');
       img.src = thumbOf(g.imagePath, 'strip');
       img.alt = g.prompt || '';
-      // (V91 block 3, the owner 2026-11-12) A press on it does nothing: ⤢ in its corner opens the message's frames large.
+      // A press on it does nothing: ⤢ in its corner opens the message's frames large.
       const big = mediaBtn('image', () => _view(gens, i));
       img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', 'not on the disk any more')); big.remove(); }, { once: true });
       box.append(img, big);
@@ -374,7 +374,7 @@ function FRAMES(ctx) {
     ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     l.left.appendChild(ta);
-    markField(ta);                           // (phase V26.6) "image 1" yellow in the prompt too
+    markField(ta);                           // "image 1" yellow in the prompt too
     Object.assign(l, { ta, save, patchKey: key });
     if (c.state === 'writing') {
       const strip = el('div', 'mv3-ig-prog');
@@ -488,9 +488,9 @@ function FRAMES(ctx) {
     ctx.reload();
   }
 
-  // ── `ideas` (the owner, 2026-10-10): right of the places above the box ──
-  // The agent looks at the person's sheet, the place and the props in the zone and answers five frames in words, as a
-  // message of the thread; a press on one puts it into the box. In English (the owner's answer (e)).
+  // ── `ideas`: right of the places above the box ──
+  // The agent looks at the person's sheet, the place and the props in the zone and answers six frames in words, as a
+  // message of the thread; a press on one puts it into the box. In English.
   let _ideasBtn = null;
   function _ideasSide() {
     const b = el('button', 'mv3-fc-ideas u-btn is-gen', 'Ideas');
@@ -514,8 +514,8 @@ function FRAMES(ctx) {
     if (!d || !d.success) { note(b, 'No ideas.', (d && d.error) || 'the server did not answer'); return; }
     ctx.reload(true);
   }
-  // Six, in two columns (the owner); one a message went from wears gold and "used".
-  // (phase V26.6, the owner's check 2026-10-31, (в)) Each has ↻ in its corner on hover: that idea written again as a
+  // Six, in two columns; one a message went from wears gold and "used".
+  // Each has ↻ in its corner on hover: that idea written again as a
   // variation of itself, in its place (POST /api/scen3/fchat/ideas/again); while it is written the card waits.
   const _againBusy = new Set();          // '<message id>:<i>' being written again
   function _ideasBubble(m) {
@@ -575,7 +575,7 @@ function FRAMES(ctx) {
   return {
     name: 'frames',
     kind: 'fchat',
-    // (phase V26.6, the owner's check 2026-10-31, (а)) "image 1", "image/2" yellow in the box and in read more.
+    // "image 1", "image/2" yellow in the box and in read more.
     markImages: true,
     ids: { root: 'mv3-fc' },
     keys: { draft: 'mv3_fc_draft_v1', write: 'mv3_fc_write_v1' },
@@ -600,9 +600,9 @@ function FRAMES(ctx) {
       sources: () => SOURCES,
       tree: () => Src.TREE.image,
       start: (kind, s) => (s && START[s.key]) || '',
-      // (phase V26.6, the owner's (пр2)) The product place takes only a product of Props.
+      // The product place takes only a product of Props.
       why: (it, kind, slot) => (slot === 'product' && it && !_isProp(it.path) ? NOT_PROP : ''),
-      // (phase V26.6, the owner's (пр3)) ...and makes one: New prop over the chat, the product added going straight into the
+      // ...and makes one: New prop over the chat, the product added going straight into the
       // place.
       make: (kind, slot) => (slot !== 'product' ? null : {
         label: '+ new prop', title: 'A product of your own - its photo and what you know about it; it goes into IMAGES → Props and into this place',
@@ -631,7 +631,7 @@ function FRAMES(ctx) {
     // The writer's message is the description's to draw; the shell keeps the thread reading while one is being written.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
-    // ONE MESSAGE PER SEND (the owner's answer (g)): the person's turn is not drawn apart - what was asked heads its answer.
+    // ONE MESSAGE PER SEND: the person's turn is not drawn apart - what was asked heads its answer.
     hidden: (m) => m.role === 'user',
     bubble: (m, progs, asked) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m)
       : (m.role !== 'user' && (m.gens || []).length ? _plainBubble(m, progs, asked) : null)),
@@ -639,9 +639,9 @@ function FRAMES(ctx) {
     attsSide: _ideasSide,
     // The idea a message went from is used now; the box is its own again.
     afterSend: () => { _armedIdea = null; },
-    // (phase V26.6, the owner's (пр2)) Into the product place only a product of Props - a file from this computer too.
+    // Into the product place only a product of Props - a file from this computer too.
     refuseAt: (slot, path) => (slot === 'product' && !_isProp(path) ? NOT_PROP : ''),
-    // The frame being changed taken out of the base: the person and the place come back (the owner's answer (v)).
+    // The frame being changed taken out of the base: the person and the place come back.
     onDetach: (a) => {
       if (!a || a.slot !== 'frame') return false;
       _base = 'cast';
@@ -683,7 +683,7 @@ function FRAMES(ctx) {
         shot: _shot,
         roles: ctx.atts().map(a => a.slot || 'extra'),
         projectId: (_proj && _proj.id) || '',
-        // The idea the words came from - marked used by the server with the send (the owner's answer (d)).
+        // The idea the words came from - marked used by the server with the send.
         idea: _armedIdea,
       }),
       draftExtra: () => ((_shot || _auto.character || _auto.place || _base !== 'cast') ? { shot: _shot, auto: _auto, base: _base } : null),
@@ -696,7 +696,7 @@ function FRAMES(ctx) {
       },
     },
 
-    // A finished frame in the thread: a press on it does nothing, ⤢ in its corner opens the thread's frames large (V91 block 3).
+    // A finished frame in the thread: a press on it does nothing, ⤢ in its corner opens the thread's frames large.
     shot(g, cell, open) {
       const img = document.createElement('img');
       img.className = 'mv3-ig-shot';
@@ -751,7 +751,7 @@ function FRAMES(ctx) {
         done.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: x.prompt || '', meta: { date: x.at } })),
         at, { showSrc: (it) => thumbOf(it.media, 'main') }));
     },
-    // (phase V73 block 4) No cross of its own: the chat lives in its window, whose head's ✕ closes it (its own head line is
+    // No cross of its own: the chat lives in its window, whose head's ✕ closes it (its own head line is
     // not shown there).
   };
 }
@@ -762,7 +762,7 @@ const CHAT = createChat(FRAMES);
 // took them out while it was open; and the one put there from the casting follows the casting when it changes.
 function _autoCast(opening) {
   if (!_proj || !CHAT.isOpen()) return;
-  // A row kept from before the two fields (places `prop`, `other`) - or a frame left in a base that holds the person and
+  // A row in any other place (`prop`, `other`) - or a frame left in a base that holds the person and
   // the place - goes to the extra field.
   if (opening) {
     const keys = _base === 'frame' ? ['frame', 'product', 'extra'] : ['character', 'place', 'product', 'extra'];
@@ -771,7 +771,7 @@ function _autoCast(opening) {
       CHAT.ctx.useAtts(real.map(a => (keys.includes(a.slot) ? a : Object.assign({}, a, { slot: 'extra' }))));
     }
   }
-  // While the base holds a frame being changed, the person and the place stay out (the owner's answer (b)).
+  // While the base holds a frame being changed, the person and the place stay out.
   if (_base === 'frame') return;
   const c = _cast();
   const want = { character: c.obrazImage || '', place: c.locationImage || '' };
@@ -799,11 +799,11 @@ function _autoCast(opening) {
   if (changed) CHAT.ctx.saveDraft();
 }
 
-// ── IN A WINDOW (phase V61, the owner 2026-10-30, (т7)) ──────────────────────────
+// ── IN A WINDOW ──────────────────────────────────────────────────────────────
 // The chat's root lives in the Setup panel (#mv3-fc in merge-v3.html), hidden - its parking place - and is MOVED into the
 // window while it is open and back when it closes, as New Character does (js/library/chmake.js): the conversation, the box
 // being typed, the zone and the countdowns are the same nodes. Closing the window hides the chat; nothing it asked for stops.
-// (phase V64 block 2) A generation's window: 1280×800 (gen-window.js GEN_SIZE) - 1100×720 until then (the owner's (т7)).
+// A generation's window: 1280×800 (gen-window.js GEN_SIZE).
 let _win = null;
 let _ro = null;
 // The node itself, held: the window takes its overlay off the page before it says it closed, and the root with it - looked
@@ -824,7 +824,7 @@ export function open(p, hooks) {
   const root = $root();
   if (!root) return;
   if (!isOpen()) {
-    // (phase V64, fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
+    // The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
     _win = openFrame({ name: 'frames chat', size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-fchat', onClose: _park });
     _win.setCrumbs([{ label: 'Frames chat' }]);
     root.removeAttribute('style');        // the place the old overlay measured for it
@@ -858,8 +858,8 @@ function _park() {
 }
 
 /**
- * "to reference" (the owner, 2026-10-10): the frame takes the base - the person and the place go from it - and the extra
- * field stays as it is (the owner's answer (b)). Its cross in the base puts the person and the place back (onDetach).
+ * "to reference": the frame takes the base - the person and the place go from it - and the extra
+ * field stays as it is. Its cross in the base puts the person and the place back (onDetach).
  */
 export function toReference(path, name) {
   const z = CHAT.ctx.zoneAtts();

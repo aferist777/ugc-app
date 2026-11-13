@@ -1,61 +1,58 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   FRAMING — where a filled clip's window is, at every moment of its FILE (phase V33.2, the owner 2026-10-20/21;
-   docs/local-app/PLAN.md "Фаза V33", V33.2 - the measurement and the answers (х7)-(х9)).
+   FRAMING — where a filled clip's window is, at every moment of its FILE.
 
    A 16:9 film in a 9:16 frame shows a slice of itself, the full height and a third of the width. Which slice is
-   no longer one fixed answer (`cropAlign`) but a PATH over time, worked out from the film's faces (lib/faces.js)
+   not one fixed answer (`cropAlign`) but a PATH over time, worked out from the film's faces (lib/faces.js)
    and kept on the clip (`frame`). This file is the ONE answer the preview (public/js/merge-v3/preview-b.js) and
    the render (lib/mv3b-render.js) both read - the page imports it, the server require()s it - so the screen and
    the file cannot frame a moment differently.
 
-   THE PATH, from the faces ((х7), (х8)):
+   THE PATH, from the faces:
    - The film is cut into SHOTS where scdet saw the picture change (a camera switch); changes closer than 0.6 s
      are one (a flash, a wipe) and the shot starts after the last of them. At a cut the window JUMPS.
    - In each shot ONE face is followed: the largest, counted over the whole shot (its size times how long it is
-     there), and held to the end of the shot ((х8) А).
+     there), and held to the end of the shot.
    - The camera does not chase every move of a head: it stands while the face is in the middle of the window
      (the dead zone, DEAD either side) and, once the face leaves it, eases after it - never faster than SPEED -
      until the face is near the middle again.
    - A face lost for a moment (turned away, a hand over it) keeps its place. A shot with NO face at all - a
-     title, a screen, a drawing - shows the whole frame by its width over a blurred copy of itself ((х7) Б).
-   - 'bands' (by hand, (х9)): a shot with two faces shows them as two bands one over the other, each following
+     title, a screen, a drawing - shows the whole frame by its width over a blurred copy of itself.
+   - 'bands' (by hand): a shot with two faces shows them as two bands one over the other, each following
      its face; any other shot is framed as 'face'.
-   - (phase V33.6, the owner 2026-10-21, (х54), (х60), (х60а)) WHOLE PEOPLE, where a film's record has them (lib/faces.js
-     `people`, counted in its frames with no face) and the plan is asked to use them (`people`): a shot with NO face, but a
-     person in most of its frames (PERSON_SHARE), follows the largest person as it would a face - the window's middle on the
-     person's - and is marked `by: 'person'`; with no person it is the whole frame over its blur, as before.
+   - WHOLE PEOPLE, where a film's record has them (lib/faces.js `people`, counted in its frames with no face) and the plan
+     is asked to use them (`people`): a shot with NO face, but a person in most of its frames (PERSON_SHARE), follows the
+     largest person as it would a face - the window's middle on the person's - and is marked `by: 'person'`; with no person
+     it is the whole frame over its blur.
      TWO, STANDING APART - two faces, or two people in a shot with no face, both there for half the shot or more, too far
      apart for one window - are two bands BY THEMSELVES in 'face' too (`autoBands`, on unless said off), one over the other;
-     close enough for one window, the largest is followed, as before. A person's band shows the person from the top down.
-   - (phase V33.8, the owner 2026-10-23, (ф1): "давай не весь кадр, а как бы увелично немного, типа до 3:2"; since phase V69 P12,
-     (хп36), (хп70): a SQUARE, SQUARE below, for every kind and the inspector) A shot with no face is not the whole frame but a
-     WINDOW from its middle over the same blur:
-     `wide` on the record, the window's shape (w/h); none - the whole frame, as before. wholeW() says how much of the
-     width it shows; the preview and the render both draw by it.
+     close enough for one window, the largest is followed. A person's band shows the person from the top down.
+   - A shot with no face may show, instead of the whole frame, a WINDOW from its middle over the same blur - a SQUARE
+     (SQUARE below) for every highlights kind and the inspector's "whole + blur": `wide` on the record, the window's shape
+     (w/h); none - the whole frame. wholeW() says how much of the width it shows; the preview and the render both draw by it.
 
    THE RECORD on a clip - `frame`, times in the FILE's seconds (a trim, a split, a copy of the clip keep it right):
      { v, mode: 'face' | 'center' | 'whole' | 'bands', shift (-1..1: the window moved by up to half the room
-       left over, either way), src: { w, h }, shots: [{ t0, t1, kind: 'face' | 'whole' | 'bands', by: 'person' (V33.6,
-       when it follows people, not faces), keys: [[t, x]], b1: [[t, x, y]], b2: [[t, x, y]] }], band (the bands' height, a
-       share of the film's), found (a share of frames with a face), wide (V33.8: a 'whole' shot shows this shape, w/h,
+       left over, either way), src: { w, h }, shots: [{ t0, t1, kind: 'face' | 'whole' | 'bands', by: 'person'
+       (when it follows people, not faces), keys: [[t, x]], b1: [[t, x, y]], b2: [[t, x, y]] }], band (the bands' height, a
+       share of the film's), found (a share of frames with a face), wide (a 'whole' shot shows this shape, w/h,
        from the middle - absent: the whole frame) }
      x and y are the window's MIDDLE as fractions of the film's width and height.
    'center' and 'whole' need no faces: the middle (moved by `shift`), or the whole frame over its blur.
-   - (phase V43, the owner 2026-10-25, (ё2), (ё13)-(ё16)) THE MOST ACTIVE, fragmentation's only: plan(..., { active }) hands a
+   - THE MOST ACTIVE, fragmentation's: plan(..., { active }) hands a
      film counted with `active` (lib/faces.js) to active.js - the window goes to the action, the one who reacts, the one who
      speaks, the largest face, a person; never a whole frame over a blur. Its record is a 'face' one, marked `active: 1`, and
      may carry PUNCH-INS: `zooms` [{ t0, t1, z, ax, ay }] - the window scaled by z about the point (ax, ay) of it, in ZOOM_IN s
-     from t0, held to t1, back in ZOOM_OUT s; `noZoom` - the clip's switch says none ((ё7а)). zoomAt() is the preview's answer,
+     from t0, held to t1, back in ZOOM_OUT s; `noZoom` - the clip's switch says none. zoomAt() is the preview's answer,
      exprZoom() the render's; the bands are never zoomed.
-   - (phase V69 P12b, the owner's (хп63), (хп97), (хп98)) THE SPEAKER, podcast's and true crime's: the same planner with
+   - THE SPEAKER, podcast's and true crime's: the same planner with
      `active.speaker` - no action, the one who listens while a voice off the screen speaks, a shot with no face the square over
      its blur (a 'whole' shot, `wide` on the record) with no punch-in on it; the record says `speaker: 1`.
-   - (phase V69 P12b, the owner's (хп75)) A WIDTH OF ITS OWN on a 'whole' shot - `wide` on the shot, 0 for the whole frame by its
+   - A WIDTH OF ITS OWN on a 'whole' shot - `wide` on the shot, 0 for the whole frame by its
      full width: a lecture BY ITS SHOTS (plan(..., { mode: 'whole', byFace })) - the lecturer's face wider than `byFace` of the
      frame, the record's square; small or none (a slide, a webcam's window), the full width. wholeW() of the shot, windowAt(),
      kindsOf() ('whole', 'whole1'... - one render branch for each width) and spansOfKind() read it - the preview, the render and
      the tile's picture by one rule.
-   - (phase V69 P12b, the owner's (хп82), (хп101)) CAMERA + GAME, a stream's: a shot whose small face stands still (the streamer's
+   - CAMERA + GAME, a stream's: a shot whose small face stands still (the streamer's
      webcam - cam.js camOf) is a 'cam' shot, `c` [x, y] the camera's middle: on top a band a third of the frame's height around it
      (`cam` on the record - its height, a share of the film's, one for the clip), below - two thirds - the game from the film's
      middle at its full height; both stand still. mode 'cam' (the inspector's "camera + game") looks for it in every shot, the rest
@@ -67,15 +64,15 @@ import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
 import { camOf, camW, gameW } from './cam.js';
 
 export const VERSION = 1;
-// (phase V69 P12, the owner's (хп36), (хп70)) "The whole frame over its blur" is a SQUARE from the film's middle: a wide film scaled up
+// "The whole frame over its blur" is a SQUARE from the film's middle: a wide film scaled up
 // until the square from its middle fills the frame's width, over its blur - `wide` 1 (w/h). The highlights kinds that show the whole
 // frame (lib/highlights-store.js FRAMES) and the inspector's "whole + blur" (merge-v3/framing-ui.js) put it on the record.
 export const SQUARE = 1;
-// (phase V69 P12b) 'cam' - "camera + game": a stream's webcam on top, the game below (cam.js).
+// 'cam' - "camera + game": a stream's webcam on top, the game below (cam.js).
 export const MODES = ['face', 'center', 'whole', 'bands', 'cam'];
 
 const CUT_MERGE = 0.6;      // scdet's changes closer than this are one
-const HOLD = 2;             // a face lost for less than this keeps its place ((х7))
+const HOLD = 2;             // a face lost for less than this keeps its place
 const NO_FACE = 0.1;        // a shot with a face in fewer of its frames than this has none
 const MIN_FACE = 0.015;     // a box narrower than this share of the width is noise
 const SAME = 0.09;          // a face in the next frame within this distance (a share of the width) is the same face
@@ -85,9 +82,9 @@ const SPEED = 0.8;          // its top speed, window widths a second
 const EASE = 0.22;          // the share of the way left it covers each frame - a soft start and stop
 const TOL = 0.004;          // how far the kept keys may stray from the camera's own path (a share of the width)
 const BAND_FACE = 3.2;      // a band shows this many face heights of the film
-const PERSON_SHARE = 0.6;   // (V33.6) a shot with no face follows a person who is in at least this share of its frames
+const PERSON_SHARE = 0.6;   // a shot with no face follows a person who is in at least this share of its frames
 const BOTH = 0.5;           // two are "both there" when each is in at least this share of the shot's frames
-const APART = 0.95;         // (V33.6) two whose span is wider than this many windows do not fit in one: bands
+const APART = 0.95;         // two whose span is wider than this many windows do not fit in one: bands
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -100,7 +97,7 @@ export function windowW(srcW, srcH, aspect) {
 }
 
 /**
- * (phase V33.8, (ф1)) What a 'whole' shot shows of the film's width, from its middle, the full height kept: 1 - the whole
+ * What a 'whole' shot shows of the film's width, from its middle, the full height kept: 1 - the whole
  * frame; less when the record has `wide` (a documentary's 3:2 of a 16:9 film is 0.84). The preview and the render both cut
  * by it, so the two cannot differ.
  */
@@ -110,7 +107,7 @@ export function wholeW(frame, srcW, srcH, shot) {
   return Math.min(1, (srcH * a) / srcW);
 }
 
-// (phase V69 P12b) A 'whole' shot's own width (`wide` on it - 0 the whole frame), else the record's.
+// A 'whole' shot's own width (`wide` on it - 0 the whole frame), else the record's.
 function _wideOf(frame, shot) {
   if (shot && shot.wide != null && Number.isFinite(+shot.wide)) return Math.max(0, +shot.wide);
   return +(frame && frame.wide) || 0;
@@ -126,7 +123,7 @@ const _kindOfShot = (frame, s) => {
   const i = _wholes(frame).indexOf(_wideOf(frame, s));
   return i > 0 ? 'whole' + i : 'whole';
 };
-/** (phase V69 P12b) What a 'whole' kind of kindsOf() shows of the film's width - the render's branch for it. */
+/** What a 'whole' kind of kindsOf() shows of the film's width - the render's branch for it. */
 export function wholeWOf(frame, kind, srcW, srcH) {
   const i = kind === 'whole' ? 0 : +String(kind).slice(5);
   const a = _wholes(frame)[i] != null ? _wholes(frame)[i] : (+(frame && frame.wide) || 0);
@@ -240,7 +237,7 @@ function _simplify(pts, tol) {
   return pts.filter((_, i) => keep[i]);
 }
 
-// (phase V33.6) Two tracks too far apart for one window of width `width`: the span of their middles and half of each wide.
+// Two tracks too far apart for one window of width `width`: the span of their middles and half of each wide.
 function _apart(a, b, width) {
   const med = (t, k) => { const v = t.pts.map((p) => p[k]).sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
   return Math.abs(med(a, 1) - med(b, 1)) + (med(a, 3) + med(b, 3)) / 2 > width * APART;
@@ -248,16 +245,16 @@ function _apart(a, b, width) {
 
 /**
  * The record a clip keeps, worked out from a film's faces (lib/faces.js's record). `aspect` is the frame's shape (w/h,
- * 9/16), `mode` one of MODES, `shift` -1..1. `people` (V33.6): a shot with no face follows a whole person, where the record
- * counted them; `autoBands` (V33.6, on unless false): two standing apart are bands by themselves in 'face'; `wide` (V33.8,
- * w/h): a shot with no face shows a window of this shape from the middle over the blur, not the whole frame. Pure: the same
+ * 9/16), `mode` one of MODES, `shift` -1..1. `people`: a shot with no face follows a whole person, where the record
+ * counted them; `autoBands` (on unless false): two standing apart are bands by themselves in 'face'; `wide`
+ * (w/h): a shot with no face shows a window of this shape from the middle over the blur, not the whole frame. Pure: the same
  * faces always give the same path.
  */
 export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0, active = null, byFace = 0 } = {}) {
-  // (V43) The most active: its own planner, on a film counted ten a second with its mouths, lips and things.
+  // The most active: its own planner, on a film counted ten a second with its mouths, lips and things.
   if (active && faces && faces.active) return planActive(faces, { aspect, shift, ...active });
   const md = MODES.includes(mode) ? mode : 'face';
-  // (V43) A film counted ten a second for the most active is read here as five a second - the path it gives stays the one
+  // A film counted ten a second for the most active is read here as five a second - the path it gives stays the one
   // a five-a-second count gives.
   let f = faces || {};
   if (+f.fps >= 9.5 && Array.isArray(f.frames)) {
@@ -266,7 +263,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
   }
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: VERSION, mode: md, shift: r3(clamp(+shift || 0, -1, 1)), src, shots: [] };
-  // (V33.8) Kept only where it shows less than the whole frame - a film no wider than the window shows itself whole.
+  // Kept only where it shows less than the whole frame - a film no wider than the window shows itself whole.
   if (+wide > 0 && md !== 'center' && wholeW({ wide }, src.w, src.h) < 0.999) rec.wide = r3(clamp(+wide, 0.5, 4));
   const fps = +f.fps || 5;
   const frames = Array.isArray(f.frames) ? f.frames : [];
@@ -274,7 +271,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
   const seconds = +f.seconds || frames.length / fps;
   const width = windowW(src.w, src.h, aspect);
   rec.found = frames.length ? r2(frames.filter((x) => _dedupe(x).length).length / frames.length) : 0;
-  // (phase V69 P12b, (хп75)) 'whole' BY ITS SHOTS: the record's width where the largest face of a shot is wider than `byFace` of the
+  // 'whole' BY ITS SHOTS: the record's width where the largest face of a shot is wider than `byFace` of the
   // frame (its middle half of the shot's frames), the whole frame by its full width where it is smaller or there is none.
   if (md === 'whole' && +byFace > 0 && frames.length && width < 0.999) {
     for (const s of _shots(f.cuts, seconds)) {
@@ -296,7 +293,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
     const shot = { t0: r3(s.t0), t1: r3(s.t1), kind: 'face' };
     const n = i1 - i0;
-    // (V69 P12b) "camera + game": the streamer's webcam in this shot - the two bands.
+    // "camera + game": the streamer's webcam in this shot - the two bands.
     const cm = md === 'cam' ? camOf(frames, i0, i1) : null;
     if (cm) { shot.kind = 'cam'; shot.c = [r3(cm.x), r3(cm.y)]; camHs.push(cm.band); rec.shots.push(shot); continue; }
     let tracks = _tracks(frames, i0, i1, fps).sort((a, b) => b.weight - a.weight);
@@ -304,7 +301,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     for (const t of tracks) for (const p of t.pts) seen.add(p[0]);
     let byPerson = false;
     if (!tracks.length || seen.size < Math.max(2, NO_FACE * n)) {
-      // (V33.6) No face: a whole person in most of the shot is followed instead; with none, the whole frame over its blur.
+      // No face: a whole person in most of the shot is followed instead; with none, the whole frame over its blur.
       const pt = persons ? _tracks(persons, i0, i1, fps).sort((a, b) => b.weight - a.weight) : [];
       if (!pt.length || pt[0].pts.length < Math.max(2, PERSON_SHARE * n)) { shot.kind = 'whole'; rec.shots.push(shot); continue; }
       tracks = pt;
@@ -313,7 +310,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     }
     const tAt = (k) => r3((i0 + k) / fps);
     // Two, each there for half the shot or more: the bands - asked for, or by themselves when they stand too far apart for
-    // one window (V33.6, (х60а)).
+    // one window.
     const both = tracks.length >= 2 && tracks[1].pts.length >= BOTH * n && tracks[0].pts.length >= BOTH * n;
     const two = both && (md === 'bands' || ((md === 'face' || md === 'cam') && autoBands !== false && _apart(tracks[0], tracks[1], width)));
     if (two) {
@@ -330,7 +327,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
     shot.keys = _simplify(cam.map((x, k) => [tAt(k), x]), TOL).map(([t, x]) => [t, r3(x)]);
     rec.shots.push(shot);
   }
-  // (V69 P12b) The camera's band: one height for the clip, the middle of what its shots wanted.
+  // The camera's band: one height for the clip, the middle of what its shots wanted.
   if (camHs.length) rec.cam = r3(camHs.slice().sort((a, b) => a - b)[Math.floor(camHs.length / 2)]);
   // The bands share one height (the render's crop is one size for the clip): the middle of what the shots wanted.
   if (bandHs.length) {
@@ -342,7 +339,7 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people 
       const i0 = Math.max(0, Math.floor(s.t0 * fps));
       const keysOf = (p) => {
         const cx = _camera(p.xs, bw, bw / 2, 1 - bw / 2, fps);
-        // A face sits a little above the band's middle: room for the chin and the shoulders. A person (V33.6) is shown
+        // A face sits a little above the band's middle: room for the chin and the shoulders. A person is shown
         // from the top of the box down: the band's middle half a band below the person's top.
         const cy = _camera(p.person ? p.ys.map((y, k) => y - p.hs[k] / 2 + bh / 2) : p.ys.map((y) => y + bh * 0.12), bh, bh / 2, 1 - bh / 2, fps);
         return _simplify(cx.map((x, k) => [r3((i0 + k) / fps), x, cy[k]]), TOL).map(([t, x, y]) => [t, r3(x), r3(y)]);
@@ -390,14 +387,14 @@ export function windowAt(frame, t, sw, sh, aspect) {
   const shift = clamp(+(frame && frame.shift) || 0, -1, 1) * room;
   const mid = (x) => clamp(x + shift, width / 2, 1 - width / 2);
   const mode = frame && frame.mode;
-  // (V69 P12b) A 'whole' shot shows its own width; a 'whole' record with shots (a lecture by its shots) reads them.
+  // A 'whole' shot shows its own width; a 'whole' record with shots (a lecture by its shots) reads them.
   const whole = (s) => ({ kind: 'whole', w: wholeW(frame, sw, sh, s) });
   if (mode === 'whole') return whole((frame.shots || []).length ? _shotAt(frame, t) : null);
   if (mode !== 'face' && mode !== 'bands' && mode !== 'cam') return { kind: 'face', x: mid(0.5) };
   const s = _shotAt(frame, t);
   if (!s) return { kind: 'face', x: mid(0.5) };
   if (s.kind === 'whole') return whole(s);
-  // (V69 P12b) camera + game: the camera's window on top (cw x ch about cx, cy), the game's below (gw wide from the middle).
+  // camera + game: the camera's window on top (cw x ch about cx, cy), the game's below (gw wide from the middle).
   if (s.kind === 'cam' && frame.cam > 0 && Array.isArray(s.c)) {
     const ch = clamp(+frame.cam, 0.1, 1), cw = camW(ch, sw, sh, aspect);
     return { kind: 'cam', cw, ch, cx: clamp(+s.c[0], cw / 2, 1 - cw / 2), cy: clamp(+s.c[1], ch / 2, 1 - ch / 2), gw: gameW(sw, sh, aspect) };
@@ -412,10 +409,10 @@ export function windowAt(frame, t, sw, sh, aspect) {
   return { kind: 'face', x: mid(_lerp(s.keys, t, 1)) };
 }
 
-// ── (phase V43) The punch-ins ───────────────────────────────────────────────
+// ── The punch-ins ───────────────────────────────────────────────────────────
 const _ss = (u) => u * u * (3 - 2 * u);
 const _zooms = (frame) => (frame && !frame.noZoom && Array.isArray(frame.zooms) ? frame.zooms : []);
-/** Does the clip punch in at all (fragmentation's record with zooms, its switch on). */
+/** Does the clip punch in at all (a record with zooms, its switch on). */
 export const hasZooms = (frame) => _zooms(frame).length > 0;
 /**
  * The punch-in at the FILE's second `t`: { z, ax, ay } - the window scaled by z about its point (ax, ay), fractions of the
@@ -469,7 +466,7 @@ export function kindsOf(frame) {
   if (!isFramed(frame)) return [];
   if (frame.mode === 'whole' && !(frame.shots || []).length) return ['whole'];
   if (frame.mode === 'center' || !(frame.shots || []).length) return ['face'];
-  // (V69 P12b) Each width of a 'whole' shot its own kind: 'whole' (the record's), 'whole1', ...
+  // Each width of a 'whole' shot its own kind: 'whole' (the record's), 'whole1', ...
   const ks = new Set(frame.shots.map((s) => (frame.mode === 'whole' ? _kindOfShot(frame, { ...s, kind: 'whole' }) : _kindOfShot(frame, s))));
   if (ks.has('bands') && !(frame.band > 0)) ks.delete('bands');
   if (ks.has('cam') && !(frame.cam > 0)) ks.delete('cam');
@@ -494,9 +491,9 @@ export function exprFace(frame, T, sw, sh, aspect) {
 }
 
 /**
- * (phase V43) The punch-ins as ffmpeg expressions in `T` (the file's time): { Z, AX, AY } - flat sums, as zoomAt reads them - or
+ * The punch-ins as ffmpeg expressions in `T` (the file's time): { Z, AX, AY } - flat sums, as zoomAt reads them - or
  * null when the clip has none. lib/mv3b-render.js framedChain scales the window by Z frame by frame and cuts the frame back out
- * about (AX, AY) - measured in block 0 against zoompan and perspective: under a pixel off, and the frames' own times kept.
+ * about (AX, AY) - measured against zoompan and perspective: under a pixel off, and the frames' own times kept.
  */
 export function exprZoom(frame, T) {
   const zs = _zooms(frame);
@@ -520,7 +517,7 @@ export function exprBand(frame, which, T, sw, sh, aspect) {
 }
 
 /**
- * (phase V69 P12b) camera + game for the render: the camera window's middle { x, y } as expressions in `T` (each 'cam' shot its own,
+ * camera + game for the render: the camera window's middle { x, y } as expressions in `T` (each 'cam' shot its own,
  * standing still), its size cw x ch and the game window's width gw - shares of the film (edges included).
  */
 export function exprCam(frame, T, sw, sh, aspect) {
@@ -546,7 +543,7 @@ export function normalize(frame) {
   if (+frame.cam > 0) out.cam = r3(clamp(+frame.cam, 0.1, 1));
   if (Number.isFinite(+frame.found)) out.found = r2(clamp(+frame.found, 0, 1));
   if (+frame.wide > 0) out.wide = r3(clamp(+frame.wide, 0.5, 4));
-  // (V43) The most active, its punch-ins and the clip's switch for them; (V69 P12b) planned by the speaker's rules.
+  // The most active, its punch-ins and the clip's switch for them; `speaker` - planned by the speaker's rules.
   if (frame.active) out.active = 1;
   if (frame.active && frame.speaker) out.speaker = 1;
   if (Array.isArray(frame.zooms)) {
@@ -561,7 +558,7 @@ export function normalize(frame) {
     const kind = ['face', 'whole', 'bands', 'cam'].includes(s.kind) ? s.kind : 'face';
     const shot = { t0: r3(+s.t0), t1: r3(+s.t1), kind };
     if (s.by === 'person' && kind !== 'whole') shot.by = 'person';
-    // (V69 P12b) A 'whole' shot's own width - 0 the whole frame.
+    // A 'whole' shot's own width - 0 the whole frame.
     if (kind === 'whole' && s.wide != null && Number.isFinite(+s.wide)) shot.wide = r3(clamp(+s.wide, 0, 4));
     if (kind === 'face') shot.keys = _keys(s.keys, 2);
     if (kind === 'bands') { shot.b1 = _keys(s.b1, 3); shot.b2 = _keys(s.b2, 3); }

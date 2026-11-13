@@ -1,7 +1,7 @@
 // LIBRARY — the viewer.
 //
 // Opens the item itself, not its thumbnail: an <img> for stills, a <video> with controls
-// for clips (and, phase V59.1, a saved text of Music -> Lyrics whole - js/sound/lyrics.js). Arrows
+// for clips (and a saved text of Music -> Lyrics whole - js/sound/lyrics.js). Arrows
 // step through the same list the grid is showing, so paging never wanders off the current filter.
 //
 // The element is REPLACED between items rather than reused: swapping a src on a live
@@ -9,18 +9,18 @@
 // left with a src goes on buffering after it is hidden.
 
 import * as Layers from '../layers.js';
-// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+// A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
-// (phase V73 block 2, (н2)) a source downloaded by a link is new until it is looked at here
+// a source downloaded by a link is new until it is looked at here
 import { opened as openedNew } from '../references/news.js';
 import { iconEl } from '../icons.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
-// (phase V73 block 4) The 3D Studio's page keeps its whole look (the owner: «Не трогать») - the viewer reaches it through
-// Alerts "open"; there it is drawn exactly as before, with none of the frame's classes.
+// The 3D Studio's page keeps its own look - the viewer reaches it through Alerts "open"; there it is drawn with none of
+// the frame's classes.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
-// (phase V73 block 4) An action of a viewer's head - an ICON and its WORD where the action is obvious (as in the menus,
+// An action of a viewer's head - an ICON and its WORD where the action is obvious (as in the menus,
 // js/icons.js menuIcons): Rename pencil, Favorite star, Delete trash, Move to folder, Copy copy, Cut… scissors; any other
 // keeps its word alone. The word sits in a <span>, so `button.textContent` is still the label - the pages find a viewer's
 // button by it (library/main.js _viewerBtn, sound/lyrics.js, references/yt.js). On the 3D Studio's page: the word only.
@@ -49,9 +49,9 @@ let _extraRows = null;
 // Opt-in: a page that passes nothing gets exactly the viewer it had.
 let _underStage = null;
 // What a PICTURE is drawn from on the stage, when not its own file - Merge shows the 2048px preview
-// tier rather than a 4K original (phase J4). Opt-in, like the rest.
+// tier rather than a 4K original. Opt-in, like the rest.
 let _showSrc = null;
-// What a VIDEO plays on the stage, when not its own file - a piece showing its whole video (js/cut.js, phase TG block 7).
+// What a VIDEO plays on the stage, when not its own file - a piece showing its whole video (js/cut.js).
 let _videoSrc = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
@@ -76,7 +76,7 @@ function _meta(it) {
   if (m.categoryId) rows.push(['Category', m.categoryId]);
   if (m.favorite) rows.push(['Favorite', 'yes']);
   if (m.date) rows.push(['Date', _fmtDate(m.date)]);
-  // (phase V27) A clip that came by a link: where from, opened in the browser.
+  // A clip that came by a link: where from, opened in the browser.
   if (m.link) {
     const a = document.createElement('a');
     a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer';
@@ -96,11 +96,11 @@ function _paint() {
 
   const stage = $('.lib-view-stage', _ov);
   stage.textContent = '';                     // replace, never reuse (see the note above)
-  // A sound of the Sounds shelf is heard whatever its extension says - a .webm there has no picture (phase V7).
+  // A sound of the Sounds shelf is heard whatever its extension says - a .webm there has no picture.
   const isSound = it.kind === 'sounds';
   const isVideo = !isSound && VIDEO_RE.test(String(it.media || ''));
   if (it.kind === 'lyrics') {
-    // (phase V59.1) A saved text of Music -> Lyrics (js/sound/lyrics.js): the text itself, whole, on the stage.
+    // A saved text of Music -> Lyrics (js/sound/lyrics.js): the text itself, whole, on the stage.
     const t = document.createElement('div');
     t.className = 'lib-view-text';
     t.textContent = String((it.meta && it.meta.text) || '');
@@ -211,8 +211,7 @@ function _paintActions(it) {
   }
 }
 
-// THE RIGHT COLUMN'S WIDTH (phase V35, the owner 2026-10-23, (т5): "в просмотре медиа в попапе ... sash добавим там, чтобы
-// пользователь мог менять размеры для удобства"). A sash between the stage and the column: dragged LEFT, the column widens;
+// THE RIGHT COLUMN'S WIDTH. A sash between the stage and the column: dragged LEFT, the column widens;
 // the stage keeps room for a picture. The width is remembered - one for every viewer: this one (the Library's and Merge's)
 // and a post's (js/references/post.js) - and a double press gives the page's own width back (css: 220px, Merge 260px).
 const LS_INFO_W = 'ugc_view_info_w_v1';
@@ -285,7 +284,7 @@ export function step(d) {
 
 // Escape is the stack's (js/layers.js) - it belongs to whatever is on top, which may be a
 // box opened over this viewer. The arrows are this viewer's own, and only while it is the
-// top layer - and never in a field (phase V56: a description is written in the right column).
+// top layer - and never in a field (a description is written in the right column).
 function _onKey(e) {
   if (!_ov || !Layers.topIs(_layer)) return;
   const t = e.target;
@@ -296,7 +295,7 @@ function _onKey(e) {
 
 export function openViewer(items, index, opts) {
   closeViewer();
-  // (phase V59.1) A saved text has no file - it is shown all the same.
+  // A saved text has no file - it is shown all the same.
   _list = (items || []).filter(i => i && (i.media || i.kind === 'lyrics'));
   if (!_list.length) return;
   _at = Math.max(0, Math.min(_list.length - 1, index || 0));
@@ -311,8 +310,8 @@ export function openViewer(items, index, opts) {
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';
-  // (phase V73 block 4, rule 5) The one frame: a head of 40 px - the name and the count at the left, the item's actions
-  // (an icon and its word) at the right, the ✕ of 28 px last. The 3D Studio's page: the markup it had.
+  // The one frame: a head of 40 px - the name and the count at the left, the item's actions
+  // (an icon and its word) at the right, the ✕ of 28 px last. The 3D Studio's page: its own markup.
   const NEW = !OLD_LOOK();
   ov.innerHTML = `
     <div class="lib-view${NEW ? ' u-win is-float' : ''}">
@@ -337,9 +336,9 @@ export function openViewer(items, index, opts) {
   $('[data-x="close"]', ov).addEventListener('click', closeViewer);
   $('[data-x="prev"]', ov).addEventListener('click', () => step(-1));
   $('[data-x="next"]', ov).addEventListener('click', () => step(1));
-  // (phase V73 block 4, the owner's (к24-3)) Closed by a press BESIDE it - the press itself (`mousedown`), as every window:
-  // a drag begun inside (a trim handle, a selection of text) and let go over the dark no longer closes it. The 3D Studio's
-  // page keeps its `click` (the owner: «Не трогать»).
+  // Closed by a press BESIDE it - the press itself (`mousedown`), as every window:
+  // a drag begun inside (a trim handle, a selection of text) and let go over the dark does not close it. The 3D Studio's
+  // page keeps its `click`.
   ov.addEventListener(OLD_LOOK() ? 'click' : 'mousedown', (e) => { if (e.target === ov) closeViewer(); });
   document.addEventListener('keydown', _onKey);
   _layer = Layers.open(ov, { name: 'viewer', onEsc: closeViewer });

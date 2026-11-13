@@ -1,9 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   THE BLOCK "PROJECTS" (phase V70, P13, the owner 2026-11-01: "поле проектов - с видом как открытый дропдаун в merge. только
-   отображаться будут последние 5 строк проектов выбранного типа. при наведении на строку показывать"; (хп28) "фишки над
-   списком, как в merge. blank тоже отдельной фишкой", (хп29) on hover the project's frame, length, fragments, date, (хп30)
-   "только строками с маленькими миниатюрами", (хп43) - it IS what Continue was, one block; (хп57) Merge's draft first in
-   "all" and "blank" while something lies on it).
+   THE BLOCK "PROJECTS" - shaped like Merge's open project list. Merge's draft comes first in "all" and "blank" while
+   something lies on it.
 
    The chips - all · blank · talking head · voiceover · highlights, the one chosen remembered (`ugc_home_proj_kind_v1`) - over
    the five projects of that kind changed last (GET /api/home/projects, routes/home.js - one read answers every chip), a row
@@ -14,8 +11,8 @@
 
 import { ICONS } from './icons.js';
 import { el, api, ls, lsSet, when, frame } from './util.js';
-// (phase V73 block 2, step 2b) "Loading" until the list comes, "did not load" + Try again when it does not (the reason a
-// popup), the empty list in the shared part ((б2-17) а, (б2-19) а).
+// "Loading" until the list comes, "did not load" + Try again when it does not (the reason a
+// popup), the empty list in the shared part.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 

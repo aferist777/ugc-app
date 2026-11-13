@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — how wide a line is drawn, in pixels of the render's frame (phase K2, 2026-10-03).
+   CAPTIONS — how wide a line is drawn, in pixels of the render's frame.
 
    A page is cut, and broken into lines, to a WIDTH: no line wider than LINE_MAX of the frame. libass
    wraps only at 0.88 (the styles' 6% margins), so what stays inside 0.78 is never wrapped by it, and
@@ -47,7 +47,7 @@ function _fileOf(font, bold) {
 
 const ZERO = /[\p{M}\p{Cf}]/u;
 
-// No-break spaces are measured as the space they look like (review K2); the narrow one as half of it.
+// No-break spaces are measured as the space they look like; the narrow one as half of it.
 const NBSP = { ' ': 1, ' ': 1, ' ': 0.5 };
 
 // One character's advance in em.
@@ -73,7 +73,7 @@ const BOXY = (st) => st.borderStyle === 'box' || st.borderStyle === 'boxline';
 /** How far the drawing stands out on EACH side of the letters: the outline, or the box round them. */
 export function edgeOf(st) {
   // A box drawn as the letters' own border (one event) is padded by the outline; layered - a box with any
-  // effect, ass.js layered() - it is the box style's, padOf (review K2: measured short by the difference).
+  // effect, ass.js layered() - it is the box style's, padOf (measured by the outline it would come out short by the difference).
   if (st.borderStyle === 'box' && (st.effect || 'none') === 'none') return (+st.outline || 0) > 0 ? +st.outline : padOf(st);
   if (BOXY(st) || st.effect === 'box') return padOf(st);
   return +st.outline || 0;

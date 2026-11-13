@@ -1,13 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the video chat's PROMPT REFERENCE, the ALMANAC (phase V14, the owner 2026-10-07; since V15 the button at the
-   foot of the chat's left column - it was "/" by the send; docs/local-app/PLAN.md "Фаза V14", "Фаза V15").
+   MERGE — the video chat's PROMPT REFERENCE, the ALMANAC (the button at the foot of the chat's left column).
 
-   (phase V60.1, the owner's (пк3а)) A window IN THE MIDDLE over the page darkened and a little blurred - as the sound
-   almanac, the one rule of the windows (css/app-shell.css) -, half the size of the attachment picker; until V60.1 it stood
-   beside the column, clear of the prompt field, with no backdrop. Laid out like a reference book: the SECTIONS on the left
+   A window IN THE MIDDLE over the page darkened and a little blurred - as the sound almanac, the one rule of the windows
+   (css/app-shell.css) -, half the size of the attachment picker. Laid out like a reference book: the SECTIONS on the left
    - Camera movement with its seven categories, the others "in development", each saying what it will hold - and the
    TIPS of the open one on the right: a still that plays while the pointer rests on it, the name, the category and the
-   words. A press COPIES the tip (the owner's answer 3): the tip blinks, a note says it was copied - over the prompt field
+   words. A press COPIES the tip: a note says it was copied - over the prompt field
    when it is in sight, else at the foot -, and the window stays open for the next one. Escape, the cross and a press on
    the dark around it close it.
 
@@ -16,13 +14,13 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
+// Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
 const BASE = '/presets/helper/';
 const LS = 'mv3_vhelp_v1';            // { sec, cat } - where the reference was left
-const W_MAX = 860, H_MAX = 560;       // half the attachment picker (the owner)
+const W_MAX = 860, H_MAX = 560;       // half the attachment picker
 
 let _index = null;                    // index.json, read once
 const _files = new Map();             // section id -> its file, read once
@@ -36,7 +34,7 @@ function el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
-// A read that fails says why (phase V73 block 2, (б2-19)): the index or a section's file is "did not load" with Try again, never
+// A read that fails says why: the index or a section's file is "did not load" with Try again, never
 // "nothing here".
 const _read = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error('the app answered ' + r.status); return r.json(); });
 function _stored() { try { return JSON.parse(localStorage.getItem(LS) || '') || {}; } catch (e) { return {}; } }
@@ -95,9 +93,9 @@ export function closeHelp() {
 
 // ── The window ──────────────────────────────────────────────────────────────
 function _build(o) {
-  // (phase V60.1) Over the page darkened and blurred: a modal layer - a press on the dark closes it.
+  // Over the page darkened and blurred: a modal layer - a press on the dark closes it.
   const ov = el('div', 'hp-ov');
-  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - the name, a quiet note, the 28 px ✕
+  // the one window frame (css/app-shell.css .u-win): its head - the name, a quiet note, the 28 px ✕
   const box = el('div', 'hp u-win is-float');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Almanac');
@@ -138,8 +136,7 @@ function _build(o) {
   place();
 }
 
-// (phase V60.1, (пк3а)) In the middle of the page, half the attachment picker - smaller on a small window. (Until V60.1:
-// right of the chat's column, clear of the prompt field.)
+// In the middle of the page, half the attachment picker - smaller on a small window.
 function _place(box) {
   const w = Math.min(W_MAX, innerWidth - 32), h = Math.min(H_MAX, innerHeight - 32);
   box.style.width = w + 'px';
@@ -183,7 +180,7 @@ function _paintSide() {
   const S = _w.side;
   S.textContent = '';
   const secs = (_index && _index.sections) || [];
-  // (phase V73 block 2) An index that did not load: the list on the right says so, with Try again.
+  // An index that did not load: the list on the right says so, with Try again.
   if (!secs.length) return;
   for (const s of secs) {
     const ready = !!s.file;
@@ -254,7 +251,7 @@ function _paintList() {
 }
 
 function _tile(it, catLabel) {
-  // (phase V16, the owner) No popup under the pointer: the tile shows its words, a press copies them.
+  // No popup under the pointer: the tile shows its words, a press copies them.
   const t = el('button', 'hp-tile');
   t.type = 'button';
   const pv = el('span', 'hp-pv');
@@ -275,7 +272,7 @@ function _tile(it, catLabel) {
   const nm = el('span', 'hp-name', it.name);
   if (catLabel) nm.appendChild(el('i', null, catLabel));
   words.append(nm, el('span', 'hp-text', it.prompt));
-  // (phase V73 block 4) "copy" wears the quiet button - the whole tip is still what is pressed
+  // "copy" wears the quiet button - the whole tip is still what is pressed
   t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', 'Copy'));
   t.addEventListener('click', () => _copy(it, t));
   return t;
@@ -307,7 +304,7 @@ async function _toClipboard(text) {
 async function _copy(it, tile) {
   const ok = await _toClipboard(it.prompt);
   if (!_w) return;
-  // (phase V73 block 4) no blinking: the note on the prompt field says it was copied; a tip not copied is outlined red a moment
+  // no blinking: the note on the prompt field says it was copied; a tip not copied is outlined red a moment
   tile.classList.remove('is-fail');
   if (!ok) { tile.classList.add('is-fail'); setTimeout(() => tile.classList.remove('is-fail'), 1000); }
   _toast(_w.fieldOf(), ok ? 'Copied: ' + it.name + ' - paste it into the prompt (Ctrl+V)' : 'Could not copy - the words are selected: copy them yourself', !ok);
@@ -320,14 +317,14 @@ function _select(node) {
   try { const r = document.createRange(); r.selectNodeContents(node); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) { /* nothing to select */ }
 }
 
-// The note over the prompt field (the owner: "всплывашка на промпте") - on the field itself, gone by itself.
+// The note over the prompt field - on the field itself, gone by itself.
 function _toast(field, words, bad) {
   for (const old of document.querySelectorAll('.hp-toast')) old.remove();
   clearTimeout(_toastT);
   const t = el('div', 'hp-toast' + (bad ? ' is-bad' : ''), words);
   document.body.appendChild(t);
   const r = field && field.isConnected ? field.getBoundingClientRect() : null;
-  // (phase V60.1) The window stands in the middle now: a field under it - the note at the window's foot instead.
+  // The window stands in the middle: a field under it - the note at the window's foot instead.
   const b = _w && _w.box ? _w.box.getBoundingClientRect() : null;
   const under = !!(r && r.width && b && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top);
   if (under) {

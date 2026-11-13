@@ -1,8 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   THE AUDIO ALMANAC - the data of the sound window's prompt reference (phase V34.A; the owner 2026-10-22:
-   "для чата sounds тоже нужно будет собрать свой альманах по стилям ... упор больше по форумам, так как там более
-   информация из первых уст"). The research behind every note, with its sources and how sure each finding is:
-   docs/local-app/audio-almanac.md.
+   THE AUDIO ALMANAC - the data of the sound window's prompt reference, researched with a weight on forums (first-hand
+   experience); every note names its sources (SOURCES).
 
    DATA ONLY. The sound window's almanac (public/js/sound/suno-form.js) draws it: the SECTIONS on the left in two groups
    (Music, Sounds), the open one's notes as chips under their categories on the right; a chip pressed shows its note -
@@ -10,7 +8,7 @@
    by hand. lib/audio-writer-rules.js reads CHIPS, CHIPS_DEFAULT and HIGHLIGHT_PRESETS from here, so the page and the
    writer speak one vocabulary. The server require()s this file (Node 24; ./package.json says "module").
 
-   THE SHAPE - docs/local-app/PLAN.md, "V34.A — ход", is the contract for the chat:
+   THE SHAPE:
      FIELDS    { <field>: { label, max, join, about } }
                the constructor fields a note can go into: words (the simple mode's box), style, negative, lyrics (Suno
                custom), idea (Suno Generate Lyrics), sound (Suno sounds), sfx (ElevenLabs Sound Effects), music
@@ -23,7 +21,7 @@
                to      - the fields it goes into, the first the main one; [] - advice, nothing to insert
                set     - values for the mode's controls, by the API's own names: style_weight, weirdness_constraint,
                          variety, vocal_gender (Suno music); sound_loop, sound_tempo, sound_key (Suno sounds);
-                         prompt_influence, loop (ElevenLabs SFX). The chat applies those its mode has.
+                         prompt_influence, loop (ElevenLabs SFX). The window shows them ("try …"), to set by hand.
                seconds - a length for ElevenLabs (duration_seconds). Suno sounds has no length field: the note
                          "Length in the prompt" (section craft) is the way to ask it for one.
      SOURCES   { <id>: { name, url, kind } }   kind: 'official' (Suno, kie.ai, ElevenLabs), 'forum' (a Reddit thread -
@@ -34,7 +32,7 @@
                chips: `style` is the phrase the writer reads, `avoid` goes to the excludes with it.
      CHIPS_DEFAULT { genre: [id], mood: [id], sound: [id] }  - a bed with nothing chosen.
      HIGHLIGHT_PRESETS [{ id, label, about, bpm, title, styles: [{ name, style, negative }], eleven }]  - the ten
-               highlights moods (the owner's (п1), (ф3)): four styles each, sharply apart (phase V68, (хп41)) - press n of
+               highlights moods: four styles each, sharply apart - press n of
                a mood takes styles[n % 4] (lib/audio-writer-rules.js fromPreset): `style` without the bed's own words
                (the rules add them), `negative` what would clash with this style, `name` ends the track's title.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -179,7 +177,7 @@ export const CHIPS = {
     { id: 'funk',       label: 'Funk',          style: 'funk, groovy bass guitar, clean rhythm guitar', bpm: [100, 115] },
     { id: 'jazz',       label: 'Jazz',          style: 'lounge jazz, brushed drums, upright bass', bpm: [80, 100], avoid: ['saxophone solo'] },
     { id: 'cinematic',  label: 'Cinematic',     style: 'cinematic underscore, steady from the first bar', bpm: [70, 100], avoid: ['trailer hits', 'braams', 'long intro'] },
-    // (phase V54, block 7, the owner's (зв32)) Fourteen more. Fast ones keep a half-time feel or soft drums - a bed under a voice.
+    // Fourteen more. Fast ones keep a half-time feel or soft drums - a bed under a voice.
     { id: 'future-bass', label: 'Future bass',  style: 'future bass, lush detuned chords, soft half-time drums', bpm: [130, 150], avoid: ['big drop', 'vocal chops'] },
     { id: 'tropical',   label: 'Tropical house', style: 'tropical house, soft plucked synths, relaxed four-on-the-floor', bpm: [100, 115], avoid: ['vocal chops', 'pan flute'] },
     { id: 'nu-disco',   label: 'Nu-disco',      style: 'nu-disco, groovy filtered bass line, crisp disco hi-hats', bpm: [110, 124] },
@@ -209,7 +207,7 @@ export const CHIPS = {
     { id: 'mysterious', label: 'Mysterious', style: 'mysterious, curious, unresolved harmony', bpm: [70, 95], avoid: ['horror', 'jump scare'] },
     { id: 'tense',      label: 'Tense',      style: 'tense, restrained, steady pulse', bpm: [85, 110], avoid: ['trailer hits', 'cymbal crash'] },
     { id: 'dark',       label: 'Dark',       style: 'dark, moody, gritty', bpm: [70, 100] },
-    // (phase V54, block 7, (зв32)) Ten more - "epic" said as grand and heroic: the word itself invites builds (the writer's rule).
+    // Ten more - "epic" said as grand and heroic: the word itself invites builds (the writer's rule).
     { id: 'happy',      label: 'Happy',       style: 'happy, cheerful, sunny', bpm: [105, 125] },
     { id: 'romantic',   label: 'Romantic',    style: 'romantic, tender, warm', bpm: [65, 90] },
     { id: 'inspiring',  label: 'Inspiring',   style: 'inspiring, hopeful, forward-moving', bpm: [95, 115], avoid: ['crescendo'] },
@@ -238,7 +236,7 @@ export const CHIPS = {
     { id: 'brushes',    label: 'Brushed drums',    style: 'brushed drums' },
     { id: 'claps',      label: 'Claps',            style: 'soft claps and finger snaps' },
     { id: 'vinyl',      label: 'Vinyl crackle',    style: 'vinyl crackle, tape warmth' },
-    // (phase V54, block 7, (зв32)) Twelve more. A chip's own word keeps it out of the excludes (lib/audio-writer-rules.js
+    // Twelve more. A chip's own word keeps it out of the excludes (lib/audio-writer-rules.js
     // _suno: what the style wants is never excluded) - "choir", "violin solo", "ukulele", "synth lead".
     { id: 'sax',        label: 'Saxophone',        style: 'smooth breathy saxophone, played sparsely' },
     { id: 'brass',      label: 'Brass',            style: 'soft brass section swells' },
@@ -256,18 +254,16 @@ export const CHIPS = {
 };
 export const CHIPS_DEFAULT = { genre: ['lofi'], mood: ['calm'], sound: [] };
 
-// ── The highlights presets (the popup's second list, the owner's (п1)) ─────
-// A podcast or interview fragment under speech. Built from the research's mood table (docs/local-app/audio-almanac.md,
-// "Заготовки highlights"): calm talk 65-85 BPM, conversation 90-110, energy 115-125 - nothing above 128 without a
-// half-time feel. Left out on purpose: "epic" (cinematic words invite long intros and builds) and "dark phonk" (dense,
-// with chants and a cowbell in the voice's middle - a music-forward choice, not a bed).
-// (phase V34.F, the owner 2026-10-23, (ф4): "что нибудь современное для фона") Each mood was one modern electronic style
-// with one colour turned per press (`vary`) - its tracks came out nearly alike, and the moods too.
-// (phase V68, П2, the owner 2026-11-01, (хп41): "треки пускай будут разными а не похожими друг на друга") FOUR STYLES per
-// mood, sharply apart - another genre, other named instruments, another key, a tempo within the mood's - and no genre in
-// two moods; press n takes styles[n % 4] (lib/audio-writer-rules.js fromPreset), its `name` ends the track's title
-// ("Calm Ground · Felt Piano · 1"). Still a bed under a voice: no lead, no voice of any kind, no build or drop, steady from
-// the first bar - the rules add the bed's tail and excludes; `negative` is only what would clash with THIS style.
+// ── The highlights presets (the popup's second list) ───────────────────────
+// A podcast or interview fragment under speech. Built from the research's mood table: calm talk 65-85 BPM, conversation
+// 90-110, energy 115-125 - nothing above 128 without a half-time feel. Left out on purpose: "epic" (cinematic words invite
+// long intros and builds) and "dark phonk" (dense, with chants and a cowbell in the voice's middle - a music-forward
+// choice, not a bed).
+// FOUR STYLES per mood, sharply apart, so that a mood's tracks are not alike (one style with a colour turned per press
+// gives nearly the same track every time) - another genre, other named instruments, another key, a tempo within the
+// mood's - and no genre in two moods; press n takes styles[n % 4] (lib/audio-writer-rules.js fromPreset), its `name` ends
+// the track's title ("Calm Ground · Felt Piano · 1"). A bed under a voice: no lead, no voice of any kind, no build or drop,
+// steady from the first bar - the rules add the bed's tail and excludes; `negative` is only what would clash with THIS style.
 export const HIGHLIGHT_PRESETS = [
   { id: 'energetic', label: 'energetic', about: 'Fast cuts, business tips, hype - talky but driving.', bpm: 120, title: 'Energetic Drive',
     styles: [

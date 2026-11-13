@@ -17,36 +17,36 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { softened } from './fx-b.js';
 import { paintCaptions } from './subs-b.js';
-// The captions, drawn by libass itself over the frame (phase K4) - the painter above draws only while
+// The captions, drawn by libass itself over the frame - the painter above draws only while
 // that is not up yet.
 import * as CapLayer from '../captions/layer.js';
 import { wirePlace, paintHandles, liveOf } from './place-b.js';
-// Captions picked and moved on the preview, and the platforms' screens over the frame (phase V30, block 3).
+// Captions picked and moved on the preview, and the platforms' screens over the frame.
 import * as CapPlace from './cap-place.js';
 import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
-// (V91 block 6) The rules the render answers the same: js/timeline/rules.js, a halfer band js/framing/band.js.
+// The rules the render answers the same: js/timeline/rules.js, a halfer band js/framing/band.js.
 import { isPlaced as placedRule, endOf, gainOf } from '../timeline/rules.js';
 import { bandGeom } from '../framing/band.js';
 import { setPlayhead, setFormat, liveVolumeOf, selectedClips } from './timeline-b.js';
-// (phase V33.2) A filled clip's window over time - the one answer the render reads too.
+// A filled clip's window over time - the one answer the render reads too.
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
-// (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
+// A clip's crop - a piece of its file cut first; the render reads the same module.
 import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
-// (phase V65) How much of a clip is seen - one rule with the render (overlay/look.js).
+// How much of a clip is seen - one rule with the render (overlay/look.js).
 import { opacityOf, blendOf } from '../overlay/look.js';
-// (phase V65, block 5) A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
+// A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
 import * as PAT from '../overlay/pattern.js';
-// (phase V75) A clip's colour correction - one rule with the render (overlay/color.js).
+// A clip's colour correction - one rule with the render (overlay/color.js).
 import { svgOf } from '../overlay/color.js';
-// (phase V84) A clip's effects - one rule with the render (fx/params.js), drawn on its layer (fx-draw.js).
+// A clip's effects - one rule with the render (fx/params.js), drawn on its layer (fx-draw.js).
 import { paramsAt as fxParamsAt, isPlain as fxPlain } from '../fx/params.js';
 import { applyFx } from './fx-draw.js';
-// (phase V84 block 4b) Where a clip's graphics are drawn - its window (the owner's (б4-11)), one rule with the bake window.
+// Where a clip's graphics are drawn - its window, one rule with the bake window.
 import { windowOf as fxWindowOf } from '../fx/box.js';
 import { onFontLoaded as fxOnFontLoaded } from '../fx/kit.js';
-// (phase V76) A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
+// A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
 import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
 
@@ -55,7 +55,7 @@ const STAGE = 'mv3-stage';
 let _on = false;
 let _cv = null;          // our canvas, ours alone - the other preview owns its own
 let _ctx = null;
-// The grips of a picked insert, on a canvas of their own ABOVE the captions' (phase K4 review): libass
+// The grips of a picked insert, on a canvas of their own ABOVE the captions': libass
 // draws the captions on a canvas laid over this one, and the grips are the editor's furniture - over
 // everything. Clicks still go to _cv underneath; this one lets them through.
 let _hcv = null;
@@ -91,7 +91,7 @@ const PAD_FRAC = 0.08;
 let PAD = 43, CW = 626, CH = 1046;
 
 // The surround, and the veil that says it is not the film. Dark enough to read as outside,
-// light enough that what hangs over the edge can still be seen. (phase V73) The page's own tokens, graphite with no blue:
+// light enough that what hangs over the edge can still be seen. The page's own tokens, graphite with no blue:
 // --bg-deep round the frame, --scrim over what hangs over its edge; read at the first drawing.
 const _toks = {};
 const _tok = (name, fb) => _toks[name] || (_toks[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb);
@@ -107,9 +107,7 @@ function _layers(tl) {
 }
 
 // Every clip of a lane under the playhead, in the lane's own order - which is the order the
-// renderer overlays them in, so the later one is drawn over the earlier. Only one of them used to
-// be drawn, and a picture laid over part of a clip on the same lane hid the rest of that clip on
-// screen while the render showed both.
+// renderer overlays them in, so the later one is drawn over the earlier.
 function _clipsAt(track, t) {
   const out = [];
   for (const c of (track.clips || [])) {
@@ -147,8 +145,8 @@ function _quality() {
 
 // A REVERSED CLIP IS HANDED A FILE THAT IS ALREADY REVERSED. Seeking backwards frame by
 // frame is not playing - the decoder starts over on every seek, so a few frames come out and
-// then it crawls - and no element can be told to run at a negative rate. The proxy has been
-// able to reverse since it was written (rev=1 runs `reverse` and `areverse`, the same filters
+// then it crawls - and no element can be told to run at a negative rate. The proxy can
+// reverse (rev=1 runs `reverse` and `areverse`, the same filters
 // the render uses), so the preview simply plays the reversed file forwards.
 const _revable = (src) => /\.(mp4|webm|mov|m4v)$/i.test(String(src || '').split('?')[0]);
 const _rev = (c) => !!(c && c.reversed) && !isStill(c) && _revable(c.src);
@@ -166,28 +164,28 @@ function _srcFor(src, rev) {
 // downloads, and one element cannot hold both.
 const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : (_shooting === 'orig' ? 'orig' : _quality()) + (rev ? '|rev' : ''));
 
-// TWO ELEMENTS FOR A FILE CUT INTO PIECES (phase V44; measured in its block 0: one element per file followed a cut only once
-// it had drifted past 0.25 s for the sound, 0.35 s for the picture - a pause cut out was heard and seen as if still there - and
-// every correction while playing left the sound silent and the picture still for ~0.2 s). Pieces of one file laid end to end
+// TWO ELEMENTS FOR A FILE CUT INTO PIECES (measured: one element per file follows a cut only once it has drifted past
+// 0.25 s for the sound, 0.35 s for the picture - a pause cut out is heard and seen as if still there - and every
+// correction while playing leaves the sound silent and the picture still for ~0.2 s). Pieces of one file laid end to end
 // on a lane with a jump in the file between them (cut silence, a stretch cut by hand) take turns between two elements: while
 // one plays its piece, the other waits paused on the first frame of the next (_cue), and at the seam the waiting one simply
 // starts. A piece that plays on in its file from where the one before it ended (a split) keeps the same element. A piece
 // after a very short one (a word between two pauses) would find the other element free only a moment before it starts -
 // too late to be put in place (~0.2 s a seek, measured) - so a THIRD element takes it when that one has had longer to wait.
 //
-// CLIPS OF ONE FILE THAT OVERLAP get an element each too (phase V49, the owner's point 1: "помехи при проигрывании"; measured
-// in its block 0 in the Electron window: one track laid twice, overlapping, shared ONE element - it was sought to one clip's
-// moment and then to the other's on every frame, 991 seeks in 6 s, and what came out was a few scraps and silence). Pieces
+// CLIPS OF ONE FILE THAT OVERLAP get an element each too (measured in the Electron window: one track laid twice,
+// overlapping, sharing ONE element is sought to one clip's moment and then to the other's on every frame, 991 seeks in
+// 6 s, and what comes out is a few scraps and silence). Pieces
 // that run over the next one (0.05 s in an older cut) are such clips as well. So the elements are dealt out per FILE across
 // every lane - the picture's elements and the sound's apart, as they are kept - by the moments they are busy: a clip takes
 // an element nobody is playing at its start, one that has had READY to be put in place first if there is one (the lowest),
-// else a new one while a run has fewer than SLOTS_RUN (two very short pieces in a row left none of three ready: the third
-// short piece of the Kids fragment started 0.5 s late), else the one let go of longest ago; an element past that is added
+// else a new one while a run has fewer than SLOTS_RUN (two very short pieces in a row leave none of three ready: the third
+// short piece starts 0.5 s late), else the one let go of longest ago; an element past that is added
 // only while every one is busy at that moment (an overlap) - at most SLOTS_MAX of one file.
 const SEAM = 0.011;               // two clips this close meet
 const LOOK = 3;                   // s: the next piece is made ready this long before it starts
 const READY = 0.6;                // s: how long an element should have to be put in place before its piece
-const SOON = 1.5;                 // s: (V49) a piece starting this soon after Play is waited for by the hold
+const SOON = 1.5;                 // s: a piece starting this soon after Play is waited for by the hold
 const SLOTS_RUN = 4;              // elements a run of pieces end to end takes turns between, at most
 const SLOTS_MAX = 8;              // elements of one file at most, overlaps included
 let _slotTl = null;
@@ -255,7 +253,7 @@ function _slotCount(kind, c) {
   return _slotN.get((kind === 'video' ? 'v|' : 'a|') + c.src + (_rev(c) ? '|rev' : '')) || 1;
 }
 const _slotKey = (slot) => (slot ? '#' + (slot + 1) : '');
-// (phase V76) A sound at another pitch is another element: it plays another file.
+// A sound at another pitch is another element: it plays another file.
 const _keyOf = (c) => _key(c.src, _rev(c)) + (c.pitch ? '|' + tagOf(c.pitch) : '') + _slotKey(_slotOf(c));
 
 // The clips of a lane that start after `t` and within LOOK of it, the nearest first.
@@ -282,25 +280,25 @@ function _cue(el, c) {
 
 // The clip an element plays now is not the one it played a moment ago: it goes where it should AT ONCE (a jump of a tenth
 // is a cut, not a drift), not when it has drifted past the tolerance. Not tighter than JUMP: an element that has just
-// started runs ~0.05 s behind the clock (measured, V44 block 3) and a tighter rule would seek it for nothing.
+// started runs ~0.05 s behind the clock (measured) and a tighter rule would seek it for nothing.
 const JUMP = 0.1;
 function _jumpOf(el, c) {
   if (el.__live !== c.id) { el.__live = c.id; el.__jump = true; }
   return !!el.__jump;
 }
 
-// A PICTURE THAT HAS ARRIVED ASKS TO BE DRAWN (phase L7, the owner 2026-09-23). An element is made
+// A PICTURE THAT HAS ARRIVED ASKS TO BE DRAWN. An element is made
 // by the paint that first needs it - the playhead has just landed on its clip - and that paint, and
-// the one a frame later, both find nothing decoded: the file is not even open yet. Nothing looked
-// again when it was, so the stage stayed black until the next seek into the same clip, which then
-// found the file open. Now the element says when it has something: its first data, the end of every
+// the one a frame later, both find nothing decoded: the file is not even open yet. Without a word
+// from it the stage would stay black until the next seek into the same clip, so the element says
+// when it has something: its first data, the end of every
 // seek, an image's load. Not while playing - the clock paints every frame anyway, and a repaint from
 // here would cancel the tick that drives it (see _repaint).
 function _ready() {
   if (_on && !_playing) _repaint();
 }
 
-// THE CLIP'S POSTER WHILE ITS FILE OPENS (phase V23, L7; the owner: "у всех на миг"). A clip carries its miniature
+// THE CLIP'S POSTER WHILE ITS FILE OPENS. A clip carries its miniature
 // (`thumb` - a Library drop, the mirror's clip); until the video has a frame decoded, that stands in its place and in
 // its shape - better than black, if only for a moment. A frame from near the start of the source: a trimmed clip's is
 // not the frame under the playhead, which is accepted. Only pictures - an /api/thumb address or an image file - and
@@ -377,7 +375,7 @@ const _rects = new Map();
 
 function _place(sw, sh, c, tFile, raw) {
   // A gesture in progress holds its numbers rather than writing them: this is where they are
-  // read back, so the picture follows the mouse without a store write per pixel. (V49) Not for the frame a PiP shows
+  // read back, so the picture follows the mouse without a store write per pixel. Not for the frame a PiP shows
   // (`raw`): the gesture moves the PiP, not what is inside it.
   const live = raw ? null : liveOf(c.id);
   if (live) c = Object.assign({}, c, live);
@@ -400,16 +398,16 @@ function _place(sw, sh, c, tFile, raw) {
     return { sx: 0, sy: 0, sw, sh, dx, dy, dw, dh, cx: dx + dw / 2, cy: dy + dh / 2, angle: 0,
              conv: { tw: dw / W, tx: 0.5, ty: 0.5 } };
   }
-  // (phase V33.2) A clip that FOLLOWS its faces: where its window is at this second of its file (public/js/framing/path.js,
+  // A clip that FOLLOWS its faces: where its window is at this second of its file (public/js/framing/path.js,
   // the render's own answer - lib/mv3b-render.js framedChain).
   if (isFramed(c.frame) && windowW(sw, sh, W / H) < 0.999 && Number.isFinite(tFile)) {
     const win = windowAt(c.frame, tFile, sw, sh, W / H);
     const conv = { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 };
     const base = { dx: 0, dy: 0, dw: W, dh: H, cx: W / 2, cy: H / 2, angle: 0, conv };
     if (win.kind === 'whole') {
-      // The whole frame by its width over a blurred copy of itself, covering ((х7) Б) - drawn as the render draws it.
-      // (phase V33.8, (ф1)) A documentary's shows the middle `w` of the width (3:2 of a 16:9 film), the full height - the
-      // render's crop by framing/path.js wholeW (lib/mv3b-render.js framedChain); 1 - the whole frame, as before.
+      // The whole frame by its width over a blurred copy of itself, covering - drawn as the render draws it.
+      // A documentary's shows the middle `w` of the width (3:2 of a 16:9 film), the full height - the
+      // render's crop by framing/path.js wholeW (lib/mv3b-render.js framedChain); 1 - the whole frame.
       const s2 = Math.max(W / sw, H / sh);
       const bw = W / s2, bh = H / s2;
       const fw = sw * Math.max(0.05, Math.min(1, +win.w || 1));
@@ -419,7 +417,7 @@ function _place(sw, sh, c, tFile, raw) {
         { sx: (sw - fw) / 2, sy: 0, sw: fw, sh, dx: 0, dy: (H - fh) / 2, dw: W, dh: fh },
       ] };
     }
-    // (phase V69 P12b, (хп82)) camera + game: the camera's window on top, a third of the frame; the game's from the middle below.
+    // Camera + game: the camera's window on top, a third of the frame; the game's from the middle below.
     if (win.kind === 'cam') {
       const top = Math.round(H / 3);
       const cw = win.cw * sw, ch = win.ch * sh, gw = win.gw * sw;
@@ -439,7 +437,7 @@ function _place(sw, sh, c, tFile, raw) {
     }
     const fw = sh * (W / H);
     const sx = Math.max(0, Math.min(sw - fw, win.x * sw - fw / 2));
-    // (phase V43) fragmentation's punch-in: the window scaled by z about its point (ax, ay) - framing/path.js zoomAt, the
+    // Fragmentation's punch-in: the window scaled by z about its point (ax, ay) - framing/path.js zoomAt, the
     // render's exprZoom (lib/mv3b-render.js framedChain) - a smaller rectangle of the film drawn over the whole frame.
     const zm = zoomAt(c.frame, tFile);
     if (zm.z > 1.0005) {
@@ -460,19 +458,18 @@ function _place(sw, sh, c, tFile, raw) {
            conv: { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 } };
 }
 
-// ── A main clip as a picture in the picture (phase V49, point 3) ─────────────
-// The owner, 2026-10-25: "то что в превью уже порезалось я хочу зафиксировать это (например галочкой в инспекторе) и менять
-// просто размер этого видео в превью чтобы по бокам появились размытые края". A clip of the MAIN lane with `pip` on is drawn as
+// ── A main clip as a picture in the picture ─────────────────────────────────
+// A clip of the MAIN lane with `pip` on is drawn as
 // the picture the frame shows of it - a filled clip's frame (its crop with its Keep side, or its window following the faces,
-// which keeps moving and punching in inside the PiP, (пр10)), a fitted clip's whole picture - in a box of that shape, by
+// which keeps moving and punching in inside the PiP), a fitted clip's whole picture - in a box of that shape, by
 // default where and as big as it already is (nothing jumps), else at `tx`/`ty` (its middle) and `tw` (its width) like an
 // insert; turned by `angle`, its edges softened by `feather`, its corners rounded by `radius`, outlined by `outline` in
-// `outlineColor` ((пр11)) - over the same clip blurred across the whole frame. lib/mv3b-render.js draws it by the same rule:
+// `outlineColor` - over the same clip blurred across the whole frame. lib/mv3b-render.js draws it by the same rule:
 // the frame's picture -> the box -> corners, outline and soft edge -> the turn -> over the blurred copy.
 const PIP_OUTLINE = '#ffffff';
 const _pipNum = (v, lo, hi) => { const n = +v; return Number.isFinite(n) && n > 0 ? Math.max(lo, Math.min(hi, n)) : 0; };
 
-// (phase V51, point 1) A CROPPED clip is a PiP of its piece: the box takes the piece's shape, its natural size is the piece
+// A CROPPED clip is a PiP of its piece: the box takes the piece's shape, its natural size is the piece
 // fitted to the frame, and what is drawn into it is that rectangle of the file (`src`) - no Fit / Fill, no framing. A cropped
 // clip off main's PiP (a lane above) is drawn by the same rule with no blur behind it (_show).
 function _pipRect(sw, sh, c, tFile) {
@@ -533,7 +530,7 @@ function _pipMasks(cw, ch, fr, rr, tpx, col) {
   return { mask: _maskCv, ring: _ringCv };
 }
 
-// ── A clip's colour correction (phase V75, the owner's (кп5)) ──────────────────
+// ── A clip's colour correction ──────────────────────────────────────────────
 // overlay/color.js's numbers as an SVG filter in the page, made once per set of values (a slider held makes a few dozen:
 // the oldest go past 64), and named in the canvas's filter for every draw of the clip's FILE while the clip is drawn
 // (`_cc`, set by _show) - before a blur, as the render corrects the clip's input before anything else. Its outline and the
@@ -584,13 +581,13 @@ function _ccDraw(g, fn) {
 }
 
 let _pipCv = null;
-// `bg` - the blur behind it: a PiP of main has it, a cropped clip of a lane above has none ((пр42)).
+// `bg` - the blur behind it: a PiP of main has it, a cropped clip of a lane above has none.
 function _drawPip(el, r, sw, sh, bg = true) {
   // Behind it the same clip, covering the frame and blurred - as framing's "whole" draws its background (the render's
   // boxblur at a quarter of the size, lib/mv3b-render.js).
   // Drawn a blur's width past the frame and cut at its edge: a canvas blur pulls the transparency outside in, and the edges
-  // of the frame came out darker than the render's.
-  // (phase V51, (пр41а)) A cropped one's blur is made of its piece (framing/crop.js BLUR_FROM_PIECE).
+  // of the frame would come out darker than the render's.
+  // A cropped one's blur is made of its piece (framing/crop.js BLUR_FROM_PIECE).
   if (bg) {
     const f = BLUR_FROM_PIECE && r.src ? r.src : { sx: 0, sy: 0, sw, sh };
     const s2 = Math.max(W / f.sw, H / f.sh);
@@ -720,7 +717,7 @@ function _srcTime(c, at, elDur) {
 // The picture itself onto the canvas, turned and softened if it was placed that way. The common
 // case - a full-frame clip with nothing set - is one drawImage and no state to save and restore.
 function _draw(el, r) {
-  // (phase V33.2) A framed clip drawn in more than one piece: the whole frame over its blur, two bands.
+  // A framed clip drawn in more than one piece: the whole frame over its blur, two bands.
   if (r.parts) {
     for (const p of r.parts) {
       if (p.blur) {
@@ -743,7 +740,7 @@ function _draw(el, r) {
   _ctx.save();
   _ctx.translate(r.cx, r.cy);
   if (r.angle) _ctx.rotate(r.angle * Math.PI / 180);
-  // (phase V75) The softened copy is the file's colours under its mask: the correction applies to it as to the file.
+  // The softened copy is the file's colours under its mask: the correction applies to it as to the file.
   _ctx.filter = _withCc(_ctx.filter);
   try {
     if (src) _ctx.drawImage(src, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
@@ -752,9 +749,9 @@ function _draw(el, r) {
   _ctx.restore();
 }
 
-// (phase V73 block 0) The words the stage draws for itself - a note, a picture's size, a half's caption or what it waits
-// for - are in the INTERFACE's font, the page's --font (css/app-shell.css), asked for once. They named "Inter", and "Inter"
-// on these pages is the bold caption file of css/caption-fonts.css - the stage spoke in a caption's face.
+// The words the stage draws for itself - a note, a picture's size, a half's caption or what it waits
+// for - are in the INTERFACE's font, the page's --font (css/app-shell.css), asked for once. Not "Inter": "Inter"
+// on these pages is the bold caption file of css/caption-fonts.css - the stage would speak in a caption's face.
 let _uiFontName = '';
 function _uiFont() {
   if (!_uiFontName) {
@@ -765,7 +762,7 @@ function _uiFont() {
 }
 
 // One clip onto the frame: a band, or a picture placed or fitted with its effects.
-// (phase V33.2) The second of the FILE on the screen: the element's own time when it is playing a frame (what is drawn,
+// The second of the FILE on the screen: the element's own time when it is playing a frame (what is drawn,
 // not where the clock wants it), the clock's otherwise (a poster); a reversed clip's copy runs the file backwards.
 function _fileTime(el, c) {
   const vid = !!(el && el.tagName === 'VIDEO');
@@ -777,10 +774,10 @@ function _fileTime(el, c) {
   return t;
 }
 
-// (phase V65, the owner's (пз5), (пз6)) A CLIP SEEN IN PART: drawn ALONE on a layer of the canvas's size - whatever it is,
+// A CLIP SEEN IN PART: drawn ALONE on a layer of the canvas's size - whatever it is,
 // a PiP over its blur, a crop, a band, a placed insert - and the layer laid on the frame at the clip's opacity. As the
 // render does it (lib/mv3b-render.js): the clip's picture whole, its alpha scaled last. A clip fully seen is drawn straight.
-// (phase V65, (пз7), (пз10)) A clip of a lane ABOVE main laid by its blend mode too - the canvas's (overlay/look.js BLENDS);
+// A clip of a lane ABOVE main laid by its blend mode too - the canvas's (overlay/look.js BLENDS);
 // held on hover in the inspector's list (place-b.js liveOf), so the frame shows the mode before it is chosen.
 let _layerCv = null;
 function _showAs(el, sw, sh, c, main) {
@@ -789,7 +786,7 @@ function _showAs(el, sw, sh, c, main) {
   const op = opacityOf(look);
   const mode = main ? null : blendOf(look);
   const mixed = !!(mode && mode.id !== 'none');
-  // (phase V84) ITS EFFECTS run now: the clip drawn alone on the layer, the effects applied to the layer (fx-draw.js, the render's
+  // ITS EFFECTS run now: the clip drawn alone on the layer, the effects applied to the layer (fx-draw.js, the render's
   // steps - lib/fx-render.js), then laid at its opacity and blend mode. Never on a band (the render's rule too).
   const fxp = (c.halfer || c.layer) ? null : fxParamsAt(look, _at, W, H, main);
   const fxOn = !!fxp && !fxPlain(fxp);
@@ -817,7 +814,7 @@ function _showAs(el, sw, sh, c, main) {
   _ctx.restore();
 }
 
-// (phase V65, block 5, (пз8), (пз14)-(пз17); phase V74 - a layer of main video, overlay/pattern.js layersOf) A PATTERN: its
+// A PATTERN - a layer of main video (overlay/pattern.js layersOf): its
 // file - a seamless tile - repeated over the whole frame by overlay/pattern.js's rule: a tile corner at the frame's middle, the
 // tiles sized (tileSize), turned about the middle (angleAt) and slid (driftAt) at the layer's own second - the timeline's; its
 // white made its colour (the file's transparency kept). The tile is drawn once per colour and size (_patTile) and laid as a
@@ -857,9 +854,9 @@ function _drawPattern(el, sw, c) {
 }
 
 function _show(el, sw, sh, c, main) {
-  // (phase V74) A pattern of main video is no picture placed: its tiles cover the frame.
+  // A pattern of main video is not a placed picture: its tiles cover the frame.
   if (c.layer) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
-  // (phase V75) Its colour correction, the slider's while one is held (place-b.js liveOf), for every draw of its file.
+  // Its colour correction, the slider's while one is held (place-b.js liveOf), for every draw of its file.
   const lv = liveOf(c.id);
   _cc = _ccFilter(lv ? Object.assign({}, c, lv) : c);
   try { _showClip(el, sw, sh, c, main); } finally { _cc = ''; }
@@ -867,8 +864,8 @@ function _show(el, sw, sh, c, main) {
 function _showClip(el, sw, sh, c, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
-  // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.
-  // (phase V51) What a crop gesture holds counts here too (crop-box.js puts it in place-b.js's live patches).
+  // A main clip with PiP on: the picture the frame shows, in its own box.
+  // What a crop gesture holds counts here too (crop-box.js puts it in place-b.js's live patches).
   const lv = liveOf(c.id);
   const lc = lv ? Object.assign({}, c, lv) : c;
   if (main && lc.pip) {
@@ -877,7 +874,7 @@ function _showClip(el, sw, sh, c, main) {
     _drawPip(el, r, sw, sh);
     return;
   }
-  // (phase V51, point 1, (пр42)) A CROPPED clip anywhere else: its piece in its box over the lanes under it - the PiP's own
+  // A CROPPED clip anywhere else: its piece in its box over the lanes under it - the PiP's own
   // rule (corners, outline, soft edge, the turn), with no blur behind it.
   if (cropActive(lc)) {
     const r = _pipRect(sw, sh, c, tFile);
@@ -887,13 +884,13 @@ function _showClip(el, sw, sh, c, main) {
     return;
   }
   const r = _place(sw, sh, c, tFile);
-  // (phase V49) A main clip is moved and sized only as a PiP (its switch in the inspector): picked, it has no grips.
+  // A main clip is moved and sized only as a PiP (its switch in the inspector): picked, it has no grips.
   if (main && !isPlaced(c)) r.nogrip = true;
   _rects.set(c.id, r);
   _draw(el, r);
 }
 
-// ── What a clip shows of its file, for the crop (phase V51, point 1) ────────
+// ── What a clip shows of its file, for the crop ─────────────────────────────
 // The crop's scissors (framing/crop.js placeFor) need to know which rectangle of the FILE a clip draws (`view`, shares of the
 // file) into which box of the frame (`box`, frame pixels, turned by `angle`) - read off the very rectangle the preview draws
 // by (_place, _pipRect). Most clips draw one; a framed clip's whole frame over its blur or two bands draw two.
@@ -925,7 +922,7 @@ export function fileTimeAt(c, t) {
 }
 
 /**
- * (phase V51) What clip `c` shows of its file at the timeline's moment `t` and where, by the preview's own rules: { W, H, maps }
+ * What clip `c` shows of its file at the timeline's moment `t` and where, by the preview's own rules: { W, H, maps }
  * (framing/crop.js pickMap / placeFor). `main` - it is on main video (a PiP there). `sw`, `sh` - its file's size or shape.
  * Read with no gesture held (a live patch would be read into it).
  */
@@ -938,7 +935,7 @@ export function mapsOf(c, main, sw, sh, t) {
 }
 
 /**
- * (phase V75 fix) The SIZE of a clip's file from any element the preview holds for it - ready to draw or not (one being sought,
+ * The SIZE of a clip's file from any element the preview holds for it - ready to draw or not (one being sought,
  * another quality, a slot): its size is known once its metadata is. Null when none knows it.
  */
 export function mediaDims(c) {
@@ -953,20 +950,20 @@ export function mediaDims(c) {
   return null;
 }
 
-/** (phase V51) The address a clip's picture is played from - its preview copy (forwards), or the picture itself. */
+/** The address a clip's picture is played from - its preview copy (forwards), or the picture itself. */
 export const frameSrc = (c) => _srcFor(c.src, false);
 
 function _paint() {
   return _paintFrame();
 }
-// (phase V84 block 4c) A card's font just loaded: the frame standing still is painted again in it (playing, the next frame is).
+// A card's font just loaded: the frame standing still is painted again in it (playing, the next frame is).
 fxOnFontLoaded(() => { try { if (!_playing && _on && _ctx && !_shooting) _paint(); } catch (e) { /* not ready */ } });
 
 function _paintFrame() {
   if (!_ctx) return 0;
   // Lent to the workshop: the stage shows what the step is doing, and at this point in a
   // talking-head project the timeline is usually empty anyway - a black frame is the honest
-  // picture of it (docs/local-app/PLAN.md, "Мастерская talking head").
+  // picture of it.
   if (_borrowed) {
     // No clip is drawn, so none is under the pointer: the gesture layer (js/merge-v3/place-b.js)
     // must not find the timeline's last rectangles under a press on the stage's halves.
@@ -997,9 +994,9 @@ function _paintFrame() {
 
   const tl = Store.timeline();
   const alive = new Set();        // the elements kept (the rest are let go of)
-  const shown = new Set();        // (phase V44) the elements on screen this frame
+  const shown = new Set();        // the elements on screen this frame
   _liveVideo = [];
-  // (phase V49) The bottom layer is main video - a clip of it may be a PiP (_show).
+  // The bottom layer is main video - a clip of it may be a PiP (_show).
   const lanes = _layers(tl);
   const mainId = lanes.length ? lanes[0].id : null;
   for (const { c, main } of lanes.flatMap(track => _clipsAt(track, _at).map(c => ({ c, main: track.id === mainId })))) {
@@ -1007,8 +1004,8 @@ function _paintFrame() {
     const still = isStill({ src: c.src });
     alive.add(_keyOf(c));
     shown.add(_keyOf(c));
-    // (phase V44) Its twins too, while the file is on screen: a piece longer than LOOK would otherwise let them go, and the
-    // next piece would open the file again from nothing. (V49) As many as its clips use.
+    // Its twins too, while the file is on screen: a piece longer than LOOK would otherwise let them go, and the
+    // next piece would open the file again from nothing. As many as its clips use.
     for (let k = 0, n = _slotCount('video', c); k < n; k++) alive.add(_key(c.src, _rev(c)) + _slotKey(k));
     const el = _el(c.src, _rev(c), _slotOf(c));
 
@@ -1022,7 +1019,7 @@ function _paintFrame() {
       if (el.__fresh === undefined) el.__fresh = true;
       const busy = !el.__fresh && (el.seeking || el.readyState < 2);
       _liveVideo.push(el);
-      // (phase V33.4) Held at the start of playing: placed exactly and kept still, as when paused (play(), below).
+      // Held at the start of playing: placed exactly and kept still, as when paused (play(), below).
       if (_playing && !_holding) {
         // LET IT PLAY. Setting currentTime every frame is scrubbing, not playing: the decoder
         // starts over on each seek and the picture crawls while the clock runs on - which is
@@ -1031,7 +1028,7 @@ function _paintFrame() {
         // it never gets the chance to do.
         el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
         if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
-        // (phase V44) A new piece for this element: put right at once (_jumpOf); after that, only a real drift.
+        // A new piece for this element: put right at once (_jumpOf); after that, only a real drift.
         const jump = _jumpOf(el, c);
         if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (jump ? JUMP : 0.35))) {
           try { el.currentTime = Math.max(0, want); } catch (e) {}
@@ -1047,7 +1044,7 @@ function _paintFrame() {
         }
       }
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
-      if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens (V23)
+      if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens
         const pic = _shooting ? null : _posterOf(c);
         if (pic) _showAs(pic, pic.naturalWidth, pic.naturalHeight, c, main);
         continue;
@@ -1058,7 +1055,7 @@ function _paintFrame() {
       _showAs(el, el.naturalWidth, el.naturalHeight, c, main);
     }
   }
-  // (phase V74, the owner's (пт1)-(пт3)) THE PATTERNS OF MAIN VIDEO - over every video lane, under the words: the bottom layer
+  // THE PATTERNS OF MAIN VIDEO - over every video lane, under the words: the bottom layer
   // first, each over the whole of main video, its own seconds the timeline's (overlay/pattern.js layersOf), its opacity and
   // blend mode as a clip's above main (_showAs). The render lays them so (lib/mv3b-render.js).
   for (const p of PAT.layersOf(tl)) {
@@ -1069,12 +1066,12 @@ function _paintFrame() {
     if (!el.naturalWidth) { missing++; continue; }
     _showAs(el, el.naturalWidth, el.naturalHeight, p, false);
   }
-  // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
+  // The next pieces of every lane made ready while this one plays - each one's element waits on its first
   // frame, the nearest piece first; an element on screen, or waiting for a nearer piece, is left alone.
-  // (phase V49) From the moment Play is pressed, held or not: a piece starting within SOON of the playhead is waited for
-  // by the hold like the clips under it (_soonVideo) - pressed 0.16 s before a run of short pieces, their elements began
-  // to seek only once the clock ran, and a cold file's seek (0.5-1 s, measured: 0.95 s for the Kids fragment's 68 MB film)
-  // left them silent and sought again.
+  // From the moment Play is pressed, held or not: a piece starting within SOON of the playhead is waited for
+  // by the hold like the clips under it (_soonVideo) - pressed just before a run of short pieces, their elements would
+  // begin to seek only once the clock ran, and a cold file's seek (0.5-1 s, measured on a 68 MB film) would
+  // leave them silent and seek again.
   _soonVideo = [];
   if (_playing && !_shooting) {
     const claimed = new Set(shown);
@@ -1092,8 +1089,8 @@ function _paintFrame() {
     }
   }
   // OVER EVERY LAYER, like the render burns them. Drawn by libass on its own canvas over the frame
-  // (captions/layer.js, K4); the painter is the stand-in while that is not up. A screenshot is saved
-  // without them and stays so (phase V77, (тч13): the picture alone - a frame for the library or a chat).
+  // (captions/layer.js); the painter is the stand-in while that is not up. A screenshot is saved
+  // without them and stays so (the picture alone - a frame for the library or a chat).
   // A caption being moved is drawn where the pointer has it (cap-place.js) - the layer is handed it there.
   if (_shooting) { /* no words on a frame */ }
   else if (CapLayer.ready()) CapLayer.render(_at);
@@ -1204,15 +1201,15 @@ function _repaint() {
   _paint();
   // NOT while playing. This cancels the frame it is about to replace, and during playback the
   // frame it would cancel is the tick that drives the clock - so any store change while
-  // playing killed playback outright. A debounced save landing half a second after a clip is
-  // dropped is exactly such a change, which made it look as though play did nothing at all.
+  // playing would kill playback outright - and a debounced save landing half a second after a clip is
+  // dropped is exactly such a change.
   if (_playing) return;
   cancelAnimationFrame(_raf);
   _raf = requestAnimationFrame(() => { if (_on && !_playing) _paint(); });
 }
 
 /**
- * Put the preview at `t`. `opts.exact` (K10b, a word picked in the caption's words): the sound and the
+ * Put the preview at `t`. `opts.exact` (a word picked in the caption's words): the sound and the
  * picture land exactly there - the ordinary tolerance (a quarter second for the sound) is wider than a word,
  * so a word picked after its neighbour played from the neighbour. Every element seeks once, as a new one does.
  */
@@ -1247,16 +1244,16 @@ function _clock() {
 let _playing = false;
 let _t0 = 0, _at0 = 0;
 let _audio = new Map();      // src -> HTMLAudioElement, one per source
-// THE CLOCK WAITS FOR THE SOUND AT THE START (phase V33.4, the owner 2026-10-21: "первые секунд пять идут без звука, но
-// картинка есть"). Pressed Play, the films and sounds under the playhead are first put in place and HELD still; the clock
-// starts when every one of them can play from there (or after HOLD_MS, whatever is ready). Starting at once left a big file
-// (a 4K piece) behind the clock by the time it could play; each correction landed behind again and the sound stayed silent.
+// THE CLOCK WAITS FOR THE SOUND AT THE START: pressed Play, the films and sounds under the playhead are first put in place
+// and HELD still; the clock starts when every one of them can play from there (or after HOLD_MS, whatever is ready).
+// Starting at once would leave a big file (a 4K piece) behind the clock by the time it could play; each correction would
+// land behind again and the sound would stay silent for the first seconds.
 let _holding = false;
 let _holdT = 0;
 const HOLD_MS = 3000;
 let _liveVideo = [];         // the films the last paint put under the playhead
 let _liveAudio = [];         // the sounds the last sync put under it
-let _soonVideo = [];         // (V49) held at Play: the films of pieces starting within SOON, being put in place
+let _soonVideo = [];         // held at Play: the films of pieces starting within SOON, being put in place
 let _soonAudio = [];         // ...and the sounds
 
 // Every audible sound at this moment. A clip at volume 0 is SKIPPED - that is what a muted
@@ -1270,7 +1267,7 @@ function _sounds(tl, t) {
   for (const tr of tl.tracks) {
     if (tr.kind !== 'audio') continue;
     for (const c of (tr.clips || [])) {
-      // (phase V54) A level shift held in the inspector is heard before it is written (timeline-b.js setLiveVolumes).
+      // A level shift held in the inspector is heard before it is written (timeline-b.js setLiveVolumes).
       const v = gainOf(tr, c, liveVolumeOf(c.id));
       if (!(v > 0)) continue;
       const s = +c.start, e = s + (+c.dur);
@@ -1287,13 +1284,13 @@ function _sounds(tl, t) {
   return out;
 }
 
-// ── A SOUND THAT DOES NOT SEEK EXACTLY IS PLAYED FROM ITS DECODED SAMPLES (phase V49) ──────────
-// Measured in the Electron window (V49 block 0): an mp3 of variable bitrate - every Suno track - lands after a seek up to 0.9 s
+// ── A SOUND THAT DOES NOT SEEK EXACTLY IS PLAYED FROM ITS DECODED SAMPLES ───
+// Measured in the Electron window: an mp3 of variable bitrate - every Suno track - lands after a seek up to 0.9 s
 // away from where the element's currentTime says it is (seeks to 6 / 30 / 70 / 120 s of the two variants of one generation:
 // +0.39 +0.89 -0.07 +0.42 and +0.53 +0.51 -0.83 -0.32 s; Chromium seeks it by the file's rough table of contents and does not
 // know it missed). The render's ffmpeg lands exactly (0.000 s at the same moments). So a track started anywhere but its own
-// start played somewhere else than the film will, two tracks laid in step sounded apart by up to 0.76 s - "помехи" over an
-// overlap - and a track cut into pieces jumped at every seam. Such a file is decoded once here into a WAV in memory (sample
+// start would play somewhere else than the film will, two tracks laid in step would sound apart by up to 0.76 s - noise over an
+// overlap - and a track cut into pieces would jump at every seam. Such a file is decoded once here into a WAV in memory (sample
 // for sample the file, at 48 kHz) and the element plays that; a WAV seeks to the sample. Until it is ready the element plays
 // the file itself; it changes over the next time it is still (paused, waiting for its piece, held at Play - the hold waits
 // for it, _pcmWaits). A file longer than PCM_MAX_S, or one that cannot be decoded, stays as it is.
@@ -1367,10 +1364,10 @@ function _pcmSwap(el) {
 }
 // Held at Play, the clock waits for a sound whose decoded copy is still being made (at most HOLD_MS, as for the rest; a
 // Suno track of two and a half minutes takes ~0.3 s). Playing on, a track is decoded when its clip is LOOK away.
-// (phase V76) ...and for a sound's copy at its pitch, as long (a line's is made in under a second).
+// ...and for a sound's copy at its pitch, as long (a line's is made in under a second).
 const _pcmWaits = (el) => { const p = el.__orig ? _pcm.get(el.__orig) : null; return !!(p && !p.done) || !!(el.__pitch && !el.__pitch.done); };
 
-// ── A sound at another pitch (phase V76, the owner's (тн7) а) ──
+// ── A sound at another pitch ────────────────────────────────────────────────
 // The server makes its file's copy at that pitch once (GET /api/pitch-copy - lib/pitch-copy.js; `rev` from the sound played
 // backwards, for a reversed film); until it is there the clip is heard as it was, and the element changes over to the copy by
 // itself - even while it plays, put in place again as a new element is. One that could not be made is asked again later.
@@ -1422,18 +1419,18 @@ function _aud(c) {
   if (_audio.has(key)) { const was = _audio.get(key); if (!_pitchSwap(was)) _pcmSwap(was); return was; }
   const el = new Audio();
   el.preload = 'auto';
-  // (phase V76) A sound at another pitch: its copy once the server has made it, the file as it is until then.
+  // A sound at another pitch: its copy once the server has made it, the file as it is until then.
   const pp = _pitchOf(c);
   el.__pitch = pp;
-  // (V49) The decoded copy when the file does not seek exactly (above), once it is made.
+  // The decoded copy when the file does not seek exactly (above), once it is made.
   const pc = (rev || (pp && pp.url)) ? null : _pcmOf(c.src);
   el.__orig = rev ? '' : c.src;
   el.src = rev ? _srcFor(c.src, true) : (pc && pc.url ? pc.url : c.src);
   if (pp && pp.url) _pitchSwap(el);
-  // HOW LONG THIS FILE TAKES TO PLAY AGAIN after a seek made while playing (phase V33.4, the owner 2026-10-21: "первые
-  // секунд пять идут без звука, но картинка есть"): from the seek to sound, a half-and-half running average. A big file
-  // read cold (a 4K piece of a highlights fragment, 17 Mbit/s) took 0.4-0.6 s a seek - more than the drift allowed - so the
-  // sound landed behind the clock, sought again, and again, and stayed silent for seconds. _syncAudio aims that far ahead.
+  // HOW LONG THIS FILE TAKES TO PLAY AGAIN after a seek made while playing: from the seek to sound, a half-and-half
+  // running average. A big file read cold (a 4K piece of a highlights fragment, 17 Mbit/s) takes 0.4-0.6 s a seek - more
+  // than the drift allows - so the sound would land behind the clock, seek again, and again, and stay silent for seconds.
+  // _syncAudio aims that far ahead.
   const landed = () => {
     if (!el.__seekAt || el.paused) return;
     const took = (performance.now() - el.__seekAt) / 1000;
@@ -1454,7 +1451,7 @@ function _syncAudio() {
     if (alive.has(key)) continue;
     try { el.pause(); } catch (e) {}
   }
-  // Sounding: playing and not held at the start (phase V33.4). Held, a sound is put in place exactly and kept still.
+  // Sounding: playing and not held at the start. Held, a sound is put in place exactly and kept still.
   const run = _playing && !_holding;
   _liveAudio = [];
   for (const { c, gain } of live) {
@@ -1470,12 +1467,12 @@ function _syncAudio() {
     // The same busy rule as the picture: no correction while a load is in progress.
     if (el.__fresh === undefined) el.__fresh = true;
     const busy = !el.__fresh && (el.seeking || el.readyState < 2);
-    // (phase V44) A new piece for this element is put right at once, as the picture's is (_jumpOf).
+    // A new piece for this element is put right at once, as the picture's is (_jumpOf).
     const jump = run && _jumpOf(el, c);
     if (!run) el.__live = c.id;
     if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (_holding ? 0.08 : jump ? JUMP : 0.25))) {
       // While sounding, a correction is aimed where the clock will be when the file plays again - its own measured seek
-      // time (above), at most 2 s - not where the clock is now, or a slow file lands behind every time (phase V33.4).
+      // time (above), at most 2 s - not where the clock is now, or a slow file lands behind every time.
       const lead = (run && !el.__fresh) ? Math.min(2, el.__cost || 0) * el.playbackRate : 0;
       try { el.currentTime = Math.max(0, want + lead); } catch (e) {}
       if (run) el.__seekAt = performance.now();
@@ -1485,8 +1482,8 @@ function _syncAudio() {
     if (run && el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
     if (!run && !el.paused) el.pause();
   }
-  // (phase V44) The next pieces of every lane made ready while this one sounds: each one's element waits paused on its
-  // first moment, the nearest first; one sounding, or waiting for a nearer piece, is left alone. (V49) Held at Play too,
+  // The next pieces of every lane made ready while this one sounds: each one's element waits paused on its
+  // first moment, the nearest first; one sounding, or waiting for a nearer piece, is left alone. Held at Play too,
   // and a piece starting within SOON is waited for (_soonAudio, as the picture's).
   _soonAudio = [];
   if (_playing) {
@@ -1509,7 +1506,7 @@ function _syncAudio() {
 // Every film and sound under the playhead can play from where it stands: the clock may start (play(), _tick).
 // One that cannot load at all (its file gone - red on the timeline) is not waited for.
 const _canRun = (el, rs) => !!el.error || el.networkState === 3 || (!el.seeking && el.readyState >= rs);
-// (V49) A piece about to start is ready once it waits on its first moment: sought there and not seeking. A sound whose
+// A piece about to start is ready once it waits on its first moment: sought there and not seeking. A sound whose
 // decoded copy is being made is waited for too (_pcmWaits).
 const _readyToRun = () => _liveAudio.every((el) => _canRun(el, 3) && !_pcmWaits(el)) && _liveVideo.every((el) => _canRun(el, 2))
   && _soonAudio.every((el) => _canRun(el, 2) && !_pcmWaits(el)) && _soonVideo.every((el) => _canRun(el, 2));
@@ -1517,7 +1514,7 @@ const _readyToRun = () => _liveAudio.every((el) => _canRun(el, 3) && !_pcmWaits(
 function _tick() {
   if (!_playing) return;
   const now = performance.now();
-  // (phase V33.4) Held at the start: the clock stands where Play was pressed while the films and sounds are put in place;
+  // Held at the start: the clock stands where Play was pressed while the films and sounds are put in place;
   // it starts the moment they can all play - or after HOLD_MS with what is ready.
   if (_holding) {
     _t0 = now; _at0 = _at;
@@ -1535,13 +1532,12 @@ function _tick() {
   _at = Math.max(0, _at0 + (now - _t0) / 1000);
   const end = duration();
   if (_at >= end) { _at = end; pause(); _paint(); _clock(); setPlayhead(_at); _stretch = null; return; }
-  // (phase V84, the owner's (эф7)) A stretch played once - an effect just added: at its end the playhead goes back to its start.
+  // A stretch played once - an effect just added: at its end the playhead goes back to its start.
   if (_stretch && _at >= _stretch.b) { const back = _stretch.back; _stretch = null; pause(); seek(back); return; }
   _paint();
   _clock();
-  // The line on the timeline is the same moment as the picture. It followed a click on the
-  // ruler and nothing else, so during playback it sat still while the video moved - two
-  // readings of one thing, disagreeing.
+  // The line on the timeline is the same moment as the picture, during playback too: two readings of one thing
+  // must never disagree.
   setPlayhead(_at);
   _syncAudio();
   _raf = requestAnimationFrame(_tick);
@@ -1560,8 +1556,8 @@ export function borrow(on) {
   _borrowed = want;
   if (!_borrowed) {
     _still = null; _pair = null; _crop = null; _filmStop(); _firstStep(false);
-    // The buttons the borrower laid over the stage go with the loan (phase V24: a talking head's
-    // crosses stayed over the next project's empty preview).
+    // The buttons the borrower laid over the stage go with the loan (a talking head's
+    // crosses would stay over the next project's empty preview).
     const stage = document.getElementById(STAGE);
     if (stage) stage.querySelectorAll('.mv3-stage-ctl').forEach(x => x.remove());
   }
@@ -1576,9 +1572,9 @@ export function borrow(on) {
   if (_film) _film.box = null;
   // The stage stops being a 9:16 window and becomes the whole panel: nothing here is a frame
   // of the film, and a reference being judged should use the room there is.
-  // (the owner's (эф21), 2026-11-11: a voiceover opened had its picture past the TikTok / Reels / Shorts screens until Fit / Fill
-  // was switched) Given BACK, the stage is the film's frame with its margin again at once (_resize): _fit left the panel's size
-  // with no margin, and only the next edit of the timeline put the frame back.
+  // Given BACK, the stage is the film's frame with its margin again at once (_resize): _fit leaves the panel's size
+  // with no margin, and only the next edit of the timeline would put the frame back (a voiceover opened would have its
+  // picture past the platforms' screens until then).
   CW = 0; CH = 0;
   _resize();
   if (_on) _paint();
@@ -1618,7 +1614,7 @@ function _wireZoom(cv) {
   // through the shift and the zoom - and the half is read off where it lands there, so a reference
   // pushed up close opens what is under the pointer and not what is under the panel's middle.
   const pick = (e) => {
-    // A film on the stage is played and paused by pressing it (X4).
+    // A film on the stage is played and paused by pressing it.
     if (_borrowed && _film && e.type === 'click') { filmPlay(); return; }
     if (!_borrowed || !_pair || !_pair.onPick) return;
     e.preventDefault();
@@ -1651,8 +1647,8 @@ function _fit() {
   // A PICTURE keeps where it was pushed: the view moves with half the change, so what was in
   // the middle stays in the middle. THE PAIR does not - its two halves are measured against the
   // surface, while the dashed frames and the words are drawn from the surface as it is NOW, so a
-  // view left over from the old size slid them off the stage as the sash moved (the owner,
-  // 2026-09-22). It re-centres instead: nothing about a pair is worth keeping across a resize.
+  // view left over from the old size would slide them off the stage as the sash moves. It re-centres
+  // instead: nothing about a pair is worth keeping across a resize.
   if (CW && CH && _pair) { _view = { z: 1, x: 0, y: 0 }; _pair.boxes = null; }
   else if (CW && CH && _still) {
     _view.x += (w - CW) / 2;
@@ -1709,9 +1705,9 @@ export function showStill(src, caption) {
   // to this one it would only push it off to the side.
   _view = { z: 1, x: 0, y: 0 };
   _pair = null;
-  _crop = null;                             // another picture is not the one being cropped (V9)
-  _filmStop();                              // ...and a picture is not a film (X4)
-  _firstStep(false);                        // ...nor the step that comes before both (P2)
+  _crop = null;                             // another picture is not the one being cropped
+  _filmStop();                              // ...and a picture is not a film
+  _firstStep(false);                        // ...nor the step that comes before both
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
@@ -1728,11 +1724,9 @@ export function showStill(src, caption) {
 let _still = null;
 let _pair = null;
 
-// ── A CLIP PLAYING ON THE STAGE (phase X4) ──────────────────────────────────
+// ── A CLIP PLAYING ON THE STAGE ─────────────────────────────────────────────
 // The third thing the borrowed stage can show, beside one picture and a pair of them: a film, with
-// its own sound. The fragment's clip used to open in a window over everything (the owner,
-// 2026-09-22: "clicking the clip should play it in the preview"), which meant leaving the panel to
-// watch four seconds of video.
+// its own sound - so watching four seconds of video needs no window over everything.
 //
 // It is NOT the timeline's transport - that belongs to the film being cut, and it stays down while
 // the workshop holds the stage. This is one video element, drawn on the canvas frame by frame,
@@ -1756,13 +1750,13 @@ function _filmTick() {
 }
 
 /**
- * Put a film on the borrowed stage. It does NOT start (phase Y2, the owner 2026-09-22): opening a
+ * Put a film on the borrowed stage. It does NOT start: opening a
  * fragment should show its clip, not play it at you. The first frame stands with a triangle on it,
  * and `filmPlay` - a press on the thumbnail, or on the stage itself - is what starts it.
  *
- * A PICTURE STANDS IN UNTIL THE VIDEO OPENS (Z5, the owner 2026-09-22): a video element has
+ * A PICTURE STANDS IN UNTIL THE VIDEO OPENS: a video element has
  * nothing to draw until it has decoded a frame, and on a real clip that is long enough for the
- * stage to look empty - which is exactly what "the preview does not show the clip" was. The
+ * stage to look empty. The
  * poster, or the frame the fragment opens on, is drawn in its place and goes the moment the film
  * itself has something.
  *
@@ -1843,7 +1837,7 @@ export function filmPlay(want) {
 // while it is stopped, nothing while it plays.
 function _drawFilm() {
   if (!_film) return;
-  // The film when it has a frame to give; the stand-in picture until then (Z5).
+  // The film when it has a frame to give; the stand-in picture until then.
   const v = _film.el;
   const from = v.videoWidth ? v : (_film.pic && _film.pic.naturalWidth ? _film.pic : null);
   if (from) {
@@ -1877,9 +1871,9 @@ function _drawFilm() {
   if (_film.caption) _caption(_film.caption, PAD + H, H);
 }
 
-// ── Cropping the picture on the stage (phase V9) ────────────────────────────
+// ── Cropping the picture on the stage ───────────────────────────────────────
 // A first frame is what a clip is MADE of, so reframing it - closer in, off to one side - is a
-// thing that belongs on the stage where the frame is being looked at (the owner, 2026-09-22). The
+// thing that belongs on the stage where the frame is being looked at. The
 // selection is kept in FRACTIONS of the picture, never in pixels of the canvas: the stage is
 // zoomed and pushed about, and a rectangle in screen numbers would slide off the thing it is about.
 // It is also locked to one ASPECT - the project's format - because a frame of another shape reaches
@@ -2122,7 +2116,7 @@ export function showPair(top, bottom, onPick) {
   _crop = null;
   _filmStop();
   const a = _halfSpec(top), b = _halfSpec(bottom);
-  // (phase V73 block 5, 5a, the owner's (б5-5) а) THE FIRST STEP IS "YOUR MOVE": the gold frame stays while who or where is
+  // THE FIRST STEP IS "YOUR MOVE": the gold frame stays while who or where is
   // still to choose; with both on the stage it goes, and the field that waits takes the gold.
   _firstStep(!a.src || !b.src);
   const want = a.src + '|' + b.src;
@@ -2150,13 +2144,13 @@ export function showPair(top, bottom, onPick) {
   if (_on) _paint();
 }
 
-// ── The stage as the FIRST STEP (P2, the owner 2026-09-22) ──────────────────
+// ── The stage as the FIRST STEP ─────────────────────────────────────────────
 // The casting - who and where - is where a talking head begins, and the stage says so: a gold
 // frame five pixels thick with the words sewn into its top line. It belongs to the PAIR and to
 // nothing else; a frame or a clip on the stage is work being judged, not a step to take. The
 // label is an element rather than something drawn on the canvas, because it sits ON the border,
 // which the canvas is inside.
-const STEP_WORDS = 'First step';   // (phase V73 block 5, (к17)) sentence case
+const STEP_WORDS = 'First step';   // sentence case
 function _firstStep(on) {
   const stage = document.getElementById(STAGE);
   if (!stage) return;
@@ -2204,7 +2198,7 @@ function _drawPair() {
     if (s.src) { if (s.caption) _caption(s.caption, top + hh, hh); return; }
     if (!s.empty) return;
     // Gold, like the frame around the stage and the fields across from it: this half is a thing
-    // to fill in, and the first one (P2).
+    // to fill in, and the first one.
     const inset = Math.round(Math.min(W, hh) * 0.06);
     _ctx.save();
     _ctx.setLineDash([8, 7]);
@@ -2262,7 +2256,7 @@ export function play() {
   if (!_on || _playing) return;
   if (_at >= duration()) _at = 0;
   _playing = true;
-  // Held until what is under the playhead can play (phase V33.4, _tick).
+  // Held until what is under the playhead can play (_tick).
   _holding = true;
   _holdT = performance.now();
   _t0 = performance.now();
@@ -2272,7 +2266,7 @@ export function play() {
   _raf = requestAnimationFrame(_tick);
 }
 
-// (phase V84, the owner's (эф7)) PLAYED ONCE: from `a` to `b` of the timeline, then the playhead stands at `back` - an effect just
+// PLAYED ONCE: from `a` to `b` of the timeline, then the playhead stands at `back` - an effect just
 // added is seen at once. Any other pause or press of Play lets the stretch go.
 let _stretch = null;
 export function playStretch(a, b, back) {
@@ -2296,8 +2290,7 @@ export function pause() {
 
 export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
 
-// (phase V84, the owner's (эф23), 2026-11-11 «пока выделен фрагмент, при нажатии пробела проигрывается в превью только выделенный
-// фрагмент») SPACE WITH CLIPS PICKED plays only their stretch - from the first one's start to the last one's end, every lane on it
+// SPACE WITH CLIPS PICKED plays only their stretch - from the first one's start to the last one's end, every lane on it
 // as the film has it - and stops at its end; the playhead then stands where it started, so Space plays the same piece again. It
 // starts at the playhead when the playhead is inside the stretch, else at its start. Playing, Space pauses. Nothing picked - the
 // whole timeline, as Play.
@@ -2312,12 +2305,12 @@ function _spaceToggle() {
   const from = _at >= a - 1e-4 && _at < b - 0.05 ? _at : a;
   playStretch(from, b, from);
 }
-/** Playing now - the timeline holds it still while its playhead is dragged (phase V41). */
+/** Playing now - the timeline holds it still while its playhead is dragged. */
 export const isPlaying = () => _playing;
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');
-  // (phase V73 block 5, 5c) Lucide's play / pause, 14 px as the timeline head's other icons (bar.js initBar)
+  // Lucide's play / pause, 14 px as the timeline head's other icons (bar.js initBar)
   if (b) { b.innerHTML = icon(_playing ? 'pause' : 'play', 14); b.title = _playing ? 'Pause (Space)' : 'Play (Space)'; }
 }
 
@@ -2329,7 +2322,7 @@ function _wireFormat() {
   if (!bar || document.getElementById('mv3-pvb-fmt')) return;
   const sel = document.createElement('select');
   sel.id = 'mv3-pvb-fmt';
-  // The shared field, as the quality picker beside it (phase V73 block 2); its size by id with it.
+  // The shared field, as the quality picker beside it; its size by id with it.
   sel.className = 'u-in is-s';
   sel.title = 'The shape of the finished video';
   for (const [k, v] of Object.entries(FORMATS)) {
@@ -2340,7 +2333,7 @@ function _wireFormat() {
   sel.value = _fmt();
   sel.addEventListener('change', () => {
     const next = FORMATS[sel.value] ? sel.value : '9:16';
-    // The heard captions are cut again for the new frame in the same step (K2): another width, another
+    // The heard captions are cut again for the new frame in the same step: another width, another
     // automatic size and words per page - eight words across a column is a paragraph in a shoe box.
     setFormat(next);
     _resize();
@@ -2369,7 +2362,7 @@ function _resize() {
   if (stage) {
     stage.style.aspectRatio = CW + ' / ' + CH;
     // The same shape as a number, for the rule that fits the stage into its field whole (merge-v3.css): a field
-    // narrower than the shape used to keep the stage's full height and squeeze the picture sideways.
+    // narrower than the shape would otherwise keep the stage's full height and squeeze the picture sideways.
     stage.style.setProperty('--mv3-ar', String(CW / CH));
   }
   // The captions' canvas covers the frame exactly - the margin is the editor's, not the film's. So does a platform's screen.
@@ -2441,7 +2434,7 @@ export function mount() {
 
 // The transport is shared hardware. The other preview stands down while this one holds the
 // stage (see its _mounted guard), so these listeners are added once and simply do nothing
-// when this module is not showing. Its four buttons are in the TIMELINE's header, right of split (phase V36, T3) - found
+// when this module is not showing. Its four buttons are in the TIMELINE's header, right of split - found
 // by their ids, wherever they are.
 let _wired = false;
 function _wireTransport() {
@@ -2465,8 +2458,7 @@ function _wireTransport() {
   });
 }
 
-// ANOTHER TIMELINE OPENED STARTS STILL, AT ITS START (phase V36, T1; the owner 2026-10-23: "при проигрывании одного хайлайта
-// я переключаюсь на другой и плейхед без остановки продолжает двигаться"): a project, a highlights fragment, the draft -
+// ANOTHER TIMELINE OPENED STARTS STILL, AT ITS START: a project, a highlights fragment, the draft -
 // whichever one the store now holds, playing stops and the playhead goes to 0; nothing plays until Play is pressed.
 let _shownKey;
 function _toStart() {

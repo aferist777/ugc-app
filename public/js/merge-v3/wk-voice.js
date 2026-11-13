@@ -1,6 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the voice of the character who speaks (docs/local-app/PLAN.md, "Setting & voice",
-   phase V2).
+   MERGE — the voice of the character who speaks.
 
    Two faces, and they are the same question one level apart:
 
@@ -12,19 +11,18 @@
 
    THE READS ARE SPOKEN FROM HERE (generate, readLine, readAll, saveText): the fragments pane shows
    the lines and their buttons, and this module is what those buttons call - a take is the voice's
-   business, whichever panel asks for it. ONE MODEL, ElevenLabs v3 with tags (decided with the owner
-   2026-09-21, docs/local-app/PLAN.md, phase W): a line is tagged by the mood of the video before it is
-   read, the words with their tags are what the take says, and a project read with v2 before that
-   keeps those reads until a line is read again.
+   business, whichever panel asks for it. ONE MODEL, ElevenLabs v3 with tags: a line is tagged by the
+   mood of the video before it is read, the words with their tags are what the take says, and a line
+   read without tags keeps that read until it is read again.
 
-   A VOICE BELONGS TO THE CHARACTER, not to this project (decided with the owner): changing the
+   A VOICE BELONGS TO THE CHARACTER, not to this project: changing the
    voice here is ADDING one to that character. `voices` is everything they have, `voice` is the
    one every read uses, and both are written through the door the Library's Characters shelf uses
    (PATCH /api/char-store/:id) - so a voice taken here is on that shelf the moment it
    is taken, and the two cannot disagree.
 
-   BEFORE THERE IS A CHARACTER the project may choose a voice of its own (the owner, 2026-09-21,
-   phase W2.5): `choose a voice` opens the same library, and the voice taken is written on the
+   BEFORE THERE IS A CHARACTER the project may choose a voice of its own: `choose a voice` opens
+   the same library, and the voice taken is written on the
    project (`voice.pick`, routes/scen3.js) - the reads use it until a character with a voice of
    their own is cast, and a character's voice wins the moment they are. A character without one
    reads in the project's pick too.
@@ -34,7 +32,7 @@
    the library already holds keeps the demo it has and costs nothing. Searching and listening to
    the owners' samples is free, which is why the search is free to be pressed as often as it takes.
    Nothing on this level goes into Alerts: a voice answers in seconds, and a row that is finished
-   before it can be read is noise (decided with the owner).
+   before it can be read is noise.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { el } from './wk-maker.js';
@@ -42,13 +40,13 @@ import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
 import * as Layers from '../layers.js';
 import * as GW from '../gen-window.js';
-// (phase V73 block 2, step 2b) Being read, nothing found - the shared parts (rows in the voice menu; the library window's list
+// Being read, nothing found - the shared parts (rows in the voice menu; the library window's list
 // in the big form, the same on Home's quick start).
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { icon } from '../icons.js';
 
-const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
+const PAGE = 20;                       // results per page
 
 let _filters = null;                   // the vocabularies, read once per page load
 let _res = null;                       // the last search: { voices, total, hasMore }
@@ -57,21 +55,21 @@ let _busy = '';                        // 'search' | 'take:<voice id>' | 'star' 
 let _said = '';                        // what the panel says under the bar
 let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
-// (phase V73 block 2, the owner's (2b-2) а) A read that failed is said - a popup with the reason, and in its place "did not
-// load" with Try again; what was shown stays (б2-19). The filters, the search and the saved voices.
+// A read that failed is said - a popup with the reason, and in its place "did not
+// load" with Try again; what was shown stays. The filters, the search and the saved voices.
 let _filtersFailed = false;
 let _searchFailed = false;
 let _shelfFailed = false;
-// English by default (phase V29, the owner 2026-10-14): every script is English, so is the voice that reads it.
+// English by default: every script is English, so is the voice that reads it.
 let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: 'en' };
 
-// The reads. "generate" hands the WHOLE script to the server and watches it (phase X2, readAll
+// The reads. "generate" hands the WHOLE script to the server and watches it (readAll
 // below); what is left here is the one-line read of a fragment's own button, which answers with the
 // take and so can be awaited.
 let _reading = [];                      // the lines being spoken now
 let _batch = null;                      // { done, total } while every stale line is being read
 let _tagging = false;                   // the tagger is marking the script up
-// WHEN THE WORK STARTED (phase N): the field it belongs to fills its bottom border as it goes, and
+// WHEN THE WORK STARTED: the field it belongs to fills its bottom border as it goes, and
 // the two things that cannot be counted - one agent call, one line spoken - are drawn from an
 // estimate that has to be measured from somewhere.
 let _tagAt = 0;
@@ -110,7 +108,7 @@ function _mark() {
   const on = !!(_audio && !_audio.paused) ? _playing : '';
   document.querySelectorAll('.mv3-wk-vplay:not(.is-read)').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
-    // (phase V73 block 4) the voices window's buttons draw the icons (play / pause) at 14 px; (block 5, 5d) setup's at 12
+    // the voices window's buttons draw the icons (play / pause) at 14 px; setup's at 12
     b.innerHTML = icon(is ? 'pause' : 'play', b.dataset.ico ? 14 : 12);
     b.classList.toggle('is-playing', !!is);
   });
@@ -134,9 +132,9 @@ const _sub = (v) => [v.descriptive, v.gender, v.age && String(v.age).replace(/_/
 
 const _saved = (rec) => (rec && Array.isArray(rec.voices) ? rec.voices : []);
 // What the character HAS, as the panel shows it: their list - and a `voice` the list does not hold
-// (6 of the owner's 48, set before the list existed) as itself, with no demo of ours. The server reads
+// as itself, with no demo of ours. The server reads
 // in it (routes/scen3.js, _castVoice), so the panel must not say they have none and paint the field
-// red (phase V24). Shown only: what is written back is the list as it is (_take).
+// red. Shown only: what is written back is the list as it is (_take).
 const _mine = (rec) => {
   const list = _saved(rec);
   const id = String((rec && rec.voice) || '');
@@ -153,17 +151,13 @@ const _active = (rec) => {
 // sub-level where voices are chosen. The dropdown is only for the ones already theirs - picking
 // a NEW one is a search, not a choice from a list. With nobody cast, or a character with no
 // voice of their own, the row is the project's own pick - or the way to one.
-// (phase V61, the owner 2026-10-30) ONE LINE in the field "mood & voice", and it never wraps: ▶, the voice - a long name ends
-// in an ellipsis - and `change` right of it. What used to stand under the name - whose voice this is - is said in a bubble
-// over the name when the pointer rests on it ((т4): "все пять - пояснения можно всплывашкой подсказкой показывать над тем, к
-// чему относится"), and the news of a voice just taken is not said at all. `o.notes` - where the notes go (the row's host
-// when not given): the field keeps its one line and puts them under it.
-// (phase V62, the owner after block 0: "пока голос не выбран, в первом поле mood и voice нужно показывать дропдаун с уже
-// сохраненными голосами, которые есть у нас. а те примеры которые мы записывали показывать в предпросмотре"; (во33) "первая строка
-// elevenlabs library"; (во34) "вверху списка показывать elevenlabs library, ниже голоса этого персонажа, и еще ниже сохраненные
-// голоса") THE VOICE IS A LIST, in a talking head and a voiceover alike: ▶ the voice that reads, and its name with ▾ - pressed,
-// the menu (_voiceMenu): "ElevenLabs library…" (the window of the search), the character's voices, the saved ones - each with ▶
-// our own demo, a press chooses it. It stays after a voice is chosen; "change" went into it.
+// ONE LINE in the field "mood & voice", and it never wraps: ▶ the voice that reads, and its name with ▾ - a long name ends
+// in an ellipsis. Whose voice this is is said in a bubble over the name when the pointer rests on it, and the news of a
+// voice just taken is not said at all. `o.notes` - where the notes go (the row's host when not given): the field keeps its
+// one line and puts them under it.
+// THE VOICE IS A LIST, in a talking head and a voiceover alike: the name pressed opens the menu (_voiceMenu): "ElevenLabs
+// library…" (the window of the search), the character's voices, the saved ones - each with ▶ our own demo, a press chooses
+// it. It stays after a voice is chosen.
 export function paintRow(host, api, o) {
   const rec = api.char();
   const pick = api.pick();
@@ -178,7 +172,7 @@ export function paintRow(host, api, o) {
   const btn = el('button', 'mv3-wk-vpickbtn u-btn is-s is-field' + (cur ? '' : ' is-need'));
   btn.type = 'button';
   btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
-  btn.appendChild(el('span', 'mv3-wk-vpickarrow')).innerHTML = icon('chevron-down', 12);   // (V73 block 5, 5d) Lucide's
+  btn.appendChild(el('span', 'mv3-wk-vpickarrow')).innerHTML = icon('chevron-down', 12);   // Lucide's
   btn.disabled = !!_busy;
   hint(btn, (now
     ? 'The voice ' + (rec.name || 'the character') + ' is read in.'
@@ -206,12 +200,12 @@ export const hasVoice = (rec) => !!_active(rec);
  *  (routes/scen3.js, _castVoice). */
 export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 
-// (phase V62, the owner's (во41) а) THE LIBRARY'S LANGUAGE, BY THE TEXT: the window's language filter starts at the language of
-// the script - a voiceover in Russian looks among Russian voices, a talking head (always English, V29) among English ones. Set
+// THE LIBRARY'S LANGUAGE, BY THE TEXT: the window's language filter starts at the language of
+// the script - a voiceover in Russian looks among Russian voices, a talking head (always English) among English ones. Set
 // when the window opens for another project than last time; a filter changed by hand stays for that project.
 let _langFor = '';
-/** (phase V62, (во41) а; one rule since V63 for the setup and Home's quick start) The library's language for a script: a talking
- *  head - English (V29); a voiceover by its text - Cyrillic Russian, plain English letters (or no text yet) English, else every
+/** The library's language for a script - one rule for the setup and Home's quick start: a talking
+ *  head - English; a voiceover by its text - Cyrillic Russian, plain English letters (or no text yet) English, else every
  *  language (''). */
 export function scriptLang(voiceover, text) {
   const t = String(text || '').replace(/\s+/g, ' ');
@@ -230,7 +224,7 @@ export function languageFor(key, lang) {
   _page = 1;
 }
 
-// ── THE VOICES' MENU (phase V62) ────────────────────────────────────────────
+// ── THE VOICES' MENU ────────────────────────────────────────────────────────
 // Under field 1's voice: "ElevenLabs library…" first, then the character's own voices (a talking head with somebody cast), then
 // every SAVED voice - the shelf of the voices taken before (lib/voice-shelf.js, the Library's Voices; read once, again after a
 // voice is taken) - each a row: ▶ our own demo, the name, its tags. A press on a row chooses it; ▶ only plays. A layer
@@ -380,7 +374,7 @@ async function _useSaved(api, it) {
   _repaint(api);
 }
 
-// (phase V62) In its window (openVoices, below) the window's own ✕ closes it - no bar of its own.
+// In its window (openVoices, below) the window's own ✕ closes it - no bar of its own.
 export function paintPicker(host, api) {
   const rec = api.char();
   if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl('reading the filters…')); return; }
@@ -445,8 +439,7 @@ export function paintPicker(host, api) {
   search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _search(api, 1); } });
   f.appendChild(search);
 
-  // (phase V62, the owner: "в попапе выбора голоса, нужно дать обозначения фильтров elevenlabs. названия фильров написать над
-  // дропдаунами") Each filter's name over its menu.
+  // Each filter's name over its menu.
   const NAMES = { gender: 'Gender', age: 'Age', descriptives: 'Style', use_cases: 'Use case', accent: 'Accent', language: 'Language' };
   const pick = (key, label, list) => {
     const cell = el('label', 'mv3-wk-vfcell');
@@ -474,7 +467,7 @@ export function paintPicker(host, api) {
   pick('accent', 'any accent', _filters.accents || []);
   pick('language', 'any language', _filters.languages || []);
   host.appendChild(f);
-  // (2b-2) the filters not read: their menus are empty, and the window says so - with Try again
+  // the filters not read: their menus are empty, and the window says so - with Try again
   if (_filtersFailed) host.appendChild(failedEl('The filters', () => { _filters = null; _filtersFailed = false; api.repaint(); }, { line: true }));
 
   const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? 'searching…' : 'search');
@@ -485,8 +478,7 @@ export function paintPicker(host, api) {
   foot.appendChild(go);
   host.appendChild(foot);
 
-  // (phase V62, the owner: "когда открывается поиск попап elevenlabs сразу показывать голоса... с перелистыванием страниц по 20
-  // штук. кнопки страниц показаны всегда снизу попапа") In its window the library is searched the moment it opens - with the
+  // In its window the library is searched the moment it opens - with the
   // filters as they stand - and its pages, 20 voices each, are always at the window's foot (`api.pagerHost`).
   const pagerHost = api.pagerHost || null;
   if (pagerHost) pagerHost.textContent = '';
@@ -577,7 +569,7 @@ async function _search(api, page) {
     _res = { voices: d.voices || [], total: d.total || 0, hasMore: !!d.hasMore };
     _searchFailed = false;
   } catch (e) {
-    // (2b-2) said in the corner; the voices found before stay, with none the list says it did not load
+    // said in the corner; the voices found before stay, with none the list says it did not load
     showError('The search failed', { detail: e.message });
     if (!(_res && _res.voices && _res.voices.length)) { _res = null; _searchFailed = true; } else _page = was;   // the page shown stays
   }
@@ -617,7 +609,7 @@ async function _take(api, card) {
       body: JSON.stringify({ ownerId: card.public_owner_id, voiceId: card.voice_id, name: card.name }),
     })).json();
     if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
-    _shelf = null;                                   // (phase V62) it is a saved voice now: field 1's menu reads the shelf afresh
+    _shelf = null;                                   // it is a saved voice now: field 1's menu reads the shelf afresh
 
     const rec = api.char();
     const entry = {
@@ -628,7 +620,7 @@ async function _take(api, card) {
     if (!rec) {
       // Nobody cast: the project's own voice (routes/scen3.js, voice.pick).
       await api.setPick(entry);
-      // (phase V61, (т4)) Taken is said by the row itself - the name is there now; only a demo that failed is news.
+      // Taken is said by the row itself - the name is there now; only a demo that failed is news.
       _said = t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
       _bad = false;
       _busy = '';
@@ -642,7 +634,7 @@ async function _take(api, card) {
     });
     // Three different things can have happened, and a sentence that blurs them sends somebody
     // looking for a second copy that does not exist.
-    // (phase V61, (т4)) The row shows the voice taken; only a demo that failed is said.
+    // The row shows the voice taken; only a demo that failed is said.
     _said = !had && t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
     _bad = false;
   } catch (e) {
@@ -659,15 +651,15 @@ async function _take(api, card) {
 // hand, and editing a line makes its read stale by itself. Unread or stale is the one rule,
 // shared with the fragments pane (js/merge-v3/scen-api.js, isRead).
 //
-// The read is ElevenLabs v3 by the tags of the mood (phase W), with the project's stability and
-// speed (V26.1, below). A setting changed after a read does not make the read stale - it is still
+// The read is ElevenLabs v3 by the tags of the mood, with the project's stability and
+// speed (below). A setting changed after a read does not make the read stale - it is still
 // the line's words - it only leaves the line to be redone by the voice field's `generate`.
 const _needs = (l) => isLive(l) && !isRead(l);
 const _tagged = (l) => !!String((l && l.tagged) || '').trim();
 
-// HOW THE SCRIPT IS SPOKEN (phase V26.1, the owner 2026-10-10): one stability and one speed for the
+// HOW THE SCRIPT IS SPOKEN: one stability and one speed for the
 // video, kept on the project (`voice.ttsParams`, normalised by routes/scen3.js). A take remembers what
-// it was spoken with; one from before was spoken at natural and 1.
+// it was spoken with; one that does not say was spoken at natural and 1.
 export const params = (p) => {
   const t = ((p && p.voice) || {}).ttsParams || {};
   return { stability: Number.isFinite(+t.stability) ? +t.stability : 0.5, speed: +t.speed || 1 };
@@ -682,17 +674,17 @@ export const unsettledBy = (p, l) => {
   if (st !== want.stability) return 'stability';
   return (+take.speed || 1) !== speedOf(p, l) ? 'speed' : '';
 };
-/** The speed a line is read at: its own, set in its fragment, else the project's (V26.1). */
+/** The speed a line is read at: its own, set in its fragment, else the project's. */
 export const speedOf = (p, l) => (+(l && l.speed) || params(p).speed);
 /** The lines of the video still waiting for their tags - stage 1 (the mood field) is about these. */
 export const untagged = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
   .map((l, i) => ((isLive(l) && !_tagged(l)) ? i : -1)).filter(i => i >= 0);
 /** Can anything be read at all? Not until the script is marked up: v3 reads the tagged words, and
- *  a line spoken without them is a line spoken in another performance (the owner, 2026-09-22 - no
- *  silent tagging inside the read). */
+ *  a line spoken without them is a line spoken in another performance (no silent tagging inside
+ *  the read). */
 export const canSpeak = (p) => untagged(p).length === 0;
 
-/** (phase V26.8) What went wrong with the last tagging or read, for the open fragment to say too - a `mood` or a `read`
+/** What went wrong with the last tagging or read, for the open fragment to say too - a `mood` or a `read`
  *  pressed there failed out of sight, in the fields of the whole video. null when nothing did. */
 export const failed = () => (_rsaid && _rbad ? _rsaid : null);
 
@@ -700,7 +692,7 @@ export const failed = () => (_rsaid && _rbad ? _rsaid : null);
  *  of three), and the batch "generate" is walking, if any. */
 export const reading = () => ({
   tagging: _tagging, lines: _reading, busy: _tagging || _reading.length > 0 || !!_batch, batch: _batch,
-  tagAt: _tagAt, readAt: _readAt,       // when each started, for the field's own progress (N3)
+  tagAt: _tagAt, readAt: _readAt,       // when each started, for the field's own progress
 });
 
 /** The words of a line, changed - with their [tags] when the line has tags, which the server keeps
@@ -734,10 +726,8 @@ export async function saveText(api, i, text) {
 // lines that lack tags when some are, so what was approved stays as it is. The server switches the
 // project to the tagged read as it does.
 /**
- * THE MOOD FIELD'S `generate` (phase Z, the owner 2026-09-22): the analysis and the tags, on
- * their own. It used to be the first half of the voice field's button, which meant the script was
- * marked up on the way to being spoken and nobody ever saw the markup before paying for the read.
- * It is stage 1 now, and the read is stage 2.
+ * THE MARK-UP, stage 1: the analysis and the tags, on their own. The read is stage 2
+ * (markAndRead runs both, one after the other).
  */
 export async function tagAll(api) {
   if (_tagging || _reading.length || _batch) return;
@@ -763,7 +753,7 @@ export async function tagAll(api) {
 }
 
 /**
- * (phase V26.8, the owner 2026-10-13) ONE LINE MARKED UP - the `mood` of an open fragment: a line put in between two, or
+ * ONE LINE MARKED UP - the `mood` of an open fragment: a line put in between two, or
  * one whose words were changed (a change drops its tags). The tagger marks it by the mood of the video and keeps the arc
  * of the lines around it (routes/scen3.js, /scen3/voice/tag with `only`).
  */
@@ -796,8 +786,8 @@ async function _tag(api, only) {
 }
 
 /**
- * The voice field's `generate` (phase Z): every line that needs reading. It no longer tags on the
- * way - that is stage 1, in the mood field, and this refuses to start until it is done.
+ * Stage 2, the read: every line that needs reading. It does not tag on the
+ * way - that is stage 1, and this refuses to start until it is done.
  */
 export async function generate(api) {
   if (_tagging || _reading.length || _batch) return;
@@ -806,15 +796,15 @@ export async function generate(api) {
     _rbad = true;
     return _repaint(api);
   }
-  // ...and the lines read with other settings (V26.1): read again for another stability, retimed
-  // for another speed. Only here - the chain reads what is not read, as it always did.
+  // ...and the lines read with other settings: read again for another stability, retimed
+  // for another speed. Only here - the chain reads only what is not read.
   await readAll(api, { settle: true });
 }
 
 /**
- * (phase V61, the owner 2026-10-30, (т3): "одна") THE ONE `generate` of the field "mood & voice": the script marked up by
- * the mood when any line of the video has no [tags], then every line that needs it read - the two stages the mood and the
- * voice fields had, one after the other. A mark-up that fails stops here, said in words, and nothing is read. `o.read`
+ * THE ONE `generate` of the field "mood & voice": the script marked up by
+ * the mood when any line of the video has no [tags], then every line that needs it read - the two stages, one after the
+ * other. A mark-up that fails stops here, said in words, and nothing is read. `o.read`
  * false - by Seedance's voice sample nothing is read: the mark-up alone.
  */
 export async function markAndRead(api, o) {
@@ -835,7 +825,7 @@ export async function markAndRead(api, o) {
 // itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
 async function _speak(api, lines, inBatch) {
   if (_reading.length || (_batch && !inBatch)) return false;
-  // Tagging is stage 1 and nothing else does it (Z2): a line read without its tags would not match
+  // Tagging is stage 1 and nothing else does it: a line read without its tags would not match
   // the lines around it.
   const some = Array.isArray(api.project() && api.project().lines) ? api.project().lines : [];
   if (lines.some(i => some[i] && !_tagged(some[i]))) {
@@ -875,9 +865,8 @@ async function _speak(api, lines, inBatch) {
 /** One line, spoken now - from the open fragment's own button. */
 export const readLine = (api, i) => _speak(api, [i], false);
 
-// EVERY LINE THAT NEEDS IT, READ BY THE SERVER (phase X2, the owner 2026-09-22). The page used to
-// send three lines and wait for them before sending three more, which meant the run belonged to the
-// page: walking away from it left the rest of the script unread. Now one call hands the whole list
+// EVERY LINE THAT NEEDS IT, READ BY THE SERVER, so the run does not belong to the page: walking
+// away from it leaves nothing unread. One call hands the whole list
 // over (routes/scen3.js, /scen3/voice/speak-all), the server starts a line a second without waiting
 // for the ones already going, and this only WATCHES - bringing the takes in as they land, so the
 // script fills in under the pointer. Closing the app still stops it; what was already spoken stays.
@@ -961,19 +950,18 @@ export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
 }
 
-// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2): "нужен поиск по голосам в elevenlabs как в talking head но
-// поиск в попапе будет"; (во17) "в обоих") ──
+// ── THE VOICES, A WINDOW ──
 // The saved voices and the ElevenLabs library with its filters and its search (paintPicker) in a window of js/gen-window.js -
 // field 1's menu opens it ("ElevenLabs library…"); it stays open after a voice is taken and is painted again when its host
-// repaints, where it was scrolled to. (phase V63, P14) ONE window for the setup (js/merge-v3/wk-setup.js) and Home's voiceover
-// quick start (js/home/start.js) - moved here from wk-setup.js. `o.key` - whose window it is (the project, the popup), `o.lang`
+// repaints, where it was scrolled to. ONE window for the setup (js/merge-v3/wk-setup.js) and Home's voiceover
+// quick start (js/home/start.js). `o.key` - whose window it is (the project, the popup), `o.lang`
 // - the library's language for it (languageFor).
 let _vwin = null;                        // { win, api }
 export const voicesOpen = () => !!(_vwin && _vwin.win.alive());
 export function openVoices(api, o = {}) {
   if (voicesOpen()) { paintVoices(api); return _vwin.win; }
   languageFor(String(o.key || ''), o.lang);
-  // (phase V64, fix (л)) Moved and stretched; its size kept.
+  // Moved and stretched; its size kept.
   const win = GW.openFrame({
     name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
     onClose: () => { if (_vwin && _vwin.win === win) _vwin = null; leave(); },
@@ -984,7 +972,7 @@ export function openVoices(api, o = {}) {
   return win;
 }
 /** Painted again - with the host's api now (`api`, when given). What scrolls is the list above the foot; the foot - the
- *  library's pages - stays at the window's bottom (the owner: "кнопки страниц показаны всегда снизу попапа"). */
+ *  library's pages - stays at the window's bottom. */
 export function paintVoices(api) {
   if (!voicesOpen()) return;
   if (api) _vwin.api = api;

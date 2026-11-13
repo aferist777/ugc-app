@@ -1,20 +1,20 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — CLIPS IN A ROW MERGED INTO ONE (phase V45, the owner 2026-10-24, answers (ю1)-(ю4)).
+   MERGE v3 — CLIPS IN A ROW MERGED INTO ONE.
 
    Clips picked on the timeline (the band, or Shift + a click one at a time - timeline-b.js) that follow one another on ONE
    lane - with their sound halves on the lane linked to it, or a sound lane alone (a talking head's reads) - are offered to
    be merged: a small window over the last of them, "Merge 5 clips into one?". "merge" asks the server for one file of them
    (POST /api/mv3/merge, lib/merge-clips.js: the picture as it is in the frame and its sound, burnt in, into the project's
    folder), shows how far it got, and lays the file in their place - ONE pair over their whole stretch, one step to undo
-   (ю2: the file stays in the project's folder). Captions and every other lane are not touched. Not offered for clips that
+   (the file stays in the project's folder). Captions and every other lane are not touched. Not offered for clips that
    do not follow one another, or for a pick across other lanes (music, a second picture lane). Escape, its cross or a press
    elsewhere close it; while the file is being made it waits (its "cancel" stops it).
 
-   A TALKING HEAD's lines merged (ю3): the merged pair is still the mirror's - it carries the first line's number (`frag`)
+   A TALKING HEAD's lines merged: the merged pair is still the mirror's - it carries the first line's number (`frag`)
    and what it holds (`merge`: each line's take, place and pieces) - so the save writes the merge into the project and the
    mirror lays it as one cell for as long as its lines keep their takes (lib/line-cuts.js, lib/frag-mirror.js). Lines that
    cannot be merged so - laid before they knew their takes, a picture picked without its sound - are refused in words, never
-   merged into the person's cell (phase V72: the mirror laid such lines again over it, and the voice sounded twice).
+   merged into the person's cell (the mirror would lay such lines again over it, and the voice would sound twice).
 
    timeline-b.js hands this its accessors (wireMerge): ids() the picked clip ids, newId(), select(id).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -62,7 +62,7 @@ export function mergeable(tl, ids) {
   if (vc.length && ac.length && (Math.abs((+ac[0].start || 0) - s0) > SEAM || Math.abs(_end(ac[ac.length - 1]) - s1) > SEAM)) return null;
   // A clip that cannot be read (its file gone, red on the timeline) is no part of a merge.
   if (main.some((c) => Store.isGone && Store.isGone(c.id))) return null;
-  // (ю3) A TALKING HEAD's lines (`frag`) merge as whole lines - every piece of each - and never with the person's own clips.
+  // A TALKING HEAD's lines (`frag`) merge as whole lines - every piece of each - and never with the person's own clips.
   const all = vc.concat(ac);
   const lines = all.filter((c) => Number(c.frag) > 0);
   if (lines.length) {
@@ -76,11 +76,11 @@ export function mergeable(tl, ids) {
   return { video: v ? { lane: v.id, clips: vc } : null, audio: a ? { lane: a.id, clips: ac } : null, n: main.length, s0, s1 };
 }
 
-// (ю3) What a talking head's merged cell holds, line by line - each line's take and its pieces: where in the line's own file,
+// What a talking head's merged cell holds, line by line - each line's take and its pieces: where in the line's own file,
 // how long, where in the merged file (lib/line-cuts.js). A merged cell merged again passes its lines on. Null - no lines.
-// (phase V72, the owner's (э2)) `why` - lines that cannot be merged AS LINES, in words: a merge of them would be laid as the
+// `why` - lines that cannot be merged AS LINES, in words: a merge of them would be laid as the
 // person's cell, the mirror would lay the same lines again over it and the voice would sound twice - so it is refused. A
-// sound cell laid before the voices were written (phase V30) does not say which take it speaks (opening the project tells
+// sound cell laid before the voices were written does not say which take it speaks (opening the project tells
 // it - lib/frag-mirror.js catchUp); a line's picture without its sound is not a line.
 const OLD_CELLS = 'These lines were laid before they knew their takes - open the project again, then merge.';
 function _linesOf(m) {
@@ -116,14 +116,14 @@ export function offerMerge() {
   const anchor = document.querySelector(`.mv3b-clip[data-clip="${CSS.escape(last.id)}"]`);
   if (!anchor) return;
   const box = document.createElement('div');
-  // (phase V73 block 5, 5c; the owner's (б5-16) б) one line as it was - only its edges and its ✕: the frame of the panels at their
+  // One line - only its edges and its ✕: the frame of the panels at their
   // button (`u-win is-float`) holding its head row alone (`u-win-head`), the 28-px ✕ at its right end
   box.className = 'mv3-mergeask u-win is-float';
   box.innerHTML = '<div class="mv3-mergeask-r u-win-head"><span class="mv3-mergeask-t"></span>'
     + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main">Merge</button>'
     + '<button type="button" class="mv3-mergeask-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>';
   setFigures(box.querySelector('.mv3-mergeask-t'), 'Merge ' + m.n + ' clips into one?');
-  // (phase V72) Lines that cannot be merged as lines: the words in place of the offer, nothing to press.
+  // Lines that cannot be merged as lines: the words in place of the offer, nothing to press.
   const why = (_linesOf(m) || {}).why;
   if (why) {
     box.querySelector('.mv3-mergeask-t').textContent = why;
@@ -164,7 +164,7 @@ export function closeMerge() {
 function _say(text, bad) {
   if (!_win) return;
   const t = _win.box.querySelector('.mv3-mergeask-t');
-  setFigures(t, text);                               // (phase V73 block 5, 5c) "merging… 42%" - its figures in mono
+  setFigures(t, text);                               // "merging… 42%" - its figures in mono
   t.classList.toggle('is-bad', !!bad);
 }
 
@@ -173,7 +173,7 @@ async function _go() {
   if (!w || w.job) return;
   const go = w.box.querySelector('.mv3-mergeask-go');
   if (!go) return;
-  const why = (_linesOf(w.m) || {}).why;           // (phase V72) never merged into the person's cell
+  const why = (_linesOf(w.m) || {}).why;           // never merged into the person's cell
   if (why) { go.remove(); _say(why, true); return; }
   go.disabled = true;
   go.style.display = 'none';
@@ -228,8 +228,8 @@ function _lay(w, j) {
   const pairId = m.video && m.audio ? 'p' + _acc.newId().replace(/^c/, '') : null;
   const dur = r3(m.s1 - m.s0);
   const name = 'merged · ' + m.n + ' clips';
-  const mergeOf = _linesOf(m);                                // a talking head's lines inside (ю3)
-  // (phase V72) Lines that cannot be merged as lines are never laid as the person's cell.
+  const mergeOf = _linesOf(m);                                // a talking head's lines inside
+  // Lines that cannot be merged as lines are never laid as the person's cell.
   if (mergeOf && mergeOf.why) { w.job = null; _say(mergeOf.why + ' The file is in the project\'s folder, nothing was laid.', true); return; }
   let newVideo = null, newAudio = null;
   const ok = Store.mutate((tl) => {

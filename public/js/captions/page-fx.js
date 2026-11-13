@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — A SUBTITLE PAGE COMES IN AND GOES OUT (phase V49, point 8a; the owner's (пр16)-(пр18), (пр20), 2026-10-25).
+   CAPTIONS — A SUBTITLE PAGE COMES IN AND GOES OUT.
 
    A page of the subtitle lane may wear an In and an Out (style.js `enter` / `leave`): motions of the WHOLE page - it fades,
    pops, zooms, grows, comes from the top, from below, from a side, drops with a bounce, blurs in, swings; it fades, pops,
    shrinks, zooms, goes up, down, to a side, falls, blurs out. No motion of single words or letters: the spoken word is lit
-   word by word (ass.js), and that stays exactly as it is while the page moves ((пр16)).
+   word by word (ass.js), and that stays exactly as it is while the page moves.
 
    HOW, IN LIBASS (ass.js writes it; the render and the preview's JASSUB draw it alike). The page keeps its own anchor and
    place - at rest it is the very drawing of a page without motion (a box drawn from the page's middle lands on a half pixel
@@ -17,23 +17,23 @@
    carried on from where they were (ass.js shifts them), so an Out can travel another way than the In. The spoken word of a
    pop or a bounce grows with the page: its growth and the page's scale are ONE chain (popScale) - two chains of \fscx fight.
 
-   LENGTHS ARE THE APP'S ((пр18)): about 0.25 s in and 0.2 s out (a drop's bounce 0.32 s, a swing 0.3 s), never more than a
+   LENGTHS ARE THE APP'S: about 0.25 s in and 0.2 s out (a drop's bounce 0.32 s, a swing 0.3 s), never more than a
    third of the page; a travel is about two line heights, with a fade - never from beyond the frame's edge.
 
-   NOTHING CHOSEN, NOTHING NEW ((пр20) and the byte check): a page with no Out and no In of its own is drawn exactly as before -
-   the preset's `appear` (pop, fade, slide) the old way. `at-once` is an In chosen to be none: the preset's `appear` goes too.
+   NOTHING CHOSEN, NOTHING NEW: a page with no Out and no In of its own has no motion of its own -
+   only the preset's `appear` (pop, fade, slide). `at-once` is an In chosen to be none: the preset's `appear` goes too.
    With an Out and no In, the preset's `appear` is the page's In, drawn here (pop -> pop, fade -> fade, slide -> from below).
 
-   TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29)-(хо33), 2026-11-03): on a lane in two rows (style.js `rows`) a page's In
+   TWO ROWS: on a lane in two rows (style.js `rows`) a page's In
    plays BEFORE its first word and its Out AFTER its end - the page is whole all the while its words are spoken. Their lengths are
    then the lane's plan's (place.js rowsPlan - `cap`, shorter where the next page of the row comes soon), not a third of the page; the
-   preset's own `appear` is an In there too ((хо33)); and a move up or down never crosses the other row (awayFrom).
+   preset's own `appear` is an In there too; and a move up or down never crosses the other row (awayFrom).
 
    Motions are our own, after ideas from pycaps and Video-Stuff (MIT; fade / pop / zoom / slide in and out, 0.2-0.4 s) - no
    code taken. PURE: numbers and tag strings.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// The preset's own way of arriving (`appear`, K3), as an In.
+// The preset's own way of arriving (`appear`), as an In.
 export const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -87,7 +87,7 @@ const OUT = {
 export const PAGE_LEAVES = ['fade', 'pop', 'shrink', 'zoom', 'rise', 'sink', 'to-left', 'to-right', 'fall', 'blur'];
 const IN_LEN = 0.25, OUT_LEN = 0.2;
 
-// THE READY PAIRS of the captions view's "animation" tab (phase V49, point 8b; the owner's (пр19)): an In and an Out that go
+// THE READY PAIRS of the captions view's "animation" tab: an In and an Out that go
 // together, 'in|out' - a press puts both on what is picked, the In and Out rows change each side by itself. 'at-once|none' is
 // no animation at all. Their tiles are drawn by the server like the presets' (lib/caption-tiles.js, animTileId).
 export const PAIRS = [
@@ -119,11 +119,11 @@ export function shownEnter(st) {
 }
 
 /**
- * HOW A SUBTITLE PAGE MOVES, for a style `st` (resolved) and a page `life` seconds long: null when it is drawn as before (no
+ * HOW A SUBTITLE PAGE MOVES, for a style `st` (resolved) and a page `life` seconds long: null when it does not move (no
  * Out and no In of its own - the preset's `appear` included), else { enter, leave } - each { key, ms, pts, a, axis, keys } or
  * null: its length (ms), the curve sampled (pts [{ t ms, s, blur, rz, dx, dy }]), when it becomes seen or unseen (a [ms, ms]),
  * which way it travels ('v', 'h' or ''), and which of s, blur, rz, travel change at all.
- * (phase V71) `cap` { enter, leave } - seconds, on a lane in two rows: each part at most that long (none under 0.02 s), `life` not
+ * `cap` { enter, leave } - seconds, on a lane in two rows: each part at most that long (none under 0.02 s), `life` not
  * asked; the preset's `appear` moves the page too.
  */
 export function pageMotion(st, life, cap) {
@@ -153,7 +153,7 @@ export function pageMotion(st, life, cap) {
 }
 
 /**
- * (phase V71) A page's In and Out at their whole lengths, seconds - 0 for none -, on a lane in two rows (the preset's `appear` is
+ * A page's In and Out at their whole lengths, seconds - 0 for none -, on a lane in two rows (the preset's `appear` is
  * an In there); null when it does not move at all. What place.js rowsPlan shares out.
  */
 export function motionLens(st) {
@@ -165,7 +165,7 @@ export function motionLens(st) {
 }
 
 /**
- * (phase V71, (хо30)) A part's move up or down turned away from the other row - `other` 'up' or 'down', where the other row is: a
+ * A part's move up or down turned away from the other row - `other` 'up' or 'down', where the other row is: a
  * page of the lower row comes from below and leaves downwards, of the upper one from above and upwards. Any other part as it is.
  */
 export function awayFrom(part, other) {

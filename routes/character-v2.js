@@ -1,7 +1,7 @@
 'use strict';
 
 // MAKING A CHARACTER'S PORTRAIT - behind New Character on the Library's Characters shelf
-// (public/js/library/chmake.js; the Character page that used these went in phase H8).
+// (public/js/library/chmake.js).
 //
 // Two steps, deliberately two requests. The analyzer runs first and can REFUSE, and a refusal
 // should cost nothing: no engine call, no image, no wait. It also lets the page say "Reading"
@@ -16,8 +16,8 @@
 // one definition of the house look instead of a server-side copy that drifts.
 //
 // Which engine draws it and which aggregator is asked are two separate choices, because they
-// fail separately: the day google/nano-banana-2 answered ModelRateLimitError on Replicate, the
-// same model answered with an image through OpenRouter. lib/img-providers.js holds that matrix.
+// fail separately: the same model can answer ModelRateLimitError on one aggregator and an image
+// through another. lib/img-providers.js holds that matrix.
 
 const express = require('express');
 const router = express.Router();
@@ -53,8 +53,8 @@ async function _refUrl(body) {
   } else {
     throw new Error('no reference image was sent');
   }
-  // In a format the engines take (phase V24, lib/image-in.js): a photo brought in as AVIF, GIF or a
-  // phone's HEIC went up as it was. verify reads the link back before it is handed to an engine -
+  // In a format the engines take (lib/image-in.js): a photo brought in as AVIF, GIF or a
+  // phone's HEIC is made into one first. verify reads the link back before it is handed to an engine -
   // one round trip against a generation that fails ten seconds after being paid for.
   const pic = await require('../lib/image-in').sendable(buf);
   return await uploadToPublicHost(pic.buf, { verify: true, ext: pic.ext });
@@ -111,7 +111,7 @@ const JOBS = require('../lib/gen-jobs');
 const ALERTS = require('../lib/alerts');
 const REFUSAL = require('../lib/gen-refusal');
 
-// PAID ONCE (phase V22, the owner 2026-10-09: "as in the chats"). The row is marked `asked` just before each
+// PAID ONCE, as in the chats. The row is marked `asked` just before each
 // create that costs money and the mark is taken back when the aggregator ANSWERS no (lib/cv2-run.js `onAsk` /
 // `onStep`); a create with no answer stops the ladder. A row found with no task, `asked`, and its asking not alive
 // here - the app was closed in the middle of it - may have been paid for: it says so, and nothing asks again by itself.
@@ -179,9 +179,8 @@ async function _submitPortrait(b, hooks) {
       onStep: hooks && hooks.onStep,
     });
 
-    // The server watches it to the end itself. The page's poll used to be the only thing
-    // driving this to a conclusion, which meant closing the tab abandoned a paid-for
-    // generation. Now the page's poll only READS what the watcher already found.
+    // The server watches it to the end itself, so closing the tab never abandons a paid-for
+    // generation. The page's poll only READS what the watcher already found.
     WATCH.watch(sub.taskId, MEDIA.work, 'generated');
     console.log('[cv2/generate]', dir, sub.engine, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
     return { taskId: sub.taskId, engine: sub.engine, provider: sub.provider, quality: sub.quality, aspect, steps: sub.steps };
@@ -206,7 +205,7 @@ async function _askBehind(alertId, kick, b) {
     ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
   } catch (err) {
     console.error('[cv2/generate]', err.response?.data || err.message);
-    // A refusal of the content is `refused` - no paid "try again" (phase V10.2, lib/gen-refusal.js).
+    // A refusal of the content is `refused` - no paid "try again" (lib/gen-refusal.js).
     const why = reasonOf(err);
     ALERTS.fail(alertId, why, REFUSAL.isRefusal(why) ? { refused: true } : undefined);       // a row let go of is left as it is (lib/alerts.js)
   } finally {
@@ -216,12 +215,12 @@ async function _askBehind(alertId, kick, b) {
 
 router.post('/character-v2/generate', async (req, res) => {
   const b = req.body || {};
-  // THE ROW COMES FIRST (V2) AND IS THE ANSWER: written at the press and answered at once, before the
-  // ladder is asked, so the page that follows it (New Character, phase H) holds it from the first
+  // THE ROW COMES FIRST AND IS THE ANSWER: written at the press and answered at once, before the
+  // ladder is asked, so the page that follows it (New Character) holds it from the first
   // moment - a reload, or the overlay's Cancel, while the ladder is still deciding has a row to act on.
   // The asking goes on behind the answer: it hands the row its task, or fails it with the reason. The
   // server watches the task to the end (WATCH.watch in _submitPortrait).
-  // Always a row: it is what resolves the portrait now - a request with no place gets the Characters shelf.
+  // Always a row: it is what resolves the portrait - a request with no place gets the Characters shelf.
   if (!b.where || typeof b.where !== 'object') b.where = { page: 'library', href: '/library?shelf=characters&make=1', label: 'Library · New Character · portrait' };
   {
     if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: 'prompt is required' });

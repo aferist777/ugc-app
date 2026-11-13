@@ -32,7 +32,7 @@ const SAVE_DEBOUNCE = 500;
 // type on purpose: it is how an internal drag is told apart from an OS file drop, so the
 // upload path and the timeline path can never claim each other's drops.
 export const DRAG_TYPE = 'application/x-mv3-clip';
-// (phase V28.4) WHAT a dragged tile is - 'video', 'image' or 'audio' - in a type of its own: a lane reads the types while
+// WHAT a dragged tile is - 'video', 'image' or 'audio' - in a type of its own: a lane reads the types while
 // the tile hangs over it (the data only at the drop) and takes only its own (timeline-b.js _laneTakes).
 export const DRAG_MEDIA = 'application/x-mv3-media-';
 
@@ -58,18 +58,17 @@ let _version = -1;
 // request goes out and again when the answer comes back: different means somebody edited while
 // the write was in the air, and that edit is newer than anything the answer can say.
 //
-// The dirty flag cannot answer this, which is what went wrong: save() cleared it the moment the
-// response arrived and then asked whether it was set, so the guard was true every time and an
-// edit made during the save was overwritten by the server's copy of the state before it - and
-// silently, because the same clearing meant nothing was scheduled to send it up again.
+// The dirty flag cannot answer this: save() clears it the moment the response arrives, so asking it
+// then would always say "nothing changed", and an edit made during the save would be overwritten by the
+// server's copy of the state before it - silently, with nothing scheduled to send it up again.
 let _edits = 0;
 let _key = null;           // which project is open
 let _title = '';
-let _draft = false;        // (phase V20) it is THE draft - not saved yet
+let _draft = false;        // it is THE draft - not saved yet
 let _misses = 0;           // projects asked for that were not there, one after another (load)
 let _adv = null;          // the project's export settings, as the server holds them
 
-/** (phase V28.4) This clip's file is not on the disk - it is red, to be replaced or removed. */
+/** This clip's file is not on the disk - it is red, to be replaced or removed. */
 export const isGone = (c) => !!(c && c.src && _gone.has(_srcKey(c.src)));
 /** How many pieces of media of the open project have no file - a clip and its sound below it are one. */
 export function goneCount() {
@@ -86,7 +85,7 @@ export function markGone(src) {
   _emit();
 }
 
-// (phase V20, the owner 2026-10-08) NOTHING OPEN IS THE DRAFT: Merge with no project to open opens THE draft - one
+// NOTHING OPEN IS THE DRAFT: Merge with no project to open opens THE draft - one
 // at a time, made when there is none - so the timeline and the chats work from the first press, and naming it waits
 // for "save". ?p=<key> and the project this session was on still come first.
 export function hasProject() { return !!_key; }
@@ -94,7 +93,7 @@ export function isDraft() { return _draft; }
 /** The draft was saved under a name: no longer the draft. */
 export function markSaved(t) { _draft = false; if (t != null) _title = String(t); _emit(); }
 /**
- * (phase V49, the owner's (пр12)) THE DRAFT CLEARED: its lanes become a new timeline's - main video, main audio and
+ * THE DRAFT CLEARED: its lanes become a new timeline's - main video, main audio and
  * Subtitles, empty (the server's shape, GET /api/mv3/blank: lib/timeline-shape.js emptyBlank) - as ONE step to undo, so
  * Ctrl+Z brings the clips back; its frame stays. The draft itself stays as it is: its key, folder, title and
  * the drafts' conversation. Done here, through mutate(), and not by the server: the edit goes up the way every edit does,
@@ -120,7 +119,7 @@ let _saving = false;
 let _dirty = false;
 let _subs = [];
 let _status = null;        // last message worth showing the user
-// (phase V28.4) THE FILES OF THIS PROJECT'S CLIPS THAT ARE NOT ON THE DISK - deleted from the library, most often: the
+// THE FILES OF THIS PROJECT'S CLIPS THAT ARE NOT ON THE DISK - deleted from the library, most often: the
 // server says which as the project opens (`missing`, lib/timeline-media.js), and a file deleted from the Library panel
 // while it is open is added (markGone). A clip on one of them is red (timeline-b.js) until it is replaced or removed.
 let _gone = new Set();
@@ -130,7 +129,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export function timeline() { return _timeline; }
 
-// The kind every project has now - an ordered list of lanes.
+// The kind every project has - an ordered list of lanes.
 export const BLANK_KIND = 'blank';
 export function version() { return _version; }
 export function status() { return _status; }
@@ -144,21 +143,20 @@ const _INFO = new Set([
   'The captions were laid from the sound - they merge in when your edit saves.',
   'The fragments were laid again while you edited - your edit was kept and merged in.',
   'The captions were laid from the sound while you edited - your edit was kept and merged in.',
-  // (phase V54) Video to Music's track laid under its clip by the server.
+  // Video to Music's track laid under its clip by the server.
   'Music laid under its clip.',
   'The music was laid under its clip - it merges in when your edit saves.',
   'The music was laid under its clip while you edited - your edit was kept and merged in.',
-  // (phase V62) A voiceover's B-roll laid by its engine (lib/broll.js).
+  // A voiceover's B-roll laid by its engine (lib/broll.js).
   'B-roll laid on main video.',
   'The B-roll was laid - it merges in when your edit saves.',
   'The B-roll was laid while you edited - your edit was kept and merged in.',
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
-// (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, a rule of the lanes) or
+// A REFUSAL OR A FAILURE - an edit refused (no project, a rule of the lanes) or
 // not saved: popped up once (bar.js, js/notice.js), and red in the timeline's header while it lasts.
-// (phase V62, the owner 2026-10-31: "этого уведомления не должно быть в приложении. потому что девайс только тот на котором
-// происходит работа") There is no "another device": a change that came from elsewhere - the app's own server - is merged in or
-// shown without a word, and only an edit not saved is said.
+// There is no "another device" - the work happens on this one: a change that came from elsewhere - the app's own
+// server - is merged in or shown without a word, and only an edit not saved is said.
 export function statusIsError() {
   const s = String(_status || '');
   return !!s && !statusIsInfo();
@@ -182,7 +180,7 @@ export function duration() {
 export function key() { return _key; }
 export function title() { return _title; }
 
-// A project CAN be renamed now, and the new name has to reach everything that shows it -
+// A project CAN be renamed, and the new name has to reach everything that shows it -
 // the picker, the generator's header, the strip - without reloading the timeline. Reloading
 // would be the lazy way to refresh a string and would throw away any edit not yet saved.
 export function setTitle(t) {
@@ -210,20 +208,17 @@ export async function open(k) {
   return load(k);
 }
 
-// ── WHICH PROJECT MERGE COMES BACK TO (phase R, the owner 2026-09-22) ──────
+// ── WHICH PROJECT MERGE COMES BACK TO ───────────────────────────────────────
 // The open project lives in the address (?p=<key>), which a reload keeps and a walk through the
 // top strip loses - the link there goes to a bare /merge. So the key is also remembered, and
-// Merge with no ?p= opens what was remembered. In SESSION storage, by the owner's decision: it is
+// Merge with no ?p= opens what was remembered. In SESSION storage: it is
 // where you were this time the app was open, not a setting, and closing the app forgets it.
 // (It also means nothing of this reaches the server - storage-sync.js mirrors localStorage only.)
-//
-// This replaces the older rule that a fresh /merge starts empty "because the empty page should be
-// a preview of where + new project goes". Coming back to what you were doing beat it.
 const SS_OPEN = 'mv3_open_key';
 const _remember = (k) => { try { if (k) sessionStorage.setItem(SS_OPEN, k); else sessionStorage.removeItem(SS_OPEN); } catch (e) { /* a private window */ } };
 const _remembered = () => { try { return sessionStorage.getItem(SS_OPEN) || ''; } catch (e) { return ''; } };
 
-// Back to no project of its own - the draft (phase V20). The URL has to be cleared too, or load() would read the
+// Back to no project of its own - the draft. The URL has to be cleared too, or load() would read the
 // project that was just closed straight back out of ?p= - and so does the memory, for the same reason.
 export async function openBlank() {
   if (_dirty) { try { await save(); } catch (e) {} }
@@ -246,11 +241,11 @@ export async function load(k) {
       if (p) want = p;
     } catch (e) {}
   }
-  // ...and failing that, the one this session was last on (R6).
+  // ...and failing that, the one this session was last on.
   let fromMemory = false;
   if (!want) { want = _remembered(); fromMemory = !!want; }
 
-  // Nothing asked for: THE DRAFT (phase V20) - the one there is, or a new one. Not the newest project - see
+  // Nothing asked for: THE DRAFT - the one there is, or a new one. Not the newest project - see
   // hasProject() above.
   if (!want) {
     const dr = await fetch('/api/mv3/timeline/new', {
@@ -278,12 +273,12 @@ export async function load(k) {
   const r = await fetch('/api/mv3/timeline?key=' + encodeURIComponent(want));
   const d = await r.json();
   // A REMEMBERED project that is no longer there must not stop the page: it was deleted, or
-  // the app was pointed at another library. Forget it and open empty (R6).
+  // the app was pointed at another library. Forget it and open empty.
   if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
   if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
-  // (phase V20) A project that is not there any more - one deleted, an old Alerts link - opens the draft, not whichever
+  // A project that is not there any more - one deleted, an old Alerts link - opens the draft, not whichever
   // project the server would pick in its place. Its ?p= goes from the address first, or the draft's load would read it
-  // straight back. (phase V49) So does the empty shape the server answers with when there is no timeline at all (`found`).
+  // straight back. So does the empty shape the server answers with when there is no timeline at all (`found`).
   if (d.key !== want || d.found === false) {
     // Never round and round: a draft that cannot be had a few times over is an error, not another try.
     if (_misses++ > 2) { _misses = 0; throw new Error('the project could not be opened'); }
@@ -299,16 +294,15 @@ export async function load(k) {
   _gone = new Set((d.missing || []).map(m => _srcKey(m && m.src)).filter(Boolean));
   _version = d.version;
   _misses = 0;
-  // (phase V49) What was said about one project is not said about the next one opened.
+  // What was said about one project is not said about the next one opened.
   if (d.key !== _key) _status = null;
   _key = d.key;
   _title = d.title || '';
   _draft = !!d.draft;
   _adv = d.adv || null;
   _base = clone(d.timeline);        // the floor a later merge measures "what did I change" against
-  // The URL follows what is actually open, so a reload comes back to the same project while a
-  // fresh /merge-v3 still starts empty. The server picks for an unknown key, so this stores
-  // what it opened rather than what was asked for.
+  // The URL follows what is actually open, so a reload comes back to the same project. The server
+  // picks for an unknown key, so this stores what it opened rather than what was asked for.
   try {
     const u = new URL(location.href);
     if (u.searchParams.get('p') !== _key) {
@@ -316,7 +310,7 @@ export async function load(k) {
       history.replaceState({}, '', u);
     }
   } catch (e) {}
-  _remember(_key);                  // and the walk to another page comes back here (R6)
+  _remember(_key);                  // and the walk to another page comes back here
   _dirty = false;
   _bindHistory();
   _emit();
@@ -325,10 +319,8 @@ export async function load(k) {
 
 // ── Merging the server's changes ────────────────────────────────────────────
 // A CHANGE FROM THE SERVER IS NOT A CONFLICT TO LOSE - the lines heard from the sound, a talking
-// head's mirror, the B-roll, music laid under a clip. The old behaviour on a refused write was to
-// adopt the server's state and drop the edit that had just been made - honest, but it threw
-// away work. Nothing is thrown away now: the local change is replayed on top of whatever
-// arrived, and a lay of the server's own is said in the status (_serverOnly).
+// head's mirror, the B-roll, music laid under a clip. Nothing is thrown away: the local change is
+// replayed on top of whatever arrived, and a lay of the server's own is said in the status (_serverOnly).
 //
 // Three states are needed for that, not two. `_base` is the timeline as it was last agreed
 // with the server, so "what did I change" is answerable at all - without it, local and remote
@@ -350,21 +342,21 @@ const _newId = () => 'm' + Date.now().toString(36) + '-' + (_idSeq++).toString(3
 
 function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
-  // ON THE SUBTITLE LANE the server lays the heard lines anew, under new ids (lib/captions-job.js, phase
-  // K1). A heard line I RETYPED meanwhile is mine now - a typed line - though their lay replaced it: it
+  // ON THE SUBTITLE LANE the server lays the heard lines anew, under new ids (lib/captions-job.js).
+  // A heard line I RETYPED meanwhile is mine now - a typed line - though their lay replaced it: it
   // stays. And the heard lines their lay put over a typed line of mine it never saw go, the way the
-  // server leaves out the words under a typed line it knows (review K1).
+  // server leaves out the words under a typed line it knows.
   const subs = theirs.kind === 'subs';
   const mineTyped = subs ? (mine.clips || []).filter(c => c && !isHeard(c) && !t.has(c.id)
     && (!b.has(c.id) || isHeard(b.get(c.id)))) : [];
   const over = (c) => mineTyped.some(k => (+c.start || 0) < (+k.start || 0) + (+k.dur || 0)
     && (+k.start || 0) < (+c.start || 0) + (+c.dur || 0));
-  // A heard line I CORRECTED (K10) keeps its timed words, and it is mine as a typed line is: one their lay
+  // A heard line I CORRECTED keeps its timed words, and it is mine as a typed line is: one their lay
   // never saw stays, the very object, and their words under it go one by one (_mergeBlank cuts around it).
   const fixed = subs ? new Set(_mineFixed(base, mine, theirs).map(c => c.id)) : new Set();
   const unlaid = subs ? new Set(_unlaid(base, mine, theirs).map(c => c.id)) : new Set();
-  // THEIR LAY REPLACED THE HEARD LINES while mine were cut again (review K2): both sides put a new heard set
-  // in place of the base's, and keeping both drew every word twice. Their lay wins for the heard lines; a
+  // THEIR LAY REPLACED THE HEARD LINES while mine were cut again: both sides put a new heard set
+  // in place of the base's, and keeping both would draw every word twice. Their lay wins for the heard lines; a
   // style of mine that changes the cut is applied to their words afterwards (_mergeBlank).
   const relaid = subs && (theirs.clips || []).some(c => isHeard(c) && !b.has(c.id));
   const out = [];
@@ -400,7 +392,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   return merged;
 }
 
-// The heard lines I corrected that the server's copy does not have (K10): changed by me since the base, or
+// The heard lines I corrected that the server's copy does not have: changed by me since the base, or
 // new (a half of a cut, a page of a re-cut holding a corrected word). One the server has, it has kept - its
 // lay keeps corrected lines - and one I left as it was and the server no longer has, "back to what was
 // heard" took away: that one goes.
@@ -410,9 +402,9 @@ function _mineFixed(base, mine, theirs) {
     && (!b.has(c.id) || !_same(c, b.get(c.id))));
 }
 
-// New heard lines of mine (a half of a split, a page of a re-cut) WHERE THEIR LAY LAID NO WORD (review K10): it
+// New heard lines of mine (a half of a split, a page of a re-cut) WHERE THEIR LAY LAID NO WORD: it
 // kept a corrected line there and left the words under it out - so it cannot stand in for mine, and dropping
-// mine lost those words while the status said the edit was kept. [] when theirs laid nothing new.
+// mine would lose those words while the status says the edit was kept. [] when theirs laid nothing new.
 function _unlaid(base, mine, theirs) {
   const b = _byId(base.clips), t = _byId(theirs.clips);
   const mids = [];
@@ -441,7 +433,7 @@ function _markSpans(clips, skip) {
   return out;
 }
 
-// MY MARKS ONTO THEIR LAY (review K10): a word marked or unmarked here while the server laid the lane again is a
+// MY MARKS ONTO THEIR LAY: a word marked or unmarked here while the server laid the lane again is a
 // look of that word - it goes onto the word laid at its moment, as the server carries its own (captions-job.js).
 // `marks`: [[from, to, on]]; only the lay's own lines are touched, never a line of mine kept as it is.
 function _applyMarks(lane, marks, mineIds) {
@@ -464,8 +456,8 @@ function _merge(base, mine, theirs) {
 }
 
 // A project's lanes are a LIST, matched by id and never by position, and their order is the
-// layer order. Treating the list as an object of named lanes is what once wiped projects: the
-// lanes came back keyed "0", "1"... with no kind, and the retried save stored no lanes at all.
+// layer order. Treated as an object of named lanes, the list would come back keyed "0", "1"... with no
+// kind, and the retried save would store no lanes at all.
 //
 // Same rules as a lane's clips: a lane I deleted stays deleted, a lane added elsewhere is kept,
 // a lane of mine they never saw goes back in beside the lane it followed here. Only audio lanes
@@ -487,9 +479,9 @@ function _mergeBlank(base, mine, theirs) {
     for (const c of (bb.clips || [])) if (!tIds.has(c.id) && mIds.has(c.id)) removed++;
     const merged = _mergeTrack(bb, m, t, t.kind === 'audio');
     // Their lay came in while I changed how the lane is cut (a style field of the cut), or gave a heard
-    // caption a look of its own (K6): cut their words my way, with my looks laid over them by time, once the
-    // whole timeline is put together (the seams need its sound) - review K6: the look was dropped while the
-    // status said the edit was kept.
+    // caption a look of its own: cut their words my way, with my looks laid over them by time, once the
+    // whole timeline is put together (the seams need its sound) - else the look would be dropped while the
+    // status says the edit was kept.
     if (t.kind === 'subs' && (t.clips || []).some(c => isHeard(c) && !bIds.has(c.id))) {
       const looks = [];
       for (const c of (m.clips || [])) {
@@ -500,7 +492,7 @@ function _mergeBlank(base, mine, theirs) {
         looks.push([+c.start || 0, (+c.start || 0) + (+c.dur || 0), lookOf(c)]);
       }
       const cutChanged = CUT_KEYS.some(k => !_same((m.style || {})[k], (bb.style || {})[k]));
-      // ...or a line I corrected stands among their pages (K10): their words under it go, one by one.
+      // ...or a line I corrected stands among their pages: their words under it go, one by one.
       const mineFixed = _mineFixed(bb, m, t);
       const keep = new Set(mineFixed.map(c => c.id));
       // ...or lines of mine their lay laid nothing over (_unlaid): held as they are, like the corrected ones.
@@ -552,8 +544,8 @@ function _bindHistory() {
   History.bind({
     read: () => _timeline,
     write: (state) => {
-      // An edit like any other (K10b): without the count, a save already on its way when Ctrl+Z was pressed
-      // took itself for the latest and put the undone state back on screen - and the undo was never saved.
+      // An edit like any other: without the count, a save already on its way when Ctrl+Z was pressed would take
+      // itself for the latest and put the undone state back on screen - and the undo would never be saved.
       _timeline = state; _dirty = true; _edits++; _emit(); _schedule();
     },
   });
@@ -574,7 +566,7 @@ export function mutate(fn, opts) {
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
   // A change that changes nothing (a re-cut that comes out the same, a value set to itself) is no step to
-  // undo and nothing to save (review K2).
+  // undo and nothing to save.
   if (_same(draft, _timeline)) return true;
   // BEFORE the change is adopted - see the header. `opts.merge`: a series tag - the same gesture repeated
   // within a moment is one step to undo (history.js).
@@ -616,10 +608,8 @@ export async function save(_merges = 0) {
       // The server changed it while this copy was being edited. Replay this change on top
       // of the server's and save that, rather than dropping either side. The retry quotes THEIR
       // version, so if a third write landed in between it 409s again and merges again.
-      // The version is this project's own. It was one number for the whole file once, so
-      // editing a DIFFERENT project refused this write too; the byte-identical case is kept
-      // for the one save after that change, when a number from the old scheme meets a rev
-      // that starts from 0 - nothing to report there.
+      // The version is this project's own; a refusal whose timeline is the base unchanged (a version that
+      // moved with nothing in the timeline) has nothing to report.
       const untouched = _same(d.timeline, _base);
       const who = untouched ? null : _serverOnly(_base, d.timeline);
       const { timeline } = _merge(_base, _timeline, d.timeline);
@@ -629,7 +619,7 @@ export async function save(_merges = 0) {
       _bindHistory();
       if (!untouched) {
         // The server laying its own cells is said as what it is (_serverOnly); any other change is merged in without a word -
-        // there is no other device (phase V62, the owner).
+        // there is no other device.
         _status = (who && who.frag) ? 'The fragments were laid again while you edited - your edit was kept and merged in.'
           : who && who.broll ? 'The B-roll was laid while you edited - your edit was kept and merged in.'
           : who && who.laid && !who.heard ? 'The music was laid under its clip while you edited - your edit was kept and merged in.'
@@ -640,7 +630,7 @@ export async function save(_merges = 0) {
       _saving = false;
       return save(_merges + 1);     // still dirty on purpose: the merged state has to go up
     } else if (r.status === 404 && d && d.gone) {
-      // (phase V49) The project is not there any more - deleted while this edit waited (the server never makes one
+      // The project is not there any more - deleted while this edit waited (the server never makes one
       // from a save): nothing to save it into, and trying again would only be refused again.
       if (d.key === _key) _dirty = false;
       _status = 'Not saved: this project is not there any more.';
@@ -663,8 +653,8 @@ export async function save(_merges = 0) {
       _base = clone(stored);
       // NOT re-bound. History reads the live timeline through a closure, so there is nothing
       // to re-bind - and bind() starts the stacks over. Every edit schedules a save a moment
-      // later, so re-binding here was emptying the undo stack after every single action: the
-      // buttons lit up on the edit and went grey again before anyone could press them.
+      // later, so re-binding here would empty the undo stack after every single action: the
+      // buttons would light up on the edit and go grey again before anyone could press them.
       if (!raced) _timeline = stored;
       else _schedule();
       // The news of a server lay this very save merged in stays (_merges > 0) - the resave after a merge is what would
@@ -683,7 +673,7 @@ export async function save(_merges = 0) {
 }
 
 /**
- * Save what is not saved yet, and WAIT for it (phase K1) - for a press that hands the SAVED timeline to
+ * Save what is not saved yet, and WAIT for it - for a press that hands the SAVED timeline to
  * the server, which listens to the sound it holds. save() itself returns at once while another save is
  * in the air. True when nothing is left unsaved.
  */
@@ -718,9 +708,9 @@ try {
 // reconciled, and pulling the rug mid-drag would be worse than telling you.
 const WATCH_MS = 20000;
 
-// TYPING IS AN EDIT TOO (review K10): a caption's text or a word being typed in and not written yet holds what
-// the person means to save. Adopting a newer copy meanwhile - a lay from the sound - replaced the line under the
-// field, and what was typed went nowhere. So while the page says a field holds unwritten typing (`setTyping`,
+// TYPING IS AN EDIT TOO: a caption's text or a word being typed in and not written yet holds what
+// the person means to save. Adopting a newer copy meanwhile - a lay from the sound - would replace the line under the
+// field, and what was typed would go nowhere. So while the page says a field holds unwritten typing (`setTyping`,
 // the inspector), the copy counts as dirty: the field writes first, and the newer one merges in at the save, as
 // for any edit. `typingDone` - the field was left - looks again at once when a copy was held back for it.
 let _typingFn = null;
@@ -751,8 +741,8 @@ async function _checkRemote() {
   if (_same(d.timeline, _base)) { _version = d.version; return; }   // only the title or the export settings moved
 
   // WHO CHANGED IT. The server lays two kinds of cell itself: a talking head's fragments
-  // (lib/frag-mirror.js, phase T' - a read spoken or a clip filed re-lays the cells that carry `frag`)
-  // and the lines heard from the sound (lib/captions-job.js, phase K1). Neither is "another device" -
+  // (lib/frag-mirror.js - a read spoken or a clip filed re-lays the cells that carry `frag`)
+  // and the lines heard from the sound (lib/captions-job.js). Neither is "another device" -
   // it is this project's own work arriving. Told apart by looking at what actually differs: if every
   // cell and every lane setting the person owns is untouched, it was the server.
   const who = _serverOnly(_base, d.timeline);
@@ -767,9 +757,9 @@ async function _checkRemote() {
     _emit();
     return;
   }
-  // The lines laid from the sound are ONE step to undo, as they were when the page laid them itself:
-  // the step is taken before the new state comes in. A mirror lay is not - undoing it would only fight
-  // the mirror, which lays it again - and neither is any other change. (V54) Nor is the music laid under a clip: one step.
+  // The lines laid from the sound are ONE step to undo: the step is taken before the new state comes in. A mirror
+  // lay is not - undoing it would only fight the mirror, which lays it again - and neither is any other change but
+  // the music laid under a clip: one step too.
   const undoable = !!who && (who.heard || who.laid) && !who.frag;
   if (undoable) History.push();
   _timeline = d.timeline;
@@ -778,7 +768,7 @@ async function _checkRemote() {
   _title = d.title || _title;
   _adv = d.adv || _adv;
   if (!undoable) _bindHistory();
-  // (phase V62, (во51)) A piece swapped by the person in the view "b-roll" (js/merge-v3/broll-view.js) comes in quietly.
+  // A piece swapped by the person in the view "b-roll" (js/merge-v3/broll-view.js) comes in quietly.
   _status = !who || (Date.now() < _hushUntil && who.broll && !who.frag && !who.heard && !who.laid) ? null
     : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
     : who.broll ? 'B-roll laid on main video.'
@@ -793,19 +783,19 @@ async function _checkRemote() {
 // and in what order. A change anywhere in that means somebody edited the project, whatever else moved
 // with it. Null for that; otherwise { frag, heard } - which of the two moved.
 const _isFrag = (c) => Number(c && c.frag) > 0;
-// (phase V54, block 2) A clip the server laid itself - Video to Music's track under its clip (lib/audio-gens.js _layUnder): the
+// A clip the server laid itself - Video to Music's track under its clip (lib/audio-gens.js _layUnder): the
 // mark rides only until this page saves (lib/timeline-shape.js keeps no such field).
 const _isLaid = (c) => !!(c && c.laidBy);
-// (phase V62, (во51)) While a piece is being swapped by the person (js/merge-v3/broll-view.js), its lay comes in without a word.
+// While a piece is being swapped by the person (js/merge-v3/broll-view.js), its lay comes in without a word.
 let _hushUntil = 0;
 export function hush(ms) { _hushUntil = Date.now() + (+ms || 0); }
-// (phase V62) A piece of a voiceover's B-roll - its engine's cell on main video, known by its id (lib/broll.js: br_<line>_…).
+// A piece of a voiceover's B-roll - its engine's cell on main video, known by its id (lib/broll.js: br_<line>_…).
 const _isBroll = (c) => /^br_\d/.test(String((c && c.id) || ''));
 function _serverOnly(base, theirs) {
   const lanes = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []);
   const a = lanes(base);
   if (!a.length) return null;
-  // A subtitle lane the server had to add - an old project without one - holds only heard lines. (V54) A sound lane it made for
+  // A subtitle lane the server had to add - an old project without one - holds only heard lines. A sound lane it made for
   // a track it laid holds only that - and, on a timeline that had no sound lane, the empty main audio made before it (then
   // main video's link to it is the server's too). Those count only beside a track laid: an empty lane alone is somebody's.
   const newLane = (l) => !!l && !a.some(x => x.id === l.id);
@@ -827,14 +817,14 @@ function _serverOnly(base, theirs) {
     const yf = made.has(yf0.linkId) ? { ...yf0, linkId: xf.linkId } : yf0;
     if (!_same(xf, yf)) return null;
     const subs = x.kind === 'subs';
-    // A heard line a person CORRECTED (K10) is the person's while the newer copy still has it - a lay keeps
+    // A heard line a person CORRECTED is the person's while the newer copy still has it - a lay keeps
     // corrected lines, so only a hand changes one; gone from the newer copy, "back to what was heard" took
     // it, and that is the server's own doing.
     const kept = new Set((yc || []).filter(isCorrected).map(c => c.id));
     const said1 = (c) => subs && isHeard(c) && !kept.has(c.id);
     // The person's cells: on the subtitle lane in any order (a lay puts the lines back in time
     // order), elsewhere as they are - on a video lane the order is which one shows. A talking head's caption
-    // (`voice`, phase V30, block 1) is MOVED by the mirror with its line, a corrected one too: where it stands is
+    // (`voice`) is MOVED by the mirror with its line, a corrected one too: where it stands is
     // the server's, what it says is the person's.
     const placeFree = (c) => (subs && c && c.voice ? { ...c, start: 0, dur: 0 } : c);
     const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c) && !_isLaid(c) && !_isBroll(c)).map(placeFree);
@@ -849,8 +839,8 @@ function _serverOnly(base, theirs) {
 }
 
 /**
- * Look for a newer timeline NOW, instead of waiting for the next poll (phase Z', the owner
- * 2026-09-22). For the places that KNOW the server has just re-laid the cut - taking a line off the
+ * Look for a newer timeline NOW, instead of waiting for the next poll. For the places that KNOW the
+ * server has just re-laid the cut - taking a line off the
  * script, putting it back - because twenty seconds of an unchanged timeline under the blur reads as
  * nothing having happened. It is the same check the watcher makes, not a second way of doing it.
  */

@@ -1,24 +1,23 @@
 'use strict';
 
-/* clean-library.js - a COPY of the owner's library for a friend, with nothing of the owner's accounts in it (phase V83,
-   block B7; the owner 2026-11-09: "я бы хотел передать с уже сразу библиотекой ... без моих ключей api и бакетов",
-   (о26) "по рекомендации Б" - without the projects and their renders).
+/* clean-library.js - a COPY of a library to hand to another person, with none of the giver's accounts in it - no API
+   keys or buckets - and, by default, without the projects and their renders.
 
        node tools/clean-library.js --to <folder> [--from library] [--with-projects] [--allow-open]
 
-   The owner's library is only READ (copied with robocopy); everything else happens in the copy:
-     - not copied: logs\, backups\, cache\ (but its thumbnails - the friend's processor need not make them again for
-       twenty minutes - and its small records, cache\*.json), .env, data\telegram.json and data\tg-inbox.json (the owner's bot);
-     - data\settings.json: every key, token and secret gone, the Cloudflare / R2 / Telegram fields too - the friend enters
-       their own on Admin -> API keys (the owner (о18));
+   The source library is only READ (copied with robocopy); everything else happens in the copy:
+     - not copied: logs\, backups\, cache\ (but its thumbnails - the recipient's processor need not make them again for
+       twenty minutes - and its small records, cache\*.json), .env, data\telegram.json and data\tg-inbox.json (the source's bot);
+     - data\settings.json: every key, token and secret gone, the Cloudflare / R2 / Telegram fields too - the recipient enters
+       their own on Admin -> API keys;
      - the journal of generations and what the chats said: data\alerts.json, mv3-chat.json, mv3-gens.json,
-       mv3-video-gens.json, audio-gens.json, mv3-queue.json - gone (their records name the owner's kie.ai tasks and
+       mv3-video-gens.json, audio-gens.json, mv3-queue.json - gone (their records name the source's kie.ai tasks and
        bucket links; what the chats made stays on the shelves);
      - without --with-projects: every project deleted BY THE APP ITSELF - the server is started on the copy (keys gone,
        nothing paid can start), each timeline deleted with its files as Merge deletes it (DELETE /api/mv3/timeline/:key
        ?files=1 - what a shelf still uses is moved to media\work first), each 3D Studio scene; then media\renders\;
        the two drafts (Merge's, the voiceover's) stay, as they always do.
-   Refused while the owner's app is open on the library (port 38417 answers) - the copy would be torn. */
+   Refused while the app is open on the source library (port 38417 answers) - the copy would be torn. */
 
 const fs = require('fs');
 const os = require('os');
@@ -98,9 +97,9 @@ async function deleteProjects(lib) {
   }
 }
 
-// Paths of the owner's computer: a source the library only REMEMBERS (a highlights video read from a file outside it,
-// phase V43 `diskPath`) means nothing on a friend's computer - removed by the store's own remove (it deletes only inside
-// its library, here the copy; the owner's video is never touched); where a copied file came from (`intake.fromPath`)
+// Paths of the source computer: a source the library only REMEMBERS (a highlights video read from a file outside it,
+// `diskPath`) means nothing on the recipient's computer - removed by the store's own remove (it deletes only inside
+// its library, here the copy; the original video is never touched); where a copied file came from (`intake.fromPath`)
 // is forgotten.
 function forgetOwnerPaths(lib) {
   const code = `
@@ -168,7 +167,7 @@ async function cleanCopy({ from, to, withProjects = false, allowOpen = false }) 
     ...GONE_DATA.map((n) => path.join(src, 'data', n))]);
   if (fs.existsSync(path.join(src, 'cache', 'thumbs'))) robocopy(path.join(src, 'cache', 'thumbs'), path.join(dest, 'cache', 'thumbs'));
   // The small records the app keeps in cache\ (render-posters.json - the renders' posters already made): without them
-  // a friend's first start would do that work again.
+  // the recipient's first start would do that work again.
   const marks = [];
   for (const e of fs.existsSync(path.join(src, 'cache')) ? fs.readdirSync(path.join(src, 'cache'), { withFileTypes: true }) : []) {
     if (!e.isFile() || !/\.json$/i.test(e.name)) continue;

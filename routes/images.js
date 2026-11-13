@@ -23,9 +23,8 @@ const LC  = require('../lib/library-cats');
 // The extension is KEPT rather than normalised to .jpg. A PNG with the background erased is
 // one of the things this shelf is for, and rewriting it to .jpg would flatten the
 // transparency onto black before anything had a chance to look at it. Any OTHER picture - AVIF,
-// GIF, TIFF, a phone's HEIC - is taken and turned into a JPEG once it is down (phase V24,
-// lib/image-in.js): it used to be turned away as "no file", or kept in a format the aggregators
-// refuse.
+// GIF, TIFF, a phone's HEIC - is taken and turned into a JPEG once it is down
+// (lib/image-in.js), rather than turned away or kept in a format the aggregators refuse.
 const IMGIN = require('../lib/image-in');
 const _upload = multer({
   storage: multer.diskStorage({
@@ -47,7 +46,7 @@ const _upload = multer({
 
 router.post('/images/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  // (phase V57, the owner's (ок2)) Not into the references of Environments / Lookbooks: only the photos their generators
+  // Not into the references of Environments / Lookbooks: only the photos their generators
   // are given lie there (lib/library-cats.js closedWhy) - the file brought goes, refused in words.
   const shut = LC.closedWhy('images', String((req.body || {}).categoryId || ''));
   if (shut) {
@@ -85,7 +84,7 @@ router.use('/images/upload', (err, _req, res, _next) => {
 //
 //   POST /api/images/sendable     { dataUrl }  -> { dataUrl, converted, from }
 //
-// (phase V24) A phone's HEIC picked in a field that shows its picture before anything is sent - the
+// A phone's HEIC picked in a field that shows its picture before anything is sent - the
 // makers of Setup, New Character: the browser cannot draw a HEIC, so the page asks for it as a JPEG
 // first (js/picture-file.js). Nothing is written anywhere; the bytes go back as they came, or as a JPEG.
 router.post('/images/sendable', async (req, res) => {
@@ -110,8 +109,8 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
   const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to its category's folder
   try {
-    // (phase V77, the owner's (тч13)) NO WORDS ON IT: the page draws the captions and the text lanes with libass on a layer of
-    // its own, so the frame arrives without them - and stays so (phase K4 burnt them in here; the owner wants the picture).
+    // NO WORDS ON IT: the page draws the captions and the text lanes with libass on a layer of
+    // its own, so the frame arrives without them - and stays so: what is wanted is the picture.
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add(imagePath, {
       name: String((req.body || {}).name || '').trim().slice(0, 120) || 'screenshot',
@@ -135,7 +134,7 @@ router.use('/images/shot', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'could not save the shot' });
 });
 
-// ── A frame out of a clip's own file (phase V77, the owner's (тч3)-(тч5)) ─────────────────────────────────────────────────────
+// ── A frame out of a clip's own file ─────────────────────────────────────────────────────
 //
 //   POST /api/images/frame   { src, t, name?, project?, at? }  -> { success, item }
 //

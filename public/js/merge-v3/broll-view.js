@@ -1,8 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — A PIECE OF A VOICEOVER'S B-ROLL, ANOTHER ITEM FOR IT (phase V62, block 2; the owner 2026-10-30, (во18): "при клике на
-   элемент видеодорожки показывает в library скачаные варианты, галочкой отмечены те, которые уже на таймлайне, при наведении
-   показывать всплывашку с предпросмотром, кликом заменять на таймлайне. типа так меньше действий, чтобы не открывать попап";
-   (во25) "всегда"; (во22) а - only what is laid is downloaded).
+   MERGE — A PIECE OF A VOICEOVER'S B-ROLL, ANOTHER ITEM FOR IT.
 
    A press on a piece of the B-roll on main video (a cell `br_…`, lib/broll.js) opens this view of the Library panel - from the
    shelf, the scenarios, the captions, whatever showed; its crumb "b-roll /" is lit, and the panel's other crumbs lead back. It shows
@@ -21,9 +18,9 @@ import { onSelChange, selectedOne, selectClipById, playhead } from './timeline-b
 import { hint } from '../bubble.js';
 import { setOpenColumn } from './layout.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts.
+// Being read, could not be read - the shared parts.
 import { loadingEl, failedEl, emptyEl } from '../ui-state.js';
-// (phase V73 block 5, 5d) Lucide's ▶ and ✓, the figures in mono.
+// Lucide's ▶ and ✓, the figures in mono.
 import { icon } from '../icons.js';
 import { figures } from '../num.js';
 
@@ -43,7 +40,7 @@ let _shown = false;
 let _cell = '';               // the piece shown: its cell id
 let _data = null;             // GET /api/broll/:id/piece/:cell
 let _busy = '';               // the item being put in
-let _failed = false;          // (phase V73 block 2) the piece could not be read and nothing of it is shown - the reason was a popup
+let _failed = false;          // the piece could not be read and nothing of it is shown - the reason was a popup
 
 // The B-roll's pieces on main video, in their order on the timeline.
 const _pieces = () => {
@@ -53,7 +50,7 @@ const _pieces = () => {
 };
 export const laid = () => _pieces().length > 0;
 
-// (phase V62, (во53)) The crumb "b-roll /" stands in every voiceover, first in the panel's head: pale until the B-roll is laid.
+// The crumb "b-roll /" stands in every voiceover, first in the panel's head: pale until the B-roll is laid.
 function _crumb() {
   const c = $('mv3-lib-br');
   if (!c) return;
@@ -99,7 +96,7 @@ async function _load() {
     _data = r.piece;
     _failed = false;
   } catch (e) {
-    // (phase V73 block 2, (б2-19)) The reason a popup; what is shown of the piece stays - with nothing shown, "did not load".
+    // The reason a popup; what is shown of the piece stays - with nothing shown, "did not load".
     showError('The piece did not load: ' + e.message);
     if (!_data) _failed = true;
   }
@@ -114,9 +111,8 @@ function _paint() {
   if (!_data) { root.appendChild(loadingEl('reading the piece…')); return; }
   const d = _data;
   const head = _el('div', 'mv3-brv-head');
-  // (the owner 2026-10-31: "текст предложения над полем с выбором биролов выдели золотым, а синим выдели ключевые слова
-  // использованые"; (во52) а) The sentence, the keywords it was searched by under it. (phase V73 block 5, 5d; plan 3.5) The sentence
-  // in plain text with a thin gold line at its left - "your sentence" -, the keywords in the second colour.
+  // The sentence, the keywords it was searched by under it: the sentence in plain text with a thin gold line at its left
+  // - "your sentence" -, the keywords in the second colour.
   head.appendChild(_el('div', 'mv3-brv-sent', '«' + d.text + '»'));
   const meta = _el('div', 'mv3-brv-meta');
   meta.appendChild(figures('Piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: '));
@@ -124,7 +120,7 @@ function _paint() {
     if (i) meta.appendChild(document.createTextNode(' · '));
     meta.appendChild(_el('span', 'mv3-brv-q', q));
   });
-  // (phase V62, block 3, (во45)) Pixabay's terms: where the results come from, linked.
+  // Pixabay's terms: where the results come from, linked.
   if (d.items.some(i => i.site === 'pixabay')) {
     meta.appendChild(document.createTextNode(' · '));
     const a = _el('a', 'mv3-brv-src', 'From Pixabay');
@@ -137,7 +133,7 @@ function _paint() {
   root.appendChild(head);
   const scroll = _el('div', 'mv3-brv-scroll');
   root.appendChild(scroll);
-  // (phase V73 block 5, 5d) a piece with nothing found says so - the shared "empty"
+  // a piece with nothing found says so - the shared "empty"
   if (!d.items.length) scroll.appendChild(emptyEl('Nothing was found for this piece.', { icon: 'search' }));
   for (const [kind, label] of [['video', 'Videos'], ['image', 'Pictures']]) {
     const items = d.items.filter(i => i.kind === kind);
@@ -163,19 +159,17 @@ function _tile(it) {
     if (it.dur) dur.appendChild(figures(Math.round(it.dur) + ' s'));
   }
   if (it.on) t.appendChild(_el('span', 'mv3-brv-on')).innerHTML = icon('check', 12);
-  // (phase V62, block 3, (во45)) Where it is from, and whose - Pixabay's terms: its results say so.
+  // Where it is from, and whose - Pixabay's terms: its results say so.
   t.appendChild(_el('span', 'mv3-brv-by', [_site(it.site), it.author].filter(Boolean).join(' · ')));
   if (_busy === it.id) t.appendChild(_el('span', 'mv3-brv-wait', 'putting it in…'));
-  // (the owner 2026-10-31: "когда пользователь выбирает бирол, не показывай текстовую системную всплывашку") No browser tooltip:
-  // the tile says it all.
+  // No browser tooltip: the tile says it all.
   t.setAttribute('aria-label', it.here ? 'In this piece now' : 'Put it into this piece');
   t.disabled = !!_busy;
   t.addEventListener('click', () => { if (!it.here) _swap(it); });
   return t;
 }
 
-// (phase V73 block 5, 5d; the owner's (б5-19) а, (к10)) The preview under the pointer is gone - a tile is seen as it is, and a
-// press puts it in.
+// No preview under the pointer - a tile is seen as it is, and a press puts it in.
 
 // ── The press: this item into the piece ──
 async function _swap(it) {
@@ -195,7 +189,7 @@ async function _swap(it) {
       if (!s || !s.state || !s.state.running) { if (s && s.state && s.state.error) throw new Error(s.state.error); break; }
       await new Promise(res => setTimeout(res, 700));
     }
-    // (во51) The swap is the person's own act: the timeline takes it without a word by the transport.
+    // The swap is the person's own act: the timeline takes it without a word by the transport.
     await Store.refresh();
   } catch (e) {
     showError('Could not put it in: ' + e.message);

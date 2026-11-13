@@ -11,21 +11,20 @@
 //   POST   /api/mv3/img/send                { project, text, refs, engine, provider, quality, aspect,
 //                                             n, write, where } - a message of the pictures chat
 //
-//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first (no chat clears its thread since V25)
-//   POST   /api/mv3/chat/delete              { id } - one message taken away, with what goes with it (V31)
+//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first (no chat clears its thread)
+//   POST   /api/mv3/chat/delete              { id } - one message taken away, with what goes with it
 //
 //   POST   /api/mv3/img/upload               multipart `image` + `project` (+ `categoryId`) - a reference
-//                                            from the person's own disk, filed into IMAGES itself or (V57)
+//                                            from the person's own disk, filed into IMAGES itself or
 //                                            the person's folder open in the window
-//   POST   /api/mv3/img/link                 { url, project, categoryId } - (V57) a picture's link from a
+//   POST   /api/mv3/img/link                 { url, project, categoryId } - a picture's link from a
 //                                            browser, downloaded and filed the same way
 //
-// A MESSAGE IS SENT BY THE SERVER (phase J, the owner 2026-10-02 - the chat lives in the Library
-// panel now and is left and come back to). The press writes the person's turn, a record and an Alerts
+// A MESSAGE IS SENT BY THE SERVER: the chat is left and come back to. The press writes the person's turn, a record and an Alerts
 // row for every picture asked for, and the answering turn that points at them - and answers; the
 // analyst, the hosting of the references and the asking happen behind it, the rows saying which in
 // words. A page that goes away loses nothing, and a reload finds every countdown at its real age.
-// Up to FIVE sends at once per project (the owner); each picture of a send is its own walk down the
+// Up to FIVE sends at once per project; each picture of a send is its own walk down the
 // fallback, so one that dies takes one picture with it rather than the batch.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -56,7 +55,7 @@ router.get('/mv3/img/matrix', (_req, res) => {
 
 router.get('/mv3/img/feed', (req, res) => {
   try {
-    // A storyboard of the video chat (phase V8, PLAN V-A) is its card's, not this chat's: it is on the Images shelf.
+    // A storyboard of the video chat is its card's, not this chat's: it is on the Images shelf.
     res.json({ success: true, items: GENS.list(String(req.query.project || '')).filter(g => !g.board && !g.frame) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -166,7 +165,7 @@ async function _work(o) {
 // Read whole rather than paged. A project's conversation is bounded by what one person typed
 // into it, and the pictures inside it are thumbnails on demand - so the whole of it costs less
 // than the paging would.
-// (phase V23) An attachment of the video chat that is not in this library - a card whose character or place was
+// An attachment of the video chat that is not in this library - a card whose character or place was
 // deleted since - is marked `gone`: the card says what is missing before anything is pressed.
 function _markGone(items) {
   const seen = new Map();
@@ -187,7 +186,7 @@ router.get('/mv3/chat', (req, res) => {
   }
 });
 
-// (phase V31, the owner 2026-10-16) One message taken away - the cross in its corner, pressed twice - with what goes with it
+// One message taken away - the cross in its corner, pressed twice - with what goes with it
 // (lib/mv3-chat.js remove): any of the three chats, the drafts' conversation too. 409 while something in it is being made.
 router.post('/mv3/chat/delete', (req, res) => {
   try {
@@ -200,14 +199,13 @@ router.post('/mv3/chat/delete', (req, res) => {
 });
 
 // ── A reference from the disk ───────────────────────────────────────────────
-// Its own door rather than /api/images/upload. Until phase V56 it filed the picture under the PROJECT's
-// category; since V56 into IMAGES itself, and since V57 into the folder open in the attachment window or the
-// pictures column when that is a folder of the person's own (`_folderFor`).
+// Its own door rather than /api/images/upload. It files the picture into IMAGES itself, or into the folder open
+// in the attachment window or the pictures column when that is a folder of the person's own (`_folderFor`).
 //
 // The extension is KEPT rather than normalised: a PNG with the background erased is one of the
 // things people attach, and rewriting it to .jpg would flatten the transparency onto black. A picture
 // in a format the aggregators refuse - AVIF, GIF, TIFF, a phone's HEIC - is turned into a JPEG once it
-// is down (phase V24, lib/image-in.js); before, it was only renamed .png and failed after the press.
+// is down (lib/image-in.js), so it does not fail after the press.
 const IMGIN = require('../lib/image-in');
 const _upload = multer({
   storage: multer.diskStorage({
@@ -233,8 +231,7 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
   const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it into its folder
   const b = req.body || {};
   try {
-    // (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images. потому что сейчас я потерял куда
-    // кинул файл") A picture brought into a chat lies in IMAGES itself; (V57, (ок2), (ок3)) through the window or the column,
+    // A picture brought into a chat lies in IMAGES itself, so it is easy to find; through the window or the column,
     // in the person's folder open there. The project is only remembered.
     const cat = _folderFor('images', b.categoryId);
     const { item } = await IMG.add(imagePath, {
@@ -255,11 +252,10 @@ router.use('/mv3/img/upload', (err, _req, res, _next) => {
 });
 
 /**
- * (phase V57, the owner's (ок2): "в попапе падает в корневую images либо в папку которую создал пользователь и кинул в
- * нее") The folder a picture brought into a chat goes into: the one asked for (`id` - the folder open in the attachment
+ * The folder a picture brought into a chat goes into: the one asked for (`id` - the folder open in the attachment
  * window or the pictures column) when it is a folder of the person's own of this kind - not a required one (Generated,
  * Screenshots, the references of Environments / Lookbooks: lib/library-cats.js isLocked) and nothing under those
- * references (`closedWhy` - "В референсы окружений и лукбуков нельзя класть ничего вручную"); else the kind's root.
+ * references (`closedWhy` - nothing goes into them by hand); else the kind's root.
  * -> { id, label } ('' for the root).
  */
 function _folderFor(kind, id) {
@@ -274,7 +270,7 @@ function _folderFor(kind, id) {
   return { id: c.id, label: c.label };
 }
 
-// ── A picture by its link (phase V57, the owner's (ок4): "Ок4 - по рекомендации. Пробовать не будем доставать") ─────
+// ── A picture by its link ─────
 // A picture dragged from a browser onto a chat or its attachment window. Only a picture's OWN address is taken: the
 // answer must be a picture (its bytes read by lib/image-in.js, made sendable as a file from this computer is); a page's
 // address - an Instagram post, an article - is refused in words, and nothing is pulled out of the page. Filed as an upload

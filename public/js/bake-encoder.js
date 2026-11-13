@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE BAKE WINDOW'S ENCODER (phase V84 block 4a) - a worker of js/bake-worker.js, so the window draws the next frame while this
-   turns the last one into YUV and encodes it (one thread did both one after the other: 45 ms a frame against 20-25).
-   It gets the drawn frames as straight RGBA, converts each by ffmpeg's own rule (toI420 - the encoder's own conversion left the
-   copy a little flatter than the render's frames, the owner's app 2026-11-11), encodes H.264 with WebCodecs and sends the stream to
+   THE BAKE WINDOW'S ENCODER - a worker of js/bake-worker.js, so the window draws the next frame while this
+   turns the last one into YUV and encodes it (one thread doing both one after the other takes 45 ms a frame against 20-25).
+   It gets the drawn frames as straight RGBA, converts each by ffmpeg's own rule (toI420 - the encoder's own conversion leaves the
+   copy a little flatter than the render's frames), encodes H.264 with WebCodecs and sends the stream to
    the server in pieces itself; every buffer goes back to the window to be drawn into again.
      { start: { id, W, H, alpha, cfg } }   { frame: { k, buf } } (buf transferred)   { end: true }
    It answers { free: buf }, { done: { frames, convMs } } or { error }.

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the `.srt` beside a render (phase V30, block 4, K9; the owner's (с11), (с38)-(с41)).
+   CAPTIONS — the `.srt` beside a render.
 
    A render with captions can leave `<name>.en_US.srt` beside its video (a box in Export, on by default): the
    subtitle lane as CLASSIC subtitles, whatever its pages look like on screen - the heard words (with every
@@ -7,11 +7,11 @@
    lines of at most 42 characters, 1-7 s), measured in characters only, since a player draws a .srt in its own
    font; a line typed on the lane is a cue of its own, as typed (its lines broken at 42 characters, never cut
    into two cues). A talking head's lines of the script never share a cue. Text lanes are titles and stay out.
-   The text is as written - the lane's casing is a look (с40). Times are the finished file's: divided by the
+   The text is as written - the lane's casing is a look. Times are the finished file's: divided by the
    export's playback speed, nothing after the film's end. `<name>.en_US` because Meta reads the language from a
-   subtitle file's name (с39).
+   subtitle file's name.
 
-   PURE: the server require()s it (lib/mv3b-job.js, through lib/mv3b-subs.js), a stand reads it.
+   PURE: the server require()s it (lib/mv3b-job.js, through lib/mv3b-subs.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { wordsOf, paginate, breakLines, typedOf, joinsOf, tokensOf } from './pages.js';
@@ -55,7 +55,7 @@ export function srtCues(tl, o) {
     const lines = _lines(p.words.map((w) => String(w.w)));
     if (lines.length) cues.push({ start: p.start, end: p.start + p.dur, lines });
   }
-  // A typed line, as typed: each paragraph broken at 42 characters, all of it one cue (с41).
+  // A typed line, as typed: each paragraph broken at 42 characters, all of it one cue.
   for (const c of (lane.clips || [])) {
     if (!c || !c.name || isHeard(c)) continue;
     const lines = [];

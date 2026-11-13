@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S EFFECTS - THE TABLE (phase V84, the owner 2026-11-09/10; docs/local-app/plan/, "Фаза V84", "Подфаза 3 — V84"). ONE
+   A CLIP'S EFFECTS - THE TABLE. ONE
    module for the page and the server: js/merge-v3/fx-draw.js draws by it, lib/fx-render.js tells ffmpeg the same numbers.
 
    The effects are video-effects-pack's (NeuroLena, MIT - github.com/neurolena1/video-effects-pack): its timings, its curves and
@@ -11,15 +11,15 @@
      px             pixelated in blocks of px u
      vig            the vignette's strength 0..1 (vigAt - its mask)
      lines          the speed lines' strength 0..1 (linesOf - where they lie)
-     mv             (block 1b) a measured camera's move { a, b, e, f }: x' = a·x − b·y + e, y' = b·x + a·y + f, e and f shares of the
+     mv             a measured camera's move { a, b, e, f }: x' = a·x − b·y + e, y' = b·x + a·y + f, e and f shares of the
                     frame's width and height (tables.js); `cover` - zoomed about the middle just enough to leave no empty corner
      glow           Soft sway's soft focus 0..1: 0.88 of the picture blurred by 1.3 u and 0.12 of it blurred by 14 u
      blurV          a vertical blur, σ in u;  stripes - the glitch's dark lines 0..1 (stripesAt);  grain - the glitch's grain 0..1
-     blur           (block 1c) a blur both ways, σ in u (Snap zoom's snaps)
-     jitter         (block 3) the glitch's column jitter { seed } (jitterOf) - drawn by the page only. An effect with `engine: true`
+     blur           a blur both ways, σ in u (Snap zoom's snaps)
+     jitter         the glitch's column jitter { seed } (jitterOf) - drawn by the page only. An effect with `engine: true`
                     is drawn by the page's code alone, the preview live and the render from a copy the app's window BAKES with
-                    that code (lib/fx-bake.js) - on every video lane (block 4a, the owner's (б4-1): above main with its alpha)
-     mosaic         (block 1c) the face's oval of blocks: { x, y (its middle), w, h (its size) } - shares of the frame
+                    that code (lib/fx-bake.js) - on every video lane (above main with its alpha)
+     mosaic         the face's oval of blocks: { x, y (its middle), w, h (its size) } - shares of the frame
    `kind` 'intro' - a moment of its own length (`dur`), stretched to 0.8-2 (`lo`, `hi`) of it; 'loop' - for as long as it is on.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -95,7 +95,7 @@ function _heart(t) {
   return { s: 1 + 0.139 * b, col: _addCol(46 / 255 * Math.min(1, b * 1.4)) };
 }
 
-// ── Block 1b: the measured cameras (video-effects-pack's motion_matrix) ──
+// ── The measured cameras (video-effects-pack's motion_matrix) ──
 /** The camera of `name` at τ - its table played forwards and back - as a similarity, e and f shares of the frame. */
 export function motionAt(name, t) {
   const tb = MOTION[name];
@@ -122,7 +122,7 @@ function _swing(t) {
     }
   }
   const m = motionAt('colorswing', t);
-  // (block 2) Its ECHO - at the purple peaks the pack mixes in a frame from another moment (found by matching its frames to the
+  // Its ECHO - at the purple peaks the pack mixes in a frame from another moment (found by matching its frames to the
   // source): [t0, t1, from dt0 to dt1 s, at alpha a0 to a1], a 6 s cycle. The frame is the clip's file's (js/fx/kit.js momentAt).
   const tt = ((t % 6) + 6) % 6;
   let echo = null;
@@ -137,7 +137,7 @@ export { SWING_ECHO };
 
 // A seeded random a frame pair (the glitch's own, the same in the page and the file).
 function _rngOf(n) { return _rng((Math.imul(n + 1, 2654435761) ^ 0x9E3779B9) >>> 0); }
-// The glitch of the Hook set - video-effects-pack's vglitch without its per-column jitter (block 5): the green channel along the
+// The glitch of the Hook set - video-effects-pack's vglitch: the green channel along the
 // measured path, the blue the other way, the red jumping down now and then; a little brighter; smeared down; dark lines; grain.
 function _glitch(t) {
   const i = Math.floor(t * 30 + 1e-6);
@@ -149,13 +149,13 @@ function _glitch(t) {
     ch: { gx, gy, bx: -gx, ry: jump },
     col: [1.1, 0, 0, 8 / 255, 0, 1.1, 0, 8 / 255, 0, 0, 1.1, 8 / 255],
     blurV: 2.6, stripes: 1, grain: 1,
-    // (block 3) its column jitter - bands of 7 u, each moved down by its own random amount (σ 5 u), new every two frames: drawn by
+    // its column jitter - bands of 7 u, each moved down by its own random amount (σ 5 u), new every two frames: drawn by
     // the page's code only (fx-draw.js) - for the render baked by the app's window (lib/fx-bake.js) on every video lane.
     jitter: { seed: (i >> 1) + 1 },
   };
 }
 
-// ── Block 3: drawn by the page's code only (the bake engine) ────────────────
+// ── Drawn by the page's code only (the bake engine) ────────────────
 /**
  * The glitch's column jitter on a frame W wide: { bw (px), dy: [px a band] } - video-effects-pack's vglitch: bands of 7 u (3 px
  * at least), each moved down by a normal random of σ 5 u, from `seed` (the frame pair's).
@@ -172,12 +172,10 @@ export function jitterOf(W, seed) {
   }
   return { bw, dy };
 }
-/** The version of the page-drawn effects and of the bake - a copy made by another is made again (lib/fx-bake.js). 2 - block 4a:
- *  the window converts the colours itself, as ffmpeg does (the owner's app, 2026-11-11: a copy came out a little flatter). */
-// 3 - block 6: the person's mask (the magazine's head in front of its title).
+/** The version of the page-drawn effects and of the bake - a copy made by another is made again (lib/fx-bake.js). */
 export const ENGINE_VERSION = 3;
 
-// ── Block 1c: by the face ──────────────────────────────────────────────────
+// ── By the face ──────────────────────────────────────────────────
 // Where the face is, an effect keeps in `path` (js/fx/params.js normalizeFx): [[the file's second, x, y, w, h], ...] five a
 // second over the clip - the face's middle and size in shares of the FRAME, where it shows on the screen (js/merge-v3/fx-ui.js
 // finds it when the effect is added). No path - video-effects-pack's own place of a face in a vertical frame.
@@ -198,7 +196,7 @@ export function faceAt(path, tf) {
 
 // Snap zoom: three snaps in on the face (video-effects-pack's snapzoom): its zoom by these keys, less the larger the face already
 // is (a face 0.21 of the frame's width is the design's), about the face's middle 0.45 of its height down; a blur on each snap (the
-// sample's radial zoom blur is an ordinary one here - the owner's (эф9) б).
+// sample's radial zoom blur is an ordinary one here).
 const SNAP = [[0, 2.1], [0.08, 2.1], [0.30, 1.45], [1.05, 1.58], [1.12, 1.58], [1.22, 1.95], [1.9, 2.05], [1.98, 2.05], [2.08, 1.0], [2.45, 1.0]];
 function _snap(t, e) {
   const f = faceAt(e && e.path, +((e && e.t0) || 0));
@@ -218,7 +216,7 @@ function _mosaic(t, e, tf) {
   return { mosaic: { x: f[0] + 0.005 * f0[2], y: f[1] + 0.005 * f0[3], w: 1.24 * f0[2], h: 1.26 * f0[3] } };
 }
 
-// ── Block 4b: Digital zoom's zoom (its viewfinder - js/fx/overlays.js) ─────────────────────────────────────────────────────
+// ── Digital zoom's zoom (its viewfinder - js/fx/overlays.js) ─────────────────────────────────────────────────────
 // video-effects-pack's digitalzoom: in on the face 1.6x, then 2.6x, a sharp way back (Zoom scales it), less the larger the face is;
 // about the face's middle 0.45 of its height down, which a hand's shake moves 24 times a second (Shake); a blur on the way back (the
 // pack's radial one an ordinary one here, as Snap zoom's).
@@ -245,7 +243,7 @@ function _dzoom(t, e) {
   return { s: z.s, ax: z.ax, ay: z.ay, blur: z.blur };
 }
 const _none = () => ({});
-// (block 4c, the owner's (б4-13) б, в, г) A card's place up or down (a share of its window), its size and its corners.
+// A card's place up or down (a share of its window), its size and its corners.
 const CARD_OPTS = [['place', 'Place', -0.4, 0.4, 0.01, 0, 'pos'], ['size', 'Size', 0.6, 1.5, 0.05, 1, 'x'], ['corners', 'Corners', 0, 1, 0.05, 1, 'pct']];
 function _idSeed(e) {
   const s = String((e && e.id) || '');
@@ -294,8 +292,8 @@ export const EFFECTS = {
     about: 'Three sharp snaps in on the face - 145 %, 195 %, then back - with a blur on each snap.', at: _snap },
   mosaic: { name: 'Face mosaic', group: 'face', kind: 'loop', face: true,
     about: 'An oval of blocks hides the face and follows it.', at: _mosaic },
-  // (block 4b) Graphics over the picture - drawn by the page only (js/fx/overlays.js; baked for the render, `engine`), inside the
-  // clip's window (js/fx/box.js, the owner's (б4-11)); their colours and settings are the person's (б4-12, б4-13).
+  // Graphics over the picture - drawn by the page only (js/fx/overlays.js; baked for the render, `engine`), inside the
+  // clip's window (js/fx/box.js); their colours and settings are the person's.
   sparkle: { name: 'Sparkle', group: 'overlay', kind: 'loop', engine: true, draw: 'sparkle',
     colors: [['spark', 'Sparkles', '#ffffff']],
     opts: [['amount', 'Amount', 20, 150, 1, 62, 'n'], ['size', 'Size', 0.5, 2, 0.05, 1, 'x']],
@@ -315,8 +313,8 @@ export const EFFECTS = {
     colors: [['accent', 'Accent', '#ff5722'], ['lines', 'Lines', '#ffffff']],
     opts: [['zoom', 'Zoom', 0.5, 1.5, 0.05, 1, 'x'], ['shake', 'Shake', 0, 2, 0.05, 1, 'x']],
     about: 'A camera\'s viewfinder - REC, a timecode, the zoom read out - zooms in on the face 1.6x, then 2.6x, with a hand\'s shake, and snaps back.', at: _dzoom },
-  // (block 4c) Cards with the person's words (`texts`), in any of the captions' fonts (`font`), standing as long as they are set
-  // (`hold` - the moment that stands, the owner's (б4-3)); js/fx/cards.js draws them.
+  // Cards with the person's words (`texts`), in any of the captions' fonts (`font`), standing as long as they are set
+  // (`hold` - the moment that stands); js/fx/cards.js draws them.
   checklistpop: { name: 'Checklist pop', group: 'card', kind: 'intro', dur: 1.84, lo: 0.7, hold: 1.55, engine: true, draw: 'checklistpop',
     texts: [['i1', 'Item 1', 'Edit'], ['i2', 'Item 2', 'Captions'], ['i3', 'Item 3', 'Effects'], ['i4', 'Item 4', '']],
     colors: [['card', 'Card', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Ticks', '#1a1a1c']], opts: CARD_OPTS,
@@ -336,7 +334,7 @@ export const EFFECTS = {
     colors: [['bg', 'Background', '#eeeeec'], ['card', 'Window', '#fcfcfc'], ['text', 'Text', '#1a1a1c'], ['accent', 'Accent', '#1a1a1c']],
     opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct']],
     about: 'The clip shrinks into a card and lands in a chat with an AI under the request; the reply ticks its list, then the clip opens back.', at: _none },
-  // (block 4d) Screens: the window turned into a scene with the clip inside it - js/fx/screens.js draws them.
+  // Screens: the window turned into a scene with the clip inside it - js/fx/screens.js draws them.
   phonemock: { name: 'Phone app', group: 'card', kind: 'intro', dur: 1.16, lo: 0.7, hold: 0.9, engine: true, draw: 'phonemock',
     texts: [['name', 'Name', 'yourname'], ['caption', 'Caption', '20 video effects, all made with AI...']],
     colors: [['bg', 'Background', '#eeeeec'], ['body', 'Phone', '#0e0e10']], opts: [['size', 'Size', 0.8, 1.2, 0.02, 1, 'x']],
@@ -355,7 +353,7 @@ export const EFFECTS = {
     colors: [['bg', 'Background', '#eeeeec'], ['accent', 'Plate', '#ff5a36'], ['text', 'Text', '#ffffff']],
     opts: [['corners', 'Corners', 0, 1, 0.05, 1, 'pct'], ['barcode', 'Barcode', 0, 1, 1, 1, 'bool']],
     about: 'The clip becomes a magazine cover: the issue and date, the masthead over the hair, a big number and a line on a plate under the chin, a barcode.', at: _none },
-  // (block 2) Copies and moments - js/fx/copies.js draws them; Grid dive and PiP delay show other moments of the clip (`moments`).
+  // Copies and moments - js/fx/copies.js draws them; Grid dive and PiP delay show other moments of the clip (`moments`).
   details: { name: 'Details', group: 'copies', kind: 'intro', dur: 3.0, lo: 0.7, hi: 2, engine: true, draw: 'details',
     about: 'The background blurs, five photo cards of the clip land one after another with a flash, then a flash and back.', at: _none },
   clasp: { name: 'Clasp', group: 'copies', kind: 'intro', dur: 2.5, lo: 0.7, hi: 2, engine: true, draw: 'clasp',
@@ -374,7 +372,7 @@ export const EFFECTS = {
     texts: [['caption', 'Caption on the line', '']],
     colors: [['card', 'Line', '#fcfcfc'], ['text', 'Text', '#1a1a1c']], opts: [['zoom', 'Zoom', 1.1, 2.0, 0.05, 1.35, 'x']],
     about: 'The screen splits: the frame on top, the same frame zoomed on the face below, sliding in with a line between them.', at: _none },
-  // (block 5) Glitches - js/fx/glitches.js.
+  // Glitches - js/fx/glitches.js.
   cursed: { name: 'Cursed', group: 'glitch', kind: 'loop', engine: true, draw: 'cursed',
     about: 'A green night-vision tone, a flipped ghost now and then, torn tracking bands, pink dashes and grain.', at: _none },
   sliceup: { name: 'Slice up', group: 'glitch', kind: 'intro', dur: 3.1, lo: 0.7, hi: 2, engine: true, draw: 'sliceup', face: true,
@@ -384,7 +382,7 @@ export const EFFECTS = {
   liquidglass: { name: 'Liquid glass', group: 'glitch', kind: 'intro', dur: 1.55, lo: 0.7, hi: 2, engine: true, draw: 'liquidglass', face: true,
     opts: [['size', 'Size', 0.6, 1.6, 0.05, 1, 'x']],
     about: 'A big glass lens glides over the face, magnifying and bending the picture, its rim catching the light.', at: _none },
-  // (block 6) Behind the person - js/fx/behind.js: what goes behind is drawn first, then the person cut out by their mask (MediaPipe's
+  // Behind the person - js/fx/behind.js: what goes behind is drawn first, then the person cut out by their mask (MediaPipe's
   // segmenter on the window's picture as it is - js/fx/person.js, `person`), then what goes in front.
   orbit: { name: 'Orbit', group: 'behind', kind: 'intro', dur: 1.55, lo: 0.7, hi: 2, engine: true, draw: 'orbit', face: true, person: true,
     colors: [['tile', 'Tiles', '#fcfcfc'], ['glyph', 'Icons', '#1a1a1c'], ['ring', 'Ring', '#ffffff']],
@@ -420,18 +418,18 @@ export const EFFECTS = {
     about: 'Black and white; diagonal slats of the colour picture close in from both sides, the person turns white, a flash, and the colour is back.', at: _none },
 };
 
-/** Sets of effects laid at once - each one an effect of its own on the clip afterwards (the owner's (эф8)). */
+/** Sets of effects laid at once - each one an effect of its own on the clip afterwards. */
 export const SETS = {
   hook: { name: 'Hook', about: 'An opening with impact: Quick zoom with a short glitch over its first 0.7 s.',
     items: [{ k: 'quickzoom' }, { k: 'glitch', len: 0.7 }] },
-  // (block 4d, the owner's (б4-9)) Each at its moment of the pack (`at` - seconds into the clip); a clip too short - earlier, ending with it.
+  // Each at its moment of the pack (`at` - seconds into the clip); a clip too short - earlier, ending with it.
   glowup: { name: 'Glow-up', about: 'Sparkles over the whole clip and a frame of light from 0.4 s.',
     items: [{ k: 'sparkle' }, { k: 'colorframe', at: 0.4 }] },
   coverstory: { name: 'Cover story', about: 'Black & white from the start, then the clip turns into a magazine cover from 2.2 s.',
     items: [{ k: 'bwframe' }, { k: 'magazine', at: 2.2 }] },
   aichat: { name: 'AI chat', about: 'The clip lands in a chat with an AI from 0.3 s, then a checklist pops in from 2.8 s.',
     items: [{ k: 'chat', at: 0.3 }, { k: 'checklistpop', at: 2.8 }] },
-  // (block 5) The pack's party: constant energy over the whole clip.
+  // The pack's party: constant energy over the whole clip.
   party: { name: 'Party', about: 'Color swing, a beat Pulse and Sparkle over the whole clip.',
     items: [{ k: 'colorswing' }, { k: 'pulse' }, { k: 'sparkle' }] },
 };
@@ -439,7 +437,7 @@ export const SETS = {
 export const GROUPS = [['motion', 'Zoom & motion'], ['color', 'Color & light'], ['face', 'Face'], ['overlay', 'Overlays'], ['card', 'Cards'],
   ['copies', 'Copies'], ['glitch', 'Glitches'], ['behind', 'Behind']];
 
-/** (block 4c) An effect's words by key - its own (`txt`; '' - not drawn), else the table's. */
+/** An effect's words by key - its own (`txt`; '' - not drawn), else the table's. */
 export function textsOf(e) {
   const d = effectOf(e && e.k);
   const out = {};
@@ -450,7 +448,7 @@ export function textsOf(e) {
   return out;
 }
 
-/** (block 4b) An effect's colours by key - its own (`col`), else the table's - '#rrggbb'. */
+/** An effect's colours by key - its own (`col`), else the table's - '#rrggbb'. */
 export function colorsOf(e) {
   const d = effectOf(e && e.k);
   const out = {};
@@ -460,7 +458,7 @@ export function colorsOf(e) {
   }
   return out;
 }
-/** (block 4b) An effect's settings by key - its own (`opt`, kept in its range), else the table's. */
+/** An effect's settings by key - its own (`opt`, kept in its range), else the table's. */
 export function optsOf(e) {
   const d = effectOf(e && e.k);
   const out = {};
@@ -495,7 +493,7 @@ function _rng(seed) {
 
 /**
  * Quick zoom's speed lines on a W x H frame: [{ x0, y0, x1, y1, w }] in pixels - 46 white rays from the middle, of a fixed
- * length (the owner's (эф9) г: they only fade), drawn at 55 % of the effect's `lines`.
+ * length (they only fade), drawn at 55 % of the effect's `lines`.
  */
 export function linesOf(W, H) {
   const rnd = _rng(5);

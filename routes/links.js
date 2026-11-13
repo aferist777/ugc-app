@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// LINKS — the yt-dlp the app reads links with (phase V27).
+// LINKS — the yt-dlp the app reads links with.
 //
 //   GET  /api/ytdlp          -> { available, version, copy, channel, checking, checkedAt, why, result, from, to, error }
 //   POST /api/ytdlp/check    -> the same, after a check for a newer nightly build

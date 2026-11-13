@@ -1,18 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — A HIGHLIGHTS PROJECT's own view of the Library panel (phase V33.1; the owner 2026-10-20: "вместо крошек
-   (scenarios / Library / generate image / generate video / captions) появляется одна крошка highligts ... в highlight
-   поле отображается столько плиток, сколько заявил пользователь и у каждой свой прогресс ... в левом верхнем углу плиток
-   галочка ... в правом столбце поля плиток будет отображаться информация по отдельным фрагментам").
+   MERGE v3 — A HIGHLIGHTS PROJECT's own view of the Library panel.
 
    In a highlights project - its own timeline hl_<id> or a fragment's hl_<id>_<n> - the crumbs are "highlights / Library"
-   (Library stays - music and B-roll for a fragment, the owner's (х15)) and "captions" while a fragment is open or ticked. The
+   (Library stays - music and B-roll for a fragment) and "captions" while a fragment is open or ticked. The
    chats (windows) talk in ONE conversation per project (lib-views.js chatKey: a fragment's key is the home's);
    with no fragment open their results are not laid on the home (chat-shell.js refuseHome). The view is one of lib-views.js's bases, as
    the scenarios view is, and it is what the project opens on. It holds:
      the top      the video, what is happening (the server's words, as the row in Alerts says them), the cross that
                   stops it (twice: "really?"), "retry" (one press when it costs nothing, two - "spend again?" - when it
                   does), and "select all";
-     the panel    (phase V40) until the agent has answered, ONE panel the field's width: the way's steps as rows - ✓ done
+     the panel    until the agent has answered, ONE panel the field's width: the way's steps as rows - ✓ done
                   with its size and time, ● going with the server's words, ○ to come -, one bar and "0:48 · ~3:10 left";
      the tiles    vertical, one per moment found, each with its own way along while it is cut;
      the card     on the right: the moment pressed - its name, how complete its theme is (0-100), its length, the time of
@@ -23,7 +20,7 @@
    The record is the server's (GET /api/highlights/:id): read when the project opens and every 1.5 s while it is at work
    (not while the window is hidden), and again when its row is retried in Alerts.
 
-   RENDERING THE TICKED (phase V33.4, the owner's (х38)-(х44)): the project bar's render button is this view's while a
+   RENDERING THE TICKED: the project bar's render button is this view's while a
    highlights project is open (export-b.js setRenderTarget) - "Render 3" for the ticked ones, dim while none is ticked, "✕
    stop" (twice: "really?") while any of the project's renders is in line; "select all" / "select none" left of it (the
    field has no box of its own). Its window is Export's, for N fragments (openMany); the server puts them in the render
@@ -43,14 +40,14 @@ import { deal, newSeed, redealFonts } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf, dropTitle, topTitleOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
-// (phase V73, the owner's (рф-4) а) a fragment's render opens in the Library's viewer - Rename and Delete there
+// a fragment's render opens in the Library's viewer - Rename and Delete there
 import { openRender } from '../library/render-view.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
+// Being read, empty, could not be read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } from './hl-group.js';
-// (phase V73 block 5, 5d) Lucide's icons in place of the signs; every figure of the view in mono.
+// Lucide's icons; every figure of the view in mono.
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
 import { parseKey, homeKey } from '../highlights/keys.js';
@@ -87,8 +84,8 @@ let _armed = '';              // 'stop' | 'retry' - the button waiting for its s
 let _armT = 0;
 let _ui = null;
 let _err = '';
-let _rStart = 0;              // (V33.4) when this page first saw the project's renders going - 0 when they are not
-const _renderSeen = new Map(); // (V33.4) project -> Map(n -> its render's time as this page last saw it)
+let _rStart = 0;              // when this page first saw the project's renders going - 0 when they are not
+const _renderSeen = new Map(); // project -> Map(n -> its render's time as this page last saw it)
 
 const _api = async (url, opt) => {
   let r = null, d = null;
@@ -112,9 +109,9 @@ function _onStore() {
     // A fragment's timeline opened (its tile, a reload) or left: its tile is lit or not, and its card shows.
     const n = _openN();
     if (n !== _openShown) { _openShown = n; if (n) _sel = n; _paint(); }
-    // (phase V33.3) The open fragment's captions given another look: its card says it at once.
+    // The open fragment's captions given another look: its card says it at once.
     else if (n && n === _sel && _capSig() !== _capShown) _paintCard();
-    // (phase V33.4) The open fragment edited after its render: "changed since" at once, as it is saved.
+    // The open fragment edited after its render: "changed since" at once, as it is saved.
     if (n && _changedSig() !== _changedShown) _paint();
     _crumbs();
     return;
@@ -126,7 +123,7 @@ function _onStore() {
   _rStart = 0;
   _stopPoll();
   closePopup();
-  // (phase V33.4) The project bar's render button is this view's while a highlights project is open.
+  // The project bar's render button is this view's while a highlights project is open.
   setRenderTarget(pid ? TARGET : null);
   _paintBar();
   if (pid) { _show(true); _load(); }
@@ -134,7 +131,7 @@ function _onStore() {
   _crumbs();
 }
 
-// ── The captions crumb (phase V33.3, the owner's (х33)) ─────────────────────
+// ── The captions crumb ──────────────────────────────────────────────────────
 // "/ captions" shows in a highlights project while a fragment is open or ticked; what it opens is lib-views.js's and the
 // inspector's, as in any project - the open fragment's subtitle lane picked.
 function _crumbs() {
@@ -142,11 +139,11 @@ function _crumbs() {
   if (lib) lib.classList.toggle('is-hl-cap', !!_pid && (_openN() > 0 || _ticked().length > 0));
   // The ticks changed under the captions of several: they follow (and go when none is ticked any more).
   const sig = _multi ? _ticked().map((f) => f.n + ':' + ((_capOfFrag(f) || {}).preset || '')).join(',') : '';
-  // (V49) Other fragments ticked: what was picked with Shift for the ones before is let go.
+  // Other fragments ticked: what was picked with Shift for the ones before is let go.
   const ticks = _ticked().map((f) => f.n).join(',');
   if (ticks !== _tickSig) { _tickSig = ticks; _hlMix = []; _hlAnims = []; _hlFonts = []; }
   if (sig !== _multiSig) { _multiSig = sig; Views.altChanged(); }
-  // (phase V66) The group's strip and «example» follow the ticks.
+  // The group's strip and «example» follow the ticks.
   groupChanged();
 }
 let _multiSig = '';
@@ -158,7 +155,7 @@ function _capOpen() {
   const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
   const st = (lane && lane.style) || {};
   const id = String(st.preset || '');
-  // (V49) Several presets on its lane: their names, as the server says them for the others (highlights-cut.js capOf).
+  // Several presets on its lane: their names, as the server says them for the others (highlights-cut.js capOf).
   const mix = mixOf(st);
   if (mix) return { preset: id, name: 'mix: ' + mix.map((e) => presetName(e.preset)).filter(Boolean).join(', '), edited: false };
   const name = id ? presetName(id) : '';
@@ -167,17 +164,17 @@ function _capOpen() {
 const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited + '|' + !!titleLaneOf(Store.timeline()); };
 let _capShown = '';
 
-// ── The captions of SEVERAL (phase V33.3, block 2; the owner's (х33), (х34)) ─
+// ── The captions of SEVERAL ─────────────────────────────────────────────────
 // Ticked fragments are what the captions crumb gives a style to - all at once, by the server on their timelines (they are
 // not open), the open one among them too; with nothing ticked, or only the open one, it is the open fragment's lane, as in
-// any project. No undo for several (х34): another style is another press.
-// (phase V49, the owner's (пр17), (пр21)) Shift picks several presets - every ticked fragment the same set, each its own deal page by
+// any project. No undo for several: another style is another press.
+// Shift picks several presets - every ticked fragment the same set, each its own deal page by
 // page - and the "animation" tab puts a pair on them, or several with Shift. What was picked is kept while the same fragments stay
 // ticked (_crumbs lets it go).
 let _multi = false;
 let _hlMix = [];
 let _hlAnims = [];
-let _hlFonts = [];          // (V68 P4) the fonts put on them - the fonts tab, one or several with Shift
+let _hlFonts = [];          // the fonts put on them - the fonts tab, one or several with Shift
 const _toggle = (list, x, shift) => (!shift ? [x] : list.includes(x) ? list.filter((y) => y !== x) : list.concat([x]));
 const _ticked = () => _frags().filter((f) => _checked.has(f.n) && f.state === 'ready' && f.key);
 const _multiWanted = () => !!_pid && _ticked().length > 0 && !(_checked.size === 1 && _checked.has(_openN()));
@@ -188,7 +185,7 @@ Views.captionsAlt({
   open: () => { _multi = true; },
   active: () => _multi && _multiWanted(),
   release: () => { _multi = false; },
-  // (phase V66, (хо16)) The same strip as the Subtitles lane's name with a group ticked: the common settings on top (hl-group.js), the
+  // The same strip as the Subtitles lane's name with a group ticked: the common settings on top (hl-group.js), the
   // tiles' part under them.
   render: (host) => renderGroupSubs(host, _tiles),
 });
@@ -225,7 +222,7 @@ async function _toServer(rest, open, body, said) {
 async function _restyle(presetId, o) {
   const list = _ticked();
   if (!list.length || _applying || !presetId) return;
-  // (V49, (пр21)) Shift: the preset joins those picked, or leaves them; without Shift it alone.
+  // Shift: the preset joins those picked, or leaves them; without Shift it alone.
   _hlMix = _toggle(_hlMix, presetId, !!(o && o.shift));
   if (!_hlMix.length) { Views.altChanged(); return; }
   const first = _hlMix[0];
@@ -238,7 +235,7 @@ async function _restyle(presetId, o) {
     const lane = _openLane();
     const st = presetStyle(first);
     if (lane && st) {
-      // (V49, (пр20)) Its In and Out stay; several presets are its lane's mix, dealt as it is cut again; one is one again.
+      // Its In and Out stay; several presets are its lane's mix, dealt as it is cut again; one is one again.
       const look = (id) => { const p = presetStyle(id) || {}; const e = { preset: id }; for (const k of LOOK_KEYS) e[k] = p[k]; return e; };
       setSubsStyle(lane.id, Object.assign(keepMotion(st, lane.style || {}), many ? { mix: _hlMix.map(look), mixSeed: newSeed() } : { mix: [] }), true);
     }
@@ -247,7 +244,7 @@ async function _restyle(presetId, o) {
     'captions: ' + (many ? _hlMix.length + ' presets' : presetName(first) || first));
 }
 
-// (V49, (пр17)) A pair of In and Out on the ticked fragments - several with Shift, each its own deal; the lanes are not cut again.
+// A pair of In and Out on the ticked fragments - several with Shift, each its own deal; the lanes are not cut again.
 async function _reanimate(pair, o) {
   const list = _ticked();
   if (!list.length || _applying || !pair) return;
@@ -263,7 +260,7 @@ async function _reanimate(pair, o) {
     'animation: ' + (_hlAnims.length > 1 ? _hlAnims.length + ' pairs' : _hlAnims[0] || 'none'));
 }
 
-// (V68 P4, the owner's (хп12)) The fonts tab on the ticked fragments: one font, or several with Shift dealt anew - each its own deal;
+// The fonts tab on the ticked fragments: one font, or several with Shift dealt anew - each its own deal;
 // none, the presets' own fonts again. The lanes are not cut again (a page keeps its preset's width).
 async function _refont(list) {
   const ticked = _ticked();
@@ -291,18 +288,18 @@ export function initHighlights() {
     root: 'mv3-hl', crumb: 'mv3-lib-hl',
     crumbTitle: 'The fragments of this video - and the card of the one pressed',
     onBack: () => _show(false), onYield: () => { _shown = false; },
-    // From the captions view too (phase V33.3): the captions let go of - the pick released - and the tiles are back.
+    // From the captions view too: the captions let go of - the pick released - and the tiles are back.
     onCrumb: () => { Views.toBase(); setOpenColumn('library'); _show(true); _load(); },
   });
   Store.onChange(_onStore);
-  // (phase V66) The common settings of the ticked fragments - what this view lends them of the project.
+  // The common settings of the ticked fragments - what this view lends them of the project.
   initGroup({ pid: () => _pid, rec: () => _rec, ticked: _ticked, openN: _openN, load: _load, say: _say, whole: _whole,
     capOpen: _capOpen, tiles: _tiles });
   _onStore();
   // A row retried in Alerts: read again at once (alerts-bell.js).
   window.addEventListener('ugc:alert-retried', () => { if (_pid) _load(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && _pid && _busy() && !_timer) _load(); });
-  // (phase V33.4) "select all" / "select none" in the project bar, left of the render button (the owner's (х38), (х38а)).
+  // "select all" / "select none" in the project bar, left of the render button.
   const all = $('mv3-hl-all');
   if (all) all.addEventListener('click', () => {
     const frags = _frags();
@@ -310,7 +307,7 @@ export function initHighlights() {
     else for (const f of frags) _checked.add(f.n);
     _paint();
   });
-  // CTRL+Z IN THE FIELD brings the deleted fragments back, one by one, the last first (the owner's (х19а)) - "in the field":
+  // CTRL+Z IN THE FIELD brings the deleted fragments back, one by one, the last first - "in the field":
   // the last press of the mouse was in this view. Anywhere else Ctrl+Z is the timeline's (bar.js): taken before it here, in
   // the capture phase, and only then.
   document.addEventListener('pointerdown', (e) => { const r = $('mv3-hl'); _inField = !!(r && r.contains(e.target)); }, true);
@@ -328,7 +325,7 @@ export function initHighlights() {
 }
 let _inField = false;
 
-/** "+ new project -> highlights": a new project, opened, and its popup at once. `opts` (phase TG, block 5c): { url } written
+/** "+ new project -> highlights": a new project, opened, and its popup at once. `opts`: { url } written
  *  into the popup, `onStarted()` once the server took the press - a long video of REFERENCES sent "to highlights". */
 export async function createHighlights(opts = {}) {
   const d = await _api('/api/highlights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -359,7 +356,7 @@ async function _load() {
   const have = new Set((_rec.fragments || []).filter((f) => !f.deletedAt).map((f) => f.n));
   if (_sel && !have.has(_sel)) _sel = 0;
   for (const n of [..._checked]) if (!have.has(n)) _checked.delete(n);
-  // (phase V33.4, the owner 2026-10-21) A fragment whose render has just been made lets go of its tick by itself: its render
+  // A fragment whose render has just been made lets go of its tick by itself: its render
   // is newer than the one this page last saw. One that failed or was stopped keeps it. The first read of a project only looks.
   const first = !_renderSeen.has(pid);
   if (first) _renderSeen.set(pid, new Map());
@@ -369,7 +366,7 @@ async function _load() {
     if (!first && at && seen.get(f.n) !== at) _checked.delete(f.n);
     seen.set(f.n, at);
   }
-  // (phase V33.4) The project's renders: followed while they go; when they are over, how many were made is said.
+  // The project's renders: followed while they go; when they are over, how many were made is said.
   if (_rec.rendering && !_rStart) _rStart = Date.now();
   else if (!_rec.rendering && _rStart) {
     const made = _frags().filter((f) => f.rendered && Date.parse(f.rendered.at || '') >= _rStart - 5000).length;
@@ -409,7 +406,7 @@ function _build() {
 }
 
 const _frags = () => ((_rec && _rec.fragments) || []).filter((f) => !f.deletedAt).sort((a, b) => (a.rank || 0) - (b.rank || 0));
-// (V43) How many parts the video came to - a part deleted since keeps its number.
+// How many parts the video came to - a part deleted since keeps its number.
 const _whole = () => !!(_rec && _rec.ask && _rec.kinds && _rec.kinds[_rec.ask.kind] && _rec.kinds[_rec.ask.kind].whole);
 const _partsFound = () => (_rec && _rec.agent && +_rec.agent.found) || ((_rec && _rec.fragments) || []).length;
 
@@ -432,7 +429,7 @@ function _paint() {
 
 const STEP = { download: 'downloading', copy: 'copying', hear: 'hearing', find: 'finding the moments', fragments: 'cutting' };
 
-// (phase V69 P12) "auto → true crime · bodycam" - what auto found the video to be; a kind in development is cut as other.
+// "auto → true crime · bodycam" - what auto found the video to be; a kind in development is cut as other.
 function _foundSaid(r) {
   const k = String((r && r.agent && r.agent.kind) || '');
   if (!k) return '';
@@ -446,7 +443,7 @@ function _paintTop() {
   top.textContent = '';
   const r = _rec;
   const what = _el('div', 'mv3-hl-what');
-  // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (_load).
+  // Not read: "did not load" with Try again - the reason is a popup (_load).
   if (!r) {
     what.appendChild(_err ? failedEl('The project', () => { _err = ''; _paint(); _load(); }, { line: true })
       : loadingEl('reading the project…', { line: true }));
@@ -456,16 +453,15 @@ function _paintTop() {
   const v = r.video;
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
   if (v && v.seconds) what.appendChild(_fig('span', 'mv3-hl-meta', _clock(v.seconds)));
-  // (phase V33.6) And the kind of video, when one other than auto was chosen.
-  // (phase V33.8) Auto - what the agent found the video to be.
-  // (phase V69 P12) Auto - the kind its first call found, by that kind's name.
+  // And the kind of video, when one other than auto was chosen.
+  // Auto - the kind its first call found the video to be, by that kind's name.
   const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label.toLowerCase()
     : (r.ask && r.agent && r.agent.kind ? ' · ' + _foundSaid(r) : '');
-  // (phase V33.8, H3) And the background music asked for - (V68 P3) its moods; a project of before, its ticked tracks.
+  // And the background music asked for - its moods; a record with no moods, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
   const moods = r.ask && Array.isArray(r.ask.moods) ? r.ask.moods.map((m) => (m && m.label) || m).filter(Boolean) : [];
   const musicSaid = moods.length ? ' · music: ' + moods.join(', ') : (nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '');
-  // (phase V43) fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
+  // fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
   const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
   const L = (K && K.whole && K.lengths) || r.lengths;
   const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label.toLowerCase() : (r.ask ? r.ask.length : '');
@@ -477,19 +473,19 @@ function _paintTop() {
   const state = _el('div', 'mv3-hl-state');
   const w = r.work || {};
   if (_live) {
-    // (phase V40) Before the moments are found the field's panel says the way in full: here only what is going.
+    // Before the moments are found the field's panel says the way in full: here only what is going.
     const panel = !_frags().length;
     state.appendChild(_fig('span', 'mv3-hl-words', _prog && !panel ? _prog.words
       : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
     const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : null);
-    if (_armed !== 'stop') x.append(iconEl('x', 14), document.createTextNode('stop'));   // (V73 block 5, 5d) Lucide's x
+    if (_armed !== 'stop') x.append(iconEl('x', 14), document.createTextNode('stop'));   // Lucide's x
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
     x.addEventListener('click', () => { if (_armed !== 'stop') { _arm('stop'); return; } _armed = ''; _stop(); });
     state.appendChild(x);
   } else if (w.state === 'failed') {
     state.appendChild(_el('span', 'mv3-hl-words is-err', w.error === 'stopped' ? 'stopped' : (w.error || 'it failed')));
-    // (phase V43, the owner's (ё17а)) Its video stays on the disk and was moved or deleted: pointed at again here (the same file -
+    // Its video stays on the disk and was moved or deleted: pointed at again here (the same file -
     // its print says so - its words its own); deleting its source is the Library's (Scenarios -> its source).
     if (/not where it was/i.test(String(w.error || '')) && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
     if (_retry) {
@@ -507,14 +503,14 @@ function _paintTop() {
   } else if (w.state === 'done') {
     const n = _frags().length;
     const found = (r.fragments || []).length;           // deleted ones too: what the agent found
-    // (V43) fragmentation asked for no count: as many parts as the video came to.
+    // fragmentation asked for no count: as many parts as the video came to.
     const want = r.ask && r.ask.count ? r.ask.count : found;
     const made = _frags().filter((f) => f.state === 'ready').length;
     const whole = !!(r.ask && r.kinds && r.kinds[r.ask.kind] && r.kinds[r.ask.kind].whole);
     const what = whole ? (n === 1 ? ' part' : ' parts') : made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
     state.appendChild(_fig('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
   }
-  // (phase V33.4) The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
+  // The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
   const rd = r.rendering;
   if (rd) {
     const k = Math.min(rd.of, rd.done + 1);
@@ -523,7 +519,7 @@ function _paintTop() {
   const tr = r.renderTrouble || {};
   if (tr.interrupted) state.appendChild(_fig('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
   if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', tr.failed + ' not rendered'));
-  // The project's renders folder, once one is made: Explorer on it (the owner's (х40)).
+  // The project's renders folder, once one is made: Explorer on it.
   const one = _frags().find((f) => f.rendered && f.rendered.url);
   const dir = one ? String(one.rendered.url).replace(/[^/]+$/, '') : '';
   const sf = dir ? _showInFolder(dir, 'Open the folder of this project\'s renders in Explorer') : null;
@@ -541,7 +537,7 @@ function _paintTop() {
   top.appendChild(state);
 }
 
-// ── The project bar: "select all" and the render button (phase V33.4) ───────
+// ── The project bar: "select all" and the render button ─────────────────────
 function _paintBar() {
   const all = $('mv3-hl-all');
   if (all) {
@@ -581,7 +577,7 @@ const TARGET = {
   },
 };
 
-// The ticked ones, with one set of settings - Export's window for N (the owner's (х39)).
+// The ticked ones, with one set of settings - Export's window for N.
 function _renderTicked() {
   const pid = _pid;
   const list = _frags().filter((f) => _checked.has(f.n));
@@ -661,15 +657,15 @@ function _paintField() {
   // No video yet: the field is the way in, and there is no card to show.
   _ui.root.classList.toggle('is-empty', !r.video && !_live);
   if (!r.video && !_live) {
-    // (phase V73 block 2, step 2b) The shared "nothing here", its button the way in.
+    // The shared "nothing here", its button the way in.
     field.appendChild(emptyEl('A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.',
       { icon: 'film', cls: 'mv3-hl-empty', action: { label: '+ add video', on: () => _popup() } }));
     return;
   }
   const grid = _el('div', 'mv3-hl-grid');
   if (!frags.length) {
-    // (phase V40, the owner 2026-10-24: "10 одинаковых плиток говорят только «ждите»") Until the agent has answered no tile knows
-    // its moment: ONE panel the field's width says the way - its steps, one bar for the whole of it and the time. The moments
+    // Until the agent has answered no tile knows its moment (ten tiles alike would only say "wait"):
+    // ONE panel the field's width says the way - its steps, one bar for the whole of it and the time. The moments
     // found, it goes and the tiles stand, each with its own way along.
     const stages = (_live && _prog && _prog.stages) || _stages;
     if (stages && stages.length) { field.appendChild(_prepPanel(stages, !wasShown)); _prepShown = true; }
@@ -678,7 +674,7 @@ function _paintField() {
   const cutting = (_prog && _prog.fragments) || {};
   const open = _openN();
   for (const f of frags) {
-    // Its own way along (block 3): waiting its turn, being cut, made - its first frame -, or not made.
+    // Its own way along: waiting its turn, being cut, made - its first frame -, or not made.
     const ready = f.state === 'ready';
     const failed = f.state === 'failed';
     const now = cutting[f.n] || null;
@@ -697,20 +693,20 @@ function _paintField() {
     cb.addEventListener('change', () => { if (cb.checked) _checked.add(f.n); else _checked.delete(f.n); _paint(); });
     t.appendChild(cb);
     // The cross in the corner, twice ("really?"): the fragment goes - Ctrl+Z in the field brings it back until the app
-    // is started again (the owner's (х19), (х19а)).
+    // is started again.
     const armed = _armed === 'del' + f.n;
     const x = _el('button', 'mv3-hl-x u-onpic is-del' + (armed ? ' is-armed' : ' u-x'), armed ? REALLY : '');
     x.type = 'button';
     x.title = 'Delete this fragment - Ctrl+Z here brings it back';
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
     t.appendChild(x);
-    // (phase V43, (ё9)) fragmentation's parts have no score: their place in the video instead - "3 / 38".
-    // (phase V73 block 5, 5d; the owner's (б5-18) а) THE MARKS IN ONE LINE at the foot, over the name - the score, the pieces,
+    // fragmentation's parts have no score: their place in the video instead - "3 / 38".
+    // THE MARKS IN ONE LINE at the foot, over the name - the score, the pieces,
     // "Rendered" -; the tick and the ✕ stay in the top corners as on every tile.
     const marks = _el('div', 'mv3-hl-marks');
     marks.appendChild(_el('span', 'mv3-hl-score u-mono', Number.isFinite(f.score) ? String(f.score) : f.rank + ' / ' + _partsFound()));
     if ((f.pieces || []).length > 1) marks.appendChild(_fig('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
-    // (phase V33.4) Rendered: a quiet mark with Lucide's play - "Changed since", dashed, when its timeline was edited after.
+    // Rendered: a quiet mark with Lucide's play - "Changed since", dashed, when its timeline was edited after.
     if (ready && f.rendered) {
       const ch = _changed(f);
       const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''));
@@ -732,7 +728,7 @@ function _paintField() {
     } else if (failed) {
       foot.appendChild(_fig('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
     } else if (rq && rq.state === 'running') {
-      // (phase V33.4) Its render, where it is (the owner's (х42)).
+      // Its render, where it is.
       const bar = _el('div', 'mv3-hl-bar');
       const fill = _el('div', 'mv3-hl-fill is-render');
       fill.style.width = Math.max(2, rq.percent || 0) + '%';
@@ -748,7 +744,7 @@ function _paintField() {
       const st = _fig('div', 'mv3-hl-step is-err', 'render failed');
       st.title = rq.error || '';
       foot.appendChild(st);
-      const again = _el('button', 'mv3-hl-again u-btn is-s', 'Render again');   // (V73 block 5, 5d) the shared button, not red
+      const again = _el('button', 'mv3-hl-again u-btn is-s', 'Render again');   // the shared button, not red
       again.type = 'button';
       again.title = (rq.error ? rq.error + '\n' : '') + 'Put it back in line with the same settings';
       again.addEventListener('click', (e) => { e.stopPropagation(); _renderAgain(f); });
@@ -756,7 +752,6 @@ function _paintField() {
     } else foot.appendChild(_fig('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
     t.appendChild(foot);
     t.addEventListener('click', () => {
-      // (phase V33.4, the owner 2026-10-21: "повторный клик на плитку должен снимать выделение и отключать превью с этим фрагментом")
       // The tile pressed again lets go: no card, and its timeline gives way to the project's own, empty one - the preview stops
       // showing it. The ticks stay as they are.
       if (_sel === f.n) {
@@ -767,8 +762,7 @@ function _paintField() {
       }
       _sel = f.n;
       _paint();
-      // Made: its timeline opens - the preview shows it, the timeline its cut (the owner: "кликнуть на него для просмотра
-      // фрагмента в превью и отображения нарезки на таймлайне").
+      // Made: its timeline opens - the preview shows it, the timeline its cut.
       if (ready && f.key && Store.key() !== f.key) Store.open(f.key).catch((e) => showError(e.message));
     });
     grid.appendChild(t);
@@ -776,7 +770,7 @@ function _paintField() {
   field.appendChild(grid);
 }
 
-// THE PREPARATION PANEL (phase V40, the owner's (о5)): the way, a row a step - ✓ done (its size, its time), ● going (what it
+// THE PREPARATION PANEL: the way, a row a step - ✓ done (its size, its time), ● going (what it
 // is doing now, the server's words), ○ still to come, ✕ where a run stopped -, ONE bar for the whole way and "0:48 · ~3:10
 // left". It pops up once, not at every read of the record (the field is drawn again every 1.5 s).
 let _prepShown = false;        // the panel was there at the last paint
@@ -802,7 +796,7 @@ function _prepPanel(stages, fresh) {
   const list = _el('ol', 'mv3-hl-stages');
   for (const s of stages) {
     const li = _el('li', 'mv3-hl-stage is-' + s.state);
-    // (phase V73 block 5, 5d) Lucide's check / x, the turning loader on the step at work (no blinking), a ring for the next
+    // Lucide's check / x, the turning loader on the step at work (no blinking), a ring for the next
     const m = li.appendChild(_el('i', 'mv3-hl-stage-m'));
     if (s.state === 'done' || s.state === 'now' || s.state === 'failed') m.innerHTML = icon(s.state === 'done' ? 'check' : s.state === 'now' ? 'loader-circle' : 'x', 14);
     else m.classList.add('is-ring');
@@ -836,7 +830,7 @@ function _paintCard() {
     const ul = _el('ul', 'mv3-hl-list');
     for (const f of frags) if (_checked.has(f.n)) ul.appendChild(_el('li', null, f.title));
     card.appendChild(ul);
-    // (phase V66.1) Their common settings are the buttons in place of the timeline (hl-group.js).
+    // Their common settings are the buttons in place of the timeline (hl-group.js).
     card.appendChild(_el('p', 'mv3-hl-note', 'Their common settings: the buttons in place of the timeline - Subtitles, main video, main audio, music - '
       + 'for all of them at once. Rendering them: Render on the right of the project bar - one after another, with one set of settings.'));
     return;
@@ -846,7 +840,7 @@ function _paintCard() {
     card.appendChild(_el('p', 'mv3-hl-note', frags.length ? (_whole() ? 'Press a tile to read its part.' : 'Press a tile to read its moment.') : (_live ? (_whole() ? 'The parts come when the agent has read the video.' : 'The moments come when the agent has read the video.') : '')));
     return;
   }
-  // Its name is edited here (the owner's (х20)): the card's, and its timeline's - the name of the render file after it.
+  // Its name is edited here: the card's, and its timeline's - the name of the render file after it.
   const name = _el('input', 'mv3-hl-card-h mv3-hl-card-name');
   name.type = 'text';
   name.value = f.title;
@@ -861,10 +855,10 @@ function _paintCard() {
   name.addEventListener('blur', keep);
   card.appendChild(name);
   if (f.state === 'failed' && f.error) card.appendChild(_el('p', 'mv3-hl-note is-err', 'Not made: ' + f.error));
-  // (phase V33.2) Its faces could not be counted (no app window): framed from the middle - the clip's Framing switch can do it later.
+  // Its faces could not be counted (no app window): framed from the middle - the clip's Framing switch can do it later.
   if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', f.faceNote + ' - Framing on its clip can follow the face later.'));
   const facts = _el('div', 'mv3-hl-facts');
-  // (phase V69 P12) Auto: the kind it found - the rules it was cut by.
+  // Auto: the kind it found - the rules it was cut by.
   if (_rec && _rec.ask && _rec.ask.kind === 'auto' && _rec.agent && _rec.agent.kind) {
     const kf = _fig('span', 'mv3-hl-fact', _foundSaid(_rec));
     if (_rec.agent.kindWhy) kf.title = _rec.agent.kindWhy;
@@ -875,7 +869,7 @@ function _paintCard() {
     score.appendChild(_el('b', null, String(f.score)));
     score.appendChild(document.createTextNode(' / 100 · how complete the theme is'));
   } else {
-    // (phase V43, (ё9)) A part of fragmentation: no score - its place in the video and its key moments (where it punches in).
+    // A part of fragmentation: no score - its place in the video and its key moments (where it punches in).
     score.appendChild(_el('b', null, 'part ' + f.rank + ' of ' + _partsFound()));
     const k = (f.keys || []).length;
     if (k) score.appendChild(document.createTextNode(' · ' + k + (k === 1 ? ' key moment' : ' key moments')));
@@ -883,7 +877,7 @@ function _paintCard() {
   facts.appendChild(score);
   facts.appendChild(_fig('span', 'mv3-hl-fact', _secs(f.seconds)));
   card.appendChild(facts);
-  // (phase V33.3) The style its captions wear - the open one's as its timeline is now, the others' as the server read them.
+  // The style its captions wear - the open one's as its timeline is now, the others' as the server read them.
   const cap = f.state !== 'ready' ? null : (f.n === _openN() ? _capOpen() : f.cap);
   _capShown = f.n === _openN() ? _capSig() : '';
   if (cap) {
@@ -894,8 +888,8 @@ function _paintCard() {
     line.title = f.n === _openN() ? 'Another style: the captions crumb above, or the subtitle lane on the timeline'
       : 'Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style';
     card.appendChild(line);
-    // (phase V33.3) The title on top (the owner's (х35)): said when it is there, "add title" when it is not - since V40 (the owner's
-    // (о4)) a new fragment has none: this button is the way to put the agent's headline on top.
+    // The title on top: said when it is there, "add title" when it is not - a fragment made without one: this button is the
+    // way to put the agent's headline on top.
     const open = f.n === _openN();
     const lane = open ? titleLaneOf(Store.timeline()) : null;
     const titled = open ? !!lane : !!(f.cap && f.cap.titled);
@@ -905,7 +899,7 @@ function _paintCard() {
       const said = lane ? String(((lane.clips || []).find((c) => (+c.start || 0) < 0.05) || {}).name || '') : '';
       tl.appendChild(_el('b', null, said || 'yes'));
       tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
-      // (phase V69 P12, the owner's (хп90)) Taken off this fragment with one press.
+      // Taken off this fragment with one press.
       const x = _el('button', 'mv3-hl-title-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.title = 'Take the title off this fragment';
@@ -920,7 +914,7 @@ function _paintCard() {
     }
     card.appendChild(tl);
   }
-  // (phase V33.8, H3) Its background music - the track dealt to it, on "audio 2"; or why it was made without.
+  // Its background music - the track dealt to it, on "audio 2"; or why it was made without.
   if (f.music) {
     const ml = _el('div', 'mv3-hl-cap');
     ml.appendChild(document.createTextNode('music: '));
@@ -929,7 +923,7 @@ function _paintCard() {
     ml.title = 'On the "audio 2" lane, quiet, from the part of the track where it has opened up - move, trim or delete it on the timeline';
     card.appendChild(ml);
   }
-  // (phase V33.4) Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
+  // Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
   if (f.state === 'ready') card.appendChild(_renderLine(f));
   // Each piece, in the fragment's order, with its time in the video: a hook taken from later is said so.
   const pcs = _el('div', 'mv3-hl-pcs');
@@ -940,7 +934,7 @@ function _paintCard() {
   card.appendChild(pcs);
   const sec = (label, text) => {
     if (!text) return;
-    card.appendChild(_el('div', 'mv3-x-hdr', label.charAt(0).toUpperCase() + label.slice(1)));   // sentence case (V73 block 5, 5d)
+    card.appendChild(_el('div', 'mv3-x-hdr', label.charAt(0).toUpperCase() + label.slice(1)));   // sentence case
     card.appendChild(_el('p', 'mv3-hl-text', text));
   };
   sec('hook', f.hook);
@@ -948,7 +942,7 @@ function _paintCard() {
   sec('what is said', f.text);
 }
 
-// "show in folder" (phase V33.4, the owner's (х40)): Explorer on a library file or folder - only in the app's window
+// "show in folder": Explorer on a library file or folder - only in the app's window
 // (desktop/preload.js reveal); a browser has none, and no button.
 function _showInFolder(url, title) {
   const w = window.ugcWindow;
@@ -964,7 +958,7 @@ function _showInFolder(url, title) {
   return b;
 }
 
-// The card's line about the fragment's render (phase V33.4, the owner's (х42)).
+// The card's line about the fragment's render.
 function _renderLine(f) {
   const line = _el('div', 'mv3-hl-cap mv3-hl-rline');
   const rd = f.rendered;
@@ -983,7 +977,7 @@ function _renderLine(f) {
     }
     const acts = _el('div', 'mv3-hl-racts');
     const play = _el('button', 'mv3-c-btn u-btn is-s');
-    play.append(iconEl('play', 14), document.createTextNode('play'));   // (V73 block 5, 5d) Lucide's play
+    play.append(iconEl('play', 14), document.createTextNode('play'));   // Lucide's play
     play.type = 'button';
     play.title = 'Play the render in the Library\'s viewer - Rename and Delete are there';
     play.addEventListener('click', () => openRender(rd.url, { onChanged: () => _load() }));
@@ -1002,9 +996,9 @@ function _renderLine(f) {
   return line;
 }
 
-// ── The title on top added to a made fragment (phase V33.3) ────────────────
+// ── The title on top added to a made fragment ──────────────────────────────
 async function _addTitle(f) {
-  // (phase V69 P12) A part of fragmentation with its number, in the video's language ("Часть 3 · ...", (хп88)).
+  // A part of fragmentation with its number, in the video's language.
   const text = topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' });
   if (f.n === _openN()) {
     // The open one is the page's: one step of its timeline's undo, its own save.
@@ -1023,7 +1017,7 @@ async function _addTitle(f) {
   _load();
 }
 
-// (phase V69 P12, (хп90)) The title on top taken off a made fragment - the open one by the page (one step of its undo).
+// The title on top taken off a made fragment - the open one by the page (one step of its undo).
 async function _dropTitle(f) {
   if (f.n === _openN()) {
     let ok = false;
@@ -1073,8 +1067,8 @@ async function _rename(f, title) {
   _load();
 }
 
-// A word in the top for a few seconds: what was just done. WHY NOT is a popup in the corner (phase V49.1, the owner's
-// (пр28), (пр29); js/notice.js) - it stays until closed, and is seen while a chat or the shelf covers this view.
+// A word in the top for a few seconds: what was just done. WHY NOT is a popup in the corner
+// (js/notice.js) - it stays until closed, and is seen while a chat or the shelf covers this view.
 let _said = null;
 let _saidT = 0;
 function _say(text, err) {
@@ -1098,7 +1092,7 @@ async function _retryNow() {
   _load();
 }
 
-// (phase V43, (ё17а)) "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
+// "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
 // file's path over (desktop/preload.js pathOf), the server checks it is the same video (its print) and the work goes on.
 function _relinkButton(sourceId) {
   const b = _el('button', 'mv3-c-btn u-btn is-s', 'Point at the file…');

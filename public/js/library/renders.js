@@ -1,20 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   LIBRARY — the Renders shelf, BY PROJECT (phase V23, the owner 2026-10-09).
-
-   "одной строкой название проекта с данными о создании; при клике выдвигается поле с миниатюрами рендеров проекта,
-   повторный клик закрывает; каждая строка — дропдаун"; "можно открыть несколько строк сразу".
+   LIBRARY — the Renders shelf, BY PROJECT.
 
    One row per project: its title, how many renders, the date of the latest. A press opens a strip of that project's
    renders under it - the shelf's own cards (poster, the cross, "unreadable"), with the length and the date under each -
    and a second press closes it; any number open at once, remembered between visits (this computer's browser storage, a
    convenience). Rows by their newest render, newest first; renders of no project - `nocat`, loose at the top - in a
-   row "No project" at the bottom. A project deleted since keeps its folder's name (the owner's answer 8). The viewer
-   pages inside the project (answer 7).
+   row "No project" at the bottom. A project deleted since keeps its folder's name. The viewer
+   pages inside the project.
 
    The server says which folder and project each render is in, and its length (routes/library.js, lib/render-posters.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// (phase V73 block 2, step 2b) "no renders yet" as the shared part (css/app-shell.css .u-empty)
+// "no renders yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
 
@@ -75,7 +72,7 @@ export function render(items, hooks) {
     const wrap = _el('div', 'lib-rgroup' + (open.has(g.key) ? ' is-open' : ''));
     const head = _el('button', 'lib-srow lib-rhead');
     head.type = 'button';
-    head.appendChild(_el('span', 'lib-rcaret')).innerHTML = icon('chevron-right', 14);   // (phase V73 block 6, (к18))
+    head.appendChild(_el('span', 'lib-rcaret')).innerHTML = icon('chevron-right', 14);
     const main = _el('div', 'lib-srow-main');
     main.appendChild(_el('div', 'lib-srow-t', g.title));
     const n = g.items.length;

@@ -1,16 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   PICKING SEVERAL TILES (phase V54 block 5, the owner 2026-10-27: "нужно еще добавить выделение зажатым кликом. типа
-   выделение нескольких файлов, так же с зажатым shift (выделение "от" и "до") и с зажатым ctrl (точечное выделение
-   нескольких)"; (зв17): every tile of media - video, pictures, sound, a post of REFERENCES - in the Library's Media and in
-   Merge's Library panel; (зв18): several tiles onto a lane - not yet). ONE module for both galleries.
+   PICKING SEVERAL TILES - every tile of media (video, pictures, sound, a post of REFERENCES) in the Library's Media and
+   in Merge's Library panel: a band, Shift for "from - to", Ctrl for one at a time. ONE module for both galleries.
 
      Ctrl + a press      adds the tile or takes it off                    (the tile does nothing else)
      Shift + a press     from the last one pressed to this one, in the gallery's order (with Ctrl: added to what is picked)
-     a press             as it always was (plays, opens) - and picks that one alone
+     a press             its own action (plays, opens) - and picks that one alone
      a press on empty space and a drag - a band: what it touches is picked; with Shift it adds
      a press on empty space, or Escape - nothing picked
      Delete              the page's question for all of them (`onDelete`) - not in a field, not under a window
-   Every press in the gallery - on a tile, a band, empty space - is told to the page (`onPress`, phase V64 block 0): the
+   Every press in the gallery - on a tile, a band, empty space - is told to the page (`onPress`): the
    gold outline of a tile ARRIVED AT (an Alerts row, "show", what a window just made) lives only until it.
 
    What is done with them is the page's: let go on a node of the tree or a folder tile (js/media-tree.js takes `many` -
@@ -274,9 +272,9 @@ const _plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 /** Whether a tile of `kind` can go to the place `to` - one tile let go on a node, as js/media-tree.js _dropAction. */
 export function canGo(kind, to) {
-  // (phase V59.1) A saved text of Music -> Lyrics stays there.
+  // A saved text of Music -> Lyrics stays there.
   if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube' || kind === 'lyrics') return false;
-  // (2026-11-09, the owner's (в20)) A sound and a track go into one another - Music, My sounds, AUDIO's root.
+  // A sound and a track go into one another - Music, My sounds, AUDIO's root.
   if ((kind === 'music' || kind === 'sounds') && (to.kind === 'music' || to.kind === 'sounds')) return true;
   if (kind === 'music' || to.kind === 'music') return kind === to.kind;
   if (kind === 'references' || to.kind === 'references') return kind === to.kind;
@@ -308,7 +306,7 @@ export async function deleteQuestion(items) {
   const n = items.length;
   const names = items.slice(0, 8).map(i => '  ' + (i.name || i.id));
   if (n > 8) names.push('  … and ' + (n - 8) + ' more');
-  // (phase V59.1) Saved texts of Music -> Lyrics have no file.
+  // Saved texts of Music -> Lyrics have no file.
   const texts = items.every(i => i.kind === 'lyrics');
   let text = 'Delete ' + _plural(n, 'item') + '?\n\n' + names.join('\n') + '\n\n'
     + (texts ? 'The texts are removed from Music → Lyrics.' : 'Their files are removed from disk.');

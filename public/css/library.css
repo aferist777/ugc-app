@@ -16,23 +16,18 @@
      select cannot show a category name. */
   --card-w:78px; --card-h:139px;
 }
-/* (phase V73 block 6) Media's tiles are of TWO shapes, larger: 9:16 (a clip, a picture) and a square (a sound, a track, a product, a
-   wide video, a saved text) - five sizes before. The box is inside the card's 1px border. */
+/* Media's tiles are of TWO shapes: 9:16 (a clip, a picture) and a square (a sound, a track, a product, a
+   wide video, a saved text). The box is inside the card's 1px border. */
 .lib-grid, .lib-rstrip{ --card-w:100px; --card-h:174px; }
 /* One ratio cannot fit every shelf — measured from the real thumbnails: character sheets
    and looks are 16:9, lookbooks are square, environments are mixed, clips are 9:16. A card
    shaped against its content crops the subject out, so each shelf sets its own. */
-/* SIX per row, always. The count is fixed rather than derived from a card width because
-   the grid loses a third of its width when a character's looks open beside it: with
-   auto-fill the cards kept their size and the last ones dropped to a second row, so
-   selecting a character made the whole shelf jump. Fixed columns just narrow. */
-/* A ROW IS NEVER SHORTER THAN ITS TILE (phase F1, the owner 2026-09-30: "only the top half of the
-   name shows"). The card height is auto here, and a card is overflow:hidden - a grid item that
-   clips may shrink to nothing - so with more characters than fit the screen the grid squeezed EVERY
-   row until they all fitted: the 16:9 sheet kept its height and the name and the counts slid under
+/* A ROW IS NEVER SHORTER THAN ITS TILE. The card height is auto here, and a card is overflow:hidden - a grid item that
+   clips may shrink to nothing - so with more characters than fit the screen the grid would squeeze EVERY
+   row until they all fitted: the 16:9 sheet keeps its height and the name and the counts slide under
    the bottom edge. max-content rows keep the whole tile, and the shelf scrolls instead. */
 .lib-grid.is-characters{
-  /* (phase V73 block 6) columns by the width, not six always: the column of the selected one stands beside the grid on
+  /* columns by the width: the column of the selected one stands beside the grid on
      this shelf whatever is selected, so the count does not jump */
   grid-template-columns:repeat(auto-fill, minmax(168px, 1fr));
   grid-auto-rows:max-content;
@@ -41,8 +36,8 @@
    looks pane opens, and a fixed height would crop a 16:9 character sheet to a strip. The
    rows above are what stop the grid squeezing the tile; the ratio only sizes the picture. */
 .lib-grid.is-characters .lib-thumb-box{ height:auto; aspect-ratio:16 / 9; }
-/* A CHARACTER'S WHOLE NAME (phase D1, the owner 2026-09-29): two lines under the sheet instead of
-   one cut short - at a 1366px window a tile is 122px wide and "Mason "Raven" Cruz-Delacroix" lost
+/* A CHARACTER'S WHOLE NAME: two lines under the sheet instead of
+   one cut short - a long name such as "Mason "Raven" Cruz-Delacroix" keeps
    its tail. Every tile keeps room for the two, so a row stays even; only a name longer than that
    is cut, and the tile's tooltip carries it whole. */
 .lib-grid.is-characters .lib-name{
@@ -55,7 +50,7 @@
    The star top left, the cross top right, both over the thumbnail. Hidden until the
    card is hovered so 218 cards are not 436 buttons of visual noise — except a star
    that is ON, which is the whole point of having starred it. */
-/* (phase V73 block 6) ★ and ✕ are Merge's gallery's: the shared on-picture part (.u-onpic, js/library/main.js) at 20 px with Lucide's
+/* ★ and ✕ are Merge's gallery's: the shared on-picture part (.u-onpic, js/library/main.js) at 20 px with Lucide's
    icons at 12 - shown on the tile under the pointer AND on the selected one; a star that is on always. */
 .lib-star, .lib-x{
   position:absolute; top:4px; z-index:2;
@@ -74,7 +69,7 @@
 /* ── Card category dropdown ─────────────────────────────────────────────────
    Second line, under the name. Sized so the text is not clipped — a select that
    crops its own value is worse than no select. */
-/* (phase V73 block 6) quieter: a line of text with a chevron, not a field - a step of the background under the pointer. */
+/* A line of text with a chevron, not a field - a step of the background under the pointer. */
 .lib-cat-sel{
   display:block; width:calc(100% - 8px); margin:0 4px 4px; height:20px;
   padding:0 16px 0 2px; border:0; border-radius:var(--r-2xs); appearance:none;
@@ -85,12 +80,12 @@
 }
 .lib-cat-sel:hover{ color:var(--ink); background-color:var(--hover); }
 
-/* (phase V73 block 6) THE PAGE'S ZONES ARE PANELS on the dark base (к15), as Merge's (block 5): the shelves and the shelf itself,
+/* THE PAGE'S ZONES ARE PANELS on the dark base, as Merge's: the shelves and the shelf itself,
    6 px apart; the bar is the shelf's head; the tree and the column of the selected one lie inside it, a hairline apart. */
 .lib-body{ display:flex; flex:1 1 auto; min-height:0; gap:var(--gap-zone); padding:var(--gap-zone); background:var(--bg); }
 /* The main column MUST be a bounded flex column, or the grid inside it grows instead of
-   scrolling — which is exactly what happened: the page had no vertical scrollbar and
-   everything past the first screen was unreachable. */
+   scrolling — the page then has no vertical scrollbar and
+   everything past the first screen is unreachable. */
 .lib-main{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0;
   background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel); overflow:hidden; }
 
@@ -100,7 +95,7 @@
   padding:var(--sp-2); background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel);
   overflow-y:auto;
 }
-/* (phase V73 block 6) rows of 32 px; the current one a step of the background and a mark at its left - not a second lit plate */
+/* rows of 32 px; the current one a step of the background and a mark at its left - not a second lit plate */
 .lib-shelf{
   position:relative; flex:0 0 auto; display:flex; align-items:center; gap:8px; width:100%; height:32px;
   padding:0 10px; border:0; border-radius:var(--r-xs);
@@ -118,7 +113,7 @@
 }
 
 /* ── Filter bar ────────────────────────────────────────────────────────────── */
-/* (phase V73 block 6) the shelf's head, 40 px: its action at the left, the path and the state in the middle, bringing in at the right,
+/* the shelf's head, 40 px: its action at the left, the path and the state in the middle, bringing in at the right,
    the checks in "⋯" at the end */
 .lib-bar{
   display:flex; align-items:center; gap:8px; flex:0 0 auto; height:40px;
@@ -127,16 +122,16 @@
 .lib-bar .sp{ flex:1; }
 .lib-status{ flex:0 1 auto; min-width:0; }   /* the shared status line (.u-status.is-line) */
 
-/* ── The grid, and the right column about the selected tile (phase B) ──────────
+/* ── The grid, and the right column about the selected tile ────────────────────
    The column is a third of the width and ONE scroller - its body - so the picture, the voices and
    the looks read as one column. It is the picture shelves' (js/library/info.js) and Voices'
    (js/library/voices.js). */
 .lib-split{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
-/* (phase V28.5) Media's media tree on the right of the grid, a sash between (js/library/main.js _wireTreeSash). */
+/* Media's media tree on the right of the grid, a sash between (js/library/main.js _wireTreeSash). */
 .lib-tree-sash{
   flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:transparent;
 }
-/* (phase V73 block 6) inside the panel the sash is a hairline, its handle under the pointer */
+/* inside the panel the sash is a hairline, its handle under the pointer */
 .lib-tree-sash::before{ content:''; position:absolute; top:0; bottom:0; left:2px; width:1px; background:var(--border-soft); }
 .lib-tree-sash:hover::before{ background:var(--border); }
 .lib-tree-sash::after{
@@ -148,10 +143,9 @@
 .lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
 body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
 .lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
-/* (phase V56) The made folders' gold names were this tree's only; since phase V64 they are both trees' (css/media-tree.css). */
-/* (V38.6) Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
+/* Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
    selected one on the right - a scenario's column, or a draft's form (#lib-sc-draft, the generator's form moved in). */
-/* (phase V54) The gallery's column: the grid and, under it only, the music player (#lib-player) - the tree's column beside
+/* The gallery's column: the grid and, under it only, the music player (#lib-player) - the tree's column beside
    it goes down to the bottom. */
 .lib-field{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0; }
 .lib-split.is-scenarios > .lib-field{ flex:0 0 var(--sc-list-w, 360px); }
@@ -162,7 +156,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   flex:0 0 33.333%; min-width:0; display:flex; flex-direction:column;
   border-left:1px solid var(--border-soft); background:var(--surface);
 }
-/* (phase V73 block 6) the column's head: the selected one's name, 13 px in sentence case (к17) */
+/* the column's head: the selected one's name, 13 px in sentence case */
 .lib-info-head{
   flex:0 0 auto; height:40px; line-height:40px; padding:0 var(--sp-4); border-bottom:1px solid var(--border-soft);
   font:var(--fw-medium) var(--fs-13)/40px var(--font); color:var(--ink);
@@ -178,7 +172,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-info-ref img{ display:block; width:100%; height:auto; }
 .lib-info-ref.is-characters img{ aspect-ratio:16 / 9; object-fit:cover; }
-/* (phase V73 block 2) The column's "nothing here" / "did not load" rows are the shared parts (.u-empty / .u-failed .is-line,
+/* The column's "nothing here" / "did not load" rows are the shared parts (.u-empty / .u-failed .is-line,
    css/app-shell.css); this keeps only where they sit - inset as the column's other rows. */
 .lib-info-note{ margin:6px 12px; }
 /* A character's voices: the play button and the lines of a Voices row, and the main one in gold. */
@@ -186,14 +180,14 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   display:flex; align-items:center; gap:8px; padding:6px 12px;
   border-bottom:1px solid var(--border-soft);
 }
-/* (phase V73 block 6) (б1-18) the main voice is said by a neutral label "Main", not gold; it and the others' star stand in one column */
+/* the main voice is said by a neutral label "Main", not gold; it and the others' star stand in one column */
 .lib-info-main{
   flex:0 0 40px; box-sizing:border-box; height:18px; display:flex; align-items:center; justify-content:center;
   border:1px solid var(--border); border-radius:var(--r-2xs);
   font:var(--fw-medium) var(--fs-10)/1 var(--font); color:var(--muted);
 }
-/* A character's gender, a press away, and its voices with the ways to change them (phase H7,
-   js/library/char-voices.js). */
+/* A character's gender, a press away, and its voices with the ways to change them
+   (js/library/char-voices.js). */
 .lib-cv-gender{ display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border-soft); }
 .lib-cv-l{ flex:0 0 auto; margin-right:4px; font:var(--fw-medium) var(--fs-10)/1 var(--font); color:var(--muted); }
 .lib-cv-g.is-on{ cursor:default; }   /* the shared chip (.u-chip) */
@@ -219,7 +213,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content;
   gap:8px; padding:10px 12px; align-content:start; justify-content:start;
 }
-/* A look's whole name (phase V73, (б1-22)): two lines, so the date of "Rachel - look 2026-10-09" shows - the looks of one
+/* A look's whole name: two lines, so the date at the end of a look's name shows - the looks of one
    character differ by it. Balanced, so the date is not broken at its hyphens. Only a longer name is cut. */
 .lib-info-looks .lib-name{
   white-space:normal; overflow-wrap:anywhere;
@@ -232,11 +226,10 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   grid-auto-rows:max-content;
   gap:8px; padding:10px; align-content:start; justify-content:start;
 }
-/* A CARD IS AS TALL AS WHAT IS ON IT (phase V35, the owner 2026-10-23, (т4): "под названием пустое место, прям много").
-   It used to be a fixed 181px, the room of a category select under the name - and a track, a built-in sound, a YouTube
-   video or a post, which have no select, kept an empty strip there. The picture box keeps its DEFINITE height
-   (--card-h): with the height only on an aspect-ratio once, Chrome sized a row from the name alone (27px) and 218 cards
-   "fitted" one screen with no scrollbar; with a definite box and max-content rows a row is never shorter than its tallest
+/* A CARD IS AS TALL AS WHAT IS ON IT: a track, a built-in sound, a YouTube video or a post, which have no category
+   select under the name, keep no empty strip there. The picture box keeps its DEFINITE height
+   (--card-h): with the height only on an aspect-ratio, Chrome sizes a row from the name alone (27px) and 218 cards
+   "fit" one screen with no scrollbar; with a definite box and max-content rows a row is never shorter than its tallest
    card, and a card is not stretched to it (align-self:start). */
 .lib-card{
   position:relative; height:auto; align-self:start;
@@ -256,8 +249,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   position:absolute; inset:0; display:block; width:100%; height:100%;
   object-fit:cover; border:0;
 }
-/* No thumbnail yet: a quiet striped tile. Never a <video> — that is what made the old
-   shelf download megabytes to paint small cards. */
+/* No thumbnail yet: a quiet striped tile. Never a <video> — the
+   shelf would download megabytes to paint small cards. */
 .lib-thumb-box.lib-thumb-pending{
   background:repeating-linear-gradient(45deg,
     var(--surface-2), var(--surface-2) 6px,
@@ -278,7 +271,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   border:1px solid var(--danger); border-radius:4px; padding:2px 5px;
   pointer-events:none; white-space:nowrap;
 }
-/* A sound or a track (phase V7; V28.5): no picture - a note in the middle, its length below; a press on the card plays it
+/* A sound or a track: no picture - a note in the middle, its length below; a press on the card plays it
    and lights it, a press anywhere else stops it (js/library/main.js _hearToggle). */
 .lib-thumb-box.lib-thumb-sound{
   display:flex; align-items:center; justify-content:center;
@@ -289,11 +282,10 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   position:absolute; left:5px; bottom:4px; font:var(--fw-regular) var(--fs-9)/1 var(--mono); color:var(--muted);
   font-variant-numeric:tabular-nums; pointer-events:none;
 }
-.lib-card.is-playing{ border-color:var(--sel-line); }   /* (б1-17) the playing sound: the selected look */
+.lib-card.is-playing{ border-color:var(--sel-line); }   /* the playing sound: the selected look */
 .lib-card.is-playing .lib-snd{ color:var(--ink); animation:lib-hear 1s ease-in-out infinite alternate; }
 @keyframes lib-hear{ from{ transform:scale(1); } to{ transform:scale(1.15); } }
-/* (second round) A talking head whose take is on a timeline: a small mark beside its name (it was the hooks' number tag
-   too until their numbers went, V54 block 8). Its line is no taller than the name's. */
+/* A talking head whose take is on a timeline: a small mark beside its name. Its line is no taller than the name's. */
 .lib-hid{
   display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
   background:var(--surface-2); color:var(--muted);
@@ -301,16 +293,15 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   vertical-align:1px;
 }
 .lib-hid.is-used{ background:color-mix(in oklch, var(--success) 70%, black); color:var(--on-media); }
-/* Cards are half the size they were, so the name has to be quieter to match. */
+/* Cards are small, so the name is quiet to match. */
 .lib-name{
-  padding:4px 6px; font-size:var(--fs-11); line-height:1.3; color:var(--muted);   /* (phase V73 block 6) 11 px - it was 9.5 */
+  padding:4px 6px; font-size:var(--fs-11); line-height:1.3; color:var(--muted);   /* 11 px */
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-/* THE SELECTED TILE (phase B2, the owner 2026-09-29): gold, three pixels, drawn OVER the picture -
-   the border and a ring inside it. The old one was a 1px border and an inset shadow that the
-   picture covered, which is why it read as thin. Gold marks a choice in Merge too. Under the star
+/* THE SELECTED TILE: the ring of the selected thing, three pixels, drawn OVER the picture -
+   the border and a ring inside it, so the picture cannot cover it. Under the star
    and the cross, which sit on top of everything on a tile. */
-.lib-card.cur{ border-color:var(--sel-ring); }   /* (phase V73, (б1-17)) the current one: the white ring of the selected thing */
+.lib-card.cur{ border-color:var(--sel-ring); }   /* the current one: the white ring of the selected thing */
 .lib-card.cur::after{
   content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
   border:2px solid var(--sel-ring); border-radius:inherit;
@@ -320,17 +311,16 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-sub{
   display:flex; gap:5px; padding:0 6px 5px; font-size:var(--fs-10); color:var(--muted);
 }
-/* (phase V73 block 2) An empty shelf, folder or filter - and a shelf that did not load (js/library/main.js _shelfFailed) - are
+/* An empty shelf, folder or filter - and a shelf that did not load (js/library/main.js _shelfFailed) - are
    the shared parts .u-empty / .u-failed (css/app-shell.css, js/ui-state.js); this keeps only where they sit: the whole row
    of the grid, and inset in the right column. */
 .lib-empty{ grid-column:1 / -1; }
 .lib-info-body > .lib-empty{ margin:10px; }
 
-/* The viewer (.lib-view-*) and .lib-btn now live in css/lib-viewer.css, which this
-   page loads too. They moved because Merge v3 opens the same popup through the same
-   js/library/viewer.js, and a second copy of the rules is a second look to keep in
-   step. Nothing else changed - the file is loaded before this one, so any override
-   here still wins. */
+/* The viewer (.lib-view-*) and .lib-btn live in css/lib-viewer.css, which this
+   page loads too: Merge opens the same popup through the same js/library/viewer.js, and
+   a second copy of the rules would be a second look to keep in step. That file is loaded
+   before this one, so any override here wins. */
 
 /* A favourite is worth seeing without opening anything. */
 .lib-card.fav .lib-thumb-box::after{
@@ -345,7 +335,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
    name, a set of tags and our own demo, which is a ROW. The grid's card columns are
    switched off here and the side pane becomes a permanent info column. */
 .lib-grid.is-voices{ display:flex; flex-direction:column; gap:4px; }
-/* (phase V73 block 6) Voices, Scenarios and Renders: rows of one height (48 px), weights 500 / 600 */
+/* Voices, Scenarios and Renders: rows of one height (48 px), weights 500 / 600 */
 .lib-vrow{
   flex:0 0 auto; position:relative; min-height:48px; box-sizing:border-box;
   display:flex; align-items:center; gap:8px; padding:6px 30px 6px 10px;
@@ -388,7 +378,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   flex:0 0 62px; font:var(--fw-medium) var(--fs-10) var(--font);
   color:var(--muted);
 }
-/* (phase V73 block 6) the voice's facts are labelled in sentence case (к17): "Voice id", "Category" */
+/* the voice's facts are labelled in sentence case: "Voice id", "Category" */
 .lib-vi-l::first-letter{ text-transform:uppercase; }
 .lib-vi-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-all; }
 .lib-vi-v.is-mono{ font-family:var(--mono); font-size:var(--fs-9); }
@@ -399,7 +389,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-vi-sep, .lib-info-sec{
   padding:6px 12px; background:var(--surface-2);
   border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);
-  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted);   /* (phase V73 block 6) sentence case (к17) */
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted);   /* sentence case */
 }
 .lib-vi-none{ padding:10px 12px; font-size:10px; color:var(--muted); }
 /* The 4K sheets of whoever speaks with this voice, through the 20kB card variant of the
@@ -437,9 +427,9 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   transition:.12s var(--ease);
 }
 .lib-srow:hover{ border-color:var(--sel-line); }
-/* The selected scenario (phase D5): the border and a ring inside it, which on a row with no picture nothing covers -
-   since phase V73 the selected look, not gold. */
-.lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* (б1-17) a step and a light line */
+/* The selected scenario: the selected look - the border and a ring inside it, which on a row with no picture nothing
+   covers. */
+.lib-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }   /* a step and a light line */
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .lib-srow-t{ font-size:var(--fs-12); font-weight:var(--fw-medium); line-height:var(--lh-12); color:var(--ink); overflow-wrap:anywhere; }
 /* One line, clipped: the tail is for recognising a scenario, and a wrapped tail turns a list
@@ -452,7 +442,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   flex:0 0 auto; font:var(--fw-regular) var(--fs-10)/1 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums;
 }
 
-/* ── Renders: a row per project, opening a strip of its renders (phase V23) ───── */
+/* ── Renders: a row per project, opening a strip of its renders ─────────────── */
 .lib-rgroup{ display:flex; flex-direction:column; gap:6px; }
 .lib-rhead{ font:inherit; }
 .lib-rcaret{ flex:0 0 auto; display:flex; width:14px; color:var(--muted); transition:transform .12s var(--ease); }
@@ -462,16 +452,16 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-rsub{ display:flex; gap:6px; font-family:var(--mono); font-variant-numeric:tabular-nums; }
 .lib-rlen{ color:var(--ink); font-weight:var(--fw-medium); }
 
-/* ── Scenarios: the selected one, in the right column (phase D5) ──────────────
+/* ── Scenarios: the selected one, in the right column ─────────────────────────
    The title in the body at its own size - the column's head is upper case and cut to one line -
-   then the fields, where it came from, the buttons and (V38.6) the lines, a card each. */
-/* (V38.6) The buttons over the lines; the lines a card each, as the generator shows a script (.mk-scene). */
+   then the fields, where it came from, the buttons and the lines, a card each. */
+/* The buttons over the lines; the lines a card each, as the generator shows a script (.mk-scene). */
 .lib-sc-bar{ display:flex; align-items:center; gap:10px; padding:6px 12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
 .lib-sc-bar .sp{ flex:1; }
 .lib-sc-cards{ display:flex; flex-direction:column; gap:4px; padding:8px 12px 12px; }
 .lib-sc-cards > .mk-scene{ padding:5px 8px; }
 .lib-sc-lt{ field-sizing:content; contain:inline-size; min-height:20px }
-/* (V38.7) The title with its line count and date beside it. */
+/* The title with its line count and date beside it. */
 .lib-sc-top{ display:flex; align-items:baseline; gap:10px; padding:8px 12px 2px; }
 .lib-sc-top > .lib-sc-title{ flex:1 1 auto; min-width:0; padding:0; }
 .lib-sc-meta{ flex:0 0 auto; font:var(--fw-regular) var(--fs-10)/1.3 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; }
@@ -483,7 +473,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-sc-status.ok{ color:var(--success); }
 .lib-sc-status.err{ color:var(--danger); }
 
-/* ── Buttons and lines the generator brought (phase E) ─────────────────────────
+/* ── Buttons and lines the generator brought ───────────────────────────────────
    .lib-btn itself lives in css/lib-viewer.css; the primary one is the generator's main press. */
 .lib-status.ok{ color:var(--success); }
 /* A line where a countdown row would be: "pick a file first", a refusal, a job's last word. */
@@ -491,7 +481,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-job-say.err{ color:var(--danger); }
 
 /* A draft heading the Scenarios list: the tag says it is one and how far it got. */
-/* (phase V73 block 6) "Draft" and its stage: quiet text, not a pill */
+/* "Draft" and its stage: quiet text, not a pill */
 .lib-sc-tag{
   flex:0 0 auto;
   font:var(--fw-medium) var(--fs-10)/1.3 var(--font);
@@ -499,9 +489,9 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-sc-tag.run{ color:var(--ink); }
 .lib-srow.is-draft{ border-style:dashed; }
-/* (phase V60, the owner's (пп6а)) THE ARCHIVE at the bottom of the list: a folded row "▸ Archive · N", the archived
-   scenarios under it when it is open - paler; the selected one keeps its gold at full strength. */
-/* (phase V73 block 6) the archive is a ROW of the list (48 px, its hairline), "Archive · N" with a chevron - not a button */
+/* THE ARCHIVE at the bottom of the list: a folded row "▸ Archive · N", the archived
+   scenarios under it when it is open - paler; the selected one keeps its full strength. */
+/* the archive is a ROW of the list (48 px, its hairline), "Archive · N" with a chevron - not a button */
 .lib-sc-arch{ width:100%; height:48px; margin-top:4px; padding:0 10px; justify-content:flex-start; gap:8px;
   border:1px solid var(--border-soft); border-radius:var(--r-sm); font-size:var(--fs-12); }
 .lib-sc-arch-c{ display:flex; transition:transform .12s var(--ease); }
@@ -511,15 +501,15 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-srow.is-archived:not(.cur){ opacity:.6; background:transparent; }
 .lib-srow.is-archived:not(.cur):hover{ opacity:.85; }
 
-/* ── The scenario generator (phase E, js/library/make.js) ─────────────────────
+/* ── The scenario generator (js/library/make.js) ──────────────────────────────
    Sources down a narrow column on the left, the form - or the chosen source's topics - on the
-   right. Styles came from the retired Library 2 page (l2-*) under the mk- prefix. */
+   right. */
 .lib-make{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
 .mk-src{
   flex:0 1 240px; min-width:170px; min-height:0; display:flex; flex-direction:column; gap:6px;
   padding:8px; background:var(--surface);
 }
-/* The sash between the column and the generator (phase V28.1): js/library/make.js sets the column's flex-basis,
+/* The sash between the column and the generator: js/library/make.js sets the column's flex-basis,
    remembered; double-click for the usual width. */
 .mk-sash{
   flex:0 0 5px; align-self:stretch; cursor:col-resize; background:var(--border);
@@ -531,8 +521,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-add{ flex:0 0 auto; width:100%; }
 .mk-add.u-btn{ font-size:14px; }
 .mk-src-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
-/* (phase V73 block 2) "No sources yet" / "No narrators yet" are the shared part .u-empty (css/app-shell.css) - .mk-src-empty went. */
-/* A source is a LINE, not a poster (phase V28.1 - a podcast has no picture). */
+/* "No sources yet" / "No narrators yet" are the shared part .u-empty (css/app-shell.css). */
+/* A source is a LINE, not a poster (a podcast has no picture). */
 .mk-srow{
   position:relative; display:flex; align-items:flex-start; gap:6px; flex:0 0 auto;
   padding:6px 26px 6px 7px;
@@ -540,7 +530,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   cursor:pointer; transition:border-color .12s var(--ease), box-shadow .12s var(--ease);
 }
 .mk-srow:hover{ border-color:var(--sel-line); }
-/* The chosen source: the selected look - a step and a light line (phase V73, (б1-21)). */
+/* The chosen source: the selected look - a step and a light line. */
 .mk-srow.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }
 /* Being added, or waiting for a decision: not pressed - only its cross and its buttons are. */
 .mk-srow.adding, .mk-srow.offer{ cursor:default; }
@@ -594,15 +584,15 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-title-in:focus{ background:var(--bg); border-color:var(--border); }
 .mk-body{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 12px 16px;
-  /* (V38.6) Room for the scrollbar kept, so a form that grows past the window does not shift sideways. */
+  /* Room for the scrollbar kept, so a form that grows past the window does not shift sideways. */
   scrollbar-gutter:stable;
   display:flex; flex-direction:column; gap:8px;
 }
-/* (phase V73 block 2) "No topics found yet", "No samples yet", "Not read yet" are the shared part .u-empty - .mk-empty went. */
+/* "No topics found yet", "No samples yet", "Not read yet" are the shared part .u-empty. */
 /* The countdown row (css/gen-progress.css .sv3-inline-prog) lies over its host: the host is a
    positioned strip of its own height, or the row would cover the whole window. */
 .mk-job{ position:relative; min-height:28px; display:flex; flex-direction:column; gap:5px; }
-/* (V38.5) No strip while there is nothing in it - .mk-job's flex would show it, hidden or not. */
+/* No strip while there is nothing in it - .mk-job's flex would show it, hidden or not. */
 .mk-job[hidden], .mk-job:empty{ display:none; }
 .mk-job > .sv3-inline-prog{ border-radius:var(--r-xs); }
 .mk-note-line{
@@ -641,7 +631,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-field > span{ font-size:10.5px; font-weight:600; color:var(--muted); }
 .mk-field em{ font-style:normal; font-weight:400; opacity:.8; }
 .mk-field input[type=file]{ font:11px var(--font); color:var(--muted); }
-/* (V38.5) Two boxes alike: box 1 - Tone, Narrator, Hooks, "Write hooks" and the AI settings gear at its right; box 2 -
+/* Two boxes alike: box 1 - Tone, Narrator, Hooks, "Write hooks" and the AI settings gear at its right; box 2 -
    the chosen hook, Lines, "Write scenario", and the ad under them. A button stands under an empty label, level with the
    fields. */
 .mk-box{
@@ -657,21 +647,21 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-box2{ display:block; }
 .mk-box2 > .mk-ad-t{ display:block; margin-top:8px; }
 .mk-box-row{ display:flex; gap:8px; align-items:flex-start; }
-/* (V38.6) A steady width - the field grows down, never sideways ("ширина столбцов танцует"). */
+/* A steady width - the field grows down, never sideways, so the columns keep their widths. */
 .mk-ctl-hook{ flex:1 1 0; min-width:0; }
 .mk-ctl-hook textarea, .mk-ad-t{ width:100%; box-sizing:border-box; }
-/* Fitted to their text in height only: without this a growing line widened the form and squeezed the column beside it. */
+/* Fitted to their text in height only: without this a growing line would widen the form and squeeze the column beside it. */
 #mk-hook, .mk-ad-t{ contain:inline-size; }
 #mk-hook{ min-height:40px; }
-/* (V38.6) "Write / scenario" on two lines, in a taller button. */
-#mk-write{ height:40px; white-space:pre-line; line-height:1.2; text-align:center; }   /* two lines (V38.6) */
+/* "Write / scenario" on two lines, in a taller button. */
+#mk-write{ height:40px; white-space:pre-line; line-height:1.2; text-align:center; }   /* two lines */
 .mk-ctl textarea, .mk-ad-t{ resize:none; field-sizing:content; }
 .mk-ctl textarea{ min-height:28px; }
 .mk-ad-t{ min-height:44px; }
 .mk-ctl textarea[readonly]{ opacity:.7; }
 .mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .mk-ctl > span:first-child{ font-size:11px; font-weight:500; color:var(--muted); }
-/* The narrators' gear beside the Narrator field's name (phase G2): as tall as the name, no taller, so the
+/* The narrators' gear beside the Narrator field's name: as tall as the name, no taller, so the
    fields of the row stay level. */
 .mk-ctl > span:has(.mk-gear){ display:flex; align-items:center; gap:4px; }
 .mk-gear{ flex:0 0 auto; margin:-3px 0; }
@@ -684,7 +674,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-stage-h .sp{ flex:1; }
 .mk-stage-h > span:first-child{ font-size:11px; font-weight:700; color:var(--ink); }
 .mk-stage-h em{ font-style:normal; font-weight:400; color:var(--muted); }
-/* (V38.5; V38.6) The hooks hang under box 1; once one is picked they fold into a bar glued to its bottom - the same
+/* The hooks hang under box 1; once one is picked they fold into a bar glued to its bottom - the same
    frame, its top a soft line - and open under it. */
 .mk-step1{ display:flex; flex-direction:column; }
 .mk-box.glued{ border-bottom-left-radius:0; border-bottom-right-radius:0; }
@@ -699,8 +689,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-fold[hidden]{ display:none; }
 .mk-fold:hover{ color:var(--ink); }
-/* Candidates, each labelled with the KIND it is - that is what they differ in. (V38.3) A row: "use hook" on the
-   left, the text edited in place, the kind on the right; the one used is gold. (V38.4) "remake" right of "use hook";
+/* Candidates, each labelled with the KIND it is - that is what they differ in. A row: "use hook" on the
+   left, the text edited in place, the kind on the right; the one used is gold. "remake" right of "use hook";
    the kind is a type of the forty, by its name, its description on hover (.mk-tip). */
 .mk-hooks{ display:flex; flex-direction:column; gap:4px; }
 .mk-hook{
@@ -747,27 +737,27 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   flex:0 0 auto; width:30px; text-align:center; padding-top:3px;
   font-size:10px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums;
 }
-.mk-scene-n.is-hook{ font-size:var(--fs-9); color:var(--ink); }   /* (phase V73 block 6) "hook" in sentence case (к17) */
+.mk-scene-n.is-hook{ font-size:var(--fs-9); color:var(--ink); }   /* "hook" in sentence case */
 .mk-scene-n.is-hook::first-letter{ text-transform:uppercase; }
-/* (V38.8, the owner: "сделай редактируемые строки сценария в темное поле. так будет видно что строки можно редактировать")
-   A line's words in a dark field, as every field that takes typing - in the generator and on the shelf alike. */
-/* (phase V73 block 2) the shared dark field (.u-area.is-dark, (б2-14)); the lines keep their own height and spacing */
+/* A line's words in a dark field, as every field that takes typing - so it reads as editable - in the generator and on
+   the shelf alike. */
+/* the shared dark field (.u-area.is-dark); the lines keep their own height and spacing */
 .mk-scene-t{ flex:1 1 auto; min-width:0; resize:none }
 .mk-scene-t.u-area{ padding:3px 8px; line-height:1.55 }
 .mk-scene-a{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; }
 
-/* (V38) "rewrite fragment" beside words selected in a paragraph (js/library/make.js _fragFrom). */
+/* "rewrite fragment" beside words selected in a paragraph (js/library/make.js _fragFrom). */
 .mk-frag-btn{ position:fixed; z-index:60; box-shadow:var(--shadow); }
 .mk-scene-secs{ font-size:9px; color:var(--muted); text-align:center; }
 
-/* The "add a source" window, on the layer stack. (phase V60.1, (пк2а)) The page under it darkened and blurred - the one
+/* The "add a source" window, on the layer stack. The page under it darkened and blurred - the one
    rule of css/app-shell.css. */
 .mk-ov{
   position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
   background:var(--ov-dim, oklch(0 0 0 / .45)); padding:24px;
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-/* (phase V73 block 4, rule 5) The three windows - Add a source, a Source, Add by a link - wear the one frame (`.u-win`,
+/* The three windows - Add a source, a Source, Add by a link - wear the one frame (`.u-win`,
    `.u-win-head` of 40 px, `.u-win-title`, the ✕ of 28 px; css/app-shell.css); `.mk-panel` only sizes them. The same
    `.mk-panel-head` / `.mk-panel-t` are the head of the Narrators AREA (js/library/narrators.js) - not a window: it keeps its
    look, which is why these two rules step aside where the frame's classes are. */
@@ -782,12 +772,12 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-choice-btn{ flex:1; }   /* the shared tabs (.u-tabs / .u-tab), equal widths */
 .mk-route{ display:flex; flex-direction:column; gap:10px; }
 .mk-route > .u-btn{ align-self:flex-start; }
-.mk-pnote{ margin:0; }   /* (phase V73 block 4) one line - the window's status line (`.u-status.is-line`), the whole note in its title */
+.mk-pnote{ margin:0; }   /* one line - the window's status line (`.u-status.is-line`), the whole note in its title */
 .mk-pnote code{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:10px; }
-/* What the add window follows (phase V28.1): a read, a question, a vertical video going onto Uploads. */
-/* (phase V73 block 4) the window's one status line (`.u-status`, red only with `.err`) */
-/* (phase TG, after block 8) "From the Library": REFERENCES -> YouTube -> Videos, a row each. */
-.mk-lib-head{ color:var(--muted); font:500 11px/16px var(--font); }   /* (phase V73 block 4) a section head, no tracked capitals */
+/* What the add window follows: a read, a question, a vertical video going onto Uploads. */
+/* the window's one status line (`.u-status`, red only with `.err`) */
+/* "From the Library": REFERENCES -> YouTube -> Videos, a row each. */
+.mk-lib-head{ color:var(--muted); font:500 11px/16px var(--font); }   /* a section head, no tracked capitals */
 .mk-lib{ display:flex; flex-direction:column; gap:6px; max-height:320px; overflow:auto; }
 .mk-lib-row{
   display:flex; align-items:center; gap:10px; padding:6px 8px;
@@ -805,10 +795,10 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
 }
 .mk-addl-t{ font-size:11.5px; font-weight:600; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
-/* (phase V73 block 4) a line's state is the one status line (`.u-status`, `.err` red) */
+/* a line's state is the one status line (`.u-status`, `.err` red) */
 .mk-addl-acts{ display:flex; flex-wrap:wrap; gap:6px; }
 .mk-addl .mk-x{ opacity:1; top:7px; right:7px; }
-/* (phase V73 block 4, the owner's (б4-14) а) "Delete a source whose video is gone" (js/library/make.js _deleteMissing): the
+/* "Delete a source whose video is gone" (js/library/make.js _deleteMissing): the
    shared question in the middle (`.dr-back` + `.u-ask.dr-box`, css/app-shell.css) - the path may be long; the tick inside. */
 .mk-delq-p{ overflow-wrap:anywhere; }
 .mk-delq-tick{ display:flex; align-items:flex-start; gap:8px; margin-top:12px; color:var(--ink); font:400 11px/16px var(--font); cursor:pointer; }
@@ -816,15 +806,15 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-ov.is-leaving{ background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none;
   transition:background .4s ease-in; pointer-events:none; }
 
-/* (phase V27) "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
+/* "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
 .lk-panel{ width:min(520px, 96vw); }
 .lk-ta{ resize:vertical; min-height:96px; }
 .lk-row{ display:flex; align-items:center; gap:8px; }
 .lk-row .sp{ flex:1; }
-/* (phase V73 block 4) its status line is the shared one (`.u-status`): quiet - "No link in it yet." is not an error */
+/* its status line is the shared one (`.u-status`): quiet - "No link in it yet." is not an error */
 /* The download under way can be stopped from the status line it is told in (the shared ✕). */
 
-/* ── The narrators (phase E6; an area since V28.2, js/library/narrators.js) ──────────────────
+/* ── The narrators (an area, js/library/narrators.js) ───────────────────────────────────────
    In place of the scenario list or the generator, three columns: the narrators (one always selected), the
    selected one's samples, its voice. The head and the countdown rows are the generator's (mk-*). */
 .lib-narrators{
@@ -851,7 +841,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   transition:.12s var(--ease);
 }
 .nr-row:hover{ border-color:var(--sel-line); }
-/* The selected narrator: the selected look, as a selected scenario - a step and a light line (phase V73, (б1-21)). */
+/* The selected narrator: the selected look, as a selected scenario - a step and a light line. */
 .nr-row.cur{ border-color:var(--sel-line); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); }
 .nr-row-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .nr-row-t{ font-size:12px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
@@ -893,9 +883,9 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .nr-add-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .nr-add-row .sp{ flex:1; }
 .nr-add-row input[type=file]{ font:11px var(--font); color:var(--muted); max-width:190px; }
-/* (phase V27) The link beside its button: the field takes what the row has left. */
+/* The link beside its button: the field takes what the row has left. */
 .nr-add-row .nr-url{ flex:1; min-width:160px; }
-/* (V38) A sample not read yet is lit a little: "Read new samples" reads it. */
+/* A sample not read yet is lit a little: "Read new samples" reads it. */
 .nr-sample.unread{ border-color:var(--warn); }
 .nr-view{ display:flex; flex-direction:column; gap:8px; }
 /* The voice: a field's label, then its lines - each corrected in place, its ✕ on hover. */
@@ -922,7 +912,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* A disabled ✕ on a row whose job runs stays dim, hover or not. */
 .nr-row:hover > .nr-x[disabled], .nr-row > .nr-x[disabled]:focus-visible{ opacity:.35; }
 
-/* ── A source's window (phase F2, js/library/make.js _openSourceWin) ────────────
+/* ── A source's window (js/library/make.js _openSourceWin) ──────────────────────
    The file on the left, played from the library; its name and what it is on the right. */
 .src-panel{ width:min(1180px, 96vw); height:min(760px, 92vh); max-height:none; }
 .src-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1fr 300px; }
@@ -937,7 +927,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .src-save{ display:flex; align-items:center; gap:10px; }
 .src-side .lib-vi{ padding:0; }
 
-/* ── Scenarios: filters and editable fields (phase F7) ───────────────────────────
+/* ── Scenarios: filters and editable fields ──────────────────────────────────────
    The filters ride at the top of the list while it scrolls; a filter in use is lit. */
 .lib-sc-filters{
   position:sticky; top:-10px; z-index:2; margin:-10px -10px 4px; padding:8px 10px;
@@ -949,11 +939,11 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 
 /* A scenario kept in the list though the filters would hide it (it was opened on purpose). */
 .lib-srow.is-outside:not(.cur){ border-style:dashed; opacity:.8; }
-/* A character whose 4K sheet is still being made (phase H6). */
-.lib-sub-run{ color:var(--ink); font-weight:var(--fw-medium); }   /* (phase V73 block 6) work going on, not gold */
-/* The scenario column's fields and facts, two to a row (phases G4, G5): the name above, the value or
-   its dropdown under it; a long one (a source's or a topic's name) takes the whole row. (V38.7) The fields three to a
-   row, each name on the left of its dropdown, the names of one width so the dropdowns stand in line. */
+/* A character whose 4K sheet is still being made. */
+.lib-sub-run{ color:var(--ink); font-weight:var(--fw-medium); }   /* work going on, not gold */
+/* The scenario column's fields and facts, two to a row: the name above, the value or
+   its dropdown under it; a long one (a source's or a topic's name) takes the whole row. The fields (.lib-sc-fields) three
+   to a row, each name on the left of its dropdown, the names of one width so the dropdowns stand in line. */
 .lib-sc-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px 10px; padding:10px 12px; }
 .lib-sc-fields{ grid-template-columns:repeat(3, minmax(0,1fr)); gap:5px 12px; padding:4px 12px 8px; }
 .lib-sc-fields > .lib-sc-cell{ flex-direction:row; align-items:center; gap:6px; }
@@ -961,7 +951,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-fields .lib-sc-fbtn{ flex:1 1 auto }
 .lib-sc-cell{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .lib-sc-cell.is-wide{ grid-column:1 / -1; }
-.lib-sc-cl{ font:var(--fw-medium) var(--fs-10) var(--font); color:var(--muted); }   /* (phase V73 block 6) the column's labels in sentence case (к17) */
+.lib-sc-cl{ font:var(--fw-medium) var(--fs-10) var(--font); color:var(--muted); }   /* the column's labels in sentence case */
 .lib-sc-cl::first-letter{ text-transform:uppercase; }
 .lib-sc-fbtn{ display:flex; gap:6px; width:100%; min-width:0; text-align:left }
 .lib-sc-fbtn-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -977,26 +967,26 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-mrow > .mv3-plus-item.is-cur span{ color:var(--ink); }
 .lib-sc-mrow > .mv3-plus-item.is-new span{ color:var(--muted); font-weight:500; }
 .lib-sc-mx{ position:absolute; top:50%; right:5px; transform:translateY(-50%); opacity:0; transition:opacity var(--dur-1) var(--ease); }
-.lib-sc-mx.u-btn{ width:20px; height:20px; }   /* in a menu row; the row asks - no time limit, as before */
+.lib-sc-mx.u-btn{ width:20px; height:20px; }   /* in a menu row; the row asks - no time limit */
 .lib-sc-mrow:hover .lib-sc-mx, .lib-sc-mx:focus-visible{ opacity:1; }
 .lib-sc-mx:hover, .lib-sc-mrow.is-asking .lib-sc-mx{ opacity:1; color:var(--on-danger); background:var(--danger-fill); border-color:var(--danger-fill); }
 .lib-sc-mrow.is-asking > .mv3-plus-item,
 .lib-sc-mrow.is-asking > .mv3-plus-item[disabled]:hover{ opacity:1; cursor:default; background:var(--danger-soft); }
 .lib-sc-mrow.is-asking > .mv3-plus-item span{ color:var(--danger); }
 
-/* (phase V35) Media is a folder: its folders lie across the whole grid's width, over its cards (js/media-tree.js), and the
+/* Media is a folder: its folders lie across the whole grid's width, over its cards (js/media-tree.js), and the
    path to the node stands at the left of the bar. */
 .lib-grid > .mt-folders{ grid-column:1 / -1; margin:0 0 2px; }
 .lib-crumbs{ flex:0 1 auto; min-width:0; overflow:hidden; }
 .lib-crumbs[hidden]{ display:none; }
 .lib-crumbs .mt-crumbs{ margin:0; flex-wrap:nowrap; }
 
-/* (phase V35, the owner's (т1)) Sounds and tracks on Media are SQUARE cards - a grid of only them (js/library/main.js
+/* Sounds and tracks on Media are SQUARE cards - a grid of only them (js/library/main.js
    is-sound): the note, the wave and the length in a square, the name under it (and an own sound's category). */
-.lib-grid.is-sound{ --card-w:132px; --card-h:130px; }  /* the box inside the 1px border: a square card (phase V73 block 6: one square size) */
-/* (phase V35, the owner's (т3)) REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
-.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }   /* (phase V73 block 6, the owner's (b6-2) a) still 16:9, as (т3) - the whole frame */
-/* (phase V26.6) IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
+.lib-grid.is-sound{ --card-w:132px; --card-h:130px; }  /* the box inside the 1px border: a square card, one size */
+/* REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
+.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }   /* 16:9 - the whole frame */
+/* IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
 .lib-grid.is-whole{ --card-w:132px; --card-h:130px; }
 .lib-grid.is-whole .lib-thumb{ object-fit:contain; padding:4px; box-sizing:border-box; }
 /* The square of a sound: the note, its name (two lines at most) under it, the wave and the length at the bottom - laid out

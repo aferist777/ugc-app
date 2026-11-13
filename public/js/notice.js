@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   NOTICES - the corner of popups at the top right, on every page (phase V49.1, the owner's (пр28)-(пр32)).
+   NOTICES - the corner of popups at the top right, on every page.
 
    One column under the strip (css/app-nav.css .sv3-toasts), the NEWEST ON TOP, FIVE AT MOST - a sixth takes the oldest
    away (one that would go by itself first, so a waiting error is not pushed out by news). Two kinds:
@@ -12,13 +12,13 @@
          goes by itself after `ms`, and has a ✕ too. A press on it does `onClick`.
 
    NOT A LAYER (js/layers.js): Escape never closes one - it keeps clearing the timeline's pick - and neither does a press
-   elsewhere or a scroll. Progress and calm news stay where they are said now (the bars' lines); only errors come here.
+   elsewhere or a scroll. Progress and calm news stay where they are said (the bars' lines); only errors come here.
    The corner stands below the page's own top bars (the strip and the bar under it - Merge's project bar, the Library's), so
    it never covers Export or Upload.
    ════════════════════════════════════════════════════════════════════════════ */
 
 const MAX = 5;
-// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+// The 3D Studio's page keeps its look: its cross keeps the glyph, everywhere else the part draws it.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 const GOING_MS = 300;
 
@@ -32,8 +32,8 @@ const _el = (tag, cls, text) => {
 };
 
 // Below the page's own top bars, measured when a popup is shown (a bar may wrap in a narrow window): the strip, and the
-// bar under it whose right end has buttons - Merge's project bar (Export), the Library's (Upload, From a link), Home's tabs
-// (reset layout), the 3D Studio's.
+// bar under it whose right end has buttons - Merge's project bar (Export), the Library's (Upload, From a link), the 3D
+// Studio's.
 const BARS = ['.sv3-nav', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
 function _place(box) {
   let top = 0;
@@ -146,7 +146,7 @@ export function showError(text, opts = {}) {
  *   cls                  a class of its own ('is-update')
  *   onClick              a press on it (it goes then)
  *   act                  { label, run } - a button of its own ("open")
- *   acts                 [{ label, title, run }] - several (phase V73: a render's "Open" and "Show in folder"); a press on one
+ *   acts                 [{ label, title, run }] - several (a render's "Open" and "Show in folder"); a press on one
  *                        takes the popup away
  *   ms                   how long it stays (5 s)
  */

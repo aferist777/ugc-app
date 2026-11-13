@@ -1,11 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE "?" OF A PARAMETER (phase V60, the owner 2026-10-29: "добавь символы вопросиков справа от названий параметров при
-   наведении на которые показываем всплывашки с инструкциями и описанием"; (пп10а), (пп11а)) - ONE rule for the sound
+   THE "?" OF A PARAMETER - ONE rule for the sound
    window of both pages (js/sound/sound-window.js), the form in it (js/sound/suno-form.js) and the almanac.
 
    A small "?" right of a parameter's name. The pointer resting on it opens a popup - what the parameter is and how to use
-   it, where the grey notes under the rows and the ♪ block of the gold card used to be. Since phase V61 ((т4а)) the popup
-   is THE APP'S BUBBLE (js/bubble.js): over the "?", its tail pointing at it - how it opens and goes is said there. A press
+   it. The popup is THE APP'S BUBBLE (js/bubble.js): over the "?", its tail pointing at it - how it opens and goes is said there. A press
    on the "?" itself does nothing else: inside a button, a <summary> or a <label> it neither folds, unfolds nor ticks.
 
      qmark(text, o)        the "?" - `text` a string (paragraphs by "\n") or a function giving one when it opens;

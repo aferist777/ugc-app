@@ -3,13 +3,13 @@
 // Every shelf arrives from /api/library/shelf/:kind in one shape, so the page never has
 // to know where a particular kind of thing is stored.
 //
-// Cards are always <img>. A clip with no thumbnail shows a striped tile — the old shelf
-// downloaded whole videos to paint small cards, which is what made it heavy.
+// Cards are always <img>. A clip with no thumbnail shows a striped tile — downloading whole
+// videos to paint small cards would make the shelf heavy.
 
 import { initNav } from '../app-nav.js';
 import { openViewer, repaint as repaintViewer } from './viewer.js';
 import { REALLY, MS as REALLY_MS } from '../really.js';
-// (phase TG, block 7) Cutting a piece out of any video - one module with Merge's panel and the post viewer.
+// Cutting a piece out of any video - one module with Merge's panel and the post viewer.
 import * as Cut from '../cut.js';
 import * as A from './actions.js';
 import * as V from './voices.js';
@@ -19,44 +19,44 @@ import { canReveal, revealRender } from './render-view.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
-// (phase V56, (ги7)) What is known about a made environment or lookbook, in the viewer's right column.
+// What is known about a made environment or lookbook, in the viewer's right column.
 import { madeRows } from './made-rows.js';
 import * as NR from './narrators.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
-// (phase V58, the owner's (лк6)) New environment / New lookbook - the generators' window (sub-session P's module).
+// New environment / New lookbook - the generators' window.
 import { openGenerator } from '../gen-window.js';
-// (phase V59) Generate music - a window over Media; (phase V64 block 5) the
+// Generate music - a window over Media: the
 // sound window - one for both pages, music and sounds (js/sound/sound-window.js), told the Library's own (_soundHost, below).
 import * as SW from '../sound/sound-window.js';
-// (V50) A chat's window at once, "loading…" in it, while its sheets, code and conversation come (_openChat).
+// A chat's window at once, "loading…" in it, while its sheets, code and conversation come (_openChat).
 import { openEarly, wanted, dropEarly, ensureChatCss } from '../merge-v3/chat-window.js';
-// (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
+// Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
 // - the same modules as Merge's Library panel.
 import { waveEl } from '../sound/wave.js';
 import { soundMenu, myCats } from '../sound/menu.js';
 import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
-// (phase V54) The music player under the gallery while Music is open.
+// The music player under the gallery while Music is open.
 import { createPlayer } from '../sound/player.js';
-// (phase V59.1) Music -> Lyrics: a saved text's tile and its viewer - one module with Merge's panel.
+// Music -> Lyrics: a saved text's tile and its viewer - one module with Merge's panel.
 import * as LYR from '../sound/lyrics.js';
-// (phase V54) Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
+// Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
 import * as TS from '../tile-select.js';
-// (phase V78) The right button on one tile: the generation chats with it.
+// The right button on one tile: the generation chats with it.
 import { rowsFor as genRows } from '../gen-menu.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
-// (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
+// REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
 import * as News from '../references/news.js';
-// (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
+// A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
 import * as YT from '../references/yt.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm() - at the button pressed, or
-// at the tile a menu or the Delete key was about (the owner's (б2-6) а); "nothing here" and "did not load" as the shared
+// The question at the button in place of the browser's confirm() - at the button pressed, or
+// at the tile a menu or the Delete key was about; "nothing here" and "did not load" as the shared
 // parts (css/app-shell.css .u-empty, .u-failed).
 import { ask } from '../ask.js';
 import { icon } from '../icons.js';
@@ -65,10 +65,10 @@ import { emptyEl, failedEl } from '../ui-state.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
-const LS_TREE_W = 'library_tree_w_v1';   // (phase V28.5) the media tree's width on Media
+const LS_TREE_W = 'library_tree_w_v1';   // the media tree's width on Media
 
-// (phase V56, the owner's п. 19 and (ги7)) Lookbooks and Environments are no shelves of their own any more: they are IMAGES ->
-// Lookbooks / Environments on Media (phase V55), with their generators there. An old address or a remembered shelf of theirs
+// Lookbooks and Environments are no shelves of their own: they are IMAGES ->
+// Lookbooks / Environments on Media, with their generators there. An old address or a remembered shelf of theirs
 // lands there (_place, boot); the server's shelves stay - the talking head and the 3D Studio read them.
 const SHELVES = {
   characters:   'Characters',
@@ -79,36 +79,34 @@ const SHELVES = {
 };
 
 let _shelf = 'characters';
-// MEDIA'S NODE (phase V28.5, the owner 2026-10-12: "полку media в library сделать таким же форматом - справа древовидный
-// столбец, а слева уже галерея сама"): the media tree's selected node is what the grid shows - Video, a kind, a category;
-// the kind and category rows went. The same tree as Merge's Library panel (js/media-tree.js).
+// MEDIA'S NODE: the media tree's selected node is what the grid shows - Video, a kind, a category.
+// The same tree as Merge's Library panel (js/media-tree.js).
 let _tree = null;
-// (phase V60, (пп1а)) null - Media is at its ROOTS: REFERENCES, VIDEO, IMAGES, AUDIO as folder tiles, the tree folded.
+// null - Media is at its ROOTS: REFERENCES, VIDEO, IMAGES, AUDIO as folder tiles, the tree folded.
 let _node = null;
 // The node the tree opens on - an address's (boot); '' - the roots, whatever was looked at last.
 let _treeStart = '';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const AUDIO = new Set(['music', 'sounds', 'sfx']);
 const _mkind = () => (_node && _node.kind) || '';
-// (phase V34.E) The search over SFX - kept while SFX is looked at, let go of outside it.
+// The search over SFX - kept while SFX is looked at, let go of outside it.
 let _q = '';
 const _mcat = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 
-// THE SHELVES WHERE ONE TILE IS ALWAYS SELECTED (phase B, the owner 2026-09-29): opening one selects
+// THE SHELVES WHERE ONE TILE IS ALWAYS SELECTED: opening one selects
 // the top-left tile, there is no "nothing selected", and the right column says what the selected one
-// is (js/library/info.js). Kept across a reload of the same shelf, dropped on leaving it. (Characters only
-// since phase V56 took the Lookbooks and Environments shelves away.)
+// is (js/library/info.js). Kept across a reload of the same shelf, dropped on leaving it. (Characters only.)
 const PICKABLE = new Set(['characters']);
 let _sel = '';
-// (phase V59) More tiles outlined beside _sel on Media - a press of the sound window made TWO tracks, and its Alerts row
+// More tiles outlined beside _sel on Media - a press of the sound window made TWO tracks, and its Alerts row
 // leads to both (?sel=<id>&sel=<id>).
 let _selAlso = new Set();
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
-// THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
-// shelf - Scenarios the generator (Environments' and Lookbooks' generators are WINDOWS since phase V58 - _openGen, below;
-// so is New Character since phase V60 - _openChar). "New …" at the LEFT of the header opens it,
+// THE MAKING AREAS: a shelf that makes its own things has one, shown in place of the
+// shelf - Scenarios the generator (Environments' and Lookbooks' generators are WINDOWS - _openGen, below;
+// so is New Character - _openChar). "New …" at the LEFT of the header opens it,
 // "← …" in the same place brings the shelf back, read again. Leaving one only hides it: what it runs goes
 // on. Each module answers init(hooks), open(opts) and close(), and none of them touches its host's
 // `hidden` for good - _paintMake is the one writer, because it runs on every read of a shelf and an area
@@ -120,47 +118,47 @@ const MAKERS = {
     backTitle: 'Back to the list of scenarios - what is being written goes on',
   },
 };
-// (phase V60, the owner's (пп4), (пп5)) NEW CHARACTER IS A WINDOW over the Characters shelf (js/library/chmake.js): the
+// NEW CHARACTER IS A WINDOW over the Characters shelf (js/library/chmake.js): the
 // header's "New Character" opens it, there is no "← Characters"; hidden, its work goes on and its bench stays.
 const CHAR_WIN = { label: 'New Character', title: 'Make a character - from the parameters, a preset, a random face or your own picture; in a window' };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
-// (phase V55, the owner's (гн10); phase V58, the owner's (лк6)) ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the
+// ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the
 // tree's row, its menu, the bar's "New …") opens their generator as a WINDOW over the page (_openGen) - the gallery and the
 // tree stay where they are.
 const GEN = {
   environments: { label: 'New environment', title: 'Make an environment - from words, from a photo, or one already made changed' },
   lookbooks: { label: 'New lookbook', title: 'Make a lookbook - from words, from a photo, or one already made built on' },
-  // (phase V59, the owner's (мг2а)) while Music or any folder under it is selected - the tracks go into that folder.
+  // while Music or any folder under it is selected - the tracks go into that folder.
   music: { label: 'Generate music', title: 'Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open' },
-  // (phase V26.6) IMAGES -> Props: the New prop window (js/prop-window.js) - a photo and what you know about the product.
+  // IMAGES -> Props: the New prop window (js/prop-window.js) - a photo and what you know about the product.
   props: { label: 'New prop', title: 'Add a product - a photo and what you know about it; an agent describes it for the frames chat' },
 };
-// (phase V26.6) IMAGES -> Props too: the products, added by New prop.
+// IMAGES -> Props too: the products, added by New prop.
 const MADE_KINDS = new Set(['environments', 'lookbooks', 'props']);
 // The node selected is Environments or Lookbooks itself: its kind, else ''.
 const _madeNode = () => (_shelf === 'media' && _node && _node.make && MADE_KINDS.has(_node.make) ? _node.make : '');
-// The generator the bar's "New …" opens on the node selected: Environments' or Lookbooks' (the node itself), or (phase V59)
+// The generator the bar's "New …" opens on the node selected: Environments' or Lookbooks' (the node itself), or
 // Music's - on Music or any folder under it. Upload stays beside it there (Music takes files).
-// (phase V59.1) Music -> Lyrics (kind 'lyrics', sub-session Q's) is a folder under Music too: the bar's "Generate music" stays.
+// Music -> Lyrics (kind 'lyrics') is a folder under Music too: the bar's "Generate music" stays.
 const _musicish = (n) => !!n && (n.kind === 'music' || n.kind === 'lyrics');
 const _genNode = () => _madeNode() || (_shelf === 'media' && _musicish(_node) ? 'music' : '');
-// THE NARRATORS (phase V28.2, the owner 2026-10-12): an area on the Scenarios shelf over the list or over the generator -
+// THE NARRATORS: an area on the Scenarios shelf over the list or over the generator -
 // "Narrators" beside "New scenario", or the gear by the generator's Narrator field. `_makingOn` stays as it was under it,
 // so "←" goes back to where it was opened from: the list ("← Scenarios") or the generator ("← Generate script").
 let _narrOn = false;
 // The next read of the shelf brings the selected tile into view (a character just saved lands ~23rd).
 let _scrollSel = false;
-let _drafts = [];         // the drafts heading the Scenarios list (phase E)
-let _scArchived = [];     // (phase V60) the archived scenarios - the folded "Archive" at the list's bottom
+let _drafts = [];         // the drafts heading the Scenarios list
+let _scArchived = [];     // the archived scenarios - the folded "Archive" at the list's bottom
 
 // The page's line: what was just done ("Saved", "Reading…"). A refusal or a failure (kind 'err') is a popup in the corner
-// instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js), and the line goes.
+// instead (js/notice.js), and the line goes.
 function _status(text, kind) {
   if (text && kind === 'err') { showError(text); text = ''; kind = ''; }
   const el = $('lib-status');
   if (!el) return;
   el.textContent = text || '';
-  // (phase V73 block 6) the shared status line, one line - cut, the whole of it under the pointer
+  // the shared status line, one line - cut, the whole of it under the pointer
   el.className = 'lib-status u-status is-line' + (kind ? ' ' + kind : '');
   el.title = text || '';
 }
@@ -172,7 +170,7 @@ function _paintShelves() {
   // Media's checks, in "⋯" - only there; leaving Media puts it away at once.
   _paintMore();
   // Media's tree, beside its grid.
-  // (V38.6) Scenarios: the list at its own width on the left, a sash, the selected one on the right - a scenario's
+  // Scenarios: the list at its own width on the left, a sash, the selected one on the right - a scenario's
   // column, or a draft's form. Elsewhere the draft's place is put away.
   const onSc = _shelf === 'scenarios';
   const split = $('lib-split');
@@ -182,8 +180,8 @@ function _paintShelves() {
   if (!onSc) { const dh = $('lib-sc-draft'); if (dh) dh.hidden = true; }
   const onMedia = _shelf === 'media' && !_makingOn;
   for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
-  // (phase V34.E) The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
-  // (phase V35) So does the path to the node.
+  // The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
+  // So does the path to the node.
   if (!onMedia) for (const id of ['lib-snd-head', 'lib-crumbs']) { const h = $(id); if (h) h.hidden = true; }
 }
 
@@ -191,8 +189,8 @@ function _paintShelves() {
 function _paintMake() {
   if (_makingOn && _makingOn !== _shelf) _makingOn = '';
   if (_narrOn && _shelf !== 'scenarios') _narrOn = false;
-  // (phase V55, V58) On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator's
-  // window over the page - there is nothing to come back from, so no "←". (phase V60) So does Characters' "New Character".
+  // On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator's
+  // window over the page - there is nothing to come back from, so no "←". So does Characters' "New Character".
   const g = _genNode();
   const w = g ? GEN[g] : _shelf === 'characters' ? CHAR_WIN : null;
   const m = w || MAKERS[_shelf];
@@ -220,12 +218,12 @@ function _paintMake() {
   _paintPlayer();
 }
 
-// (phase V55, (гн10); phase V58, the owner's (лк6), (лк7)) THE GENERATOR OF ENVIRONMENTS OR LOOKBOOKS - the same window a
-// talking head's "where" / "who" open (sub-session P's module), the size of the almanac, over the page: the gallery and the
+// THE GENERATOR OF ENVIRONMENTS OR LOOKBOOKS - the same window a
+// talking head's "where" / "who" open, the size of the almanac, over the page: the gallery and the
 // tree stay where they are, the folder selected behind it. What it makes lands in that folder - the tree's numbers and,
 // while the folder is open, the gallery are read again.
 // What the window says to Alerts (`where`): the generator's address - a row still running, or failed, opens the window
-// again - and the old chat's `spot`, so a row that ended leads to the picture outlined in its folder
+// again - and its `spot`, so a row that ended leads to the picture outlined in its folder
 // (alerts-bell.js `_hrefOf`) and a row running is picked up by the window opened again here.
 const GEN_WHERE = {
   environments: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
@@ -237,7 +235,7 @@ async function _openGen(kind, fromTree) {
   if (kind === 'music') return _openMusic(fromTree);
   if (!MADE_KINDS.has(kind)) return;
   if (kind === 'props') return _openProp();
-  // (V50) The window first; its folder is selected and the gallery read behind it.
+  // The window first; its folder is selected and the gallery read behind it.
   if (!(_genWins[kind] && _genWins[kind].alive())) {
     try {
       _genWins[kind] = openGenerator({
@@ -257,7 +255,7 @@ async function _selectBehind(key) {
   _node = _tree.selected();
   await _load();
 }
-// (phase V26.6) NEW PROP - its window over Media, Props selected behind it; a product added is outlined there, and the gallery
+// NEW PROP - its window over Media, Props selected behind it; a product added is outlined there, and the gallery
 // is read again when its description lands (its name may come from the agent).
 async function _openProp() {
   const { openNewProp } = await import('../prop-window.js');
@@ -275,30 +273,29 @@ function _genLanded(kind, path) {
   }
 }
 
-// (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge ... в library") GENERATE MUSIC - the
+// GENERATE MUSIC - the
 // sound window over Media (js/sound/sound-window.js), the gallery and
 // the tree staying behind it.
 // From Music's "Generate music" in its menu in the tree (and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
-// the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
-// moods take only a mood's preset - the window and the server say so). `lyric` (phase V59.1) - a saved text's "use in custom"
-// (the event `ugc:lyric-use`, sub-session Q's tile and viewer): the window on Custom with it, the gallery staying where it is.
+// the bar's "Generate music": the folder selected - Music or one under it. The tracks go there (highlights and its
+// moods take only a mood's preset - the window and the server say so). `lyric` - a saved text's "use in custom"
+// (the event `ugc:lyric-use`, from its tile and viewer): the window on Custom with it, the gallery staying where it is.
 async function _openMusic(fromTree, lyric, stay) {
   if (_shelf !== 'media' || !_tree) return;
-  // `stay` (phase V64) - an Alerts row led to a folder (SFX → My sounds → Generated too): the window opens over it as it is.
+  // `stay` - an Alerts row led to a folder (SFX → My sounds → Generated too): the window opens over it as it is.
   const toMusic = !stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music');
   const at = toMusic ? _tree.node('music') : _musicish(_node) ? _node : null;
-  // (V50) The window first; Music is selected and the gallery read behind it.
+  // The window first; Music is selected and the gallery read behind it.
   const shown = SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric })
     .catch((e) => { _status((e && e.message) || 'The music generator did not open', 'err'); });
   if (toMusic) await _selectBehind('music');
   await shown;
 }
-// (phase V64 block 4, the owner 2026-10-31, (зг6), (зг11): "давай там сделаем тоже чаты в попапах - это будут черновые ...
-// обычные ни к чему непривязанные чаты ... они будут общие как для merge так и для library") THE PICTURES CHAT AND THE VIDEO
+// THE PICTURES CHAT AND THE VIDEO
 // CHAT IN THE LIBRARY: the same windows as Merge's (js/merge-v3/chat-window.js), on THE DRAFT's conversation - the unbound one,
 // the same as Merge's draft's (js/merge-v3/chat-owner.js useDraft) - with no "this project". What they make lies in IMAGES →
 // Generated and VIDEO → Generated → <model>, as from Merge; the gallery is read again when a window closes on something made.
-// (V50) The window at once (its frame, "loading…"); the sheets - waited for, never a bare chat -, the code and the
+// The window at once (its frame, "loading…"); the sheets - waited for, never a bare chat -, the code and the
 // conversation into it; closed meanwhile - nothing opens.
 const _chatOn = {};
 async function _openChat(which, o) {
@@ -310,7 +307,7 @@ async function _openChat(which, o) {
     if (which === 'videos') {
       const V = await import('../merge-v3/vidchat.js');
       if (!_chatOn.videos) { _chatOn.videos = true; V.initVidChat(); }
-      // (phase V78) With a thing of the Library in its zone (js/gen-menu.js), or as it is.
+      // With a thing of the Library in its zone (js/gen-menu.js), or as it is.
       if (wanted(which)) await V.openVideos(o);
     } else {
       const P = await import('../merge-v3/picchat.js');
@@ -319,7 +316,7 @@ async function _openChat(which, o) {
     }
   } catch (e) { dropEarly(which); _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
 }
-// (V50, (сп2)) The Library drawn and idle: the chats' code and sheets read beforehand, so a first opening is like a second.
+// The Library drawn and idle: the chats' code and sheets read beforehand, so a first opening is like a second.
 // Code and CSS only - the conversation is asked for at a press (useDraft). The sound window's are the page's own.
 function _preloadChats() {
   const quiet = () => {};
@@ -328,7 +325,7 @@ function _preloadChats() {
   import('../merge-v3/picchat.js').catch(quiet);
   import('../merge-v3/vidchat.js').catch(quiet);
 }
-// (phase V64 block 4, (зг12)) An Alerts row of a chat's result made here: ?reveal=<its file> - its folder open, it outlined;
+// An Alerts row of a chat's result made here: ?reveal=<its file> - its folder open, it outlined;
 // ?open=pictures|videos|audio - the window again over it.
 const _KIND_OF_PATH = [['/media/birols/', 'birols'], ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'],
   ['/media/images/', 'images'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music']];
@@ -357,7 +354,7 @@ async function _arrived(p) {
   else if (p.open === 'audio') await _openMusic(false, null, true);
 }
 
-// (phase V64 block 5) The Library's host of the sound window (js/sound/sound-window.js): no project, the folder under Music the
+// The Library's host of the sound window (js/sound/sound-window.js): no project, the folder under Music the
 // window was opened on (`place`), the Alerts row back to that folder - or, for sounds, to SFX → My sounds → Generated - and the
 // tracks or sounds outlined there when they land.
 function _soundsGenKey() {
@@ -376,7 +373,7 @@ const _soundHost = {
   onLanded: (gen, dest) => _musicLanded(gen, dest),
   onSaved: () => _lyricsSaved(),
 };
-// (phase V59.1) A text saved by the window into Music -> Lyrics: the tree's numbers again, and the gallery while it shows Lyrics.
+// A text saved by the window into Music -> Lyrics: the tree's numbers again, and the gallery while it shows Lyrics.
 async function _lyricsSaved() {
   if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
   _counts();
@@ -398,7 +395,7 @@ function _musicPlace(n) {
 async function _musicLanded(gen, dest) {
   if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
   _counts();
-  // (phase V64) Sounds too - in SFX → My sounds → Generated.
+  // Sounds too - in SFX → My sounds → Generated.
   if (_shelf !== 'media' || !_node || !['music', 'sounds'].includes(_node.kind)) return;
   const ids = ((gen && gen.results) || []).map(r => String(r.id || '')).filter(Boolean);
   if (dest && _node.key === dest.node && ids.length) {
@@ -409,19 +406,18 @@ async function _musicLanded(gen, dest) {
   await _load({ keepScroll: true });
 }
 
-// ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
+// ── The music player ────────────────────────────────────────────────────────
 // A bar under the gallery (not under the tree's column), there while Music is open (its root, highlights, its moods) -
 // out of the grid, so drawing the grid again stops nothing. Leaving Music stops it and hides it; back, the same track where it was.
-// (phase V64, fix (а), the owner 2026-10-31: "плеер должен исчезать при снятии выделения аудиоклипа") And only while ITS track is
+// And only while ITS track is
 // picked (js/tile-select.js): a track pressed - the bar with it; the pick let go (a press on empty space, Escape, another folder,
 // another tile pressed) - the bar hides and the sound stops; the track and its place are kept for its next press.
 let _player = null;
 const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
-// (phase V64, fix (о), the owner 2026-11-01: "давай кстати звуки sfx делать обрезку снизу как у music проигрывание в плеере - в
-// library") SFX too - ★ Favorites, Built-in, My sounds and its folders: a sound pressed plays in the same bar, cut there as a
+// SFX too - ★ Favorites, Built-in, My sounds and its folders: a sound pressed plays in the same bar, cut there as a
 // track is (its piece a new sound in My sounds - lib/audio-cut.js).
 const SFX_NODES = new Set(['sfx-all', 'sfx-fav', 'sfx', 'sounds']);
-// (2026-11-09) And AUDIO itself - "Save audio"'s sounds lie there (`aroot`).
+// And AUDIO itself - "Save audio"'s sounds lie there (`aroot`).
 const _inSfx = () => _shelf === 'media' && !_makingOn && !!_node && (SFX_NODES.has(_node.key) || _node.kind === 'sounds' || _node.kind === 'sfx' || !!_node.aroot);
 const _inPlayer = () => _inMusic() || _inSfx();
 function _playerPicked() {
@@ -432,7 +428,7 @@ function _paintPlayer() {
   if (_player) _player.show(_inPlayer() && _playerPicked());
 }
 
-// (phase V60) New Character's window over the Characters shelf - the shelf itself stays behind it. The column lets go
+// New Character's window over the Characters shelf - the shelf itself stays behind it. The column lets go
 // first (a voice demo must not play on under the window); hidden by the person, the shelf is read again - something
 // may have been made (onClosed); saved, it is read on the new character (onSaved).
 function _openChar() {
@@ -442,8 +438,8 @@ function _openChar() {
   try { CM.open(); } catch (e) { _status((e && e.message) || 'New Character did not open', 'err'); }
 }
 
-// The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (phase V28.2:
-// they save themselves), and a picture shelf's column lets go first - a voice demo must not play on under
+// The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (they
+// save themselves), and a picture shelf's column lets go first - a voice demo must not play on under
 // the area.
 async function _openMaker(opts) {
   const m = MAKERS[_shelf];
@@ -463,7 +459,7 @@ async function _openMaker(opts) {
 async function _closeMaker(then, after) {
   if (!_makingOn) return;
   const m = MAKERS[_makingOn];
-  // (V38.6) Back from the generator on the draft it was writing: that draft selected, its form on the right.
+  // Back from the generator on the draft it was writing: that draft selected, its form on the right.
   const dr = _makingOn === 'scenarios' ? MK.currentDraft() : '';
   await m.mod.close();
   _makingOn = '';
@@ -493,9 +489,8 @@ function _closeNarrators() {
   _paintMake();
 }
 
-// ── "New scenario": blank or narrator (phase V28.2) ──────────────────────────
-// The owner 2026-10-12: "при нажатии new scenario делаем дропдаун с выбором blank и narrator. blank будет открывать попап,
-// как при создании сценария в merge, а при клике narrator переходить в generate script". Blank is Merge's own scenario
+// ── "New scenario": blank or narrator ───────────────────────────────────────
+// Narrator opens the generator. Blank is Merge's own scenario
 // window (js/scen-window.js): saved - the shelf again, on it; used - a talking head made from it, and Merge opened on it.
 // A menu like Merge's "+ new project": a layer, so Escape and a press outside close it, and the same press does too.
 let _newPop = null;
@@ -554,14 +549,14 @@ function _newBlank() {
   });
 }
 
-// ── The media tree (phase V28.5) ─────────────────────────────────────────────
+// ── The media tree ───────────────────────────────────────────────────────────
 // Made once, read again with the shelf; a node pressed reads the shelf for it. What comes in with no category - an
 // upload, a link - shows: a category selected gives way to its kind (Video shows every kind).
 function _initTree() {
   const host = $('lib-tree');
   if (!host || _tree) return _tree;
   _tree = createTree(host, {
-    // (phase V60, (пп1а), (пп2а)) Nothing selected is the roots; the path begins with "Media", which goes back to them.
+    // Nothing selected is the roots; the path begins with "Media", which goes back to them.
     page: 'lib', home: 'Media', start: _treeStart,
     status: (t, bad) => _status(t, bad ? 'err' : ''),
     onSelect: (n) => {
@@ -571,10 +566,10 @@ function _initTree() {
       if (_tsel) _tsel.clear();         // another folder: nothing picked
       if (_shelf === 'media') _load();
     },
-    // (phase V55, (гн10)) Environments / Lookbooks / Props' "create": their generator's window (phase V58).
-    // (phase V59) Music's "Generate music" (in its menu since V64): the sound window, on Music itself.
+    // Environments / Lookbooks / Props' "create": their generator's window.
+    // Music's "Generate music" (in its menu): the sound window, on Music itself.
     onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make, true); },
-    // (phase V64 blocks 1, 4) A root's "generate": IMAGES - the pictures chat, VIDEO - the video chat (their windows, the
+    // A root's "generate": IMAGES - the pictures chat, VIDEO - the video chat (their windows, the
     // unbound draft's conversation), AUDIO - the sound window.
     onGenerate: (n) => {
       if (_shelf !== 'media' || !n) return;
@@ -583,7 +578,7 @@ function _initTree() {
     },
     onChanged: () => (_shelf === 'media'
       ? _load({ keepScroll: true }).then(() => _counts()) : null),
-    // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
+    // Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => _shelf === 'media' && !!SS.filesTo(n),
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
   });
@@ -591,10 +586,10 @@ function _initTree() {
 }
 
 function _showLanded(kind) {
-  // (phase V35) What came in with no category lies in its kind - a B-roll's in Generated - and a folder shows only what
+  // What came in with no category lies in its kind - a B-roll's in Generated - and a folder shows only what
   // lies directly in it: a node elsewhere gives way to that kind.
   const home = kind === 'birols' ? 'generated' : kind;
-  // (phase V60) From the roots too.
+  // From the roots too.
   if (!_tree || (_node && _node.key === home)) return false;
   _tree.select(home, false);
   _node = _tree.selected();
@@ -636,8 +631,7 @@ function _wireTreeSash() {
   });
 }
 
-// (V38.6, the owner: "делаем sash в полке scenarios (запоминается положение - двигаем влево вправо)") The Scenarios
-// list's width: dragged and remembered, a double press for the usual 360 px ((щ5)); the right side takes the rest.
+// The Scenarios list's width: dragged and remembered, a double press for the usual 360 px; the right side takes the rest.
 const LS_SC_W = 'lib_sc_list_w';
 const SC_DEF = 360, SC_MIN = 220, SC_RIGHT_MIN = 420;
 function _wireScSash() {
@@ -675,7 +669,7 @@ function _wireScSash() {
   sash.addEventListener('dblclick', () => keep(apply(SC_DEF)));
 }
 
-// (V38.6, the owner: "если черновик, то с полями") A draft selected in the list: the generator's form on the shelf's
+// A draft selected in the list: the generator's form on the shelf's
 // right (js/library/make.js mount) - the sources stay out of it, they belong to "New scenario → narrator". The draft on
 // show already is only shown again, as it was.
 async function _showDraftHere(id) {
@@ -720,10 +714,10 @@ const _KINDABLE = new Set(['birols', 'uploads', 'hooks']);
 // The kinds whose items can be filed under a category - the three video kinds, images and sounds.
 const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 
-// (second round) A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
+// A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
 // deleted project (`meta.kept`) is the library's and is deleted like anything.
 const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept))
-  // (phase TG, block 6; after block 8 in REFERENCES -> YouTube -> Videos) A downloaded YouTube video is a source of the
+  // A downloaded YouTube video (REFERENCES -> YouTube -> Videos) is a source of the
   // scenarios: no star, no cross, not moved - watched, sent to highlights and deleted (twice) in its viewer.
   || it.kind === 'youtube';
 
@@ -736,9 +730,9 @@ function _actionsFor(it) {
     const on = !!(it.meta && it.meta.favorite);
     out.push({ id: 'fav', label: on ? 'Unfavorite' : 'Favorite' });
   }
-  // (phase V73, the owner's (rn-3) а) a render's Delete in its viewer takes two presses - "Really?" first (js/really.js)
+  // a render's Delete in its viewer takes two presses - "Really?" first (js/really.js)
   if (it.kind === 'renders') {
-    // (phase V84, the owner's (эф26)) Explorer on its folder, the file picked - the app's window only.
+    // Explorer on its folder, the file picked - the app's window only.
     if (canReveal()) out.push({ id: 'reveal', label: 'Show in folder' });
     const armed = !!(_rArmed && _rArmed.id === it.id);
     out.push({ id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed });
@@ -751,9 +745,9 @@ let _rArmed = null;       // { id, t } - the render whose Delete was pressed onc
 
 // Runs one action and reports what the caller has to do about it. `removed` means the
 // item is gone, so whoever is showing it has to stop. `anchor` - where a question opens: the button pressed, or the tile
-// a menu or the Delete key was about (phase V73 block 2, (б2-6)); with none, in the middle.
+// a menu or the Delete key was about; with none, in the middle.
 async function _runAction(id, it, anchor) {
-  // A character whose sheet is being made is left alone until it lands (phase H6).
+  // A character whose sheet is being made is left alone until it lands.
   if ((id === 'rename' || id === 'del') && it.kind === 'characters' && it.meta && it.meta.sheetRunning) {
     return { msg: 'Its 4K sheet is being made - wait for it, or let it go in Alerts first', err: true };
   }
@@ -771,9 +765,9 @@ async function _runAction(id, it, anchor) {
     // server's (favorites first, then date). A local repaint would leave it where it was.
     return { reload: true, msg: fav ? 'Added to favorites' : 'Removed from favorites' };
   }
-  // (block 6) A video of YOUTUBE into a new highlights project, chosen in its popup already.
+  // A video of YOUTUBE into a new highlights project, chosen in its popup already.
   if (id === 'hl') { location.href = '/merge?source=' + encodeURIComponent((it.meta && it.meta.source) || it.id); return { changed: false }; }
-  // (after block 8, the owner's (Y4)) A downloaded YouTube video deleted as a source - the second press within a few seconds.
+  // A downloaded YouTube video deleted as a source - the second press within a few seconds.
   if (id === 'srcdel') {
     const r = await YT.ytDelete(it);
     if (r.armed) return { actionsOnly: true, msg: r.msg };
@@ -781,8 +775,8 @@ async function _runAction(id, it, anchor) {
     return { removed: true, reload: true, msg: 'Source deleted' };
   }
   if (id === 'del' && it.kind === 'references') {
-    // (phase TG) A post of REFERENCES goes with its files - its own route.
-    // `stay`: the projects it is used in are a list that scrolls inside the question (б2-7) - scrolling it must not close it.
+    // A post of REFERENCES goes with its files - its own route.
+    // `stay`: the projects it is used in are a list that scrolls inside the question - scrolling it must not close it.
     if (!await ask(anchor, await RP.deleteQuestion(it), { yes: 'Delete', danger: true, stay: true })) return { changed: false };
     const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
@@ -812,7 +806,7 @@ async function _apply(r) {
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
 
-// (phase TG, the owner 2026-10-21: "счетчик не обновился в library после скачивания поста") A post the Telegram bot
+// A post the Telegram bot
 // brought in while this page is open: the tree's numbers, the shelves' counts and Media's gallery read again (the
 // signal is js/alerts-bell.js's, which also chimes).
 window.addEventListener('ugc-references', () => {
@@ -821,17 +815,17 @@ window.addEventListener('ugc-references', () => {
   if (_shelf === 'media' && !_makingOn) _load({ keepScroll: true });
 });
 
-// (phase TG) A post of REFERENCES in the post viewer (js/references/post.js), paging through the posts on view; a post
+// A post of REFERENCES in the post viewer (js/references/post.js), paging through the posts on view; a post
 // deleted there reads the shelf and the tree again.
 function _openPost(it, file) {
   const posts = _items.filter(x => x.kind === 'references');
   const at = posts.findIndex(x => String(x.id) === String(it.id));
   if (at < 0) { _status('That post is no longer here', 'err'); return; }
-  // Deleted, moved, or a piece cut out of it into a new clip (block 7) - the post viewer says which itself.
+  // Deleted, moved, or a piece cut out of it into a new clip - the post viewer says which itself.
   RP.openPost(posts, at, { file, onChanged: (w) => _apply({ removed: !!(w && w.deleted), reload: true, msg: (w && w.deleted) ? 'Post deleted' : '' }) });
 }
 
-// (phase V59.1) A saved text of Music -> Lyrics, whole, in the viewer - paging through the texts here (js/sound/lyrics.js):
+// A saved text of Music -> Lyrics, whole, in the viewer - paging through the texts here (js/sound/lyrics.js):
 // Copy, Use in Custom, Rename, Delete; renamed or deleted, the gallery and the tree are read again.
 function _openLyric(it) {
   LYR.openLyrics(_items, it, {
@@ -842,7 +836,7 @@ function _openLyric(it) {
 
 // Open in the viewer, with the same actions available there. `follow` is told every item the viewer
 // steps to: a picture shelf moves its selection with it, so closing the viewer leaves you on the one
-// you were looking at (phase B5).
+// you were looking at.
 function _open(it, list, follow) {
   const items = list || _items;
   // By id, not by identity. A card holds the item object it was rendered from, and a
@@ -876,13 +870,13 @@ function _open(it, list, follow) {
       }
       const orig = Cut.originalRow(item, repaintViewer);
       if (orig) rows.push(orig);
-      // (phase V55) A made environment or lookbook in IMAGES: what is known about it, as its shelf's column says.
+      // A made environment or lookbook in IMAGES: what is known about it, as its shelf's column says.
       rows.push(...madeRows(item));
       return rows;
     },
     onAction: async (id, item) => {
       if (id === 'reveal') { await revealRender(item.media); return { actionsOnly: true }; }
-      // (rn-3) а: a render's Delete here - the first press arms it, the second within a few seconds deletes (no question)
+      // a render's Delete here - the first press arms it, the second within a few seconds deletes (no question)
       if (id === 'del' && item.kind === 'renders' && !(_rArmed && _rArmed.id === item.id)) {
         if (_rArmed) clearTimeout(_rArmed.t);
         _rArmed = { id: item.id, t: setTimeout(() => { _rArmed = null; repaintViewer(); }, REALLY_MS) };
@@ -904,7 +898,7 @@ function _open(it, list, follow) {
   });
 }
 
-// The viewer's button of an action - where its question opens (phase V73 block 2, (б2-6)): js/library/viewer.js draws the
+// The viewer's button of an action - where its question opens: js/library/viewer.js draws the
 // row from _actionsFor, a button a label.
 function _viewerBtn(id, it) {
   const a = (_actionsFor(it) || []).find(x => x.id === id);
@@ -918,10 +912,10 @@ function _viewerBtn(id, it) {
 // the grid holds all three kinds at once, so one list would be the wrong one two thirds of
 // the time.
 let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
-// (phase V54 block 6, (зв45)) A folder in a folder reads as its path - "Товары / Обувь / Лето" - in the tree's order.
-// (phase V57) The references of Environments / Lookbooks (`closed`) take nothing by hand: offered only as where the item
+// A folder in a folder reads as its path - "Products / Shoes / Summer" - in the tree's order.
+// The references of Environments / Lookbooks (`closed`) take nothing by hand: offered only as where the item
 // already is (`current`), and not to be chosen.
-// (phase V60.2, the owner's (дг10а)) A B-roll (`model` - the model whose folder it lies in) is offered its own model's folders.
+// A B-roll (`model` - the model whose folder it lies in) is offered its own model's folders.
 const _catsFor = (kind, current, model) => (_catsByKind[kind] || []).filter(c => !c.closed || c.id === current)
   .filter(c => !(kind === 'birols' && model && c.model && c.model !== model)).map(c => Object.assign({}, c,
     { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }, c.closed ? { disabled: true } : {}));
@@ -963,21 +957,20 @@ function _picker(cls, current, options, onPick, title) {
   return sel;
 }
 
-// A TILE SHOWS A MINIATURE, never the picture itself (phase B1, the owner 2026-09-29). The shelf's
+// A TILE SHOWS A MINIATURE, never the picture itself. The shelf's
 // `thumb` for a character, a look, a lookbook or an environment is the thumbs/ copy beside it - and,
 // where there is none, the original: a 5504px sheet of 6.6 MB in a 190px tile. So those tiles go
 // through the thumbnail door, from the copy when there is one and from the original when not, made
-// once and cached (lib/thumbs.js `strip`). The shelf's own shape stays: the Character page reads it
-// too, and wraps `thumb` in the same door itself.
+// once and cached (lib/thumbs.js `strip`). The shelf's own shape stays.
 //
-// A still on Media too (phase D3): its shelf `thumb` is the 640px copy, already a door address, so the
+// A still on Media too: its shelf `thumb` is the 640px copy, already a door address, so the
 // tile is sized from the picture itself. A clip keeps its poster - 320px, a miniature already, and a
 // static file, which the door would only make slower.
 const _SIZED = new Set(['characters', 'obrazy', 'lookbooks', 'environments']);
 const _door = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=strip';
 function _tileSrc(it) {
   if (it.kind === 'images') return it.media ? _door(it.media) : '';
-  // (phase V55) A made environment or lookbook in IMAGES (the media shelf's) comes with its door address already.
+  // A made environment or lookbook in IMAGES (the media shelf's) comes with its door address already.
   if (String(it.thumb || '').startsWith('/api/thumb?')) return String(it.thumb).replace('&v=card', '&v=strip');
   if (!_SIZED.has(it.kind)) return it.thumb || '';
   const src = it.thumb || it.media;
@@ -985,7 +978,7 @@ function _tileSrc(it) {
 }
 
 // One sound heard at a time on the Media shelf: a press on its card plays it there - no window - and a press on it again,
-// or anywhere else, stops it (the owner, V28.4: "воспроизведение по клику на аудио без попапов").
+// or anywhere else, stops it.
 let _hearing = null;
 function _stopHearing() {
   if (!_hearing) return;
@@ -1010,17 +1003,17 @@ function _card(it, extra) {
   const card = document.createElement('div');
   card.className = 'lib-card' + (it.meta && it.meta.favorite ? ' fav' : '');
   card.dataset.id = String(it.id);
-  // (phase V54) What js/tile-select.js picks it by - on Media.
+  // What js/tile-select.js picks it by - on Media.
   if (_shelf === 'media') card.dataset.key = it.kind + ':' + it.id;
   card.title = it.name + (it.meta && it.meta.character ? '\n' + it.meta.character : '');
 
   // The ratio lives on the box: an <img> with no loaded source contributes no height,
-  // which collapsed the rows and killed the grid's scrolling.
+  // which would collapse the rows and kill the grid's scrolling.
   const src = _tileSrc(it);
   const box = document.createElement('div');
   box.className = 'lib-thumb-box' + (src ? '' : ' lib-thumb-pending');
   if (LYR.isLyrics(it)) {
-    // (phase V59.1) A saved text: its title and first lines; a press opens it whole (_openLyric).
+    // A saved text: its title and first lines; a press opens it whole (_openLyric).
     box.className = 'lib-thumb-box lib-thumb-text';
     box.appendChild(LYR.tileFace(it));
     card.title = LYR.tileTitle(it);
@@ -1031,7 +1024,7 @@ function _card(it, extra) {
     note.className = 'lib-snd';
     note.textContent = '♪';
     box.appendChild(note);
-    // (phase V34.E) Its waveform (lib/audio-wave.js; a built-in sound's comes with the set).
+    // Its waveform (lib/audio-wave.js; a built-in sound's comes with the set).
     box.appendChild(waveEl((it.meta || {}).wave, 'snd-twave'));
     if (it.dur) {
       const d = document.createElement('span');
@@ -1060,7 +1053,7 @@ function _card(it, extra) {
     box.classList.add('lib-thumb-broken');
     const bad = document.createElement('span');
     bad.className = 'lib-broken-tag';
-    bad.textContent = 'Unreadable';   // (к17) sentence case - the tag is not written in capitals any more
+    bad.textContent = 'Unreadable';   // sentence case
     bad.title = 'The file is truncated - the render did not finish writing, so it cannot be played.';
     box.appendChild(bad);
   }
@@ -1071,7 +1064,7 @@ function _card(it, extra) {
   if (_FAVABLE.has(it.kind)) {
     const star = document.createElement('button');
     star.type = 'button';
-    // (phase V73 block 6) ★ and ✕ as Merge's gallery has them: the shared on-picture part, Lucide's icons
+    // ★ and ✕ as Merge's gallery has them: the shared on-picture part, Lucide's icons
     star.className = 'lib-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
     star.innerHTML = icon('star', 12);
     star.title = (it.meta && it.meta.favorite) ? 'Remove from favorites' : 'Add to favorites';
@@ -1082,7 +1075,7 @@ function _card(it, extra) {
     });
     box.appendChild(star);
   }
-  // (phase V34.E) A built-in sound is the app's: a star, never a cross.
+  // A built-in sound is the app's: a star, never a cross.
   if (!_fixed(it) && it.kind !== 'sfx') {
     const x = document.createElement('button');
     x.type = 'button';
@@ -1098,7 +1091,7 @@ function _card(it, extra) {
 
   const name = document.createElement('div');
   name.className = 'lib-name';
-  // (second round) A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
+  // A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
   if (it.kind === 'heads') {
     const m = it.meta || {};
     card.title = [m.project, it.name, m.used ? 'on a timeline' : ''].filter(Boolean).join('\n');
@@ -1110,8 +1103,8 @@ function _card(it, extra) {
     }
   }
   name.appendChild(document.createTextNode(it.name));
-  // (phase V35, the owner's (т1)) A sound or a track is a square, as in Merge: its name inside it, under the note.
-  // (phase V59.1) A saved text has its title on its face already.
+  // A sound or a track is a square, as in Merge: its name inside it, under the note.
+  // A saved text has its title on its face already.
   if (AUDIO.has(it.kind)) box.appendChild(name); else if (!LYR.isLyrics(it)) card.appendChild(name);
   // A sound's or a track's name is changed where it is read - it has no window to do it in.
   if (AUDIO.has(it.kind) && it.kind !== 'sfx') {
@@ -1121,18 +1114,18 @@ function _card(it, extra) {
       try { await _apply(await _runAction('rename', it)); } catch (err) { _status(err.message, 'err'); }
     });
   }
-  // (phase V28.5) On Media a card is dragged onto a node of the tree - another category, another kind of video (not a
+  // On Media a card is dragged onto a node of the tree - another category, another kind of video (not a
   // talking head, which is its project's).
   if (_shelf === 'media' && !_fixed(it)) {
     card.draggable = true;
-    // (phase V54) A picked tile carries the others picked with it.
+    // A picked tile carries the others picked with it.
     card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it, _pickedWith(it)); });
   }
 
   // Second line: which category this clip is filed under, changeable in place. Only
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
-    // (2026-11-09, the owner's (в19)) A sound may lie in AUDIO itself: the first choice, and where "Save audio" put it.
+    // A sound may lie in AUDIO itself: the first choice, and where "Save audio" put it.
     const snd = it.kind === 'sounds';
     const here = snd && (it.meta || {}).inAudio ? AROOT_PICK : (it.meta && it.meta.categoryId) || '';
     card.appendChild(_picker('lib-cat-sel', here,
@@ -1142,26 +1135,25 @@ function _card(it, extra) {
   }
 
   if (extra) card.appendChild(extra);
-  // (phase TG) A post of REFERENCES: how many files, and its miniatures on hover - a press on one opens the post on it.
+  // A post of REFERENCES: how many files, and its miniatures on hover - a press on one opens the post on it.
   if (it.kind === 'references') RP.decorate(card, it, (post, file) => _openPost(post, file));
-  // (phase V73 block 2, (н2)) a source downloaded by a link: its gold dot until it is opened, as a new post's
+  // a source downloaded by a link: its gold dot until it is opened, as a new post's
   else if (it.kind === 'youtube') News.mark(card, it);
-  // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
-  // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
-  // miniature, not the file. What the old menu offered is in the viewer and on the tile.
-  // (phase V34.E, the owner's (р2)) The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
+  // NO MENU ON A TILE - the window's own
+  // ("Copy image / Save image as", desktop/main.js) must not open on it: it would save this
+  // miniature, not the file. What a menu would offer is in the viewer and on the tile.
+  // The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
   card.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
+    // Several picked, this one among them: their menu - Move to…, the star, Delete N.
     const many = _pickedWith(it);
     if (many) { _manyMenu(many, e); return; }
-    // (phase V84, the owner's (эф26), 2026-11-11 «в library при клике на рендерах правой кнопкой мыши показывать show in folder»)
     // A render: one row - Explorer on its folder, the file picked (the app's window only; none in a browser).
     if (it.kind === 'renders') {
       if (canReveal()) TS.menuAt(e.clientX, e.clientY, [['Show in folder', '', () => revealRender(it.media)]]);
       return;
     }
-    // (phase V78, the owner's (лч1)-(лч3)) A picture or a video: the generation chats over the page with it (js/gen-menu.js).
+    // A picture or a video: the generation chats over the page with it (js/gen-menu.js).
     if (!AUDIO.has(it.kind)) {
       const rows = genRows(it, (which, o) => _openChat(which, o));
       if (rows.length) TS.menuAt(e.clientX, e.clientY, rows);
@@ -1172,12 +1164,12 @@ function _card(it, extra) {
       stop: () => { _stopHearing(); if (_player) _player.pause(); },
       changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
       del: async (x) => {
-        // The question at the tile the menu was about (б2-6).
+        // The question at the tile the menu was about.
         try { _stopHearing(); await _apply(await _runAction('del', x, card)); if (_player) _player.forget(x.id); }
         catch (err) { _status(err.message, 'err'); }
       },
-      // (phase V54, (зв14)) A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
-      // (phase V64, fix (а)) The track picked with it - the bar is there while its track is.
+      // A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
+      // The track picked with it - the bar is there while its track is.
       cut: (x) => (AUDIO.has(x.kind) && _player && _inPlayer()
         ? (_player.open(x, { cut: true }), (_tsel && _tsel.only(_keyOf(x))), _paintPlayer(), true) : false),
     });
@@ -1185,7 +1177,7 @@ function _card(it, extra) {
   return card;
 }
 
-// ── Several tiles picked (phase V54 block 5, (зв17)) ────────────────────────
+// ── Several tiles picked ────────────────────────────────────────────────────
 // js/tile-select.js picks them on Media; let go on the tree they go in one request (js/media-tree.js), and here are the
 // right button's menu and Delete for them.
 let _tsel = null;
@@ -1212,12 +1204,12 @@ function _manyMenu(items, e) {
   const n = items.length;
   const starable = items.filter(x => !['references', 'heads', 'youtube', 'lyrics'].includes(x.kind) && !MADE_KINDS.has(x.kind));
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
-  // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
+  // What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
   const madeOnly = items.every(x => MADE_KINDS.has(x.kind));
-  // "Delete N" asks at the tile the menu was opened on (б2-6).
+  // "Delete N" asks at the tile the menu was opened on.
   const tile = e.target && e.target.closest ? e.target.closest('.lib-card') : null;
   TS.menuAt(e.clientX, e.clientY, [
-    // (phase V59.1) Saved texts stay in Music -> Lyrics.
+    // Saved texts stay in Music -> Lyrics.
     items.every(LYR.isLyrics) ? ['Move to…', 'texts stay in Music → Lyrics', null]
     : madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
       : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
@@ -1232,7 +1224,7 @@ function _manyMenu(items, e) {
     ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, tile), true],
   ]);
 }
-// The tile pressed last among the picked - where the Delete key's question opens (б2-6); the last one picked otherwise.
+// The tile pressed last among the picked - where the Delete key's question opens; the last one picked otherwise.
 let _pressedKey = '';
 function _lastPicked(keys) {
   const grid = $('lib-grid');
@@ -1247,31 +1239,31 @@ async function _deleteMany(all, anchor) {
   const items = all.filter(x => x.kind !== 'sfx' && !_fixed(x));
   if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds, a project\'s talking heads and YouTube sources stay', 'err'); return; }
   if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', 'err'); return; }
-  // One alone: the question it always had.
+  // One alone: its own question.
   if (items.length === 1) {
     try { await _apply(await _runAction('del', items[0], anchor)); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }
     return;
   }
-  // `stay`: the names and the projects are a list that scrolls inside the question (б2-7).
+  // `stay`: the names and the projects are a list that scrolls inside the question.
   if (!await ask(anchor, await TS.deleteQuestion(items), { yes: 'Delete ' + items.length, danger: true, stay: true })) return;
   _stopHearing();
   try { await _afterMany(await TS.batch('delete', items), 'deleted', true); }
   catch (err) { _status(err.message, 'err'); }
 }
 
-// (phase V35, the owner's (у2)) The path to Media's node at the left of the bar - "AUDIO / SFX / My sounds", every word a
+// The path to Media's node at the left of the bar - "AUDIO / SFX / My sounds", every word a
 // press away (js/media-tree.js crumbsEl); a tile let go on a word goes there.
 function _paintCrumbs() {
   const host = $('lib-crumbs');
   if (!host) return;
-  // (phase V60, (пп2а)) "Media" first - alone at the roots, a press away from any folder.
+  // "Media" first - alone at the roots, a press away from any folder.
   const on = _shelf === 'media' && !_makingOn && !!_tree;
   host.hidden = !on;
   host.textContent = '';
   if (on) host.appendChild(_tree.crumbsEl(_node));
 }
 
-// (phase V34.E) Over SFX: the search, and "find online…" - "find «words» online" when the words found nothing here (р3).
+// Over SFX: the search, and "find online…" - "find «words» online" when the words found nothing here.
 function _paintSndHead() {
   _paintCrumbs();
   const host = $('lib-snd-head');
@@ -1300,7 +1292,7 @@ async function _setKind(it, kind) {
 
 // Filing one clip under a category, from wherever the control is. Repaints through
 // _apply so the chip counts and the filtered view stay honest.
-// (2026-11-09) A sound into AUDIO itself - the server's move (routes/library.js _audioMove).
+// A sound into AUDIO itself - the server's move (routes/library.js _audioMove).
 const AROOT_PICK = '__audio__';
 async function _toAudioRoot(it) {
   try {
@@ -1337,22 +1329,22 @@ function _renderGrid() {
     return;
   }
   // Scenarios are text, so they are rows too, and one is always selected with the right column
-  // about it - see js/library/scenarios.js (phase D5).
+  // about it - see js/library/scenarios.js.
   if (_shelf === 'scenarios') {
     // reload, not a local patch: a saved scenario changes its line count, and that count is the
     // store's answer rather than the editor's.
     SC.render(_items, {
       reload: () => _load({ keepScroll: true }), status: _status, counts: _counts,
-      // (V38.6) A draft is selected like a scenario, its form on the right; one made elsewhere is
+      // A draft is selected like a scenario, its form on the right; one made elsewhere is
       // selected once the list has been read with it.
       drafts: _drafts, showDraft: _showDraftHere, hideDraft: _hideDraftHere,
-      // (phase V60, the owner's (пп6а)) the archived, under "▸ Archive · N" at the bottom
+      // the archived, under "▸ Archive · N" at the bottom
       archived: _scArchived,
       openDraft: (id) => { SC.select('d:' + id); return _load({ keepScroll: true }); },
     });
     return;
   }
-  // (phase V23) Renders are rows of projects, each opening a strip of its renders - js/library/renders.js. The cards
+  // Renders are rows of projects, each opening a strip of its renders - js/library/renders.js. The cards
   // are the shelf's own; the viewer pages inside the project.
   if (_shelf === 'renders') {
     RE.render(_items, { card: _card, open: (it, list) => _open(it, list) });
@@ -1362,18 +1354,18 @@ function _renderGrid() {
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
-  // (phase V35, the owner's (т1), (т3)) Sounds and tracks are square cards; a folder of horizontal videos (YouTube ->
+  // Sounds and tracks are square cards; a folder of horizontal videos (YouTube ->
   // Videos, the node's `tiles: 'wide'`) has 16:9 ones - css/library.css.
   if (_shelf === 'media') {
     grid.classList.toggle('is-sound', _items.length > 0 && _items.every(x => AUDIO.has(x.kind)));
-    // (phase V59.1) Music -> Lyrics: cards of text.
+    // Music -> Lyrics: cards of text.
     grid.classList.toggle('is-text', _items.length > 0 && _items.every(LYR.isLyrics));
     grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
-    // (phase V26.6) IMAGES -> Props: a product is shown whole in its square, never cut to fill it.
+    // IMAGES -> Props: a product is shown whole in its square, never cut to fill it.
     grid.classList.toggle('is-whole', !!(_node && _node.tiles === 'whole'));
   }
-  // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
-  // directly in it. A search over SFX shows what it found in all of SFX, with no folders. (phase V60) At the roots: the four
+  // Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
+  // directly in it. A search over SFX shows what it found in all of SFX, with no folders. At the roots: the four
   // top nodes as folder tiles.
   const searching = _shelf === 'media' && !!(_q && SS.isSfx(_node));
   const folders = _shelf === 'media' && !searching && _tree ? _tree.foldersEl(_node) : null;
@@ -1382,10 +1374,10 @@ function _renderGrid() {
   if (!_items.length) {
     if (folders) return;
     const said = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
-      // (phase V59.1) Music -> Lyrics: where its texts come from.
+      // Music -> Lyrics: where its texts come from.
       : _mkind() === 'lyrics' ? 'No saved lyrics yet - Generate music saves them here (its Lyrics, or "save" by Custom\'s Lyrics).'
       : 'Nothing here' + (_node && _node.cat ? ' in this folder.' : ' yet.')) : 'Nothing on this shelf yet.';
-    // (phase V73 block 2) The shared part, its icon by what the folder holds: sound, pictures, or a folder.
+    // The shared part, its icon by what the folder holds: sound, pictures, or a folder.
     const k = _mkind();
     const icon = _shelf !== 'media' ? 'folder'
       : (searching || AUDIO.has(k) || k === 'lyrics') ? 'music'
@@ -1406,7 +1398,7 @@ function _renderGrid() {
       looks.textContent = n + (n === 1 ? ' look' : ' looks');
       sub.appendChild(looks);
       if (it.meta.voices) { const v = document.createElement('span'); v.textContent = '· voice'; sub.appendChild(v); }
-      // Its 4K sheet is still being made (phase H6): the tile shows the face until it lands.
+      // Its 4K sheet is still being made: the tile shows the face until it lands.
       if (it.meta.sheetRunning) {
         const s = document.createElement('span');
         s.className = 'lib-sub-run';
@@ -1418,14 +1410,14 @@ function _renderGrid() {
     const card = _card(it, sub);
     if (PICKABLE.has(_shelf)) {
       // A picture shelf's tile SELECTS: the right column says what it is, and the enlarged view is
-      // the column's picture pressed. Pressing the selected one again reads the column again (B4).
+      // the column's picture pressed. Pressing the selected one again reads the column again.
       card.classList.toggle('cur', String(it.id) === _sel);
       card.addEventListener('click', () => _pick(it));
     } else {
-      // (phase V28.1) Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
+      // Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel || _selAlso.has(String(it.id)));
-      // (phase V54) A track in Music plays in the player; SFX and My sounds on their cards, as before.
+      // A sound or a track plays in the player where it shows one (_inPlayer); elsewhere on its card.
       if (AUDIO.has(it.kind) && _player && _inPlayer()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); _paintPlayer(); });
       else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
       else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
@@ -1438,7 +1430,7 @@ function _renderGrid() {
   if (_tsel) _tsel.refresh();
 }
 
-// (phase V64 block 0) Media's outline of what was arrived at, let go of - at the first press in the gallery.
+// Media's outline of what was arrived at, let go of - at the first press in the gallery.
 function _dropArrived() {
   if (_shelf !== 'media' || (!_sel && !_selAlso.size)) return;
   _sel = '';
@@ -1446,7 +1438,7 @@ function _dropArrived() {
   document.querySelectorAll('#lib-grid .lib-card.cur').forEach(c => c.classList.remove('cur'));
 }
 
-// ── The selected tile, and the right column about it (phase B) ──────────────
+// ── The selected tile, and the right column about it ────────────────────────
 function _paintSel() {
   document.querySelectorAll('#lib-grid .lib-card').forEach(c => c.classList.toggle('cur', c.dataset.id === _sel));
 }
@@ -1477,7 +1469,7 @@ function _showSelected() {
 // look's card, the same card the grid draws, cross and all.
 const _infoHooks = {
   open: (it) => _open(it, null, (item) => { if (String(item.id) !== _sel) _pick(item); }),
-  // A character's voice or gender changed in its column (phase H7): the tiles say so, the column stays.
+  // A character's voice or gender changed in its column: the tiles say so, the column stays.
   changed: () => {
     const g = $('lib-grid');
     const top = g ? g.scrollTop : 0;
@@ -1488,14 +1480,14 @@ const _infoHooks = {
   card: (l) => _card(l),
 };
 
-// WHAT LANDS IS SEEN BY THE SHELF. While a character's tile says "sheet…" (phase H6) - and on Renders while posters are
+// WHAT LANDS IS SEEN BY THE SHELF. While a character's tile says "sheet…" - and on Renders while posters are
 // made - the shelf is asked every ten seconds, and its tiles drawn again when the answer differs: the face on a tile turns
-// into its sheet. (Lookbooks and Environments were watched so until phase V56 took their shelves away.)
+// into its sheet.
 let _sheetT = null;
 let _shelfRunning = 0;    // what the last read of Renders said is being made there
 const _watched = (kind, items, running) => (kind === 'characters'
   ? (items || []).some(it => it && it.meta && it.meta.sheetRunning)
-  // (phase V23) Renders: while posters are being made in the background (lib/render-posters.js).
+  // Renders: while posters are being made in the background (lib/render-posters.js).
   : kind === 'renders' && running > 0);
 const _shelfSig = (items, running) => (items || [])
   .map(it => String(it.id) + (it && it.meta && it.meta.sheetRunning ? '*' : '') + (it && it.thumb ? '+' : '')
@@ -1515,7 +1507,7 @@ function _watchShelf() {
       if (_shelf === kind && !_makingOn && d && d.success) {
         _shelfRunning = d.running || 0;
         if (_shelfSig(d.items, d.running) !== was) {
-          // The tiles again, the column left alone (review H): it may be in the middle of a voice search,
+          // The tiles again, the column left alone: it may be in the middle of a voice search,
           // a Save or a description being written. The items keep their identity - the column holds one
           // of them - and take the new fields.
           const old = new Map(_items.map(it => [String(it.id), it]));
@@ -1527,7 +1519,7 @@ function _watchShelf() {
           const cur = _items.find(it => String(it.id) === _sel);
           if (cur) INFO.setPicture(kind, cur);
           // The selected one gone, or none yet (the first picture landing on an empty shelf): one is
-          // always selected on a picture shelf, so the column follows the top-left tile (review I).
+          // always selected on a picture shelf, so the column follows the top-left tile.
           else _showSelected();
           _counts();
         }
@@ -1548,14 +1540,14 @@ async function _load(opts) {
   // whole width.
   if (!PICKABLE.has(_shelf) && _shelf !== 'voices' && _shelf !== 'scenarios') INFO.hide();
   try {
-    // Media: what lies directly in the node the media tree has selected (its `q`; phase V35: the folders are drawn
-    // from the tree, a node that only holds folders asks for nothing) - or a search over all of SFX (the owner's (у3)).
+    // Media: what lies directly in the node the media tree has selected (its `q`; the folders are drawn
+    // from the tree, a node that only holds folders asks for nothing) - or a search over all of SFX.
     if (!(_shelf === 'media' && SS.isSfx(_node))) _q = '';
     const mq = _shelf === 'media' ? (_q ? { group: 'sfxall', q: _q } : (_node && _node.q) || null) : null;
     const qs = new URLSearchParams(mq || {});
     const q = qs.toString();
     const url = '/api/library/shelf/' + _shelf + (q ? '?' + q : '');
-    // Scenarios: the drafts head the list (phase E4), read beside the shelf.
+    // Scenarios: the drafts head the list, read beside the shelf.
     const draftsP = _shelf === 'scenarios'
       ? fetch('/api/scriptgen/drafts').then(r => r.json()).catch(() => null) : null;
     const d = (_shelf === 'media' && !mq) ? { success: true, items: [] } : await (await fetch(url)).json();
@@ -1592,11 +1584,11 @@ async function _load(opts) {
   }
 }
 
-// (phase V73 block 0) A shelf whose read FAILED is not an empty shelf. The grid and the column drew what they draw for a
+// A shelf whose read FAILED is not an empty shelf. The grid and the column drew what they draw for a
 // shelf with nothing on it ("Nothing on this shelf yet.", "No voices with a demo yet." …); those words are replaced by
 // "<shelf> did not load." - the grid's with "Try again", which reads it again. The reason is the popup in the corner.
 // Media's folder tiles stay: the tree, not this read, draws them.
-// (phase V73 block 2, step 2b) Both are the shared part "did not load" (js/ui-state.js failedEl, css/app-shell.css
+// Both are the shared part "did not load" (js/ui-state.js failedEl, css/app-shell.css
 // .u-failed): the grid's whole, with Try again; the column's in the form of the "nothing here" it replaces, with none.
 function _shelfFailed() {
   const what = SHELVES[_shelf] || 'the shelf';
@@ -1621,7 +1613,7 @@ async function _counts() {
     document.querySelectorAll('.lib-shelf').forEach(b => {
       const n = d.counts[b.dataset.kind];
       const el = b.querySelector('.lib-n');
-      if (el) el.textContent = (n == null) ? '' : int(n);   // (phase V73 block 6) "1,363", in mono
+      if (el) el.textContent = (n == null) ? '' : int(n);   // "1,363", in mono
     });
   } catch (e) { /* the counts are a nicety, not the page */ }
 }
@@ -1630,8 +1622,8 @@ async function _counts() {
 // roots (_pressShelf, below).
 function _select(kind) {
   if (!SHELVES[kind]) return;
-  // The open shelf's button pressed while its making area shows goes back to the shelf, as "← …" does
-  // (phase F4); pressing the open shelf otherwise does nothing.
+  // The open shelf's button pressed while its making area shows goes back to the shelf, as "← …" does;
+  // pressing the open shelf otherwise does nothing.
   if (kind === _shelf) {
     if (_makingOn) _closeMaker();
     else _closeNarrators();
@@ -1640,21 +1632,20 @@ function _select(kind) {
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'media') _stopHearing();  // nor a sound or a track
   if (_shelf === 'scenarios') SC.leave();  // and the lines typed are stored, an answer on its way dropped
-  if (_shelf === 'characters') CM.close(); // (phase V60) New Character's window, hidden - its work goes on
+  if (_shelf === 'characters') CM.close(); // New Character's window, hidden - its work goes on
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
   if (_narrOn) { NR.close(); _narrOn = false; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
-  _sel = '';                               // a shelf opens on its top-left tile (B2)
+  _sel = '';                               // a shelf opens on its top-left tile
   _selAlso = new Set();
   if (_tsel) _tsel.clear();
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
 }
 
-// (phase V60, the owner 2026-10-29, (пп1а): "чтобы не рандомная папка открывалась при нажатии полки, а показывались все
-// корневые папки") Media's ROOTS: nothing selected in the tree, every branch folded, the gallery the four top nodes. The
+// Media's ROOTS: nothing selected in the tree, every branch folded, the gallery the four top nodes. The
 // shelf pressed - from another shelf, or on Media again - opens there; an address with a folder opens on its folder.
 function _toRoots() {
   if (_tree) _tree.home(false);
@@ -1673,7 +1664,7 @@ function _pressShelf(kind) {
   _load();
 }
 
-// ── The menu "⋯" (phase V73 block 6; V91, the owner's (чк19а)) ─────────────────────────────────────────────────────
+// ── The menu "⋯" ─────────────────────────────────────────────────────────────────────────────────────────────────────
 // Media's two checks of the library, as rows of "⋯" at the bar's end (shown on Media only). Neither runs by itself: a
 // row pressed looks across the WHOLE library (never the filtered view - a repair whose number moved with the folder open
 // would be worse than useless), then asks at "⋯" what to do with what it found, or says there is nothing.
@@ -1751,7 +1742,7 @@ async function _checkBroken() {
   lines.push('The records are removed. There is no file to delete - that is the point.');
   lines.push('', 'Go ahead?');
   _status('');
-  // At "⋯"; the records are a list that scrolls inside (б2-7) - `stay`, so scrolling it does not close it.
+  // At "⋯"; the records are a list that scrolls inside - `stay`, so scrolling it does not close it.
   if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
 
   try {
@@ -1811,7 +1802,7 @@ async function _checkThumbs() {
   if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
   lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
   _status(said);
-  // Nothing is deleted - a plain answer (б2-5).
+  // Nothing is deleted - a plain answer.
   if (!await ask($('lib-more'), lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
 
   let done = 0, failed = 0;
@@ -1837,10 +1828,10 @@ function _paintUpload() {
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (!btn) return;
-  // (phase V55) Environments / Lookbooks take only what their generator made: "New …" stands in the bar instead.
-  // (phase V60) At the roots nothing is brought in - a root is opened first.
+  // Environments / Lookbooks take only what their generator made: "New …" stands in the bar instead.
+  // At the roots nothing is brought in - a root is opened first.
   btn.hidden = _shelf !== 'media' || !_node || !!_madeNode();
-  // (phase V27) Clips come by a link too - B-rolls, Uploads, Hooks, not pictures or sounds.
+  // Clips come by a link too - B-rolls, Uploads, Hooks, not pictures or sounds.
   const lk = $('lib-link');
   if (lk) {
     lk.hidden = !_linkKind();
@@ -1848,17 +1839,17 @@ function _paintUpload() {
       + ' - one link per line, or let a link go over the shelf';
   }
   if (btn.hidden) return;
-  // The NODE selected in the media tree decides what can be brought in and where it lands (phase V28.5).
+  // The NODE selected in the media tree decides what can be brought in and where it lands.
   const kind = _mkind();
   btn.disabled = false;
   if (kind === 'images') {
     btn.textContent = 'Upload images';
-    // (phase V57) In the references of Environments / Lookbooks it says why not, and a press says it again (`_shut`).
+    // In the references of Environments / Lookbooks it says why not, and a press says it again (`_shut`).
     btn.title = _shut() || 'Add pictures to the library. A PNG keeps its transparency.';
     if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
-  // (phase V34.E) Built-in is the app's, Favorites the starred: nothing is brought in there. SFX itself takes sounds.
+  // Built-in is the app's, Favorites the starred: nothing is brought in there. SFX itself takes sounds.
   if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
     btn.textContent = 'Upload';
     btn.disabled = true;
@@ -1889,7 +1880,7 @@ function _paintUpload() {
     btn.title = 'Talking heads come from the talking-head projects - nothing is uploaded here';
     return;
   }
-  // (phase V59.1) Music -> Lyrics: texts saved by Generate music - no file.
+  // Music -> Lyrics: texts saved by Generate music - no file.
   if (kind === 'lyrics') {
     btn.textContent = 'Upload';
     btn.disabled = true;
@@ -1902,9 +1893,9 @@ function _paintUpload() {
   btn.title = 'Add video files to ' + _landName(_linkKind());
 }
 
-// ── By a link (phase V27) ───────────────────────────────────────────────────
+// ── By a link ───────────────────────────────────────────────────────────────
 // The kind a link's clip goes to, as an upload's would: the kind selected, Uploads under Video; '' where no clip goes.
-// Where a clip brought in lands, in words (second round): a B-roll comes in with no category - into Generated itself.
+// Where a clip brought in lands, in words: a B-roll comes in with no category - into Generated.
 function _landName(kind) {
   if (kind === 'birols') return 'Generated';
   const k = A.KINDS.find(x => x.id === kind);
@@ -1914,7 +1905,8 @@ function _landName(kind) {
 function _linkKind() {
   if (_shelf !== 'media' || !_node) return '';
   if (VIDEO.has(_mkind())) return _mkind();
-  // (second round) Generated takes B-rolls (with no category - they lie in it); Talking heads takes nothing.
+  // Generated takes B-rolls (with no category - the server files each into its model's folder); Talking heads takes
+  // nothing.
   if (_node.key === 'generated') return 'birols';
   return _node.key === 'video' ? 'uploads' : '';
 }
@@ -1967,7 +1959,7 @@ async function _addLinks(urls, kind) {
       + (bad.length ? ' - ' + bad[0].error : '')), bad.length ? 'err' : '');
 }
 
-// (phase V57, the owner's (ок2)) The node selected is the references of Environments / Lookbooks or a folder in them: nothing
+// The node selected is the references of Environments / Lookbooks or a folder in them: nothing
 // goes there by hand - why, in words (js/media-tree.js closedSays); '' anywhere else.
 function _shut() { return _shelf === 'media' && _tree && _node ? _tree.closedSays(_node) : ''; }
 
@@ -1989,7 +1981,7 @@ async function _upload(files) {
     return;
   }
   if (kind === 'music') {
-    // (phase V54) Into the own folder of Music selected, if one is.
+    // Into the own folder of Music selected, if one is.
     const rm = await A.uploadMusic(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), _mcat());
     if (btn) btn.disabled = false;
     if (rm.ok) await landed('music');
@@ -2030,47 +2022,47 @@ async function _upload(files) {
     : (r.ok + ' of ' + r.total + ' uploaded'), r.ok === r.total ? '' : 'err');
 }
 
-// ── An address to land on (phase H5) ─────────────────────────────────────────
-// What an Alerts row leads to: ?shelf=characters&make=1 is New Character - its window over the shelf since phase V60 (a
+// ── An address to land on ────────────────────────────────────────────────────
+// What an Alerts row leads to: ?shelf=characters&make=1 is New Character - its window over the shelf (a
 // portrait or a sheet being made there; Home's "+ new character" too), ?shelf=characters&sel=<id> a character on the shelf,
 // selected and in view, ?shelf=scenarios&make=1&src=<id>
-// the generator on a source (phase V28.1: a source being added is a row of its own), ?shelf=scenarios&make=1&draft=<id> the
-// generator on a draft (phase V38.1: the way back from Admin -> AI settings), ?shelf=media&kind=environments&make=1 (phase V56)
-// the generator of Environments - its window over Media since phase V58, where the old chat's Alerts rows lead too -, ?shelf=media&kind=environments&sel=<file> a picture outlined there - and the old
-// ?shelf=environments|lookbooks[&make=1|&sel=] of the shelves that went land in the same places. Read when the
+// the generator on a source (a source being added is a row of its own), ?shelf=scenarios&make=1&draft=<id> the
+// generator on a draft (the way back from Admin -> AI settings), ?shelf=media&kind=environments&make=1
+// the generator of Environments - its window over Media -, ?shelf=media&kind=environments&sel=<file> a picture outlined
+// there - and an older ?shelf=environments|lookbooks[&make=1|&sel=] lands in the same places. Read when the
 // page loads, and - when the Library is already open - taken from the Alerts list without loading the
 // page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
 function _place(u) {
   const q = u.searchParams;
   const p = _placeOf(u);
-  // (phase V64 block 4) ?open=pictures|videos|audio - a window again; ?reveal=<a file> - its folder, it outlined.
+  // ?open=pictures|videos|audio - a window again; ?reveal=<a file> - its folder, it outlined.
   if (p) { p.open = q.get('open') || ''; p.reveal = q.get('reveal') || ''; }
   return p;
 }
 function _placeOf(u) {
   const q = u.searchParams;
   let kind = q.get('shelf') || '';
-  // (phase V28.5) The Music shelf is Media -> Audio -> Music: an old address lands there.
+  // An address of a Music shelf lands on Media -> Audio -> Music.
   if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', draft: '', mkind: 'music' };
-  // (phase V59) Several tiles outlined: ?sel=<id>&sel=<id> - the first is `sel`, the others `also`.
+  // Several tiles outlined: ?sel=<id>&sel=<id> - the first is `sel`, the others `also`.
   const also = q.getAll('sel').slice(1).filter(Boolean);
   const make = q.get('make') === '1';
-  // (phase V56) The shelves of Environments and Lookbooks went: their folder on Media - `made` its generator opened there.
+  // Environments and Lookbooks are folders on Media - `made` its generator opened there.
   if (MADE_KINDS.has(kind)) return { kind: 'media', sel: q.get('sel') || '', also, make: false, src: '', draft: '', mkind: kind, made: make ? kind : '' };
   if (!SHELVES[kind]) return null;
-  // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
+  // `kind`: Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
   const mkind = kind === 'media' ? (q.get('kind') || '') : '';
-  // (phase V59) ?shelf=media&kind=music&make=1 - the sound window, over Music.
+  // ?shelf=media&kind=music&make=1 - the sound window, over Music.
   return { kind, sel: q.get('sel') || '', also, make, src: q.get('src') || '', draft: q.get('draft') || '', mkind,
     made: make && (MADE_KINDS.has(mkind) || mkind === 'music') ? mkind : '' };
 }
 
-// What the making area opens on: a source, a draft (V38.1), or a clean form.
+// What the making area opens on: a source, a draft, or a clean form.
 const _makeOpts = (p) => (p.src ? { sourceId: p.src } : p.draft ? { draftId: p.draft } : undefined);
 
 async function _goToPlace(p) {
   if (!p) return;
-  // Media's kind first (the tree's node): switching to the shelf reads it with it. (phase V60) Media with no folder named:
+  // Media's kind first (the tree's node): switching to the shelf reads it with it. Media with no folder named:
   // its roots.
   if (p.mkind && _tree) { _tree.select(p.mkind, false); _node = _tree.selected(); }
   else if (p.kind === 'media' && !p.made && !p.reveal && _tree) _toRoots();
@@ -2079,10 +2071,10 @@ async function _goToPlace(p) {
     if (_shelf !== p.kind) return;
   }
   _closeNarrators();                              // what the address names is under them
-  // (phase V60) New Character: its window over the shelf (a portrait's or a sheet's row of Alerts, Home) - opened, or, open
+  // New Character: its window over the shelf (a portrait's or a sheet's row of Alerts, Home) - opened, or, open
   // already, asked whether a row it shows was started again from Alerts.
   if (p.make && p.kind === 'characters') { _openChar(); return; }
-  // (V38.6) A draft named - "← back" from AI settings, a link - is the draft selected on the shelf, its form on the right.
+  // A draft named - "← back" from AI settings, a link - is the draft selected on the shelf, its form on the right.
   if (p.make && p.kind === 'scenarios' && p.draft && !p.src) {
     if (_makingOn) await _closeMaker(() => SC.select('d:' + p.draft));
     else { SC.select('d:' + p.draft); await _load({ keepScroll: true }); }
@@ -2092,10 +2084,10 @@ async function _goToPlace(p) {
     if (_makingOn !== p.kind) await _openMaker(_makeOpts(p));
     // The generator on show, asked for one of its sources: that source, without starting a clean form.
     else if (p.kind === 'scenarios' && p.src) await MK.showSource(p.src);
-    // ...or for a draft (V38.1): that draft.
+    // ...or for a draft: that draft.
     else if (p.kind === 'scenarios' && p.draft) await MK.open({ draftId: p.draft });
-    // Already showing: asked to look again - a row it shows may have been started again from Alerts
-    // (review I). Not the generator, whose open() starts a clean form.
+    // Already showing: asked to look again - a row it shows may have been started again from Alerts.
+    // Not the generator, whose open() starts a clean form.
     else if (p.kind !== 'scenarios') await MAKERS[p.kind].mod.open({});
     return;
   }
@@ -2105,9 +2097,9 @@ async function _goToPlace(p) {
     outline();
     await _load({ keepScroll: !p.mkind && p.kind !== 'media' });
   }
-  // (phase V56, V58) Environments' or Lookbooks' generator: its window, over their folder.
+  // Environments' or Lookbooks' generator: its window, over their folder.
   if (p.made) await _openGen(p.made);
-  // (phase V64) A chat's or the sound window's result: its folder, it outlined, the window again.
+  // A chat's or the sound window's result: its folder, it outlined, the window again.
   await _arrived(p);
 }
 
@@ -2135,14 +2127,14 @@ function boot() {
     _shelf = arrive.kind;
     try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
     if (arrive.sel) { _sel = arrive.sel; _selAlso = new Set(arrive.also || []); _scrollSel = true; }
-    // (V38.6) A draft named: selected on the shelf, not the generator opened on it.
+    // A draft named: selected on the shelf, not the generator opened on it.
     if (arrive.kind === 'scenarios' && arrive.make && arrive.draft && !arrive.src) { SC.select('d:' + arrive.draft); arrive.make = false; }
-    // (phase V60) A folder named: the tree opens on it; none - Media's roots.
+    // A folder named: the tree opens on it; none - Media's roots.
     _treeStart = arrive.mkind || '';
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
   }
 
-  // (phase V60) Media pressed opens on its roots (_pressShelf).
+  // Media pressed opens on its roots (_pressShelf).
   document.querySelectorAll('.lib-shelf').forEach(b => {
     b.addEventListener('click', () => _pressShelf(b.dataset.kind));
   });
@@ -2155,17 +2147,16 @@ function boot() {
     counts: _counts,
     // "open" beside "Saved": the list again, on that scenario.
     openScenario: (id) => _closeMaker(() => SC.select(id)),
-    // The gear by the Narrator field (phase V28.2): the narrators, and "← Generate script" back.
+    // The gear by the Narrator field: the narrators, and "← Generate script" back.
     narrators: _openNarrators,
-    // (V38.6) The form on the shelf: "← topics" opens the generator on the draft's source and its topics (the owner's
-    // (щ3)); a save selects the new scenario; a discard reads the list again; a stage started or landed repaints the rows.
+    // The form on the shelf: "← topics" opens the generator on the draft's source and its topics; a save selects the new scenario; a discard reads the list again; a stage started or landed repaints the rows.
     openSource: (id) => _openMaker({ sourceId: id }),
     saved: async (id, text) => { SC.select(id); await _load({ keepScroll: true }); _counts(); if (text) _status(text, 'ok'); },
     discarded: () => { SC.select(''); return _load({ keepScroll: true }); },
     draftsChanged: _refreshDraftRows,
   });
   CM.init({
-    // Done (phase V60: the window has closed): the shelf again, on the character just made - selected, in view, its column open.
+    // Done (the window has closed): the shelf again, on the character just made - selected, in view, its column open.
     onSaved: async (id, name) => {
       if (_shelf !== 'characters') _select('characters');
       if (id) { _sel = String(id); _scrollSel = true; }
@@ -2182,9 +2173,9 @@ function boot() {
     }),
   });
   const nb = $('lib-new');
-  // Scenarios asks which (phase V28.2); the other shelves open their making area; (phase V55, V58) on Media, Environments
+  // Scenarios asks which; the other shelves open their making area; on Media, Environments
   // or Lookbooks selected, their generator's window.
-  // (phase V59) On Music or a folder under it, "Generate music" - its window. (phase V60) On Characters, New Character's.
+  // On Music or a folder under it, "Generate music" - its window. On Characters, New Character's.
   if (nb) nb.addEventListener('click', () => (_genNode() ? _openGen(_genNode()) : _shelf === 'characters' ? _openChar()
     : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
@@ -2195,7 +2186,7 @@ function boot() {
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (btn && inp) {
-    // (phase V57) Refused in words before the file window opens - in the references of Environments / Lookbooks.
+    // Refused in words before the file window opens - in the references of Environments / Lookbooks.
     btn.addEventListener('click', () => { if (_shut()) { _status(_shut(), 'err'); return; } inp.click(); });
     // Copy the FileList into an array BEFORE clearing the input: input.files is live,
     // so `inp.value = ''` empties the very list you are holding and the upload sees
@@ -2206,7 +2197,7 @@ function boot() {
       _upload(files);
     });
   }
-  // (phase V27) By a link: the window, the stop of the one coming in, and a link let go over the shelf.
+  // By a link: the window, the stop of the one coming in, and a link let go over the shelf.
   const lk = $('lib-link');
   if (lk) lk.addEventListener('click', () => _openLinks(''));
   const stop = $('lib-link-stop');
@@ -2230,35 +2221,35 @@ function boot() {
   _wireTreeSash();
   _wireScSash();
   _initTree();
-  // (phase V59) The sound window's presses still being made (a reload) - the gallery read again when they land.
+  // The sound window's presses still being made (a reload) - the gallery read again when they land.
   SW.configure(_soundHost);
   SW.follow();
-  // (phase V59.1) "use in custom" on a saved text - its tile or its viewer (js/sound/lyrics.js, which closes the viewer first).
+  // "use in custom" on a saved text - its tile or its viewer (js/sound/lyrics.js, which closes the viewer first).
   window.addEventListener('ugc:lyric-use', (e) => { const l = e && e.detail; if (l && String(l.text || '').trim()) _openMusic(false, l); });
-  // (phase V54) Several tiles picked on Media (js/tile-select.js).
+  // Several tiles picked on Media (js/tile-select.js).
   const grid = $('lib-grid');
   if (grid) {
     _tsel = TS.createSelection({
       host: grid, tile: '.lib-card[data-key]',
       active: () => _shelf === 'media' && !_makingOn,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x))), _lastPicked(keys)),
-      // (phase V64 block 0, the owner 2026-10-31) The outline of a tile arrived at - an Alerts row, "show", the tracks the
+      // The outline of a tile arrived at - an Alerts row, "show", the tracks the
       // sound window made, ?sel= - lives until the first press in the gallery: on empty space nothing is marked any more,
       // on a tile only that one (its own pick). A track in the player still glows while it plays (js/sound/player.js).
       onPress: _dropArrived,
-      // (phase V64, fix (а)) The player is there while its track is picked.
+      // The player is there while its track is picked.
       onChange: () => _paintPlayer(),
     });
-    // (phase V73 block 2) The tile pressed last - the Delete key's question opens at it (_lastPicked).
+    // The tile pressed last - the Delete key's question opens at it (_lastPicked).
     grid.addEventListener('pointerdown', (e) => {
       const c = e.target && e.target.closest ? e.target.closest('.lib-card[data-key]') : null;
       if (c) _pressedKey = c.dataset.key;
     }, true);
-    // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
+    // The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
     grid.addEventListener('contextmenu', (e) => {
       if (!(_shelf === 'media' && !_makingOn) || !_tree || !_node) return;
-      // (phase V57) In the references of Environments / Lookbooks: "New folder" is there, not to be pressed, saying why.
+      // In the references of Environments / Lookbooks: "New folder" is there, not to be pressed, saying why.
       const shut = _shut();
       if (!shut && !_tree.holds(_node)) return;
       if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
@@ -2273,7 +2264,7 @@ function boot() {
       }]]);
     });
   }
-  // (phase V54) The music player, and Space for it - not in a field, not under a window (js/layers.js).
+  // The music player, and Space for it - not in a field, not under a window (js/layers.js).
   const ph = $('lib-player');
   if (ph) {
     _player = createPlayer(ph, {
@@ -2291,18 +2282,18 @@ function boot() {
   }
   Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load(); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
-    // reading is the person's choice, and its own area is not opened in its place (review I).
+    // reading is the person's choice, and its own area is not opened in its place.
     if (arrive && arrive.make && arrive.kind === 'characters' && _shelf === 'characters') _openChar();
     else if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(_makeOpts(arrive));
-    // (phase V56, V58) An address of Environments' or Lookbooks' generator: its window, over Media - unless another folder was
+    // An address of Environments' or Lookbooks' generator: its window, over Media - unless another folder was
     // pressed meanwhile.
     else if (arrive && arrive.made && _shelf === 'media' && _node && _node.key === arrive.made) _openGen(arrive.made);
-    // (phase V64) A chat's or the sound window's result: its folder, it outlined, the window again.
+    // A chat's or the sound window's result: its folder, it outlined, the window again.
     if (arrive && (arrive.open || arrive.reveal)) _arrived(arrive);
     if (window.requestIdleCallback) requestIdleCallback(_preloadChats, { timeout: 2000 });
     else setTimeout(_preloadChats, 300);
   });
-  // (phase V64 block 4) A chat's window closed on something made: the tree and the gallery read again.
+  // A chat's window closed on something made: the tree and the gallery read again.
   window.addEventListener('mv3:lib-reload', async () => {
     if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
     _counts();

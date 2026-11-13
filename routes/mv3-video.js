@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// MERGE — the video chat's server (phase V2, docs/local-app/PLAN.md "V-A", "V-E"). The page is phase V3.
+// MERGE — the video chat's server. The page is js/merge-v3/vidchat.js.
 //
 //   GET  /api/mv3/video/matrix          every model, its records on kie.ai and Replicate, parameters, prices and why
 //                                       one cannot be used - no network (smoke reads it with no key)
@@ -10,19 +10,18 @@
 //                                       turn - at the press - and the work behind the answer
 //   POST /api/mv3/video/upload          a clip from this computer into VIDEO -> Uploads (or the person's folder there)
 //
-// A message's CARD (phase V16: the writer stopping for a look, the column's storyboard, Kling's first frame) - the writer
+// A message's CARD (the writer stopping for a look, the column's storyboard, Kling's first frame) - the writer
 // and the video are presses of their own:
 //   PATCH /api/mv3/video/card/:id           the person's edit of a card
 //   POST  /api/mv3/video/card/:id/rewrite   the writer again for a card (another variant, a failed one, another model)
 //   POST  /api/mv3/video/card/:id/make      the video from the card: a record and an Alerts row per clip, at the press
-//   POST  /api/mv3/video/card/:id/board     (phase V8) a card's STORYBOARD (Kling's first frame: its picture): a picture of
+//   POST  /api/mv3/video/card/:id/board     a card's STORYBOARD (Kling's first frame: its picture): a picture of
 //                                           the pictures chat's store (nano-banana-2, 4K) with its Alerts row, at the press
-//   POST  /api/mv3/video/card/:id/video     (phase V16) the storyboard card's video prompt, from the sheet chosen
-// (The recipes' builder - POST /write, /card/:id/again - went with the catalog in phase V91.)
+//   POST  /api/mv3/video/card/:id/video     the storyboard card's video prompt, from the sheet chosen
 //
-// The thread itself is GET /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': old libraries
-// hold 'video' messages of a strip that was removed, and a live 'video' would bring them back.
-// Not /api/video/* (gone with Animate) and not /api/mv3/vid/* (smoke expects those to stay 404).
+// The thread itself is GET /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': a library may
+// hold 'video' messages with nothing behind them, and a live 'video' would bring them back.
+// Not /api/video/* and not /api/mv3/vid/* (smoke expects those to stay 404).
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -55,10 +54,10 @@ router.get('/mv3/video/matrix', (_req, res) => {
 
 router.get('/mv3/video/feed', (req, res) => {
   try {
-    // (phase V60.2) A draft's clips are kept under the drafts' conversation (lib/mv3-chat.js threadOf): the right column's
+    // A draft's clips are kept under the drafts' conversation (lib/mv3-chat.js threadOf): the right column's
     // "this project" and the window's "made in this project" ask by the draft's own key.
-    // (phase V78 fix) A clip is recorded under the key it was asked from - a draft's own, as the pictures chat's are - so the
-    // feed asks by that key first; the drafts' conversation's key too, for what an older draft may have kept there.
+    // A clip is recorded under the key it was asked from - a draft's own, as the pictures chat's are - so the
+    // feed asks by that key first; the drafts' conversation's key too, for what a draft may have kept there.
     const key = String(req.query.project || '');
     const p = CHAT.threadOf(key);
     const seen = new Set();
@@ -78,7 +77,7 @@ function _mediaOf(list) {
   for (let i = 0; i < media.length; i++) {
     const abs = toDiskExisting(media[i].path);
     if (!abs || !fs.existsSync(abs)) return { error: 'attachment ' + (i + 1) + (media[i].label ? ' («' + media[i].label + '»)' : '') + ' is not in this library' };
-    // (phase V7) A clip or a sound goes as the part the person chose: its start and end come with it, and the part is
+    // A clip or a sound goes as the part the person chose: its start and end come with it, and the part is
     // checked against the file itself when it is prepared - before the money (lib/video-prep.js).
     if (media[i].kind !== 'image') {
       const m = media[i];
@@ -94,7 +93,7 @@ function _mediaOf(list) {
 }
 
 // Who can take it, before anything is written: the chosen aggregator (or the cheapest with a key) first. A CHOSEN one
-// that cannot take it is an error, never swapped for the other at the other's price (review V2r): the page showed
+// that cannot take it is an error, never swapped for the other at the other's price: the page shows
 // what the chosen one costs. Only a refusal at the ask itself goes down the ladder. { fits } or { error }.
 function _routeOf(model, agg, params, media, prompt) {
   const chosen = KEYS.AGGS.includes(agg) ? agg : '';
@@ -125,29 +124,29 @@ router.post('/mv3/video/send', async (req, res) => {
     const model = String(b.model || '');
     if (!VM.MODELS.some(m => m.id === model)) return res.status(400).json({ success: false, error: 'no such model: ' + model });
     const isMC = /^kmc/.test(model);
-    // Kling motion control's box IS its prompt (phase V7.3): an empty one sends the standard prompt, said as the turn.
-    // (phase V17) With the writer on it holds the person's words for the first frame - empty is fine.
+    // Kling motion control's box IS its prompt: an empty one sends the standard prompt, said as the turn.
+    // With the writer on it holds the person's words for the first frame - empty is fine.
     const mcSteps = isMC && b.write !== false;
     const text = String(b.text || '').trim().slice(0, 30000) || (isMC && !mcSteps ? VM.STANDARD_MC_PROMPT : '');
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    // (phase V29, the owner 2026-10-14) Every prompt goes to the model in English.
+    // Every prompt goes to the model in English.
 
     // What is attached, each checked to be in the library; who can take it.
     const mm = _mediaOf(b.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const media = mm.media;
-    // (phase V16) Seedance's frames: every picture a frame, the first one there.
+    // Seedance's frames: every picture a frame, the first one there.
     const fr = isMC ? null : _framesOf(model, media);
     if (fr && fr.error) return res.status(400).json({ success: false, error: fr.error });
-    // (phase V16, the owner's answer 3) The writer stopping for a look makes a clip from the attachments alone, and so does
+    // The writer stopping for a look makes a clip from the attachments alone, and so does
     // the storyboard's; frames are written from even with the writer off.
     const fromAtts = media.length > 0 && (mcSteps || (!isMC && ((b.write !== false && (review || !!b.storyboard)) || !!fr)));
     if (!text && !fromAtts) return res.status(400).json({ success: false, error: 'say what to make' });
-    // (phase V17, the owner 2026-10-08) Kling motion control STEP BY STEP: the person's pictures and a still of the clip go
+    // Kling motion control STEP BY STEP: the person's pictures and a still of the clip go
     // to the writer, which writes the first frame's picture prompt into a message of its own; nothing is paid here - the
-    // picture is drawn by its press, and the video made from it by another (the owner's answer 2).
+    // picture is drawn by its press, and the video made from it by another.
     if (mcSteps) {
       const wrong = _frameWrong(model, b.agg, params, media);
       if (wrong) return res.status(400).json({ success: false, error: wrong });
@@ -185,11 +184,11 @@ router.post('/mv3/video/send', async (req, res) => {
     const rt = _routeOf(model, b.agg, params, media, isMC ? text : 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
     const fits = rt.fits;
-    // (review V7) What the first rung's preparation would refuse - before the writer is paid. Counted after this wait.
+    // What the first rung's preparation would refuse - before the writer is paid. Counted after this wait.
     const fw = await _filesWrong(fits[0], media);
     if (fw) return res.status(400).json({ success: false, error: fw });
     const sheet = media.some(m => m.kind === 'image' && m.role === 'storyboard');
-    // (phase V15, the owner 2026-10-07) The column's storyboard: the writer writes the sheet's prompt from this message,
+    // The column's storyboard: the writer writes the sheet's prompt from this message,
     // the sheet is drawn, and it stops there - the video is made from the storyboard's card. Seedance's and the writer's.
     if (b.storyboard) {
       if (_family(model) !== 'seedance') return res.status(400).json({ success: false, error: 'a storyboard is drawn for Seedance - pick a Seedance model' });
@@ -206,7 +205,7 @@ router.post('/mv3/video/send', async (req, res) => {
       _writeBoard(st.card.id, st.kick, { model, text, media, params });
       return;
     }
-    // (phase V16, the owner 2026-10-07) THE WRITER STOPS FOR A LOOK: the person's turn and a prompt card, the writer behind
+    // THE WRITER STOPS FOR A LOOK: the person's turn and a prompt card, the writer behind
     // the answer, and the video made only from the card ("make the video" - /card/:id/make). With the writer off the
     // words still go as typed, one press; under Kling motion control the writer writes the first frame (above).
     if (review) {
@@ -234,7 +233,7 @@ router.post('/mv3/video/send', async (req, res) => {
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
     CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
-    // (phase V16) With the pen off the words go as typed - except beside frames, which the writer writes all the same.
+    // With the pen off the words go as typed - except beside frames, which the writer writes all the same.
     const asTyped = b.write === false && !fr;
     const first = (isMC || asTyped) ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
     // Every record has its row: one without would never be ended, and would count against the three at once.
@@ -249,7 +248,7 @@ router.post('/mv3/video/send', async (req, res) => {
         model, agg: fits[0].agg, prompt: text, said: text, params, media,
       }).id);
     }
-    // (phase V18.3) The answer carries what was asked - the words and the attachments - and is drawn as the one message.
+    // The answer carries what was asked - the words and the attachments - and is drawn as the one message.
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path), asked: text, media });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
@@ -274,7 +273,7 @@ async function _work(o) {
       over = { prompt: t.text, lang: 'en', writer: t.translated ? 'translated' : '' };
     } else {
       const sees = await _writerSees(o.media, 'send');
-      // (phase V16) Frames: the writer writes them with the words or without, and our opening goes before its prompt.
+      // Frames: the writer writes them with the words or without, and our opening goes before its prompt.
       const open = VR.framesOpening(o.frames);
       const t = await AGENT.thinkVideo({ model: o.model, text: o.text || (o.frames ? NO_WORDS_FRAMES : ''), media: o.media, picUrls: sees.urls, seen: sees.seen,
                                          thread: o.before, params: o.params, max: _roomFor(o.pair.promptMax, open), frames: o.frames || null });
@@ -285,7 +284,7 @@ async function _work(o) {
       }
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: o.frames ? _withOpening(t.prompt, o.frames) : t.prompt, fell: t.fell || '', writer: t.writer || '' };
-      // (phase V15) A storyboard among the pictures is followed: a prompt that does not name it gets the sentence that does.
+      // A storyboard among the pictures is followed: a prompt that does not name it gets the sentence that does.
       const k = o.media.filter(m => m.kind === 'image').findIndex(m => m.role === 'storyboard') + 1;
       if (k && !_namesSheet(over.prompt, k)) over.prompt = (over.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
     }
@@ -301,7 +300,7 @@ async function _work(o) {
   }
 }
 
-// ── The cards (phase V6; the writer stopping for a look since V16) ──────────
+// ── The cards (the writer stopping for a look) ──────────────────────────────
 // The writer works behind the answer into a CARD - a prompt card, the storyboard's, Kling's first frame's - and the prompt
 // it makes is the person's to edit; only then is the video made from it (make: the records and their Alerts rows at the
 // press, their prompt READY - a retry from Alerts sends it as it is). No Alerts row for the writer: it is a text, seconds
@@ -312,10 +311,10 @@ const WRITE_AT_ONCE = 3;
 // (lib/video-models.js render): every check and the translator read it in ONE form, so it is put in that form first.
 const REF_ANY = /\{\{\s*(image|video|audio)\s*:\s*(\d+)\s*\}\}/gi;
 const _strictRefs = (p) => String(p || '').replace(REF_ANY, (all, k, n) => '{{' + k.toLowerCase() + ':' + (+n) + '}}');
-// (phase V23) Counted on the raw thread - the whole read folded in every record just to count cards.
+// Counted on the raw thread - the whole read would fold in every record just to count cards.
 const _writingIn = (project) => CHAT.writingCount(project);
 
-// ── The storyboard (phase V8, PLAN V-G; the owner 2026-10-06: 4K, and always a stop after it) ──────────────────
+// ── The storyboard (4K, and always a stop after it) ──────────────────
 // A storyboard draws a SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
 // Alerts row of type 'picture', filed in IMAGES -> Generated) - and the video is made from it: the
 // sheet chosen on the card goes as the LAST picture of the clip, after the card's own.
@@ -337,9 +336,9 @@ function _boardInfo(quality) {
   };
 }
 
-// ── Kling motion control's FIRST FRAME (phase V17, the owner 2026-10-08; phase V7.6 before it) ──────────────────────
-// 1 · a PICTURE - a frame of the clip redrawn with the person's character in the pose there (nano-banana-2 at 2K - the
-// owner's answer 2 of V7.6: Kling takes 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that
+// ── Kling motion control's FIRST FRAME ──────────────────────
+// 1 · a PICTURE - a frame of the clip redrawn with the person's character in the pose there (nano-banana-2 at 2K -
+// Kling takes 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that
 // picture with the part of the clip. It rides on the storyboard's machinery (`board`, its records, its row, `boardsOf`,
 // the retry's home) with `kind: 'frame'`, and the video takes the chosen picture IN PLACE OF the person's pictures.
 const FRAME_QUALITY = '2K';
@@ -370,7 +369,7 @@ function _frameWrong(model, agg, params, media) {
   return rt.error || '';
 }
 // The still of the clip at a moment, cut once into media/work under the card's name - the writer reads it and the
-// drawing sends it (review V7: whole or not at all - the same moment reuses the file). Its address; throws in words.
+// drawing sends it (whole or not at all - the same moment reuses the file). Its address; throws in words.
 async function _stillOf(cardId, clip, at) {
   const name = 'vframe_' + String(cardId).replace(/[^a-z0-9]/gi, '').slice(-16) + '_' + Math.round(at * 100) + '.jpg';
   const abs = path.join(MEDIA.work, name);
@@ -382,10 +381,10 @@ async function _stillOf(cardId, clip, at) {
   }
   return '/media/work/' + name;
 }
-// (phase V17, the owner: "the pose is the most important") A first frame's prompt names the still - the pose comes from
+// The pose matters most: a first frame's prompt names the still - the pose comes from
 // it; one that does not gets the sentence that does, at its head.
 const _framePose = (p) => (/\{\{video:1\}\}/.test(p) ? p : ('Keep exactly the pose, the framing and the camera angle of {{video:1}}. ' + p).trim());
-// (review V7) The stills of first frames (media/work/vframe_*) go once no picture record names them any more - a picture
+// The stills of first frames (media/work/vframe_*) go once no picture record names them any more - a picture
 // retried from Alerts sends its frame again, so one stays while its record does (the pictures chat trims its records);
 // an hour's grace covers a frame cut a moment before its record was written. A while after the start, then daily.
 function _sweepFrames() {
@@ -406,9 +405,9 @@ function _sweepFrames() {
 }
 setTimeout(_sweepFrames, 60000).unref();
 setInterval(_sweepFrames, 24 * 3600000).unref();
-router._sweepFrames = _sweepFrames;          // for the stands
+router._sweepFrames = _sweepFrames;          // for tests
 
-// (review V7) Each clip and sound as the first rung would prepare it - its part in the file, its shape in the rung's
+// Each clip and sound as the first rung would prepare it - its part in the file, its shape in the rung's
 // window, a sound that has one - asked BEFORE anything is paid: a writer, a storyboard or a first frame is not
 // bought for a video that can never be made. '' or the words.
 async function _filesWrong(pair, media) {
@@ -457,8 +456,8 @@ function _seatWrong(model, agg, params, media) {
   return 'the storyboard goes to the video as one more picture after your ' + n + ' - ' + rt.error;
 }
 
-// What a two-step card must be able to do before its writer is asked, and again before its sheet is paid for (review
-// V8): no frame among its pictures (beside the sheet the model reads every picture as a reference), a link for the sheet
+// What a two-step card must be able to do before its writer is asked, and again before its sheet is paid for:
+// no frame among its pictures (beside the sheet the model reads every picture as a reference), a link for the sheet
 // (it always goes to the video as a picture - R2), a sheet that can be drawn with its pictures (nano-banana-2 takes 14),
 // and the seat. '' when it can, else why in words.
 const BOARD_R2 = 'the storyboard goes to the video model as a picture, from a public link - that needs R2 (Admin -> API keys)';
@@ -473,7 +472,7 @@ function _twoStepWrong(model, agg, params, media) {
   return _seatWrong(model, agg, params, list);
 }
 
-// The storyboard prompt goes to a PICTURE model, which reads references as words (review V8): the card's pictures,
+// The storyboard prompt goes to a PICTURE model, which reads references as words: the card's pictures,
 // {{image:N}}, become "Image N" (the way lib/mv3-prompt-rules.js has them named); what a picture model cannot see - the
 // sheet itself, a clip, a sound - goes.
 function _boardWords(prompt, pics) {
@@ -483,11 +482,11 @@ function _boardWords(prompt, pics) {
 // The video prompt of a two-step card names its sheet - the picture after the card's own.
 const _namesSheet = (prompt, k) => _strictRefs(prompt).includes('{{image:' + k + '}}');
 
-// ── The column's storyboard (phase V15; a sub-project message since V16 - the owner 2026-10-07) ──────────────────
+// ── The column's storyboard ──────────────────
 // A plain message with the storyboard box ticked: its card ('board') holds the whole way - the words and the pictures,
-// the sheet's prompt (written behind the answer by the V8 sheet rules; its variants), the sheets, the video's prompt
-// (its variants) and the clips. A STOP BEFORE EVERY PAID STEP (the owner, V16 answer 5): "draw the storyboard" (V8's
-// /card/:id/board - the record and its row at that press), "write the video" (/card/:id/video: the video's prompt from the
+// the sheet's prompt (written behind the answer by the storyboard's sheet rules; its variants), the sheets, the video's prompt
+// (its variants) and the clips. A STOP BEFORE EVERY PAID STEP: "draw the storyboard"
+// (/card/:id/board - the record and its row at that press), "write the video" (/card/:id/video: the video's prompt from the
 // same words with the chosen sheet among the pictures), "make the video" (/card/:id/make - the sheet the last picture).
 const _short = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 60);
 // Its row, once drawn, leads back to the card - not to the picture on its shelf (js/alerts-bell.js reveals only 'pictures'
@@ -504,7 +503,7 @@ const _verId = () => 'v' + Date.now().toString(36) + crypto.randomBytes(2).toStr
 const _restState = (x) => {
   if ((x.card.sends || []).length || (x.genIds || []).length) return 'sent';
   const B = x.card.board;
-  // (phase V17) A frame card's own words are its picture's prompt - Kling's is put in at its start.
+  // A frame card's own words are its picture's prompt - Kling's is put in at its start.
   if (B && B.kind === 'frame') return (B.versions || []).length || B.prompt ? 'ready' : 'failed';
   return (x.card.versions || []).length || x.card.prompt || (B && ((B.versions || []).length || B.prompt)) ? 'ready' : 'failed';
 };
@@ -565,7 +564,7 @@ async function _writeBoard(cardId, kick, o) {
   } finally { CHAT.writing.delete(kick); }
 }
 
-// The pictures the WRITER looks at, made small first (review V6): a character's sheet is 4K, and the writer only has
+// The pictures the WRITER looks at, made small first: a character's sheet is 4K, and the writer only has
 // to see what is in it - the aggregator gets each picture fitted to its own limits when the clip is asked for.
 async function _hostForWriter(paths) {
   const { toDiskExisting: abs } = require('../lib/media');
@@ -578,12 +577,12 @@ async function _hostForWriter(paths) {
     return require('../lib/helpers').uploadToPublicHost(buf, { ext: 'jpg', verify: true });
   }));
 }
-// What the WRITER sees: the pictures, made small (review V6), then THREE FRAMES of every clip - the start, the middle
-// and the end of its part - in the order the clips are listed (phase V7; lib/mv3-video-rules.js listing says so). What
-// cannot be hosted is left out with a warning: the writer works from the words then, as before.
-// (review V7) It answers { urls, seen } - what the writer is told it sees is what it gets: the pictures all or none,
-// each clip's THREE frames or none of them (one short and the next clip's frames were read as this one's end).
-// (phase V48) A clip WATCHED whole (`watched[i]` - its description) needs no frames: `seen.clips[i]` is 'watched'.
+// What the WRITER sees: the pictures, made small, then THREE FRAMES of every clip - the start, the middle
+// and the end of its part - in the order the clips are listed (lib/mv3-video-rules.js listing says so). What
+// cannot be hosted is left out with a warning: the writer works from the words then.
+// It answers { urls, seen } - what the writer is told it sees is what it gets: the pictures all or none,
+// each clip's THREE frames or none of them (with one short, the next clip's frames would be read as this one's end).
+// A clip WATCHED whole (`watched[i]` - its description) needs no frames: `seen.clips[i]` is 'watched'.
 async function _writerSees(media, why, watched) {
   const list = Array.isArray(media) ? media : [];
   const pics = list.filter(m => m.kind === 'image').map(m => m.path);
@@ -609,11 +608,10 @@ async function _writerSees(media, why, watched) {
   return { urls, seen };
 }
 
-// (phase V48, the owner 2026-10-25: "нам нужно чтобы агент просматривал видео полностью и описывал его ... это нужно
-// пока только для seedance") THE CLIPS WATCHED before Seedance's writer writes a card: each clip - the part of it that
+// THE CLIPS WATCHED before Seedance's writer writes a card: each clip - the part of it that
 // goes - described by an agent that watches video (lib/clip-watch.js: kept by the file and the part, never paid twice),
 // the descriptions written onto the card as they come (`watch`, one entry per clip) - a step of the message the person
-// reads and corrects (кл5). A description the card has already for the same part is used AS IT STANDS - corrected or
+// reads and corrects. A description the card has already for the same part is used AS IT STANDS - corrected or
 // not; a clip that was not watched is asked again. The clips' descriptions in their order ({ text } or null - the writer
 // then sees its three frames, and the card says "clip not watched"), or null when this card watches nothing.
 const _samePart = (w, i, c) => !!(w && w.n === i + 1 && w.path === c.path
@@ -658,16 +656,16 @@ async function _watchFor(cardId, kick, model, media, words) {
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
 
-// The thread's own card, or why not. `type` - one, or a list (phase V15: a storyboard card draws as a two-step one).
+// The thread's own card, or why not. `type` - one, or a list (a storyboard card draws as a two-step one).
 function _cardOf(id, project, type) {
   const m = CHAT.get(id);
   const types = Array.isArray(type) ? type : [type || 'prompt'];
-  // (phase V21) In the thread of the project asked from - the drafts' conversation for the draft, whatever draft wrote it.
+  // In the thread of the project asked from - the drafts' conversation for the draft, whatever draft wrote it.
   if (!m || String(m.project || '') !== CHAT.threadOf(project) || !m.card || !types.includes(m.card.type)) return null;
   return m;
 }
 
-// (phase V16, the owner 2026-10-07) Seedance's FRAMES ("pictures are"): the first frame - and the last - by their roles,
+// Seedance's FRAMES ("pictures are"): the first frame - and the last - by their roles,
 // { kind: 'first' | 'fl', first, last, asRefs } with their numbers among the pictures; null when there are none, or
 // { error } in words. With nothing beside them they are the model's own frames; beside a clip or a sound they go as
 // references (Seedance takes frames OR references) - `asRefs` - and the prompt names them.
@@ -682,7 +680,7 @@ function _framesOf(model, media) {
   if (pics.length > (last ? 2 : 1)) return { error: 'with frames only the frames go - take the other pictures off, or send the pictures as references' };
   return { kind: last ? 'fl' : 'first', first, last, asRefs: (media || []).some(m => m.kind !== 'image') };
 }
-// (phase V16, the owner: "it is important") A frames prompt OPENS with our sentence (lib/mv3-video-rules.js
+// A frames prompt OPENS with our sentence (lib/mv3-video-rules.js
 // framesOpening) - the writer is told not to write one; a first sentence of its own about starting on the first frame
 // goes all the same, so the model is not told twice.
 function _withOpening(prompt, fr) {
@@ -696,7 +694,7 @@ function _withOpening(prompt, fr) {
 // What the writer may use of a model's prompt limit when our opening goes before its prompt.
 const _roomFor = (max, open) => (max && open ? Math.max(200, max - open.length - 1) : max);
 
-// (phase V17) The writer of Kling's first frame, behind the answer: the still cut at the moment (the file the drawing
+// The writer of Kling's first frame, behind the answer: the still cut at the moment (the file the drawing
 // sends too), hosted with the person's pictures - the writer sees them in that order; every writing a VARIANT of the
 // picture's prompt (`board.versions`), the newest chosen; one that fails leaves the variants there were, and says why.
 async function _writeFrame(cardId, kick, o) {
@@ -734,7 +732,7 @@ async function _writeFrame(cardId, kick, o) {
   } finally { CHAT.writing.delete(kick); }
 }
 
-// (phase V16) The writer of a PLAIN card - the chat's message with the writer stopping for a look: each writing is a
+// The writer of a PLAIN card - the chat's message with the writer stopping for a look: each writing is a
 // VARIANT of the prompt (`versions`, at most 10), the newest chosen; one that fails leaves the variants there were, and
 // says why. Filed only while the card still waits for THIS writer.
 const NO_WORDS = '(Nothing was written - decide what the clip shows from the attachments.)';
@@ -744,7 +742,7 @@ async function _writePlain(cardId, kick, o) {
   try {
     const watched = await _watchFor(cardId, kick, o.model, o.media, o.text);
     const sees = await _writerSees(o.media, 'review', watched);
-    // (phase V16) Frames: the writer's frames rules, and our opening before its prompt.
+    // Frames: the writer's frames rules, and our opening before its prompt.
     const fr = _framesOf(o.model, o.media);
     const frames = fr && !fr.error ? fr : null;
     const open = VR.framesOpening(frames);
@@ -753,7 +751,7 @@ async function _writePlain(cardId, kick, o) {
     out = t.prompt ? { prompt: _strictRefs(frames ? _withOpening(t.prompt, frames) : t.prompt), writer: t.writer || '', fell: t.fell || '' }
       : { error: t.fail || 'the writer answered nothing usable - write it again' };
     if (out.prompt) {
-      // A storyboard among the pictures is followed (V15): a prompt that does not name it gets the sentence that does.
+      // A storyboard among the pictures is followed: a prompt that does not name it gets the sentence that does.
       const k = o.media.filter(m => m.kind === 'image').findIndex(m => m.role === 'storyboard') + 1;
       if (k && !_namesSheet(out.prompt, k)) out.prompt = (out.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
       const wrong = _refsWrong(out.prompt, o.media);
@@ -767,7 +765,7 @@ async function _writePlain(cardId, kick, o) {
       if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
       const had = (m.card.versions || []).length;
       if (out.prompt) {
-        // (phase V16) A storyboard card's video prompt remembers the sheet it was written with.
+        // A storyboard card's video prompt remembers the sheet it was written with.
         const v = { id: _verId(), at: new Date().toISOString(), model: o.model, agg: o.agg, params: o.params, prompt: out.prompt,
                     writer: out.writer, fell: out.fell, edited: false, boardId: o.boardId || '' };
         m.card.versions = (m.card.versions || []).concat([v]).slice(-10);
@@ -794,15 +792,15 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const prompt = b.prompt == null ? null : _strictRefs(String(b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
     const board = b.board == null ? null : String(b.board).replace(/\r\n/g, '\n').slice(0, 6000);
     const chosen = b.chosen == null ? null : String(b.chosen);
-    // (phase V16) A card's prompt variants: `ver` the one edited (the chosen one when none), `cur` the one chosen; `bver` and
+    // A card's prompt variants: `ver` the one edited (the chosen one when none), `cur` the one chosen; `bver` and
     // `bcur` the same for a storyboard's prompt.
     const ver = b.ver == null ? null : String(b.ver);
     const cur = b.cur == null ? null : String(b.cur);
     const bver = b.bver == null ? null : String(b.bver);
     const bcur = b.bcur == null ? null : String(b.bcur);
-    // A first frame's moment (V17): where the part starts.
+    // A first frame's moment: where the part starts.
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
-    // (phase V48, кл5) The person's correction of what the agent saw in clip `n`: the next writing reads it as it stands.
+    // The person's correction of what the agent saw in clip `n`: the next writing reads it as it stands.
     const wEdit = b.watch && typeof b.watch === 'object' && Number.isFinite(+b.watch.n)
       ? { n: Math.round(+b.watch.n), text: String(b.watch.text == null ? '' : b.watch.text).replace(/\r\n/g, '\n').slice(0, 40000) } : null;
     let why = null;
@@ -820,10 +818,10 @@ router.patch('/mv3/video/card/:id', (req, res) => {
         return;
       }
       if (story && at != null) { why = [400, 'a storyboard card has no moment of a clip']; return false; }
-      // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
+      // Written - waiting, or made and edited for the next make.
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
-      // (phase V16) A storyboard's prompt by variant - the column's storyboard, and Kling's first frame's picture prompt.
+      // A storyboard's prompt by variant - the column's storyboard, and Kling's first frame's picture prompt.
       if (x.card.board && Array.isArray(x.card.board.versions) && x.card.board.versions.length) {
         const B = x.card.board;
         const pickB = (id) => B.versions.find(v => v.id === id);
@@ -857,7 +855,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
           }
         }
       }
-      // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
+      // Only a sheet of this card that has landed and is still on the shelf can be chosen.
       if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
         const W = x.card.board.kind === 'frame' ? 'picture' : 'storyboard';
         const g = CHAT.boardsOf(x).find(y => y.id === chosen);
@@ -869,7 +867,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       if (x.card.board && x.card.board.kind === 'frame' && at != null) {
         const clip = (x.media || []).find(y => y.kind === 'video') || {};
         const B = x.card.board;
-        // (phase V17) The moment IS where the part starts: the part follows it with the length the person chose (`len`),
+        // The moment IS where the part starts: the part follows it with the length the person chose (`len`),
         // 3 s at least in the clip.
         const len = Math.max(3, +B.len || ((+clip.out || 0) - (+clip.in || 0)));
         const v = Math.round(Math.max(0, Math.min(B.dur - 3, at)) * 100) / 100;
@@ -899,7 +897,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     const m = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
-    // (phase V15) The column's storyboard whose prompt was not written: written again, with a sheet of its own at the press.
+    // The column's storyboard whose prompt was not written: written again, with a sheet of its own at the press.
     if (m.card.type === 'board') {
       const s = _settings(b);
       if (_family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a storyboard is drawn for Seedance - pick a Seedance model' });
@@ -917,7 +915,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       _writeBoard(m.id, st.kick, { model: s.model, text: m.card.text, media: mm.media, params: s.params });
       return;
     }
-    // (phase V17) Kling's first frame: its picture's prompt written again - another variant, from the same words and pictures.
+    // Kling's first frame: its picture's prompt written again - another variant, from the same words and pictures.
     if (m.card.board && m.card.board.kind === 'frame') {
       const s = _settings(b);
       if (_family(s.model) !== 'kmc') return res.status(400).json({ success: false, error: 'the first frame is Kling motion control\'s - pick it on the left' });
@@ -938,7 +936,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       _writeFrame(m.id, kick, { text: m.card.text || '', media: mm.media, at: +clip.in || 0 });
       return;
     }
-    // (phase V16) A plain card written again: another variant of its prompt, from the person's words and its attachments.
+    // A plain card written again: another variant of its prompt, from the person's words and its attachments.
     const s = _settings(b);
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control takes its own prompt - send your pictures and the clip from the box' });
@@ -982,11 +980,11 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
   const ids = [];
   try {
     const project = String(b.project || '').trim();
-    // (phase V16) A storyboard card of the column makes its video from its own message too.
+    // A storyboard card of the column makes its video from its own message too.
     const m = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompt is still being written' });
-    // A made card is made again from its own field (the owner, 2026-10-06): another attempt of the same card.
+    // A made card is made again from its own field: another attempt of the same card.
     if (m.card.state !== 'ready' && m.card.state !== 'sent') return res.status(409).json({ success: false, error: 'the prompt was not written - write it again' });
     const prompt = _strictRefs(String(b.prompt == null ? m.card.prompt : b.prompt).replace(/\r\n/g, '\n')).trim().slice(0, 30000);
     if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
@@ -997,17 +995,17 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       return res.status(400).json({ success: false, error: frame ? 'a first frame\'s video is made by Kling motion control - pick it on the left'
         : 'this prompt was written for ' + _labelOf(m.card.model) + ' - write it again for ' + _labelOf(s.model) });
     }
-    // (review V7) A first frame's video takes the DRAWN picture in place of the person's: the person's own pictures are not
-    // needed any more, and one gone from the Library must not stop a paid picture from being used.
+    // A first frame's video takes the DRAWN picture in place of the person's: the person's own pictures are not
+    // needed then, and one gone from the Library must not stop a paid picture from being used.
     const mm = _mediaOf(frame ? (m.media || []).filter(x => x && x.kind !== 'image') : m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
-    // The pictures' records, read once for this press however many times the sheets are looked up (phase V23).
+    // The pictures' records, read once for this press however many times the sheets are looked up.
     let _pics = null;
     const picsAll = () => (_pics || (_pics = require('../lib/mv3-gens').listAll()));
     if (m.card.board) {
       // The sheet the video follows: the one the page sends, else the card's chosen one while it can be followed, else
-      // the newest that landed and is still on the shelf (review V8). A first frame's picture the same way.
+      // the newest that landed and is still on the shelf. A first frame's picture the same way.
       const W = frame ? 'picture' : 'storyboard';
       const boards = CHAT.boardsOf(m, picsAll());
       const want = String(b.boardId || '');
@@ -1056,10 +1054,10 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    // Said by the person's words (phase V16) - a card with none by its prompt.
+    // Said by the person's words - a card with none by its prompt.
     const said = frame && m.card.plain && !String(m.card.text || '').trim() ? 'motion control from its first frame'
       : String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200);
-    // (phase V16) The variant of the prompt the person made it from - chosen, and kept with the attempt.
+    // The variant of the prompt the person made it from - chosen, and kept with the attempt.
     const ver = Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
     const where = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
@@ -1080,7 +1078,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       const at = new Date().toISOString();
       Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params, sent: { at, n },
                               sends: _was(x).concat([{ at, n, boardId, genIds: ids, ver }]) });
-      // (phase V16) The variant made from is the chosen one, as the person edited it.
+      // The variant made from is the chosen one, as the person edited it.
       const v = ver && Array.isArray(x.card.versions) ? x.card.versions.find(y => y.id === ver) : null;
       if (v) { if (v.prompt !== prompt) Object.assign(v, { prompt, edited: true }); x.card.cur = v.id; }
       if (x.card.board && boardId) x.card.board.chosen = boardId;
@@ -1104,7 +1102,7 @@ async function _make(o) {
   try {
     const over = { prompt: o.prompt, writer: o.writer, lang: 'en' };
     // A card's prompt edited in another language is translated, as the plain send does - and refused in words when it
-    // cannot be. Kling motion control's only before phase V29 (review V7); every model's since (the owner 2026-10-14).
+    // cannot be, for every model.
     if (!AGENT.english(o.prompt)) {
       if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
       for (const id of o.ids) VGENS.stage(id, 'translating the prompt', o.kick);
@@ -1135,7 +1133,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
     if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
-    // (phases V7.6, V17) Kling's first frame is a PICTURE of the clip's frame with the person's character in it, not a sheet.
+    // Kling's first frame is a PICTURE of the clip's frame with the person's character in it, not a sheet.
     const frame = m.card.board.kind === 'frame';
     const W = frame ? 'picture' : 'storyboard';
     // A made card draws too: it is made again from its field, and another sheet may be what the next attempt follows.
@@ -1155,14 +1153,14 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     if (pv.error) return res.status(400).json({ success: false, error: pv.error });
     const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
     if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });
-    // (review V7) The video's clips and sounds as its rung would take them: no picture is bought for a video that cannot be.
+    // The video's clips and sounds as its rung would take them: no picture is bought for a video that cannot be.
     const vr = _routeOf(m.card.model, m.card.agg, m.card.params || {}, all.media, 'xxx');
     if (!vr.error) {
       const fw = await _filesWrong(vr.fits[0], all.media);
       if (fw) return res.status(400).json({ success: false, error: fw });
     }
     // The first frame's still: the clip's frame at the moment (cut once, `_stillOf`) - the moment is where the part
-    // starts (phase V17). The picture model gets the still and then every picture of the person, in their numbers.
+    // starts. The picture model gets the still and then every picture of the person, in their numbers.
     let refs = pics.map(x => x.path);
     let at = null;
     if (frame) {
@@ -1175,11 +1173,11 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     }
     // Its row, once drawn, leads back to the card - the video is chosen and made there.
     const where = _boardWhere(project, b.where);
-    // (phase V15) A storyboard of the column is said by the words it was drawn for.
-    // (phase V17) Kling's first frame is said by the person's words too, or as what it is.
+    // A storyboard of the column is said by the words it was drawn for.
+    // Kling's first frame is said by the person's words too, or as what it is.
     const title = m.card.type === 'board' ? _short(m.card.text)
       : frame && m.card.plain ? (_short(m.card.text) || 'first frame') : 'video';
-    // (review V7) The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
+    // The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
     // the card is read again and the count asked again here, in the tick the record is written.
     const m2 = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m2 || !m2.card.board) return res.status(409).json({ success: false, error: 'the card is not in the thread any more' });
@@ -1199,7 +1197,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
       if (x.card.board.prompt !== typed) {
         x.card.board.prompt = typed;
         x.card.board.edited = true;
-        // (phase V16) The variant drawn from keeps the words it was drawn with.
+        // The variant drawn from keeps the words it was drawn with.
         const v = Array.isArray(x.card.board.versions) ? x.card.board.versions.find(y => y.id === x.card.board.cur) : null;
         if (v) Object.assign(v, { prompt: typed, edited: true });
       }
@@ -1218,7 +1216,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
   }
 });
 
-// (phase V16) A storyboard card's VIDEO prompt - "write the video": the writer writes it from the card's words and
+// A storyboard card's VIDEO prompt - "write the video": the writer writes it from the card's words and
 // pictures with the chosen sheet among them (the last picture, `storyboard`); every writing is a variant, and the
 // video is made from it by "make the video" (/card/:id/make). Nothing is paid here.
 router.post('/mv3/video/card/:id/video', async (req, res) => {
@@ -1266,8 +1264,8 @@ router.post('/mv3/video/card/:id/video', async (req, res) => {
 });
 
 // ── A clip from this computer ───────────────────────────────────────────────
-// Into VIDEO -> Uploads itself, no category (phase V56, (ги4): what is brought into a chat lies in the root of its kind;
-// lib/birols-store.js places it, makes its poster, measures it) - or (V57, (ок2)) the folder of Uploads open in the
+// Into VIDEO -> Uploads itself, no category (what is brought into a chat lies in the root of its kind;
+// lib/birols-store.js places it, makes its poster, measures it) - or the folder of Uploads open in the
 // attachment window.
 const EXTS = ['.mp4', '.mov', '.webm', '.m4v', '.mkv', '.avi'];
 const _upload = multer({
@@ -1286,13 +1284,13 @@ router.post('/mv3/video/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no clip' });
   const b = req.body || {};
   try {
-    // A file with no picture is no clip (phase V7: a sound has its own door, onto Sounds).
+    // A file with no picture is no clip (a sound has its own door, onto Sounds).
     const dim = await require('../lib/media-probe').probe(req.file.path).catch(() => ({}));
     if (!(dim.w > 0)) {
       try { fs.unlinkSync(req.file.path); } catch (er) { /* gone */ }
       return res.status(400).json({ success: false, error: 'it has no picture in it' + (dim.audio ? ' - a sound goes in among the sounds' : '') });
     }
-    // (phase V57, (ок2)) Through the attachment window: into the folder of Uploads open there (`categoryId`), when it is
+    // Through the attachment window: into the folder of Uploads open there (`categoryId`), when it is
     // one - else Uploads itself.
     const LC = require('../lib/library-cats');
     const want = String(b.categoryId || '');
@@ -1313,9 +1311,9 @@ router.use('/mv3/video/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 
-// ── A sound from this computer (phase V7) ───────────────────────────────────
+// ── A sound from this computer ───────────────────────────────────────────────
 // Onto the Sounds shelf (lib/sounds-store.js): from the Library into the folder open there (`categoryId`); from a chat
-// into SFX -> My sounds itself, no category (phase V56, (ги4)) - or (V57, (ок2)) the folder of My sounds open in the
+// into SFX -> My sounds itself, no category - or the folder of My sounds open in the
 // attachment window (the page sends only one of the person's own, chat-pick.js pickFolder).
 const SOUND_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.webm'];
 const _uploadSound = multer({

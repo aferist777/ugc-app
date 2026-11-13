@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE SCREENS (phase V84 block 4d, the owner 2026-11-11, (б4-1)-(б4-13)) - Phone app, Phone, Screen in screen and Magazine cover:
+   THE SCREENS - Phone app, Phone, Screen in screen and Magazine cover:
    video-effects-pack's scenes (MIT; their numbers, timings and layout written again for the canvas) that turn the clip's window
    into a scene with the clip's own picture inside it (S.picture() - the window as it is, upright). The person's words (textsOf),
    font (textFont - one of the captions'), colours and settings (js/fx/effects.js). Drawn by the page only - live by the preview,
@@ -257,7 +257,7 @@ function screeninscreen(g, S) {
 // The clip becomes a cover tilting in from below: the issue and date on top, the masthead over the hair, a big number with its label
 // and a line over a coloured plate under the chin, two small lines and a barcode at the foot - nothing over the face; every text
 // the person's; the whole cover tilts out again. The hair's top is the face's (the pack takes it from the person's mask on its first
-// frame); with no room the masthead lies over the hair and the head stands in front of it (block 6 - the person's mask, js/fx/person.js).
+// frame); with no room the masthead lies over the hair and the head stands in front of it (the person's mask, js/fx/person.js).
 const _capH = (g, size, fnt) => {
   g.save();
   g.font = fnt;
@@ -381,7 +381,7 @@ function magazine(g, S) {
   };
   darken(0, 0.34 * chh, 0.58, 0);
   draw(0);
-  // (block 6) No room over the hair: the head in front of the masthead, as the picture is (not darkened).
+  // No room over the hair: the head in front of the masthead, as the picture is (not darkened).
   if (P) x.drawImage(P.cut, -L.x0, -L.y0, L.bw, L.bh);
   // Under the cover lines - so white words read on a light sweater (a smooth step to 0.66 at the foot).
   const g0 = 0.50 * chh;

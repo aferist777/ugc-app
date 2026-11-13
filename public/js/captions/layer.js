@@ -1,18 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the preview draws them with the render's own libass (phase K4, 2026-10-03).
+   CAPTIONS — the preview draws them with the render's own libass.
 
    JASSUB is libass compiled to WebAssembly (tools/fetch-jassub.js lays it out in vendor/jassub/). The
-   preview's captions used to be a canvas imitation of libass that had to be taught every effect twice;
-   now the page builds the SAME .ass the render burns (ass.js) and libass draws it, in the SAME font
-   files (fonts.js, handed over as files - `queryFonts: false`, or Electron would lend it the system's
-   fonts and the screen would stop matching the file).
+   page builds the SAME .ass the render burns (ass.js) and libass draws it, in the SAME font files
+   (fonts.js, handed over as files - `queryFonts: false`, or Electron would lend it the system's fonts
+   and the screen would stop matching the file) - no imitation of libass to teach every effect twice.
 
    JASSUB draws on a canvas of its own, handed to its worker (transferControlToOffscreen) - so this
    layer is a second canvas laid exactly over the FRAME inside the preview's stage, clicks passing
    through it, and the preview tells it the time (manualRender) whenever it paints. Until the worker is
    up, or if it cannot start, the preview's own painter (js/merge-v3/subs-b.js) draws instead.
 
-   ONLY THE FONTS IN USE (phase V68 P4): with 101 families shipped (33 MB) the worker is no longer handed every file at start.
+   ONLY THE FONTS IN USE: with 101 families shipped (33 MB) the worker is not handed every file at start.
    It gets the fonts the .ass names in its Style rows (fontsOf below - ass.js writes no \fn, so the styles are all of them) and
    PT Sans, which draws the letters a font lacks; a new .ass that names another font has its files added to the worker
    (`addFonts`) before it is drawn. The render's libass reads the whole folder (fontsdir) - the same files either way.
@@ -130,7 +129,7 @@ export function setTimeline(tl) {
 }
 
 /**
- * A GESTURE IN HAND (phase V30, block 3: a caption dragged on the preview): these captions - the ones on screen,
+ * A GESTURE IN HAND (a caption dragged on the preview): these captions - the ones on screen,
  * with their place as the pointer has it - are drawn instead of the project's until `null` gives the project's
  * back. Nothing is stored; the store hears of the gesture once, when it ends.
  */

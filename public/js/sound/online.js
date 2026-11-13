@@ -1,11 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   FINDING SOUNDS ONLINE (phase V34.D-E; the owner 2026-10-22, (з1), (н9)-(н11): "пользователь может подключаться к
-   библиотеке в попапе и добавлять себе в библиотеку другие звуки из наборов, так же поиском по библиотекам"; "только cc0
-   берем. обойдемся openverse"; 2026-10-23, (р3): "когда пользователь что-то написал в поиск и не нашел в библиотеке, то
-   подставлять написаное в поиск в попап поиска онлайн") - one window for Merge's Library panel and the Library's Media
-   shelf.
+   FINDING SOUNDS ONLINE - one window for Merge's Library panel and the Library's Media shelf.
 
-   The search (CC0 only; GET /api/audio/online - since phase V54 Freesound directly with the owner's key, else Openverse,
+   The search (CC0 only; GET /api/audio/online - Freesound directly with a Freesound key, else Openverse,
    which searches Freesound and Wikimedia Commons with no key; the answer says which, `via`), a result played by
    a press of ▶, "add" files it into the category chosen at the top - "Downloaded" by default, made when it is first used
    (POST /api/audio/online/add). Below: the galleries a person opens and downloads from by hand - the file is then let go
@@ -44,8 +40,8 @@ export function openOnline(opts) {
   const o = opts || {};
   if (typeof o.stop === 'function') o.stop();
   const back = el('div', 'snd-back');
-  // (phase V73 block 4, rule 5) The one frame: a head band of 40 px - the name, the source as its quiet note, the ✕ of 28 px;
-  // what was the window's padding is its body's.
+  // The one frame: a head band of 40 px - the name, the source as its quiet note, the ✕ of 28 px;
+  // the padding is its body's.
   const win = el('div', 'snd-win snd-online u-win is-float');
   const head = el('div', 'snd-win-head u-win-head');
   head.appendChild(el('span', 'u-win-title', 'Find sounds online'));
@@ -100,7 +96,7 @@ export function openOnline(opts) {
   foot.appendChild(g);
   const credit = el('div', 'snd-on-credit', '');
   foot.appendChild(credit);
-  // Whoever answered is credited, as its terms ask (phase V54: Freesound first, Openverse the second way).
+  // Whoever answered is credited, as its terms ask (Freesound first, Openverse the second way).
   const credited = (via, note) => {
     credit.textContent = (via === 'freesound'
       ? 'Search made using the Freesound API (freesound.org).'
@@ -130,7 +126,7 @@ export function openOnline(opts) {
   const paint = (d) => {
     list.textContent = '';
     pager.textContent = '';
-    // (phase V73 block 2) empty, searching and did not load are the shared parts (js/ui-state.js)
+    // empty, searching and did not load are the shared parts (js/ui-state.js)
     if (!d.results.length) { list.appendChild(emptyEl('Nothing CC0 for "' + _last.q + '" - other words?', { icon: 'music' })); return; }
     for (const r of d.results) {
       const row = el('div', 'snd-on-row');
@@ -174,7 +170,7 @@ export function openOnline(opts) {
           add.disabled = false;
           add.textContent = 'Add';
           add.title = e.message;
-          showError(e.message);                 // (phase V73 block 2) in the corner (js/notice.js), not under the row
+          showError(e.message);                 // in the corner (js/notice.js), not under the row
         }
       });
       row.appendChild(add);
@@ -207,7 +203,7 @@ export function openOnline(opts) {
       credited(d.via, d.note ? d.note + ' - searched Openverse' : '');
       paint(d);
     } catch (e) {
-      // (phase V73 block 2, (б2-19)) the search not answered: "did not load" and Try again in the list, the reason in the corner
+      // the search not answered: "did not load" and Try again in the list, the reason in the corner
       list.textContent = '';
       list.appendChild(failedEl('the results', () => run(page)));
       showError(e.message);

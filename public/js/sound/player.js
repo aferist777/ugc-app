@@ -1,20 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE MUSIC PLAYER (phase V54, the owner 2026-10-27: "давай у музыки во всю ширину поля будет плеер, в котором пользователь
-   сможет перематывать, обрезать и все то, что делает попап cut"; (зв12)-(зв16), (зв25): only on the Library's page, only
-   with Music; "этот плеер я бы поместил перманентно в музыкальной вкладке библиотеки") - a bar under the gallery only
-   (the owner 2026-10-28: "плеер не должен заходить под столбец дерева" - library.html #lib-field), outside the grid that
-   is drawn again, there while Music is open (its root, highlights, its moods) - and (phase V64 fix (а)) while its track is picked
-   on the Library's page: the page shows and hides it (js/library/main.js _paintPlayer); hidden, it stops. (phase V64, fix (о))
+   THE MUSIC PLAYER - only on the Library's page: seeking, playing and cutting what the Cut window does - a bar under the
+   gallery only (never under the tree's column - library.html #lib-field), outside the grid that
+   is drawn again, there while Music is open (its root, highlights, its moods) - and while its track is picked
+   on the Library's page: the page shows and hides it (js/library/main.js _paintPlayer); hidden, it stops.
    SFX's sounds play and are cut in it too (★ Favorites, Built-in, My sounds) - a piece of a sound is a new sound in My sounds.
 
    Until a track is pressed it says "choose a track"; then the last track stays on it where it was. Leaving Music stops the
    sound and hides the bar; coming back shows the same track at the same place (kept for the next visit of the page too).
-   SFX and My sounds did not play in it until phase V64 fix (о) - their tiles played on themselves, their "Cut…" was the Cut window.
 
-   On the bar: ▶/⏸, "0:41 / 3:12", the name OVER the wave (phase V59, the owner 2026-10-29: "название было не справа от
-   кнопки play - а сверху над волной"), the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a press on
+   On the bar: ▶/⏸, "0:41 / 3:12", the name OVER the wave, the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a press on
    the wave moves the playhead, playing goes on from there), the handles of a piece - dragged by their gold flags on the
-   ruler -, "▶ the piece" and ✕, which takes the track off the bar. "Cut" is not in that row (phase V59): it stands on the
+   ruler -, "▶ the piece" and ✕, which takes the track off the bar. "Cut" is not in that row: it stands on the
    ruler right of the right flag while a piece is marked (scrub.js `cut`) and makes the piece a new track in the root of
    Music (POST /api/audio/cut, lib/audio-cut.js) - with the flags at the very ends there is nothing to cut, and the whole
    track is never saved a second time. Space on the page plays and pauses (the page asks, js/library/main.js). "Cut…" in
@@ -54,7 +50,7 @@ export function createPlayer(host, opts) {
   play.type = 'button';
   play.title = 'Play / pause (Space)';
   const time = el('span', 'snd-clock', '');
-  // (phase V59) The name over the wave, in one column with it.
+  // The name over the wave, in one column with it.
   const mid = el('div', 'snd-pl-mid');
   const name = el('span', 'snd-pl-name', 'Choose a track');
   const wave = el('div', 'snd-pl-wave');
@@ -105,7 +101,7 @@ export function createPlayer(host, opts) {
   // A track on the bar: its wave, the piece, the place.
   function _load(it, at, range) {
     if (sc) { sc.destroy(); sc = null; }
-    // (phase V64, fix (о)) Its kind too - a track of Music, or a sound of SFX: the page knows it picked by "<kind>:<id>".
+    // Its kind too - a track of Music, or a sound of SFX: the page knows it picked by "<kind>:<id>".
     cur = { id: String(it.id), kind: String(it.kind || 'music'), path: String(it.path || it.media), name: String(it.name || 'track'), dur: +it.dur || 0,
       wave: Array.isArray(it.wave) ? it.wave : ((it.meta && it.meta.wave) || []) };
     audio.src = cur.path;
@@ -116,7 +112,7 @@ export function createPlayer(host, opts) {
       range: range || [0, d],
       onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = 0; paint(); },
       onRange: () => save(),
-      // (phase V59) "Cut" by the right flag, only while a piece is marked.
+      // "Cut" by the right flag, only while a piece is marked.
       cut: { title: cur.kind === 'music' ? 'The piece between the gold flags becomes a new track in Music - the track itself stays as it is'
         : 'The piece between the gold flags becomes a new sound in My sounds - the sound itself stays as it is', onCut: _cut },
     });
@@ -137,7 +133,7 @@ export function createPlayer(host, opts) {
     if (!it) return;
     const same = cur && cur.id === String(it.id) && cur.path === String(it.media || it.path);
     if (h.cut) {
-      // "Cut…": the track here with a piece marked - its middle third, at most 30 s (phase V59: a short one too, so "Cut"
+      // "Cut…": the track here with a piece marked - its middle third, at most 30 s (a short one too, so "Cut"
       // by the right flag is there at once) - and nothing playing.
       if (!same) _load(it, 0, null);
       const d = D();
@@ -175,7 +171,7 @@ export function createPlayer(host, opts) {
     audio.play().catch(() => o.status('That file will not play', true));
   });
   x.addEventListener('click', () => forget(cur && cur.id));
-  // (phase V59) The piece a new track - only a piece: with the flags at the very ends the wave shows no "Cut".
+  // The piece a new track - only a piece: with the flags at the very ends the wave shows no "Cut".
   async function _cut(a, b) {
     if (!cur || !sc || !sc.piece()) return;
     o.status('Cutting…');

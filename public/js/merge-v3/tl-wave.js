@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — a sound's waveform on its clip (phase V36, T4).
+   MERGE v3 — a sound's waveform on its clip.
 
-   The owner, 2026-10-23: "чтобы аудио дорожка показывала пики звука, чтобы можно было подрезать пользователю вручную
-   тишину со смещением". Every clip on an audio lane - a sound, a track of music, a film's own sound - draws the peaks of
+   So that silence can be trimmed by hand, every clip on an audio lane - a sound, a track of music, a film's own sound - draws the peaks of
    its file (GET /api/track-peaks, lib/track-peaks.js: RATE a second, 0..255 of the file's loudest) for the part of the
    file the clip plays: from trimIn, at its speed, backwards when reversed. At any zoom: each pixel column is the loudest
    peak of the stretch of file under it.
@@ -14,14 +13,14 @@
 
      paintWaves(host, zoom, gutter)   every .mv3b-wave under `host` (its clip on the element as __clip)
      paintWaveAs(host, cv, c, zoom, gutter)
-                                      (phase V82) ONE canvas for the clip `c` as it is now - an edge being dragged (its
+                                      ONE canvas for the clip `c` as it is now - an edge being dragged (its
                                       start, length and trimIn not stored yet), or the ghost of what it was: so the wave
                                       stays where its sound is while an edge moves, and only what is trimmed goes
      onPeaks(cb)                      cb() when some file's peaks have just arrived - the timeline paints again
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const MARGIN = 300;               // px drawn beyond the visible edge either side, so a short scroll shows no blank
-const FAINT = 0.4;                // (V49) a clip's own wave where it lies over an earlier sound of its lane
+const FAINT = 0.4;                // a clip's own wave where it lies over an earlier sound of its lane
 const _peaks = new Map();         // src -> { data: Uint8Array|null, rate, failed }
 const _subs = [];
 
@@ -65,10 +64,9 @@ function _draw(cv, c, z, x0, x1) {
   const dur = Math.max(0, +c.dur || 0);
   const rev = !!c.reversed;
   const mid = H / 2;
-  // (phase V73 block 5, 5c) the wave's colour is the sheet's (--muted, --ink picked); with none, the same quiet grey - not the
-  // old green
+  // The wave's colour is the sheet's (--muted, --ink picked); with none, a quiet grey.
   ctx.fillStyle = getComputedStyle(cv).color || '#a1a1a6';
-  // (phase V49, (пр2) а) Where the clip lies over an earlier sound of its lane (timeline-b.js _overlaps: seconds from its
+  // Where the clip lies over an earlier sound of its lane (timeline-b.js _overlaps: seconds from its
   // start) it is see-through, and its own wave is drawn faint there, so the wave under it reads.
   const over = (cv.parentElement && cv.parentElement.__over) || null;
   const faint = (x) => !!over && over.some(([a, b]) => x / z >= a && x / z < b);
@@ -117,7 +115,7 @@ export function paintWaves(host, zoom, gutter) {
   }
 }
 
-/** (phase V82) One canvas for the clip `c` as it is now (an edge being dragged) or was (its ghost) - see the head. */
+/** One canvas for the clip `c` as it is now (an edge being dragged) or was (its ghost) - see the head. */
 export function paintWaveAs(host, cv, c, zoom, gutter) {
   if (!host || !cv || !c || !c.src) return;
   _paint(host, cv, c, +zoom || 60, gutter);

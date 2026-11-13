@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE GRAPHICS' KIT (phase V84 block 4b) - what every effect that draws on the frame shares: the preview and the app's bake window
+   THE GRAPHICS' KIT - what every effect that draws on the frame shares: the preview and the app's bake window
    draw with this one code (js/merge-v3/fx-draw.js applyFx -> js/fx/overlays.js, cards.js, screens.js, copies.js, glitches.js,
    behind.js). Page only (canvas).
      fontsReady()          Inter in four weights for the canvas ('UGC FX Inter': 400, 500 - the interface's files; 700, 900 - the
@@ -127,8 +127,8 @@ export function rrPath(x0, y0, x1, y1, r, step) {
   });
 }
 
-// ── Block 4c: the cards' text ──────────────────────────────────────────────
-// (the owner's (б4-13) а) A card's font may be any of the captions' 101 (js/captions/fonts.js) - a font with no Russian letters draws
+// ── The cards' text ──────────────────────────────────────────────
+// A card's font may be any of the captions' 101 (js/captions/fonts.js) - a font with no Russian letters draws
 // a Russian line in its twin, as the captions do (drawnFamily). Loaded for the canvas under a name of its own, once; Inter stays
 // behind it for a letter it lacks.
 import { fontOf as capFont, drawnFamily, FONT_DIR } from '../captions/fonts.js';
@@ -245,7 +245,7 @@ export function sparkGlyph(g, x, y, r, color, alpha = 1) {
   g.restore();
 }
 
-// ── Block 2: other moments of a clip ───────────────────────────────────────
+// ── Other moments of a clip ───────────────────────────────────────
 // Frames of the clip's file from other moments (Grid dive's tiles, PiP delay's late copy, Color swing's echo), made once by the
 // server (lib/fx-moments.js, cache/fx-moments/) - the preview and the bake window draw the same pictures. `spec` - { ranges:
 // [[from, to], ...] (the file's seconds), w }. Until they are there, an effect draws the picture it has.
@@ -298,12 +298,12 @@ export function momentAt(src, spec, t) {
   }
   return best;
 }
-/** (block 6) Tells everyone listening that something has loaded - the person's segmenter (js/fx/person.js). */
+/** Tells everyone listening that something has loaded - the person's segmenter (js/fx/person.js). */
 export function told() { for (const cb of _onFont) { try { cb(); } catch (e) { /* its own */ } } }
 
-// ── SVG filters the canvas draws through (blocks 2, 5) ─────────────────────
+// ── SVG filters the canvas draws through ─────────────────────
 // One hidden <svg> of filters; a filter's numbers are set just before the draw that uses it (the canvas reads them then - measured
-// for fx-draw.js's colour matrix, 2026-11-10).
+// for fx-draw.js's colour matrix).
 const SVG_NS = 'http://www.w3.org/2000/svg';
 let _svg = null;
 const _filters = new Map();
@@ -370,7 +370,7 @@ export function lumaTables(id, tables) {
   return 'url(#ugc-fx-lt-' + id + ')';
 }
 /**
- * (block 6) A mask GROWN by about `r` px - a sticker's outline round the person (video-effects-pack's distance-transform border):
+ * A mask GROWN by about `r` px - a sticker's outline round the person (video-effects-pack's distance-transform border):
  * its alpha blurred by r / 1.2 and cut where the blur is 0.115 (a straight edge's r px out), soft over ~1.5 px; its edge then
  * wobbled as cut by hand - moved by a noise `wob` px at most, its grain `cells` across the `w` px wide picture, `seed` its own.
  * The canvas filter string: draw the mask through it, then colour it (source-in). The same shape at any size of the picture.

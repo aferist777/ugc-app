@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN -> THIS COMPUTER: speech recognition here (phase K1b, the owner 2026-10-03).
+   ADMIN -> THIS COMPUTER: speech recognition here.
 
    Captions are heard by Groq; when Groq cannot be asked, or a subtitle lane says "this computer", the
    app hears the sound itself (lib/whisper-local.js). This pane says what that needs and lets it be
@@ -7,11 +7,11 @@
 
      the program      whisper.cpp with OpenBLAS - ships with the app (npm install), nothing to do here
      the model        574 MB - the first local recognition downloads it anyway; here it can be done ahead
-     (phase V23, the owner 2026-10-09) no field about the graphics card - another computer has another one
+     no field about the graphics card - another computer has another one
 
    GET /api/speech/local is read when the pane shows, and every second while something downloads.
 
-   (phase V27, the owner 2026-10-12: "давай добавим строку на всякий случай") and the yt-dlp links are
+   And the yt-dlp links are
    read with: its version, whose copy it is, what the last check for a newer nightly build found, and a
    button to check now - the checks run on their own anyway (lib/ytdlp.js). GET /api/ytdlp.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -20,8 +20,8 @@
   if (!body) return;
   var state = null, timer = null, shown = false, msg = '', armed = null;
   var yt = null, ytBusy = false, ytTimer = null;
-  var stateFailed = false, ytFailed = false;   // a read that failed, said in place of "reading…" for ever (б2-19)
-  // (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js); a part being read or not read is the
+  var stateFailed = false, ytFailed = false;   // a read that failed, said in place of "reading…" for ever
+  // A failure is a popup in the corner (js/notice.js); a part being read or not read is the
   // shared part (js/ui-state.js) - this is a classic script, so the modules come with import().
   function sayError(t, detail) { import('/js/notice.js').then(function (m) { m.showError(t, detail ? { detail: detail } : {}); }).catch(function () {}); }
   function stateEl(make) {
@@ -52,7 +52,7 @@
   function btn(label, fn, go) { var b = el('button', 'u-btn is-s' + (go ? ' adm-go is-main' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
   // Two presses for a delete: the first arms it for three seconds.
   function del(what) {
-    // (phase V73 block 2) one "Really?" (js/really.js's words, 3 s); a delete - the danger button, armed - its red fill
+    // one "Really?" (js/really.js's words, 3 s); a delete - the danger button, armed - its red fill
     var b = btn(armed === what ? 'Really?' : 'Delete', function () {
       if (armed !== what) { armed = what; paint(); setTimeout(function () { if (armed === what) { armed = null; paint(); } }, 3000); return; }
       armed = null;
@@ -75,10 +75,10 @@
       .catch(function (e) { sayError('It did not work.', e.message); paint(); });
   }
 
-  // ── UGC Studio itself (phase V83, block B5; the owner 2026-11-09) ──────────────
-  // A friend's copy: its version, the channel, when it last asked, "Check now", the download as it goes, "Restart and
+  // ── UGC Studio itself ──────────────
+  // An installed copy: its version, the channel, when it last asked, "Check now", the download as it goes, "Restart and
   // update" once a new version is laid down (desktop/updater.js; GET /api/app/update, POST /api/app/update/check).
-  // The owner's copy from git: its version, and that its commits are what changes it.
+  // A copy run from git: its version, and that its commits are what changes it.
   var appSt = null, appBusy = false, appTimer = null;
   function appLoad() {
     return fetch('/api/app/update').then(function (r) { return r.json(); })
@@ -151,7 +151,7 @@
     if (s.result === 'newest') return at + 'this is the newest nightly build.';
     return at + (s.result === 'skipped' ? '' : 'the check failed - ') + (s.error || 'no reason given') + '.';
   }
-  // (Home, the owner 2026-10-22: "hide" puts the First steps away for good, and they come back from here.) The flag is the
+  // Home's "hide" puts the First steps away for good, and they come back from here. The flag is the
   // Home page's own (localStorage, mirrored into the library by js/storage-sync.js): taken off here and in the library.
   var STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
   function paintHome() {
@@ -240,7 +240,7 @@
       : (m.error ? 'The last download failed: ' + m.error : 'Not downloaded yet. The first recognition on this computer downloads it anyway; here it can be done ahead of time.'),
     mright));
 
-    // (phase V23, the owner 2026-10-09) No field about the graphics card: another computer has another one. A build for
+    // No field about the graphics card: another computer has another one. A build for
     // NVIDIA cards already fetched is still used by the server when a card answers (lib/whisper-local.js).
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status', msg);

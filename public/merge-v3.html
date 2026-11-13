@@ -18,31 +18,31 @@
      without this; the chats and the countdowns on setup's stage are what need it here. -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/merge-v3.css">
-<!-- The dialog frame and its buttons, shared with the Library (phase V28.2) - RIGHT AFTER merge-v3.css, where
-     they were: the cascade stays as it was. -->
+<!-- The dialog frame and its buttons, shared with the Library - RIGHT AFTER merge-v3.css: the cascade
+     depends on the order. -->
 <link rel="stylesheet" href="css/dialog.css">
-<!-- The media tree beside the Library panel's gallery (js/media-tree.js, phase V28.4). -->
+<!-- The media tree beside the Library panel's gallery (js/media-tree.js). -->
 <link rel="stylesheet" href="css/media-tree.css">
-<!-- (phase V55) The pictures chat's right column: the folder column, js/folder-column.js. -->
+<!-- The pictures chat's right column: the folder column, js/folder-column.js. -->
 <link rel="stylesheet" href="css/folder-column.css">
-<!-- The chats, in their windows - the pictures chat first (js/merge-v3/picchat.js, phase J). -->
+<!-- The chats, in their windows - the pictures chat first (js/merge-v3/picchat.js). -->
 <link rel="stylesheet" href="css/mv3-imagen.css">
-<!-- (phase V56, V58) What is known about a made environment or lookbook, in the viewer (js/library/made-rows.js). -->
+<!-- What is known about a made environment or lookbook, in the viewer (js/library/made-rows.js). -->
 <link rel="stylesheet" href="css/made-rows.css">
-<!-- (phase V58) The generators' windows (js/gen-window.js) - linked here so the first window opens dressed; data-gw tells the
+<!-- The generators' windows (js/gen-window.js) - linked here so the first window opens dressed; data-gw tells the
      module it is in. -->
 <link rel="stylesheet" href="css/gen-window.css" data-gw="1">
-<!-- The fonts captions are drawn in - the same files the render uses (phase K5). -->
+<!-- The fonts captions are drawn in - the same files the render uses. -->
 <link rel="stylesheet" href="css/caption-fonts.css">
-<!-- The caption presets beside the settings of the picked captions (js/merge-v3/captions-view.js, phase K6). -->
+<!-- The caption presets beside the settings of the picked captions (js/merge-v3/captions-view.js). -->
 <link rel="stylesheet" href="css/mv3-captions.css">
-<!-- (phase V33.1) A highlights project: its view, its popup, the caption style picked in it. -->
+<!-- A highlights project: its view, its popup, the caption style picked in it. -->
 <link rel="stylesheet" href="css/mv3-highlights.css">
-<!-- (phase V34.E) Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
+<!-- Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
 <link rel="stylesheet" href="css/sound.css">
-<!-- (phase V64 block 5) The sound window - one for both pages (js/sound/sound-window.js). -->
+<!-- The sound window - one for both pages (js/sound/sound-window.js). -->
 <link rel="stylesheet" href="css/sound-window.css">
-<!-- (phase V36) The timeline's transport, a sound's waveform on its clip, the stretch cut out of every lane. -->
+<!-- The timeline's transport, a sound's waveform on its clip, the stretch cut out of every lane. -->
 <link rel="stylesheet" href="css/mv3-timeline.css">
 </head>
 <body>
@@ -54,9 +54,9 @@
   <a href="/3d">3D Studio</a>
   <a href="/library">Library</a>
   <span class="sp"></span>
-  <!-- The render queue, up here beside Alerts (the owner, 2026-09-22): both are readings about
+  <!-- The render queue, up here beside Alerts: both are readings about
        work in flight, and neither belongs to the project the bar below is about. It opens the
-       same window it always did (js/merge-v3/queue.js). The bell and Admin are put in after it
+       queue's window (js/merge-v3/queue.js). The bell and Admin are put in after it
        by js/app-nav.js, so the right-hand end reads Queue, the wait, Alerts, Admin. -->
   <button class="sv3-navbtn" id="mv3-queue" type="button"
           title="Render queue - projects waiting to be rendered">Queue</button>
@@ -64,13 +64,13 @@
 
 <main class="mv3-app">
 
-  <!-- The project bar. Back because a project selector belongs to the whole page and has
+  <!-- The project bar: a project selector belongs to the whole page and has
        nowhere honest to live inside one panel. Newest project first - filled by
        js/merge-v3/projects.js. -->
   <div class="mv3-bar">
     <!-- Left of the picker on purpose: making one and choosing one are the same decision, and
          the new project is what the picker will be showing a second later. -->
-    <!-- (phase V73 block 5, 5a) The bar is quieter than the top strip: no fill of its own, quiet buttons, Export the one gold
+    <!-- The bar is quieter than the top strip: no fill of its own, quiet buttons, Export the one gold
          button of the page. The "+" is Lucide's, put in by js/merge-v3/projects.js (_wireNew). -->
     <button class="mv3-c-btn u-btn is-s is-quiet" id="mv3-project-new" type="button"
             title="Start an empty project and open it">+ New project</button>
@@ -93,12 +93,11 @@
             title="Delete this project's timeline">Delete</button>
     <span class="mv3-bar-note u-status is-line" id="mv3-project-note"></span>
     <span class="sp"></span>
-    <!-- (phase V33.4) In a highlights project only: every fragment ticked, or none - for the render beside it
+    <!-- In a highlights project only: every fragment ticked, or none - for the render beside it
          (js/merge-v3/highlights.js). -->
     <button class="mv3-c-btn u-btn is-s is-quiet" id="mv3-hl-all" type="button" hidden>Select all</button>
-    <!-- The render window, with the export settings: js/merge-v3/export-b.js. (The queue button
-         that stood here moved into the top strip, beside Alerts - phase R.) In a highlights project it renders the
-         ticked fragments, and stops them while they render (phase V33.4). -->
+    <!-- The render window, with the export settings: js/merge-v3/export-b.js. In a highlights project it renders the
+         ticked fragments, and stops them while they render. -->
       <button class="mv3-c-btn mv3-x-open u-btn is-l is-main" id="mv3-export" type="button"
             title="Render this timeline with FFmpeg">Export</button>
   </div>
@@ -106,68 +105,58 @@
   <div class="mv3-work">
 
     <!-- The column of panels is a stack: the switchable pair on top, the timeline under it, the
-         horizontal sash between them. It stands on the right of the window (its id says "left" from
-         before - css/merge-v3.css `order`), and the preview takes the whole height on the left, so a
+         horizontal sash between them. It stands on the right of the window (its id says "left" -
+         css/merge-v3.css `order` puts it right), and the preview takes the whole height on the left, so a
          9:16 stage is as tall as the window lets it be. -->
     <div class="mv3-left" id="mv3-left">
 
       <!-- Two panels, exactly one open. Markup order does not decide which is on the
            left - flex `order` does (css/merge-v3.css). A folded panel's spine is never
-           shown any more: in a talking head or a voiceover the crumbs switch the two
+           shown: in a talking head or a voiceover the crumbs switch the two
            (js/merge-v3/workshop.js); any other project has only the Library. -->
       <div class="mv3-pair" id="mv3-pair">
 
       <section class="mv3-panel u-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
-        <!-- (phase V73 block 5, 5a, the owner's (б5-4) а) THE CRUMBS ARE THE WINDOWS' FORM (`.u-crumbs` of block 4): words in
+        <!-- THE CRUMBS ARE THE WINDOWS' FORM (`.u-crumbs`): words in
              sentence case, the one showing light, the rest quiet; the "/" between two words is drawn by css/merge-v3.css
              OUTSIDE the buttons (`.is-pre` - after the word, before "Library"; `.is-post` - before it), never pressed. -->
         <div class="mv3-panel-head u-panel-head">
-          <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08; since phase V64 "Library / captions" - the chats are
-               windows): always there, the one showing lit, any other one press away. "Library" is the shelf; "captions"
-               picks the subtitle lane (js/merge-v3/lib-views.js).
-               "scenarios /" left of "Library" (phase V28.3, the owner 2026-10-12): the scenarios a talking head is made
+          <!-- THE VIEWS ARE CRUMBS: always there, the one showing lit, any other one press away. "Library" is the
+               shelf; "captions" picks the subtitle lane (js/merge-v3/lib-views.js).
+               "scenarios /" left of "Library": the scenarios a talking head is made
                from, in the draft and a blank project only (js/merge-v3/scen-pick.js). -->
           <button class="mv3-lib-crumb is-pre" id="mv3-lib-scen" type="button" hidden>Scenarios</button>
-          <!-- (phase V33.1) A highlights project's own view - its tiles and the card of a moment (js/merge-v3/highlights.js);
-               in such a project the crumbs are "highlights / Library / captions" (phase V49, the owner's (пр4); V64 without the
-               chats' crumbs; css/mv3-highlights.css) - the chats talk in ONE conversation per project. -->
+          <!-- A highlights project's own view - its tiles and the card of a moment (js/merge-v3/highlights.js);
+               in such a project the crumbs are "highlights / Library / captions" (css/mv3-highlights.css) - the chats
+               talk in ONE conversation per project. -->
           <button class="mv3-lib-crumb is-pre" id="mv3-lib-hl" type="button" hidden>Highlights</button>
-          <!-- (phase V62, fix (к), the owner 2026-10-31: "давай уберем вертикальную кнопку setup. пускай кнопка setup будет в
-               крошках в режиме voiceover"; phase V64, the owner 2026-10-31: "у talking head убираем вертикальную кнопку setup -
-               делаем крошкой") A voiceover's and a talking head's way back to setup: the first crumb - no project has a
-               Setup spine any more (css/merge-v3.css; js/merge-v3/workshop.js). -->
+          <!-- A voiceover's and a talking head's way back to setup: the first crumb - no project has a
+               Setup spine (css/merge-v3.css; js/merge-v3/workshop.js). -->
           <button class="mv3-lib-crumb is-pre" id="mv3-lib-setup" type="button" hidden>Setup</button>
-          <!-- (phase V62, block 2) A voiceover's B-roll piece: its sentence's batch (js/merge-v3/broll-view.js). Right of
-               "setup /" (the owner 2026-10-31: "крошка b-rolls должна быть справа от setup в режиме voiceover"), as
-               "highlights /" is first in a highlights project; in a voiceover only, pale until the B-roll is laid. -->
+          <!-- A voiceover's B-roll piece: its sentence's batch (js/merge-v3/broll-view.js). Right of
+               "setup /", as "highlights /" is first in a highlights project; in a voiceover only, pale until the B-roll
+               is laid. -->
           <button class="mv3-lib-crumb is-pre" id="mv3-lib-br" type="button" hidden>B-roll</button>
           <span class="mv3-panel-title u-panel-name" id="mv3-lib-title">Library</span>
-          <!-- (phase V64 block 3, the owner 2026-10-31: "из крошек уберем generate image, generate video, generate audio") The
-               chats are WINDOWS now (js/merge-v3/chat-window.js), opened by "generate" of IMAGES / VIDEO / AUDIO in the tree,
-               the lane's right button and ?open=… - the crumbs went. -->
           <button class="mv3-lib-crumb is-post" id="mv3-lib-cap" type="button">Captions</button>
           <span class="sp"></span>
         </div>
         <!-- Upload progress and refusals. Its own element, outside the body: the body
              is emptied and rebuilt on every load, which would wipe the message. -->
         <div class="mv3-libstatus u-status is-line" id="mv3-lib-status" hidden></div>
-        <!-- THE GALLERY AND THE MEDIA TREE (phase V28.4, the owner 2026-10-12): what the tree has selected is what the
+        <!-- THE GALLERY AND THE MEDIA TREE: what the tree has selected is what the
              gallery shows (js/merge-v3/library.js, js/media-tree.js); the sash between them sets the tree's width. -->
         <div class="mv3-lib-row" id="mv3-lib-row">
           <div class="mv3-panel-body"></div>
           <div class="mv3-lib-sash" id="mv3-lib-sash" title="Drag to resize the tree, double-click for the default width"></div>
           <div class="mv3-lib-tree" id="mv3-lib-tree"></div>
         </div>
-        <!-- (phase V64 block 3) The pictures chat and the video chat have no place here any more: their roots are made by
-             js/merge-v3/chat-window.js and live in their windows. -->
-        <!-- (phase V64 block 5) "generate audio" is no view here any more: the sound window, one for both pages
-             (js/sound/sound-window.js; Merge's host js/merge-v3/sound-host.js). -->
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
         <div class="mv3-scv" id="mv3-sc"></div>
-        <!-- (phase V62, block 2) Another item for a piece of a voiceover's B-roll (js/merge-v3/broll-view.js). -->
+        <!-- Another item for a piece of a voiceover's B-roll (js/merge-v3/broll-view.js). -->
         <div class="mv3-scv mv3-brv" id="mv3-br"></div>
-        <!-- A highlights project's tiles and the card of a moment (phase V33.1, js/merge-v3/highlights.js). -->
+        <!-- A highlights project's tiles and the card of a moment (js/merge-v3/highlights.js). -->
         <div class="mv3-hlv" id="mv3-hl"></div>
         <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
         <div class="mv3-cap" id="mv3-cap"></div>
@@ -175,10 +164,10 @@
              so the drop path checks the files itself. -->
         <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>
         <!-- WHAT IS PICKED ON THE TIMELINE - a clip, a lane, several clips - slides in over the
-             Library from the right (phase L5, the owner 2026-09-23), and slides out when nothing is.
+             Library from the right, and slides out when nothing is.
              Painted by js/merge-v3/inspector.js. -->
         <aside class="mv3-over" id="mv3-over" aria-label="Settings of what is picked on the timeline">
-          <!-- (phase V73 block 5, part 5b, the owner's (к24-4)) ITS HEAD: the name of what is picked and a ✕ that lets it go, as
+          <!-- ITS HEAD: the name of what is picked and a ✕ that lets it go, as
                Escape does. Outside the body, which every paint empties (js/merge-v3/inspector.js _paintHead). -->
           <div class="mv3-over-head u-panel-head">
             <span class="mv3-over-title u-panel-name" id="mv3-over-title"></span>
@@ -189,9 +178,9 @@
         </aside>
       </section>
 
-      <!-- SETUP (phase L, the owner 2026-09-23). What this panel holds now is the build of a
-           talking head or a voiceover; the settings of whatever is picked on the timeline slide
-           over the Library instead. Its id stays: four modules find it. -->
+      <!-- SETUP. What this panel holds is the build of a talking head or a voiceover; the settings of
+           whatever is picked on the timeline slide over the Library instead. Its id is `mv3-inspector`:
+           four modules find it. -->
       <section class="mv3-panel u-panel mv3-col" id="mv3-inspector" data-col="inspector">
         <div class="mv3-spine">Setup</div>
         <div class="mv3-panel-head u-panel-head">
@@ -200,7 +189,7 @@
         </div>
         <!-- Filled by js/merge-v3/inspector.js with the build (js/merge-v3/workshop.js). -->
         <div class="mv3-panel-body"></div>
-        <!-- The frames chat of a talking head (phase V26.5), laid over the place the fields leave for it - outside the
+        <!-- The frames chat of a talking head, laid over the place the fields leave for it - outside the
              body, which every paint empties (js/merge-v3/fchat.js). -->
         <div class="mv3-pc is-frames" id="mv3-fc"></div>
       </section>
@@ -212,7 +201,7 @@
       <section class="mv3-panel u-panel" id="mv3-timeline">
         <div class="mv3-panel-head u-panel-head">
           <span class="mv3-panel-title u-panel-name">Timeline</span>
-          <!-- (phase V73 block 5, 5c; the owner's (б5-15) б) THE HEAD IN FOUR GROUPS - edit | play and its time | silence | at the
+          <!-- THE HEAD IN FOUR GROUPS - edit | play and its time | silence | at the
                right the zoom -, a thin line between the first three; the buttons keep their 20 px and the head its 35. The icons
                are Lucide's, put in by js/merge-v3/bar.js (initBar) and, for play / pause, js/merge-v3/preview-b.js (_syncPlayBtn). -->
           <!-- Undo / redo as buttons as well as Ctrl+Z / Ctrl+Y: a lane's Fit or Align stamps
@@ -225,8 +214,8 @@
                     title="Cut the selected clip at the playhead">Split</button>
           </span>
           <i class="mv3-tl-div" aria-hidden="true"></i>
-          <!-- The transport, right of split (phase V36, T3; the owner 2026-10-23) - it moves the playhead the lanes below
-               show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays as before. The time of the
+          <!-- The transport, right of split - it moves the playhead the lanes below
+               show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays too. The time of the
                playhead right after it (written by js/merge-v3/timeline-b.js by its id). -->
           <span class="mv3-tl-grp is-play">
             <span class="mv3-tl-transport">
@@ -238,14 +227,14 @@
             <span class="mv3-tl-clock u-mono" id="mv3-tl-clock">0:00.0</span>
           </span>
           <i class="mv3-tl-div" aria-hidden="true"></i>
-          <!-- (phase V44) Cut silence: the pauses of main audio in the stretch or the picked clips shortened
+          <!-- Cut silence: the pauses of main audio in the stretch or the picked clips shortened
                (js/merge-v3/tl-silence.js) - live while something is picked, dim otherwise. Its own icon (Lucide has none), in
                the set's stroke of 1.5. -->
           <span class="mv3-tl-grp is-silence">
             <button class="mv3-iconbtn is-silence is-dim u-btn is-icon" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
           </span>
           <i class="mv3-tl-div" aria-hidden="true"></i>
-          <!-- (phase V77, the owner's (тч3), (тч3а)) THE FRAME AT THE PLAYHEAD INTO A CHAT: as the preview shows it, without words,
+          <!-- THE FRAME AT THE PLAYHEAD INTO A CHAT: as the preview shows it, without words,
                saved in IMAGES → Screenshots and put into the pictures chat or into the video chat as the first frame
                (js/merge-v3/tl-gen.js fromFrame; the icons by js/merge-v3/bar.js). -->
           <span class="mv3-tl-grp is-frame">
@@ -255,14 +244,14 @@
                     title="The frame at the playhead into the video chat as the first frame of a new clip - as the preview shows it, without words"></button>
           </span>
           <span class="sp"></span>
-          <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
-               is what made the old store's data loss so hard to notice. The one status line (`.u-status`, red for an error). -->
+          <!-- Only ever shown when a save was refused or failed: silence about a lost edit
+               makes data loss hard to notice. The one status line (`.u-status`, red for an error). -->
           <span class="mv3-tl-status u-status is-line" id="mv3-tl-status" hidden></span>
           <span class="mv3-tl-grp is-zoom">
             <button class="mv3-iconbtn is-text u-btn" id="mv3-fit" type="button"
                     title="Fit the whole timeline into view">Fit</button>
-            <!-- px/sec, the same scale and range the old editor used. Alt + wheel over the timeline moves it too, toward the
-                 playhead (phase V49.1, js/merge-v3/timeline-b.js _onWheel). -->
+            <!-- px/sec. Alt + wheel over the timeline moves it too, toward the
+                 playhead (js/merge-v3/timeline-b.js _onWheel). -->
             <label class="mv3-tl-zoom" title="Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead">
               <span>Zoom</span>
               <input type="range" id="mv3-zoom" class="u-range" min="1" max="240" step="1" value="60">
@@ -270,12 +259,12 @@
             </label>
           </span>
         </div>
-        <!-- (phase V28.4) Media of this project deleted from the library: said here, the clips red (timeline-b.js). -->
+        <!-- Media of this project deleted from the library: said here, the clips red (timeline-b.js). -->
         <div class="mv3-tl-gone" id="mv3-tl-gone" hidden></div>
         <!-- Ruler, lanes and playhead are built by js/merge-v3/timeline-b.js from the project's
              list of lanes. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
         <div class="mv3-tl" id="mv3-tl"></div>
-        <!-- (phase V73 block 5, 5c; the owner's (б5-14) а) AN EMPTY TIMELINE SAYS WHAT GOES ON IT: quiet words over the middle of
+        <!-- AN EMPTY TIMELINE SAYS WHAT GOES ON IT: quiet words over the middle of
              its lanes while no lane holds a clip - not in a highlights project, not under setup. Over the lanes, not in them, so
              the pointer and a drop go through; placed and shown by js/merge-v3/timeline-b.js (_paintEmpty). -->
         <div class="mv3-tl-empty" id="mv3-tl-empty" hidden>Drag clips, pictures and sounds here from the Library</div>
@@ -295,11 +284,11 @@
       <div class="mv3-preview-body">
         <div class="mv3-stage" id="mv3-stage"></div>
       </div>
-      <!-- The time at the bottom left, and the backing resolution to the right of it (the transport went to the timeline's
-           header, right of split - phase V36, T3). Quality changes only how many pixels the canvas composites into - it
+      <!-- The time at the bottom left, and the backing resolution to the right of it (the transport is in the timeline's
+           header, right of split). Quality changes only how many pixels the canvas composites into - it
            never touches the project or the eventual export. -->
       <div class="mv3-pv-bar">
-        <!-- (phase V73 block 5, 5a) the time in mono, like every figure of the page (к21а); "q" said in full - Quality -->
+        <!-- the time in mono, like every figure of the page; "q" said in full - Quality -->
         <span class="mv3-pv-time u-mono" id="mv3-pv-time">0:00.0 / 0:00.0</span>
         <label class="mv3-pv-q" title="Preview resolution - not the export">
           <span>Quality</span>

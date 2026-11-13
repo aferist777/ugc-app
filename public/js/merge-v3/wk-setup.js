@@ -5,35 +5,32 @@
    Loaded when the step is opened (js/merge-v3/workshop.js), because this is the
    heaviest part of the page and most visits never come here.
 
-   THE STAGE IS WHERE THE CASTING IS SEEN (decided with the owner 2026-09-21,
-   docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало"). The preview is lent to this
+   THE STAGE IS WHERE THE CASTING IS SEEN. The preview is lent to this
    step while it is open (PV.borrow) and shows two halves: who on top, where below. Each
    half is a door and a field: empty, it says what it is waiting for. Each half carries a
    CROSS while it holds a choice, which takes that choice off the project.
 
-   THE DOORS ARE WINDOWS (phase V57; phase V58 - one window each, its content changing, with
+   THE DOORS ARE WINDOWS (one window each, its content changing, with
    CRUMBS in its head, js/gen-window.js openFrame). "Who":
      characters / Mute (+ new look)          the characters on the left - the most looks first, the
                                              scenario's gender with "all" beside it -, the one the
                                              pointer rests on shows its 4K sheet and its looks (wk-maker.js
                                              paintChoose); A PRESS ON A LOOK CASTS IT AT ONCE and closes the
-                                             window (V57, (ок5)); a look's ✕ pressed twice deletes it from the
+                                             window; a look's ✕ pressed twice deletes it from the
                                              character - one a talking head is cast in is refused by the
-                                             server with the project's name ((лк3), lib/casting-use.js);
-                                             "+ new look" stands right of the name ((п. 11-12): "кнопка прямо
-                                             напротив имени будет в самый раз")
+                                             server with the project's name (lib/casting-use.js);
+                                             "+ new look" stands right of the name
      characters / Mute / new look            the lookbooks to dress them in, the one picked, `apply`
      … / new look / create lookbook          the generator's bench (js/gen-window.js paintBench)
    Each crumb but the last goes back. "Where" is js/merge-v3/wk-env.js, the same way.
 
-   THE WINDOWS DO NOT CLOSE BY THEMSELVES AFTER A GENERATION IS STARTED ((лк5)): `apply` and the
+   THE WINDOWS DO NOT CLOSE BY THEMSELVES AFTER A GENERATION IS STARTED: `apply` and the
    benches' `create` put the work into Alerts, the window says so on its line ("in Alerts · …"),
-   and the person closes it. THE HALVES OF THE STAGE WAIT APART (the owner 2026-10-29): a look or a
+   and the person closes it. THE HALVES OF THE STAGE WAIT APART: a look or a
    lookbook is waited for on the UPPER half only, an environment on the LOWER (wk-maker.js holdHalf);
    while one is made, the other half's window opens and its choice is written.
 
-   A WINDOW OVER A WINDOW (the owner 2026-10-29: "пользователь кликает по алерту и нужно открыть попап
-   "кто" поверх рабочего попапа "где""): a row of Alerts (or its popup) of THIS project's "who" or
+   A WINDOW OVER A WINDOW: a row of Alerts (or its popup) of THIS project's "who" or
    "where" asks the page first (js/alerts-bell.js `ugc:goto`); this step opens that window over what
    is open, and closing it shows the one under it as it was.
 
@@ -41,23 +38,21 @@
    server puts one made for this project on it (routes/scen3.js), so the next talking head cast
    with the same person finds the wardrobe already there.
 
-   THE PANEL IS THE SCRIPT (the hub of this step - js/merge-v3/wk-fragments.js, decided
-   with the owner 2026-09-21, phase M): the voice it is read in over one list of lines,
+   THE PANEL IS THE SCRIPT (the hub of this step - js/merge-v3/wk-fragments.js):
+   the voice it is read in over one list of lines,
    each with its read, its shot, its frame and its clip; on the right the open line, or
    the settings of the whole video. The voices (wk-voice.js) and the frames chat (fchat.js)
    are windows over it.
 
-   THE READ BELONGS TO THE CHARACTER (decided with the owner 2026-09-18): a voice is a
+   THE READ BELONGS TO THE CHARACTER: a voice is a
    property of the one speaking, not a stage of its own - js/merge-v3/wk-voice.js keeps
    the voices and speaks the lines; this file only opens its window (_openVoices).
 
-   WHAT IS SAVED. Only ids, and on the scenario project, where casting has always
-   lived: characterId / characterName, then obrazId / obrazImage, then the location
+   WHAT IS SAVED. Only ids, and on the scenario project, where the casting
+   lives: characterId / characterName, then obrazId / obrazImage, then the location
    pair (routes/scen3.js, _normCasting). Nothing here owns a character or a look -
    they belong to the Library's Characters shelf and to the looks, and this only points
    at them.
-
-   Built in phases C4, C5, V1-V3, F1-F3, S, M, V57 and V58 (docs/local-app/PLAN.md).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
@@ -65,7 +60,7 @@ import * as API from './scen-api.js';
 import * as Store from './store.js';
 import { askChoice } from '../ask.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts.
+// Being read, empty, could not be read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import * as PV from './preview-b.js';
 import * as ENV from './wk-env.js';
@@ -87,10 +82,10 @@ let _host = null;                        // the panel - the windows stand over i
 let _active = false;                     // this step is the one painted (for `ugc:goto`)
 let _saving = false;
 let _picShown = false;                   // the stage shows a line's frame or clip - not the halves
-// The panel is the script (js/merge-v3/wk-fragments.js). The character, the environment and their makers are WINDOWS since
-// phase V57, and so is the frames chat since phase V61 (js/merge-v3/fchat.js, opened by js/merge-v3/wk-fragments.js
+// The panel is the script (js/merge-v3/wk-fragments.js). The character, the environment and their makers are WINDOWS,
+// and so is the frames chat (js/merge-v3/fchat.js, opened by js/merge-v3/wk-fragments.js
 // openChat). ?view= in the address opens one of them directly - that is how the Alerts list takes somebody back to where a
-// generation was started (js/alerts-bell.js); the old shelves' names open their windows: cast "who", lookbooks "new look",
+// generation was started (js/alerts-bell.js); these names open their windows: cast "who", lookbooks "new look",
 // newlb "create lookbook", env "where", newenv "new environment", fchat the frames chat, voice the voices. Read once, when
 // this module is first loaded - which is when the step is opened.
 const WINDOWS = ['cast', 'lookbooks', 'newlb', 'env', 'newenv', 'fchat'];
@@ -98,7 +93,7 @@ let _ask = '';                           // a window the address asked for, open
 (function _urlView() {
   let v = '';
   try { v = new URLSearchParams(location.search).get('view') || ''; } catch (e) { v = ''; }
-  // (phase V62, (во17)) The voices are a window now: an address that asks for them opens it.
+  // The voices are a window: an address that asks for them opens it.
   if (v === 'voice' || WINDOWS.includes(v)) _ask = v;
 })();
 let _lbs = null;                          // the lookbooks to dress in, read when that page opens - false: they did not load
@@ -130,7 +125,7 @@ async function _load(repaint) {
     _state = 'idle';
   } catch (e) {
     _chars = [];
-    // (phase V73 block 2, (б2-18)) The reason a popup; the setup says the characters did not load, with Try again.
+    // The reason a popup; the setup says the characters did not load, with Try again.
     _state = 'failed';
     showError('Could not read the characters: ' + e.message);
   }
@@ -158,14 +153,14 @@ async function _patch(casting) {
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     _ctx.project = r.project;
   } catch (e) {
-    // (phase V73 block 2) A refusal is a popup in the corner (it stood as a red line over the setup until the next read).
+    // A refusal is a popup in the corner.
     showError('Could not save the casting: ' + e.message);
   }
   _saving = false;
   _ctx.repaint();
 }
 
-// ── WHO IS CAST (phase V67, the owner 2026-11-01) ───────────────────────────
+// ── WHO IS CAST ─────────────────────────────────────────────────────────────
 // A look - or none, the stage's ✕ - goes up through ONE route (routes/scen3.js POST /scen3/projects/:id/cast), which decides
 // what moves: another character's look puts that character's reads, frames and clips aside in the project, another look of
 // the same character its frames and clips, and what the new one had put aside comes back. When something would be put aside
@@ -191,7 +186,7 @@ async function _cast(look, anchor, sure, opts) {
   if (r.success) {
     // The record as the server has it now - the lines and the set too, not only the casting.
     if (_ctx.project && String(_ctx.project.id) === String(id)) Object.assign(_ctx.project, r.project);
-    // (V67 block 2) The character in the name: the picker and the strip show the timeline's new title at once.
+    // The character in the name: the picker and the strip show the timeline's new title at once.
     if (r.title && Store.key() === 'sv3_' + id) Store.setTitle(r.title);
     if (r.title) import('./projects.js').then(m => m.repaintPicker()).catch(() => {});
     if (r.moved || r.title) Store.refresh().catch(() => {});
@@ -208,7 +203,7 @@ async function _cast(look, anchor, sure, opts) {
     const text = 'Change to ' + (a.sameChar ? 'another look of ' + (a.to || 'this character') : (a.to || 'this character')) + '?';
     const sub = 'The ' + what.replace(/^the /, '') + ' ' + whose + ' leave the fields - their files stay in this project and come back when ' + back + '.';
     const host = (anchor && anchor.isConnected) ? anchor : document.querySelector('#mv3-stage') || document.body;
-    // (phase V67, second round (г), (об12), (об13)) "new project": this script, place and choices in a new talking head with
+    // "new project": this script, place and choices in a new talking head with
     // the look pressed - this project stays as it is. Not on the way back (↺): that one returns this project to its start.
     const forkHint = a.sameChar
       ? 'A new talking head of this script in the look pressed - this project keeps its look and everything made in it.'
@@ -225,7 +220,7 @@ async function _cast(look, anchor, sure, opts) {
   return false;
 }
 
-// "new project" (phase V67, second round (г)): made by the server from this project (js/merge-v3/scen-api.js forkHead) and
+// "new project": made by the server from this project (js/merge-v3/scen-api.js forkHead) and
 // opened - its setup, the look cast, the fields to fill. Resolves true once open (the window of "who" goes with this project).
 async function _fork(look) {
   if (!_ctx || !_ctx.project || _saving) return false;
@@ -243,13 +238,13 @@ async function _fork(look) {
 
 // ── The picture of a character ──────────────────────────────────────────────
 // The portrait when there is one. When there is not, the 4K reference sheet - three
-// full bodies side by side. (Decided with the owner: everyone gets a portrait eventually,
+// full bodies side by side. (Everyone gets a portrait eventually,
 // so this is a fallback and not a second design.)
 function _faceOf(c) {
   return { src: c.face || c.sheet || '', left: !c.face && !!c.sheet };
 }
 
-// (phase V61, (т9а)) "saving…" at the right of the panel's head while the casting is saved; gone with the save, and with the step.
+// "saving…" at the right of the panel's head while the casting is saved; gone with the save, and with the step.
 function _savingWord() {
   const head = document.querySelector('#mv3-inspector .mv3-panel-head');
   if (!head) return;
@@ -268,9 +263,8 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // NO TITLE LINE OF ITS OWN (phase V61, the owner 2026-10-30, (т9): "давай всю строку удалим вместе с кнопкой generate all и
-  // header setup с описанием"): the panel's own head says "Setup" and carries the crumbs (js/merge-v3/workshop.js), and
-  // "saving…" stands grey at its right while the casting is saved ((т9а)).
+  // NO TITLE LINE OF ITS OWN: the panel's own head says "Setup" and carries the crumbs (js/merge-v3/workshop.js), and
+  // "saving…" stands grey at its right while the casting is saved.
   _savingWord();
 
   if (!ctx.project) { root.appendChild(loadingEl('Reading the project…')); return; }
@@ -279,7 +273,7 @@ export function paint(host, ctx) {
 
   const chosen = _castChar();
   const scroll = _el('div', 'mv3-wk-scroll');
-  softScroll(scroll);                       // a touchpad moves this step too far per flick (V5)
+  softScroll(scroll);                       // a touchpad moves this step too far per flick
   root.appendChild(scroll);
   // The sample a voice was being listened to stops when the panel leaves that level: a voice
   // still talking over the script is a sound with nothing on screen to explain it.
@@ -288,7 +282,7 @@ export function paint(host, ctx) {
   FRAG.paint(scroll, ctx, _fragApi(chosen));
   _paintVoices(chosen);
   _stage(chosen);
-  // The casting's own countdowns, each on its half, when the stage shows the halves (V58).
+  // The casting's own countdowns, each on its half, when the stage shows the halves.
   _syncHalves();
   // Arriving at the project is when to ask the journal whether a look, a lookbook or an environment of this
   // place is being made; a repaint is not.
@@ -304,14 +298,14 @@ const _castChar = () => (_chars || []).find(c => c.id === String(_casting().char
 
 // The voice row's way to the voices (js/merge-v3/wk-voice.js, "ElevenLabs library…").
 function _go(view) {
-  // (phase V62, (во17)) The voices open in a window over the setup - a talking head's and a voiceover's alike.
+  // The voices open in a window over the setup - a talking head's and a voiceover's alike.
   if (view === 'voice') _openVoices();
 }
 
-// An old shelf's name - from the address, a row of Alerts - opens its window, over what is open.
+// A view's name - from the address, a row of Alerts - opens its window, over what is open.
 function _openAsked(v) {
   if (!_ctx || !_ctx.project) return;
-  // (phase V62) A voiceover has no who, where or frames chat - only the voices.
+  // A voiceover has no who, where or frames chat - only the voices.
   if (_ctx.project.type === 'voiceover' && v !== 'voice') return;
   const c = _castChar();
   if (v === 'cast') _openWho('list');
@@ -319,19 +313,19 @@ function _openAsked(v) {
   else if (v === 'newlb') _openWho(c ? 'lookbook' : 'list', c);
   else if (v === 'env') ENV.openWhere(_envApi(), 'list');
   else if (v === 'newenv') ENV.openWhere(_envApi(), 'make');
-  else if (v === 'fchat') FRAG.openChat();          // (phase V61) its rows of Alerts, the address
-  else if (v === 'voice') _openVoices();            // (phase V62)
+  else if (v === 'fchat') FRAG.openChat();          // its rows of Alerts, the address
+  else if (v === 'voice') _openVoices();
 }
 
-// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2), (во17)) ──
-// The saved voices and the ElevenLabs library in a window over the setup - js/merge-v3/wk-voice.js openVoices (phase V63: the
-// window moved there, one for the setup and Home's quick start). Field 1's menu opens it; it stays open after a voice is taken,
+// ── THE VOICES, A WINDOW ──
+// The saved voices and the ElevenLabs library in a window over the setup - js/merge-v3/wk-voice.js openVoices (one window
+// for the setup and Home's quick start). Field 1's menu opens it; it stays open after a voice is taken,
 // and is painted again with every repaint of the step.
 const _voiceOpen = () => VOICE.voicesOpen();
 function _openVoices() {
   if (!_ctx || !_ctx.project) return;
   if (_voiceOpen()) return;
-  // (phase V62, (во41) а) The library's language filter starts at the script's (wk-voice.js scriptLang).
+  // The library's language filter starts at the script's (wk-voice.js scriptLang).
   const p = _ctx.project;
   const text = (p.lines || []).map(l => String((l && l.text) || '')).join(' ');
   VOICE.openVoices(_voiceApi(_castChar()), { key: String(p.id), lang: VOICE.scriptLang(p.type === 'voiceover', text) });
@@ -357,14 +351,14 @@ function _whoHalf(chosen) {
   if (chosen) return { src: _faceOf(chosen).src, caption: chosen.name + ' · no look yet' };
   return { src: '', caption: '' };
 }
-// ...and the lower, with no caption (phase V24, the owner 2026-10-09: the word "environment" under the
-// place said nothing the picture did not).
+// ...and the lower, with no caption (the word "environment" under the
+// place would say nothing the picture does not).
 function _whereHalf() {
   return { src: _casting().locationImage || '', caption: '' };
 }
 
 function _stage(chosen) {
-  // (phase V62) A VOICEOVER has nobody and nowhere to choose: the stage stays empty - its picture is the B-roll.
+  // A VOICEOVER has nobody and nowhere to choose: the stage stays empty - its picture is the B-roll.
   if ((_ctx.project || {}).type === 'voiceover') {
     PV.cropOff();
     PV.showStill('', '');
@@ -377,11 +371,11 @@ function _stage(chosen) {
   const pic = FRAG.openPicture(_ctx.project);
   _picShown = !!pic;
   if (pic) {
-    // A clip PLAYS here (X4) - and ONLY here: it is put up stopped, with its triangle, and the
-    // press that starts it is a press on the stage (the owner, 2026-09-22).
+    // A clip PLAYS here - and ONLY here: it is put up stopped, with its triangle, and the
+    // press that starts it is a press on the stage.
     if (pic.film) PV.showFilm(pic.film, pic.caption, pic.poster);
     else PV.showStill(pic.src, pic.caption);
-    // A picture that can be REFRAMED brings a selection with it (V9): the panel says the shape - the
+    // A picture that can be REFRAMED brings a selection with it: the panel says the shape - the
     // project's format - and this puts the frame on the stage and the acts along its foot. The order
     // matters: `showStill` with a new picture drops any selection, so the crop is asked for after it.
     if (pic.crop) PV.cropOn(pic.crop.aspect); else PV.cropOff();
@@ -403,8 +397,7 @@ function _stage(chosen) {
   _stageBack(!!(cast.characterId || cast.obrazImage));
 }
 
-// (phase V67 block 3, the owner 2026-11-01: "в поле превью на крошке сетап добавить кнопку сброса, чтобы вернуться к
-// изначальному персонажу"; (об9)) THE WAY BACK: the first look cast in this project (`cast0`, routes/scen3.js) - while another
+// THE WAY BACK: the first look cast in this project (`cast0`, routes/scen3.js) - while another
 // look, or none, is cast and that look is still on its character's shelf. "↺ <name>" beside the upper half's cross; a press
 // is a cast like any (_cast): asked first when it would put work aside, and what was made for them comes back.
 function _backLook() {
@@ -419,7 +412,7 @@ function _stageBack(withCross) {
   const stage = document.getElementById('mv3-stage');
   if (!back || !stage) return;
   const b = _el('button', 'mv3-wk-back mv3-stage-ctl' + (withCross ? '' : ' is-alone'));
-  // (phase V73 block 5, 5d) Lucide's rotate-ccw in place of "↺"
+  // Lucide's rotate-ccw is the "↺"
   b.append(iconEl('rotate-ccw', 12), document.createTextNode(back.characterName));
   b.type = 'button';
   b.title = 'Back to ' + back.characterName + ' in the look this project began with - what was made for them comes back';
@@ -429,13 +422,12 @@ function _stageBack(withCross) {
 }
 
 // A half's cross: the choice is taken off the project; the frames and the reads already made stay what
-// they are - they are files - and nothing else moves. (phase V67) "Who" through the cast route: nothing is put aside, and
+// they are - they are files - and nothing else moves. "Who" through the cast route: nothing is put aside, and
 // the same look cast again finds the fields as they were.
 function _clearHalf(half, anchor) {
   if (_saving) return;
   if (half === 'top') {
-    // (phase V67, second round (а), the owner 2026-11-01: "при нажатии крестика, тоже давай предупреждение во всплывашке") Asked
-    // at the cross, as a change is; nothing is put aside, and the question says so.
+    // Asked at the cross, as a change is; nothing is put aside, and the question says so.
     const name = _casting().characterName || 'the character';
     askChoice(anchor || document.querySelector('#mv3-stage') || document.body, 'Take ' + name + ' off this project?',
       'Nothing is lost - the reads, frames and clips stay. Choose the same look again and everything is as it was.',
@@ -447,7 +439,7 @@ function _clearHalf(half, anchor) {
 
 // THE BUTTONS THIS STEP LAYS OVER THE STAGE - a half's cross, the acts along a picture's foot - all
 // wear `mv3-stage-ctl`: the stage given back to the timeline drops them (js/merge-v3/preview-b.js,
-// borrow), and so does leaving the step or the project (phase V24).
+// borrow), and so does leaving the step or the project.
 function _dropStageCtl() {
   const stage = document.getElementById('mv3-stage');
   if (stage) stage.querySelectorAll('.mv3-stage-ctl').forEach(x => x.remove());
@@ -471,7 +463,7 @@ function _stageClears(top, bottom) {
   if (bottom) mk('bottom', 'Take the environment off this project');
 }
 
-// WHAT CAN BE DONE TO THE PICTURE ON THE STAGE, in a row along its foot (V9). The panel decides
+// WHAT CAN BE DONE TO THE PICTURE ON THE STAGE, in a row along its foot. The panel decides
 // what those acts are - it knows which picture this is and what state it is in - and each is handed
 // the selection as it stands, so `apply` does not have to reach into the preview for it.
 function _stageActs(acts) {
@@ -535,7 +527,7 @@ function _envApi() {
     repaint: () => _ctx.repaint(),
     anchor: () => _host,
     saving: () => _saving,
-    // The lower half of the stage waits for the place being made (V58).
+    // The lower half of the stage waits for the place being made.
     onStart: () => _syncHalves(),
     onEnd: (place, error) => { endHalf(place, error); _syncHalves(); },
   };
@@ -570,7 +562,7 @@ function _voiceApi(chosen) {
     },
     go: _go,
     repaint: () => _ctx.repaint(),
-    // The SERVER writes the takes now (phase X2), so the panel has to read the project back to see
+    // The SERVER writes the takes, so the panel has to read the project back to see
     // them arrive rather than trust the answer to its own call.
     reload: () => (_ctx.reloadProject ? _ctx.reloadProject() : Promise.resolve()),
     note: _note,
@@ -591,14 +583,14 @@ function _voiceApi(chosen) {
 }
 
 
-// ── "WHO": THE WINDOW (phase V57; V58 - crumbs, the ✕ of a look, a new look in the same window) ──
+// ── "WHO": THE WINDOW (crumbs, the ✕ of a look, a new look in the same window) ──
 /** The window of "who" on `page` ('list' | 'look' | 'lookbook'), for `char` on the pages after the list - over everything
  *  open; opened while it is under another window, it comes up over it. */
 function _openWho(page, char) {
   if (!_chars) return;
   if (_who && _who.win.alive() && !_who.win.isTop()) _who.win.close();
   if (!_who || !_who.win.alive()) {
-    // (phase V64, fix (л), (зг14): "окна who/where - только передвигаем и запоминаем. размеры не меняем") Moved; its place kept.
+    // Moved; its place kept, its size fixed.
     const win = GW.openFrame({ name: 'character and look', anchor: _host, geom: { key: 'who', move: true, keepPos: true },
       onClose: () => { if (_who && _who.win === win) _who = null; } });
     _who = { win, page: 'list', char: null };
@@ -654,7 +646,7 @@ function _paintCharacters(body) {
   const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
   const cast = _casting();
   const castId = String(cast.characterId || '');
-  // (phase V63) The groups are wk-maker.js lookGroups - the same list Home's talking head quick start chooses from.
+  // The groups are wk-maker.js lookGroups - the same list Home's talking head quick start chooses from.
   const groups = lookGroups(_chars, { say: (c) => c.name + ' is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.' });
   paintChoose(body, {
     state: _whoState,
@@ -668,7 +660,7 @@ function _paintCharacters(body) {
     // The crumb follows the character shown - "+ new look" stands by THAT name.
     onGroup: () => _whoCrumbs(),
     mark: (it) => (it.look && cast.obrazImage && it.path === cast.obrazImage ? 'cast' : ''),
-    // (phase V67) Asked first at the look pressed when it would put work aside; the window closes once it is cast.
+    // Asked first at the look pressed when it would put work aside; the window closes once it is cast.
     press: (it, tile) => {
       if (!it.look) return;
       const win = _who && _who.win;
@@ -692,7 +684,7 @@ function _paintCharacters(body) {
   });
 }
 
-// The one write of "who": the look with its character - it belongs to them (phase V67: through _cast).
+// The one write of "who": the look with its character - it belongs to them (through _cast).
 function _castLook(c, o, anchor) {
   if (!c || !o) return Promise.resolve(false);
   return _cast({ characterId: String(c.id), characterName: c.name, obrazId: String(o.id), obrazImage: o.image }, anchor, false, { fork: true });
@@ -700,7 +692,7 @@ function _castLook(c, o, anchor) {
 
 // ── NEW LOOK: dress the character in a lookbook ─────────────────────────────
 // The lookbooks ("+" leads to the bench that makes one), the one picked, and at the foot who + what and `apply`. After
-// `apply` the window stays ((лк5)): its line says the dressing is in Alerts, the stage's upper half how far.
+// `apply` the window stays: its line says the dressing is in Alerts, the stage's upper half how far.
 function _paintDress(body, c) {
   const list = _el('div', 'mk-scroll');
   softScroll(list);
@@ -708,7 +700,7 @@ function _paintDress(body, c) {
   if (_lbs === null) {
     list.appendChild(loadingEl('reading the lookbooks…'));
     API.lookbooks().then((files) => { _lbs = files || []; _paintWho(); })
-      // (phase V73 block 2, (б2-19)) Not read is not "No lookbooks yet": "did not load" with Try again, the reason a popup.
+      // Not read is not "No lookbooks yet": "did not load" with Try again, the reason a popup.
       .catch((e) => { _lbs = false; showError('Could not read the lookbooks: ' + e.message); _paintWho(); });
   } else if (_lbs === false) {
     list.appendChild(failedEl('The lookbooks', () => { _lbs = null; _paintWho(); }));
@@ -858,7 +850,7 @@ async function _followDress(id) {
     _endDress('');
     // The wardrobe and the project are read again rather than patched by hand: the server filed
     // the look and wrote it into the casting, and what it wrote is what should be on screen. A look
-    // made for this project is chosen by it (decided with the owner 2026-09-21).
+    // made for this project is chosen by it.
     _chars = byLooks(await loadCharacters(true));
     await _ctx.reloadProject();
     _lbPick = '';
@@ -871,7 +863,7 @@ async function _followDress(id) {
   _ctx.repaint();
 }
 
-// ── THE HALVES OF THE STAGE (phase V58) ─────────────────────────────────────
+// ── THE HALVES OF THE STAGE ─────────────────────────────────────────────────
 // Each half waits for its own work: the upper for a look being dressed or a lookbook being made, the lower for an
 // environment - only this project's, and only while the stage shows the halves and the script is not counting down on
 // the whole of it (a frame or a clip; wk-maker.js heldPlace).
@@ -909,7 +901,7 @@ function _pickUpRunning() {
   }).catch(() => { /* without the list the panel simply shows nothing running */ });
 }
 
-// ── A WINDOW OVER A WINDOW (phase V58) ──────────────────────────────────────
+// ── A WINDOW OVER A WINDOW ──────────────────────────────────────────────────
 // A row of Alerts or its popup asks the page before it goes anywhere (js/alerts-bell.js `_goTo` - a cancellable
 // `ugc:goto`; js/merge-v3/main.js and library.js hear it for their own addresses, `reveal` and `open`, never a `view`).
 // One of THIS project's "who" or "where" (`?p=<key>&...&view=<a window>`) opens that window over what is open, here.

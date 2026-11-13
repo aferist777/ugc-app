@@ -1,22 +1,18 @@
-// LIBRARY - making a character, on the Characters shelf (phase H, the owner 2026-09-30 / 10-01).
+// LIBRARY - making a character, on the Characters shelf.
 //
-// A WINDOW (phase V60, the owner 2026-10-29, (пп4), (пп5): "процесс создания персонажей я бы сделал в попапе"; only the
-// move - "пока только косметика", the making itself is the owner's to change later). "New Character" in the shelf's
-// header opens it over the shelf - the generators' window (js/gen-window.js openFrame), 1280×800 since phase V64 (1100×720 before) as every generation's window,
-// smaller on a small screen; there is no "← Characters" any more. Its ✕, Escape or a press beside it HIDE it: what runs
+// A WINDOW. "New Character" in the shelf's header opens it over the shelf - the generators' window (js/gen-window.js
+// openFrame), 1280×800 as every generation's window, smaller on a small screen. Its ✕, Escape or a press beside it HIDE it: what runs
 // goes on and the bench stays - the content is built once, in #lib-chmake (hidden, its parking place), and is MOVED into
 // the window's body and back, never built again. The rows of Alerts of a portrait or a sheet
 // (/library?shelf=characters&make=1, `spot.view` 'chmake') open the shelf with the window - always the Library's, wherever
-// it was started (phase V60.1, the owner's (пк5б)). Saved: the window closes and the shelf shows the new character selected
-// (`onSaved`). (phase V60.1, (пк4а)) HOME opens the same window over itself - "+ new character", "Make your first
+// it was started. Saved: the window closes and the shelf shows the new character selected
+// (`onSaved`). HOME opens the same window over itself - "+ new character", "Make your first
 // character" - with a parking place of its own (home.html #lib-chmake) and the same bench (`lib_chmake_v1`); saved there, a
 // popup says so with "open in Library" (js/home/main.js).
 //
-// Before V60: "New Character" put this where the grid and its column were, and
-// "← Characters" (the same place) brought them back. It is the Character page's creation, moved: the
-// parameters and presets, TPDNE and your own picture, the edit chips, the takes, and the save form that
+// What it holds: the parameters and presets, TPDNE and your own picture, the edit chips, the takes, and the save form that
 // draws the 4K reference sheet. The panels are js/library/character/ (create-panel, edit-panel,
-// save-panel, presets, schema - they came with the page, which went in phase H8); the orchestration is
+// save-panel, presets, schema); the orchestration is
 // below, the layout css/char-make.css.
 //
 // THE WAITING FOLLOWS THE JOURNAL. A portrait and a sheet each have an Alerts row written at the press
@@ -26,12 +22,12 @@
 // page. Whatever is being waited for is remembered with the bench, so the area picks it up again when it
 // is opened - after another shelf, after a reload, after the app was closed.
 //
-// THE BENCH IS KEPT until it is saved or thrown away with "start over" (the owner: work that was paid
+// THE BENCH IS KEPT until it is saved or thrown away with "start over" (work that was paid
 // for is not lost by closing the area). Only pictures ON DISK are remembered: a TPDNE face is a data URL
-// that was never written anywhere, and another one is a press away. There are no drafts (the owner:
-// "не будем хранить черновики") - a take is kept by saving it.
+// that was never written anywhere, and another one is a press away. There are no drafts - a take is kept
+// by saving it.
 //
-// Leaving is allowed at every step, the sheet included (the owner): the area is only hidden.
+// Leaving is allowed at every step, the sheet included: the area is only hidden.
 
 import * as CreatePanel from './character/create-panel.js';
 import * as EditPanel from './character/edit-panel.js';
@@ -40,10 +36,10 @@ import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './character
 import { genName } from './character/schema.js';
 import { startProgress, lockControls } from '../progress.js';
 import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
-// (phase V60) The window it is shown in.
+// The window it is shown in.
 import { openFrame, GEN_SIZE } from '../gen-window.js';
-// (phase V73 block 2, step 2b; the owner's (б2-20) а) A failure is ONE popup in the corner - it was said three times (the
-// progress overlay's red label, the red status line, the red block under the portrait); the save form's Try again stays.
+// A failure is ONE popup in the corner - not the progress overlay's red label, a red status line or a red block under the
+// portrait; the save form's Try again stays.
 // "Start over" asks at its button in place of the browser's confirm().
 import { showError } from '../notice.js';
 import { ask } from '../ask.js';
@@ -116,7 +112,7 @@ function _recall() {
 
 // ── Status and the last failure ─────────────────────────────────────────────
 // The head's line says what was just done ("Take deleted", "Renamed to …"); a refusal or a failure (kind 'err') is a
-// popup in the corner instead (phase V73 block 2, (б2-20) а; js/notice.js), and the line goes.
+// popup in the corner instead (js/notice.js), and the line goes.
 function _status(text, kind) {
   if (text && kind === 'err') { showError(text); text = ''; kind = ''; }
   const el = $('chm-status');
@@ -206,7 +202,7 @@ async function _run(label, fn, opts = {}) {
     if (e && e.stopped) pr.detach();             // the bench was emptied under it: nothing to report
     else if (e && e.cancelled) { pr.detach(); _status('Let go of - what was asked for is paid for'); }
     else if (e && e.soft) { pr.detach(); _status(e.message); }
-    // (б2-20) а: the overlay goes without its red label, the line is cleared, the failure is the popup alone.
+    // The overlay goes without its red label, the line is cleared, the failure is the popup alone.
     else { pr.detach(); _status(''); _showErr(label, e && e.message, opts.detail); }
   } finally {
     unlock();
@@ -309,7 +305,7 @@ function _pushVar(label) {
   _paintVars();
 }
 
-// Once the character is saved the takes are frozen (review H): the face on the bench IS the character's
+// Once the character is saved the takes are frozen: the face on the bench IS the character's
 // now, and the save form's "Try again" must not draw another take's sheet.
 function _showVar(i) {
   if (_saving) return;
@@ -528,7 +524,7 @@ async function _settleFromCharacter(s) {
   _savePanel.status(s.note, s.kind || undefined);
 }
 
-// WHAT CHANGED WHILE NOBODY LOOKED (review H): a portrait or a sheet that failed here can be started
+// WHAT CHANGED WHILE NOBODY LOOKED: a portrait or a sheet that failed here can be started
 // again from Alerts - the same row runs again - and this area would go on showing the failure and
 // offering to pay a second time. Asked every time the area opens and whenever the window comes back.
 async function _recheck() {
@@ -552,7 +548,7 @@ async function _recheck() {
 
 // Done, or a preset whose sheet was ready: the bench empties, the area closes, and the shelf is read
 // again with the new character selected and in view (js/library/main.js, onSaved). A name typed just
-// before the press - still inside the form's pause - is written first (review H).
+// before the press - still inside the form's pause - is written first.
 async function _finishSave() {
   const s = _saving || {};
   const id = s.charId || '';
@@ -567,7 +563,7 @@ async function _finishSave() {
   _setStage(false);
   _showFace(null);
   _remember();
-  // (phase V60) The window closes; the shelf selects the new character.
+  // The window closes; the shelf selects the new character.
   _hide(true);
   if (_hooks.onSaved) _hooks.onSaved(id, name);
 }
@@ -648,7 +644,7 @@ function _build() {
   _root = host.querySelector('.chm');
   _built = true;
 
-  // No "Save image as" on a miniature: every picture here cancels the window's own menu (phase B7).
+  // No "Save image as" on a miniature: every picture here cancels the window's own menu.
   host.addEventListener('contextmenu', (e) => { if (e.target.closest('img')) e.preventDefault(); });
 
   const onGenerate = (values, name) => _makePortrait('Generating the character…', async () => ({
@@ -712,7 +708,7 @@ function _build() {
 
   $('chm-over').addEventListener('click', async () => {
     if (_busy) return;
-    // Only when there is something on the bench, as before; at the button, the answer red - it throws the takes away.
+    // Only when there is something on the bench; at the button, the answer red - it throws the takes away.
     if ((_face.src || _vars.length) && !await ask($('chm-over'), 'Start over? The portrait and its takes leave the bench - their files stay in media/work.', { yes: 'Start over', danger: true, stay: true })) return;
     if (_busy) return;
     _pending = null;
@@ -784,7 +780,7 @@ function _wireUpload() {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.id = 'chm-upload'; inp.accept = PICTURE_ACCEPT; inp.hidden = true;
   drop.appendChild(inp);
-  // A phone's HEIC too - made a JPEG by the server first, the page cannot show one (phase V24).
+  // A phone's HEIC too - made a JPEG by the server first, the page cannot show one.
   const take = async (file) => {
     if (!file) return;
     if (!isPictureFile(file)) { _status('That file is not a picture', 'err'); return; }
@@ -840,7 +836,7 @@ function _restore() {
   _recheck();
 }
 
-// ── The window's door (phase V60) ───────────────────────────────────────────
+// ── The window's door ───────────────────────────────────────────────────────
 // hooks: onSaved(id, name) - a character saved (the window closed first); onClosed() - the window hidden by the person
 // (✕, Escape, a press beside it), what was made meanwhile to be read again.
 export function init(hooks) { _hooks = hooks || {}; }
@@ -857,7 +853,7 @@ export function open() {
   if (!host) return;
   if (!_built) _build();
   if (!isOpen()) {
-    // (phase V64, fix (л)) Moved and stretched; its size kept, its place not (it opens in the middle).
+    // Moved and stretched; its size kept, its place not (it opens in the middle).
     _win = openFrame({ name: 'New Character', size: GEN_SIZE, geom: { key: 'chmake', resize: true, move: true, keepSize: true },
       cls: 'is-chmake', onClose: _park });
     _win.setCrumbs([{ label: 'New Character' }]);

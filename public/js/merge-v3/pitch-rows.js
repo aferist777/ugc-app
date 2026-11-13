@@ -1,9 +1,9 @@
-/* THE PITCH ROWS of a sound (phase V76, the owner 2026-11-06; docs/local-app/plan/, "Фаза V76", (тн1)-(тн4), (тн10)) - one
+/* THE PITCH ROWS of a sound - one
    module for every strip that offers it: a sound clip, the sound of a film, several picked, a whole audio lane (inspector.js),
    and main audio of the ticked highlights (hl-group.js).
 
-     Pitch        the slider: semitones, -12..+12, one at a time ((тн1) а) - no presets (the owner's (тн-п1), 2026-11-11)
-     Keep timbre  on: the same voice, higher or lower; off: the timbre moves with the pitch ((тн3) а); nothing to keep at 0
+     Pitch        the slider: semitones, -12..+12, one at a time - no presets
+     Keep timbre  on: the same voice, higher or lower; off: the timbre moves with the pitch; nothing to keep at 0
 
    `pitches` - the pitch of each clip it stands for (null for none); `write(fn, part)` - give each clip fn(its pitch) -> its new
    pitch (null for none), ONE undo step for all of them; `part` - what changed, { st } or { shift }, for a writer that cannot

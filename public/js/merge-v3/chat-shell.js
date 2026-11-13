@@ -1,30 +1,27 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a chat in its window: the shell (phase V1, docs/local-app/PLAN.md "V-A").
+   MERGE — a chat in its window: the shell.
 
-   The pictures chat (phase J) was one module; the video chat (phase V3) is the same conversation with other
+   The pictures chat and the video chat are the same conversation with other
    settings and other results, so what they share lives here and each is `createChat(DESCRIPTION)` -
-   picchat.js and (V3) vidchat.js. A copy would have meant every later change made twice.
+   picchat.js and vidchat.js. A copy would mean every change made twice.
 
    ── What the shell does ─────────────────────────────────────────────────────
    Following the open project, what was being written and attached per project, the thread read
    from the server every few seconds with each countdown drawn from its record's real age and its cross
    letting go of the row, "the result becomes the reference", sending (a project started for a send from
    "no project"), the attachment row, bringing files in, the right column of things to point at behind a
-   sash (`column`: since phase V55 the folder column, js/folder-column.js - the pictures chat; since V60.2 the video chat's
-   too), the picker behind
-   every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
-   V55 the window with the tree), the zone's enlarged view under the pointer, and the narrow layout.
+   sash (`column`: the folder column, js/folder-column.js - the pictures chat's and the video chat's), the picker behind
+   every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - the
+   window with the tree), the zone's enlarged view under the pointer, and the narrow layout.
 
-   (V91 block 3, the owner 2026-11-12, (чк19в)-(чк19е): "клик по самому медиа ничего не делает") A press on a picture or a
-   clip - a result in the thread, a message's attachment, a thing in the zone - does nothing; a picture has ⤢ in its
+   A press on a picture or a clip - a result in the thread, a message's attachment, a thing in the zone - does nothing; a picture has ⤢ in its
    top-right corner that opens it large, a clip ▶ in its middle that plays it in the Library's viewer, and the pointer
-   resting on a clip plays it in place without its sound. The right column's press attaches, as before. Only the zone
+   resting on a clip plays it in place without its sound. The right column's press attaches. Only the zone
    shows a thing larger under the pointer (peekShow).
 
-   (phase V64 block 3, the owner 2026-10-31) Every chat lives in a generation's window now - the frames chat since V61, the
-   pictures chat and the video chat since V64 (chat-window.js): no crumb, no room, no view remembered per
-   project; the window shows and hides it, and its conversation is still the open project's - in the Library (block 4) THE
-   draft's, the unbound one: whose it is, chat-owner.js says (the store's words, either way).
+   Every chat lives in a generation's window - the frames chat, the pictures chat and the video chat (chat-window.js):
+   no view is remembered per project; the window shows and hides it, and its conversation is the open project's - in
+   the Library THE draft's, the unbound one: whose it is, chat-owner.js says (the store's words, either way).
 
    ── What a description says ─────────────────────────────────────────────────
    Its name and kind, its element ids and storage keys, its words, the settings column (`settings`: load,
@@ -37,7 +34,7 @@
    Making things is iterative. You say a thing, look at it, then say "the same but at night" - and the
    second sentence only means anything because the first one is still there. The conversation belongs to
    the PROJECT (data/mv3-chat.json by kind, the results in their own store and on their shelf) - a highlights
-   project's is ONE for its home and all its fragments, kept under the home's key (phase V49, lib-views.js chatKey).
+   project's is ONE for its home and all its fragments, kept under the home's key (lib-views.js chatKey).
 
    ── The server sends ────────────────────────────────────────────────────────
    A press is one request: the server writes the person's turn, a record and an Alerts row for every result
@@ -55,7 +52,7 @@
    Narrower than 700px, the settings fold into one row above the input.
    ════════════════════════════════════════════════════════════════════════════ */
 
-// (phase V64 block 4) Whose conversation it is - the open project in Merge, the unbound draft's in the Library.
+// Whose conversation it is - the open project in Merge, the unbound draft's in the Library.
 import * as Store from './chat-owner.js';
 import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
@@ -64,7 +61,7 @@ import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { note } from '../ask.js';
 import { twoPress } from '../really.js';
-// (phase V73 block 2, step 2b) The empty conversation - the shared "nothing here".
+// The empty conversation - the shared "nothing here".
 import { emptyEl } from '../ui-state.js';
 import { markField, markText } from './image-words.js';
 import { icon } from '../icons.js';
@@ -93,7 +90,7 @@ export const posterOf = (p) => {
   return c.slice(0, i) + '/thumbs/' + c.slice(i + 1).replace(/\.[^.]+$/, '') + '_thumb.jpg';
 };
 
-// ── A chat's pictures and clips (V91 block 3, the owner 2026-11-12) ─────────────
+// ── A chat's pictures and clips ─────────────
 // A press on the thing itself does nothing (the right column's attaches): ⤢ in a picture's top-right corner opens it large,
 // ▶ in a clip's middle plays it in the Library's viewer, and the pointer resting on a clip plays it in place without its
 // sound - one at a time, the poster again the moment the pointer leaves (hover-play.js).
@@ -131,7 +128,7 @@ export function viewClip(path, name, thumb) {
 }
 
 // One attachment of a message as it went: a picture's miniature, a clip's poster or a sound's note, its number - per
-// kind, the way the prompt names them - and for a clip or a sound the seconds of it that went (phase V7). `all` - the
+// kind, the way the prompt names them - and for a clip or a sound the seconds of it that went. `all` - the
 // message's attachments: given, a picture has ⤢ (the message's pictures large, from this one) and a clip ▶ in its middle,
 // playing in place under the pointer; one not in this library has neither.
 export function refCell(a, k, n, all) {
@@ -159,9 +156,9 @@ export function refCell(a, k, n, all) {
   return c;
 }
 export const money = (v) => '$' + (+(+v).toFixed(4));
-// (phase V73 block 4) a label in sentence case - its first letter capital; the word itself stays (it makes sentences elsewhere)
+// a label in sentence case - its first letter capital; the word itself stays (it makes sentences elsewhere)
 const capWord = (w) => { const s = String(w || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
-/** (phase V73 block 4) A switch of a chat's column (the writer, the storyboard): the shared toggle (.u-switch, on is green) and
+/** A switch of a chat's column (the writer, the storyboard): the shared toggle (.u-switch, on is green) and
  *  its word in one <label> - the word pressed switches it too. onChange(on) after each press. */
 export function switchRow(word, on, off, onChange) {
   const row = el('label', 'mv3-vc-check');
@@ -179,7 +176,7 @@ export function switchRow(word, on, off, onChange) {
   row.append(b, el('span', null, word));
   return row;
 }
-/** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
+/** The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
 export function almanacSoon() {
   const b = el('button', 'mv3-vc-almanac is-soon u-btn is-l', 'Almanac');
   b.type = 'button';
@@ -193,8 +190,8 @@ export const ratioOf = (ar) => {
   return (+p[0] || 1) / (+p[1] || 1);
 };
 /**
- * (phase V49, the owner's (пр6)) A chat's result is not laid on a highlights project's own timeline - nothing on it is rendered:
- * a drag (its `dragstart` event, cancelled) says "open a fragment" - since V49.1 ((пр33)) in the corner of
+ * A chat's result is not laid on a highlights project's own timeline - nothing on it is rendered:
+ * a drag (its `dragstart` event, cancelled) says "open a fragment" in the corner of
  * popups with "to highlights" (lib-views.js noFragment), as a drop on the home's lanes does. True when refused. `anchor` is
  * kept for the callers; the popup does not stand at it.
  */
@@ -213,7 +210,7 @@ const _gensOf = (m) => ((m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : 
 /**
  * One chat. `make(ctx)` returns its description; the answer is { open, isOpen, init }.
  */
-// (phase V21) What every draft keeps of the chats in this browser, under one key - as the drafts' conversation is one.
+// What every draft keeps of the chats in this browser, under one key - as the drafts' conversation is one.
 const DRAFT_LK = 'draft';
 
 export function createChat(make) {
@@ -223,11 +220,11 @@ export function createChat(make) {
   let _key = null;           // whose conversation this is - '' before a project exists
   let _thread = [];
   let _feed = [];            // this project's own results - the right column's "this project"
-  let _col = null;           // (phase V55) the right column - js/folder-column.js; null for a chat without one
+  let _col = null;           // the right column - js/folder-column.js; null for a chat without one
   let _timer = 0;
   let _seq = 0;
   let _sending = false;
-  // (phase V18.3) The message drawn at the press, until the answer it was sent for takes its place: { el, id }.
+  // The message drawn at the press, until the answer it was sent for takes its place: { el, id }.
   let _pend = null;
   let _n = 1;
   let _write = true;
@@ -238,7 +235,7 @@ export function createChat(make) {
   let _landedNow = new Set();   // ...and those that landed since the read before it
   const _nodes = new Map();     // message id -> { el, sig, progs: Map(genId -> countdown), away }
   let _adopt = false;           // a project is being made for a send from "no project"
-  // (phase V21) The open project is the draft: what is kept here per project - the words and attachments being
+  // The open project is the draft: what is kept here per project - the words and attachments being
   // written - is the drafts' own (DRAFT_LK), as their conversation is.
   let _draftHere = false;
   let _draftT = 0;
@@ -247,7 +244,7 @@ export function createChat(make) {
   const _memo = new Map();
   let _uploading = null;        // the upload in flight - a send waits for it
   let _made = false;            // something landed or was added while the chat showed - the shelf reads again
-  // (phase V77, the owner's (тч7)) The page's own word at the end of the thread - what came in from the timeline and how to change
+  // The page's own word at the end of the thread - what came in from the timeline and how to change
   // it: never kept, never sent; it goes with the next send or another project.
   let _notice = '';
 
@@ -255,57 +252,57 @@ export function createChat(make) {
   const ctx = {
     ui: () => _ui,
     key: () => _key,
-    // In the order their numbers count (phase V6: per part of the zone, per slot of the part, then the rest) - what goes:
-    // the empty numbered places (phase V15) left out.
+    // In the order their numbers count (per part of the zone, per slot of the part, then the rest) - what goes:
+    // the empty numbered places left out.
     atts: () => _real(),
-    // (phase V26.5) The zone as it is laid out - its empty numbered places too, each with its slot.
+    // The zone as it is laid out - its empty numbered places too, each with its slot.
     zoneAtts: () => _ordered().slice(),
-    // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
+    // Why a send cannot go yet - an empty numbered place, blinking -, or null.
     holeWhy: () => _holeWhy(),
-    // (phase V16) Whether anything attached answers `fn` - read without laying out the zone, so the zone's own words (a
+    // Whether anything attached answers `fn` - read without laying out the zone, so the zone's own words (a
     // part's note) can ask it.
     anyAtt: (fn) => _atts.some(a => !a.hole && fn(a)),
-    // (phase V16) The zone replaced by these attachments ({ path, kind, role, label, in, out }) - a message's, put back
+    // The zone replaced by these attachments ({ path, kind, role, label, in, out }) - a message's, put back
     // for the next variant; [] empties it.
     useAtts: (list) => _useAtts(list),
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
-    // (phase V73 block 4) the column's price box, read into the bar beside the send
+    // the column's price box, read into the bar beside the send
     priceFrom: (box) => _priceFrom(box),
     attach: (path, name, o) => _attach(path, name, o),
-    // (phase V7) An attachment changed by its description - the part of a clip or a sound that goes, its length once
+    // An attachment changed by its description - the part of a clip or a sound that goes, its length once
     // measured (a value of null or '' takes the field away) - or taken back off.
     setAtt: (path, patch) => _setAtt(path, patch),
     detach: (path) => _detach(path),
     // Whether the chat shows.
     shown: () => _chat,
-    // (phase V6) The zone's slots changed (the video chat's "pictures are"): what is attached finds its slots again, and
+    // The zone's slots changed (the video chat's "pictures are"): what is attached finds its slots again, and
     // nothing stays armed.
     reslot: (o) => _reslot(o),
-    // (phase V6) A slot that must be filled, blinking - the send was refused for it.
+    // A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
-    // (phase V3) The words in the box - a description may put its standard prompt there - and its hint.
+    // The words in the box - a description may put its standard prompt there - and its hint.
     text: () => (_ui ? _ui.ta.value : ''),
     setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
     placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
     // Whether the writer is on.
     writing: () => _write,
-    // (phase V15) The writer switched from the description's own control (the video chat's column).
+    // The writer switched from the description's own control (the video chat's column).
     setWriting: (v) => _setWriting(v),
     saveDraft: () => _draftLater(),
-    // (phase V6) The thread read again - a card the description draws changed on the server.
+    // The thread read again - a card the description draws changed on the server.
     reload: (toEnd) => _reload(toEnd),
-    // (phase V60.2) A result's "read more" on its own, and every finished one of the thread large from it - for a description
+    // A result's "read more" on its own, and every finished one of the thread large from it - for a description
     // that lays its result out itself (the video chat's field at a message's head).
     facts: (g) => _facts(g),
     view: (g) => _view(g),
     // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
     stageWords: (g) => _stageWords(g),
-    // (phase V60.2) What the right column offers may have changed - the video chat's model takes no clips, or shorter ones:
+    // What the right column offers may have changed - the video chat's model takes no clips, or shorter ones:
     // it is read again when its description's `sig` says so.
     columnChanged: () => _columnChanged(),
-    // (phase V77) The page's word at the end of the thread (above); '' takes it away.
+    // The page's word at the end of the thread (above); '' takes it away.
     notice: (t) => { _notice = String(t || ''); if (_ui && _chat) _paintThread(true); },
   };
   const S = make(ctx);
@@ -345,9 +342,9 @@ export function createChat(make) {
     _build();
     // Laid out for its width (narrow or not) only once the chat can be SEEN.
     _fit();
-    // (V50 speed, the owner 2026-11-12) The settings and the thread are asked first, the right column after them: the server
-    // answers one request at a time and the column's reading is the long one - asked together, the conversation waited behind
-    // it. The video chat's column follows its models, so it waits for them too and is read once (`_colWait`); never more
+    // The settings and the thread are asked first, the right column after them: the server
+    // answers one request at a time and the column's reading is the long one - asked together, the conversation would wait
+    // behind it. The video chat's column follows its models, so it waits for them too and is read once (`_colWait`); never more
     // than a second.
     const mine = ++_opens;
     _colWait = true;
@@ -372,10 +369,10 @@ export function createChat(make) {
   function _onStore() {
     // Not before the store has read what is open: "nothing yet" is not "no project".
     if (!Store.isReady()) return;
-    // (phase V49, the owner's (пр5)) A highlights project talks in ONE conversation: its fragments' keys are its home's, so
+    // A highlights project talks in ONE conversation: its fragments' keys are its home's, so
     // pressing another fragment is no project switch here - the thread, the view and what is being written stay.
     const k = Views.chatKey(Store.key());
-    // (phase V21) The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
+    // The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
     // none of them), and its conversation is read again (the project's copy).
     if (k && k === _key && _draftHere && !Store.isDraft()) {
       _draftHere = false;
@@ -386,7 +383,7 @@ export function createChat(make) {
     }
     if (k === _key) return;
     const was = _key;
-    // The picker was for a place of the project being left; (phase V77) so was the page's word.
+    // The picker was for a place of the project being left; so was the page's word.
     if (_picking) Pick.closePick();
     _notice = '';
     if (was !== null) {
@@ -419,7 +416,7 @@ export function createChat(make) {
     _paintHead();
   }
 
-  // (phase V20) No project is the draft - Merge opens it by itself; this is for the rare page that could not.
+  // No project is the draft - Merge opens it by itself; this is for the rare page that could not.
   async function _ensureProject() {
     if (Store.key()) return;
     await Store.openBlank();
@@ -427,13 +424,13 @@ export function createChat(make) {
   }
 
   // ── What was being written, per project ───────────────────────────────────
-  // (phase V21) The key it is kept under: the drafts' own while the project is the draft.
+  // The key it is kept under: the drafts' own while the project is the draft.
   const _lk = (k) => (k === _key && _draftHere ? DRAFT_LK : (k || ''));
   function _saveDraft(k0) {
     const k = _lk(k0);
     const d = stored(S.keys.draft, {});
     const text = _ui ? _ui.ta.value : ((d[k] || {}).text || '');
-    // What the description keeps of its own with the draft (phase V26.5: the frames chat's shot and its choices).
+    // What the description keeps of its own with the draft (the frames chat's shot and its choices).
     const extra = typeof set.draftExtra === 'function' ? set.draftExtra() : null;
     if (text.trim() || _atts.length || extra) d[k] = Object.assign({ text, atts: _atts.slice(0, S.maxAtts) }, extra ? { extra } : {});
     else delete d[k];
@@ -445,7 +442,7 @@ export function createChat(make) {
   }
   function _loadDraft(k, memo) {
     const d = stored(S.keys.draft, {})[_lk(k)] || {};
-    // (phase V15) Its empty numbered places too.
+    // Its empty numbered places too.
     _atts = (Array.isArray(d.atts) ? d.atts : []).filter(a => a && (a.path || a.hole)).slice(0, S.maxAtts);
     // The row as it was left there is not a change by hand: the counter comes back with it.
     _attSeq = memo ? memo.attSeq : _attSeq + 1;
@@ -464,21 +461,21 @@ export function createChat(make) {
   }
 
   // ── The attachment row ────────────────────────────────────────────────────
-  // (phase V6, the owner 2026-10-06) A description may lay it out as a ZONE - set.zone(): { parts: [{ kind, word, room,
+  // A description may lay it out as a ZONE - set.zone(): { parts: [{ kind, word, room,
   // off, none, slots }] }, the video chat's pictures, clips and sounds side by side. A part shows ONE empty place, and
   // the next appears beside it as things are attached, up to what the model takes - thirty places are never drawn at
   // once - and scrolls sideways. A part may hold SLOTS (the video chat's first and last frames, the frames chat's person,
   // place and products): every cell wears the slot's name, a slot shows one empty place at a time up to its most, and
   // "other" closes the part for what no slot asks for. An empty
-  // place pressed opens the picker on it (phase V13) - its slot ARMED while the picker is open, so whatever is pressed
-  // or brought in there goes into it. Without a zone it is the one row it always was.
+  // place pressed opens the picker on it - its slot ARMED while the picker is open, so whatever is pressed
+  // or brought in there goes into it. Without a zone it is one row.
   //
-  // (phase V15, the owner 2026-10-07) A thing taken out of the zone leaves its NUMBERED PLACE EMPTY, so the numbers
+  // A thing taken out of the zone leaves its NUMBERED PLACE EMPTY, so the numbers
   // after it - and the prompt that names them - stay: picture 1 taken off to put another person in is still picture 1.
   // An empty place - a hole, { hole, kind, slot, id } in the row - is filled by the next thing for its part or slot,
   // opens the picker on itself when pressed, and closes with its cross: then the numbers after it move up. One at the
   // END of its part's numbers holds nothing up and goes by itself. A send waits while one is open (ctx.holeWhy). A thing
-  // in the zone pressed opens the picker on ITS place, on it - another pressed there takes its place and its number; a
+  // in the zone pressed does nothing - another in its place is its cross, then the "+" of the place that stays; a
   // clip's or a sound's seconds open the part that goes. The pictures chat's zone has one part and no slots.
   let _armed = null;            // { kind, slot } - the slot the next attachment goes into, while the picker is open
   let _grew = '';               // the part something was just attached to - its row comes to its end
@@ -524,7 +521,7 @@ export function createChat(make) {
     return may ? may.key : '';
   }
 
-  // (phase V15) The place a new thing of this kind goes into, when it is not a new one at the end: the one the picker is
+  // The place a new thing of this kind goes into, when it is not a new one at the end: the one the picker is
   // open on, else the first empty numbered place it fits (in the armed slot, while one is armed).
   function _placeFor(kind) {
     if (_pickAt && _pickAt.target) {
@@ -544,10 +541,10 @@ export function createChat(make) {
     if (z) {
       const p = z.parts.find(x => x.kind === kind);
       if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
-      // (phase V26.5) A slot named by the description - the frames chat puts the character and the place into their own:
+      // A slot named by the description - the frames chat puts the character and the place into their own:
       // its empty numbered place when it has one, else a new place in it while the slot and the part have room.
       const named = o && typeof o.slot === 'string' && p.slots ? p.slots.find(s => s.key === o.slot) : null;
-      // `atEnd` (phase V15): a new place after the others - the storyboard is the last picture.
+      // `atEnd`: a new place after the others - the storyboard is the last picture.
       into = named ? (_atts.find(a => a.hole && _kindOf(a) === kind && a.slot === named.key) || null)
         : o && o.atEnd ? null : _placeFor(kind);
       if (named) {
@@ -571,11 +568,11 @@ export function createChat(make) {
         return;
       }
     }
-    // (phase V26.6) A place that takes only some things says why, whichever way the thing came (the picker, a file).
+    // A place that takes only some things says why, whichever way the thing came (the picker, a file).
     const refused = typeof S.refuseAt === 'function' ? S.refuseAt(slot, path) : '';
     if (refused) { _say(refused); if (_picking) Pick.pickSay(refused); return; }
     _say('');
-    // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out); (phase V15)
+    // A clip or a sound comes with its poster, its length and the part of it that goes (in/out);
     // a thing that says what it is for - a voice from the picker's voices - with its role and its name.
     const att = { path, name: name || '', kind, slot };
     for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
@@ -600,11 +597,11 @@ export function createChat(make) {
     _draftLater();
   }
 
-  // Taken out: in the zone its place stays, empty and numbered (phase V15) - unless nothing comes after it.
+  // Taken out: in the zone its place stays, empty and numbered - unless nothing comes after it.
   function _detach(path) {
     const i = _atts.findIndex(a => a.path === path);
     if (i < 0) return;
-    // (phase V26.5) The description hears what was taken out - the frames chat puts the person and the place back when
+    // The description hears what was taken out - the frames chat puts the person and the place back when
     // the frame it was changing goes.
     const gone = _atts[i];
     if (typeof S.onDetach === 'function' && S.onDetach(gone) === true) return;
@@ -621,7 +618,7 @@ export function createChat(make) {
     _draftLater();
   }
 
-  // (phase V16) Everything in the zone replaced: a message's attachments put back, or none at all.
+  // Everything in the zone replaced: a message's attachments put back, or none at all.
   function _useAtts(list) {
     _atts = [];
     _armed = null;
@@ -662,7 +659,7 @@ export function createChat(make) {
     return cut;
   }
 
-  // (phase V15) Why a send cannot go yet: the first empty numbered place of a part that takes things - the numbers in
+  // Why a send cannot go yet: the first empty numbered place of a part that takes things - the numbers in
   // the prompt would move under it. It blinks; null when there is none.
   function _holeWhy() {
     const z = _zone();
@@ -758,7 +755,7 @@ export function createChat(make) {
     if (_picking) Pick.pickChanged();
   }
 
-  // (phase V26.5) A part laid out as GROUPS of its slots - the frames chat's two fields, the person and the place, and
+  // A part laid out as GROUPS of its slots - the frames chat's two fields, the person and the place, and
   // what else goes - each a box of its own with its word and count; the numbers still count across the whole part.
   function _groupBox(p, g, num) {
     const box = el('div', 'mv3-ig-part is-' + p.kind + ' is-group' + (g.cls ? ' ' + g.cls : ''));
@@ -790,12 +787,12 @@ export function createChat(make) {
       return frag;
     }
     const box = el('div', 'mv3-ig-part is-' + p.kind);
-    // Its places in order - empty ones too (phase V15).
+    // Its places in order - empty ones too.
     const mine = _ordered().filter(a => _kindOf(a) === p.kind);
     const real = mine.filter(a => !a.hole);
     const head = el('div', 'mv3-ig-part-h', capWord(p.word));
     if (p.room && !p.off) head.appendChild(el('b', null, real.length + ' / ' + p.room));
-    // (phase V16) A part's own word on its head line - the video chat's frames going as references.
+    // A part's own word on its head line - the video chat's frames going as references.
     if (p.note && p.room && !p.off) {
       const nt = el('span', 'mv3-ig-part-note', p.note);
       nt.title = p.noteLong || p.note;
@@ -809,7 +806,7 @@ export function createChat(make) {
       box.title = why || '';
       box.classList.add('is-off');
       if (real.length) {
-        // (phase V7) Attached under a model that took them: they stay in sight, each with its cross, until taken off
+        // Attached under a model that took them: they stay in sight, each with its cross, until taken off
         // or another model takes them again - the send says why it will not go with them.
         for (const a of real) row.appendChild(_cell(_filled(a, num(a)), '', ''));
       } else if (p.slots && p.slots.length) {
@@ -818,12 +815,12 @@ export function createChat(make) {
       box.appendChild(row);
       return box;
     }
-    // (phase V7) A clip let go over this part of the zone - from a lane of the timeline - is attached here, the part
+    // A clip let go over this part of the zone - from a lane of the timeline - is attached here, the part
     // of its file the timeline plays (timeline-b.js asks for [data-drop-kind]; the description takes 'mv3:clip-out').
     if (p.kind !== 'image') box.dataset.dropKind = p.kind;
     // A thing, or its empty place, in a cell wearing its slot's name. A slot or a part with an empty place offers no
     // other: that place is where the next one goes.
-    // (phase V15) A voice and a storyboard wear their word, so the message can say what each is by its number.
+    // A voice and a storyboard wear their word, so the message can say what each is by its number.
     const tag = (a) => (a.role === 'voice' || a.role === 'storyboard' ? a.role : '');
     const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
       : _cell(_filled(a, num(a), p), tag(a) || (s ? (s.label || s.key) : ''),
@@ -840,7 +837,7 @@ export function createChat(make) {
       const rest = mine.filter(x => !keys.includes(x.slot));
       for (const a of rest) put(a, other, false);
       // "other" only where the room is more than the part's own slots can still take - an "other" beside a slot that
-      // takes all the room would offer a thing the model does not take (phase V7.5).
+      // takes all the room would offer a thing the model does not take.
       const open = p.slots.reduce((n, s) => n + Math.max(0, s.max - mine.filter(a => a.slot === s.key).length), 0);
       if (!rest.some(a => a.hole) && mine.length < p.room && p.room - mine.length > open) row.appendChild(_empty(p, other, false, false));
     } else {
@@ -855,8 +852,8 @@ export function createChat(make) {
   }
 
   // An attached thing: its picture, its NUMBER - with more than one, the message has to say which is which - and a cross.
-  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go; a clip's or a sound's
-  // seconds open the part that goes (S.trimFor). (V91 block 3, the owner's (чк19г)) A press on it does nothing - another
+  // A clip shows its poster and a sound a note, each with the seconds of it that go; a clip's or a sound's
+  // seconds open the part that goes (S.trimFor). A press on it does nothing - another
   // in its place is its cross, then the "+" of the place that stays with its number -, and it has no buttons but those:
   // the pointer resting on a picture or a clip shows it larger over the chat's field (peekShow), a clip playing there
   // without its sound.
@@ -876,12 +873,12 @@ export function createChat(make) {
       cell.addEventListener('mouseenter', () => peekShow({ img: thumbOf(a.path, 'main') }, cell));
       cell.addEventListener('mouseleave', peekHide);
       cell.title = a.name || '';
-      // (phase V16) A picture that does not go as things are - dimmed, its cross kept, the reason on it (the video
+      // A picture that does not go as things are - dimmed, its cross kept, the reason on it (the video
       // chat: one beyond the frames' places).
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
       if (st.off) { cell.classList.add('is-dim'); cell.title = st.off; }
     } else {
-      // (phase V17) A clip shows its own still when it has one - Kling's first frame, picked on its slider.
+      // A clip shows its own still when it has one - Kling's first frame, picked on its slider.
       if (kind === 'video' && (a.still || a.poster)) {
         const img = document.createElement('img');
         img.src = a.still || thumbOf(a.poster, 'strip');
@@ -931,7 +928,7 @@ export function createChat(make) {
     return c;
   }
 
-  // An empty place - a slot's, in a part with slots: pressed, the picker opens on it (phase V13), or - for a description
+  // An empty place - a slot's, in a part with slots: pressed, the picker opens on it, or - for a description
   // without one - this computer is asked for a file.
   function _empty(p, s, dim, must) {
     const key = s ? s.key : '';
@@ -944,7 +941,7 @@ export function createChat(make) {
     c.dataset.slot = key;
     if (must) c.classList.add('is-req');
     if (dim) { c.classList.add('is-off'); b.disabled = true; return c; }
-    // (phase V27) The place a clip by a link goes into: how far it is, instead of "+".
+    // The place a clip by a link goes into: how far it is, instead of "+".
     if (_linking && !_linkShown && !_linking.target && _linking.kind === p.kind && (_linking.slot == null || _linking.slot === key)) {
       _linkShown = true;
       c.classList.add('is-linking');
@@ -961,7 +958,7 @@ export function createChat(make) {
     return c;
   }
 
-  // (phase V15) An empty NUMBERED place - a thing taken out: its number stays, "+" opens the picker on it, the cross
+  // An empty NUMBERED place - a thing taken out: its number stays, "+" opens the picker on it, the cross
   // closes it (the numbers after it move up).
   function _holeCell(p, h, n, s, must) {
     const box = el('div', 'mv3-ig-att is-hole');
@@ -987,7 +984,7 @@ export function createChat(make) {
     c.dataset.kind = p.kind;
     c.dataset.slot = (s && s.key) || '';
     c.dataset.hole = h.id;
-    // (phase V27) The numbered place a clip by a link goes into says how far it is.
+    // The numbered place a clip by a link goes into says how far it is.
     if (_linking && _linking.target === h) {
       _linkShown = true;
       c.classList.add('is-linking');
@@ -998,12 +995,11 @@ export function createChat(make) {
     return c;
   }
 
-  // ── The picker (phase V13, the owner 2026-10-07) ──────────────────────────
+  // ── The picker ──────────────────────────
   // For ONE place: its part, and in a part with slots its slot - "other" ('') for what no slot asks for, null for a
   // part without slots. The slot is armed while the window is open; the window closes by itself once the place is full.
-  // (phase V15) `target`: an empty numbered place - what is pressed there takes that place and its number. (V91 block 3, the
-  // owner's (чк19г)) A thing in the zone pressed no longer opens the window on it: another in its place is its cross, then
-  // this "+".
+  // `target`: an empty numbered place - what is pressed there takes that place and its number. A thing in the zone
+  // pressed does not open the window on it: another in its place is its cross, then this "+".
   let _picking = false;
   let _pickAt = null;           // { kind, slot, target, filled } of the place the picker is open on
   function _openPick(p, s, target) {
@@ -1024,7 +1020,7 @@ export function createChat(make) {
       hint: (s && s.hint) || '',
       project: { key: _key || '', title: Store.title() || '', plinks: Store.unbound() ? '' : (_key || '') },
       sources: P.sources(kind),
-      // (phase V55) The window with the tree - the almanac's size, over the middle of this chat.
+      // The window with the tree - the almanac's size, over the middle of this chat.
       tree: typeof P.tree === 'function' ? P.tree(kind) : null,
       anchor: _ui ? _ui.root : null,
       start: P.start(kind, s),
@@ -1042,19 +1038,19 @@ export function createChat(make) {
         }
         _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0, role: it.role || '', label: it.label || '' });
       },
-      // (phase V26.6) ...and the place it would go into: the frames chat's product place takes only a product of Props.
+      // ...and the place it would go into: the frames chat's product place takes only a product of Props.
       why: (it) => P.why(it, kind, slot),
-      // (phase V26.6, the owner's (пр3)) A place's own way to make what goes into it - the product place's "+ new prop".
+      // A place's own way to make what goes into it - the product place's "+ new prop".
       make: typeof P.make === 'function' ? P.make(kind, slot) : null,
       computer: {
         word: p.word, hint: (P.upWords || {})[kind] || '',
         open: () => { const input = _fileOf(kind); if (input) input.click(); },
         accepts: (f) => !!(U && U.ok(f)),
         drop: (files) => _upload(files),
-        // (phase V57, (ок4)) A picture's link let go over the window: downloaded into the folder open there.
+        // A picture's link let go over the window: downloaded into the folder open there.
         link: kind === 'image' && U ? (url) => _linkPicture(url, { kind, cat: Pick.pickFolder() }) : null,
       },
-      // (phase V27) A clip by a link, where the description takes them (`S.links`: { video: true }).
+      // A clip by a link, where the description takes them (`S.links`: { video: true }).
       link: (S.links && S.links[kind]) ? {
         hint: 'At the best quality there is, without a login - into VIDEO → Uploads itself, and into this place.',
         add: (url) => _linkIn(url, kind),
@@ -1118,9 +1114,9 @@ export function createChat(make) {
     }, { passive: false });
   }
 
-  // ── A clip by a link (phase V27, the owner 2026-10-12) ──────────────────────
+  // ── A clip by a link ──────────────────────
   // Into the place the picker is open on: the server downloads it (lib/link-queue.js - the best there is, no login) into
-  // VIDEO -> Uploads itself (phase V56), as this chat's own upload files a clip, and it is attached the moment it is in.
+  // VIDEO -> Uploads itself, as this chat's own upload files a clip, and it is attached the moment it is in.
   // Meanwhile the empty place it goes into says how far (`_linking`, painted by _empty / _holeCell) and the line over the
   // box the rest; a send waits for it as for an upload. One at a time. Resolves with what to say when it did not come
   // or did not go into its place ('' - it did).
@@ -1182,12 +1178,10 @@ export function createChat(make) {
 
   // ── Bringing files in from this computer ──────────────────────────────────
   // Through the chat's own door: the file is filed on its shelf IN THE ROOT OF ITS KIND - IMAGES, VIDEO -> Uploads,
-  // SFX -> My sounds (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images") - the thread
-  // keeps a path, never the bytes - and goes straight into the row. Every way in is this one: the window's "+ from this
+  // SFX -> My sounds - the thread keeps a path, never the bytes - and goes straight into the row. Every way in is this one: the window's "+ from this
   // computer…" and a drop over it, a drop on the chat, the column's "+", a paste into the box. Nothing else uploads it:
   // the Library's own drop stands down while a chat shows, or one drop would file it twice.
-  // (phase V57, the owner's (ок2), (ок3): "либо в папку которую создал пользователь и кинул в нее") Through the attachment
-  // window and the column's "+" it goes INTO THE FOLDER OPEN there instead, when that is a folder of the person's own
+  // Through the attachment window and the column's "+" it goes INTO THE FOLDER OPEN there instead, when that is a folder of the person's own
   // (`into` { kind, cat } - chat-pick.js pickFolder; the server has the last word, routes/mv3-img.js `_folderFor`).
   // Resolves with the kinds that came in ({ image: { paths, at }, ... } - `at` the tree's node they went into).
   function _upload(files, into) {
@@ -1198,7 +1192,7 @@ export function createChat(make) {
     return run;
   }
 
-  // (phase V7) What a description takes from this computer, by kind: `S.uploads` { image, video, audio } - each its own
+  // What a description takes from this computer, by kind: `S.uploads` { image, video, audio } - each its own
   // door ({ url, field, accept, ok(file), att(item) }) - or the one `S.upload` for pictures.
   const _U = (k) => (S.uploads ? S.uploads[k] || null : (k === 'image' ? S.upload : null));
   const _kindOfFile = (f) => ['image', 'video', 'audio'].find(k => _U(k) && _U(k).ok(f)) || '';
@@ -1214,10 +1208,10 @@ export function createChat(make) {
 
   async function _uploadNow(files, into) {
     let all = [...(files || [])].filter(f => f && _kindOfFile(f));
-    // (phase V13) While the picker is open, files are for its place: its kind only, and no more than the place has room
+    // While the picker is open, files are for its place: its kind only, and no more than the place has room
     // for - the rest would spill into the other slots of the part.
     let note = '';
-    // (phase V57) ...and they go into the folder open in it.
+    // ...and they go into the folder open in it.
     if (!into && _picking && _pickAt) into = { kind: _pickAt.kind, cat: Pick.pickFolder() };
     if (_picking && _pickAt) {
       const U = _U(_pickAt.kind);
@@ -1254,7 +1248,7 @@ export function createChat(make) {
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
       } else bad = (d && d.error) || 'it could not be added';
     }
-    // (review V7) What the attaching said of a file that came in ("…the first 15 s go", why it was not taken) stays: only
+    // What the attaching said of a file that came in ("…the first 15 s go", why it was not taken) stays: only
     // the "adding…" line goes, or the words of what was not added stand in its place.
     if (bad) _say('Not added: ' + bad);
     else if (note) _say(note);
@@ -1265,7 +1259,7 @@ export function createChat(make) {
     return Object.fromEntries(filed);
   }
 
-  // ── A picture by its link (phase V57, the owner's (ок4): "ни ссылка перетещеная из браузера ...") ─────────────────
+  // ── A picture by its link ─────────────────
   // A picture dragged from a browser onto the chat or the attachment window: the server downloads it (routes/mv3-img.js
   // POST /api/mv3/img/link - a picture's own address only; a page's is refused in words, nothing is pulled out of pages),
   // makes it sendable as a file from this computer and files it - onto the chat into IMAGES itself, through the window or
@@ -1317,10 +1311,10 @@ export function createChat(make) {
     return g.stage ? g.stage + '…' : S.busyWord + '…';
   }
 
-  // (phase V6) A card is drawn again when what it IS changes - never for the text being typed into it; its clips are
-  // its description's to keep fresh in place (the owner, 2026-10-06: a made card stays a field to edit and make again
+  // A card is drawn again when what it IS changes - never for the text being typed into it; its clips are
+  // its description's to keep fresh in place (a made card stays a field to edit and make again
   // from, and a clip landing must not rebuild it under the typing).
-  // (phase V26.5) A description may add what else makes a message what it is (`msgSig` - the frames chat's used ideas).
+  // A description may add what else makes a message what it is (`msgSig` - the frames chat's used ideas).
   const _sig = (m) => ((m.card && typeof S.cardSig === 'function') ? [m.text || '', S.cardSig(m)]
     : [m.text || ''].concat(_gensOf(m).map(g => g.id + ':' + g.state + ':'
       + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))).join('|')
@@ -1388,7 +1382,7 @@ export function createChat(make) {
   function _paintThread(toEnd) {
     const host = _ui.thread;
     const atEnd = toEnd || host.scrollTop + host.clientHeight >= host.scrollHeight - 40;
-    // (phase V6) The description follows the thread as it is now (the video chat: its working messages, painted in place).
+    // The description follows the thread as it is now (the video chat: its working messages, painted in place).
     if (typeof S.onThread === 'function') S.onThread(_thread);
     const ids = new Set(_thread.map(m => m.id));
     for (const [id, n] of _nodes) {
@@ -1399,9 +1393,9 @@ export function createChat(make) {
     }
     let empty = host.querySelector('.mv3-ig-empty');
     if (!_thread.length && !_pend && !_notice) {
-      // (phase V73 block 0) The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
+      // The Library's and Home's chats are on the draft: the description's `emptyDraft` when it has one.
       const said = !_key ? T.emptyNoProject : (Store.unbound() && T.emptyDraft) ? T.emptyDraft : T.empty;
-      // (phase V73 block 2, step 2b) The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
+      // The shared part, its icon the chat's (`emptyIcon`, a picture by default); made again only
       // when its words change.
       if (!empty || empty.dataset.said !== said) {
         const e = emptyEl(said, { icon: T.emptyIcon || 'image', cls: 'mv3-ig-empty' });
@@ -1412,7 +1406,7 @@ export function createChat(make) {
     } else if (empty) empty.remove();
 
     let prev = null;
-    // (phase V18.3) A description may draw a send as ONE message: the person's turn is not drawn apart (`hidden`), and
+    // A description may draw a send as ONE message: the person's turn is not drawn apart (`hidden`), and
     // the answer after it is handed it, to draw what was asked at its head.
     let asked = null;
     const busy = _busyIds();
@@ -1437,14 +1431,14 @@ export function createChat(make) {
         n.away = false;
         for (const g of _gensOf(m)) { const p = n.progs.get(g.id); if (p) p.say(_stageWords(g)); }
       }
-      // (phase V31) Read on every paint: a turn of the person is busy while ITS answers are, and they are other nodes.
+      // Read on every paint: a turn of the person is busy while ITS answers are, and they are other nodes.
       if (n.del) n.del.hidden = busy.has(m.id);
       if (m.role !== 'user') asked = null;
       const want = prev ? prev.nextSibling : host.firstChild;
       if (n.el !== want) host.insertBefore(n.el, want);
       prev = n.el;
     }
-    // (phase V77) The page's word after the messages.
+    // The page's word after the messages.
     let word = host.querySelector(':scope > .mv3-ig-notice');
     if (!_notice) { if (word) word.remove(); }
     else {
@@ -1461,13 +1455,13 @@ export function createChat(make) {
     if (atEnd) host.scrollTop = host.scrollHeight;
   }
 
-  // ── A MESSAGE TAKEN AWAY (phase V31, the owner 2026-10-16) ─────────────────
-  // A faint ✕ in the corner of every message of every chat, brighter under the pointer (ч4, ч8). The first press asks
-  // "really?" in its place and the second takes the message away (ч5: "даблкликом с really?") - with what it was asked with
-  // and the records of what it made; the clips and pictures stay on their shelves and on the timeline (ч6, the server's
+  // ── A MESSAGE TAKEN AWAY ─────────────────
+  // A faint ✕ in the corner of every message of every chat, brighter under the pointer. The first press asks
+  // "really?" in its place and the second takes the message away - with what it was asked with
+  // and the records of what it made; the clips and pictures stay on their shelves and on the timeline (the server's
   // lib/mv3-chat.js remove). It goes back to ✕ after 3 s, when the pointer leaves the message, or on Escape.
   function _delOn(b, m) {
-    // (phase V73 block 2) the shared cross, "Really?" by js/really.js (3 s, Escape and the pointer leaving the message let go)
+    // the shared cross, "Really?" by js/really.js (3 s, Escape and the pointer leaving the message let go)
     const x = el('button', 'mv3-ig-del u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
     x.title = 'Delete this message - what it made stays on its shelf and on the timeline';
@@ -1493,7 +1487,7 @@ export function createChat(make) {
     return x;
   }
 
-  // What cannot be taken away now (ч7): a message with something still being made in it - a clip or a picture on its
+  // What cannot be taken away now: a message with something still being made in it - a clip or a picture on its
   // countdown, a card a writer is writing, a storyboard being drawn - and a turn of the person whose answers have one (the
   // server takes a turn's answers with it).
   function _busyIds() {
@@ -1509,19 +1503,19 @@ export function createChat(make) {
   }
 
   function _bubble(m, progs, asked) {
-    // (phase V6) A card is the description's to draw.
-    // (phase V26.5) `asked` - the person's turn this answers, when the description hides the turns (`hidden`).
+    // A card is the description's to draw.
+    // `asked` - the person's turn this answers, when the description hides the turns (`hidden`).
     if (m.card && typeof S.cardBubble === 'function') {
       const c = S.cardBubble(m, progs, asked);
       if (c) return c;
     }
-    // (phase V26.5) Any other message a description draws itself - the frames chat's ideas and its frames.
+    // Any other message a description draws itself - the frames chat's ideas and its frames.
     if (typeof S.bubble === 'function') {
       const c = S.bubble(m, progs, asked);
       if (c) return c;
     }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));
-    // (phase V18.3) What was asked, at the head of the answer - the description draws it.
+    // What was asked, at the head of the answer - the description draws it.
     if (m.role !== 'user' && typeof S.askedHead === 'function') {
       const h = S.askedHead(m, asked);
       if (h) b.appendChild(h);
@@ -1614,7 +1608,7 @@ export function createChat(make) {
     _timer = 0;
     if (!_chat) return;
     const busy = _pending.size || _feed.some(x => x.state === 'pending')
-      // (phase V6) A description's own waiting in the thread - the video chat's card being written.
+      // A description's own waiting in the thread - the video chat's card being written.
       || (typeof S.busy === 'function' && S.busy(_thread));
     _timer = setTimeout(() => { _timer = 0; if (_chat && !document.hidden) _reload(); else _schedule(); }, busy ? POLL_MS : IDLE_MS);
   }
@@ -1625,21 +1619,21 @@ export function createChat(make) {
     if (_sending || !_ui) return;
     const ta = _ui.ta;
     const at = _ui.go;
-    // (phase V7.3) A description may stand in for an empty box - Kling motion control's standard prompt.
+    // A description may stand in for an empty box - Kling motion control's standard prompt.
     const text = ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : '');
-    // (phase V16) A description may let the box go empty - the video chat's writer makes a clip from the attachments.
+    // A description may let the box go empty - the video chat's writer makes a clip from the attachments.
     if (!text && !(typeof S.emptyOk === 'function' && S.emptyOk())) {
       ta.focus();
       ta.classList.add('is-bad');
       setTimeout(() => ta.classList.remove('is-bad'), 900);
       return;
     }
-    // (phase V15) An empty numbered place first: the numbers in the prompt would move under it.
+    // An empty numbered place first: the numbers in the prompt would move under it.
     const why = _holeWhy() || set.ready();
     if (why) { note(at, why[0], why[1]); return; }
     _sending = true;
     _ui.go.disabled = true;
-    // (phase V18.3, the owner 2026-10-08) THE MESSAGE IS DRAWN AT THE PRESS - what was asked, and "sending…" - and the
+    // THE MESSAGE IS DRAWN AT THE PRESS - what was asked, and "sending…" - and the
     // answer takes its place in the thread; a refusal takes it away, the box and the zone left as they were.
     _dropPend();
     if (typeof S.sending === 'function') {
@@ -1661,16 +1655,16 @@ export function createChat(make) {
         try { await _ensureProject(); }
         catch (e) { _adopt = false; note(at, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
       }
-      // The conversation's key (phase V49): a highlights fragment talks in its project's, and its Alerts row leads back to
+      // The conversation's key: a highlights fragment talks in its project's, and its Alerts row leads back to
       // the project with this chat open.
       const key = Views.chatKey(Store.key());
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
-          // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or (phase V26.5)
+          // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or
           // the place the description names (the frames chat's).
-          // (phase V64 block 4) From the Library's unbound chat - the Library (chat-owner.js whereOf).
+          // From the Library's unbound chat - the Library (chat-owner.js whereOf).
           where: typeof S.where === 'function' ? S.where(key) : Store.whereOf(key, S.name),
         })),
       });
@@ -1679,7 +1673,7 @@ export function createChat(make) {
       ta.value = '';
       _notice = '';
       _grow();
-      // (phase V16) What the description does once a send is in (the video chat: the zone emptied - its attachments are
+      // What the description does once a send is in (the video chat: the zone emptied - its attachments are
       // packed into the writer's message).
       if (typeof S.afterSend === 'function') S.afterSend(d);
       _saveDraft(_key || '');
@@ -1698,8 +1692,8 @@ export function createChat(make) {
     _pend = null;
   }
 
-  // The writer on or off - the pen in the bar, or (phase V15) the description's own switch through ctx.setWriting.
-  // (phase V73 block 4) How many at once: the layers icon and the number, the words in its title.
+  // The writer on or off - the pen in the bar, or the description's own switch through ctx.setWriting.
+  // How many at once: the layers icon and the number, the words in its title.
   function _paintN() {
     const b = _ui && _ui.nBtn;
     if (!b) return;
@@ -1707,7 +1701,7 @@ export function createChat(make) {
     b.title = 'How many to make at once: ' + _n + ' - press for ' + S.counts[(S.counts.indexOf(_n) + 1) % S.counts.length] + '. Each is its own attempt.';
     b.setAttribute('aria-label', 'How many at once: ' + _n);
   }
-  // (phase V73 block 4) THE PRICE BY THE SEND: the column's price box (a model column paints it) is read into the bar - its
+  // THE PRICE BY THE SEND: the column's price box (a model column paints it) is read into the bar - its
   // figure beside the button, the whole phrase in the title - and the box itself is not shown.
   function _priceFrom(box) {
     const p = _ui && _ui.price;
@@ -1723,7 +1717,7 @@ export function createChat(make) {
     const pen = _ui && _ui.pen;
     if (!pen) return;
     pen.classList.toggle('on', _write);
-    pen.classList.toggle('is-on', _write);   // (phase V73 block 2) pressed: the selected look (б2-13)
+    pen.classList.toggle('is-on', _write);   // pressed: the selected look
     pen.title = _write
       ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
       : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
@@ -1735,7 +1729,7 @@ export function createChat(make) {
     if (typeof set.onPen === 'function') set.onPen(_write);
   }
 
-  // (phase V55, (гн5)) One line of 26 px, growing with the words up to six lines (css/mv3-imagen.css .mv3-ig-say).
+  // One line of 26 px, growing with the words up to six lines (css/mv3-imagen.css .mv3-ig-say).
   const SAY_MAX = 106;
   function _grow() {
     const ta = _ui.ta;
@@ -1744,18 +1738,18 @@ export function createChat(make) {
     ta.style.height = 'auto';
     // scrollHeight is the words and the padding; the box's height takes its border too.
     ta.style.height = Math.min(SAY_MAX, ta.scrollHeight + 2) + 'px';
-    // (phase V26.6) The pictures' numbers marked over the box follow a value set by script too.
+    // The pictures' numbers marked over the box follow a value set by script too.
     if (ta._imw) ta._imw.refresh();
   }
 
   // ── The right column ──────────────────────────────────────────────────────
-  // (phase V55, the owner's (гн7)) The FOLDER COLUMN (js/folder-column.js): a dropdown of the media tree - "this project"
+  // The FOLDER COLUMN (js/folder-column.js): a dropdown of the media tree - "this project"
   // first, then the description's roots (the pictures chat: REFERENCES and IMAGES with all their folders) -, the open
   // folder's folders as tiles, then its pictures. "this project" is this project's own results, read with the thread.
-  // (phase V60.2) A description's `sig` says what its column offers now (the video chat: which tops, the longest clip): read
+  // A description's `sig` says what its column offers now (the video chat: which tops, the longest clip): read
   // again only when it changed.
   let _colSig = null;
-  let _colWait = false;      // (V50 speed) the window has just opened: the column is read once the settings are in (_show)
+  let _colWait = false;      // the window has just opened: the column is read once the settings are in (_show)
   let _opens = 0;
   const _sigNow = () => (S.column && typeof S.column.sig === 'function' ? String(S.column.sig()) : '');
   function _loadColumn() {
@@ -1775,8 +1769,8 @@ export function createChat(make) {
     if (!_col.isOwn()) _col.paint();
   }
 
-  // (phase V56, (ги4)) The column's "+": the picture goes into IMAGES itself, and the column opens there with it in view -
-  // (phase V57, the owner's (ок3)) into the folder open in the column when it is a folder of the person's own in IMAGES
+  // The column's "+": the picture goes into IMAGES itself, and the column opens there with it in view -
+  // into the folder open in the column when it is a folder of the person's own in IMAGES
   // (not a required one, nor anything under Environments / Lookbooks - the server's rule), and the column stays on it.
   let _colFile = null;
   function _colFolder() {
@@ -1784,7 +1778,7 @@ export function createChat(make) {
     const n = s && s.node;
     return n && n.kind === 'images' && n.cat && !n.locked ? String(n.cat) : '';
   }
-  // (phase V60.2) A column of several kinds (`column.multi` - the video chat): the folder open is the person's own folder of
+  // A column of several kinds (`column.multi` - the video chat): the folder open is the person's own folder of
   // one kind's home (`pick.lands` - IMAGES, VIDEO -> Uploads, My sounds) -> { kind, cat }, else null - the server has the last
   // word (`_folderFor`), as through the attachment window.
   function _colInto() {
@@ -1794,8 +1788,7 @@ export function createChat(make) {
     const kind = n && n.cat && !n.locked ? Object.keys(lands).find(k => lands[k] === n.kind) : '';
     return kind ? { kind, cat: String(n.cat) } : null;
   }
-  // (2026-11-09, the owner: "в корне REFERENCES везде стоят плюсики первой плиткой ... давай поудаляем эти плюсики") Nothing
-  // is brought into REFERENCES - no "+" while one of its folders is open.
+  // Nothing is brought into REFERENCES - no "+" while one of its folders is open.
   function _plusTile() {
     const open = _col ? _col.selected() : null;
     if (open && open.node && open.node.kind === 'references') return null;
@@ -1833,7 +1826,7 @@ export function createChat(make) {
   }
 
   function _tile(it) {
-    // (phase V60.2) The video chat's column holds clips and sounds too.
+    // The video chat's column holds clips and sounds too.
     if (it && it.ftype === 'video') return _clipTile(it);
     if (it && it.ftype === 'audio') return _soundTile(it);
     const t = el('div', 'mv3-ig-card'
@@ -1860,8 +1853,7 @@ export function createChat(make) {
         t.classList.add('is-dragging');
       });
       t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
-      // A press ATTACHES, and a second one takes it back off; ⤢ in its corner opens it large - the folder's pictures, from it
-      // (V91 block 3, the owner's (чк19в)).
+      // A press ATTACHES, and a second one takes it back off; ⤢ in its corner opens it large - the folder's pictures, from it.
       t.addEventListener('click', () => {
         if (_atts.some(a => a.path === it.path)) _detach(it.path);
         else _attach(it.path, it.name);
@@ -1876,7 +1868,7 @@ export function createChat(make) {
     return t;
   }
 
-  // (phase V60.2, the owner's (вч1б)) What the video chat's column holds besides pictures. A press attaches it to its part of
+  // What the video chat's column holds besides pictures. A press attaches it to its part of
   // the zone as the attachment window does - a clip with its poster and length (its part window opens as there), a sound
   // with its length -, a second press takes it off; what the model cannot take of it is said over the box (`pick.why`, `_say`).
   // Dragged, it goes onto a lane as a shelf's tile does.
@@ -1900,7 +1892,7 @@ export function createChat(make) {
   const _secsOf = (v) => (+v > 0 ? (+v).toFixed(1) + 's' : '');
 
   // A clip: its poster at its shape, its length; ▶ in its middle plays it in the Library's viewer and the pointer resting on
-  // it plays it in place without its sound (V91 block 3, the owner's (чк19в)).
+  // it plays it in place without its sound.
   function _clipTile(it) {
     const t = el('div', 'mv3-ig-card is-clip'
       + (it.state === 'pending' ? ' is-busy' : it.state === 'failed' ? ' is-fail' : '')
@@ -2009,7 +2001,7 @@ export function createChat(make) {
   // ── The zone's enlarged view ──────────────────────────────────────────────
   // ONE PLACE, ALWAYS THE SAME: the bottom right of the conversation, over the thread - learnt once.
   // It closes itself the moment the pointer is anywhere but what opened it, or that thing is repainted
-  // away; a wheel and a press close it too. (V91 block 3, the owner's (чк19г)) Only the zone's things have it - every
+  // away; a wheel and a press close it too. Only the zone's things have it - every
   // chat's, the frames chat's too: `what` { img, clip } - a picture larger, a clip playing in it without its sound, over its
   // poster (hover-play.js).
   let _peek = null;
@@ -2065,7 +2057,7 @@ export function createChat(make) {
   }
 
   // ── Narrow or wide ────────────────────────────────────────────────────────
-  // Narrower than 700px, the settings column folds into one row above the input (the owner's answer 3).
+  // Narrower than 700px, the settings column folds into one row above the input.
   function _fit() {
     if (!_ui) return;
     const w = _ui.root.clientWidth;
@@ -2093,13 +2085,13 @@ export function createChat(make) {
     const setBox = el('div', 'mv3-ig-set');
     const left = el('div', 'mv3-ig-scroll');
     const said = el('div', 'mv3-ig-said u-status is-bad');
-    // (phase V15) A description's own foot of the column, under everything - the video chat's almanac.
+    // A description's own foot of the column, under everything - the video chat's almanac.
     setBox.append(left, said, ...(typeof S.columnFoot === 'function' ? S.columnFoot() : []));
 
     const chat = el('div', 'mv3-ig-chat');
     const thread = el('div', 'mv3-ig-thread');
     const atts = el('div', 'mv3-ig-atts');
-    // A door from this computer for every kind the description takes (phase V7) - pictures' is `file`, as it was.
+    // A door from this computer for every kind the description takes - pictures' is `file`.
     const files = {};
     for (const k of ['image', 'video', 'audio']) {
       const U = _U(k);
@@ -2118,8 +2110,8 @@ export function createChat(make) {
     ta.rows = 1;
     ta.placeholder = T.placeholder;
     // THE WRITER: on, the message is rewritten into the shape the chosen model wants; off, the words go
-    // exactly as typed. (phase V15) A description that keeps its own switch for it in its column has no pen here.
-    // (phase V73 block 4, (б4-13) а) the bar's buttons are icons, their words in the title: the writer a pencil, how many at
+    // exactly as typed. A description that keeps its own switch for it in its column has no pen here.
+    // The bar's buttons are icons, their words in the title: the writer a pencil, how many at
     // once the layers with the number, the send an arrow; the price of the press stands right before it (_priceFrom).
     const pen = S.penInBar === false ? null : el('button', 'pen u-btn is-s is-icon');
     if (pen) { pen.type = 'button'; pen.innerHTML = icon('pencil', 14); }
@@ -2133,10 +2125,10 @@ export function createChat(make) {
     const price = el('span', 'mv3-ig-price u-price');
     price.hidden = true;
     bar.append(...[ta, pen, nBtn, price, go].filter(Boolean));
-    // (phase V26.6, the owner's check 2026-10-31, (а)) A description with `markImages` (the frames chat) has the pictures'
+    // A description with `markImages` (the frames chat) has the pictures'
     // numbers - "image 1" - yellow in its box (js/merge-v3/image-words.js).
     if (S.markImages) markField(ta);
-    // (phase V26.5) What a description stands right of the attachment row - the frames chat's `ideas`.
+    // What a description stands right of the attachment row - the frames chat's `ideas`.
     const side = typeof S.attsSide === 'function' ? S.attsSide() : [];
     let attsAt = atts;
     if (side.length) {
@@ -2145,8 +2137,8 @@ export function createChat(make) {
     }
     chat.append(thread, attsAt, ...Object.values(files), bar);
 
-    // The right column - for a description that has one (`column`: the pictures chat; since phase V60.2 the video chat too,
-    // the owner's (вч1б) - its pictures, clips and sounds, `column.multi`).
+    // The right column - for a description that has one (`column`: the pictures chat; the video chat too -
+    // its pictures, clips and sounds, `column.multi`).
     let sash = null, stripBox = null;
     if (S.column) {
       sash = el('div', 'mv3-sash is-v mv3-ig-sash');
@@ -2160,11 +2152,11 @@ export function createChat(make) {
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
         roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
-        // (phase V78, (лч16)) THIS PROJECT's folders - the project's; none in the Library's unbound chat.
+        // THIS PROJECT's folders - the project's; none in the Library's unbound chat.
         plinks: () => (Store.unbound() ? '' : (_key || '')),
-        // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
-        // (phase V78, the owner 2026-11-07) ONE "this project": what this chat made here, and THIS PROJECT's folders and links.
-        // A draft has no THIS PROJECT (the owner 2026-11-07): there the row is what this chat made in the draft - "This draft".
+        // The Library's unbound chat has no project: no "this project" row.
+        // ONE "this project": what this chat made here, and THIS PROJECT's folders and links.
+        // A draft has no THIS PROJECT: there the row is what this chat made in the draft - "This draft".
         own: Store.unbound() ? null : {
           get label() { return Store.isDraft() ? 'This draft' : 'THIS PROJECT'; },
           get empty() { return Store.isDraft() ? 'Nothing made in this draft yet.' : 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.'; },
@@ -2203,7 +2195,7 @@ export function createChat(make) {
       _upload(files);
     });
     // A file dropped anywhere on the chat is an attachment - and only that (library.js stands down).
-    // (phase V57, (ок4)) So is a picture's link dragged from a browser - downloaded into IMAGES itself (_linkPicture); a
+    // So is a picture's link dragged from a browser - downloaded into IMAGES itself (_linkPicture); a
     // drag of this app's own (a tile, a clip - `application/x-…`) is not one.
     const _linkDrag = (dt) => {
       const t = [...((dt && dt.types) || [])];
@@ -2251,6 +2243,6 @@ export function createChat(make) {
     _paintHead();
   }
 
-  // (phase V26.5) `close` - its window hides it; `fit` - its place changed size.
+  // `close` - its window hides it; `fit` - its place changed size.
   return { open, init, isOpen: () => _chat, close: () => { if (_chat) _show(false); }, fit: () => _fit(), ctx };
 }

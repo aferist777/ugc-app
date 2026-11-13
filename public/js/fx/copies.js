@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   COPIES AND MOMENTS (phase V84 block 2, the owner 2026-11-11 "делаем остальные блоки одним походом до конца") - Details, Clasp,
+   COPIES AND MOMENTS - Details, Clasp,
    Film strip, Split, Grid dive, PiP delay, Split screen: video-effects-pack's effects (MIT; their frame-by-frame keys at 30 a
    second, sizes and timings written again for the canvas). Drawn by the page only - live by the preview, baked for the render by
    the app's window with this code (js/merge-v3/fx-draw.js applyFx). Each is draw(g, S) on the clip's window (js/fx/overlays.js
@@ -388,5 +388,5 @@ function splitscreen(g, S) {
   }
 }
 
-/** Every effect of this block by its effect's `draw` key. */
+/** Every effect of this module by its effect's `draw` key. */
 export const COPIES = { details, clasp, strip, split, griddive, pipdelay, splitscreen };

@@ -1,10 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE — THE TIMELINE'S MEDIA INTO THE GENERATION CHATS, AND WHAT THEY MAKE BACK (phase V77, the owner 2026-11-06,
-   docs/local-app/plan/ "Фаза V77", (тч1)-(тч14)).
+   MERGE — THE TIMELINE'S MEDIA INTO THE GENERATION CHATS, AND WHAT THEY MAKE BACK.
 
    The right button on a clip of a video lane (js/merge-v3/timeline-b.js _clipMenu) and the two frame buttons right of
    "cut silence" (js/merge-v3/bar.js) open a chat's window WITH the thing in its zone - the zone emptied first, the thread
-   and the words in the box left as they are (the owner's (тч8а)):
+   and the words in the box left as they are:
      a picture   "animate"            the video chat, the picture as its FIRST FRAME
                  "change"             the pictures chat, the picture to change
      a film      "continue"           the video chat, the last frame the timeline plays as the first frame
@@ -16,11 +15,11 @@
 
    WHERE IT CAME FROM is kept in this browser by the PATH of what went into the zone (`mv3_tl_gen_v1`): the timeline, the
    clip, what was done, the moment of its file. A finished result whose message carries that path has a button under it
-   that lays it back (timeline-b.js genBack, one step to undo), by what was done ((тч10а)-(тч10в)):
+   that lays it back (timeline-b.js genBack, one step to undo), by what was done:
      change -> "In its place" (the picture's file)        animate, as a reference -> "In its place" (the clip's place)
      continue -> "After the clip" (inserted, the lane moves on)   a frame to the video chat -> "Into the cut" (the clip
      cut at the frame, the clip inserted, the lane moves on)      a frame to the pictures chat -> "Above it" (the lane above)
-   No button on a talking head's lines (none is made from them, (тч11а)) nor in the Library's chats (no timeline there).
+   No button on a talking head's lines (none is made from them) nor in the Library's chats (no timeline there).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';

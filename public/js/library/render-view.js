@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A RENDER IN THE LIBRARY'S VIEWER (phase V73, the owner's (рф-1) а, (рф-4) а - the "Render finished" window went).
+   A RENDER IN THE LIBRARY'S VIEWER.
 
    The one place a render is looked at, from any page: the popup a finished render leaves ("Open"), Queue -> open, a
    highlights fragment's "▶ play". It is the Library's viewer (js/library/viewer.js) of the render as the Renders shelf
@@ -8,7 +8,7 @@
               lib/relocate.js; " (2)" when the name is taken)
      Delete   by two presses (js/really.js's words and time): the file, its poster, its .srt and its Queue entry
               (DELETE /api/library/item/renders/:id)
-     Show in folder  (phase V84, the owner's (эф26), 2026-11-11) Explorer on the render's folder with the file picked - the
+     Show in folder  Explorer on the render's folder with the file picked - the
               shell's reveal (desktop/preload.js), so only in the app's window: in a browser the button is not there.
    o.onChanged() after Rename or Delete - the page reads what it shows again (Queue, a highlights card).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -26,7 +26,7 @@ const _json = async (url, opts) => {
   return d;
 };
 
-// (phase V84, (эф26)) Explorer on a render - the app's window only (the shell's reveal); none in a browser.
+// Explorer on a render - the app's window only (the shell's reveal); none in a browser.
 const _reveal = () => { const w = window.ugcWindow; return w && typeof w.reveal === 'function' ? w.reveal : null; };
 /** Whether "Show in folder" can be offered here - the app's window. */
 export const canReveal = () => !!_reveal();

@@ -1,6 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A SOUND'S WAVE WITH A RULER (phase V54, the owner 2026-10-27: "нужно во первых добавить линейку для того чтобы двигать
-   плейхед, а то сейчас двигаются только рамки") - ONE module for the music player of the Library (js/sound/player.js) and
+   A SOUND'S WAVE WITH A RULER - ONE module for the music player of the Library (js/sound/player.js) and
    the Cut window (js/sound/cut-window.js).
 
    A canvas of two bands: the RULER on top - its seconds - and the WAVE under it from the server's peaks (GET
@@ -9,15 +8,12 @@
    through the wave and a FLAG on the ruler, drawn over its ticks so it is always seen; and the playhead, always shown -
    ▶ plays from it.
 
-   One rule for the player and the Cut window (the owner 2026-10-28: "желтые флажки должны перекрывать линейку, чтобы их
-   видно было и перетаскивание флажков строго по линейке, а проигрывание и перестановка плейхеда по клику на волну"):
+   One rule for the player and the Cut window:
    a handle is taken and dragged ONLY by its flag on the ruler; a press on the wave moves the playhead there (and a drag
    on it goes on moving it); a press on the ruler away from the flags does nothing. Cursors: ew-resize over a flag,
    pointer over the wave, the plain arrow over the rest of the ruler.
 
-   "CUT" BY THE RIGHT FLAG (phase V59, the owner 2026-10-29: "кнопка cut должна быть активной, когда выбран фрагмент на
-   волне, сейчас cut при флажках по самым краям, оригинал трека, сохраняет трек еще раз ... кнопка cut будет появляться
-   справа от правого флажка, когда выбран фрагмент трека"; (мг11) the Cut window the same): with `cut` given, a button on
+   "CUT" BY THE RIGHT FLAG (the player and the Cut window the same): with `cut` given, a button on
    the ruler right of the right flag - only while a PIECE is marked (the flags not at the very ends; the whole sound is
    not cut into a second copy of itself). It follows the flag as it is dragged; when the flag is at the very end it stands
    inside the wave, left of the flags. Its press is `cut.onCut(a, b)`; the button waits while what it answers goes.
@@ -56,7 +52,7 @@ export function scrubber(opts) {
   cv.className = 'snd-scrub-cv';
   cv.style.height = (RULER + o.height) + 'px';
   el.appendChild(cv);
-  // (phase V59) "Cut" by the right flag - on the ruler, shown only while a piece is marked (css/sound.css .snd-scrub-cut).
+  // "Cut" by the right flag - on the ruler, shown only while a piece is marked (css/sound.css .snd-scrub-cut).
   let cutBtn = null, cutW = 0;
   if (o.handles && o.cut && typeof o.cut.onCut === 'function') {
     cutBtn = document.createElement('button');
@@ -172,7 +168,7 @@ export function scrubber(opts) {
       g.fillStyle = 'rgba(255,255,255,0.06)';
       g.fillRect(xa, top, Math.max(0, xb - xa), hh);
     }
-    // (phase V73) the marked piece in the selected thing's light (--sel-ring); blue went with the old look
+    // the marked piece in the selected thing's light (--sel-ring)
     const lit = css.getPropertyValue('--sel-ring').trim() || '#ededed';
     const xp0 = xOf(t);
     const bar = Math.max(1, Math.min(3, w / 300));
@@ -217,7 +213,7 @@ export function scrubber(opts) {
     _placeCut(w, whole);
   }
 
-  // (phase V59) "Cut" right of the right flag's pole; with no room there (the flag at the very end) inside the wave, left
+  // "Cut" right of the right flag's pole; with no room there (the flag at the very end) inside the wave, left
   // of the right flag - and left of the left one too when the piece is too short for it between them.
   function _placeCut(w, whole) {
     if (!cutBtn) return;
@@ -291,7 +287,7 @@ export function scrubber(opts) {
       draw();
     },
     range: () => [a, b],
-    // (phase V59) a piece is marked - the flags are not at the very ends
+    // a piece is marked - the flags are not at the very ends
     piece: () => !_whole(),
     dur: () => dur,
     dragging: () => !!drag,

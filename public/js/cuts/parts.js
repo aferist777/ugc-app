@@ -1,7 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   FRAGMENTS OF ONE VIDEO - ONE RULE for the page and the server (phase V81, the owner 2026-11-09: "надо пользователю дать
-   возможность на одном видео сделать сразу несколько выделений ... сохранить и сразу склеить выделеное, либо сохранить каждый
-   фрагмент отдельно ... видео проанализировалось и сразу же нарезалось на сцены").
+   FRAGMENTS OF ONE VIDEO - ONE RULE for the page and the server.
 
    The page's bar of fragments (js/ranges.js, under every viewer's video - js/cut.js) and the server's cuts (lib/cuts.js
    cutMany, lib/scenes.js) read the same seconds from here: which fragments there are, in what order the join plays them, and

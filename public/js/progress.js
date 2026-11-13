@@ -50,7 +50,7 @@ function _emaPut(label, ms) {
 const CANCEL_AT = 1.4;      // past this, waiting is unusual: offer the way out
 const STUCK_AT  = 3;        // past this, it is not going to arrive on its own
 const OVER_NOTE  = 'Longer than usual - it may still be rendering.';
-// Deliberately not "check for banned words". Now that a refusal is read correctly it comes back
+// Deliberately not "check for banned words": a refusal comes back
 // within seconds with its own reason, so a job still going at three times its estimate is stuck
 // rather than rejected - and saying otherwise would send the user editing text that is fine.
 const STUCK_NOTE = 'Well past normal. A refusal would have been reported by now, so this looks '
@@ -166,8 +166,8 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
         try { ov.remove(); } catch (e) {}
         host.classList.remove('sv3-blur');
         if (hadStatic) host.style.position = '';
-        // Pages usually show the SAME failure a second time, in their own error block, and
-        // dismissing the overlay left that one sitting there - one press, half the error
+        // Pages usually show the SAME failure a second time, in their own error block, which
+        // would otherwise stay after the overlay is dismissed - one press, half the error
         // gone. Announced rather than called back, so this stays ignorant of who listens.
         try {
           host.dispatchEvent(new CustomEvent('sv3-progress-dismissed', { bubbles: true }));
@@ -187,9 +187,9 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
 // ("l2-topics|80k"). Left out, they are the same thing - which is right when the label is fixed.
 // `startedAt` re-attaches the row to a job already running, as startProgress does: the bar and the
 // countdown start from its real age, and finish() times the whole job, not the part watched.
-// `onCancel`, when given, puts a ✕ at the right end of the row (phase G1, the Library's generator):
+// `onCancel`, when given, puts a ✕ at the right end of the row (the Library's generator):
 // pressing it calls onCancel once, and the row says "canceling…" until its owner closes it. Rows
-// without it are as they always were.
+// without it have no cross.
 export function startInlineProgress(host, { label, key, estimateMs = 0, startedAt = 0, onCancel = null } = {}) {
   if (!host) return { finish() {}, fail() {}, detach() {}, say() {} };
   const emaKey = key || label;
@@ -216,7 +216,7 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
       if (closed || x.disabled) return;
       x.disabled = true;
       row.querySelector('.sv3-inline-label').textContent = 'canceling…';
-      try { onCancel(); } catch (err) { /* the owner says what happened */ }
+      try { onCancel(); } catch (err) { /* the caller says what happened */ }
     });
     row.appendChild(x);
   }

@@ -1,7 +1,7 @@
 'use strict';
 
 /* fetch-jassub.js - puts JASSUB (libass compiled to WebAssembly) into vendor/jassub/, the captions'
-   preview from phase K4: the page draws the SAME .ass the render burns, with the same libass, so the
+   preview: the page draws the SAME .ass the render burns, with the same libass, so the
    screen and the file are one drawing.
 
    npm install runs it (postinstall, with --optional: no network is a warning, not a failed install).
@@ -34,7 +34,7 @@ const PINS = {
 const DIR = path.join(__dirname, '..', 'vendor', 'jassub');
 const MARK = path.join(DIR, 'PINNED.json');
 // How the files are laid out: moved when that changes, so an installed copy is laid out again (2: the deps'
-// licences read from their package.json - abslink was written down as MIT, it is Apache-2.0).
+// licences read from their package.json).
 const LAYOUT = 2;
 const optional = process.argv.includes('--optional');
 

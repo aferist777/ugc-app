@@ -1,13 +1,4 @@
-// CUTTING PIECES OUT OF ANY VIDEO (phase TG, block 7; the owner 2026-10-21: "в просмотре медиа и в uploads и в birols,
-// где угодно в видео можно обрезать"; "когда пользователь выбрал фрагмент обрезки, нужно предложить в попапе куда
-// сохранить обрезок"; "вариант Б, но в обрезке можно галочкой отобразить оригинал, где бы этот кусок не находился и
-// обрезать еще раз и создастся новый файл").
-//
-// SEVERAL FRAGMENTS, A JOIN, THE SCENES, ITS SOUND (phase V81, the owner 2026-11-09: "надо пользователю дать возможность на одном
-// видео сделать сразу несколько выделений ... две опции при сохранении - сохранить и сразу склеить выделеное, либо сохранить каждый
-// фрагмент отдельно ... видео проанализировалось и сразу же нарезалось на сцены ... правой кнопкой мыши пользователь может нажать на
-// фрагмент и сохранить фрагмент отдельно"; "в меню правой кнопки будет save audio"; "после нарезки на сцены, с зажатым ctrl можно
-// выделять нужные сцены и правой кнопкой добавить на таймлайн ... добавить раздельно или добавить сразу одним файлом").
+// CUTTING PIECES OUT OF ANY VIDEO - several fragments, a join, the scenes, its sound.
 //
 // ONE module for every viewer of a video: the Library's and Merge's (js/library/viewer.js - `underStage`, `videoSrc`, a row of
 // `extraRows`) and the post viewer of REFERENCES (js/references/post.js, `cutBox` per file of a post).
@@ -19,15 +10,14 @@
 //                     ONE window "save the pieces to" (the place picker js/place-tree.js over js/media-targets.js, the clip's own
 //                     place on top) and the work (POST /api/library/cuts) with its count and "stop". The video stays - or,
 //                     with "Delete original" on, goes once the pieces are saved, unless a project uses it (the server says
-//                     where; V81 amendment, the owner's (нк1)-(нк4), 2026-11-12).
-//   right button      on the video: "Save audio" (a row per sound track - into the root of AUDIO since 2026-11-09, the
-//                     owner's (в19)-(в21); POST /api/audio/from-video)
-//                     and "Save video as…" (what the shell's own menu had); on a fragment: "Save this fragment…" / "Save N
+//                     where).
+//   right button      on the video: "Save audio" (a row per sound track - into the root of AUDIO; POST /api/audio/from-video)
+//                     and "Save video as…"; on a fragment: "Save this fragment…" / "Save N
 //                     fragments…", "Save its audio", "Delete" - and in Merge (`o.lay`) "Add to timeline · separately" (each a
 //                     clip of this file, no new file) and "· as one file" (the join made first, beside the video).
 //   right column      a piece has "original": ticked, the stage shows the WHOLE video it was cut from with the piece's
 //                     fragment - or a join's fragments - on the bar; a save from there is another new piece.
-//   keys              while the viewer is on top: Delete, Escape (the pick first, (в16)), Ctrl+Z / Ctrl+Y - the bar's.
+//   keys              while the viewer is on top: Delete, Escape (the pick first), Ctrl+Z / Ctrl+Y - the bar's.
 //
 // Not cut here: talking heads (their project's) and renders - they have the right button's Save audio only.
 
@@ -59,7 +49,7 @@ const clean = (p) => String(p || '').split('?')[0];
 // Which pieces show their whole video now - by viewer item. Forgotten when a viewer opens (`reset`).
 const _whole = new Set();
 const _key = (it) => (it ? it.kind + ':' + it.id : '');
-// (phase V81, (в18)) The fragments drawn over each video while its viewer is open - and their steps back.
+// The fragments drawn over each video while its viewer is open - and their steps back.
 const _states = new Map();
 
 export function reset() { _whole.clear(); _states.clear(); }
@@ -276,7 +266,7 @@ export function cutBox(video, piece, o) {
     return { state: st.state, pieces };
   }
 
-  // Save: the fragments as ONE new clip, nothing asked (the owner's (нк2)) - one window of places; "Delete original" goes with
+  // Save: the fragments as ONE new clip, nothing asked - one window of places; "Delete original" goes with
   // this press only. The right button on a fragment keeps its own choices and never deletes the video.
   save.addEventListener('click', () => {
     const parts = bar.parts();
@@ -359,8 +349,8 @@ export function cutBox(video, piece, o) {
 }
 
 // ── the window "save the pieces to" ──────────────────────────────────────────
-// (phase V39) A tree of the places (js/place-tree.js): REFERENCES and VIDEO folded, the clip's own place on top as
-// "BESIDE IT"; "+ new category…" in REFERENCES, Uploads and B-rolls. One window for every piece of a press (phase V81).
+// A tree of the places (js/place-tree.js): REFERENCES and VIDEO folded, the clip's own place on top as
+// "Beside it"; a "+" for a new folder in REFERENCES, Uploads and B-rolls. One window for every piece of a press.
 export function closeMenu() { closePlaces(); }
 
 async function _places(anchor, piece, parts, join, go) {
@@ -376,13 +366,13 @@ async function _places(anchor, piece, parts, join, go) {
   openPlaces(anchor, {
     title, tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
     places: { images: false, refHome: 'its site\'s folder (no folder of yours)', newCats: ['references', 'uploads', 'birols'] },
-    // (the owner 2026-11-12) A folder is chosen first; "Save here" saves.
+    // A folder is chosen first; "Save here" saves.
     confirm: 'Save here',
     onPick: go,
   });
 }
 
-// ── a video's sound (phase V81) ──────────────────────────────────────────────
+// ── a video's sound ──────────────────────────────────────────────────────────
 const _tracks = new Map();
 /** The video's sound tracks [{ k, label, def }] - [] for a video with none. */
 export async function tracksOf(src) {
@@ -414,7 +404,7 @@ export async function saveAudio(o) {
   return d.item;
 }
 
-// "Save video as…" - the shell's Save dialog, as its own menu offered before the page had one.
+// "Save video as…" - the shell's Save dialog.
 function _download(src, name) {
   const a = document.createElement('a');
   a.href = clean(src);

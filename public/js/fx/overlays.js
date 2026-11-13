@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE OVERLAYS (phase V84 block 4b, the owner 2026-11-11, (б4-1)-(б4-13)) - graphics drawn over a clip's picture: Sparkle, Rainbow
+   THE OVERLAYS - graphics drawn over a clip's picture: Sparkle, Rainbow
    glow, Color frame, Frame break, Digital zoom's viewfinder. video-effects-pack's scenes (MIT; its numbers and timings, written
    again for the canvas) - drawn by the PAGE ONLY: live by the preview, baked for the render by the app's window with this very code
    (js/merge-v3/fx-draw.js applyFx, the last step; lib/fx-bake.js). Each is draw(g, S):
      g   a 2D context set up on the clip's WINDOW (js/fx/box.js windowOf - the frame for main video, an insert's own rectangle with
-         its turn, the owner's (б4-11)): (0, 0) its top-left corner, clipped to it
+         its turn): (0, 0) its top-left corner, clipped to it
      S   { w, h - the window's size, u - its width / 1080 (the pack's pixels), tau - the effect's own time (an 'intro' stretched to its
          length), live - seconds since it began, e - the effect (its id seeds every random), col - its colours [r, g, b] by key,
          opt - its settings by key (js/fx/effects.js colorsOf / optsOf), canvas(name, w, h) - a scratch canvas,

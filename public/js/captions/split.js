@@ -1,13 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — A SPLIT FRAME PUTS THE SUBTITLES IN THE MIDDLE (phase V40, the owner 2026-10-24: (о6а) А, (о7), (о8);
-   docs/local-app/PLAN.md "Фазы V39–V44", V40 item 4).
+   CAPTIONS — A SPLIT FRAME PUTS THE SUBTITLES IN THE MIDDLE.
 
    A filled clip that follows its faces may show a shot as TWO BANDS, one over the other (framing/path.js: a 'bands' shot of
    a 'face' or 'bands' record - autoBands in highlights, "two faces" on any clip of any project). Their seam is the frame's
    middle, and a subtitle page at the bottom then covers the lower face. So a page of the SUBTITLE lane whose time lies on a
-   split frame for MORE THAN HALF of it ((о6а) А - a page has one place for its whole time: it never jumps mid-show) is put
+   split frame for MORE THAN HALF of it (a page has one place for its whole time: it never jumps mid-show) is put
    in the frame's middle, on the seam; a page no longer on one goes back to its lane's place. The text lanes - a title on
-   top among them - stay where they are ((о8)).
+   top among them - stay where they are.
 
    It is written into the page's OWN style - pos 'center' - as a place put by hand is, so the preview and the render draw it
    with nothing new (style.js resolveStyle, ass.js), the inspector shows it, and a recut carries it on its words (pages.js
@@ -16,10 +15,10 @@
    ty, without the mark - is never touched; moved by hand after the rule placed it, it is the person's from then on.
 
    WHEN: at the cut of a highlights fragment and whenever its captions are restyled there (lib/highlights-cut.js), and
-   whenever a clip's Framing switch changes on the page (merge-v3/framing-ui.js) - in the same step as the frame; (phase V51)
+   whenever a clip's Framing switch changes on the page (merge-v3/framing-ui.js) - in the same step as the frame;
    and whenever its fit, frame, crop, PiP or size is written (merge-v3/timeline-b.js SPLIT_KEYS) - in that same step.
 
-   (phase V69 P12b, the owner's (хп102)) CAMERA + GAME - a stream's webcam on top, a third of the frame, the game below (framing/path.js
+   CAMERA + GAME - a stream's webcam on top, a third of the frame, the game below (framing/path.js
    'cam' shots): a page on it for more than half its time goes onto THAT seam, a third down the frame (`ty` CAM_TY - the mark too).
 
    PURE, and shared: the page imports it, the server require()s it.
@@ -32,13 +31,13 @@ import { isPlaced } from '../timeline/rules.js';
 
 /** The rule's mark: a page in the middle with exactly this offset down was put there by the rule. */
 export const MARK = 0.0001;
-/** A page goes to the middle when more than this share of its time lies on a split frame ((о6а) А). */
+/** A page goes to the middle when more than this share of its time lies on a split frame. */
 export const SHARE = 0.5;
-/** (V69 P12b) The rule's place on the camera + game seam: a third down the frame (the middle less a sixth), marked as MARK is. */
+/** The rule's place on the camera + game seam: a third down the frame (the middle less a sixth), marked as MARK is. */
 export const CAM_TY = MARK - 1 / 6;
 
 const _video = (tl) => ((tl && tl.tracks) || []).filter((t) => t && t.kind === 'video');
-// An insert on the frame (PiP): covers nothing. (phase V51) Nor does a cropped clip, placed or not: it is drawn as its piece -
+// An insert on the frame (PiP): covers nothing. Nor does a cropped clip, placed or not: it is drawn as its piece -
 // never framed into bands (lib/mv3b-render.js isFramedClip) - a PiP of it on main, an insert of it on a lane above.
 // A PiP NOT sized (no `tw`) is not on this list: it shows the frame's own picture - the bands too - as big as the frame.
 const _placed = (c) => !!(c && (isPlaced(c) || cropActive(c)));
@@ -133,7 +132,7 @@ export function placeBySplit(tl) {
       const mine = isRulePlaced(c);
       if (!mine && ownPlace(c)) continue;                    // the person's place
       const a = +c.start || 0, d = Math.max(0, +c.dur || 0);
-      // The middle of two bands, or (V69 P12b) the seam of camera + game - none when neither holds the page for more than SHARE.
+      // The middle of two bands, or the seam of camera + game - none when neither holds the page for more than SHARE.
       const ty = d > 0 && spans.length > 0 && _over(spans, a, a + d) > SHARE * d ? MARK
         : d > 0 && cams.length > 0 && _over(cams, a, a + d) > SHARE * d ? CAM_TY : null;
       const want = ty != null;

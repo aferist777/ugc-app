@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the Library panel's views, ONE owner (phase K6b, 2026-10-03; several chats since V1).
+   MERGE v3 — the Library panel's views, ONE owner.
 
    The panel shows the shelf, a view registered the way a chat is (below - among them the scenarios a talking
-   head is made from, phase V28.3, scen-pick.js, its crumb "scenarios /" left of "Library" and hidden in a
-   talking head), or the captions view (phase K6: preset tiles beside the settings of the captions picked on
+   head is made from, scen-pick.js, its crumb "scenarios /" left of "Library" and hidden in a
+   talking head), or the captions view (preset tiles beside the settings of the captions picked on
    the timeline). Two kinds of state, kept apart:
      the BASE      the shelf or one chat - remembered per project HERE (viewOf / rememberView), told by
                    the chats; a chat takes or lets go of only ITS OWN base, so two chats never reset each
@@ -12,16 +12,15 @@
                    the pick does not survive a reload, and letting go of it puts the base back.
    What shows is the overlay over the base. This module alone writes what follows from that: the panel's
    class (is-chat / is-captions) and which chat's box and buttons show (is-shown), the header - the CRUMBS
-   "Library / captions", always there, the one showing lit, any other one press away (phase V18.2, the owner
-   2026-10-08; "generate image / generate video / generate audio" went in phase V64) - and THE ROOM - the corner of the sashes as far left and down
-   as it goes while a chat or the captions view can be SEEN, the arrangement there was before put back when
-   neither is (layout.js panelRoom). There used to be two owners of the room, and leaving the chat while
-   captions showed would have put the corner back under it.
+   "Library / captions", always there, the one showing lit, any other one press away - and THE ROOM - the corner of the
+   sashes as far left and down as it goes while a chat or the captions view can be SEEN, the arrangement there was before
+   put back when neither is (layout.js panelRoom). One owner of the room: leaving the chat while captions show must not
+   put the corner back under them.
 
-   (phase V64 block 3, the owner 2026-10-31) THE PICTURES CHAT AND THE VIDEO CHAT ARE WINDOWS (chat-window.js) - hosted chats
-   that register nothing here. What is still registered the way a chat is: the scenarios (scen-pick.js), a highlights
-   project's tiles (highlights.js), a voiceover's B-roll piece (broll-view.js). "generate audio" went too (block 5): the sound
-   window, js/sound/sound-window.js.
+   THE PICTURES CHAT AND THE VIDEO CHAT ARE WINDOWS (chat-window.js) - hosted chats
+   that register nothing here. What is registered the way a chat is: the scenarios (scen-pick.js), a highlights
+   project's tiles (highlights.js), a voiceover's B-roll piece (broll-view.js). The sound is a window too:
+   js/sound/sound-window.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { panelRoom, onColumnOpen } from './layout.js';
@@ -85,7 +84,7 @@ export function toShelf() {
   if (c && c.onBack) c.onBack();
 }
 
-// ── A HIGHLIGHTS PROJECT's keys (phase V49, the owner's (пр5), (пр6)) ───────
+// ── A HIGHLIGHTS PROJECT's keys ─────────────────────────────────────────────
 // Its own timeline hl_<id> - its home, open while no fragment is - and a fragment's hl_<id>_<n> (highlights.js KEY_RE). The chats
 // talk in ONE conversation per highlights project: a fragment's key is its home's wherever a chat keys by project (the thread,
 // what it made, the view it was left on, what was being written); and nothing is laid on the home, which is never rendered.
@@ -96,7 +95,7 @@ export const isHlHome = isHome;
 /** What a drag of a chat's result says there. */
 export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
 /**
- * (phase V49.1, the owner's (пр33)) Said wherever something would be laid on the home - a chat's result dragged
+ * Said wherever something would be laid on the home - a chat's result dragged
  * there and a drop on its lanes, refused on release: a popup (js/notice.js) with "to highlights", which brings the tiles back
  * (the highlights view's own crumb, highlights.js) and lets the popup go.
  */
@@ -107,8 +106,7 @@ export function noFragment() {
   } } });
 }
 
-/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library / captions" (phase V49, the owner's (пр4); V64
- *  without the chats'; css/mv3-highlights.css). */
+/** A highlights project is open: its crumbs are "highlights / Library / captions" (css/mv3-highlights.css). */
 export function setHighlights(on) {
   const panel = $('mv3-library');
   if (panel) panel.classList.toggle('is-hl', !!on);
@@ -123,10 +121,10 @@ export function setCaptions(on) {
 
 /** What letting go of the captions does ("Library" or a chat's crumb pressed over them). */
 export function onBack(view, fn) { if (view === 'captions') _capsBack = fn; }
-/** What the "captions" crumb does from another view (phase V18.2: the inspector picks the subtitle lane). */
+/** What the "captions" crumb does from another view (the inspector picks the subtitle lane). */
 export function onOpen(view, fn) { if (view === 'captions') _capsOpen = fn; }
 
-// (phase V33.3) THE CAPTIONS OF WHAT IS NOT ON THE TIMELINE - a highlights project's ticked fragments (the owner's (х33)). A base
+// THE CAPTIONS OF WHAT IS NOT ON THE TIMELINE - a highlights project's ticked fragments. A base
 // view may offer the captions view a target of its own while nothing is picked:
 //   wants()       its crumb would open it now (fragments ticked)
 //   open()        the crumb was pressed: it is up until let go of
@@ -144,20 +142,20 @@ export function altRelease() { if (_alt) _alt.release(); _altTell(); }
 /** The inspector says how to paint again when the alternative target changes (its fragments ticked or not). */
 export function onAltChange(fn) { _altPaint = fn; }
 export function altChanged() { if (_altPaint) _altPaint(); _altTell(); }
-// (phase V66) Whoever wants to know that the alternative was opened, let go of or painted again (hl-group.js: «example» on the preview).
+// Whoever wants to know that the alternative was opened, let go of or painted again (hl-group.js: «example» on the preview).
 const _altSeen = new Set();
 export function onAltShown(fn) { if (typeof fn === 'function') _altSeen.add(fn); }
 function _altTell() { for (const fn of _altSeen) { try { fn(); } catch (e) { /* the next one still hears */ } } }
 
-// (phase V66, the owner's (хо1)-(хо16)) A LANE'S NAME pressed may lead to another strip than the lane's own - a highlights project's
+// A LANE'S NAME pressed may lead to another strip than the lane's own - a highlights project's
 // ticked fragments: Subtitles, main audio and the music lane give the common settings of all of them (hl-group.js).
 //   wants(track)         that strip instead of the lane's own now
 //   render(host, track)  drawn into the inspector's strip; returns the captions tiles' target, or null
 let _laneAlt = null;
 export function laneAlt(p) { _laneAlt = p || null; }
 export const laneAltFor = (track) => (_laneAlt && track && _laneAlt.wants(track) ? _laneAlt : null);
-// (phase V66.1, the owner 2026-11-03: "при клике на дорожку с музыкой, в правом поле нужно показывать, что пользователь может выбрать
-// другую дорожку из стандартных") A block of a view's ON TOP of a lane's own strip, or of a clip's on it - a highlights fragment's music:
+// A block of a view's ON TOP of a lane's own strip, or of a clip's on it - a highlights fragment's music (the choice of
+// another of the standard tracks):
 //   wants(track, clip)        that block now (clip - the clip picked on the lane, or none for the lane's name)
 //   render(host, track, clip)
 let _laneExtra = null;
@@ -171,7 +169,7 @@ function _views() {
   return v;
 }
 
-/** The chat a project was left on ('' for the shelf). A highlights project's fragments share its home's mark (phase V49). */
+/** The chat a project was left on ('' for the shelf). A highlights project's fragments share its home's mark. */
 export const viewOf = (key) => String(_views()[chatKey(key)] || '');
 
 /** A chat came forward (`name`) or was left (`null`) on this project - only its own mark is taken away. */
@@ -218,15 +216,15 @@ function _paint() {
   if (panel) {
     panel.classList.toggle('is-chat', _chats.has(t));
     panel.classList.toggle('is-captions', t === 'captions');
-    // (phase V64, fix (в)) The scenarios with the media tree beside them (css/merge-v3.css, merge-v3/library.js).
+    // The scenarios with the media tree beside them (css/merge-v3.css, merge-v3/library.js).
     panel.classList.toggle('is-scen', t === 'scenarios');
   }
   const title = $('mv3-lib-title');
   if (title) {
-    // (phase V60.2) A link always: it leads to the Library's roots, from the shelf too.
+    // A link always: it leads to the Library's roots, from the shelf too.
     title.classList.add('is-link');
     title.title = 'The Library - REFERENCES, VIDEO, IMAGES, AUDIO';
-    // (phase V64, fix (ж)) Blue while the gallery is what shows; white over a view or the captions.
+    // Blue while the gallery is what shows; white over a view or the captions.
     title.classList.toggle('is-on', t === 'shelf');
   }
   for (const [name, c] of _chats) {
@@ -247,14 +245,13 @@ function _paint() {
   _room();
 }
 
-/** (phase V60.2) What "Library" does once the shelf is back: the panel's roots (js/merge-v3/library.js toRoots). */
+/** What "Library" does once the shelf is back: the panel's roots (js/merge-v3/library.js toRoots). */
 let _toRoots = null;
 export function onLibraryRoots(fn) { _toRoots = typeof fn === 'function' ? fn : null; }
 
 export function initViews() {
   onColumnOpen(() => _room());
-  // "Library" always lands on the shelf: the captions let go of, then the chat under them left - and (phase V60.2, the
-  // owner's (дг1а): "при нажатии на крошку library в merge нужно уводить пользователя в корневую папку") on the shelf's
+  // "Library" always lands on the shelf: the captions let go of, then the chat under them left - and on the shelf's
   // ROOTS, from the shelf itself too. A folded column's press is the column's (it opens it).
   const title = $('mv3-lib-title');
   if (title) {

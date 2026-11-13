@@ -1,13 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — THE FONTS TAB (phase V68 P4, the owner 2026-11-01: "шрифты нужно отобразить так же плиткой, как пресеты и анимации.
-   типа отрисовать"; (хп8), (хп12), (хп47)). ONE module for the highlights popup (hl-popup.js) and Merge's captions view
+   MERGE v3 — THE FONTS TAB. ONE module for the highlights popup (hl-popup.js) and Merge's captions view
    (captions-view.js).
 
-   A tile is the font itself: "Captions" and under it "Субтитры" in white with a black outline on the dark square - the Russian
+   A tile is the font itself: "Captions" and under it the same word in Russian, in white with a black outline on the dark square - the Russian
    word in the font's twin when it has no Cyrillic (fonts.js drawnFamily: how a Russian line is drawn). A PICTURE, drawn with the
-   render's own libass by tools/font-tiles.js and shipped in public/fonts/captions/tiles/ (fonts.js tileName): the owner's check
-   2026-11-02 found the tab drawn in the live fonts slow to open and to scroll - All loaded 33 MB of fonts and repainted outlined
-   letters of thousands of contours; 101 pictures are 450 KB, asked for only once the tab is on screen, the ones in view first
+   render's own libass by tools/font-tiles.js and shipped in public/fonts/captions/tiles/ (fonts.js tileName): a tab drawn in
+   the live fonts is slow to open and to scroll - All would load 33 MB of fonts and repaint outlined letters of thousands of
+   contours; 101 pictures are 450 KB, asked for only once the tab is on screen, the ones in view first
    (loading=lazy). The name under it; the chips over the grid are All and the font groups (fonts.js GROUPS).
 
    A press chooses ONE font; Shift adds one to those chosen or takes it away - each page one of them, two in a row never the
@@ -25,7 +24,7 @@ export const fontLabel = (family) => { const f = FONTS.find((x) => x.family === 
 /**
  * The fonts tab in `host`. `onPick(families, { shift, family })` on a press (`family` the one pressed); `note` - a line over the
  * chips. Returns { set(families), getAll(), reveal(family) - its group open, the tile scrolled to and outlined in gold,
- * openFirst(), shown(on), recommend(groups) - (phase V69 P12) the kind's recommended groups marked and first among the chips }.
+ * openFirst(), shown(on), recommend(groups) - the kind's recommended groups marked and first among the chips }.
  */
 export function fontPicker(host, { onPick, note } = {}) {
   let cat = '';
@@ -41,7 +40,7 @@ export function fontPicker(host, { onPick, note } = {}) {
   const list = FONTS.slice().sort((a, b) => order.indexOf(groupOf(a)) - order.indexOf(groupOf(b)));
   const chips = [['', 'All', list.length]].concat(GROUPS.map(([id, label]) => [id, label, list.filter((f) => groupOf(f) === id).length]));
   for (const [id, label, n] of chips) {
-    const b = _el('button', 'mv3-cap-cat u-chip', label);   // (phase V73 block 5, 5d) the shared chip, its count in mono
+    const b = _el('button', 'mv3-cap-cat u-chip', label);   // the shared chip, its count in mono
     b.type = 'button';
     b.dataset.cat = id;
     b.appendChild(_el('span', 'mv3-cap-n u-mono', String(n)));

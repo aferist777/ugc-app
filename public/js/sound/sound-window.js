@@ -1,10 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE SOUND WINDOW (phase V64 block 5, the owner 2026-10-31, (зг6), (зг10): "напротив audio корневой папки будем открывать
-   попап с генератором музыки, а на звуки можно переключить в левом столбце над выбором simple, custom и lyrics. по умолчанию
-   открываем music simple") - ONE window for music and sounds, the same on both pages: the Library's AUDIO -> "generate"
-   (and Music's "Generate music") and Merge's AUDIO -> "generate", the lane's "Video to Music…", ?open=audio. It took the
-   place of the Library's music window (V59) and of Merge's "/ generate audio" view of the Library
-   panel (V34.E, js/merge-v3/sound-host.js - Merge's adapter now). A generation's window (js/gen-window.js, GEN_SIZE 1280×800):
+   THE SOUND WINDOW - ONE window for music and sounds, the same on both pages: the Library's AUDIO -> "generate"
+   (and Music's "Generate music") and Merge's AUDIO -> "generate", the lane's "Video to Music…", ?open=audio. Merge's
+   adapter is js/merge-v3/sound-host.js. A generation's window (js/gen-window.js, GEN_SIZE 1280×800):
 
      head     the engine and the MODE - "Suno · Simple · background, no vocals" - and a "?" right of it: how the mode works
      left     MUSIC | SOUNDS - the switch on top; under it the mode of that group (Music: Simple, Custom, Lyrics, From a
@@ -17,11 +14,11 @@
               it (a press puts a video into "The video"; in Merge a clip of the timeline comes by its right button)
      foot     ALMANAC, the line of the last press ("in Alerts · …"), where it goes ("into Music → Pop"), the price, "generate"
 
-   It opens on Music → Simple ((зг6)) - unless it is opened for something: a clip for Video to Music, a text for Custom. The
+   It opens on Music → Simple - unless it is opened for something: a clip for Video to Music, a text for Custom. The
    window stays open after "generate"; the press is the server's at once (routes/audio-gen.js, lib/audio-gens.js - its record
    and its Alerts row), and the page follows it. WHERE IT GOES: sounds - SFX → My sounds → Generated; music in Merge - Music's
    root (a clip's track also under its clip); music in the Library - the folder under Music open there (`into`), a mood
-   folder of highlights - Simple makes that mood's preset (V60), Custom goes into highlights' root (V60.2), and there only
+   folder of highlights - Simple makes that mood's preset, Custom goes into highlights' root, and there only
    Simple and Custom of Music are offered.
 
    The page says how it works through a HOST (configure(h)) - Merge's (js/merge-v3/sound-host.js) and the Library's
@@ -91,7 +88,7 @@ const _rowOpen = new Map(); // a text's row the person opened or folded: `<gen>:
 let _looked = false;
 let _timer = 0;
 let _rest = '';            // the Library: the music mode remembered for the folders that are not a mood's
-let _groupShown = '';      // (fix (з)) the group the switch last showed - its thumb slides from there
+let _groupShown = '';      // the group the switch last showed - its thumb slides from there
 let _placeKey = null;      // the Library: the folder the window was last fitted to
 // Merge: the open project's presses (`made`)
 let GENS = [];
@@ -108,13 +105,13 @@ const _hook = (name, ...a) => (H && typeof H[name] === 'function' ? H[name](...a
 const _place = () => (typeof _o.place === 'function' ? _o.place() : null) || null;
 const _key = () => String(_hook('key') || '');
 
-// (phase V60, (пп9а)) The Library's window on a mood folder (Music → highlights → <mood>) - its id, '' for any other folder.
+// The Library's window on a mood folder (Music → highlights → <mood>) - its id, '' for any other folder.
 function _moodOpen() {
   const p = _place();
   const m = /^music:highlights:(.+)$/.exec(String((p && p.key) || ''));
   return m && F && F.moods().some(x => x.id === m[1]) ? m[1] : '';
 }
-// The modes offered: a group's - on a mood folder Music is Simple and Custom only (phase V60.2, (ми7а)).
+// The modes offered: a group's - on a mood folder Music is Simple and Custom only.
 function _modes(group) {
   const g = group || groupOf(S().mode);
   return g === 'music' && _moodOpen() ? ['simple', 'custom'] : GROUPS[g];
@@ -131,7 +128,7 @@ function _form() {
     fields: {
       sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
       compose: { prompt: '', seconds: 30, instrumental: true },
-      // `clip` (phase V54) - a clip of a timeline { key, trackId, clipId, name, start, dur, thumb } in place of a file; `dur` - the
+      // `clip` - a clip of a timeline { key, trackId, clipId, name, start, dur, thumb } in place of a file; `dur` - the
       // file's length when it is known (the price).
       video: { video: '', name: '', thumb: '', dur: 0, clip: null, description: '', tags: '', sfx: false, useAudio: false },
       sfx: { prompt: '', seconds: 0, loop: false, influence: 0.3 },
@@ -165,7 +162,7 @@ function _form() {
 // ── the mode ──────────────────────────────────────────────────────────────────
 function setMode(id, how) {
   if (!_modes(groupOf(id)).includes(id)) return;
-  // (phase V60.2, (ми2а)-(ми4а)) Custom picked while the mood's card is in "edit": its Style and Exclude go with it.
+  // Custom picked while the mood's card is in "edit": its Style and Exclude go with it.
   const carried = id === 'custom' && how === 'pick' && F.carryEdit();
   S().mode = id;
   S().lastMode[groupOf(id)] = id;
@@ -198,7 +195,7 @@ function paint() {
   _side();
 }
 
-// The line over the card says how the work goes and goes quiet after 9 s. (phase V73 block 2) An error (`bad`) - a refusal of
+// The line over the card says how the work goes and goes quiet after 9 s. An error (`bad`) - a refusal of
 // the tree, a file that will not play, a press that failed, the form's "Not saved" - is a popup in the corner instead
 // (js/notice.js), and the line goes quiet.
 let _sayT = 0;
@@ -229,10 +226,10 @@ function _dest() {
   const hl = /^music:highlights(:|$)/.test(key) || p.folder === 'highlights';
   const lyr = key === 'music:lyrics';
   if (p.cat && !hl && !lyr) return { node: key, into: p.cat, label: 'Music → ' + (p.trail || p.label) };
-  // (phase V60, (пп9а)) A mood folder open: Simple makes its mood, and the server files the tracks there.
+  // A mood folder open: Simple makes its mood, and the server files the tracks there.
   const mood = F.preset();
   if (mood) return { node: key, into: '', label: 'Music → highlights → ' + mood.label };
-  // (phase V60.2, (ми6а)) Custom on a mood folder: into highlights itself - the mood folder keeps only what its preset made.
+  // Custom on a mood folder: into highlights itself - the mood folder keeps only what its preset made.
   if (_moodOpen()) return { node: 'music:highlights', into: 'highlights', label: 'Music → highlights' };
   return { node: 'music', into: '', label: 'Music',
     note: hl ? 'highlights takes only a mood\'s preset - open a mood\'s folder' : lyr ? 'Lyrics holds texts only' : '' };
@@ -267,11 +264,10 @@ function paintCol() {
     col.appendChild(r);
     return r;
   };
-  // MUSIC | SOUNDS ((зг6)): over the mode. (fix (з), the owner 2026-11-01: "переключатель MUSIC | SOUND сделай аккуратней, как
-  // пилюля тумблер айфоновская") A pill with a thumb that slides under the group chosen (css/sound-window.css .au-switch) - drawn
+  // MUSIC | SOUNDS: over the mode. A pill with a thumb that slides under the group chosen (css/sound-window.css .au-switch) - drawn
   // where it was, then moved, so the column painted again still shows the slide.
   const g = groupOf(S().mode);
-  // (phase V73 block 4, (б2-12)) the shared segment (css/app-shell.css .u-seg): the group lit is the selected look
+  // the shared segment (css/app-shell.css .u-seg): the group lit is the selected look
   const seg = el('div', 'au-switch u-seg');
   seg.dataset.on = _groupShown || g;
   for (const k of ['music', 'sounds']) {
@@ -313,7 +309,7 @@ function paintMake() {
   host.textContent = '';
   const m = _mode();
   if (!m) return;
-  // (phase V73 block 4) the gold card is a panel: its head the mode's name in gold (the generator's place), whom it is for after it
+  // the gold card is a panel: its head the mode's name in gold (the generator's place), whom it is for after it
   const card = el('div', 'au-card');
   const title = H && H.made ? String(_hook('title') || '') : '';
   const h = el('div', 'au-card-h');
@@ -362,7 +358,7 @@ function paintMake() {
   else if (S().mode === 'lyrics') host.appendChild(_lyricsList());
 }
 
-// ── Video to Music's video (phase V54) ────────────────────────────────────────
+// ── Video to Music's video ────────────────────────────────────────────────────
 // ONE CLIP of a timeline (Merge, its right button) or a FILE (a press in the VIDEO tree on the right, "from this computer…", a
 // file let go on the field). A clip is shown as it is NOW on the open timeline (the host's clipNow).
 function _v2m() {
@@ -451,8 +447,8 @@ async function _uploadVideo(file) {
   } catch (e) { _say(e.message, true); return null; }
 }
 
-// ── The VIDEO tree of Video to Music (phase V54, (зв23), (зв24), (зв31)) - beside the middle, in that mode only ──
-// (phase V64, fix (к)) Only VIDEO's FOLDERS are seen - the path over them, the folder tiles, the videos; the tree that walks
+// ── The VIDEO tree of Video to Music - beside the middle, in that mode only ──
+// Only VIDEO's FOLDERS are seen - the path over them, the folder tiles, the videos; the tree that walks
 // them is built in a column that is never shown (css/sound-window.css).
 let _vtree = null;
 let _vseq = 0;
@@ -478,7 +474,7 @@ function _v2mOpen() {
   _vtree.load().then(() => {
     const n = _vtree.selected();
     if (n) { _v2mLoad(n); return; }
-    // (phase V73 block 2, (б2-19)) The tree not read (its reason said in the corner by `status`): the gallery says so - not empty.
+    // The tree not read (its reason said in the corner by `status`): the gallery says so - not empty.
     if (_ui) _ui.v2mGal.replaceChildren(failedEl('the videos', () => { _vRead = 0; _v2mOpen(); }));
   });
 }
@@ -492,7 +488,7 @@ async function _v2mLoad(n) {
   if (fold) gal.appendChild(fold);
   const grid = el('div', 'au-v2m-grid');
   gal.appendChild(grid);
-  // (phase V73 block 2) empty, reading and did not load are the shared parts (js/ui-state.js); a folder not read says so with
+  // empty, reading and did not load are the shared parts (js/ui-state.js); a folder not read says so with
   // Try again, the reason in the corner - never "No videos here."
   if (!n.q) { if (!fold) grid.appendChild(emptyEl('Nothing here.', { icon: 'folder' })); return; }
   grid.appendChild(loadingEl('reading…'));
@@ -588,7 +584,7 @@ function _body() {
   if (mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
   else if (mode === 'compose') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, instrumental: f.instrumental !== false });
   else if (mode === 'video') {
-    // (phase V54) A clip - the server makes it into a file and lays the track under it - or a file of the library.
+    // A clip - the server makes it into a file and lays the track under it - or a file of the library.
     const v = _v2m();
     if (f.clip) b.clip = { key: f.clip.key, clipId: f.clip.clipId, name: v.name, start: v.start, dur: v.dur };
     else Object.assign(b, { video: f.video, name: f.name || '' });
@@ -604,7 +600,7 @@ async function _generate(btn) {
   _err = '';
   _paintLine();
   try {
-    // (phase V54) A clip of the open timeline: the server reads it from the SAVED timeline - what is not saved yet goes first.
+    // A clip of the open timeline: the server reads it from the SAVED timeline - what is not saved yet goes first.
     const vc = S().mode === 'video' ? S().f.video.clip : null;
     if (vc && H && typeof H.flush === 'function' && !(await H.flush(vc))) throw new Error('The timeline could not be saved - the clip is read from the saved one. Try again in a moment.');
     const b = _body();
@@ -620,7 +616,7 @@ async function _generate(btn) {
     if (H && H.made) { GENS = [r.gen].concat(GENS.filter(g => g.id !== r.gen.id)); _paintMade(); _followProject(); }
     _say(r.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can close this window, the app files it when it comes.');
   } catch (e) {
-    // (phase V73 block 2) A press refused or failed before it started is an error - in the corner (js/notice.js); a field left
+    // A press refused or failed before it started is an error - in the corner (js/notice.js); a field left
     // empty at the press ("The mood's style is empty…", js/sound/suno-form.js - `hint`) is said on the foot's line, as a hint.
     if (e && e.hint) { _err = e.message; _paintLine(); } else showError(e.message);
   } finally {
@@ -727,7 +723,7 @@ function _when(iso) {
   return d.toDateString() === now.toDateString() ? hm : String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hm;
 }
 
-// ── Merge: the open project's presses under the card (phase V60, (пп12а)) ─────
+// ── Merge: the open project's presses under the card ─────────────────────────
 const _ago = (iso) => {
   const t = Date.parse(iso);
   if (!t) return '';
@@ -802,7 +798,7 @@ function _genCard(g) {
       const again = el('button', 'au-link', 'Try again (pays again)');
       again.type = 'button';
       again.addEventListener('click', async () => {
-        // (phase V73 block 2) the question at the button, a plain answer - it is paid (б2-5)
+        // the question at the button, a plain answer - it is paid
         if (!await ask(again, 'Ask for it again? It costs ' + (g.engine === 'eleven' ? 'ElevenLabs credits' : 'kie credits') + ' again.', { yes: 'Ask again' })) return;
         try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/retry', {}); _say('Asked again.'); _followProject(); _pollProject(); } catch (e) { _say(e.message, true); }
       });
@@ -812,7 +808,7 @@ function _genCard(g) {
     for (const l of (g.lyrics || [])) card.appendChild(F.lyricCard(l, g));
   } else {
     for (const r of (g.results || [])) card.appendChild(_result(r));
-    // (phase V54) Made from a clip: where its track was laid, or why not.
+    // Made from a clip: where its track was laid, or why not.
     if (g.laid) card.appendChild(el('div', 'au-said', 'Laid under its clip on ' + g.laid.lane + ' at ' + _clock(g.laid.at) + '.'));
     else if (g.notLaid) card.appendChild(el('div', 'au-said', 'Not laid on the timeline: ' + g.notLaid + '.'));
   }
@@ -881,7 +877,7 @@ function _result(r) {
     row.draggable = true;
     row.title = 'A press plays it · drag it onto an audio lane';
     row.addEventListener('dragstart', (e) => {
-      // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
+      // Not onto a highlights project's own timeline - a fragment is opened first.
       if (typeof drag.refuse === 'function' && drag.refuse(row, e)) return;
       e.dataTransfer.effectAllowed = 'copyMove';
       e.dataTransfer.setData(drag.type, JSON.stringify({
@@ -989,7 +985,7 @@ function _apply(o) {
 
 /**
  * The window - one per page: opened again while it is open, the same one stays, fitted to `o`. It opens on Music → Simple
- * ((зг6)) unless `o` asks for another mode, a clip or a text.
+ * unless `o` asks for another mode, a clip or a text.
  */
 export async function open(o) {
   const opt = Object.assign({ mode: 'simple' }, o || {});
@@ -1001,12 +997,12 @@ export async function open(o) {
     _apply(opt);
     return _win;
   }
-  // (phase V60.1, (пк7б)) A mood's preset edited in an earlier opening is not carried into this one.
+  // A mood's preset edited in an earlier opening is not carried into this one.
   F.resetEdit();
   _placeKey = null;
   _err = '';
   _win = openFrame({
-    // (fix (л)) The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
+    // The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
     name: 'generate audio', anchor: _o.anchor, cls: 'is-music is-sound', size: GEN_SIZE, geom: GEOM_CHAT,  passDrags: true, foot: true,
     onClose: () => {
       F.closeAlmanac();
@@ -1040,7 +1036,7 @@ export async function open(o) {
   v2m.append(v2mGal, v2mTree);
   v2m.hidden = true;
   pair.append(mid, v2m);
-  // (phase V73 block 4) the foot is the frame's, across the whole window: the almanac and the last press at the left; where it
+  // the foot is the frame's, across the whole window: the almanac and the last press at the left; where it
   // goes, the price and "generate" at the right
   const foot = _win.foot;
   foot.classList.add('au-foot');
@@ -1064,7 +1060,7 @@ export async function open(o) {
   return win;
 }
 
-// The settings column while the catalog is read ("Reading…"); (phase V73 block 2, (б2-19)) not read - "The settings did not
+// The settings column while the catalog is read ("Reading…"); not read - "The settings did not
 // load" and Try again there, the reason in the corner (the form says it, js/sound/suno-form.js ready).
 async function _start(win, opt) {
   if (!_ui || win !== _win) return;

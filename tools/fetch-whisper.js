@@ -1,6 +1,6 @@
 'use strict';
 
-/* fetch-whisper.js - puts the whisper.cpp the app ships with into vendor/whisper/ (phase K1b).
+/* fetch-whisper.js - puts the whisper.cpp the app ships with into vendor/whisper/.
 
    Captions are heard by Groq first; when Groq cannot be asked (no key, no network, it failed) or the
    subtitle lane says "this computer", lib/whisper-local.js runs this program on the sound instead.
@@ -9,7 +9,7 @@
    By hand, after moving the pin:
        node tools/fetch-whisper.js
 
-   ONE BUILD, Windows x64 with OpenBLAS (the benchmark in docs/local-app/PLAN.md: 15% faster on the
+   ONE BUILD, Windows x64 with OpenBLAS (measured 15% faster on the
    processor than the plain build, the same words), pinned by the release AND by SHA-256 - the release
    publishes no checksum file, so the hash is the one GitHub shows for the asset, checked here, and an
    asset swapped after the fact is refused. Only what whisper-cli needs is unpacked: the program, its

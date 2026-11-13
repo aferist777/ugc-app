@@ -1,6 +1,6 @@
 'use strict';
 
-/* fx-bake.js - the bake engine's window side (phase V84 block 3; lib/fx-bake.js does the work).
+/* fx-bake.js - the bake engine's window side (lib/fx-bake.js does the work).
 
      GET  /api/fx-bake/next?wait=1       the app's hidden bake window asks for a stretch to draw (held open ~25 s)
      GET  /api/fx-bake/frames/:id        that stretch's frames as the clip lies in the frame, raw I420 (above main: with its alpha plane)
@@ -23,7 +23,7 @@ router.post('/fx-bake/:id/done', (req, res) => { FXB.done(req, res).catch((e) =>
 router.post('/fx-bake/:id/fail', (req, res) => FXB.fail(req, res));
 router.get('/fx-bake/state', (_req, res) => res.json({ success: true, ...FXB.state() }));
 
-// (phase V84 block 2) Other moments of a clip's file for the effects that show them (lib/fx-moments.js): { src, ranges, w } ->
+// Other moments of a clip's file for the effects that show them (lib/fx-moments.js): { src, ranges, w } ->
 // { key, url, ranges: [{ from, n }] } - JPEGs 30 a second under that url, made once.
 router.post('/fx-moments', async (req, res) => {
   try {

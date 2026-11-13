@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// MERGE — THE FRAMES CHAT of a talking head (phase V26.5, the owner 2026-10-10; docs/local-app/PLAN.md "V26.5").
+// MERGE — THE FRAMES CHAT of a talking head.
 //
 // A first frame asked for in words, in Setup (public/js/merge-v3/fchat.js). It is the pictures chat's way of asking -
 // the person's turn, a record and an Alerts row for every picture AT THE PRESS, the asking behind the answer
@@ -9,7 +9,7 @@
 //   - what it is told: every attached picture is named by the field it was put in - the base (character and place, or
 //     the frame being changed) and the extra ones, said in words (lib/mv3-agent.js FRAME_ROLES) -, the frame is drawn in
 //     the project's shape, and a `shot` is where its edge is;
-//   - the writer OFF is not "as typed" (the owner's answer (g)): a light pass puts the words into English and names the
+//   - the writer OFF is not "as typed": a light pass puts the words into English and names the
 //     pictures, and the frame is drawn at once;
 //   - what it makes is the PROJECT's: the picture lands in the project's frames folder (`frame`, `scen` on the record),
 //     and `to frames` puts it into the set (routes/scen3.js addChatFrame).
@@ -38,12 +38,12 @@ const KIND = 'fchat';
 const AT_ONCE = 5;
 const COUNTS = [1, 2, 4];
 const ROLES = ['character', 'place', 'frame', 'extra', 'product'];
-// A picture's role as the page says it; anything else - a row kept from before the two fields - is an extra one.
+// A picture's role as the page says it; anything else is an extra one.
 const _roleOf = (r) => (ROLES.includes(String(r || '')) ? String(r) : 'extra');
 const SCEN = () => require('./scen3');
 const PROPS = require('../lib/props');
 
-// (phase V26.6, the owner's (п5)) THE PRODUCTS of a message: a picture in the product place that is a product of IMAGES ->
+// THE PRODUCTS of a message: a picture in the product place that is a product of IMAGES ->
 // Props goes with its name and description (lib/props.js) - anything else there is an extra picture. -> { roles, notes
 // (aligned with the pictures: { name, description } of a product, else null), props: [{ path, name, description }] - what the
 // frame remembers }.
@@ -92,7 +92,7 @@ router.post('/scen3/fchat/send', (req, res) => {
     const write = b.write !== false;
     const facts = SCEN().fchatFacts(id, String(b.shot || ''));
     const media = refs.map((p, i) => ({ path: p, kind: 'image', role: roles[i], label: roles[i] }));
-    // THE WRITER STOPS FOR A LOOK (as in the video chat, V16): the person's turn and a prompt card, the writer behind the
+    // THE WRITER STOPS FOR A LOOK (as in the video chat): the person's turn and a prompt card, the writer behind the
     // answer, and the frame drawn only from the card (`draw`).
     if (write) {
       if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
@@ -106,7 +106,7 @@ router.post('/scen3/fchat/send', (req, res) => {
                           card: { type: 'prompt', plain: true, state: 'writing', kick: kickW, startedAt: new Date().toISOString(),
                                   from: turn.id, text, model: engine, params: { shot: String(b.shot || '') }, versions: [] } });
       } catch (e) { CHAT.writing.delete(kickW); throw e; }
-      // The idea the words came from is used now (the owner's answer (d)).
+      // The idea the words came from is used now.
       _ideaUsed(b.idea, key);
       res.json({ success: true, send: card.id, card: card.id, review: true });
       _writeCard(card.id, kickW, { id, engine, text, refs, roles, notes: pr.notes, facts, before });
@@ -128,7 +128,7 @@ router.post('/scen3/fchat/send', (req, res) => {
         frame: true, scen: id, shot: String(b.shot || ''), props: pr.props,
       }).id);
     }
-    // The words on the answer itself: the message is drawn whole - what was asked over what came of it (the owner's answer (g)).
+    // The words on the answer itself: the message is drawn whole - what was asked over what came of it.
     CHAT.add({ id: msgId, project: key, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs, media, asked: text });
     _ideaUsed(b.idea, key);
     res.json({ success: true, send: msgId, genIds: ids });
@@ -169,8 +169,8 @@ const _rest = (x) => ((x.card.sends || []).length || (x.genIds || []).length ? '
 // Every writing is a VARIANT of the prompt (at most 10), the newest chosen; one that fails leaves the variants there
 // were and says why. Filed only while the card still waits for THIS writer. The writer LOOKS at the pictures (hosted
 // once - the same bytes are one upload); pictures it cannot see, it writes without.
-// (phase V61) What the writer and the ideas must know of the look - a covered face, the clothes - read now if it never was:
-// the first-frames field that read it is gone (routes/scen3.js _fchatRead). Unanswered, the chat goes on without it.
+// What the writer and the ideas must know of the look - a covered face, the clothes - read now if it never was
+// (routes/scen3.js _fchatRead). Unanswered, the chat goes on without it.
 async function _factsRead(id, shot) {
   try { await SCEN().fchatRead(id); } catch (e) { console.warn('[fchat] the look and the place were not read: ' + e.message); }
   return SCEN().fchatFacts(id, shot);
@@ -295,7 +295,7 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
     const aspect = (facts && facts.format) || '9:16';
-    // (phase V26.6) The frame remembers its products.
+    // The frame remembers its products.
     const pr = _products(refs, (Array.isArray(m.media) ? m.media : []).filter(a => a && a.path).map(a => _roleOf(a.role)));
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);
@@ -329,7 +329,7 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
   }
 });
 
-// ── `ideas` (the owner, 2026-10-10: "a button to analyse both pictures and offer variants") ──
+// ── `ideas`: a button to analyse the pictures and offer variants ──
 // The agent looks at what is in the zone - the person's sheet and the place (or the frame being changed) and the extra
 // pictures - and answers six frames in words, as a message of the thread; each is a press away from the message box, and
 // one a message went from is marked used. Asked again, it looks again. Seconds and fractions of a cent: no Alerts row.
@@ -360,7 +360,7 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    // Everything in the zone: the base and the extra pictures (the owner: ideas with the things attached).
+    // Everything in the zone: the base and the extra pictures.
     const keep = refs.map((p, i) => i);
     const facts = await _factsRead(id, String(b.shot || ''));
     let picUrls = [];
@@ -376,8 +376,7 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
   }
 });
 
-// (phase V26.6, the owner's check 2026-10-31, (в): "на каждой идее можно нажать символ заново ... предлагается новая идея
-// выбранной карточки") ONE idea of an ideas message asked again: a VARIATION of it in its place - the agent shown the
+// ONE idea of an ideas message asked again: a VARIATION of it in its place - the agent shown the
 // pictures the ideas were made with (their numbers stay true), the other ideas so it repeats none. Its "used" goes.
 // { project, projectId, id, i, shot } -> { idea }. Fractions of a cent: no Alerts row; one at a time per idea (409).
 const _againNow = new Set();
@@ -434,8 +433,8 @@ router.post('/scen3/fchat/to-set', async (req, res) => {
     if (!proj) return res.status(404).json({ success: false, error: 'the project of this frame is gone' });
     const abs = toDiskExisting(g.imagePath);
     if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'the frame is not on the disk any more' });
-    // (phase V61) The frame keeps the edge it was asked with - the clip's writer reads its shot from it.
-    // (phase V26.6) ...and the products it was drawn with - the clip's writers read them.
+    // The frame keeps the edge it was asked with - the clip's writer reads its shot from it.
+    // ...and the products it was drawn with - the clip's writers read them.
     const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id, shot: g.shot || '', props: g.props || [] });
     res.json(Object.assign({ success: true }, out));
   } catch (e) {

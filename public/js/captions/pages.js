@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — heard words cut into PAGES, and a page broken into LINES (phase K2, 2026-10-03).
+   CAPTIONS — heard words cut into PAGES, and a page broken into LINES.
 
    A page is what is on screen at once. It ENDS where a thought ends - a full stop, a question, a pause
    of 0.4 s, a comma once the phrase has two words - and never runs across a line somebody typed, the
@@ -7,10 +7,10 @@
    FEWEST pages that each hold at most N words (the style's `wordsPerLine`, or the format's), fit in the
    style's `lines` lines of at most 0.78 of the frame (measure.js), last no more than 3.2 s and - two
    words or more - no less than 0.3 s; among the cuts into that many pages (or one more, when that is
-   what it takes), the most even one that does not leave a preposition or a conjunction at a page's end
-   ("что если на | тебя"), start a page on an enclitic ("| же"), or tear a pair apart ("5000 | лайков",
-   "потому | что"). That is how Subtitle Edit
-   and stable-ts cut; a greedy cut, even with the rules, left 7-15% of pages on a weak word.
+   what it takes), the most even one that does not leave a preposition or a conjunction at a page's end,
+   start a page on an enclitic, or tear a pair apart (a number and its noun, a two-word conjunction).
+   That is how Subtitle Edit and stable-ts cut; a greedy cut, even with the rules, leaves 7-15% of pages
+   on a weak word.
 
    A word alone on a page shorter than 0.3 s joins its neighbour when nothing hard lies between. A page
    stays on screen across a short gap to the next one (no blank flashes), and a little longer before a
@@ -22,7 +22,7 @@
    breakLines() is the one rule for where a page breaks into lines - the cut asks it whether a page fits,
    the .ass builder asks it where to put the breaks.
 
-   A LANE WITH SEVERAL PRESETS (phase V49, mix.js): what a deal put on a page (its references) is no look of its own - it is no
+   A LANE WITH SEVERAL PRESETS (mix.js): what a deal put on a page (its references) is no look of its own - it is no
    boundary, a page cut from words of two pages takes its first word's; a page must fit in EVERY look it may be dealt; and the
    pages cut again are dealt again (mix.js deal) - the lines typed by hand too.
 
@@ -50,9 +50,9 @@ export const PAGE = {
   minClip: 0.1,      // the shortest a page is on screen: the shortest clip a lane keeps
 };
 
-// What a cut of a phrase costs, besides being uneven ((words - n/k)^2 a page). The research's simulator
+// What a cut of a phrase costs, besides being uneven ((words - n/k)^2 a page). A simulation of the cut
 // settled on 4 / 6 / 1 for the fewest pages alone; with one more page allowed (at `page`), 5 and 8 keep
-// the weak ends at 0-1% of pages on the recorded words, against 7-15% cut greedily (K2 stand).
+// the weak ends at 0-1% of pages on the recorded words, against 7-15% cut greedily.
 const COST = { weak: 5, enclitic: 8, pair: 10, short: 1, page: 3, flash: 4, clause: 4 };
 
 // ── The words ───────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ const hasMark = (t) => /[.,!?;:…—–-]$/u.test(bare(t));
 const capital = (t) => /^\p{Lu}/u.test(String(t || '').replace(OPENERS, ''));
 
 // Prepositions, conjunctions, particles and determiners that belong to the NEXT word: a page or a line
-// does not end on them (unless they carry a mark - "Что?" may).
+// does not end on them (unless they carry a mark - "What?" may).
 const WEAK = new Set((
   'в во на с со к ко у о об обо от ото до из изо за по под подо над при про для без безо через перед передо '
   + 'между около после кроме ради среди сквозь вместо мимо против вокруг из-за из-под '
@@ -87,8 +87,8 @@ const PAIRS = new Set(['потому|что', 'так|как', 'так|что', 
 // A full stop that never ends a sentence...
 const ABBR = new Set(['т.', 'т.е.', 'т.к.', 'е.', 'к.', 'ул.', 'стр.', 'проф.', 'акад.', 'гл.', 'табл.',
   'г-н.', 'г-жа.', 'д-р.', 'mr.', 'mrs.', 'ms.', 'dr.', 'vs.', 'e.g.', 'i.e.', 'st.']);
-// ...and one that ends it only when the next word starts with a capital ("и др. Потом", "100 руб. за штуку").
-// "им.", "рис.", "см." are words as often as abbreviations - "Я верю им. Они..." ends a sentence (review K2).
+// ...and one that ends it only when the next word starts with a capital (an abbreviation before a lowercase word does not).
+// Some of these are words as often as abbreviations: before a capital they end the sentence.
 const MAYBE = new Set(['т.д.', 'т.п.', 'д.', 'п.', 'г.', 'гг.', 'в.', 'вв.', 'руб.', 'коп.', 'тыс.', 'млн.', 'млрд.', 'др.', 'etc.',
   'им.', 'рис.', 'см.']);
 
@@ -97,14 +97,14 @@ export const weakEnd = (t) => !hasMark(t) && WEAK.has(bare(t));
 /** A word a page should not start with. */
 export const enclitic = (t) => ENCLITIC.has(bare(t));
 
-/** Do the two words belong together ("5000 лайков", "50 000", "т. е.", "потому что", "А. Пушкин")? */
+/** Do the two words belong together (a number and its word, "50 000", a two-part abbreviation, a two-word conjunction, an initial and a surname)? */
 export function pair(a, b) {
   const A = String(a || ''), B = String(b || '');
-  if (/^[№$€£]?\d+([.,]\d+)*%?$/u.test(A) && /^[«"(]*\p{L}/u.test(B)) return true;     // 5000 лайков, 99% людей
+  if (/^[№$€£]?\d+([.,]\d+)*%?$/u.test(A) && /^[«"(]*\p{L}/u.test(B)) return true;     // 5000 likes, 99% of people
   if (/^\d{1,3}$/.test(A) && /^\d{3}(?!\d)/.test(B)) return true;                        // 50 000
-  if (/^\p{Lu}\.$/u.test(A) && capital(B)) return true;                                  // А. Пушкин
+  if (/^\p{Lu}\.$/u.test(A) && capital(B)) return true;                                  // A. Smith
   const x = bare(A), y = bare(B);
-  if (x === 'т.') return /^[едпк]\./u.test(y);                                           // т. е., и т. д.
+  if (x === 'т.') return /^[едпк]\./u.test(y);                                           // two-part abbreviations (i. e., etc.)
   if (hasMark(A)) return false;
   return PAIRS.has(x + '|' + y.replace(/[,.!?;:…]+$/u, ''));
 }
@@ -118,7 +118,7 @@ export function endsSentence(t, next, gap) {
   if (ABBR.has(s)) return false;
   if (MAYBE.has(s)) return !next || capital(next);
   if (/^\p{Lu}\.$/u.test(String(t).replace(OPENERS, ''))) return false;      // an initial
-  if (/^\d+\.$/u.test(s)) return !next || capital(next);                     // "3. в" is not an end
+  if (/^\d+\.$/u.test(s)) return !next || capital(next);                     // "3." before a lowercase word is not an end
   if (/^(\p{L}\.){2,}$/u.test(s)) return !next || capital(next);              // U.S., p.m.
   return true;
 }
@@ -126,7 +126,7 @@ export function endsSentence(t, next, gap) {
 const endsClause = (t) => /[,;:—–…-]$|\.\.\.$/u.test(bare(t));
 
 // ── Lines ───────────────────────────────────────────────────────────────────
-/** Classic subtitles (phase V30, block 4, (с12), (с42)): the `sentences` cut of a lane, and the `.srt` beside a render. */
+/** Classic subtitles: the `sentences` cut of a lane, and the `.srt` beside a render. */
 export const SENT = {
   chars: 42,         // a line holds at most this many characters...
   lines: 2,          // ...and a page at most this many lines
@@ -141,7 +141,7 @@ export const SENT = {
  * then three). The fewest lines no wider than 0.78 of the frame each; among those, the most even, with
  * no weak word at a line's end and no short word alone on a line of a page of three or more; when it is
  * a tie, the lower line the wider. A word wider than the limit alone is a line of its own.
- * A lane cut in `sentences` (phase V30, block 4) also holds a line to 42 characters; with no style at all
+ * A lane cut in `sentences` also holds a line to 42 characters; with no style at all
  * (`st` null - the `.srt`, which a player draws in its own font) the characters are the only measure.
  */
 export function breakLines(tokens, st, W) {
@@ -202,7 +202,7 @@ export function breakLines(tokens, st, W) {
 /**
  * How a page is DRAWN: its lines (breakLines) and the size it is drawn at. A word wider than a line
  * cannot be broken, so a page holding one is drawn smaller - just enough for it to fit 0.78 of the
- * frame ("сельскохозяйственные" in Rubik Mono One is 1.24 of it) - rather than run off the edges.
+ * frame (a long Russian word in Rubik Mono One is 1.24 of it) - rather than run off the edges.
  * @returns { lines: [counts], size } - `size` the style's own when nothing had to shrink
  */
 export function fitPage(tokens, st, W) {
@@ -239,7 +239,7 @@ export function joinsOf(pieces) {
   for (let i = 1; i < list.length; i++) {
     const p = list[i - 1], q = list[i];
     // A silence between them is a seam too: the listener stretches the last word of a read into it, so
-    // the pause rule, measured between WORDS, can miss it (review K2).
+    // the pause rule, measured between WORDS, can miss it.
     const goesOn = q.src === p.src && Math.abs(q.crop - (p.crop + (p.end - p.at) * (p.speed || 1))) < 0.05;
     if (!goesOn) out.push(q.at);
   }
@@ -264,7 +264,7 @@ export function fixJoins(words, joins) {
 }
 
 // ── The cut ─────────────────────────────────────────────────────────────────
-// What a deal put on a page is not a look of its own (V49): a look of references only is no look.
+// What a deal put on a page is not a look of its own: a look of references only is no look.
 const lookKey = (l) => {
   if (!l) return '';
   if (!l.style) return JSON.stringify(l);
@@ -277,19 +277,19 @@ const lookKey = (l) => {
 
 /**
  * @param words   [{ text, start, end, k?, h?, look?, voice? }] in timeline seconds; `look` is the own look of the
- *                caption the word came from: { style?, tx?, ty? }; `h` a word a person corrected (K10); `voice` the
- *                talking-head line it was heard from (phase V30, block 1) - a page never holds words of two lines, and
+ *                caption the word came from: { style?, tx?, ty? }; `h` a word a person corrected; `voice` the
+ *                talking-head line it was heard from - a page never holds words of two lines, and
  *                carries its line's voice
  * @param opts.lane    the lane's style as stored
  * @param opts.format  the timeline's format ('9:16' | '16:9')
  * @param opts.typed   [[from, to]] the lines typed by hand on the lane
  * @param opts.joins   [t] the seams between reads (joinsOf)
  * @param opts.walls   [[from, to]] spans a page does not run into or across - heard captions NOT being cut
- *                     again (recutSome). Unlike a typed line, a wall takes no word away (review K6).
+ *                     again (recutSome). Unlike a typed line, a wall takes no word away.
  * @param opts.srt     cut for the `.srt` beside a render (srt.js): the `sentences` rule by characters only
  * @returns [{ name, start, dur, words: [{ w, s, e, k?, h? }], style?, tx?, ty? }] - captions, heard
  *
- * A lane cut in `sentences` (its style's `cut`, phase V30 block 4) - and the `.srt` - is cut as classic subtitles: a
+ * A lane cut in `sentences` (its style's `cut`) - and the `.srt` - is cut as classic subtitles: a
  * phrase ends only at a hard boundary (a pause of 1 s, not 0.4) or a sentence's end, and a comma is where it is cut
  * best when it must be; a page holds any number of words in two lines of at most 42 characters (and of 0.78 of the
  * frame in the lane's font), 7 s at most, and stays up a second when the next page leaves room (SENT).
@@ -313,7 +313,7 @@ export function paginate(words, opts) {
     const mid = (start + end) / 2;
     if (typed.some(([a, b]) => mid >= a && mid < b)) continue;
     // Out from under EVERY typed line before its middle - they may overlap, and a short one may sit
-    // inside the word's first half (review K2). The spans are in start order: one pass follows a chain.
+    // inside the word's first half. The spans are in start order: one pass follows a chain.
     for (const [a, b] of typed) if (a < mid && b > start) start = Math.max(start, up2(b));
     const nextT = typed.find(([a]) => a >= mid);
     if (nextT && end > nextT[0]) end = down2(nextT[0]);
@@ -359,7 +359,7 @@ export function paginate(words, opts) {
     if (end) { phrases.push({ idx: cur, end }); cur = []; }
   }
 
-  // Each phrase's style: the lane's, with the own look of its words on top. On a lane with several presets (V49) a page may be
+  // Each phrase's style: the lane's, with the own look of its words on top. On a lane with several presets a page may be
   // dealt any of them: `alts` - each look it must fit in too.
   const mixL = srt ? null : mixOf(o.lane);
   const styleCache = new Map();
@@ -367,7 +367,7 @@ export function paginate(words, opts) {
     const key = lookKey(look);
     if (!styleCache.has(key)) {
       // The `.srt` has no look: a player draws it in its own font, so its lines are measured in characters.
-      // (V68 P4) A font dealt over the preset keeps the preset's widths (place.js drawnPage): cut in the preset's font.
+      // A font dealt over the preset keeps the preset's widths (place.js drawnPage): cut in the preset's font.
       const st = srt ? null : cutStyle(withAuto(resolveStyle(o.lane, look && look.style), F.w, F.h));
       const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(o.format);
       const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
@@ -384,8 +384,8 @@ export function paginate(words, opts) {
   };
 
   // Does words[a..b) make a page? Joining a flash single to a neighbour (`merging`) is never refused for
-  // being short: the joined page is longer than the single it takes in (review K2: with two words a page,
-  // the rule against flashes made single-word ones).
+  // being short: the joined page is longer than the single it takes in (with two words a page, a rule
+  // against flashes would make single-word ones).
   const maxDur = sent ? SENT.maxDur : PAGE.maxDur;
   const makes = (S, a, b, merging) => {
     const n = b - a;
@@ -495,8 +495,8 @@ export function paginate(words, opts) {
       if (sent) end = Math.max(end, Math.min(start + SENT.minDur, limit));
       return { start, end: Math.max(end, last.end) };
     });
-    // NO PAGE IS ON SCREEN UNDER 0.1 s - the shortest clip a lane keeps; a shorter one was stretched by
-    // the lane and drawn over the next page (review K2). It starts earlier instead, in the page before's
+    // NO PAGE IS ON SCREEN UNDER 0.1 s - the shortest clip a lane keeps; a shorter one would be stretched by
+    // the lane and drawn over the next page. It starts earlier instead, in the page before's
     // tail (which keeps its own 0.1 s) and never before a typed line: its words keep their moments, so a
     // re-cut gives the same pages back.
     for (let i = 0; i < span.length; i++) {
@@ -568,9 +568,9 @@ export function lookOf(c) {
 
 /**
  * Every heard word on the lane, back in timeline seconds, with its marks and its caption's look. A caption
- * whose words no longer spell its text (rewritten by hand before K10) is timed for its text first - the
- * person's text is what is cut, never the words it replaced. A talking head's word keeps its line (`voice`,
- * phase V30, block 1): the pages cut again are still that line's.
+ * whose words no longer spell its text is timed for its text first - the
+ * person's text is what is cut, never the words it replaced. A talking head's word keeps its line (`voice`):
+ * the pages cut again are still that line's.
  */
 export function wordsOf(track) {
   const out = [];
@@ -581,7 +581,7 @@ export function wordsOf(track) {
     for (const w of timedWords(c)) {
       if (!w || !String(w.w || '').trim()) continue;
       // Rounded as the cut rounds them: two words at one moment then tie exactly and keep their caption's
-      // order, instead of being reordered by float noise on every re-cut (review K2).
+      // order, instead of being reordered by float noise on every re-cut.
       const x = { text: String(w.w), start: r2(base + (+w.s || 0)), end: r2(base + (+w.e || 0)) };
       if (w.k) x.k = true;
       if (w.h) x.h = true;
@@ -594,7 +594,7 @@ export function wordsOf(track) {
 }
 
 /**
- * A heard caption's words as they spell its text: its own, or - rewritten by hand before K10 - its text timed
+ * A heard caption's words as they spell its text: its own, or - when they no longer spell it - its text timed
  * over them (retext). When even that cannot be done (no room), its words as they are.
  */
 export function timedWords(c) {
@@ -605,7 +605,7 @@ export function timedWords(c) {
 }
 
 /**
- * Is this heard caption more than ONE page of its lane - by the limits the cut keeps (K10b: a line grown by
+ * Is this heard caption more than ONE page of its lane - by the limits the cut keeps (a line grown by
  * corrections; a correction never cuts by itself)? More words than a page holds, wider than its lines, or
  * on screen longer than PAGE.maxDur. @returns what it is more than, in words, or null when it fits.
  */
@@ -614,7 +614,7 @@ export function overPage(c, laneStyle, format) {
   if (words.length < 2) return null;
   const F = renderFrame(format);
   const st = cutStyle(withAuto(resolveStyle(laneStyle, c && c.style), F.w, F.h));
-  // A lane cut in `sentences` (phase V30, block 4): any number of words, two lines, up to 7 s.
+  // A lane cut in `sentences`: any number of words, two lines, up to 7 s.
   const sent = st.cut === 'sentences';
   const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);
   const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
@@ -659,12 +659,12 @@ export function recut(track, tl, style) {
 /**
  * The lane's clips with its heard captions cut again (recut) - the typed ones the very same objects - or
  * null. A page that comes out as it was keeps its caption's id, any other the id of the caption its first
- * word came from while that one is free (review K2): a re-cut that changes nothing changes nothing - no
+ * word came from while that one is free: a re-cut that changes nothing changes nothing - no
  * undo step, no save - and a merge with another save still knows the captions. `makeId` gives a new id.
  */
 export function recutClips(track, tl, makeId) {
   const pages = recut(track, tl);
-  // A lane with no heard words is still dealt its mix (V49) - its typed lines.
+  // A lane with no heard words is still dealt its mix - its typed lines.
   if (!pages) {
     if (!needsDeal(track)) return null;
     const list = ((track && track.clips) || []).slice();
@@ -679,7 +679,7 @@ export function recutClips(track, tl, makeId) {
 }
 
 /**
- * Only SOME heard captions cut again - those picked (K6: a caption given a style of its own is cut by
+ * Only SOME heard captions cut again - those picked (a caption given a style of its own is cut by
  * it, and the rest of the lane stays the very same objects, its hand cuts included). Every other
  * caption is a wall the new pages do not cross. @returns { clips, made: [ids of the new pages] } or null
  */
@@ -690,8 +690,8 @@ export function recutSome(track, tl, ids, makeId) {
   if (!mine.length) return null;
   const others = all.filter((c) => !mine.includes(c));
   // Typed lines take the words under them away, as in every cut; the other HEARD captions are only walls -
-  // a picked word that touches a neighbour (a zero-length word at a page's end, an edge pulled over it)
-  // used to be taken away, and a whole caption could vanish (review K6).
+  // taking away a picked word that touches a neighbour (a zero-length word at a page's end, an edge pulled
+  // over it) could make a whole caption vanish.
   const pages = paginate(wordsOf({ clips: mine }), {
     lane: track.style, format: tl && tl.format,
     typed: typedOf({ clips: others }),
@@ -707,10 +707,10 @@ export function recutSome(track, tl, ids, makeId) {
 /**
  * The lane's heard captions cut again with LOOKS laid over them by time: `looks` [[from, to, look]] - a word
  * whose middle falls in a span wears that look. What a save merge uses when the server laid the lane
- * again while a caption was given a style of its own (review K6): the server's words, my looks.
+ * again while a caption was given a style of its own: the server's words, my looks.
  *
  * `keep` (a Set of ids): heard captions left exactly as they are - lines I corrected that the server's lay
- * never saw (K10). They stand as typed lines do: the server's words under them go, ONE BY ONE (a page of
+ * never saw. They stand as typed lines do: the server's words under them go, ONE BY ONE (a page of
  * its that only touches one keeps the rest of its words), and no page runs across them.
  */
 export function recutWithLooks(track, tl, looks, makeId, keep) {
@@ -734,7 +734,7 @@ export function recutWithLooks(track, tl, looks, makeId, keep) {
 }
 
 // Pages as lane clips, keeping the ids of the captions they came from (see recutClips). A new id is never
-// one the lane already holds - two captions under one id are deleted, picked and merged as one (review K6).
+// one the lane already holds - two captions under one id are deleted, picked and merged as one.
 function _asClips(pages, old, makeId, lane) {
   const taken = new Set((lane || old).map((c) => c && c.id));
   const fresh = () => { let id; do { id = makeId(); } while (taken.has(id)); taken.add(id); return id; };

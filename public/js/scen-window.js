@@ -1,5 +1,4 @@
-// THE SCENARIO WINDOW - one scenario read, or a new one written by hand (phase V28.2, the owner 2026-10-12:
-// "blank будет открывать попап, как при создании сценария в merge"). ONE window for two pages: Merge's
+// THE SCENARIO WINDOW - one scenario read, or a new one written by hand. ONE window for two pages: Merge's
 // "scenarios" view opens it on a row or on "+ scenario" (js/merge-v3/scen-pick.js), the Library's
 // "New scenario -> blank" on a new one (js/library/main.js). Its frame and its buttons are css/dialog.css.
 //
@@ -12,7 +11,7 @@
 //     saved(rec)   after every save and restore - the list behind the window reads itself again
 //     use(rec)     makes the project and opens it; a throw is said in the corner (js/notice.js), the window stays
 //     closeOnSave  the window goes after a save (the Library: the shelf shows it, selected)
-//     voiceover    (phase V62) `use` makes a voiceover, and the lines are kept in the language they are typed in
+//     voiceover    `use` makes a voiceover, and the lines are kept in the language they are typed in
 
 import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
@@ -32,7 +31,7 @@ export async function openScenario(summary, hooks = {}) {
   const saved = hooks.saved || (() => {});
   let rec = { id: null, title: '', lines: [], vertical: '', product: '', roles: [] };
   const ov = _el('div', 'mv3-x-ov');
-  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
+  // the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
   const box = _el('div', 'mv3-x is-scen u-win is-float');
   ov.appendChild(box);
 
@@ -70,11 +69,11 @@ export async function openScenario(summary, hooks = {}) {
   const vertical = field('Vertical', input('optional', 'mv3-sc-verticals'));
   const product = field('Product', input('optional', 'mv3-sc-products'));
   const role = field('Role', input('optional', 'mv3-sc-roles'));
-  // The presenter's gender (phase V28.2: "Gender", no longer "Narrator" - in the Library a narrator is the
+  // The presenter's gender ("Gender", not "Narrator" - in the Library a narrator is the
   // voice a script is WRITTEN in, a field of its own).
   const gender = field('Gender', (() => {
     const s = document.createElement('select');
-    s.className = 'u-in';                             // (phase V73 block 2) the shared field, as the window's others
+    s.className = 'u-in';                             // the shared field, as the window's others
     for (const [v, t] of [['', 'Any - every character is offered'], ['female', 'Female'], ['male', 'Male']]) {
       const o = document.createElement('option');
       o.value = v; o.textContent = t;
@@ -109,8 +108,8 @@ export async function openScenario(summary, hooks = {}) {
   const save = _el('button', 'mv3-c-btn u-btn', 'Save');
   save.type = 'button';
   save.title = 'Keep it in the library';
-  // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
-  // 2026-10-01). For a scenario in the archive the same place says `restore`: the row and its menu
+  // `use` worn like `save` and standing at the far right, away from it. For a scenario in the
+  // archive the same place says `restore`: the row and its menu
   // offer nothing to build with until it is back, and neither does this window.
   let archived = !!(summary && summary.archived);
   const use = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main');
@@ -123,7 +122,7 @@ export async function openScenario(summary, hooks = {}) {
   dressUse();
   foot.append(save, note, use);
   box.appendChild(foot);
-  // (phase V73 block 2) The foot's line says how the work goes ("reading…", "saving…", "saved"); an error is a popup in the
+  // The foot's line says how the work goes ("reading…", "saving…", "saved"); an error is a popup in the
   // corner (js/notice.js) and the line goes quiet.
   const fail = (text) => { note.textContent = ''; showError(text); };
 
@@ -190,15 +189,15 @@ export async function openScenario(summary, hooks = {}) {
   const collect = () => ({
     id: rec.id || undefined,
     title: title.value.trim(),
-    // The scenario's own type, not a fixed one: it is a field now (phase F7), set in the Library.
+    // The scenario's own type, not a fixed one: it is a field, set in the Library.
     type: (rec && rec.type) || 'talking_head',
     vertical: vertical.value.trim(),
     product: product.value.trim(),
     // One role, the presenter: the store keeps a list, and nothing offers a second one.
     roles: (role.value.trim() || gender.value) ? [{ id: 'r0', name: role.value.trim(), gender: gender.value }] : [],
     lines: linesOf().map(text => ({ text })),
-    // (phase V29, the owner 2026-10-14) Lines typed in another language are kept in English: the server translates them.
-    // (phase V62) Not for a voiceover: it is read in the language it is written in.
+    // Lines typed in another language are kept in English: the server translates them.
+    // Not for a voiceover: it is read in the language it is written in.
     english: !hooks.voiceover,
   });
 
@@ -226,7 +225,7 @@ export async function openScenario(summary, hooks = {}) {
       use.disabled = true;
       note.textContent = 'restoring…';
       try {
-        // By the list's id when the record could not be read (review I): rec.id is null then.
+        // By the list's id when the record could not be read: rec.id is null then.
         await API.archive(rec.id || summary.id, false);
         archived = false;
         dressUse();
@@ -242,7 +241,7 @@ export async function openScenario(summary, hooks = {}) {
     use.disabled = true;
     try {
       await hooks.use(await store());
-      // THE WINDOW GOES (phase Y1, the owner 2026-09-22): the project is open on its step, and this
+      // THE WINDOW GOES: the project is open on its step, and this
       // modal must not stay on top of it - with the page's shortcuts switched off underneath, because
       // a modal layer holds them.
       _close(ov, layer);

@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the .ass file, ONE builder for the render and the preview (phases K0, K3; 2026-10-03).
+   CAPTIONS — the .ass file, ONE builder for the render and the preview.
 
    Burnt by libass through ffmpeg's `ass` filter (lib/mv3b-render.js), and drawn by the same libass in
-   the page (layer.js, K4), so the screen and the file are one drawing.
+   the page (layer.js), so the screen and the file are one drawing.
 
    A PAGE IS LAID OUT ONCE. What a word does while it is spoken is a timed switch (`\t` at the word's
    moments, `\kf` for the fill), never a new layout - and what would change the layout or the boxes is
-   drawn in a layer of its own (after the K3 review, checked on our ffmpeg frame by frame):
-     layer +0  the line's box, ONE run for the whole page (a box drawn word by word left dark seams
-               where the boxes of a semi-transparent line overlapped);
+   drawn in a layer of its own (checked on our ffmpeg frame by frame):
+     layer +0  the line's box, ONE run for the whole page (a box drawn word by word leaves dark seams
+               where the boxes of a semi-transparent line overlap);
      layer +1  the box behind the spoken word (`box`): every word's box clear but the spoken one's,
                the spaces in clear blocks of their own so the box sits round the word only;
      layer +2  the letters - outlined, with their shadow; a word being popped steps aside here;
@@ -17,40 +17,40 @@
    Every layer has the same font, size, spacing and scale, so libass lays the words in the same places
    in all of them (a border or a shadow does not move a glyph). Four layers per lane: lane i is 4i..4i+3,
    so a higher lane is still drawn on top. A style that needs none of this - no box with timed words,
-   no box or pop effect - is one event, as it always was.
+   no box or pop effect - is one event.
 
    A caption's words carry their times from its own start ({w, s, e, k}); they are used only while they
    still SAY the caption's text - a line corrected by hand is drawn as typed, untimed, rather than the
-   old words being burnt over it. A word marked `k` (K10b) wears the marked colour (style.js markedColour)
+   old words being burnt over it. A word marked `k` wears the marked colour (style.js markedColour)
    for its whole page in every effect - in karaoke and sweep before AND after it is sung; in color and box
    it turns the text's colour while it is spoken, so it still flashes and its letters stay off the box.
    Casing is applied here, to what is drawn - never to the stored text.
 
-   A TYPED line of the subtitle lane plays the spoken word too (phase V30, block 1, the owner's (с5)): its words are timed by
+   A TYPED line of the subtitle lane plays the spoken word too: its words are timed by
    their letters over the whole line (words.js typedWords) here, where it is drawn - nothing stored, the line stays typed for
-   every other rule. A text lane's lines are titles: drawn as typed, as always.
+   every other rule. A text lane's lines are titles: drawn as typed.
 
-   THE LINES ARE BROKEN HERE, not by libass (phase K2): pages.js breakLines() says where - no line wider
+   THE LINES ARE BROKEN HERE, not by libass: pages.js breakLines() says where - no line wider
    than 0.78 of the frame, the most even, never on a weak word - and the break is written as \N between
    the SAME two words in every layer, so the layers cannot part. libass's own wrap (0.88, the margins)
-   is only a safety net now. A line somebody typed with a line break is drawn as typed; a page holding a
+   is only a safety net. A line somebody typed with a line break is drawn as typed; a page holding a
    word wider than a line is drawn in a smaller size, in a style row of its own, until it fits.
    How a page is drawn - its words, breaks and size - is place.js drawnPage, the same rule the editor's rectangle
    of the page is worked out by; a page that would run past an edge of the frame is moved back inside in its
-   \pos (phase V30, block 3, the owner's (с34)), and one that fits is written as it always was.
+   \pos, and one that fits is written where it is.
 
-   A TEXT LINE WITH AN ENTRANCE, AN EXIT, A PLATE, A TILT OR A GLOW (phase V42) is drawn by text-fx.js in its lane's four
-   layers, with a style row of its own; every other line is drawn here, exactly as before. A line in a font without Cyrillic
+   A TEXT LINE WITH AN ENTRANCE, AN EXIT, A PLATE, A TILT OR A GLOW is drawn by text-fx.js in its lane's four
+   layers, with a style row of its own; every other line is drawn here. A line in a font without Cyrillic
    that holds a Cyrillic letter is drawn whole in the font's twin (fonts.js drawnFamily).
 
-   A SUBTITLE PAGE WITH AN IN OR AN OUT (phase V49, point 8a) is drawn here in the same layers, moving as a whole (page-fx.js
+   A SUBTITLE PAGE WITH AN IN OR AN OUT is drawn here in the same layers, moving as a whole (page-fx.js
    says how): from its own place, its In inside its own events - the words' moments untouched - and its Out in a second set of
-   events over its last moments, the words carried on from where they were (_shift). A page without them is drawn as before,
-   byte for byte; `at-once` (an In chosen to be none) only takes the preset's `appear` away.
+   events over its last moments, the words carried on from where they were (_shift). A page without them has no
+   motion tags; `at-once` (an In chosen to be none) only takes the preset's `appear` away.
 
-   A SUBTITLE LANE IN TWO ROWS (phase V71, style.js `rows`) is drawn by its plan (place.js rowsPlan): each page from its In, played
+   A SUBTITLE LANE IN TWO ROWS (style.js `rows`) is drawn by its plan (place.js rowsPlan): each page from its In, played
    before its first word, to the end of its Out, played after its end, whole in between for at least 0.8 s, every other page in
-   the second row - the same layers, the words' moments the page's. A lane without it is drawn as before, byte for byte.
+   the second row - the same layers, the words' moments the page's. A lane without it is drawn in one row.
 
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -99,10 +99,10 @@ export function assText(s) {
 // switches at once, \kf fills from the left. A PAUSE IS A SYLLABLE OF ITS OWN: \k carries a length, not
 // a moment, so the moments are rounded once and the lengths taken between them - no word lights early by
 // the length of a pause, and nothing drifts.
-// A MARKED word (`k`, K10b) wears its colour before AND after it is sung - both colours of its syllable -
+// A MARKED word (`k`) wears its colour before AND after it is sung - both colours of its syllable -
 // and the next word takes the style's two back explicitly (\r would start the colours over, not the
 // timing). `mark`: { on, prim, sec } as override colours, or nothing - a line without a marked word is
-// written exactly as before.
+// written with no mark colours.
 export function karaokeLine(words, tag, casing, brk, mark) {
   const k = tag || '\\k';
   const out = [];
@@ -132,7 +132,7 @@ export function layered(st) {
   return st.effect === 'box' || st.effect === 'pop' || st.effect === 'bounce' || (BOXY(st) && st.effect !== 'none');
 }
 
-// The words, while they still spell the caption's text (words.js); a line rewritten before K10 has none to time.
+// The words, while they still spell the caption's text (words.js); a line they no longer spell has none to time.
 const _wordsOf = (c) => (spells(c.words, c.name) ? c.words : null);
 
 // How the page arrives, repeated in every word's block (\r would undo it from the second word on).
@@ -149,8 +149,8 @@ function _sw(w, base, on, after) {
   return base + '\\t(' + s + ',' + (s + 1) + ',' + on + ')\\t(' + e + ',' + (e + 1) + ',' + after + ')';
 }
 
-// The words as an event that starts `off` ms into the page sees them (an Out's, phase V49): their times from that event's
-// start, `t0` the start before it was cut at 0 (s), and what each was by then. (phase V71) `off` below 0 - an event starting
+// The words as an event that starts `off` ms into the page sees them (an Out's): their times from that event's
+// start, `t0` the start before it was cut at 0 (s), and what each was by then. `off` below 0 - an event starting
 // before the page (an In played before its first word): the words come that much later in it.
 function _shift(words, off) {
   if (!words || !off) return words;
@@ -176,7 +176,7 @@ function _place(st, a) {
 }
 
 // ── layer +2: the letters ───────────────────────────────────────────────────
-// `head` (phase V49): a moving page's own tags for every block - its motion, and the blur when the motion does not set it -
+// `head`: a moving page's own tags for every block - its motion, and the blur when the motion does not set it -
 // in place of how a page arrives.
 function _textBody(c, st, words, page, head0) {
   const arrive = head0 != null ? head0 : _arrive(st), blur = head0 != null ? '' : _blur(st);
@@ -200,7 +200,7 @@ function _textBody(c, st, words, page, head0) {
       t = _sw(w, w.k ? '\\1c' + mk : '', '\\alpha&HFF&', '\\alpha&H00&');
     } else if (w.k && (st.effect === 'color' || st.effect === 'box')) {
       // Marked, the whole page - and while it is spoken it turns the text's colour: a flash where every
-      // other word lights up, and letters that do not sink into a box of the same colour (K10b).
+      // other word lights up, and letters that do not sink into a box of the same colour.
       t = _sw(w, '\\1c' + mk, '\\1c' + prim, '\\1c' + mk);
     } else if (w.k) {
       t = '\\1c' + mk;                                    // marked to stand out: the whole page
@@ -211,7 +211,7 @@ function _textBody(c, st, words, page, head0) {
   }).join('');
 }
 
-// ── layer +3 on a moving page (phase V49): its size is the page's times its growth (page-fx.js popScale) ──
+// ── layer +3 on a moving page: its size is the page's times its growth (page-fx.js popScale) ──
 function _popBodyMoving(st, words, brk, part, base, head) {
   const hl = tagColour(st.highlight);
   const grow = st.effect === 'pop' ? { x: 112, y: 125, up: 80, down: 170 } : { x: 100, y: 132, up: 60, down: 140 };
@@ -254,7 +254,7 @@ function _wordBoxBody(st, words, brk, head) {
 }
 
 /**
- * A SUBTITLE PAGE THAT MOVES (phase V49): its In in its own events [start, the Out's start], its Out in a second set over its
+ * A SUBTITLE PAGE THAT MOVES: its In in its own events [start, the Out's start], its Out in a second set over its
  * last moments - each set in the layers a page of its style has (see the header). `dlg` writes an event.
  */
 function _movingPage(dlg, M, s, L, start, end, box, drawn) {
@@ -268,7 +268,7 @@ function _movingPage(dlg, M, s, L, start, end, box, drawn) {
 
 /**
  * The events of a moving page: `sets` [{ part (page-fx.js, or null - at rest), t0, t1 (s), off (ms - the words' shift, _shift), ev
- * (the event's length, ms) }], each in the layers a page of its style has (see the header), drawn `lift` px down (phase V71: its row).
+ * (the event's length, ms) }], each in the layers a page of its style has (see the header), drawn `lift` px down (its row).
  */
 function _drawSets(dlg, s, L, box, drawn, sets, lift) {
   const st = s.st;
@@ -299,7 +299,7 @@ function _drawSets(dlg, s, L, box, drawn, sets, lift) {
 }
 
 /**
- * (phase V71) A PAGE OF A LANE IN TWO ROWS, drawn by its plan `R` (place.js rowsPlan): its In over [S - inL, S], whole until H, its
+ * A PAGE OF A LANE IN TWO ROWS, drawn by its plan `R` (place.js rowsPlan): its In over [S - inL, S], whole until H, its
  * Out over [H, H + outL], in its row; a move up or down turned away from the other row (page-fx.js awayFrom). Not moving at all (no
  * In or Out, or no room for them) - one set of events over [S, H], arriving with nothing.
  */
@@ -374,9 +374,9 @@ function boxStyle(name, st, a, w, h) {
 export function buildAss(lanes, w, h) {
   const list = (Array.isArray(lanes) ? lanes : [lanes]).filter(Boolean);
   const used = [];
-  // A LANE HOLDING A MARKED WORD (review K10): a page with one is written word by word, and on a 'box' look
+  // A LANE HOLDING A MARKED WORD: a page with one is written word by word, and on a 'box' look
   // with no spoken effect - one event, a box per run of letters - the semi-transparent boxes of the runs overlap
-  // in dark seams. Such a lane is drawn layered, the box once under the page; a lane without one is unchanged.
+  // in dark seams. Such a lane is drawn layered, the box once under the page; a lane without one is not affected.
   const make = (name, st, marks) => ({ name, st, a: { ...anchorOf(st, w, h), h }, marks: !!marks,
     layered: layered(st) || (!!marks && st.borderStyle === 'box' && st.effect === 'none') });
   for (const track of list) {
@@ -415,7 +415,7 @@ export function buildAss(lanes, w, h) {
     return shrunk.get(key);
   };
 
-  // A line in a font without Cyrillic that holds a Cyrillic letter: the same style in the font's twin (V42).
+  // A line in a font without Cyrillic that holds a Cyrillic letter: the same style in the font's twin.
   const twins = new Map();
   const twinned = (s, text) => {
     const fam = drawnFamily(s.st.font, text);
@@ -436,7 +436,7 @@ export function buildAss(lanes, w, h) {
     + assTime(end) + ',' + style + ',,0,0,0,,' + text);
   used.forEach((u, lane) => {
     const L = lane * 4;
-    // (phase V71) A subtitle lane in two rows: every page by its plan.
+    // A subtitle lane in two rows: every page by its plan.
     const plan = u.subs ? rowsPlan(u.track, w, h) : null;
     u.clips.forEach((c, i) => {
       let s = twinned(styleOf(u, lane, c), c.name);
@@ -450,21 +450,21 @@ export function buildAss(lanes, w, h) {
       }
       // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
       // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
-      // drawn exactly as typed, its spaces and all (review K2). A typed line of the subtitle lane with a
-      // spoken word is timed by its letters (phase V30, block 1). One rule with the editor's rectangle (place.js).
+      // drawn exactly as typed, its spaces and all. A typed line of the subtitle lane with a
+      // spoken word is timed by its letters. One rule with the editor's rectangle (place.js).
       const drawn = drawnPage(c, s.st, u.subs, w, end - start);
       const box = boxOf(drawn, s.st, w, h);
       if (drawn.shrink) s = smaller(s, drawn.shrink);
       const R = plan ? plan.get(pageKey(c, i)) : null;
       if (R) { _rowPage(dlg, s, L, R, box, drawn, c); return; }
-      // A subtitle page with an In or an Out moves (phase V49, page-fx.js); any other is drawn as it always was.
+      // A subtitle page with an In or an Out moves (page-fx.js); any other is drawn without motion.
       const M = u.subs ? pageMotion(s.st, end - start) : null;
       if (M) { _movingPage(dlg, M, s, L, start, end, box, drawn); return; }
       const words = drawn.words;
       const page = { brk: drawn.brk, text: drawn.text };
-      // An In chosen to be none (`at-once`, V49) arrives with nothing - the preset's way of arriving goes.
+      // An In chosen to be none (`at-once`) arrives with nothing - the preset's way of arriving goes.
       const st = s.st.enter === 'at-once' && s.st.appear !== 'none' ? Object.assign({}, s.st, { appear: 'none' }) : s.st;
-      // Never off the frame (phase V30, block 3, (с34)): a page past an edge is drawn moved back inside.
+      // Never off the frame: a page past an edge is drawn moved back inside.
       const place = _place(st, (box.dx || box.dy) ? { ...s.a, x: s.a.x + box.dx, y: s.a.y + box.dy } : s.a);
       if (s.layered && BOXY(st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(st, page));
       if (s.layered && st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(st, words, page.brk));

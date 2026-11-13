@@ -1,6 +1,6 @@
 'use strict';
 
-/* faces.js - the app's HIDDEN faces window (phase V33.2; docs/local-app/PLAN.md "Фаза V33", V33.2).
+/* faces.js - the app's HIDDEN faces window.
 
    MediaPipe's face detector needs a browser, and the server (Node, in a utility process) is not one; a page of the app
    counts only while it is open. So the shell keeps one window that is never shown - public/faces-worker.html - which asks
@@ -8,7 +8,7 @@
    on whatever page the person is on. Opened once the server answers; it follows the server to a new port like every
    other window (main.js); a page that dies is opened again; the app's quit closes it.
 
-   (phase V84 block 3) The BAKE window is one more of the same kind - public/bake-worker.html, which draws the effects the page
+   The BAKE window is one more of the same kind - public/bake-worker.html, which draws the effects the page
    alone draws for the render (lib/fx-bake.js): createWorkerWindow({ log, page, name }) makes either. */
 
 const { BrowserWindow } = require('electron');
@@ -55,7 +55,7 @@ function createWorkerWindow({ log, page, name }) {
 }
 
 const createFacesWindow = ({ log }) => createWorkerWindow({ log, page: 'faces-worker.html', name: 'faces' });
-/** (phase V84 block 3) The hidden window that draws the effects the page alone draws, for the render (lib/fx-bake.js). */
+/** The hidden window that draws the effects the page alone draws, for the render (lib/fx-bake.js). */
 const createBakeWindow = ({ log }) => createWorkerWindow({ log, page: 'bake-worker.html', name: 'bake' });
 
 module.exports = { createFacesWindow, createBakeWindow, createWorkerWindow };

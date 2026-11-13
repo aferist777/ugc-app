@@ -1,10 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   WHERE ELSE TO FIND SOUNDS (phase V54, the owner 2026-10-27: "добавим справа от строки поиска символ с вопросиком и при
-   клике открывается всплывашка с ссылками на сайты со звуками"; (зв2): the five below) - the "?" right of the SFX search,
+   WHERE ELSE TO FIND SOUNDS - the "?" right of the SFX search, a popup of links to the five sites below,
    on Merge's Library panel and the Library's Media shelf alike (js/sound/shelf.js searchHead).
 
    Sites whose sounds go into a video with no credit owed. Where a site can search by a word, its link carries the words
-   typed in the search (checked 2026-10-27: Freesound, Pixabay and Mixkit's "discover" take any word; Kenney and Sonniss
+   typed in the search (Freesound, Pixabay and Mixkit's "discover" take any word; Kenney and Sonniss
    have only their pages). A link opens in the computer's own browser - the window sends every outside address there
    (desktop/main.js). A downloaded file is let go on My sounds in the tree.
 

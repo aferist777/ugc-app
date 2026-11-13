@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE BUBBLE (phase V61, the owner 2026-10-30, (т4): "пояснения можно всплывашкой подсказкой показывать над тем, к чему
-   относится всплывашка - и может быть всплывашки сделать в форме облачка диалогов типа, как в комиксе"; (т4а) - one look for
-   the setup of a talking head AND every "?" of the app). ONE module: js/merge-v3/wk-fragments.js and wk-voice.js hang their
+   THE BUBBLE - a hint as a speech bubble, as in a comic, one look for the setup of a talking head AND every "?" of the
+   app. ONE module: js/merge-v3/wk-fragments.js and wk-voice.js hang their
    explanations on what they are about, js/sound/qmark.js shows a "?"'s popup through it.
 
    A speech bubble OVER the thing it is about, its tail pointing down at it - under it, tail up, when there is no room above;
@@ -16,9 +15,7 @@
      showBubble(anchor, text, o)  opened now, over `anchor`
      closeBubble()              the bubble open, closed
      tipBox(o) / placeBubble(box, anchor, side)
-                                (phase V62, the owner 2026-10-31: "облачка будут не в самих полях, а поверх интерфейса
-                                рисоваться с красным крестиком чтобы закрыть. и так же галочка, "не показывать больше"") a
-                                STEP'S TIP: the same bubble over the page with a red ✕ in its corner and the tick "don't
+                                a STEP'S TIP: the same bubble over the page with a red ✕ in its corner and the tick "don't
                                 show again" at its foot - o.title, o.text, o.onClose(), o.onNever(on); placed by its owner
                                 (js/merge-v3/vo-tips.js) over its thing ('above') or under it ('below'). Not on the stack of
                                 layers: it takes no key.
@@ -80,7 +77,7 @@ export function showBubble(anchor, text, o) {
   if (opts.title) box.appendChild(_el('b', null, opts.title));
   for (const p of t.split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
   document.body.appendChild(box);
-  // (phase V67) `side: 'below'` - under the thing when there is room (a question's answer: its words stay readable above).
+  // `side: 'below'` - under the thing when there is room (a question's answer: its words stay readable above).
   placeBubble(box, anchor, opts.side);
   const layer = Layers.open(box, { modal: false, name: 'help', onEsc: closeBubble });
   _open = { box, anchor, layer, on: opts.on || '' };

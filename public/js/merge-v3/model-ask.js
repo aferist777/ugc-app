@@ -1,15 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE SPEECH MODEL, OFFERED WHEN THE PROGRAM FIRST STARTS (phase V30, block 1; the owner 2026-10-15, answer (с23):
-   "давай вопрос при первом запуске программы").
+   THE SPEECH MODEL, OFFERED WHEN THE PROGRAM FIRST STARTS.
 
-   Captions are heard by Groq when there is a key, and on this computer when there is not (the owner's (с22)); a talking
+   Captions are heard by Groq when there is a key, and on this computer when there is not; a talking
    head's new lines are heard by themselves - and on this computer that needs the speech model, 574 MB, which is never
    downloaded by itself. So Merge asks once, the first time it opens in a library where it was never asked: the
    recognition program is there, the model is not and is not being downloaded.
 
      Download   the app fetches it in the background (lib/whisper-local.js: Hugging Face, a pinned commit, checked by
                 SHA-256, a broken download goes on from where it stopped); Admin -> This computer shows how far it is
-     Not now    the lane of subtitles and Admin offer it later, as before
+     Not now    the lane of subtitles and Admin offer it later
 
    Asked once: the answer is kept in localStorage, which the library mirrors (data/ui-state.json, js/storage-sync.js) - a
    new library is a new start. A question already on screen (the update's) is answered first.
@@ -36,7 +35,7 @@ export async function askModelOnce() {
   const mb = Math.round((+st.model.bytes || 574041195) / 1e6);
 
   const back = _el('div', 'dr-back');
-  const box = _el('div', 'nm-box dr-box u-ask is-float');   // (phase V73 block 2) the shared question, in the middle
+  const box = _el('div', 'nm-box dr-box u-ask is-float');   // the shared question, in the middle
   box.setAttribute('role', 'dialog');
   box.appendChild(_el('b', 'nm-t', 'Subtitles on this computer'));
   box.appendChild(_el('div', 'dr-holds', 'Speech can be heard right here, with no key and no cost - the captions of a talking head '
@@ -46,8 +45,8 @@ export async function askModelOnce() {
   const yes = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Download');
   const no = _el('button', 'nm-b u-btn is-s', 'Not now');
   for (const b of [yes, no]) b.type = 'button';
-  row.append(no, yes);                                  // "Not now" left, the verb right (б2-8)
-  // (phase V73 block 4) the note above the buttons, as the update's question has it
+  row.append(no, yes);                                  // "Not now" left, the verb right
+  // the note above the buttons, as the update's question has it
   box.append(_el('div', 'dr-note', 'From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> '
     + 'This computer offer it later.'), err, row);
   document.body.append(back, box);

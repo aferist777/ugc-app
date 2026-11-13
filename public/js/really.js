@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   "REALLY?" - ONE FORM OF THE SECOND PRESS (phase V73 block 2, the owner 2026-11-05, (б2-9) а, (б2-10) а).
+   "REALLY?" - ONE FORM OF THE SECOND PRESS.
 
    A button that deletes, or spends money again, asks with itself: the first press ARMS it, the second does it. Armed it
    says "Really?" (a short addition after a dot when it says how much goes: "Really? · 2 keys"); a delete arms as the
    shared part's red fill (`.u-btn.is-danger.is-armed`), a paid press as a light step (`.u-btn.is-armed`) with its own
    words ("$0.42 · go?"). It lets go by itself after 3 s, on Escape (a layer of js/layers.js, not modal - the page's keys
-   go on working), and, given a `host`, when the pointer leaves it. The confirmations are where they always were: none
-   added, none taken away (the owner's rule).
+   go on working), and, given a `host`, when the pointer leaves it.
 
      twoPress(btn, { go, paid, text, extra, ms, host, armed, rest })
        go(e)       the second press

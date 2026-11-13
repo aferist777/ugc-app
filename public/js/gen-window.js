@@ -1,8 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
-// THE GENERATORS' WINDOWS (phase V58, the owner 2026-10-29, (лк5)-(лк7): "я вроде хотел сделать генераторы в попапе в
-// library. чтобы открывался попап размером с альманах, как в merge проектах"). ONE module, opened from anywhere:
+// THE GENERATORS' WINDOWS. ONE module, opened from anywhere:
 //
-//   openFrame(o)      a window the almanac's size (860×560) - a generation's GEN_SIZE, 1280×800 (phase V64) - over the page - its head a row of CRUMBS (each but the
+//   openFrame(o)      a window the almanac's size (860×560) - a generation's GEN_SIZE, 1280×800 - over the page - its head a row of CRUMBS (each but the
 //                     last goes back; one may carry a button, "characters / Mute (+ new look)"), its body the caller's;
 //                     on the stack of layers (js/layers.js): Escape, its ✕ and a press beside it close it. SEVERAL at
 //                     once - one over another (talking head's "who" over "where", wk-setup.js): the one closed shows the
@@ -12,10 +11,10 @@
 //                     and a sentence on the right, `create`. The server decides what the inputs mean (routes/scen3.js
 //                     POST /scen3/gen/env, /scen3/gen/lookbook) and files what is made: IMAGES -> Environments /
 //                     Lookbooks, the photo in their references.
-//   openGenerator(o)  a window holding only the bench - THE SEAM for the Library and Merge's Library panel (sub-session Q):
+//   openGenerator(o)  a window holding only the bench - THE SEAM for the Library and Merge's Library panel:
 //                       openGenerator({ kind: 'environment' | 'lookbook', where, anchor, onMade, onClose })
 //
-// THE WINDOW DOES NOT CLOSE BY ITSELF ((лк5)): `create` starts a row of Alerts (the server's - it waits, files, announces)
+// THE WINDOW DOES NOT CLOSE BY ITSELF: `create` starts a row of Alerts (the server's - it waits, files, announces)
 // and the bench says so on its line ("in Alerts · Drawing the place…"); the person closes the window when they want. A
 // row of this bench found running (a reload, a window opened again) is followed to its end (`where.spot` the same).
 //
@@ -58,26 +57,18 @@ export function ensureCss() {
 
 // ── The frame ───────────────────────────────────────────────────────────────
 const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vhelp.js)
-// (phase V64 block 2, the owner 2026-10-31, (зг5), (зг9): "давай все окна генераций 1280×800") THE GENERATIONS' WINDOWS - the
-// pictures, video and sound chats, the frames chat, New Character - are this size; a smaller screen makes it smaller
-// (openFrame). (fix (е), the owner 2026-11-01: "давай new environment/lookbook/prop сделаем маленькими окнами как были") New
-// environment, New lookbook and New prop are the almanac's size again (W_WIN × H_WIN, over their place), as are the pickers,
-// the almanac, the viewer and the "who" / "where" windows.
-// (fix (б)) And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
+// THE GENERATIONS' WINDOWS - the pictures, video and sound chats, the frames chat, New Character - are this size; a smaller
+// screen makes it smaller (openFrame). New environment, New lookbook and New prop are the almanac's size (W_WIN × H_WIN, over
+// their place), as are the pickers, the almanac, the viewer and the "who" / "where" windows.
+// And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
 export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
-// (phase V63, the owner 2026-11-02: "делаем компактней попапы highlights, talking head ... сделай размеры попапов highlights и
-// talking head примерно такого же размера" - as the chats he had set, 958×669) The highlights popup and Home's talking head quick
-// start open at this size, in one column; each keeps its own size and place once moved or stretched.
+// The highlights popup and Home's talking head quick start open at this size, in one column; each keeps its own size and place once moved or stretched.
 export const POPUP_SIZE = Object.freeze({ w: 960, h: 670 });
-// (fix (л), (зг14)) The chats' windows - pictures, video, sound, frames - are ONE size in ONE place, both the person's and kept.
+// The chats' windows - pictures, video, sound, frames - are ONE size in ONE place, both the person's and kept.
 export const GEOM_CHAT = Object.freeze({ key: 'chat', resize: true, move: true, keepSize: true, keepPos: true });
 const _frames = [];                        // open, the top last
 
-// (phase V64, fix (л), the owner 2026-11-01: "попапы которые мы делали сделаем, чтобы пользователь мог менять их размеры ...
-// будет запоминаться размер попапов и ... можно было перемещать попап по интерфейсу"; (зг14): "чаты картинок, видео и звука, чат
-// кадров - размер и положение общее - запоминаем и размер и положение. окна create props/environment/lookbook статичные ... окна
-// who/where - только передвигаем и запоминаем. размеры не меняем. в остальном согласен") A WINDOW'S OWN SIZE AND PLACE. A window
-// opened with `geom: { key, resize, move, keepSize, keepPos }` is dragged by its head (`move`) and stretched by its edges and
+// A WINDOW'S OWN SIZE AND PLACE. A window opened with `geom: { key, resize, move, keepSize, keepPos }` is dragged by its head (`move`) and stretched by its edges and
 // corners (`resize`); what the person set is kept in the browser under `key` (`keepSize`, `keepPos`) - one key shared by
 // several windows makes them one size in one place (the chats: 'chat'). A double press on the head puts the window back to its
 // own size, centred, and forgets what was kept. A window without `geom` stays as it opens (New environment / lookbook / prop).
@@ -93,13 +84,12 @@ function _geomPut(key, g) {
 
 /**
  * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size, passDrags, geom, foot }.
- *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720; V64: a
- *         generation's GEN_SIZE); a smaller screen still makes it smaller
- *   passDrags  (phase V64) a thing of the app dragged out of it lays the windows aside until it is let go (_passing)
- *   geom  (phase V64, fix (л)) { key, resize, move, keepSize, keepPos } - moved by its head, stretched by its edges, kept
- *   foot  (phase V73 block 4) true - the frame's foot of 52 px under the body, `win.foot`, filled by the caller: what is
+ *   size  { w, h } - another size than the almanac's (a generation's GEN_SIZE); a smaller screen still makes it smaller
+ *   passDrags  a thing of the app dragged out of it lays the windows aside until it is let go (_passing)
+ *   geom  { key, resize, move, keepSize, keepPos } - moved by its head, stretched by its edges, kept
+ *   foot  true - the frame's foot of 52 px under the body, `win.foot`, filled by the caller: what is
  *         secondary at the left, a `.sp`, then the price and the one gold button at the right
- * (phase V73 block 4, rule 5) The frame is the shared one (css/app-shell.css `.u-win`): a head of 40 px one step lighter, the
+ * The frame is the shared one (css/app-shell.css `.u-win`): a head of 40 px one step lighter, the
  * crumbs at 13 px, the ✕ of 28 px.
  * -> { box, head, crumbs, body, foot, close(), alive(), isTop(), setCrumbs(list) }
  *    setCrumbs([{ label, on?, act?: { label, title, on } }]) - the last is where the window is; the others go back.
@@ -122,7 +112,7 @@ export function openFrame(o) {
   ov.appendChild(box);
   document.body.appendChild(ov);
   const G = o.geom && o.geom.key ? o.geom : null;
-  let live = null;                         // (fix (л)) { x, y, w, h } the person set in this opening
+  let live = null;                         // { x, y, w, h } the person set in this opening
   const place = () => {
     const W = window.innerWidth, H = window.innerHeight, M = 8;
     const sz = o.size || {};
@@ -133,8 +123,7 @@ export function openFrame(o) {
     h = Math.min(h, H - 2 * M);
     let left, top;
     if (live) { left = live.x; top = live.y; } else if (kept && G.keepPos && kept.x != null && kept.y != null) { left = +kept.x; top = +kept.y; } else {
-      // (phase V64, fix (б), the owner 2026-10-31: "сделай чтобы окна чатов были в одном месте") A generation's window
-      // (GEN_SIZE) stands in the middle of the screen whatever opened it - the chats, the sound, the generators all in one place.
+      // A generation's window (GEN_SIZE) stands in the middle of the screen whatever opened it - the chats, the sound, the generators all in one place.
       const a = o.size !== GEN_SIZE && o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
       const cx = a && a.width ? a.left + a.width / 2 : W / 2;
       const cy = a && a.height ? a.top + a.height / 2 : H / 2;
@@ -174,7 +163,7 @@ export function openFrame(o) {
   return win;
 }
 
-// (phase V64 block 3, the owner's (зг4): "окно отходит на время перетаскивания") A window with `passDrags` - the chats'
+// A window with `passDrags` - the chats'
 // - lets a result dragged out of it reach the page: from the moment the drag starts (a tick later - the drag's picture is
 // taken first) every window and its darkening are see-through and catch nothing; let go anywhere, or Escape, and they come
 // back. Only a drag of this app's own things (`application/x-…`: a picture, a clip, a sound for a lane) - files and words
@@ -208,7 +197,7 @@ function _crumbs(host, list) {
     if (!last && c.on) { b.type = 'button'; b.title = 'Back to ' + c.label; b.addEventListener('click', c.on); }
     host.appendChild(b);
     if (c.act) {
-      // (phase V73 block 4) a generator's place in the head: the button with the gold line ("+ new look", "+ new environment")
+      // a generator's place in the head: the button with the gold line ("+ new look", "+ new environment")
       const a = el('button', 'gw-act u-btn is-s is-gen', c.act.label);
       a.type = 'button';
       if (c.act.title) a.title = c.act.title;
@@ -222,7 +211,7 @@ function _crumbs(host, list) {
 /** The frames open now, the top last. */
 export const frames = () => _frames.slice();
 
-// (fix (л)) Moved by the head and stretched by the edges and corners - what was set kept under the window's key; a double press
+// Moved by the head and stretched by the edges and corners - what was set kept under the window's key; a double press
 // on the head puts it back. `setLive(g)` tells the frame what the person set in this opening (null - none).
 function _wireGeom(box, head, G, place, setLive) {
   const M = 8;
@@ -349,7 +338,7 @@ export function openGenerator(o) {
   return win;
 }
 
-// (phase V73 block 2, (б2-19)) A shelf that could not be read is not an empty shelf: "Environments did not load" and Try
+// A shelf that could not be read is not an empty shelf: "Environments did not load" and Try
 // again where its tiles would be, the reason in the corner (js/notice.js). Tiles shown already stay.
 function _read(kind) {
   const s = S[kind];
@@ -388,7 +377,7 @@ function _mode(kind) {
   return note ? 'draw' : '';
 }
 
-// What stops `create`, in words ('' - nothing does). Twenty characters for words alone - the owner's number.
+// What stops `create`, in words ('' - nothing does). Twenty characters for words alone.
 function _why(kind) {
   const s = S[kind];
   const note = s.note.trim();
@@ -424,7 +413,7 @@ function _render(kind) {
 
   // LEFT: the shelf a base is drawn from. What is made joins it, so the pile grows while you work.
   const left = el('div', 'gw-half is-shelf');
-  // (phase V73 block 2) the shared parts - reading, empty, did not load (js/ui-state.js); `gw-note` is their place here
+  // the shared parts - reading, empty, did not load (js/ui-state.js); `gw-note` is their place here
   if (s.failed) left.appendChild(failedEl(K.noun + 's', () => { s.failed = false; _render(kind); _read(kind); }, { cls: 'gw-note' }));
   else if (s.list === null) left.appendChild(loadingEl('reading the ' + K.noun + 's…', { cls: 'gw-note' }));
   else if (!s.list.length) left.appendChild(emptyEl(K.none, { icon: 'image', cls: 'gw-note' }));
@@ -466,7 +455,7 @@ function _render(kind) {
     ask.appendChild(el('div', 'gw-choice-why', s.optionsWhy || 'There is no place in this picture. What should it become?'));
     const chips = el('div', 'gw-chips');
     for (const opt of s.options) {
-      // (phase V73 block 4, (4а-10) а) the shared chip (.u-chip): several may be lit
+      // the shared chip (.u-chip): several may be lit
       const c = el('button', 'gw-chip u-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
       c.type = 'button';
       c.title = 'Pick any number of them - they are made into one place';
@@ -501,8 +490,8 @@ function _render(kind) {
   if (typeof o.onChange === 'function') { try { o.onChange(); } catch (e) { /* the caller's */ } }
 }
 
-// The field a base picture goes into: empty, a press opens the file picker; holding a picture, a press opens it large (the
-// owner's rule, 2026-09-17); ✕ takes it off; a file let go on it replaces it.
+// The field a base picture goes into: empty, a press opens the file picker; holding a picture, a press opens it large; ✕
+// takes it off; a file let go on it replaces it.
 function _field(kind) {
   const s = S[kind];
   const src = s.ref ? s.ref.dataUrl : (s.base ? derived(s.base, 'card') : '');
@@ -514,7 +503,7 @@ function _field(kind) {
   input.hidden = true;
   const take = async (file) => {
     if (!file) return;
-    // (phase V73 block 2) a refused or unread file is said in the corner (js/notice.js)
+    // a refused or unread file is said in the corner (js/notice.js)
     if (!isPictureFile(file)) { showError('That is not a picture'); return; }
     try { s.ref = { name: file.name || 'photo', dataUrl: await pictureDataUrl(file), token: '' }; s.base = ''; _forget(s); }
     catch (e) { showError((e && e.message) || 'The file could not be read'); return; }
@@ -642,7 +631,7 @@ async function _make(kind, o) {
     s.making = false;
     s.status = '';
     // A refusal of the agent is an answer about what was asked for, and it reads better as that than as an error - it stays
-    // on the bench's line; a failure of the press is an error, in the corner (phase V73 block 2).
+    // on the bench's line; a failure of the press is an error, in the corner.
     if (e && e.refused) s.said = msg;
     else showError('The ' + KINDS[kind].noun + ' failed: ' + msg);
     _end(kind, msg);

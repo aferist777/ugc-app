@@ -1,4 +1,4 @@
-// NEW CHARACTER - the Create model column (js/library/chmake.js; the Character page's, moved in phase H8).
+// NEW CHARACTER - the Create model column (js/library/chmake.js).
 //
 // Built in three pieces, because two of them must not move when the column flips between
 // building by hand and steering a reference by words:
@@ -10,9 +10,7 @@
 //              the face, so it has to still be there once a face exists
 //   buildRef   the `ref` panel: where a face from outside is steered by a sentence
 //
-// There is no simple/advanced switch. What used to be "advanced" — every group, two columns —
-// is now simply how the parameters look; the old simple mode showed four of eighteen and hid
-// the rest behind a toggle nobody needed once presets existed.
+// There is no simple/advanced switch: every group, two columns, is how the parameters look.
 //
 // One state, two views. The dropdowns and the prompt's clickable tokens read and write the
 // same values object, so changing either moves the other. A second source of truth here would
@@ -233,7 +231,7 @@ function closeTokenPicker() {
 }
 document.addEventListener('click', closeTokenPicker);
 
-// Two rows, as asked: what the dependencies allow, then everything else. The split is the
+// Two rows: what the dependencies allow, then everything else. The split is the
 // point — the second row is reachable, but you can see you are stepping outside what the
 // other choices imply, which is exactly the information a flat list hides.
 function openTokenPicker(anchor, k) {
@@ -371,9 +369,8 @@ export function build(host, hooks) {
   prow.appendChild(psel);
 
   // USE takes the example itself rather than the parameters behind it. A preset is two things
-  // at once - a set of values you can generate from, and a face already made - and until now
-  // only the first was reachable: choosing one filled the dropdowns and you paid for a
-  // generation to see a face very like the one already on screen.
+  // at once - a set of values you can generate from, and a face already made - and USE reaches
+  // the second, so nothing is paid for a generation of a face very like the one already on screen.
   //
   // Beside the picker rather than under the example, because it acts on what the picker
   // chose. Disabled with no preset, since there would be nothing to take.
@@ -479,8 +476,7 @@ export function build(host, hooks) {
 // column. No parameters describe either, so the only handle is a sentence about what to change.
 //
 // Applying an edit deliberately does NOT re-apply the realism markers. The base face already
-// carries them; adding them again on every edit compounds the effect. The old page made the
-// same call with { skipRealism: true }, and it was worth carrying over.
+// carries them; adding them again on every edit compounds the effect.
 //
 // The examples are appearance only - no clothing among them, because the analyzer is forbidden
 // to change clothing and a placeholder should not advertise what will be refused. They run from

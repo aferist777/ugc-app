@@ -1,7 +1,7 @@
 'use strict';
 
-/* build-patterns.js - builds the app's built-in pattern set (phase V65; docs/local-app/plan/,
-   "Фаза V65"), from tools/patterns-list.json and the folder of finished files the owner chose: one folder laid out as
+/* build-patterns.js - builds the app's built-in pattern set, from tools/patterns-list.json and the folder of finished
+   files: one folder laid out as
    vendor/patterns/ is, and ONE archive of it - the archive tools/fetch-patterns.js installs. Run by hand when the set
    changes; npm install never runs it:
        node tools/build-patterns.js --from "<folder with the list's `from` files>"
@@ -10,8 +10,7 @@
    number of patterns go into fetch-patterns.js's PIN.
 
    THE FILES: each a SEAMLESS tile, white on transparent (a texture's brightness became its opacity), 2160 x 2160 - noise
-   and film grain 1080 x 1080 (the owner 2026-10-31). Made in the V65 sub-session and approved by the owner in the folder
-   "Паттерны — просмотр" (2026-10-31): Hero Patterns (CC BY 4.0, Steve Schoger) and CC0 files of Wikimedia Commons,
+   and film grain 1080 x 1080. Hero Patterns (CC BY 4.0, Steve Schoger) and CC0 files of Wikimedia Commons,
    Flickr and ambientCG, three drawn for the app; the list says where each came from and what was done to it. Not used:
    Pixabay (its licence forbids handing its files on as they are).
 

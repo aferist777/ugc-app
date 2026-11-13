@@ -1,33 +1,32 @@
 // WHERE MEDIA CAN BE PUT - the places of the media tree (GET /api/library/tree), cut down to a smaller tree for the place
-// picker (js/place-tree.js, phase V39): the window "save the piece to" after a stretch is chosen in any video (js/cut.js,
-// phase TG block 7) and "move to…" of a REFERENCES post (js/references/post.js, block 5b).
+// picker (js/place-tree.js): the window "save the piece to" after a stretch is chosen in any video (js/cut.js)
+// and "move to…" of a REFERENCES post (js/references/post.js).
 //
 //   { key, label, count, locked, to?, newIn?, children? }
 //     to       the node is a place itself: { kind, cat, label, text } - a kind and its category ('' - none), the
 //              category's name, the whole path in words ("Generated · B-rolls · Reels")
-//     newIn    (phase V54, (зв44)) a new folder in this node - the picker draws it as the "+" of the node's row (a row of
-//              its own until 2026-11-12), for a kind's node AND every folder of it: { kind, parent, label } - the folder made
-//              there is the place
+//     newIn    a new folder in this node - the picker draws it as the "+" of the node's row, for a kind's node AND
+//              every folder of it: { kind, parent, label } - the folder made there is the place
 //     a node with neither only opens.
 //
 // REFERENCES - back to the post's own source folder (no category: the sources' folders themselves are not places, a post
 // goes back to its own) and its own categories; VIDEO - Generated (a B-roll with no category), B-rolls' categories,
 // Hooks, Uploads and theirs (never Talking heads: a take is its project's); IMAGES (unless `images: false`) - IMAGES
-// itself and its categories, never the references of Environments / Lookbooks (`closed`, phase V57). (Phase V35: the tree has no Uncategorized nodes - what has no category lies in the node that
-// says so with `loose`.)
+// itself and its categories, never the references of Environments / Lookbooks (`closed`). (The tree has no
+// Uncategorized nodes - what has no category lies in the node that says so with `loose`.)
 //
-// (phase V54, `audio: true` - "Move to…" of several tiles, js/tile-select.js) AUDIO too: Music itself, its highlights
+// (`audio: true` - "Move to…" of several tiles, js/tile-select.js) AUDIO too: Music itself, its highlights
 // folder and the moods (`to.folder`, `to.mood` - a mood takes only the tracks its preset made, the server says so), My
-// sounds and its categories; never Built-in or ★ Favorites. (2026-11-09, the owner's (в19)) And AUDIO itself (`to.aroot`).
+// sounds and its categories; never Built-in or ★ Favorites. And AUDIO itself (`to.aroot`).
 
 const KINDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references']);
-// The kinds whose own node holds folders (its key is the kind) - and their folders do (phase V54).
+// The kinds whose own node holds folders (its key is the kind) - and their folders do.
 const HOLDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references', 'sounds', 'music']);
 const AUDIO_KINDS = new Set(['sounds', 'music']);
 const ANYCAT = '__cat__';
 
 /**
- * opts { images: false - without IMAGES; audio: true - with AUDIO (V54); refHome - the words for REFERENCES' "no category";
+ * opts { images: false - without IMAGES; audio: true - with AUDIO; refHome - the words for REFERENCES' "no category";
  *        newCats - the kinds whose nodes take a new folder (their "+") - a kind's and every folder's of it }
  * -> the roots: REFERENCES, VIDEO, IMAGES (, AUDIO)
  */
@@ -38,14 +37,14 @@ export function placesOf(tree, opts) {
   const map = (n, path) => {
     if (n.kind === 'heads' || n.ref) return null;
     if (n.kind === 'sfx' || n.key === 'sfx-fav') return null;          // Built-in is the app's; Favorites is a star
-    // (phase V57, the owner's (ок2)) The references of Environments / Lookbooks and the folders in them take nothing by hand.
+    // The references of Environments / Lookbooks and the folders in them take nothing by hand.
     if (n.closed) return null;
     let to = null;
     if (n.kind === 'music' && o.audio) to = { kind: 'music', cat: n.cat || '', label: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '', text: path || n.label };
     else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label, ...(n.aroot ? { aroot: true } : {}) };
     else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
     const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
-    // A kind's own node (its key is the kind) and every folder of it (phase V54) take a new folder - not the app's
+    // A kind's own node (its key is the kind) and every folder of it take a new folder - not the app's
     // (highlights, its moods, the sources' folders: `noAdd`).
     const holds = adds.has(n.kind) && HOLDS.has(n.kind) && !n.noAdd && !n.project && (n.key === n.kind || (n.cat && (n.own || n.locked)));
     if (holds) kids.push({ key: 'new:' + n.key, label: '+ new folder…', newIn: { kind: n.kind, parent: n.cat || '', label: n.label } });
@@ -79,7 +78,7 @@ export function placesOf(tree, opts) {
 /** Where a place is, in words: "Uploads · Reels", "REFERENCES · its site's folder". */
 export function whereText(to) {
   if (!to) return '';
-  // (phase V54) A folder in a folder: the whole path the picker built.
+  // A folder in a folder: the whole path the picker built.
   if (to.cat && to.text && to.kind !== 'references') return to.text;
   if (to.kind === 'references') return 'REFERENCES · ' + (to.cat ? (to.text ? to.text.replace(/^REFERENCES · /, '') : to.label) : 'its site\'s folder');
   if (to.kind === 'images') return 'IMAGES' + (to.cat ? ' · ' + to.label : '');

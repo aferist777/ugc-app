@@ -1,13 +1,13 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// HIGHLIGHTS - a long video into vertical shorts (phase V33.1; lib/highlights-store.js, lib/highlights-job.js).
+// HIGHLIGHTS - a long video into vertical shorts (lib/highlights-store.js, lib/highlights-job.js).
 //
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
-//   GET    /api/highlights/offer            -> { lengths, counts, kinds }   (V63) what the popup offers, with no project
-//   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   (V63) made AND started by the press
+//   GET    /api/highlights/offer            -> { lengths, counts, kinds }   what the popup offers, with no project
+//   POST   /api/highlights/start            { name?, …as /:id/start } -> { alertId, key, id }   made AND started by the press
 //   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio=&count= -> { price }   what "find moments" is expected to cost
-//   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
+//   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, audio, kind, length, count, style, moods, title } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
@@ -16,18 +16,18 @@
 //   POST   /api/highlights/:id/fragments/restore     { n? } -> { n } the last deleted (or n) back, 0 when none
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
-//                                                 (V66) or { ns, place: { pos, ty }, size: n | 'auto', wordsPerLine, lines } -> { n }
-//   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   (V66) the title on top on / off for several
-//   POST   /api/highlights/:id/volume            { ns, lane: speech | music, volume } -> { n }   (V66) a lane's volume on several
-//   POST   /api/highlights/:id/patterns          { ns, patterns } -> { n }   (V74) main video's patterns on several
+//                                                 or { ns, place: { pos, ty }, size: n | 'auto', wordsPerLine, lines } -> { n }
+//   POST   /api/highlights/:id/title-on-top      { ns, on } -> { n }   the title on top on / off for several
+//   POST   /api/highlights/:id/volume            { ns, lane: speech | music, volume } -> { n }   a lane's volume on several
+//   POST   /api/highlights/:id/patterns          { ns, patterns } -> { n }   main video's patterns on several
 //   POST   /api/highlights/:id/fx                { add: { <n>: { <clip id>: [effects] } } } | { ns, remove: <kind> } -> { n }
-//                                                 (V84, (эф11)) clip effects on several fragments' main video
-//   POST   /api/highlights/:id/music             { ns, moods | none, open } -> { n, open, missed }   (V66) their music dealt again / off
-//   POST   /api/highlights/:id/fragments/:n/music  { how: another | <mood> | none, taken, open } -> { music, clips? }   (V66) one's music
+//                                                 clip effects on several fragments' main video
+//   POST   /api/highlights/:id/music             { ns, moods | none, open } -> { n, open, missed }   their music dealt again / off
+//   POST   /api/highlights/:id/fragments/:n/music  { how: another | <mood> | none, taken, open } -> { music, clips? }   one's music
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
-//   POST   /api/highlights/:id/fragments/:n/title-on-top/remove   (V69 P12) and taken off it
-//   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together (V33.4)
-//   POST   /api/highlights/:id/render/stop  all of the project's renders stopped (V33.4, the owner's (х43))
+//   POST   /api/highlights/:id/fragments/:n/title-on-top/remove   and taken off it
+//   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together
+//   POST   /api/highlights/:id/render/stop  all of the project's renders stopped
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -45,7 +45,7 @@ const router = express.Router();
 JOB.boot();
 
 // What the page is shown of a project: everything but the agent's whole answer, which is the server's business. `caps`
-// (phase V33.3): each made fragment's caption style, read from its timeline - for the one project the field shows.
+// each made fragment's caption style, read from its timeline - for the one project the field shows.
 function view(rec, o) {
   if (!rec) return null;
   const { agent, ...rest } = rec;
@@ -57,14 +57,14 @@ function view(rec, o) {
   // The kind as it is read: none is auto.
   if (rec.ask) out.ask = { ...rec.ask, kind: HL.kindOf(rec) };
   if (o && o.caps) {
-    // (phase V33.4) And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
+    // And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
     const rv = RENDER.viewOf(rec);
-    // (phase V76.1) Every made fragment's timeline read at once (lib/merge-store.js many), not the store's index once each.
+    // Every made fragment's timeline read at once (lib/merge-store.js many), not the store's index once each.
     const tls = MSTORE.many((rec.fragments || []).filter((f) => f.state === 'ready' && f.key).map((f) => f.key));
     out.fragments = (rec.fragments || []).map((f) => {
       const tl = f.state === 'ready' && f.key ? (tls.get(String(f.key)) || null) : null;
       const r = rv.byN[f.n] || {};
-      // (phase V66) `lanes`: what the common settings of several show of each - its subtitles' place and shape, its sound lanes.
+      // `lanes`: what the common settings of several show of each - its subtitles' place and shape, its sound lanes.
       return { ...f, ...(tl ? { cap: CUT.capOf(tl), lanes: CUT.lanesOf(tl) } : {}), rq: r.line || null, rendered: r.render || null };
     });
     out.rendering = rv.rendering;
@@ -76,7 +76,7 @@ function view(rec, o) {
 // What the popup offers: the lengths, the counts and the kinds (fragmentation with its own lengths, no count).
 function offer() {
   return { lengths: HL.LENGTHS, counts: HL.COUNTS,
-    // (phase V69 P12) each kind its count buttons, and whether it is in development (its button grey).
+    // each kind its count buttons, and whether it is in development (its button grey).
     kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, counts: HL.countsOf(k),
       ...(v.inDev ? { inDev: true } : {}), ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])) };
 }
@@ -88,7 +88,7 @@ router.post('/highlights', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V63, P14, the owner 2026-10-30, (бс3), (бс8)) HOME'S QUICK START: the popup opens with no project (`offer`), and its
+// HOME'S QUICK START: the popup opens with no project (`offer`), and its
 // "find moments" MAKES the project and starts it in one press - closed with ✕, nothing was made. A press refused before any
 // money (no style, a bad link, a file gone) leaves no project behind.
 router.get('/highlights/offer', (_req, res) => {
@@ -117,7 +117,7 @@ router.get('/highlights/price', (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V43, the owner's (ё18)) The sound tracks of a video - a file of this computer the app's window handed over (`path`), or
+// The sound tracks of a video - a file of this computer the app's window handed over (`path`), or
 // a source of the Library (`source`) - so the popup offers the choice when there is one. Only read.
 //   GET /api/highlights/tracks ?path= | ?source= -> { tracks: [{ k, label, def }], first }
 router.get('/highlights/tracks', async (req, res) => {
@@ -141,7 +141,7 @@ router.get('/highlights/:id', (req, res) => {
   // Whether "retry" has something to go on with, and whether it costs (the row's own answer - lib/alerts.js view).
   const row = rec.work && rec.work.alertId ? ALERTS.get(rec.work.alertId) : null;
   const rv = row && row.state === 'failed' && !JOB.live(rec.id) ? ALERTS.view(row) : null;
-  // (phase V40) `stages`: the steps of its way as the record left them - the preparation panel of a run that stopped before
+  // `stages`: the steps of its way as the record left them - the preparation panel of a run that stopped before
   // its moments were found; while it is at work `progress.stages` says them.
   const live = JOB.live(rec.id);
   res.json({ success: true, project: view(rec, { caps: true }), progress: JOB.progress(rec.id), live,
@@ -162,8 +162,8 @@ router.post('/highlights/:id/stop', (req, res) => {
   res.json({ success: true });
 });
 
-// A fragment (block 3): deleted - hidden until the app starts again (х19а) -, brought back (Ctrl+Z in the field: the last
-// deleted, or one named), renamed (х20: its card's name and its timeline's).
+// A fragment: deleted - hidden until the app starts again -, brought back (Ctrl+Z in the field: the last
+// deleted, or one named), renamed (its card's name and its timeline's).
 router.post('/highlights/:id/fragments/:n/delete', (req, res) => {
   try { res.json({ success: true, ...JOB.deleteFragment(req.params.id, req.params.n) }); }
   catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
@@ -177,8 +177,8 @@ router.post('/highlights/:id/fragments/:n/title', (req, res) => {
   catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V33.3) One caption style on several made fragments at once - their timelines' subtitle lanes (lib/highlights-cut.js
-// restyle); no undo for several (the owner's (х34)).
+// One caption style on several made fragments at once - their timelines' subtitle lanes (lib/highlights-cut.js
+// restyle); no undo for several.
 router.post('/highlights/:id/style', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
@@ -187,22 +187,22 @@ router.post('/highlights/:id/style', (req, res) => {
     const ns = new Set((Array.isArray(b.ns) ? b.ns : []).map(Number).filter((n) => n > 0));
     const keys = (rec.fragments || []).filter((f) => ns.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key).map((f) => f.key);
     if (!keys.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
-    // (phase V49) Animations alone (no preset): put on the lanes as they are, not cut again (CUT.reanimate).
+    // Animations alone (no preset): put on the lanes as they are, not cut again (CUT.reanimate).
     if (!b.preset && Array.isArray(b.anims)) {
       const a = CUT.reanimate(keys, b.anims);
       return res.json({ success: true, n: a.keys.length, name: a.name });
     }
-    // (phase V68 P4) Fonts alone: put on the lanes as they are, not cut again (CUT.refont; [] - the presets' own fonts again).
+    // Fonts alone: put on the lanes as they are, not cut again (CUT.refont; [] - the presets' own fonts again).
     if (!b.preset && Array.isArray(b.fonts)) {
       const a = CUT.refont(keys, b.fonts);
       return res.json({ success: true, n: a.keys.length });
     }
-    // (phase V66) The place (held over presets), the size, the words in a line, the lines - on the lanes as they are. (V71) Two rows or one.
+    // The place (held over presets), the size, the words in a line, the lines - on the lanes as they are. Two rows or one.
     if (!b.preset && (b.place || b.size != null || b.wordsPerLine != null || b.lines != null || b.rows != null)) {
       const a = CUT.relayout(keys, { place: b.place || null, size: b.size, wordsPerLine: b.wordsPerLine, lines: b.lines, rows: b.rows });
       return res.json({ success: true, n: a.keys.length });
     }
-    // (phase V49) Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.
+    // Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.
     const out = CUT.restyle(keys, String(b.preset || ''), { mix: Array.isArray(b.mix) ? b.mix : undefined, anims: Array.isArray(b.anims) ? b.anims : undefined });
     res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
@@ -214,7 +214,7 @@ function _made(rec, ns) {
   return (rec.fragments || []).filter((f) => want.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key);
 }
 
-// (phase V66, the owner's (хо12)) The title on top put on, or taken off, several made fragments at once - "title on top: on / off" of
+// The title on top put on, or taken off, several made fragments at once - "title on top: on / off" of
 // their common subtitle settings. The OPEN one is the page's (its own undo step), as with one fragment.
 router.post('/highlights/:id/title-on-top', (req, res) => {
   try {
@@ -224,14 +224,14 @@ router.post('/highlights/:id/title-on-top', (req, res) => {
     const frags = _made(rec, b.ns);
     if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
     const TT = require('../public/js/captions/title.js');
-    // (phase V76.1) All of them in one pass of the store.
+    // All of them in one pass of the store.
     const texts = b.on ? new Map(frags.map((f) => [String(f.key), TT.topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' })])) : null;
     const n = CUT.titles(frags.map((f) => f.key), texts).length;
     res.json({ success: true, n });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V66, the owner's (хо3), (хо4)) A lane's volume on several made fragments - `lane` 'speech' (main audio) or 'music'; the
+// A lane's volume on several made fragments - `lane` 'speech' (main audio) or 'music'; the
 // OPEN one is the page's.
 router.post('/highlights/:id/volume', (req, res) => {
   try {
@@ -245,8 +245,8 @@ router.post('/highlights/:id/volume', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V74, the owner's (пт7)) Main video's patterns - the whole list, top layer first - on several made fragments; the OPEN
-// one is the page's (its own undo step), as the other common settings of V66.
+// Main video's patterns - the whole list, top layer first - on several made fragments; the OPEN
+// one is the page's (its own undo step), as with the other common settings.
 router.post('/highlights/:id/patterns', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
@@ -260,7 +260,7 @@ router.post('/highlights/:id/patterns', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V84, the owner's (эф11) «Hook для всех N») Clip effects on several made fragments' main video: `add` - the page's own effects
+// Clip effects on several made fragments' main video: `add` - the page's own effects
 // for each fragment's clips (js/merge-v3/fx-ui.js laneEffects, the faces found there), or `remove` - a kind taken off all of `ns`. The
 // OPEN one is the page's. Their copies baked in the background as after a save (lib/fx-bake.js want).
 router.post('/highlights/:id/fx', (req, res) => {
@@ -285,7 +285,7 @@ router.post('/highlights/:id/fx', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V76, the owner's (тн9)) MAIN VIDEO of several made fragments: `color` { key, value } and `zoom` true / false into every
+// MAIN VIDEO of several made fragments: `color` { key, value } and `zoom` true / false into every
 // clip of it - the OPEN one is the page's, as above; or `framing` (lib/highlights-cut.js REFRAMES) - planned for all of them, the
 // open one's frames handed back (`open` - its number) for the page to lay. -> { n, open?, missed, why }
 router.post('/highlights/:id/video', async (req, res) => {
@@ -305,7 +305,7 @@ router.post('/highlights/:id/video', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V76, the owner's (тн10) а) Main audio's pitch on several made fragments - `pitch` { st?, shift? }, the part given; the OPEN
+// Main audio's pitch on several made fragments - `pitch` { st?, shift? }, the part given; the OPEN
 // one is the page's.
 router.post('/highlights/:id/pitch', (req, res) => {
   try {
@@ -332,7 +332,7 @@ async function _music(rec, f, track, open, later) {
     if (!clips.length) throw Object.assign(new Error('"' + track.title + '" is not in Music any more'), { status: 409 });
   }
   const laid = open ? CUT.bedClips(clips, CUT.filmEnd(tl)) : null;
-  // (phase V76.1) `later` - a Map the clips wait in, written with the others' in one pass (POST /music).
+  // `later` - a Map the clips wait in, written with the others' in one pass (POST /music).
   if (!open) { if (later) later.set(String(f.key), clips); else CUT.setMusic(f.key, clips); }
   return { track: _trackOf(track), laid };
 }
@@ -347,7 +347,7 @@ function _keepMusic(id, results) {
   });
 }
 
-// (phase V66, the owner's (хо9)-(хо11)) ONE made fragment's music: `how` 'another' (of its mood), a mood id ('yours' - Music ->
+// ONE made fragment's music: `how` 'another' (of its mood), a mood id ('yours' - Music ->
 // highlights' root) or 'none'; `taken` - the tracks the other ticked ones wear, not given while the mood has others; `open` - it is the
 // open one: its clips come back for the page to lay. -> { music, clips? }
 router.post('/highlights/:id/fragments/:n/music', async (req, res) => {
@@ -369,7 +369,7 @@ router.post('/highlights/:id/fragments/:n/music', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V66, (хо4)) The music of several made fragments dealt again from `moods` (each its own track, none twice while there are
+// The music of several made fragments dealt again from `moods` (each its own track, none twice while there are
 // tracks left - lib/highlights-music.js deal), or taken off (`none`). `open` - the number of the open one: its clips come back.
 // -> { n, open: { n, clips } | null, missed }
 router.post('/highlights/:id/music', async (req, res) => {
@@ -416,22 +416,22 @@ router.post('/highlights/:id/music', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V33.3) The title on top added to a made fragment (its card's "add title", the owner's (х35)): its headline in the video's
-// language, or its English title when the agent gave none ((х36)). The one that is OPEN gets it from the page instead.
+// The title on top added to a made fragment (its card's "add title"): its headline in the video's
+// language, or its English title when the agent gave none. The one that is OPEN gets it from the page instead.
 router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
     const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
     if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
     if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
-    // (phase V69 P12) A part of fragmentation with its number, in the video's language ("Часть 3 · ...", (хп88)).
+    // A part of fragmentation with its number, in the video's language ("Part 3 · ..." in its words).
     const text = require('../public/js/captions/title.js').topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' });
     if (!CUT.addTitle(f.key, text)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
     res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V69 P12, the owner's (хп90)) The title on top taken off a made fragment (the ✕ by "title on top" on its card). The one that
+// The title on top taken off a made fragment (the ✕ by "title on top" on its card). The one that
 // is OPEN loses it on the page instead (its own undo step).
 router.post('/highlights/:id/fragments/:n/title-on-top/remove', (req, res) => {
   try {
@@ -444,7 +444,7 @@ router.post('/highlights/:id/fragments/:n/title-on-top/remove', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// (phase V33.4) The ticked fragments rendered together with one set of export settings - into the render queue, armed
+// The ticked fragments rendered together with one set of export settings - into the render queue, armed
 // (lib/highlights-render.js); and all of the project's renders stopped.
 router.post('/highlights/:id/render', (req, res) => {
   try {

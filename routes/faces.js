@@ -1,6 +1,6 @@
 'use strict';
 
-/* faces.js - the faces of a film (phase V33.2; lib/faces.js does the work).
+/* faces.js - the faces of a film (lib/faces.js does the work).
 
      GET  /api/faces/next?wait=1      the app's hidden faces window asks for a film to count (held open ~25 s)
      GET  /api/faces/frames/:id       that film's frames, raw RGBA, five a second
@@ -9,7 +9,7 @@
      GET  /api/faces/state            is the window there, what it is counting
      GET  /api/faces/of?src=<address>[&full=1] where one film stands: ready (its faces with full=1) | counting | waiting |
                                       failed | none
-     POST /api/faces/find { src }     count one film's faces (a clip's "follow the face" switch, block 5) - answers at once
+     POST /api/faces/find { src }     count one film's faces (a clip's "follow the face" switch) - answers at once
 
    Loopback only, like the whole server: the window is the app's own. */
 

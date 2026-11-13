@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — a heard line's WORDS, and the text a person writes over them (phase K10a, 2026-10-03).
+   CAPTIONS — a heard line's WORDS, and the text a person writes over them.
 
    A heard caption carries its words: { w, s, e, k?, h? } - the word as shown, its start and end in
    seconds from the caption's start, `k` "make this word stand out", `h` a word a person changed,
    inserted, cut, joined or moved (the editor writes it; the server never does). The words are drawn
    only while they SPELL the caption's text (spells) - so every change writes the words and the text
-   together, and a line whose words no longer spell its text (a line rewritten before K10) is timed
+   together, and a line whose words no longer spell its text is timed
    again (retext) before anything cuts it.
 
    A line a person has touched is CORRECTED (isCorrected): Generate from the sound keeps it as it is,
@@ -13,10 +13,10 @@
 
    retext() keeps the timing when the text is rewritten. The old words and the new ones are matched by
    their letters (Levenshtein over whole words; a word's key is its letters and digits in lower case,
-   ё read as е):
+   the Cyrillic yo read as ye):
      - a word that stays keeps its moment (a new spelling of it - case, a mark - too);
-     - a word spelled differently in the same place keeps the moment of its place ("хера" -> "хрена");
-     - new words share the stretch of the words they replace by "letters + 2" (measured on the owner's
+     - a word spelled differently in the same place keeps the moment of its place;
+     - new words share the stretch of the words they replace by "letters + 2" (measured on
        4200 heard words: closer than equal shares and than syllables, a median miss of 0.04-0.05 s);
      - a word put where nothing was said goes into the pause beside it, 0.04 s per "letter + 2";
      - a word taken out leaves a pause;
@@ -24,10 +24,10 @@
        that was a word of its own (Whisper hears dashes so) is matched to that word, as any word is.
    No word is shorter than 0.06 s: where a stretch is too short for what is put into it, the words
    beside it share theirs; where the whole line is too short, the change is refused in words.
-   retextLines() is the same over SEVERAL lines at once (phase V30, block 2 - the captions view's document,
+   retextLines() is the same over SEVERAL lines at once (the captions view's document,
    captions/doc.js): one core, each word coming back with the line it belongs to.
 
-   The word editor's operations (K10b) are here too, PURE: each returns { words, name } - the new words
+   The word editor's operations are here too, PURE: each returns { words, name } - the new words
    and the text they spell - or { why } when it cannot be done, decided before anything is changed, or
    { remove: true } when no word is left. Limits on every one: 200 words, 60 characters a word, 400 the
    text.
@@ -47,15 +47,15 @@ const cs = (t) => Math.round((+t || 0) * 100);
 const MINC = Math.round(WORD_MIN * 100);
 
 /**
- * A typed text's words: split where a line MAY break - never at a no-break space ("50 000", "Иван
- * Петрович" typed with one), which stays inside its word, as libass keeps it (review K2).
+ * A typed text's words: split where a line MAY break - never at a no-break space ("50 000", a first name
+ * and a patronymic typed with one), which stays inside its word, as libass keeps it.
  */
 export const tokensOf = (text) => String(text == null ? '' : text).split(/[^\S   ]+/).filter(Boolean);
 
-/** What a word is matched by: its letters and digits, lower case, ё as е ("Ещё," and "еще" are one word). */
+/** What a word is matched by: its letters and digits, lower case, the Cyrillic yo as ye (a word with or without a comma is one word). */
 export const keyOf = (t) => String(t == null ? '' : t).toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, '');
 
-// What the drawing compares (unchanged since K0): lower case, anything but letters and digits a space.
+// What the drawing compares: lower case, anything but letters and digits a space.
 const _norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 /** Do these words spell this text? Only then are they drawn one by one (ass.js, subs-b.js). */
@@ -76,7 +76,7 @@ export const textOf = (words) => (words || []).map((w) => w.w).join(' ');
 
 /**
  * The words a person wrote: split as a line breaks - except that a run which was ONE word of the line before
- * (`old`: "than $2.", "хера —", a word holding a space) stays one word. WHERE it was one word (review K10): the
+ * (`old`: "than $2.", a word and its dash, a word holding a space) stays one word. WHERE it was one word: the
  * new tokens are lined up with the old ones (the longest common run of equal tokens), and tokens are kept
  * together only where they line up with all the parts of one old word, in order - the same pair elsewhere in the
  * line, two words of their own before, stays two words. A text left as it was gives the old words back.
@@ -146,7 +146,7 @@ export function likeness(a, b) {
   return 1 - row[y.length] / Math.max(x.length, y.length);
 }
 
-/** How many words of a line a person has corrected (those of a line rewritten before K10 counted as retext would). */
+/** How many words of a line a person has corrected (those of a line its words no longer spell counted as retext would). */
 export function correctedCount(c) {
   const w = c && c.words;
   if (!Array.isArray(w) || !w.length) return 0;
@@ -167,15 +167,15 @@ function _word(x) {
 const _copy = (words) => (Array.isArray(words) ? words : []).filter((w) => w && w.w != null).map(_word);
 // The words and the text they spell - or a refusal when the text would pass 400 characters or a word 60: the
 // server keeps 400 and 60, and a text or a word cut there no longer spells its words, which then go untimed
-// without a word said. A word is measured as it IS, with the marks glued onto it (review K10: retext checked the
-// tokens before the glue, and a run of dashes in front of a word was stored cut - without the word).
+// without a word said. A word is measured as it IS, with the marks glued onto it: checked before the glue, a run of
+// dashes in front of a word would be stored cut - without the word.
 const _done = (words) => {
   if (words.some((w) => String(w.w).length > LIMITS.word)) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
   const name = textOf(words);
   return name.length > LIMITS.text ? { why: 'A line holds at most ' + LIMITS.text + ' characters' } : { words, name };
 };
 
-// Where a word may be cut: between two characters as a reader sees them (review K10) - never inside an emoji's
+// Where a word may be cut: between two characters as a reader sees them - never inside an emoji's
 // pair of halves, a flag, a family or a letter with its stress mark. The boundaries strictly inside the text.
 function _cuts(txt) {
   let starts = null;
@@ -264,7 +264,7 @@ function _place(seq, end) {
         else if (R - L >= need) win = [L, R];
       }
       if (win) {
-        // A word beside that gave up some of its time was touched too (the owner's answer 1b; review K10).
+        // A word beside that gave up some of its time was touched too.
         const placed = _share(toks, win[0], win[1]);
         placed.forEach((o, k) => { const t = toks[k]; if (t.s != null && (cs(t.s) !== cs(o.s) || cs(t.e) !== cs(o.e))) o.h = true; });
         out.push(...placed);
@@ -290,8 +290,8 @@ const _endOf = (ws, dur) => Math.max(cs(dur), ...ws.map((w) => cs(w.e)), 0);
 
 // Levenshtein over the keys, walked back from the end with an equal pair taken first: matched words stay
 // together. [op, old index, new index] in order - '=' the same word, '~' another in its place, '-' gone, '+' new.
-// A WORD OF LETTERS WEIGHS TWICE A MARK (review K10): every mark has the same empty key, so a dash moved one word
-// on matched the old dash at no cost and dropped the word it passed - which then lost its moment and its mark.
+// A WORD OF LETTERS WEIGHS TWICE A MARK: every mark has the same empty key, so unweighted a dash moved one word
+// on would match the old dash at no cost and drop the word it passed - which would then lose its moment and its mark.
 // Weighted, keeping the lettered word matched always wins; an unchanged mark still matches its own old word.
 function _align(a, b) {
   const n = a.length, m = b.length;
@@ -343,7 +343,7 @@ export function retext(words, text, dur) {
 }
 
 /**
- * The words of SEVERAL lines rewritten at once (phase V30, block 2 - the captions view's document): `words` the old words
+ * The words of SEVERAL lines rewritten at once (the captions view's document): `words` the old words
  * of those lines in one time base, `texts` the new lines, `dur` the length of the stretch they share. The same matching
  * as retext over all of them - a word that stays keeps its moment whichever line it ends up on, so a word moved across
  * the end of a line takes its time with it - and each word comes back with `ln`, the index of its line. A mark goes with
@@ -405,7 +405,7 @@ function _rewrite(ws, nt, lnOf, end) {
     last.w += ' ' + mark;
     touch(last);
   };
-  // A word taken out is a touch too (the owner's answer 1b) - of the line, which keeps no word for it: the
+  // A word taken out is a touch too - of the line, which keeps no word for it: the
   // word before the gap carries it (the one after, when the first went).
   let touchNext = false;
   const gone = () => {
@@ -472,10 +472,10 @@ function _rewrite(ws, nt, lnOf, end) {
   return { out: _place(seq, end), n: seq.reduce((m, x) => m + (x.group ? x.toks.length : 1), 0) };
 }
 
-// ── A typed line, timed by its letters (phase V30, block 1) ─────────────────
+// ── A typed line, timed by its letters ──────────────────────────────────────
 /**
- * The words of a TYPED line of the subtitle lane, timed by "letters + 2" over the whole line, from its start to its end (the
- * owner's (с5): no sound, no button) - so the spoken word's effect plays on it as on a heard one. Nothing is stored: it is
+ * The words of a TYPED line of the subtitle lane, timed by "letters + 2" over the whole line, from its start to its end
+ * (no sound, no button) - so the spoken word's effect plays on it as on a heard one. Nothing is stored: it is
  * worked out where the line is drawn (ass.js, the preview's hand painter), and a line retyped or made longer is timed again
  * by itself. A mark goes with its word, as in retext; paragraphs stay as typed - `paras` holds the words in each.
  * @returns { words: [{ w, s, e }], paras: [n] } or null - no word, more than 200, or too short for 0.06 s a word
@@ -489,7 +489,7 @@ export function typedWords(text, dur) {
   return { words: _share(all.map((w) => ({ w })), 0, end), paras: paras.map((p) => p.length) };
 }
 
-// ── The word editor's operations (K10b) ─────────────────────────────────────
+// ── The word editor's operations ────────────────────────────────────────────
 const _at = (ws, i) => (Number.isInteger(i) && i >= 0 && i < ws.length ? ws[i] : null);
 const NO_WORD = { why: 'There is no such word in this line' };
 
@@ -558,7 +558,7 @@ export function removeAt(words, i) {
   return _done(ws);
 }
 
-/** Word `i` and the next one made one word ("эфо" + "ризм"), over the time of both. */
+/** Word `i` and the next one made one word ("eupho" + "ria"), over the time of both. */
 export function joinAt(words, i) {
   const ws = _copy(words);
   const a = _at(ws, i), b = _at(ws, i + 1);
@@ -640,8 +640,8 @@ export function edgeAt(words, i, side, t, dur) {
     const hi = E - MINC;
     if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
     T = Math.max(lo, Math.min(hi, T));
-    // Never the other way from the key (review K10): a word already shorter than the minimum put the bound on
-    // the far side of the edge, and the clamp moved the edge - and the neighbour - backwards.
+    // Never the other way from the key: a word already shorter than the minimum would put the bound on
+    // the far side of the edge, and the clamp would move the edge - and the neighbour - backwards.
     if ((T - S) * (cs(t) - S) < 0) {
       return { why: cs(t) < S ? (shared ? 'The word before is at its shortest (' + WORD_MIN + ' s)' : 'The word before ends here')
         : 'This word is at its shortest (' + WORD_MIN + ' s)' };

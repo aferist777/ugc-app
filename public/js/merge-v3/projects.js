@@ -20,10 +20,10 @@ import { askName } from '../name-box.js';
 import { askChoice } from '../ask.js';
 import { openScenarios, openVoiceover } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
-// (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
+// A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) A kind with no projects - the shared "nothing here", a row of the list.
+// A kind with no projects - the shared "nothing here", a row of the list.
 import { emptyEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 import { icon } from '../icons.js';
@@ -31,7 +31,7 @@ import { icon } from '../icons.js';
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
 let _after = '';
-// (phase V33.1) The projects' names as the list last said them - a highlights project's, while one of its fragments is open.
+// The projects' names as the list last said them - a highlights project's, while one of its fragments is open.
 const _titles = new Map();
 // The project a press of "edit" or "delete" is about: the open timeline's own - or, for a fragment, its project's.
 const _projKey = () => homeOf(Store.key()) || Store.key();
@@ -39,7 +39,7 @@ function _note(text) {
   const el = document.getElementById('mv3-project-note');
   if (el) el.textContent = text || '';
 }
-// (phase V49.1, the owner's (пр28), (пр29)) An error is not said on this line - "opening…" and "cleared" are: it is a popup
+// An error is not said on this line - "opening…" and "cleared" are: it is a popup
 // in the corner (js/notice.js), and the line's "…" goes.
 function _fail(text) {
   _note('');
@@ -60,7 +60,7 @@ async function _paint() {
   const { list } = d;
   _titles.clear();
   for (const p of list) _titles.set(p.key, p.title);
-  // (phase V33.1) A fragment of a highlights project is not in the list: its project's line stands for it.
+  // A fragment of a highlights project is not in the list: its project's line stands for it.
   const open = list.some(p => p.key === Store.key()) ? Store.key() : (homeOf(Store.key()) || Store.key());
   const openRec = open ? list.find(p => p.key === open) : null;
 
@@ -70,15 +70,14 @@ async function _paint() {
     const o = document.createElement('option');
     o.value = p.key;
     // Clip count in the label because two projects from the same day are otherwise told
-    // apart only by their title, and imported titles all start with the date. (phase V20) The draft says what it is.
-    // (phase V56, the owner's п. 14 and (ги6): "давай пометим в названиях проектов talking head проекты") A talking head
-    // says so before its name, as highlights does - in the list and in the closed field.
+    // apart only by their title, and imported titles all start with the date. The draft says what it is.
+    // A talking head says so before its name, as highlights does - in the list and in the closed field.
     o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
       : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.vodraft ? 'draft · voiceover' + (p.clips ? ' · ' + p.clips : '')
       : projectIdOf(p.key) ? (p.voiceover ? 'voiceover · ' : 'talking head · ') + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
-    // (phase V67) Its kind, for the list's filter (_openList).
+    // Its kind, for the list's filter (_openList).
     o.dataset.kind = p.draft ? 'draft' : p.highlights ? 'highlights' : p.vodraft ? 'voiceover'
       : projectIdOf(p.key) ? (p.voiceover ? 'voiceover' : 'talking') : 'blank';
     sel.appendChild(o);
@@ -87,7 +86,7 @@ async function _paint() {
   // the list, which reads as "this one is open" when it is not.
   if (openRec) {
     sel.value = open;
-    // (phase V20) A delete opens the draft - and says what became of what was there.
+    // A delete opens the draft - and says what became of what was there.
     _note(_after);
     _after = '';
   } else {
@@ -101,13 +100,13 @@ async function _paint() {
   }
 }
 
-/** (phase V67) The list read again - a name the server gave (a talking head's character in its title, js/merge-v3/wk-setup.js). */
+/** The list read again - a name the server gave (a talking head's character in its title, js/merge-v3/wk-setup.js). */
 export function repaintPicker() { return _paint(); }
 
-// (phase V76.3, the owner 2026-11-07: "чтобы быстрее проекты загружались") A project opened that the picker already lists - picked
-// from it, a highlights fragment under its project's line - is SHOWN there; the list is read again only for one it does not know
-// (one just made, renamed by the server). A press on the picker reads it again in any case (_openList), so nothing goes stale;
-// it was read after every opening (~0.24 s in the owner's library, the server answering nothing else meanwhile).
+// A project opened that the picker already lists - picked from it, a highlights fragment under its project's line - is
+// SHOWN there; the list is read again only for one it does not know (one just made, renamed by the server): reading it
+// takes ~0.24 s, the server answering nothing else meanwhile. A press on the picker reads it again in any case
+// (_openList), so nothing goes stale.
 function _show(k) {
   const sel = _sel();
   if (!sel || !k) return false;
@@ -121,14 +120,12 @@ function _show(k) {
   return true;
 }
 
-// ── THE LIST, WITH ITS FILTER (phase V67, second round (д), the owner 2026-11-01: "давай добавим еще в дропдаун выбора проекта
-// фильтр "all, talking head, voiceover, highlights", чтобы показывались проекты определенного типа"; "показывать в самом
-// дроплауне над списком проектов"; (об14) "только all - all стоит по умолчанию", (об15), (об16)) ─────────────────────────
+// ── THE LIST, WITH ITS FILTER ───────────────────────────────────────────────
 // A press on the picker opens THIS list instead of the select's own: the kinds in a row over the projects - "all" the first
 // time, the one chosen remembered (a per-window convenience, localStorage) -, then the projects of that kind. Merge's draft
 // heads every kind; the voiceover draft is a voiceover; a project of Merge's own is in "all" only; the open project, when it is
 // not of the kind, stays at the top. The select stays what holds the choice - its options (painted by _paint, each with its
-// `kind`), its value, its `change` -, so everything that reads the picker reads it as before.
+// `kind`), its value, its `change` -, so everything that reads the picker reads the select.
 const KINDS = [['all', 'All'], ['talking', 'Talking head'], ['voiceover', 'Voiceover'], ['highlights', 'Highlights']];
 const FILTER_KEY = 'mv3_proj_filter_v1';
 function _filter() {
@@ -217,7 +214,7 @@ export function initProjects() {
   sel.addEventListener('change', async () => {
     const want = sel.value;
     if (!want) return;              // the "choose a project" placeholder
-    // (phase V49, the owner's (пр13)) Away from the draft: nothing is asked - it stays as it is, first in this list.
+    // Away from the draft: nothing is asked - it stays as it is, first in this list.
     _note('opening…');
     try {
       await Store.open(want);
@@ -229,7 +226,7 @@ export function initProjects() {
   // changes the store several times a second and none of those change which projects
   // exist. Opening the dropdown is also the moment a project made elsewhere (Home, the Library)
   // has to appear without reloading the page.
-  // (phase V67, second round (д)) The press opens the list with its filter (_openList), not the select's own - which is
+  // The press opens the list with its filter (_openList), not the select's own - which is
   // read again there first.
   sel.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
@@ -249,8 +246,8 @@ export function initProjects() {
   _wireDelete();
 
   // And once when the store first knows which project is open. The sentinel is a Symbol, not
-  // null: "no project open" IS null now, so a null seed made the first paint look like a
-  // repeat and the picker was never filled at all.
+  // null: "no project open" IS null, so a null seed would make the first paint look like a
+  // repeat and the picker would never be filled.
   let last = Symbol('unpainted');
   Store.onChange(() => {
     const k = Store.key();
@@ -263,7 +260,7 @@ export function initProjects() {
   });
 }
 
-// (phase V20; phase V49, the owner's (пр12), (пр13)) THE DRAFT is never asked about - not at the window's close, not at
+// THE DRAFT is never asked about - not at the window's close, not at
 // the start, not when another project is opened: it stays as it is, its lanes and its chats, first in the list. Its two
 // buttons: "save" names it (a new empty draft takes its place, routes/mergev3.js), "clear" empties its lanes and keeps it.
 function _paintDraft() {
@@ -280,7 +277,7 @@ function _paintDraft() {
   }
   _delLook(x, d);
 }
-// (phase V73 block 5, 5a, the owner's (б5-3) а) "clear" deletes nothing - Ctrl+Z brings the clips back: a quiet button, its
+// "clear" deletes nothing - Ctrl+Z brings the clips back: a quiet button, its
 // "Really?" the light step (as a paid press); "delete" the part's quiet red, its "Really?" the red fill.
 function _delLook(x, draft) {
   if (!x) return;
@@ -299,14 +296,14 @@ function _delLook(x, draft) {
 function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
-  // (phase V73 block 5, 5a) the "+" is Lucide's plus, the words stay (their case is block 7's)
+  // the "+" is Lucide's plus
   b.innerHTML = icon('plus', 14) + '<span>New project</span>';
   // Several kinds of project, so the button asks which (_kindMenu). A blank project is an empty
   // timeline and is made here; a talking head starts from a scenario: the Library's "scenarios" view
-  // opens in the project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is
+  // opens in the project that is open (js/merge-v3/scen-pick.js) - the project itself is
   // made when one is used; a voiceover opens its draft, highlights its popup.
   b.addEventListener('click', () => _kindMenu(b));
-  // (Home, the owner 2026-10-22) ?new=menu | blank | talking | highlights - Home's "+" buttons do what this menu's items do,
+  // ?new=menu | blank | talking | highlights - Home's "+" buttons do what this menu's items do,
   // once the page has its project. Said once: the address forgets it.
   const want = (() => { try { return new URLSearchParams(location.search).get('new') || ''; } catch (e) { return ''; } })();
   if (want) {
@@ -356,7 +353,7 @@ function _wireNew() {
   };
 }
 
-// (phase V62) THE voiceover draft opened (js/merge-v3/scen-pick.js openVoiceover); a refusal is a popup.
+// THE voiceover draft opened (js/merge-v3/scen-pick.js openVoiceover); a refusal is a popup.
 async function _voiceover() {
   _note('opening…');
   try { await openVoiceover(); _note(''); } catch (e) { _fail(e.message); }
@@ -383,7 +380,7 @@ function _kindMenu(anchor) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mv3-plus-item u-mi';
-    // A kind that is coming (phase V61): there, greyed, and nothing happens on a press (css/app-shell.css [disabled]).
+    // A kind that is coming: there, greyed, and nothing happens on a press (css/app-shell.css [disabled]).
     if (!on) btn.disabled = true;
     const t = document.createElement('span');
     t.textContent = label;
@@ -395,16 +392,15 @@ function _kindMenu(anchor) {
     el.appendChild(btn);
   };
   item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
-  // Nothing asked about the draft (the owner, V28.3 (d)): the view opens in it, and a talking head made from it leaves
+  // Nothing asked about the draft: the view opens in it, and a talking head made from it leaves
   // it a draft.
   item('talking head', 'from a scenario - pick or write one', () => { openScenarios(); });
-  // (phase V33.1, the owner 2026-10-03/04: third) A long video in, vertical shorts out - a project of its own, and its popup.
+  // A long video in, vertical shorts out - a project of its own, and its popup.
   item('highlights', 'a long video → shorts', async () => {
     _note('creating…');
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
-  // (phase V61, the owner 2026-10-30: "будет новый режим в new project - называться будет voiceover, в котором просто
-  // генерируется голосом текст сценария") - phase V62: THE voiceover draft, on its setup.
+  // A voiceover: the script's text read in a voice - THE voiceover draft, on its setup.
   item('voiceover', 'a scenario or your own text, read in a voice', () => { _voiceover(); });
 
   document.body.appendChild(el);
@@ -453,7 +449,7 @@ async function _saveRename() {
     // A name already taken is not a failure to be swept away - the box stays open with what
     // was typed still in it, because the next thing to do is change one word of it.
     if (!d || !d.success) { _fail(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
-    // (phase V20) A draft named is a draft saved.
+    // A draft named is a draft saved.
     if (saving) Store.markSaved(d.title); else if (key === Store.key()) Store.setTitle(d.title);
     _cancelRename();
     await _paint();
@@ -474,7 +470,7 @@ function _wireRename() {
     const key = Store.key();
     if (!key) { _fail('open a project first'); return; }
     _editing = true;
-    // (phase V20) A draft is named the way a new project is: the day, then its name.
+    // A draft is named the way a new project is: the day, then its name.
     const draft = Store.isDraft();
     box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (_projKey() === key ? (Store.title() || '') : (_titles.get(_projKey()) || ''));
     box.hidden = false;
@@ -495,7 +491,7 @@ function _wireRename() {
   document.addEventListener('mousedown', (e) => {
     if (!_editing) return;
     if (e.target === box || e.target === b) return;
-    // (phase V49.1) Nor the corner of popups: closing "that name is taken" keeps what was typed.
+    // Nor the corner of popups: closing "that name is taken" keeps what was typed.
     if (e.target && e.target.closest && e.target.closest('.sv3-toasts')) return;
     _cancelRename();
   }, true);
@@ -521,16 +517,16 @@ function _wireDelete() {
       b.textContent = REALLY;
       b.classList.add('is-armed');
       // Disarms itself. An armed delete left sitting there is a trap for the next click
-      // that happens to land on it. (phase V73 block 2: one "Really?", 3 s - js/really.js)
+      // that happens to land on it. (One "Really?", 3 s - js/really.js.)
       _armTimer = setTimeout(_disarm, MS);
       return;
     }
     _disarm();
     const key = _projKey();
     if (!key) return;
-    // (phase V49) The draft is not deleted - its lanes are emptied, and it stays.
+    // The draft is not deleted - its lanes are emptied, and it stays.
     if (Store.isDraft()) { _clear(); return; }
-    // A TALKING HEAD'S FILES (phase C3, the owner 2026-10-05): the last timeline of its project holds the reads,
+    // A TALKING HEAD'S FILES: the last timeline of its project holds the reads,
     // frames and clips in the project's folder, and deleting it asks whether they go too. The pictures and videos
     // on the Library's shelves are not in that folder and stay.
     let rec = null;
@@ -548,7 +544,7 @@ function _wireDelete() {
   });
 }
 
-// (phase V49, the owner's (пр12)) "clear": the draft's lanes emptied to a new timeline's, one step to undo (store.js
+// "clear": the draft's lanes emptied to a new timeline's, one step to undo (store.js
 // clearDraft); its name, folder and chats stay, and so does what it made - on the shelves.
 async function _clear() {
   _note('clearing…');
@@ -558,7 +554,7 @@ async function _clear() {
   } catch (e) { _fail(e.message); }
 }
 
-// (phase V28.4, second round, the owner: "при удалении проекта спрашивать про удаление исходников с головами") A project
+// A project
 // deleted with its files and talking heads made in it: keep them in the Library (Generated · Talking heads · <the
 // project>, deleted there one by one) or let them go with the project.
 async function _askHeads(anchor, key) {
@@ -582,7 +578,7 @@ async function _askHeads(anchor, key) {
 
 async function _delete(key, files, heads) {
   _note('deleting…');
-  // (phase V49) An edit still waiting goes up first: a save after the delete would be refused (the project is gone).
+  // An edit still waiting goes up first: a save after the delete would be refused (the project is gone).
   try { await Store.flush(); } catch (e) { /* refused or offline - the delete goes on */ }
   try {
     const q = files ? '?files=1' + (heads ? '&heads=' + heads : '') : '';
@@ -591,8 +587,8 @@ async function _delete(key, files, heads) {
     // Back to nothing open rather than to whatever is left. Deleting a project and finding
     // yourself editing a different one is how the wrong video gets edited.
     const kept = d.files && d.files.kept;
-    // (phase V61) Not `heads`: that name is the parameter ('keep' | 'delete') the address above reads, and a const of the
-    // same name in this block made that read throw before the request ("Cannot access 'heads' before initialization").
+    // Not `heads`: that name is the parameter ('keep' | 'delete') the address above reads, and a const of the
+    // same name in this block would make that read throw before the request ("Cannot access 'heads' before initialization").
     const keptHeads = d.files && d.files.heads;
     _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
       keptHeads ? keptHeads + (keptHeads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');

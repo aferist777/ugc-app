@@ -1,18 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the preset styles (phase K3, 2026-10-03). Made once by a converter (not in the repository).
+   CAPTIONS — the preset styles. Made once by a converter (not in the repository).
 
    From CapShorts (github.com/thealiraza2/CapShorts, MIT, (c) 2026 Ali Raza - templates.json) and Capite
    (github.com/muneebkhan08/Capite, MIT, (c) 2026 Capite Contributors - caption-styles.config.json),
    converted into our style (style.js) with their bugs left behind: an rgba() colour is a colour and an
    opacity, karaoke fills from the unsung colour to the sung, every font is a shipped one with Cyrillic
-   (Komika Axis -> Rubik Mono One, the owner's choice), names of real people and brands are descriptive,
+   (Komika Axis -> Rubik Mono One), names of real people and brands are descriptive,
    the Urdu presets are not here, and two presets that look the same are one.
 
    A preset is a BASE: applying it copies its style into the project (with `preset` saying which), and
-   what is changed afterwards lives in the project only (the owner, 2026-10-03).
+   what is changed afterwards lives in the project only.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// The Classic presets are written by hand (phase V30, block 4) and only added to these lists here.
+// The Classic presets are written by hand and only added to these lists here.
 import { CLASSIC, CLASSIC_CATEGORY } from './presets-classic.js';
 
 export const CATEGORIES = [

@@ -1,46 +1,38 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the HIGHLIGHTS POPUP: which video, what kind of video, how long and how many fragments, their music and the
-   style of their captions (phase V33.1; the owner 2026-10-20: "появляется попап для вставки ссылки, добавление файла с пк,
-   дропдаун с выбором длительности, дропдаун с выбором количества фрагментов", and (х1), (х4), (х13), (х16)).
+   style of their captions.
 
-   A WINDOW OF ITS OWN (phase V68 P3, the owner 2026-11-01, (хп3), (хп4): "этот попап тоже давай сделаем чтобы можно было менять
-   размеры и положение попапа и оно сохраняется; ... в два столбца ... слева 2/3 ... справа 1/3"): js/gen-window.js openFrame -
-   POPUP_SIZE (960×670, V63; 1280×800 until then) the first time, moved by its head, stretched by its edges, its size and place
-   kept (`geom` 'highlights'), a double press on the head puts it back. Its parts (until V63 two columns, 2/3 and 1/3; since V63
-   two steps in one column - below), the foot under them:
+   A WINDOW OF ITS OWN: js/gen-window.js openFrame - POPUP_SIZE (960×670) the first time, moved by its head, stretched by its
+   edges, its size and place kept (`geom` 'highlights'), a double press on the head puts it back. Its parts (two steps in one
+   column - below), the foot under them:
    - the video - a link · from the Library · a file, from the Library open first, its list scrolled in a box of its own;
-     the fragments - the kind of video as square buttons with the pixel icons the owner chose (P1, merge-v3/hl-kinds.js), under
-     them a box of one height with the words: every kind's short line while none is chosen (only at the very first opening -
-     (хп35), (хп48): everything under the kinds is blurred and "find moments" waits), the chosen one's longer words after;
-     the length and the count as buttons ((хп18); fragmentation has no count); "reset to standard"; music - the moods as
-     buttons (hl-music.js).
-   - the captions - the tabs presets · animation · fonts (P4), under them what is chosen OF THE OPEN TAB (the owner's
-     check: its presets, its animations, its fonts - merge-v3/font-tiles.js; none, each preset's own font, (хп10)) - the set's
-     name on top, a small button each with ✕ under it - a press shows the tile in its group, outlined (hl-style.js reveal); the
-     tiles under that.
-   EVERY KIND REMEMBERS ITS OWN (хп19), (хп46): length, count, moods, presets, animations, fonts - hl-kinds.js; switching the kind
-   brings its own back.
-   TWO STEPS SINCE V63 (P14, the owner 2026-11-02: "давай сделаем его в два шага быстрый запуск. на первом шаге пользователь выбирает
-   the video, the parts, а на втором шаге music и caption зоны") - the same window on Home and in Merge, ONE COLUMN and the
-   chats' size (gen-window.js POPUP_SIZE; the owner's check of P14: "сделай так же the parts под the video. просто сам попап будет
-   меньше по размеру"): STEP 1 the video with the parts under it, "next →" once a video and a kind are chosen; STEP 2 the music
-   with the captions under it, "‹ back" and the press. The crumbs say the step, the first one goes back. Each section is one
-   element moved into the step's column, so nothing is painted twice and every picker keeps what it holds. It always opens on
-   step 1.
-   THE KINDS IN ONE TABLE (phase V69 P12): their words, standards, count buttons (a target), recommended moods, preset groups,
-   animations and font groups are public/js/highlights/kinds.js's (through hl-kinds.js); a kind in development (stream, (хп86)) is a
-   grey button that is not pressed. THE TITLE ON TOP (хп90): a switch on step 2 by the captions - on / off, auto's "by the video / on /
-   off" - each kind remembering its own. AUTO "BY THE VIDEO" (хп93): its music row starts with "by the video", and the press sends,
-   for every kind auto may find, that kind's captions, moods and title as it remembers them (hl-kinds.js byVideoSets).
-   THE HOST'S PRESS (V63): `start(spec)` given - Home's quick start - the press hands the choice to the host, which MAKES the
+     the fragments - the kind of video as square buttons with pixel icons (merge-v3/hl-kinds.js), under them a box of one
+     height with the words: every kind's short line while none is chosen (only at the very first opening: everything under
+     the kinds is blurred and "find moments" waits), the chosen one's longer words after; the length and the count as
+     buttons (fragmentation has no count); "reset to standard"; music - the moods as buttons (hl-music.js).
+   - the captions - the tabs presets · animation · fonts, under them what is chosen OF THE OPEN TAB (its presets, its
+     animations, its fonts - merge-v3/font-tiles.js; none, each preset's own font) - the set's name on top, a small button
+     each with ✕ under it - a press shows the tile in its group, outlined (hl-style.js reveal); the tiles under that.
+   EVERY KIND REMEMBERS ITS OWN: length, count, moods, presets, animations, fonts - hl-kinds.js; switching the kind brings its
+   own back.
+   TWO STEPS - the same window on Home and in Merge, ONE COLUMN and the chats' size (gen-window.js POPUP_SIZE): STEP 1 the
+   video with the parts under it, "next →" once a video and a kind are chosen; STEP 2 the music with the captions under it,
+   "‹ back" and the press. The crumbs say the step, the first one goes back. Each section is one element moved into the
+   step's column, so nothing is painted twice and every picker keeps what it holds. It always opens on step 1.
+   THE KINDS IN ONE TABLE: their words, standards, count buttons (a target), recommended moods, preset groups, animations and
+   font groups are public/js/highlights/kinds.js's (through hl-kinds.js); a kind in development (stream) is a grey button
+   that is not pressed. THE TITLE ON TOP: a switch on step 2 by the captions - on / off, auto's "by the video / on / off" -
+   each kind remembering its own. AUTO "BY THE VIDEO": its music row starts with "by the video", and the press sends, for
+   every kind auto may find, that kind's captions, moods and title as it remembers them (hl-kinds.js byVideoSets).
+   THE HOST'S PRESS: `start(spec)` given - Home's quick start - the press hands the choice to the host, which MAKES the
    project and starts it (POST /api/highlights/start); with no project there is no `id` (`rec` is GET /api/highlights/offer).
 
-   THREE WAYS IN (х1): a link, a file of this computer - its path handed over by the app's own window (desktop/preload.js
+   THREE WAYS IN: a link, a file of this computer - its path handed over by the app's own window (desktop/preload.js
    pathOf; a browser tab cannot), pressed or let go of anywhere on the window -, or a source already in the Library. The
-   lengths and counts are the server's (lib/highlights-store.js). The CAPTION STYLE IS A MUST (х16): "find moments" is not
+   lengths and counts are the server's (lib/highlights-store.js). The CAPTION STYLE IS A MUST: "find moments" is not
    pressed until one is chosen, and the field says so in red, as a choice not made does in a talking head.
 
-   ONE PRESS, NO "ARE YOU SURE" (х13): the price is on the button - the words (Groq's, by the length when it is known, or
+   ONE PRESS, NO "ARE YOU SURE": the price is on the button - the words (Groq's, by the length when it is known, or
    this computer's for nothing, or kept with the source) and the agent's few cents. The server writes the row and answers
    at once; the window closes and the tiles stand up in the field (highlights.js follows the record).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -50,7 +42,7 @@ import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } fro
 import { moodPicker } from './hl-music.js';
 import * as KIND from './hl-kinds.js';
 import { fontPicker, fontLabel } from './font-tiles.js';
-// (phase V73 block 2, step 2b) Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
+// Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -76,29 +68,29 @@ export function closePopup() { if (_win) _win.frame.close(); }
 
 /**
  * Open it for project `id` (its record `rec`: the lengths, counts and kinds it offers). `onStarted(alertId)` once the server
- * took the press. `url` (phase TG, block 5c) - a link written in already: a long video of REFERENCES sent "to highlights".
- * `sourceId` (block 6) - a source of the Library chosen already: a video of the media tree's YOUTUBE sent "to highlights".
- * `start(spec)` (phase V63) - the host's press: answers `{ alertId, … }` or throws its refusal; `id` is null then.
+ * took the press. `url` - a link written in already: a long video of REFERENCES sent "to highlights".
+ * `sourceId` - a source of the Library chosen already: a video of REFERENCES -> YouTube -> Videos sent "to highlights".
+ * `start(spec)` - the host's press: answers `{ alertId, … }` or throws its refusal; `id` is null then.
  */
 export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   if (_win) return;
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'Up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
-  // (phase V33.6, V33.8, V43) The kinds - the server's: auto, podcast · interview, documentary, fragmentation (its own lengths, no count).
+  // The kinds - the server's: auto, podcast · interview, documentary, fragmentation (its own lengths, no count).
   const kinds = (rec && rec.kinds) || { auto: { label: 'Auto' }, podcast: { label: 'Podcast · interview' }, documentary: { label: 'Documentary' } };
   const isWhole = (k) => !!(kinds[k] && kinds[k].whole);
   const lengthsOf = (k) => (isWhole(k) && kinds[k].lengths) || lengths;
   const st = {
     from: url ? 'link' : 'source', url: '', path: '', fileName: '', sourceId: '', source: null,
-    // (after block 8) What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
+    // What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
     pick: null,
-    // (V68 P3) '' - no kind chosen yet: the very first opening (хп35), (хп48).
+    // '' - no kind chosen yet: the very first opening.
     kind: '', length: '', count: 5, moods: [],
-    // (phase V49) The styles chosen - one, or several with Shift (пр25) - and the animations (пр26); `style` the first of them.
+    // The styles chosen - one, or several with Shift - and the animations; `style` the first of them.
     style: '', styles: [], anims: [], fonts: [], title: false, capTab: 'presets', price: null, busy: false, said: '', err: false,
-    // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
+    // The video's sound tracks (a file or a source with more than one) and the one chosen.
     tracks: [], audio: null, tracksFor: '',
-    // (V63) 1 - the video and the parts, 2 - the music and the captions.
+    // 1 - the video and the parts, 2 - the music and the captions.
     step: 1,
   };
 
@@ -111,16 +103,15 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const box = frame.box;
   frame.body.classList.add('mv3-hlp');
   const cols = _el('div', 'mv3-hlp-cols');
-  // (V63) The column of a step, and the four sections that are moved into it: the video with the parts under it (step 1), the
-  // music with the captions under it (step 2) - one column since the owner's check of P14 ("сделай так же the parts под the video.
-  // просто сам попап будет меньше по размеру").
+  // The column of a step, and the four sections that are moved into it: the video with the parts under it (step 1), the
+  // music with the captions under it (step 2).
   const A = _el('div', 'mv3-hlp-left');
   cols.append(A);
   const L = _el('div', 'mv3-hlp-sec');
   const P = _el('div', 'mv3-hlp-sec');
   const M = _el('div', 'mv3-hlp-sec');
   const R = _el('div', 'mv3-hlp-sec');
-  // (phase V73 block 4) the foot is the frame's: who hears and what was said at the left, '‹ back', the price and the press at the right
+  // the foot is the frame's: who hears and what was said at the left, '‹ back', the price and the press at the right
   const foot = frame.foot;
   foot.classList.add('mv3-hlp-foot');
   frame.body.append(cols);
@@ -129,7 +120,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   L.appendChild(_el('div', 'mv3-x-hdr', 'The video'));
   const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
-  // (V68 P3, the owner: "from the library должен стоять по умолчанию и в порядке стоять справа от a link")
+  // "From the Library" is the default and stands right of "A link".
   for (const [k, label] of [['link', 'A link'], ['source', 'From the Library'], ['file', 'A file']]) {
     const b = _el('button', 'mv3-sc-tab u-tab', label);
     b.type = 'button';
@@ -162,8 +153,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   panes.file = _el('div', 'mv3-hlp-pane mv3-hlp-filepane');
   panes.file.append(pickBtn, fileSaid, fileIn);
   for (const k of Object.keys(panes)) L.appendChild(panes[k]);
-  // (phase V43, the owner's (ё18): "давать выбор дорожки если есть выбор") A file with more than one sound track - a dub and the
-  // original, say - says so here: the one chosen is heard and is the parts' sound.
+  // A file with more than one sound track - a dub and the original, say - says so here: the one chosen is heard and is the parts' sound.
   const trackSel = _el('select', 'mv3-hlp-sel u-in is-s');
   trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
   const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'Sound');
@@ -209,7 +199,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     else ic.textContent = String(v.label || k).slice(0, 1).toUpperCase();
     b.append(ic, _el('span', 'mv3-hlp-kind-nm', v.label || k));
     b.title = (v.label || k) + (KIND.ABOUT[k] ? ' - ' + KIND.ABOUT[k].short : '');
-    // (V69 P12, (хп86)) A kind in development: grey, not pressed.
+    // A kind in development: grey, not pressed.
     if (v.inDev) {
       b.disabled = true;
       b.classList.add('is-dev');
@@ -220,14 +210,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     kindBtns[k] = b;
     kindRow.appendChild(b);
   }
-  // (хп19) The kind's standards back: its length, count, music, captions.
+  // The kind's standards back: its length, count, music, captions.
   const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'Reset to standard');
   reset.type = 'button';
   reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
   kindRow.appendChild(reset);
   P.appendChild(kindRow);
-  // (хп35) One height whatever it says: every kind's short line, or the chosen one's words.
+  // One height whatever it says: every kind's short line, or the chosen one's words.
   const about = _el('div', 'mv3-hlp-about');
   P.appendChild(about);
 
@@ -240,13 +230,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   cntRow.appendChild(_el('span', 'mv3-hlp-olab', 'How many'));
   const cntChips = _el('div', 'mv3-hlp-chips');
   cntRow.appendChild(cntChips);
-  // (V69 P12) Each kind its own count buttons (30 for most, 50 for stream) - the server's.
+  // Each kind its own count buttons (30 for most, 50 for stream) - the server's.
   const countsOf = (k) => (kinds[k] && Array.isArray(kinds[k].counts) && kinds[k].counts.length ? kinds[k].counts : counts);
   const fragNote = _el('p', 'mv3-x-note', '');
   opts.append(lenRow, cntRow, fragNote);
   P.appendChild(opts);
 
-  // ── (V68 P3) The background music - the moods of Music → highlights ──
+  // ── The background music - the moods of Music → highlights ──
   const musicSec = _el('div', 'mv3-hlp-music');
   musicSec.appendChild(_el('div', 'mv3-x-hdr', 'Music'));
   M.appendChild(musicSec);
@@ -260,7 +250,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── The captions: presets · animation, what is chosen, the tiles ──
   R.appendChild(_el('div', 'mv3-x-hdr', 'Captions'));
-  // (V69 P12, (хп90)) The title on top: on / off - auto's "by the video" too; each kind remembers its own.
+  // The title on top: on / off - auto's "by the video" too; each kind remembers its own.
   const titleRow = _el('div', 'mv3-hlp-orow mv3-hlp-titlerow');
   titleRow.appendChild(_el('span', 'mv3-hlp-olab', 'Title on top'));
   const titleChips = _el('div', 'mv3-hlp-chips');
@@ -278,10 +268,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   };
   tabBtn('presets', 'Presets', 'The style of the captions - one, or several with Shift: each page one of them');
   const animTab = tabBtn('anim', 'Animation', 'How a page comes in and goes out - after a style is chosen');
-  // (V68 P4) The fonts over the presets' own: one, or several with Shift - each page one of them, as wide as in its preset's font.
+  // The fonts over the presets' own: one, or several with Shift - each page one of them, as wide as in its preset's font.
   const fontTab = tabBtn('fonts', 'Fonts', 'The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen');
   R.appendChild(capTabs);
-  // (V68 P3, the owner's second round: "писать выбранные, прям под открытой вкладкой") What is chosen, a row a tab.
+  // What is chosen, right under the open tab.
   const chosen = _el('div', 'mv3-hlp-chosen');
   R.appendChild(chosen);
   const capBox = _el('div', 'mv3-hlp-style mv3-hlp-pane-cap is-missing');
@@ -308,7 +298,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Find moments');
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
-  // (V63) The steps: "next →" on the first, "‹ back" beside the press on the second.
+  // The steps: "next →" on the first, "‹ back" beside the press on the second.
   const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Next →');
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => next());
@@ -355,7 +345,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     if (!st.styles.length) st.capTab = 'presets';
     picker.recommend(st.kind);
     picker.openFirst();
-    // (V69 P12) The title on top, auto's "by the video" in the moods, the kind's recommended moods, animations and font groups.
+    // The title on top, auto's "by the video" in the moods, the kind's recommended moods, animations and font groups.
     st.title = s.title === true || (st.kind === 'auto' && s.title === BY_VIDEO) ? s.title : false;
     music.byVideo(st.kind === 'auto');
     if (st.kind === 'auto') { music.set(s.moods || []); st.moods = music.get(); }
@@ -393,8 +383,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
 
   // ── The Library: REFERENCES -> YouTube -> Videos ──
-  // (after block 8; the owner's (Y3): "эти окна показывают именно эту папку, вместе с нескачанными, и выбранное видео
-  // скачивается") Downloaded videos (sources of the Library) and videos kept as tiles - one of those is downloaded by the
+  // Downloaded videos (sources of the Library) and videos kept as tiles - one of those is downloaded by the
   // project first, by its link. Videos from elsewhere come by "a link" or "a file".
   let sources = null;
   let sourcesP = null;
@@ -403,7 +392,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       panes.source.textContent = '';
       panes.source.appendChild(loadingEl('reading REFERENCES · YouTube · Videos…', { line: true }));
       sourcesP = _api('/api/references/youtube').then((d) => { sources = d.items || []; paintSources(); })
-        // (phase V73 block 2, (б2-19)) Not read: "did not load" with Try again (read again), the reason a popup.
+        // Not read: "did not load" with Try again (read again), the reason a popup.
         .catch((e) => {
           sourcesP = null;
           showError('Could not read REFERENCES · YouTube · Videos: ' + e.message);
@@ -442,7 +431,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const seq = ++priceSeq;
     const q0 = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
       : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
-    // (V43) fragmentation's agent writes every part of the video - its price is the kind's and the length's.
+    // fragmentation's agent writes every part of the video - its price is the kind's and the length's.
     const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind || 'auto') + '&length=' + encodeURIComponent(st.length)
       + (isWhole(st.kind) ? '' : '&count=' + st.count) + (st.audio != null ? '&audio=' + st.audio : '');
     try {
@@ -455,7 +444,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   function say(text, err) { st.said = text || ''; st.err = !!err; paint(); }
 
-  // ── (V63) The two steps ──
+  // ── The two steps ──
   // A video given: a link, a file handed over, or a video of the Library picked.
   function hasVideo() {
     if (st.from === 'link') return /^https?:\/\/\S+/i.test(st.url);
@@ -500,8 +489,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     return !!st.pick;
   }
 
-  // What is chosen of the open tab (the owner's check of P3, 2026-11-01: "компактнее в один столбец. название набора сверху. и в
-  // пресетах показывай пресеты, в анимациях анимации"): the set's name and count on top, its buttons under it; a press shows the
+  // What is chosen of the open tab, in one column: the set's name and count on top, its buttons under it; a press shows the
   // tile in its group, ✕ lets it go.
   function chosenSet(label, items, empty, onShow, onDrop) {
     const r = _el('div', 'mv3-hlp-cset');
@@ -564,16 +552,16 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function paint() {
     if (!_win) return;
     for (const b of tabs.children) b.classList.toggle('is-on', b.dataset.from === st.from);
-    // (V43) The sound tracks of what is chosen - only when there is a choice.
+    // The sound tracks of what is chosen - only when there is a choice.
     trackRow.hidden = !(st.tracks.length > 1 && st.tracksFor && (st.from === 'file' || st.from === 'source'));
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== st.from;
-    // (хп48) No kind yet: everything under the kinds waits for one.
+    // No kind yet: everything under the kinds waits for one.
     const locked = !st.kind;
     for (const el of [opts, musicSec, R]) { el.classList.toggle('is-locked', locked); el.inert = locked; }
     reset.disabled = locked;
     for (const [k, b] of Object.entries(kindBtns)) b.classList.toggle('is-on', k === st.kind);
     paintAbout();
-    // The length and the count - fragmentation has its own lengths and no count (V43).
+    // The length and the count - fragmentation has its own lengths and no count.
     const whole = isWhole(st.kind);
     lenChips.textContent = '';
     for (const [k, v] of Object.entries(lengthsOf(st.kind))) {
@@ -590,7 +578,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       cntChips.appendChild(b);
     }
     cntRow.hidden = whole;
-    // (V69 P12, (хп90)) The title on top.
+    // The title on top.
     titleChips.textContent = '';
     for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, 'by the video', 'As the kind auto finds has it']] : []).concat([
       [true, 'on', 'The fragment\'s headline at the top for its first 3 s'], [false, 'off', 'No title - "add title" on a fragment\'s card puts one']])) {
@@ -604,7 +592,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     fragNote.textContent = !st.kind ? '' : whole
       ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
       : 'The agent returns this many - the strongest first, weaker ones last with a lower score; fewer only when the video has no more. A fragment may be made of up to three pieces of the video.';
-    // The captions: the animations' tab open once a style is chosen (V49).
+    // The captions: the animations' tab open once a style is chosen.
     capBox.classList.toggle('is-missing', !st.style && !locked);
     animTab.disabled = !st.styles.length;
     fontTab.disabled = !st.styles.length;
@@ -630,12 +618,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
       cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
-    // (phase V73 block 4) the price stands by the press, in mono - not inside its words
+    // the price stands by the press, in mono - not inside its words
     goBtn.textContent = st.busy ? 'Starting…' : (whole ? 'Split into parts' : 'Find moments');
     priceEl.textContent = cost && st.kind ? cost : '';
     goBtn.disabled = !ready();
     goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';
-    // (V63) The steps' buttons: "next →" on the first, "‹ back" and the press on the second.
+    // The steps' buttons: "next →" on the first, "‹ back" and the press on the second.
     const wait = stepWait();
     nextBtn.hidden = st.step !== 1;
     nextBtn.disabled = !!wait || st.busy;
@@ -657,21 +645,21 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     say('');
     const spec = { from: st.from, length: st.length, ...(isWhole(st.kind) ? {} : { count: st.count }), style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
       moods: music.get(), title: st.title };
-    // (V69 P12, (хп93)) auto's "by the video" - for every kind it may find, that kind's captions, moods and title as it remembers them.
+    // auto's "by the video" - for every kind it may find, that kind's captions, moods and title as it remembers them.
     const sets = st.kind === 'auto' ? KIND.byVideoSets(presetName, (idp) => !!presetName(idp), lengths, counts) : null;
     if (sets && spec.moods.includes(BY_VIDEO)) spec.moodsByKind = sets.moodsByKind;
     if (sets && st.title === BY_VIDEO) spec.titleByKind = sets.titleByKind;
     if (st.style === BY_VIDEO) {
       spec.style.byKind = sets ? sets.byKind : {};
     } else if (st.styles.length > 1) {
-      // (V49, (пр25)) Several: every fragment the same set, dealt page by page.
+      // Several: every fragment the same set, dealt page by page.
       spec.style.mix = st.styles.map((idp) => ({ preset: idp, name: presetName(idp) }));
     }
-    // (V49, (пр26)) The animations: one for every page, or several dealt. (V68 P4, (хп8)) The fonts: one for every page, or several
-    // dealt; none - each style's own. "By the video" carries each kind's own.
+    // The animations: one for every page, or several dealt. The fonts: one for every page, or several dealt; none - each
+    // style's own. "By the video" carries each kind's own.
     if (st.anims.length && st.style !== BY_VIDEO) spec.style.anims = st.anims.slice();
     if (st.fonts.length && st.style !== BY_VIDEO) spec.style.fonts = st.fonts.slice();
-    // (V43, (ё18)) The sound track chosen, when the video has more than one.
+    // The sound track chosen, when the video has more than one.
     if (st.audio != null && st.tracks.length > 1 && (st.from === 'file' || st.from === 'source')) {
       spec.audio = st.audio;
       const t = st.tracks.find((x) => x.k === st.audio);
@@ -679,11 +667,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     }
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
-    // A video kept as a tile: the project downloads it by its link (after block 8).
+    // A video kept as a tile: the project downloads it by its link.
     else if (st.pick && st.pick.type === 'remote') { spec.from = 'link'; spec.url = st.pick.link; }
     else spec.sourceId = st.sourceId;
     try {
-      // (V63) Home's quick start: the host makes the project and starts it; Merge's project starts as before.
+      // Home's quick start: the host makes the project and starts it; Merge's project starts by its own route.
       const d = typeof start === 'function' ? await start(spec)
         : await _api('/api/highlights/' + encodeURIComponent(id) + '/start',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
@@ -698,7 +686,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── What it opens with ──
   // A project stopped before its video was in keeps what it asked: that kind, its length, count and moods. Else the kind
-  // chosen last - none at the very first opening (хп35), (хп48), (хп49).
+  // chosen last - none at the very first opening.
   const ask = rec && rec.ask ? rec.ask : null;
   const askKind = ask && kinds[ask.kind] ? ask.kind : '';
   const k0 = askKind || (kinds[KIND.lastKind()] && !kinds[KIND.lastKind()].inDev ? KIND.lastKind() : '');

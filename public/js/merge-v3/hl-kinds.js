@@ -1,21 +1,20 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the KINDS OF VIDEO in the highlights popup: their icons, their words, their standards, and what each one
-   remembers (phase V68 P3, the owner 2026-11-01, (хп19), (хп35), (хп46), (хп48)-(хп50)).
+   remembers.
 
-   ICONS - the owner's choice in P1 (docs/local-app/mockups/v68-icons/video-<kind>.svg): pixels on a 16×16 grid, drawn as SVG
+   ICONS - pixels on a 16×16 grid, drawn as SVG
    in the page (not <img>) so `currentColor` takes the button's gold.
-   ABOUT and STANDARD (phase V69 P12) - public/js/highlights/kinds.js, the ONE table of the kinds for the server and the popup: each
-   kind's short line (every kind's shown while none is chosen, only at the very first opening - (хп35)) and its long words, and what
-   it starts with the first time and after "reset to standard" - its length, count, moods, presets, animations, fonts and title (the
-   owner's tables of P5-P11).
+   ABOUT and STANDARD - public/js/highlights/kinds.js, the ONE table of the kinds for the server and the popup: each
+   kind's short line (every kind's shown while none is chosen, only at the very first opening) and its long words, and what
+   it starts with the first time and after "reset to standard" - its length, count, moods, presets, animations, fonts and title.
    MEMORY - ONE key, `mv3_hl_kinds_v1` (localStorage, mirrored to the library by storage-sync.js - Merge and Home alike):
    { v: 1, kind, kinds: { <kind>: { length, count, moods, styles, anims, fonts, title } } } - the kind chosen last and each kind's last
-   settings ((хп19), (хп46); `fonts` since V68 P4, `title` since V69 P12 - a kind that has none yet takes its standard).
+   settings (a kind that has no `fonts` or `title` yet takes its standard).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { KINDS as TABLE, BY_VIDEO as BYV, FOUND, acting } from '../highlights/kinds.js';
 
-export const BY_VIDEO = BYV;              // "by the video" - auto's captions, music and title: the kind it finds gives its own (V69 P12)
+export const BY_VIDEO = BYV;              // "by the video" - auto's captions, music and title: the kind it finds gives its own
 export const YOURS = 'yours';            // the root of Music -> highlights as a "mood" (lib/highlights-music.js YOURS)
 
 export const ICONS = {
@@ -28,10 +27,10 @@ export const ICONS = {
   fragmentation: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 2h1v1h-1zM13 2h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM9 6h1v1h-1zM10 6h1v1h-1zM6 7h1v1h-1zM9 7h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM5 9h1v1h-1zM6 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM5 11h1v1h-1zM6 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM12 11h1v1h-1zM13 11h1v1h-1zM2 12h1v1h-1zM6 12h1v1h-1zM9 12h1v1h-1zM13 12h1v1h-1zM2 13h1v1h-1zM3 13h1v1h-1zM5 13h1v1h-1zM6 13h1v1h-1zM9 13h1v1h-1zM10 13h1v1h-1zM12 13h1v1h-1zM13 13h1v1h-1zM3 14h1v1h-1zM4 14h1v1h-1zM5 14h1v1h-1zM10 14h1v1h-1zM11 14h1v1h-1zM12 14h1v1h-1z"/><path fill="#f4f1e8" d="M7 7h1v1h-1zM8 7h1v1h-1z"/></svg>',
 };
 
-/** (V69 P12) Every kind's words - the table's. */
+/** Every kind's words - the table's. */
 export const ABOUT = Object.fromEntries(Object.entries(TABLE).map(([k, v]) => [k, { short: v.short, long: v.long }]));
 
-/** (V69 P12) Every kind's standard - the table's (the owner's "Итог Пn" of each kind). */
+/** Every kind's standard - the table's. */
 export const STANDARD = Object.fromEntries(Object.entries(TABLE).map(([k, v]) => [k, {
   length: v.length, count: v.count || 5, moods: v.moods.std.slice(), styles: v.presets.std.slice(), anims: v.anims.std.slice(),
   fonts: v.fonts.std.slice(), title: v.title,
@@ -66,9 +65,8 @@ export function memory() {
 function _write() { try { localStorage.setItem(LS, JSON.stringify(_mem)); } catch (e) { /* a private window */ } }
 
 /**
- * What kind `kind` remembers, over its standards: { length, count, moods, styles, anims, fonts, title }. A length the kind no longer
- * offers (fragmentation's 2-4 min, V69 P12) or a count it has not takes its standard. (V69 P12) A kind of before kept no title: its
- * standard; and its moods "by the video" only for auto.
+ * What kind `kind` remembers, over its standards: { length, count, moods, styles, anims, fonts, title }. A length the kind does not
+ * offer or a count it has not takes its standard; a title not kept, its standard; and its moods "by the video" only for auto.
  */
 export function settingsOf(kind, lengths, counts) {
   const std = standardOf(kind, lengths);
@@ -92,11 +90,11 @@ export function keep(kind, s) {
     fonts: (s.fonts || []).slice(), title: s.title };
   _write();
 }
-/** The kind chosen last ('' - none yet: the very first opening, (хп35), (хп49)). */
+/** The kind chosen last ('' - none yet: the very first opening). */
 export const lastKind = () => String(memory().kind || '');
 
 /**
- * (phase V33.8, (в1)) The first style a kind remembers, else its standard's first. `known(id)` - is it a preset.
+ * The first style a kind remembers, else its standard's first. `known(id)` - is it a preset.
  */
 export function styleFor(kind, known) {
   const r = _obj(memory().kinds[kind]);
@@ -104,11 +102,11 @@ export function styleFor(kind, known) {
   return mine || FIRST_STYLE[kind] || FIRST_STYLE.podcast;
 }
 
-/** (phase V69 P12) The kinds auto may find, as their sets "by the video" go: a kind in development (stream) cuts as other. */
+/** The kinds auto may find, as their sets "by the video" go: a kind in development (stream) cuts as other. */
 export const BY_VIDEO_KINDS = FOUND.filter((k) => acting(k) === k);
 
 /**
- * (phase V69 P12, (хп93)) What auto's "by the video" sends for each kind it may find - as each remembers it in this popup (other: its
+ * What auto's "by the video" sends for each kind it may find - as each remembers it in this popup (other: its
  * standard - not a button): { byKind: { <kind>: { preset, name, mix, anims, fonts } }, moodsByKind, titleByKind }. `name(id)` - a
  * preset's name, `known(id)` - is it a preset.
  */

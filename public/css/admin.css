@@ -2,18 +2,18 @@
    reads as one more page of the app rather than a control panel bolted on. Compact by intent:
    every key should fit on one line. */
 
-/* THE PAGE SCROLLS HERE (phase S5): the shell's body clips the window (overflow:hidden on every page), so a
-   pane taller than the window - Thanks, 61 entries - was cut off with no way down. The body of the page takes
+/* THE PAGE SCROLLS HERE: the shell's body clips the window (overflow:hidden on every page), so a
+   pane taller than the window - Thanks, 61 entries - would be cut off with no way down. The body of the page takes
    the height that is left and scrolls; the panels keep their own height (without flex:0 0 auto a panel's
-   overflow:hidden let it shrink to nothing); the tabs stay in view. */
+   overflow:hidden lets it shrink to nothing); the tabs stay in view. */
 .adm-body{ padding:14px; display:flex; flex-direction:column; gap:10px; flex:1 1 auto; min-height:0; overflow-y:auto; }
 
 /* ── the tab strip ─────────────────────────────────────────────────────── */
 .adm-tabs{ position:sticky; top:-14px; z-index:1; margin:-14px 0 0; padding:14px 0 4px; background:var(--bg); }
-/* the tabs are the shared part (.u-tabs / .u-tab, phase V73 block 2); the row keeps its sticky place */
+/* the tabs are the shared part (.u-tabs / .u-tab); the row keeps its sticky place */
 
-/* (phase V73 block 6) a pane is the page's panel (к15): the whole width, a head of 40 px with its name and its buttons, what the pane
-   is in a line under the head (it was a phrase squeezed into the head) */
+/* a pane is the page's panel: the whole width, a head of 40 px with its name and its buttons, what the pane
+   is in a line under the head */
 .adm-panel{
   flex:0 0 auto;
   background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel);
@@ -36,33 +36,32 @@
 .adm-status.ok{ color:var(--success); }
 
 /* ── the keys ──────────────────────────────────────────────────────────────
-   Moved here from library.css with the Brains popup they belonged to. Every row is the same:
-   a field showing the mask, a × that removes on Save, and a state line under it. */
+   Every row is the same: a field showing the mask, a × that removes on Save, and a state line under it. */
 .adm-keys{ padding:var(--sp-3) var(--sp-4); }
 .bk-row{ margin-bottom:6px; }
 .bk-row:last-child{ margin-bottom:0; }
 /* One line per key: label, the field at a fixed width, the x, and to the right of it the
    verdict with the description under it - the row is as tall as the description makes it. */
 .bk-line{ display:flex; align-items:flex-start; gap:6px; }
-/* (phase V73 block 6) the label at the left, without its colon (js/admin-keys.js) */
+/* the label at the left, without its colon (js/admin-keys.js) */
 .bk-label{
   flex:0 0 150px; font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted);
   text-align:left; padding-top:6px;
 }
-/* (phase V73 block 2) the shared field (.u-in); a key is read in mono, its state in its border */
+/* the shared field (.u-in); a key is read in mono, its state in its border */
 .bk-field{ flex:0 0 300px; min-width:0; font-family:var(--mono) }
-/* (phase TG, block 8) The field and its x in a column; a key's instruction opens under them, at their width. */
+/* The field and its x in a column; a key's instruction opens under them, at their width. */
 .bk-col{ flex:0 0 330px; width:330px; min-width:0; display:flex; flex-direction:column; }
 .bk-frow{ display:flex; align-items:flex-start; gap:6px; }
 .bk-frow .bk-field{ flex:1 1 auto }
 .bk-x{ flex:0 0 auto; }   /* the shared ✕ that takes out (.u-x.is-del) */
-/* (phase V73 block 6) a key marked for removal: its button puts it back - Lucide's undo-2 */
+/* a key marked for removal: its button puts it back - Lucide's undo-2 */
 .bk-x.bk-undo::before{ content:''; display:block; width:16px; height:16px; background:currentColor;
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E") center / contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E") center / contain no-repeat; }
 /* The mask is a reading, not a value: muted, and it goes the moment the field is focused. */
 .bk-field.is-mask{ color:var(--muted); letter-spacing:.03em; }
-/* (phase V73 block 6) Whether the key is there and whether it works: a dot and its words beside the field - the field's border is the
-   field's (the classes stay for the dot). A key to be removed on Save keeps its dashed red field: that is a change, not a state. */
+/* Whether the key is there and whether it works: a dot and its words beside the field - the field's border is the
+   field's (the classes are for the dot). A key to be removed on Save keeps its dashed red field: that is a change, not a state. */
 .bk-field.is-cleared{ border-color:var(--danger); border-style:dashed; }
 .bk-staterow{ display:flex; align-items:center; gap:6px; min-height:16px; }
 .bk-dot{ flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--faint); }
@@ -80,11 +79,11 @@
 /* Marks where one provider's fields end and the next set begins. */
 .bk-group{
   margin:14px 0 8px; padding-top:10px; border-top:1px solid var(--border-soft);
-  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* (phase V73 block 6) sentence case (к17) */
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* sentence case */
   color:var(--muted);
 }
 .bk-row:first-child .bk-group{ margin-top:0; padding-top:0; border-top:0; }
-/* (phase TG) The Cloudflare key's check, step by step, with its own "check", and how to get the key. */
+/* The Cloudflare key's check, step by step, with its own "check", and how to get the key. */
 .bk-steps-row{ display:flex; align-items:flex-start; gap:8px; margin-top:2px; }
 .bk-steps{ font-size:10px; line-height:1.45; color:var(--muted); min-width:0; }
 .bk-step a{ color:var(--ink); }
@@ -99,14 +98,13 @@
 .bk-help li{ margin:1px 0; }
 .bk-help a{ color:var(--ink); }
 .bk-help-note{ margin-top:2px; }
-/* (phase TG, block 2) The bot's state under its field. */
+/* The bot's state under its field. */
 .bk-tg{ font-size:10px; line-height:1.5; color:var(--muted); margin-top:2px; }
 .bk-tg .bk-step a{ color:var(--ink); }
 .bk-tg .bk-mini{ margin-left:4px; }
 
-/* ── What the panes share (AI settings, This computer, Thanks) ─────────────────
-   The dio- names are from the Import / Export pane they were made for, gone in phase V54 (the owner 2026-10-28). */
-.dio-body{ padding:var(--sp-3) var(--sp-4) var(--sp-4); }   /* (phase V73 block 6) the whole width - it stopped at 760 */
+/* ── What the panes share (AI settings, This computer, Thanks) ───────────────── */
+.dio-body{ padding:var(--sp-3) var(--sp-4) var(--sp-4); }   /* the whole width */
 
 /* Admin -> This computer (js/admin-local.js): one row per thing, what it is on the left, its state or its
    button on the right. */
@@ -121,7 +119,7 @@
 .loc-prog{ flex:0 0 200px; }
 
 .dio-sec{
-  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* (phase V73 block 6) sentence case (к17) */
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* sentence case */
   color:var(--muted); margin:16px 0 6px;
 }
 .dio-sec:first-child{ margin-top:0; }
@@ -146,7 +144,7 @@
 }
 
 /* ── Thanks (js/admin-thanks.js): the repositories the app is built on ─────── */
-.thx-body{ max-width:none; }   /* (phase V73 block 6) the whole width - it stopped at 860 */
+.thx-body{ max-width:none; }   /* the whole width */
 .thx-intro{ margin:0 0 14px; font:var(--fw-regular) var(--fs-12)/1.5 var(--font); color:var(--muted); }
 .thx-group{ margin:0 0 18px; }
 .thx-row{ padding:7px 0 8px; border-bottom:1px solid var(--border-soft); }
@@ -154,18 +152,18 @@
 .thx-top{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
 .thx-name{ font:var(--fw-strong) var(--fs-12)/1.3 var(--font); color:var(--ink); text-decoration:none; }
 .thx-name:hover{ color:var(--ink); text-decoration:underline; }
-.thx-lic{ font:var(--fw-regular) var(--fs-11)/1.3 var(--font); color:var(--faint); }   /* (phase V73 block 6) the licence as quiet text, not a pill */
-/* The group an entry belongs to, pale on its line: the list itself is one A-Z (phase S5). */
+.thx-lic{ font:var(--fw-regular) var(--fs-11)/1.3 var(--font); color:var(--faint); }   /* the licence as quiet text, not a pill */
+/* The group an entry belongs to, pale on its line: the list itself is one A-Z. */
 .thx-grp{ margin-left:auto; font:var(--fw-regular) var(--fs-10)/1.3 var(--font); color:var(--faint); }
 .thx-what{ margin-top:3px; font:var(--fw-medium) var(--fs-11)/1.45 var(--font); color:var(--ink); }
 .thx-how{ margin-top:2px; font:var(--fw-regular) var(--fs-11)/1.5 var(--font); color:var(--muted); }
 
-/* ── AI settings (phase V25, js/admin-ai.js): what the agents are, then their ladder ─────────────────────────────
+/* ── AI settings (js/admin-ai.js): what the agents are, then their ladder ─────────────────────────────
    One line per step: its number, the aggregator, the model, why it is stepped over when it is, the arrows and the
    minus. A step on an aggregator that cannot be asked is outlined in danger. */
 .ai-say p{ margin:0 0 7px; font:var(--fw-regular) var(--fs-11)/1.5 var(--font); color:var(--muted); }
 .ai-say b{ color:var(--ink); font-weight:var(--fw-medium); }
-/* (phase V73 block 6) one line, the four paragraphs under "How it works" */
+/* one line, the four paragraphs under "How it works" */
 .ai-say > .ai-line{ margin:0 0 6px; color:var(--ink); font-size:var(--fs-12); }
 .ai-how{ margin:0 0 10px; }
 .ai-how > summary{ width:max-content; cursor:pointer; color:var(--muted); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); }

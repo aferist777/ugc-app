@@ -1,6 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — THE PICTURES' NUMBERS IN THE FRAMES CHAT'S WORDS (phase V26.6, the owner's check 2026-10-31, (а): "в чате frames
-   давай выделять желтым слова image/N - чтобы было видно что вставилось в идею"; "везде в чате кадров").
+   MERGE — THE PICTURES' NUMBERS IN THE FRAMES CHAT'S WORDS.
 
    "image 1", "image/2", "Image 3" are yellow wherever the frames chat shows words - the ideas, your words over a card,
    "sent as", read more - and in its fields - the message box, the writer's prompt -, so it is seen which pictures an idea

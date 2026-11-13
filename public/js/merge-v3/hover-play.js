@@ -1,8 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a clip that plays in its tile while the pointer rests there (the owner, 2026-10-06), in the picker of
-   attachments (phase V13, chat-pick.js) - and (V91 block 3, the owner 2026-11-12: "при наведении курсора на видео без
-   клика - проигрывание без звука") on the chats' clips: a result in the thread, a message's attachment, a tile of the
-   right column and the zone's enlarged view (chat-shell.js hoverClip, peekShow).
+   MERGE — a clip that plays in its tile while the pointer rests there, in the picker of attachments (chat-pick.js) - and,
+   without sound, on the chats' clips: a result in the thread, a message's attachment, a tile of the right column and the
+   zone's enlarged view (chat-shell.js hoverClip, peekShow).
 
    One at a time per window, nothing fetched before it starts (350 ms on the tile), and it plays ON: left and come
    back to within a moment, it goes on where it was; come back later, and it starts from where it was left rather

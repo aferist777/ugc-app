@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SOUND ON A SHELF (phase V34.E) - what Merge's Library panel and the Library's Media shelf share about AUDIO's nodes
+   SOUND ON A SHELF - what Merge's Library panel and the Library's Media shelf share about AUDIO's nodes
    (routes/library.js _tree): Music; SFX ('sfx-all') -> ★ Favorites ('sfx-fav'), Built-in ('sfx', 'sfx:<category>' - the
    program's set, read only), My sounds ('sounds', 'sounds:<category>').
 
@@ -8,9 +8,8 @@
      searchHead({ q, found, onSearch, onOnline })
                           the search over the grid - every word in a name, a tag or the category, as typed (Escape
                           clears) - and ONE button "find online…"; when the words found nothing here it turns gold itself
-                          and reads "find «words» online", opening the online search with them already in it (the owner
-                          2026-10-23, (р3); one button, not a second one beside it - V34.F, (т15)); and (phase
-                          V54) a "?" right of the field - the sites to download free sounds from by hand, searching for
+                          and reads "find «words» online", opening the online search with them already in it (one
+                          button, not a second one beside it); and a "?" right of the field - the sites to download free sounds from by hand, searching for
                           the words typed (js/sound/sites.js)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -27,7 +26,7 @@ export const isBuiltin = (n) => !!n && (n.key === 'sfx' || String(n.key || '').s
 
 export function filesTo(n) {
   if (!n) return null;
-  // (phase V54) An own folder of Music takes them into itself; highlights and its moods - into Music.
+  // An own folder of Music takes them into itself; highlights and its moods - into Music.
   if (n.kind === 'music') return { kind: 'music', cat: n.cat && !n.noAdd ? n.cat : '' };
   if (n.key === 'sfx-all' || n.kind === 'sounds') return { kind: 'sounds', cat: n.cat && n.cat !== UNCAT ? n.cat : '' };
   return null;
@@ -61,7 +60,7 @@ export function searchHead(o) {
     if (e.key === 'Escape' && s.value) { e.preventDefault(); e.stopPropagation(); _typedAt = Date.now(); _caret = 0; s.value = ''; o.onSearch(''); }
   });
   head.appendChild(s);
-  // (phase V54) "?" - the sites to download from by hand, with the words as typed now.
+  // "?" - the sites to download from by hand, with the words as typed now.
   const help = el('button', 'snd-btn snd-help u-btn is-icon', '?');
   help.type = 'button';
   help.title = 'Where else to find free sounds - the sites open in your browser';

@@ -1,8 +1,8 @@
 'use strict';
 
-/* updater.js - a friend's copy asks the owner's Worker for a new version and lays it down beside the running one
-   (phase V83, block B5; the owner 2026-11-09: (о5) downloaded by itself, installed only by "restart" in the chip,
-   (о6) nothing forced, (о11а) "у друга только рабочая версия" - the old one goes once the new one came up, desktop/home.js).
+/* updater.js - an installed copy asks the publisher's Worker for a new version and lays it down beside the running one:
+   downloaded by itself, installed only by "restart" in the chip, nothing forced; the old version goes once the new one
+   came up (desktop/home.js).
 
    Only in a copy the launcher started (UGC_HOME), with a token (updates\token, put there by the handoff) and with the
    public key and the Worker's address in the program (desktop/update-key.js) - otherwise it says why and asks nothing.
@@ -19,7 +19,7 @@
      - its files.json written, the folder moved to versions\<version>, updates\ready.json { version, seq, notes,
        important } - the chip says "Update <version>" and the launcher switches at the next start.
    The running version is never touched. Its state is in updates\state.json for the server (lib/app-update.js) and
-   each check tells the Worker what this copy has (POST /v1/seen, the owner (о3)). */
+   each check tells the Worker what this copy has (POST /v1/seen). */
 
 const fs = require('fs');
 const path = require('path');

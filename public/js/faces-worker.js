@@ -1,25 +1,25 @@
-/* faces-worker.js - the app's hidden faces window (phase V33.2; docs/local-app/PLAN.md "Фаза V33", V33.2).
+/* faces-worker.js - the app's hidden faces window.
 
    Asks the server for a film (GET /api/faces/next, held open), reads its frames as they come - raw RGBA, five a second,
    480 wide (GET /api/faces/frames/:id) -, finds the faces in each with MediaPipe's BlazeFace FULL RANGE model and answers
    with every frame's boxes (POST /api/faces/:id/done). On the window's graphics card when it has one, else on the
-   processor (5.8 and 10.8 ms a frame on the owner's laptop). The frames are counted as they arrive, so the server's
+   processor (5.8 and 10.8 ms a frame on a laptop). The frames are counted as they arrive, so the server's
    ffmpeg goes at the detector's pace and nothing is held in memory but one frame.
 
-   WHOLE PEOPLE (phase V33.6; PLAN.md "Фаза V33", V33.6): a film handed out with `people` also has its frames with NO face looked
+   WHOLE PEOPLE: a film handed out with `people` also has its frames with NO face looked
    at for people - MediaPipe's EfficientDet-Lite0 (float16: int8 on the graphics card finds nothing), only "person", 28.5 ms a
    frame on the card - and the answer carries them beside the faces (`people`, one list a frame, empty where a face was).
 
    desktop/faces.js keeps it open, hidden, for as long as the app runs; it can be opened in a tab too (a test). */
 
-/* (phase V43, PLAN.md "Фазы V39–V44", V43 - the measurement of block 0 on the owner's episode) THE MOST ACTIVE: a film handed
+/* THE MOST ACTIVE: a film handed
    out with `active` (fragmentation) is counted ten times a second, 960 wide, and besides the faces each frame carries
    - per face (the boxes' order): the change of its MOUTH and of its EYES since the frame before, the camera's own move taken
      off (mean luma change, the lower and the upper part of the box - a printed LEGO mouth answers this), and from the Face
      Landmarker on a crop around it the LIPS' gap and four blendshapes (jaw open, smile, brows up, eyes wide) - a live face's
      lips answer this; [m, e, lip, jaw, smile, brow, wide], null where the landmarker read nothing;
    - every second frame (5 a second) the THINGS of any kind EfficientDet finds - [kind, x, y, w, h, score, changed share];
-   - the camera's own move, pan and tilt in pixels of a 480 frame (the shift of the column and row profiles, as in V33.6).
+   - the camera's own move, pan and tilt in pixels of a 480 frame (the shift of the column and row profiles).
    The people of the frames with no face come from the same things ('person'), so `people` is there as for auto. */
 import { FaceDetector, ObjectDetector, FaceLandmarker } from '/vendor/mediapipe/vision_bundle.mjs';
 
@@ -61,7 +61,7 @@ async function make(prefer) {
   throw last || new Error('the face detector could not start');
 }
 
-// (phase V33.6) The person detector - the graphics card when it can, else the processor (float16 both: 28.5 / 69 ms a frame).
+// The person detector - the graphics card when it can, else the processor (float16 both: 28.5 / 69 ms a frame).
 async function makePeople(prefer) {
   let last = null;
   for (const d of prefer) {
@@ -92,7 +92,7 @@ function peopleIn(img, fw, fh) {
       r3(d.categories[0].score)]);
 }
 
-// ── (phase V43) The most active: the landmarker on a crop around each face, every kind of thing, the camera's own move ──
+// ── The most active: the landmarker on a crop around each face, every kind of thing, the camera's own move ──
 const MARKS_MODEL = '/vendor/mediapipe/face_landmarker.task';
 const OBJ_SCORE = 0.3;
 const OBJ_MIN_AREA = 0.01;
@@ -228,11 +228,11 @@ async function count(job) {
   let fill = 0;
   let ms = 0;
   const out = [];
-  // (phase V33.6) Whole people in the frames with no face, when the film asks for them. A detector that will not start
+  // Whole people in the frames with no face, when the film asks for them. A detector that will not start
   // leaves the film without people (said in the answer), not without faces.
   let people = null;
   let msP = 0, nP = 0, peopleError = '';
-  // (phase V43) The most active, for fragmentation: the landmarker and the detector of every kind of thing. Its people come
+  // The most active, for fragmentation: the landmarker and the detector of every kind of thing. Its people come
   // from the same things - the person detector is not run beside it.
   let act = null, msA = 0, activeError = '';
   if (job.active) {
@@ -269,7 +269,7 @@ async function count(job) {
       }
       ms += performance.now() - t0;
       if (act) {
-        // (V43) The camera's own move, then each face's mouth and eyes after it, its lips and look, and every second frame
+        // The camera's own move, then each face's mouth and eyes after it, its lips and look, and every second frame
         // the things and how much of each moved.
         const t1 = performance.now();
         const fb = out[out.length - 1];

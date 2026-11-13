@@ -1,19 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — a clip's CROP, in its settings (phase V51, point 1, the owner 2026-10-26; answers (пр38)-(пр44); phase V75, the
-   owner 2026-11-06, (кп1)-(кп4)).
+   MERGE v3 — a clip's CROP, in its settings.
 
    "Crop" in the settings of a video or a picture of any video lane (inspector.js): the switch and, while it is on, the
    forms - Free / 9:16 / 1:1 / 16:9 / 4:5 put the largest frame of that form about the middle of the one there is, and keep
-   it until Free is pressed ((пр39)). THE FRAME ITSELF IS CUT ON THE PREVIEW since V75 (place-b.js: a side cuts the piece's
-   edge where it is, Alt + its middle slides the picture inside the frame) - the field that showed the clip's whole file in
-   the strip is gone ((кп1) б, (кп4) а); its rule is framing/crop.js dragFrame.
+   it until Free is pressed. THE FRAME ITSELF IS CUT ON THE PREVIEW (place-b.js: a side cuts the piece's
+   edge where it is, Alt + its middle slides the picture inside the frame); its rule is framing/crop.js dragFrame.
 
-   THE PIECE STAYS WHERE IT WAS ((пр40)): the crop is scissors over a still picture - the piece keeps its place and its scale
+   THE PIECE STAYS WHERE IT WAS: the crop is scissors over a still picture - the piece keeps its place and its scale
    on the screen, its edges follow the frame (framing/crop.js placeFor; what a clip shows and where is the preview's own
    answer, preview-b.js mapsOf). Switched on, a main clip becomes a PiP (`pip`), a clip of a lane above an insert of its piece
    (`tw` / `tx` / `ty`). Switched off, the frame is remembered (`off`): a clip of a lane above has its whole picture back
-   around the piece, the same pixels where they were ((пр43)); a MAIN clip is the whole frame again, no PiP ((кп2), V75).
-   Several main clips picked are cut by ONE frame ((пр44)).
+   around the piece, the same pixels where they were; a MAIN clip is the whole frame again, no PiP.
+   Several main clips picked are cut by ONE frame.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -27,7 +25,7 @@ import { showError } from '../notice.js';
 
 const isMain = (track) => !!(track && track.kind === 'video' && track.main);
 const _under = (c, t) => t >= +c.start - 1e-4 && t < +c.start + (+c.dur || 0);
-// The moment the field and the scissors read a clip at: the playhead on it, else its first frame ((пр38)).
+// The moment the field and the scissors read a clip at: the playhead on it, else its first frame.
 const _moment = (c) => { const t = playhead(); return _under(c, t) ? t : +c.start || 0; };
 const _rect = (k) => ({ x: +k.x, y: +k.y, w: +k.w, h: +k.h });
 
@@ -44,11 +42,11 @@ function _fresh(items) {
 }
 
 // ── The shape of a clip's file ───────────────────────────────────────────────
-// Only its shape is used (the crop is in shares of it). KEPT ONCE KNOWN, per file. (phase V75 fix, the owner 2026-11-06: after the
-// format was switched there and back the Crop switch said "has not loaded yet" again and again) It came only from the element the
-// preview was DRAWING (ready, not being sought), else from the preview's copy loaded anew - which a long film may not have made
-// yet: 15 s, then nothing. Now: what was known, any element of the preview that knows its size (preview-b.js mediaDims), the
-// server's reading of the file's header for a film (GET /api/media/probe - turned by its `rotate`), the picture or the copy last.
+// Only its shape is used (the crop is in shares of it). KEPT ONCE KNOWN, per file - so a format switched there and back
+// does not leave the Crop switch saying "has not loaded yet". Read from what was known, any element of the preview that
+// knows its size (preview-b.js mediaDims), the server's reading of the file's header for a film (GET /api/media/probe -
+// turned by its `rotate`), the picture or the copy last - not only from the element the preview is drawing, which a long
+// film's copy may not have made yet.
 const _dims = new Map();          // src -> { w, h } | Promise
 function _dimsNow(c) {
   const d = _dims.get(c.src);
@@ -108,8 +106,8 @@ function _loadDims(c) {
 }
 
 // ── What a switch writes ─────────────────────────────────────────────────────
-// ON: the frame remembered, or what the clip shows now (nothing moves at the press) - cut where the piece is ((пр40)); a main
-// clip becomes a PiP. `k` - the one frame for every clip picked ((пр44)).
+// ON: the frame remembered, or what the clip shows now (nothing moves at the press) - cut where the piece is; a main
+// clip becomes a PiP. `k` - the one frame for every clip picked.
 function _onPatch(it, k, d) {
   const main = isMain(it.track);
   const m = mapsOf(it.clip, main, d.w, d.h, _moment(it.clip));
@@ -118,13 +116,13 @@ function _onPatch(it, k, d) {
   return { crop, ...placeFor(pickMap(m.maps, k), k, m.W, m.H), ...(main ? { pip: true } : {}) };
 }
 
-// OFF: the frame remembered, and the clip's whole picture back around the piece - the same pixels where they were ((пр43)); a
-// main clip the whole frame (V75).
+// OFF: the frame remembered, and the clip's whole picture back around the piece - the same pixels where they were; a
+// main clip the whole frame.
 function _offPatch(it, d) {
   const k = active(it.clip);
   if (!k) return null;
   const main = isMain(it.track);
-  // (phase V75, the owner's (кп2)) A main clip: the whole frame again, no PiP - its look (edges) kept for the next time.
+  // A main clip: the whole frame again, no PiP - its look (edges) kept for the next time.
   if (main) return { crop: { ...k, off: true }, pip: null, tx: null, ty: null, tw: null, angle: null };
   const t = _moment(it.clip);
   const m = mapsOf(it.clip, main, d.w, d.h, t);
@@ -144,7 +142,7 @@ function _offPatch(it, d) {
 }
 
 /** The crop's patch when a cropped clip above main takes the whole frame again ("Full frame", inspector.js): the frame
- *  remembered, not applied ((пр43)) - or nothing to add. */
+ *  remembered, not applied - or nothing to add. */
 export const pipOffCrop = (c) => (active(c) ? { crop: { ...active(c), off: true } } : {});
 
 /** Crop on or off for every clip of `items` ([{ track, clip }]), one undo step. */
@@ -173,7 +171,7 @@ export async function setCrop(items, want) {
 }
 
 // ── What a frame does to the clips picked ─────────────────────────────────────
-// (phase V75) For the preview's gesture (place-b.js) and the forms below.
+// For the preview's gesture (place-b.js) and the forms below.
 
 /** Where each clip picked starts from: what it shows now and where (the scissors' still picture) - or null, a file not loaded. */
 export function cropBases(items) {
@@ -187,7 +185,7 @@ export function cropBases(items) {
   return out.length ? out : null;
 }
 
-/** The patches a frame makes, one per clip - its piece where it was ((пр40)). */
+/** The patches a frame makes, one per clip - its piece where it was. */
 export function cropPatches(base, k, shape) {
   const crop = { ..._rect(k) };
   if (shape) crop.shape = shape;
@@ -195,7 +193,7 @@ export function cropPatches(base, k, shape) {
     patch: { crop, ...placeFor(pickMap(b.m.maps, k), k, b.m.W, b.m.H) } }));
 }
 
-// A form pressed: the largest frame of it about the middle of the one there is, kept until Free ((пр39)). Free: the frame as
+// A form pressed: the largest frame of it about the middle of the one there is, kept until Free. Free: the frame as
 // it is, its shape no longer kept. One step.
 async function _shape(items, name) {
   const now = _fresh(items);

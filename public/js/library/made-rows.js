@@ -1,13 +1,10 @@
 // WHAT IS KNOWN ABOUT A MADE PICTURE - the viewer's right column for a picture the generators made, opened from IMAGES ->
 // Environments / Lookbooks (the Library's Media and Merge's Library panel).
 //
-// (phase V55, the owner's (гн9): "открыть (просмотр как на полке, с описанием)"; phase V56, (ги7)) The shelves of
-// Environments and Lookbooks went, so what their right column let one WRITE is written here: a lookbook's gender, the
-// description, how a place moves (phase V26.8, the owner: "сделай how it moves редактируемым"); and how many looks were
-// dressed in a lookbook. (phase V58) It lived in the Library's making chat (js/library/makechat.js), which went when the
-// generators became windows (the owner's (лк6)); the rows stayed, word for word.
+// What is WRITTEN here: a lookbook's gender, the description, how a place moves; and how many looks were dressed in a
+// lookbook.
 
-// (phase V26.6) And IMAGES -> Props: a product's name, the person's own words and the agent's description (_propRows).
+// And IMAGES -> Props: a product's name, the person's own words and the agent's description (_propRows).
 const MADE = new Set(['environments', 'lookbooks', 'props']);
 const GENDERS = ['male', 'female', 'unisex'];
 
@@ -57,7 +54,7 @@ function _textRow(value, placeholder, rows, store) {
   });
   foot.append(said, save);
   box.append(ta, foot);
-  // (phase V26.6) What is kept changed elsewhere ("read again"): the box shows it, nothing to save.
+  // What is kept changed elsewhere ("read again"): the box shows it, nothing to save.
   box.setKept = (v) => { kept = String(v || ''); ta.value = kept; save.hidden = true; said.textContent = ''; };
   return box;
 }
@@ -116,7 +113,7 @@ export function madeRows(it) {
   return rows;
 }
 
-// (phase V26.6, the owner's (п4)) A PRODUCT of IMAGES -> Props: its name, what the person said about it (kept apart, as
+// A PRODUCT of IMAGES -> Props: its name, what the person said about it (kept apart, as
 // typed) and the agent's description (English, in sections) - each written by hand here, "save" under it. The frames chat
 // reads the name and the description.
 function _propRows(it, m) {
@@ -131,7 +128,7 @@ function _propRows(it, m) {
   return [['name', name], ['your words', words], ['description', desc], ['', _readAgain(it, m, desc)]];
 }
 
-// "read again" (the owner's (п4)): the agent looks at the picture and reads the words as they are saved now, and its
+// "read again": the agent looks at the picture and reads the words as they are saved now, and its
 // description REPLACES the one there (written by hand too). The box says "describing…" until it lands.
 function _readAgain(it, m, desc) {
   const box = el('div', 'made-ed-foot');

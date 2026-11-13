@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE PERSON'S MASK (phase V84 block 6, the owner 2026-11-11 "Да" to the model) - for the effects that go BEHIND the person
+   THE PERSON'S MASK - for the effects that go BEHIND the person
    (js/fx/behind.js) and the magazine cover's head in front of its title. MediaPipe's Selfie Segmenter (Apache-2.0;
    vendor/mediapipe/selfie_segmenter.tflite, laid out by tools/fetch-mediapipe.js) is run on the clip's WINDOW'S PICTURE AS IT IS
    NOW - so the mask fits whatever that picture is (cut, framed, moved by the effects before) -, by the preview and by the app's

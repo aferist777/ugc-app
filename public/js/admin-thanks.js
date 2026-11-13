@@ -1,18 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN -> THANKS: the open-source work UGC Studio is built on (the owner, 2026-10-03).
+   ADMIN -> THANKS: the open-source work UGC Studio is built on.
 
    Every repository the app uses - the npm packages, what they carry inside (libvips in sharp, the
    codecs in our FFmpeg build), what is fetched at install (yt-dlp, JASSUB, whisper.cpp) or on demand
    (the Whisper model), the caption fonts and presets, the projects whose rules our captions follow, and
    the video chat's almanac (AI Camera Movements) -
    each with its license, what it is, and what it does HERE. Checked against the files themselves (the
-   packages' package.json and LICENSE, the vendor pins, the font licenses) on 2026-10-03.
+   packages' package.json and LICENSE, the vendor pins, the font licenses).
 
    A dependency added to package.json without a line here fails the smoke check (tools/smoke-local.js
    reads the `npm` names below) - a new library gets its thanks in the same change.
 
-   Plain data and a renderer; the pane is built once, the first time it shows. ONE LIST, A-Z (phase S5, the
-   owner 2026-10-05: every entry in alphabetical order): the case is ignored, so "dotenv" stands among the
+   Plain data and a renderer; the pane is built once, the first time it shows. ONE LIST, A-Z (every entry in
+   alphabetical order): the case is ignored, so "dotenv" stands among the
    D's, and the group an entry belongs to is a pale tag on its line.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {

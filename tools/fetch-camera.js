@@ -1,9 +1,9 @@
 'use strict';
 
-/* fetch-camera.js - the camera movements of the video chat's prompt reference (phase V14, docs/local-app/PLAN.md
-   "Фаза V14"): the 46 moves of https://aicameramovements.com in its 7 categories - each move's name and prompt as the
+/* fetch-camera.js - the camera movements of the video chat's prompt reference: the 46 moves of
+   https://aicameramovements.com in its 7 categories - each move's name and prompt as the
    site writes them, and its preview made small - laid out in public/presets/helper/ (shipped with the program, like
-   the character presets in public/presets/; the owner, 2026-10-07: "встраиваем").
+   the character presets in public/presets/).
 
    Run by hand, once - and again when the site changes:
        node tools/fetch-camera.js            read the site, fetch every preview, make the small ones, write camera.json;

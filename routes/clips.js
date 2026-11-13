@@ -6,8 +6,7 @@
 //   POST /api/media/thumbs/audit     which clips need a thumbnail
 //   POST /api/media/thumb            make one
 //
-// The upload keeps its /biroly/ address - the Library and Merge post to it. The Birols page and
-// its server half (the synced tab state, the background generation worker) are gone.
+// The upload keeps its /biroly/ address - the Library and Merge post to it.
 
 const express = require('express');
 const fs      = require('fs');
@@ -40,9 +39,9 @@ const _upload = multer({
 });
 
 // ── Thumbnail sweep ─────────────────────────────────────────────────────────
-// The media shelf draws 72px cards. Most of the library had no thumbnail (so the
-// card loaded the VIDEO to show one frame) or a "thumbnail" that was the full
-// 720x1280 frame - 14MB across the shelf. These two endpoints let the page fix
+// The media shelf draws 72px cards. A clip with no thumbnail makes the card load the
+// VIDEO to show one frame, and a "thumbnail" that is the full 720x1280 frame weighs
+// 14MB across the shelf. These two endpoints let the page fix
 // that at the press of Media's "⋯" -> Thumbnails, incrementally.
 //
 // The server only MAKES files here. Remembering the thumbnail on the clip's record is the page's
@@ -54,8 +53,7 @@ const _upload = multer({
 // card draws `thumbPath` off the record. Those two disagree far more often than they agree:
 // measured on a live library, 211 of 339 records were blank while the file was sitting
 // right there, and 4 more pointed at a file that had since gone. Judging by the derived
-// path alone called every one of them healthy, which is exactly what an empty grid of
-// cards was telling us it was not.
+// path alone would call every one of them healthy, while the grid of cards stays empty.
 //
 // So each item is answered against the RECORD first, and falls into one of three:
 //   ok    the record points at a real, small thumbnail - nothing to do
@@ -101,7 +99,7 @@ router.post('/media/thumb', async (req, res) => {
 });
 
 // What is in a file: length, frame size, whether it has sound (lib/media-probe.js). The video chat asks it for a
-// clip or a sound attached without its length (phase V7: hooks carry none) - the part that goes is picked on the page.
+// clip or a sound attached without its length (hooks carry none) - the part that goes is picked on the page.
 //   GET /api/media/probe?src=<address>   -> { duration, w, h, audio }
 router.get('/media/probe', async (req, res) => {
   try {

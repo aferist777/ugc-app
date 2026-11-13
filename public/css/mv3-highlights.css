@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A HIGHLIGHTS PROJECT (phase V33.1): its view in the Library panel (js/merge-v3/highlights.js), its popup
+   A HIGHLIGHTS PROJECT: its view in the Library panel (js/merge-v3/highlights.js), its popup
    (js/merge-v3/hl-popup.js) and the caption style picked in it (js/merge-v3/hl-style.js, the captions view's tiles).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── The crumbs of a highlights project: "highlights / Library" (the owner's
-      (х15)), and "/ captions" while a
-      fragment is open or ticked (phase V33.3, (х33) - highlights.js puts .is-hl-cap on the panel). No scenarios. ── */
+/* ── The crumbs of a highlights project: "highlights / Library", and "/ captions" while a
+      fragment is open or ticked (highlights.js puts .is-hl-cap on the panel). No scenarios. ── */
 #mv3-library.is-hl #mv3-lib-scen,
 #mv3-library.is-hl:not(.is-hl-cap) #mv3-lib-cap{display:none !important}
 #mv3-library:not(.is-hl) #mv3-lib-hl{display:none !important}
@@ -36,13 +35,13 @@
   border-left:1px solid var(--border-soft); background:var(--surface);
 }
 .mv3-hlv.is-empty .mv3-hl-card{display:none}
-/* (phase V73 block 2) No video yet is the shared part with its "+ add video" (js/ui-state.js emptyEl); here only where it sits. */
+/* No video yet is the shared part with its "+ add video" (js/ui-state.js emptyEl); here only where it sits. */
 .mv3-hl-empty{max-width:420px; margin:40px auto}
 
 /* The tiles: vertical, as a short is */
 .mv3-hl-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:10px; align-content:start}
 .mv3-hl-tile{
-  position:relative; aspect-ratio:9 / 16; border:1px solid var(--border); border-radius:var(--r-xs);   /* (V73 block 5, 5d) the gallery's radius */
+  position:relative; aspect-ratio:9 / 16; border:1px solid var(--border); border-radius:var(--r-xs);   /* the gallery's radius */
   overflow:hidden; background:var(--surface-2); cursor:pointer; transition:border-color .12s var(--ease);
 }
 .mv3-hl-tile:hover{border-color:var(--muted)}
@@ -51,7 +50,7 @@
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
 .mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; margin:0}
-/* (phase V73 block 5, 5d; the owner's (б5-18) а) THE MARKS IN ONE LINE at the foot, over the name: the score (mono), the pieces,
+/* THE MARKS IN ONE LINE at the foot, over the name: the score (mono), the pieces,
    "Rendered" - quiet labels on the scrim; the tick and the ✕ in the top corners. */
 .mv3-hl-marks{display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1)}
 .mv3-hl-score, .mv3-hl-pieces, .mv3-hl-rendered{
@@ -59,7 +58,7 @@
   background:var(--scrim); color:var(--on-media); font:var(--fw-medium) var(--fs-9)/1.3 var(--font);
 }
 .mv3-hl-score{font-weight:var(--fw-strong)}
-/* The cross in the corner (х19): pale until the tile is pointed at; armed - "really?" - filled red. */
+/* The cross in the corner: pale until the tile is pointed at; armed - "really?" - filled red. */
 .mv3-hl-x{position:absolute; top:5px; right:5px; z-index:3; opacity:.35; transition:opacity var(--dur-1) var(--ease)}
 .mv3-hl-x.u-onpic:not(.is-armed){width:20px; height:20px; --x-size:12px}   /* the shared cross on the tile; armed - the part's red fill */
 .mv3-hl-x.u-onpic.is-armed{height:20px}
@@ -70,7 +69,7 @@
 .mv3-hl-step.is-err{color:var(--danger)}
 .mv3-hl-said{font:600 10px/1.3 var(--font); color:var(--muted); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hl-said.is-err{color:var(--danger)}
-/* (phase V40, the owner 2026-10-24) The name in a dark field with its frame, as the scenario's lines (V38.8, library.css
+/* The name in a dark field with its frame, as the scenario's lines (library.css
    .mk-scene-t): seen at once as a field that takes typing; pointed at - its frame lighter, typed in - blue. */
 .mv3-hl-card-name{
   display:block; width:100%; padding:3px 8px; margin-bottom:6px; border:1px solid var(--border); border-radius:var(--r-xs);
@@ -89,17 +88,17 @@
 .mv3-hl-step{font:600 9px/1.3 var(--font); color:var(--ink); overflow-wrap:anywhere}
 .mv3-hl-bar{height:4px; border-radius:2px; background:var(--on-media-line); overflow:hidden}
 .mv3-hl-fill{height:100%; background:var(--muted); transition:width .4s linear}
-/* (phase V40, the owner's (о5)) Until the moments are found: ONE panel the field's width - the way's steps as rows, one bar for
+/* Until the moments are found: ONE panel the field's width - the way's steps as rows, one bar for
    the whole of it, "0:48 · ~3:10 left" - popping up once. */
 .mv3-hl-prep{
-  margin:0; padding:var(--sp-3) var(--sp-4);   /* (V73 block 5, 5d) no shadow: a section of the panel */
+  margin:0; padding:var(--sp-3) var(--sp-4);   /* no shadow: a section of the panel */
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
 }
 .mv3-hl-prep.is-new{animation:mv3-hl-pop .28s var(--ease) both}
 @keyframes mv3-hl-pop{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
 .mv3-hl-stages{list-style:none; margin:0 0 10px; padding:0; display:flex; flex-direction:column; gap:6px}
 .mv3-hl-stage{display:flex; align-items:center; gap:var(--sp-2); font:500 11px/1.35 var(--font); color:var(--muted)}
-.mv3-hl-stage-m{flex:0 0 14px; display:flex; justify-content:center; font-style:normal}   /* Lucide's icons (V73 block 5, 5d) */
+.mv3-hl-stage-m{flex:0 0 14px; display:flex; justify-content:center; font-style:normal}   /* Lucide's icons */
 .mv3-hl-stage-m.is-ring::before{content:''; width:8px; height:8px; border:1.5px solid currentColor; border-radius:50%}
 .mv3-hl-stage-w{flex:1 1 auto; min-width:0; overflow-wrap:anywhere}
 .mv3-hl-stage-t{flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--muted)}
@@ -107,19 +106,19 @@
 .mv3-hl-stage.is-done .mv3-hl-stage-m{color:var(--success)}
 .mv3-hl-stage.is-now{color:var(--ink); font-weight:600}
 .mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--ink)}
-.mv3-hl-stage.is-now .mv3-hl-stage-m .u-ico{animation:u-spin 1s linear infinite}   /* the turning loader while it works - the blink went */
+.mv3-hl-stage.is-now .mv3-hl-stage-m .u-ico{animation:u-spin 1s linear infinite}   /* the turning loader while it works */
 .mv3-hl-stage.is-next{opacity:.7}
 .mv3-hl-stage.is-failed, .mv3-hl-stage.is-failed .mv3-hl-stage-m{color:var(--danger)}
 .mv3-hl-prep-bar{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}
 .mv3-hl-prep-bar > i{display:block; height:100%; width:0; background:var(--muted); border-radius:3px; transition:width .6s linear}
 .mv3-hl-prep-t{margin-top:6px; font:500 var(--fs-10)/1.3 var(--font); color:var(--muted); text-align:right}   /* figures in mono */
 
-/* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
+/* Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
 .mv3-hl-fill.is-render{background:var(--muted)}
 .mv3-hl-step.is-warn{color:var(--warn)}
-/* "Rendered" is a quiet mark with Lucide's play (green went: green is "on" - the tick); "Changed since" dashed */
+/* "Rendered" is a quiet mark with Lucide's play (not green: green is "on" - the tick); "Changed since" dashed */
 .mv3-hl-rendered.is-changed{color:var(--muted); border:1px dashed var(--on-media-line)}
-.mv3-hl-again{align-self:flex-start}   /* the shared button, not red (V73 block 5, 5d) */
+.mv3-hl-again{align-self:flex-start}   /* the shared button, not red */
 .mv3-hl-rline b{overflow-wrap:anywhere}
 .mv3-hl-meta.is-err{color:var(--danger)}
 .mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
@@ -138,14 +137,14 @@
 .mv3-hl-text{margin:0; font:400 11px/1.5 var(--font); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere}
 .mv3-hl-list{margin:4px 0 8px; padding-left:16px; font:400 11px/1.5 var(--font); color:var(--ink)}
 
-/* ── The popup (phase V68 P3): a window of js/gen-window.js (openFrame, geom 'highlights') - two columns, 2/3 and 1/3, the foot
-   across both ── */
+/* ── The popup: a window of js/gen-window.js (openFrame, geom 'highlights') - a grid of two columns, 2/3 and 1/3, laid as
+   ONE column below; the foot across ── */
 .gw-body.mv3-hlp{flex-direction:column}
 .gw.is-drop{outline:2px dashed var(--sel-line); outline-offset:-6px}
 .mv3-hlp-cols{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 1fr)}
 .mv3-hlp-left{min-width:0; min-height:0; overflow-y:auto; padding:2px 16px 14px}
 .mv3-hlp-right{min-width:0; min-height:0; display:flex; flex-direction:column; padding:2px 12px 10px; border-left:1px solid var(--border-soft)}
-/* (phase V63) Two steps in ONE column, the chats' size (the owner's check of P14): the video with the parts under it, then the
+/* Two steps in ONE column, the chats' size: the video with the parts under it, then the
    music with the captions under it - the captions' tiles filling what the music leaves. A section is one element moved into the
    step's column - it lays its children out as the column's own. */
 .mv3-hlp-cols{grid-template-columns:minmax(0, 1fr)}
@@ -156,7 +155,7 @@
 .mv3-hlp-sec{display:contents}
 .mv3-hlp-back[hidden], .mv3-hlp-go[hidden]{display:none}
 .mv3-hlp-back{margin-right:6px}
-/* (хп48) No kind yet: what is under the kinds waits, blurred */
+/* No kind yet: what is under the kinds waits, blurred */
 .mv3-hlp .is-locked{filter:blur(2px); opacity:.45; pointer-events:none; user-select:none}
 .mv3-hlp-tabs{margin-bottom:7px}
 .mv3-hlp-pane{display:flex; align-items:center; gap:8px; min-height:30px}
@@ -178,20 +177,20 @@
 .mv3-hlp-src-t small{font:400 10px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab{display:flex; align-items:center; gap:7px; margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-lab[hidden]{display:none}
-/* The kinds: square buttons, the owner's pixel icons (P1) three times their grid, gold */
+/* The kinds: square buttons, pixel icons three times their grid, gold */
 .mv3-hlp-kinds{display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap}
 .mv3-hlp-kind{
   width:96px; height:96px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:6px 4px;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--gold); cursor:pointer;
 }
-.mv3-hlp-kind:hover{border-color:var(--sel-line)}   /* (phase V73 block 4) gold is the main button's; the icons keep theirs */
-.mv3-hlp-kind.is-on{border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 1px var(--sel-line)}   /* (б1-17) the picked kind: a step and a light line */
+.mv3-hlp-kind:hover{border-color:var(--sel-line)}   /* gold is the main button's; the icons keep theirs */
+.mv3-hlp-kind.is-on{border-color:var(--sel-line); background:var(--sel-bg); box-shadow:0 0 0 1px var(--sel-line)}   /* the picked kind: a step and a light line */
 .mv3-hlp-kind-ic{width:48px; height:48px; display:flex; align-items:center; justify-content:center; font:800 22px/1 var(--font)}
 .mv3-hlp-kind-ic svg{width:48px; height:48px; display:block}
 .mv3-hlp-kind-nm{font:600 10px/1.2 var(--font); color:var(--muted); text-align:center}
 .mv3-hlp-kind.is-on .mv3-hlp-kind-nm{color:var(--ink)}
 .mv3-hlp-reset{margin-left:auto}
-/* (хп35) The kind's words - one height, whatever they say */
+/* The kind's words - one height, whatever they say */
 .mv3-hlp-about{height:116px; overflow-y:auto; margin-top:8px; padding:8px 11px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); font:400 10.5px/1.5 var(--font); color:var(--ink)}
 .mv3-hlp-about-h{margin-bottom:3px; font:600 10px/1.4 var(--font); color:var(--muted)}
@@ -203,14 +202,14 @@
 .mv3-hlp-orow[hidden]{display:none}
 .mv3-hlp-olab{flex:0 0 66px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-hlp-chips{display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0}
-/* .mv3-hlp-chip is the shared chip (.u-chip, phase V73 block 2) */
+/* .mv3-hlp-chip is the shared chip (.u-chip) */
 .mv3-hlp-quiet{font:500 10px/1.4 var(--font); color:var(--muted)}
 .mv3-hlp-quiet.is-err{color:var(--danger)}
 /* The captions: the tabs, what is chosen in rows, the tiles filling the rest of the column */
 .mv3-hlp-captabs{padding:0}
 .mv3-hlp-chosen{flex:0 0 auto; max-height:30%; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:6px 0;
   border-bottom:1px solid var(--border-soft)}
-/* (the owner's check of P3) The open tab's set only: its name on top, its buttons under it - one column, small */
+/* The open tab's set only: its name on top, its buttons under it - one column, small */
 .mv3-hlp-cset{display:flex; flex-direction:column; gap:4px; min-width:0}
 .mv3-hlp-cset-h{font:500 11px/16px var(--font); color:var(--muted)}
 .mv3-hlp-cset .mv3-hlp-chips{gap:3px}
@@ -227,39 +226,39 @@
 .mv3-hlp-style.is-missing{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset}
 .mv3-hls-cats{flex:0 0 auto; margin-bottom:7px}
 .mv3-hlp-style .mv3-hls-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
-/* (V68 P4) The fonts tab: its line, the groups, the tiles (merge-v3/font-tiles.js) */
+/* The fonts tab: its line, the groups, the tiles (merge-v3/font-tiles.js) */
 .mv3-hlp-fonts .mv3-cap-note{flex:0 0 auto; margin-bottom:6px}
 .mv3-hlp-fonts .mv3-fnt-cats{flex:0 0 auto; margin-bottom:7px}
 .mv3-hlp-fonts .mv3-fnt-grid{flex:1 1 auto; min-height:0; overflow-y:auto; padding:4px 2px}
-/* (V68 P3) A chosen one pressed in its row: its tile outlined in gold */
-.mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}   /* the selected look (б1-17) */
-/* (phase V73 block 4) the frame's foot: who hears and what was said - the one status line, two of them - at the left */
+/* A chosen one pressed in its row: its tile outlined in gold */
+.mv3-cap-tile.is-spot .mv3-cap-box{border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring)}   /* the selected look */
+/* the frame's foot: who hears and what was said - the one status line, two of them - at the left */
 .mv3-hlp-footl{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px}
 .mv3-c-btn.mv3-hlp-go{flex:0 0 auto}
 
-/* ── The card's line of the captions' style (phase V33.3) ── */
+/* ── The card's line of the captions' style ── */
 .mv3-hl-cap{font:500 10px/1.4 var(--font); color:var(--muted); margin:0 0 6px}
 .mv3-hl-cap b{color:var(--ink); font-weight:700}
 .mv3-hl-cap-ed{color:var(--muted)}
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
 
-/* (phase V33.8, H2) The captions recommended for the video's kind: their chip first, gold; their groups marked with a dot */
-/* (phase V73 block 4, a proposal) the recommended marks are not gold any more (gold - the main button, the generators, your move):
+/* The captions recommended for the video's kind: their chip first, gold; their groups marked with a dot */
+/* the recommended marks are not gold (gold - the main button, the generators, your move):
    the recommended group's chip a light dashed line, the dots in the text's colour */
 .mv3-hls-cats .mv3-cap-cat.is-rec{border-style:dashed; border-color:var(--sel-line); color:var(--ink)}
 .mv3-hls-cats .mv3-cap-cat.is-rec.is-on{border-style:solid; background:var(--sel-bg); color:var(--ink)}
 .mv3-hls-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--ink); font-size:7px; margin-right:4px; vertical-align:2px}
-/* (phase V33.8, (в1)) The "by the video" tile of auto: the two styles it chooses between */
+/* The "by the video" tile of auto: the two styles it chooses between */
 .mv3-hls-by-box{display:flex; flex-direction:column; justify-content:center; gap:6px; padding:6px 8px; border:1px dashed var(--sel-line)}
 .mv3-hls-by-l{display:flex; flex-direction:column; gap:1px; text-align:left; min-width:0}
 .mv3-hls-by-l small{font:500 10px/1.2 var(--font); color:var(--muted)}
 .mv3-hls-by-l b{font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hls-by.is-on .mv3-hls-by-box{border-style:solid}
-/* (phase V69 P12) A kind in development: grey, not pressed, its words under its name; the title's ✕ on a card; the recommended marks
+/* A kind in development: grey, not pressed, its words under its name; the title's ✕ on a card; the recommended marks
    of the moods, the animations and the font groups (a gold dot, as the preset groups have) */
 .mv3-hlp-kind.is-dev{opacity:.45; filter:grayscale(1); cursor:default; border-style:dashed}
 .mv3-hlp-kind.is-dev:hover{border-color:var(--border)}
-.mv3-hlp-kind-dev{font:400 10px/1.1 var(--font); color:var(--faint)}   /* a quiet label (phase V73 block 4) */
+.mv3-hlp-kind-dev{font:400 10px/1.1 var(--font); color:var(--faint)}   /* a quiet label */
 .mv3-hl-title-x{margin-left:6px}
 .mv3-hlp-moods .mv3-hlp-chip.is-rec::before,
 .mv3-fnt-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--ink); font-size:7px; margin-right:4px; vertical-align:2px}
@@ -267,29 +266,29 @@
 .mv3-hls-grid .mv3-cap-tile.is-rec::after{content:'●'; position:absolute; top:4px; right:5px; color:var(--ink); font-size:8px; line-height:1}
 .mv3-hlp-titlerow{margin:4px 0 2px}
 .mv3-hls-grid .mv3-cap-tile.is-rec{position:relative}
-/* (phase V69 P12) "by the video" lists each kind auto may find - one line each, the kind and the set it would wear */
+/* "by the video" lists each kind auto may find - one line each, the kind and the set it would wear */
 .mv3-hls-by-box.is-kinds{justify-content:flex-start; align-items:stretch; gap:2px; padding:5px 6px}
 .mv3-hls-by-box.is-kinds .mv3-hls-by-l{flex-direction:row; align-items:baseline; gap:4px; overflow:hidden}
 .mv3-hls-by-box.is-kinds .mv3-hls-by-l small{flex:0 0 auto; font-size:10px}
 .mv3-hls-by-box.is-kinds .mv3-hls-by-l b{min-width:0; font-size:10px}
 
-/* (phase V66) The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
+/* The common settings of the ticked fragments in the strip (hl-group.js): "for all N" on top, each fragment under it */
 .mv3-hlg{display:flex; flex-direction:column; gap:6px}
 .mv3-hlg.is-busy{opacity:.6; pointer-events:none}
-.mv3-hlg-each{font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted)}   /* (V73 block 5, (к17)) sentence case */
+.mv3-hlg-each{font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted)}   /* sentence case */
 .mv3-hlg-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
 .mv3-hlg-item{display:flex; flex-direction:column; gap:1px; padding:4px 8px; border-radius:var(--r-xs); cursor:pointer}
 .mv3-hlg-item:hover{background:var(--surface-2)}
 .mv3-hlg-name{font:600 11px/1.35 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-hlg-what{font:500 10px/1.35 var(--font); color:var(--muted)}
 .mv3-hlg-sub{font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--muted)}
-.mv3-hlg .mv3-cap-n{font-family:var(--mono)}   /* a mood's count in mono (V73 block 5) */
+.mv3-hlg .mv3-cap-n{font-family:var(--mono)}   /* a mood's count in mono */
 .mv3-hlg-moods{gap:4px}
 .mv3-hlg-track{max-width:100%; min-width:0}
-/* (phase V66.1) While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
+/* While a group is ticked the timeline's panel is covered by the buttons of the common settings (hl-group.js) */
 #mv3-timeline.is-hlg{position:relative}
-/* (phase V73 block 5, 5c) ONE FORM, on the 4-px grid. (phase V76, the owner 2026-11-06) ONE ROW under the timeline's top edge,
+/* ONE FORM, on the 4-px grid. ONE ROW under the timeline's top edge,
    left to right; a narrow window carries it on to the next line. */
 .mv3-hlg-panel{position:absolute; inset:0; z-index:30; display:flex; flex-wrap:wrap; align-items:flex-start; align-content:flex-start;
   justify-content:flex-start; gap:var(--sp-1); padding:var(--sp-3); background:var(--bg); border-top:1px solid var(--border-soft)}
-.mv3-hlg-pbtn{justify-content:flex-start}   /* the shared part; .is-on its pressed look (б1-21, б2-13) */
+.mv3-hlg-pbtn{justify-content:flex-start}   /* the shared part; .is-on its pressed look */

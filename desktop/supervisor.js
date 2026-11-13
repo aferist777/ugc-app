@@ -19,7 +19,7 @@
    STOPPING takes its children with it. On Windows a process tree does not end with its root, and
    an ffmpeg left behind would go on encoding after the window is gone. It is asynchronous, and the
    shell waits for it before it quits: done synchronously, with an encode running, the wait for
-   taskkill's exit never returned and the app hung on the way out. */
+   taskkill's exit would never return and the app would hang on the way out. */
 
 const { utilityProcess } = require('electron');
 const { execFile, spawn } = require('child_process');
@@ -115,10 +115,10 @@ function createSupervisor({ appDir, libraryDir, log }) {
       env: { ...process.env, UGC_DATA_DIR: libraryDir, PORT: String(port) },
     });
     child = me;
-    // (phase V83, block B5) What the server asks of the shell (routes/app-update.js: "check for updates now").
+    // What the server asks of the shell (routes/app-update.js: "check for updates now").
     me.on('message', (m) => events.emit('message', m));
     me.stdout.on('data', log.write);
-    // (phase V83, block B0) A library a newer program wrote: the server says why on stderr and exits with
+    // A library a newer program wrote: the server says why on stderr and exits with
     // EXIT_REFUSED - no second try will open it, so the shell gives up at once, in those words.
     let refusal = '';
     me.stderr.on('data', (chunk) => {

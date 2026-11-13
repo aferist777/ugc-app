@@ -1,10 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — THE TEXT PRESETS: titles, hooks, labels, callouts, kinetic type (phase V42; the mockup the owner approved
-   2026-10-24, (ц1)). Written by hand.
+   CAPTIONS — THE TEXT PRESETS: titles, hooks, labels, callouts, kinetic type. Written by hand.
 
    A text preset is a look (font, colours, outline, what stands behind) + an entrance + an exit (style.js enter / leave,
    drawn by text-fx.js). It is a BASE like a caption preset (preset-use.js): applying it copies its style, marked with its
-   id - but it has NO PLACE (the owner's (ц3)): the line or lane keeps where it was put (TEXT_KEEP). Sizes are pixels of a
+   id - but it has NO PLACE: the line or lane keeps where it was put (TEXT_KEEP). Sizes are pixels of a
    1080-wide frame. `sample` is what its tile says (lib/caption-tiles.js).
 
    The fonts without Cyrillic (Anton, Bebas Neue, Bangers, Luckiest Guy, Permanent Marker) draw a line with a Cyrillic
@@ -16,7 +15,7 @@ export const TEXT_CATEGORIES = [
   { id: 'callout', label: 'Callout' }, { id: 'kinetic', label: 'Kinetic' },
 ];
 
-/** What a text preset never sets on a line or a lane: where it is (ц3). */
+/** What a text preset never sets on a line or a lane: where it is. */
 export const TEXT_KEEP = ['pos', 'tx', 'ty'];
 
 // What every text preset says unless it says otherwise: no spoken word, nothing behind, its own size.
@@ -31,7 +30,7 @@ const P = (id, name, category, sample, style) => ({ id, name, category, kind: 't
 
 export const TEXT_PRESETS = [
   // ── Headline: a big title ──
-  // The highlights title's look since V33.3 (captions/title.js): white on a dark box.
+  // The highlights title's look (captions/title.js): white on a dark box.
   P('tx-dark-plate', 'Dark Plate', 'headline', 'How I made $10K in 30 days', { font: 'Montserrat ExtraBold', size: 92,
     borderStyle: 'box', outline: 10, backAlpha: 0.8, enter: 'pop', enterDur: 0.35, leave: 'fade', leaveDur: 0.3 }),
   P('tx-impact', 'Impact', 'headline', 'HOW I MADE $10K', { font: 'Anton', size: 150, outline: 6, shadow: 5, shadowAlpha: 0.6,

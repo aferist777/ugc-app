@@ -1,17 +1,16 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — "where" of talking head: the window of the made environments, and new environment in it.
 
-   ONE WINDOW, ITS CONTENT CHANGES (phase V58, the owner 2026-10-29, п. 11-12: "после клика ... хлебными крошками переходы
-   сопровождать сверху в хэдере, чтобы пользователь мог вернуться назад"; "с environments аналогично"). The lower half of
+   ONE WINDOW, ITS CONTENT CHANGES under crumbs in its head that lead back. The lower half of
    the stage pressed (js/merge-v3/wk-setup.js) opens it over the page (js/gen-window.js openFrame, the almanac's size):
 
      environments (+ new environment)    only the environments their generator made (IMAGES -> Environments; the
                                          references are photos, not places), wide tiles, a search (wk-maker.js
-                                         paintChoose). A press SETS THE PROJECT IN IT and the window closes (V57, (ок5));
+                                         paintChoose). A press SETS THE PROJECT IN IT and the window closes;
                                          the ✕ of a tile pressed twice deletes it - one a project stands on is refused
-                                         by the server with that project's name (lib/casting-use.js, (лк4)).
+                                         by the server with that project's name (lib/casting-use.js).
      environments / new environment      the generator's bench (js/gen-window.js paintBench). `create` puts the work into
-                                         Alerts and the window STAYS ((лк5)); the countdown is on the stage's LOWER half
+                                         Alerts and the window STAYS; the countdown is on the stage's LOWER half
                                          only (wk-maker.js holdHalf) - "who" goes on meanwhile. The place made is set in
                                          the project it was made for, unless another place was chosen there meanwhile.
 
@@ -22,7 +21,7 @@ import * as API from './scen-api.js';
 import { derived } from '../chars-store.js';
 import { paintChoose } from './wk-maker.js';
 import { openFrame, paintBench } from '../gen-window.js';
-// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts; the reason a popup in the corner.
+// Being read, could not be read - the shared parts; the reason a popup in the corner.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -41,7 +40,7 @@ export function openWhere(api, page) {
   const want = page === 'make' ? 'make' : 'list';
   if (_w && _w.win.alive() && !_w.win.isTop()) _w.win.close();
   if (!_w || !_w.win.alive()) {
-    // (phase V64, fix (л), (зг14)) "where": moved, its place kept; its size as it is.
+    // "where": moved, its place kept; its size as it is.
     const win = openFrame({ name: 'environment', anchor: api.anchor(), geom: { key: 'where', move: true, keepPos: true },
       onClose: () => { if (_w && _w.win === win) _w = null; } });
     _w = { win, page: want };
@@ -95,7 +94,7 @@ function _paint() {
   if (_envs === null) {
     win.body.appendChild(loadingEl('reading the environments…'));
     API.environments().then((files) => { _envs = files || []; _paint(); })
-      // (phase V73 block 2, (б2-19)) Not read is not "No environments yet": "did not load" with Try again, the reason a popup.
+      // Not read is not "No environments yet": "did not load" with Try again, the reason a popup.
       .catch((e) => { _envs = false; showError('Could not read the environments: ' + e.message); _paint(); });
     return;
   }

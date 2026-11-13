@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// THE OWNER'S TELEGRAM BOT (phase TG) - Admin -> API keys, the row "Telegram bot" (lib/telegram.js).
+// THE PERSON'S OWN TELEGRAM BOT - Admin -> API keys, the row "Telegram bot" (lib/telegram.js).
 //
 //   GET  /api/telegram           -> { tokenSet, bot, chat, code, mode: receiver|poll|off, receiver, connecting, error,
 //                                     conflict, receiverError, lastAt, queue: { waiting, error } }   - never the key

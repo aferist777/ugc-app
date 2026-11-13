@@ -1,8 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// ADMIN -> AI SETTINGS (phase V25, the owner 2026-10-13: "кнопку в admin между api keys и import/export с названием ai
-// settings и поместить лесенку туда с пояснением что это такое").
+// ADMIN -> AI SETTINGS.
 //
 //   GET /api/ai-settings    the agents' ladder, its cap, and every aggregator with its models and whether it can be
 //                           asked now (`off`: '' or why not - no key, its key refused at the last check)

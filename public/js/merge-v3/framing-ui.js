@@ -1,5 +1,5 @@
-/* framing-ui.js - the clip's FRAME switch in the inspector (phase V33.2, the owner's (х9), 2026-10-21): how a filled
-   clip's window moves - fixed (the old "Keep" anchor), following the face, the middle, the whole frame over its blur, two
+/* framing-ui.js - the clip's FRAME switch in the inspector: how a filled
+   clip's window moves - fixed (the "Keep" anchor), following the face, the middle, the whole frame over its blur, two
    faces as two bands - and a shift left or right for the whole clip. Any filled clip in Merge, not only a highlights one.
 
    "Follow the face" and "two faces" need the clip's faces: they are counted by the app's hidden window (lib/faces.js -
@@ -7,7 +7,7 @@
    (public/js/framing/path.js plan). While they are counted the panel says how far; with no window to count (the app
    run as a bare server) it says so and nothing changes. The middle and the whole frame need only the film's size.
 
-   (phase V40, the owner's (о7)) A frame that comes out split into two bands takes the subtitles with it: the record is
+   A frame that comes out split into two bands takes the subtitles with it: the record is
    written and the split frame's rule run over the subtitle lane IN ONE STEP (one Ctrl+Z) - a page that is on the bands for
    more than half its time goes to the middle, one the rule put there and no longer on them goes back
    (public/js/captions/split.js). */
@@ -16,28 +16,28 @@ import * as Store from './store.js';
 import { SQUARE, plan, normalize } from '../framing/path.js';
 import { placeBySplit } from '../captions/split.js';
 
-// (phase V69 P12b, (хп82)) 'camera + game' - a stream's webcam on top, the game below (public/js/framing/cam.js); on any clip, so a
+// 'camera + game' - a stream's webcam on top, the game below (public/js/framing/cam.js); on any clip, so a
 // stream's frame can be seen while the stream kind is in development.
 export const FRAMINGS = [['fixed', 'Fixed'], ['face', 'Follow the face'], ['center', 'Middle'],
                          ['whole', 'Whole + blur'], ['bands', 'Two faces'], ['cam', 'Camera + game']];
 
-// (phase V43, (ё13), (ё7а)) A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
+// A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
 // marked `active`, planned on the server from the counted source, the words and the key moments. The switch shows it as its
 // own choice while the clip has it (another choice replaces it; Ctrl+Z brings it back); and its punch-ins have a switch of their
 // own - on or off, nothing to edit by hand.
 const ACTIVE = ['active', 'The most active'];
-// (phase V69 P12b) A podcast's or a true crime fragment's clip follows THE SPEAKER - the same planner by its kind's rules
+// A podcast's or a true crime fragment's clip follows THE SPEAKER - the same planner by its kind's rules
 // (public/js/framing/active.js `speaker`): its switch says so.
 const SPEAKER = ['active', 'The speaker'];
 /** The switch's value for the clip: 'active' for a part of fragmentation, else its record's mode, or fixed. */
 export const modeOf = (c) => (c && c.frame && c.frame.active ? 'active' : (c && c.frame && c.frame.mode) || 'fixed');
 /** The choices the switch offers this clip - the most active only on a clip that has it. */
 export const framingsOf = (c) => (c && c.frame && c.frame.active ? [c.frame.speaker ? SPEAKER : ACTIVE, ...FRAMINGS] : FRAMINGS);
-/** (V43) The punch-ins' row - on / off - for a clip whose record has them, or null. `C` the inspector's controls. */
+/** The punch-ins' row - on / off - for a clip whose record has them, or null. `C` the inspector's controls. */
 export function zoomRow(c, C) {
   const f = c && c.frame;
   if (!f || !f.active || !Array.isArray(f.zooms) || !f.zooms.length) return null;
-  // (phase V73 block 5, 5b, the owner's (б5-11) а) on / off is the shared switch, as Crop, PiP and Halfer
+  // on / off is the shared switch, as Crop, PiP and Halfer
   const sw = C.toggle(!f.noZoom, (on) => {
     const next = { ...f };
     if (!on) next.noZoom = true; else delete next.noZoom;
@@ -69,11 +69,11 @@ export function noteOf(c) {
   const f = c && c.frame;
   if (!f) return '';
   if (f.active) {
-    // (V43) The most active: what it follows, and its punch-ins.
+    // The most active: what it follows, and its punch-ins.
     const shots = (f.shots || []).length;
     const bands = (f.shots || []).filter((s) => s.kind === 'bands').length;
     const z = (f.zooms || []).length;
-    // (V69 P12b) The speaker's: its shots with no face shown as the square.
+    // The speaker's: its shots with no face shown as the square.
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
     const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
     return `${f.speaker ? 'the speaker' : 'the most active'} · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
@@ -83,7 +83,7 @@ export function noteOf(c) {
   if (f.mode === 'face' || f.mode === 'bands' || f.mode === 'cam') {
     const shots = (f.shots || []).length;
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
-    // (V69 P12b) camera + game: how many shots show the streamer's webcam.
+    // camera + game: how many shots show the streamer's webcam.
     const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
     if (f.mode === 'cam') return `camera + game in ${cams} of ${shots} shot${shots === 1 ? '' : 's'}` + (none ? ` · ${none} with no face as a square` : '');
     return `a face in ${Math.round((+f.found || 0) * 100)}% of the frames · ${shots} shot${shots === 1 ? '' : 's'}`
@@ -98,7 +98,7 @@ export const failed = (c) => !!(_wait.get(c.id) && _wait.get(c.id).error);
 /** Called by the panel each time it is drawn: how to tell it the note changed. */
 export function onNote(fn) { _tick = fn; }
 
-// The clip's frame written - or taken off (null) - and the subtitles placed for it, as ONE step to undo (phase V40).
+// The clip's frame written - or taken off (null) - and the subtitles placed for it, as ONE step to undo.
 function _setFrame(c, value) {
   const f = value ? normalize(value) : null;
   Store.mutate((tl) => {
@@ -114,20 +114,20 @@ function _setFrame(c, value) {
 
 /**
  * The switch moved to `mode` on clip `c` - written as one Ctrl+Z step with the subtitles' places (_setFrame). Faces counted
- * if they are needed - the panel follows through noteOf(). (Since V40 the inspector's writer of the clip, its third
+ * if they are needed - the panel follows through noteOf(). (The inspector's writer of the clip, its third
  * argument, is not used: the frame and the subtitles go in one step.)
  */
 export async function choose(c, mode) {
   _wait.delete(c.id);
   const shift = c.frame ? (+c.frame.shift || 0) : 0;
-  // (V43) The most active is planned on the server; chosen while the clip has it, nothing changes.
+  // The most active is planned on the server; chosen while the clip has it, nothing changes.
   if (mode === 'active') { _say(); return; }
   if (mode === 'fixed') { _setFrame(c, null); _say(); return; }
   if (mode === 'center' || mode === 'whole') {
     const p = await _json('/api/media/probe?src=' + encodeURIComponent(c.src));
     if (!p || !(p.w > 0)) { _wait.set(c.id, { mode, error: 'the film could not be read' }); _say(); return; }
     const side = p.rotate === 90 || p.rotate === 270;
-    // (phase V69 P12, (хп36)) "whole + blur" is the square from the middle over the blur.
+    // "whole + blur" is the square from the middle over the blur.
     _setFrame(c, { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [], ...(mode === 'whole' ? { wide: SQUARE } : {}) });
     _say();
     return;
@@ -144,7 +144,7 @@ export async function choose(c, mode) {
     if (_wait.get(c.id) !== mine) return;
     if (st && st.state === 'ready' && st.faces) {
       _wait.delete(c.id);
-      // (V69 P12) A shot with no face - the square from the middle over the blur.
+      // A shot with no face - the square from the middle over the blur.
       _setFrame(c, plan(st.faces, { aspect: aspectOf(), mode, shift, wide: SQUARE }));
       _say();
       return;

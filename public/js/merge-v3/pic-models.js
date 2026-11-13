@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — the settings column of a chat that DRAWS PICTURES: the model, the aggregator, the quality, the price and
-   who catches a refusal (phase J; shared since phase V26.5 - the pictures chat and the frames chat of a talking head).
+   who catches a refusal (shared by the pictures chat and the frames chat of a talking head).
 
    Read from `/api/mv3/img/matrix` through the current choice: which models can take what is attached (the number of
    pictures is the PAIRING's business - kie takes five for grok, Replicate one), which aggregators can serve the model,
@@ -10,7 +10,7 @@
 
 import * as Store from './store.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
-// (phase V73 block 2, step 2b) The model table being read or not read - the shared parts (a row of the column); the reason a popup.
+// The model table being read or not read - the shared parts (a row of the column); the reason a popup.
 import { loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -74,7 +74,7 @@ export function modelColumn(ctx, o) {
     const host = ui.left;
     if (!_table || !_table.engines.length) {
       host.textContent = '';
-      // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (load).
+      // Not read: "did not load" with Try again - the reason is the popup (load).
       host.appendChild(_tableErr ? failedEl('The models', () => { _tableErr = ''; paint(); load(); }, { line: true })
         : _table ? el('div', 'mv3-ig-fall', 'No picture model is available - check the API keys in Admin.')
           : loadingEl('reading the models…', { line: true }));
@@ -87,7 +87,7 @@ export function modelColumn(ctx, o) {
       const tl = Store.timeline();
       const row = (label, ctl, cls) => {
         const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
-        if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // (phase V73 block 2) the shared field at 24, (2a-3) б
+        if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // the shared field at 24
         const l = el('label', null, label);
         l.htmlFor = ctl.id;
         r.append(l, ctl);
@@ -108,7 +108,7 @@ export function modelColumn(ctx, o) {
       row('quality', q);
       let arSel = null, arWrap = null, shape = null;
       if (opts.shapes) {
-        // The shape twice: buttons in the wide column, a dropdown in the folded row (the owner's answer 3).
+        // The shape twice: buttons in the wide column, a dropdown in the folded row.
         arSel = document.createElement('select');
         arSel.id = id('ar');
         arSel.title = 'Shape';
@@ -117,7 +117,7 @@ export function modelColumn(ctx, o) {
         arWrap = el('div', 'mv3-ig-ar-row');
         host.appendChild(arWrap);
       } else {
-        // (phase V26.5) The shape is not a choice: said, so the price line is not the only place it shows.
+        // The shape is not a choice: said, so the price line is not the only place it shows.
         shape = el('div', 'mv3-ig-shape');
         host.appendChild(shape);
       }

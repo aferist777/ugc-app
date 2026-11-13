@@ -1,13 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — how a caption looks, ONE copy for the server and the page (phase K0, 2026-10-03).
+   CAPTIONS — how a caption looks, ONE copy for the server and the page.
 
-   The defaults used to live in four places - lib/mv3b-subs.js, js/merge-v3/subs-b.js, the store's
-   whitelist in routes/mergev3.js and the converter - "copied, not imported", for want of a build step.
    A module under public/ is imported by the page and require()d by the server (Node 24 loads an ES
-   module that way), so there is one now, and a field added here is a field both sides know.
+   module that way), so a field added here is a field both sides know.
 
-   A STYLE belongs to a lane (`track.style`) and, partially, to one caption (`clip.style`, the owner
-   2026-10-03: a fragment can wear a style of its own); what a caption is drawn with is the lane's style
+   A STYLE belongs to a lane (`track.style`) and, partially, to one caption (`clip.style`: a fragment
+   can wear a style of its own); what a caption is drawn with is the lane's style
    with the caption's on top - resolveStyle(). The stored lane style is normalised on every save
    (normalizeStyle: clamps, defaults, unknown keys dropped); a caption's own is normalised the same way
    but keeps only what it sets (normalizeOverride).
@@ -19,9 +17,9 @@
 
 import { familyOf, isShipped } from './fonts.js';
 
-// What the active word does (phase K3 draws all of them; K0 knows them):
+// What the active word does:
 //   none     every word looks the same
-//   karaoke  each word turns `primary` the moment it is spoken, `secondary` before - the old toggle
+//   karaoke  each word turns `primary` the moment it is spoken, `secondary` before
 //   color    the word being spoken wears `highlight`
 //   box      a box in `highlight` behind the word being spoken
 //   pop      the word being spoken grows for a moment, in `highlight`
@@ -35,15 +33,15 @@ export const CASINGS = ['none', 'upper', 'lower', 'title'];
 // outline: letters outlined; box: a box behind each line; boxline: a box AND outlined letters.
 export const BORDERS = ['outline', 'box', 'boxline'];
 export const POSITIONS = ['top', 'center', 'bottom'];
-// How a heard lane is cut (phase V30, block 4, (с12)): `pages` - a few words a page (K2); `sentences` - classic
+// How a heard lane is cut: `pages` - a few words a page; `sentences` - classic
 // subtitles, a sentence or a part of one, two lines of up to 42 characters, 1-7 s (pages.js SENT). The LANE's, never
-// a line's (с43): resolveStyle takes it from the lane only.
+// a line's: resolveStyle takes it from the lane only.
 export const CUTS = ['pages', 'sentences'];
-// A TEXT line's entrance and exit (phase V42, the owner's (о15); captions/text-fx.js draws them, its ENTER / LEAVE are keyed by
+// A TEXT line's entrance and exit (captions/text-fx.js draws them, its ENTER / LEAVE are keyed by
 // these names): what moves - the whole line, its rows, its words or its letters - and how; `enterDur` / `leaveDur` their
-// lengths, s. A SUBTITLE page has In and Out too since phase V49 (the owner's (пр16)-(пр18)): whole-page motions only, drawn by
+// lengths, s. A SUBTITLE page has In and Out too: whole-page motions only, drawn by
 // captions/page-fx.js, lengths automatic. On a subtitle lane `none` is "not chosen": the
-// preset's own way of arriving (`appear`) - and `at-once`, chosen, arrives with nothing, whatever the preset does ((пр20)).
+// preset's own way of arriving (`appear`) - and `at-once`, chosen, arrives with nothing, whatever the preset does.
 export const ENTERS = ['none', 'fade', 'pop', 'zoom', 'grow', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'stretch', 'swing',
   'wipe', 'mask-rise', 'rows', 'words', 'words-pop', 'letters', 'letters-pop', 'letters-drop', 'typewriter', 'glitch', 'flicker',
   'from-top', 'at-once'];
@@ -53,31 +51,31 @@ export const LEAVES = ['none', 'fade', 'pop', 'zoom', 'shrink', 'rise', 'sink', 
 // colour and opacity (`backColor`, `backAlpha`); `plateIn` / `plateOut` - its own entrance and exit ('' - the text's).
 export const PLATES = ['none', 'round', 'pill', 'marker', 'underline', 'circle', 'tag', 'sticker'];
 
-// SEVERAL PRESETS AND ANIMATIONS AT ONCE on the subtitle lane (phase V49, point 8c; the owner's (пр17), (пр21), (пр22)): the
+// SEVERAL PRESETS AND ANIMATIONS AT ONCE on the subtitle lane: the
 // lane's `mix` - the looks dealt, one entry per preset ({ preset, ...LOOK_KEYS }: what a preset's own section of the strip
 // changes) - and `anims` - the animations dealt, 'in|out' pairs; `mixSeed` - the deal's seed, new at every press. A page dealt
 // one wears REFERENCES, never a copy: `mixP` - its entry of `mix`, `mixA` - its pair of `anims`, `mixS` - the seed it was
 // dealt with (captions/mix.js deals them). A mix is two entries or more - one is no mix. SPARSE: written only when set, so a
-// style without a mix is stored, saved as a preset and drawn exactly as before.
+// style without a mix has no such fields.
 export const LOOK_KEYS = ['font', 'bold', 'italic', 'casing', 'primary', 'secondary', 'highlight', 'marked', 'outlineColor',
   'shadowColor', 'backColor', 'backAlpha', 'shadowAlpha', 'outline', 'shadow', 'blur', 'scaleX', 'scaleY', 'spacing', 'borderStyle',
   'effect', 'appear'];
 export const MIX_MAX = 40;
-// FONTS DEALT (phase V68 P4, the owner's (хп8), (хп10), (хп11), 2026-11-01): a lane's `fonts` - the families picked in the fonts
+// FONTS DEALT: a lane's `fonts` - the families picked in the fonts
 // tab, any lane - draw its pages over the preset's own font (one: every page; several: each page the one it was dealt, `mixF`,
 // two in a row never the same - mix.js). Colours, edges and motion stay the preset's. A page dealt a font keeps the WIDTH it has
 // in the preset's font (`fitTo` of the resolved style - place.js drawnPage scales it); a page whose own style names a font is
-// the hand's and is left alone. None picked - the preset's font, the style stored and drawn exactly as before.
-// THE PLACE HELD (phase V66, the owner's (хо13), 2026-11-03): a subtitle lane whose place was set for several highlights fragments at
+// the hand's and is left alone. None picked - the preset's font, and no field.
+// THE PLACE HELD: a subtitle lane whose place was set for several highlights fragments at
 // once (`hold: true`) keeps its place (pos, tx, ty) when a preset is put on it - the place on the screen is about the platform's
-// buttons, not about the look (preset-use.js keepMotion). Nothing is drawn by it: a style without it is stored as before.
-// TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29), 2026-11-03): a subtitle lane with `rows: 2` is drawn by place.js rowsPlan -
+// buttons, not about the look (preset-use.js keepMotion). Nothing is drawn by it: a style without it has no field.
+// TWO ROWS: a subtitle lane with `rows: 2` is drawn by place.js rowsPlan -
 // a page's In before its first word, its Out after its end, every other page in a second row, a page fully seen at least 0.8 s. The
-// lane's, never a preset's (preset-use.js); no field - one row, every page drawn exactly as before.
+// lane's, never a preset's (preset-use.js); no field - one row.
 const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS', 'fonts', 'mixF', 'hold', 'rows'];
-/** The fields a held place keeps over a preset (phase V66). */
+/** The fields a held place keeps over a preset. */
 export const PLACE_KEYS = ['pos', 'tx', 'ty'];
-/** (phase V71) Is a subtitle lane's style in two rows? */
+/** Is a subtitle lane's style in two rows? */
 export const rowsOn = (lane) => !!lane && +lane.rows === 2;
 
 export const DEF = {
@@ -93,9 +91,9 @@ export const DEF = {
   wrap: true, wordsPerLine: 0, lines: 2, cut: 'pages',
   effect: 'none', appear: 'none', casing: 'none',
   sizeAuto: true,
-  // The colour of a word marked to stand out (`k`, K10b) - '' is automatic (markedColour).
+  // The colour of a word marked to stand out (`k`) - '' is automatic (markedColour).
   marked: '',
-  // A text line's (phase V42): its entrance and exit and their lengths, the plate behind it, its tilt (degrees, counter-
+  // A text line's: its entrance and exit and their lengths, the plate behind it, its tilt (degrees, counter-
   // clockwise) and its glow (0 none; '' colour - the text's). The accent of a tag's stripe and of a typewriter's cursor is
   // `highlight` - a text lane has no spoken word to light.
   enter: 'none', enterDur: 0.5, leave: 'none', leaveDur: 0.4,
@@ -116,7 +114,7 @@ const TEXT = (n) => (v) => (v == null ? undefined : String(v).slice(0, n));
 
 const RULES = {
   preset: TEXT(60),
-  // Always a shipped font (fonts.js): an old project's Arial is stored as Liberation Sans (K5).
+    // Always a shipped font (fonts.js): an old project's Arial is stored as Liberation Sans.
   font: (v) => { const s = String(v == null ? '' : v).trim().slice(0, 60); return s ? familyOf(s) : undefined; },
   size: NUM(20, 200),
   bold: BOOL, italic: BOOL,
@@ -141,7 +139,7 @@ const RULES = {
   enter: ONE(ENTERS), enterDur: NUM(0.05, 3), leave: ONE(LEAVES), leaveDur: NUM(0.05, 3),
   plate: ONE(PLATES), plateIn: (v) => (v === '' ? '' : ONE(ENTERS)(v)), plateOut: (v) => (v === '' ? '' : ONE(LEAVES)(v)),
   tilt: NUM(-15, 15), glow: NUM(0, 10), glowColor: (v) => (v === '' ? '' : COLOUR(v)),
-  // (phase V49) The mix - a lane's - and a page's references into it.
+  // The mix - a lane's - and a page's references into it.
   mix: (v) => {
     if (!Array.isArray(v)) return undefined;
     const out = [];
@@ -162,7 +160,7 @@ const RULES = {
   },
   mixSeed: NUM(0, 2147483647, true), mixS: NUM(0, 2147483647, true),
   mixP: NUM(0, MIX_MAX - 1, true), mixA: NUM(0, MIX_MAX - 1, true),
-  // (V68 P4) Shipped families only, each once; a name the app does not ship is dropped, not read as the fallback.
+  // Shipped families only, each once; a name the app does not ship is dropped, not read as the fallback.
   fonts: (v) => {
     if (!Array.isArray(v)) return undefined;
     const out = [];
@@ -173,9 +171,9 @@ const RULES = {
     return out.length ? out : undefined;
   },
   mixF: NUM(0, MIX_MAX - 1, true),
-  // (V66) A lane's place held over presets - only ever true; false is no field at all.
+  // A lane's place held over presets - only ever true; false is no field at all.
   hold: (v) => (v === true ? true : undefined),
-  // (V71) Two rows - only ever 2; one row is no field at all.
+  // Two rows - only ever 2; one row is no field at all.
   rows: (v) => (+v === 2 ? 2 : undefined),
 };
 
@@ -193,15 +191,15 @@ export function markedColour(st) {
   const s = st || DEF;
   if (HEX.test(String(s.marked || ''))) return String(s.marked).toLowerCase();
   const sung = s.effect === 'karaoke' || s.effect === 'sweep';
-  // ...and, where a box is drawn behind the words, the box's colour (review K10: Highlighter Yellow Sweep's
-  // marked word came out yellow on its yellow box).
+  // ...and, where a box is drawn behind the words, the box's colour (Highlighter Yellow Sweep's marked word
+  // would come out yellow on its yellow box).
   const boxed = (s.borderStyle === 'box' || s.borderStyle === 'boxline') && +s.backAlpha > 0;
   const ok = (c) => HEX.test(String(c || '')) && _far(c, s.primary || DEF.primary) && (!sung || _far(c, s.secondary || DEF.secondary))
     && (!boxed || _far(c, s.backColor || DEF.backColor));
   return [s.highlight].concat(MARK_TRY).find(ok) || MARK_TRY[0];
 }
 
-// A style written before `effect` existed said karaoke with a switch.
+// A style with no `effect` but a `karaoke` switch: on reads as 'karaoke', off as 'none'.
 function _legacy(st) {
   if (st && st.effect == null && st.karaoke != null) return { ...st, effect: st.karaoke ? 'karaoke' : 'none' };
   return st;
@@ -241,19 +239,19 @@ export function normalizeOverride(st) {
 export function resolveStyle(laneStyle, clipStyle) {
   const lane = _legacy(laneStyle || {});
   const own = clipStyle ? _legacy(clipStyle) : null;
-  // A page dealt from its lane's mix (phase V49): the look and the animation it was dealt, under what it sets itself.
+  // A page dealt from its lane's mix: the look and the animation it was dealt, under what it sets itself.
   const dealt = own ? dealtOf(lane, own) : null;
-  // (V68 P4) A font dealt from the lane's `fonts` goes over the preset's (and the mix look's), under the page's own.
+  // A font dealt from the lane's `fonts` goes over the preset's (and the mix look's), under the page's own.
   const fd = fontDealt(lane, own);
   const st = Object.assign({}, DEF, lane, dealt, fd ? { font: fd } : null, own || {});
   delete st.karaoke;                       // read as `effect` above (_legacy)
-  st.font = familyOf(st.font);             // a shipped font, whatever an old project named (K5)
+  st.font = familyOf(st.font);             // a shipped font, whatever an old project named
   if (fd && !(own && own.font != null)) {
     // The font the page would have had - the one whose width it keeps (place.js drawnPage).
     const before = familyOf(Object.assign({}, DEF, lane, dealt).font);
     if (before !== st.font) st.fitTo = before;
   }
-  // The cut is the lane's (phase V30, block 4, (с43)): a Classic preset put on a line gives it the look only.
+  // The cut is the lane's: a Classic preset put on a line gives it the look only.
   st.cut = lane.cut === 'sentences' ? 'sentences' : 'pages';
   return st;
 }
@@ -262,7 +260,7 @@ export function resolveStyle(laneStyle, clipStyle) {
 export const mixOf = (lane) => (lane && Array.isArray(lane.mix) && lane.mix.length >= 2 ? lane.mix : null);
 /** The lane's animations dealt - two pairs or more - else null. */
 export const animsOf = (lane) => (lane && Array.isArray(lane.anims) && lane.anims.length >= 2 ? lane.anims : null);
-/** The lane's fonts dealt (V68 P4) - one or more families - else null. */
+/** The lane's fonts dealt - one or more families - else null. */
 export const fontsOf = (lane) => (lane && Array.isArray(lane.fonts) && lane.fonts.length ? lane.fonts : null);
 
 /** The font a page wears from its lane's `fonts`: the one font, or the one it was dealt (`mixF`); null for none. */
@@ -274,7 +272,7 @@ export function fontDealt(laneStyle, clipStyle) {
   return Number.isInteger(k) && fo[k] ? fo[k] : null;
 }
 
-/** The style a page is CUT and measured by: the preset's font where a font is dealt over it (V68 P4) - else itself. */
+/** The style a page is CUT and measured by: the preset's font where a font is dealt over it - else itself. */
 export function cutStyle(st) {
   if (!st || !st.fitTo) return st;
   const o = Object.assign({}, st, { font: st.fitTo });
@@ -286,7 +284,7 @@ export function cutStyle(st) {
 export const pairOf = (p) => { const [enter, leave] = String(p || '').split('|'); return { enter: enter || 'none', leave: leave || 'none' }; };
 
 /**
- * What a page was dealt from its lane's mix (phase V49): the look of its entry of `mix` and its pair of `anims` - {} when it
+ * What a page was dealt from its lane's mix: the look of its entry of `mix` and its pair of `anims` - {} when it
  * was dealt nothing, or its references point at nothing (the mix gone or shorter: the lane's own look then).
  */
 export function dealtOf(laneStyle, clipStyle) {
@@ -343,7 +341,7 @@ export function captionLanes(timeline) {
 
 /**
  * A caption's words as stored: {w, s, e} with times from the caption's own start, and `k` when the word
- * is marked to stand out (K10). At most 200 to a caption.
+ * is marked to stand out. At most 200 to a caption.
  */
 export function normalizeWords(words) {
   if (!Array.isArray(words)) return null;
@@ -353,7 +351,7 @@ export function normalizeWords(words) {
     .map(w => {
       const o = { w: String(w.w).slice(0, 60), s: num(w.s), e: num(w.e) };
       if (w.k) o.k = true;
-      // A word a person changed, put in, cut, joined or moved (K10): the line is theirs - Generate keeps it.
+      // A word a person changed, put in, cut, joined or moved: the line is theirs - Generate keeps it.
       if (w.h) o.h = true;
       return o;
     });

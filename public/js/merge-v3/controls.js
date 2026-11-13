@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the inspector's controls. Phase I2.
+   MERGE v3 — the inspector's controls.
 
-   One place for the four row types the panels need, because the old editor built
-   them ad hoc at each call site and they drifted: sliders with different readouts,
-   selects with and without labels, switches that were sometimes checkboxes.
+   One place for the four row types the panels need, so they cannot drift apart - sliders with
+   different readouts, selects with and without labels, switches that are sometimes checkboxes.
 
    THE ONE RULE THAT MATTERS HERE. A slider fires `input` on every pixel of a drag
    and `change` once on release. The readout follows `input` so the number moves under
@@ -17,7 +16,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { wire as wireRange } from '../ui-range.js';
-// (phase V73 block 5, part 5b) a pressed button may be a Lucide icon; a label's figures in mono (js/num.js)
+// A pressed button may be a Lucide icon; a label's figures in mono (js/num.js)
 import { icon } from '../icons.js';
 import { setFigures } from '../num.js';
 
@@ -47,7 +46,7 @@ export function hint(text, flush) {
   return h;
 }
 
-// A row of buttons with no label (phase S2): the whole width of the strip is theirs, so three fit
+// A row of buttons with no label: the whole width of the strip is theirs, so three fit
 // where a labelled row took two. Missing ones are skipped; a label too long for its share ends in "…"
 // and is whole in its title.
 export function acts(btns) {
@@ -61,7 +60,7 @@ export function acts(btns) {
   return r;
 }
 
-// (phase V54) `mixed` - several things picked disagree: the readout says "mixed" until the slider is moved, and the move gives
+// `mixed` - several things picked disagree: the readout says "mixed" until the slider is moved, and the move gives
 // them all one value. `onInput` - for a gesture heard while it is held (the shift of several levels); still nothing written.
 export function slider({ min, max, step, value, fmt, onChange, onInput, mixed }) {
   const wrap = document.createElement('span');
@@ -70,7 +69,7 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   inp.type = 'range';
   inp.min = String(min); inp.max = String(max); inp.step = String(step);
   inp.value = String(value);
-  wireRange(inp);                                   // (phase V73 block 2) the shared slider, its track filled to the thumb
+  wireRange(inp);                                   // the shared slider, its track filled to the thumb
   const out = document.createElement('span');
   out.className = 'mv3-c-num';
   let moved = false;
@@ -85,10 +84,10 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   return wrap;
 }
 
-// (phase V84, the owner 2026-11-10) A stretch on ONE track - its start and its end, two thumbs, one readout. `fit(a, b, which)` is
+// A stretch on ONE track - its start and its end, two thumbs, one readout. `fit(a, b, which)` is
 // the caller's rule for the thumb moved ('a' or 'b'): it returns [a, b] as they may be, and the other thumb follows while the hand
 // moves. Nothing is written until the release - one write, one undo step, as a slider's.
-// (the owner 2026-11-10) `label` - its name OVER it and the track the strip's whole width, `ends` - the two numbers under its ends;
+// `label` - its name OVER it and the track the strip's whole width, `ends` - the two numbers under its ends;
 // `onInput(a, b)` - told while a thumb is held (nothing written).
 export function span({ min, max, step, a, b, fmt, fit, onChange, onInput, label, ends }) {
   const wrap = document.createElement('span');
@@ -154,9 +153,8 @@ export function span({ min, max, step, a, b, fmt, fit, onChange, onInput, label,
 }
 
 // ── Volume, in decibels ─────────────────────────────────────────────────────
-// The number stored stays LINEAR - a multiplier, which is what the renderer and the preview
-// both want - and only the control speaks dB. Migrating the stored unit would have meant
-// touching every consumer to gain nothing; what was actually wrong was the dial, not the
+// The number stored is LINEAR - a multiplier, which is what the renderer and the preview
+// both want - and only the control speaks dB: the dial is what needs the scale, not the
 // value behind it.
 //
 // A percentage is the wrong unit for audio. 150% says nothing about how much louder that is,
@@ -199,7 +197,7 @@ export function select(opts, value, onChange) {
 export function toggle(on, onChange) {
   const b = document.createElement('button');
   b.type = 'button';
-  // (phase V73 block 2) The shared switch (.u-switch): on is green (б1-7) - no "on / off" words in a pill any more.
+  // The shared switch (.u-switch): on is green - no "on / off" words in a pill.
   b.className = 'mv3-c-sw u-switch' + (on ? ' is-on' : '');
   b.setAttribute('role', 'switch');
   b.setAttribute('aria-checked', on ? 'true' : 'false');
@@ -214,10 +212,10 @@ export function toggle(on, onChange) {
 export function toggleNamed(label, on, onChange, title, ico) {
   const b = document.createElement('button');
   b.type = 'button';
-  // (phase V73 block 2) a pressed button - the selected look (б2-13), never the switch's green
+  // a pressed button - the selected look, never the switch's green
   b.className = 'mv3-c-sw u-btn is-s' + (ico ? ' is-icon' : '') + (on ? ' is-on' : '');
   b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  // (phase V73 block 5, 5b) `ico` - a Lucide icon in place of the label's glyph (↺, B, I, ↻); the label then names it
+  // `ico` - a Lucide icon in the label's place; the label then names it
   if (ico) { b.innerHTML = icon(ico, 14); b.setAttribute('aria-label', title || label); } else b.textContent = label;
   if (title) b.title = title;
   b.addEventListener('click', () => { if (onChange) onChange(!on); });

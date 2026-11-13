@@ -1,23 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the CAPTION STYLE of a highlights project, chosen in its popup (phase V33.1, the owner's (х16): "в попапе ...
-   отдельное поле с фильтром субтитров и пользователь выбирает стиль и тогда только может отправить на создание хайлайтов").
+   MERGE v3 — the CAPTION STYLE of a highlights project, chosen in its popup - a field of its own; the highlights are sent
+   off only once a style is chosen.
 
-   The captions view's own tiles (captions-view.js, phase K6 / V32), in a picker of their own: the categories over them -
+   The captions view's own tiles (captions-view.js), in a picker of their own: the categories over them -
    All, Mine, Viral, Pop… -, every preset of the app and every one of the person's, each showing its STILL and playing its
-   loop only under the cursor (V32: the loop asked for at the first hover, from its start each time, its round finished
+   loop only under the cursor (the loop asked for at the first hover, from its start each time, its round finished
    when the cursor leaves). A press CHOOSES - nothing is applied to any lane here: the style goes to every fragment of
-   the project (block 3). The tiles are the server's (lib/caption-tiles.js); one not made yet shows the preset's name in
+   the project. The tiles are the server's (lib/caption-tiles.js); one not made yet shows the preset's name in
    its own font and colour, and the set is asked to be made once.
 
-   SEVERAL WITH SHIFT (phase V49, the owner's (пр25), (пр26)): Shift on a tile adds it to those chosen or takes it away - every
+   SEVERAL WITH SHIFT: Shift on a tile adds it to those chosen or takes it away - every
    fragment gets the same set, dealt page by page (public/js/captions/mix.js); several replace "by the video". The popup's second
    tab is the animations (animPicker): the In -> Out pairs of the captions view's "animation" tab (captions/page-fx.js PAIRS), its
    tiles the same server's, one or several with Shift.
 
-   WHAT IS CHOSEN, SHOWN (phase V68 P3, the owner 2026-11-01, the second round: "клик на выбранный вариант списка открывает и
-   категорию по которому кликнули"): the popup writes the chosen ones in rows under its tabs; a press on one calls `reveal` -
+   WHAT IS CHOSEN, SHOWN: the popup writes the chosen ones in rows under its tabs; a press on one calls `reveal` -
    its group opens, the tile is scrolled to and outlined in gold. A picker opens on the group of the first one chosen (`openFirst`)
-   - no longer on "recommended", which hid the chosen ones of other groups. What a kind remembers is merge-v3/hl-kinds.js.
+   - not on "recommended", which would hide the chosen ones of other groups. What a kind remembers is merge-v3/hl-kinds.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
@@ -30,16 +29,15 @@ import { KINDS as TABLE } from '../highlights/kinds.js';
 const MINE = 'mine';
 const REC = 'rec';
 
-// (phase V33.8, H2; the owner's (у7): "под подкасты - яркие, под документалку и факты - чуть сдержанней. типа рекомендованые, но
-// оставить выбор и других групп субтитров") The caption groups recommended for a kind of video - first among the chips, marked
+// The caption groups recommended for a kind of video - first among the chips, marked
 // "recommended", and open when the kind is chosen; every other group stays beside them.
-// (phase V69 P12) The table's - public/js/highlights/kinds.js `presets.rec` and `said` (classic left documentary: it cuts by
+// The table's - public/js/highlights/kinds.js `presets.rec` and `said` (documentary has no classic: it cuts by
 // sentences, and highlights cut by pages). auto: one tile, "by the video" - the kind it finds gives its own set.
 export const RECOMMENDED = Object.fromEntries(Object.entries(TABLE).filter(([, v]) => v.button !== false)
   .map(([k, v]) => [k, { cats: v.presets.rec.slice(), said: v.presets.said, ...(k === 'auto' ? { byVideo: true } : {}) }]));
 
-// "By the video" (V33.8, (в1)): not a preset but a choice between two - the style podcast remembers and the one documentary
-// remembers (V68 P3: their first style, hl-kinds.js styleFor).
+// "By the video": not a preset - the kind auto finds gives its own captions (hl-kinds.js byVideoSets); `styleFor` is a
+// kind's first style (hl-kinds.js styleFor).
 export { BY_VIDEO };
 const _known = (id) => !!(PRESETS.find((x) => x.id === id) || MyPresets.byId(id));
 /** The style a kind gives "by the video" - the first it remembers, or the app's first answer (Podcast Viral, Classic White). */
@@ -64,7 +62,7 @@ export function presetName(id) {
   return p ? p.name : '';
 }
 
-// ── The stills, and the loop under the cursor - a picker's tiles (V32), for the presets and the animations alike ──
+// ── The stills, and the loop under the cursor - a picker's tiles, for the presets and the animations alike ──
 // `tiles` - id -> { btn, box, img, over, loop, starting, end }; `ctx` - { state, alive } as the picker has them now.
 function _player(tiles, ctx) {
   function paintStills() {
@@ -147,13 +145,13 @@ async function _follow(ctx, first, paint) {
   }
 }
 
-// A press, with Shift or not (V49): Shift adds the tile to those chosen, or - chosen already - takes it away; without Shift, it alone.
+// A press, with Shift or not: Shift adds the tile to those chosen, or - chosen already - takes it away; without Shift, it alone.
 function _press(chosen, id, shift) {
   if (!shift) return [id];
   return chosen.includes(id) ? chosen.filter((x) => x !== id) : chosen.concat([id]);
 }
 
-// (V68 P3) A tile shown on request: scrolled to inside its grid and outlined in gold until another press.
+// A tile shown on request: scrolled to inside its grid and outlined in gold until another press.
 function _spot(grid, btn) {
   for (const b of grid.querySelectorAll('.is-spot')) b.classList.remove('is-spot');
   if (!btn || btn.hidden) return;
@@ -163,7 +161,7 @@ function _spot(grid, btn) {
 }
 
 /**
- * A picker in `host`. `onPick(ids)` on a press - the styles chosen, one or (V49, Shift) several; `kind` (V33.8) - the video's kind,
+ * A picker in `host`. `onPick(ids)` on a press - the styles chosen, one or (Shift) several; `kind` - the video's kind,
  * whose recommended groups come first. Returns { set(ids), get() - the first, getAll(), recommend(kind), openFirst(), reveal(id),
  * stop() } - stop() puts every loop back to its still (the popup closed).
  */
@@ -171,10 +169,10 @@ export function stylePicker(host, { onPick, kind } = {}) {
   let cat = '';
   let chosen = [];
   const ctx = { state: null, alive: true };
-  let rec = null;                  // (V33.8) RECOMMENDED[kind], or null
+  let rec = null;                  // RECOMMENDED[kind], or null
   const tiles = new Map();         // id -> { btn, box, ph, img, over, loop, starting, end }
   const P = _player(tiles, ctx);
-  // A tile pressed: "by the video" is one choice by itself, and several styles replace it (пр25).
+  // A tile pressed: "by the video" is one choice by itself, and several styles replace it.
   const pick = (id, shift) => {
     _spot(grid, null);
     chosen = id === BY_VIDEO ? [BY_VIDEO] : _press(chosen.filter((x) => x !== BY_VIDEO), id, shift);
@@ -188,7 +186,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
 
   const mine = MyPresets.list();
   const countOf = (id) => PRESETS.filter((p) => p.category === id).length;
-  // The chips: (V33.8) the kind's recommended groups first - one chip "recommended" for all of them -, then All, Mine and
+  // The chips: the kind's recommended groups first - one chip "recommended" for all of them -, then All, Mine and
   // the groups, the recommended ones first, each marked.
   function paintChips() {
     top.textContent = '';
@@ -218,7 +216,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     return (c === MINE ? -1 : i >= 0 ? i : 100) * 10000 + (+btn.dataset.i || 0);
   };
 
-  // (V33.8, (в1)) The "by the video" tile: shown under "recommended" while the kind is auto; it says the two styles it chooses from.
+  // The "by the video" tile: shown under "recommended" while the kind is auto; it says the sets it chooses from.
   const byBtn = _el('button', 'mv3-cap-tile mv3-hls-by');
   byBtn.type = 'button';
   byBtn.dataset.id = BY_VIDEO;
@@ -229,7 +227,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   byName.appendChild(_el('span', 'mv3-cap-nm', 'by the video'));
   byBtn.append(byBox, byName);
   byBtn.addEventListener('click', () => pick(BY_VIDEO, false));
-  // (phase V69 P12, (хп93)) Each kind auto may find, with the set it would wear - as that kind remembers its captions here.
+  // Each kind auto may find, with the set it would wear - as that kind remembers its captions here.
   function paintBy() {
     byBox.textContent = '';
     byBox.classList.add('is-kinds');
@@ -287,7 +285,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     byBtn.hidden = !(cat === REC && rec && rec.byVideo);
   }
 
-  /** (V33.8) The video's kind changed: its recommended groups first among the chips - the style chosen stays chosen. */
+  /** The video's kind changed: its recommended groups first among the chips - the style chosen stays chosen. */
   function recommend(k) {
     rec = RECOMMENDED[k] || null;
     if (rec && rec.byVideo) paintBy();
@@ -296,7 +294,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   }
   // The group a chosen tile is in: "by the video" under "recommended"; the person's under Mine; else its category.
   const groupOf = (id) => (id === BY_VIDEO ? REC : (tiles.get(id) ? tiles.get(id).btn.dataset.cat : ''));
-  /** (V68 P3) Open on the group of the first one chosen - none chosen: "recommended" when the kind has it, else All. */
+  /** Open on the group of the first one chosen - none chosen: "recommended" when the kind has it, else All. */
   function openFirst() {
     const g = chosen.length ? groupOf(chosen[0]) : (rec ? REC : '');
     cat = g === REC && !rec ? '' : g;
@@ -305,7 +303,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     grid.scrollTop = 0;
     if (chosen.length) _spot(grid, chosen[0] === BY_VIDEO ? byBtn : tiles.get(chosen[0]).btn);
   }
-  /** (V68 P3) Show tile `id`: its group open, the tile scrolled to and outlined in gold. */
+  /** Show tile `id`: its group open, the tile scrolled to and outlined in gold. */
   function reveal(id) {
     const g = groupOf(id);
     cat = g === REC && !rec ? '' : g;
@@ -317,7 +315,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     for (const [k, t] of tiles) t.btn.classList.toggle('is-on', chosen.includes(k));
     byBtn.classList.toggle('is-on', chosen.includes(BY_VIDEO));
   }
-  /** The styles chosen, one or several (V49) - those no longer there are left out. */
+  /** The styles chosen, one or several - those not found are left out. */
   function set(ids) {
     const list = (Array.isArray(ids) ? ids : [ids]).filter((id) => id && (tiles.has(id) || id === BY_VIDEO));
     chosen = list.includes(BY_VIDEO) ? [BY_VIDEO] : [...new Set(list)];
@@ -332,11 +330,11 @@ export function stylePicker(host, { onPick, kind } = {}) {
   };
 }
 
-/** A pair's name (V49): "from the top → down"; '' for none. */
+/** A pair's name: "from the top → down"; '' for none. */
 export const pairName = (pair) => { const p = PAIRS.find((x) => x.id === pair); return p ? p.name : ''; };
 
 /**
- * THE ANIMATIONS (V49, the owner's (пр26)): the In -> Out pairs' tiles in `host`, one chosen - or several with Shift, dealt page by
+ * THE ANIMATIONS: the In -> Out pairs' tiles in `host`, one chosen - or several with Shift, dealt page by
  * page. `onPick(pairs)` on a press. Returns { set(pairs), getAll(), reveal(pair), stop() }.
  */
 export function animPicker(host, { onPick } = {}) {
@@ -371,7 +369,7 @@ export function animPicker(host, { onPick } = {}) {
   }
   function paint() { for (const t of tiles.values()) t.btn.classList.toggle('is-on', chosen.includes(t.btn.dataset.pair)); }
   _follow(ctx, 'anim', P.paintStills);
-  // (phase V69 P12) The kind's recommended pairs: marked and first.
+  // The kind's recommended pairs: marked and first.
   let rec = [];
   function recommend(pairs) {
     rec = Array.isArray(pairs) ? pairs.slice() : [];
@@ -387,7 +385,7 @@ export function animPicker(host, { onPick } = {}) {
     recommend,
     set: (pairs) => { chosen = [...new Set((Array.isArray(pairs) ? pairs : []).filter((x) => PAIRS.some((p) => p.id === x)))]; paint(); },
     getAll: () => chosen.slice(),
-    // (V68 P3) Show pair `pair`'s tile: scrolled to and outlined in gold.
+    // Show pair `pair`'s tile: scrolled to and outlined in gold.
     reveal: (pair) => { const t = tiles.get(animTileId(pair)); _spot(grid, t && t.btn); },
     stop: () => { ctx.alive = false; for (const t of tiles.values()) P.stopNow(t); },
   };

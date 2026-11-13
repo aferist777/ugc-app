@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// CLIPS BY A LINK (phase V27, the owner 2026-10-12) - what the three places that take one share: the Library's Media
+// CLIPS BY A LINK - what the three places that take one share: the Library's Media
 // shelf (main.js), Merge's Library panel (merge-v3/library.js) and the video chat's picker (merge-v3/chat-shell.js).
 //
 // The server downloads (lib/link-queue.js: one link at a time, the best there is, no login) and files the clip as a
@@ -106,7 +106,7 @@ export function openLinkWindow({ where, prefill, onAdd }) {
   document.body.appendChild(ov);
   const ta = ov.querySelector('.lk-ta');
   const said = ov.querySelector('.lk-said');
-  // (phase V73 block 4, rule 5) The one frame: the note ONE line - its first sentence shown, the whole under the pointer; the
+  // The one frame: the note ONE line - its first sentence shown, the whole under the pointer; the
   // last row is the frame's foot (the status line left, "Add" right).
   const note = ov.querySelector('.mk-pnote');
   note.textContent = 'Each lands in ' + (where || 'Uploads') + ' as a file brought in would, at the best quality '

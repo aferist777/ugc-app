@@ -1,11 +1,11 @@
 'use strict';
 
-/* build-sfx.js - builds the app's built-in sound set (phase V34.B; docs/local-app/PLAN.md "Фаза V34", V34.1) from
+/* build-sfx.js - builds the app's built-in sound set from
    tools/sfx-list.json: one folder laid out as vendor/sfx/ is, and ONE archive of it - the archive tools/fetch-sfx.js
    installs. Run by hand when the set changes; npm install never runs it:
        node tools/build-sfx.js                    -> <temp>/ugc-sfx-build/out/ and <temp>/ugc-sfx-build/ugc-sfx-<version>.zip
        node tools/build-sfx.js --out <dir> --cache <dir> --only <id,id,...>
-   Then the archive is copied to tools/sfx/ (kept in git - the owner's answer; a new version's file takes the old one's
+   Then the archive is copied to tools/sfx/ (kept in git; a new version's file takes the old one's
    place, git keeps the old in its history) and its name, size, SHA-256 and number of sounds go into fetch-sfx.js's PIN.
 
    WHERE THE SOUNDS COME FROM - all CC0 (free to ship inside a program and to sell it; no credit required - credited
@@ -243,7 +243,7 @@ async function zip(dir, sounds, file, date) {
     a.on('error', reject);
     a.pipe(out);
     // Buffers, not a.file(): archiver stats files four at a time and adds them as the stats come back, so the order -
-    // and the archive's hash - changed from build to build. Appended in this order, the same set makes the same zip.
+    // and the archive's hash - would change from build to build. Appended in this order, the same set makes the same zip.
     for (const name of ['sfx.json', 'LICENSE.txt', ...sounds.map(s => s.file).sort()]) {
       a.append(fs.readFileSync(path.join(dir, name)), { name, date });
     }

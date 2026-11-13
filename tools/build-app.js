@@ -1,7 +1,7 @@
 'use strict';
 
-/* build-app.js - a VERSION FOLDER of the app, the one a friend's launcher runs and the updater fills (phase V83,
-   block B1; the owner 2026-11-09: (о15) "своим скриптом" - no electron-builder, every step here).
+/* build-app.js - a VERSION FOLDER of the app, the one an installed copy's launcher runs and the updater fills - by a
+   script of its own: no electron-builder, every step here.
 
        node tools/build-app.js [--out <folder>] [--seq <n>] [--channel stable] [--worktree]
 
@@ -12,8 +12,8 @@
      UGC Studio.exe                Electron's own exe under the app's name (node_modules/electron/dist)
      *.dll, *.pak, locales\ ...    the rest of Electron, as it is
      resources\app\                the app: desktop\ lib\ routes\ public\ server.js package.json - from the
-                                   LAST COMMIT (`git archive HEAD`), never the working tree: other sessions keep half-made
-                                   edits in it -, vendor\ (laid out by tools/fetch-*.js, checked here without --optional:
+                                   LAST COMMIT (`git archive HEAD`), never the working tree, which may hold half-made
+                                   edits -, vendor\ (laid out by tools/fetch-*.js, checked here without --optional:
                                    a build with no network must fail, not ship without yt-dlp), node_modules\ - only the
                                    packages package-lock.json does not mark `dev` (no electron, eslint, globals)
      resources\app\launcher\       UGC Studio.exe - the launcher (desktop/launcher/Launcher.cs, compiled here by csc.exe)
@@ -148,7 +148,7 @@ function build(opts = {}) {
       `'use strict';\n// Baked in by tools/build-app.js for a stand.\nmodule.exports = ${JSON.stringify(baked, null, 2)};\n`);
   }
 
-  // 4b. The launcher (phase V83, block B2), compiled from this version's own source: it travels with every version,
+  // 4b. The launcher, compiled from this version's own source: it travels with every version,
   //     and the app puts it in the UGC Studio folder when the one there differs (desktop/home.js).
   compileLauncher(path.join(app, 'desktop', 'launcher', 'Launcher.cs'), path.join(app, 'desktop', 'icon.ico'), path.join(app, 'launcher', 'UGC Studio.exe'));
 

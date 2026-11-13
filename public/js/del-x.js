@@ -1,19 +1,18 @@
-// ✕ IN THE CORNER OF A PICTURE, PRESSED TWICE (phase V58, the owner 2026-10-29: "добавь в правый верхний угол картинок
-// крестик для удаления файла с даблкликом "really?""). ONE module for the who / where windows of talking head: the looks
+// ✕ IN THE CORNER OF A PICTURE, PRESSED TWICE. ONE module for the who / where windows of talking head: the looks
 // and environments they choose from (js/merge-v3/wk-maker.js paintChoose, given by wk-setup.js and wk-env.js), a lookbook
-// to dress in (wk-setup.js) and the generators' shelves (js/gen-window.js). (V91 block 3, the owner's (чк19е): nothing is
-// deleted from a chat - its ✕ on the folder column and the attachment window went.)
+// to dress in (wk-setup.js) and the generators' shelves (js/gen-window.js). Nothing is deleted from a chat: its folder
+// column and attachment window have no ✕.
 //
 // The first press asks "really?" in its place - with what the deleting touches when the caller says it (`ask`) - and
 // the second deletes; it goes back to ✕ after 3 s, when the pointer leaves the tile, or on Escape. A refusal (a look cast
-// in a talking head, (лк3)) is said in the corner of the window (js/notice.js).
+// in a talking head) is said in the corner of the window (js/notice.js).
 //
 // Its look is its own (a <style> put in once), so it is the same on every page.
 
 import { twoPress, REALLY } from './really.js';
 import { showError } from './notice.js';
 
-// The 3D Studio's page draws this cross itself (the shared parts never reach it, (б1-13а)).
+// The 3D Studio's page draws this cross itself (the shared parts never reach it).
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 const CSS = `
 .dx{position:absolute; top:4px; right:4px; z-index:3; opacity:0; transition:opacity .12s; white-space:nowrap}
@@ -45,8 +44,8 @@ function _ensureCss() {
  */
 export function delX(o) {
   _ensureCss();
-  // (phase V73 block 2) The shared parts: a 24-px cross on a picture (.u-onpic.is-del.u-x), armed by js/really.js. The 3D
-  // Studio's page keeps its own look ((б1-13а)): the glyph, "really?" and the rules above.
+  // The shared parts: a 24-px cross on a picture (.u-onpic.is-del.u-x), armed by js/really.js. The 3D
+  // Studio's page keeps its own look: the glyph, "really?" and the rules above.
   const old = OLD_LOOK();
   const x = document.createElement('button');
   x.type = 'button';

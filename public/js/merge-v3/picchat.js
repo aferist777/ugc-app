@@ -1,21 +1,21 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — making pictures, as a conversation, in a window (phase J, the owner 2026-10-02).
+   MERGE — making pictures, as a conversation, in a window.
 
    What was being written and attached is remembered per project, so closing the window, another project or a
    reload loses nothing.
 
-   Since phase V1 this file is the chat's DESCRIPTION: the conversation itself - the thread, the countdowns,
+   This file is the chat's DESCRIPTION: the conversation itself - the thread, the countdowns,
    the attachment row, sending, the right column, the narrow layout - is chat-shell.js, shared with the
    video chat. What is the pictures chat's own is here: the model table and its settings column (model,
    aggregator, quality, shape, price), what a finished picture looks like in the thread, and where the
    pictures come from (`POST /api/mv3/img/send`, the project's pictures, the Library's Images).
 
-   (phase V55, the owner 2026-10-28, (гн6), (гн7)) Its attachments are laid out as the video chat's: a ZONE "PICTURES
+   Its attachments are laid out as the video chat's: a ZONE "PICTURES
    0/N" (N - as many as the model takes) of small squares, its "+" opening the attachment window with the tree
    (chat-pick.js); its right column is the folder column (js/folder-column.js): a dropdown of the media tree - this
    project, REFERENCES (pictures), IMAGES with all its folders -, the open folder's folders as tiles, then its pictures.
 
-   (phase V64 block 3, the owner 2026-10-31) A WINDOW, no view of the Library panel any more (js/merge-v3/chat-window.js):
+   A WINDOW (js/merge-v3/chat-window.js):
    opened by IMAGES' "generate" in the tree, the lane's right button, the gallery's "+" and
    ?open=pictures; a picture dragged out of it lays the window aside until it is let go on a lane.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -30,15 +30,15 @@ import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { backButton } from './tl-gen.js';
 
 const MAX_ATTS = 5;
-const LS_LAST = 'mv3-imagen-last';       // the model choice - the key the window this replaced used
-// (phase V77) The description's way in from outside (openPictures with a thing from the timeline) - set when it is made.
+const LS_LAST = 'mv3-imagen-last';       // the model choice - kept under its earlier key, so a saved choice is still read
+// The description's way in from outside (openPictures with a thing from the timeline) - set when it is made.
 let _api = null;
 
 function PICTURES(ctx) {
-  // The model, the aggregator, the quality, the shape and the price (phase V26.5: shared with the frames chat).
+  // The model, the aggregator, the quality, the shape and the price (shared with the frames chat).
   const M = modelColumn(ctx, { lsKey: LS_LAST, maxAtts: MAX_ATTS, shapes: true });
 
-  // (phase V77, the owner's (тч1), (тч8а)) A picture from the timeline: the zone emptied - the thread and the words in the box stay -,
+  // A picture from the timeline: the zone emptied - the thread and the words in the box stay -,
   // the picture in it, the page's word at the end of the thread, the box ready for what to change.
   _api = {
     fromTimeline(o) {
@@ -46,7 +46,7 @@ function PICTURES(ctx) {
       if (!a.path) return;
       ctx.useAtts([]);
       ctx.attach(a.path, a.name || '');
-      // (phase V78) From the Library too (js/gen-menu.js).
+      // From the Library too (js/gen-menu.js).
       const lib = o.from === 'library';
       const what = (o.as === 'frame' ? 'The frame' : 'The picture') + (lib ? ' from the Library' : ' from the timeline');
       ctx.notice(what + ' is in the zone - say what to change in it.'
@@ -74,7 +74,7 @@ function PICTURES(ctx) {
     text: {
       placeholder: 'Describe a picture, or say what to change.',
       empty: 'Describe a picture. What comes back stays in this project - and in the Library.',
-      // (phase V73 block 0) Opened from Home or the Library the chat is on THE draft's conversation (chat-owner.js unbound):
+      // Opened from Home or the Library the chat is on THE draft's conversation (chat-owner.js unbound):
       // no project to stay in - what it makes lies in IMAGES → Generated.
       emptyDraft: 'Describe a picture. What comes back lies in the Library, in IMAGES → Generated.',
       emptyNoProject: 'Describe a picture. A project is started for it with the first message.',
@@ -83,17 +83,17 @@ function PICTURES(ctx) {
       plus: 'Add a picture from this computer. It goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself - and straight into the row above the message box.',
       cat: 'This project\'s pictures, or a folder of the Library',
     },
-    // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in (phase V24).
+    // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in.
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
     // The right column's "this project": the pictures made in it.
     feed: {
       url: (k) => '/api/mv3/img/feed?project=' + encodeURIComponent(k),
       map: (g) => ({ path: g.imagePath, aspect: g.aspect, state: g.state, name: g.prompt || '', error: g.error }),
     },
-    // (phase V55, (гн7)) The right column: this project, then REFERENCES' pictures and IMAGES by their folders.
-    // (phase V78, (лч16)) THIS PROJECT first - its pictures only.
+    // The right column: this project, then REFERENCES' pictures and IMAGES by their folders.
+    // THIS PROJECT first - its pictures only.
     column: { roots: ['plinks', 'references', 'images'], files: 'photo', group: 'images', home: 'images' },
-    // (phase V55, (гн6)) "+" of the zone opens the attachment window with the tree: characters & looks above it (and the
+    // "+" of the zone opens the attachment window with the tree: characters & looks above it (and the
     // environments and lookbooks while IMAGES has no folders of them), REFERENCES and IMAGES in it.
     pick: {
       sources: () => [Src.PEOPLE_ROW],
@@ -114,15 +114,14 @@ function PICTURES(ctx) {
       // The project's own shape is the dot among the shapes.
       onProject: M.onProject,
       room: M.room,
-      // (phase V55, (гн6)) One part, as the video chat's: as many places as the model takes.
+      // One part, as the video chat's: as many places as the model takes.
       zone: () => ({ parts: [{ kind: 'image', word: 'pictures', one: 'picture', room: M.room(), none: 'This model takes no pictures.' }] }),
       ready: M.ready,
       body: M.body,
     },
 
     // A finished picture in the thread: a miniature with "to reference" under it - a press on it does nothing, ⤢ in its
-    // top-right corner opens it large (V91 block 3, the owner 2026-11-12). (phase V60.3, the owner's (вс1б)) No "to timeline":
-    // it is dragged onto a lane.
+    // top-right corner opens it large. No "to timeline": it is dragged onto a lane.
     shot(g, cell, open) {
       const img = document.createElement('img');
       img.className = 'mv3-ig-shot';
@@ -149,7 +148,7 @@ function PICTURES(ctx) {
       use.title = 'Put it in the row above the message box and carry on from it';
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));
       acts.append(use);
-      // (phase V77) Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
+      // Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
       const back = backButton(g, g.refs || [], { src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '',
         name: (g.prompt || '').slice(0, 60), w: +g.w || 0, h: +g.h || 0 }, 'image');
       if (back) acts.append(back);
@@ -176,7 +175,7 @@ function PICTURES(ctx) {
     ],
 
     // Every picture this thread finished, in the Library's viewer - drawn from the 2048px tier, never the
-    // 4K original (phase J4).
+    // 4K original.
     view(done, at) {
       openViewer(
         done.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: x.prompt || '', meta: { date: x.at } })),
@@ -184,9 +183,7 @@ function PICTURES(ctx) {
         { showSrc: (it) => thumbOf(it.media, 'main') });
     },
 
-    // (phase V25, the owner 2026-10-13) The almanac at the foot of the column, as in the video chat - still to come, so
-    // dimmed. The gear in the header that opened the models' rules and the analyst's ladder is gone: the ladder is on
-    // Admin -> AI settings.
+    // The almanac at the foot of the column, as in the video chat - still to come, so dimmed.
     columnFoot: () => [almanacSoon()],
   };
 }
@@ -197,7 +194,7 @@ const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', ...CHAT_WIN.pictures });
 /** Every way in - IMAGES' "generate", the gallery's "+" on IMAGES, the lane's right-click, ?open=pictures: its window. */
 export async function openPictures(o) {
   await WIN.open();
-  // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
+  // Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) _api.fromTimeline(o);
 }
 

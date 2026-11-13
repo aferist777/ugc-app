@@ -1,41 +1,30 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — HIGHLIGHTS: THE COMMON SETTINGS OF THE TICKED FRAGMENTS (phase V66, the owner 2026-10-31 and 2026-11-03, answers
-   (хо1)-(хо17)): "чтобы сразу у всех хайлайтов можно было поменять положение субтитров двигать верх-вниз по превью (на превью
-   слово example), размер субтитров, количество слов в строке, количество строк ... музыку наложеную можно менять у каждого хайлайта
-   по отдельности при выделенных всех".
+   MERGE v3 — HIGHLIGHTS: THE COMMON SETTINGS OF THE TICKED FRAGMENTS
 
-   While two fragments or more are ticked (highlights.js), the NAME of a lane on the timeline - Subtitles, main audio, the lane of the
-   music - opens its common settings in the strip on the right instead of the one lane's (lib-views.js laneAlt): at the top "for all
-   N", under it each fragment. The captions crumb with fragments ticked leads to the same place as Subtitles ((хо16)).
-     Subtitles    where (up / down, and «example» dragged on the preview), size (one number for all, (хо17)), words in a line,
-                  lines, the title on top on / off ((хо12)); under them the tiles' tabs as before (highlights.js); each fragment its
-                  preset and how many of its pages stand in a place of their own - never moved by the common place ((хо6)); a press on
-                  one opens it with its own Subtitles picked, all of its settings ((хо15)). A place set for all is HELD over presets
-                  ((хо13), captions/style.js `hold`).
-     main audio   the volume for all; each fragment its own ((хо3)).
-     pattern      (phase V74, the owner's (пт7)) main video's patterns - the set with ticks and the layers with their settings, as the
-                  one lane's strip has them (patterns-ui.js): each change puts the WHOLE list on all of them; each fragment its own
-                  list, a press opens it with its main video picked.
-     music        the volume for all - the lane's, in dB, so each keeps its own balance (the bed at -12 dB since V90) ((хо4)); "deal
+   While two fragments or more are ticked (highlights.js), the TIMELINE'S PANEL IS COVERED BY ONE ROW OF BUTTONS under its top
+   edge - Subtitles · Main video · Main audio · Music, for all N (no lanes, no transport). A button, like the NAME of such a lane
+   on the timeline, opens its common settings in the strip on the right instead of the one lane's (lib-views.js laneAlt): at the
+   top "for all N", under it each fragment. The captions crumb with fragments ticked leads to the same place as Subtitles.
+     Subtitles    where (up / down, and «example» dragged on the preview), size (one number for all), words in a line,
+                  lines, the title on top on / off; under them the tiles' tabs (highlights.js); each fragment its
+                  preset and how many of its pages stand in a place of their own - never moved by the common place; a press on
+                  one opens it with its own Subtitles picked, all of its settings. A place set for all is HELD over presets
+                  (captions/style.js `hold`).
+     Main video   its colour, its frame ("By the kind" back to the app's), its punch-ins and its patterns - the set with ticks
+                  and the layers with their settings, as the one lane's strip has them (patterns-ui.js): each change puts the
+                  WHOLE list on all of them; its EFFECTS: a tile puts the clip effect on every ticked fragment - a moment on
+                  the clip at its start, one that goes on over the whole fragment (fx-ui.js laneEffects; the faces found here;
+                  POST /fx). Each fragment its own; a press opens it with its main video picked.
+     Main audio   the volume and the pitch for all; each fragment its own volume.
+     Music        the volume for all - the lane's, in dB, so each keeps its own balance (the bed at -12 dB); "deal
                   again" from moods, or no music; each fragment its track and a choice of another one of its mood, one of a
-                  mood, or none ((хо9)) - the server measures and lays it (routes/highlights.js), only the app's clips replaced
-                  ((хо11)). No music lane on the open fragment: "+ music" makes its "audio 2" (the owner: "если нет, то можно
-                  добавить").
-   The OPEN fragment among the ticked is the page's - its own undo step; the others are the server's. No undo for several ((хо5)):
+                  mood, or none - the server measures and lays it (routes/highlights.js), only the app's clips replaced.
+                  No music lane on the open fragment: "+ music" makes its "audio 2".
+   The OPEN fragment among the ticked is the page's - its own undo step; the others are the server's. No undo for several:
    a slider brought back gives back the same pages and place. Nothing ticked open and a lane's name pressed on the project's own
-   timeline: the first ticked opens ((хо1)).
+   timeline: the first ticked opens. A fragment's row in the strip shows its own timeline until "‹ all N".
 
-   CHANGED (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)): while a group is ticked the TIMELINE'S PANEL IS COVERED BY THREE
-   BUTTONS - Subtitles, main audio, music - for all N (no lanes, no transport; the bubbles and gold names went); a fragment's row in
-   the strip shows its own timeline until "‹ all N". (Phase V74: a fourth, "pattern".)
-   (phase V84, the owner's (эф11) «Hook для всех N») Main video's EFFECTS for all: a tile puts the clip effect on every ticked fragment -
-   a moment on the clip at its start, one that goes on over the whole fragment (fx-ui.js laneEffects; the faces found here; POST /fx).
-   CHANGED (phase V76, the owner 2026-11-06: «кнопки "for all" в поле таймлайна расположи по горизонтали под верхней границей поля
-   таймлайнов. еще нужна там кнопка main video с общими настройками для видео. и pitch так же будет общей настройкой»): the buttons
-   are ONE ROW under the timeline's top edge - Subtitles · Main video · Main audio · Music; MAIN VIDEO (in place of "pattern") is
-   its colour, its frame ("By the kind" back to the app's), its punch-ins and the patterns ((тн9)); main audio has the pitch ((тн10) а).
-
-   THE SAMPLE ((хо7)): while the Subtitles block is in the strip, the preview draws a whole page of «example» - as many words in a
+   THE SAMPLE: while the Subtitles block is in the strip, the preview draws a whole page of «example» - as many words in a
    line as the lanes have, in as many lines - in the open fragment's look, instead of its subtitles (captions/layer.js setLive),
    and it is dragged up and down there (cap-place.js setSample); let go, the place is written for all.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -46,33 +35,33 @@ import * as C from './controls.js';
 import * as CapPlace from './cap-place.js';
 import { fitTimeline } from './layout.js';
 import { setSubsStyle, selectTrackById, onSelChange, newBedLane, mainVideo, patternsOf, setPatterns, setClipsFields } from './timeline-b.js';
-// (phase V76) Main video's colour and frame, main audio's pitch - for all of them.
+// Main video's colour and frame, main audio's pitch - for all of them.
 import { COLOR_KEYS, COLOR_RANGE, COLOR_LABEL, colorOf } from '../overlay/color.js';
 import { FRAMINGS, modeOf } from './framing-ui.js';
 import { pitchOf } from '../sound/pitch.js';
 import { pitchRows } from './pitch-rows.js';
-// (phase V74) Main video's patterns, picked by ticks - the one lane's block, for all of them.
+// Main video's patterns, picked by ticks - the one lane's block, for all of them.
 import { renderPatterns, nameOf as patternName } from './patterns-ui.js';
-// (phase V84, the owner's (эф11)) Main video's effects - the clip effects' panel, for all of them.
+// Main video's effects - the clip effects' panel, for all of them.
 import { fxGroupRows, laneEffects, facesFor } from './fx-ui.js';
 import { EFFECTS, SETS } from '../fx/effects.js';
 import { normalizeFx } from '../fx/params.js';
 import { normalizeStyle, autoWordsPerLine, autoSize, POSITIONS, rowsOn } from '../captions/style.js';
 import { paginate } from '../captions/pages.js';
 import { putTitle, dropTitle, titleLaneOf, topTitleOf } from '../captions/title.js';
-// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts (rows of the strip); the reason a popup.
+// Being read, could not be read - the shared parts (rows of the strip); the reason a popup.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
-// (phase V73 block 5, 5c) The buttons over the timeline: "+" and "‹" as Lucide's icons, N in mono.
+// The buttons over the timeline: "+" and "‹" as Lucide's icons, N in mono.
 import { iconEl } from '../icons.js';
 import { figures } from '../num.js';
 
 let _A = null;             // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
-let _own = '';              // a fragment opened from its row with its OWN Subtitles picked ((хо15)) - its key
+let _own = '';              // a fragment opened from its row with its OWN Subtitles picked - its key
 let _busy = '';             // 'subs' | 'speech' | 'music' | 'pattern' | 'video' while a write for all is under way
-let _patWant = null;        // (V74) the patterns waiting to go to the rest while a write of them is under way: { list, ns }
+let _patWant = null;        // the patterns waiting to go to the rest while a write of them is under way: { list, ns }
 let _moods = null;          // Music -> highlights: [{ id, label, n }] (the root as 'yours' when it has tracks)
-let _moodsAsk = '';         // (phase V73 block 2) 'asking' while it is read, 'failed' when it could not be (the reason was a popup)
+let _moodsAsk = '';         // 'asking' while it is read, 'failed' when it could not be (the reason was a popup)
 let _dealMoods = [];        // the moods "deal again" takes
 let _sample = false;        // the «example» is on the preview
 
@@ -86,7 +75,7 @@ async function _post(url, body) {
 }
 
 // ── Who is in the group ─────────────────────────────────────────────────────
-/** Two fragments or more ticked (made) - the buttons over the timeline lead to the common settings ((хо1), V66.1 (хо24)). */
+/** Two fragments or more ticked (made) - the buttons over the timeline lead to the common settings. */
 export const isGroup = () => !!(_A && _A.pid() && _A.ticked().length >= 2);
 const _tl = () => Store.timeline() || {};
 const _openSubs = () => ((_tl().tracks) || []).find((t) => t && t.kind === 'subs') || null;
@@ -133,7 +122,7 @@ async function _forAll(kind, page, server, said) {
   Views.altChanged();
 }
 
-/** (хо2), (хо7), (хо13), (хо17) Place, size, words, lines for all the ticked. */
+/** Place, size, words, lines for all the ticked. */
 function _subsPatch(patch, said) {
   const fmt = _tl().format || '9:16';
   _forAll('subs', () => {
@@ -145,14 +134,14 @@ function _subsPatch(patch, said) {
     else if (patch.size != null) Object.assign(p, { size: patch.size, sizeAuto: false });
     if (patch.wordsPerLine != null) p.wordsPerLine = patch.wordsPerLine;
     if (patch.lines != null) p.lines = patch.lines;
-    // (phase V71) Two rows, or one - no field.
+    // Two rows, or one - no field.
     if (patch.rows != null) p.rows = +patch.rows === 2 ? 2 : undefined;
     setSubsStyle(lane.id, p, patch.size != null || patch.wordsPerLine != null || patch.lines != null);
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/style', { ns, ...patch }), said);
 }
 
 /**
- * (phase V74, (пт7)) Main video's patterns - the whole list - for all the ticked: the open one by the page (its own undo step), the
+ * Main video's patterns - the whole list - for all the ticked: the open one by the page (its own undo step), the
  * rest by the server, the latest list only while one is on its way (a tick after a tick sends both).
  */
 async function _patternsAll(next) {
@@ -174,7 +163,7 @@ async function _patternsAll(next) {
   Views.altChanged();
 }
 
-// ── (phase V76, the owner's (тн9) «все по рекомендации») MAIN VIDEO of the ticked ─────────────────────────────────────────────
+// ── MAIN VIDEO of the ticked ─────────────────────────────────────────────
 // Its colour (one value of one slider), its punch-ins on / off - into every clip of main video of every ticked fragment, the open one
 // by the page (one undo step), the rest by the server; its frame planned by the server for all of them, the open one's laid here.
 const _mainOpen = () => { const m = mainVideo(); return ((m && m.clips) || []).filter((c) => c && c.src); };
@@ -227,7 +216,7 @@ async function _framingAll(mode) {
   Views.altChanged();
 }
 
-// ── (phase V84, the owner's (эф11) «Hook для всех N») MAIN VIDEO'S EFFECTS for all the ticked ───────────────────────────────────────
+// ── MAIN VIDEO'S EFFECTS for all the ticked ───────────────────────────────────────
 // A tile pressed puts the effect on each ticked fragment's main video taken as one film (fx-ui.js laneEffects - the page's one rule):
 // a moment on the clip at the fragment's start, one that goes on over the whole fragment, a set's at their own moments. The faces of
 // the effects by the face are found here for every fragment (fx-ui.js facesFor - counted when they were cut, so at once), the other
@@ -293,7 +282,7 @@ function _fxOff(k) {
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { ns, remove: k }), _fxName(k) + ' is off them');
 }
 
-// ── (phase V76, (тн10) а) Main audio's pitch for all the ticked - the open one by the page, the rest by the server (the part changed).
+// ── Main audio's pitch for all the ticked - the open one by the page, the rest by the server (the part changed).
 function _pitchAll(fn, part) {
   if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
   _forAll('speech', () => {
@@ -304,7 +293,7 @@ function _pitchAll(fn, part) {
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/pitch', { ns, pitch: part }));
 }
 
-/** (хо12) The title on top on / off for all the ticked. */
+/** The title on top on / off for all the ticked. */
 function _titleAll(on) {
   const rec = _A.rec();
   _forAll('subs', () => {
@@ -317,7 +306,7 @@ function _titleAll(on) {
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/title-on-top', { ns, on: !!on }), on ? 'the title is on top of them' : 'the title is off them');
 }
 
-/** (хо3), (хо4) A lane's volume - 'speech' (main audio) or 'music' - for all the ticked, or for one (`only`). */
+/** A lane's volume - 'speech' (main audio) or 'music' - for all the ticked, or for one (`only`). */
 function _volume(lane, volume, only) {
   const v = Math.round(volume * 10000) / 10000;
   const pageSide = () => Store.mutate((tl) => {
@@ -335,7 +324,7 @@ function _volume(lane, volume, only) {
 }
 
 // The music the server handed back for the open fragment, laid by the page: the app's clips replaced on its music lane - "audio 2"
-// made when it has none - one undo step ((хо11)).
+// made when it has none - one undo step.
 function _layOpenMusic(clips) {
   Store.mutate((tl) => {
     for (const t of (tl.tracks || [])) if (t && t.kind === 'audio') t.clips = (t.clips || []).filter((c) => !_isBed(c));
@@ -345,7 +334,7 @@ function _layOpenMusic(clips) {
   });
 }
 
-/** (хо9) One fragment's music: 'another', a mood id, or 'none'. */
+/** One fragment's music: 'another', a mood id, or 'none'. */
 async function _musicOne(f, how) {
   if (_busy) return;
   const taken = _A.ticked().filter((x) => x !== f && x.music).map((x) => x.music.id);
@@ -362,7 +351,7 @@ async function _musicOne(f, how) {
   Views.altChanged();
 }
 
-/** (хо4) The music of all the ticked dealt again from `_dealMoods`, or taken off (`none`). */
+/** The music of all the ticked dealt again from `_dealMoods`, or taken off (`none`). */
 async function _musicAll(none) {
   if (_busy) return;
   const { list, open } = _split();
@@ -390,7 +379,7 @@ async function _readMoods() {
     if ((d.root || []).length) _moods.push({ id: 'yours', label: 'yours', n: d.root.length });
     _moodsAsk = '';
   } catch (e) {
-    // (phase V73 block 2, (б2-19)) Not read is not "no moods": the strip says "did not load" with Try again.
+    // Not read is not "no moods": the strip says "did not load" with Try again.
     _moodsAsk = 'failed';
     showError('Music → highlights could not be read', { detail: (e && e.message) || '' });
   }
@@ -398,13 +387,13 @@ async function _readMoods() {
 }
 
 // ── Painting ────────────────────────────────────────────────────────────────
-// (phase V73 block 5, part 5b) The strip's head takes this title (inspector.js _paintHead, `data-strip-title`).
+// The strip's head takes this title (inspector.js _paintHead, `data-strip-title`).
 function _head(host, what, n) {
   const h = _el('div', 'mv3-ins-title', what + ' · for all ' + n);
   h.dataset.stripTitle = '1';
   host.appendChild(h);
 }
-// (phase V73 block 5, 5b, (к17)) a section title in sentence case
+// a section title in sentence case
 function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'Each fragment')); }
 const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
 
@@ -421,14 +410,14 @@ export function renderSubs(host, target) {
   const subs = list.map(_subsOf).filter(Boolean);
   const ref = (list.find((f) => f.n === _A.openN()) && _subsOf(list.find((f) => f.n === _A.openN()))) || subs[0] || {};
   const mixed = (k) => !_same(subs.map((s) => s[k]));
-  // Where: up and down from its anchor ((хо7)), as the one lane's Nudge - and «example» dragged on the preview.
+  // Where: up and down from its anchor, as the one lane's Nudge - and «example» dragged on the preview.
   const pos = POSITIONS.includes(ref.pos) ? ref.pos : 'bottom';
   box.appendChild(C.row('Where', C.slider({
     min: -0.80, max: 0.80, step: 0.01, value: +ref.ty || 0, mixed: mixed('ty') || mixed('pos'),
     fmt: (v) => (Math.abs(v) < 0.005 ? pos : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '% from ' + pos),
     onChange: (v) => _subsPatch({ place: { pos, ty: v } }),
   })));
-  // Size: one number for all ((хо17)), or the format's.
+  // Size: one number for all, or the format's.
   const autoS = subs.length > 0 && subs.every((s) => s.sizeAuto);
   const size = C.slider({ min: 20, max: 200, step: 1, value: +ref.size || 60, mixed: mixed('size') || mixed('sizeAuto'),
     fmt: (v) => v + (autoS ? ' (auto)' : ''), onChange: (v) => _subsPatch({ size: v }) });
@@ -441,11 +430,11 @@ export function renderSubs(host, target) {
   const ls = C.select(LINES, String(lines), (v) => _subsPatch({ lines: +v }));
   if (mixed('lines')) ls.title = 'Not the same on all of them now - a choice gives them one';
   box.appendChild(C.row('Lines', ls));
-  // (phase V71, the owner's (хо34)) Two rows for all of them - each page whole while it is spoken, every other one in a second row.
+  // Two rows for all of them - each page whole while it is spoken, every other one in a second row.
   const rows = C.select([['1', 'One'], ['2', 'Two']], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
   if (mixed('rows')) rows.title = 'Not the same on all of them now - a choice gives them one';
   box.appendChild(C.row('Rows', rows));
-  // (хо12) The title on top.
+  // The title on top.
   const titled = list.filter(_titled).length;
   const tOn = C.button('On', () => _titleAll(true), { title: 'Its headline at the top for the first three seconds - on every ticked fragment' });
   const tOff = C.button('Off', () => _titleAll(false), { title: 'The title on top taken off every ticked fragment' });
@@ -455,9 +444,9 @@ export function renderSubs(host, target) {
   box.appendChild(_el('p', 'mv3-ins-note', _busy === 'subs' ? 'Putting it on them…'
     : 'Drag «example» on the preview up or down - let go, and all of them are there. A place set here stays when a preset is pressed; '
       + 'the size, the words and the lines are the preset\'s. Lines with a place of their own stay where they are.'));
-  // The tiles' tabs, as the captions of several always had them (highlights.js).
+  // The tiles' tabs, as the captions of several have them (highlights.js).
   const out = target(box);
-  // Each fragment ((хо6), (хо15)).
+  // Each fragment.
   _each(box);
   const ul = _el('ul', 'mv3-hlg-list');
   for (const f of list) {
@@ -476,7 +465,7 @@ export function renderSubs(host, target) {
   return out;
 }
 
-// (phase V76, (тн9)) MAIN VIDEO for all the ticked: its colour, its frame, its punch-ins and (V74, (пт7)) its patterns - the open
+// MAIN VIDEO for all the ticked: its colour, its frame, its punch-ins and its patterns - the open
 // one's list shown, a change puts the whole list on all.
 function renderVideo(host) {
   const list = _A.ticked();
@@ -519,7 +508,7 @@ function renderVideo(host) {
     list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(),
     note: _busy === 'pattern' ? 'Putting them on them…' : 'Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.',
   });
-  // (phase V84, (эф11)) Its effects - a tile on all of them.
+  // Its effects - a tile on all of them.
   box.appendChild(_el('div', 'mv3-c-sep'));
   box.appendChild(_el('div', 'mv3-hlg-each', 'Effects'));
   const counts = new Map();
@@ -556,7 +545,7 @@ function renderSpeech(host) {
   const vol = (f) => (f.n === _A.openN() ? ((_openA1() || {}).volume != null ? +_openA1().volume : 1) : ((f.lanes && f.lanes.speech && f.lanes.speech.volume) != null ? +f.lanes.speech.volume : 1));
   const vols = list.map(vol);
   box.appendChild(C.row('Volume', _mixedVolume(vols, (v) => _volume('speech', v))));
-  // (phase V76, (тн10) а) One pitch of the speech for all of them - "Mixed" while it differs; the music stays as it is.
+  // One pitch of the speech for all of them - "Mixed" while it differs; the music stays as it is.
   const pitches = list.flatMap((f) => (f.n === _A.openN()
     ? (((_openA1() || {}).clips) || []).filter((c) => c && c.src).map((c) => pitchOf(c))
     : ((f.lanes && f.lanes.speech && f.lanes.speech.pitches) || [])));
@@ -578,7 +567,7 @@ function renderMusic(host) {
     return f.lanes && f.lanes.music && f.lanes.music.volume != null ? +f.lanes.music.volume : 1;
   };
   box.appendChild(C.row('Volume', _mixedVolume(list.map(vol), (v) => _volume('music', v))));
-  // Deal again ((хо4)): the moods as chips, then the press.
+  // Deal again: the moods as chips, then the press.
   if (!_moods && _moodsAsk === 'failed') {
     box.appendChild(failedEl('Music → highlights', () => { _moodsAsk = ''; _readMoods(); Views.altChanged(); }, { line: true }));
   } else if (!_moods) { _readMoods(); box.appendChild(loadingEl('reading Music → highlights…', { line: true })); }
@@ -608,7 +597,7 @@ function renderMusic(host) {
   for (const f of list) box.appendChild(C.row(f.title, _trackChoice(f)));
 }
 
-// (phase V66.1) ONE fragment's music, on top of its music lane's strip or of the app's clip on it: its track, and the choice of
+// ONE fragment's music, on top of its music lane's strip or of the app's clip on it: its track, and the choice of
 // another of the standard ones - of its mood, of a mood, or none (the same as its row among the ticked).
 const _openFrag = () => {
   const rec = _A && _A.rec();
@@ -651,18 +640,18 @@ function _mixedVolume(vols, onChange) {
 }
 
 // ── A lane's name pressed ───────────────────────────────────────────────────
-// (хо15), (хо26) A fragment opened from its row with its own lane picked - its timeline shown, lanes and all, the one lane's
+// A fragment opened from its row with its own lane picked - its timeline shown, lanes and all, the one lane's
 // strip - until "‹ all N" in the timeline's head (or another fragment opened, or the group gone).
 async function _openOwn(f, lane) {
   if (!f.key) return;
   if (Store.key() !== f.key) { try { await Store.open(f.key); } catch (e) { _A.say(e.message, true); return; } }
   _own = f.key;
-  // (V74) 'main' - its main video lane, whatever its id.
+  // 'main' - its main video lane, whatever its id.
   selectTrackById(lane === 'main' ? ((mainVideo() || {}).id || 'v1') : lane);
   _sync();
 }
 
-// (хо1) Nothing ticked is open: the first ticked opens, and the same lane is picked there (the music's - its lane, made when missing).
+// Nothing ticked is open: the first ticked opens, and the same lane is picked there (the music's - its lane, made when missing).
 async function _openFirst(laneKind) {
   const f = _A.ticked()[0];
   if (!f || !f.key) return;
@@ -699,13 +688,13 @@ const _kindOf = (track) => {
   if (!track) return '';
   if (track.kind === 'subs') return 'subs';
   if (track.id === 'a1') return 'speech';
-  // (phase V74) The main video lane - (V76) its colour, frame, punch-ins and patterns.
+  // The main video lane - its colour, frame, punch-ins and patterns.
   if (track.kind === 'video') { const m = mainVideo(); return m && m.id === track.id ? 'video' : ''; }
   if (track.kind === 'audio') { const m = openMusicLane(); return m && m.id === track.id ? 'music' : ''; }
   return '';
 };
 
-// ── «example» on the preview ((хо7)) ────────────────────────────────────────
+// ── «example» on the preview ────────────────────────────────────────
 // A whole page: as many «example» in a line as the lane's words, in as many lines - the open fragment's look, standing still.
 function _sampleTl(over) {
   const tl = _tl();
@@ -723,7 +712,7 @@ function _sampleTl(over) {
   const first = (paginate(said, { lane: style, format: fmt })[0] || {}).words || [];
   const words = (first.length ? first : said.slice(0, 1).map(() => ({ w: 'example' }))).map((w) => ({ w: w.w || 'example', s: 0, e: 0 }));
   const clips = [{ id: 'hlg-sample', start: 0, dur: 36000, name: words.map((w) => w.w).join(' '), words, src: null }];
-  // (phase V71, the owner's (хо32)) In two rows: a second page of the sample, where the second row stands - the two move together.
+  // In two rows: a second page of the sample, where the second row stands - the two move together.
   if (rowsOn(style)) clips.push({ ...clips[0], id: 'hlg-sample2' });
   return { format: fmt, tracks: [{ id: 'subs', kind: 'subs', name: 'Subtitles', style, clips }] };
 }
@@ -739,15 +728,13 @@ function _checkSampleNow() {
 }
 const _checkSample = () => _sync();
 
-// ── The buttons in place of the timeline (phase V66.1, the owner 2026-11-03, (хо24)-(хо28)) ───────────────────────────────
-// "когда выбрано несколько фрагментов нарезки, то на таймлайне просто отображать эти кнопки для массового редактирования. без элементов
-// таймлайна". While a group is ticked the timeline's panel - its head with the transport and its lanes - is covered by the buttons
-// of the common settings: compact buttons at its left edge, Subtitles, main audio, music ("+ music" while the open
-// fragment has none) and (phase V74) pattern - (phase V76) ONE ROW under its top edge: Subtitles, Main video, Main audio, Music;
-// the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
-// frame and «example» (a group with none open opens the first ticked, quietly - (хо24)). A fragment's row in the strip shows ITS
-// timeline, lanes and all, with "‹ all N" in the timeline's head back to the buttons ((хо26)); fewer than two ticked - the timeline as
-// it was ((хо28)). No bubbles, no gold names ((хо27)).
+// ── The buttons in place of the timeline ───────────────────────────────
+// While a group is ticked the timeline's panel - its head with the transport and its lanes - is covered by the buttons
+// of the common settings: ONE ROW under its top edge - Subtitles, Main video, Main audio, Music ("+ music" while the open
+// fragment has none); the one whose block is in the strip is lit. Under them the open fragment stays open - the preview shows its
+// frame and «example» (a group with none open opens the first ticked, quietly). A fragment's row in the strip shows ITS
+// timeline, lanes and all, with "‹ all N" in the timeline's head back to the buttons; fewer than two ticked - the ordinary
+// timeline. No bubbles, no gold names.
 let _panel = null;             // the buttons over the timeline
 let _back = null;              // "‹ all N" in the timeline's head while a fragment is shown on its own
 let _opening = false;          // the first ticked being opened under the buttons
@@ -770,7 +757,7 @@ function _panelPaint(tl) {
   if (_panel.dataset.sig === sig) return;
   _panel.dataset.sig = sig;
   _panel.textContent = '';
-  // (phase V73 block 5, 5c) ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
+  // ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
   for (const [k, label, plus] of [['subs', 'Subtitles'], ['video', 'Main video'], ['speech', 'Main audio'], ['music', 'Music', !music]]) {
     const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''));
     if (plus) b.appendChild(iconEl('plus', 14));
@@ -793,7 +780,7 @@ function _backPaint() {
     const title = head.querySelector('.mv3-panel-title');
     if (title && title.nextSibling) head.insertBefore(_back, title.nextSibling); else head.appendChild(_back);
   }
-  // (phase V73 block 5, 5c) Lucide's chevron in place of "‹", N in mono; 24 px in the head's 35, which does not grow
+  // Lucide's chevron in place of "‹", N in mono; 24 px in the head's 35, which does not grow
   _back.replaceChildren(iconEl('chevron-left', 14), _el('span'));
   _back.lastChild.appendChild(figures('all ' + _A.ticked().length));
 }
@@ -804,10 +791,10 @@ function _panelSync() {
   if (tl) tl.classList.toggle('is-hlg', want);
   if (!want) { if (_panel) { _panel.remove(); _panel = null; } }
   else _panelPaint(tl);
-  // (V66.1, the owner: "чтобы просто все кнопки вместились") The buttons come: the panel as tall as they are; they go: as its lanes.
+  // The buttons come: the panel as tall as they are; they go: as its lanes.
   if (want !== _panelWas) { _panelWas = want; fitTimeline(); }
   if (want) {
-    // (хо24) A group with no fragment open: the first ticked opens under the buttons - its frame on the preview.
+    // A group with no fragment open: the first ticked opens under the buttons - its frame on the preview.
     if (_A.openN() <= 0 && !_opening) {
       const f = _A.ticked()[0];
       if (f && f.key) { _opening = true; Store.open(f.key).catch((e) => _A.say(e.message, true)).finally(() => { _opening = false; }); }
@@ -829,14 +816,14 @@ function _sync() {
 export function initGroup(api) {
   _A = api;
   Views.laneAlt({
-    // A lane's name - a button of the panel - while a group is ticked; not on a fragment shown on its own from its row ((хо26)).
+    // A lane's name - a button of the panel - while a group is ticked; not on a fragment shown on its own from its row.
     wants: (track) => {
       if (!isGroup() || _ownNow()) return false;
       return !!_kindOf(track);
     },
     render: (host, track) => {
       const k = _kindOf(track);
-      // (хо24) The project's own timeline: the first ticked opens, the lane picked there.
+      // The project's own timeline: the first ticked opens, the lane picked there.
       if (_A.openN() <= 0) { host.appendChild(_el('p', 'mv3-ins-note', 'Opening the first ticked fragment…')); _openFirst(k); return null; }
       let out = null;
       if (k === 'subs') out = renderSubs(host, (box) => _A.tiles(box));
@@ -847,7 +834,7 @@ export function initGroup(api) {
       return out;
     },
   });
-  // (V66.1) One fragment's music lane - not while the group's buttons stand for the lanes.
+  // One fragment's music lane - not while the group's buttons stand for the lanes.
   Views.laneExtra({
     wants: (track, clip) => {
       if (!_A.pid() || (isGroup() && !_ownNow()) || !_openFrag()) return false;

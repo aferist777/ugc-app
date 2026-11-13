@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   REFERENCES - A NEW FILE'S TILE (phase V73 block 2; the owner 2026-11-05, (н2) б and (н3) б).
+   REFERENCES - A NEW FILE'S TILE.
 
    What comes from OUTSIDE - a post the Telegram bot brought (not moved by hand since), a source downloaded by a link
    (REFERENCES -> YouTube -> Videos; only one that came after `since`, as in the tree) - is marked on its tile with a
    gold dot until it is OPENED (pressed into the viewer:
    the post viewer, js/references/post.js, or the media viewer, js/library/viewer.js). Generations, uploads and stock
-   are never marked here (н3).
+   are never marked here.
 
    ONE key for the Library's gallery and Merge's panel gallery - one origin, as the tree's `ugc_tree_seen_v1`:
      ugc_ref_opened_v1 = { since, ids }

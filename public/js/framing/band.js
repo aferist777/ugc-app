@@ -1,10 +1,9 @@
-/* band.js - A HALFER BAND'S NUMBERS (V91 cleanup block 6, the owner's (чк16): one rule where there were three copies).
+/* band.js - A HALFER BAND'S NUMBERS, one rule.
    The preview (merge-v3/preview-b.js _drawBand), the render (lib/mv3b-render.js bandChain) and the save
    (lib/timeline-shape.js) read a band from here.
 
    A clip with `halfer` is a strip across the whole width of the frame instead of a picture on it: the source turned a
-   quarter at a time, scaled to cover the strip, and the slice `halferKeep` names kept. The numbers and their defaults
-   came from the talking-head editor's Halfers lane:
+   quarter at a time, scaled to cover the strip, and the slice `halferKeep` names kept. The numbers and their defaults:
      halferThick  how tall, as a share of the frame (5-100, 40)
      halferPos    where: 100 against the top edge, 0 against the bottom (100)
      halferKeep   which slice survives the crop: 100 is the top at 0 and 180, the right at 90 and 270 (100)
@@ -13,7 +12,7 @@
    A band has no placement, framing or effects: it is always the full width. */
 
 // A band percentage: a real number inside its range, or the default when there is none. NULL IS MISSING, not zero:
-// Number(null) is 0, which read an explicit null as "against the bottom".
+// Number(null) is 0, which would read an explicit null as "against the bottom".
 export const bandPct = (v, dflt, lo = 0) => {
   const n = Number(v);
   return (v != null && Number.isFinite(n)) ? Math.max(lo, Math.min(100, n)) : dflt;

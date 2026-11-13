@@ -1,7 +1,7 @@
 'use strict';
 
 // The looks whose files are all gone (POST /obrazy/prune-missing). A look is deleted through
-// DELETE /library/item/:kind/:id, which moves its files through lib/relocate.js; the old DELETE /obrazy/:id, which wiped the folder past it, went in phase C.
+// DELETE /library/item/:kind/:id, which moves its files through lib/relocate.js.
 
 const express = require('express');
 const fs      = require('fs');

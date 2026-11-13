@@ -1,17 +1,17 @@
-/* A SOUND CLIP'S PITCH (phase V76, the owner 2026-11-06; docs/local-app/plan/, "Фаза V76", (тн1)-(тн10)) - ONE module for the
+/* A SOUND CLIP'S PITCH - ONE module for the
    page and the server (js/merge-v3/pitch-rows.js, preview-b.js, timeline-b.js, hl-group.js; lib/timeline-shape.js,
    lib/pitch-copy.js and lib/mv3b-render.js require() it, as they do overlay/color.js).
 
-   `pitch: { st, shift }` on a clip of an audio lane: `st` semitones, -12..+12, whole ((тн1) а); `shift` - the timbre moves with
-   the pitch (a tape sped up or slowed down) instead of being kept (the same voice, higher or lower; (тн3) а, kept by default).
-   The field is absent at 0 - a clip without it sounds byte for byte as before. The speed is apart: it changes the tempo and
+   `pitch: { st, shift }` on a clip of an audio lane: `st` semitones, -12..+12, whole; `shift` - the timbre moves with
+   the pitch (a tape sped up or slowed down) instead of being kept (the same voice, higher or lower; kept by default).
+   The field is absent at 0 - a clip without it plays its file untouched. The speed is apart: it changes the tempo and
    keeps whatever pitch the clip has.
 
    HOW IT SOUNDS - one rule for the preview and the render: the server makes a COPY of the clip's file with its pitch moved,
    rubberband in the app's ffmpeg (filterOf), as long as the file to the sample (lib/pitch-copy.js, kept in cache/pitch/); the
    preview plays it and the render takes it as the clip's input. A copy is made once per file, pitch and timbre.
 
-   No presets (the owner's (тн-п1), 2026-11-11: the list only repeated the slider) - the semitones and the timbre are all. */
+   No presets (a list would only repeat the slider) - the semitones and the timbre are all. */
 
 export const PITCH_MIN = -12;
 export const PITCH_MAX = 12;
