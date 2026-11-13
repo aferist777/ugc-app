@@ -223,9 +223,9 @@
 
 /* ── The sound window's frame (js/sound/sound-window.js; Merge and Home load this sheet too) ──
    The generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1280×800: the mode's name and its "?" in
-   the head, the settings column on the left, the sash, the right column - the gold card (drawn above, .au-*, as are the "?"
-   and the almanac's window) and under it the foot:
-   ALMANAC, the line of the last press, where the tracks go, the price, "generate". What Merge's own sheets give and
+   the head, the settings column on the left with the almanac at its foot (as in the chats), the sash, the right column -
+   the gold card (drawn above, .au-*, as are the "?" and the almanac's window) and under it the foot: the line of the last
+   press, where the tracks go, the price, "generate". What Merge's own sheets give and
    the Library does not load is here, kept to this window: the chats' settings column (css/mv3-imagen.css .mv3-ig-*), the
    almanac's gold button (.mv3-vc-almanac), the chips (css/merge-v3.css .mv3-chip). */
 .gw-body.au-win{ flex-direction:row }
@@ -245,12 +245,12 @@
 .gw-ov.is-music .gw-crumb.is-here{ overflow:visible }
 .gw-ov.is-music .gw-crumbs > .qm{ width:17px; height:17px; margin-left:2px; font-size:10px }
 
-/* the foot is the frame's (.u-win-foot), across the whole window: the almanac (the chats' gold button, in development -
-   blurred and not pressed, as css/mv3-imagen.css draws it in the chats: the Library and Home do not load that sheet) and the
-   line of the last press (the one status line) at the left; where it goes, the price in mono and "generate" at the right */
+/* the almanac at the foot of the settings column: the chats' gold button, in development - blurred and not pressed, as
+   css/mv3-imagen.css draws it in the chats (the Library and Home do not load that sheet); its holder is no box of its own */
+.au-alm{ display:contents }
+/* the foot is the frame's (.u-win-foot), across the whole window: the line of the last press (the one status line) at the
+   left; where it goes, the price in mono and "generate" at the right */
 .au-foot{ min-width:0 }
-.au-foot-alm{ flex:0 0 auto }
-.gw-ov.is-music .au-foot .mv3-vc-almanac{ margin:0 }
 .gw-ov.is-music .mv3-vc-almanac.is-soon, .gw-ov.is-music .mv3-vc-almanac.is-soon:hover, .gw-ov.is-music .mv3-vc-almanac.is-soon:active{
   filter:blur(1.2px); opacity:.5; cursor:default; transform:none;
   background:transparent; border-color:var(--gold-line); color:var(--gold);

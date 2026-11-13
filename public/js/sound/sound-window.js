@@ -1020,7 +1020,9 @@ export async function open(o) {
   body.classList.add('au-win');
   const set = el('div', 'mv3-ig-set au-set');
   const col = el('div', 'mv3-ig-scroll');
-  set.appendChild(col);
+  // The almanac at the foot of the settings column, where the chats have theirs.
+  const alm = el('div', 'au-alm');
+  set.append(col, alm);
   const sash = el('div', 'au-msash');
   sash.title = 'Drag to widen the settings - a double press puts it back';
   const right = el('div', 'au-right');
@@ -1036,18 +1038,17 @@ export async function open(o) {
   v2m.append(v2mGal, v2mTree);
   v2m.hidden = true;
   pair.append(mid, v2m);
-  // the foot is the frame's, across the whole window: the almanac and the last press at the left; where it
-  // goes, the price and "generate" at the right
+  // the foot is the frame's, across the whole window: the last press at the left; where it goes, the price and
+  // "generate" at the right
   const foot = _win.foot;
   foot.classList.add('au-foot');
-  const alm = el('div', 'au-foot-alm');
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
   const price = el('div', 'au-price');
   const go = el('button', 'au-go u-btn is-main', 'Generate');
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
-  foot.append(alm, line, el('span', 'sp'), into, price, go);
+  foot.append(line, el('span', 'sp'), into, price, go);
   right.append(pair);
   body.append(set, sash, right);
   _ui = { set, col, sash, mid, status, make, v2m, v2mGal, v2mTree, alm, line, into, price, go, madeH: null, made: null };
@@ -1068,6 +1069,7 @@ async function _start(win, opt) {
   const ok = await F.ready();
   if (!_ui || win !== _win) return;
   if (!ok) { _ui.col.replaceChildren(failedEl('the settings', () => _start(win, opt), { line: true })); return; }
+  _ui.alm.replaceChildren();
   F.almanacButton(_ui.alm);
   _fitMode();
   _apply(opt);
