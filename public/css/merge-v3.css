@@ -1182,17 +1182,17 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    order (wk-fragments.js _stageMoodVoice): 4 names, an empty cell, 4 controls, generate. Wide, it is one line. */
 .mv3-wk-stage-body:has(> .mv3-wk-mvrow){container-type:inline-size}
 @container (max-width: 520px){
-  .mv3-wk-mvrow:not(.is-sample){grid-template-columns:minmax(0, 1fr) minmax(0, 1.5fr)}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(1){grid-area:1 / 1}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(2){grid-area:1 / 2}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(6){grid-area:2 / 1}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(7){grid-area:2 / 2}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(3){grid-area:3 / 1}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(4){grid-area:3 / 2}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(8){grid-area:4 / 1}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(9){grid-area:4 / 2}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(5){display:none}
-  .mv3-wk-mvrow:not(.is-sample) > :nth-child(10){grid-area:5 / 1 / 6 / 3}
+  .mv3-wk-stage-body > .mv3-wk-mvrow{grid-template-columns:minmax(0, 1fr) minmax(0, 1.5fr)}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(1){grid-area:1 / 1}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(2){grid-area:1 / 2}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(6){grid-area:2 / 1}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(7){grid-area:2 / 2}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(3){grid-area:3 / 1}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(4){grid-area:3 / 2}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(8){grid-area:4 / 1}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(9){grid-area:4 / 2}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(5){display:none}
+  .mv3-wk-stage-body > .mv3-wk-mvrow > :nth-child(10){grid-area:5 / 1 / 6 / 3}
 }
 /* The voiceover draft's script column while it has no script (js/merge-v3/vo-script.js), and its bar over the lines. */
 .mv3-vos{display:flex; flex-direction:column; min-height:0; flex:1 1 auto}
@@ -1289,14 +1289,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* What a press will cost stands on the button's own line, just left of it: the two belong together,
    and the right-hand edge they share is the mannequin's. */
 .mv3-wk-stage-foot .mv3-wk-vsub{flex:0 1 auto; text-align:right}
-/* HOW THE FIRST-FRAMES FIELD FOLDS IN HALF A ROW. Its menus wear their names to the LEFT at full
-   width, which at 200px leaves the menu itself too narrow to read a word of: the name goes ABOVE
-   it instead, and each menu takes the whole line. The mannequin stands beside the wishes rather
-   than beside the menus - it is a picture, and so is what it is next to. */
-.mv3-wk-stage.is-half .mv3-wk-fsetlab{flex:1 1 100%; flex-direction:column; align-items:stretch; gap:2px}
-.mv3-wk-stage.is-half .mv3-wk-fsetlab.is-tight{flex:1 1 100%}
-.mv3-wk-stage.is-half .mv3-wk-fsetlab.is-tight .mv3-wk-vsel.is-small{width:auto; flex:1 1 auto}
-.mv3-wk-stage.is-half .mv3-wk-fsetlabw{font-size:var(--fs-10)}   /* "Sound", "Gestures", "Camera" - sentence case */
 /* The head: the number in mono, quiet, then the name 12 / 500 in sentence case, and "Done" with its green
    tick at the right; what the field is and where it stands the line under it, wrapping. Blocked - nothing to
    work on yet - dims the whole field and says what it waits for. */
@@ -1366,11 +1358,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 .mv3-wk-fins{position:absolute; left:50%; bottom:-10px; z-index:3; transform:translateX(-50%); display:none}
 .mv3-wk-fins.u-btn{width:18px; height:18px; padding:0; border-radius:var(--r-xs)}   /* keeps its 18 px on the row's edge; Lucide's plus, not gold */
 .mv3-wk-frow:hover > .mv3-wk-fins{display:flex}
-/* THE POPUP while a voice's demo is being made: over the foot of the page, taking nothing - no keys,
-   no presses. Neutral - the step, the hairline and the one shadow. */
-.mv3-wk-popup{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:60; max-width:420px;
-  padding:var(--sp-2) var(--sp-4); border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
-  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--ink); box-shadow:var(--shadow); pointer-events:none}
 /* EVERY WORD of the line, as many lines as it takes - no clamp, no tip on hover. */
 .mv3-wk-ftext{
   flex:1 1 auto; min-width:0; font:400 var(--fs-10)/1.4 var(--font); color:var(--ink);
@@ -1488,13 +1475,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
 /* the white ring of the selected frame, 2 px drawn OVER the picture (an inset shadow is covered by it), under its ✕ */
 .mv3-wk-fsetfr.is-on{border-color:var(--sel-ring)}
 .mv3-wk-fsetfr.is-on::after{content:""; position:absolute; inset:0; z-index:1; pointer-events:none; border:2px solid var(--sel-ring); border-radius:inherit}
-/* A menu with its one-word name to the left of it. The pair is what flexes, not the menu
-   inside it, or the shot size and how many would not share a row. */
-.mv3-wk-fsetlab{flex:1 1 110px; display:inline-flex; align-items:center; gap:5px; min-width:0}
-.mv3-wk-fsetlab .mv3-wk-vsel.is-small{flex:1 1 auto; min-width:0}
-.mv3-wk-fsetlab.is-tight{flex:0 0 auto}
-.mv3-wk-fsetlab.is-tight .mv3-wk-vsel.is-small{flex:0 0 auto; width:46px}
-.mv3-wk-fsetlabw{flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 /* FIELD 2's FOOT: the tick "scattered" on the left, "frames chat" on the right. */
 .mv3-wk-stage-foot.is-frames{justify-content:space-between}
 .mv3-wk-ftick{display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--font); color:var(--muted); cursor:pointer; user-select:none}
@@ -1600,7 +1580,6 @@ body.mv3-locked.mv3-lock-soft #mv3-timeline:hover{box-shadow:inset 0 0 0 1px var
    mood, the voice with `change` right of it (a long name ends in an ellipsis), the stability, the speed and `generate`. One
    grid, so each name stands over its control. What it has to say goes under the two lines. */
 .mv3-wk-mvrow{display:grid; grid-template-columns:minmax(90px, 170px) minmax(0, 1fr) auto auto auto; column-gap:10px; row-gap:3px; align-items:center; min-width:0}
-.mv3-wk-mvrow.is-sample{grid-template-columns:minmax(90px, 170px) minmax(0, 1fr) auto}
 .mv3-wk-mvname{justify-self:start; font:var(--fw-medium) var(--fs-10)/1.3 var(--font); color:var(--muted); cursor:help; user-select:none}   /* sentence case */
 .mv3-wk-mvname:hover{color:var(--ink)}
 .mv3-wk-mvname:empty{cursor:default}

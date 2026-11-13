@@ -492,7 +492,7 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
 /* The writer held on by the storyboard: on, and not to be unticked from here. */
 .mv3-vc-check.is-held, .mv3-vc-check.is-held .u-switch{ cursor:default }
-/* The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
+/* The almanac of every chat - pictures, video, frames - is a BUTTON in gold (.u-btn.is-gen), as the frames chat's `ideas`: the
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
 .mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px }   /* the shared part at 32 */
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
@@ -1014,9 +1014,12 @@ audio.vtrim-media{ background:none; height:32px }
 /* What stands right of the attachment row - the frames chat's `ideas`. */
 .mv3-ig-attsrow{ display:flex; align-items:stretch; min-width:0; border-top:1px solid var(--border-soft) }
 .mv3-ig-attsrow > .mv3-ig-atts{ flex:1 1 auto; min-width:0; border-top:0 }
-/* An almanac still to come (the pictures and frames chats): the same gold button - it IS one -, not pressable, its title
-   saying "in development". */
-.mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ cursor:not-allowed; background:transparent }
+/* An almanac in development (the pictures and frames chats): the same gold button, blurred and dimmed as the strip's
+   3D Studio entry (css/app-nav.css .is-soon) and not pressed - no fill under the pointer -, "In development" in its title. */
+.mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover, .mv3-vc-almanac.is-soon:active{
+  filter:blur(1.2px); opacity:.5; cursor:default; transform:none;
+  background:transparent; border-color:var(--gold-line); color:var(--gold);
+}
 /* The frames chat's `ideas`: right of the places above the box, in gold; its answer a list to press. */
 .mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px }   /* a gold line (.u-btn.is-gen) */
 .mv3-fc-ideaslist{ display:flex; flex-direction:column; gap:5px; margin-top:6px }

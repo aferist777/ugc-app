@@ -33,8 +33,6 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
 import * as CapView from './captions-view.js';
 // A sound's pitch - semitones, keep timbre.
 import { pitchRows } from './pitch-rows.js';
-import * as MyPresets from './my-presets.js';
-import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys, placed, keepMotion } from '../captions/preset-use.js';
 import { shownEnter, PAGE_LEAVES, pairNow, APPEAR_AS } from '../captions/page-fx.js';
@@ -46,7 +44,7 @@ import * as Listen from './listen.js';
 import { askDelete, note } from '../ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS, rowsOn } from '../captions/style.js';
+import { markedColour, renderFrame, PLATES, pairOf, mixOf, animsOf, fontsOf, LOOK_KEYS, rowsOn } from '../captions/style.js';
 import { deal, needsDeal, redealFonts, newSeed, withoutRefs, refsOf } from '../captions/mix.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
@@ -920,9 +918,9 @@ function _blankWordsTrack(host, track) {
   // the lane's name in the strip's head, what it holds under it
   _capHead(host, _cap1(track.name || (isSubs ? 'Subtitles' : 'Text')), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : '')
     + (mix ? ' · ' + mix.length + ' presets' : ''));
-  // Saved as the lane's style is stored - an automatic size stays automatic. Several presets are no one look: no saving.
+  // Several presets are no one look: they are named instead.
   if (mix) _mixLine(host, mix);
-  else _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw, isSubs ? '' : 'text');
+  else _presetLine(host, raw, () => apply(raw.preset));
 
   // FOUR GROUPS: Text - where the lines come from and how they are cut; Look; Motion - In and
   // Out; Place - where and how big.
@@ -959,7 +957,7 @@ function _blankWordsTrack(host, track) {
     // WHO LISTENS: Groq, or this computer - which is also where a run goes by itself when Groq
     // cannot be asked. Off when this copy of the app has no recognition of its own.
     const L = Listen.local();
-    const can = !!(L && L.platform && (L.program.present || L.cuda.present));
+    const can = !!(L && L.platform && L.program.present);
     // What is STORED is shown: a lane set to this computer in a copy without the program can still be put
     // back on Groq here - nothing else writes the field, and every press would be refused.
     const engine = how.engine === 'local' ? 'local' : 'cloud';
@@ -1188,39 +1186,20 @@ function _capHead(host, title, sub) {
   if (sub) host.appendChild(setFigures(_el('div', 'mv3-cap-sub'), sub));
 }
 
-// "based on Red Pop · edited" and the way back to it - a style made from a preset says which. Where ONE look is shown (a
-// lane, a line), `save` - what that look is - puts "save as my preset" in the same row, at the top of the strip where it is
-// seen without scrolling; a look made from no preset has the row for that button alone.
-// `kind` 'text': saved into the text gallery's Mine.
-function _presetLine(host, style, back, editedAny, save, kind) {
+// "based on Red Pop · edited" and the way back to it - a style made from a preset says which, at the top of the strip;
+// a look made from no preset has no row.
+function _presetLine(host, style, back, editedAny) {
   const id = style && style.preset;
   const name = id ? presetName(id) : '';
-  if (!name && !save) return;
-  const row = _el('div', 'mv3-cap-preset' + (name ? '' : ' is-plain'));
-  if (name) {
-    const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
-    row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
-    if (edited) {
-      const b = C.button('Back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
-      row.appendChild(b);
-    }
+  if (!name) return;
+  const row = _el('div', 'mv3-cap-preset');
+  const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
+  row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
+  if (edited) {
+    const b = C.button('Back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
+    row.appendChild(b);
   }
-  if (save) row.appendChild(_saveMine(save, kind));
   host.appendChild(row);
-}
-
-// SAVE AS MY PRESET, with a window for the name. The window offers "My preset" (or
-// "My preset 2"…); a taken name - one of the person's or of the app's - is refused in it, in the server's words, and
-// it stays open. The lane or line it is saved from stays as it was; the new tile is shown in `Mine`.
-function _saveMine(lookOf, kind) {
-  const b = C.button('Save as my preset', () => {
-    askName({
-      anchor: b.isConnected ? b : null, title: 'Save as my preset', value: MyPresets.freeName(), okLabel: 'Save', maxLength: 60,
-      submit: (name) => MyPresets.save(name, lookOf(), kind),
-    }).then((p) => { if (p && p.id) CapView.showMine(p.id); });
-  }, { title: 'Keeps this look - font, colors, place, effects - as a preset of your own: its tile goes into Mine, to put on any lane or line' });
-  b.classList.add('mv3-cap-save');
-  return b;
 }
 
 // The tiles are always beside the settings when there is room - the presets are what the view is for. Only a
@@ -1485,8 +1464,7 @@ function _blankCaption(host, track, clip) {
     const p = placed(id, styleOf(track, fmt, clip));
     if (p) setCapStyleB([clip.id], track.kind === 'subs' ? keepMotion(p, clip.style || {}, true) : p, { replace: true, cut });
   };
-  _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true),
-    undefined, () => resolveStyle(track.style, clip.style), track.kind === 'text' ? 'text' : '');
+  _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true));
   const heardLine = isHeard(clip);
   // its words - the group Text; then Look · Motion · Place
   const tx = _group(host, 'text', 'Text');
@@ -1824,10 +1802,6 @@ export function initInspector() {
   // A pair of In and Out pressed - on what is picked; with Shift, one more dealt.
   CapView.onAnim((pair, o) => { if (_capAnim) _capAnim(pair, o); });
   CapView.onFonts((list, o) => { if (_capFont) _capFont(list, o); });
-  // The person's own presets: read once, and a change paints the strip - "based on" a preset of theirs
-  // is said once the list is known, and goes when the preset is deleted.
-  MyPresets.onChange(() => render());
-  MyPresets.load();
   Views.onBack('captions', () => { const alt = !!Views.altCaptions(); Views.altRelease(); clearSelB(); if (alt) render(true); });
   // THE HEAD'S ✕ does what Escape does - the pick let go; and with nothing picked,
   // a view's own captions (a highlights project's ticked fragments) let go, as "Library" in the captions view lets them.

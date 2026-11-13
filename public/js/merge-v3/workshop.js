@@ -91,10 +91,10 @@ function _readCount() {
   const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
   return { read: lines.filter(isRead).length, clips: lines.filter(_hasClip).length, total: lines.length };
 }
-// A line with a clip of its own - Kling's takes or Seedance's (routes/scen3.js keeps both on the line).
+// A line with a clip of its own (routes/scen3.js keeps its takes on the line, whichever model made them).
 function _hasClip(l) {
   const v = (l && l.video) || {};
-  return ((v.plain || []).length + (v.tagged || []).length + (((l && l.sd) || {}).clips || []).length) > 0;
+  return ((v.plain || []).length + (v.tagged || []).length) > 0;
 }
 // IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first CLIP has been laid on it (a read with no clip lies
 // nowhere in a talking head - lib/frag-mirror.js): a cut of two fragments is a cut, and

@@ -23,15 +23,9 @@
    subtitle and text lanes as one document, in the tiles' place (caption-doc.js); the strip on the right stays. The tab
    last chosen is remembered.
 
-   THE PERSON'S OWN: `Mine` is the first category after All, and in All
-   they stand first, newest first; their tiles come and go with the list (my-presets.js) without the others being
-   built again. A right-click on one opens Rename / Delete - deleted at once; the app's tiles have no menu. An empty
-   `Mine` says how to fill it.
-
    TWO GALLERIES: what is picked says which - a text lane or text lines get the TEXT
    presets (presets-text.js: Headline, Hook, Label, Callout, Kinetic), everything else the caption presets. Each
-   has its own categories, its own `Mine` (a preset of the person's saved from text is `kind: 'text'`) and its own category
-   remembered; the tiles of the other gallery are hidden, not rebuilt. A text tile loops for 3 s (lib/caption-tiles.js).
+   has its own categories and its own category remembered; the tiles of the other gallery are hidden, not rebuilt. A text tile loops for 3 s (lib/caption-tiles.js).
 
    THE ANIMATIONS: a tab `animation` between `presets` and `text` - tiles of ready In ->
    Out pairs (captions/page-fx.js PAIRS), drawn by the server like the presets' (lib/caption-tiles.js) and shown the same way:
@@ -53,13 +47,6 @@ import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as Doc from './caption-doc.js';
 import { fontPicker } from './font-tiles.js';
-import * as MyPresets from './my-presets.js';
-import * as Layers from '../layers.js';
-import { askName } from '../name-box.js';
-import { note } from '../ask.js';
-import { menuIcons } from '../icons.js';
-// An empty `Mine` - the shared "nothing here".
-import { emptyEl } from '../ui-state.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
@@ -72,26 +59,25 @@ const TAB_IDS = TABS.map((t) => t[0]);
 // The animations' tiles: the pair's In -> Out on plain white letters; until the still is made, its name in these.
 const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
 const POLL_MS = 1500;
-const MINE = 'mine';
 
 const _store = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? fb : v; } catch (e) { return fb; } };
 const _keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 let _ui = null;
-const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine, img, over, loop, starting, end }
+const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, img, over, loop, starting, end }
 const _anims = new Map();          // an animation's pair 'in|out' -> its tile, the same shape
 const _loops = new Map();          // a loop's address -> Promise<Blob>: asked at its first hover, then kept
-const _counts = new Map();         // gallery|category ('' for All) -> its number on the chip
 let _target = null;                // what show() was last told: the preset the pick wears
-let _menu = null;
 let _state = null;
 let _timer = 0;
 let _shown = false;
 let _asked = false;
-// The gallery shown - 'subs' or 'text' - and each one's category.
+// The gallery shown - 'subs' or 'text' - and each one's category: '' (All) or one of its own (a category it no longer has
+// is All).
 let _kind = 'subs';
-const _cats = { subs: _store(LS_CAT, ''), text: _store(LS_CAT_TEXT, '') };
+const _catOk = (cats, id) => (cats.some((c) => c.id === id) ? id : '');
+const _cats = { subs: _catOk(CATEGORIES, _store(LS_CAT, '')), text: _catOk(TEXT_CATEGORIES, _store(LS_CAT_TEXT, '')) };
 const _kindOf = (p) => (p && p.kind === 'text' ? 'text' : 'subs');
 let _tab = TAB_IDS.includes(_store(LS_TAB, 'presets')) ? _store(LS_TAB, 'presets') : 'presets';
 let _apply = null;
@@ -120,19 +106,16 @@ function _build() {
   host.textContent = '';
   const top = _el('div', 'mv3-cap-top');
   const chips = _el('div', 'mv3-cap-cats');
-  // `Mine` first after All; its number and All's move with the person's list (_paintCounts). A row of chips per gallery,
-  // the other's hidden.
+  // A row of chips per gallery, the other's hidden.
   for (const [kind, cats, list] of [['subs', CATEGORIES, PRESETS], ['text', TEXT_CATEGORIES, TEXT_PRESETS]]) {
-    const all = [['', 'All', 0], [MINE, 'Mine', 0]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
+    const all = [['', 'All', list.length]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
     for (const [id, label, n] of all) {
       // the shared chip, its count in mono
       const b = _el('button', 'mv3-cap-cat u-chip', label);
       b.type = 'button';
       b.dataset.cat = id;
       b.dataset.kind = kind;
-      const num = _el('span', 'mv3-cap-n u-mono', String(n));
-      b.appendChild(num);
-      _counts.set(kind + '|' + id, num);
+      b.appendChild(_el('span', 'mv3-cap-n u-mono', String(n)));
       b.addEventListener('click', () => _setCat(id));
       chips.appendChild(b);
     }
@@ -152,13 +135,8 @@ function _build() {
     tabs.appendChild(b);
   }
   const grid = _el('div', 'mv3-cap-grid');
-  // An empty `Mine` says how to fill it; the person's tiles go between it and the app's first (_syncMine).
-  const empty = emptyEl('Nothing here yet. Give a lane or a line the look you want in the settings on the right, '
-    + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.', { icon: 'folder', cls: 'mv3-cap-empty' });
-  empty.hidden = true;
-  grid.appendChild(empty);
   for (const p of PRESETS.concat(TEXT_PRESETS)) {
-    const t = _tile(p, false);
+    const t = _tile(p);
     grid.appendChild(t.btn);
     _tiles.set(p.id, t);
   }
@@ -171,7 +149,7 @@ function _build() {
     + 'In and Out on the right change each side by itself.'));
   const agrid = _el('div', 'mv3-cap-grid');
   for (const p of PAIRS) {
-    const t = _tile({ id: animTileId(p.id), name: p.name, pair: p.id, kind: 'anim', style: ANIM_LOOK }, false);
+    const t = _tile({ id: animTileId(p.id), name: p.name, pair: p.id, kind: 'anim', style: ANIM_LOOK });
     agrid.appendChild(t.btn);
     _anims.set(p.id, t);
   }
@@ -186,21 +164,20 @@ function _build() {
   const text = _el('div', 'mv3-cap-pane');
   host.append(tabs, presets, anim, fonts, text);
   Doc.mount(text);
-  _ui = { host, tabs, presets, anim, agrid, fonts, text, top, chips, status, grid, empty, firstApp: grid.children[1] || null };
-  _syncMine();
+  _ui = { host, tabs, presets, anim, agrid, fonts, text, top, chips, status, grid };
   _paintCat();
   _paintTab();
 }
 
 // One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and color.
-function _tile(p, mine) {
+function _tile(p) {
   const btn = _el('button', 'mv3-cap-tile');
   const anim = p.kind === 'anim';
   btn.type = 'button';
   btn.dataset.id = p.id;
-  btn.dataset.cat = mine ? MINE : anim ? 'anim' : p.category;
+  btn.dataset.cat = anim ? 'anim' : p.category;
   btn.dataset.kind = anim ? 'anim' : _kindOf(p);
-  btn.title = anim ? p.name + ' - put it on what is picked' : _title(p.name, mine);
+  btn.title = p.name + (anim ? ' - put it on what is picked' : ' - apply to what is picked');
   const box = _el('div', 'mv3-cap-box');
   const ph = _el('span', 'mv3-cap-ph', p.name);
   const s = p.style || {};
@@ -217,7 +194,7 @@ function _tile(p, mine) {
   name.appendChild(ed);
   btn.appendChild(box);
   btn.appendChild(name);
-  const t = { btn, box, ed, nm, ph, mine, kind: anim ? 'anim' : _kindOf(p) };
+  const t = { btn, box, ed, nm, ph, kind: anim ? 'anim' : _kindOf(p) };
   // Shift picks several: what is picked deals them out - the inspector says how.
   btn.addEventListener('click', (e) => {
     const o = { shift: !!(e && e.shiftKey) };
@@ -225,7 +202,6 @@ function _tile(p, mine) {
   });
   btn.addEventListener('pointerenter', () => _enter(t));
   btn.addEventListener('pointerleave', () => _leave(t));
-  if (mine) btn.addEventListener('contextmenu', (e) => { e.preventDefault(); _openMenu(e, p.id, btn); });
   return t;
 }
 
@@ -293,38 +269,6 @@ function _stopNow(t) {
   t.over = false;
   _stop(t);
 }
-const _title = (name, mine) => name + ' - apply to what is picked' + (mine ? '. Right-click to rename or delete it' : '');
-
-// THE PERSON'S TILES follow their list: a deleted one goes, a new one comes, a renamed one says its new name - newest
-// first, before the app's. The 131 are not touched.
-function _syncMine() {
-  if (!_ui) return;
-  const list = MyPresets.all();
-  const want = new Set(list.map((p) => p.id));
-  for (const [id, t] of [..._tiles]) if (t.mine && !want.has(id)) { _stopNow(t); t.btn.remove(); _tiles.delete(id); }
-  for (const p of list) {
-    let t = _tiles.get(p.id);
-    if (!t) { t = _tile(p, true); _tiles.set(p.id, t); }
-    else if (t.nm.textContent !== p.name) {
-      t.nm.textContent = p.name;
-      t.ph.textContent = p.name;
-      t.btn.title = _title(p.name, true);
-    }
-    _ui.grid.insertBefore(t.btn, _ui.firstApp);
-  }
-  _paintCounts();
-  _paintCat();
-  _light();
-  _paintState();
-}
-
-function _paintCounts() {
-  for (const [kind, list] of [['subs', PRESETS], ['text', TEXT_PRESETS]]) {
-    const n = MyPresets.all().filter((p) => _kindOf(p) === kind).length;
-    if (_counts.has(kind + '|')) _counts.get(kind + '|').textContent = String(list.length + n);
-    if (_counts.has(kind + '|' + MINE)) _counts.get(kind + '|' + MINE).textContent = String(n);
-  }
-}
 
 // The tile of the preset the pick wears is lit, and says `edited` when it was changed since; so is the pair of its In and Out
 // (`anims`). A lane wearing several (`presets`) has them all lit, each `edited` that was (`editedIds`).
@@ -340,71 +284,6 @@ function _light() {
   const pairs = new Set(t.anims || []);
   for (const [pair, x] of _anims) x.btn.classList.toggle('is-on', pairs.has(pair));
   if (_fonts) _fonts.set(t.fonts || []);
-}
-
-// ── The person's tile's menu: Rename / Delete - at once ────────────────────
-function _closeMenu() {
-  if (!_menu) return;
-  _menu.el.remove();
-  document.removeEventListener('mousedown', _menu.away, true);
-  window.removeEventListener('scroll', _closeMenu, true);
-  Layers.close(_menu.layer);
-  _menu = null;
-}
-
-function _openMenu(ev, id, tile) {
-  _closeMenu();
-  const p = MyPresets.find(id);
-  if (!p) return;
-  const el = _el('div', 'mv3-plus-menu u-menu is-float');
-  const item = (label, sub, on, danger) => {
-    const b = _el('button', 'mv3-plus-item u-mi' + (danger ? ' is-danger' : ''));
-    b.type = 'button';
-    b.appendChild(_el('span', null, label));
-    if (sub) b.appendChild(_el('small', null, sub));
-    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
-    el.appendChild(b);
-  };
-  // Anchored on the TILE: the menu is gone by the time these run.
-  item('Rename', p.name, () => _rename(p, tile));
-  item('Delete', 'at once - lanes and lines that wear it keep their look', () => _delete(p, tile), true);
-  menuIcons(el);
-  document.body.appendChild(el);
-  const w = el.offsetWidth, h = el.offsetHeight;
-  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';
-  el.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, ev.clientY))) + 'px';
-  const away = (e) => { if (!el.contains(e.target)) _closeMenu(); };
-  const layer = Layers.open(el, { modal: false, name: 'preset menu', onEsc: _closeMenu });
-  _menu = { el, away, layer };
-  // On the next tick: this very right-click is still travelling, and it would close the menu it just opened.
-  setTimeout(() => { if (_menu && _menu.el === el) document.addEventListener('mousedown', away, true); }, 0);
-  window.addEventListener('scroll', _closeMenu, true);
-}
-
-function _rename(p, tile) {
-  // A taken name is refused in the window, in the server's words; the same name is no change.
-  return askName({
-    anchor: tile, title: 'Rename preset', value: p.name, okLabel: 'Rename', maxLength: 60,
-    submit: (name) => (name === p.name ? null : MyPresets.rename(p.id, name)),
-  });
-}
-
-async function _delete(p, tile) {
-  try { await MyPresets.remove(p.id); } catch (e) { if (tile.isConnected) note(tile, 'The preset was not deleted.', e.message); }
-}
-
-/**
- * A preset just saved from the strip, shown: `Mine` when another category hides it, scrolled to and marked for a moment.
- * The tab is left as it is - the person may be in the text.
- */
-export function showMine(id) {
-  const t = _tiles.get(id);
-  if (!_ui || !t || t.kind !== _kind) return;
-  if (_cats[_kind] && _cats[_kind] !== MINE) _setCat(MINE);
-  if (_tab !== 'presets') return;
-  t.btn.classList.add('is-new');
-  setTimeout(() => t.btn.classList.remove('is-new'), 2000);
-  if (t.btn.scrollIntoView) t.btn.scrollIntoView({ block: 'nearest' });
 }
 
 function _setTab(id) {
@@ -452,7 +331,6 @@ function _paintCat() {
     t.btn.hidden = t.kind !== _kind || (!!cat && t.btn.dataset.cat !== cat);
     if (t.btn.hidden) _stopNow(t);
   }
-  _ui.empty.hidden = !(cat === MINE && !MyPresets.all().some((p) => _kindOf(p) === _kind));
 }
 
 function _paintState() {
@@ -528,7 +406,6 @@ export function show(target) {
 
 export function hide() {
   _shown = false;
-  _closeMenu();
   if (_fonts) _fonts.shown(false);
   for (const t of _allTiles()) _stopNow(t);
   Doc.setShown(false);
@@ -542,11 +419,3 @@ export function revealLit() {
   if (lit && lit.scrollIntoView) lit.scrollIntoView({ block: 'nearest' });
 }
 
-// The person's list changed (saved, renamed, deleted): their tiles follow, and the set is asked again - the server makes a
-// new one's tile first (lib/caption-tiles.js mineChanged).
-MyPresets.onChange(() => {
-  if (!_ui) return;
-  _syncMine();
-  if (_shown) _read(true);
-  else _asked = false;
-});

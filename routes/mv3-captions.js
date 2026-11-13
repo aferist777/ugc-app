@@ -13,17 +13,11 @@
 //                                                 null and what was last laid (from its subs/ file); for a talking
 //                                                 head `lines` - its lines with no caption and why
 //
-//   GET  /api/speech/local                      -> { success, state }  this computer's ear: the program,
-//                                                 the model, the NVIDIA build - present, coming, failed.
+//   GET  /api/speech/local                      -> { success, state }  this computer's ear: the program and
+//                                                 the model - present, coming, failed.
 //                                                 Starts nothing (the smoke check asks every GET)
-//   POST /api/speech/local/download { what }    -> { success, state }  'model' | 'cuda', in the background
+//   POST /api/speech/local/download { what }    -> { success, state }  'model', in the background
 //   POST /api/speech/local/remove   { what }    -> { success, state }
-//
-//   GET  /api/mv3/captions/presets               -> { success, presets }   the person's own caption presets
-//                                                 (lib/caption-presets-store.js), newest first
-//   POST /api/mv3/captions/presets { name, style } -> { success, preset, presets }   a new one; a taken name 409
-//   POST /api/mv3/captions/presets/rename { id, name } -> { success, preset, presets }
-//   POST /api/mv3/captions/presets/delete { id } -> { success, presets }   at once; projects keep their copy
 //
 // The sound is taken from the SAVED timeline - the page saves what it has before it presses - and the
 // lines are laid on the timeline as it stands when they are ready, not as it stood at the press.
@@ -39,7 +33,6 @@ const LOCAL = require('../lib/whisper-local');
 const { KEY_RE } = require('../lib/subs-store');
 const { HEARD } = require('../lib/mv3b-subs');
 const TILES = require('../lib/caption-tiles');
-const MINE = require('../lib/caption-presets-store');
 const { CATEGORIES } = require('../public/js/captions/presets.js');
 const { TEXT_CATEGORIES } = require('../public/js/captions/presets-text.js');
 
@@ -99,44 +92,11 @@ router.post('/mv3/captions/tiles/make', (req, res) => {
   try {
     const first = String((req.body && req.body.first) || '');
     // 'anim' - the animations' tiles first, while the "animation" tab is open.
-    const known = first === TILES.MINE_CAT || first === TILES.ANIM_CAT || CATEGORIES.concat(TEXT_CATEGORIES).some((c) => c.id === first);
+    const known = first === TILES.ANIM_CAT || CATEGORIES.concat(TEXT_CATEGORIES).some((c) => c.id === first);
     res.json({ success: true, ...TILES.make(known ? first : null) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
-});
-
-// ── The person's own presets (lib/caption-presets-store.js) ──
-// A change is answered with the whole list, and the tiles hear of it: a new one's is made first, a deleted one's goes.
-const _presetErr = (res, e) => res.status(e.status || 500).json({ success: false, error: e.message });
-
-router.get('/mv3/captions/presets', (req, res) => {
-  try { res.json({ success: true, presets: MINE.list() }); } catch (e) { _presetErr(res, e); }
-});
-
-router.post('/mv3/captions/presets', (req, res) => {
-  try {
-    const b = req.body || {};
-    const preset = MINE.add(b.name, b.style, b.kind === 'text' ? 'text' : '');
-    TILES.mineChanged();
-    res.json({ success: true, preset, presets: MINE.list() });
-  } catch (e) { _presetErr(res, e); }
-});
-
-router.post('/mv3/captions/presets/rename', (req, res) => {
-  try {
-    const b = req.body || {};
-    const preset = MINE.rename(b.id, b.name);
-    res.json({ success: true, preset, presets: MINE.list() });
-  } catch (e) { _presetErr(res, e); }
-});
-
-router.post('/mv3/captions/presets/delete', (req, res) => {
-  try {
-    MINE.remove((req.body || {}).id);
-    TILES.mineChanged();
-    res.json({ success: true, presets: MINE.list() });
-  } catch (e) { _presetErr(res, e); }
 });
 
 // ── This computer's ear (Admin -> This computer, and the subtitle lane) ─────
@@ -146,8 +106,7 @@ router.get('/speech/local', (req, res) => {
 
 router.post('/speech/local/download', (req, res) => {
   const what = String((req.body && req.body.what) || '');
-  if (!['model', 'cuda'].includes(what)) return res.status(400).json({ success: false, error: 'Download what? model or cuda.' });
-  if (what === 'cuda' && !LOCAL.gpu()) return res.status(400).json({ success: false, error: 'This computer has no NVIDIA graphics card.' });
+  if (what !== 'model') return res.status(400).json({ success: false, error: 'Download what? Only the model.' });
   // In the background: the state says how far it got, and why it stopped if it did.
   LOCAL.download(what).catch(() => { /* kept in the state's error */ });
   res.json({ success: true, state: LOCAL.state() });

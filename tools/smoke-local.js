@@ -92,6 +92,11 @@ const REMOVED = [
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
                  ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'],
                  ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
+                 // the person's own caption presets
+                 ['GET', '/api/mv3/captions/presets'], ['POST', '/api/mv3/captions/presets'], ['POST', '/api/mv3/captions/presets/rename'],
+                 ['POST', '/api/mv3/captions/presets/delete'], ['GET', '/js/merge-v3/my-presets.js'],
+                 // Seedance in talking head
+                 ['POST', '/api/scen3/sd/prompts'], ['POST', '/api/scen3/sd/prompt'], ['POST', '/api/scen3/sd/pick'], ['POST', '/api/scen3/voice/demo'],
                  // the old Character page's address
                  ['GET', '/character']];
 

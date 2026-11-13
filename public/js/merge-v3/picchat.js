@@ -183,7 +183,7 @@ function PICTURES(ctx) {
         { showSrc: (it) => thumbOf(it.media, 'main') });
     },
 
-    // The almanac at the foot of the column, as in the video chat - still to come, so dimmed.
+    // The almanac at the foot of the column, as in the video chat - in development, so blurred and not pressed.
     columnFoot: () => [almanacSoon()],
   };
 }

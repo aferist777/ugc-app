@@ -18,7 +18,8 @@
      THE ALMANAC                    a window in the middle over a darkened, blurred page: the sections on the
                                     left, the open one's notes as chips under their categories, a chip's note under them
                                     ("+ add", "copy"), and a field the notes are gathered in - "into <field>" adds it to
-                                    the open mode's own field
+                                    the open mode's own field. Its button is in development - not pressed -, so nothing
+                                    opens it now (`openAlmanac` is the form's for when it is)
      SAVED LYRICS                   Music -> Lyrics (GET|POST /api/audio/lyrics): in
                                     Custom a dropdown of them over the Lyrics field (a choice replaces the text, the title
                                     only when it is empty) and "save" under it; "save" on every text Lyrics wrote - a text
@@ -162,8 +163,7 @@ export function createSunoForm(o) {
     if (!_readying) {
       _readying = (async () => {
         const c = await api('/api/audio/catalog');
-        let a = null;
-        if (c.almanac) { try { a = await import('/js/audio/almanac-data.js'); } catch (e) { a = null; } }
+        const a = await import('/js/audio/almanac-data.js');
         CAT = c; ALM = a;
       })().finally(() => { _readying = null; });
     }
@@ -751,13 +751,14 @@ export function createSunoForm(o) {
     return a && b ? a + (nl ? '\n\n' : ', ') + b : a || b;
   };
 
-  /** The almanac's gold button, into the column's foot. */
+  /** The almanac's gold button, at the left of the frame's foot - in development: blurred, not pressed, "In development"
+   *  under the pointer, as the chats' (js/merge-v3/chat-shell.js almanacSoon). The window below is kept for it. */
   function almanacButton(foot) {
-    // in the frame's foot: a quiet button at the left
-    const alm = el('button', 'mv3-vc-almanac u-btn is-quiet' + (almSections().length ? '' : ' is-soon'), 'Almanac');
+    const alm = el('button', 'mv3-vc-almanac u-btn is-gen is-soon', 'Almanac');
     alm.type = 'button';
-    alm.title = almSections().length ? 'Notes on styles and sounds - gather them into a prompt' : 'The almanac of music and sounds is being written - soon';
-    alm.addEventListener('click', () => { if (almSections().length) openAlmanac(); else say('The almanac is being written (V34.A) - soon.'); });
+    alm.title = 'In development';
+    alm.setAttribute('aria-disabled', 'true');
+    alm.tabIndex = -1;
     foot.appendChild(alm);
     return alm;
   }
@@ -986,7 +987,7 @@ export function createSunoForm(o) {
     field, text, check, knob,
     helpText, paintFields, body, press, lyricCard, resetEdit, carryEdit,
     saveButton, useLyric,
-    almanacButton, closeAlmanac,
+    almanacButton, openAlmanac, closeAlmanac,
   };
 }
 

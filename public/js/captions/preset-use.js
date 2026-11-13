@@ -4,15 +4,11 @@
    presets.js is made by a tool and not edited by hand, so what the page and the server do WITH a preset
    lives here. A preset is a BASE: applying it copies its whole style into the
    project, marked with its id (`preset`); what is changed afterwards lives in the project only, and
-   "back to the preset" takes it away.
+   "back to the preset" takes it away. A style marked with an id that is no preset of the app's keeps its look, and
+   "based on" is not said.
 
-   The person's OWN presets are bases the same way: the page is told the list
-   (merge-v3/my-presets.js -> setMine) and a preset is looked for among the app's first, then among them. One
-   deleted is simply not found: "based on" stops being said, and the project keeps the look it copied.
-
-   THE TEXT PRESETS (presets-text.js) and the person's own saved from a text lane or line (`kind: 'text'`) are
-   bases the same way - but they carry no place: applied, the line or lane keeps where it is (placed), and
-   where it is never counts as an edit of the preset (editedKeys).
+   THE TEXT PRESETS (presets-text.js) are bases the same way - but they carry no place: applied, the line or lane keeps
+   where it is (placed), and where it is never counts as an edit of the preset (editedKeys).
 
    A SUBTITLE'S IN AND OUT ARE NOT ITS PRESET'S: a preset put on the subtitle lane or on its
    lines leaves their In and Out as they were (keepMotion), and an In or Out chosen is never an edit of the preset. A text
@@ -23,15 +19,12 @@ import { presetOf } from './presets.js';
 import { textPresetOf, TEXT_KEEP } from './presets-text.js';
 import { normalizeStyle, DEF, PLACE_KEYS } from './style.js';
 
-let _mine = [];
-/** The person's own presets ({id, name, style}), as the page last heard them. */
-export function setMine(list) { _mine = (Array.isArray(list) ? list : []).filter((p) => p && p.id && p.style); }
-const _find = (id) => presetOf(id) || textPresetOf(id) || _mine.find((p) => p.id === id) || null;
+const _find = (id) => presetOf(id) || textPresetOf(id) || null;
 
-/** Is it a text preset - the app's (presets-text.js) or the person's saved from text? */
+/** Is it a text preset (presets-text.js)? */
 export const isTextPreset = (id) => { const p = _find(id); return !!p && p.kind === 'text'; };
 
-/** The whole style a preset gives, marked with its id - or null for an id that is neither the app's nor the person's. */
+/** The whole style a preset gives, marked with its id - or null for an id that is no preset of the app's. */
 export function presetStyle(id) {
   const p = _find(id);
   if (!p) return null;
