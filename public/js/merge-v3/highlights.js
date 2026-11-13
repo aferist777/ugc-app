@@ -53,17 +53,17 @@ import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } fro
 // (phase V73 block 5, 5d) Lucide's icons in place of the signs; every figure of the view in mono.
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
+import { parseKey, homeKey } from '../highlights/keys.js';
 const _fig = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.appendChild(figures(text)); return e; };
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
 const $ = (id) => document.getElementById(id);
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const KEY_RE = /^hl_([a-z0-9]+)(?:_(\d+))?$/;
-/** The highlights project of a timeline's key: its id, or ''. */
-export const projectOf = (key) => { const m = KEY_RE.exec(String(key || '')); return m ? m[1] : ''; };
+/** The highlights project of a timeline's key: its id, or '' (the keys' rule: js/highlights/keys.js). */
+export const projectOf = (key) => { const p = parseKey(key); return p ? p.id : ''; };
 /** The project's own timeline, for any of its keys ('' for a key of no highlights project). */
-export const homeOf = (key) => { const id = projectOf(key); return id ? 'hl_' + id : ''; };
+export const homeOf = (key) => { const id = projectOf(key); return id ? homeKey(id) : ''; };
 
 const _clock = (s) => {
   s = Math.max(0, +s || 0);
@@ -99,7 +99,7 @@ const _api = async (url, opt) => {
 
 // ── Where the view is ───────────────────────────────────────────────────────
 // The fragment whose timeline is open (its n), 0 for the project's own.
-const _openN = () => { const m = KEY_RE.exec(String(Store.key() || '')); return m && m[2] ? Number(m[2]) : 0; };
+const _openN = () => { const p = parseKey(Store.key()); return p ? p.n : 0; };
 let _openShown = 0;           // the open fragment the tiles were last drawn for
 
 function _onStore() {
@@ -762,7 +762,7 @@ function _paintField() {
       if (_sel === f.n) {
         _sel = 0;
         _paint();
-        if (f.key && Store.key() === f.key) Store.open('hl_' + _pid).catch((e) => showError(e.message));
+        if (f.key && Store.key() === f.key) Store.open(homeKey(_pid)).catch((e) => showError(e.message));
         return;
       }
       _sel = f.n;
@@ -1045,7 +1045,7 @@ async function _delete(f) {
   try {
     await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/delete', { method: 'POST' });
     // Its timeline open: the project's own takes its place.
-    if (Store.key() === f.key) await Store.open('hl_' + _pid);
+    if (Store.key() === f.key) await Store.open(homeKey(_pid));
     if (_sel === f.n) _sel = 0;
     _checked.delete(f.n);
     _say('deleted «' + f.title + '» - Ctrl+Z here brings it back');

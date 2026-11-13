@@ -26,9 +26,10 @@ import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
 import { isTalking } from './workshop.js';
 import { refuseHome } from './chat-shell.js';
 import * as SW from '../sound/sound-window.js';
+import { isHl } from '../highlights/keys.js';
 
 const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
-const _hl = (k) => /^hl_/.test(String(k || ''));
+const _hl = isHl;
 const _allowed = () => Store.isReady() && !!Store.key();
 const _kind = () => (_hl(Store.key()) ? 'highlights' : isTalking() ? 'talking head' : Store.isDraft() ? 'draft' : 'blank');
 const _key = () => Views.chatKey(Store.key() || '');

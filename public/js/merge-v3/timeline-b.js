@@ -64,6 +64,7 @@ import { showError } from '../notice.js';
 // (phase V73 block 5, 5c) The lanes' squares, the link mark and the stretch's label as Lucide's icons; its seconds in mono.
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
+import { isHl } from '../highlights/keys.js';
 
 // A lane's name as it is shown: sentence case ("Main video") - the stored name stays as it is ("main video").
 const _shownName = (n) => { const s = String(n || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
@@ -2244,7 +2245,7 @@ function _paintEmpty(tracks, inner) {
   const host = _host();
   if (!el || !host) return;
   const key = String(Store.key() || '');
-  const empty = !!key && !/^hl_/.test(key) && tracks.every(t => !(t && Array.isArray(t.clips) && t.clips.length));
+  const empty = !!key && !isHl(key) && tracks.every(t => !(t && Array.isArray(t.clips) && t.clips.length));
   el.hidden = !empty;
   if (!empty) return;
   const ruler = inner && inner.querySelector(':scope > .mv3b-row.is-ruler');

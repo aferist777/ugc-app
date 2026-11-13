@@ -43,6 +43,7 @@ import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY } from '../really.js';
 import { menuIcons, iconEl } from '../icons.js';
 import { figures } from '../num.js';
+import { isHl } from '../highlights/keys.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -71,7 +72,7 @@ const _el = (tag, cls, text) => {
 // The draft and a blank project (the owner, V28.3 (a)): not a talking head, and not before the store
 // has read what is open.
 // (phase V33.1) Nor a highlights project: its crumbs are its own.
-const _hl = (k) => /^hl_/.test(String(k || ''));
+const _hl = isHl;
 function _allowed() {
   return Store.isReady() && !WK.projectIdOf(Store.key() || '') && !_hl(Store.key());
 }

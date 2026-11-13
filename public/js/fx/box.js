@@ -8,6 +8,8 @@
      windowOf(c, main, sw, sh, W, H) -> { cx, cy, w, h, angle }   (the frame's pixels, its middle; angle in degrees)
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { isPlaced } from '../timeline/rules.js';
+
 const _crop = (c) => {
   const k = c && c.crop;
   return (k && !k.off && +k.w > 0 && +k.h > 0) ? k : null;
@@ -16,7 +18,7 @@ const _crop = (c) => {
 export function windowOf(c, main, sw, sh, W, H) {
   const whole = { cx: W / 2, cy: H / 2, w: W, h: H, angle: 0 };
   if (main || !c) return whole;
-  const placed = c.tw != null && +c.tw > 0;
+  const placed = isPlaced(c);
   const K = _crop(c);
   if (!placed && !K) return whole;
   if (!(sw > 0 && sh > 0)) return whole;

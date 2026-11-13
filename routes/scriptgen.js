@@ -63,10 +63,10 @@ const AGENT = require('../lib/mv3-agent');
 
 const router = express.Router();
 
-// The fewest lines a generated script is written and saved with. The scenarios store itself
-// takes three (routes/scen3.js MIN_LINES); this is the generator's own rule. Named here because
-// the wizard has to say so BEFORE spending a generation, not after.
-const MIN_LINES = 5;
+// (V91 block 6, the owner's (чк16)) The fewest lines a scenario is saved with is the scenarios store's (routes/scen3.js
+// MIN_LINES, three) - one number. The form offers scripts of FORM_LINES lines and up: a choice of the form, not a gate.
+const MIN_LINES = scen3.MIN_LINES;
+const FORM_LINES = 5;
 
 const _jobs = {};
 const _newJobId = () => 'gj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -247,7 +247,7 @@ router.get('/scriptgen/models', (_req, res) => {
     // (V37) No models to choose: the agents' ladder writes, its first step first - for the countdown and the form's line.
     ladder: AGENTS.ladder(), effort: EFFORT,
     tones: WM.TONES,
-    scenes: { min: Math.max(WM.SCENES_MIN, MIN_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
+    scenes: { min: Math.max(WM.SCENES_MIN, FORM_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
     defaults: WM.DEFAULTS,
     minLines: MIN_LINES,
   });

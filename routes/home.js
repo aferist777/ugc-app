@@ -103,7 +103,7 @@ router.get('/home/projects', (_req, res) => {
         for (const f of ready) {
           if (it.thumb) break;
           if (f.thumb && onDisk(f.thumb)) { it.thumb = IMG_RE.test(f.thumb) ? _thumbSrc(String(f.thumb).split('?')[0]) : f.thumb; break; }
-          const ft = timelines['hl_' + hl.id + '_' + f.n];
+          const ft = timelines[require('../public/js/highlights/keys.js').fragKey(hl.id, f.n)];
           it.thumb = ft ? _thumbOf(ft) : null;
         }
       } else if (pid && kindOfProject.get(pid) === 'scenarios') {

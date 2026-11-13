@@ -29,6 +29,7 @@ import { hexToAss, assTime, assText } from './ass.js';
 import { drawnPage, boxOf } from './place.js';
 import { meter, padOf } from './measure.js';
 import { assFace, fontOf } from './fonts.js';
+import { APPEAR_AS } from './page-fx.js';
 
 // ── Small things ────────────────────────────────────────────────────────────
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -116,8 +117,7 @@ export const LEAVE = {
   flicker: { by: 'block', steps: 24, f: (p) => ({ a: p <= 0 ? 1 : [1, 0.3, 1, 0, 0.8, 0, 0, 0.5, 0, 0][Math.min(9, Math.floor(p * 10))] }) },
 };
 
-// The old way a text line arrived (`appear`, K3), read as an entrance when the line has none of the new.
-const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
+// The old way a text line arrived (`appear`, K3), read as an entrance when the line has none of the new (page-fx.js APPEAR_AS).
 // `at-once` (phase V49): an entrance chosen to be none - the old way goes too.
 const enterOf = (st) => (st.enter === 'at-once' ? 'none' : st.enter && st.enter !== 'none' ? st.enter : APPEAR_AS[st.appear] || 'none');
 

@@ -22,13 +22,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { effectOf, COL_ID, colThen, MOSAIC_BLOCK, SWING_ECHO, optsOf } from './effects.js';
+import { isStillSrc, isPlaced } from '../timeline/rules.js';
 
 export const FX_MAX = 20;
 /** (block 4c) The longest words a card takes in one field. */
 export const TEXT_MAX = 120;
 const r3 = (x) => Math.round(x * 1000) / 1000;
-const STILL_RE = /\.(jpe?g|png|webp|avif|bmp)$/i;
-const _still = (c) => !!c && STILL_RE.test(String(c.src || '').split('?')[0]);
+const _still = (c) => !!c && isStillSrc(c.src);
 const _rev = (c) => !!(c && c.reversed && !_still(c));
 const _sp = (c) => (+(c && c.speed) > 0 ? +c.speed : 1);
 
@@ -250,7 +250,7 @@ export function placeEffect(c, e, from, to) {
 /** The clip's middle for its effects, shares of the frame (see the header). */
 export function anchorOf(c, main) {
   if (main) return { x: 0.5, y: 0.5 };
-  const placed = c && c.tw != null && +c.tw > 0;
+  const placed = isPlaced(c);
   const crop = !!(c && c.crop && !c.crop.off);
   if (!placed && !crop) return { x: 0.5, y: 0.5 };
   const x = c.tx == null ? 0.5 : Math.max(0, Math.min(1, +c.tx));

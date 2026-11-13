@@ -37,7 +37,7 @@ import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys, placed, keepMotion } from '../captions/preset-use.js';
-import { shownEnter, PAGE_LEAVES, pairNow } from '../captions/page-fx.js';
+import { shownEnter, PAGE_LEAVES, pairNow, APPEAR_AS } from '../captions/page-fx.js';
 import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
@@ -54,6 +54,7 @@ import * as WordEdit from './word-edit.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as WK from './workshop.js';
 import { isStill } from './store.js';
+import { isPlaced as _isPlaced } from '../timeline/rules.js';
 import * as C from './controls.js';
 import * as M from './music.js';
 import { setOpenColumn, columnMax } from './layout.js';
@@ -241,10 +242,7 @@ const CROPS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right'],
 // Two things are left to the panel. A soft edge, because it is a look rather than a place and
 // the mouse has nothing to grab for it. And the way back to full frame, because dragging to
 // EXACTLY the whole frame is the one move a mouse cannot make.
-// PLACED IS `tw` HAVING A VALUE AT ALL, and not "smaller than the frame": anchored by its
-// middle, an insert as wide as the film is still a placement - it can be moved off centre,
-// turned, and hung over the edge. `tw: null` is the unplaced state, and the only one.
-const _isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
+// PLACED IS `tw` HAVING A VALUE AT ALL (js/timeline/rules.js isPlaced, the render's rule too).
 
 function _pipRows(host, track, c) {
   const set = (k, v) => setB(track.id, c.id, k, v);
@@ -886,8 +884,6 @@ const LEAVE_OPTS = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoo
   ['sink', 'Sink'], ['to-left', 'To the left'], ['to-right', 'To the right'], ['fall', 'Fall'], ['blur', 'Blur'], ['stretch', 'Stretch'],
   ['wipe', 'Wipe'], ['mask-sink', 'Slot'], ['rows', 'Line by line'], ['words', 'Word by word'], ['letters', 'Letter by letter'],
   ['letters-fall', 'Letters fall'], ['backspace', 'Backspace'], ['glitch', 'Glitch'], ['flicker', 'Flicker']];
-// The old way a text line arrived, shown as its entrance (text-fx.js reads it so).
-const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
 const _secs = (v) => (Math.round(v * 100) / 100) + ' s';
 
 /** What choosing `v` in Behind writes, for a look that is `st` now: a box or a plate, never both; one that would be clear is given
