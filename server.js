@@ -52,6 +52,19 @@ const PROGRAM = require('./lib/app-version').current();
 }
 // The format this program writes and the program that opened the library last (lib/library-format.js).
 try { LIB_FORMAT.stamp(ROOT_DIR, PROGRAM); } catch (e) { console.warn('[format] the library was not stamped: ' + e.message); }
+// (V91 block 5) What nothing reads any more goes from the library, once, each file copied into backups/ first
+// (lib/library-tidy.js); and the moves older than 30 days are forgotten (lib/moves.js).
+try {
+  const t = require('./lib/library-tidy').run(ROOT_DIR);
+  if (t) {
+    console.log(`[tidy] the library tidied (${t.backup || 'nothing to copy'}): ${t.keys} keys and ${t.entries} entries of the`
+      + ` window's memory, ${t.settings} settings, ${t.cats} folder orders, ${t.files} stores, ${t.owner} files' owner,`
+      + ` ${t.renders} finished renders' timelines, ${t.caches} caches`);
+    for (const f of t.failed) console.warn('[tidy] not done, tried again at the next start - ' + f);
+  }
+} catch (e) { console.warn('[tidy] ' + e.message); }
+try { const n = require('./lib/moves').prune(); if (n) console.log(`[moves] ${n} moves older than 30 days forgotten`); }
+catch (e) { console.warn('[moves] ' + e.message); }
 const { generateMissingThumbs } = require('./lib/helpers');
 // The project list and the folders in projects/ agree before anything reads either: a folder
 // carried over from another library joins the list, a listed folder that is gone leaves it.
@@ -216,9 +229,16 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
     require('./lib/thumbs').sweepOldSizes();
 
-    // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go.
-    try { require('./lib/fx-bake').sweep(Object.values((require('./lib/merge-store').read() || {}).timelines || {})); }
-    catch (e) { console.warn('[fx-bake] sweep failed:', e.message); }
+    // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go; (V91 block 5) so do the pitch copies
+    // no clip names (lib/pitch-copy.js). Never on a store read as empty - a timeline unread is not a timeline gone.
+    let timelines = [];
+    try { timelines = Object.values((require('./lib/merge-store').read() || {}).timelines || {}); }
+    catch (e) { console.warn('[sweep] the timelines were not read:', e.message); }
+    if (timelines.length) {
+      try { require('./lib/fx-bake').sweep(timelines); } catch (e) { console.warn('[fx-bake] sweep failed:', e.message); }
+      try { const n = require('./lib/pitch-copy').sweep(timelines); if (n) console.log(`[pitch] ${n} copies no clip names went`); }
+      catch (e) { console.warn('[pitch] sweep failed:', e.message); }
+    }
     try { require('./lib/fx-moments').sweep(); } catch (e) { console.warn('[fx-moments] sweep failed:', e.message); }
 
     // A picture Merge asked for is watched by the server, not by the page - so a watcher is a

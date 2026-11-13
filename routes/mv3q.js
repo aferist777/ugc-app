@@ -234,7 +234,8 @@ async function runBlank(item) {
     const it = t.items.find(x => x.id === item.id);
     if (it) {
       it.phase = null;
-      if (ok) { it.status = 'done'; it.url = toUrl(final); it.warning = warning; }
+      // (V91 block 5, (чк15)) A finished entry lets go of its copy of the timeline: only a failed one is tried again.
+      if (ok) { it.status = 'done'; it.url = toUrl(final); it.warning = warning; delete it.timeline; }
       else { it.status = 'failed'; it.error = error; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }
@@ -437,6 +438,9 @@ router.post('/mv3q/retry/:id', (req, res) => {
   const it = s.items.find(x => x.id === String(req.params.id || ''));
   if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
   if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
+  if (!(it.timeline && Array.isArray(it.timeline.tracks))) {
+    return res.status(409).json({ success: false, error: 'This render is finished - render it again from its project.' });
+  }
   // Trying again is asking for it: armed, and started at once if the encoder is idle.
   it.status = 'queued'; it.armed = true;
   it.error = null; it.url = null; it.percent = 0; it.remain = null; it.phase = null;
