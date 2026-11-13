@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — a heard caption's WORDS, one by one (phase K10b, 2026-10-03).
+   MERGE v3 — a heard caption's WORDS, one by one.
 
    Under the line's text in the strip, its words as chips: the word and, small, where it starts. A chip
    pressed is PICKED and the preview goes to its start - exactly there, the sound too (preview-b seek
-   `exact`); nothing plays by itself (the owner's answer 4): Space plays, and a preview already playing goes
+   `exact`); nothing plays by itself: Space plays, and a preview already playing goes
    on playing, from that word. The picked word has a row of its own: the word in a field, and
      A  make it stand out (`k`) - a look, not a correction          K
      ✂  cut it in two at the playhead                               S
@@ -76,7 +76,7 @@ export function leave() {
     const e = S.edit;
     const typed = String(e.value == null ? '' : e.value);
     // Refused, it cannot stay on screen: the pick is moving to another line, whose strip replaces this one. So it
-    // is said in a note that stays until it is read, with what was typed to put in again (review K10) - opened
+    // is said in a note that stays until it is read, with what was typed to put in again - opened
     // once the new pick is painted, over it on the timeline, and not closed by the scrolling that brings it in.
     if (!_commit('none')) {
       const why = (S.msg && S.msg.text) || 'That cannot be done';
@@ -96,7 +96,7 @@ export function leave() {
 /**
  * The focus onto this caption's words (Enter in its text) - kept through the paint the text's change makes.
  * True when the words of that caption are on screen and took it; false when they are not (a line whose words
- * no longer spell its text has no words shown) - the caller keeps the focus somewhere then (review K10).
+ * no longer spell its text has no words shown) - the caller keeps the focus somewhere then.
  */
 export function focusList(clipId, later) {
   if (S.clip === clipId && _list && _list.isConnected) {
@@ -167,7 +167,7 @@ export function paint(host, track, clip, opts) {
       const at = +w.s || 0;
       // An open field is written first - which repaints the strip: the word is found again by its start.
       // A refused one keeps the field, its words said under it, and nothing else happens: picking another word
-      // would throw the correction away without a word (review K10).
+      // would throw the correction away without a word.
       if (S.edit && !_commit('none')) { _focusField(); return; }
       if (_list) _list.focus({ preventScroll: true });
       let j = i;
@@ -242,10 +242,10 @@ function _paintPick() {
   f.addEventListener('input', () => { if (S.edit && f.__edit === S.edit) S.edit.value = f.value; });
   f.addEventListener('keydown', _fieldKeys);
   // Kept when the focus leaves it - but not when only the WINDOW does (Alt+Tab): the field still has the focus
-  // inside the page, and taking it away there left nothing focused, where Delete takes the whole line.
+  // inside the page, and taking it away there would leave nothing focused, where Delete takes the whole line.
   f.addEventListener('blur', () => { if (!_painting && S.edit && f.__edit === S.edit && document.activeElement !== f) _commit('none'); });
   row.appendChild(f);
-  // (phase V73 block 5, 5b) ✂ ⇥ ✕ + as Lucide's icons (`ico`); "A" - the mark's own letter - stays a letter
+  // ✂ ⇥ ✕ + as Lucide's icons (`ico`); "A" - the mark's own letter - stays a letter
   const btn = (label, title, fn, off, cls, ico) => {
     const b = _el('button', 'mv3-wd-btn u-btn is-s is-icon' + (cls ? ' ' + cls : ''), ico ? null : label);
     if (ico) { b.innerHTML = icon(ico, 14); b.setAttribute('aria-label', title); }
@@ -258,7 +258,7 @@ function _paintPick() {
     b.addEventListener('pointerdown', (e) => e.preventDefault());
     // An open field is kept first, back onto the list (a refused one stops here, its words said); the list keeps
     // the focus after the operation too - a focus left on nothing makes the next Delete the TIMELINE's, and it
-    // takes the whole line (review K10).
+    // takes the whole line.
     b.addEventListener('click', () => { if (S.edit && !_commit('list')) return; fn(); if (!S.edit) _keepFocus(); });
     row.appendChild(b);
     return b;
@@ -370,8 +370,8 @@ function _commit(then) {
     if (!r || r.why) { _say((r && r.why) || 'That cannot be done'); return false; }
     W = r.words || [];
     // An edit that gives the same words back (two spaces where one was) is no change: the store would make none
-    // and paint nothing, and the field would stay focused belonging to no edit - typing and Enter did nothing
-    // (review K10). It goes the way of an unchanged field.
+    // and paint nothing, and the field would stay focused belonging to no edit, typing and Enter doing nothing
+    // It goes the way of an unchanged field.
     if (_sameWords(W, S.words)) op = null;
   }
   // The words the field made begin at `first`; `made` of them (a word with a space is two, marks alone none).

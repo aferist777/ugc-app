@@ -1,11 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   WHOSE CONVERSATION A CHAT IS (phase V64 block 4, the owner 2026-10-31, (зг6), (зг11): "давай там сделаем тоже чаты в
-   попапах - это будут черновые и генерации сразу сохраняться будут в generated. обычные ни к чему непривязанные чаты. мы
-   создадим попапы с чатами и они будут общие как для merge так и для library"; (зг11) - one unbound conversation per chat,
-   the same as Merge's draft's).
+   WHOSE CONVERSATION A CHAT IS - in the Library one unbound conversation per chat, the same as Merge's draft's.
 
    The chats (chat-shell.js, picchat.js, vidchat.js) ask THIS module what their conversation is - never the store directly:
-     in Merge        the open project, as before - the store's key, its title, whether it is the draft, its timeline
+     in Merge        the open project - the store's key, its title, whether it is the draft, its timeline
      in the Library  useDraft(): THE draft's conversation - Merge's draft's key (POST /api/mv3/timeline/new {draft:true}, the
                      one there is, never a new one beside it), so the server keeps it as the drafts' one conversation per
                      chat (lib/mv3-chat.js threadOf); no timeline, nothing laid anywhere - what is made lies in IMAGES ->
@@ -53,7 +50,7 @@ export function onChange(fn) {
   if (_draft && _draft.key) fn();
 }
 /** Where an Alerts row of a chat's result leads (`view` 'pictures' | 'videos'): Merge's project with the chat open - or, from
- *  the Library (phase V64 block 4, (зг12)), the Library: IMAGES / VIDEO with the window open; once the result is filed the
+ *  the Library, the Library: IMAGES / VIDEO with the window open; once the result is filed the
  *  row leads to the folder it lies in, outlined (js/alerts-bell.js _hrefOf, ?reveal=). */
 export function whereOf(key, view) {
   if (_draft) {

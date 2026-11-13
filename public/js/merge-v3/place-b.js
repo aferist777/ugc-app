@@ -25,7 +25,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { selectedOne, selectClipById, setClipFields, setClipsFields, selectedClips, multiCount } from './timeline-b.js';
-// (phase V75, the owner's (кп1) б, (кп4) а) A CROPPED piece's frame is cut HERE, on the preview: a side of the picked piece cuts
+// A CROPPED piece's frame is cut HERE, on the preview: a side of the picked piece cuts
 // its edge where it is - the piece stays where it was, only that edge moves (framing/crop.js dragFrame, placeFor through
 // crop-box.js cropPatches), a form chosen in the strip kept, Shift keeps the one it has -, and Alt + its middle slides the
 // picture inside a frame that stays (panFrame). The corners, the middle and the knob size, move and turn it as ever. Live
@@ -37,8 +37,8 @@ import { isPlaced as _isPlaced } from '../timeline/rules.js';
 const HANDLE = 9;      // half-width of a corner grip, in canvas pixels
 const SIDES = new Set(['n', 's', 'e', 'w']);
 const KNOB = 22;       // how far above the top edge the turning knob sits
-// (phase V73, the owner's (б1-10)) White, the selected thing's colour (--sel-ring: no colour of its own, (к16)), over the
-// dark line drawn under it, so a bright shot does not swallow it. It was yellow until then. Read at the first drawing, when
+// White, the selected thing's colour (--sel-ring), over the
+// dark line drawn under it, so a bright shot does not swallow it. Read at the first drawing, when
 // the page's sheets are surely there.
 let _mark = '';
 const mark = () => _mark || (_mark = getComputedStyle(document.documentElement).getPropertyValue('--sel-ring').trim() || '#ededed');
@@ -48,14 +48,14 @@ let _cv = null;
 let _drag = null;
 let _live = null;      // { id, patch } - the gesture in progress, not yet stored
 
-// (phase V51, point 1) A gesture held OUTSIDE the preview - the crop's frame dragged in the clip's settings (crop-box.js): a
-// patch per clip (several main clips picked are cropped by one frame, (пр44)), drawn by the preview, written on release.
+// A gesture held OUTSIDE the preview - the crop's frame dragged in the clip's settings (crop-box.js): a
+// patch per clip (several main clips picked are cropped by one frame), drawn by the preview, written on release.
 let _ext = null;       // Map id -> patch, or null
 
 /** The patch a gesture is holding for this clip, or null. The preview draws with it. */
 export const liveOf = (id) => (_live && _live.id === id ? _live.patch : (_ext && _ext.get(id)) || null);
 
-/** (phase V51) Patches held by a gesture elsewhere - a Map of id -> patch, or null when it is let go - and the preview drawn. */
+/** Patches held by a gesture elsewhere - a Map of id -> patch, or null when it is let go - and the preview drawn. */
 export function setLive(patches) {
   _ext = patches && patches.size ? patches : null;
   if (_api && _api.repaint) _api.repaint();
@@ -68,11 +68,11 @@ function _target() {
   if (!one) return _groupTarget();
   if (!one.clip || one.track.kind !== 'video') return null;
   const r = _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
-  // (phase V49) A main clip that is not a PiP has no grips either (preview-b.js `nogrip`): it moves only as a PiP.
+  // A main clip that is not a PiP has no grips either (preview-b.js `nogrip`): it moves only as a PiP.
   return r && !r.band && !r.nogrip ? { track: one.track, clip: one.clip, r } : null;
 }
 
-// (phase V49, (пр9)) SEVERAL MAIN CLIPS PICKED - cut silence's pieces, by the band or Shift: the PiP'd ones among them move
+// SEVERAL MAIN CLIPS PICKED - cut silence's pieces, by the band or Shift: the PiP'd ones among them move
 // together. The grips are on the one on screen; what the gesture does to it - moved by so much, sized by so much, turned by
 // so much - is done to each of them from where each was, in one step.
 function _groupTarget() {
@@ -112,7 +112,7 @@ function _local(p, r) {
   return { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) };
 }
 
-// `sides` - a cropped piece: its edges, between the corners, are taken too (phase V75).
+// `sides` - a cropped piece: its edges, between the corners, are taken too.
 function _partAt(p, r, sides) {
   const l = _local(p, r);
   const hw = r.dw / 2, hh = r.dh / 2;
@@ -128,7 +128,7 @@ function _partAt(p, r, sides) {
 }
 const _cut = (t) => !!(t && cropActive(t.clip));
 
-// (phase V75) A gesture on a cropped piece's frame: a side ('n' 's' 'e' 'w') or 'pan' (Alt + its middle). False when its file is
+// A gesture on a cropped piece's frame: a side ('n' 's' 'e' 'w') or 'pan' (Alt + its middle). False when its file is
 // not loaded yet - the press is then an ordinary one.
 function _beginCrop(t, p, part, e) {
   const items = t.group ? t.group.filter(x => cropActive(x.clip)) : [{ track: t.track, clip: t.clip }];
@@ -176,7 +176,7 @@ function _pick(p) {
   const all = [...rects.entries()];
   for (let i = all.length - 1; i >= 0; i--) {
     const [id, r] = all[i];
-    // (phase V65; V74) A pattern covers the whole frame: a press goes through it to what is under it (it is chosen in the strip
+    // A pattern covers the whole frame: a press goes through it to what is under it (it is chosen in the strip
     // of main video).
     if (r.nopick) continue;
     const l = _local(p, r);
@@ -215,7 +215,7 @@ function _begin(t, p, part, e) {
     // against: dragging to twice that distance is twice the width.
     grip: Math.max(4, Math.hypot(t.r.dw / 2, t.r.dh / 2)),
     aim0: Math.atan2(p.y - t.r.cy, p.x - t.r.cx),
-    // (V49) The other PiP'd main clips picked with it, each from where it was.
+    // The other PiP'd main clips picked with it, each from where it was.
     group: t.group ? t.group.map(x => ({ track: x.track.id, id: x.clip.id, base: _baseOf(x.clip, t, at0) })) : null,
   };
   // Every gesture carries the whole placement, so the one that lifts a clip off the frame
@@ -234,10 +234,10 @@ function _down(e) {
   const part = t ? _partAt(p, t.r, _cut(t)) : '';
   // The selected picture's grips come first...
   if (t && (part === 'size' || part === 'turn')) { _begin(t, p, part, e); e.preventDefault(); return; }
-  // ...(phase V75) a cropped piece's sides, and Alt + its middle...
+  // ...a cropped piece's sides, and Alt + its middle...
   const cropPart = SIDES.has(part) ? part : (part === 'move' && e.altKey && _cut(t)) ? 'pan' : '';
   if (cropPart && _beginCrop(t, p, cropPart, e)) { e.preventDefault(); return; }
-  // ...then the captions, drawn over every picture (phase V30, block 3: cap-place.js picks and moves them)...
+  // ...then the captions, drawn over every picture (cap-place.js picks and moves them)...
   if (_api.caption && _api.caption(e, p)) return;
   if (t) {
     // A BAND ON TOP IS PICKED BY CLICKING IT, even over the selected picture: it covers that part
@@ -279,8 +279,8 @@ function _move(e) {
   const b = _drag.base;
   // A CLICK IS NOT A PLACEMENT. Picking a picture must leave it exactly as it was - so until
   // the pointer has actually travelled, this writes nothing and the release below has nothing
-  // to commit. Without it, selecting a full-frame clip quietly turned it into an insert and
-  // spent an undo step doing it.
+  // to commit. Without it, selecting a full-frame clip would quietly turn it into an insert and
+  // spend an undo step doing it.
   if (!_drag.moved && Math.hypot(e.clientX - _drag.pg0.x, e.clientY - _drag.pg0.y) < 3) return;
   _drag.moved = true;
 
@@ -309,7 +309,7 @@ function _move(e) {
 function _up() {
   if (!_drag) return;
   if (_drag.kind === 'crop') {
-    // (phase V75) The frame written once, then the live one let go - one undo step.
+    // The frame written once, then the live one let go - one undo step.
     const d = _drag;
     _drag = null;
     if (d.moved && d.patches && d.patches.length) setClipsFields(d.patches);
@@ -320,7 +320,7 @@ function _up() {
   _drag = null;
   _live = null;
   if (d.moved && Object.keys(patch).length && d.group) {
-    // (V49) Every PiP'd main clip picked: moved, sized and turned by as much as the one on screen - one step.
+    // Every PiP'd main clip picked: moved, sized and turned by as much as the one on screen - one step.
     const b = d.base;
     const dx = (patch.tx != null ? patch.tx : b.tx) - b.tx, dy = (patch.ty != null ? patch.ty : b.ty) - b.ty;
     const k = (patch.tw != null ? patch.tw : b.tw) / (b.tw || 1);
@@ -364,7 +364,7 @@ export function paintHandles(ctx) {
   ctx.translate(r.cx, r.cy);
   if (r.angle) ctx.rotate(r.angle * Math.PI / 180);
 
-  // A dark line under the yellow one, so the outline holds against a bright picture as well as
+  // A dark line under the white one, so the outline holds against a bright picture as well as
   // a dark one without borrowing a colour from either.
   ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)';
   ctx.strokeRect(-hw, -hh, r.dw, r.dh);
@@ -387,7 +387,7 @@ export function paintHandles(ctx) {
   };
   grip(-hw, -hh); grip(hw, -hh); grip(-hw, hh); grip(hw, hh);
   grip(0, -hh - KNOB, true);
-  // (phase V75) A cropped piece: a bar on the middle of each side - the sides cut it.
+  // A cropped piece: a bar on the middle of each side - the sides cut it.
   if (_cut(t)) {
     const bar = (x, y, w, h) => {
       ctx.beginPath();
@@ -409,7 +409,7 @@ export function paintHandles(ctx) {
  * @param canvas the preview's canvas
  * @param api    { rectOf(id), rects(), pad(), frame(), repaint(), caption(e, p), capHover(p) } - all in FRAME
  *               coordinates; `caption` takes a press on a page of captions (true when it did), `capHover` says the
- *               cursor over one (phase V30, block 3).
+ *               cursor over one.
  */
 export function wirePlace(canvas, api) {
   _cv = canvas;

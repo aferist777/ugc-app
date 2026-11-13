@@ -9,10 +9,10 @@
 //   DELETE /api/narrators/:id                  -> { success }
 //   POST   /api/narrators/:id/samples          { text, label } -> { narrator }
 //   POST   /api/narrators/:id/samples/upload   multipart file -> { jobId }
-//   POST   /api/narrators/:id/samples/link     { url } -> { jobId }   (its sound only, no login - phase V27)
-//   POST   /api/narrators/:id/samples/source   { sourceId } -> { narrator }  a Library source's words, free (V38)
+//   POST   /api/narrators/:id/samples/link     { url } -> { jobId }   (its sound only, no login)
+//   POST   /api/narrators/:id/samples/source   { sourceId } -> { narrator }  a Library source's words, free
 //   DELETE /api/narrators/:id/samples/:index   -> { narrator }
-//   POST   /api/narrators/:id/read             {} -> { jobId }  the samples not read yet - adds to the voice (V38; by
+//   POST   /api/narrators/:id/read             {} -> { jobId }  the samples not read yet - adds to the voice (by
 //                                                the agents' ladder, medium)
 //   PATCH  /api/narrators/:id/voice/:lineId    { text } -> { narrator }   a line of the voice corrected by hand
 //   DELETE /api/narrators/:id/voice/:lineId    -> { narrator }
@@ -82,7 +82,7 @@ router.get('/narrators/:id', (req, res) => {
     const rec = store.get(req.params.id);
     if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
     // The rendered block goes back too: it is what a model will actually be told, and being
-    // able to read that is the difference between tuning a narrator and guessing at it. (V38) The samples go with
+    // able to read that is the difference between tuning a narrator and guessing at it. The samples go with
     // their first lines only - the column shows no more - and a reading that runs is said, for a page opened later.
     const run = _reading(rec.id) ? _readingNow.get(String(rec.id)) : '';
     res.json({ success: true, narrator: store.view(rec), block: P.narratorBlock(rec),
@@ -127,10 +127,10 @@ router.delete('/narrators/:id/samples/:index', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
-// (phase V38, block D5) A SOURCE of the Library becomes a sample for nothing: its words were heard when it came in, so
+// A SOURCE of the Library becomes a sample for nothing: its words were heard when it came in, so
 // its transcript is the sample's text. Refused when this narrator has it already - by the source, by its link, or by
-// its words: the same video transcribed into a sample before (the owner's "black story" is the source "История по
-// черному - рабство древнего рима") overlaps it almost word for word, another video by a tenth at most.
+// its words: the same video transcribed into a sample before overlaps it almost word for word, another video by a
+// tenth at most.
 const _vocab = (t) => new Set(String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').slice(0, 300));
 function _sameWords(a, b) {
   const A = _vocab(a);
@@ -162,8 +162,7 @@ router.post('/narrators/:id/samples/source', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
-// A video or audio file becomes a sample by being transcribed. This is how Azazin was built:
-// his three samples are his own videos, and the words are what the analysis reads.
+// A video or audio file becomes a sample by being transcribed: the words are what the analysis reads.
 router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) => {
   const id = String(req.params.id);
   const file = req.file;
@@ -204,7 +203,7 @@ router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) =
   })();
 });
 
-// (phase V27, the owner 2026-10-12) A LINK becomes a sample the same way: only its sound is fetched (the
+// A LINK becomes a sample the same way: only its sound is fetched (the
 // best there is - the words are what is kept), into the same temp folder, transcribed and deleted. Any
 // site yt-dlp reads, without a login; the same video twice in one narrator is refused.
 router.post('/narrators/:id/samples/link', async (req, res) => {
@@ -258,11 +257,10 @@ router.post('/narrators/:id/samples/link', async (req, res) => {
   })();
 });
 
-// ── reading the new samples (phase V38) ─────────────────────────────────────
+// ── reading the new samples ─────────────────────────────────────────────────
 // ONE button, "Read new samples": the samples not read yet (all of them the first time), one call by the agents' ladder
 // at effort medium. What comes back is ADDED to the voice (lib/narrators-store.js applyReading) - a line it has already is
-// dropped. The samples read are marked, so a sample is never paid for twice. (V38's words and phrases beside the voice
-// were taken out by the owner, V38.1.)
+// dropped. The samples read are marked, so a sample is never paid for twice.
 
 const _readingNow = new Map();           // narratorId -> jobId, while a reading runs
 const _reading = (id) => { const j = _readingNow.get(String(id)); return !!(j && _jobs[j] && _jobs[j].state === 'running'); };
@@ -321,7 +319,7 @@ router.post('/narrators/:id/read', (req, res) => {
   })();
 });
 
-// ── the voice by hand (the owner's (д17): the app only adds, so a line is corrected or deleted here) ──
+// ── the voice by hand (the app only adds, so a line is corrected or deleted here) ──
 
 router.patch('/narrators/:id/voice/:lineId', (req, res) => {
   try {

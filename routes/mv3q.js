@@ -17,14 +17,14 @@
    the runner takes armed entries in the order they were queued; each row says how many are
    ahead.
 
-   A HIGHLIGHTS FRAGMENT (phase V33.4, the owner's (х38)-(х44); lib/highlights-render.js). Its entry carries
+   A HIGHLIGHTS FRAGMENT (lib/highlights-render.js). Its entry carries
    `hl: { id, n }` and comes in ARMED - the project bar's Render is asking for it - without arming anybody else's
    (addArmed). Its file is named after the fragment's timeline, not mv3q_<number>, and takes the place of the fragment's
    own earlier render (another file of that name is not touched: "(2)"); done, the fragment's record learns it. The
    project's renders are stopped together (stopWhere: the waiting ones taken out, the one under the encoder killed and
    its draft deleted) and gone on with together (armWhere - the Queue's "go on" on the project's row).
 
-   EXPORT'S RENDER (phase V73 block 4, the owner's (б4-2) а) is one such entry too: POST /mv3q/render puts the timeline in
+   EXPORT'S RENDER is one such entry too: POST /mv3q/render puts the timeline in
    line ARMED (addArmed) and starts it when the encoder is free; POST /mv3q/stop/:id stops one entry (stopWhere) - Export's
    Stop and Queue's. The page follows the entry through GET /mv3q (merge-v3/export-b.js).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -43,7 +43,7 @@ const { DATA_DIR } = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
-// (V50 speed, J) THE BADGE'S NUMBER without the list: every page asks it every 5 s, and the file is megabytes (a finished
+// THE BADGE'S NUMBER without the list: every page asks it every 5 s, and the file is megabytes (a finished
 // entry keeps its timeline). Counted whenever this module reads or writes the file; read again only when the file on the disk
 // is not the one counted - another writer (relocate rewrites its addresses) or none counted yet.
 let _count = null;   // { stamp, waiting, running }
@@ -97,7 +97,7 @@ function next() {
   return runBlank(item);
 }
 
-// (phase V33.4) Entries asked to stop while they were being prepared or rendered (stopWhere).
+// Entries asked to stop while they were being prepared or rendered (stopWhere).
 const _stopping = new Set();
 
 // Take an entry out of the list - one that was stopped.
@@ -109,7 +109,7 @@ function _drop(id) {
 }
 
 // Where an entry's file goes. A highlights fragment's is named after its timeline (lib/names.js, as the timeline's own
-// file) and takes the place of its own earlier render; (phase V73, the owner's (rn-1) а) anything else's is
+// file) and takes the place of its own earlier render; anything else's is
 // "<project title> <YYYY-MM-DD HH-MM>" - the title and the time of the press (lib/render-files.js nameFor: at most 60
 // characters, the title cut, the time whole, " (2)" when taken); renamed later by the viewer's Rename.
 function _finalFor(item) {
@@ -136,7 +136,7 @@ function _finalFor(item) {
 async function runBlank(item) {
   // The same preparation Export -> Render uses (lib/mv3b-job.js): captions included.
   const built = await JOB.prepare(item.timeline, item.id, item.adv);
-  // Stopped while it was being prepared (phase V33.4): it goes without a frame encoded.
+  // Stopped while it was being prepared: it goes without a frame encoded.
   if (_stopping.has(item.id)) {
     _stopping.delete(item.id);
     if (built.dispose) built.dispose();
@@ -196,7 +196,7 @@ async function runBlank(item) {
   _proc.on('close', async (code) => {
     _proc = null;
     built.dispose();
-    // Stopped under the encoder (phase V33.4): the entry goes, and its draft with it - nothing of it is left.
+    // Stopped under the encoder: the entry goes, and its draft with it - nothing of it is left.
     if (_stopping.has(item.id)) {
       _stopping.delete(item.id);
       JOB.dropDraft(out);
@@ -234,13 +234,13 @@ async function runBlank(item) {
     const it = t.items.find(x => x.id === item.id);
     if (it) {
       it.phase = null;
-      // (V91 block 5, (чк15)) A finished entry lets go of its copy of the timeline: only a failed one is tried again.
+      // A finished entry lets go of its copy of the timeline: only a failed one is tried again.
       if (ok) { it.status = 'done'; it.url = toUrl(final); it.warning = warning; delete it.timeline; }
       else { it.status = 'failed'; it.error = error; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }
     write(t);
-    // (phase V33.4) A highlights fragment's render: its record learns it (lib/highlights-render.js).
+    // A highlights fragment's render: its record learns it (lib/highlights-render.js).
     if (ok && it && it.hl) {
       try { require('../lib/highlights-render').rendered(it, final); }
       catch (e) { console.warn('[mv3q] a fragment did not learn of its render:', e.message); }
@@ -282,7 +282,7 @@ function summarise(item) {
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 router.get('/mv3q', (req, res) => {
-  // (V50 speed, J) ?count=1 - the strip's badge: the number alone, from the count kept above - the list's `waiting`. A row
+  // ?count=1 - the strip's badge: the number alone, from the count kept above - the list's `waiting`. A row
   // marked running with nothing running is a leftover the full read below puts back first.
   const countOnly = !!req.query.count;
   if (countOnly) {
@@ -301,21 +301,21 @@ router.get('/mv3q', (req, res) => {
   for (const it of s.items) {
     if (it.status === 'running' || (it.status === 'queued' && it.armed)) ahead.set(it.id, line++);
   }
-  // (phase V33.4) A highlights fragment's entry says its project's name as it is now - the Queue shows them as one row.
+  // A highlights fragment's entry says its project's name as it is now - the Queue shows them as one row.
   const names = new Map();
   const nameOf = (id) => {
     if (!names.has(id)) { let e = null; try { e = require('../lib/highlights-store').entry(id); } catch (err) { /* no store */ } names.set(id, e ? e.name : ''); }
     return names.get(id);
   };
-  // (V50 speed, J) Without its `timeline` - the frozen job is for the runner; no page reads it from the list (Queue's window,
-  // Export's follow, the shell's question before quitting), and it was nearly all of a 2 MB answer.
+  // Without its `timeline` - the frozen job is for the runner; no page reads it from the list (Queue's window,
+  // Export's follow, the shell's question before quitting), and it would be nearly all of a 2 MB answer.
   const items = s.items.map(it => ({ ...it, timeline: undefined,
     ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   if (countOnly) return res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy() });
   // `busy`: any render at all - routes/mv3b.js renders outside the queue (lib/render-busy.js); the shell asks about it before
-  // the app stops (desktop/main.js, phase V23).
+  // the app stops (desktop/main.js).
   res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy(), items });
 });
 
@@ -325,7 +325,7 @@ router.post('/mv3q/add', (req, res) => {
     if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
       return res.status(400).json({ success: false, error: 'an entry needs its timeline' });
     }
-    // (phase V28.4) Not with a clip whose file is gone - the render would refuse it anyway (lib/mv3b-job.js prepare).
+    // Not with a clip whose file is gone - the render would refuse it anyway (lib/mv3b-job.js prepare).
     const gone = require('../lib/mv3b-job').missingCount(b.timeline);
     if (gone) {
       return res.status(409).json({ success: false, missing: gone,
@@ -366,7 +366,7 @@ router.delete('/mv3q/:id', (req, res) => {
 // it while the encoder is busy with another render is fine - the entries are armed
 // and take their turn. Pressing it twice does not start a second runner.
 router.post('/mv3q/run', (req, res) => {
-  // (phase V33.4, the owner's (х44а)) `hl`: only that highlights project's entries - interrupted or failed - go on; nobody
+  // `hl`: only that highlights project's entries - interrupted or failed - go on; nobody
   // else's waiting ones are started (the Queue's "go on" on the project's row).
   const hl = String((req.body || {}).hl || '');
   if (hl) {
@@ -384,14 +384,14 @@ router.post('/mv3q/run', (req, res) => {
     if (it.status === 'queued' && !it.armed) { it.armed = true; it.interrupted = false; armed++; }
   }
   write(s);
-  // (phase V23) Whether one was ALREADY rendering - read before this call starts one, or a render it just started
+  // Whether one was ALREADY rendering - read before this call starts one, or a render it just started
   // answered `already` too.
   const was = !!_active;
   if (!was) next();
   res.json({ success: true, already: was, started: !was && !!_active, freed, armed });
 });
 
-// (phase V73 block 4, the owner's (б4-2) а) EXPORT'S RENDER is ONE entry of this queue: in line at once and ARMED - the
+// EXPORT'S RENDER is ONE entry of this queue: in line at once and ARMED - the
 // press asks for it - without arming anybody else's waiting entries (addArmed), started now when the encoder is free. So
 // the window may be closed while it goes, Queue shows it, and it is stopped by its own Stop (POST /mv3q/stop/:id) in the
 // window or in Queue. The checks of `add` first: a timeline, and no clip whose file is gone.
@@ -413,7 +413,7 @@ router.post('/mv3q/render', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V73 block 4) ONE entry stopped - Export's Stop and Queue's: waiting, it is taken out; under the encoder, ffmpeg is
+// ONE entry stopped - Export's Stop and Queue's: waiting, it is taken out; under the encoder, ffmpeg is
 // killed and its entry and draft go once it has exited (runBlank); in its finishing passes it is not stopped - only an
 // encode can be cut off - and is kept (`finishing`). A finished or failed one is left as it is (`finished`).
 router.post('/mv3q/stop/:id', (req, res) => {
@@ -485,7 +485,7 @@ function removeByUrl(url) {
   return before - s.items.length;
 }
 
-// ── Entries put in by the server (phase V33.4: a highlights project's Render) ─
+// ── Entries put in by the server (a highlights project's Render) ─────────────
 // In line at once, ARMED - the press was asking for them - and the runner woken; nobody else's waiting entries are armed.
 // `list`: [{ key, title, timeline, adv, dur, hl, rev }]. Returns the new ids, in order.
 function addArmed(list) {
@@ -533,7 +533,7 @@ function forgetWhere(pred) {
   return before - s.items.length;
 }
 
-// Stopped (the owner's (х43)): the waiting ones taken out, the one under the encoder killed - its entry and its draft go
+// Stopped: the waiting ones taken out, the one under the encoder killed - its entry and its draft go
 // when ffmpeg has exited (runBlank). Returns { removed, stopping } - stopping: one was under the encoder.
 function stopWhere(pred) {
   const removed = removeWhere(pred);
@@ -575,15 +575,15 @@ function entriesOf(pred) {
   return s.items.filter(pred).map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null }));
 }
 
-// A ROW INTERRUPTED (phase V23): an entry the app was closed or restarted in the middle of goes back to waiting for
-// Render all - it stayed armed and "next" for ever, and Render all only counts what is not armed.
+// A ROW INTERRUPTED: an entry the app was closed or restarted in the middle of goes back to waiting for
+// Render all - left as it was it would stay armed and "next" for ever, and Render all only counts what is not armed.
 function _interrupted(it) {
   if (it.url) { it.status = 'done'; return; }
   it.status = 'queued'; it.armed = false; it.interrupted = true;
   it.percent = 0; it.remain = null; it.phase = null;
 }
-// (phase V33.4, the owner's (х44)) So do the ones that were IN LINE - armed, not reached yet: nothing starts the runner
-// when the server starts, and left armed they said "in line · next" for ever. Nothing goes on by itself after a start.
+// So do the ones that were IN LINE - armed, not reached yet: nothing starts the runner
+// when the server starts, and left armed they would say "in line · next" for ever. Nothing goes on by itself after a start.
 try {
   const s0 = read();
   if (s0.items.some(x => x.status === 'running' || (x.status === 'queued' && x.armed)) || s0.running) {
@@ -592,7 +592,7 @@ try {
     write(s0);
   }
 } catch (e) { console.warn('[mv3q] could not put interrupted renders back in line:', e.message); }
-// What a render interrupted by a closed app or a crash left: nothing renders while the server starts (phase V23).
+// What a render interrupted by a closed app or a crash left: nothing renders while the server starts.
 try { JOB.sweepDrafts(); } catch (e) { console.warn('[mv3q] could not clear unfinished renders:', e.message); }
 
 module.exports = router;

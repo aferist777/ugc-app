@@ -14,7 +14,7 @@
 // stops when another row's play pauses it and when the demo runs out, and either would leave
 // a pause sign standing over silence.
 
-// (phase V73 block 2, step 2b) "no voices yet" as the shared part (css/app-shell.css .u-empty)
+// "no voices yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
 
@@ -59,7 +59,7 @@ function _row(it) {
   });
   const mark = () => {
     const on = !audio.paused;
-    play.innerHTML = icon(on ? 'pause' : 'play', 12);   // (phase V73 block 6, (к18))
+    play.innerHTML = icon(on ? 'pause' : 'play', 12);
     play.title = (on ? 'Pause' : 'Play') + ' our demo';
     play.classList.toggle('is-playing', on);
     row.classList.toggle('is-playing', on);

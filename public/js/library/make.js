@@ -1,20 +1,18 @@
-// LIBRARY — the scenario generator: "New scenario" on the Scenarios shelf (phase E, the owner
-// 2026-09-29). What Library 2 was, moved to where scenarios are.
+// LIBRARY — the scenario generator: "New scenario" on the Scenarios shelf.
 //
 // TWO PARTS, in place of the scenario list. On the LEFT a column of sources - the long videos scripts are written
-// from - as LINES, not posters (phase V28.1, the owner: a podcast has no picture), with a 20px "+" over it that adds
+// from - as LINES, not posters (a podcast has no picture), with a 20px "+" over it that adds
 // one, and a sash between it and the right (its width remembered). On the RIGHT the "Generate script"
 // form; with no source chosen it writes from the topic alone ("without a source"). Choosing a source
 // puts ITS topics on the right instead; choosing a topic brings the form back, filled for that
 // fragment. Pressing the chosen source again lets go of it; "← topics" goes back from the form.
 //
-// THE FORM ON THE SHELF (phase V38.6, the owner 2026-10-24: "в левом столбце список сценариев и черновиков и готовых а с
-// правой стороны так: ... если черновик, то с полями. а источники показываем только, когда переходим в new scenario->narrator")
+// THE FORM ON THE SHELF. The sources are shown only in this layout ("New scenario -> narrator"), never on the shelf.
 // A draft selected in the Scenarios list shows THIS module's form on the right of the shelf: the form's node is moved
 // there (mount) and back (open) - one form, one state, two places. On the shelf "← topics" opens the whole layout on the
-// draft's source and its topics (the owner's (щ3)); a save or a discard hands the list back to the page.
+// draft's source and its topics; a save or a discard hands the list back to the page.
 //
-// PAID WORK IS NEVER LOST (the owner: drafts must not be lost). Everything slow is a job on the server
+// PAID WORK IS NEVER LOST. Everything slow is a job on the server
 // that this module polls, and every stage of a script is written into a draft on the server as it
 // lands (routes/scriptgen.js, the keepers). So before any paid step the draft is saved at once - a
 // form written without a source has no other address the answer could be filed under - and a
@@ -32,8 +30,8 @@ import * as HT from './hook-types.js';
 import * as Layers from '../layers.js';
 import { REALLY, MS } from '../really.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
-// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here", "reading…"
-// and "did not load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а).
+// The question at the button in place of the browser's confirm(); "nothing here", "reading…"
+// and "did not load" as the shared parts - the reason of a failed read is the popup in the corner.
 import { ask } from '../ask.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
@@ -59,7 +57,7 @@ let _stopArmed = '';      // the source whose cross says "really?" - the next pr
 const _srcJobs = new Map();
 const _srcLast = new Map();  // sourceId -> { text, err } - what its last job said, when it failed
 const _following = new Map();  // draftId -> { jobId, run, rows } - the stages this page follows
-let _embedded = false;         // (V38.6) the form stands on the Scenarios shelf, not in this layout
+let _embedded = false;         // the form stands on the Scenarios shelf, not in this layout
 
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
@@ -162,13 +160,13 @@ function _build() {
 
   $('mk-add').addEventListener('click', _openAddSource);
   _wireSash();
-  // Questions about a link left waiting before a reload are the add window's again (phase V28.1).
+  // Questions about a link left waiting before a reload are the add window's again.
   _loadAsks();
   // A row retried in Alerts - a source's way in going on again: its line says so at once, not at the next reload.
   window.addEventListener('ugc:alert-retried', () => { if (_built) _readSources().then(() => _paintSources()); });
   $('mk-mine').addEventListener('click', _mineTopics);
   $('mk-src-off').addEventListener('click', () => _chooseSource(null));
-  // (V38.6, (щ3)) On the shelf the source's topics are the whole layout's: the page opens it on that source.
+  // On the shelf the source's topics are the whole layout's: the page opens it on that source.
   $('mk-to-topics').addEventListener('click', () => {
     if (!_embedded) { if (_src) _showTopics(); return; }
     if (_gen && _gen.sourceId && _hooks.openSource) _hooks.openSource(_gen.sourceId);
@@ -178,7 +176,7 @@ function _build() {
   $('mk-src-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('mk-src-title').blur(); });
 
   $('mk-go').addEventListener('click', _runGo);
-  // (V38.5) Box 2: the hook the script is written from - picked above, edited here (the owner's (ш2)) - the number of
+  // Box 2: the hook the script is written from - picked above, edited here - the number of
   // lines and "Write scenario".
   $('mk-write').addEventListener('click', _runScript);
   $('mk-hook').addEventListener('input', () => { _gen.hook = $('mk-hook').value; _markUsed(); _paintGo(); _queueDraft(); });
@@ -186,7 +184,7 @@ function _build() {
   $('mk-ai').innerHTML = GEAR_SVG;
   $('mk-ai').addEventListener('click', _toAiSettings);
   $('mk-hooks-fold').addEventListener('click', () => { _hooksOpen = !_hooksOpen; _paintFold(); });
-  // (V38.4) How many hooks a press writes: kept in the draft, and as the last choice for the next new one.
+  // How many hooks a press writes: kept in the draft, and as the last choice for the next new one.
   const nSel = $('mk-hook-n');
   for (let n = HT.HOOK_COUNT.min; n <= HT.HOOK_COUNT.max; n++) {
     const opt = el('option', '', n + (n === 1 ? ' hook' : ' hooks'));
@@ -208,7 +206,7 @@ function _build() {
   // The narrators window says when a narrator was made, deleted or read again (js/library/narrators.js);
   // the form's list of them is rebuilt, keeping the choice while it still exists.
   document.addEventListener('lib:narrators', () => { if (_gen) _paintNarrators(); });
-  // A vertical or product removed on the Scenarios shelf (phase G4) leaves this form too, hidden or not:
+  // A vertical or product removed on the Scenarios shelf leaves this form too, hidden or not:
   // the server cleared the drafts' copies, and a stage landing later would save the form's copy back.
   document.addEventListener('lib:values-removed', (e) => {
     const { field, value } = (e && e.detail) || {};
@@ -218,7 +216,7 @@ function _build() {
   });
   // Closing the page is leaving the form: a save still waiting out its pause goes now.
   window.addEventListener('pagehide', () => { if (_saveT && _gen) _saveDraft({ keepalive: true }); });
-  // (V38) The "rewrite fragment" button stands by its selection: a scroll moves the words away from it.
+  // The "rewrite fragment" button stands by its selection: a scroll moves the words away from it.
   window.addEventListener('scroll', () => { if (_frag) _hideFragBtn(); }, true);
 }
 
@@ -233,7 +231,7 @@ export function init(hooks) { _hooks = hooks || {}; }
  */
 export async function open(opts) {
   _build();
-  mount(null);                                    // (V38.6) the form back in this layout
+  mount(null);                                    // the form back in this layout
   const o = opts || {};
   await _flushDraft();
   await Promise.all([_readSources(), _readDrafts()]);
@@ -246,7 +244,7 @@ export async function open(opts) {
 }
 
 /**
- * A source by its id - an Alerts row leads here (phase V28.1, ?shelf=scenarios&make=1&src=): its topics when it is a
+ * A source by its id - an Alerts row leads here (?shelf=scenarios&make=1&src=): its topics when it is a
  * source, its line in the column, lit, while it is being added or waits for a decision. `opening`: the layout was
  * just opened for it, and a form is put up when there are no topics to show.
  */
@@ -280,7 +278,7 @@ function _flashRow(id) {
 }
 
 /**
- * (V38.6) Where the form stands: `host` - the Scenarios shelf's right side - or, with null, this layout. One node moved,
+ * Where the form stands: `host` - the Scenarios shelf's right side - or, with null, this layout. One node moved,
  * so a stage it follows, a pause before a save and what is typed go with it.
  */
 export function mount(host) {
@@ -293,7 +291,7 @@ export function mount(host) {
   if (_embedded) { _hideFragBtn(); f.hidden = false; }
 }
 
-/** (V38.6) A draft in the form on the shelf - read as it is now. False when it could not be opened. */
+/** A draft in the form on the shelf - read as it is now. False when it could not be opened. */
 export async function openDraft(id) {
   _build();
   await _flushDraft();
@@ -301,9 +299,9 @@ export async function openDraft(id) {
   return _resumeDraft(id);
 }
 
-/** (V38.6) The draft the form on the shelf shows - '' when the form is not there. */
+/** The draft the form on the shelf shows - '' when the form is not there. */
 export const embeddedDraft = () => (_embedded && _gen && _gen.draftId ? String(_gen.draftId) : '');
-/** (V38.6) The draft the form holds, wherever it stands - the page selects it on the way back from the layout. */
+/** The draft the form holds, wherever it stands - the page selects it on the way back from the layout. */
 export const currentDraft = () => (_gen && _gen.draftId ? String(_gen.draftId) : '');
 
 /** Leave the layout: what is typed is saved; what runs keeps running. */
@@ -377,13 +375,13 @@ const _choosable = (it) => !!it && !it.progress && !_offer(it);
 function _stateLine(it) {
   const t = it.transcript || {};
   const way = it.intake || null;
-  // (phase V43) Its video stays on the disk and is not there any more.
+  // Its video stays on the disk and is not there any more.
   if (it.disk && it.disk.missing) return 'the file is not where it was';
   if (it.state === 'nospeech') return 'no speech - not a source';
   if (it.state === 'notopics') return 'no topics - not a source';
   if (it.state === 'error') {
     const cut = /interrupted/i.test(it.error || '') ? 'interrupted' : 'failed';
-    // Its way in is an Alerts row (phase V28.1): "retry" is there.
+    // Its way in is an Alerts row: "retry" is there.
     return way && way.alertId ? cut + ' - retry in Alerts' : cut;
   }
   if (it.state === 'downloading' || it.state === 'waiting') return 'downloading…';
@@ -432,7 +430,7 @@ function _paintProgress(box) {
   }
 }
 
-// A LINE (phase V28.1): a mark, the name, what it is at, its length and drafts, a cross at the top right. One being
+// A LINE: a mark, the name, what it is at, its length and drafts, a cross at the top right. One being
 // added has its share done and the time left, and is not pressed - its cross stops it, twice ("really?"). One with
 // nothing to write from offers to go onto Uploads.
 function _srcLine(it) {
@@ -468,7 +466,7 @@ function _srcLine(it) {
     bar.appendChild(fill);
     main.appendChild(bar);
   }
-  // (phase V43, the owner's (ё17а)) Its video stays on the disk and is not where it was: point at it again (the same file - its
+  // Its video stays on the disk and is not where it was: point at it again (the same file - its
   // words stay its own), or delete the source, with its transcripts or keeping them for the same file added again.
   if (it.disk && it.disk.missing && !p) {
     row.classList.add('offer');
@@ -497,7 +495,7 @@ function _srcLine(it) {
     main.appendChild(acts);
   }
   row.appendChild(main);
-  // (phase V73 block 2) the shared cross on the row; armed - "Really?" in the part's red fill
+  // the shared cross on the row; armed - "Really?" in the part's red fill
   const x = el('button', 'mk-x u-onpic is-del' + (p && _stopArmed === id ? ' is-armed' : ' u-x'), p && _stopArmed === id ? REALLY : '');
   x.type = 'button';
   if (p) {
@@ -512,7 +510,7 @@ function _srcLine(it) {
   row.appendChild(x);
   if (_choosable(it)) {
     row.addEventListener('click', () => _chooseSource(it));
-    // Its own menu (phase F2) - never Electron's.
+    // Its own menu - never Electron's.
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _sourceMenu(e, it); });
   } else row.addEventListener('contextmenu', (e) => e.preventDefault());
   return row;
@@ -534,7 +532,7 @@ async function _stopAdding(it) {
   setTimeout(async () => { await _readSources(); _paintSources(); }, 1200);
 }
 
-// Nothing to write from (phase V28.1): onto Uploads in Media, and the line goes.
+// Nothing to write from: onto Uploads in Media, and the line goes.
 async function _sourceToUploads(it, btn) {
   if (btn) btn.disabled = true;
   try {
@@ -545,7 +543,7 @@ async function _sourceToUploads(it, btn) {
   _paintSources();
 }
 
-// ── The sash between the column and the generator (phase V28.1) ──
+// ── The sash between the column and the generator ──
 const LS_SRC_W = 'lib_mk_src_w';
 const SRC_W = { def: 240, min: 170, max: 560 };
 const MAIN_MIN = 420;
@@ -626,7 +624,7 @@ function _detachGen() {
   if (_gen.draftId) _queueDraft();
 }
 
-// (phase V43) The video of a source that stays on the disk, pointed at again: the app's window hands the file's path over,
+// The video of a source that stays on the disk, pointed at again: the app's window hands the file's path over,
 // the server checks it is the same video (its print).
 function _relinkSource(it) {
   const inp = document.createElement('input');
@@ -648,9 +646,9 @@ function _relinkSource(it) {
   inp.click();
 }
 
-// (phase V43, (ё17а): "удалить с галочкой удаления расшифровок") A source whose video is gone from the disk: deleted - with its
-// transcripts, or keeping them (the box not ticked) for the same file added again, which then is not heard twice.
-// (phase V73 block 4, the owner's (б4-14) а) The shared question IN THE MIDDLE over the dimmed page (the update's and the
+// A source whose video is gone from the disk: deleted - with its transcripts (the box ticked), or keeping them (the box
+// not ticked) for the same file added again, which then is not heard twice.
+// The shared question IN THE MIDDLE over the dimmed page (the update's and the
 // speech model's - `.dr-back` + `.u-ask`): the question, what goes, the tick inside, "Cancel" left and the red "Delete" right.
 function _deleteMissing(it) {
   const back = el('div', 'dr-back');
@@ -695,7 +693,7 @@ function _deleteMissing(it) {
 
 async function _deleteSource(it, anchor) {
   const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
-  // (phase V43) A video that stays on the disk is never deleted by the app - only what the library holds goes.
+  // A video that stays on the disk is never deleted by the app - only what the library holds goes.
   const lines = [`Delete "${it.title}"?`, '',
     it.disk ? 'Its poster and its transcript are removed. Your video stays where it is on the disk (' + it.disk.path + ').'
       : `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
@@ -737,7 +735,7 @@ function _paintTopics(rec) {
   const box = $('mk-topic-list');
   box.textContent = '';
   const t = rec.transcript || {};
-  // (phase V73 block 2) No topics to show - the shared part, in the source's own words.
+  // No topics to show - the shared part, in the source's own words.
   if (_reading(rec)) {
     box.appendChild(emptyEl('Still being read. The topics can be found the moment the words are in.'));
     return;
@@ -799,7 +797,7 @@ function _paintTopics(rec) {
 const _draftFor = (sourceId, topicId) => _drafts.find(d =>
   String(d.sourceId) === String(sourceId) && String(d.topicId) === String(topicId)) || null;
 
-// ONE RENAME, wherever it is typed - the topics header or the source window (phase F2) - and
+// ONE RENAME, wherever it is typed - the topics header or the source window - and
 // everything this page shows the name in follows it: the card, the topics header, the form's
 // "from", the drafts. The server reads the name live for the scenarios and drafts it has.
 async function _renameSource(id, title) {
@@ -837,10 +835,10 @@ async function _saveTitle() {
   } catch (e) { if (_src && String(_src.id) === id) $('mk-title-saved').textContent = e.message; }
 }
 
-// ── A source's menu and its window (phase F2) ───────────────────────────────
+// ── A source's menu and its window ──────────────────────────────────────────
 // Right-click on a card: "change name" and "play", both into the same window - the video on the
 // left, the name on the right. "play" starts the video; "change name" puts the caret in the name
-// and leaves the video still (the owner, 2026-09-30).
+// and leaves the video still.
 let _menu = null;
 function _closeMenu() {
   if (!_menu) return;
@@ -1050,17 +1048,17 @@ async function _mineTopics() {
   if (!rec) return;
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  // Paid - a plain answer (б2-5); the question waits, so a job picked up meanwhile is not started twice.
+  // Paid - a plain answer; the question waits, so a job picked up meanwhile is not started twice.
   if ((rec.topics || []).length && !await ask($('mk-mine'), 'Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.', { yes: 'Find again', stay: true })) return;
   if (_srcJobs.has(id)) return;
   $('mk-mine').disabled = true;
   let run = null;
   try {
-    // (phase V37) By the agents' ladder (Admin -> AI settings), as every agent - no model is sent.
+    // By the agents' ladder (Admin -> AI settings), as every agent - no model is sent.
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/topics`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
-    // Its way in was cut off (phase V28.1): the server retried its Alerts row - the work is that row's.
+    // Its way in was cut off: the server retried its Alerts row - the work is that row's.
     if (d.alertId) { await _afterRetry(); return; }
     run = { kind: 'topics', jobId: d.jobId, startedAt: Date.now(), rows: [], step: '' };
   } catch (e) {
@@ -1080,7 +1078,7 @@ async function _transcribeAgain(rec, anchor) {
   if (!await ask(anchor, `Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`, { yes: 'Transcribe', stay: true })) return;
   if (_srcJobs.has(id)) return;
   try {
-    // When it has no topics yet, they are found after the words (phase V28.1) - by the agents' ladder (V37).
+    // When it has no topics yet, they are found after the words - by the agents' ladder.
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
@@ -1134,8 +1132,8 @@ function _ctl(label, node, extra) {
   return w;
 }
 
-// The narrators open from their field (phase G2, the owner 2026-09-30: a gear to the right of "Narrator") - the
-// narrators AREA since phase V28.2, in place of the generator, with "← Generate script" back to it as it was.
+// The narrators open from their field (a gear to the right of "Narrator") - the
+// narrators AREA, in place of the generator, with "← Generate script" back to it as it was.
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 function _narratorsGear() {
   const b = el('button', 'mk-gear u-btn is-icon is-quiet');
@@ -1167,8 +1165,8 @@ async function _buildControls(settings) {
   box.textContent = '';
   const d = _reg.defaults;
   const s = settings || {};
-  // No Language (phase V29, the owner 2026-10-14): every script is written in English.
-  // (V38.5, the owner 2026-10-24: "оставляем в этом поле tone, narrator и дропдаун с количеством хуков") Box 1 holds Tone,
+  // No Language: every script is written in English.
+  // Box 1 holds Tone,
   // Narrator and the hook count (static, beside these); the number of lines is box 2's list, filled here once the limits
   // are read.
   box.appendChild(_ctl('Tone', _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
@@ -1183,10 +1181,10 @@ async function _buildControls(settings) {
   }
   sc.value = String(Math.min(_reg.scenes.max, Math.max(_reg.scenes.min, parseInt(s.scenes, 10) || _reg.scenes.default)));
   sc.title = `How many lines the script has, the hook the first; the scenarios store needs at least ${_reg.minLines}`;
-  // (phase V37) No model chosen: the AGENTS' LADDER writes, at effort medium - the gear says which step is asked first.
+  // No model chosen: the AGENTS' LADDER writes, at effort medium - the gear says which step is asked first.
   $('mk-ai').title = _aiTitle();
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
-  // (phase V38) A narrator has ONE voice: no reading to pin. A draft from before that pinned one is the narrator.
+  // A narrator has ONE voice: no reading to pin; a draft that names one is simply the narrator's.
   await _paintNarrators(s.narratorId || 'neutral', s.narratorName);
 }
 
@@ -1215,10 +1213,9 @@ async function _paintNarrators(want, wantName) {
   sel.value = pick;
 }
 
-// (V38.5, the owner 2026-10-24: ""writes" (выбор нейросети удаляем) и создаем кнопку с шестеренкой справа от кнопки write
-// hooks") The gear right of "Write hooks": Admin -> AI settings, where the agents' ladder that writes is ordered (V37).
-// The way there saves the draft first and carries the way back: AI settings shows "← back" to this generator, on this
-// draft (V38.1).
+// The gear right of "Write hooks" (there is no model to choose): Admin -> AI settings, where the agents' ladder that
+// writes is ordered. The way there saves the draft first and carries the way back: AI settings shows "← back" to this
+// generator, on this draft.
 function _aiTitle() {
   const first = (_reg && _reg.ladder && _reg.ladder[0]) || null;
   return 'AI settings - the agents\' ladder writes' + (first ? `, ${first.model} asked first` : '')
@@ -1243,11 +1240,11 @@ function _opts() {
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ - (?:not read|deleted)$/, '') : '',
-    // (V38.1) What to advertise in two paragraphs - empty, no ad.
+    // What to advertise in two paragraphs - empty, no ad.
     advertise: $('mk-ad') ? $('mk-ad').value.trim() : '',
-    // (V38.4) How many hooks a press writes.
+    // How many hooks a press writes.
     hookCount: HT.hookCount($('mk-hook-n') && $('mk-hook-n').value),
-    // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
+    // Not sent as a choice - the ladder's first step and the effort, for the countdown's key only.
     model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
     effort: (_reg && _reg.effort) || 'medium',
   };
@@ -1256,11 +1253,10 @@ function _opts() {
 // Sent with every generation, so the server can write the answer into the draft (the keeper).
 const _draftKey = () => (_gen ? { draftId: _gen.draftId || '', sourceId: _gen.sourceId, topicId: _gen.topicId } : {});
 
-// (V38.5, the owner 2026-10-24) TWO buttons where one moved between two places: the hooks' in box 1 - "Write hooks",
-// "Write again" once a batch is there ("а кнопка write hooks называется write again после того, как сгенерировала пачку
-// хуков") - and the script's in box 2 - "Write scenario", "Write again" once it is written ((ш4)). Box 2 shows once a hook
-// is chosen; a draft opened with a hook, a script or an ad shows it at once. No "New hooks", no "Generate again" by the
-// save ((ш5)).
+// TWO buttons: the hooks' in box 1 - "Write hooks",
+// "Write again" once a batch is there - and the script's in box 2 - "Write scenario", "Write again" once it is
+// written. Box 2 shows once a hook
+// is chosen; a draft opened with a hook, a script or an ad shows it at once.
 function _paintGo() {
   if (!_built) return;
   const written = !!(_gen && _gen.paragraphs && _gen.paragraphs.length);
@@ -1272,11 +1268,10 @@ function _paintGo() {
   go.classList.toggle('primary', !hooks);
   go.classList.toggle('is-main', !hooks);
   const wr = $('mk-write');
-  // (V38.6) On two lines, in a taller button: "Write / scenario".
+  // On two lines, in a taller button: "Write / scenario".
   wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
   wr.disabled = busy || !String((_gen && _gen.hook) || '').trim();
-  // (V38.7, the owner: "когда сценарий написан и пользователь выбирает другой hook, то write again снова становится синей
-  // кнопкой") Blue while there is no script - and again when box 2 holds another hook than the script's first line.
+  // Blue while there is no script - and again when box 2 holds another hook than the script's first line.
   const other = written && String((_gen && _gen.hook) || '').trim() !== String(_gen.paragraphs[0] || '').trim();
   wr.classList.toggle('primary', !written || other);
   wr.classList.toggle('is-main', !written || other);
@@ -1291,16 +1286,15 @@ function _paintGo() {
   $('mk-save').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
   document.querySelectorAll('#mk-scenes .mk-scene-rw, #mk-hook-list .mk-hook-use').forEach(b => { b.disabled = busy; });
-  // (V38.4) "remake" only for a hook whose type is one of the forty.
+  // "remake" only for a hook whose type is one of the forty.
   document.querySelectorAll('#mk-hook-list .mk-hook-remake').forEach(b => { b.disabled = busy || !b.dataset.type; });
   $('mk-hook-n').disabled = busy;
   if (busy) _hideFragBtn();
 }
 
-// (V38.5, the owner's (ш3): "да, только под дропдаун скрывать все хуки"; V38.6: "при выборе хука вся пачка сгенерированных
-// хуков должна сворачиваться наверх в дропдаун в ширину полей между двумя полями-шагами генератора. как бы приклеенным к
-// верхнему полю генерации хуков") Once a hook is picked - or a script is written - the hooks fold into one bar glued under
-// box 1, "▸ 7 hooks"; a press opens them under it and box 2 moves down ((щ6)); a pick folds them again, new hooks come
+// Once a hook is picked - or a script is written - the whole batch of hooks folds up into one bar, as wide as the
+// fields, glued under box 1, "▸ 7 hooks"; a press opens them under it and box 2 moves down; a pick folds them again, new
+// hooks come
 // open. Before any pick they are open, with no bar.
 let _hooksOpen = false;
 function _paintFold() {
@@ -1325,14 +1319,14 @@ function _markUsed() {
   });
 }
 
-// (V38.4, (э4)) Five unless chosen otherwise; the last choice is what a new draft starts with.
+// Five unless chosen otherwise; the last choice is what a new draft starts with.
 const _COUNT_KEY = 'ugc.make.hookCount';
 function _lastCount() {
   try { return HT.hookCount(localStorage.getItem(_COUNT_KEY)); } catch (e) { return HT.HOOK_COUNT.default; }
 }
 function _setStage(s) { _stage = s; _paintGo(); }
 const _busy = () => _stage === 'hooks' || _stage === 'script' || _stage === 'working';
-// (V38.3) Hooks on show wait to be used - else the form is idle.
+// Hooks on show wait to be used - else the form is idle.
 const _pickOrIdle = () => ($('mk-hook-list').querySelector('.mk-hook') ? 'pick' : 'idle');
 
 function _clearForm() {
@@ -1369,7 +1363,7 @@ async function _saveDraft(o) {
   clearTimeout(_saveT);
   _saveT = null;
   if (!_gen) return;
-  // A form with nothing in it is not a draft yet: turning a dropdown on a blank form made an empty
+  // A form with nothing in it is not a draft yet: turning a dropdown on a blank form would make an empty
   // "untitled draft" row. The first word typed - or the first stage started - makes it.
   if (!_gen.draftId && !_hasContent()) return;
   const gen = _gen;
@@ -1401,7 +1395,7 @@ function _hasContent() {
 // and a stage's reattach finds it - the list is otherwise read only now and then.
 function _noteDraft(dr) {
   if (!dr) return;
-  // (V38.7) "hooks written" before "hook chosen" - lib/script-drafts.js stageOf says the same.
+  // "hooks written" before "hook chosen" - lib/script-drafts.js stageOf says the same.
   const stage = (dr.paragraphs || []).length ? 'script written' : dr.hook ? 'hook chosen' : (dr.hooks || []).length ? 'hooks written' : 'topic only';
   const i = _drafts.findIndex(x => String(x.id) === String(dr.id));
   const sum = { ...(i >= 0 ? _drafts[i] : {}), id: dr.id, sourceId: dr.sourceId, topicId: dr.topicId,
@@ -1433,7 +1427,7 @@ async function _discardDraft() {
   try {
     await J.api('/api/scriptgen/drafts/' + encodeURIComponent(_gen.draftId), { method: 'DELETE' });
     _gen = null;
-    // (V38.6) On the shelf the list is read again, and its first scenario is on the right.
+    // On the shelf the list is read again, and its first scenario is on the right.
     if (_embedded) { if (_hooks.discarded) await _hooks.discarded(); return; }
     await _readDrafts();
     _paintSources();
@@ -1459,9 +1453,9 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     topicTitle: full ? full.topicTitle : (topic ? topic.title : ''),
     topicSpan: topic ? `${J.clock(topic.start)}–${J.clock(topic.end)}` : '',
     hooks: (full && full.hooks) || [],
-    // (V38.3) The hook the script is written from: one of the five, used (and maybe edited) - there is no field of one's own.
+    // The hook the script is written from: one of the hooks, used (and maybe edited) - there is no field of one's own.
     hook: (full && full.hook) || '',
-    // (V38.4) Its type - the script is carried the way that opening works.
+    // Its type - the script is carried the way that opening works.
     hookType: (full && full.hookType) || '',
     paragraphs: (full && full.paragraphs) || [],
   };
@@ -1472,11 +1466,11 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   $('mk-vertical').value = saved.vertical || '';
   $('mk-product').value = saved.product || '';
   $('mk-ad').value = (full && full.settings && full.settings.advertise) || '';
-  // (V38.5) Box 2 holds the hook; it shows at once for a draft that has one, a script or an ad. The hooks of a written
+  // Box 2 holds the hook; it shows at once for a draft that has one, a script or an ad. The hooks of a written
   // draft open folded.
   $('mk-hook').value = _gen.hook;
   _gen.box2 = !!(_gen.hook.trim() || _gen.paragraphs.length || $('mk-ad').value.trim());
-  // (V38.6) Folded when a hook is chosen or a script written; open while there is still one to pick.
+  // Folded when a hook is chosen or a script written; open while there is still one to pick.
   _hooksOpen = !(_gen.hook.trim() || _gen.paragraphs.length);
   $('mk-hook-n').value = String(full && full.settings && full.settings.hookCount
     ? HT.hookCount(full.settings.hookCount) : _lastCount());
@@ -1544,13 +1538,12 @@ function _reattachStage() {
 }
 
 // ── The chain: hooks, then the script ───────────────────────────────────────
-// (V38.3, the owner 2026-10-24: "поле для своего хука удаляем. делаем в самих хуках редактирование. тип хука пишем в правой
-// стороне строки хука. с левой стороны кнопка use hook") A row per hook: "use hook" on the left writes the script from it,
+// A row per hook: "use hook" on the left writes the script from it,
 // its text is edited in place (kept in the draft), its kind on the right. The one used is marked, and stays until the
 // script lands - a script that did not come is one press away again.
-// (V38.4) "remake" right of "use hook" writes the row again in its own type; the type on the right by its NAME
-// (public/js/library/hook-types.js), its description on hover. A kind from before that is not one of the forty is shown
-// as it was, with no description and no remake.
+// "remake" right of "use hook" writes the row again in its own type; the type on the right by its NAME
+// (public/js/library/hook-types.js), its description on hover. A kind that is not one of the forty is shown
+// as it is, with no description and no remake.
 function _renderHooks(hooks) {
   const box = $('mk-hook-list');
   box.textContent = '';
@@ -1558,7 +1551,7 @@ function _renderHooks(hooks) {
   hooks.forEach((h, i) => {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
-    // (V38.6, the owner: "кнопка use hooks сделай более видимой") Blue, as the main buttons are.
+    // Blue, as the main buttons are, so it is easy to see.
     const use = el('button', 'u-btn is-s is-main mk-hook-use', 'Use hook');
     use.type = 'button';
     use.title = 'Put this hook into the box below - the script is written from it there';
@@ -1567,11 +1560,11 @@ function _renderHooks(hooks) {
     ta.rows = 1;
     ta.spellcheck = false;
     ta.value = h.text;
-    // (V38.6) Fitted to its text by the stylesheet (field-sizing) - a height measured by script while the list was folded
-    // came out as nothing.
+    // Fitted to its text by the stylesheet (field-sizing) - a height measured by script while the list is folded
+    // comes out as nothing.
     ta.addEventListener('input', () => { _gen.hooks[i] = { ..._gen.hooks[i], text: ta.value }; _markUsed(); _queueDraft(); });
-    // (V38.5, the owner: "пользователь выбирает нужный хук, он появляется в таком же поле как у дропдаунов только ниже")
-    // No script is written yet: the hook goes into box 2, where it can be edited, and "Write scenario" writes from it.
+    // No script is written yet: the hook goes into box 2 - a field like the dropdowns', below them - where it can be
+    // edited, and "Write scenario" writes from it.
     use.addEventListener('click', () => {
       const text = ta.value.trim();
       if (!text || _busy()) return;
@@ -1579,12 +1572,12 @@ function _renderHooks(hooks) {
       _gen.hook = text;
       _gen.hookType = type ? type.id : '';
       _gen.box2 = true;
-      _hooksOpen = false;               // (V38.6) the batch folds under box 1
+      _hooksOpen = false;               // the batch folds under box 1
       $('mk-hook').value = text;
       _markUsed();
       _paintGo();
       $('mk-box2').scrollIntoView({ block: 'nearest' });
-      // (V38.7) Saved at once, so the draft's row in the list says "hook chosen".
+      // Saved at once, so the draft's row in the list says "hook chosen".
       _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
     const remake = el('button', 'u-btn is-s mk-hook-remake', 'Remake');
@@ -1606,9 +1599,8 @@ function _renderHooks(hooks) {
   _paintFold();
 }
 
-// (V38.4, the owner: "кнопку remake чтобы выбранный хук переделался в том типе хука, которым он уже является. и после
-// нажатия хук переписывается в соответствии с темой сценария") One hook again, of its own type, by the topic - the row's
-// text replaced, a hand edit too ((э5)). The other rows go with it, so it does not read like them. While it is written
+// One hook again, of its own type, by the topic - the row's
+// text replaced, a hand edit too. The other rows go with it, so it does not read like them. While it is written
 // every hook button waits (one stage at a time per draft); a cancel leaves the row as it was.
 async function _remakeHook(i, type, ta, row, btn) {
   if (!type || _busy()) return;
@@ -1636,12 +1628,12 @@ async function _remakeHook(i, type, ta, row, btn) {
 function _putRemade(r) {
   const h = (_gen.hooks || [])[r.index];
   if (!h || !r.text || (HT.hookType(h.type || h.kind) || {}).id !== r.type) return false;
-  // (V38.5) Box 2 keeps its own copy of the hook: a row written again leaves it as it is.
+  // Box 2 keeps its own copy of the hook: a row written again leaves it as it is.
   _gen.hooks[r.index] = { type: r.type, text: r.text };
   return true;
 }
 
-// (V38.4) The hook type's description, beside its name - the page's own small box, at once (not the browser's, a second
+// The hook type's description, beside its name - the page's own small box, at once (not the browser's, a second
 // later). Above the name, or below it when there is no room above; inside the window.
 let _tipEl = null;
 function _hideTip() { if (_tipEl) { _tipEl.remove(); _tipEl = null; } }
@@ -1659,14 +1651,12 @@ function _showTip(anchor, type) {
   _tipEl = t;
 }
 
-// The hooks are shown while there is no script yet (a draft's five, or the hook it was written from). A hook kept from
-// before V38.3 that was typed by hand, with no five beside it, is shown as one of its own.
-// (V38.5) The draft's hooks, beside a script too (folded, _paintFold). A hook typed by hand before V38.3, with no hooks
-// beside it, is box 2's - no row of its own any more.
+// The draft's hooks, beside a script too (folded, _paintFold). A hook typed by hand, with no hooks
+// beside it, is box 2's - no row of its own.
 function _showHooks() { _renderHooks(_gen.hooks || []); }
 
 const _TIMING = {
-  // (V38.4) 1-10 hooks: each count its own measured time.
+  // 1-10 hooks: each count its own measured time.
   hooks: (o) => {
     const n = HT.hookCount(o.hookCount);
     return { key: `l2-hooks|${o.model}|${o.effort}|${n}`, label: `Writing ${n} ${n === 1 ? 'hook' : 'hooks'}…`, estimateMs: J.EST.hooks(n) };
@@ -1710,7 +1700,7 @@ async function _followStage(jobId, run, gen, onResult) {
   const here = () => !!_gen && String(_gen.draftId) === draftId;
   if (_stage === 'idle' || _stage === 'pick') _setStage('working');
   _stageRow(rec);
-  if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged();     // (V38.6) its row says "writing…"
+  if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged();     // its row says "writing…"
   try {
     const job = await J.pollJob('/api/scriptgen/jobs', jobId, (j) => {
       if (j.step && here() && rec.rows.length && !rec.cancelling) rec.rows[rec.rows.length - 1].say(j.step);
@@ -1722,7 +1712,7 @@ async function _followStage(jobId, run, gen, onResult) {
     return true;
   } catch (e) {
     if (e.cancelled) {
-      // Cancelled (phase G1): not an error. The form goes back to what it showed before the press -
+      // Cancelled: not an error. The form goes back to what it showed before the press -
       // the hooks it had, the script it had - since the server kept nothing of this stage.
       // Painted from the form itself, never read back from the server: nothing of the stage was kept,
       // and a reload would put the draft's copy over edits still waiting out their pause.
@@ -1757,7 +1747,7 @@ async function _followStage(jobId, run, gen, onResult) {
 async function _landInto(what, r) {
   const res = r || {};
   if (what === 'hooks' && Array.isArray(res.hooks)) {
-    // (V38.5, (ш6)) New hooks leave the chosen one in box 2.
+    // New hooks leave the chosen one in box 2.
     _gen.hooks = res.hooks;
     _hooksOpen = true;
     _renderHooks(_gen.hooks);
@@ -1788,7 +1778,7 @@ function _stageRow(rec) {
   return row;
 }
 
-// The ✕ beside the countdown (phase G1, the owner 2026-09-30): the server stops the job and frees the
+// The ✕ beside the countdown: the server stops the job and frees the
 // draft; the poll sees it canceled and _followStage puts the form back. A job that ended meanwhile
 // lands as usual - the cross came too late, and says nothing.
 async function _cancelStage(rec) {
@@ -1827,7 +1817,7 @@ async function _reloadDraftInto() {
   } catch (e) { _setStage('idle'); }
 }
 
-// Box 1's button: hooks - as many as the list beside it says (V38.4); "Write again" once a batch is there (V38.5). The
+// Box 1's button: hooks - as many as the list beside it says; "Write again" once a batch is there. The
 // script is box 2's button.
 async function _runGo() {
   if (!_controlsReady()) { J.sayJob($('mk-job'), 'the model list is not loaded yet', true); return; }
@@ -1842,7 +1832,7 @@ async function _writeHooks() {
   $('mk-hook-list').textContent = '';
   const o = _opts();
   const ok = await _runStage('/api/scriptgen/hooks', { ...o, topic }, _TIMING.hooks(o), async (r) => {
-    // (V38.5, (ш6)) The chosen hook stays in box 2 until another is picked.
+    // The chosen hook stays in box 2 until another is picked.
     _gen.hooks = r.hooks || [];
     _hooksOpen = true;
     _renderHooks(_gen.hooks);
@@ -1859,7 +1849,7 @@ async function _runScript() {
   const gen = _gen;
   _setStage('script');
   const o = _opts();
-  // (V38.4) With its type: the script is carried the way that opening works.
+  // With its type: the script is carried the way that opening works.
   const body = { ...o, topic, hook, hookType: _gen.hookType || '' };
   await _runStage('/api/scriptgen/script', body, _TIMING.script(o), async (r) => {
     _gen.paragraphs = r.paragraphs || [];
@@ -1901,7 +1891,7 @@ function _renderScenes() {
     const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
     ta.addEventListener('input', () => {
       _gen.paragraphs[i] = ta.value;
-      // Editing the first paragraph edits the hook: "Write again" writes from what is on screen - box 2 says the same (V38.6).
+      // Editing the first paragraph edits the hook: "Write again" writes from what is on screen - box 2 says the same.
       if (i === 0) { _gen.hook = ta.value; $('mk-hook').value = ta.value; _markUsed(); }
       secs.textContent = J.spokenSeconds(ta.value) + 's';
       fit();
@@ -1923,7 +1913,7 @@ function _renderScenes() {
   _paintGo();
 }
 
-// `fragment` (V38, the owner's (д13)): { text, start } - only those words of the paragraph are written again.
+// `fragment`: { text, start } - only those words of the paragraph are written again.
 async function _rewrite(index, btn, fragment) {
   if (!_gen || _busy()) return;
   const was = btn ? btn.textContent : '';
@@ -1944,7 +1934,7 @@ async function _rewrite(index, btn, fragment) {
   if (_gen === gen) _setStage('idle');
 }
 
-// ── "rewrite fragment": a piece of a paragraph selected (phase V38, the owner's (д13)) ──
+// ── "rewrite fragment": a piece of a paragraph selected ──
 // Words selected in a paragraph's text (not the hook's) bring a small button beside the selection; pressed, only those
 // words are written again, in the narrator's voice. It is a layer of its own (Escape takes it away) and goes when the
 // selection does, when the text is typed into or the script scrolls.
@@ -2028,7 +2018,7 @@ async function _saveScript() {
     clearTimeout(_saveT);
     _saveT = null;
     _gen = null;
-    // (V38.6) On the shelf the new scenario is selected in the list, in the draft's place.
+    // On the shelf the new scenario is selected in the list, in the draft's place.
     if (_embedded) {
       const n0 = (d.scenario.lines || []).length;
       if (_hooks.counts) _hooks.counts();
@@ -2051,7 +2041,7 @@ async function _saveScript() {
 
 // The layout's own line, over both views: what was saved (with the way to it), what went wrong.
 function _say(text, kind, scenarioId) {
-  // (V38.6) The layout's line is not on the shelf: the page's status line says it there.
+  // The layout's line is not on the shelf: the page's status line says it there.
   if (_embedded) { if (_hooks.status && text) _hooks.status(text, kind); return; }
   const box = $('mk-said');
   if (!box) return;
@@ -2072,7 +2062,7 @@ function _say(text, kind, scenarioId) {
   box.appendChild(x);
 }
 
-// ── Adding a source (phase V28.1) ───────────────────────────────────────────
+// ── Adding a source ─────────────────────────────────────────────────────────
 // A window on the layer stack: a link, or a file from this computer - its PATH, handed over by the app's own window
 // (desktop/preload.js), and the server copies it. The SERVER reads it and decides by the frame (lib/source-intake.js):
 // a horizontal video becomes a source and the window flies into Alerts, where its whole way in goes on; a vertical
@@ -2136,7 +2126,7 @@ function _openAddSource() {
   document.body.appendChild(ov);
   const q = (s) => ov.querySelector(s);
   const f = (name) => q(`[data-f="${name}"]`);
-  // (phase V73 block 4) The long note is ONE line - the one about money ((4а-14) а), the whole under the pointer.
+  // The long note is ONE line - the one about money, the whole under the pointer.
   f('note').textContent = 'The transcription and the topics are paid calls.';
   f('note').title = ADD_NOTE.join(' ');
   const route = (r) => {
@@ -2157,8 +2147,7 @@ function _openAddSource() {
   _paintAdds();
 }
 
-// ── From the Library (after block 8; the owner's (Y6): "в попапе выбор from: link, file, library (нужно сделать как в
-// highlights)") ── REFERENCES -> YouTube -> Videos, the same list as highlights' "from the Library" (GET
+// ── From the Library ── REFERENCES -> YouTube -> Videos, the same list as highlights' "from the Library" (GET
 // /api/references/youtube): a downloaded one is a source already - here among the sources; one kept as a tile is added by its
 // link, the way "From a link" adds it (downloaded, heard, its topics found - paid), and its tile becomes the downloaded video.
 const _mmss = (s) => { const t = Math.max(0, Math.round(+s || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
@@ -2166,8 +2155,8 @@ async function _paintLib() {
   if (!_addWin) return;
   const box = _addWin.f('lib');
   box.textContent = '';
-  // (phase V73 block 2) Reading, nothing there, did not load - the shared parts, as rows; a failed read is not "nothing
-  // there": "did not load" with Try again, the reason in the corner (б2-19).
+  // Reading, nothing there, did not load - the shared parts, as rows; a failed read is not "nothing
+  // there": "did not load" with Try again, the reason in the corner.
   box.appendChild(loadingEl('reading…', { line: true }));
   let items = [];
   try { items = (await J.api('/api/references/youtube')).items || []; }
@@ -2190,7 +2179,7 @@ async function _paintLib() {
       ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
     row.appendChild(t);
     if (it.type === 'remote') {
-      const b = el('button', 'u-btn is-s', 'Add');   // (phase V73 block 4) plain - one gold per route
+      const b = el('button', 'u-btn is-s', 'Add');   // plain - one gold per route
       b.type = 'button';
       b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
       b.addEventListener('click', async () => {
@@ -2331,7 +2320,7 @@ function _addLine(r) {
   const say = (text, err) => { const s = el('div', 'mk-addl-s u-status' + (err ? ' err' : ''), text); if (err) line.classList.add('err'); line.appendChild(s); };
   const acts = el('div', 'mk-addl-acts');
   const btn = (label, title, on, cls) => {
-    // (phase V73 block 4) the answers are plain buttons - the window's gold is each route's own "Add"
+    // the answers are plain buttons - the window's gold is each route's own "Add"
     const b = el('button', 'u-btn is-s' + (cls === 'primary' ? ' primary' : cls ? ' ' + cls : ''), label);
     b.type = 'button';
     if (title) b.title = title;

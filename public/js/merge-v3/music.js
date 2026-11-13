@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the music panel of an audio lane: the lane's master volume and where its music comes from. Phase I5; since
-   phase V28.4 (the owner 2026-10-12) the tracks themselves are in the Library panel - AUDIO -> Music in its tree
+   MERGE v3 — the music panel of an audio lane: the lane's master volume and where its music comes from. The
+   tracks themselves are in the Library panel - AUDIO -> Music in its tree
    (js/merge-v3/library.js) - and one is laid on a lane by dragging it there, as it is, from where it is let go; two of
    them overlapping cross into each other by themselves (js/sound/fades.js).
 
-   (phase V34.E, the owner's (м10)) The generator went from here: music and sounds are made in the sound window
+   Music and sounds are made in the sound window, not here
    (js/sound/sound-window.js, Merge's host js/merge-v3/sound-host.js) - Suno and ElevenLabs, for the open project. A clip's
-   fades stay in its own settings.
+   fades are in its own settings.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -30,10 +30,10 @@ function _lane(tl) {
   return tl.tracks.find(t => t && t.id === _dest) || null;
 }
 
-// (phase V76) `more(host)` - rows of the lane's own under its volume (its pitch, inspector.js).
+// `more(host)` - rows of the lane's own under its volume (its pitch, inspector.js).
 export function renderMusicTrack(host, track, more) {
   // The lane's master volume first: a setting for the music already down. A lane never set plays at its full level (null is 1
-  // in the render and the preview) - so it shows 0 dB (phase V54, the owner's (зв11) в: it showed -6 dB and played at 0).
+  // in the render and the preview) - so it shows 0 dB.
   host.appendChild(C.row('Volume', C.volume(
     track.volume != null ? track.volume : 1,
     (v) => Store.mutate(tl => { const t = _lane(tl); if (t) t.volume = v; }),

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A SOUND'S WAVEFORM ON ITS TILE (phase V34.E) - 64 points, 0..100 of the sound's own loudest (lib/audio-wave.js, the
+   A SOUND'S WAVEFORM ON ITS TILE - 64 points, 0..100 of the sound's own loudest (lib/audio-wave.js, the
    built-in set's own measure), drawn as bars mirrored round the middle. Merge's Library panel, the Library's Media shelf,
    the online search and the sound window draw the same.
 

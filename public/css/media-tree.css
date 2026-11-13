@@ -1,12 +1,12 @@
-/* THE MEDIA TREE (phase V28.4 + V28.5) - js/media-tree.js, in Merge's Library panel and on the Library's Media shelf.
-   Rows of one line (28 px since phase V73 block 2): the twisty, the name with its count in brackets, and at the right edge
+/* THE MEDIA TREE - js/media-tree.js, in Merge's Library panel and on the Library's Media shelf.
+   Rows of one line (28 px): the twisty, the name with its count in brackets, and at the right edge
    two columns of one width - a lock for a required category, then the button ("generate" / "create" always, the "+" and
    the ✕ on hover).
    An empty category is pale (and last - the server's order); the selected node is lit; a node a tile can be let go
    on is outlined while it hangs over it. */
 .mt{
   height:100%; overflow:auto; padding:4px 4px 10px; box-sizing:border-box;
-  font:var(--fw-medium) var(--fs-11)/1.25 var(--font); color:var(--ink); user-select:none;   /* (phase V73 block 6, (б5-20)) on the scale */
+  font:var(--fw-medium) var(--fs-11)/1.25 var(--font); color:var(--ink); user-select:none;   /* on the scale */
 }
 .mt-row{
   position:relative; display:flex; align-items:center; gap:3px; min-height:28px; padding-right:4px;
@@ -24,15 +24,15 @@
 .mt-tw{
   flex:0 0 14px; width:14px; height:18px; padding:0; border:0; background:none; cursor:pointer;
   display:flex; align-items:center; justify-content:center; color:var(--muted); transition:transform .12s var(--ease);
-}   /* (б5-20) Lucide's chevron, 12 px */
+}   /* Lucide's chevron, 12 px */
 .mt-tw.is-open{transform:rotate(90deg)}
 .mt-tw:hover{color:var(--ink)}
 .mt-tw[disabled]{cursor:default}
-/* (phase V73 block 2, (б2-21)-(б2-24)) The name is cut, its count in brackets never; the columns at the right edge one width
+/* The name is cut, its count in brackets never; the columns at the right edge one width
    on every row, so locks and buttons stand one under another. The other two trees ("Move to…", the folder column's
    dropdown) have the count after the name too and the lock at the right edge (.mtp-row). */
 .mt-name{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mt-n{flex:0 0 auto; color:var(--faint); font:var(--fw-regular) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}   /* (б5-20) mono, "(1,260)" */
+.mt-n{flex:0 0 auto; color:var(--faint); font:var(--fw-regular) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}   /* mono, "(1,260)" */
 .mt-side{flex:0 0 auto; margin-left:auto; display:flex; align-items:center; gap:2px}
 .mt-lk{flex:0 0 16px; width:16px; display:flex; align-items:center; justify-content:center}
 .mt-bt{flex:0 0 64px; width:64px; display:flex; align-items:center; justify-content:flex-end}
@@ -43,22 +43,18 @@
 .mt-act{display:none}
 .mt-row:hover .mt-act{display:inline-flex}
 
-/* (phase V64 block 1, the owner 2026-10-31: "дерево с золотым цветом папок - environment, lookbooks, props. и вместо кнопки
-   "+" при наведении будет написано "create" в синей рамке с круглыми краями. при наведении на кнопку заливка золотым ...
-   напротив корневых папок - images, video, audio - они тоже должны быть золотым написаны - показываем кнопку generate золотым
-   цветом с золотой обводкой, при наведении кнопка становится полностью золотой с контрастным текстом на ней") GOLD IS WHERE A
-   GENERATOR'S BUTTON IS - in both trees (js/media-tree.js .is-made, .is-gen); Music has none. */
+/* GOLD IS WHERE A GENERATOR'S BUTTON IS - in both trees (js/media-tree.js .is-made, .is-gen); Music has none. */
 .mt .mt-row.is-made .mt-name, .mt .mt-row.is-group.is-gen .mt-name{color:var(--gold)}
-/* "create" (fix (н): always there) and "generate" are the shared generator's button (.u-btn.is-s.is-gen): a gold line, solid
-   gold with dark words under the pointer (V64, (б2-24)), in the button column. */
+/* "create" (always there) and "generate" are the shared generator's button (.u-btn.is-s.is-gen): a gold line, solid
+   gold with dark words under the pointer, in the button column. */
 
 /* A tile hanging over a node that takes it. */
 .mt-row.is-drop{outline:1px dashed var(--sel-line); outline-offset:-1px; background:var(--sel-bg)}
 
 /* The menu under the right button wears the shared menu's look (css/app-shell.css .mv3-plus-menu).
-   (phase V73 block 0) The tree is also in windows over the page - the chats' attachment window (.pk-ov, 9400) -, so its
+   The tree is also in windows over the page - the chats' attachment window (.pk-ov, 9400) -, so its
    menu and the question of deleting a folder stand over every such window (9450), under the question at a button (9460)
-   and the name box (9700). They were 9300 and 60: opened under the attachment window, they could not be seen or pressed. */
+   and the name box (9700). */
 .mv3-plus-menu.mt-menu{min-width:190px; z-index:9450}
 
 /* Deleting a category: where its media go, and the projects that use them. */
@@ -72,13 +68,13 @@
 .mt-pop-used-head{color:var(--ink); margin-bottom:3px}
 .mt-pop-used-row{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
-/* (phase TG, the owner 2026-10-21) A node holding something new since it was last opened: its name and count green, and a
+/* A node holding something new since it was last opened: its name and count gold, and a
    dot before the count. Opening it sees it (js/media-tree.js). */
 .mt-row.is-new .mt-name, .mt-row.is-group.is-new .mt-name{ color:var(--gold); }
-.mt-row.is-new .mt-n{ color:var(--gold); font-weight:var(--fw-medium); }   /* «Generated ● (12)» (б2-23) */
+.mt-row.is-new .mt-n{ color:var(--gold); font-weight:var(--fw-medium); }   /* «Generated ● (12)» */
 .mt-row.is-new .mt-n::before{ content:'● '; font-size:8px; vertical-align:1px; }
 
-/* ── FOLDERS IN THE GALLERY (phase V35, the owner 2026-10-23, (т2), (у2)) ─────────────────────────────────────────────
+/* ── FOLDERS IN THE GALLERY ───────────────────────────────────────────────────────────────────────────────────────────
    A node's folders as tiles first in its gallery (js/media-tree.js foldersEl) - a folder, its name, a lock for the app's
    own, its count; pressed, it opens. Over the gallery the path to the node (crumbsEl): every word but the last opens its
    folder. A tile hanging over a folder tile or a word that takes it is outlined, as over its row. */
@@ -114,7 +110,7 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .mt-crumb.is-drop{outline:1px dashed var(--sel-line); outline-offset:-1px; background:var(--sel-bg); color:var(--ink)}
 .mt-crumb-sep{color:var(--muted); opacity:.55; padding:0 1px}
 
-/* ── THE PLACE PICKER (phase V39, js/place-tree.js) ───────────────────────────────────────────────────────────────────
+/* ── THE PLACE PICKER (js/place-tree.js) ──────────────────────────────────────────────────────────────────────────────
    "Save the piece to" (js/cut.js) and "move to…" of a post (js/references/post.js): the window is the move menu's
    (css/references.css .ref-move), its list these rows - buttons, so they are reset to the row's look. A place lights its
    name under the pointer; a branch only opens. Grey - it cannot go there (why in the tooltip), its ▸ still opens;
@@ -131,7 +127,7 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .mtp-row.is-off:not([aria-expanded]):hover{background:none}
 .mtp .ref-move-head{padding:4px 6px 2px}
 .mtp-sep{height:1px; margin:4px 3px; background:var(--border)}
-/* (2026-11-12) "+" on a folder's row - a new folder in it; with `confirm` the chosen place is lit and the foot picks it. */
+/* "+" on a folder's row - a new folder in it; with `confirm` the chosen place is lit and the foot picks it. */
 .mtp-add{margin-left:auto; flex:0 0 auto; width:18px; height:18px; border-radius:var(--r-xs); display:flex; align-items:center;
   justify-content:center; font:600 13px/1 var(--font); color:var(--muted); cursor:pointer}
 .mtp-add:hover{background:var(--surface-3, var(--surface-2)); color:var(--ink)}
@@ -142,7 +138,7 @@ button.mt-crumb:hover{background:var(--surface-2); color:var(--ink)}
 .mtp-chosen{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden;
   text-overflow:ellipsis}
 
-/* (phase V54 block 5) Several tiles picked (js/tile-select.js) - in the Library's Media and Merge's Library panel. */
+/* Several tiles picked (js/tile-select.js) - in the Library's Media and Merge's Library panel. */
 .lib-card.is-picked, .mv3-tile.is-picked{
   border-color:var(--sel-ring); box-shadow:0 0 0 2px var(--sel-ring);
 }

@@ -1,30 +1,30 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   HOME - the page the app opens on (the owner 2026-10-22; the approved mockup is docs/local-app/mockups/home.html).
+   HOME - the page the app opens on.
 
-   (phase V73 block 6) No sub-header of its own any more - its one tab "Overview" went, "Reset layout" is a quiet button
+   No sub-header of its own: "Reset layout" is a quiet button
    in the corner under the blocks. The Overview is BLOCKS in two columns, each in the gold frame of a talking head's field, no
    numbers; a block is taken by its head and let go anywhere in either column, and where they stand is kept
    (`ugc_home_layout_v2`, mirrored into the library by js/storage-sync.js).
 
-   (phase V70, P13, the owner 2026-11-01, (хп25)-(хп30), (хп42), (хп43)) The left column, top to bottom:
+   The left column, top to bottom:
      New project   blank · highlights · talking head · voiceover - a filled gold icon each (js/home/icons.js) and its word;
-                   a press opens the kind's QUICK-START POPUP over Home (js/home/start.js, phase V63) - its press makes the project
+                   a press opens the kind's QUICK-START POPUP over Home (js/home/start.js) - its press makes the project
                    and opens it in Merge; a press with a modifier follows Merge's own "+ new project" by address (/merge?new=…)
      Generate      the pictures chat, the video chat, music & sounds - their WINDOWS over Home (js/home/windows.js)
      Library       character (New Character), prop (New prop), look (New lookbook), environment (New environment) - windows
-     Projects      (what Continue was) the chips and the five changed last of a kind, a card on hover (js/home/projects.js)
-     New           what came since the last visit (GET /api/home/news?since=) - "mark as seen" - where it stood ((хп42))
-   and the right one: First steps and The app, as they were. "Now" went ((хп30)).
+     Projects      the chips and the five changed last of a kind, a card on hover (js/home/projects.js)
+     New           what came since the last visit (GET /api/home/news?since=) - "mark as seen"
+   and the right one: First steps and The app.
      The app       the keys and their balances (GET /api/keys/health), the bot, Cloudflare
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { initNav } from '../app-nav.js';
-// (phase V60.1, the owner's (пк4а)) New Character opens HERE - the Library's window, the same module and the same bench
-// (`lib_chmake_v1`, one for every page); its rows in Alerts still lead to the Library ((пк5б), chmake.js `_where`).
+// New Character opens HERE - the Library's window, the same module and the same bench
+// (`lib_chmake_v1`, one for every page); its rows in Alerts still lead to the Library (chmake.js `_where`).
 import * as CM from '../library/chmake.js';
 import { showError, showToast } from '../notice.js';
-// (phase V73 block 2, step 2b) A block being read says "Loading"; one that could not be read says so, with Try again, and
-// the reason is a popup - what it showed before stays ((б2-17) а, (б2-19) а).
+// A block being read says "Loading"; one that could not be read says so, with Try again, and
+// the reason is a popup - what it showed before stays.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
 import { ICONS } from './icons.js';
@@ -61,10 +61,10 @@ function _newCharacter(e) {
 const BLOCKS = {};
 const _none = async () => {};
 
-// ── New project (phase V70) ──
+// ── New project ──
 // The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`): blank, highlights, talking
-// head, voiceover - in the owner's order (2026-11-01). A voiceover (phase V62) is THE voiceover draft, on its setup.
-// (phase V63, P14) Each opens its QUICK-START POPUP over Home (js/home/start.js): what the project starts with, then Merge.
+// head, voiceover - in this order. A voiceover is THE voiceover draft, on its setup.
+// Each opens its QUICK-START POPUP over Home (js/home/start.js): what the project starts with, then Merge.
 BLOCKS.start = () => {
   const f = frame('start', 'New project');
   f.what.textContent = '· a quick start, then Merge';
@@ -77,7 +77,7 @@ BLOCKS.start = () => {
   return { el: f.st, paint: _none };
 };
 
-// ── Generate (phase V70, (хп27)) ──
+// ── Generate ──
 // The chats and the sound window, as windows over Home (js/home/windows.js) - the Library's own; what they make lies in
 // IMAGES → Generated, VIDEO → Generated → <model>, Music and SFX → My sounds → Generated, and their Alerts rows lead there.
 BLOCKS.generate = () => {
@@ -91,8 +91,8 @@ BLOCKS.generate = () => {
   return { el: f.st, paint: _none };
 };
 
-// ── Library (phase V70, (хп27)) ──
-// What the Library keeps and makes: a character (New Character - here since phase V60.1), a prop (New prop), a look (New
+// ── Library ──
+// What the Library keeps and makes: a character (New Character), a prop (New prop), a look (New
 // lookbook), an environment (New environment) - each its window over Home.
 BLOCKS.library = () => {
   const f = frame('library', 'Library');
@@ -109,7 +109,7 @@ BLOCKS.library = () => {
   return { el: f.st, paint: _none };
 };
 
-// ── Projects (phase V70: what Continue was) ──
+// ── Projects ──
 BLOCKS.projects = projectsBlock;
 
 // ── New since you were here ──
@@ -136,7 +136,7 @@ BLOCKS.new = () => {
   let shown = false;           // painted once - a later failed read leaves what it shows
   const row = (ico, title, sub, go, href, bad) => {
     const r = el('div', 'hm-row' + (bad ? ' is-bad' : ''));
-    // (phase V73 block 6, (к18)) the kind of news as one of the interface's icons; figures in mono
+    // the kind of news as one of the interface's icons; figures in mono
     const mark = el('span', 'hm-ico');
     mark.innerHTML = icon(ico, 14);
     r.appendChild(mark);
@@ -187,7 +187,7 @@ BLOCKS.new = () => {
 };
 
 // ── First steps ──
-// (the owner's (H6) and 2026-10-22: "будем показывать пока пользователь сам не закроет этот блок") Seven things a new
+// Seven things a new
 // person does first, each ticked off by what is really there - never by a press here; the frame is dashed while any is
 // left, solid when none is, and the block stays until "hide" puts it away for good (back from Admin -> This computer).
 const STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
@@ -223,7 +223,7 @@ BLOCKS.steps = () => {
   f.body.append(prog, list, wait);
   let shown = false;
   const paint = async () => {
-    // (phase V73 block 2, (б2-19) а) A read that fails no longer ticks its step off in silence ("0 of 7 done"): the steps
+    // A read that fails does not tick its step off in silence ("0 of 7 done"): the steps
     // are not drawn from half an answer - what was shown stays, the first time the body says it did not load.
     let bad = null;
     const read = (u) => api(u).catch((e) => { bad = bad || e; return null; });
@@ -256,7 +256,7 @@ BLOCKS.steps = () => {
     f.what.replaceChildren(figures('· ' + n + ' of ' + STEPS.length + ' done'));
     fill.style.width = Math.round((n / STEPS.length) * 100) + '%';
     count.replaceChildren(figures(n + ' / ' + STEPS.length));
-    // (phase V73 block 6) Gold only at the first step not done - its ring and its button; the others' buttons are quiet, a
+    // Gold only at the first step not done - its ring and its button; the others' buttons are quiet, a
     // step done is ticked in the one green.
     const next = STEPS.find((s) => !done[s.id]);
     list.replaceChildren(...STEPS.map((s) => {
@@ -271,7 +271,7 @@ BLOCKS.steps = () => {
       if (!done[s.id]) {
         const a = el('a', 'hm-btn u-btn is-s ' + (s === next ? 'is-gen' : 'is-quiet'), s.go);
         a.href = s.href;
-        // (phase V60.1) The first character is made here, in New Character's window.
+        // The first character is made here, in New Character's window.
         if (s.id === 'char') a.addEventListener('click', _newCharacter);
         li.appendChild(a);
       }
@@ -315,7 +315,7 @@ BLOCKS.app = () => {
   f.body.appendChild(box);
   let shown = false;
   const td = (cls, ...kids) => { const c = el('td', cls); for (const k of kids) c.append(k); return c; };
-  // (phase V73 block 6) A state is a dot AND its word, in a column of its own - not a colour alone; one green for "works".
+  // A state is a dot AND its word, in a column of its own - not a colour alone; one green for "works".
   const dot = (st, word) => {
     const c = el('td', 's');
     const s = el('span', 'hm-state');
@@ -326,7 +326,7 @@ BLOCKS.app = () => {
   const WORD = { ok: 'works', down: 'not working', unset: 'no key' };
   const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
   const paint = async () => {
-    // (phase V73 block 2, (б2-19) а) A failed read is said - never "not set - connect it in Admin" for a bot or a key that
+    // A failed read is said - never "not set - connect it in Admin" for a bot or a key that
     // could only not be read; what was shown stays, the first time each part that failed says it did not load.
     const bad = {};
     const read = (k, u) => api(u).catch((e) => { bad[k] = e; return null; });
@@ -459,7 +459,7 @@ $('#hm-reset').addEventListener('click', () => { place(FIRST); keep(); });
 
 // ── painting, and painting again ──────────────────────────────────────────────
 // Each block paints at once; the ones about work in flight again on their own beat, while the page is looked at.
-// (phase V73 block 2, (б2-19) а) A block that throws while it draws is said - a popup, once per block - not lost.
+// A block that throws while it draws is said - a popup, once per block - not lost.
 const _drawn = (id) => (e) => showError('A block of Home could not be drawn', { detail: id + ': ' + ((e && e.message) || e), key: 'home-paint-' + id });
 const _paint = (id) => { const b = made[id]; return b ? b.paint().catch(_drawn(id)) : null; };
 const _first = [];
@@ -468,7 +468,7 @@ for (const id of Object.keys(made)) {
   _first.push(_paint(id));
   if (b.every) setInterval(() => { if (!document.hidden) _paint(id); }, b.every);
 }
-// (V50, (сп2)) The blocks drawn (or 4 s gone) and the page idle: the windows' code and sheets read beforehand (js/home/windows.js).
+// The blocks drawn (or 4 s gone) and the page idle: the windows' code and sheets read beforehand (js/home/windows.js).
 Promise.race([Promise.allSettled(_first), new Promise((res) => setTimeout(res, 4000))]).then(() => {
   if (window.requestIdleCallback) requestIdleCallback(() => WIN.preload(), { timeout: 2000 });
   else setTimeout(() => WIN.preload(), 300);

@@ -1,13 +1,13 @@
 'use strict';
 
-/* home.js - the app's side of the launcher (phase V83, block B2; desktop/launcher/Launcher.cs).
+/* home.js - the app's side of the launcher (desktop/launcher/Launcher.cs).
 
    Only when the launcher started this copy: it names the UGC Studio folder in UGC_HOME and itself in UGC_LAUNCHER.
    This version's name is its folder's - versions\<name>\UGC Studio.exe -, as the launcher knows it.
      cameUp()   once, when the server first answers: updates\started.json { version } - the launcher stops counting
                 tries and keeps this version -, updates\running.json { pid, version } - pressed again while open, the
                 launcher only brings this window up -; then every OTHER version folder is deleted, in the background
-                (the owner (о11а): a friend keeps only the working one), except one the updater has made ready; and the
+                (an installed copy keeps only the working one), except one the updater has made ready; and the
                 launcher in the folder is replaced by this version's own copy when they differ (a new launcher arrives
                 with an update - it is not running by now).
      closing()  running.json taken away, if it is still ours.

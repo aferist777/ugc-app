@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — where a page is on the frame, ONE answer for everything that asks (phase V30, block 3, K7).
+   CAPTIONS — where a page is on the frame, ONE answer for everything that asks.
 
    A page is drawn by libass (ass.js, the render and the preview's JASSUB), but the editor has to know
    where it is without asking libass: to pick a caption with a press on the preview, to outline what is
@@ -11,17 +11,17 @@
    from the anchor (style.js anchorOf) by libass's alignment - a bottom page grows up from its anchor, a top
    one down, a middle one both ways.
 
-   A PAGE NEVER LEAVES THE FRAME (the owner's (с34)): a rectangle that runs past an edge is moved back
+   A PAGE NEVER LEAVES THE FRAME: a rectangle that runs past an edge is moved back
    inside by just that much - ass.js writes the moved place into the page's \pos, the preview's painter
    (subs-b.js) draws it there, so the screen and the render agree. A page that fits is
-   written exactly as before.
+   written where it is.
 
-   TWO ROWS (phase V71, the owner's (хо18)-(хо22), (хо29)-(хо31), 2026-11-03; style.js `rows`): rowsPlan says, for every page of such a
+   TWO ROWS (style.js `rows`): rowsPlan says, for every page of such a
    lane, WHEN it is on screen and in WHICH ROW - the one answer ass.js draws by and the preview picks, outlines and marks by (pagesAt,
    pageBox). A page is whole while its words are spoken: its In before its first word, its Out after its end; it stays at least
    0.8 s, but is gone before the next page of its row comes in, and for that time its Out and that In play shorter - never under half
    their length while it can stay longer. Every other page is in the second row - over the lane's place by a usual page's height and
-   0.15 of a line (higher beside a taller page; UNDER it for a lane at the top of the frame, (хо31)); after a pause long enough for
+   0.15 of a line (higher beside a taller page; UNDER it for a lane at the top of the frame); after a pause long enough for
    one page to go and the next to come, the first row again. A page with a place of its own has its rows from its place. The pages
    themselves - their times on the timeline - are not touched: it is how they are drawn.
 
@@ -57,10 +57,10 @@ const _lines = (tokens, counts) => {
 /**
  * HOW A CAPTION IS DRAWN AS A PAGE in style `st` (resolved, its size filled in - style.js withAuto) on a frame
  * `w` wide, lasting `dur` seconds: the words it is timed by (its own while they spell its text; a typed line of
- * the subtitle lane with a spoken word - `subs` - timed by its letters, phase V30 block 1), where its lines
+ * the subtitle lane with a spoken word - `subs` - timed by its letters), where its lines
  * break (`brk`, word indices), the text as written into the .ass, the lines as drawn (for measuring), and the
  * smaller size it is drawn at when a word is wider than a line (`shrink`, else null). ass.js draws by it.
- * (V68 P4) In a font dealt over its preset's (`st.fitTo`) the page is cut in the preset's font and `shrink` is the size that
+ * In a font dealt over its preset's (`st.fitTo`) the page is cut in the preset's font and `shrink` is the size that
  * gives it the width it has there (_fitted) - larger as well as smaller.
  */
 export function drawnPage(c, st, subs, w, dur) {
@@ -105,7 +105,7 @@ export function drawnPage(c, st, subs, w, dur) {
   return out;
 }
 
-// THE SIZE BY WIDTH (phase V68 P4, the owner's (хп11)): a page drawn in a font dealt over its preset's keeps the width it has in
+// THE SIZE BY WIDTH: a page drawn in a font dealt over its preset's keeps the width it has in
 // the preset's font - cut there (the same words a line, so nothing about the cut changes), then drawn at the size that makes its
 // widest line as wide: between half and twice the size (a hair-thin Six Caps would grow threefold), and never wider than a
 // line of the frame. Both widths in the line's own drawn font - a Russian line in its twin.
@@ -169,7 +169,7 @@ export function boxOf(drawn, st, W, H) {
   const top = a.y - _lift(a.an, th);
   let x = a.x - iw / 2 - edge, y = top + up - edge;
   const w = iw + around, h = th - up - down + around;
-  // Back inside the frame (с34) - past it by more than half a pixel. Wider than the frame (never, with lines of 0.78):
+  // Back inside the frame - past it by more than half a pixel. Wider than the frame (never, with lines of 0.78):
   // centred.
   const fit = (p, size, room) => (size >= room ? (room - size) / 2 - p : p < -0.5 ? -p : p + size > room + 0.5 ? room - size - p : 0);
   const dx = fit(x, w, W), dy = fit(y, h, H);
@@ -185,12 +185,12 @@ export function boxOf(drawn, st, W, H) {
 /**
  * A caption's page on the frame: its style resolved from its lane's (`laneStyle`) with its own on top, drawn as
  * ass.js draws it. `subs` - it is on the subtitle lane. See boxOf for what comes back; `st` - the style.
- * (phase V71) `track` - its lane, given: a page of a lane in two rows comes back where its row draws it (`lift`, px down; the
+ * `track` - its lane, given: a page of a lane in two rows comes back where its row draws it (`lift`, px down; the
  * place it is measured from - `dx`, `dy`, `ax`, `ay` less the lift - stays the lane's or its own).
  */
 export function pageBox(c, laneStyle, subs, W, H, track) {
   const own = c && c.style && typeof c.style === 'object' && Object.keys(c.style).length ? c.style : null;
-  // In the font it is drawn in: a line with a Cyrillic letter in a font without them is drawn in the twin (V42).
+  // In the font it is drawn in: a line with a Cyrillic letter in a font without them is drawn in the twin.
   const st = withTwin(withAuto(resolveStyle(laneStyle, own), W, H), c && c.name);
   const start = Math.max(0, +c.start || 0);
   const dur = Math.max(0.05, +c.dur || 0);
@@ -200,7 +200,7 @@ export function pageBox(c, laneStyle, subs, W, H, track) {
   return r && r.lift ? lifted(b, r.lift) : b;
 }
 
-/** (phase V71) A page's rectangle moved `lift` pixels down (up when less than 0) - into its row; `lift` said on it. */
+/** A page's rectangle moved `lift` pixels down (up when less than 0) - into its row; `lift` said on it. */
 export function lifted(b, lift) {
   const out = Object.assign({}, b, { y: b.y + lift, ay: b.ay + lift, lift });
   out.lines = (b.lines || []).map((l) => Object.assign({}, l, { y: l.y + lift }));
@@ -210,7 +210,7 @@ export function lifted(b, lift) {
 /**
  * Every page on screen at `t` (seconds), in the order they are drawn - the subtitles first, the text lanes over
  * them: [{ track, clip, lane, box }]. What is on top is LAST.
- * (phase V71) On a lane in two rows a page is on screen from its In to the end of its Out, in its row (rowsPlan): `box` - where
+ * On a lane in two rows a page is on screen from its In to the end of its Out, in its row (rowsPlan): `box` - where
  * it is drawn, `box0` - where its place puts it (what a drag moves from).
  */
 export function pagesAt(tl, t, W, H) {
@@ -231,7 +231,7 @@ export function pagesAt(tl, t, W, H) {
   return out;
 }
 
-// ── TWO ROWS (phase V71) ─────────────────────────────────────────────────────
+// ── TWO ROWS ─────────────────────────────────────────────────────────────────
 /** The rule's numbers: a page whole at least `minOn` s; rows `gap` of a line apart; an Out and an In kept at `share` of their length
  *  at least while a page can stay longer; a pause `reset` s longer than an Out and an In - the first row again. Not settings. */
 export const ROWS = { minOn: 0.8, gap: 0.15, share: 0.5, reset: 0.05 };
@@ -261,7 +261,7 @@ export function rowsPlan(track, W, H) {
   return plan;
 }
 
-/** (phase V71) A page's row and times on its lane (rowsPlan) - null when the lane is in one row. */
+/** A page's row and times on its lane (rowsPlan) - null when the lane is in one row. */
 export function rowOf(track, c, W, H) {
   const plan = rowsPlan(track, W, H);
   if (!plan) return null;
@@ -272,7 +272,7 @@ export function rowOf(track, c, W, H) {
 function _rowsOf(laneStyle, clips, W, H) {
   const laneSt = withAuto(resolveStyle(laneStyle), W, H);
   const gap = ROWS.gap * (+laneSt.size || 60) * ((+laneSt.scaleY || 100) / 100);
-  // (хо31) A lane at the top of the frame has its second row under it; in the middle and at the bottom, over it.
+  // A lane at the top of the frame has its second row under it; in the middle and at the bottom, over it.
   const under = laneSt.pos === 'top';
   const P = clips.map((c, i) => {
     const box = pageBox(c, laneStyle, true, W, H);
@@ -335,14 +335,14 @@ function _rowsOf(laneStyle, clips, W, H) {
 export const inBox = (p, b, pad) => !!b && p.x >= b.x - (pad || 0) && p.x <= b.x + b.w + (pad || 0)
   && p.y >= b.y - (pad || 0) && p.y <= b.y + b.h + (pad || 0);
 
-/** Does a caption's own style set where it sits? Then its lane's place does not move it (с31). */
+/** Does a caption's own style set where it sits? Then its lane's place does not move it. */
 export const ownPlace = (c) => !!(c && c.style && typeof c.style === 'object'
   && (c.style.pos != null || c.style.tx != null || c.style.ty != null));
 
 const _clampOff = (v) => Math.max(-1, Math.min(1, Math.round(v * 10000) / 10000));
 
 /**
- * WHERE A PAGE DRAGGED by (dx, dy) frame pixels lands (the owner's (с8), (с33)), from its place `from` ({pos, tx,
+ * WHERE A PAGE DRAGGED by (dx, dy) frame pixels lands, from its place `from` ({pos, tx,
  * ty} of the style that places it) and its rectangle before the drag (`box`, boxOf). The rectangle stays inside
  * the frame. It SNAPS - unless `o.free` (Alt) - to the vertical middle (tx 0) and to the three anchors: near one,
  * Where becomes that anchor and the offset nothing. Elsewhere the offset from the anchor in Where changes (how

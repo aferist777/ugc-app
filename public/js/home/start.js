@@ -1,26 +1,25 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   HOME'S QUICK START (phase V63, P14; the owner 2026-10-30 (бс1)-(бс8), 2026-11-01 (хп31)-(хп34), (хп2), (хп44), 2026-11-02
-   (хп58), (хп59) and "давай сделаем его [попап highlights] в два шага быстрый запуск").
+   HOME'S QUICK START.
 
    Each tile of New project (js/home/main.js) opens ITS POPUP over Home - a window of js/gen-window.js openFrame, the page dimmed
-   and blurred under it; ✕ or Escape - nothing is made, Home stays ((бс3)). The popup's press makes the project with what was
+   and blurred under it; ✕ or Escape - nothing is made, Home stays. The popup's press makes the project with what was
    chosen and opens it in Merge:
      blank        the name (today's date, as Merge's own) and the format 9:16 / 16:9 -> POST /api/mv3/timeline/new
-     talking      THE TEXT - a scenario of the shelf, "+ your text" (a line a paragraph, (хп58)), "+ scenario" - the voiceover's
+     talking      THE TEXT - a scenario of the shelf, "+ your text" (a line a paragraph), "+ scenario" - the voiceover's
                   list (merge-v3/vo-script.js paintChooser with `put`: nothing is written until "create") - and WHO - a character
                   in a look, the list of the "who" window (merge-v3/wk-maker.js lookGroups, paintChoose); not chosen - the
-                  character and the place are chosen in the project ((хп33)). "create": the project and its timeline
-                  (scen-api.js talkingHead, or POST /scen3/projects { lines, name } - made English, V29), the look cast
+                  character and the place are chosen in the project. "create": the project and its timeline
+                  (scen-api.js talkingHead, or POST /scen3/projects { lines, name } - made English), the look cast
                   (/scen3/projects/:id/cast - its name too) -> Merge on setup
-     highlights   the popup of V68 in its two steps (merge-v3/hl-popup.js) with no project (GET /api/highlights/offer): its
-                  press MAKES the project and starts it (POST /api/highlights/start) - the one popup that pays, (бс8) -> Merge
+     highlights   the highlights popup in its two steps (merge-v3/hl-popup.js) with no project (GET /api/highlights/offer): its
+                  press MAKES the project and starts it (POST /api/highlights/start) - the one popup that pays -> Merge
      voiceover    the text (the same list, the whole own text one line), the mood (/scen3/motion-presets) and the voice - field
                   1's menu and the voices' window as they are (merge-v3/wk-voice.js paintRow, openVoices; a NEW voice of the
-                  library may be taken here, (хп59) - it is a saved voice from then on) -> THE voiceover draft with them
+                  library may be taken here - it is a saved voice from then on) -> THE voiceover draft with them
                   (scen-api.js voiceoverDraft, /scen3/projects/:id/script, /scen3/projects { voice, video }) -> Merge on setup
-   EACH REMEMBERS ITS LAST CHOICE ((хп2); (бс7) is undone): `ugc_home_start_v1` (mirrored into the library by storage-sync.js) -
+   EACH REMEMBERS ITS LAST CHOICE: `ugc_home_start_v1` (mirrored into the library by storage-sync.js) -
    blank its format; talking its text and look; voiceover its text, voice and mood; highlights its own memory by kinds
-   (`mv3_hl_kinds_v1`, merge-v3/hl-kinds.js - one with Merge's). Merge's "+ new project" stays as it was ((бс2)).
+   (`mv3_hl_kinds_v1`, merge-v3/hl-kinds.js - one with Merge's). Merge's "+ new project" is its own.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { openFrame, GEN_SIZE, POPUP_SIZE } from '../gen-window.js';
@@ -77,7 +76,7 @@ function _frame(kind, label, o) {
   _cur = { kind, frame };
   return frame;
 }
-// The foot every popup has - the frame's (phase V73 block 4): what it says at the left (the one status line), its press at the right.
+// The foot every popup has - the frame's: what it says at the left (the one status line), its press at the right.
 function _foot(frame, label, title) {
   const foot = frame.foot;
   const said = el('span', 'hm-qs-said u-status');
@@ -85,12 +84,12 @@ function _foot(frame, label, title) {
   go.type = 'button';
   if (title) go.title = title;
   foot.append(said, el('span', 'sp'), go);
-  // (phase V73 block 2) a press that failed is a popup (`fail`); the line keeps what is being done and the hints
+  // a press that failed is a popup (`fail`); the line keeps what is being done and the hints
   return { foot, said, go, say: (t, bad) => { said.textContent = t || ''; said.classList.toggle('is-bad', !!bad); },
     fail: (t) => { said.textContent = ''; said.classList.remove('is-bad'); showError(t); } };
 }
 
-// ── BLANK: the name and the format ((хп31), (хп44)) ─────────────────────────────
+// ── BLANK: the name and the format ─────────────────────────────
 function _blank() {
   const st = { format: _mem('blank').format === '16:9' ? '16:9' : '9:16', busy: false };
   const frame = _frame('blank', 'blank', { size: { w: 560, h: 330 }, geom: { key: 'start_blank', move: true, keepPos: true } });
@@ -225,15 +224,14 @@ async function _textCard(host, st, o) {
   return { paint };
 }
 
-// ── TALKING HEAD: the text and who ((хп32), (хп33), (хп58)) ────────────────────
+// ── TALKING HEAD: the text and who ────────────────────
 async function _talking() {
   const CS = await import('../chars-store.js');
   const WM = await import('../merge-v3/wk-maker.js');
   const API = await import('../merge-v3/scen-api.js');
   const m = _mem('talking');
   const st = { text: m.text && typeof m.text === 'object' ? m.text : null, look: m.look && m.look.obrazId ? m.look : null, busy: false };
-  // (the owner's check of P14: "попап talking head - тоже компактней. поле who под полем сценариев") The chats' size, ONE column:
-  // the text, who under it.
+  // The chats' size, ONE column: the text, who under it.
   const frame = _frame('talking', 'talking head', { size: POPUP_SIZE, geom: { key: 'start_talking', resize: true, move: true, keepSize: true, keepPos: true } });
   const cols = el('div', 'hm-qs-cols is-one');
   const L = el('div', 'hm-qs-col is-text');
@@ -257,7 +255,7 @@ async function _talking() {
     const t = st.text;
     F.go.disabled = st.busy || !t;
     F.go.textContent = st.busy ? 'Creating…' : 'Create';
-    if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '');   // a hint, not red (V73 block 2)
+    if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '');   // a hint, not red
   };
   const paintWho = () => {
     whoLine.textContent = '';
@@ -297,7 +295,7 @@ async function _talking() {
     if (st.look) whoState.group = st.look.characterId;
     paintWho();
   }).catch((e) => {
-    // (phase V73 block 2) did not load, with Try again; the reason a popup
+    // did not load, with Try again; the reason a popup
     showError('Could not read the characters', { detail: e.message });
     whoHost.replaceChildren(failedEl('The characters', () => { whoHost.replaceChildren(loadingEl('reading the characters…', { line: true })); loadChars(); }, { line: true }));
   });
@@ -317,7 +315,7 @@ async function _talking() {
         key = (await _post('/api/mv3/timeline/new', { projectId: d.project.id })).key;
       }
       if (st.look) {
-        // Cast as the "who" window casts: its name follows (V67). A refusal leaves "who" to the project.
+        // Cast as the "who" window casts: its name follows. A refusal leaves "who" to the project.
         try { await _post('/api/scen3/projects/' + encodeURIComponent(key.replace(/^sv3_/, '')) + '/cast', st.look); }
         catch (e) { console.warn('[home/start] the look was not cast - it is chosen in the project:', e.message); }
       }
@@ -327,7 +325,7 @@ async function _talking() {
   });
 }
 
-// ── VOICEOVER: the text, the mood and the voice ((хп34), (хп59)) ───────────────
+// ── VOICEOVER: the text, the mood and the voice ───────────────
 async function _voiceover() {
   const VOICE = await import('../merge-v3/wk-voice.js');
   const API = await import('../merge-v3/scen-api.js');
@@ -426,7 +424,7 @@ async function _voiceover() {
   });
 }
 
-// ── HIGHLIGHTS: its popup, its press makes the project ((бс5), (бс8)) ───────────
+// ── HIGHLIGHTS: its popup, its press makes the project ───────────
 async function _highlights() {
   const HP = await import('../merge-v3/hl-popup.js');
   if (HP.isOpen()) return;

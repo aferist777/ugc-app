@@ -1,25 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — captions picked and moved ON THE PREVIEW (phase V30, block 3, K7; the owner's (с8), (с31)-(с34)).
+   MERGE v3 — captions picked and moved ON THE PREVIEW.
 
    A caption is placed by looking at it, like a picture (place-b.js): press its page and move it.
 
-     press a page          its LANE is picked, and the move moves the whole lane (с32: until a single line is
+     press a page          its LANE is picked, and the move moves the whole lane (until a single line is
                            picked, the lane is what moves)
-     press it twice        its LINE is picked (с32, the owner at the start of the code: "двойным нажатием
-                           выделяется фраза"), and a move moves that line
+     press it twice        its LINE is picked, and a move moves that line
      press a picked line   it moves - with every caption picked beside it, all by the same amount
      Shift                 up and down only
      Alt                   no snapping
 
-   A page whose own style says where it sits is not moved by its lane (с31) - so a press on it picks that line,
+   A page whose own style says where it sits is not moved by its lane - so a press on it picks that line,
    or nothing under the pointer would move. WHERE IT GOES: a line's place is its own style (pos, tx, ty - the
    strip's Where and Nudge of "This line"), a lane's its style; no re-cut, a place does not change a line's width.
-   It SNAPS (с33) to the frame's vertical middle and to the three anchors - near one, Where becomes it and the
-   offset nothing - with a thin line saying to what. The page never leaves the frame (с34, captions/place.js).
+   It SNAPS to the frame's vertical middle and to the three anchors - near one, Where becomes it and the
+   offset nothing - with a thin line saying to what. The page never leaves the frame (captions/place.js).
 
-   THE SAMPLE (phase V66, the owner's (хо7)): while a highlights project's common Subtitles settings are in the strip (hl-group.js), a
+   THE SAMPLE: while a highlights project's common Subtitles settings are in the strip (hl-group.js), a
    page of «example» is drawn in place of the captions (setSample) - it alone is pressed, moved only up and down, and let go its place
-   goes to the owner of the sample (written for all the ticked fragments); nothing on the timeline is picked or written here.
+   goes to whoever set the sample (written for all the ticked fragments); nothing on the timeline is picked or written here.
 
    NOTHING IS WRITTEN UNTIL THE MOUSE COMES UP: while it moves, the captions on screen are drawn with the place in
    hand (captions/layer.js setLive, or the painter), and the release writes it once - one Ctrl+Z. A press that
@@ -27,9 +26,9 @@
 
    The picked captions' pages are outlined in yellow dashes, as a picked band is; with a platform's screen over
    the frame (platforms.js), what a page lies under is outlined in red, and the part of the page under it too
-   (с36 - a mark, nothing refused).
+   (a mark, nothing refused).
 
-   TWO ROWS (phase V71): a page of a lane in two rows is pressed, outlined and marked where its row draws it, from its In to the
+   TWO ROWS: a page of a lane in two rows is pressed, outlined and marked where its row draws it, from its In to the
    end of its Out (captions/place.js pagesAt); a drag moves its place - the lane's, or its own - from where that place puts it
    (`box0`), so it snaps as a page of the first row does and its row stays over it. While a move is in hand such a lane is drawn
    whole: which row a page is in depends on every page before it.
@@ -43,7 +42,7 @@ import { selectedIds, selectedTrack, selectedCaptions, selectClipById, selectTra
 import { pagesAt, inBox, ownPlace, dragPlace, anchorY } from '../captions/place.js';
 import { renderFrame, resolveStyle, POSITIONS, rowsOn } from '../captions/style.js';
 
-// the picked outline - place-b.js's white over a dark line (phase V73, (б1-10)); the red of what a platform's screen hides.
+// the picked outline - place-b.js's white over a dark line; the red of what a platform's screen hides.
 // Read at the first drawing, when the page's sheets are surely there.
 const _toks = {};
 const _tok = (name, fb) => _toks[name] || (_toks[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb);
@@ -56,7 +55,7 @@ let _api = null;              // { canvas, on(), at(), pad(), frame(), repaint()
 let _drag = null;
 let _live = null;             // the timeline drawn while a move is in hand
 let _raf = 0;
-let _sample = null;           // (V66) { tl, onDrop(place) } - the «example» of several fragments' common place
+let _sample = null;           // { tl, onDrop(place) } - the «example» of several fragments' common place
 
 const _fmt = () => { const tl = Store.timeline(); return (tl && tl.format) === '16:9' ? '16:9' : '9:16'; };
 // Render-frame pixels per canvas-frame pixel, and per pixel of the page.
@@ -98,7 +97,7 @@ export function down(e, p) {
   const hit = _hit(p);
   if (!hit) return false;
   e.preventDefault();
-  // (V66) The sample: moved up and down, nothing picked.
+  // The sample: moved up and down, nothing picked.
   if (_sample) {
     _drag = { what: { kind: 'sample' }, hit, from: _placeOf(resolveStyle(hit.track.style)), p0: p, pg0: { x: e.clientX, y: e.clientY }, moved: false, r: null };
     return true;
@@ -167,7 +166,7 @@ function _liveOf(pt) {
   return {
     format: tl.format,
     tracks: (tl.tracks || []).filter((t) => t.kind === 'subs' || t.kind === 'text').map((t) => {
-      // (phase V71) A lane in two rows whole: a page's row is counted from the first page.
+      // A lane in two rows whole: a page's row is counted from the first page.
       const all = t.kind === 'subs' && rowsOn(t.style);
       const clips = (t.clips || []).filter((c) => (all ? !!c : on(c))).map((c) => (pt.lines && pt.lines.has(c.id)
         ? { ...c, style: { ...(c.style || {}), ...pt.lines.get(c.id) } } : c));
@@ -188,7 +187,7 @@ function _move(e) {
   // Page pixels -> canvas pixels -> render-frame pixels.
   const dx = (e.clientX - _drag.pg0.x) * sc * k, dy = (e.clientY - _drag.pg0.y) * sc * k;
   const sample = _drag.what.kind === 'sample';
-  // (phase V71) From where its place puts it - a page of the second row is drawn over that.
+  // From where its place puts it - a page of the second row is drawn over that.
   _drag.r = dragPlace(_drag.from, _drag.hit.box0 || _drag.hit.box, dx, dy, F.w, F.h, { vertical: sample || e.shiftKey, free: e.altKey, near: NEAR * sc * k });
   if (sample) {
     const s = _sample.tl;
@@ -212,7 +211,7 @@ function _up() {
   const d = _drag;
   _drag = null;
   if (_raf) { cancelAnimationFrame(_raf); _raf = 0; }
-  // (V66) The sample let go: its place to its owner, the sample drawn where it was let go until the owner draws it again.
+  // The sample let go: its place to whoever set it, the sample drawn where it was let go until they draw it again.
   if (d.what.kind === 'sample') {
     if (d.moved && d.r && _sample) {
       if (_live) _sample.tl = _live;
@@ -292,7 +291,7 @@ export function paint(ctx) {
 }
 
 /**
- * (phase V66) The «example» of several highlights fragments' common place: `o` { tl - the timeline drawn in place of the captions,
+ * The «example» of several highlights fragments' common place: `o` { tl - the timeline drawn in place of the captions,
  * onDrop(place { pos, ty }) } - or null, the captions back. While it is set, only it is pressed and moved.
  */
 export function setSample(o) {

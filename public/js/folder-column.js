@@ -1,27 +1,23 @@
-// THE FOLDER COLUMN (phase V55, the owner 2026-10-28, (гн7), (гн13): "в правом столбце чата изображений нужно в дропдауне
-// сделать дерево, а ниже показывать изображения"; "показывать плитками, иначе как мне выбирать медиа которое хочу
-// прикрепить"). ONE module for a narrow column of pictures to point at - the pictures chat's right column (js/merge-v3/
-// chat-shell.js). (The Images column of the old New environment / New lookbook chat went with it in phase V58 - the
-// generators are windows now, js/gen-window.js.)
+// THE FOLDER COLUMN. ONE module for a narrow column of pictures to point at - the pictures chat's right column (js/merge-v3/
+// chat-shell.js).
 //
 //   - on top a DROPDOWN of the media tree (GET /api/library/tree, only `roots`), worn as "Move to…" wears it
 //     (css/media-tree.css .mtp-row, css/references.css .ref-move) - folded but for the way to what is open; a first row
 //     that is not a folder ("this project", `own`) when the caller has one; "‹" beside it goes up a level;
 //   - under it the FOLDERS of the one open, as tiles - pressed, one opens;
-//   - then what lies DIRECTLY in it (its `q`, the media tree's rule since V35): the pictures, each its own shape, stacked
+//   - then what lies DIRECTLY in it (its `q`, the media tree's rule): the pictures, each its own shape, stacked
 //     in columns. A REFERENCES post gives its pictures one by one (`files`).
-//   - (phase V56, (ги2), (ги3)) only the folders holding files of that type - in them or under them - are offered, and
+//   - only the folders holding files of that type - in them or under them - are offered, and
 //     their number is how many of those (typedTree: the shelf read once per kind, its answer dealt to the folders).
-//   - (V91 block 3, the owner's (чк19е): "из чата мы не можем удалять из библиотеки") nothing is deleted from here - the ✕ of
-//     phase V58 ((лк1)) went; files are deleted in the Library.
+//   - nothing is deleted from here; files are deleted in the Library.
 //
-//   - (phase V60.2, the owner's (вч1б)) the video chat's right column too: this project's clips, REFERENCES, IMAGES, VIDEO and
+//   - the video chat's right column too: this project's clips, REFERENCES, IMAGES, VIDEO and
 //     AUDIO - each top node its own type of files (`files` as a function), clips the model cannot take left out (`fit`).
 //
 // The tiles are the caller's (`tile(it)`): what a press does, its mark, a drag. Nothing is remembered unless `lsKey`.
 //
 // The helpers under it - readTree, folderIndex, pruneTree, filesUnder, filesOf - are the attachment window's
-// too (js/merge-v3/chat-pick.js, phase V55): a node's files are read by its `q`, never by a list of the app's folders.
+// too (js/merge-v3/chat-pick.js): a node's files are read by its `q`, never by a list of the app's folders.
 
 import * as Layers from './layers.js';
 import { showError } from './notice.js';
@@ -42,7 +38,7 @@ const _json = (url) => fetch(url).then(r => r.json()).catch(() => null);
 // ── The tree and the files of its nodes ─────────────────────────────────────
 
 /** The media tree's top nodes `roots` (by key, in that order) -> { nodes, byKey, parentOf } or null when unread. `plinks` -
- *  (phase V78) the open project's key: its THIS PROJECT is read too (root 'plinks'). */
+ *  the open project's key: its THIS PROJECT is read too (root 'plinks'). */
 export async function readTree(roots, plinks) {
   const d = await _json('/api/library/tree' + (plinks ? '?plinks=' + encodeURIComponent(plinks) : ''));
   if (!d || !d.success) return null;
@@ -102,11 +98,10 @@ export async function nodeFiles(node, type) {
   return filesOf(d.items, type);
 }
 
-// ── Only the folders that hold the type wanted (phase V56, the owner 2026-10-28, п. 2, (ги2), (ги3)) ──
-// "отображать только те папки в которых есть изображения и писать их количество. не показываем пустые папки и не
-// показываем в выборе изображения папки с видео": a folder is offered only when files of the type lie in it or in a folder
+// ── Only the folders that hold the type wanted ──
+// A folder is offered only when files of the type lie in it or in a folder
 // under it, and its number is how many - every one under it too. One rule for the attachment window (js/merge-v3/
-// chat-pick.js), the pictures chat's right column and the Images column of New environment / New lookbook (below).
+// chat-pick.js) and the right columns of the pictures chat and the video chat (below).
 
 const _Q_KEYS = ['filter', 'cat', 'src', 'folder', 'mood', 'aroot'];
 const ANYCAT = '__cat__';
@@ -118,9 +113,9 @@ const _grouped = (q) => !!q && !!q.filter && Object.keys(q).every(k => _Q_KEYS.i
  * The files of `type` in every folder of a tree (`nodes` - readTree's, or the media tree's, before anything is left out):
  *   -> { direct: Map(key -> files lying directly in it), total: Map(key -> how many in it and under it) }
  * `cache` (a Map) keeps the shelf's answers for one reading. A kind that could not be read throws.
- * `fit(file)` (phase V57, the owner's (ок1)) - only the files it takes are counted and shown: the video chat's window
+ * `fit(file)` - only the files it takes are counted and shown: the video chat's window
  * leaves out the clips longer than the chosen model takes.
- * `type` (phase V60.2, the owner's (вч1б)) may be a function of the top node's key -> a type or a list of them: the video
+ * `type` may be a function of the top node's key -> a type or a list of them: the video
  * chat's column shows the pictures of IMAGES, the clips of VIDEO, the sounds of AUDIO and both of a REFERENCES post.
  */
 export async function folderIndex(nodes, type, cache, fit) {
@@ -203,7 +198,7 @@ export async function typedTree(roots, type, cache, fit, plinks) {
   return { nodes, byKey, parentOf, index };
 }
 
-// (V50 speed) The tree as the column offers it: every folder the index has counted cut down to those holding the type, each
+// The tree as the column offers it: every folder the index has counted cut down to those holding the type, each
 // counting them (pruneTree); a folder not counted yet stays as read - never offered (`_valid` asks the index) until the whole
 // tree is counted. With the whole index this is typedTree's answer.
 function _shaped(nodes, idx) {
@@ -249,7 +244,7 @@ function _inQ(i, q, foldersOf) {
   }
   if (q.folder && !_isIn(m.folder, q.folder)) return false;
   if (q.mood && !_isIn(m.mood, q.mood)) return false;
-  // (2026-11-09) AUDIO's own root - `aroot` '1' what lies there (a sound's `inAudio`), '0' the rest (My sounds' root).
+  // AUDIO's own root - `aroot` '1' what lies there (a sound's `inAudio`), '0' the rest (My sounds' root).
   if (q.aroot === '1' ? !m.inAudio : q.aroot === '0' ? !!m.inAudio : false) return false;
   if (q.cat) { const c = m.categoryId || ''; if (q.cat === ANYCAT || (q.cat === UNCAT ? !!c : c !== q.cat)) return false; }
   return true;
@@ -260,13 +255,13 @@ function _inQ(i, q, foldersOf) {
 /**
  * createFolderColumn(host, o) - builds the column in `host` (emptied).
  *   o.roots        the tree's top nodes offered, by key - ['references', 'images'] - or a function answering them at every
- *                  reading (phase V60.2: the video chat's VIDEO goes while its model takes no clips, (вч4б))
+ *                  reading (the video chat's VIDEO goes while its model takes no clips)
  *   o.files        'photo' (default) | 'video' | 'audio' - what of a folder is shown; or a function of the top node's key
- *                  answering one or a list (phase V60.2, (вч1б): the video chat's pictures, clips and sounds)
- *   o.fit(file)    -> false for a file not to show or count (the video chat: a clip longer than its model takes, V57)
+ *                  answering one or a list (the video chat's pictures, clips and sounds)
+ *   o.fit(file)    -> false for a file not to show or count (the video chat: a clip longer than its model takes)
  *   o.own          { label, empty } - a first row that is not a folder ("this project"); its pictures are the caller's,
  *                  given with setOwn(items) - each { path, name, aspect, state, ... } as the caller's tile takes it.
- *                  (phase V78, the owner 2026-11-07: "чтобы была только одна папка this project") With THIS PROJECT in the
+ *                  With THIS PROJECT in the
  *                  tree (`plinks`) the two are ONE row: its folders are THIS PROJECT's, and in it lie what the caller gave
  *                  and the links of THIS PROJECT's top - the tree's own node 'plinks' is not drawn apart.
  *   o.start        what is open first: 'own', a node's key - else what `lsKey` remembers, else `own`, else roots[0]
@@ -286,7 +281,7 @@ function _inQ(i, q, foldersOf) {
 export function createFolderColumn(host, o) {
   const opt = Object.assign({ files: 'photo', empty: 'Nothing in this folder.', title: 'Show' }, o || {});
   const OWN = 'own';
-  const PL = 'plinks';            // (phase V78) THIS PROJECT's node - one with the own row
+  const PL = 'plinks';            // THIS PROJECT's node - one with the own row
   let tree = null;              // _shaped's answer - only the folders holding files of `files`, and their files; `partial`
                                 // while only the folder open is counted, `failed` when the rest could not be
   let sel = '';                 // OWN or a node's key
@@ -296,7 +291,7 @@ export function createFolderColumn(host, o) {
   let state = 'idle';           // 'reading' | 'ready' | 'error'
   let loads = 0;
   let menu = null;              // the dropdown, while open
-  let full = null;              // (V50 speed) while the whole count waits for the pictures: starts it at once
+  let full = null;              // while the whole count waits for the pictures: starts it at once
 
   host.textContent = '';
   const root = el('div', 'fc');
@@ -319,11 +314,11 @@ export function createFolderColumn(host, o) {
 
   const stored = () => { if (!opt.lsKey) return ''; try { return String(JSON.parse(localStorage.getItem(opt.lsKey) || '""') || ''); } catch (e) { return ''; } };
   const remember = () => { if (!opt.lsKey) return; try { localStorage.setItem(opt.lsKey, JSON.stringify(sel)); } catch (e) { /* a private window */ } };
-  // (V50 speed) The own row needs no tree: when nothing else is asked for it is open from the start, so the caller's own
+  // The own row needs no tree: when nothing else is asked for it is open from the start, so the caller's own
   // pictures show as soon as it gives them (setOwn), before the tree is read.
   { const k = [opt.start, stored()].find(Boolean) || ''; if (opt.own && (!k || k === OWN || k === PL)) sel = OWN; }
   const node = (k) => (tree ? tree.byKey.get(k) || null : null);
-  // (phase V78) THIS PROJECT's folders are the own row's: their parent at the top is the own row.
+  // THIS PROJECT's folders are the own row's: their parent at the top is the own row.
   const parentKey = (k) => { const p = tree ? tree.parentOf.get(k) || '' : ''; return p === PL && opt.own ? OWN : p; };
   const pathOf = (k) => {
     const out = [];
@@ -356,16 +351,16 @@ export function createFolderColumn(host, o) {
     if (!tree && sel !== OWN) { state = 'reading'; paint(); }
     let err = '';
     const roots = typeof opt.roots === 'function' ? opt.roots() : opt.roots;
-    // (phase V78, (лч16)) THIS PROJECT too, when the caller names the project (`plinks`) - only its files of the column's types.
+    // THIS PROJECT too, when the caller names the project (`plinks`) - only its files of the column's types.
     const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
     const fit = typeof opt.fit === 'function' ? opt.fit : null;
     const raw = await readTree(roots, pk);
     if (mine !== loads) return;
-    // (phase V73 block 2, (б2-19)) No answer is a failed reading too (readTree answers null), never an empty column. The reason
+    // No answer is a failed reading too (readTree answers null), never an empty column. The reason
     // goes to the corner (js/notice.js); a column read before keeps what it shows.
     const failed = (why) => { showError(why || 'the folders could not be read'); if (!tree) { state = 'error'; paint(); } };
     if (!raw) { failed(); return; }
-    // (V50 speed, the owner 2026-11-12: "моментально показывать чат и затем сразу подгружать медиа") The folder that opens is
+    // So the column shows at once, the folder that opens is
     // counted FIRST - its own folders only, one shelf read for most - and drawn; the whole tree is counted after (below). The
     // cache keeps every shelf's answer for both, so nothing is read twice.
     const cache = new Map();
@@ -377,7 +372,7 @@ export function createFolderColumn(host, o) {
       for (const [key, v] of part.direct) idx.direct.set(key, v);
       for (const [key, v] of part.total) idx.total.set(key, v);
     };
-    // The folders tried in today's order - one asked for, the one open, the start or the one remembered, then the own row or the
+    // The folders tried in this order - one asked for, the one open, the start or the one remembered, then the own row or the
     // first root holding the type -, read again after every count: a press meanwhile is kept. The own row is THIS PROJECT's.
     const order = () => [wanted, sel].concat(sel ? [] : [opt.start, stored()], opt.own ? [OWN] : raw.nodes.map(n => n.key));
     let want = '';
@@ -461,7 +456,7 @@ export function createFolderColumn(host, o) {
     pick.title = (path.join(' / ') || '') + ' - press to choose another folder';
     pickN.textContent = own ? (tree ? String(_ownCount()) : '') : n ? String(n.count || 0) : '';
     const p = own ? '' : parentKey(sel);
-    // (V50 speed) a parent not counted yet shows once the whole tree is
+    // a parent not counted yet shows once the whole tree is
     up.hidden = !p || !_valid(p);
     up.title = p ? 'Up to ' + (p === OWN ? opt.own.label : node(p).label) : '';
   }
@@ -498,9 +493,9 @@ export function createFolderColumn(host, o) {
     const own = sel === OWN;
     const shown = own ? _ownShown() : files;
     const lead = typeof opt.lead === 'function' ? opt.lead() : null;
-    // (phase V73 block 2) reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
+    // reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
     // are the shared parts (js/ui-state.js); `fc-none` is their place in the list
-    // (V50 speed) the own row's pictures show before the tree is read - "reading…" only while it has none
+    // the own row's pictures show before the tree is read - "reading…" only while it has none
     if ((state === 'reading' || state === 'idle') && !(own && shown.length)) { list.replaceChildren(loadingEl('reading…', { cls: 'fc-none' })); return; }
     if (state === 'error' && !own) { list.replaceChildren(failedEl('the folders', () => { state = 'reading'; paint(); load(); }, { cls: 'fc-none' })); return; }
     if (!shown.length) {
@@ -511,7 +506,7 @@ export function createFolderColumn(host, o) {
       list.replaceChildren(...[words ? emptyEl(words, { icon: own ? 'image' : 'folder', cls: 'fc-none' }) : null, lead].filter(Boolean));
       return;
     }
-    // Sounds are rows across the column (phase V60.2): a folder of AUDIO is one column.
+    // Sounds are rows across the column: a folder of AUDIO is one column.
     const n = shown.every(x => x && x.ftype === 'audio') ? 1 : Math.max(1, _cols(list.clientWidth));
     const H = new Array(n).fill(0);
     const boxes = [];
@@ -551,7 +546,7 @@ export function createFolderColumn(host, o) {
     box.appendChild(lst);
 
     const row = (n, depth, ownRow) => {
-      // (phase V78) The own row holds THIS PROJECT's folders.
+      // The own row holds THIS PROJECT's folders.
       const kids = ownRow ? ((node(PL) || {}).children || []) : (n.children || []);
       const has = kids.length > 0;
       const key = ownRow ? OWN : n.key;
@@ -568,7 +563,7 @@ export function createFolderColumn(host, o) {
       }
       b.appendChild(tw);
       b.appendChild(el('span', 'mt-name', ownRow ? opt.own.label : n.label));
-      // (phase V73 block 2, (б2-22)) the count in brackets right after the name, the lock at the right edge - the media tree's way
+      // the count in brackets right after the name, the lock at the right edge - the media tree's way
       b.appendChild(el('span', 'mt-n', '(' + (ownRow ? _ownCount() : (n.count || 0)) + ')'));
       if (!ownRow && n.locked) { const l = el('span', 'mt-lock'); l.innerHTML = LOCK_SVG; b.appendChild(l); }
       b.title = ownRow ? opt.own.label : pathOf(key).join(' / ');
@@ -579,7 +574,7 @@ export function createFolderColumn(host, o) {
     function paintMenu() {
       const top = lst.scrollTop;
       lst.textContent = '';
-      // (V50 speed; phase V56's rule - only the folders holding the type, with their numbers) Offered once the whole tree is
+      // Only the folders holding the type, with their numbers - offered once the whole tree is
       // counted: until then a line that says so, and the count starts at once.
       if (!tree || tree.partial) {
         lst.appendChild(tree && tree.failed ? failedEl('the folders', () => { _closeMenu(); load(); }, { line: true })
@@ -627,7 +622,7 @@ export function createFolderColumn(host, o) {
     setOwn: (items) => { ownItems = Array.isArray(items) ? items : []; if (sel === OWN) paint(); else _paintHead(); },
     select,
     selected: () => (sel === OWN ? { own: true } : { node: node(sel) }),
-    // (phase V60.2) Before the first reading has chosen, "this project" is what opens when nothing else is asked for - so the
+    // Before the first reading has chosen, "this project" is what opens when nothing else is asked for - so the
     // caller's first read of its own results is not left for its next tick.
     isOwn: () => sel === OWN || (!sel && !!opt.own && !opt.start && !stored()),
     items: () => (sel === OWN ? _ownShown() : files),

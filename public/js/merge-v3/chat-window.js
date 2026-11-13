@@ -1,24 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE CHATS' WINDOWS (phase V64 block 3, the owner 2026-10-31: "будем открывать не вкладки а попапы с чатами генерации";
-   (зг4)-(зг7), (зг9)). The pictures chat and the video chat are no views of Merge's Library panel any more: each opens in
-   a generation's window over the page (js/gen-window.js openFrame, GEN_SIZE 1280×800, smaller on a smaller screen), as
-   the frames chat does since V61 (fchat.js) - its root MOVED into the window while it is open and back to its parking
-   place when it closes, so what is typed, attached and waited for is the same nodes. Closing the window hides the chat;
+   THE CHATS' WINDOWS. The pictures chat and the video chat each open in a generation's window over the page
+   (js/gen-window.js openFrame, GEN_SIZE 1280×800, smaller on a smaller screen), as the frames chat does (fchat.js) - its
+   root MOVED into the window while it is open and back to its parking place when it closes, so what is typed, attached and waited for is the same nodes. Closing the window hides the chat;
    nothing it asked for stops (the server waits, files, announces in Alerts).
 
    The window is the chat's owner (chat-shell.js): no crumb, no room of the panel, no view remembered per project. Its
-   conversation is the open project's, as before (the store's key; a highlights fragment's is its home's). A result dragged out of the window (a picture, a clip, a tile of the right column) lays the window aside until
-   it is let go on a lane (`passDrags`, (зг4)); on a highlights project's own timeline the drag says "Open a fragment
-   first." (chat-shell.js refuseHome, (зг7)).
+   conversation is the open project's (the store's key; a highlights fragment's is its home's). A result dragged out of the window (a picture, a clip, a tile of the right column) lays the window aside until
+   it is let go on a lane (`passDrags`); on a highlights project's own timeline the drag says "Open a fragment
+   first." (chat-shell.js refuseHome).
 
      chatWindow({ chat, id, cls, name, title }) -> { open(), close(), isOpen(), name }
      closeChatWindows()   every chat's window closed - an Alerts row leads to a file in the Library panel behind them
-     ensureChatCss()      (phase V64 block 4) the chats' sheets on a page that does not load them (the Library) - a promise
-                          of them loaded (V50), so a chat is never shown bare
-     openEarly(which) / wanted(which) / dropEarly(which)   (V50) a page loading a chat at its first press (Home, the Library)
+     ensureChatCss()      the chats' sheets on a page that does not load them (the Library) - a promise
+                          of them loaded, so a chat is never shown bare
+     openEarly(which) / wanted(which) / dropEarly(which)   a page loading a chat at its first press (Home, the Library)
                           shows the chat's window at once, "loading…" in it, and the chat's open() takes it - below
        chat    createChat()'s answer - { open, close, isOpen, fit }
-       id      its root's element id; made in a parking place of its own when the page has none (the Library, block 4)
+       id      its root's element id; made in a parking place of its own when the page has none (the Library)
        cls     the root's classes beside .mv3-pc ('is-video')
        name    the window's name on the stack of layers
        title   its crumb
@@ -40,7 +38,7 @@ function _parking() {
   return p;
 }
 
-// (phase V64 block 4) The chats' look is Merge's sheets - the Library loads them the first time a chat opens there.
+// The chats' look is Merge's sheets - the Library loads them the first time a chat opens there.
 const CHAT_CSS = ['merge-v3.css', 'mv3-imagen.css', 'folder-column.css'];
 const _cssIn = new Map();     // a sheet put in here -> a promise of it loaded (or failed)
 export function ensureChatCss() {
@@ -61,16 +59,15 @@ export function ensureChatCss() {
 const _all = new Set();
 export function closeChatWindows() { for (const w of _all) w.close(); }
 
-// (fix (л)) A chat's frame: moved and stretched; one size and place for every chat's window, kept.
+// A chat's frame: moved and stretched; one size and place for every chat's window, kept.
 function _frame(name, title, onClose) {
   const win = openFrame({ name, size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-chatwin', passDrags: true, onClose });
   win.setCrumbs([{ label: title }]);
   return win;
 }
 
-// (V50, the owner 2026-11-12: "может моментально показывать чат и затем сразу подгружать медиа") A page that loads a chat at
-// its first press (Home, the Library) shows the chat's window AT ONCE - the same frame - with "loading…" in it; the chat's
-// open() takes that frame when its sheets, modules and conversation are in. Closed meanwhile (✕, Escape, a press beside it),
+// A page that loads a chat at its first press (Home, the Library) shows the chat's window AT ONCE - the same frame - with
+// "loading…" in it; the chat's open() takes that frame when its sheets, modules and conversation are in. Closed meanwhile (✕, Escape, a press beside it),
 // it is gone and the page opens nothing later (wanted()); pressed again meanwhile, the one window stays.
 // The two chats' names and titles - picchat.js and vidchat.js take theirs from here, so the early window is always theirs.
 export const CHAT_WIN = { pictures: { name: 'pictures chat', title: 'generate image' }, videos: { name: 'video chat', title: 'generate video' } };
@@ -136,7 +133,7 @@ export function chatWindow(o) {
   async function open() {
     const r = root();
     if (!isOpen()) {
-      // (V50) Its early window showing "loading…" is taken as it is; else a frame of its own.
+      // Its early window showing "loading…" is taken as it is; else a frame of its own.
       const e = _early.get(o.name);
       if (e && e.win.alive()) {
         _early.delete(o.name);

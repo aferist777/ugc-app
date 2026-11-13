@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS FROM WHAT WAS SAID - the sound a timeline plays, and the words heard in it (phase K1).
+   CAPTIONS FROM WHAT WAS SAID - the sound a timeline plays, and the words heard in it.
 
    The server listens (lib/captions-job.js) and lays the lines; the page reads the same rules to say
    whether there is anything to listen to. How the words are cut into pages - at the lay and at every
-   re-cut - is pages.js (phase K2). ONE module, as the style is (style.js): an ES module the page
+   re-cut - is pages.js. ONE module, as the style is (style.js): an ES module the page
    imports and the server require()s through lib/mv3b-subs.js.
 
    A HEARD line is a caption that carries the timings of its words (`words`); a TYPED one has none.
@@ -12,7 +12,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Languages by their ISO-639-1 codes, for naming the one a listener heard ("Heard as Russian", lib/whisper-words.js).
- *  Nobody TELLS the listener a language any more (phase V29, the owner 2026-10-14: the lane's menu went) - it detects. */
+ *  Nobody TELLS the listener a language - it detects. */
 export const LANGS = [
   ['auto', 'detect'], ['ru', 'Russian'], ['en', 'English'], ['uk', 'Ukrainian'], ['es', 'Spanish'],
   ['de', 'German'], ['fr', 'French'], ['it', 'Italian'], ['pt', 'Portuguese'], ['pl', 'Polish'], ['tr', 'Turkish'],
@@ -20,9 +20,8 @@ export const LANGS = [
 
 /**
  * How the subtitle lane is listened to, as stored on it: `{ engine }`, or null when it is the default - ask Groq.
- * `engine: 'local'` is "this computer" (phase K1b). The language is always detected: a `lang` an older lane
- * carries is dropped here (phase V29 - the menu went; every lane of the owner's library was on "detect", so
- * nothing is heard again or paid twice).
+ * `engine: 'local'` is "this computer". The language is always detected: a `lang` a lane
+ * carries is dropped here.
  */
 export function listenOf(lane) {
   const l = (lane && lane.listen) || {};
@@ -35,9 +34,9 @@ export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 
 // One flat run of audio laid end to end, silence where the timeline is silent, so the words come
 // back already in timeline coordinates and need no shifting.
 //
-// MUSIC IS NOT LISTENED TO. A bed runs under the whole video, and heard as sound it took the ground
-// from every voice on top of it - the captions came out of the song. A bed says so on the clip
-// (`bed`, music.js); a bed laid before that was said is known by what it is: a music-panel clip
+// MUSIC IS NOT LISTENED TO. A bed runs under the whole video, and heard as sound it would take the ground
+// from every voice on top of it - the captions would come out of the song. A bed says so on the clip
+// (`bed`, music.js); a bed without that mark is known by what it is: a music-panel clip
 // (id m...), no picture half, a track of the music (Media -> Audio -> Music).
 //
 // OVERLAPS ARE NOT REPRESENTABLE in a flat run, and two people talking at once is not something a
@@ -47,7 +46,7 @@ export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 
 //
 // A REVERSED clip is played backwards by the render (lib/mv3b-render.js), and speech backwards is
 // noise to a listener: it is left out, as silence.
-// (phase V34.E) A sound effect from SFX (`sfx`) is not listened to either - whisper "hears" words in noise (the owner's (з7)).
+// A sound effect from SFX (`sfx`) is not listened to either - whisper "hears" words in noise.
 export const isBed = (c) => !!c && (c.bed === true || c.sfx === true
   || (/^m[0-9a-z]/.test(String(c.id || '')) && !c.pairId && /^\/media\/audio\//.test(String(c.src || ''))));
 
@@ -117,7 +116,7 @@ export function silencesOf(pieces) {
 
 // ── What was heard, made fit to lay ─────────────────────────────────────────
 // Whisper hears things that were not said: in silence it is known to write a whole sentence ("thank
-// you for watching", "Субтитры сделал DimaTorzok"), and it loops on a phrase. Its own segments say
+// you for watching", a subtitler's credit), and it loops on a phrase. Its own segments say
 // when that happened, and the timeline says where nothing plays at all. These rules run only when a
 // lane is laid; what Groq answered is kept whole in the project's subs/ file, so they can change
 // without paying again.
@@ -130,7 +129,7 @@ const WORD_CHARS = 60;                  // the longest a stored word is (style.j
  * @param segments  [{ start, end, no_speech_prob, avg_logprob, compression_ratio }] in timeline seconds
  * @param opts.gaps   [[from, to]] where the timeline plays nothing (silencesOf)
  * @param opts.typed  [[from, to]] the lines typed by hand - they own their stretch
- * @param opts.fixed  [[from, to]] the heard lines a person corrected (K10) - they own theirs too
+ * @param opts.fixed  [[from, to]] the heard lines a person corrected - they own theirs too
  * @returns { words, dropped: { noise, silence, typed, fixed } }
  */
 export function cleanWords(words, segments, opts) {
@@ -143,8 +142,8 @@ export function cleanWords(words, segments, opts) {
   const kept = [];
   for (const w0 of (words || [])) {
     // No word longer than a stored word may be (60 - normalizeWords): a page built from a longer one (a web
-    // address heard as one word) spelled what its stored words no longer did, and an untouched line counted as
-    // corrected for good (review K10). Cut here, before the pages are, the text and the words say the same.
+    // address heard as one word) would spell what its stored words do not, and an untouched line would count as
+    // corrected for good. Cut here, before the pages are, the text and the words say the same.
     let text = String((w0 && (w0.text != null ? w0.text : w0.word)) || '').trim();
     if (text.length > WORD_CHARS) text = text.slice(0, /[\uD800-\uDBFF]/.test(text[WORD_CHARS - 1]) ? WORD_CHARS - 1 : WORD_CHARS);
     if (!text) continue;
@@ -158,12 +157,12 @@ export function cleanWords(words, segments, opts) {
     if (gap && end <= gap[1] + 0.05) { dropped.silence++; continue; }
     if (gap) start = gap[1];
     // ...and a word that runs on into a silence ends where the sound does: Whisper stretches the last word
-    // before a silence by ~0.4 s, which hid the pause from the cut (review K2).
+    // before a silence by ~0.4 s, which would hide the pause from the cut.
     const into = gaps.find(([a]) => start < a && end > a + 0.05);
     if (into) end = into[0];
     if (inside(typed, (start + end) / 2)) { dropped.typed++; continue; }
     if (inside(fixed, (start + end) / 2)) { dropped.fixed++; continue; }
-    // A talking head's word keeps the line it was heard from (phase V30, block 1).
+    // A talking head's word keeps the line it was heard from.
     kept.push(w0.voice ? { text, start, end, voice: String(w0.voice) } : { text, start, end });
   }
   kept.sort((a, b) => a.start - b.start);

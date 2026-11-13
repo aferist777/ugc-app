@@ -1,18 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A SOUND'S MENU UNDER THE RIGHT BUTTON (phase V34.E; the owner 2026-10-23, (р2): "правая кнопка мыши") - the one menu a
-   tile has in Merge's Library panel and on the Library's Media shelf, and only a sound's or a track's (the rule of V23 -
-   no menu on a tile - stays for every other tile). What a sound has no window to do in:
+   A SOUND'S MENU UNDER THE RIGHT BUTTON - the menu of a sound's or a track's tile in Merge's Library panel and on the
+   Library's Media shelf. What a sound has no window to do in:
 
      Cut…        a piece as a new sound (js/sound/cut-window.js) - of a track a new    every sound, every track
-                 track in Music, of the rest a sound in My sounds (V54); a track in the
-                 Library opens in its player instead (the page's `cut`)
+                 track in Music, of the rest a sound in My sounds; a track or a sound
+                 in the Library opens in its player instead (the page's `cut`)
      Rename      its name (PATCH /api/library/item/:kind/:id)                          own sounds, tracks
      Move to     another category of My sounds, or My sounds itself                     own sounds
-                 (2026-11-09, the owner's (в19)-(в20)) AUDIO itself, Music - a sound    own sounds
+                 AUDIO itself, Music - a sound                                          own sounds
                  becomes a track; AUDIO, My sounds - a track becomes a sound            tracks
                  (POST /api/library/batch/move, routes/library.js _audioMove)
      highlights  a track into Music -> highlights (its root), out of it, or back into
-                 the mood its preset made it for (V34.F: a mood folder takes nothing
+                 the mood its preset made it for (a mood folder takes nothing
                  else - routes/music.js, lib/music-store.js `place`)                   tracks
      About       where it came from: its author, license and page, what it was asked,
                  the sound a piece was cut from, its tags                               every one
@@ -22,7 +21,7 @@
 
      soundMenu(item, event, { status(text, bad), changed(), del(item), stop(), cut(item), toTimeline(piece) })
                           changed() reads the shelf again (awaited - the word about what was done comes after it);
-                          cut(item) - the page's own way to cut it (true: done; the Library's player for a track);
+                          cut(item) - the page's own way to cut it (true: done; the Library's player);
                           toTimeline(piece) - Merge's "to timeline" in the Cut window (timeline-b.js placeSoundPiece)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -51,7 +50,7 @@ const _patch = (it, body) => _api('/api/library/item/' + encodeURIComponent(it.k
 export async function myCats() {
   try {
     const d = await _api('/api/library/cats');
-    // (phase V54) A folder in a folder reads as its path.
+    // A folder in a folder reads as its path.
     return ((d.byKind && d.byKind.sounds) || []).filter(c => !c.locked)
       .map(c => ({ id: c.id, label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }));
   } catch (e) { return []; }
@@ -88,9 +87,9 @@ export async function soundMenu(it, ev, opts) {
     else b.disabled = true;
     m.appendChild(b);
   };
-  // (phase V78) The page's own rows first - Merge's "Add to this project…".
+  // The page's own rows first - Merge's "Add to this project…".
   for (const [label, sub, fn] of (Array.isArray(o.extra) ? o.extra : [])) item(label, sub, fn);
-  // (phase V54, (зв28)) Where the piece goes follows what is cut: a track's into Music, the rest into My sounds - no choice.
+  // Where the piece goes follows what is cut: a track's into Music, the rest into My sounds - no choice.
   const inPlayer = it.kind === 'music' && typeof o.cut === 'function';
   item('Cut…', inPlayer ? 'in the player - a piece of it as a new track in Music'
     : 'a piece of it as a new ' + (it.kind === 'music' ? 'track in Music' : 'sound in My sounds'), () => {
@@ -112,7 +111,7 @@ export async function soundMenu(it, ev, opts) {
       if (done) { await o.changed(); o.status('Renamed.'); }
     });
   }
-  // (phase V34.F, the owner's (ф3)) A track and the highlights folder: its root takes any track, a mood only its own.
+  // A track and the highlights folder: its root takes any track, a mood only its own.
   if (it.kind === 'music') {
     let pl = null;
     try { pl = await _api('/api/audio/music/' + encodeURIComponent(it.id) + '/place'); } catch (e) { pl = null; }
@@ -132,7 +131,7 @@ export async function soundMenu(it, ev, opts) {
       if (pl.folder) item('Out of highlights', 'into Music itself - the popup stops offering it', put({ folder: '' }, '"' + it.name + '" is out of highlights.'));
     }
   }
-  // (2026-11-09, the owner's (в19)-(в20)) A sound and a track go into one another and into AUDIO itself - the server's move.
+  // A sound and a track go into one another and into AUDIO itself - the server's move.
   const moveTo = (to, said) => async () => {
     try {
       const d = await _api('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },

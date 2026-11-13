@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the lanes of words as ONE DOCUMENT (phase V30, block 2, the owner 2026-10-15).
+   CAPTIONS — the lanes of words as ONE DOCUMENT.
 
    The captions view's `text` tab shows the lines of the subtitle and text lanes as a document: a line of it is a
-   caption, in time order. ONE model for every change made there (the owner's plan): the lines changed are taken out
+   caption, in time order. ONE model for every change made there: the lines changed are taken out
    and their new texts are put in their place - rewrite(track, from, to, texts). The words of those lines are matched
    to the new texts as a line rewritten in the strip is (words.js retextLines - retext over several lines at once): a
    word that stays keeps its moment whichever line it is on now, a new word shares the time of what it replaced by
@@ -15,8 +15,8 @@
      longer before a longer one (pages.js PAGE, as a cut page does).
    - A TYPED line (no words) stays typed: its text as it is written; lines that are all typed share their stretch by
      "letters + 2". A typed line rewritten together with a heard one is timed by its letters (words.js typedWords) and
-     becomes part of a corrected heard line (the owner's (с26)).
-   - A TALKING HEAD's line of the script (`voice`, phase V30 block 1) never shares a caption with another line's words:
+   becomes part of a corrected heard line.
+   - A TALKING HEAD's line of the script (`voice`) never shares a caption with another line's words:
      a rewrite across two of them is refused, and says why.
    - The limits of a line: 200 words, 400 characters, 60 a word - refused in words before anything changes.
    - A line left with no text is taken off its lane.
@@ -26,7 +26,7 @@
 
    Find and replace (matcher, matchesIn, replaceIn): over the text of each line; a replacement is a rewrite of its line.
 
-   PURE: no page, no store - the stands import it as the page does.
+   PURE: no page, no store.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { isHeard } from './heard.js';

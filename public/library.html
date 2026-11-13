@@ -17,20 +17,20 @@
 <!-- The countdown rows of the scenario generator (js/progress.js startInlineProgress). -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/library.css">
-<!-- The scenario window "New scenario -> blank" opens - Merge's own (js/scen-window.js, phase V28.2). -->
+<!-- The scenario window "New scenario -> blank" opens - Merge's own (js/scen-window.js). -->
 <link rel="stylesheet" href="css/dialog.css">
-<!-- The media tree beside the Media shelf's gallery (js/media-tree.js, phase V28.5). -->
+<!-- The media tree beside the Media shelf's gallery (js/media-tree.js). -->
 <link rel="stylesheet" href="css/media-tree.css">
-<!-- Making a character on the Characters shelf (phase H, js/library/chmake.js). -->
+<!-- Making a character on the Characters shelf (js/library/chmake.js). -->
 <link rel="stylesheet" href="css/char-make.css">
-<!-- (phase V56, V58) What is known about a made environment or lookbook, in the viewer (js/library/made-rows.js). -->
+<!-- What is known about a made environment or lookbook, in the viewer (js/library/made-rows.js). -->
 <link rel="stylesheet" href="css/made-rows.css">
-<!-- (phase V58) The generators' windows (js/gen-window.js) - linked here so the first window opens dressed; data-gw tells the
+<!-- The generators' windows (js/gen-window.js) - linked here so the first window opens dressed; data-gw tells the
      module it is in. -->
 <link rel="stylesheet" href="css/gen-window.css" data-gw="1">
 <!-- The sound window over Media (js/sound/sound-window.js) - one with Merge's: css/sound-window.css. -->
 <link rel="stylesheet" href="css/sound-window.css">
-<!-- (phase V34.E) Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
+<!-- Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
 <link rel="stylesheet" href="css/sound.css">
 </head>
 <body>
@@ -48,9 +48,9 @@
   <!-- Shelves. One row per kind; the count fills in when a shelf is read. -->
   <aside class="lib-shelves" id="lib-shelves">
     <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
-    <!-- (phase V56) Lookbooks and Environments are IMAGES -> Lookbooks / Environments on Media, no shelves of their own. -->
+    <!-- Lookbooks and Environments are IMAGES -> Lookbooks / Environments on Media, no shelves of their own. -->
     <!-- Everything a timeline takes - video (B-rolls, Hooks, Uploads), pictures, music and sounds - in a gallery with
-         the media tree beside it (phase V28.5; the Music shelf is Audio -> Music here). -->
+         the media tree beside it (music is Audio -> Music here). -->
     <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
     <!-- Every voice we have taken that has our own demo. Rows rather than cards, with a
          permanent info column - see js/library/voices.js. -->
@@ -58,8 +58,8 @@
     <!-- Text, not pictures: rows like Voices, and a click opens the scenario right here, where
          its lines are. See js/library/scenarios.js. -->
     <button class="lib-shelf" type="button" data-kind="scenarios">Scenarios<span class="lib-n"></span></button>
-    <!-- Finished videos. This shelf has no record store behind it: it IS the finals/
-         directory, so a render is on it exactly while its file exists. Merge's export flow
+    <!-- Finished videos. This shelf has no record store behind it: it IS the renders'
+         folder (media/renders/), so a render is on it exactly while its file exists. Merge's export flow
          is the only thing that puts one there or takes it away - see routes/library.js
          _rendersShelf. -->
     <button class="lib-shelf" type="button" data-kind="renders">Renders<span class="lib-n"></span></button>
@@ -68,27 +68,27 @@
   <main class="lib-main">
     <div class="lib-bar" id="lib-bar">
       <!-- The shelf's making area in place of the shelf, and the way back - at the LEFT of the bar, one in
-           the other's place (the owner, phases G3 and H1). Their words come from the shelf that is open:
+           the other's place. Their words come from the shelf that is open:
            New scenario, New Character, New environment, New lookbook (js/library/main.js MAKERS). -->
       <button class="u-btn is-s is-main" type="button" id="lib-new" hidden></button>
       <button class="u-btn is-s" type="button" id="lib-back" hidden></button>
-      <!-- (phase V28.2) The narrators in place of the list, on Scenarios only - "←" in the place of "New scenario"
+      <!-- The narrators in place of the list, on Scenarios only - "←" in the place of "New scenario"
            brings back what was there (js/library/narrators.js). -->
       <button class="u-btn is-s" type="button" id="lib-narr" hidden title="The narrators - how a script is written">Narrators</button>
-      <!-- (phase V35) On Media: the path to the node the tree has selected - "AUDIO / SFX / My sounds", every word a press
+      <!-- On Media: the path to the node the tree has selected - "AUDIO / SFX / My sounds", every word a press
            away (js/media-tree.js crumbsEl, painted by js/library/main.js). -->
       <div class="lib-crumbs" id="lib-crumbs" hidden></div>
-      <!-- (phase V34.E) Over SFX: the search and "find online…" (js/sound/shelf.js, painted by js/library/main.js). -->
+      <!-- Over SFX: the search and "find online…" (js/sound/shelf.js, painted by js/library/main.js). -->
       <div class="lib-snd-head" id="lib-snd-head" hidden></div>
-      <!-- (phase V73 block 6) The bar in three parts: the shelf's action at the left, the path and the state in the middle,
+      <!-- The bar in three parts: the shelf's action at the left, the path and the state in the middle,
            bringing in at the right - and the checks of the library in the menu "⋯" at its end. -->
       <span class="lib-status u-status is-line" id="lib-status"></span>
-      <!-- (phase V27) Stops the link being downloaded - shown only while one is (js/library/links.js). -->
+      <!-- Stops the link being downloaded - shown only while one is (js/library/links.js). -->
       <button class="u-btn is-s is-icon is-quiet u-x lib-link-stop" type="button" id="lib-link-stop" hidden title="Stop this download"></button>
       <span class="sp"></span>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="u-btn is-s" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
-      <!-- (phase V27) The same clips from a link - YouTube, TikTok, Instagram... - downloaded by the server. -->
+      <!-- The same clips from a link - YouTube, TikTok, Instagram... - downloaded by the server. -->
       <button class="u-btn is-s" type="button" id="lib-link" hidden>From a link</button>
       <!-- accept follows the node selected in the media tree (js/library/main.js). -->
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
@@ -96,20 +96,20 @@
            (js/library/main.js _moreMenu). -->
       <button class="u-btn is-s is-icon is-quiet" type="button" id="lib-more" hidden title="Checks of the library"></button>
     </div>
-    <!-- THE RIGHT COLUMN (phase B): the grid keeps two thirds, and the last third says what the
+    <!-- THE RIGHT COLUMN: the grid keeps two thirds, and the last third says what the
          selected tile is - on Characters (js/library/info.js) - or the
          selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
-      <!-- The gallery's column: the grid, and under it (phase V54) THE MUSIC PLAYER while Music is open - out of the grid
-           that is drawn again, and only under it: the tree's column on the right goes down to the bottom (the owner
-           2026-10-28: "плеер не должен заходить под столбец дерева"; js/sound/player.js, shown by js/library/main.js). -->
+      <!-- The gallery's column: the grid, and under it THE MUSIC PLAYER while Music is open - out of the grid
+           that is drawn again, and only under it: the tree's column on the right goes down to the bottom
+           (js/sound/player.js, shown by js/library/main.js). -->
       <div class="lib-field" id="lib-field">
         <div class="lib-grid" id="lib-grid"></div>
         <div id="lib-player" hidden></div>
       </div>
-      <!-- (V38.6) Scenarios: the list's width, dragged and remembered (js/library/main.js _wireScSash). -->
+      <!-- Scenarios: the list's width, dragged and remembered (js/library/main.js _wireScSash). -->
       <div class="lib-tree-sash lib-sc-sash" id="lib-sc-sash" hidden title="Drag to resize the list, double-click for the usual width"></div>
-      <!-- THE MEDIA TREE (phase V28.5, the owner 2026-10-12): on Media, what it selects is what the grid shows -
+      <!-- THE MEDIA TREE: on Media, what it selects is what the grid shows -
            the same tree as Merge's Library panel (js/media-tree.js); the sash sets its width. -->
       <div class="lib-tree-sash" id="lib-tree-sash" hidden title="Drag to resize the tree, double-click for the default width"></div>
       <aside class="lib-tree" id="lib-tree" hidden></aside>
@@ -117,21 +117,21 @@
         <div class="lib-info-head" id="lib-info-head"></div>
         <div class="lib-info-body" id="lib-info-body"></div>
       </aside>
-      <!-- (V38.6) Scenarios: a draft selected in the list - the generator's form, moved here (js/library/make.js mount). -->
+      <!-- Scenarios: a draft selected in the list - the generator's form, moved here (js/library/make.js mount). -->
       <section class="lib-sc-draft" id="lib-sc-draft" hidden></section>
     </div>
-    <!-- THE SCENARIO GENERATOR (phase E): sources down the left, the form or a source's topics on the
+    <!-- THE SCENARIO GENERATOR: sources down the left, the form or a source's topics on the
          right. Built the first time "New scenario" is pressed and only hidden after that, so what it
          runs goes on while the list is looked at (js/library/make.js). -->
     <div class="lib-make" id="lib-make" hidden></div>
-    <!-- THE NARRATORS (phase V28.2): the list, the samples and the voice of the selected one, in place of the scenario
+    <!-- THE NARRATORS: the list, the samples and the voice of the selected one, in place of the scenario
          list or the generator. Built the first time "Narrators" is pressed and only hidden after that, so a sample being
          transcribed or a voice being read goes on (js/library/narrators.js). -->
     <div class="lib-narrators" id="lib-narrators" hidden></div>
-    <!-- MAKING A CHARACTER (phase H): the parameters, the portrait with its takes, and the save form that
+    <!-- MAKING A CHARACTER: the parameters, the portrait with its takes, and the save form that
          draws the 4K sheet. Built the first time "New Character" is pressed and only hidden after that,
          so a portrait or a sheet being made goes on while the shelf is looked at (js/library/chmake.js).
-         (phase V60) Shown in a WINDOW over the shelf (js/gen-window.js openFrame): its content is moved into the window
+         Shown in a WINDOW over the shelf (js/gen-window.js openFrame): its content is moved into the window
          and back here - this stays hidden, the content's place while the window is closed. -->
     <div class="lib-chmake" id="lib-chmake" hidden></div>
   </main>

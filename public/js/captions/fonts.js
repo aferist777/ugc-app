@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the fonts the app ships, and only those (phase K5, 2026-10-03).
+   CAPTIONS — the fonts the app ships, and only those.
 
-   They live in public/fonts/captions/ (static TTFs, OFL or Apache-2.0 - licences beside them; how the owner's 80
-   were made is below). A font with no Cyrillic - the five display faces of the text presets (phase V42, the
-   owner's (ц2)): Anton, Bebas Neue, Bangers, Luckiest Guy and Permanent Marker, and 41 of the owner's 80 - would
+   They live in public/fonts/captions/ (static TTFs, OFL or Apache-2.0 - licences beside them; how the 80 from
+   google/fonts were made is below). A font with no Cyrillic - the five display faces of the text presets:
+   Anton, Bebas Neue, Bangers, Luckiest Guy and Permanent Marker, and 41 of the 80 - would
    have libass quietly fill the missing letters from Arial, the word coming out in two fonts. Each of them
    names its `twin`, a shipped font with Cyrillic: a line that holds a Cyrillic letter is drawn WHOLE in the
    twin (drawnFamily below - ass.js, place.js and text-fx.js all ask it), never a word in two fonts. The
@@ -12,22 +12,22 @@
 
    `family` is the name libass looks the font up by: the font's OWN family name (nameID 1), which for a
    weight-named file is "Montserrat Black", not "Montserrat" - asked for "Montserrat" in bold, libass
-   gave Arial. `bold` is what the .ass says: true or false fixed by the file (never fake bold on a font
+   gives Arial. `bold` is what the .ass says: true or false fixed by the file (never fake bold on a font
    that has only one weight), 'style' where a family ships both a regular and a bold file and the
    style's own switch chooses. `line` is the height of the font's line in em (what an .ass Fontsize
    measures), (OS/2 winAscent + winDescent) / unitsPerEm of the file. How wide each letter is lives in
-   advances.js, read from the same files (K2, tools/caption-advances.js). `ink` is how much of that line
+   advances.js, read from the same files (tools/caption-advances.js). `ink` is how much of that line
    the letters leave empty above the tallest ("H", "d", "l") and below the lowest ("g", "j", "p", "q", "y"),
-   as fractions of the line - measured on what our ffmpeg's libass draws (phase V30, block 3: a page's
+   as fractions of the line - measured on what our ffmpeg's libass draws (a page's
    rectangle on the preview, captions/place.js, is where its letters are, not the whole of its lines).
 
-   Old projects named Windows fonts; they are read as the closest shipped one (the owner's answer 3,
-   2026-10-03), Arial as Liberation Sans, which has Arial's metrics.
+   A Windows font a project names is read as the closest shipped one, Arial as Liberation Sans, which has
+   Arial's metrics.
 
-   THE OWNER'S 80 (phase V68 P4, the owner 2026-11-01/02, (хп9), (хп23), (хп52)-(хп55)): wild, graffiti, horror, pixel...
+   THE 80 FROM GOOGLE/FONTS: wild, graffiti, horror, pixel...
    faces from google/fonts, laid out by tools/build-fonts.py (tools/fonts-list.json pins each file): a variable file made
    the static font of the weight picked, a font whose licence reserves no name cut to Latin and Cyrillic - none is
-   otherwise changed. 41 of them draw no Russian (Pixelify Sans lacks О and П) and name their `twin`, chosen by look from
+   otherwise changed. 41 of them draw no Russian (Pixelify Sans lacks two Cyrillic capitals) and name their `twin`, chosen by look from
    the fonts with Cyrillic. Every font has a `group` - its row of chips in the fonts tab (GROUPS; the 21 above are
    `basic`). The fonts tab (captions-view.js, hl-style.js) lays them on a lane as `fonts` - style.js, mix.js.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -48,7 +48,7 @@ export const FONTS = [
   { family: 'Unbounded Black', label: 'Unbounded Black', files: { 400: 'Unbounded-Black.ttf' }, bold: false, line: 1.548, ink: [0.26, 0.06] },
   { family: 'Russo One', label: 'Russo One', files: { 400: 'RussoOne-Regular.ttf' }, bold: false, line: 1.205, ink: [0.18, 0.08] },
   { family: 'Exo 2 Black', label: 'Exo 2 Black', files: { 400: 'Exo2-Black.ttf' }, bold: false, line: 1.469, ink: [0.28, 0.07] },
-  // No Cyrillic (phase V42): a line with a Cyrillic letter is drawn in the `twin`.
+  // No Cyrillic: a line with a Cyrillic letter is drawn in the `twin`.
   { family: 'Anton', label: 'Anton', files: { 400: 'Anton-Regular.ttf' }, bold: false, line: 1.733, ink: [0.32, 0.12], twin: 'Fira Sans Extra Condensed Black' },
   { family: 'Bebas Neue', label: 'Bebas Neue', files: { 400: 'BebasNeue-Regular.ttf' }, bold: false, line: 1.300, ink: [0.19, 0.22], twin: 'Oswald' },
   { family: 'Bangers', label: 'Bangers', files: { 400: 'Bangers-Regular.ttf' }, bold: false, line: 1.757, ink: [0.38, 0.17], twin: 'Rubik Mono One' },
@@ -57,8 +57,8 @@ export const FONTS = [
   { family: 'Liberation Sans', label: 'Liberation Sans (Arial)', files: { 400: 'LiberationSans-Regular.ttf', 700: 'LiberationSans-Bold.ttf' }, bold: 'style', line: 1.117, ink: [0.16, 0.00] },
   { family: 'PT Sans', label: 'PT Sans', files: { 400: 'PT_Sans-Web-Regular.ttf', 700: 'PT_Sans-Web-Bold.ttf' }, bold: 'style', line: 1.294, ink: [0.23, 0.05] },
   { family: 'PT Serif', label: 'PT Serif', files: { 400: 'PT_Serif-Web-Regular.ttf', 700: 'PT_Serif-Web-Bold.ttf' }, bold: 'style', line: 1.325, ink: [0.21, 0.05] },
-  // THE OWNER'S 80 (phase V68 P4, (хп9)): made by tools/build-fonts.py from google/fonts; `group` - their group in the fonts
-  // tab; `twin` where the file has no Russian alphabet (Pixelify Sans lacks О and П).
+  // THE 80 FROM GOOGLE/FONTS: made by tools/build-fonts.py; `group` - their group in the fonts
+  // tab; `twin` where the file has no Russian alphabet (Pixelify Sans lacks two Cyrillic capitals).
   // graffiti
   { family: 'Lacquer', label: 'Lacquer', files: { 400: 'Lacquer-Regular.ttf' }, bold: false, line: 1.707, ink: [0.28, 0.28], group: 'graffiti', twin: 'Rubik Spray Paint' },
   { family: 'Rubik Burned', label: 'Rubik Burned', files: { 400: 'RubikBurned-Regular.ttf' }, bold: false, line: 1.414, ink: [0.23, 0.07], group: 'graffiti' },
@@ -169,15 +169,15 @@ export const ALIASES = {
 
 export const FALLBACK = 'Liberation Sans';
 
-// The fonts tab's groups, in their order (V68 P4: the owner's 15 of P1, then the app's own 21).
+// The fonts tab's groups, in their order: the 15 of the fonts from google/fonts, then `basic` - the app's own 21.
 export const GROUPS = [['graffiti', 'Graffiti'], ['brush', 'Brush'], ['marker', 'Marker'], ['comic', 'Comic'], ['horror', 'Horror'],
   ['retro', 'Retro'], ['pixel', 'Pixel'], ['stencil', 'Stencil'], ['hand', 'Handwritten'], ['bubble', 'Bubble'],
   ['condensed', 'Condensed'], ['gothic', 'Gothic'], ['techno', 'Techno'], ['western', 'Western'], ['heavy', 'Heavy'], ['basic', 'Basic']];
 /** A font's group in the fonts tab. */
 export const groupOf = (f) => (f && f.group) || 'basic';
 
-// THE FONTS TAB'S PICTURES (V68 P4, the owner's check 2026-11-02: the tab drawn in live fonts loaded 33 MB and stuttered when
-// scrolled): each font's tile is a picture made by tools/font-tiles.js with the render's own libass, shipped beside the fonts.
+// THE FONTS TAB'S PICTURES (the tab drawn in live fonts loads 33 MB and stutters when scrolled): each font's tile is a
+// picture made by tools/font-tiles.js with the render's own libass, shipped beside the fonts.
 export const TILE_DIR = FONT_DIR + 'tiles/';
 /** The file name of a family's tile picture. */
 export const tileName = (family) => String(family || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.webp';
@@ -196,12 +196,12 @@ export const familyOf = (name) => fontOf(name).family;
 /** Is this one of the shipped families itself (not an alias, not the fallback for an unknown name)? */
 export const isShipped = (name) => BY.has(String(name == null ? '' : name).trim().toLowerCase());
 
-// A letter of the Cyrillic alphabets (phase V42).
+// A letter of the Cyrillic alphabets.
 const CYRILLIC = /[Ѐ-ӿ]/;
 
 /**
  * The family a line saying `text` is DRAWN in: its style's font - or, where that font has no Cyrillic and the line holds a
- * Cyrillic letter, the font's twin (phase V42, the owner's (ц2)): the whole line, never a word in two fonts.
+ * Cyrillic letter, the font's twin: the whole line, never a word in two fonts.
  */
 export function drawnFamily(name, text) {
   const f = fontOf(name);

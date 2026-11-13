@@ -1,6 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE PATTERNS OF MAIN VIDEO (phase V65 block 5, the owner 2026-10-31, (пз8), (пз14)-(пз19); phase V74, the owner
-   2026-11-03/04, (пт1)-(пт9); docs/local-app/plan/, "Фаза V65", "Фаза V74") - ONE module for the page and the server:
+   THE PATTERNS OF MAIN VIDEO - ONE module for the page and the server:
    js/merge-v3/preview-b.js draws by it, lib/pattern-bake.js and lib/mv3b-render.js render by it, js/merge-v3/patterns-ui.js
    offers its tiles and settings, timeline-b.js and lib/timeline-shape.js keep them.
 
@@ -8,7 +7,7 @@
    fitted or cropped: its file - a SEAMLESS tile, white on transparent - is laid over the WHOLE frame, repeated. One corner of
    the tiles sits at the frame's middle; they turn about it.
 
-   Since V74 a pattern is no clip: it is a LAYER of main video - a list `patterns` on the MAIN VIDEO LANE (the bottom video lane,
+   A pattern is no clip: it is a LAYER of main video - a list `patterns` on the MAIN VIDEO LANE (the bottom video lane,
    mainLane), TOP LAYER FIRST as the lanes are listed, each { src, pattern?, opacity?, blend? } - its address, the settings
    below, its opacity and blend mode by overlay/look.js's rules, only what differs from the defaults kept (normalizeLayer); one
    entry per pattern of the set, with no limit of how many. It covers the WHOLE main video, from 0 to its end (mainEnd),
@@ -16,11 +15,11 @@
    the bottom layer first, each as a clip of that stretch, known by its layer id. No lane of its own.
 
    `pattern: { scale, color, angle, move, speed, dir }`, every field optional (absent = the default):
-     scale  0.25..4 (25-400 %, (пз14)), 1: a 2160 px file then covers the frame's long side; a 1080 px tile (noise,
+     scale  0.25..4 (25-400 %), 1: a 2160 px file then covers the frame's long side; a 1080 px tile (noise,
             film grain) is laid at the same density - it repeats twice there.
-     color  '#rrggbb', white: the white of the file becomes this colour, its transparency kept ((пз15)).
-     angle  0..359 degrees, 0: the tiles turned about the frame's middle, standing still ((пз17)).
-     move   'none' | 'rotate' | 'drift' ((пз16)): a turn about the middle, or a slide one way; a pattern lands still.
+     color  '#rrggbb', white: the white of the file becomes this colour, its transparency kept.
+     angle  0..359 degrees, 0: the tiles turned about the frame's middle, standing still.
+     move   'none' | 'rotate' | 'drift': a turn about the middle, or a slide one way; a pattern lands still.
      speed  rotate: 0.5..20 degrees a second (2); drift: 5..200 px a second of a frame 1080 px across its short side (20).
      dir    rotate: 'cw' | 'ccw'; drift: 'e' 'ne' 'n' 'nw' 'w' 'sw' 's' 'se' (the eight arrows; 'e' to the right).
    `t` everywhere is the layer's own seconds - the timeline's (it starts at 0).
@@ -101,7 +100,7 @@ export function coverSide(tile, W, H) {
   return (n + (n % 2)) * tile;
 }
 
-// ── The patterns of main video (phase V74) ──────────────────────────────────
+// ── The patterns of main video ──────────────────────────────────────────────
 
 /** One entry of main video's `patterns` as stored: { src, pattern?, opacity?, blend? }, or null when it is no pattern. */
 export function normalizeLayer(p) {

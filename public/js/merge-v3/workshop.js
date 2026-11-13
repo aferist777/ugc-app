@@ -3,9 +3,8 @@
 
    A talking head is not assembled by hand: it is BUILT - who says it, where, in what
    voice, and the frame and the clip of every fragment - and only then is there a
-   timeline to edit. That building used to be a page of its own, then three steps of
-   this panel; it is ONE step now, `setup`, with `timeline` beside it (decided with the
-   owner 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало", phase M).
+   timeline to edit. That building is ONE step of this panel, `setup`, with `timeline`
+   beside it.
 
    WHICH PROJECTS. Only those with a scenario project behind them - a talking head or a
    voiceover - and the key says so: sv3_<project id> (lib/merge-store.js puts its file in
@@ -20,12 +19,10 @@
    WHILE SETUP IS OPEN THE TIMELINE IS LOCKED AND THE LIBRARY FOLDED (js/merge-v3/layout.js):
    the cut is laid from the fragments, so until there is one there is nothing to edit. The
    crumbs in setup's head are the way to the timeline, and they wait - a talking head for every
-   fragment's video, a voiceover for its first read laid (_ready, below; decided with the owner
-   2026-09-21, docs/local-app/PLAN.md "Сцена,
-   setup и таймлайн-зеркало").
+   fragment's video, a voiceover for its first read laid (_ready, below).
 
    WHAT IS STORED WHERE. What has been CHOSEN - the character, the look, the place,
-   the frames - is the scenario project and lives on the server, where it always has.
+   the frames - is the scenario project and lives on the server.
    Which step is open is not work: it is remembered per project in this browser, so
    coming back lands where you left without a write to the project for every click.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -36,8 +33,7 @@ import { lock, softLock, setOpenColumn, roomForWork, roomForTimeline } from './l
 import { isRead, isLive } from './scen-api.js';
 import { hint } from '../bubble.js';
 
-// TWO STEPS (decided with the owner 2026-09-21): `setup` builds the project, `timeline` edits the
-// result. There are NO CHIPS for them any more (phase L, the owner 2026-09-23): the crumbs are the
+// TWO STEPS: `setup` builds the project, `timeline` edits the result. The crumbs are the
 // switch. The Setup panel open is the setup step; a crumb of setup's way on (_paintOn, below) is the
 // timeline step - the timeline unlocked, the Library open, the settings of a clip sliding over it - and
 // the crumb "setup /" first in the Library panel's head is setup again (initWorkshop, below).
@@ -71,7 +67,7 @@ export function project() { return _project; }
 
 /** The inspector hands us its repaint. */
 export function onChange(fn) { _onChange = fn; }
-/** (phase V62) Others that follow the setup's repaints - the crumb "b-roll /" (js/merge-v3/broll-view.js). */
+/** Others that follow the setup's repaints - the crumb "b-roll /" (js/merge-v3/broll-view.js). */
 const _also = [];
 export function onRepaint(fn) { if (typeof fn === 'function') _also.push(fn); }
 
@@ -81,7 +77,7 @@ const _repaint = () => {
 };
 // The stage belongs to a build step while one is open, and to the timeline otherwise - and the
 // timeline and the Library the other way round: locked while a step is open (js/merge-v3/layout.js).
-// And in a talking head the open PANEL is the step (phase L): Setup for setup, the Library for
+// And in a talking head the open PANEL is the step: Setup for setup, the Library for
 // the timeline. A blank project has no Setup and leaves the pair alone.
 const _lend = () => {
   PV.borrow(active());
@@ -91,7 +87,7 @@ const _lend = () => {
 
 // How far the script has got - what the way on says while it waits (below, _paintOn).
 function _readCount() {
-  // The lines that are IN the video: one taken off is not waited for (phase Z, scen-api.js).
+  // The lines that are IN the video: one taken off is not waited for (scen-api.js).
   const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
   return { read: lines.filter(isRead).length, clips: lines.filter(_hasClip).length, total: lines.length };
 }
@@ -100,29 +96,24 @@ function _hasClip(l) {
   const v = (l && l.video) || {};
   return ((v.plain || []).length + (v.tagged || []).length + (((l && l.sd) || {}).clips || []).length) > 0;
 }
-// IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first CLIP has been laid on it (phase V61, the owner's
-// (т1а): a read with no clip lies nowhere in a talking head - lib/frag-mirror.js): a cut of two fragments is a cut, and
+// IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first CLIP has been laid on it (a read with no clip lies
+// nowhere in a talking head - lib/frag-mirror.js): a cut of two fragments is a cut, and
 // waiting for the last line before letting anybody look at it helps nobody. Anything on any lane counts - the mirror's
 // cells and whatever the person put there themselves.
 function _hasCut() {
   const tl = Store.timeline();
   return !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
 }
-// (phase V62, the owner's (во38)-(во40): "у talking head тоже. там будет появляться только когда все фрагменты имеют видео";
-// "показывать крошки только они не нажимаемы. при наведении показывать, что нужно сделать чтобы они стали активны") THE WAY ON
-// FROM SETUP is the crumbs in its head - "Library / captions" (V64: the chats are windows) - and they are
-// pressed once the script is done: a voiceover's lines all read, a talking head's fragments all with their video. Until then
-// they stand greyed, and the bubble over them says what is left. The Library's spine in setup went (css/merge-v3.css).
-// (phase V62, the owner 2026-10-31: "давай таймлайн становится доступен, после того как фрагменты разложены на таймлайне";
-// (во54) "а + 1") A VOICEOVER's way on opens with the first read laid on the timeline - anything on it - as its timeline under
-// setup does (layout.js softLock).
+// THE WAY ON FROM SETUP is the crumbs in its head - "Library / captions" - pressed once a talking head's fragments all
+// have their video. Until then they stand greyed, and the bubble over them says what is left. A VOICEOVER's way on opens
+// with the first read laid on the timeline - anything on it - as its timeline under setup does (layout.js softLock).
 function _ready() {
   if (!_project) return false;
   const n = _readCount();
   if (_isVo()) return _hasCut();
   return n.total > 0 && n.clips === n.total;
 }
-// (phase V62) Is a voiceover's B-roll on the timeline - its engine's pieces on main video (lib/broll.js: br_<line>_…)?
+// Is a voiceover's B-roll on the timeline - its engine's pieces on main video (lib/broll.js: br_<line>_…)?
 function _brollLaid() {
   const tl = Store.timeline();
   const v1 = ((tl && tl.tracks) || []).find(t => t.id === 'v1');
@@ -131,7 +122,7 @@ function _brollLaid() {
 function _mayEdit() {
   return _ready();
 }
-// (phase V62) Is the project open a voiceover - the script in a voice, no clips of its own?
+// Is the project open a voiceover - the script in a voice, no clips of its own?
 const _isVo = () => !!(_project && _project.type === 'voiceover');
 
 // The step being left lets go of what it was doing on its own - a read still playing.
@@ -163,7 +154,7 @@ export function setStep(id) {
   _paintRoute();
   _lend();
   _repaint();
-  // THE PAGE IS LAID OUT FOR THE STEP (phase L1, the owner 2026-09-23): the timeline as tall as its
+  // THE PAGE IS LAID OUT FOR THE STEP: the timeline as tall as its
   // lanes, the preview a little wider - or, back in setup, the most room there is for the work. On
   // the switch only: opening a page keeps the arrangement that was saved. After the paint, because
   // the lanes have to be drawn, and unlocked, before they can be measured.
@@ -199,14 +190,12 @@ function _firstStep() {
 }
 
 // ── The spines ──────────────────────────────────────────────────────────────
-// (phase V64) No project shows either spine any more - the switch is the crumbs: setup's way on (_paintOn)
-// and the Library panel's "setup /". What is left of this paint is the body classes, the lock's softness
+// No project shows either spine - the switch is the crumbs: setup's way on (_paintOn)
+// and the Library panel's "setup /". This paint sets the body classes, the lock's softness
 // and whether "setup /" is there.
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
-  // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back -
-  // (phase V64, the owner 2026-10-31: "у talking head убираем вертикальную кнопку setup - делаем крошкой") and a talking
-  // head's: no project shows a spine any more (css/merge-v3.css).
+  // No project has a Setup spine: the crumb "setup /" in the Library panel's head is the way back (css/merge-v3.css).
   document.body.classList.toggle('mv3-vo', !!_pid && _isVo());
   const back = document.getElementById('mv3-lib-setup');
   if (back) back.hidden = !_pid;
@@ -218,7 +207,7 @@ function _paintSpines() {
 // page, and a second line here would cost the list below it the same height on a column
 // that is already narrow.
 function _head() { return document.querySelector('#mv3-inspector .mv3-panel-head'); }
-// (phase V73 block 5, 5a, (к17), (б5-4) а) A crumb's word in sentence case; its "/" is drawn by css/merge-v3.css outside it.
+// A crumb's word in sentence case; its "/" is drawn by css/merge-v3.css outside it.
 const _cap = (w) => { const t = String(w || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 function _paintRoute() {
@@ -226,10 +215,10 @@ function _paintRoute() {
   const head = _head();
   if (!head) return;
   let bar = head.querySelector('.mv3-wk-steps');
-  // (phase V64, fix (ж)) SETUP is blue while it is where you are - not the timeline step.
+  // SETUP is blue while it is where you are - not the timeline step.
   const setupTitle = head.querySelector('.mv3-panel-title');
   if (setupTitle) setupTitle.classList.toggle('is-on', !!_pid && _step === 'setup');
-  // (phase V62) In setup the bar is always there: "setup" and the way on (_paintOn).
+  // In setup the bar is always there: "setup" and the way on (_paintOn).
   if (!(_pid && _step === 'setup')) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
@@ -239,8 +228,7 @@ function _paintRoute() {
     head.insertBefore(bar, sp || null);
   }
   bar.textContent = '';
-  // (phase V62, the owner 2026-10-31, items 8 and 14: "\u043d\u0443\u0436\u043d\u043e \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043a\u0440\u043e\u0448\u043a\u0438, \u043a\u0430\u043a \u0443 \u043f\u0440\u043e\u0435\u043a\u0442\u043e\u0432 \u0442\u0438\u043f\u0430 highlights") THE CRUMBS OF
-  // HIGHLIGHTS' LOOK - the Library panel's own (`.mv3-lib-crumb`): words in capitals after a "/", no pill, no outline. The panel's
+  // THE CRUMBS OF HIGHLIGHTS' LOOK - the Library panel's own (`.mv3-lib-crumb`): words after a "/", no pill, no outline. The panel's
   // title, SETUP, is the first of them, then the way on (_paintOn).
   const wrap = document.createElement('div');
   wrap.className = 'mv3-wk-crumbs';
@@ -250,15 +238,15 @@ function _paintRoute() {
   bar.scrollLeft = 0;
 }
 
-// THE WAY ON (phase V62): after "setup", the Library panel's own crumbs - each one the timeline step with that view of the panel
-// (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left. (phase V64
-// block 3) No "generate image / video / audio" - the chats are windows, opened by "generate" in the Library's tree.
+// THE WAY ON: after "setup", the Library panel's own crumbs - each one the timeline step with that view of the panel
+// (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left.
+// No "generate image / video / audio" - the chats are windows, opened by "generate" in the Library's tree.
 const ON = [
   ['Library', 'mv3-lib-title', 'The timeline and the Library'],
   ['captions', 'mv3-lib-cap', 'The captions of the timeline - their look and presets'],
 ];
 function _paintOn(wrap) {
-  // (phase V62, (во53)) A voiceover's "b-roll" first, right of SETUP: the B-roll's pieces, from the timeline step's Library panel
+  // A voiceover's "b-roll" first, right of SETUP: the B-roll's pieces, from the timeline step's Library panel
   // (js/merge-v3/broll-view.js openCurrent) - pale until the B-roll is laid.
   if (_isVo()) {
     const on = _brollLaid();
@@ -273,8 +261,7 @@ function _paintOn(wrap) {
   }
   const ok = _ready();
   const n = _readCount();
-  // (phase V67, the owner's (об1): "во всплывашке при наведении на library писать почему нельзя нажать") Why it cannot be
-  // pressed, in so many words: what is missing, how much of it, and where it is made.
+  // Why it cannot be pressed, in so many words: what is missing, how much of it, and where it is made.
   const left = !_project ? 'Reading the project…'
     : !n.total ? (_isVo() ? 'Choose the script first - a scenario or your own text, on the right.' : 'This project has no lines.')
       : _isVo() ? 'Not yet - nothing is on the timeline. Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline and the Library open.'
@@ -307,7 +294,7 @@ async function _adopt() {
   const key = Store.key() || '';
   if (key === _key) return;
   // The project being left lets go of what its step was doing - a read playing, a trial, the
-  // buttons it laid over the stage (phase V24) - before the next one is set up.
+  // buttons it laid over the stage - before the next one is set up.
   _leave();
   _key = key;
   _pid = projectIdOf(key);
@@ -327,7 +314,7 @@ async function _adopt() {
       _project = d.project;
       const first = _firstStep();
       if (first !== _step) { _leave(); _step = first; _paintRoute(); _lend(); }
-      // WHATEVER STEP IT LANDED ON IS THE ONE IT IS STANDING ON (phase R): remembered here and not
+      // WHATEVER STEP IT LANDED ON IS THE ONE IT IS STANDING ON: remembered here and not
       // only when a crumb is pressed, so a walk to another page and back comes home to the same
       // place. Without it a project opened by its address came back on whichever step the rule
       // picks for a project with a cut - the timeline - however long you had been in setup.
@@ -370,7 +357,7 @@ function _follow() {
 
 export function initWorkshop() {
   Store.onChange(_follow);
-  // (phase V62) A voiceover's timeline gaining its first cell or its B-roll changes the way on: the crumbs, the soft lock.
+  // A voiceover's timeline gaining its first cell or its B-roll changes the way on: the crumbs, the soft lock.
   let was = '';
   Store.onChange(() => {
     if (!_isVo()) { was = ''; return; }
@@ -379,13 +366,13 @@ export function initWorkshop() {
     was = now;
     _paintRoute();
   });
-  // (phase V62, fix (к); V64 a talking head's too) "setup /", first in the Library panel's head: back to setup, as the spine was.
+  // "setup /", first in the Library panel's head: back to setup.
   const back = document.getElementById('mv3-lib-setup');
   if (back) {
     back.title = 'Back to setup - the script and its fields';
     back.addEventListener('click', (e) => { e.stopPropagation(); if (_pid) setStep('setup'); });
   }
-  // (во54) A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
+  // A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
   const tl = document.getElementById('mv3-timeline');
   if (tl) {
     tl.addEventListener('click', (e) => {

@@ -2,13 +2,12 @@
    MERGE — starting a TALKING HEAD project: the "scenarios" view of the Library panel.
 
    A talking-head project starts from a SCENARIO - a title and the lines that will be spoken.
-   The scenario library is a VIEW of the Library panel (phase V28.3, the owner 2026-10-12): the
+   The scenario library is a VIEW of the Library panel: the
    crumb "scenarios /" left of "Library", in the draft and in a blank project - never in a talking
    head, where "scenarios" would read as its own script. It is one of lib-views.js's bases: it
    takes the gallery's place with the media tree on its right, the corner of the sashes goes left and
    down, the view is remembered per project, and "Library" goes back to the shelf. "+ new project
    -> talking head" opens it in the project that is open (a talking head goes to the draft for it).
-   It used to take the Setup panel over, the Library folded to its spine beside it; that went.
 
    READING AND USING ARE NOT THE SAME ACT.
 
@@ -18,7 +17,7 @@
      use       makes the project. The lines are copied into it (routes/scen3.js takes a
                snapshot), so editing the scenario afterwards never reaches it, and the
                same scenario can be used as many times as you like. The project open now
-               is left as it is - the draft stays the draft, nothing asked (the owner).
+               is left as it is - the draft stays the draft, nothing asked.
 
    The rest is on the right-click menu, and the two that change the library are deliberately
    different weights: ARCHIVE puts a scenario out of the list and can be taken back, DELETE
@@ -36,9 +35,9 @@ import * as Store from './store.js';
 import * as WK from './workshop.js';
 import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
-// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+// A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+// The list being read, empty, or not read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY } from '../really.js';
 import { menuIcons, iconEl } from '../icons.js';
@@ -48,7 +47,7 @@ import { isHl } from '../highlights/keys.js';
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
 
-// THE CATEGORY (phase E7, the owner 2026-09-29; one dropdown since F8, 2026-09-30): all · saved -
+// THE CATEGORY (one dropdown): all · saved -
 // written by hand, no provenance - · each source the generator wrote from · no source - generated
 // from a topic alone - · archive. The sources are grouped by id on the server and named by their
 // CURRENT title, and the list is read again every time it opens: a source renamed in the Library
@@ -69,9 +68,9 @@ const _el = (tag, cls, text) => {
 };
 
 // ── Where the view may be ───────────────────────────────────────────────────
-// The draft and a blank project (the owner, V28.3 (a)): not a talking head, and not before the store
+// The draft and a blank project: not a talking head, and not before the store
 // has read what is open.
-// (phase V33.1) Nor a highlights project: its crumbs are its own.
+// Nor a highlights project: its crumbs are its own.
 const _hl = isHl;
 function _allowed() {
   return Store.isReady() && !WK.projectIdOf(Store.key() || '') && !_hl(Store.key());
@@ -101,8 +100,7 @@ export async function openScenarios() {
 }
 
 /**
- * (phase V62, the owner after block 0: "давай voiceover открывать сразу на этапе, когда показаны поля для выбора голоса и крошки
- * видны. шаг со списком сценариев удаляем из voiceover") "+ new project -> voiceover" and Home's "+ voiceover": THE voiceover
+ * "+ new project -> voiceover" and Home's "+ voiceover": THE voiceover
  * draft, opened on its setup - its script column offers the scenarios and "+ your text" (js/merge-v3/vo-script.js).
  */
 export async function openVoiceover() {
@@ -125,7 +123,7 @@ function _onStore() {
   if (!Store.isReady()) return;
   _crumb();
   const k = Store.key() || '';
-  // (phase V20) The draft saved under a name: its own from now on, and it stays on the view it was on.
+  // The draft saved under a name: its own from now on, and it stays on the view it was on.
   if (k === _key && _draftHere && !Store.isDraft()) {
     _draftHere = false;
     if (_shown) Views.rememberView(k, NAME);
@@ -166,7 +164,7 @@ async function _load() {
     _state = '';
   } catch (e) {
     _rows = [];
-    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    // The reason a popup; the list says it did not load, with Try again.
     _state = 'failed';
     showError('Could not read the scenarios: ' + e.message);
   }
@@ -288,14 +286,14 @@ function _build() {
   if (!root) return;
   const top = _el('div', 'mv3-scv-top');
   const add = _el('button', 'mv3-sc-new u-btn is-s');
-  add.append(iconEl('plus', 14), document.createTextNode('scenario'));   // (phase V73 block 5, 5d) Lucide's plus
+  add.append(iconEl('plus', 14), document.createTextNode('scenario'));   // Lucide's plus
   add.type = 'button';
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
   top.appendChild(add);
 
   // The category: one button showing the choice and its count; pressing it opens the list.
-  // (phase V73 block 5, 5d) the shared list button (`is-field`), its chevron Lucide's, its count in mono
+  // the shared list button (`is-field`), its chevron Lucide's, its count in mono
   const filter = _el('button', 'mv3-sc-filter u-btn is-s is-field');
   filter.type = 'button';
   filter.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
@@ -341,11 +339,11 @@ function _paintList() {
   for (const s of rows) {
     const row = _el('div', 'mv3-sc-row' + (s.archived ? ' is-archived' : ''));
     row.title = 'Open the text. Right-click for the rest.';
-    // THE BUTTONS RIGHT OF THE TITLE (phase V73 block 5, 5d; plan 3.5 - left of it, the cross first, since V28.3): the title -
+    // THE BUTTONS RIGHT OF THE TITLE: the title -
     // use - ✕. The button depends on where the scenario is: an archived one is not offered as something to build with until it
     // is back in the library.
     const acts = _el('div', 'mv3-sc-acts');
-    // OUT OF THE LIST from the row itself (phase I1, the owner 2026-10-01), in two presses: the
+    // OUT OF THE LIST from the row itself, in two presses: the
     // first turns the cross into "really?" for three seconds, the second archives. One press would
     // make a row vanish under a stray click; the archive filter's `restore` brings it back.
     if (!s.archived) {
@@ -422,9 +420,9 @@ function _rowMenu(ev, s, row) {
   };
 
   item('open', 'read and edit the text', () => openForm(s));
-  // (phase V62) Both kinds from the same scenario, whichever way the view was opened.
+  // Both kinds from the same scenario, whichever way the view was opened.
   if (!s.archived) item('talking head', 'make a talking head from it', () => _use(s.id).catch(e => showError('Could not make the project: ' + e.message)));
-  // (phase V62, (во32) а) Into THE voiceover draft, which opens.
+  // Into THE voiceover draft, which opens.
   if (!s.archived) item('voiceover', 'read it in a voice - B-roll over it', () => _toVoiceover(s.id).catch(e => showError('Could not put it into the voiceover: ' + e.message)));
   if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
   else item('archive', 'out of the list, kept', () => _archive(s, true));
@@ -484,14 +482,14 @@ function _disarm() {
 
 // ── Making the project ──────────────────────────────────────────────────────
 // The project and its empty timeline are made by `talkingHead` (js/merge-v3/scen-api.js, shared with the
-// Library's scenario window since phase V28.2), and opened here on its setup step. The project left keeps
+// Library's scenario window), and opened here on its setup step. The project left keeps
 // this view as its own: back in the draft, the scenarios are where they were.
-// It THROWS when it cannot (phase Y1): who called this is who knows where to put the news - a button in
+// It THROWS when it cannot: who called this is who knows where to put the news - a button in
 // the list, a line in the form.
 async function _use(scenarioId) {
   return _open(await API.talkingHead(scenarioId));
 }
-// (phase V62) A scenario into THE voiceover draft - its lines in their own language, never translated - and the draft opened.
+// A scenario into THE voiceover draft - its lines in their own language, never translated - and the draft opened.
 async function _toVoiceover(scenarioId) {
   const key = await API.voiceoverDraft();
   await API.voiceoverScript(WK.projectIdOf(key), { scenarioId });
@@ -505,7 +503,7 @@ async function _open(key) {
 }
 
 // ── The scenario itself, read or written ────────────────────────────────────
-// The window is shared with the Library (js/scen-window.js, phase V28.2): here a save reads the list
+// The window is shared with the Library (js/scen-window.js): here a save reads the list
 // behind it again, and `use` makes the project and opens it.
 export function openForm(summary) {
   return openScenario(summary, { saved: () => _load(), use: (rec) => _use(rec.id) });

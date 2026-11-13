@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE GLITCHES (phase V84 block 5, the owner 2026-11-11 "делаем остальные блоки одним походом до конца") - Cursed, Slice up,
+   THE GLITCHES - Cursed, Slice up,
    Slice merge, Liquid glass: video-effects-pack's effects (MIT; their tone curve, keys at 30 a second, bands and lens written again
    for the canvas). Drawn by the page only - live by the preview, baked for the render by the app's window with this code. Each is
    draw(g, S) on the clip's window (js/fx/overlays.js says what g and S are). Their randomness is the effect's own (js/fx/kit.js

@@ -1,10 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE — music and sounds: MERGE'S HOST OF THE SOUND WINDOW (phase V64 block 5, the owner 2026-10-31, (зг6), (зг10)).
+   MERGE — music and sounds: MERGE'S HOST OF THE SOUND WINDOW.
 
-   Until V64 this file was "/ generate audio", the Library panel's fourth view (phase V34.E: the settings, ONE constructor per
-   mode, the open project's presses under the gold card, Video to Music's VIDEO tree). Its whole body moved into ONE window
-   for both pages - js/sound/sound-window.js (Music: Simple, Custom, Lyrics, From a description, Video to Music; Sounds:
-   Sounds, Sound effects) - and what stays here is what is Merge's own, told to that window as its host:
+   The window is ONE for both pages - js/sound/sound-window.js (Music: Simple, Custom, Lyrics, From a description, Video to
+   Music; Sounds: Sounds, Sound effects) - and what is here is what is Merge's own, told to that window as its host:
 
      the project       the open one (the store's key; a highlights fragment's is its home's - lib-views.js chatKey): its
                        presses under the gold card ("this project · N"), the press is the project's, its kind tells Simple's
@@ -17,7 +15,7 @@
 
    The ways in: AUDIO's "generate" in the tree and Music's "Generate music" (merge-v3/library.js - Music → Simple),
    ?open=audio, the lane's "Video to Music…", "use in custom" on a saved text (`ugc:lyric-use`). What the person set is
-   remembered in the browser (`mv3_audio_v1`, as before).
+   remembered in the browser (`mv3_audio_v1`).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -68,7 +66,7 @@ const HOST = {
   writerKind: () => WRITER_KIND[_kind()] || 'blank',
   videoSecs: _videoSecs,
   clipNow: _clipNow,
-  // (phase V54) The server reads a clip from the SAVED timeline - what is not saved yet goes first.
+  // The server reads a clip from the SAVED timeline - what is not saved yet goes first.
   flush: async (clip) => (clip && clip.key === Store.key() ? Store.flush() : true),
   where: (dest, label) => ({
     page: 'merge', href: '/merge?p=' + encodeURIComponent(_key()) + '&open=audio',
@@ -101,7 +99,7 @@ export async function openAudio(o) {
 export const openMusicMaker = () => openAudio({ mode: 'simple' });
 
 /**
- * (phase V54, block 2) THE RIGHT BUTTON ON A CLIP (timeline-b.js): the window on Video to Music with THAT clip in "The
+ * THE RIGHT BUTTON ON A CLIP (timeline-b.js): the window on Video to Music with THAT clip in "The
  * video" - nothing is asked until "generate". `o` - { key, trackId, clipId } of the open timeline.
  */
 export async function videoToMusicFromClip(o) {
@@ -115,7 +113,7 @@ export async function videoToMusicFromClip(o) {
 export function initAudChat() {
   // The clip in "The video" as it is now; another project opened - its presses read again.
   Store.onChange(() => { if (!Store.isReady()) return; SW.clipChanged(); SW.projectChanged(); });
-  // (phase V59.1) "use in custom" on a tile of Music -> Lyrics or in its text's viewer (the event `ugc:lyric-use` { id, title,
+  // "use in custom" on a tile of Music -> Lyrics or in its text's viewer (the event `ugc:lyric-use` { id, title,
   // text }): the window on Suno's Custom with that text - the title only when it is empty.
   window.addEventListener('ugc:lyric-use', (e) => {
     const l = (e && e.detail) || {};

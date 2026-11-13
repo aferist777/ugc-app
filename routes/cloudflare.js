@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// THE ONE CLOUDFLARE KEY (phase TG) - Admin -> API keys, the row "Cloudflare" (lib/cloudflare.js).
+// THE ONE CLOUDFLARE KEY - Admin -> API keys, the row "Cloudflare" (lib/cloudflare.js).
 //
 //   GET  /api/cloudflare          -> { tokenSet, inUse, account, bucket, checking, check: { at, ok, steps } | null }
 //   POST /api/cloudflare/check    -> the same, after the check ran: the key, the account, the bucket, an upload

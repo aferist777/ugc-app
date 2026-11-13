@@ -1,14 +1,14 @@
 'use strict';
 
 /* caption-advances.js - writes public/js/captions/advances.js: how wide every letter of every caption
-   font is, read from the font files themselves (phase K2).
+   font is, read from the font files themselves.
 
    Run it by hand when a font in public/fonts/captions/ is added, removed or replaced:
        node tools/caption-advances.js            writes the table
        node tools/caption-advances.js --check    says whether the table still matches the files (exit 1 if not)
 
-   Why from the files: a page is cut to a width (0.78 of the frame), and the old per-font average of a
-   capital and a lowercase letter was a Latin estimate - it read Cyrillic 11-20% narrow against what
+   Why from the files: a page is cut to a width (0.78 of the frame), and a per-font average of a
+   capital and a lowercase letter is a Latin estimate - it reads Cyrillic 11-20% narrow against what
    libass draws. The sum of the letters' own advances matches libass within ~2% (it does no kerning).
 
    What is read: the font's units per em, the 'hmtx' advance of the glyph each character maps to through
@@ -95,9 +95,9 @@ async function main() {
   if (stray.length) console.warn('Not in fonts.js, not measured: ' + stray.join(', '));
 
   const text = '/* ═══════════════════════════════════════════════════════════════════════════\n'
-    + '   CAPTIONS — how wide each letter is, in thousandths of an em, read from the font files (phase K2).\n\n'
-    + '   MADE BY tools/caption-advances.js - not edited by hand. Run it again when a font changes; the K2 stand\n'
-    + '   checks the table against the files. 0 is a character the font has no glyph for (drawn in PT Sans).\n'
+    + '   CAPTIONS — how wide each letter is, in thousandths of an em, read from the font files.\n\n'
+    + '   MADE BY tools/caption-advances.js - not edited by hand. Run it again when a font changes; its --check\n'
+    + '   compares the table with the files. 0 is a character the font has no glyph for (drawn in PT Sans).\n'
     + '   ═══════════════════════════════════════════════════════════════════════════ */\n\n'
     + 'export const CHARS = ' + JSON.stringify(CHARS) + ';\n\n'
     + 'export const ADVANCES = {\n'

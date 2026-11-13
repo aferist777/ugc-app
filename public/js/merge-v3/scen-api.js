@@ -76,7 +76,7 @@ export const remove = (id) =>
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);
 
 /**
- * A TALKING HEAD from a scenario - what `use` does, in Merge and in the Library (phase V28.2): the project
+ * A TALKING HEAD from a scenario - what `use` does, in Merge and in the Library: the project
  * (its own copy of the lines) and the EMPTY timeline it will be assembled into, keyed to it. Without that
  * second one a project made today would be invisible in Merge's picker until its first assembly, and
  * tomorrow there would be no way back into it. Returns the timeline's key - what Merge opens.
@@ -89,7 +89,7 @@ export async function talkingHead(scenarioId) {
 }
 
 /**
- * (phase V67, second round (г)) A NEW talking head of this project's script with another look cast (routes/scen3.js POST
+ * A NEW talking head of this project's script with another look cast (routes/scen3.js POST
  * /scen3/projects/:id/fork), its timeline, and its name - the timeline's title too - with the character (the cast route of
  * the same look moves nothing). Returns the new timeline's key.
  */
@@ -101,12 +101,12 @@ export async function forkHead(projectId, look) {
   return t.key;
 }
 
-/** (phase V62, (во27), (во28)) A voiceover's line, at most - ElevenLabs reads 5 000 characters at a time, the mood's tags
+/** A voiceover's line, at most - ElevenLabs reads 5 000 characters at a time, the mood's tags
  *  included; the server keeps the same number (routes/scen3.js VO_MAX). */
 export const VO_MAX = 4500;
 
 /**
- * (phase V62, (во29), (во35)) THE VOICEOVER DRAFT - the one there is, or a new empty one - and its timeline, made when it is
+ * THE VOICEOVER DRAFT - the one there is, or a new empty one - and its timeline, made when it is
  * missing. Returns the timeline's key: what "+ new project -> voiceover" and Home's "+ voiceover" open.
  */
 export async function voiceoverDraft() {
@@ -117,7 +117,7 @@ export async function voiceoverDraft() {
   return t.key;
 }
 
-/** (phase V62, (во30)) The draft's script: { scenarioId } - a scenario's lines, { text, name } - one's own text as one line,
+/** The draft's script: { scenarioId } - a scenario's lines, { text, name } - one's own text as one line,
  *  { clear: true } - none, back to the list. Refused once its first line is read (it is a project then). Returns the project. */
 export const voiceoverScript = (projectId, body) =>
   _post('/api/scen3/projects/' + encodeURIComponent(projectId) + '/script', body).then(d => d.project);
@@ -125,8 +125,7 @@ export const voiceoverScript = (projectId, body) =>
 /**
  * The take a line is read BY now, and the words it should have said. A line with its words
  * marked up ([tags]) is read by its tagged take - ElevenLabs v3 performs the tags; one without, by
- * the plain take. Which is how a project read before the tags keeps its reads until a line is read
- * again (decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W).
+ * the plain take. So a line read without tags keeps its read until it is read again.
  */
 export const takeOf = (l) => {
   const a = (l && l.audio) || {};
@@ -148,7 +147,7 @@ export const isRead = (l) => {
 };
 
 /**
- * IS THIS LINE IN THE VIDEO (phase Z, the owner 2026-09-22)? A line is never deleted - it is
+ * IS THIS LINE IN THE VIDEO? A line is never deleted - it is
  * TAKEN OFF: it keeps its place in the script (which is what stops the frames and the clips of
  * the lines below it moving), the panel dims it and puts it at the foot of the list with a
  * `restore`, and nothing else reads it - not the counts, not the reads, not the clips, not the
@@ -171,10 +170,9 @@ export const plainWords = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ')
 export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files || []);
 
 /**
- * What is known ABOUT those pictures, keyed by path: the gender the outfit suits, and - for
- * one made since the agent started writing them - the long description of what it is. A
- * lookbook from before has no entry at all, which is why every reader treats a missing one
- * as "nothing known" rather than as an error.
+ * What is known ABOUT those pictures, keyed by path: the gender the outfit suits, and - when
+ * the agent wrote one - the long description of what it is. A lookbook may have no entry at
+ * all, which is why every reader treats a missing one as "nothing known" rather than as an error.
  */
 export const lookbookMeta = () => _json('/api/scen3/lookbook-meta').then(d => d.meta || {});
 
@@ -185,9 +183,9 @@ export const lookbookMeta = () => _json('/api/scen3/lookbook-meta').then(d => d.
 export const dress = (body) => _post('/api/scen3/gen/dress', body);
 
 // ── Following a generation ──────────────────────────────────────────────────
-// Nothing here waits on a provider any more. A generation started from Merge is a row in the
-// Alerts journal, the SERVER waits for it and files the result, and the page follows the row
-// (docs/local-app/PLAN.md, "Alerts"). So leaving the panel - or the page - loses nothing, and
+// Nothing here waits on a provider. A generation started from Merge is a row in the
+// Alerts journal, the SERVER waits for it and files the result, and the page follows the row.
+// So leaving the panel - or the page - loses nothing, and
 // coming back finds either the finished thing or the same row still running.
 
 /** One row of the journal. */
@@ -233,7 +231,7 @@ export const makeLookbook = (body) => _post('/api/scen3/gen/lookbook', body);
 /** Every picture on the environments shelf. */
 export const environments = () => _json('/api/gallery/environments').then(d => d.files || []);
 
-/** { "<path>": { description, prompt, from, at } } - an environment made before has no entry. */
+/** { "<path>": { description, prompt, from, at } } - an environment may have no entry. */
 export const envMeta = () => _json('/api/scen3/env-meta').then(d => d.meta || {});
 
 /**

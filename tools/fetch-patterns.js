@@ -1,7 +1,6 @@
 'use strict';
 
-/* fetch-patterns.js - lays out the app's built-in pattern set in vendor/patterns/ (phase V65; docs/local-app/plan/,
-   "Фаза V65"), as fetch-sfx.js lays out the sounds.
+/* fetch-patterns.js - lays out the app's built-in pattern set in vendor/patterns/, as fetch-sfx.js lays out the sounds.
 
    npm install runs it (postinstall, with --optional: a missing archive is a warning, not a failed install).
    By hand, after moving the pin:

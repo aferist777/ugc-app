@@ -1,6 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   HIGHLIGHTS — THE KINDS OF VIDEO, ONE TABLE (phase V69 P12, the owner 2026-11-01..03, the talks P5-P11; docs/local-app/plan/
-   "Фаза V69" - each kind's "Итог Пn" table). ONE module for the server (lib/highlights-store.js KINDS, lib/highlights-agent.js,
+   HIGHLIGHTS — THE KINDS OF VIDEO, ONE TABLE. ONE module for the server (lib/highlights-store.js KINDS, lib/highlights-agent.js,
    lib/highlights-job.js require() it) and the popup (merge-v3/hl-kinds.js STANDARD and ABOUT, hl-style.js RECOMMENDED,
    hl-popup.js): what a kind is called and said to be, its lengths and counts, the agent's ways (a late hook, key lines), how its
    frame and title go, and its standard and recommended music, presets, animations and fonts.
@@ -11,17 +10,17 @@
      lengths          'moments' (up to 30 / 30-60 / 60-90 s) or 'parts' (fragmentation's own, lib/highlights-store.js)
      length           the standard length
      counts, count    the count buttons and the standard one - a TARGET (the agent returns that many); [] - no count (fragmentation)
-     hook             'twice' - the moment's strongest line opens it and is heard again in its place (podcast, true crime, (хп37));
+     hook             'twice' - the moment's strongest line opens it and is heard again in its place (podcast, true crime);
                       '' - the pieces in the video's order
-     keys             the agent answers each moment's key lines (where the frame punches in - P12b)
-     pauses           (P12b, (хп76)) its pauses longer than 0.8 s shortened to 0.3 s when it is cut - and the agent measures a moment
+     keys             the agent answers each moment's key lines (where the frame punches in)
+     pauses           its pauses longer than 0.8 s shortened to 0.3 s when it is cut - and the agent measures a moment
                       on the clock of the speech (lib/highlights-pauses.js); lecture's only
      title            the title on top by default: true / false / 'by-video' (auto - the kind it finds)
      moods            { std, rec } - Music -> highlights moods (lib/highlights-music.js): the standard ticked, the recommended marked
      presets          { std, rec, said } - caption presets' ids the standard, their groups (presets.js CATEGORIES) recommended
      anims            { std, rec } - In -> Out pairs (captions/page-fx.js PAIRS)
      fonts            { std, rec } - families (captions/fonts.js) the standard, their groups recommended
-     inDev            in development: its button grey, not pressed ((хп86) - stream until the owner's word)
+     inDev            in development: its button grey, not pressed (stream)
      button           false - not a button of the popup (other: what auto cuts a video of none of the kinds by)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -128,7 +127,7 @@ export const KINDS = {
     anims: { std: ['fade|fade'], rec: ['fade|fade', 'pop|shrink', 'rise|rise', 'zoom|fade'] },
     fonts: { std: [], rec: ['basic', 'condensed', 'heavy'] },
   },
-  // (P11) What auto cuts a video of none of the kinds by - not a button: the general rules with the target, the pieces in order, no
+  // What auto cuts a video of none of the kinds by - not a button: the general rules with the target, the pieces in order, no
   // key lines; "by the video" gives it podcast's captions, no music, no title.
   other: {
     label: 'Other', button: false,
@@ -144,12 +143,12 @@ export const KINDS = {
 
 /** The kinds the popup shows as buttons, in order. */
 export const BUTTONS = Object.keys(KINDS).filter((k) => KINDS[k].button !== false);
-/** The kinds auto may find a video to be (P11, (хп91)) - never fragmentation; other for none of them. */
+/** The kinds auto may find a video to be - never fragmentation; other for none of them. */
 export const FOUND = ['podcast', 'truecrime', 'documentary', 'lecture', 'stream', 'other'];
 
 /** A kind's row, or null. */
 export const kindOf = (k) => (Object.prototype.hasOwnProperty.call(KINDS, k) ? KINDS[k] : null);
 /** Is this kind in development (its button grey, not pressed). */
 export const inDev = (k) => !!(kindOf(k) && kindOf(k).inDev);
-/** The kind a found kind ACTS as while it is in development: other (auto names it, cuts it by the general rules - (хп86), (хп91)). */
+/** The kind a found kind ACTS as while it is in development: other (auto names it, cuts it by the general rules). */
 export const acting = (k) => (kindOf(k) ? (inDev(k) ? 'other' : k) : 'other');

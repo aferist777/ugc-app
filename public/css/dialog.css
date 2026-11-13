@@ -1,20 +1,20 @@
-/* THE DIALOG FRAME AND ITS BUTTONS - shared by Merge and the Library (phase V28.2: the scenario window,
-   js/scen-window.js, opens on both pages). Moved here whole out of css/merge-v3.css, and loaded RIGHT AFTER
-   it on Merge, so every rule keeps its place in the cascade: what merge-v3.css says before these still loses
+/* THE DIALOG FRAME AND ITS BUTTONS - shared by Merge and the Library (the scenario window,
+   js/scen-window.js, opens on both pages). Loaded RIGHT AFTER css/merge-v3.css
+   on Merge, so every rule keeps its place in the cascade: what merge-v3.css says before these still loses
    to them, what the files after it say (mv3-imagen.css) still wins. A dialog's own variants
-   (.mv3-x-go, .mv3-x-sum ...) stay in merge-v3.css. */
+   (.mv3-x-go, .mv3-x-sum ...) are in merge-v3.css. */
 
 /* ── The frame ───────────────────────────────────────────────────────────────── */
-/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+/* The page under it darkened and blurred - the one rule of css/app-shell.css. */
 .mv3-x-ov{
   position:fixed; inset:0; z-index:9400;
   display:flex; align-items:center; justify-content:center;
   background:var(--ov-dim, oklch(0 0 0 / .45)); padding:24px;
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-/* (phase V73 block 4, rule 5) The frame, its head and its foot are the shared ones (css/app-shell.css `.u-win is-float`,
-   `.u-win-head` with `.u-win-title` and the 28 px ✕, `.u-win-foot`): Export, the finished render, the scenario window and
-   one's own text wear them next to these names, which only place. A `.mv3-x` not wearing them keeps the old look below. */
+/* The frame, its head and its foot are the shared ones (css/app-shell.css `.u-win is-float`,
+   `.u-win-head` with `.u-win-title` and the 28 px ✕, `.u-win-foot`): Export, the scenario window and
+   one's own text wear them next to these names, which only place. A `.mv3-x` not wearing them keeps the look below. */
 .mv3-x{ display:flex; flex-direction:column; width:min(440px, 94vw); max-height:92vh; overflow:hidden }
 .mv3-x:not(.u-win){ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow) }
 .mv3-x-head{ display:flex; align-items:center; flex:0 0 auto }
@@ -24,20 +24,20 @@
 .mv3-x-close{flex:0 0 auto}
 /* the body under a head of 16 px: its text starts where the title does */
 .mv3-x-body{flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 16px}
-/* A section's head - the showcase's section title: quiet, 11 px, its words in sentence case as the callers write them (к17) */
+/* A section's head: quiet, 11 px, its words in sentence case as the callers write them */
 .mv3-x-hdr{
   margin:12px 0 4px; padding-bottom:4px; border-bottom:1px solid var(--border-soft);
   color:var(--muted); font:var(--fw-medium, 500) var(--fs-11, 11px)/var(--lh-11, 16px) var(--font); letter-spacing:0; text-transform:none;
 }
-/* (V73 block 5, 5d) the highlights page's fragment card borrows the name - the shared head, sentence case; only its place here */
+/* the highlights page's fragment card borrows the name - the shared head, sentence case; only its place here */
 .mv3-hl-card .mv3-x-hdr{ margin:12px 0 4px }
 .mv3-x-row{display:flex; align-items:center; gap:9px; padding:3px 0; min-height:26px}
 .mv3-x-row > label{flex:0 0 118px; font:600 10.5px/1.3 var(--font); color:var(--muted)}
 .mv3-x-row select, .mv3-x-row input[type=color]{ flex:1 1 auto; min-width:0 }
 .mv3-x-row input[type=color]{ height:24px; padding:1px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); cursor:pointer }
-/* a note in a window's body: the quiet text at 11 px (rule 2 - nothing under 10 px in a window) */
+/* a note in a window's body: the quiet text at 11 px (nothing under 10 px in a window) */
 .mv3-x-note{margin:4px 0 0; font:400 var(--fs-11, 11px)/var(--lh-11, 16px) var(--font); color:var(--muted)}
-/* A box with its words, in a row or a foot (phase V30, block 4: the .srt in Export and beside Save & download). */
+/* A box with its words, in a row or a foot (the .srt in Export and beside Save & download). */
 .mv3-x-check{display:inline-flex; align-items:center; min-width:0}
 .mv3-x-check label{display:inline-flex; align-items:center; gap:6px; cursor:pointer; font:600 10.5px/1.3 var(--font); color:var(--ink); white-space:nowrap}
 .mv3-x-check input{margin:0}
@@ -45,10 +45,10 @@
 .mv3-x-foot{ display:flex; align-items:center; flex:0 0 auto }
 .mv3-x-foot:not(.u-win-foot){ gap:7px; padding:9px 13px; background:var(--surface-2); border-top:1px solid var(--border) }
 
-/* ── The buttons: since phase V73 block 2 every one is the shared part (`.u-btn`, css/app-shell.css) -
-   `.mv3-c-btn` stays as their name, with no look of its own. ──────────────────── */
+/* ── The buttons: every one is the shared part (`.u-btn`, css/app-shell.css) -
+   `.mv3-c-btn` is their name, with no look of its own. ──────────────────── */
 
-/* The scenario window's foot (phase I2): save and its note on the left, use (or restore) alone at the
+/* The scenario window's foot: save and its note on the left, use (or restore) alone at the
    right edge, worn exactly like save. A button that cannot be pressed now looks it, and does not light
    up under the pointer. */
 .mv3-x.is-scen .mv3-x-use{margin-left:auto}
@@ -60,7 +60,7 @@
 .mv3-sc-inp{ flex:1 1 auto; min-width:0 }
 .mv3-sc-lines{ display:block; width:100%; min-height:210px; margin-top:5px; resize:vertical }
 .mv3-sc-lines.u-area{ line-height:1.7 }
-/* (phase V62) A voiceover from one's own text (js/merge-v3/vo-text.js): a taller field, and its counter red at the limit. */
+/* A voiceover from one's own text (js/merge-v3/vo-text.js): a taller field, and its counter red at the limit. */
 .mv3-sc-lines.is-votext{min-height:300px}
-.mv3-vo-count{font-family:var(--mono); font-variant-numeric:tabular-nums}   /* (phase V73 block 4) a counter's figures even */
-.mv3-vo-count.is-full{color:var(--warn)}   /* (V73 block 5, 5d) a limit is a warning - gold, not red */
+.mv3-vo-count{font-family:var(--mono); font-variant-numeric:tabular-nums}   /* a counter's figures even */
+.mv3-vo-count.is-full{color:var(--warn)}   /* a limit is a warning - gold, not red */

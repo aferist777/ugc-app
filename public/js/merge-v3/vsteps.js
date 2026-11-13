@@ -1,6 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the video chat's WORKING MESSAGE as a sub-project of its own (phase V16, the owner 2026-10-07: "чтобы чат не
-   растягивать, чтобы само сообщение было как бы своим подпроектом"; docs/local-app/PLAN.md "Фаза V16").
+   MERGE — the video chat's WORKING MESSAGE as a sub-project of its own, so the chat itself does not stretch.
 
    One message holds the whole way from the words to the clip. Its STEPS are paged at its top ("‹ step k of N ›"); each step
    has its VARIANTS - every writing of a prompt, every sheet drawn - and every arrow says on hover what it pages. The variant
@@ -8,12 +7,11 @@
    begun, or a variant that has just appeared, is shown by itself; what the person paged to is kept across the thread's
    repaints, by the message's id, for the page's life.
 
-   (phase V60.2, the owner 2026-10-29, (вч6а)-(вч10а)) Two steps at most - the video is not a step any more: it stands at the
-   head of the message (vidchat.js). The bar of variants at the bottom went: a step puts a small "‹ 2 of 3 ›" where it wants
-   it (`pager`) - into its field's title line (V60.3), beside its sheet. A step may have more than one set of variants (the
+   Two steps at most - the video is not a step: it stands at the head of the message (vidchat.js). A step puts a small
+   "‹ 2 of 3 ›" where it wants it (`pager`) - into its field's title line, beside its sheet. A step may have more than one set of variants (the
    storyboard's step: its prompt's writings and its sheets).
 
-   (phase V60.3, the owner 2026-10-30, (вс2а), (вс4а)) The message is two columns: the steps' line and the step shown stand
+   The message is two columns: the steps' line and the step shown stand
    in the left one, under what was asked, the presses under both columns (vidchat.js puts the parts there). The steps' line
    goes into the title line of the step's field when the step takes it (`nav.head()`), else it stands over the step.
 

@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — a render finished (phase V73, the owner's (рф-1) а, (рф-3) а: "окно render finished ... возможно вообще удалить
-   этот попап" - the window went).
+   MERGE v3 — a render finished.
 
    ONE POPUP in the corner (js/notice.js showToast): "Rendered · <its name>", with
      Open            the Library's viewer of the render - Rename and Delete there (js/library/render-view.js)
      Show in folder  Explorer on the file in the library (the shell's reveal, desktop/preload.js - only in the app's window;
                      a browser has none, and no button)
-   The render is on the Renders shelf and in Queue -> open as well. Nothing is copied into Downloads any more.
+   The render is on the Renders shelf and in Queue -> open as well. Nothing is copied into Downloads.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { showToast, showError } from '../notice.js';

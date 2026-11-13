@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// REFERENCES (phase TG) - what the Telegram bot brought in (lib/references-store.js, lib/references-intake.js).
+// REFERENCES - what the Telegram bot brought in (lib/references-store.js, lib/references-intake.js).
 //
 // The page is the media tree's REFERENCES branch and the post viewer (js/references/post.js); pieces are cut by js/cut.js.
 // ════════════════════════════════════════════════════════════════════════════
@@ -13,8 +13,7 @@ const router = express.Router();
 
 // GET /api/references/stamp -> { n, latest, latestId, title, where }
 // What every page asks every few seconds (js/alerts-bell.js): a post landed while the app was open - a sound of its own,
-// a toast, and the Library and Merge read their tree and gallery again (the owner 2026-10-21: "счетчик не обновился";
-// "добавим новый звук при добавлении медиа через телеграм").
+// a toast, and the Library and Merge read their tree and gallery again.
 router.get('/references/stamp', (_req, res) => {
   try {
     const list = REFS.read();
@@ -26,9 +25,8 @@ router.get('/references/stamp', (_req, res) => {
 });
 
 // GET /api/references/youtube -> { items: [...] }   newest first
-// (after block 8; the owner's (Y3), (Y6): "эти окна показывают именно эту папку, вместе с нескачанными, и выбранное видео
-// скачивается") REFERENCES -> YouTube -> Videos as ONE list for the window of highlights ("from the Library") and the
-// scenarios' "Add a source" ("From the Library"):
+// REFERENCES -> YouTube -> Videos as ONE list for the window of highlights ("from the Library") and the
+// scenarios' "Add a source" ("From the Library") - the videos not downloaded too, a chosen one downloaded then:
 //   { type: 'source', id, title, thumb, seconds, words, topics, state }   downloaded - a source of the Library
 //   { type: 'remote', id, title, thumb, seconds, link }                   kept as a tile - downloaded once chosen
 router.get('/references/youtube', (_req, res) => {
@@ -61,8 +59,6 @@ router.get('/references/youtube', (_req, res) => {
 
 // POST /api/references/:id/move { files: [media ids] | 'all', to: { kind, cat, label } }
 //   -> { moved, skipped: [{ id, why }], post: the post left (null when it went), made: a new post's id }
-// (block 5b; the owner: "если пользователь переносит по одному медиа из поста то из референсов удаляется только тот
-// который перенесли")
 //   kind 'references'  the post - or the files chosen, as a NEW post with the same author, caption and link - filed under
 //                      an own category (`cat`), or let go back to its source's folder ('')
 //   birols | uploads | hooks   each VIDEO chosen becomes a clip of that kind and category (routes/library.js fileRecord)
@@ -97,11 +93,11 @@ router.post('/references/:id/move', async (req, res) => {
       REFS.apply((list) => {
         const p = list.find(x => x && String(x.id) === id);
         if (!p) return;
-        // Moved by hand is seen: it is not news in the tree any more (`handled`, 2026-10-22).
+        // Moved by hand is seen: it is not news in the tree any more (`handled`).
         if (whole) { p.categoryId = cat; p.categoryLabel = cat ? label : ''; p.handled = true; target = p; return; }
         // A part: a new post of its own, the rest stays.
         const ids = new Set(chosen.map(m => String(m.id)));
-        // It keeps when it came - moved is not new (the tree lights only what the bot brought, 2026-10-22).
+        // It keeps when it came - moved is not new (the tree lights only what the bot brought).
         const np = { ...p, id: REFS.newId(), categoryId: cat, categoryLabel: cat ? label : '', handled: true,
           media: p.media.filter(m => ids.has(String(m.id))) };
         np.poster = (np.media[0] && np.media[0].thumb) || null;
@@ -119,7 +115,7 @@ router.post('/references/:id/move', async (req, res) => {
 
     // ── out of REFERENCES, into VIDEO or IMAGES ──
     if (!VIDEO_KINDS.includes(kind) && kind !== 'images') return res.status(400).json({ success: false, error: 'it goes to REFERENCES, VIDEO or IMAGES' });
-    // (phase V57, the owner's (ок2)) Not into the references of Environments / Lookbooks (lib/library-cats.js closedWhy).
+    // Not into the references of Environments / Lookbooks (lib/library-cats.js closedWhy).
     const shut = require('../lib/library-cats').closedWhy(kind, cat);
     if (shut) return res.status(409).json({ success: false, error: shut });
     const fileRecord = require('./library').fileRecord;
@@ -162,7 +158,7 @@ router.post('/references/:id/move', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// GET /api/references/:id/watch -> { url }   (block 5c) a long video kept as a tile, watched from its site: the address of
+// GET /api/references/:id/watch -> { url }   a long video kept as a tile, watched from its site: the address of
 // a stream with picture and sound (lib/ytdlp.js streamUrl). Not YouTube's - that one plays in its own player.
 router.get('/references/:id/watch', async (req, res) => {
   try {
@@ -192,7 +188,7 @@ router.delete('/references/:id', (req, res) => {
     // Only what another post does not point at (a file is one post's - this is a guard, not a rule in use).
     const used = new Set();
     for (const p of REFS.read()) for (const m of (p.media || [])) { if (m.path) used.add(m.path); if (m.thumb) used.add(m.thumb); }
-    // (block 7) A file some piece was cut from stays while the piece is there - its "original".
+    // A file some piece was cut from stays while the piece is there - its "original".
     const CUTS = require('../lib/cuts');
     for (const u of CUTS.originalsInUse()) used.add(u);
     const urls = [...new Set([gone.poster, ...(gone.media || []).flatMap(m => [m.path, m.thumb])])].filter(u => u && !used.has(u));

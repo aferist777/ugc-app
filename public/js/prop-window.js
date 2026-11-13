@@ -1,16 +1,16 @@
 // ════════════════════════════════════════════════════════════════════════════
-// NEW PROP (phase V26.6, the owner 2026-10-30, (п3), (пр1)-(пр5)): a product brought into IMAGES -> Props - ONE window,
+// NEW PROP: a product brought into IMAGES -> Props - ONE window,
 // opened from anywhere: the "+" of Props in the media tree (the Library and Merge's Library panel), the Library's bar, Merge's
-// gallery "+" tile, and the frames chat's picker opened from its product place ((пр3)).
+// gallery "+" tile, and the frames chat's picker opened from its product place.
 //
 //   openNewProp({ anchor, onAdded(item), onClose })   -> the window (the one open already, when there is one)
 //     item  { id, media, name } - the product, once it lies in Props (its description is written behind)
 //
 // On the left the PHOTO: a press opens this computer's files, a file let go on it, Ctrl+V of a copied picture, or
 // "from IMAGES…" - the attachment window with the tree (js/merge-v3/chat-pick.js); a picture of IMAGES is COPIED (it stays
-// where it is, (пр5)). On the right its name (optional - the agent names it) and what the person knows about it, in any
+// where it is). On the right its name (optional - the agent names it) and what the person knows about it, in any
 // language, and `add` (POST /api/props/add). Nothing is generated and no Alerts row is written.
-// After `add` THE WINDOW STAYS ((пр1) "а"): the product as it landed - its name and the agent's description once it is
+// After `add` THE WINDOW STAYS: the product as it landed - its name and the agent's description once it is
 // written ("describing…"; not written - why, and "read again") - and "add another".
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -54,7 +54,7 @@ export function openNewProp(o) {
   ensureCss();
   ensurePickCss();                         // "from IMAGES…" opens the attachment window - its look ready before
   _s = _blank();
-  // (phase V64, fix (е)) The almanac's size again, over its place - not a generation's 1280×800.
+  // The almanac's size, over its place - not a generation's 1280×800.
   _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', onClose: _closed });
   _win.setCrumbs([{ label: 'New prop' }]);
   document.addEventListener('paste', _onPaste, true);
@@ -80,7 +80,7 @@ function _onPaste(e) {
   _take(files[0]);
 }
 
-// (phase V73 block 2) A refused or unread file, and a failed `add`, are said in the corner (js/notice.js).
+// A refused or unread file, and a failed `add`, are said in the corner (js/notice.js).
 async function _take(file) {
   if (!file) return;
   if (!isPictureFile(file)) { showError('That is not a picture.'); return; }
@@ -260,7 +260,7 @@ function _result() {
     again.addEventListener('click', async () => {
       again.disabled = true;
       try { await post('/api/props/' + encodeURIComponent(_s.added.id) + '/read', {}); _s.info = Object.assign({}, i, { reading: true, fail: '' }); _s.polls = 0; _render(); _follow(); }
-      // (phase V73 block 2) the press failed: in the corner; the description's own state stays as it was
+      // the press failed: in the corner; the description's own state stays as it was
       catch (e) { again.disabled = false; showError(e.message); }
     });
     body.appendChild(again);

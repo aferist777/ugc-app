@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — THE PART OF A CLIP OR A SOUND that goes to the video model (phase V7, PLAN V-H; the owner 2026-10-07).
+   MERGE — THE PART OF A CLIP OR A SOUND that goes to the video model.
 
    Pressed in the attachment zone, a clip (or a sound) opens this panel over the zone: the clip itself and, under it,
    a bar of its whole length with a WINDOW on it - the part that goes. The window is dragged to move it and its edges
@@ -10,7 +10,7 @@
    openTrim({ anchor, kind, src, poster, dur, from, to, min, max, title, why, still, onChange(from, to), onStill(url), onClose })
    closeTrim()
 
-   (phase V17, the owner 2026-10-08) `still`: Kling motion control's FIRST FRAME. A slider over the clip picks the moment
+   `still`: Kling motion control's FIRST FRAME. A slider over the clip picks the moment
    the character is seen best; the part goes FROM there (the window's start follows it, its length kept within what the
    model takes), and the frame at that moment is handed to `onStill` as a small JPEG - the zone shows it on the clip.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -46,7 +46,7 @@ export function openTrim(opts) {
   let from = Math.max(0, Math.min(+o.from || 0, dur - min));
   let to = Math.max(from + min, Math.min(+o.to || (from + max), from + max, dur));
 
-  // (phase V73 block 4, (б4-6) а) a panel at its place: the frame's edges, its head row with the 28 px ✕, no backdrop; what it
+  // a panel at its place: the frame's edges, its head row with the 28 px ✕, no backdrop; what it
   // holds under the head in its own padded column (`body`)
   const box = _el('div', 'vtrim u-win is-float');
   const head = _el('div', 'vtrim-h u-win-head');
@@ -66,7 +66,7 @@ export function openTrim(opts) {
   media.src = o.src;
   if (o.kind !== 'audio') { media.muted = false; media.playsInline = true; if (o.poster) media.poster = o.poster; }
   body.appendChild(media);
-  // (phase V17) The first frame: its moment on a slider of its own - the part starts there.
+  // The first frame: its moment on a slider of its own - the part starts there.
   let still = null;
   if (o.still && o.kind !== 'audio') {
     still = _el('div', 'vtrim-still');
@@ -76,7 +76,7 @@ export function openTrim(opts) {
     range.max = String(Math.max(0, dur - min));
     range.step = '0.04';
     range.title = 'The first frame: the moment the character is seen best - the moves go from here';
-    wireRange(range);                               // (phase V73 block 2) the shared slider, in the trimmer's gold
+    wireRange(range);                               // the shared slider, in the trimmer's gold
     const at = _el('span', 'vtrim-still-at u-range-v');
     still.append(_el('span', 'k', 'First frame'), range, at);
     body.appendChild(still);
@@ -85,8 +85,7 @@ export function openTrim(opts) {
   }
 
   const bar = _el('div', 'vtrim-bar' + (o.kind === 'audio' ? '' : ' is-film'));
-  // A clip's bar is a strip of its frames (the owner, 2026-10-07: "a strip of frames with the window on it"); a
-  // sound's is a plain strip.
+  // A clip's bar is a strip of its frames with the window on it; a sound's is a plain strip.
   const film = o.kind === 'audio' ? null : document.createElement('canvas');
   if (film) { film.className = 'vtrim-film'; bar.appendChild(film); }
   const win = _el('div', 'vtrim-win');
@@ -113,7 +112,7 @@ export function openTrim(opts) {
     if (still) { still.range.value = String(from); fillRange(still.range); still.at.textContent = _t(from); }
   };
   const show = (t) => { try { media.currentTime = Math.max(0, Math.min(dur - 0.05, t)); } catch (e) { /* not loaded yet */ } };
-  // (phase V17) The first frame, taken once the clip stands on it: a small JPEG for the zone's cell.
+  // The first frame, taken once the clip stands on it: a small JPEG for the zone's cell.
   let want = still ? from : null;
   const shot = () => {
     if (!still || want == null || Math.abs(media.currentTime - want) > 0.08 || !media.videoWidth) return;
@@ -131,7 +130,7 @@ export function openTrim(opts) {
     if (still) { want = from; if (Math.abs(media.currentTime - from) <= 0.08) shot(); }
     if (typeof o.onChange === 'function') o.onChange(+from.toFixed(2), +to.toFixed(2));
   };
-  // (phase V17) The slider moves the part's start; its end follows the length the person chose (`wantLen` - the window's
+  // The slider moves the part's start; its end follows the length the person chose (`wantLen` - the window's
   // own edges set it), so a start pushed to the clip's end and back gets its whole part again.
   let wantLen = to - from;
   if (still) {
@@ -200,7 +199,7 @@ export function openTrim(opts) {
   media.addEventListener('loadedmetadata', () => show(from), { once: true });
 
   // Over the zone, beside the place that opened it, inside the window.
-  // The zone is drawn again under it (its cell replaced), so the place it was first opened beside is kept (review V7).
+  // The zone is drawn again under it (its cell replaced), so the place it was first opened beside is kept.
   let at0 = null;
   const place = () => {
     if (o.anchor && o.anchor.isConnected) { const rr = o.anchor.getBoundingClientRect(); at0 = { left: rr.left, top: rr.top, width: rr.width }; }

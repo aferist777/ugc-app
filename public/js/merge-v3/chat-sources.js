@@ -1,20 +1,19 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — where a chat's picker takes pictures from (phase V13 in the video chat; shared since phase V26.5 with the
-   frames chat, since V55 with the pictures chat). Each loader answers { items, cats?, why? } - an item is { path, name,
-   sub, cat, thumb, big, aspect }. Since V55 the shelves of folders are the window's tree (TREE below); the loaders here
-   are its rows - what is not a folder.
+   MERGE — where a chat's picker takes pictures from (the video chat, the frames chat and the pictures chat). Each loader
+   answers { items, cats?, why? } - an item is { path, name, sub, cat, thumb, big, aspect }. The shelves of folders are the
+   window's tree (TREE below); the loaders here are its rows - what is not a folder.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { thumbOf, json } from './chat-shell.js';
 
-// A shelf that could not be read (phase V73 block 2, (б2-19)): `failed` - the attachment window says "did not load" with Try again.
+// A shelf that could not be read: `failed` - the attachment window says "did not load" with Try again.
 export const gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read', failed: true });
 export const shape = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
 export const pic = (path, name, sub, x) => Object.assign({ path, name: name || '', sub: sub || '',
   thumb: thumbOf(path, 'strip'), big: thumbOf(path, 'main') }, x || {});
 
-/** A character's sheet, then its looks, one character after another (`items`) - and (phase V56, the owner's п. 1, (ги1))
- *  the same as GROUPS, one per character, the ones with the most looks first: the attachment window shows them in place of
+/** A character's sheet, then its looks, one character after another (`items`) - and the same
+ *  as GROUPS, one per character, the ones with the most looks first: the attachment window shows them in place of
  *  its tree (chat-pick.js). Looks of no character are a group of their own, last. */
 export async function people() {
   const [c, l] = await Promise.all([json('/api/library/shelf/characters'), json('/api/library/shelf/looks')]);
@@ -35,14 +34,14 @@ export async function people() {
   return { items: groups.flatMap(g => g.items), groups };
 }
 
-// ── The attachment window with the tree (phase V55, chat-pick.js `tree`) ─────
+// ── The attachment window with the tree (chat-pick.js `tree`) ─────
 // What of the media tree each kind shows (its top nodes), the key the tree remembers its branches under, the folder opened
-// the first time, how a file of a folder (js/folder-column.js filesOf) becomes the window's item, and (phase V56, (ги4))
+// the first time, how a file of a folder (js/folder-column.js filesOf) becomes the window's item, and
 // `home` - the root a file brought into a chat lies in: IMAGES, VIDEO -> Uploads, AUDIO -> SFX -> My sounds.
 const _treeClip = (f) => ({ path: f.path, src: f.path, poster: f.thumb || '', name: f.name || '', thumb: f.thumb ? thumbOf(f.thumb, 'strip') : '',
   aspect: f.aspect || '', dur: +f.dur || 0 });
 export const TREE = {
-  // (phase V78, (лч16)) THIS PROJECT first - in Merge, the project's own folders of links.
+  // THIS PROJECT first - in Merge, the project's own folders of links.
   image: { roots: ['plinks', 'references', 'images'], page: 'pk_image', fallback: 'images', home: 'images', type: 'photo',
     map: (f) => pic(f.path, f.name, '', { aspect: f.aspect || '' }) },
   video: { roots: ['plinks', 'references', 'video'], page: 'pk_video', fallback: 'uploads', home: 'uploads', type: 'video', map: _treeClip },

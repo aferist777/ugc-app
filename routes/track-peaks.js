@@ -1,18 +1,18 @@
 'use strict';
 
-/* track-peaks.js - a sound's peaks for its waveform on Merge's lanes (phase V36, T4).
+/* track-peaks.js - a sound's peaks for its waveform on Merge's lanes.
 
      GET /api/track-peaks?src=<address>
        the bytes of lib/track-peaks.js (one a peak, X-Peaks-Rate a second, 0..255 of the file's loudest), read once and
        kept in cache/peaks/; 404 when the address names no file. A film's sound is read the same way as a sound's.
 
      GET /api/track-pauses?src=<address>&from=<s>&to=<s>
-       (phase V44) the pauses of the file's sound inside [from, to) - seconds of the FILE - by the noise floor of that
+       the pauses of the file's sound inside [from, to) - seconds of the FILE - by the noise floor of that
        stretch (lib/track-pauses.js): { success, from, to, floor, thr, pauses: [[a, b], ...] }; the loudness is read once
        and kept in cache/pauses/. The timeline's "cut silence" asks it for main audio's clips (js/merge-v3/tl-silence.js).
 
      GET /api/pitch-copy?src=<address>&st=<semitones>&shift=1&rev=1
-       (phase V76) the file at another pitch (lib/pitch-copy.js): answered when the copy is made - { success, url } (an address
+       the file at another pitch (lib/pitch-copy.js): answered when the copy is made - { success, url } (an address
        under /cache/pitch/), made once and kept; `shift` - the timbre moves with the pitch, `rev` - from the sound played
        backwards. The preview plays it in place of the file (js/merge-v3/preview-b.js). */
 

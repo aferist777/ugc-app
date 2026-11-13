@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE CARDS (phase V84 block 4c, the owner 2026-11-11, (б4-1)-(б4-13)) - Checklist pop, Checklist, Growth chart and Chat:
+   THE CARDS - Checklist pop, Checklist, Growth chart and Chat:
    video-effects-pack's scenes (MIT; their numbers, timings and look written again for the canvas), with the PERSON'S words
    (js/fx/effects.js textsOf - '' not drawn), font (one of the captions' 101, its twin for a Russian line - js/fx/kit.js
-   textFont), colours (card, text, accent; Chat's background), corners, place up or down and size (the owner's (б4-13)). Drawn by the
+   textFont), colours (card, text, accent; Chat's background), corners, place up or down and size. Drawn by the
    page only - live by the preview, baked for the render by the app's window with this code (js/merge-v3/fx-draw.js applyFx). Each is
    draw(g, S) on the clip's window (js/fx/overlays.js says what g and S are); `tau` stands still at the effect's `hold` while the card
    is set longer than its own length (js/fx/params.js ownTime), `live` goes on - a dot's pulse, a spinner.

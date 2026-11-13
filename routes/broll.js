@@ -1,13 +1,13 @@
 'use strict';
 
-/* routes/broll.js - THE B-ROLL ENGINE's doors (phase V62, block 1; lib/broll.js does the work).
+/* routes/broll.js - THE B-ROLL ENGINE's doors (lib/broll.js does the work).
 
    GET  /api/broll/:id/state            -> { success, state }   how far it has got - the page's field 2 follows it
    POST /api/broll/:id/find             -> { success, state }   find the B-roll of every sentence that has none, and lay it
    POST /api/broll/:id/mode  { mode }   -> { success, state }   'mixed' | 'video' | 'image': what is laid - laid again now
 
-   The work is the SERVER's (CLAUDE.md, the generation journal's rule - though this is no paid generation: the stock is free and
-   the agent's keywords are fractions of a cent, like the voices - no Alerts row, (во14)): a press starts it and answers at once;
+   The work is the SERVER's (this is no paid generation: the stock is free and the agent's keywords are fractions of a cent,
+   like the voices - so no Alerts row): a press starts it and answers at once;
    the page asks for the state while it runs. One run per project. */
 
 const express = require('express');
@@ -28,7 +28,7 @@ router.post('/broll/:id/mode', (req, res) => {
   try { res.json({ success: true, state: BR.setMode(String(req.params.id), String((req.body || {}).mode || '')) }); } catch (e) { _fail(res, e); }
 });
 
-// ── Block 2 - another item for a piece, from the Library panel ──
+// ── Another item for a piece, from the Library panel ──
 //   GET  /api/broll/:id/piece/:cell            -> { success, piece }  its sentence's batch (lib/broll.js piece)
 //   GET  /api/broll/:id/thumb/:item            -> the item's picture
 //   POST /api/broll/:id/swap  { cell, item }   -> { success, state }  the piece takes that item - chosen by hand

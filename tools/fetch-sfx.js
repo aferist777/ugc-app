@@ -1,15 +1,14 @@
 'use strict';
 
-/* fetch-sfx.js - lays out the app's built-in sound set in vendor/sfx/ (phase V34.B; docs/local-app/PLAN.md "Фаза V34").
+/* fetch-sfx.js - lays out the app's built-in sound set in vendor/sfx/.
 
    npm install runs it (postinstall, with --optional: a missing archive is a warning, not a failed install).
    By hand, after moving the pin:
        node tools/fetch-sfx.js
 
    ONE archive, made by tools/build-sfx.js from tools/sfx-list.json (Kenney's audio packs and CC0 sounds of Freesound
-   and Wikimedia Commons found through Openverse - trimmed, levelled, Opus) and KEPT IN GIT, in tools/sfx/ (the owner
-   2026-10-22: "Cloudflare не трогать: архив набора звуков положить в репозиторий (git), fetch-sfx.js берёт его
-   оттуда") - so nothing is downloaded. Pinned by size and SHA-256: an archive changed after the fact is refused.
+   and Wikimedia Commons found through Openverse - trimmed, levelled, Opus) and KEPT IN GIT, in tools/sfx/ - so
+   nothing is downloaded. Pinned by size and SHA-256: an archive changed after the fact is refused.
    What it lays out:
        vendor/sfx/sfx.json                    the set: categories, and every sound's id, name, category, file, tags,
                                               duration, 64-point waveform, author, licence, page

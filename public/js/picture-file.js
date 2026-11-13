@@ -1,5 +1,5 @@
-// A PICTURE FROM THIS COMPUTER (phase V24, the owner 2026-10-09: every picture brought in is made a format
-// that works - lib/image-in.js on the server). What counts as a picture, what the file pickers offer, and
+// A PICTURE FROM THIS COMPUTER (every picture brought in is made a format that works - lib/image-in.js on
+// the server). What counts as a picture, what the file pickers offer, and
 // a phone's HEIC turned into a JPEG by the server before the page shows it: the browser cannot draw a
 // HEIC, and a phone's HEIC often arrives with no type at all - so it is known by its name too.
 

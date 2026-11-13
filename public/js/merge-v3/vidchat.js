@@ -1,28 +1,28 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — making clips, as a conversation, in a window (phase V3, docs/local-app/PLAN.md "Фаза V").
+   MERGE — making clips, as a conversation, in a window.
 
    The pictures chat's shell (chat-shell.js) with its own description: its own window (chat-window.js), column and
-   box, its own conversation (kind 'clip'). The server is phase V2
+   box, its own conversation (kind 'clip'). The server side
    (routes/mv3-video.js): a press writes the turn, a record and an Alerts row for each clip asked for, and the
    work - the writer, the references hosted, the aggregator asked, the clip fetched and filed as a B-roll in its
    model's folder (VIDEO -> Generated -> <model>) - goes on behind it.
 
-   What is this chat's own (the owner, 2026-10-05):
+   What is this chat's own:
    - ONE dropdown of every model, each its own line with its price; the chosen model shows ITS OWN parameters
      (duration, quality, shape, sound, Grok's mode, how Seedance reads the pictures, Kling's orientation) and the
      price of this send; the aggregator beside it with its own rate - the cheapest with a working key by default.
    - A line under the model's dropdown says what the chosen model does and what to attach.
    - Kling motion control's VIDEO has no writer - Kling gets its own prompt. With the writer off the box IS that prompt
      (empty: the standard one); with it on the box says what to take from which picture, and the first frame is drawn
-     before the video (phase V17).
-   - (phase V13, the owner 2026-10-07) Every "+" of the attachment zone opens the picker on its place (chat-pick.js) - the
+     before the video.
+   - Every "+" of the attachment zone opens the picker on its place (chat-pick.js) - the
      Library's shelves of that kind and this computer. A clip that lands is not put in the zone by itself - it is one press
      on it there, under "made in this project".
-   - (phase V60.2, the owner 2026-10-29, (вч1б)-(вч5а)) A RIGHT COLUMN again, the pictures chat's folder column
+   - A RIGHT COLUMN, the pictures chat's folder column
      (js/folder-column.js): "this project" - the clips made here - first, then REFERENCES, IMAGES, VIDEO and AUDIO; a press
      puts a picture, a clip or a sound into its part of the zone. VIDEO is not there while the model takes no clips (and
-     AUDIO while it takes no sounds), and a clip longer than the model takes is not shown (V57's rule of the window).
-   - (phase V7) Clips and sounds are references too: from this project's clips, B-roll, Uploads, the Sounds shelf, this
+     AUDIO while it takes no sounds), and a clip longer than the model takes is not shown (the attachment window's rule, _clipFit).
+   - Clips and sounds are references too: from this project's clips, B-roll, Uploads, the Sounds shelf, this
      computer or a lane of the timeline; each goes as the PART of it the person chose (vtrim.js), the first seconds
      the model takes by default, and the price follows that part.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -37,7 +37,7 @@ import { openTrim, closeTrim } from './vtrim.js';
 import { openHelp, closeHelp } from './vhelp.js';
 import { stepCard } from './vsteps.js';
 import { note, askDelete } from '../ask.js';
-// (phase V73 block 2, step 2b) The model table being read or not read - the shared parts (a row of the column); the reason a popup.
+// The model table being read or not read - the shared parts (a row of the column); the reason a popup.
 import { emptyEl, loadingEl, failedEl, cap as capFirst } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { startInlineProgress } from '../progress.js';
@@ -45,12 +45,12 @@ import { wire as wireRange } from '../ui-range.js';
 import { backButton } from './tl-gen.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
-const SHOW_ATTS = 9;                       // the old row's places at most (the zone grows instead - phase V6)
+const SHOW_ATTS = 9;                       // the row's places at most (the zone grows instead)
 const MAX_PICS = 30;                       // pictures at most, whatever a model says (Seedance 2.5 takes 30)
 const MAX_ATTS = 50;                       // everything attached at most - pictures, clips and sounds
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-// (phase V77) The description's way in from outside (openVideos with a thing from the timeline) - set when it is made.
+// The description's way in from outside (openVideos with a thing from the timeline) - set when it is made.
 let _api = null;
 
 function VIDEOS(ctx) {
@@ -71,7 +71,7 @@ function VIDEOS(ctx) {
     return recOf(m, _set && _set.agg.value) || recOf(m, _last.agg[m.id]) || recOf(m, m.defaultAgg) || m.records[0];
   }
   const params = () => { const m = model(); return (m && _last.params[m.id]) || {}; };
-  // (phase V10.2) Seedance's sound beside a clip: 'clip' (the default - laid under), 'on' (its own) or 'off'.
+  // Seedance's sound beside a clip: 'clip' (the default - laid under), 'on' (its own) or 'off'.
   const _clipSoundOf = (p) => (['clip', 'on', 'off'].includes(p.clipSound) ? p.clipSound : 'clip');
   function setParam(k, v) {
     const m = model();
@@ -80,7 +80,7 @@ function VIDEOS(ctx) {
     _remember();
   }
   const isMC = () => (model() || {}).family === 'kmc';
-  // (phase V17, the owner 2026-10-08) Kling motion control STEP BY STEP: with the writer on, the person's pictures (the
+  // Kling motion control STEP BY STEP: with the writer on, the person's pictures (the
   // character - and a place, clothes or a thing, said in the box from which) and a still of the clip go to the writer and
   // a picture model first; the first frame is drawn, and Kling moves it with the clip from that moment.
   const _mcSteps = () => isMC() && ctx.writing();
@@ -89,7 +89,7 @@ function VIDEOS(ctx) {
     const ps = ((_table && _table.frame && _table.frame.providers) || []).filter(p => p.usable);
     return Math.max(1, Math.min(13, (ps.length ? Math.max(...ps.map(p => p.maxRefs || 2)) : 14) - 1));
   };
-  // (phase V16, the owner 2026-10-07) Seedance's pictures as FRAMES - "pictures are": 'frame' the first frame, 'fl' the first
+  // Seedance's pictures as FRAMES - "pictures are": 'frame' the first frame, 'fl' the first
   // and the last. The zone's pictures are then those places alone, both required; beside a clip or a sound they go as
   // references (Seedance takes frames OR references - kie, Replicate and ByteDance all say so), and the prompt names
   // them. The writer writes the animation from the frames, with the words or without - the server says in its first
@@ -103,10 +103,10 @@ function VIDEOS(ctx) {
   }
   const _frameKeys = () => _frameSlots().map(s => s.key);
   const _onlyFrames = () => 'In this mode only the ' + (_asOf() === 'fl' ? 'first and last frames go' : 'first frame goes');
-  // (phase V15, the owner 2026-10-07) The column's STORYBOARD: ticked, under Seedance, with the writer, and not with frames
+  // The column's STORYBOARD: ticked, under Seedance, with the writer, and not with frames
   // (the sheet goes as a reference). ">" writes its sheet's prompt, and every paid step waits for its press on its message.
   const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && ctx.writing() && !_framesMode(); };
-  // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
+  // What is attached, by kind (the zone has pictures, clips and sounds).
   const _kind = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
   const _pics = () => ctx.atts().filter(a => _kind(a) === 'image');
   const _clips = () => ctx.atts().filter(a => _kind(a) === 'video');
@@ -115,7 +115,7 @@ function VIDEOS(ctx) {
   const _span = (a) => Math.max(0, (+a.out || 0) - (+a.in || 0));
   const _s = (v) => (+v).toFixed(1).replace(/\.0$/, '') + ' s';
 
-  // ── The part of a clip or a sound that goes (phase V7) ────────────────────
+  // ── The part of a clip or a sound that goes ────────────────────
   // How long it may be on the chosen model: Seedance takes clips of 2-15 s (2.5: 2-30) and all of them together that
   // much at most, the sounds likewise; Kling motion control follows 3-30 s of the moves - 10 s when the character keeps
   // the picture's orientation. `max` is what is left for THIS one beside the others of its kind.
@@ -135,7 +135,7 @@ function VIDEOS(ctx) {
       }
       const [lo, hi] = L.clipSecs || [2, 15];
       const all = L.videoSecs || hi;
-      // (phase V47) The only clip is the video's length: 4 s at least (lib/video-models.js byClip).
+      // The only clip is the video's length: 4 s at least (lib/video-models.js byClip).
       const alone = !!r.oneClip && !ctx.atts().some(x => x !== a && x.path !== a.path && _kind(x) === 'video');
       if (alone) {
         const least = Math.max(lo, r.oneClip.least || 4);
@@ -171,7 +171,7 @@ function VIDEOS(ctx) {
     return '';
   }
   // What the zone's cell says of it (the shell asks): red with the reason, or gold seconds when only a part goes; a picture
-  // beyond the frames' places dimmed, with the reason (phase V16).
+  // beyond the frames' places dimmed, with the reason.
   function _attState(a) {
     if (_kind(a) === 'image') {
       return _framesMode() && !_frameKeys().includes(a.slot) ? { off: _onlyFrames() + ' - take this one off, or set "pictures are" to references' } : null;
@@ -191,7 +191,7 @@ function VIDEOS(ctx) {
     // Measured when the shelf did not know its length - and a clip's file taken as a sound, which may have none.
     if (!dur || (k === 'audio' && /\.(mp4|mov|m4v|webm|mkv|avi)(\?|$)/i.test(a.path))) {
       const d = await json('/api/media/probe?src=' + encodeURIComponent(a.path));
-      // (review V7) Another project opened meanwhile: its own attachment of the same file is not this one.
+      // Another project opened meanwhile: its own attachment of the same file is not this one.
       if (ctx.key() !== key0) return;
       if (d && d.success && +d.duration > 0) dur = Math.round(+d.duration * 100) / 100;
       if (d && d.success && ((k === 'video' && !(d.w > 0)) || (k === 'audio' && !d.audio))) {
@@ -216,7 +216,7 @@ function VIDEOS(ctx) {
       if (to - from < rule.min && dur >= rule.min) { to = Math.min(dur, from + rule.min); from = Math.max(0, to - rule.min); }
     }
     ctx.setAtt(a.path, { dur, in: Math.round(from * 100) / 100, out: Math.round(to * 100) / 100 });
-    // (phase V17, the owner 2026-10-08) Kling motion control: the clip opens on its first frame's slider at once.
+    // Kling motion control: the clip opens on its first frame's slider at once.
     if (k === 'video' && isMC()) { setTimeout(() => _autoStill(a.path), 150); return; }
     if (dur > to - from + 0.05) {
       ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press its seconds to choose another part.');
@@ -230,14 +230,14 @@ function VIDEOS(ctx) {
   }
 
   // The part chosen by hand: the clip (or the sound) in a panel over the zone, its window within what the model takes.
-  // The attachment whose part window is open - the window goes with it when it is taken off (review V7).
+  // The attachment whose part window is open - the window goes with it when it is taken off.
   let _trimPath = '';
   function _trimFor(a, cell) {
     const dur = +a.dur || 0;
     if (!dur) { ctx.say('Its length is not known - it cannot be cut.'); return; }
     const k = _kind(a);
     const rule = _spanRule(a) || { min: 0.5, max: dur, why: '' };
-    // (phase V17) Under Kling motion control the part starts on the first frame, picked on a slider.
+    // Under Kling motion control the part starts on the first frame, picked on a slider.
     const still = isMC() && k === 'video';
     openTrim({
       anchor: cell, kind: k, src: a.path, poster: a.poster ? thumbOf(a.poster, 'main') : '', dur,
@@ -261,9 +261,9 @@ function VIDEOS(ctx) {
     const L = r.limits || {};
     return k === 'video' ? L.videos > 0 : k === 'audio' ? L.audios > 0 : L.images > 0;
   };
-  // (phase V60.2) What the right column offers: everything until the models are read.
+  // What the right column offers: everything until the models are read.
   const _colTakes = (k) => !_table || _takes(k);
-  // (phase V47, the owner 2026-10-24/25) ONE clip decides Seedance's length and shape (lib/video-models.js byClip): the
+  // ONE clip decides Seedance's length and shape (lib/video-models.js byClip): the
   // column's rows show the clip's and are not sent - 2.5 on kie makes the clip's own seconds, the others its seconds
   // rounded. With several clips the column's length and shape go. `media`: a card's own attachments, else the zone.
   function _byClip(r, media) {
@@ -302,7 +302,7 @@ function VIDEOS(ctx) {
     if (!_takes(k)) { ctx.say(((model() || {}).label || 'This model') + ' takes no ' + (k === 'video' ? 'clips' : 'sounds') + '.'); return; }
     const was = ctx.atts().find(x => x.path === d.src);
     if (was) {
-      // (review V7) One place per file: a clip's sound twin let go over the sounds is not the clip attached already.
+      // One place per file: a clip's sound twin let go over the sounds is not the clip attached already.
       if (_kind(was) !== k) { ctx.say('This file is attached already as a ' + (_kind(was) === 'video' ? 'clip' : 'sound') + ' - one place per file.'); return; }
       // Attached already: the part the timeline plays replaces the one it had.
       ctx.setAtt(d.src, { in: d.in, out: d.out });
@@ -327,7 +327,7 @@ function VIDEOS(ctx) {
     const p = params();
     if (p.resolution && !r.resolutions.includes(p.resolution)) return { none: true, cannot: p.resolution };
     const res = p.resolution || r.resDef;
-    // (phase V7) With a reference clip a rate's second figure is the one asked (lib/video-models.js price), and the
+    // With a reference clip a rate's second figure is the one asked (lib/video-models.js price), and the
     // clip's seconds count: Kling is billed by the seconds of the moves, kie's Seedance by the clip's AND the video's.
     const clips = media ? media.filter(x => x && x.kind === 'video') : (_takes('video') ? _clips() : []);
     // Kling follows ONE clip - the first; Seedance's clips count together.
@@ -337,11 +337,11 @@ function VIDEOS(ctx) {
     if (per == null) return { none: true, res };
     if (r.duration.fromClip) {
       const cap = p.orientation === 'image' ? (r.limits.videoSecsImage || 10) : (r.limits.videoSecs || 30);
-      // (phase V10.2) kie bills Kling by the whole seconds that come back, rounded down.
+      // kie bills Kling by the whole seconds that come back, rounded down.
       const secs = !vidIn ? 0 : r.billWhole ? Math.max(1, Math.floor(Math.min(vidIn, cap) + 0.001)) : Math.min(vidIn, cap);
       return { per, res, fromClip: true, whole: !!r.billWhole, secs, usd: secs ? per * secs : null };
     }
-    // (phase V47) One Seedance clip: the video is as long as the clip - kie bills the clip's seconds and the video's.
+    // One Seedance clip: the video is as long as the clip - kie bills the clip's seconds and the video's.
     const one = r.oneClip && clips.length === 1 ? clips[0] : null;
     if (one && _span(one) > 0) {
       const out1 = _clipOut(r, one);
@@ -375,7 +375,7 @@ function VIDEOS(ctx) {
 
   function _row(host, label, ctl, cls) {
     const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
-    if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // (phase V73 block 2) the shared field at 24, (2a-3) б
+    if (ctl.tagName === 'SELECT') ctl.classList.add('u-in', 'is-s');   // the shared field at 24
     const l = el('label', null, label);
     if (ctl.id) l.htmlFor = ctl.id;
     r.append(l, ctl);
@@ -403,7 +403,7 @@ function VIDEOS(ctx) {
     const host = ui.left;
     if (!_table || !models().length) {
       host.textContent = '';
-      // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again - the reason was the popup (load). A table with no
+      // Not read: "did not load" with Try again - the reason a popup (load). A table with no
       // model says so rather than "reading" for ever.
       host.appendChild(_err ? failedEl('The models', () => { _err = ''; paint(); load(); }, { line: true })
         : _table ? emptyEl('No video models.', { line: true }) : loadingEl('reading the models…', { line: true }));
@@ -416,7 +416,7 @@ function VIDEOS(ctx) {
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
       })), _last.model, (v) => { _last.model = v; _recent(v); _remember(); _paintModel(); ctx.paintAtts(); });
       _row(host, 'model', mSel);
-      // What the chosen model does and what to attach - under its dropdown (phase V6).
+      // What the chosen model does and what to attach - under its dropdown.
       const brief = el('div', 'mv3-vc-brief');
       host.appendChild(brief);
       const aSel = document.createElement('select');
@@ -426,7 +426,7 @@ function VIDEOS(ctx) {
       _row(host, 'aggregator', aSel, 'is-prov');
       const box = el('div', 'mv3-vc-params');
       host.appendChild(box);
-      // (phase V15) The writer and the storyboard - the switches of how the message goes.
+      // The writer and the storyboard - the switches of how the message goes.
       const sw = el('div', 'mv3-vc-switches');
       host.appendChild(sw);
       const cost = el('div', 'mv3-ig-cost');
@@ -445,25 +445,23 @@ function VIDEOS(ctx) {
     _paintModel();
   }
 
-  // The switches (phase V15, the owner 2026-10-07): the writer - it was the pen in the bar - and the storyboard. Every
-  // prompt goes in English (phase V29, the owner 2026-10-14).
+  // The switches: the writer and the storyboard. Every prompt goes in English.
   function _paintSwitches() {
     if (!_set) return;
     const m = model();
     const box = _set.sw;
     box.textContent = '';
     if (!m) return;
-    // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on
-    // - and (phase V17.1, the owner 2026-10-08) holds it on while it is ticked.
+    // The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on
+    // - and holds it on while it is ticked.
     const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'
       : _framesMode() ? 'The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references'
       : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
     const held = !bWhy && _boardOn();
-    // (phase V16, the owner) The writer is a checkbox like the storyboard - on by default.
-    // (phase V73 block 4) the shared switch (.u-switch), its word beside it
+    // The writer is a switch like the storyboard - on by default: the shared switch (.u-switch), its word beside it.
     const wr = switchRow('Writer', ctx.writing(), held, (v) => ctx.setWriting(v));
     if (held) wr.classList.add('is-held');
-    // (phase V17) Under Kling motion control the writer writes the first frame's picture prompt.
+    // Under Kling motion control the writer writes the first frame's picture prompt.
     wr.title = held ? 'The storyboard is written by the writer - untick the storyboard first'
       : isMC() ? 'On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.'
         : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
@@ -498,8 +496,8 @@ function VIDEOS(ctx) {
     const want = recOf(m, _last.agg[m.id]) && recOf(m, _last.agg[m.id]).usable ? _last.agg[m.id] : m.defaultAgg;
     if (want) _set.agg.value = want;
     _set.agg.disabled = m.records.filter(r => r.usable).length < 2;
-    // (phase V17, the owner 2026-10-08) Kling's prompt is put in by the server - the box holds no standard text any more;
-    // one an older draft left there goes. The box's hint is painted with the model's settings.
+    // Kling's prompt is put in by the server - the box holds no standard text, and a draft's box that holds it is
+    // emptied. The box's hint is painted with the model's settings.
     const std = _table.standardPrompt || '';
     if (std && ctx.text() === std) ctx.setText('');
     _set.brief.textContent = m.brief;
@@ -515,9 +513,9 @@ function VIDEOS(ctx) {
     const p = params();
     const n = _pics().length;
     const fam = m.family;
-    // (phase V7) Beside a clip or a sound Seedance's pictures are references - frames go only on their own.
+    // Beside a clip or a sound Seedance's pictures are references - frames go only on their own.
     const mixed = _takes('video') && _clips().length + _sounds().length > 0;
-    // (phase V47) One clip: the length and the shape are the clip's - shown, not chosen; several: chosen here.
+    // One clip: the length and the shape are the clip's - shown, not chosen; several: chosen here.
     const one = _byClip(r);
     if (!r.duration.fromClip && one) {
       const out = _clipOut(r, one);
@@ -536,7 +534,7 @@ function VIDEOS(ctx) {
       r.resolutions.includes(p.resolution) ? p.resolution : r.resDef, (v) => {
         setParam('resolution', v);
         _paintPrice();
-        // (phase V10.2) The zone's places can change with it (Grok 1.5 on kie: one picture at 1080p).
+        // The zone's places can change with it (Grok 1.5 on kie: one picture at 1080p).
         if (r.limits.imagesAt) ctx.paintAtts();
       }));
     // The shape: with a picture Grok takes the picture's (Grok 1.5 on kie: with one - several are references, and the
@@ -562,10 +560,10 @@ function VIDEOS(ctx) {
       })), p.mode || 'normal', (v) => setParam('mode', v)));
     }
     if (fam === 'seedance') {
-      // (phase V7.4, the owner's answer 4) With a clip attached the sound can be the CLIP's: Seedance makes none, and the
+      // With a clip attached the sound can be the CLIP's: Seedance makes none, and the
       // clip's part is laid under the video when it lands.
-      // (phase V10.2, the owner 2026-10-10) With a clip the clip's sound is the DEFAULT: Seedance with its own sound beside a
-      // reference clip said the clip's words over again (V10.1 No 6). The choice beside a clip is remembered on its own
+      // With a clip the clip's sound is the DEFAULT: Seedance with its own sound beside a
+      // reference clip says the clip's words over again. The choice beside a clip is remembered on its own
       // (`clipSound`), so "with sound" chosen for words alone does not turn it back.
       const withClip = _takes('video') && _clips().length > 0;
       const opts = [{ value: 'on', text: withClip ? 'the model\'s sound' : 'with sound' }];
@@ -575,7 +573,7 @@ function VIDEOS(ctx) {
       const sel = _select('mv3-vc-audio', withClip ? 'With a clip, the first clip\'s sound is laid under the video when it lands - Seedance\'s own sound would say the clip\'s words over again' : 'Seedance makes its own sound',
         opts, now, (v) => { if (withClip) setParam('clipSound', v); else setParam('audio', v === 'on'); });
       _row(box, 'sound', sel);
-      // (phase V16) Chosen first, even before a picture: the zone lays out the frames' places for it.
+      // Chosen first, even before a picture: the zone lays out the frames' places for it.
       _row(box, 'pictures are', _select('mv3-vc-as', 'What the pictures are for: references the video uses, or the frame it starts on (and the one it ends on)', [
         { value: 'refs', text: 'References' },
         { value: 'frame', text: 'The first frame' },
@@ -586,18 +584,18 @@ function VIDEOS(ctx) {
       _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
         { value: 'video', text: 'As in the clip (up to 30 s)' }, { value: 'image', text: 'As on the picture (up to 10 s)' },
       ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); ctx.columnChanged(); }));
-      // (phase V10.2) Whose background: the picture's, always - Kling puts the moves into the picture's place (V10.1 No 11,
-      // 12; kie's "keep the clip's room" for 3.0 came back on the picture's background too). Said, not chosen.
+      // Whose background: the picture's, always - Kling puts the moves into the picture's place (kie's "keep the
+      // clip's room" for 3.0 comes back on the picture's background too). Said, not chosen.
       const bg = _select('mv3-vc-bg', 'Kling puts the moves into your picture\'s place - the room of the clip does not come along. For another place, keep the writer on: it draws the first frame with your character there.',
         [{ value: 'image', text: 'From your picture' }], 'image', () => {});
       bg.disabled = true;
       _row(box, 'background', bg);
-      // The clip's sound: Replicate's Kling keeps it itself; on kie it is laid under the video when it lands (V7.4).
+      // The clip's sound: Replicate's Kling keeps it itself; on kie it is laid under the video when it lands.
       _row(box, 'sound', _select('mv3-vc-keep', r.keepSound ? 'The clip\'s own sound - Kling keeps it' : 'The clip\'s own sound - laid under the video when it lands',
         [{ value: 'on', text: 'Keep the clip\'s sound' }, { value: 'off', text: 'Silent' }],
         p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
     }
-    // (phase V16) With frames the words may be left out - the writer decides the motion from the frames. (phase V17) Under
+    // With frames the words may be left out - the writer decides the motion from the frames. Under
     // Kling the box says what it is for: with the writer, what to take from which picture; without it, Kling's prompt.
     ctx.placeholder(isMC()
       ? (ctx.writing() ? 'What to take from which picture - "the character from 1, the place from 2, the hat from 3 on her head" - or nothing, and the writer works it out. Kling gets its own prompt.'
@@ -605,7 +603,7 @@ function VIDEOS(ctx) {
       : _framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
     _paintSwitches();
     _paintPrice();
-    // (phase V60.2) The right column follows the model: its VIDEO and AUDIO, the longest clip it shows.
+    // The right column follows the model: its VIDEO and AUDIO, the longest clip it shows.
     ctx.columnChanged();
   }
 
@@ -629,7 +627,7 @@ function VIDEOS(ctx) {
       box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + _secsWords(pr)
         + ' · ' + pr.res + ' · ' + r.aggLabel + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
     }
-    // (phase V15) The storyboard first: what the sheet costs now, and the video's price for later - its own press.
+    // The storyboard first: what the sheet costs now, and the video's price for later - its own press.
     if (_boardOn() && pr && !pr.none && !pr.fromClip) {
       const sp = _sheetPrice(_pics().filter(a => a.role !== 'storyboard').length);
       box.className = 'mv3-ig-cost';
@@ -637,7 +635,7 @@ function VIDEOS(ctx) {
       box.append(el('b', null, sp.usd != null ? '≈' + money(sp.usd) : '—'),
         el('span', null, 'the storyboard first · ' + sp.words + ' · then, by its own press, the video ≈' + money(pr.usd * many)));
     }
-    // (phase V17) Kling step by step: the first frame first, and the video after it - each by its own press.
+    // Kling step by step: the first frame first, and the video after it - each by its own press.
     if (_mcSteps() && pr && !pr.none) {
       const fi = _table && _table.frame;
       const fp = fi && (fi.providers || []).find(p => p.usable);
@@ -652,7 +650,7 @@ function VIDEOS(ctx) {
     if (r && r.priceNote) notes.push(r.priceNote);
     if (r && r.duration.fromClip) notes.push(r.billWhole ? 'the most it costs: billed by the whole seconds that come back, rounded down' : 'the most it costs: billed by the seconds that come back');
     else if (pr && pr.vidIn && r.agg === 'kie') notes.push('the most it costs: kie.ai has billed a second less');
-    // The fallback rung, with its own price (PLAN V-B): asked only when the chosen one turns the clip down.
+    // The fallback rung, with its own price: asked only when the chosen one turns the clip down.
     const other = r && model() ? model().records.find(x => x.agg !== r.agg && x.usable) : null;
     if (other && !(_table && _table.fake)) {
       const po = priceOf(other);
@@ -667,7 +665,7 @@ function VIDEOS(ctx) {
     _freshenCards();
   }
 
-  // (phase V77) The models used, newest first - the one to go back to when the chosen one cannot take what the timeline gives.
+  // The models used, newest first - the one to go back to when the chosen one cannot take what the timeline gives.
   function _recent(id) {
     if (!id) return;
     _last.recent = [id].concat((_last.recent || []).filter(x => x !== id)).slice(0, 8);
@@ -690,10 +688,10 @@ function VIDEOS(ctx) {
     return as !== 'first' || (mm.family !== 'kmc' && (r.modes || []).includes('i2v'));
   }
 
-  // (phase V77, the owner's (тч6)-(тч8а)) A THING FROM THE TIMELINE (js/merge-v3/tl-gen.js): the zone emptied - the thread and the
+  // A THING FROM THE TIMELINE (js/merge-v3/tl-gen.js): the zone emptied - the thread and the
   // words in the box stay -, the thing in its place, a model that takes it (the chosen one, else the last one used that does,
   // else Seedance 2.5), Seedance's pictures as the first frame for a first frame; then the page's word
-  // at the end of the thread - what came in, what was changed and where to change it back (the owner's (тч7)).
+  // at the end of the thread - what came in, what was changed and where to change it back.
   async function fromTimeline(o) {
     const a = (o && o.attach) || {};
     if (!a.path) return;
@@ -718,7 +716,7 @@ function VIDEOS(ctx) {
     if (kind === 'video') ctx.attach(a.path, a.name || '', { kind: 'video', poster: a.poster || '', dur: +a.dur || 0, in: a.in, out: a.out });
     else ctx.attach(a.path, a.name || '', first && seed ? { slot: 'first' } : {});
     const lines = [];
-    // (phase V78) From the Library too (js/gen-menu.js) - its words say where it came from.
+    // From the Library too (js/gen-menu.js) - its words say where it came from.
     const lib = o.from === 'library';
     const src = lib ? 'the Library' : 'the timeline';
     if (kind === 'video') lines.push(lib ? 'The clip from the Library is a REFERENCE: its first seconds the model takes go.'
@@ -739,11 +737,11 @@ function VIDEOS(ctx) {
   }
   _api = { fromTimeline };
 
-  // (phase V15) The column's storyboard keeps its sheet's place: the sheet goes to the video as one more picture, after
-  // the message's own (phase V8) - one place fewer, Seedance's alone - and it is drawn WITH the message's pictures, which
+  // The column's storyboard keeps its sheet's place: the sheet goes to the video as one more picture, after
+  // the message's own - one place fewer, Seedance's alone - and it is drawn WITH the message's pictures, which
   // nano-banana-2 takes up to 14 of.
   const _seat = () => (_boardOn() ? 1 : 0);
-  // (phase V15) What a sheet of the column's storyboard costs: the first aggregator that draws from this many pictures.
+  // What a sheet of the column's storyboard costs: the first aggregator that draws from this many pictures.
   function _sheetPrice(n) {
     const info = _table && _table.board;
     if (!info) return { usd: null, words: 'the storyboard engine is not in this program' };
@@ -755,7 +753,7 @@ function VIDEOS(ctx) {
     const ps = ((_table && _table.board && _table.board.providers) || []).filter(p => p.usable);
     return ps.length ? Math.max(...ps.map(p => p.maxRefs || 1)) : 14;
   };
-  // (phase V10.2) Fewer at some resolutions - Grok 1.5 on kie takes one picture at 1080p.
+  // Fewer at some resolutions - Grok 1.5 on kie takes one picture at 1080p.
   const _imgCap = (r) => {
     const at = r && r.limits.imagesAt ? r.limits.imagesAt[params().resolution || r.resDef] : null;
     return at != null ? Math.min(at, r.limits.images || 0) : ((r && r.limits.images) || 0);
@@ -771,16 +769,16 @@ function VIDEOS(ctx) {
     return Math.min(SHOW_ATTS, _picRoom(r));
   }
 
-  // ── The attachment zone (phase V6, the owner 2026-10-06) ──────────────────
+  // ── The attachment zone ──────────────────
   // Pictures | clips | sounds, each as many as the model takes on the chosen aggregator - the shell grows them one
-  // place at a time. (phase V16) Seedance's pictures as frames have the frames' places, each cell wearing its name. A
-  // clip or a sound shows the seconds of it that go (phase V7); pressed, the part is chosen.
+  // place at a time. Seedance's pictures as frames have the frames' places, each cell wearing its name. A
+  // clip or a sound shows the seconds of it that go; pressed, the part is chosen.
   const _slotsOf = (kind) => (kind === 'image' && _framesMode() ? _frameSlots() : null);
   function _zone() {
     const r = rec(), m = model();
     const lim = r ? r.limits : { images: 0, videos: 0, audios: 0 };
     const who = (m && m.label) || 'This model';
-    // (phase V16) Frames: their places alone; beside a clip or a sound they go as references - said over the zone.
+    // Frames: their places alone; beside a clip or a sound they go as references - said over the zone.
     const frames = _framesMode();
     const asRefs = frames && ctx.anyAtt(a => a.kind === 'video' || a.kind === 'audio');
     return { parts: [
@@ -796,9 +794,9 @@ function VIDEOS(ctx) {
       { kind: 'audio', word: 'sounds', one: 'sound', room: lim.audios || 0, slots: null, none: who + ' takes no sounds.' },
     ] };
   }
-  // ── Where attachments come from (phase V13: the picker, chat-pick.js) ─────
+  // ── Where attachments come from (the picker, chat-pick.js) ─────
   // Each kind its own shelves; an item is { path, name, sub, cat, thumb, big, poster, aspect, dur, src }.
-  // (phase V26.5) The pictures' loaders are shared with the frames chat (chat-sources.js).
+  // The pictures' loaders are shared with the frames chat (chat-sources.js).
   const _gone = Src.gone;
   const _shape = Src.shape;
   const _clip = (path, poster, name, x) => Object.assign({ path, src: path, poster: poster || '', name: name || '',
@@ -812,7 +810,7 @@ function VIDEOS(ctx) {
     return { items: (d.items || []).filter(g => g && g.state === 'done' && g.videoPath).map(g => _clip(g.videoPath, g.posterPath,
       String(g.said || g.prompt || '').slice(0, 80), { aspect: _shape(g.w, g.h) || (g.params || {}).aspect || '', dur: +g.duration || 0 })) };
   }
-  // (phase V15, the owner 2026-10-07) The Library's saved voices - our own demo of each - among the sounds: listened to
+  // The Library's saved voices - our own demo of each - among the sounds: listened to
   // in the picker, attached as a sound whose role is "voice" and whose name is the voice's. Nothing is attached by
   // itself with a character: whose voice it is, the person says in the message.
   async function _voices() {
@@ -827,11 +825,11 @@ function VIDEOS(ctx) {
         sub: [looks, whose ? 'voice of ' + whose : ''].filter(Boolean).join(' · ') };
     }) };
   }
-  // (phase V55, (гн2)) What is not a folder, as rows above the window's tree; the rest - REFERENCES, IMAGES, VIDEO,
+  // What is not a folder, as rows above the window's tree; the rest - REFERENCES, IMAGES, VIDEO,
   // AUDIO - is the media tree itself (chat-sources.js TREE).
   const SOURCES = {
     image: [Src.PEOPLE_ROW],
-    // (phase V78, the owner 2026-11-07: one "this project") With THIS PROJECT in the window's tree the row goes - its clips lie
+    // With THIS PROJECT in the window's tree the row is left out (`unless`) - its clips lie
     // in THIS PROJECT's top (js/merge-v3/chat-pick.js _madeIntoProject).
     video: [{ id: 'made', label: 'Made in this project', load: _made, empty: 'No clips made in this project yet.', unless: 'plinks' }],
     audio: [{ id: 'voices', label: 'Voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' }],
@@ -842,8 +840,8 @@ function VIDEOS(ctx) {
     if (kind !== 'image' || !s || !s.key) return '';
     return Src.pictureStart(s.role);
   }
-  // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
-  // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
+  // ── The almanac - the prompt reference (at the foot of the column, vhelp.js) ──
+  // One for the whole chat: a tip pressed there is copied, and the note says so on the prompt
   // field typed in last - the chat's box, or the prompt of a card.
   const _helpNote = () => (isMC() ? 'Kling motion control: the camera follows your clip - a camera tip may not take.' : '');
   let _lastField = null;
@@ -866,7 +864,7 @@ function VIDEOS(ctx) {
 
   // What cannot go into the zone at all, said on its tile: a clip or a sound shorter than the model takes (one longer
   // goes, and only its part is sent).
-  // (phase V57, the owner's (ок1)) The longest clip the chosen model takes - Seedance one clip of 2-15 s (2.5: 2-30), Kling
+  // The longest clip the chosen model takes - Seedance one clip of 2-15 s (2.5: 2-30), Kling
   // motion control 3-30 s of the moves (10 s while the character keeps the picture's orientation), lib/video-models.js's
   // limits as the matrix gives them: the attachment window shows no clip longer, and counts none in its folders. A clip
   // whose length is not known yet is shown (its cell says so when it is attached).
@@ -890,7 +888,7 @@ function VIDEOS(ctx) {
     if (!rule || !m || +it.dur >= rule.min - 0.05) return '';
     return _s(it.dur) + ' - ' + m.label + ' needs at least ' + _s(rule.min);
   }
-  // (phase V16) The first frame's place - or the last one's - that is empty: the send waits for it.
+  // The first frame's place - or the last one's - that is empty: the send waits for it.
   function _missing() {
     if (!_framesMode()) return null;
     for (const s of _frameSlots()) if (!_pics().some(a => a.slot === s.key)) return Object.assign({ part: 'image' }, s);
@@ -902,23 +900,23 @@ function VIDEOS(ctx) {
     const m = model(), r = rec();
     if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
-    // (phase V15) An empty numbered place: the numbers in the prompt would move under it.
+    // An empty numbered place: the numbers in the prompt would move under it.
     const hole = ctx.holeWhy();
     if (hole) return hole;
-    // A frame's place that must be filled and is not: nothing is asked, the cell blinks (phase V16).
+    // A frame's place that must be filled and is not: nothing is asked, the cell blinks.
     const miss = _missing();
     if (miss) {
       ctx.flash(miss.part, miss.key);
       return ['The ' + miss.label + ' is empty.', miss.hint + ' - press its place, then a picture.'];
     }
-    // (phase V16) A picture beyond the frames' places does not go - it stands dimmed with the reason.
+    // A picture beyond the frames' places does not go - it stands dimmed with the reason.
     if (_framesMode() && _pics().some(a => !_frameKeys().includes(a.slot))) {
       return [_onlyFrames() + '.', 'Take the other pictures off, or set "pictures are" to references.'];
     }
     const n = _pics().length;
     const L = r.limits || {};
-    // (phase V7.3) Kling motion control: ONE picture - the person and the place - and ONE clip - the moves; the box is
-    // its prompt, in English (translated when not), up to its limit. (phase V17) With the writer on: the person's pictures
+    // Kling motion control: ONE picture - the person and the place - and ONE clip - the moves; the box is
+    // its prompt, in English (translated when not), up to its limit. With the writer on: the person's pictures
     // - the character, and whatever else they want taken from where - and the clip; the first frame is drawn from them.
     if (isMC()) {
       const secs = (r.duration.min || 3) + '-' + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s';
@@ -940,7 +938,7 @@ function VIDEOS(ctx) {
         : _mcSteps() ? 'Up to ' + _picRoom(r) + ' - the still of the clip is the picture model\'s other reference.'
           : m.label + ' on ' + r.aggLabel + ' takes ' + _imgCap(r) + (_imgCap(r) < (L.images || 0) ? ' at ' + (params().resolution || r.resDef) : '') + '.'];
     }
-    // (phase V7) Clips and sounds: as many as the model takes, each with a part it takes.
+    // Clips and sounds: as many as the model takes, each with a part it takes.
     const vi = _clips(), au = _sounds();
     if (vi.length > (L.videos || 0)) return ['Too many clips.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.videos ? L.videos : 'no clips') + '.'];
     if (au.length > (L.audios || 0)) return ['Too many sounds.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.audios ? L.audios : 'no sounds') + '.'];
@@ -952,23 +950,23 @@ function VIDEOS(ctx) {
       return [(k === 'video' ? 'Clip ' : 'Sound ') + (ctx.atts().filter(x => _kind(x) === k).indexOf(a) + 1) + ' cannot go like this.', wrong[1] + '.'];
     }
     if (au.length && !n && !vi.length) return ['A sound goes beside a picture or a clip.', m.label + ' takes sounds as references to something it sees.'];
-    // A two-step video always sends a picture - its storyboard (review V8).
+    // A two-step video always sends a picture - its storyboard.
     const any = n + vi.length + au.length;
     if ((any || _seat()) && !_table.r2) return ['Attachments need R2.', (_seat() ? 'The storyboard goes to the video as a picture - ' : 'The models read what is attached ') + 'from a public link: set R2 on Admin → API keys.'];
     return '';
   }
 
   const _ownRole = (a) => a.role === 'voice' || a.role === 'storyboard';
-  // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go (V7.4).
+  // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go.
   function _body(cardMedia) {
     const m = model(), r = rec();
     const p = params();
     const fam = m.family;
-    // (phase V15) The column's storyboard is drawn from the pictures - an older sheet among them is not one of them (the
+    // The column's storyboard is drawn from the pictures - an older sheet among them is not one of them (the
     // new sheet takes its place when it lands).
     const boarding = _boardOn();
     const atts = ctx.atts().filter(a => !(boarding && _kind(a) === 'image' && a.role === 'storyboard'));
-    // What each picture is for: its place says - a frame's place (phase V16: "pictures are" lays them out in the zone;
+    // What each picture is for: its place says - a frame's place ("pictures are" lays them out in the zone;
     // beside a clip or a sound the server sends them as references, and the prompt names them).
     const slots = new Map(['image', 'video', 'audio'].flatMap(k => (_slotsOf(k) || []).map(s => [k + ':' + s.key, s])));
     const role = (a) => {
@@ -976,21 +974,21 @@ function VIDEOS(ctx) {
       return s ? (/^frame-/.test(s.kind) ? s.kind : s.role) : '';
     };
     const fmt = (Store.timeline() || {}).format || '9:16';
-    // (phase V7.4) Seedance's sound from the clip: its own off, the first clip's part laid under when it lands - only
-    // while a clip goes with it. (phase V10.2) Beside a clip that is the default, and the choice there is its own.
+    // Seedance's sound from the clip: its own off, the first clip's part laid under when it lands - only
+    // while a clip goes with it. Beside a clip that is the default, and the choice there is its own.
     const withClip = fam === 'seedance'
       && (cardMedia ? cardMedia.some(a => a && a.kind === 'video') : atts.some(a => _kind(a) === 'video'));
     const besideClip = withClip ? _clipSoundOf(p) : '';
     const clipSound = besideClip === 'clip';
-    // (phase V47) One clip: the length the record shows is the clip's (the server sends the clip's, whatever comes here).
+    // One clip: the length the record shows is the clip's (the server sends the clip's, whatever comes here).
     const one = _byClip(r, cardMedia || atts.map(a => ({ kind: _kind(a), in: a.in, out: a.out })));
     const oneSecs = one && _span(one) > 0 ? clamp(Math.round(_span(one)), r.duration.min, r.duration.max) : 0;
     return {
       model: m.id, agg: r.agg,
-      // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
+      // The column's storyboard: the sheet is written and drawn, and it stops there.
       storyboard: boarding || undefined,
-      // (phase V16, the owner) The writer stops for a look: its prompt comes back as a message of its own, and the video is
-      // made from there - "make the video". Under Kling motion control the writer writes the first frame instead (V17).
+      // The writer stops for a look: its prompt comes back as a message of its own, and the video is
+      // made from there - "make the video". Under Kling motion control the writer writes the first frame instead.
       review: !boarding && ctx.writing() && !isMC() ? true : undefined,
       params: {
         duration: r.duration.fromClip ? undefined : oneSecs || clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
@@ -1000,17 +998,17 @@ function VIDEOS(ctx) {
         mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
       media: atts.map((a) => Object.assign({
-        // (phase V15) A thing that says what it is for - a voice, a storyboard - goes as that; otherwise its place decides
-        // (phase V16: a message's attachments put back into the zone keep nothing of their old places - a first frame put
+        // A thing that says what it is for - a voice, a storyboard - goes as that; otherwise its place decides
+        // (a message's attachments put back into the zone keep nothing of their earlier places - a first frame put
         // back under "references" is a reference).
         path: a.path, kind: _kind(a), role: _ownRole(a) ? a.role : role(a),
         label: (_ownRole(a) && a.label) || ((a.slot && slots.get(_kind(a) + ':' + a.slot)) || {}).label || '',
-      // (phase V7) A clip or a sound goes as its part - the server prepares just that.
+      // A clip or a sound goes as its part - the server prepares just that.
       }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
     };
   }
 
-  // ── The prompt cards (phase V6, the owner 2026-10-06; the writer's message since V16) ──
+  // ── The prompt cards (the writer's message) ──
   // The writer's answer is a PROMPT CARD the person edits; the press under it makes the video (POST /card/:id/make).
   const REF_WORD = { image: 'picture', video: 'clip', audio: 'sound' };
   const REF_KIND = { picture: 'image', clip: 'video', sound: 'audio' };
@@ -1022,19 +1020,19 @@ function VIDEOS(ctx) {
   const _patchT = new Map();
   const _familyOf = (id) => ((models().find(m => m.id === id) || {}).family || '');
   const _labelOf = (id) => ((models().find(m => m.id === id) || {}).label || id || '');
-  // (phase V64 block 4) Merge's project with the chat open - or the Library, from its unbound chat (chat-owner.js).
+  // Merge's project with the chat open - or the Library, from its unbound chat (chat-owner.js).
   const _where = (key) => Store.whereOf(key, 'videos');
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
   // ── The cards in the thread ──
-  // (phase V16) A working message is drawn anew only when it first has something written - or fails without it: from
+  // A working message is drawn anew only when it first has something written - or fails without it: from
   // then on its steps, their variants, its clips and its prices are painted in place (_paintStory, _paintReview), never
   // under the typing.
   const _cardSig = (m) => {
     const c = m.card;
     const B = c.board || {};
-    // (phase V17) A first frame's card is written when its picture's prompt is: Kling's own is put in at its start.
-    // (phase V48) A Seedance card shows its steps from the moment its clips begin to be watched.
+    // A first frame's card is written when its picture's prompt is: Kling's own is put in at its start.
+    // A Seedance card shows its steps from the moment its clips begin to be watched.
     const has = B.kind === 'frame' ? (B.versions || []).length || B.prompt
       : (c.versions || []).length || c.prompt || (B.versions || []).length || B.prompt || (c.watch || []).length;
     return [c.type, c.plain ? 'plain' : c.board ? (B.kind || 'two') : 'one', has ? 'v' : (c.state || '') + ':' + (c.error || '')].join(':');
@@ -1042,19 +1040,19 @@ function VIDEOS(ctx) {
   const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
     || (m.boards || []).some(g => g.state === 'pending'));
 
-  // (phase V16, the owner 2026-10-07) Every working message is a SUB-PROJECT (vsteps.js): its steps paged at its top - the
-  // chat does not grow with every attempt. (phase V60.2, the owner 2026-10-29) Two steps at most, the video at the head of
+  // Every working message is a SUB-PROJECT (vsteps.js): its steps paged at its top - the
+  // chat does not grow with every attempt. Two steps at most, the video at the head of
   // the message: the plain chat's - "clip watched" (Seedance with clips) and "prompt"; the column's storyboard -
-  // "storyboard" (the clips' descriptions, its prompt and its sheet) and "video prompt"; Kling's first frame (V17) - "first
-  // frame prompt" and "first frame". Every prompt folded into one line.
+  // "storyboard" (the clips' descriptions, its prompt and its sheet) and "video prompt"; Kling's first frame - "first
+  // frame prompt" and "first frame". Every prompt is a field open at once (_field).
   function _cardBubble(m, progs) {
     const c = m.card;
     if (c.type === 'board' || c.board) return _storyCard(m, progs);
     return _reviewCard(m, progs);
   }
 
-  // ── The attempts of a card (the owner, 2026-10-06: a made card is made again from its own field) ──
-  // Every make is one: when, how many, the sheet it followed and its clips. (phase V16) Every clip of every attempt is a
+  // ── The attempts of a card (a made card is made again from its own field) ──
+  // Every make is one: when, how many, the sheet it followed and its clips. Every clip of every attempt is a
   // variant of the message's "video" step.
   function _triesOf(m) {
     const c = m.card;
@@ -1070,7 +1068,7 @@ function VIDEOS(ctx) {
       _freshenOne(id, l);
     }
   }
-  // A message leaving the live ones takes its countdowns with it (review V8): each is an interval of its own.
+  // A message leaving the live ones takes its countdowns with it: each is an interval of its own.
   function _forget(id) {
     const l = _live.get(id);
     if (l && l.steps) l.steps.destroy();
@@ -1080,7 +1078,7 @@ function VIDEOS(ctx) {
   function _freshenOne(id, l) {
     if (l.story) _freshenStory(id, l);
     else _freshenReview(id, l);
-    // (phase V60.2) Its video field: before any clip it takes the shape the column would make it.
+    // Its video field: before any clip it takes the shape the column would make it.
     _paintVid(l);
   }
 
@@ -1090,8 +1088,8 @@ function VIDEOS(ctx) {
     const mm = model(), r = rec();
     if (!mm || !mm.usable) return ['Not available now.', (mm && mm.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
-    // A two-step card always sends a picture - its storyboard (review V8).
-    // (phase V23) A card whose character or place is not in this library any more: what is missing, before the press.
+    // A two-step card always sends a picture - its storyboard.
+    // A card whose character or place is not in this library any more: what is missing, before the press.
     const gone = (m.media || []).filter(a => a && a.gone);
     if (gone.length) {
       const what = gone.map(a => a.label ? '«' + a.label + '»' : (a.kind === 'video' ? 'a clip' : a.kind === 'audio' ? 'a sound' : 'a picture')).join(', ');
@@ -1105,13 +1103,13 @@ function VIDEOS(ctx) {
     const l = _live.get(m.id);
     if (!l || go.disabled) return;
     const mm = model();
-    // (phase V16) A message makes from the variant shown - written for its own model.
+    // A message makes from the variant shown - written for its own model.
     if (mm && mm.family !== _familyOf(l.vmodel || m.card.model)) {
       if (l.kind === 'swap') { note(go, 'Kling makes it.', 'A first frame\'s video is made by Kling motion control - pick it on the left.'); return; }
       if (l.story) { note(go, 'Seedance makes it.', 'A video that follows a storyboard is made by Seedance - pick a Seedance model on the left.'); return; }
       return _rewrite(m, go);
     }
-    // (phase V17) Kling's first frame has no prompt field: Kling's own prompt is the card's.
+    // Kling's first frame has no prompt field: Kling's own prompt is the card's.
     const prompt = l.kind === 'swap' ? String(m.card.prompt || (_table && _table.standardPrompt) || '').trim() : toNeutral(l.ta.value).trim();
     if (!prompt) { note(go, 'The prompt is empty.', 'Write what the clip shows, or write it again.'); return; }
     const why = _readyFor(m);
@@ -1131,7 +1129,7 @@ function VIDEOS(ctx) {
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
-        // (phase V16) The column storyboard's video follows the sheet its prompt variant was written with; the others the
+        // The column storyboard's video follows the sheet its prompt variant was written with; the others the
         // one shown.
         boardId: l.kind === 'column' ? (l.boardId || undefined) : sheet ? sheet.id : undefined,
         ver: l.ver || undefined,
@@ -1145,7 +1143,7 @@ function VIDEOS(ctx) {
   }
 
   async function _rewrite(m, btn) {
-    // (phase V17) Under Kling the writer writes the first frame's prompt - nothing else.
+    // Under Kling the writer writes the first frame's prompt - nothing else.
     const frameCard = !!(m.card.board && m.card.board.kind === 'frame');
     if (isMC() && !frameCard) { note(btn, 'No writer here.', 'Under Kling motion control the writer writes only the first frame - pick another model on the left.'); return; }
     if (frameCard && !isMC()) { note(btn, 'Kling makes this one.', 'The first frame is Kling motion control\'s - pick it on the left.'); return; }
@@ -1153,7 +1151,7 @@ function VIDEOS(ctx) {
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
     try {
-      // (phase V48) A description being corrected is saved first: the writer writes from it as it stands.
+      // A description being corrected is saved first: the writer writes from it as it stands.
       await _flushWatch(m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/rewrite', { project: m.project, model: b.model, agg: b.agg, params: b.params });
@@ -1163,7 +1161,7 @@ function VIDEOS(ctx) {
       if (btn.isConnected) btn.disabled = false;
     }
   }
-  // ── What the agent saw (phase V48, the owner 2026-10-25; кл5) ──
+  // ── What the agent saw ──
   // Seedance's clips are WATCHED whole before its writer writes (routes/mv3-video.js _watchFor): the first step of the
   // message, one description per clip - "clip not watched" where no model could, the writer then seeing three frames.
   // A description is the person's to correct - who is who, what happens - and "write it again" writes the prompt from
@@ -1184,7 +1182,7 @@ function VIDEOS(ctx) {
     if (!list.length) return null;
     const failed = !written && c.state === 'failed';
     const tail = '|' + (c.state === 'writing' ? 'w' : 'r') + '|' + (failed ? c.error || 'x' : '');
-    // (phase V60.3, the owner's (вс6а)) One clip's description at a time, as a field down to the bottom of the video: each clip
+    // One clip's description at a time, as a field down to the bottom of the video: each clip
     // is a variant of the step - "‹ 1 of 2 ›" in its title line.
     const variants = list.map(w => ({ key: 'c' + w.n, sig: w.n + ':' + w.state + ':' + (w.why ? 1 : 0) + tail, w }));
     return {
@@ -1195,7 +1193,7 @@ function VIDEOS(ctx) {
     };
   }
   // The clips' descriptions: `one` - { w, nav } - the one shown as a field (the step "clip watched"); without it every clip folded
-  // into one line (the storyboard's step, (вс7а)).
+  // into one line (the storyboard's step).
   function _watchBody(m, b, progs, failed, one) {
     const c = m.card;
     const list = (c.watch || []).filter(Boolean);
@@ -1222,8 +1220,8 @@ function VIDEOS(ctx) {
       if (w.state === 'done') {
         const ta = _watchTa(m, w, locked, saves);
         ta.classList.add('is-fit');
-        // (phase V60.2, (вч10а), (вч12а)) Folded into one line; open, its part, who watched it, the description and - one line,
-        // no empty block under it any more - what the writer does with it.
+        // Folded into one line; open, its part, who watched it, the description and - one line,
+        // no empty block under it - what the writer does with it.
         const open = [h, ta];
         if (!locked) open.push(el('div', 'vc-card-note', 'The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".'));
         box.appendChild(_foldLine({ id: m.id, key: 'watch' + w.n, word: 'clip ' + w.n, lead: _clipT(w.in) + '–' + _clipT(w.out) + ' · ', text: () => ta.value, ta, open }));
@@ -1239,7 +1237,7 @@ function VIDEOS(ctx) {
           startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
         }));
       } else if (w.state === 'waiting') {
-        // (phase V60.2, (вч12а)) A note of one line - `vc-card-why` is the row of presses' and stood 180 px tall here.
+        // A note of one line - not `vc-card-why`, which is the row of presses' and would stand 180 px tall here.
         box.appendChild(el('div', 'vc-card-note', 'waits for clip ' + (w.n - 1)));
       } else {
         box.appendChild(el('div', 'mv3-ig-bad', 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.'));
@@ -1273,7 +1271,7 @@ function VIDEOS(ctx) {
     saves.set(w.n, save);
     return ta;
   }
-  // (phase V60.3, the owner's (вс6а)) The clip shown on the step "clip watched": its description as a field down to the bottom
+  // The clip shown on the step "clip watched": its description as a field down to the bottom
   // of the video - its part, who watched it, "corrected by you" in the title line, what the writer does with it under the
   // pointer; being watched, waiting or not watched - said in the field's place.
   function _watchField(m, w, lab, b, progs, saves, locked, nav) {
@@ -1312,13 +1310,13 @@ function VIDEOS(ctx) {
   }
 
   // What the storyboard - or Kling's first frame, drawn at 2K from the clip's still and every picture of the person
-  // (V17) - costs, and whether it can be drawn.
+  // - costs, and whether it can be drawn.
   function _boardPrice(l) {
     if (!_table) return { ok: false, text: 'reading the prices…' };
     const frame = l.kind === 'swap';
     const info = frame ? _table.frame : _table.board;
     if (!info) return { ok: false, text: 'the picture engine is not in this program' };
-    // The sheet always goes to the video as a picture (review V8): without R2 it would be bought for nothing.
+    // The sheet always goes to the video as a picture: without R2 it would be bought for nothing.
     if (!_table.r2) return { ok: false, text: 'the ' + l.W + ' goes to the video as a picture - set R2 on Admin → API keys' };
     const pics = (l.m.media || []).filter(x => x.kind === 'image').length;
     const n = frame ? pics + 1 : pics;
@@ -1326,9 +1324,9 @@ function VIDEOS(ctx) {
     if (!p) return { ok: false, text: ((info.providers || []).find(x => x.why) || {}).why || (info.label + ' cannot take ' + n + ' pictures') };
     return { ok: true, text: (p.price != null ? '≈' + money(p.price) + ' · ' : '') + info.quality + ' · ' + info.label + ' · ' + p.label };
   }
-  // The sheets the video can follow: landed, and still on the Images shelf (the server says `gone` - review V8).
+  // The sheets the video can follow: landed, and still on the Images shelf (the server says `gone`).
   const _boardOk = (g) => !!(g && g.state === 'done' && g.imagePath && !g.gone);
-  // ONE PRESS, ONE SHEET (review V8): the button stays shut from the press until the thread has been read with the new
+  // ONE PRESS, ONE SHEET: the button stays shut from the press until the thread has been read with the new
   // sheet in it, whatever repaints meanwhile, and the second click of a double click is not a press. `two`: { bta - the
   // prompt field shown, frame, range - the first frame's moment, busy }; without a field the card's own prompt is drawn.
   async function _drawBoard(m, two, btn, e) {
@@ -1338,7 +1336,7 @@ function VIDEOS(ctx) {
     try {
       clearTimeout(_patchT.get('b:' + m.id));
       _patchT.delete('b:' + m.id);
-      // (phase V17) A moment just moved is written before the picture is drawn from it.
+      // A moment just moved is written before the picture is drawn from it.
       const live = _live.get(m.id);
       if (live && live.atSave) { await live.atSave; live.atSave = null; }
       // Kling's first frame: its prompt in the neutral references (its moment is the card's - written just above).
@@ -1357,9 +1355,9 @@ function VIDEOS(ctx) {
     }
   }
   // A sheet: a press shows the card's sheets large.
-  // (phase V18.1, the owner 2026-10-08) `how`: 'big' - the storyboard at the message's width, from the 1280px tier (the
-  // 440px miniature stretched to 600 came out in squares); 'frame' - Kling's first frame at its own shape, at most 320px
-  // high, its box set before the picture loads. No popup under the pointer: the press opens it large. (phase V60.3) 'row' -
+  // `how`: 'big' - the storyboard at the message's width, from the 1280px tier (the
+  // 440px miniature stretched to 600 shows its squares); 'frame' - Kling's first frame at its own shape, at most 320px
+  // high, its box set before the picture loads. No popup under the pointer: the press opens it large. 'row' -
   // the storyboard's sheet in its row under the prompt, 72 px high at its shape; Kling's first frame fills its step down to the
   // bottom of the video (css .vm-fill).
   function _boardThumb(g, all, W, how) {
@@ -1390,7 +1388,7 @@ function VIDEOS(ctx) {
     const cell = el('div', 'vc-board is-busy');
     const bar = el('div', 'mv3-ig-prog');
     cell.appendChild(bar);
-    // (phase V18.1) Kling's first frame waits in the box it will land in - its shape and size - with the countdown under
+    // Kling's first frame waits in the box it will land in - its shape and size - with the countdown under
     // it, so nothing moves when the picture comes.
     let box = cell;
     if (W === 'picture') {
@@ -1417,13 +1415,13 @@ function VIDEOS(ctx) {
     }
   }
 
-  // ── A message with a picture first (phases V15, V8, V17; a sub-project since V16 - the owner 2026-10-07) ──
+  // ── A message with a picture first (a sub-project) ──
   // Two kinds, one shape. The column's storyboard (`column`): ">" writes the sheet's prompt alone, and every paid step
-  // waits for its press (the owner, V16 answer 5) - "draw the storyboard", "write the video" (the video's prompt from the
-  // same words with the sheet shown among the pictures), "make the video". Kling's first frame (`swap`, V17): the
+  // waits for its press - "draw the storyboard", "write the video" (the video's prompt from the
+  // same words with the sheet shown among the pictures), "make the video". Kling's first frame (`swap`): the
   // writer's prompt for a picture of the person's character in the pose of the clip's still, drawn by its press; then
   // Kling moves the picture shown with the part of the clip from that moment, by its own prompt. Their steps
-  // (phase V60.2: two, the video at the message's head): the storyboard's - "storyboard" (its prompt, every writing a
+  // (two, the video at the message's head): the storyboard's - "storyboard" (its prompt, every writing a
   // variant, and its sheets, every one drawn a variant - the one shown is the one the video follows) · "video prompt"
   // (every writing a variant); Kling's - "first frame prompt" · "first frame" (the pictures, and the press that makes the
   // video). Kling's message opens on its first step; the column's steps grow as the work goes.
@@ -1434,23 +1432,23 @@ function VIDEOS(ctx) {
     const kind = _kindOf(c);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-board is-steps is-' + c.state);
     const h = el('div', 'vc-card-h');
-    // (phase V17) Kling's first frame of the plain chat is the person's message.
+    // Kling's first frame of the plain chat is the person's message.
     const own = kind === 'swap' && c.plain;
     h.appendChild(el('span', 'k', kind === 'column' ? 'Storyboard' : 'Video'));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model) + (kind === 'column' ? '' : ' · the first frame, then the video')));
     box.appendChild(h);
-    // (phase V18.3) What was asked, at the head - seen on every step.
+    // What was asked, at the head - seen on every step.
     const asked = _askedOf({ words: c.text, media: m.media, none: own ? 'from your pictures' : 'from the attachments alone' });
-    // (phase V60.2) What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
+    // What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
     const foot = el('div', 'vm-foot');
     const vid = _vidField(m.id, foot);
     const hd = _headOf(asked, vid);
     box.appendChild(hd.el);
     const B = c.board || {};
-    // (phase V48) A Seedance card whose clips are being watched, or were, has its steps at once.
+    // A Seedance card whose clips are being watched, or were, has its steps at once.
     if (!((B.versions || []).length || B.prompt) && !(c.watch || []).length) {
       vid.paint(_clipsOf(m), _shapeNow(m.media || []));
-      // Nothing written yet: the writer at work, or why not - (phase V60.3, (вс8а)) in the place the prompt will stand in.
+      // Nothing written yet: the writer at work, or why not - in the place the prompt will stand in.
       const word = kind === 'swap' ? 'first frame prompt' : 'storyboard prompt';
       if (c.state === 'writing') {
         hd.left.appendChild(_waitField({ word, progs, progKey: 'w:' + m.id, prog: {
@@ -1471,7 +1469,7 @@ function VIDEOS(ctx) {
       return box;
     }
     const steps = stepCard(m.id);
-    // (phase V60.3) The steps under what was asked, in the left column; their presses under both columns.
+    // The steps under what was asked, in the left column; their presses under both columns.
     hd.left.append(steps.parts[0], steps.parts[1]);
     box.append(steps.parts[2], foot);
     const l = { m, el: box, steps, vid, story: true, kind, W: kind === 'swap' ? 'picture' : 'storyboard', ta: null, go: null, price: null, save: null,
@@ -1491,9 +1489,9 @@ function VIDEOS(ctx) {
     const m = l.m, c = m.card, B = c.board || {};
     const kind = l.kind;
     const patch = (b) => _post('/api/mv3/video/card/' + encodeURIComponent(m.id), Object.assign({ project: m.project }, b), 'PATCH');
-    // (phase V48) The writing begins once the clips have been watched.
+    // The writing begins once the clips have been watched.
     const writing = c.state === 'writing' && !_watchBusy(c);
-    // Every writing of a prompt is a variant of it. (phase V48) None while nothing is written - its clips watched first.
+    // Every writing of a prompt is a variant of it. None while nothing is written - its clips watched first.
     const bv = B.versions || [];
     const bvars = bv.map(v => ({ key: v.id, sig: '', v }));
     if (writing && c.writing === 'board') bvars.push({ key: 'writing', sig: 'writing', writing: true });
@@ -1513,9 +1511,9 @@ function VIDEOS(ctx) {
     };
     const bpage = (x) => { if (x && x.v && x.key !== B.cur) patch({ bcur: x.key }); };
     const steps = [];
-    // (phase V60.2, the owner's (вч6а), (вч7а)) Two steps at most - the video is at the head of the message.
+    // Two steps at most - the video is at the head of the message.
     if (kind === 'swap') {
-      // (phase V17) Kling's first frame: 1 - its prompt and the moment of the clip; 2 - the picture, and the press that makes
+      // Kling's first frame: 1 - its prompt and the moment of the clip; 2 - the picture, and the press that makes
       // the video from it (Kling's prompt is its own, put in by the server).
       if (bvars.length) {
         steps.push({
@@ -1536,7 +1534,7 @@ function VIDEOS(ctx) {
         }));
       }
     } else {
-      // The storyboard: 1 - what the agent saw of the clips (V48), the sheet's prompt and the sheet; 2 - the video's prompt.
+      // The storyboard: 1 - what the agent saw of the clips, the sheet's prompt and the sheet; 2 - the video's prompt.
       const watchSig = (c.watch || []).filter(Boolean).map(w => w.n + ':' + w.state + ':' + (w.why ? 1 : 0)).join(',') + '|' + (c.state === 'writing' ? 'w' : 'r');
       if ((c.watch || []).length || bvars.length) {
         steps.push({
@@ -1564,8 +1562,8 @@ function VIDEOS(ctx) {
     l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !made && steps.length ? steps[0].key : '' });
     _paintVid(l);
   }
-  // (phase V60.2) The storyboard's first step: the clips' descriptions (folded), the sheet's prompt and the sheet.
-  // (phase V60.3, the owner's (вс7а)) The sheet's prompt a field down to the bottom of the video, the sheet a row under it.
+  // The storyboard's first step: the clips' descriptions (folded), the sheet's prompt and the sheet.
+  // The sheet's prompt a field down to the bottom of the video, the sheet a row under it.
   function _storyStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     const B = c.board || {};
@@ -1577,7 +1575,7 @@ function VIDEOS(ctx) {
     if (x) _boardPromptStep(m, l, x, b, progs, watched ? Object.assign({}, nav, { head: null }) : nav);
     if (written || (l.m.boards || []).length) _sheetRow(m, l, nav.shown('board'), b, progs, nav);
   }
-  // (phase V60.3, the owner's (вс7а)) The storyboard's sheet under its prompt: a row 72 px high - the sheet shown at its shape
+  // The storyboard's sheet under its prompt: a row 72 px high - the sheet shown at its shape
   // (a press: the card's sheets large), its "‹ 2 of 3 ›", what it is; being drawn - its countdown; not drawn - why.
   function _sheetRow(m, l, x, b, progs, nav) {
     const row = el('div', 'vm-sheet');
@@ -1633,7 +1631,7 @@ function VIDEOS(ctx) {
     if (!x || x.writing) {
       const B = c.board || {};
       const first = !((B.versions || []).length || B.prompt);
-      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      // In the place the prompt will stand in.
       b.appendChild(_waitField({ nav, word: 'prompt', always: true, pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: first ? 'writing the storyboard prompt…' : 'writing another variant of the storyboard prompt…',
         key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
@@ -1656,19 +1654,19 @@ function VIDEOS(ctx) {
     };
     bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    // (phase V60.3, (вс7а)) A field down to the bottom of the video (less the sheet's row under it), its variants' pager in its
+    // A field down to the bottom of the video (less the sheet's row under it), its variants' pager in its
     // title line.
     b.appendChild(_field({ nav, word: 'prompt', always: true, text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null }));
     l.bta = bta;
   }
-  // 1 · Kling's first frame (V17): the moment of the clip it is drawn from and the prompt the writer wrote - [clip 1] is
+  // 1 · Kling's first frame: the moment of the clip it is drawn from and the prompt the writer wrote - [clip 1] is
   // the clip's still there, [picture N] the person's pictures. The moment is where the part starts, anywhere in the clip.
   const _t = (v) => { const x = Math.max(0, +v || 0); const mm = Math.floor(x / 60); return mm + ':' + (x - mm * 60).toFixed(1).padStart(4, '0'); };
   function _momentStep(m, l, x, b, progs, nav) {
     const c = l.m.card, B = c.board || {};
     l.bta = null; l.range = null;
     if (!x || x.writing) {
-      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      // In the place the prompt will stand in.
       b.appendChild(_waitField({ nav, word: 'first frame prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: 'writing another variant of the first frame\'s prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       } }));
@@ -1689,7 +1687,7 @@ function VIDEOS(ctx) {
     range.type = 'range';
     range.min = String(lo); range.max = String(hi); range.step = '0.04';
     range.value = String(Math.max(lo, Math.min(hi, +clip.in || 0)));
-    wireRange(range);                               // (phase V73 block 2) the shared slider
+    wireRange(range);                               // the shared slider
     range.title = 'The first frame: the moment your character is seen best - the moves go from here';
     const said = el('span', 'vc-moment-at');
     const say = () => {
@@ -1719,7 +1717,7 @@ function VIDEOS(ctx) {
     };
     bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    // (phase V60.3, the owner's (вс6а)) Its title line (the steps, the variants' pager), the moment of the clip under it, then the
+    // Its title line (the steps, the variants' pager), the moment of the clip under it, then the
     // prompt as a field down to the bottom of the video.
     const f = _field({ nav, word: 'first frame prompt', text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null });
     f.insertBefore(mo, bta);
@@ -1736,7 +1734,7 @@ function VIDEOS(ctx) {
     go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
     const price = el('span', 'vc-card-why');
     a.append(go, price);
-    // Kling's first frame (V17) and the storyboard: their own prompt written again.
+    // Kling's first frame and the storyboard: their own prompt written again.
     const again = el('button', 'vc-link', 'write it again');
     again.type = 'button';
     again.title = l.kind === 'swap' ? 'Another variant of the first frame\'s prompt from the same words and pictures - this one stays'
@@ -1748,8 +1746,8 @@ function VIDEOS(ctx) {
     l.drawPrice = price;
     _freshenStory(m.id, l);
   }
-  // 2 · Kling's first frame (the picture): the one shown - drawing, drawn (press: large), or why not. (phase V60.3, the owner's
-  // (вс6а)) It fills the step down to the bottom of the video, at least 160 px, at its shape; the steps and its pictures'
+  // 2 · Kling's first frame (the picture): the one shown - drawing, drawn (press: large), or why not.
+  // It fills the step down to the bottom of the video, at least 160 px, at its shape; the steps and its pictures'
   // "‹ 2 of 3 ›" in its title line, Kling's own prompt under it. (The storyboard's sheet is a row under its prompt: _sheetRow.)
   function _sheetStep(m, l, x, b, progs, nav) {
     const fill = el('div', 'vm-fill');
@@ -1762,7 +1760,7 @@ function VIDEOS(ctx) {
     else if (!ok) fill.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
     else fill.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, 'frame'));
     b.appendChild(_field({ nav, word: 'first frame', pager: nav ? nav.pager('board') : null, wait: fill }));
-    // (phase V17) Kling's prompt is its own: said, not a field.
+    // Kling's prompt is its own: said, not a field.
     if (ok) {
       const clip = (l.m.media || []).find(y => y.kind === 'video') || {};
       const said = 'Kling moves this picture with the clip ' + _t(clip.in) + ' – ' + _t(clip.out) + ' and gets: ' + (l.m.card.prompt || '');
@@ -1773,7 +1771,7 @@ function VIDEOS(ctx) {
   }
   function _sheetActs(m, l, x, a) {
     l.drawGo = null; l.drawPrice = null;
-    // (phase V17, the owner 2026-10-08) Kling's first frame: the picture drawn, and right under it the press that makes the
+    // Kling's first frame: the picture drawn, and right under it the press that makes the
     // video from it - its price, the count - then another picture.
     if (l.kind === 'swap') {
       l.go = null; l.price = null;
@@ -1843,12 +1841,12 @@ function VIDEOS(ctx) {
     }
   }
   // 3 · the video prompt: its words to edit, and what goes with it - the pictures with the sheet as the last one (the
-  // sheet ITS variant was written with). Kling's first frame has no such step - its prompt is Kling's own (V17).
+  // sheet ITS variant was written with). Kling's first frame has no such step - its prompt is Kling's own.
   function _videoPromptStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     l.ta = null; l.ver = ''; l.vmodel = ''; l.boardId = ''; l.patchKey = '';
     if (!x || x.writing) {
-      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      // In the place the prompt will stand in.
       b.appendChild(_waitField({ nav, word: 'prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: 'writing the video prompt…', key: 'mv3-video-writer', estimateMs: 25000,
         startedAt: Date.parse(c.startedAt || m.at) || 0,
@@ -1876,7 +1874,7 @@ function VIDEOS(ctx) {
     const has = !!(sheet && sheet.imagePath);
     const all = media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
       .concat(media.filter(a => a.kind !== 'image'));
-    // (phase V60.3, the owner's (вс3а), (вс7а)) Open at once, down to the bottom of the video; what goes with it under it, in
+    // Open at once, down to the bottom of the video; what goes with it under it, in
     // small cells.
     b.appendChild(_field({ nav, word: 'video prompt', text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
     const row = _mediaRow(all);
@@ -1932,8 +1930,8 @@ function VIDEOS(ctx) {
     }
   }
 
-  // (phase V18.3, the owner 2026-10-08) WHAT WAS ASKED stands at the head of its answer - the person's turn is not drawn
-  // apart any more: the words whole (folded after three lines); the attachments.
+  // WHAT WAS ASKED stands at the head of its answer - the person's turn is not drawn
+  // apart: the words whole (folded after three lines); the attachments.
   function _askedOf(o) {
     const box = el('div', 'vc-asked');
     const words = String(o.words || '').trim();
@@ -1958,7 +1956,7 @@ function VIDEOS(ctx) {
     });
   }
   // The message drawn at the press (the shell's `sending`): what was asked, and "sending…" until the answer comes.
-  // (phase V60.2, (вч14а), (вч17а)) With its head as every message has it: the video's field on the right, empty.
+  // With its head as every message has it: the video's field on the right, empty.
   let _pendSeq = 0;
   function _sendingCard(o) {
     const box = el('div', 'mv3-ig-msg is-agent is-sending vc-card');
@@ -1975,9 +1973,9 @@ function VIDEOS(ctx) {
     box.appendChild(hd.el);
     return box;
   }
-  // (phase V60.2, the owner's (вч17а)) A message of the one press - the writer off - has the same head: what was asked on the
+  // A message of the one press - the writer off - has the same head: what was asked on the
   // left, its clip on the right (×2 - its variants), "read more" at its foot. It has no steps and no presses. Its countdown is
-  // the thread's to finish when the clip lands, as before (`progs`).
+  // the thread's to finish when the clip lands (`progs`).
   function _plainBubble(m, progs, asked) {
     if (m.role === 'user' || m.card) return null;
     const gens = (m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []);
@@ -1989,7 +1987,7 @@ function VIDEOS(ctx) {
     box.appendChild(h);
     const media = (m.media || []).length ? m.media : ((asked && asked.media) || []);
     const words = String((m.asked != null ? m.asked : (asked ? asked.text : '')) || '').trim();
-    // (phase V60.3, the owner's (вс11а)) The words whole, as a block down to the bottom of the video, scrolling inside - not
+    // The words whole, as a block down to the bottom of the video, scrolling inside - not
     // three lines and "more"; the attachments under them.
     let head = null;
     if (words || media.length) {
@@ -2006,7 +2004,7 @@ function VIDEOS(ctx) {
   }
 
   // What a message carries, by kind and number, each with its slot's or its role's name - what was asked, a writer's
-  // message (phase V16).
+  // message.
   function _mediaRow(media) {
     if (!media.length) return null;
     const row = el('div', 'mv3-ig-msg-refs');
@@ -2025,14 +2023,13 @@ function VIDEOS(ctx) {
     return row;
   }
 
-  // ── A PROMPT FOLDED INTO ONE LINE (phase V60.2, the owner 2026-10-29, (вч10а), (вч11а)) ──
-  // Every prompt of a message - a clip's description, the storyboard's or the first frame's prompt, the video's - is one
+  // ── A TEXT FOLDED INTO ONE LINE ──
+  // Only the clips' descriptions on the storyboard's step are folded: each is one
   // line: its word and ▸, its first words, how many characters, and its variants' "‹ 2 of 3 ›" at the right end. A press
   // opens it in place, to read and edit, as tall as its text. What is open stays open while the person stays in the chat -
   // the thread's repaints, another variant, a make -, and everything folds again when anything hides the chat (its window
   // closed, another project, another page, a reload).
-  // (phase V60.3, the owner 2026-10-30, (вс3а), (вс6а)) Only the clips' descriptions on the storyboard's step are folded now:
-  // every other text of a step is a field down to the bottom of the video (`_field` below).
+  // Every other text of a step is a field down to the bottom of the video (`_field` below).
   const _open = new Set();       // message id + ':' + line key - the lines open now
   const _folds = new Set();      // { el, fold } of every line drawn - folded at once when the chat hides
   function _foldAll() {
@@ -2079,9 +2076,9 @@ function VIDEOS(ctx) {
     return wrap;
   }
 
-  // ── A STEP'S TEXT AS A FIELD (phase V60.3, the owner 2026-10-30, (вс3а)-(вс5а)) ──
+  // ── A STEP'S TEXT AS A FIELD ──
   // The text of the step shown - a prompt, a clip's description - is open at once: a field from under what was asked down
-  // to the bottom of the video's column, at least 120 px, scrolling inside, edited in place as before. Its title line: the
+  // to the bottom of the video's column, at least 120 px, scrolling inside, edited in place. Its title line: the
   // steps' "‹ step k of N ›" when there are two (`nav.head()`), its word (when the steps' line does not already say it, or
   // `always`), what it is (`lead`), how many characters, its variants' "‹ 2 of 3 ›".
   // o: { nav, word, always, lead, text(), ta, pager, wait } - `wait` stands in the field's place while there is no text.
@@ -2105,7 +2102,7 @@ function VIDEOS(ctx) {
     else if (o.wait) wrap.appendChild(o.wait);
     return wrap;
   }
-  // (phase V60.3, the owner's (вс8а)) A field's place while it has no text - from the press of ">" on: dashed, as tall as the
+  // A field's place while it has no text - from the press of ">" on: dashed, as tall as the
   // field will be, its countdown (or "sending…") inside, why not in red; the text comes into the same place, nothing moves.
   // o: _field's { nav, word, always, lead, pager } and { words, pulse, bad, prog (startInlineProgress's), progs, progKey }
   function _waitField(o) {
@@ -2119,16 +2116,16 @@ function VIDEOS(ctx) {
     return _field(Object.assign({}, o, { ta: null, text: null, wait: box }));
   }
 
-  // ── THE VIDEO AT THE HEAD OF ITS MESSAGE (phase V60.2, the owner 2026-10-29, (вч13б)-(вч17а)) ──
+  // ── THE VIDEO AT THE HEAD OF ITS MESSAGE ──
   // Right of what was asked, against the message's right edge, 180 px wide at the clip's shape (9:16 - 180×320, 16:9 -
   // 180×101, 1:1 - 180×180). Before any clip: a dashed field of the shape the column would make it now (the price and the
   // press follow the column too), "the video will appear here" - from the press of ">" on. Being made: its countdown in it,
   // the cross letting go of the row. Failed: a red frame and its words, "Alerts can try it again" under it. Several clips -
   // ×2, made again - are its variants: "‹ 1 of 3 ›" under it, a new one shown by itself, which attempt it is under the
-  // pointer. "read more" at the message's foot, as before (вч16б). (phase V60.3, the owner's (вс1б)) No "to timeline" under
+  // pointer. "read more" at the message's foot. No "to timeline" under
   // it: the clip is dragged onto a lane.
   const _vidShown = new Map();   // message id -> { key, n } - the clip shown as the person left it, and how many there were
-  const _dims = new Map();       // a clip's path -> 'w:h' ('' while it is read) - one clip decides Seedance's shape (V47)
+  const _dims = new Map();       // a clip's path -> 'w:h' ('' while it is read) - one clip decides Seedance's shape
   const _arOf = (shape) => String(shape || '9:16').replace(':', ' / ');
   function _readDims(path) {
     if (_dims.has(path)) return;
@@ -2243,7 +2240,7 @@ function VIDEOS(ctx) {
     }
     return { el: box, paint, destroy: () => drop(false) };
   }
-  // (phase V60.3, the owner's (вс2а)) The message's two columns: what was asked at the top of the left one - the steps go
+  // The message's two columns: what was asked at the top of the left one - the steps go
   // under it, into `left` -, the video in the right one; the presses go under both (the caller's).
   function _headOf(asked, vid) {
     const h = el('div', 'vm-head');
@@ -2266,7 +2263,7 @@ function VIDEOS(ctx) {
     l.vid.paint(_clipsOf(l.m), _shapeNow(l.m.media || []));
   }
 
-  // ── The writer's message (phase V16, the owner 2026-10-07) ──
+  // ── The writer's message ──
   // With the writer on, ">" packs the words and the attachments into a message of their own - the box and the zone are
   // emptied - and the writer's prompt comes back in it to look at and edit; only its "make the video" spends. The message
   // is a SUB-PROJECT (vsteps.js):
@@ -2280,18 +2277,18 @@ function VIDEOS(ctx) {
     h.appendChild(el('span', 'k', 'Video'));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
     box.appendChild(h);
-    // (phase V18.3) What was asked, at the head - seen on every step.
+    // What was asked, at the head - seen on every step.
     const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
     const asked = _askedOf({ words: c.text, media: m.media, none: frames ? 'from the frames alone' : 'from the attachments alone' });
-    // (phase V60.2) What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
+    // What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
     const foot = el('div', 'vm-foot');
     const vid = _vidField(m.id, foot);
     const hd = _headOf(asked, vid);
     box.appendChild(hd.el);
-    // (phase V48) A card whose clips are being watched, or were, has its steps at once: what the agent saw comes first.
+    // A card whose clips are being watched, or were, has its steps at once: what the agent saw comes first.
     if (!(c.versions || []).length && !(c.watch || []).length) {
       vid.paint(_clipsOf(m), _shapeNow(m.media || []));
-      // (phase V60.3, (вс8а)) The prompt's place, with its countdown or why it was not written.
+      // The prompt's place, with its countdown or why it was not written.
       if (c.state === 'writing') {
         hd.left.appendChild(_waitField({ word: 'prompt', progs, progKey: 'w:' + m.id, prog: {
           label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
@@ -2309,7 +2306,7 @@ function VIDEOS(ctx) {
       return box;
     }
     const steps = stepCard(m.id);
-    // (phase V60.3) The steps under what was asked, in the left column; their presses under both columns.
+    // The steps under what was asked, in the left column; their presses under both columns.
     hd.left.append(steps.parts[0], steps.parts[1]);
     box.append(steps.parts[2], foot);
     const l = { m, el: box, steps, vid, ta: null, go: null, price: null, save: null, review: true, ver: '', vmodel: '', patchKey: '' };
@@ -2317,12 +2314,12 @@ function VIDEOS(ctx) {
     _paintReview(m.id, l);
     return box;
   }
-  // (phase V60.2, (вч6а)) Two steps at most: what the agent saw of the clips, then the prompt - the video is at the head.
+  // Two steps at most: what the agent saw of the clips, then the prompt - the video is at the head.
   function _paintReview(id, l) {
     const m = l.m, c = m.card;
     const vers = (c.versions || []).map(v => ({ key: v.id, sig: v.model, v }));
     const written = vers.length > 0;
-    // (phase V48) The prompt is being written once the clips have been watched - not while they are.
+    // The prompt is being written once the clips have been watched - not while they are.
     if (c.state === 'writing' && !_watchBusy(c)) vers.push({ key: 'writing', sig: 'writing', writing: true });
     const steps = [];
     const watch = _watchStep(m, l, written);
@@ -2343,9 +2340,9 @@ function VIDEOS(ctx) {
     const c = l.m.card;
     l.ta = null; l.ver = ''; l.vmodel = ''; l.patchKey = '';
     if (!x || x.writing) {
-      // (phase V48) Counted from the end of the watching, when the clips were watched first.
+      // Counted from the end of the watching, when the clips were watched first.
       const watched = (c.watch || []).map(w => Date.parse((w && w.at) || '') || 0);
-      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      // In the place the prompt will stand in.
       b.appendChild(_waitField({ nav, word: 'prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: (c.versions || []).length ? 'writing another variant…' : 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000,
         startedAt: Math.max(Date.parse(c.startedAt || m.at) || 0, ...watched),
@@ -2368,7 +2365,7 @@ function VIDEOS(ctx) {
     };
     ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    // (phase V60.3, the owner's (вс3а), (вс4а)) Open at once, down to the bottom of the video; the steps and its variants'
+    // Open at once, down to the bottom of the video; the steps and its variants'
     // pager in its title line.
     b.appendChild(_field({ nav, word: 'prompt', text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
     Object.assign(l, { ta, save, ver: v.id, vmodel: v.model || c.model, patchKey: key });
@@ -2421,12 +2418,11 @@ function VIDEOS(ctx) {
         : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
           : '≈' + money(pr.usd * n) + ' · ' + _secsWords(pr) + ' · ' + pr.res + ' · '
             + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
-    // (phase V60.3, (вс9б)) The row of presses stays one line: the price gives way, whole under the pointer.
+    // The row of presses stays one line: the price gives way, whole under the pointer.
     l.price.title = l.price.textContent;
   }
-  // A finished clip: its poster - dragged onto a lane (phase V13). (phase V60.2) At its message's head, 180 px wide at its
-  // shape. (phase V60.3, the owner's (вс1б)) No "to timeline" under it: the drag lays it. (V91 block 3, the owner
-  // 2026-11-12) A press on it does nothing: ▶ in its middle plays the thread's clips in the Library's viewer, and the pointer
+  // A finished clip: its poster - dragged onto a lane. At its message's head, 180 px wide at its
+  // shape. No "to timeline" under it: the drag lays it. A press on it does nothing: ▶ in its middle plays the thread's clips in the Library's viewer, and the pointer
   // resting on it plays it in place without its sound.
   function _shotOf(g, cell, open) {
     const box = el('div', 'mv3-vc-shot');
@@ -2452,7 +2448,7 @@ function VIDEOS(ctx) {
     };
     box.draggable = true;
     box.addEventListener('dragstart', (ev) => {
-      // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
+      // Not onto a highlights project's own timeline - a fragment is opened first.
       if (refuseHome(box, ev)) return;
       ev.dataTransfer.effectAllowed = 'copy';
       ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(item));
@@ -2460,13 +2456,13 @@ function VIDEOS(ctx) {
     });
     box.addEventListener('dragend', () => box.classList.remove('is-dragging'));
     cell.appendChild(box);
-    // (phase V77) Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
+    // Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
     const back = backButton(g, g.media || [], { src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
       name: item.name, dur: +g.duration || 0, w: +g.w || 0, h: +g.h || 0 }, 'video');
     if (back) cell.appendChild(back);
   }
 
-  // "attachments back to the zone" (the owner's answer 6): this message's attachments in the zone again, for the next
+  // "attachments back to the zone": this message's attachments in the zone again, for the next
   // message - what is there now is replaced, after a question.
   function _backLink(m) {
     const back = el('button', 'vc-link', 'Attachments back to the zone');
@@ -2502,8 +2498,8 @@ function VIDEOS(ctx) {
       placeholder: 'Describe a clip, or say what to change.',
       empty: 'Describe a clip. What comes back stays in this project - and on the B-roll shelf.',
       emptyIcon: 'film',
-      // (phase V73 block 0) From Home or the Library - THE draft's conversation (chat-owner.js unbound): VIDEO → Generated →
-      // the model's folder (phase V60.2).
+      // From Home or the Library - THE draft's conversation (chat-owner.js unbound): VIDEO → Generated →
+      // the model's folder.
       emptyDraft: 'Describe a clip. What comes back lies in the Library, in VIDEO → Generated → its model.',
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
@@ -2511,7 +2507,7 @@ function VIDEOS(ctx) {
       plus: 'Add a picture, a clip or a sound from this computer - into the folder open here when it is one of yours of its kind (IMAGES, VIDEO → Uploads, My sounds), else into the root of its kind - and straight into the zone.',
       cat: 'This project\'s clips, or a folder of the Library',
     },
-    // (phase V60.2) The right column's "this project": the clips made in it.
+    // The right column's "this project": the clips made in it.
     feed: {
       url: (k) => '/api/mv3/video/feed?project=' + encodeURIComponent(k),
       map: (g) => ({
@@ -2520,10 +2516,10 @@ function VIDEOS(ctx) {
         ftype: 'video', libId: g.birolId || '', group: 'videochat',
       }),
     },
-    // (phase V60.2, the owner's (вч1б), (вч4б)) The right column: what the zone takes, by the model chosen.
+    // The right column: what the zone takes, by the model chosen.
     column: {
       multi: true,
-      // (phase V78, (лч16)) THIS PROJECT first - its pictures, and its clips and sounds while the model takes them.
+      // THIS PROJECT first - its pictures, and its clips and sounds while the model takes them.
       roots: () => ['plinks', 'references', 'images'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : []),
       files: (root) => (root === 'plinks' ? ['photo'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : [])
         : root === 'references' ? (_colTakes('video') ? ['photo', 'video'] : 'photo')
@@ -2533,12 +2529,11 @@ function VIDEOS(ctx) {
       sig: () => [_colTakes('video'), _colTakes('audio'), _clipFit().note || ''].join('|'),
       group: 'images', home: 'images',
     },
-    // (phase V13, the owner 2026-10-07) Every "+" of the zone opens the picker on its place.
+    // Every "+" of the zone opens the picker on its place.
     pick: {
-      // (phase V64 block 4) The Library's unbound chat has no project: no "made in this project".
+      // The Library's unbound chat has no project: no "made in this project".
       sources: (kind) => (SOURCES[kind] || []).filter(s => !(s.id === 'made' && Store.unbound())),
-      // (phase V55) The window with the tree, the almanac's size (chat-pick.js). (phase V57, the owner's (ок1): "все клипы
-      // длинне чем берет модель") For clips: only the ones the chosen model takes by their length - read at every opening.
+      // The window with the tree, the almanac's size (chat-pick.js). For clips: only the ones the chosen model takes by their length - read at every opening.
       tree: (kind) => (kind === 'video' && Src.TREE.video ? Object.assign({}, Src.TREE.video, _clipFit()) : Src.TREE[kind] || null),
       start: _startFor,
       why: _pickWhy,
@@ -2552,12 +2547,12 @@ function VIDEOS(ctx) {
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),
     },
-    // (phase V27) A clip comes by a link too - the picker's "from a link", into Uploads (its root, V56) and into its place,
+    // A clip comes by a link too - the picker's "from a link", into Uploads (its root) and into its place,
     // as a clip from this computer (chat-shell.js _linkIn, lib/link-queue.js).
     links: { video: true },
-    // (phase V7) Each kind through its own door - pictures into IMAGES, clips into VIDEO -> Uploads, sounds into SFX ->
-    // My sounds, each into the root of its kind (phase V56, (ги4)) or, through the attachment window, the person's folder open
-    // there (V57) - and straight into their part of the zone.
+    // Each kind through its own door - pictures into IMAGES, clips into VIDEO -> Uploads, sounds into SFX ->
+    // My sounds, each into the root of its kind or, through the attachment window, the person's folder open
+    // there - and straight into their part of the zone.
     uploads: {
       image: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile,
                att: (i) => ({ path: i.imagePath, name: i.name }) },
@@ -2568,14 +2563,14 @@ function VIDEOS(ctx) {
                ok: (f) => /^audio\//.test(f.type || '') || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i.test(f.name || ''),
                att: (i) => ({ path: i.audioPath, name: i.name, dur: +i.duration || 0 }) },
     },
-    // (phase V7.3) Kling motion control's empty box sends its standard prompt.
+    // Kling motion control's empty box sends its standard prompt.
     emptyText: () => (isMC() && !ctx.writing() && _table ? _table.standardPrompt || '' : ''),
-    // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone - and with frames,
+    // With the writer on, a message may be the attachments alone - and with frames,
     // which the writer writes even when it is off.
     emptyOk: () => ctx.atts().length > 0 && (ctx.writing() || _framesMode()),
-    // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
+    // The writer's message holds the attachments: the zone is emptied for the next message.
     afterSend: (d) => { if (d && (d.review || d.storyboard || d.frame)) ctx.useAtts([]); },
-    // (phase V18.3, the owner 2026-10-08) ONE MESSAGE PER SEND: the person's turns are not drawn apart - what was asked
+    // ONE MESSAGE PER SEND: the person's turns are not drawn apart - what was asked
     // heads its answer; the message is drawn at the press.
     hidden: (m) => m.role === 'user',
     askedHead: (m, user) => {
@@ -2584,18 +2579,18 @@ function VIDEOS(ctx) {
       return (String(words || '').trim() || media.length) ? _askedOf({ words, media }) : null;
     },
     sending: (o) => _sendingCard(o),
-    // (phase V60.2, (вч17а)) A message of the one press has the working message's head.
+    // A message of the one press has the working message's head.
     bubble: (m, progs, asked) => _plainBubble(m, progs, asked),
-    // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
+    // Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },
     trimFor: _trimFor,
-    // (phase V60.2, (вч11а)) Whatever hides the chat folds every prompt again.
+    // Whatever hides the chat folds every folded line again.
     onHide: () => { closeTrim(); closeHelp(); _foldAll(); },
-    // (phase V15, the owner 2026-10-07) The writer is a switch of the column, and the almanac stands at its foot.
+    // The writer is a switch of the column, and the almanac stands at its foot.
     penInBar: false,
     columnFoot: () => [_almanacBtn()],
-    // (phase V6) The cards in the thread, drawn here.
+    // The cards in the thread, drawn here.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
     busy: _busy,
@@ -2607,7 +2602,7 @@ function VIDEOS(ctx) {
       paint,
       onAtts: () => {
         if (_set) _paintParams();
-        // (review V7) A clip taken off while its part window is open takes the window with it.
+        // A clip taken off while its part window is open takes the window with it.
         if (_trimPath && !ctx.atts().some(a => a.path === _trimPath)) closeTrim();
       },
       onCount: _paintPrice,
@@ -2622,11 +2617,11 @@ function VIDEOS(ctx) {
         if (ctx.atts().some(a => a.slot === undefined)) ctx.reslot({ unplaced: true }); else ctx.paintAtts();
         _dropGone();
       },
-      // The storyboard is the writer's: its seat and its price follow the writer too (phase V15).
+      // The storyboard is the writer's: its seat and its price follow the writer too.
       onPen: () => { _paintParams(); ctx.paintAtts(); },
     },
 
-    // A finished clip: the field at a message's head draws it (phase V60.2), the shell's results too.
+    // A finished clip: the field at a message's head draws it, the shell's results too.
     shot: _shotOf,
 
     facts: (g) => [
@@ -2635,7 +2630,7 @@ function VIDEOS(ctx) {
       ['took', g.secs ? g.secs + 's' : ''],
       ['cost', g.credits ? g.credits + ' kie credits (≈' + money(g.credits * 0.005) + ')' : ''],
       ['references', (g.media || []).length ? String(g.media.length) : ''],
-      // (phase V7.4) Where the model did not keep the clip's sound itself.
+      // Where the model did not keep the clip's sound itself.
       ['sound', g.underlay === 'laid' ? 'the clip\'s sound, laid under it' : (g.underlay || '')],
       ['writer', g.fell ? 'sent as typed - ' + g.fell : (g.writer || '')],
       ['sent as', (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
@@ -2652,10 +2647,10 @@ function VIDEOS(ctx) {
 const CHAT = createChat(VIDEOS);
 const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', ...CHAT_WIN.videos });
 
-/** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window (phase V64 block 3). */
+/** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window. */
 export async function openVideos(o) {
   await WIN.open();
-  // (phase V77) Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
+  // Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) await _api.fromTimeline(o);
 }
 

@@ -1,12 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — THE PATTERNS OF MAIN VIDEO, PICKED BY TICKS (phase V74, the owner 2026-11-03/04, (пт1)-(пт9): «выбранный паттерн
-   и добавление паттерна будет в выдвижном поле справа при выборе дорожки main video», «отмечаем галочками в правом столбце»;
-   docs/local-app/plan/, "Фаза V74").
+   MERGE v3 — THE PATTERNS OF MAIN VIDEO, PICKED BY TICKS.
 
    In the strip of the MAIN VIDEO lane (inspector.js _blankVideoTrack) - and in the common settings of a highlights project's
    ticked fragments, "Main video · for all N" (hl-group.js) - under the lane's own rows:
      the set     every pattern of the app (GET /api/patterns - vendor/patterns/, lib/patterns-builtin.js) as a tile WITH A TICK,
-                 under the fold «Patterns · N ▸» (phase V74.1: opened in the strip, kept as it was left); a tick lays the pattern
+                 under the fold «Patterns · N ▸» (opened in the strip, kept as it was left); a tick lays the pattern
                  over the ones ticked already (70 %, no blend mode - look.js PATTERN_OPACITY), untick takes it off;
      the layers  the ticked ones, the top layer first: the tile, the name, ↑ ↓ for the order; a press on a row opens its own
                  settings - scale, color, angle, movement, speed, direction (overlay/pattern.js), opacity and blend mode
@@ -23,10 +21,10 @@ import * as PAT from '../overlay/pattern.js';
 import { opacityOf, blendOf, PATTERN_OPACITY } from '../overlay/look.js';
 import { setLive as setLivePlace } from './place-b.js';
 import { blendButton } from './blend-menu.js';
-// (phase V73 block 2, step 2b) Being read, empty, could not be read - the shared parts (rows in the strip); the reason a popup.
+// Being read, empty, could not be read - the shared parts (rows in the strip); the reason a popup.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
-// (phase V73 block 5, part 5b) Lucide's icons for ▸ ▾ ✓ ↑ ↓ ↻ ↺ and the eight ways of a drift; the figures in mono
+// Lucide's icons for ▸ ▾ ✓ ↑ ↓ ↻ ↺ and the eight ways of a drift; the figures in mono
 import { icon, iconEl } from '../icons.js';
 import { setFigures } from '../num.js';
 const DIR_ICON = { e: 'arrow-right', ne: 'arrow-up-right', n: 'arrow-up', nw: 'arrow-up-left', w: 'arrow-left', sw: 'arrow-down-left',
@@ -72,7 +70,7 @@ function _keep(fn) {
   if (now) now.scrollTop = top;
 }
 
-// (phase V74.1, the owner's (пт10) а, (пт11) а) THE TILES UNDER THE FOLD «Patterns · N ▸»: a press opens them in the strip itself,
+// THE TILES UNDER THE FOLD «Patterns · N ▸»: a press opens them in the strip itself,
 // under it - the layers ticked move down -, another folds them; shut until opened, then kept as the person left it, across lanes,
 // fragments and restarts (localStorage - this window's convenience; shut when it cannot be read).
 const GRID_KEY = 'mv3_pat_grid_v1';
@@ -89,7 +87,7 @@ export function renderPatterns(host, io) {
   const fold = _el('button', 'mv3-patf' + (_gridOpen ? ' is-open' : ''));
   fold.type = 'button';
   fold.title = _gridOpen ? 'Fold the patterns' : 'The app\'s patterns - tick one to lay it over main video';
-  // (phase V73 block 5, 5b) the strip's one fold form: a chevron, then the title
+  // the strip's one fold form: a chevron, then the title
   fold.appendChild(iconEl(_gridOpen ? 'chevron-down' : 'chevron-right', 14));
   fold.appendChild(setFigures(_el('span', 'mv3-patf-name'), 'Patterns' + (list.length ? ' · ' + list.length : '')));
   fold.addEventListener('click', () => { _setGrid(!_gridOpen); _keep(() => io.repaint()); });
@@ -97,7 +95,7 @@ export function renderPatterns(host, io) {
   if (!_set) {
     // Read whether open or not: the layers' rows take their names and tiles from the set.
     const failed = !_asking && Date.now() - _failedAt < 5000;
-    // (phase V73 block 2, (б2-18)) Not read: "did not load" with Try again; the reason was the popup (_readSet).
+    // Not read: "did not load" with Try again; the reason was the popup (_readSet).
     if (_gridOpen) {
       host.appendChild(failed ? failedEl('The patterns', () => { _failedAt = 0; _readSet(io.repaint); _keep(() => io.repaint()); }, { line: true })
         : loadingEl('reading the patterns…', { line: true }));
@@ -201,7 +199,7 @@ function _lookOf(e) {
   return bits.join(' · ');
 }
 
-// ONE LAYER'S SETTINGS (phase V65's rows of a pattern clip, the owner's (пз8), (пз14)-(пз17)): Scale 25-400 %, Color, Angle
+// ONE LAYER'S SETTINGS: Scale 25-400 %, Color, Angle
 // 0-359°, Movement - still, rotate (0.5-20°/s, ↻ or ↺), drift (5-200 px/s, eight arrows) -, Opacity, Blend.
 function _rows(host, e, io) {
   const id = PAT.layerId(e.src);

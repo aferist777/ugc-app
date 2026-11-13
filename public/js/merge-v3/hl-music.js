@@ -1,20 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the BACKGROUND MUSIC of a highlights project, chosen in its popup by MOOD (phase V68 P3, the owner 2026-11-01,
-   (хп6): "пользователь будет выбирать не конкретно трек, а под конкретный тип проекта"; (хп20): "кнопки настроений вместо
-   треков"; (хп39): "каждому свой"; (хп51)).
+   MERGE v3 — the BACKGROUND MUSIC of a highlights project, chosen in its popup by MOOD, not by track.
 
-   Buttons: "no music", then the ten moods of Music -> highlights (GET /api/audio/music/highlights, phase V34.F - each with how
+   Buttons: "no music", then the ten moods of Music -> highlights (GET /api/audio/music/highlights - each with how
    many tracks it has, its words under the pointer), then "yours" - the root of Music -> highlights - only when it has tracks.
    Several moods may be on; "no music" is on when none is. A mood with no tracks yet is greyed. The press sends the moods; the
    server gives each fragment ONE track of them, none twice while there are enough (lib/highlights-music.js ofMoods, deal).
-   Until phase V68 the popup listed the tracks themselves, each with ▶ and a tick (phase V33.8, H3) - gone with it.
    What each kind remembers is merge-v3/hl-kinds.js.
-   (phase V69 P12, (хп93)) auto's row starts with "by the video" - the kind it finds gives its own moods (its standard by default) -
+   auto's row starts with "by the video" - the kind it finds gives its own moods (its standard by default) -
    and each kind's recommended moods are marked (public/js/highlights/kinds.js `moods.rec`).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { YOURS, BY_VIDEO } from './hl-kinds.js';
-// (phase V73 block 2, step 2b) Being read, could not be read - the shared parts; the reason a popup in the corner.
+// Being read, could not be read - the shared parts; the reason a popup in the corner.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -27,8 +24,8 @@ export function moodPicker(host, { onChange, onReady } = {}) {
   let data = null;          // { moods: [{ id, label, about, tracks }], root: [tracks] }
   let err = '';
   let chosen = [];
-  let byVideoOn = false;           // (V69 P12) auto's "by the video" button
-  let rec = [];                    // (V69 P12) the kind's recommended moods
+  let byVideoOn = false;           // auto's "by the video" button
+  let rec = [];                    // the kind's recommended moods
   const row = _el('div', 'mv3-hlp-chips mv3-hlp-moods');
   host.appendChild(row);
 
@@ -81,7 +78,7 @@ export function moodPicker(host, { onChange, onReady } = {}) {
     }
   }
 
-  // (phase V73 block 2, (б2-18)) A read that fails: the row says "did not load" with Try again, the reason is a popup.
+  // A read that fails: the row says "did not load" with Try again, the reason is a popup.
   const SAID = 'Music → highlights could not be read';
   async function read() {
     if (err) { err = ''; paint(); }
@@ -105,9 +102,9 @@ export function moodPicker(host, { onChange, onReady } = {}) {
     set: (ids) => { chosen = [...new Set((Array.isArray(ids) ? ids : []).map(String))].filter(have); paint(); },
     get: () => chosen.filter(have),
     have,
-    /** (V69 P12) Offer "by the video" (auto) or not - taken away, it is let go of. */
+    /** Offer "by the video" (auto) or not - taken away, it is let go of. */
     byVideo: (on) => { byVideoOn = !!on; if (!byVideoOn) chosen = chosen.filter((x) => x !== BY_VIDEO); paint(); },
-    /** (V69 P12) The kind's recommended moods - marked. */
+    /** The kind's recommended moods - marked. */
     recommend: (ids) => { rec = Array.isArray(ids) ? ids.slice() : []; paint(); },
   };
 }

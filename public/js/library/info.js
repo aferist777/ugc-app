@@ -1,20 +1,18 @@
-// LIBRARY — the right column of the Characters shelf (phase B, the owner 2026-09-29).
+// LIBRARY — the right column of the Characters shelf.
 //
 // On Characters one tile is always selected, and this column says what it is. At the top the picture
 // itself - a copy sized for the column, never the original, and the way into the enlarged view - then
-// what belongs to it: a character's voices and looks. (Lookbooks and Environments had this column too
-// until phase V56 took their shelves away, (ги7): what it let one write - a lookbook's gender, the
-// description, how a place moves - is written in the viewer's right column now, js/library/made-rows.js
-// madeRows.)
+// what belongs to it: a character's voices and looks. (A made lookbook's gender, the description, how a place
+// moves are written in the viewer's right column - js/library/made-rows.js madeRows.)
 //
 // Read from the server on EVERY selection, a second press on the same tile included
-// (/api/library/info): a voice given or a look made on the Character page shows up the next time
+// (/api/library/info): a voice given or a look made elsewhere shows up the next time
 // the tile is pressed, without reloading the page. The Voices shelf paints its own info into the
 // same column (js/library/voices.js); the page decides which of the two has it.
 
 import * as CV from './char-voices.js';
-// (phase V73 block 2, step 2b) "nothing here" and "did not load" as the shared parts, rows of the column; the reason of a
-// failed read is the popup in the corner (the owner's (б2-19) а)
+// "nothing here" and "did not load" as the shared parts, rows of the column; the reason of a
+// failed read is the popup in the corner
 import { emptyEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -50,14 +48,14 @@ function _ref(kind, it, hooks) {
   img.src = _big(it.media);
   b.appendChild(img);
   b.addEventListener('click', () => hooks.open(it));
-  // No "Save image as" on the column's copy (phase I): the window's own menu would save the 1920px
+  // No "Save image as" on the column's copy: the window's own menu would save the 1920px
   // copy, not the picture.
   b.addEventListener('contextmenu', (e) => e.preventDefault());
   return b;
 }
 
 // ── A character's gender and voices ─────────────────────────────────────────
-// Chosen here since the Character page moved into the Library (phase H7): js/library/char-voices.js.
+// Chosen here: js/library/char-voices.js.
 
 // ── Looks: a character's own, or the ones dressed in a lookbook ─────────────
 function _looks(list, hooks, none) {

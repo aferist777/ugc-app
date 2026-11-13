@@ -1,5 +1,4 @@
-// UGC Studio's LAUNCHER - the "UGC Studio.exe" a friend opens (phase V83, block B2; the owner 2026-11-09: (о8) "exe",
-// (о11а) "у друга только рабочая версия").
+// UGC Studio's LAUNCHER - the "UGC Studio.exe" an installed copy is opened by.
 //
 // The folder it lies in:
 //   UGC Studio.exe          this program
@@ -18,7 +17,7 @@
 //     the failed one `bad` (the updater never installs it again), and the person told in a window;
 //   - starts versions\<current>\UGC Studio.exe with UGC_DATA_DIR = library\, UGC_HOME = this folder,
 //     UGC_LAUNCHER = this exe, and leaves.
-// The previous version is deleted by the app once the new one came up (desktop/home.js) - a friend keeps one version.
+// The previous version is deleted by the app once the new one came up (desktop/home.js) - an installed copy keeps one version.
 // Compiled by tools/build-app.js with the .NET Framework's own csc.exe - C# 5, nothing to install.
 
 using System;

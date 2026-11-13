@@ -153,11 +153,6 @@ export function build(host, hooks) {
   sheet.appendChild(sstat);
   wrap.appendChild(sheet);
 
-  // The sheet's own gear used to sit here, and before that in the Portrait column's header.
-  // It is gone: which model draws the sheet is now one row of the sheet ladder, in the
-  // settings panel behind the gear in the nav. Two places to set the same thing is two
-  // places to set it differently, and this one only existed while the save form was open.
-
   // ── footer: Cancel to the LEFT of Save character, as asked ──
   const foot = document.createElement('div');
   foot.className = 'cv2-save-foot';

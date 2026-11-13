@@ -4,26 +4,24 @@
 // does: a scenario is a title, a few fields and a line count. A card here would be a grey tile
 // with a name under it, which is a thumbnail that admits it has no thumbnail.
 //
-// ONE ROW IS ALWAYS SELECTED and the right column is about it (phase D5, the owner 2026-09-29) - the
+// ONE ROW IS ALWAYS SELECTED and the right column is about it - the
 // rule of the picture shelves: opening the shelf selects the first, a delete falls back to the
 // first, a reload keeps the one that was selected. The column holds the whole scenario: its title with its line count
-// and date, its fields three to a row, "Make video" and Delete, and its lines - (phase V38.6, the owner: "если сценарий
-// уже сохранен, то давай отображать так же построчно как и при создании, только без полей для генерации") a card each,
-// as the generator shows a script, the first the hook, edited in place. (V38.7) No "Where it came from" and no rewrite
-// in the narrator's voice any more: the scenario is written.
+// and date, its fields three to a row, "Make video" and Delete, and its lines - a card each, line by line
+// as the generator shows a script but without its generating fields, the first the hook, edited in place. There is no
+// "Where it came from" and no rewrite in the narrator's voice here: the scenario is written.
 //
-// NOTHING TO SAVE BY HAND (phase V28.2, the owner 2026-10-12: "сохранение должно быть автоматическим после любых
-// изменений в сценарии"): a field is saved the moment it is chosen, the lines a moment after the typing stops, when the
-// textarea is left, and before anything paints the column again or leads away from it. Where "Save" was stands "Make
-// video" ("чтобы после прочтения можно было сразу начать делать видео в merge"): the talking head made from the
+// NOTHING TO SAVE BY HAND: a field is saved the moment it is chosen, the lines a moment after the typing stops, when the
+// textarea is left, and before anything paints the column again or leads away from it. In place of a Save stands "Make
+// video", so a video can be started right after reading: the talking head made from the
 // scenario, and Merge opened on it - what "use" does in Merge's picker.
 //
-// DRAFTS HEAD THE LIST (phase E4): a script the generator is still writing, one row each, saying how
-// far it got. (V38.6) A draft is SELECTED like a scenario (`_sel` 'd:<id>'): the right side is then the generator's form
+// DRAFTS HEAD THE LIST: a script the generator is still writing, one row each, saying how
+// far it got. A draft is SELECTED like a scenario (`_sel` 'd:<id>'): the right side is then the generator's form
 // on that draft, without the sources (the page moves it there - js/library/main.js _showDraftHere). The shelf opens on
 // the first scenario; a draft chosen stays chosen while it is there.
 //
-// FILTERS AND FIELDS (phase F7, the owner 2026-09-30): over the list, above the drafts, a dropdown per
+// FILTERS AND FIELDS: over the list, above the drafts, a dropdown per
 // field - type, role, gender, vertical, product, narrator (the voice of the WRITING) - with
 // the values the scenarios really have and how many; the choice is remembered, drafts are not
 // filtered. The same fields are dropdowns in the column, saved the moment one is chosen, each with
@@ -33,11 +31,10 @@
 // textarea on newlines maps onto the store exactly. A line that carries a newline of its own (the
 // generator can write one) is shown on one textarea line, or a Save would quietly make it two.
 //
-// THE ARCHIVE (phase V60, the owner 2026-10-29, (пп6а)-(пп8а): "снизу списка будет типа под папка в которой будут
-// архивированные сценарии. правый клик по сценарию открывает контекстное меню в котором кнопка archive"): at the bottom of
+// THE ARCHIVE: at the bottom of
 // the list a folded row "▸ Archive · N" - pressed, the archived scenarios open under it, paler, newest first; pressed
 // again, they fold; remembered. None archived - no row. While any filter over the list is chosen the archive is not
-// shown at all (the owner: "архивные записи не показываются при изменении фильтров"); the filters and their numbers
+// shown at all; the filters and their numbers
 // count the live scenarios only. The right button on a scenario: "Archive"; on an archived one: "Restore" (drafts have
 // no menu). An archived one selected: its lines on the right, edited and saved as any, with "Restore" where "Make video"
 // stands - a video is not made from the archive. The archive is Merge's too: the same flag, the same edit (scen-api.js
@@ -48,8 +45,8 @@ import * as Layers from '../layers.js';
 import { talkingHead, archive as archiveScenario } from '../merge-v3/scen-api.js';
 import { menuAt } from '../tile-select.js';
 import { spokenSeconds } from './jobs.js';
-// (phase V73 block 2, step 2b) the question at the button in place of the browser's confirm(); "nothing here" and "did not
-// load" as the shared parts - the reason of a failed read is the popup in the corner (the owner's (б2-19) а)
+// The question at the button in place of the browser's confirm(); "nothing here" and "did not
+// load" as the shared parts - the reason of a failed read is the popup in the corner.
 import { ask } from '../ask.js';
 import { icon } from '../icons.js';
 import { emptyEl, failedEl } from '../ui-state.js';
@@ -83,7 +80,7 @@ function _tail(m) {
   ].filter(Boolean).join(' · ');
 }
 
-// ── Filters (phase F7) ──────────────────────────────────────────────────────
+// ── Filters ─────────────────────────────────────────────────────────────────
 const FIELDS = [
   { key: 'type', label: 'Type' }, { key: 'role', label: 'Role' }, { key: 'gender', label: 'Gender' },
   { key: 'vertical', label: 'Vertical' }, { key: 'product', label: 'Product' },
@@ -93,7 +90,7 @@ const NONE = '__none__';
 const LS_FILTERS = 'library_sc_filters_v1';
 let _filters = (() => { try { return JSON.parse(localStorage.getItem(LS_FILTERS) || '{}') || {}; } catch (e) { return {}; } })();
 const _saveFilters = () => { try { localStorage.setItem(LS_FILTERS, JSON.stringify(_filters)); } catch (e) { /* this view only */ } };
-// The language filter went with the field (phase V29): a remembered one would leave "clear" over nothing.
+// There is no language filter: a remembered one is dropped, or it would leave "clear" over nothing.
 if ('language' in _filters) { delete _filters.language; _saveFilters(); }
 // A scenario opened ON PURPOSE - "open" after the generator saved it, or the one just edited - stays
 // in the list even when the filters would hide it, marked as outside them. Choosing a filter or
@@ -153,7 +150,7 @@ let _seq = 0;            // an answer for a scenario no longer selected is dropp
 let _hooks = {};
 let _say = null;         // { id, text, kind } - said in the column once it is painted again
 
-// ── The archive (phase V60) ─────────────────────────────────────────────────
+// ── The archive ─────────────────────────────────────────────────────────────
 let _archived = [];      // the archived scenarios, newest first (the shelf's `archived`)
 const LS_ARCH = 'library_sc_archive_open_v1';
 let _archOpen = (() => { try { return localStorage.getItem(LS_ARCH) === '1'; } catch (e) { return false; } })();
@@ -196,7 +193,7 @@ function _draftRow(dr) {
   return row;
 }
 
-// (V38.6) A draft chosen: the scenario on show lets go (its lines stored), and the page puts the draft's form on the
+// A draft chosen: the scenario on show lets go (its lines stored), and the page puts the draft's form on the
 // right. Pressing the chosen draft again leaves its form as it is.
 function _pickDraft(dr) {
   const key = 'd:' + dr.id;
@@ -225,10 +222,10 @@ export function render(items, hooks = {}) {
   grid.className = 'lib-rows is-scenarios';
   if (_items.length) grid.appendChild(_filterRow());
   const drafts = _hooks.drafts || [];
-  // (V38.6) A draft chosen stays chosen while it is there - saved or discarded, the scenarios have the selection back.
+  // A draft chosen stays chosen while it is there - saved or discarded, the scenarios have the selection back.
   if (_sel.startsWith('d:') && !drafts.some(d => 'd:' + d.id === _sel)) _sel = '';
   const shown = _items.filter(it => _passes(it) || String(it.id) === _keep);
-  // (phase V60) The archived ones in sight: the archive shown (no filter) and open.
+  // The archived ones in sight: the archive shown (no filter) and open.
   const arch = _archShown() && _archOpen ? _archived : [];
   // The selection survives a reload while that scenario is still shown; otherwise the first scenario - or, with none
   // to show, the first draft, then the first archived one in sight.
@@ -250,7 +247,7 @@ export function render(items, hooks = {}) {
   _show(cur);
 }
 
-// A scenario's row - live, or (phase V60) archived: paler, and its menu says "Restore".
+// A scenario's row - live, or archived: paler, and its menu says "Restore".
 function _row(it, archived) {
   const outside = !archived && !_passes(it);
   const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : '') + (archived ? ' is-archived' : ''));
@@ -265,7 +262,7 @@ function _row(it, archived) {
   row.appendChild(_el('div', 'lib-srow-d', _fmtDate((it.meta || {}).date)));
   // Pressing the selected one again reads its column again, as on the picture shelves.
   row.addEventListener('click', () => _pick(it));
-  // (phase V60, the owner's (пп7а)) The right button: "Archive", or on an archived one "Restore".
+  // The right button: "Archive", or on an archived one "Restore".
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     menuAt(e.clientX, e.clientY, [archived
@@ -281,7 +278,7 @@ function _archHead() {
   b.type = 'button';
   b.setAttribute('aria-expanded', _archOpen ? 'true' : 'false');
   b.title = _archOpen ? 'Fold the archive' : 'The archived scenarios';
-  b.appendChild(_el('span', 'lib-sc-arch-c')).innerHTML = icon('chevron-right', 14);   // (phase V73 block 6, (к18))
+  b.appendChild(_el('span', 'lib-sc-arch-c')).innerHTML = icon('chevron-right', 14);
   b.appendChild(_el('span', 'lib-sc-arch-t', 'Archive'));
   b.appendChild(_el('span', 'lib-sc-arch-n', '· ' + _archived.length));
   b.addEventListener('click', () => {
@@ -317,7 +314,7 @@ async function _setArchived(it, yes) {
 function _pane() {
   const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
   if (!pane || !body) return null;
-  // (V38.6) A draft's form on the right gives way to the scenario.
+  // A draft's form on the right gives way to the scenario.
   if (_hooks.hideDraft) _hooks.hideDraft();
   _closeFieldMenu();   // its field is about to be painted again
   // What was typed into the scenario on show goes to the store before the column is painted again - and before it is
@@ -336,7 +333,7 @@ function _empty(note) {
   if (body) body.appendChild(emptyEl(note || 'Nothing on this shelf yet.', { line: true, cls: 'lib-info-note' }));
 }
 
-// ── The fields, as dropdowns (phase F7) ─────────────────────────────────────
+// ── The fields, as dropdowns ────────────────────────────────────────────────
 // The lists to choose from: the suggestion lists and the narrators - read once, the narrators again
 // when the narrators window changes them.
 let _lists = null;
@@ -360,7 +357,7 @@ document.addEventListener('lib:narrators', () => { _lists = null; });
 const _inUse = (key) => [...new Set(_items.map(it => _val(it, key)).filter(Boolean))];
 const _uniq = (arr) => { const seen = new Set(); return arr.filter(v => { const k = String(v).toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; }); };
 
-// ONE FIELD (phase G4, the owner 2026-09-30; V38.7: "в три столбца и название дропдауна слева от дропдауна"): its name
+// ONE FIELD: its name
 // on the left of a button that shows the value - the names of one width, so the buttons stand in line - three to a row. Pressing it opens the list as a layer - a list of our own, because a row of a native <select>
 // cannot carry the ✕ that removes a wrong value. `values` are [{value, label}]; "none" and "new…" are
 // added as asked. The pick is handed to `onPick`, which saves; a refused save puts the old value back.
@@ -607,7 +604,7 @@ async function _paintFields(box, s) {
   const opt = (arr) => arr.map(v => ({ value: v, label: v }));
   const role = (s.roles || [])[0] || { id: 'r0', name: '', gender: '' };
   const roleOf = (name, gender) => [{ id: role.id || 'r0', name, gender }];
-  // What a ✕ may take away (phase G4): the four vocabularies a person types into. talking_head is the
+  // What a ✕ may take away: the four vocabularies a person types into. talking_head is the
   // type everything falls back to; gender is two words, narrators go in their own window.
   const rm = (field, fallback) => ({ field, fallback, can: (v) => !(field === 'type' && v === 'talking_head') });
   _fieldRow(box, 'type', s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
@@ -656,7 +653,7 @@ async function _show(it) {
   }
   if (my !== _seq) return;
   body.textContent = '';
-  // (V38.7, the owner: "строки с названием lines и edited помещаем справа от названия сценария") The title, and beside it
+  // The title, and beside it
   // how many lines and when it was last edited.
   const lines = s.lines || [];
   const top = _el('div', 'lib-sc-top');
@@ -669,8 +666,8 @@ async function _show(it) {
   await _paintFields(facts, s);
   if (my !== _seq) return;
 
-  // (V38.6, the owner's (щ2)) The buttons over the lines, under the fields; the lines under them, a card each.
-  // (phase V60, the owner's (пп8а)) An archived one: "Restore" where "Make video" stands - no video from the archive.
+  // The buttons over the lines, under the fields; the lines under them, a card each.
+  // An archived one: "Restore" where "Make video" stands - no video from the archive.
   const foot = _el('div', 'lib-sc-bar');
   const archived = !!s.archived;
   const make = _el('button', 'u-btn is-main', archived ? 'Restore' : 'Make video');
@@ -686,12 +683,12 @@ async function _show(it) {
   const box = _el('div', 'lib-sc-cards');
   body.appendChild(box);
 
-  // The lines save themselves (phase V28.2): a moment after the typing stops, and when the lines are left.
+  // The lines save themselves: a moment after the typing stops, and when the lines are left.
   const a = { s, box, cards: [], was: '', st, count, timer: null, busy: null, empty: false };
   _paintCards(a, lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')));
   a.was = _valueOf(a);
   _auto = a;
-  // Leaving the lines - for anything but another of them - is the save that makes them English (phase V29), never the
+  // Leaving the lines - for anything but another of them - is the save that makes them English, never the
   // pause in the typing.
   box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) _flushA(a, true); });
   make.addEventListener('click', () => {
@@ -709,12 +706,12 @@ async function _show(it) {
   _say = null;
 }
 
-// ── The lines, saved by themselves (phase V28.2) ─────────────────────────────
+// ── The lines, saved by themselves ───────────────────────────────────────────
 const AUTOSAVE_MS = 800;
 let _auto = null;                    // the column on show: { s, box, cards, was, st, count, timer, busy, empty }
 let _flushing = Promise.resolve();   // the save of a column painted over, which a new reading waits for
 
-// ── The lines as cards (phase V38.6) ───────────────────────────────────────
+// ── The lines as cards ─────────────────────────────────────────────────────
 // As the generator shows a script (its .mk-scene cards): the number, the first one "hook", the words, how long they
 // take said. Edited as one text: Enter splits a line in two at the cursor (a paste of several lines makes as many
 // cards), Backspace at a line's start joins it to the one above, Delete at its end joins the one below to it, the arrows
@@ -802,7 +799,7 @@ function _cardKey(a, c, e) {
 // empty.
 const _linesOf = (a) => a.cards.map(c => c.ta.value.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean).map(text => ({ text }));
 
-// (phase V29, the owner 2026-10-14: "набранное переводится") A letter of another script than Latin - the server's
+// A letter of another script than Latin - the server's
 // own test (lib/mv3-agent.js `english`). Lines with one are made English by the server when they are left.
 const _foreign = (s) => /(?!\p{Script=Latin})\p{L}/u.test(String(s || ''));
 
@@ -912,14 +909,14 @@ async function _delete(s, btn) {
 /** The lines typed into the scenario on show, stored now - the page is about to put something in its place. */
 export function flush() { return _flushA(_auto); }
 
-/** The scenario to select at the next render - one the generator has just saved; (V38.6) 'd:<id>' a draft. */
+/** The scenario to select at the next render - one the generator has just saved; 'd:<id>' a draft. */
 export function select(id) { _sel = String(id || ''); _keep = _sel.startsWith('d:') ? '' : _sel; }
 
 // Leaving the shelf: the lines typed are stored, an answer on its way is dropped, and coming back opens on
 // the first scenario.
 export function leave() {
   if (_auto) { _flushing = _flushA(_auto); _auto = null; }
-  if (_hooks.hideDraft) _hooks.hideDraft();       // (V38.6) a draft's form: what is typed is saved
+  if (_hooks.hideDraft) _hooks.hideDraft();       // a draft's form: what is typed is saved
   _seq++;
   _sel = '';
   _say = null;

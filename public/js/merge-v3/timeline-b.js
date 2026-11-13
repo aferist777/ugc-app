@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the timeline.
 
-   Merge's one editor (docs/local-app/PLAN.md, phase 3): a project is an ordered list of lanes,
+   Merge's one editor: a project is an ordered list of lanes,
    created and deleted by hand, and their order is the layer order. A talking head's or a
    voiceover's lines are laid on its main lanes by the server (lib/frag-mirror.js).
 
@@ -36,32 +36,32 @@ import { retext, isCorrected } from '../captions/words.js';
 import { linesOf as docLines, editLine as docEditLine } from '../captions/doc.js';
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
-// (phase V33.2) A filled clip's window over time, kept as the render reads it.
+// A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
 import { normalize as normalizeCrop } from '../framing/crop.js';
-// (phase V65) A clip's opacity and blend mode - one rule for the page and the server.
+// A clip's opacity and blend mode - one rule for the page and the server.
 import { normalizeOpacity, normalizeBlend } from '../overlay/look.js';
 import { normalizeColor } from '../overlay/color.js';
 import { normalizePitch } from '../sound/pitch.js';
-// (phase V84) A clip's effects: the field, its frames on the clip, "Add effect…" at its right button.
+// A clip's effects: the field, its frames on the clip, "Add effect…" at its right button.
 import { normalizeFx, spanOf as fxSpanOf } from '../fx/params.js';
 import { effectOf as fxEffectOf } from '../fx/effects.js';
 import * as FXUI from './fx-ui.js';
-// (phase V74) Main video's patterns - a list on its lane (overlay/pattern.js).
+// Main video's patterns - a list on its lane (overlay/pattern.js).
 import { normalizeLayers } from '../overlay/pattern.js';
-// (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
+// The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
-// (phase V36, T4) A sound's waveform on its clip.
+// A sound's waveform on its clip.
 import { paintWaves, paintWaveAs, onPeaks } from './tl-wave.js';
-// (phase V36, T5) A stretch cut out of every lane, the rest moved left.
+// A stretch cut out of every lane, the rest moved left.
 import { cutRefused, cutScope, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
 import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
-// (phase V51, points 2 and 4) Ctrl+C / Ctrl+V of the picked clips and text lines - the buffer and the paste.
+// Ctrl+C / Ctrl+V of the picked clips and text lines - the buffer and the paste.
 import { wireClip, copyPicked, paste } from './tl-clip.js';
-// (phase V49.1) Refusals and failures in the corner of popups.
+// Refusals and failures in the corner of popups.
 import { showError } from '../notice.js';
-// (phase V73 block 5, 5c) The lanes' squares, the link mark and the stretch's label as Lucide's icons; its seconds in mono.
+// The lanes' squares, the link mark and the stretch's label as Lucide's icons; its seconds in mono.
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
 import { isHl } from '../highlights/keys.js';
@@ -80,19 +80,17 @@ let _on = false;        // is this module the one currently showing?
 const _host = () => document.getElementById(HOST);
 
 // The label column's width is shared with the CSS (--mv3-lbl-w): the playhead is positioned in pixels,
-// so both have to agree. 84 since phase S4 - at 78 "MAIN VIDEO" with its link mark ended in "…". 88 since phase V73 block 5,
-// 5c: "Main video" in 500 11 px with its link icon ended in "…" by a pixel at 84.
+// so both have to agree. 88: at 84 "Main video" in 500 11 px with its link icon ends in "…" by a pixel.
 const LBL_W = 88;
 // The square column sits to the LEFT of the labels, so the lanes begin 20px further in than
 // the label width alone says. The playhead is positioned in pixels from the timeline's left
-// edge; using LBL_W by itself put the line over the names it was meant to stand beside.
+// edge; LBL_W by itself would put the line over the names it is meant to stand beside.
 const SQ_W = 20;
 const GUTTER = SQ_W + LBL_W;
 
 // A drop is placed at the pointer and may cover what is already there: these lanes are
 // LAYERS, and which one shows is decided by the lane's place in the list rather than by
-// keeping clips apart. Main is a sequence and behaves differently - that lands with the
-// insert rule, next phase.
+// keeping clips apart.
 const FALLBACK_DUR = 3;
 
 
@@ -102,7 +100,7 @@ const _zoom = () => {
   return z ? (parseInt(z.value, 10) || 60) : 60;
 };
 // A counter as well as the clock: a re-cut makes hundreds of ids in one millisecond, and the clock and a
-// random number alone gave two captions one id a few times in a hundred presses (review K6). The parts are
+// random number alone give two captions one id a few times in a hundred presses. The parts are
 // separated, so a short counter and a long random number cannot spell the same id as the reverse.
 let _idSeq = 0;
 const _id = () => 'c' + Date.now().toString(36) + '-' + (_idSeq++).toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36);
@@ -155,8 +153,8 @@ function _newVideoLane(t) {
   const firstVideo = t.findIndex(x => x.kind === 'video');
   t.splice(firstVideo < 0 ? 0 : firstVideo, 0, v);
   // Its sound goes at the far end of the audio block, which is the mirror of the same place - unless the audio side is full
-  // already (beds of music): then the lane is silent, as one whose sound lane was deleted (phase V41: a fifth audio lane was
-  // made here, and the server's ceiling dropped one of them on the save).
+  // already (beds of music): then the lane is silent, as one whose sound lane was deleted (a fifth audio lane would be
+  // dropped by the server's ceiling on the save).
   if (_count(t, 'audio') < MAX_PER_SIDE) {
     const a = { id: _freshId(t, 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
                 volume: null, speed: null, clips: [] };
@@ -184,7 +182,7 @@ function _newAudioLane(t) {
   return a;
 }
 
-/** (phase V66) Inside a mutation: a bed lane at the far end of the audio block (a highlights fragment's music) - null at the ceiling. */
+/** Inside a mutation: a bed lane at the far end of the audio block (a highlights fragment's music) - null at the ceiling. */
 export function newBedLane(tracks) { return _newAudioLane(tracks); }
 
 export function addAudioTrack() {
@@ -203,7 +201,7 @@ export function addTextTrack() {
   Store.mutate(tl => { _newTextLane(tl.tracks); });
 }
 
-// Inside a mutation: a text lane, or null at the ceiling (phase V51: a paste makes one too).
+// Inside a mutation: a text lane, or null at the ceiling (a paste makes one too).
 function _newTextLane(t) {
   if (_count(t, 'text') >= MAX_TEXT) return null;
   const row = { id: _freshId(t, 'x'), kind: 'text', name: '', linkId: null, main: false,
@@ -273,9 +271,9 @@ function _measure(ids, src) {
   v.src = src;
 }
 
-// (phase V28.4, the owner 2026-10-12: "чтобы не происходила мешанины") WHAT A LANE TAKES: a video lane - films and
+// WHAT A LANE TAKES, so the lanes never get mixed up: a video lane - films and
 // pictures; an audio lane - sounds, music and films (a film's sound). A tile says what it is (DRAG_MEDIA, js/merge-v3/
-// library.js); one that does not say is taken as before.
+// library.js); one that does not say is taken by any lane.
 function _laneTakes(kind, media) {
   if (!media) return true;
   if (kind === 'video') return media === 'video' || media === 'image';
@@ -287,8 +285,7 @@ function _mediaOfDrag(dt) {
   return t ? t.slice(DRAG_MEDIA.length) : '';
 }
 
-// (phase V28.4, the owner 2026-10-12: "при бросить из библиотеки может быть разница в длительности, поэтому не обрезая и
-// не укорачивая но начало на той же секунде") A TILE LET GO ON A RED CLIP takes its place: the new file from the same
+// A TILE LET GO ON A RED CLIP takes its place: the new file from the same
 // second, at its own length - not cut, not shortened - with the clip's volume, speed and effects. A film replacing one
 // half of a film's pair replaces both; a picture has no sound, so the sound half of the pair goes; a sound on the sound
 // half lets go of the picture (it stays red until replaced too).
@@ -327,7 +324,7 @@ function _replace(trackId, clipId, data) {
   if (measure.length) _measure(measure, data.src);
 }
 
-// `make` ('video' | 'audio', phase V41, the owner's (о12)): let go above the top video lane or below the bottom audio one,
+// `make` ('video' | 'audio'): let go above the top video lane or below the bottom audio one,
 // the clip goes onto a lane made for it IN THE SAME STEP - a pair of video and its sound, or a sound lane on its own; one
 // undo takes both away. Returns { dur, lane } - the clip's length on the timeline and the lane it went on - or null when
 // nothing was laid.
@@ -340,7 +337,7 @@ function _drop(trackId, want, data, make) {
   // Made up here so the clips can be found again by the measurement below.
   const vidId = _id(), audId = _id();
   let laid = false;
-  // (phase V74) A pattern is no clip any more - it is picked in the strip of main video (patterns-ui.js), and nothing offers
+  // A pattern is not a clip - it is picked in the strip of main video (patterns-ui.js), and nothing offers
   // one to be let go here.
 
   const ok = Store.mutate(tl => {
@@ -350,7 +347,7 @@ function _drop(trackId, want, data, make) {
       if (!_laneTakes(make, data.media)) return;
       track = make === 'video' ? _newVideoLane(t) : _newAudioLane(t);
     } else track = t.find(x => x.id === trackId);
-    // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
+    // Words lanes hold words: a file dropped on a text lane would become a caption reading its file name.
     if (!track || track.kind === 'subs' || track.kind === 'text') return;
     if (!_laneTakes(track.kind, data.media)) return;
     laid = track.id;
@@ -358,7 +355,7 @@ function _drop(trackId, want, data, make) {
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
     // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
     // was put. Snapping it to a join and pushing the neighbours along is right in a scenario
-    // project - and the talking-head timeline still does it - but here it only moves things
+    // project, but here it only moves things
     // the person did not touch.
 
     const base = {
@@ -370,12 +367,12 @@ function _drop(trackId, want, data, make) {
     };
 
     // Dropped straight onto an audio lane: sound only, and audible - somebody putting a file
-    // on the audio side means to hear it. A TRACK OF MUSIC (phase V28.4) lies as it is, from where it was let go: a bed
+    // on the audio side means to hear it. A TRACK OF MUSIC lies as it is, from where it was let go: a bed
     // under the voices - half volume, never transcribed (captions/heard.js isBed) - and where two beds overlap on
     // one lane they cross into each other by themselves (js/sound/fades.js).
     if (track.kind === 'audio') {
       if (data.bed) track.clips.push({ ...base, id: vidId, volume: 0.5, bed: true, pairId: null });
-      // (phase V34.E) A sound of SFX - own or built-in: full volume, never transcribed (captions/heard.js isBed).
+      // A sound of SFX - own or built-in: full volume, never transcribed (captions/heard.js isBed).
       else if (data.group === 'sounds' || data.group === 'sfx') track.clips.push({ ...base, id: vidId, volume: 1, sfx: true, pairId: null });
       else track.clips.push({ ...base, id: vidId, volume: 1, pairId: null });
       return;
@@ -429,8 +426,8 @@ function _removeIn(t, trackId, clipId) {
 }
 
 // ── Selecting several at once ───────────────────────────────────────────────
-// Shift held, drag across empty lane and a band follows the pointer (without Shift that drag is the playhead's - phase
-// V36, T2); everything it TOUCHES is taken,
+// Drag across empty lane and a band follows the pointer (Shift held adds to the pick; the playhead is the ruler's);
+// everything it TOUCHES is taken,
 // not only what it encloses. Enclosure sounds tidier and is wrong here: lanes are 24px tall
 // and clips are often wider than the screen, so a band that had to contain a clip could
 // never catch one.
@@ -462,7 +459,7 @@ function _selectTrack(id) {
   _paintSel();
 }
 
-// A LANE PICKED LETS GO OF ITSELF at a press anywhere else (the owner, 2026-10-06): the preview, the Library, the
+// A LANE PICKED LETS GO OF ITSELF at a press anywhere else: the preview, the Library, the
 // ruler, the page around - the pick goes and the strip of its settings slides back. Not a press in the strip itself
 // (the lane is being set there), not in a window or a menu on top (a question the strip asked), and not on a lane's
 // name or a clip: those pick something else. Captured, so a control that keeps its own mousedown still counts.
@@ -471,18 +468,17 @@ function _awayFromLane(e) {
   const t = e.target;
   if (!t || !t.closest) return;
   // Nor in the captions view beside the strip - its preset tiles and their categories set the lane too - nor on the
-  // Library's "captions" crumb that picked it (phase V18.2: a press on a category let go of the lane, and the panel went
-  // back to the chat under it).
-  // (phase V49.1) Nor in the corner of popups: closing one changes nothing on the timeline.
-  // (phase V66.1) Nor on the buttons of a highlights project's ticked fragments over the timeline - they pick the lanes.
+  // Library's "captions" crumb that picked it.
+  // Nor in the corner of popups: closing one changes nothing on the timeline.
+  // Nor on the buttons of a highlights project's ticked fragments over the timeline - they pick the lanes.
   if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip, .sv3-toasts, .mv3-hlg-panel')) return;
   // Nor, while the captions view is up, on "Library" or a chat's crumb: their own click lets the pick go (lib-views.js
-  // toBase). Let go here, at the mousedown, the panel jumped back from the corner under the pointer and the click never
-  // landed - "generate video" pressed over the captions showed the shelf (phase V23.5).
+  // toBase). Let go here, at the mousedown, the panel would jump back from under the pointer and the click would never
+  // land.
   if (Views.isCaptions() && t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
   const top = Layers.top();
   if (top && top.el && top.el.contains && top.el.contains(t)) return;
-  // Nor on a page of captions on the preview (phase V30, block 3): that press picks a lane or moves it (cap-place.js).
+  // Nor on a page of captions on the preview: that press picks a lane or moves it (cap-place.js).
   if (_keepPick && _keepPick(e)) return;
   _clearSel();
 }
@@ -491,7 +487,7 @@ let _keepPick = null;
 /** A press that is not "away" from a picked lane though it lands outside the timeline - the preview's caption pages. */
 export function keepPickOn(fn) { _keepPick = typeof fn === 'function' ? fn : null; }
 
-// (phase V51, point 3, the owner's (пр51)) PICKED CLIPS LET GO OF THEMSELVES at a press anywhere else, as a lane does - the
+// PICKED CLIPS LET GO OF THEMSELVES at a press anywhere else, as a lane does - the
 // Library, the tiles of highlights, the page around - and the strip of their settings slides back. Not a press in that strip
 // or the captions view (they are being set there), on the buttons over the timeline (split, cut silence, undo, the transport,
 // the zoom, FIT - they work on the pick), on the ruler (the playhead walks over the picked clip), in a window, a menu or a
@@ -510,8 +506,7 @@ function _awayFromClip(e) {
   const t = e.target;
   if (!t || !t.closest) return;
   if (_onPreview(t)) { _pvPress = [..._sel].join(' '); return; }
-  // (phase V62, the owner 2026-10-31: "выделение не снимается с фрагмента таймлайна пока пользователь не сменит крошку") Nor in
-  // the view "b-roll" of the Library panel and on its crumb: another item is chosen there FOR the picked piece.
+  // Nor in the view "b-roll" of the Library panel and on its crumb: another item is chosen there FOR the picked piece.
   if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, #mv3-br, #mv3-lib-br, .sv3-toasts, #mv3-timeline > .mv3-panel-head, .mv3b-row.is-ruler, .mv3b-clip, .mv3b-lbl')) return;
   // While that view is up, nothing but another crumb of the panel lets the pick go (a clip or the band on the lanes picks anew).
   if (_brollUp() && !t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
@@ -538,12 +533,12 @@ export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb
 // opens the panel when something is picked, and a lane is something.
 function _afterSelB() {
   const n = _sel.size + (_selTrack ? 1 : 0);
-  // (phase V84) The open effect's frame only on a picked clip.
+  // The open effect's frame only on a picked clip.
   _paintFx();
   for (const cb of _selSubs) { try { cb(n); } catch { /* a listener's own trouble */ } }
-  // (phase V44) "cut silence" is live while there is something picked to cut in.
+  // "cut silence" is live while there is something picked to cut in.
   refreshSilence();
-  // (phase V45) An offer to merge belongs to the pick it was made for.
+  // An offer to merge belongs to the pick it was made for.
   refreshMerge();
 }
 
@@ -557,10 +552,9 @@ function _paintSel() {
   _afterSelB();
 }
 
-// THE PLAYHEAD GOES WHERE THE PRESS IS, AND FOLLOWS IT WHILE HELD (phase V36, T2; the owner 2026-10-23, (у9), (ф6): "я мог
-// перетаскивать плейхед только кликнув на него, если я промахивался то он не перетаскивался"): a press on the ruler or on bare
-// timeline - a lane where no clip is, the seam, the room between the blocks - puts the playhead there and drags it until the
-// button is let go. A press on a clip still takes the clip; the band that picks several is drawn with Shift held.
+// THE PLAYHEAD GOES WHERE THE PRESS IS, AND FOLLOWS IT WHILE HELD: a press anywhere on the ruler - not only on the
+// playhead itself - puts the playhead there and drags it until the button is let go. A press on bare lanes is the band
+// (_beginBand).
 // The moment under the pointer is read off the lanes' left edge - the same GUTTER the playhead is drawn from.
 function _timeAtX(x) {
   const host = _host();
@@ -569,7 +563,7 @@ function _timeAtX(x) {
   return Math.max(0, (x - inner.getBoundingClientRect().left - GUTTER) / _zoom());
 }
 
-// PLAYING, THE PLAYHEAD DRAGGED HOLDS IT STILL (phase V41, the owner's (о9): "как в CapCut и Premiere"): the press pauses
+// PLAYING, THE PLAYHEAD DRAGGED HOLDS IT STILL (as in CapCut and Premiere): the press pauses
 // the preview, the picture follows the pointer, and playing goes on from where the button is let go - not past the end.
 function _scrub(e) {
   e.preventDefault();
@@ -599,8 +593,7 @@ function _beginBand(e) {
   // In the frozen gutter on the left (the squares and the names stay there whatever the scroll), even between the blocks
   // where no name is drawn: nothing.
   if (e.clientX < host.getBoundingClientRect().left + GUTTER) return;
-  // (phase V45, the owner's (ю4): "плейхед мы можем двигать только по линейке, выделение в поле дорожек выделяет фрагменты
-  // дорожек (без shift)") A press on bare lanes and a sweep is the BAND - it picks what it touches, in place of what was
+  // A press on bare lanes and a sweep is the BAND - it picks what it touches, in place of what was
   // picked, or added to it with Shift held; let go without sweeping, it lets go of the pick. The playhead is the ruler's.
   const x0 = e.clientX, y0 = e.clientY;
   const el = document.createElement('div');
@@ -611,13 +604,8 @@ function _beginBand(e) {
   e.preventDefault();
 }
 
-// The band takes ANY clip here, main lanes included - the opposite of the talking-head
-// timeline, and on purpose.
-//
-// There, Main is a read that arrived from a scenario: its clips are the spoken cut, they hold
-// the whole timing of the video, and sweeping a rectangle over them is not an edit anybody
-// means to make. Here nothing arrived from anywhere. A blank project is assembled by hand
-// from the first clip on, main included, so withholding the main lanes from the one gesture
+// The band takes ANY clip here, main lanes included, and on purpose: a project is assembled by
+// hand from the first clip on, main included, so withholding the main lanes from the one gesture
 // that picks several things would be withholding them from their own editor.
 const _bandable = (el) => !!el.closest('.mv3b-row');
 
@@ -631,7 +619,7 @@ function _moveBand(e) {
     if (w <= 3 && h <= 3) return;
     _band.moved = true;
     _selBack = null;
-    // (phase V36, T5) Clips picked: a drawn stretch goes, so Delete means them.
+    // Clips picked: a drawn stretch goes, so Delete means them.
     _letRangeGo();
     if (!_band.add) _clearSel();
   }
@@ -652,17 +640,17 @@ function _endBand() {
   const b = _band;
   b.el.remove();
   _band = null;
-  // The panels held still while the band was swept (gesture()); now they follow what it picked - and (phase V45) clips in a
+  // The panels held still while the band was swept (gesture()); now they follow what it picked - and clips in a
   // row are offered to be merged.
   if (b.moved) { _afterSelB(); offerMerge(); }
   // PRESSED ON BARE LANE and let go without sweeping: whatever was picked is let go of - the strip of its settings slides
-  // away and the Library is what is left (phase L6). The playhead stays: since phase V45 (ю4) it is moved by the ruler only.
+  // away and the Library is what is left. The playhead stays: it is moved by the ruler only.
   if (!b.moved && !b.add) _clearSel();
 }
 
 // Everything selected, deleted in one go. A pair still goes as a pair - _removeIn owns that
-// rule, and running it per clip keeps the one place that knows it. (phase V54, the owner's (зв11) б) ONE mutation - one step
-// to undo, however many there were: "Delete N clips" and the Delete key took N steps.
+// rule, and running it per clip keeps the one place that knows it. ONE mutation - one step
+// to undo, however many there were.
 function _deleteSelected() {
   if (!_sel.size) return;
   const tl = Store.timeline();
@@ -684,7 +672,7 @@ function _deleteSelected() {
 let _drag = null;
 
 // Where a clip may go: video to video, audio to audio. A subtitle lane takes neither. Not a lane scrolled under the ruler or
-// the words block stuck to the floor (phase V41): what cannot be seen there takes nothing.
+// the words block stuck to the floor: what cannot be seen there takes nothing.
 function _laneUnder(y, kind) {
   const host = _host();
   const cover = host ? [...host.querySelectorAll('.mv3b-row.is-ruler, .mv3b-zone.is-subs.has-words')] : [];
@@ -722,13 +710,13 @@ function _edgeOf(e, el) {
   return null;
 }
 
-// ── A stretch drawn over a wave, cut out of every lane (phase V36, T5) ──────
-// The owner 2026-10-23, (у8): "протянуть мышью по волне и Delete" - the stretch goes from EVERY lane and what is after it
+// ── A stretch drawn over a wave, cut out of every lane ──────────────────────
+// A sweep of the mouse over a wave and Delete - the stretch goes from EVERY lane and what is after it
 // moves left (js/merge-v3/tl-cut.js; captions by js/captions/cut.js). A sound clip has two places to press: the strip on
 // top with its name takes the clip as every clip is taken (moved, picked by a click), the WAVE under it draws a stretch
 // of time - as in a sound editor; its edges still trim. The stretch is drawn across all lanes; Delete cuts it, Escape or
 // a press on a clip lets it go; a press on the ruler or bare lane keeps it (to listen to it before cutting).
-// (phase V82, the owner 2026-11-09) Not every lane when the sound under it is tied to no picture: the stretch remembers the
+// Not every lane when the sound under it is tied to no picture: the stretch remembers the
 // lane it was drawn on, and tl-cut.js cutScope says what it cuts - every lane, or that lane alone (and the subtitles with main
 // audio); the band is drawn over what it cuts.
 let _range = null;              // { a, b, lane } in timeline seconds, while a stretch is drawn
@@ -772,7 +760,7 @@ function _endRange(e) {
   }
   // A click on the wave: the clip is picked, as a click on any clip picks it - and a stretch drawn before goes.
   _letRangeGo();
-  // (phase V45, (ю4)) With Shift held it is added to the pick, or taken out of it.
+  // With Shift held it is added to the pick, or taken out of it.
   if (e && e.shiftKey) { _togglePick(g.id); return; }
   _selBack = null;
   _sel.clear();
@@ -781,7 +769,7 @@ function _endRange(e) {
   _paintSel();
 }
 
-// (phase V45, the owner's (ю4): "с зажатым shift выделение по одному фрагменту кликом") A clip clicked with Shift held joins
+// A clip clicked with Shift held joins
 // the pick - or leaves it - and clips in a row are offered to be merged.
 function _togglePick(id) {
   _selBack = null;
@@ -797,15 +785,15 @@ function _letRangeGo() {
   _paintRange();
 }
 
-// What the drawn stretch cuts (phase V82): every lane, or its own lane alone - tl-cut.js cutScope.
+// What the drawn stretch cuts: every lane, or its own lane alone - tl-cut.js cutScope.
 function _rangeScope() {
   if (!_range || !_range.lane) return { all: true };
   return cutScope(Store.timeline(), _range.lane, _range.a, _range.b);
 }
 
 // The stretch over the lanes: one element in the stack, under the playhead and the frozen names - and a copy inside the
-// words block while it sticks to the floor (phase V41: it is a layer of its own over the lanes, and the stretch cuts its
-// lines too). Its label lives in the ruler, which stays in sight. (phase V82) A stretch that cuts its own lane alone lies in
+// words block while it sticks to the floor (it is a layer of its own over the lanes, and the stretch cuts its
+// lines too). Its label lives in the ruler, which stays in sight. A stretch that cuts its own lane alone lies in
 // that lane only - and in the subtitle lanes when it is main audio.
 function _paintRange() {
   refreshSilence();
@@ -823,7 +811,7 @@ function _paintRange() {
     for (const p of [inner, words]) {
       if (!p) continue;
       const el = band();
-      // Under the playhead's line, which shares its layer (phase V49.1): put before it.
+      // Under the playhead's line, which shares its layer: put before it.
       p.insertBefore(el, p.querySelector(':scope > .mv3b-head'));
       el.style.left = (GUTTER + _range.a * z) + 'px';
       el.style.width = w;
@@ -845,13 +833,13 @@ function _paintRange() {
   if (!ruler) return;
   let lbl = ruler.querySelector('.mv3b-range-t');
   if (!lbl) {
-    // (phase V41) THE LABEL IS A BUTTON: a press cuts, as Delete does. Its own press is not the ruler's (a seek).
+    // THE LABEL IS A BUTTON: a press cuts, as Delete does. Its own press is not the ruler's (a seek).
     lbl = document.createElement('button');
     lbl.type = 'button';
     lbl.className = 'mv3b-range-t';
     lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
     lbl.addEventListener('click', (e) => { e.stopPropagation(); cutRange(); });
-    // (phase V73 block 5, 5c) Lucide's scissors in place of "✂", the seconds in mono
+    // Lucide's scissors, the seconds in mono
     lbl.append(iconEl('scissors', 10), document.createElement('span'));
     ruler.appendChild(lbl);
   }
@@ -864,7 +852,7 @@ function _paintRange() {
 
 /**
  * Cut the drawn stretch out of every lane and move what is after it left - one step to undo. A talking head's lines are
- * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was. (phase V82) A
+ * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was. A
  * sound tied to no picture is cut out of its own lane alone (tl-cut.js cutScope).
  */
 export function cutRange() {
@@ -884,10 +872,10 @@ export function cutRange() {
   return { ok: !!ok };
 }
 
-// ── Cut silence (phase V44) ─────────────────────────────────────────────────
+// ── Cut silence ─────────────────────────────────────────────────────────────
 // The window is js/merge-v3/tl-silence.js; the pick it listens in and the cut are the timeline's.
 
-// What "cut silence" listens in (ы1): the stretch drawn over a wave, or the time the picked clips take (each its own) -
+// What "cut silence" listens in: the stretch drawn over a wave, or the time the picked clips take (each its own) -
 // null with nothing picked.
 function _silenceSpan() {
   if (_range) return [[_range.a, _range.b]];
@@ -923,7 +911,7 @@ function _silenceCut(cuts) {
 
 function _beginDrag(e, t, c, el) {
   if (e.button !== 0) return;
-  // (phase V36, T5) On a sound's wave the press draws a stretch of time, not the clip.
+  // On a sound's wave the press draws a stretch of time, not the clip.
   if (t.kind === 'audio' && _onWave(e, el)) { _beginRange(e, t, c); return; }
   const tl = Store.timeline();
   const tracks = (tl && tl.tracks) || [];
@@ -959,7 +947,7 @@ function _beginDrag(e, t, c, el) {
   _drag = {
     edge,
     dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0, speed: +c.speed || 1,
-    // (phase V82, (тб5)) Played backwards, the timeline's left edge is the END of the file's window: trims mirror.
+    // Played backwards, the timeline's left edge is the END of the file's window: trims mirror.
     reversed: !!c.reversed && !isStill(c),
     group: edge ? [] : group,
     x0: e.clientX, y0: e.clientY, start0: +c.start,
@@ -968,7 +956,7 @@ function _beginDrag(e, t, c, el) {
     mate: mateClip ? { id: mateClip.id, from: mateTrack.id, kind: mateTrack.kind, to: mateTrack.id } : null,
     el, mateEl: mateClip ? document.querySelector(`.mv3b-clip[data-clip="${mateClip.id}"]`) : null,
     start: +c.start, moved: false,
-    // (review V7) A still is no clip for the video chat: it lights no part of the zone.
+    // A still is no clip for the video chat: it lights no part of the zone.
     still: isStill(c),
   };
   document.body.classList.add('mv3b-dragging');
@@ -977,12 +965,12 @@ function _beginDrag(e, t, c, el) {
 
 // How far the HAND has to travel before this is a drag rather than a click. Measured in page
 // pixels, not in seconds of timeline: at a high zoom one pixel of movement is a hundredth of a
-// second and the clip would creep every time it was picked - and worse, the commit rebuilt the
-// timeline, so the element under the pointer was replaced and a double click could never land
+// second and the clip would creep every time it was picked - and worse, the commit rebuilds the
+// timeline, so the element under the pointer would be replaced and a double click could never land
 // on the same node twice. Nobody presses a mouse button without moving it a little.
 const SLOP = 3;
 
-// (phase V7) THE VIDEO CHAT'S ATTACHMENTS TAKE A CLIP FROM A LANE: let go over the part of the zone that takes it
+// THE VIDEO CHAT'S ATTACHMENTS TAKE A CLIP FROM A LANE: let go over the part of the zone that takes it
 // ([data-drop-kind] - clips from a video lane, sounds from either), the part of its file the lane plays goes there as a
 // reference, and the timeline stays as it was. The part is held lit while the clip is over it.
 let _dropEl = null;
@@ -1012,7 +1000,7 @@ function _clipOut(d, kind) {
   } }));
 }
 
-// (phase V82) A clip's wave as its edge is being dragged - its start, length and trimIn are the hand's until it lets go.
+// A clip's wave as its edge is being dragged - its start, length and trimIn are the hand's until it lets go.
 function _waveAsDragged(el) {
   const cv = el && el.querySelector(':scope > canvas.mv3b-wave');
   const c = el && el.__clip;
@@ -1022,9 +1010,8 @@ function _waveAsDragged(el) {
   paintWaveAs(_host(), cv, now, _zoom(), GUTTER);
 }
 
-// (phase V82, the owner 2026-11-09: "призрачный обрезок показывать слева и справа при сдвиге краев") The clip as it was when an
-// edge was taken, faint and under it - a sound with its wave: what the edge trims shows beside the clip, left or right; what an
-// edge adds needs none (the clip shows it). Gone with the next build, or at the let-go.
+// The clip as it was when an edge was taken, faint and under it - a sound with its wave: what the edge trims shows beside
+// the clip, left or right; what an edge adds needs none (the clip shows it). Gone with the next build, or at the let-go.
 function _ghostOf(el) {
   if (!el || !el.parentElement) return null;
   const g = document.createElement('div');
@@ -1066,15 +1053,15 @@ function _moveDrag(e) {
     // between rather than treated as the same number - at 2x, dragging the front in by a
     // second eats two seconds of film.
     const sp = _drag.speed || 1;
-    // (phase V49) The shortest a trim leaves a clip is 0.1 s - or the clip's own length when it is shorter already (a piece a
-    // cut left): grabbing the edge of a piece of 0.05 s made it 0.1 s, and it ran over the piece beside it.
+    // The shortest a trim leaves a clip is 0.1 s - or the clip's own length when it is shorter already (a piece a
+    // cut left): a piece of 0.05 s grabbed by its edge would become 0.1 s and run over the piece beside it.
     const minD = Math.min(0.1, _drag.dur0);
     const rev = _drag.reversed;
-    // (phase V82) The ghost of the clip as it was, under it: what an edge takes off shows beside it while the hand moves.
+    // The ghost of the clip as it was, under it: what an edge takes off shows beside it while the hand moves.
     if (!_drag.ghosts) _drag.ghosts = [_ghostOf(_drag.el), _ghostOf(_drag.mateEl)].filter(Boolean);
     if (_drag.edge === 'in') {
-      // A caption has no source behind its front edge: it may be pulled back as far as the start. (phase V82) Nothing is
-      // pulled back past the timeline's start - the clip stopped at 0 while its length grew on, and what it played slid.
+      // A caption has no source behind its front edge: it may be pulled back as far as the start. Nothing is pulled
+      // back past the timeline's start - the clip would stop at 0 while its length grew on, and what it played would slide.
       // Backwards, pulling it back takes the file AFTER its window.
       let lo = -_drag.start0;
       if (!_drag.words) lo = Math.max(lo, rev ? (room === Infinity ? -Infinity : _drag.dur0 - (room - _drag.trimIn0) / sp) : -_drag.trimIn0 / sp);
@@ -1097,7 +1084,7 @@ function _moveDrag(e) {
       _drag.mateEl.style.left = ((_drag.start != null ? _drag.start : _drag.start0) * z) + 'px';
       _drag.mateEl.style.width = Math.max(2, _drag.dur * z) + 'px';
     }
-    // (phase V82, the owner 2026-11-09) The wave stays where its sound is: drawn again for the clip as the edge leaves it - only
+    // The wave stays where its sound is: drawn again for the clip as the edge leaves it - only
     // the part trimmed goes, nothing slides with the edge.
     _waveAsDragged(_drag.el);
     _waveAsDragged(_drag.mateEl);
@@ -1141,7 +1128,7 @@ function _endDrag(e) {
   _drag = null;
   for (const g of (d.ghosts || [])) g.remove();
   document.body.classList.remove('mv3b-dragging');
-  // Let go over the video chat's attachments (phase V7): the clip goes there, the lanes are drawn back as they were.
+  // Let go over the video chat's attachments: the clip goes there, the lanes are drawn back as they were.
   const into = (d.far && !d.edge && !d.words && !d.still && e && e.clientX != null) ? _dropAt(e, d.kind) : null;
   _hintDrop(null);
   if (into) {
@@ -1149,7 +1136,7 @@ function _endDrag(e) {
     _build();
     return;
   }
-  // (review V7) Let go over a chat but not on a part that takes it: nothing happens - not a move of the clip along its
+  // Let go over a chat but not on a part that takes it: nothing happens - not a move of the clip along its
   // lane by however far the hand travelled.
   if (d.far && !d.edge && e && e.clientX != null) {
     const at = document.elementFromPoint(e.clientX, e.clientY);
@@ -1160,17 +1147,17 @@ function _endDrag(e) {
   // is the one I want to change", and keeping the old set would make the inspector talk
   // about something else.
   if (!d.moved) {
-    // (phase V36, T5) A clip picked lets a drawn stretch go: Delete is the clip's again.
+    // A clip picked lets a drawn stretch go: Delete is the clip's again.
     _letRangeGo();
-    // (phase V45, (ю4)) With Shift held, one clip at a time: added to the pick, or taken out of it.
+    // With Shift held, one clip at a time: added to the pick, or taken out of it.
     if (e && e.shiftKey) { _togglePick(d.id); return; }
     _selBack = null;
     _sel.clear();
     _selTrack = '';
     _sel.add(d.id);
     // NO REBUILD. _paintSel toggles the classes, which is the whole of what a selection looks
-    // like - and rebuilding threw away the very element the pointer was on, so the second half
-    // of a double click landed on a different node and the double click never happened.
+    // like - and rebuilding would throw away the very element the pointer is on, so the second half
+    // of a double click would land on a different node and the double click would never happen.
     _paintSel();
     return;
   }
@@ -1184,11 +1171,11 @@ function _endDrag(e) {
           const c = (tr.clips || []).find(x => x.id === id);
           if (!c) continue;
           if (d.edge === 'in') {
-            // A CAPTION'S WORDS KEEP THEIR MOMENTS (phase K0): their times run from the caption's
-            // start, so moving the start moved every word by as much - the highlight ran late after a
-            // trim. They are shifted back, and a word now before the start is dropped.
+            // A CAPTION'S WORDS KEEP THEIR MOMENTS: their times run from the caption's
+            // start, so moving the start would move every word by as much - the highlight would run late
+            // after a trim. They are shifted back, and a word now before the start is dropped.
             if (isHeard(c)) {
-              // A line rewritten before K10 is timed for its text first - the person's text is what stays.
+              // A line whose words do not spell its text is timed for its text first - the person's text is what stays.
               const words = timedWords(c);
               const sh = Math.round(((+d.start || 0) - (+c.start || 0)) * 100) / 100;
               const left = words
@@ -1207,9 +1194,9 @@ function _endDrag(e) {
             c.start = d.start;
             c.trimIn = d.words ? 0 : d.trimIn;
           } else if (isHeard(c) && (+d.dur || 0) < (+c.dur || 0)) {
-            // THE BACK EDGE IS THE FRONT'S MIRROR (K10): a word the edge passes goes, from the words and from
-            // the text, and one the edge cuts through ends at the edge. Only what the edge CROSSES (review K10): a
-            // word that lay past the old end already (a trim before K10) was not touched by this one and stays.
+            // THE BACK EDGE IS THE FRONT'S MIRROR: a word the edge passes goes, from the words and from
+            // the text, and one the edge cuts through ends at the edge. Only what the edge CROSSES: a word
+            // that lay past the old end already (an earlier trim) is not touched by this one and stays.
             const words = timedWords(c);
             const end = Math.round((+d.dur || 0) * 100) / 100;
             const was = Math.round((+c.dur || 0) * 100) / 100;
@@ -1222,7 +1209,7 @@ function _endDrag(e) {
               c.words = left;
             }
           }
-          // (phase V82, (тб5)) Backwards, the right edge moves where the file is read from.
+          // Backwards, the right edge moves where the file is read from.
           if (d.edge === 'out' && d.reversed && d.trimIn != null) c.trimIn = d.trimIn;
           c.dur = d.dur;
           return;
@@ -1270,7 +1257,7 @@ function _endDrag(e) {
 
 const _hasClip = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf(DRAG_TYPE) >= 0;
 
-// ── Files from Explorer (phase V41, the owner's (о13), (о13а)) ──────────────
+// ── Files from Explorer ─────────────────────────────────────────────────────
 // Let go on a lane or where a drop makes one (_wireGhost), each file is COPIED INTO THE LIBRARY first - a video onto
 // VIDEO -> Uploads with no category, a picture into IMAGES, a sound into AUDIO -> Music; the same file never twice
 // (lib/drop-file.js, POST /api/mv3/drop-file) - and then laid as a tile from the Library is: at the pointer, the next one
@@ -1295,7 +1282,7 @@ function _mediaOfFile(f) {
   return Object.keys(_FILE_RE).find(k => _FILE_RE[k].test(n)) || '';
 }
 
-// (phase V78) The same way in for THIS PROJECT's uploads (js/merge-v3/library.js): the file into its place in the library, a
+// The same way in for THIS PROJECT's uploads (js/merge-v3/library.js): the file into its place in the library, a
 // link to it into the folder open there.
 export const mediaOfFile = (f) => _mediaOfFile(f);
 export const sendFileToLibrary = (f, onProgress) => _sendFile(f, onProgress);
@@ -1331,7 +1318,7 @@ async function _sendFile(f, onProgress) {
 }
 
 // One line over the timeline's top right while files go in, and what came of it for a few seconds after. A refusal or a
-// failure is a popup in the corner instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js) - and the line goes.
+// failure is a popup in the corner instead (js/notice.js) - and the line goes.
 let _dropNote = null, _dropNoteT = 0;
 function _dropSay(text, bad, stay) {
   const host = _host();
@@ -1347,7 +1334,7 @@ function _dropSay(text, bad, stay) {
   if (!stay) _dropNoteT = setTimeout(() => _dropSay(''), 3000);
 }
 
-// (phase V49.1, the owner's (пр33)) A HIGHLIGHTS PROJECT'S OWN TIMELINE takes nothing: it is open while no fragment is, and it
+// A HIGHLIGHTS PROJECT'S OWN TIMELINE takes nothing: it is open while no fragment is, and it
 // is never rendered. A drag over its lanes is taken as anywhere (a Library tile cannot be told "no" at its start - the media
 // tree takes it too); LET GO, it is refused - before a file from Explorer is copied into the library - with a popup and
 // "to highlights" (lib-views.js noFragment). True when refused.
@@ -1402,7 +1389,7 @@ async function _dropFiles(files, place) {
 function _wireLane(lane, t) {
   if (t.kind === 'subs' || t.kind === 'text') return;
   lane.addEventListener('dragover', (e) => {
-    // (phase V41) Files from Explorer too - what they are is readable while they are dragged (_fileMedia).
+    // Files from Explorer too - what they are is readable while they are dragged (_fileMedia).
     const files = !_hasClip(e) && _hasFiles(e);
     if (!_hasClip(e) && !files) return;
     if (!_laneTakes(t.kind, files ? _fileMedia(e.dataTransfer) : _mediaOfDrag(e.dataTransfer))) { e.dataTransfer.dropEffect = 'none'; return; }
@@ -1412,7 +1399,7 @@ function _wireLane(lane, t) {
   });
   lane.addEventListener('dragleave', () => lane.classList.remove('is-drop'));
   lane.addEventListener('drop', (e) => {
-    // (phase V49.1, (пр33)) A highlights project's own timeline: refused here, on release - a tile, a red clip's
+    // A highlights project's own timeline: refused here, on release - a tile, a red clip's
     // replacement and files alike, before anything is copied.
     if ((_hasClip(e) || _hasFiles(e)) && _refusedHome(e)) { lane.classList.remove('is-drop'); return; }
     if (!_hasClip(e) && _hasFiles(e)) {
@@ -1428,7 +1415,7 @@ function _wireLane(lane, t) {
     let data = null;
     try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { return; }
     if (!data || !data.src) return;
-    // On a red clip: in its place (phase V28.4).
+    // On a red clip: in its place.
     const red = e.target && e.target.closest ? e.target.closest('.mv3b-clip.is-gone') : null;
     if (red && red.dataset.track === t.id) { _replace(t.id, red.dataset.clip, data); return; }
     const r = lane.getBoundingClientRect();
@@ -1436,12 +1423,12 @@ function _wireLane(lane, t) {
   });
 }
 
-// ── A lane made by a drop (phase V41, the owner's (о12)) ────────────────────
+// ── A lane made by a drop ───────────────────────────────────────────────────
 // A tile held over the RULER - above the top video lane - shows the ghost of a new pair, a video lane and its sound lane, and
 // where the clip will lie on them; held BELOW THE BOTTOM AUDIO LANE (the room under it, or over the words block) - the ghost
 // of a new audio lane. Let go there: the lanes are made and the clip laid on them in one step (_drop `make`). Taken away:
 // the ghost goes. Not past the ceiling - four lanes a side - and not for what the side does not take (a sound above, a
-// picture below). Held over a lane, it is that lane's drop, as before.
+// picture below). Held over a lane, it is that lane's drop.
 let _ghost = null;          // { side, media, rows: [element], at }
 let _dragData = null;       // what a tile of this page carries while it is dragged - read at its dragstart, for the length
 
@@ -1477,7 +1464,7 @@ function _ghostRow(kind, side, label, withClip) {
   row.dataset.side = side;
   const box = document.createElement('div');
   box.className = 'mv3b-box';
-  box.innerHTML = icon('plus', 12);                 // (phase V73 block 5, 5c) Lucide's, as the lanes' squares
+  box.innerHTML = icon('plus', 12);                 // Lucide's, as the lanes' squares
   const lbl = document.createElement('div');
   lbl.className = 'mv3b-lbl';
   lbl.textContent = _shownName(label);
@@ -1560,7 +1547,7 @@ function _wireGhost(host) {
     const g = _ghost;
     _hideGhost();
     if (!g || !_on || _onLane(e.target)) return;
-    // (phase V49.1, (пр33)) Nor a lane made by a drop, on a highlights project's own timeline.
+    // Nor a lane made by a drop, on a highlights project's own timeline.
     if (_refusedHome(e)) return;
     if (!_hasClip(e) && _hasFiles(e)) {
       e.preventDefault();
@@ -1663,12 +1650,12 @@ function _lane(t) {
   const lbl = document.createElement('div');
   lbl.className = 'mv3b-lbl' + (mate ? ' is-linked' : '');
   const nm = document.createElement('span');
-  nm.textContent = _shownName(t.name);              // (phase V73 block 5, 5c; (к17)) sentence case, 500 11 px
+  nm.textContent = _shownName(t.name);              // sentence case, 500 11 px
   lbl.appendChild(nm);
   if (mate) {
     const mk = document.createElement('span');
     mk.className = 'mv3b-link';
-    mk.innerHTML = icon('link', 10);                // Lucide's link in place of "⚭"
+    mk.innerHTML = icon('link', 10);                // Lucide's link
     lbl.appendChild(mk);
   }
   lbl.title = (mate
@@ -1677,9 +1664,9 @@ function _lane(t) {
     : (t.kind === 'video' ? t.name + ' - silent, no audio track paired with it' : t.name))
     + '. Click for its settings.';
   // The NAME is what picks the lane, not the whole row: the row is mostly lane, and a click
-  // on lane already means something - it moves the playhead there.
+  // on lane already means something - it starts the band (_beginBand).
   lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
-  // A second press on the name lets the lane go and the strip of its settings slides away (the owner, 2026-10-06).
+  // A second press on the name lets the lane go and the strip of its settings slides away.
   lbl.addEventListener('click', (e) => { e.stopPropagation(); if (_selTrack === t.id && !_sel.size) _clearSel(); else _selectTrack(t.id); });
   if (_selTrack === t.id) row.classList.add('is-selT');
   row.appendChild(lbl);
@@ -1696,10 +1683,9 @@ function _lane(t) {
   return row;
 }
 
-// (phase V49, the owner's (пр2) а: "наложенная сверху часть была прозрачной, чтобы было видно звуковую волну на нижней
-// дорожке") WHERE A SOUND LIES OVER AN EARLIER ONE ON ITS LANE: a clip is drawn over every clip before it in the lane's list
+// WHERE A SOUND LIES OVER AN EARLIER ONE ON ITS LANE: a clip is drawn over every clip before it in the lane's list
 // (sorted by start), so for each clip the stretches it shares with any of those - in seconds from its own start, joined.
-// Over them it is see-through and its own wave faint (tl-wave.js), so the wave under it shows; the rest of it as before.
+// Over them it is see-through and its own wave faint (tl-wave.js), so the wave under it shows; the rest of it as usual.
 function _overlaps(clips) {
   const out = new Map();
   for (let i = 1; i < clips.length; i++) {
@@ -1727,7 +1713,7 @@ function _fxFrames(el, c) {
   const d = +c.dur || 0;
   if (!(d > 0)) return;
   el.classList.add('has-fx');
-  // (the owner 2026-11-10) A frame shows only while its effect is OPEN in the inspector on the picked clip (_paintFx) - the clip's
+  // A frame shows only while its effect is OPEN in the inspector on the picked clip (_paintFx) - the clip's
   // violet outline says it has effects; the frame says where the one being set runs, and follows its slider (fxLive).
   const open = FXUI.focusOf();
   for (const e of c.fx) {
@@ -1757,7 +1743,7 @@ function _paintFx() {
   });
 }
 
-/** (the owner 2026-11-10) The open effect's frame moved while its Start / End slider is held - `a`, `b` seconds into the clip. */
+/** The open effect's frame moved while its Start / End slider is held - `a`, `b` seconds into the clip. */
 export function fxLive(clipId, fxId, a, b) {
   const el = document.querySelector(`.mv3b-fx[data-clip="${CSS.escape(String(clipId))}"][data-fx="${CSS.escape(String(fxId))}"]`);
   const d = el ? +el.dataset.dur : 0;
@@ -1774,7 +1760,7 @@ function _clipEl(t, c, over) {
                  (t.kind === 'video' && c.halfer ? ' is-halfer' : '');
   el.dataset.clip = c.id;
   el.dataset.track = t.id;
-  // (phase V28.4) Its file was deleted from the library: red, to be replaced (a tile let go on it) or removed.
+  // Its file was deleted from the library: red, to be replaced (a tile let go on it) or removed.
   if (Store.isGone(c)) {
     el.classList.add('is-gone');
     el.title = (c.name || 'This clip') + ' - its file was deleted from the library. Let a tile from the Library go on it to replace it, or remove it.';
@@ -1783,7 +1769,7 @@ function _clipEl(t, c, over) {
   el.style.width = Math.max(2, c.dur * _zoom()) + 'px';
   if (c.thumb && t.kind === 'video') el.style.backgroundImage = `url('${c.thumb}')`;
 
-  // A HEARD LINE CORRECTED BY HAND carries a small mark (K10b, the owner's answer 6): it is kept by Generate
+  // A HEARD LINE CORRECTED BY HAND carries a small mark: it is kept by Generate
   // and goes with "back to what was heard". The words themselves are in the strip, not on the clip.
   const fixed = t.kind === 'subs' && isHeard(c) && isCorrected(c);
   if (fixed) {
@@ -1792,7 +1778,7 @@ function _clipEl(t, c, over) {
     m.className = 'mv3b-fix';
     el.appendChild(m);
   }
-  // (phase V36, T4) A SOUND SHOWS ITS WAVE - a sound, a track of music, a film's own sound: the peaks of the part of its
+  // A SOUND SHOWS ITS WAVE - a sound, a track of music, a film's own sound: the peaks of the part of its
   // file it plays, drawn by tl-wave.js for what can be seen (after the build, on scroll, when the peaks arrive). The name
   // sits in the strip above it (css/mv3-timeline.css).
   if (t.kind === 'audio' && c.src && !Store.isGone(c)) {
@@ -1801,7 +1787,7 @@ function _clipEl(t, c, over) {
     el.appendChild(wave);
     el.__clip = c;
   }
-  // (phase V49, (пр2) а) Over an earlier sound of its lane this one is see-through - its fill stops there (_overlaps).
+  // Over an earlier sound of its lane this one is see-through - its fill stops there (_overlaps).
   const d = +c.dur || 0;
   if (over && over.length && d > 0 && !Store.isGone(c)) {
     const pc = (v) => (Math.max(0, Math.min(d, v)) / d * 100).toFixed(3) + '%';
@@ -1817,13 +1803,13 @@ function _clipEl(t, c, over) {
     el.classList.add('has-over');
     el.__over = over;
   }
-  // (phase V84, the owner's (эф4), (эф5)) A CLIP WITH EFFECTS is another colour, and each effect is a FRAME on it - its left and
+  // A CLIP WITH EFFECTS is another colour, and each effect is a FRAME on it - its left and
   // right edges where it starts and ends, its name in it; two at once - two rows. Pressed, the clip is picked as ever and the
   // effect opens in the inspector (fx-ui.js).
   if (t.kind === 'video' && Array.isArray(c.fx) && c.fx.length && !Store.isGone(c)) _fxFrames(el, c);
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
-  cap.textContent = (Store.isGone(c) ? 'Deleted · ' : '') + (c.name || '');   // (V73 block 5, 5c; (к17)) sentence case
+  cap.textContent = (Store.isGone(c) ? 'Deleted · ' : '') + (c.name || '');   // sentence case
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
@@ -1847,16 +1833,10 @@ function _clipEl(t, c, over) {
 
   el.addEventListener('mousemove', (e) => {
     if (_drag || _ranging) return;
-    // (phase V36, T5) Over a sound's wave the pointer draws a stretch of time; over its strip it takes the clip.
+    // Over a sound's wave the pointer draws a stretch of time; over its strip it takes the clip.
     el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : (t.kind === 'audio' && _onWave(e, el) ? 'text' : 'grab');
   });
   el.addEventListener('mousedown', (e) => _beginDrag(e, t, c, el));
-  // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. It is the one thing a still is usually
-  // put on a timeline to become, and reaching the panel to press a button for it is two moves
-  // for something the clip itself can answer. Safe from here: that window writes nothing to
-  // any timeline - what it makes goes to the library, and getting it onto the montage is a
-  // drag like anything else there.
-
 
   el.title = (c.name || 'clip') + (fixed ? ' - corrected by hand' : '') +
     (t.kind === 'audio' && !(+c.volume) ? ' - silent; turn its sound on in the inspector' : '') +
@@ -1894,9 +1874,9 @@ function _ticks(lane, upTo) {
   lane.insertBefore(frag, lane.firstChild);
 }
 
-// HOW WIDE THE LANES ARE (phase V49.1, the owner's report: "названия дорожек пропадают при прокрутке вправо"). Clips and
-// marks lie absolute, so the content was only ever as wide as the box it is seen in - and a sticky name cannot leave its
-// row: one box-width to the right it slid away with it, and so did the rows' lines, the seam, the ruler's and the words
+// HOW WIDE THE LANES ARE, so the lanes' names stay in sight when scrolled right. Clips and
+// marks lie absolute, so the content would only be as wide as the box it is seen in - and a sticky name cannot leave its
+// row: one box-width to the right it would slide away with it, and so would the rows' lines, the seam, the ruler's and the words
 // block's backgrounds, the drop, the right-click and the band. So the content is given its width: the film (at least ten
 // seconds, as the ruler counts) and a mark more, room for the end to come to the middle of the box, and never narrower
 // than the box. In px of lane, right of the frozen names.
@@ -1945,7 +1925,7 @@ function _ruler(upTo) {
     if (e.button !== 0) return;
     _scrub(e);
   });
-  // The playhead's tip, here rather than on the line (phase V41): the ruler stays on top while the lanes scroll.
+  // The playhead's tip, here rather than on the line: the ruler stays on top while the lanes scroll.
   const tip = document.createElement('div');
   tip.className = 'mv3b-head-tip';
   tip.style.left = (_playhead * z) + 'px';
@@ -1955,7 +1935,7 @@ function _ruler(upTo) {
 }
 
 // The playhead is one element over the whole stack, not a mark per lane: it is one moment,
-// and drawing it per lane makes it possible for them to disagree. (phase V49.1) It goes UNDER the frozen names, not over
+// and drawing it per lane makes it possible for them to disagree. It goes UNDER the frozen names, not over
 // them: over the clips, under the names (merge-v3.css) - so the ruler and the words block stuck to the floor, which cover
 // the lanes, each carry their own piece of it (the tip's stem; a copy, as a stretch drawn to cut has one), placed with it.
 function _head() {
@@ -2003,8 +1983,8 @@ function _seekTo(t) {
   _headMoved();
   // The preview is the other half of this workflow, and the playhead belongs to both. seek()
   // calls setPlayhead back, which is harmless: it writes the same number this just wrote.
-  // THE MOMENT GIVEN, not _playhead read later (phase V41): while playing, the preview's next frame wrote its own time into
-  // _playhead before the import answered, and the seek went to where playing already was - a press seemed to do nothing.
+  // THE MOMENT GIVEN, not _playhead read later: while playing, the preview's next frame may write its own time into
+  // _playhead before the import answers, and the seek would go to where playing already is - a press would seem to do nothing.
   if (_P) _P.seek(at);
   else import('./preview-b.js').then(P => { _P = P; P.seek(at); }).catch(() => {});
 }
@@ -2014,7 +1994,6 @@ function _seekTo(t) {
 // playhead could end up off screen. Zooming in is looking closer at the moment you are on, so
 // that moment is what stays, in the middle of the lanes. The frozen gutter (the square and
 // the track name, both sticky) never scrolls, so the strip to centre in begins after it.
-// Same rule as the talking-head timeline, which owns the same scroll box.
 function _centreOnPlayhead() {
   const host = _host();
   if (!host) return;
@@ -2023,13 +2002,13 @@ function _centreOnPlayhead() {
   host.scrollLeft = Math.max(0, _playhead * _zoom() - strip / 2);
 }
 
-// ── ALT + WHEEL ZOOMS (phase V49.1, the owner's (пр27) а) ───────────────────
+// ── ALT + WHEEL ZOOMS ───────────────────────────────────────────────────────
 // Over the timeline, Alt held: a notch of the wheel is x1.2 closer (up) or farther (down), in the slider's range and in
 // whole px/sec, and the PLAYHEAD STAYS WHERE IT IS ON SCREEN - the slider's own rule held still instead of centred. A
 // playhead off screen is put in the middle, as the slider does. A touchpad's small deltas add up to notches; whatever
 // arrives within one frame is applied once (each change rebuilds the lanes). The slider, its number and the kept value
 // follow: the slider is set and told (bar.js keeps it, the input listener below rebuilds), then the scroll is put back.
-// Plain wheel and Shift + wheel are the browser's, as before; Alt + Shift is Windows' layout switch and is left alone.
+// Plain wheel and Shift + wheel are the browser's; Alt + Shift is Windows' layout switch and is left alone.
 const NOTCH_PX = 100;       // one notch of a mouse wheel, in the pixels Chromium reports
 let _wheelAcc = 0;          // notches gathered since the last frame (+ = farther)
 let _wheelAsked = false;
@@ -2114,12 +2093,12 @@ export function canSplit() {
   const s = +one.clip.start, e = s + (+one.clip.dur);
   if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: 'Put the playhead inside the selected clip' };
   // A heard caption is cut BETWEEN its words: a half with none would keep the whole text as a typed copy
-  // of the page - and a page stays up past its last word, so that was most of its tail (review K2).
+  // of the page - and a page stays up past its last word, so that would be most of its tail.
   const words = isHeard(one.clip) ? timedWords(one.clip) : null;
   if (words) {
-    // The same rounded moment the cut uses (review K10): a word picked in the strip puts the playhead on its
-    // start exactly, and the float difference came out a hair past it - the last word was refused, and a cut
-    // before the first word gave a typed copy of the whole text.
+    // The same rounded moment the cut uses: a word picked in the strip puts the playhead on its
+    // start exactly, and the float difference could come out a hair past it - the last word refused, and a cut
+    // before the first word giving a typed copy of the whole text.
     const left = _r2(_r2(_playhead) - s);
     if (!words.some(w => _r2(+w.s) >= left) || !words.some(w => _r2(+w.s) < left)) {
       return { ok: false, why: 'No word starts on that side of the playhead - drag the edge of the line to shorten it' };
@@ -2141,7 +2120,7 @@ export function splitAtPlayhead() {
   return { ok: true };
 }
 
-// (phase V77) A CLIP CUT AT `at` inside a mutation - Split's rule, also "Into the cut" of a result made from a frame
+// A CLIP CUT AT `at` inside a mutation - Split's rule, also "Into the cut" of a result made from a frame
 // (js/merge-v3/tl-gen.js): the clip and its pair's half under the cut, each the right half straight after the original. The
 // right half's id, or null when `at` is not inside it.
 function _cutIn(tracks, clipId, at) {
@@ -2157,7 +2136,7 @@ function _cutIn(tracks, clipId, at) {
     b.id = _id();
     b.start = at;
     b.dur = right;
-    // (phase V23) A sound's fade belongs to its own end: the left half keeps the fade in, the right the fade out.
+    // A sound's fade belongs to its own end: the left half keeps the fade in, the right the fade out.
     delete b.fadeIn;
     delete c.fadeOut;
     if (c.reversed) {
@@ -2169,11 +2148,11 @@ function _cutIn(tracks, clipId, at) {
     }
     c.dur = left;
     if (isHeard(c)) {
-      // A line rewritten before K10 is timed for its text first: the halves carry the person's words.
+      // A line whose words do not spell its text is timed for its text first: the halves carry the person's words.
       const words = timedWords(c);
-      // A word ends where its half does (K10): the left half's last word used to run on past the cut.
+      // A word ends where its half does - never past the cut.
       const w0 = words.filter(w => _r2(+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
-      // The whole word, mark and all (K2: the right half used to lose `k`).
+      // The whole word, mark and all (`k` included).
       const w1 = words.filter(w => _r2(+w.s) >= left)
         .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
       c.words = w0.length ? w0 : null;
@@ -2202,14 +2181,14 @@ function _cutIn(tracks, clipId, at) {
   return made;
 }
 
-// The project the pick was made in (K6b).
+// The project the pick was made in.
 let _selKey = null;
 // A press that cut the picked captions again moved the pick onto their new pages; this remembers the pick
-// before and after it, so Ctrl+Z puts the old pick back and redo the new one (review K6). Any pick made by
+// before and after it, so Ctrl+Z puts the old pick back and redo the new one. Any pick made by
 // hand forgets it.
 let _selBack = null;
 
-// (phase V28.4) THE NOTICE OVER THE TIMELINE: media of this project were deleted from the library - said as it opens, until
+// THE NOTICE OVER THE TIMELINE: media of this project were deleted from the library - said as it opens, until
 // closed (for this opening) or until no red clip is left.
 let _goneShut = '';
 function _paintGone() {
@@ -2220,7 +2199,7 @@ function _paintGone() {
   if (!n || _goneShut === key) { el.hidden = true; el.textContent = ''; if (!n && _goneShut === key) _goneShut = ''; return; }
   el.hidden = false;
   el.textContent = '';
-  // (phase V73 block 5, 5c; the owner's (б5-17) а) a line one step lighter with a red icon and plain words, the count in mono
+  // A line one step lighter with a red icon and plain words, the count in mono
   const mark = iconEl('circle-alert', 14);
   mark.classList.add('mv3-tl-gone-i');
   el.appendChild(mark);
@@ -2236,7 +2215,7 @@ function _paintGone() {
   el.appendChild(x);
 }
 
-// (phase V73 block 5, 5c; the owner's (б5-14) а) AN EMPTY TIMELINE SAYS WHAT GOES ON IT - quiet words over the middle of its lanes
+// AN EMPTY TIMELINE SAYS WHAT GOES ON IT - quiet words over the middle of its lanes
 // while no lane holds a clip (a subtitle or a text line is a clip of its lane, as layout.js _empty counts). Not in a highlights
 // project (its own timeline takes nothing, a fragment holds its pieces); under setup the sheet hides them. From under the ruler
 // to the panel's foot, right of the frozen names - laid over the lanes, so they do not scroll away and a drop goes through.
@@ -2256,8 +2235,8 @@ function _paintEmpty(tracks, inner) {
 function _build() {
   const host = _host();
   if (!host) return;
-  // (phase V75, the owner's (кп8): "прокрутка уходила") The lanes are rebuilt whole on every change - a clip moved on the
-  // preview too -, and emptied for a moment the scroll box lost its place: the same timeline is shown where it was looked at.
+  // The lanes are rebuilt whole on every change - a clip moved on the
+  // preview too -, and emptied for a moment the scroll box would lose its place: the same timeline is shown where it was looked at.
   const keepX = host.scrollLeft, keepY = host.scrollTop;
   host.textContent = '';
   _paintGone();
@@ -2265,8 +2244,8 @@ function _build() {
   const tl = Store.timeline();
   const tracks = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];
 
-  // THE PICK FOLLOWS THE TIMELINE (K6b): another project's pick is let go of - every project's subtitle
-  // lane is "subs", so a picked lane stayed picked in the next one - and so is a clip that is gone (a
+  // THE PICK FOLLOWS THE TIMELINE: another project's pick is let go of - every project's subtitle
+  // lane is "subs", so a picked lane would stay picked in the next one - and so is a clip that is gone (a
   // re-cut, a lay by the server), which "N clips selected" still counted.
   let lost = false;
   const key = Store.key();
@@ -2294,7 +2273,7 @@ function _build() {
 
   const inner = document.createElement('div');
   inner.className = 'mv3b-inner';
-  // (phase V49.1) The content as wide as the film and its margin (_lanesWidth), the ruler's marks across all of it.
+  // The content as wide as the film and its margin (_lanesWidth), the ruler's marks across all of it.
   const lanesW = _lanesWidth(_endOf(tracks));
   inner.style.width = (GUTTER + lanesW) + 'px';
   _builtW = host.clientWidth;
@@ -2316,7 +2295,7 @@ function _build() {
   const audio = zone('is-audio', t => t.kind === 'audio');
   // The words zone, and it is PINNED TO THE BOTTOM rather than glued under the audio block.
   // Subtitles are the floor of a timeline - they belong to the whole film rather than to the
-  // lane above them - and stuck to the audio they moved every time a lane was added or taken
+  // lane above them - and stuck to the audio they would move every time a lane is added or taken
   // away, which is exactly the kind of thing the eye should be able to stop tracking.
   //
   // Text lanes sit ABOVE the subtitles, in the order they were made.
@@ -2331,12 +2310,12 @@ function _build() {
     inner.appendChild(seam);
   }
   if (audio) inner.appendChild(audio);
-  // (phase V41, the owner's (о10)) While it holds lines it sticks to the bottom of the window (merge-v3.css) - empty, it would
+  // While it holds lines it sticks to the bottom of the window (merge-v3.css) - empty, it would
   // only hide the lanes under it.
   if (subs) {
     if (tracks.some(t => (t.kind === 'subs' || t.kind === 'text') && (t.clips || []).length)) subs.classList.add('has-words');
     inner.appendChild(subs);
-    // (phase V49.1) Stuck to the floor it covers the lanes and the playhead under it: its own copy of the line.
+    // Stuck to the floor it covers the lanes and the playhead under it: its own copy of the line.
     if (subs.classList.contains('has-words')) subs.appendChild(_head());
   }
 
@@ -2346,18 +2325,18 @@ function _build() {
   // What is brought into view (a picked lane, a clip) stops short of the ruler and the words block that cover the lanes.
   host.style.scrollPaddingTop = '19px';
   host.style.scrollPaddingBottom = (subs && subs.classList.contains('has-words')) ? subs.offsetHeight + 'px' : '';
-  // (phase V36, T1) Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
+  // Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
   // the lanes are shown from there, not scrolled to where the last one was looked at.
   if (opened) host.scrollLeft = 0;
   else { host.scrollLeft = keepX; host.scrollTop = keepY; }
-  // (phase V36, T4) The waves of what can be seen - laid out now, so they are drawn at once.
+  // The waves of what can be seen - laid out now, so they are drawn at once.
   paintWaves(host, _zoom(), GUTTER);
-  // (phase V36, T5) A stretch drawn belongs to the timeline it was drawn on.
+  // A stretch drawn belongs to the timeline it was drawn on.
   if (opened) _range = null;
   _paintRange();
-  // (phase V44) The glow of the pauses "cut silence" found, on the lanes just built.
+  // The glow of the pauses "cut silence" found, on the lanes just built.
   paintSilence();
-  // (phase V49, (пр15)) The timeline is never shorter than its lanes: the floor follows what was just built (layout.js).
+  // The timeline is never shorter than its lanes: the floor follows what was just built (layout.js).
   lanesChanged();
 }
 
@@ -2383,7 +2362,7 @@ export const multiCount = () => _sel.size;
 
 /** Pick one clip, by id - what a click on the PREVIEW means. */
 export function selectClipById(id) {
-  // (phase V51) A press on the preview that found a picture under it - the one picked already as well: not a press away.
+  // A press on the preview that found a picture under it - the one picked already as well: not a press away.
   if (id && _pvPress != null) _pvPicked = true;
   if (!id || (_sel.size === 1 && _sel.has(id))) return;
   _selBack = null;
@@ -2393,7 +2372,7 @@ export function selectClipById(id) {
   _paintSel();
 }
 
-/** Pick a whole lane, by id - what the Library's "captions" crumb means (phase V18.2): the subtitle lane. */
+/** Pick a whole lane, by id - what the Library's "captions" crumb means: the subtitle lane. */
 export function selectTrackById(id) {
   if (!id || (_selTrack === String(id) && !_sel.size)) return;
   _selectTrack(id);
@@ -2429,22 +2408,21 @@ export function selectedOne() {
 const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign', 'frame',
                              'tx', 'ty', 'tw', 'angle', 'feather',
                              'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation',
-                             // (phase V49, point 3) A main clip as a picture in the picture, its corners and outline.
+                             // A main clip as a picture in the picture, its corners and outline.
                              'pip', 'radius', 'outline', 'outlineColor',
-                             // (phase V51, point 1) A piece of the clip's file, cut first (framing/crop.js).
+                             // A piece of the clip's file, cut first (framing/crop.js).
                              'crop',
-                             // (phase V54, the owner's (зв11) а) A sound's own fades - offered by the inspector since V23 and
-                             // never let through: the slider stayed where it was let go, and nothing was written.
+                             // A sound's own fades.
                              'fadeIn', 'fadeOut',
-                             // (phase V65, (пз5)) How much of a clip of a video lane is seen, and (пз7) how it mixes with
+                             // How much of a clip of a video lane is seen, and how it mixes with
                              // what is under it (overlay/look.js).
                              'opacity', 'blend',
-                             // (phase V75, (кп5)) Its colour correction (overlay/color.js).
+                             // Its colour correction (overlay/color.js).
                              'color',
-                             // (phase V76) A sound at another pitch (sound/pitch.js); (тн9) the frame the app gave a highlights
+                             // A sound at another pitch (sound/pitch.js); the frame the app gave a highlights
                              // clip, kept while the frame of several is changed (hl-group.js).
                              'pitch', 'frameWas',
-                             // (phase V84) Its effects (fx/params.js).
+                             // Its effects (fx/params.js).
                              'fx']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
@@ -2453,20 +2431,18 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
 // purpose: it is the one thing the two halves have always disagreed about, which is what
 // lets a birol land muted.
 const PAIRED = new Set(['dur', 'speed', 'reversed']);
-// Effects are NOT on that list: they belong to the picture. The mix reads level, speed,
-// direction and trim off a sound clip and nothing else, so a fade written onto one would be
-// a setting with nothing to act on.
+// Effects are NOT on that list: they belong to the picture.
 
 const _r2 = (v) => Math.round(v * 100) / 100;
 
-// (phase V49) No clip is made LONGER by the floor of a length: a piece a cut left shorter than 0.1 s stays its length (the
-// timeline keeps clips down to 0.02 s, lib/timeline-shape.js) - at 0.1 it ran over the piece after it, which the render
-// and the preview then played twice.
+// No clip is made LONGER by the floor of a length: a piece a cut left shorter than 0.1 s stays its length (the
+// timeline keeps clips down to 0.02 s, lib/timeline-shape.js) - at 0.1 it would run over the piece after it, which the
+// render and the preview would then play twice.
 const _minDur = (c) => Math.max(0.02, Math.min(0.1, +c.dur || 0.1));
 
 function _write(c, key, value) {
   if (key === 'volume') { c.volume = Math.max(0, Math.min(4, +value || 0)); return; }
-  // (phase V54) Seconds of the timeline, as js/sound/fades.js reads them for the preview and the render (which keep them inside
+  // Seconds of the timeline, as js/sound/fades.js reads them for the preview and the render (which keep them inside
   // the clip); to the millisecond, so the 15 ms of a seam (cut silence) survive; none is null - lib/timeline-shape.js's shape.
   if (key === 'fadeIn' || key === 'fadeOut') { const v = +value; c[key] = v > 0 ? Math.min(30, Math.round(v * 1000) / 1000) : null; return; }
   if (key === 'dur') { c.dur = Math.max(_minDur(c), _r2(+value || 0)); return; }
@@ -2481,17 +2457,17 @@ function _write(c, key, value) {
     return;
   }
   if (key === 'reversed') { c.reversed = !!value; return; }
-  // (phase V65) 0..1 in hundredths; fully seen takes the field off.
+  // 0..1 in hundredths; fully seen takes the field off.
   if (key === 'opacity') { const v = normalizeOpacity(value); if (v == null) delete c.opacity; else c.opacity = v; return; }
-  // (phase V65) A blend mode's id; none takes the field off.
+  // A blend mode's id; none takes the field off.
   if (key === 'blend') { const v = normalizeBlend(value); if (v == null) delete c.blend; else c.blend = v; return; }
-  // (phase V75) The values that are not neutral; neutral takes the field off.
+  // The values that are not neutral; neutral takes the field off.
   if (key === 'color') { const v = normalizeColor(value); if (v == null) delete c.color; else c.color = v; return; }
-  // (phase V76) { st, shift } - semitones and the timbre moving with them; 0 takes the field off.
+  // { st, shift } - semitones and the timbre moving with them; 0 takes the field off.
   if (key === 'pitch') { const v = normalizePitch(value); if (v == null) delete c.pitch; else c.pitch = v; return; }
-  // (phase V84) [{ id, k, t0, len }] - the effects the program knows; none takes the field off.
+  // [{ id, k, t0, len }] - the effects the program knows; none takes the field off.
   if (key === 'fx') { const v = normalizeFx(value); if (v) c.fx = v; else delete c.fx; return; }
-  // (phase V76, (тн9)) { frame } - the app's frame of a highlights clip, null for none; no value takes the field off.
+  // { frame } - the app's frame of a highlights clip, null for none; no value takes the field off.
   if (key === 'frameWas') { if (value && typeof value === 'object') c.frameWas = { frame: normalizeFrame(value.frame) || null }; else delete c.frameWas; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
   // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
@@ -2504,22 +2480,21 @@ function _write(c, key, value) {
   }
   if (key === 'angle') { c.angle = (value == null) ? null : Math.max(-180, Math.min(180, +value || 0)); return; }
   if (key === 'feather') { c.feather = (value == null) ? null : Math.max(0, Math.min(0.45, +value || 0)); return; }
-  // (phase V49, point 3, the owner's (пр8)-(пр11)) A MAIN clip shown as a picture in the picture over a blurred copy of itself
+  // A MAIN clip shown as a picture in the picture over a blurred copy of itself
   // (preview-b.js _pipRect, lib/mv3b-render.js): the switch, then the look - its corners rounded (a share of its shorter
   // side, 0.5 round ends), an outline (a share of the frame's width) and its colour. The look stays when the switch goes off.
   if (key === 'pip') { c.pip = value ? true : null; return; }
   if (key === 'radius') { c.radius = (value == null || !(+value > 0)) ? null : Math.min(0.5, +value); return; }
   if (key === 'outline') { c.outline = (value == null || !(+value > 0)) ? null : Math.min(0.05, +value); return; }
   if (key === 'outlineColor') { c.outlineColor = /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : null; return; }
-  // (phase V51, point 1) THE CROP - { x, y, w, h } in shares of the file, `off` when remembered and not applied; null takes it off.
+  // THE CROP - { x, y, w, h } in shares of the file, `off` when remembered and not applied; null takes it off.
   if (key === 'crop') { const k = normalizeCrop(value); if (k) c.crop = k; else delete c.crop; return; }
-  // All five the panel offers. Only three were let through, so top and bottom quietly wrote
-  // centre - which the preview and the render then showed, as if the choice had been made.
+  // All five the panel offers.
   if (key === 'cropAlign') {
     c.cropAlign = ['left', 'center', 'right', 'top', 'bottom'].indexOf(String(value)) >= 0 ? String(value) : 'center';
     return;
   }
-  // (phase V33.2) THE FRAME'S PATH - following the face, the middle, the whole frame over its blur, two bands - or none,
+  // THE FRAME'S PATH - following the face, the middle, the whole frame over its blur, two bands - or none,
   // and the fixed `cropAlign` frames the clip again.
   if (key === 'frame') {
     const f = normalizeFrame(value);
@@ -2534,7 +2509,7 @@ function _write(c, key, value) {
   if (key === 'rotation') { c.rotation = [0, 90, 180, 270].indexOf(+value) >= 0 ? +value : 90; return; }
 }
 
-// ── The timeline's media into the generation chats and back (phase V77, js/merge-v3/tl-gen.js) ─────────────────────────────
+// ── The timeline's media into the generation chats and back (js/merge-v3/tl-gen.js) ───
 // A moment of the timeline inside a clip -> the moment of its FILE (played backwards, the clip's start is its window's end).
 function _fileAt(c, t) {
   const sp = +c.speed || 1;
@@ -2549,9 +2524,9 @@ function _tlAt(c, f) {
 }
 
 /**
- * (phase V77, the owner's (тч3а)) THE CLIP A FRAME OF THE PREVIEW IS OF - for the frame buttons right of "cut silence": the
+ * THE CLIP A FRAME OF THE PREVIEW IS OF - for the frame buttons right of "cut silence": the
  * picked video clip when one is picked and the playhead is on it, else the topmost video clip under the playhead (the lanes
- * above main first; on a lane the later clip is the one drawn). A talking head's line is never one (the mirror's, (тч11а)), nor
+ * above main first; on a lane the later clip is the one drawn). A talking head's line is never one (the mirror's), nor
  * a red clip. -> { trackId, clipId, fileT, at } | null
  */
 export function frameTarget() {
@@ -2588,19 +2563,19 @@ function _probe(src, video) {
   });
 }
 
-// The look a clip was given that a result laid in its place keeps (lib/frag-mirror.js LOOK, with V65's opacity and blend).
+// The look a clip was given that a result laid in its place keeps (lib/frag-mirror.js LOOK, with opacity and blend).
 const GEN_LOOK = ['fit', 'cropAlign', 'crop', 'pip', 'tx', 'ty', 'tw', 'angle', 'feather', 'radius', 'outline', 'outlineColor', 'color',
   'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation', 'opacity', 'blend'];
 
 /**
- * (phase V77, the owner's (тч10), (тч10а)-(тч10в)) A RESULT OF A CHAT LAID BACK where the thing it was made from came from -
+ * A RESULT OF A CHAT LAID BACK where the thing it was made from came from -
  * the button under it (js/merge-v3/tl-gen.js backButton). One mutation, one step to undo. By what was done (`o.act`):
  *   edit         the picture's FILE replaced - its place, length and look stay; its crop (shares of the file) only on a picture
  *                of the same shape
  *   animate, ref the new clip in the clip's place: from its second, no longer than it was - nothing after it moves; the look
  *                carried (the crop only on a frame of the same shape); the old clip's sound half goes with it
  *   continue     INSERTED right after the clip: what is after it on that lane moves on by the new clip's length, with the
- *                sound halves of what moves; the other lanes stay ((тч10в) а)
+ *                sound halves of what moves; the other lanes stay
  *   frame-vid    the same, inserted INTO A CUT at the frame's moment - the clip cut there by Split's rule (_cutIn)
  *   frame-pic    a picture on the lane above the clip's lane, at the frame's moment, 10 s, over what is there
  * `item` - { kind: 'image' | 'video', src, thumb, libId, name, dur, w, h }. -> { ok, lane, at } | { ok: false, why }
@@ -2732,7 +2707,7 @@ function _freeSoundLane(tracks, a, b) {
 }
 
 /**
- * (phase V54, the owner's (зв29)) A PIECE OF A SOUND at the playhead - "to timeline" of the Cut window: the same file cut by
+ * A PIECE OF A SOUND at the playhead - "to timeline" of the Cut window: the same file cut by
  * `trimIn` and `dur` (no new file), on the first audio lane under main audio that is free for the whole piece, or a new one
  * made in the same step; at the ceiling it is refused in words. One step to undo; the piece laid is picked. A highlights
  * project's own timeline takes nothing ("Open a fragment first."). `kind` - 'music' lays a bed (half volume, never heard for
@@ -2773,7 +2748,6 @@ export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } 
 }
 
 /**
- * (phase V81, the owner 2026-11-09: "правой кнопкой добавить на таймлайн ... добавить раздельно или добавить сразу одним файлом")
  * FRAGMENTS OF ONE VIDEO laid on main video one after another from the playhead - each a clip of that file cut by `trimIn` and
  * `dur` (no new file; a join made first is one fragment of its own file), with its sound on main video's paired lane when the
  * file has one - as a tile let go there: the neighbours are not moved. One step to undo; the last laid is picked. A highlights
@@ -2822,10 +2796,10 @@ export function placeVideoPieces(parts, file) {
   return { ok: true, n: ids.length, at };
 }
 
-// (phase V40, tail (а), the owner 2026-10-24: "Fit / Fill и Shift пересчитывают субтитры на шве") A clip's fit or its frame
-// - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the subtitles' places on the seam are
-// worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch does (framing-ui.js).
-// (phase V51) So do a crop, a PiP and a placement (`tw`) - put on, taken off or sized: a cropped or placed clip covers nothing.
+// A clip's fit or its frame - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the
+// subtitles' places on the seam are worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch
+// does (framing-ui.js). So do a crop, a PiP and a placement (`tw`) - put on, taken off or sized: a cropped or placed clip
+// covers nothing.
 const SPLIT_KEYS = new Set(['fit', 'frame', 'crop', 'pip', 'tw']);
 
 /**
@@ -2844,7 +2818,7 @@ export function setClipFields(trackId, clipId, patch) {
 }
 
 /**
- * (phase V49, (пр9)) Fields on SEVERAL clips in ONE mutation - one undo step: a PiP switched on, sized or moved for every main
+ * Fields on SEVERAL clips in ONE mutation - one undo step: a PiP switched on, sized or moved for every main
  * clip picked at once. `items` - [{ trackId, clipId, patch }], each its own patch.
  */
 export function setClipsFields(items) {
@@ -2863,9 +2837,9 @@ export function setClipsFields(items) {
 }
 
 /**
- * (phase V54, the owner's (зв8)) LEVELS HEARD WHILE A SLIDER IS HELD - the shift of several sound clips at once. Held HERE, never
- * in the store (the planning session's check: written into the live timeline, a save already due, or a newer copy adopted
- * meanwhile, carried levels nobody let go of - or the old ones were put back into a timeline that had replaced them): the
+ * LEVELS HEARD WHILE A SLIDER IS HELD - the shift of several sound clips at once. Held HERE, never
+ * in the store (written into the live timeline, a save already due, or a newer copy adopted
+ * meanwhile, would carry levels nobody let go of - or put the old ones back into a timeline that had replaced them): the
  * preview reads them every frame (preview-b.js _sounds, liveVolumeOf) and plays them at once. `list` - [{ clipId, volume }];
  * `null` lets go. The release lets go and writes the new levels with setClipsFields - ONE step.
  */
@@ -2877,7 +2851,7 @@ export function setLiveVolumes(list) {
 /** The level a held slider gives this clip, or null - the preview's (preview-b.js _sounds). */
 export const liveVolumeOf = (id) => (_liveVol && _liveVol.has(String(id)) ? _liveVol.get(String(id)) : null);
 
-/** (phase V49) Every clip picked, with its lane - [{ track, clip }], in the lanes' order. */
+/** Every clip picked, with its lane - [{ track, clip }], in the lanes' order. */
 export function selectedClips() {
   if (!_sel.size) return [];
   const out = [];
@@ -2885,20 +2859,20 @@ export function selectedClips() {
   return out;
 }
 
-/** (phase V49) The main video lane - the bottom one, the one a PiP belongs to - or null. */
+/** The main video lane - the bottom one, the one a PiP belongs to - or null. */
 export function mainVideo(tl) {
   const vids = (((tl || Store.timeline()) || {}).tracks || []).filter(t => t.kind === 'video');
   return vids.length ? vids[vids.length - 1] : null;
 }
 
-/** (phase V74) The patterns of main video - top layer first (overlay/pattern.js normalizeLayers); [] when none. */
+/** The patterns of main video - top layer first (overlay/pattern.js normalizeLayers); [] when none. */
 export function patternsOf(tl) {
   const m = mainVideo(tl);
   return normalizeLayers(m && m.patterns);
 }
 
 /**
- * (phase V74) Main video's patterns become `list` - ONE undo step. Emptied, the field stays as [] when it was there (a lane's
+ * Main video's patterns become `list` - ONE undo step. Emptied, the field stays as [] when it was there (a lane's
  * field the page took off would lose to the server's copy in a merge, store.js _mergeTrack) - the server keeps none then.
  */
 export function setPatterns(list) {
@@ -2954,8 +2928,7 @@ export function stampTrack(trackId, patch) {
  *
  * It deliberately leaves speed, trims, placement and levels alone. Those are edits made by
  * hand, one clip at a time, and wiping them from a button called "reset" would be exactly the
- * surprise the stamp warning exists to prevent. (phase V49, (пр14) а) Nor the effects any more: they are not offered, and
- * what a project already has of them stays in its file for the phase that brings them back.
+ * surprise the stamp warning exists to prevent.
  */
 export function resetTrack(trackId) {
   Store.mutate(tl => {
@@ -2964,7 +2937,7 @@ export function resetTrack(trackId) {
     for (const c of (t.clips || [])) {
       c.fit = null; c.cropAlign = null;
     }
-    placeBySplit(tl);            // (V40) a fitted clip is never split: its subtitles go back off the seam
+    placeBySplit(tl);            // a fitted clip is never split: its subtitles go back off the seam
   });
 }
 
@@ -2995,8 +2968,8 @@ export function addCaption(trackId, at, text) {
 
 /**
  * How the subtitle lane is listened to, one field at a time: `{ lang }` - an ISO code, or 'auto' to let
- * the listener tell (phase K1) - and/or `{ engine }` - 'local' for this computer, 'cloud' for Groq
- * (phase K1b). The defaults are not stored. The lines themselves are laid by the server
+ * the listener tell - and/or `{ engine }` - 'local' for this computer, 'cloud' for Groq.
+ * The defaults are not stored. The lines themselves are laid by the server
  * (lib/captions-job.js), not here.
  */
 export function setSubsListen(trackId, patch) {
@@ -3011,11 +2984,11 @@ export function setSubsListen(trackId, patch) {
 }
 
 /**
- * One caption's own text. A TYPED line takes it as it is. A HEARD line keeps its timing (phase K10): the
+ * One caption's own text. A TYPED line takes it as it is. A HEARD line keeps its timing: the
  * words that stay keep their moments, a word spelled otherwise the moment of its place, new words share
- * the time of what they replace (words.js retext) - they used to be dropped, and the line coloured as one
- * piece. An empty heard line is taken off the lane, in the same step. @returns null, or { why } when the
- * text cannot be timed (no room in the line, too many words) - nothing is changed then.
+ * the time of what they replace (words.js retext). An empty heard line is taken off the lane, in the same
+ * step. @returns null, or { why } when the text cannot be timed (no room in the line, too many words) -
+ * nothing is changed then.
  */
 export function setCaptionText(trackId, clipId, text) {
   let why = null;
@@ -3035,8 +3008,8 @@ export function setCaptionText(trackId, clipId, text) {
 }
 
 /**
- * A heard caption's words changed by one of the word editor's operations (words.js - replaceAt, cutAt...,
- * K10b): `op(words, clip)` returns { words, name }, { remove: true } or { why }. ONE mutation, one step to
+ * A heard caption's words changed by one of the word editor's operations (words.js - replaceAt, cutAt...):
+ * `op(words, clip)` returns { words, name }, { remove: true } or { why }. ONE mutation, one step to
  * undo; nothing is changed when it refuses. `opts.merge`: a series tag - [ and ] pressed twenty times are
  * one step (history.js). @returns null, or { why }.
  */
@@ -3046,7 +3019,7 @@ export function editWords(trackId, clipId, op, opts) {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c || !isHeard(c)) { why = 'That line is not on the lane any more'; return; }
-    // A line rewritten before K10 is timed for its text first: the operation works on what is shown.
+    // A line whose words do not spell its text is timed for its text first: the operation works on what is shown.
     const r = op(timedWords(c), c);
     if (!r || r.why) { why = (r && r.why) || 'That cannot be done'; return; }
     if (r.remove) { t.clips = t.clips.filter(x => x !== c); return; }
@@ -3057,7 +3030,7 @@ export function editWords(trackId, clipId, op, opts) {
   return why ? { why } : null;
 }
 
-// ── The captions view's document (phase V30, block 2) ───────────────────────
+// ── The captions view's document ────────────────────────────────────────────
 const DOC_CHANGED = 'The line has changed meanwhile - your text was not written over it';
 const DOC_GONE = 'That line is not on the lane any more';
 
@@ -3120,7 +3093,7 @@ export function rewriteLines(trackId, ids, painted, op) {
 }
 
 /**
- * Many lines given new texts in ONE mutation - "replace all" (phase V30, block 2): `edits` [{ trackId, id, painted,
+ * Many lines given new texts in ONE mutation - "replace all": `edits` [{ trackId, id, painted,
  * text }]. A line that cannot take its text (a limit; changed meanwhile) is left as it is and named in `refused`; the
  * rest are written. A picked line emptied by it hands the pick to its lane. @returns { done, refused: [{ id, why }] }
  */
@@ -3174,7 +3147,7 @@ export function rewriteEach(edits) {
   return { done: res.done, refused: res.refused };
 }
 
-/** The caption after this one on its lane, by start - for proofreading on into the next line (K10b). */
+/** The caption after this one on its lane, by start - for proofreading on into the next line. */
 export function nextCaption(clipId) {
   const tl = Store.timeline();
   for (const t of ((tl && tl.tracks) || [])) {
@@ -3209,15 +3182,15 @@ export function setSubsStyle(trackId, patch, cut, after) {
     if (!t) return;
     t.style = Object.assign({}, t.style || {}, patch || {});
     if (cut && t.kind === 'subs') pages = _recutLane(tl, t);
-    if (typeof after === 'function') after(t, tl);   // (phase V49, S3) runs inside the same mutation - one undo step
+    if (typeof after === 'function') after(t, tl);   // runs inside the same mutation - one undo step
   });
   return pages;
 }
 
-// THE HEARD LINES CUT AGAIN, inside a mutation (K2). The lines somebody typed stay the very same
+// THE HEARD LINES CUT AGAIN, inside a mutation. The lines somebody typed stay the very same
 // objects - their ids, their own style, their place - so a merge with another save still knows them;
 // the pages cut from the heard words carry the own look of the lines they came from.
-// (phase V40, tail (б), the owner 2026-10-24: "пресет на открытом фрагменте тоже") The new pages carry their words' places; on a
+// The new pages carry their words' places; on a
 // split frame which of them is on the seam is worked out again for them (public/js/captions/split.js) - the same step.
 function _recutLane(tl, t) {
   const clips = recutClips(t, tl, _id);
@@ -3229,7 +3202,7 @@ function _recutLane(tl, t) {
 
 /**
  * The frame's shape, and the heard captions cut again for it - a frame of another width and another
- * automatic size is another set of pages. ONE mutation: one step to undo (it used to be two).
+ * automatic size is another set of pages. ONE mutation: one step to undo.
  */
 export function setFormat(fmt) {
   return Store.mutate(tl => {
@@ -3239,7 +3212,7 @@ export function setFormat(fmt) {
 }
 
 /**
- * A CAPTION'S OWN STYLE (phase K0, the owner 2026-10-03): `patch` over the lane's style for these
+ * A CAPTION'S OWN STYLE: `patch` over the lane's style for these
  * captions - merged into what they already set - or, given null, back to the lane's style. One step to
  * undo however many captions.
  */
@@ -3250,11 +3223,11 @@ export function setCaptionStyle(clipIds, style, opts) {
   let made = null;
   let gone = null;
   // The pick follows the re-cut only when it was on those captions: a lane's "reset" of the lines with a
-  // style of their own must leave the LANE picked (review K6).
+  // style of their own must leave the LANE picked.
   const follow = [...ids].some(id => _sel.has(id));
   const before = new Set(_sel);
   // ONE mutation across every lane of words: a band can take captions of the subtitles and of a text lane
-  // at once, and that is one step to undo (K6).
+  // at once, and that is one step to undo.
   Store.mutate(tl => {
     for (const t of (tl.tracks || [])) {
       if (!t || (t.kind !== 'subs' && t.kind !== 'text')) continue;
@@ -3262,7 +3235,7 @@ export function setCaptionStyle(clipIds, style, opts) {
       for (const c of (t.clips || [])) {
         if (!ids.has(c.id)) continue;
         touched = true;
-        // `style` may be worked out per caption (review K6: Behind fills a box only where there was none).
+        // `style` may be worked out per caption (Behind fills a box only where there is none).
         const s = typeof style === 'function' ? style(c, t) : style;
         if (s == null) delete c.style;
         // A preset is a whole style (every field), so it REPLACES what the caption wore; a field changed by
@@ -3280,7 +3253,7 @@ export function setCaptionStyle(clipIds, style, opts) {
         }
       }
     }
-    // (V40, tail (б)) Pages cut again: their places on a split frame's seam worked out again.
+    // Pages cut again: their places on a split frame's seam worked out again.
     if (made) placeBySplit(tl);
   });
   // The pick follows its words onto the pages cut from them.
@@ -3293,7 +3266,7 @@ export function setCaptionStyle(clipIds, style, opts) {
 }
 
 /**
- * These heard captions cut again by the lane's rules, and only them (K10b, `re-cut this line`: a line grown
+ * These heard captions cut again by the lane's rules, and only them (`re-cut this line`: a line grown
  * longer than a page by corrections - a correction itself never cuts). One step to undo; the pick moves onto
  * the new pages and comes back with the undo (`_selBack`). @returns the ids of the new pages, or null.
  */
@@ -3309,7 +3282,7 @@ export function recutLines(trackId, clipIds) {
     gone = (t.clips || []).filter(c => ids.has(c.id) && isHeard(c)).map(c => c.id);
     t.clips = r.clips;
     made = r.made;
-    placeBySplit(tl);          // (V40, tail (б)) the pages cut again, on a split frame's seam or not
+    placeBySplit(tl);          // the pages cut again, on a split frame's seam or not
   });
   if (made && [...ids].some(id => _sel.has(id))) {
     for (const id of (gone || [])) _sel.delete(id);
@@ -3320,7 +3293,7 @@ export function recutLines(trackId, clipIds) {
   return made;
 }
 
-// ── The pick, as the panels ask about it (K6) ───────────────────────────────
+// ── The pick, as the panels ask about it ────────────────────────────────────
 /** The ids picked. */
 export const selectedIds = () => [..._sel];
 
@@ -3342,7 +3315,7 @@ export function selectedCaptions() {
 /**
  * A band is being swept across the lanes. The captions view and the room it takes must not come and go
  * under the pointer while it is: taking the room shrinks the timeline and moves the lanes away from a band
- * drawn in screen pixels, which emptied the pick, which gave the room back... every frame (review K6).
+ * drawn in screen pixels, which would empty the pick, which would give the room back... every frame.
  */
 export const gesture = () => !!(_band && _band.moved);
 
@@ -3374,7 +3347,7 @@ export function mateOf(clipId) {
 }
 export const deleteMulti = () => _deleteSelected();
 
-// ── The right-click on bare lane (phase L3, the owner 2026-09-23) ───────────
+// ── The right-click on bare lane ────────────────────────────────────────────
 // The playhead goes to the moment under the pointer, and a menu asks what to make THERE: a picture in the pictures
 // chat, a clip in the video chat - each lands on its shelf (lib/mv3-gens.js, lib/mv3-video-gens.js) and is dragged from
 // the chat onto a lane. A right-click on a clip or on a lane's name is not this menu's.
@@ -3422,7 +3395,7 @@ function _laneMenu(e) {
     'Make a picture with a model - it lands on the images shelf; drag it from the chat onto a lane',
     () => import('./picchat.js').then(m => m.openPictures())
       .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
-  // The video chat, the same way (phase V3).
+  // The video chat, the same way.
   item('generate video', 'the video chat · drag a clip onto a lane',
     'Make a clip with a model - it lands on the B-roll shelf; drag it from the chat onto a lane',
     () => import('./vidchat.js').then(m => m.openVideos())
@@ -3445,14 +3418,14 @@ function _showCtx(box, e) {
   window.addEventListener('scroll', _closeCtx, true);
 }
 
-// ── The right button on a clip (phase V54, block 2, the owner's (зв3), (зв4); phase V77, (тч1), (тч2), (тч11а)) ──────────────────
-// A clip of a VIDEO lane - not a red clip whose file is gone - has a menu. (phase V77) The generation chats WITH this clip
+// ── The right button on a clip ──────────────────────────────────────────────
+// A clip of a VIDEO lane - not a red clip whose file is gone - has a menu. The generation chats WITH this clip
 // (js/merge-v3/tl-gen.js): a picture - "Animate…" (the video chat, the picture as its first frame) and "Change…" (the pictures
 // chat); a film - "Continue…" (its last frame as the video chat's first frame), "As a reference…" (the part the timeline plays)
 // and "Frame to the pictures chat…" (the frame at the playhead, else the first one it shows). A talking head's line has none of
-// them (the mirror's, (тч11а)). (phase V54) A film's "Video to Music…" puts THIS clip, as it is seen, into the sound window's
+// them (the mirror's). A film's "Video to Music…" puts THIS clip, as it is seen, into the sound window's
 // Video to Music (js/merge-v3/sound-host.js); the server makes the clip into a file and lays the track under it on a lane of its
-// own (V77, (тч14)). A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
+// own. A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
 function _ctxItem(box, label, sub, title, on) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -3490,7 +3463,7 @@ function _clipMenu(e) {
   const at = _playhead;
   const gen = (act) => import('./tl-gen.js').then(G => G.fromClip(act, { trackId: t.id, clipId: c.id, at }))
     .catch(err => showError('The chat did not open', { detail: (err && err.message) || String(err) }));
-  // (phase V84, (р8), (эф4)) An effect on the whole clip - first: the clip picked, its group Effects open with the panel of tiles.
+  // An effect on the whole clip - first: the clip picked, its group Effects open with the panel of tiles.
   if (!c.halfer) {
     _ctxItem(box, 'Add effect…', 'the effects of this clip · in the inspector',
       'Open the effects of this clip in the inspector - a tile pressed covers the whole clip, Ctrl+Z takes it off',
@@ -3540,22 +3513,22 @@ function _letFieldGo() {
 
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
-  // (phase V84) The open effect's frame follows the inspector.
+  // The open effect's frame follows the inspector.
   FXUI.onFocus(() => _paintFx());
-  // (phase V36, T4) The waves follow the scroll and the panel's width, and are drawn when a file's peaks arrive.
+  // The waves follow the scroll and the panel's width, and are drawn when a file's peaks arrive.
   const host = _host();
   if (host) {
     host.addEventListener('scroll', _wavesSoon, { passive: true });
-    // (phase V49.1) A wider box: the lanes and the ruler reach across it (_widen), then the waves.
+    // A wider box: the lanes and the ruler reach across it (_widen), then the waves.
     // Out of the observer's own turn: a width set inside it may resize the box again (a scroll bar), a loop it reports.
     if (window.ResizeObserver) new ResizeObserver(() => { setTimeout(_widen, 0); _wavesSoon(); }).observe(host);
-    // (phase V41) A press on the timeline is not in the field last used (the zoom slider, a select of the format, a text of
+    // A press on the timeline is not in the field last used (the zoom slider, a select of the format, a text of
     // the inspector) - every press here keeps the focus where it was (preventDefault, so a drag selects no text), and
-    // Delete then counted as typing in that field. Let go of at the release, once the gesture's own work is done.
+    // Delete would then count as typing in that field. Let go of at the release, once the gesture's own work is done.
     host.addEventListener('mousedown', () => { _pressIn = true; }, true);
-    // (phase V41) A drop above the top video lane or below the bottom audio one makes its lane.
+    // A drop above the top video lane or below the bottom audio one makes its lane.
     _wireGhost(host);
-    // (phase V49.1, (пр27)) Alt + wheel zooms toward the playhead. Not passive: the page's own scroll is held back.
+    // Alt + wheel zooms toward the playhead. Not passive: the page's own scroll is held back.
     host.addEventListener('wheel', _onWheel, { passive: false });
   }
   onPeaks(_wavesSoon);
@@ -3566,12 +3539,12 @@ export function initTimelineB() {
   // drag, and a listener on the clip would drop the gesture the moment it did.
   document.addEventListener('mousemove', _moveDrag);
   document.addEventListener('mouseup', _endDrag);
-  // (phase V36, T5) A stretch drawn over a wave follows the pointer the same way.
+  // A stretch drawn over a wave follows the pointer the same way.
   document.addEventListener('mousemove', _moveRange);
   document.addEventListener('mouseup', _endRange);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
   document.addEventListener('mousedown', _awayFromLane, true);
-  // (phase V51, point 3) Picked clips too - a press on the preview is decided once the preview has had it.
+  // Picked clips too - a press on the preview is decided once the preview has had it.
   document.addEventListener('mousedown', _awayFromClip, true);
   document.addEventListener('mousedown', _afterPreviewPress);
   document.addEventListener('contextmenu', _laneMenu);
@@ -3583,27 +3556,27 @@ export function initTimelineB() {
     if (!_on) return;
     if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
     if (locked()) return;                  // a talking head is being built: the timeline is asleep (js/merge-v3/layout.js)
-    // A key something nearer took for itself (the word editor, K10b) is not the timeline's.
+    // A key something nearer took for itself (the word editor) is not the timeline's.
     if (e.defaultPrevented) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || !!e.target.isContentEditable;
-    // Escape in a TEXT field takes back what was typed there - it does not let go of the line (K10b: it used to,
-    // and the caption's text field lost what was typed with the pick). A select, a slider, a colour, a checkbox
-    // left focused is not typing: Escape lets go of the pick there as it always did (review K10).
+    // Escape in a TEXT field takes back what was typed there - it does not let go of the line (the caption's text field
+    // would lose what was typed with the pick). A select, a slider, a colour, a checkbox
+    // left focused is not typing: Escape lets go of the pick there.
     const t0 = e.target;
     const texty = t0.tagName === 'TEXTAREA' || !!t0.isContentEditable
       || (t0.tagName === 'INPUT' && /^(text|search|number|email|url|tel|password|)$/.test(String(t0.type || '')));
-    // (phase V36, T5) Escape lets a drawn stretch go first; the next one lets go of the pick.
+    // Escape lets a drawn stretch go first; the next one lets go of the pick.
     if (e.key === 'Escape' && !texty) { if (_range) _letRangeGo(); else _clearSel(); }
     // Not while typing: the inspector has fields, and Delete there means a character. And not in a block that
     // keeps its own keys (the words of a caption, where Delete takes a WORD).
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
       e.preventDefault();
-      // (phase V36, T5) A stretch drawn over a wave: cut out of every lane. Otherwise the picked clips go.
+      // A stretch drawn over a wave: cut out of every lane. Otherwise the picked clips go.
       if (_range) cutRange();
       else _deleteSelected();
     }
-    // (phase V51) Ctrl+C copies the picked clips and text lines, Ctrl+V lays them (tl-clip.js) - by the printed letter when
-    // it is a Latin one, by the key's place in another alphabet ("С" and "М" in the Russian layout), as bar.js reads Ctrl+Z.
+    // Ctrl+C copies the picked clips and text lines, Ctrl+V lays them (tl-clip.js) - by the printed letter when
+    // it is a Latin one, by the key's place in another alphabet (as in the Russian layout), as bar.js reads Ctrl+Z.
     // Not in a text field or a block that keeps its own keys: there they copy and paste text.
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !texty && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
       const key = String(e.key || '').toLowerCase();
@@ -3611,23 +3584,23 @@ export function initTimelineB() {
       if (k === 'c' && !e.repeat) copyPicked();
       else if (k === 'v') { e.preventDefault(); if (!e.repeat) paste(); }
     }
-    // (phase V44, (ы6)) S opens "cut silence" - by the key's place, so "Ы" in the Russian layout is the same key.
+    // S opens "cut silence" - by the key's place, so it is the same key in any layout.
     if (e.code === 'KeyS' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat
         && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
       e.preventDefault();
       openSilence();
     }
   });
-  // (phase V44) The button right of ⏩ and its window.
+  // The button right of ⏩ and its window.
   wireSilence({ span: _silenceSpan, zoom: _zoom, gutter: GUTTER, host: _host, cut: _silenceCut });
-  // (phase V45) Clips in a row picked: "merge?".
+  // Clips in a row picked: "merge?".
   wireMerge({ ids: () => [..._sel], newId: _id, select: (id) => { if (id) selectClipById(id); } });
-  // (phase V51) Ctrl+C / Ctrl+V: the pick, ids, the playhead, what is laid picked, and the lanes a paste may have to make.
+  // Ctrl+C / Ctrl+V: the pick, ids, the playhead, what is laid picked, and the lanes a paste may have to make.
   wireClip({ ids: () => [..._sel], newId: _id, playhead: () => _playhead, select: _pickIds,
              video: _newVideoLane, audio: _newAudioLane, text: _newTextLane });
 }
 
-// (phase V51) These clips picked, in place of the pick - what a paste laid.
+// These clips picked, in place of the pick - what a paste laid.
 function _pickIds(ids) {
   _selBack = null;
   _sel.clear();

@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — a stretch of time cut out of every lane, the rest moved left (phase V36, T5).
+   MERGE v3 — a stretch of time cut out of every lane, the rest moved left.
 
-   The owner, 2026-10-23, (у8): "чтобы можно было подрезать пользователю вручную тишину со смещением" - a stretch drawn
-   over a waveform and Delete: the stretch goes from EVERY lane, and everything after it moves left by its length, so a
-   picture and its sound stay together. Inside one mutation (js/merge-v3/timeline-b.js cutRange) - one step to undo.
+   A stretch drawn over a waveform and Delete - silence trimmed by hand: the stretch goes from EVERY lane, and everything
+   after it moves left by its length, so a picture and its sound stay together. Inside one mutation
+   (js/merge-v3/timeline-b.js cutRange) - one step to undo.
 
      a clip wholly before the cut       stays
      a clip wholly after it             moves left
@@ -15,24 +15,23 @@
                                         still is only shortened
      a caption line, a title            js/captions/cut.js: words inside go, the rest move, nothing heard again
 
-   ONLY ITS OWN LANE when the sound is tied to no picture (phase V82, the owner 2026-11-09: "если пользователь выделяет волну на
-   аудиодорожке, а волна элемента не привязана к видео элементу, то видео не трогаем"): `cutScope` - a stretch drawn on a lane
+   ONLY ITS OWN LANE when the sound is tied to no picture: `cutScope` - a stretch drawn on a lane
    where a sound inside it has its pair on a video lane (a film laid with its own sound, a talking head's line with its clip, a
    highlights fragment) cuts every lane as above; else (a voiceover's read, music, an mp3, a sound effect) only THAT lane is cut,
    what is after the cut on it moved left up to the first sound tied to a picture - that one and all after it stay where they
-   are, a pause before it - and the subtitle lanes go with it only when it is main audio ((тб1), (тб2)). Video, the other sound
-   lanes and the text lanes are not touched. Cut silence is not this (тб4): it cuts every lane, as it did.
+   are, a pause before it - and the subtitle lanes go with it only when it is main audio. Video, the other sound
+   lanes and the text lanes are not touched. Cut silence is not this: it cuts every lane.
 
    A TALKING HEAD's lines are laid by its script (lib/frag-mirror.js: cells with `frag`, and the caption pages bound to a
-   line by `voice`). Since phase V44 ((ы5), (ы15)) they are cut here like any clip: a line becomes pieces of its file, and
+   line by `voice`). They are cut here like any clip: a line becomes pieces of its file, and
    the save of the timeline writes what its pieces say into the line (lib/line-cuts.js), so the mirror lays it so again;
    Ctrl+Z, saved, gives it back whole. Refused only when a cut would take a WHOLE line away - that is taking it off the
    script.
 
-   CUT SILENCE (phase V44, the owner 2026-10-24): many such cuts at once, the pauses of main audio shortened
+   CUT SILENCE: many such cuts at once, the pauses of main audio shortened
    (js/merge-v3/tl-silence.js finds them, lib/track-pauses.js listens). Every pause longer than `keep` keeps `keep` - half
-   after the sound before it, half before the sound after (ы2) - and the rest goes from every lane as above, from the last
-   cut to the first, in ONE mutation. Two things are not moved with the picture (ы4): MUSIC laid under it (a `bed` on
+   after the sound before it, half before the sound after - and the rest goes from every lane as above, from the last
+   cut to the first, in ONE mutation. Two things are not moved with the picture: MUSIC laid under it (a `bed` on
    audio 2 and below) is neither cut nor moved - it plays on evenly, and what of it is left past the shortened film's end
    goes; a SOUND EFFECT (`sfx`) is moved whole with the picture under its start, never cut. Each seam a sound is cut at
    gets SEAM_FADE in and out (js/sound/fades.js reads them - the preview and the render alike), so no seam clicks.
@@ -40,7 +39,7 @@
 
 import { cutLine } from '../captions/cut.js';
 import { isBed } from '../captions/heard.js';
-// (phase V69 P12b) The pauses' cuts are one rule for the page and the server - js/sound/pause-cuts.js; said here as before.
+// The pauses' cuts are one rule for the page and the server - js/sound/pause-cuts.js; re-exported here.
 import { SEAM_FADE, MIN_SILENCE_CUT, MIN_KEEP, cutsOfPauses, mapThrough } from '../sound/pause-cuts.js';
 export { SEAM_FADE, MIN_SILENCE_CUT, MIN_KEEP, cutsOfPauses, mapThrough };
 
@@ -57,10 +56,10 @@ const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
 const LINE_GONE = 'A whole line of the talking head is inside the stretch - take it off the script in Setup instead, '
   + 'or cut a shorter stretch.';
 
-// (phase V82) The lanes a cut of `scope` (cutScope) touches: every lane, or its lane and - for main audio - the subtitles.
+// The lanes a cut of `scope` (cutScope) touches: every lane, or its lane and - for main audio - the subtitles.
 const _inScope = (scope, t) => !scope || scope.all || t.id === scope.lane || (!!scope.subs && t.kind === 'subs');
 
-// (phase V44) Would `cuts` ({ a, b }) take a WHOLE line of a talking head away - every piece of it on main audio?
+// Would `cuts` ({ a, b }) take a WHOLE line of a talking head away - every piece of it on main audio?
 function _lineGone(tl, cuts, scope) {
   const lines = new Map();
   for (const t of tl.tracks) {
@@ -74,7 +73,7 @@ function _lineGone(tl, cuts, scope) {
 
 const MERGED_LINES = 'Merged lines of the talking head are one file - cut inside them before merging, or take the merge back (Ctrl+Z).';
 
-// (phase V45) Would `cuts` reach into a talking head's lines merged into one file (a cell with `merge`)?
+// Would `cuts` reach into a talking head's lines merged into one file (a cell with `merge`)?
 function _mergedHit(tl, cuts, scope) {
   for (const t of tl.tracks) {
     if (!_inScope(scope, t)) continue;
@@ -94,7 +93,7 @@ export function cutRefused(tl, a, b, scope) {
   return _lineGone(tl, [{ a, b }], scope) ? LINE_GONE : '';
 }
 
-/** (phase V82) Is `c`, a clip of a sound lane, tied to a picture - the other half of its pair on a video lane of `tl`? A picture
+/** Is `c`, a clip of a sound lane, tied to a picture - the other half of its pair on a video lane of `tl`? A picture
  *  whose sound was taken away keeps its pairId pointing at nothing, and a pairId alone says nothing. */
 export function tiedToPicture(tl, c) {
   if (!c || !c.pairId || !tl || !Array.isArray(tl.tracks)) return false;
@@ -102,8 +101,8 @@ export function tiedToPicture(tl, c) {
 }
 
 /**
- * (phase V82) What a stretch [a, b) drawn on the sound lane `laneId` cuts:
- *   { all: true }                              a sound in it on that lane is tied to a picture - every lane, as before
+ * What a stretch [a, b) drawn on the sound lane `laneId` cuts:
+ *   { all: true }                              a sound in it on that lane is tied to a picture - every lane
  *   { all: false, lane, subs, stopAt }         that lane only; what is after the cut on it moves left up to `stopAt` (the start
  *                                              of the first sound tied to a picture after it - Infinity when none), which
  *                                              stays; `subs` - the subtitle lanes go with it (it is main audio)
@@ -123,7 +122,7 @@ export function cutScope(tl, laneId, a, b) {
 /**
  * Cut [a, b) out of every lane of `tl` (a timeline being mutated) and close the gap.
  * `opts.newId()` - an id for a clip's right piece; `opts.isStill(c)` - a picture, which is shortened rather than split;
- * `opts.only` - (phase V82) a cutScope that is not `all`: only its lane (and the subtitles with main audio), and on it nothing
+ * `opts.only` - a cutScope that is not `all`: only its lane (and the subtitles with main audio), and on it nothing
  * from `stopAt` on is moved.
  */
 export function rippleCut(tl, a, b, opts) {
@@ -132,16 +131,16 @@ export function rippleCut(tl, a, b, opts) {
   if (!(D > 0)) return;
   const newId = (opts && opts.newId) || (() => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
   const isStill = (opts && opts.isStill) || (() => false);
-  // (phase V44) A sound cut here fades out into the seam and in out of it - cut silence's seams; a stretch cut by hand has none.
+  // A sound cut here fades out into the seam and in out of it - cut silence's seams; a stretch cut by hand has none.
   const seam = Math.max(0, +(opts && opts.seamFade) || 0);
   const fadeAt = (t, c, side) => { if (seam && t.kind === 'audio') c[side] = Math.max(+c[side] || 0, seam); };
   // The right pieces of a pair cut through become a pair of their own - one new pair id for both halves.
   const pairs = new Map();
   const pairOf = (p) => { if (!pairs.has(p)) pairs.set(p, 'p' + newId().replace(/^c/, '')); return pairs.get(p); };
 
-  // (phase V44) Cut silence keeps every word - shortened, never dropped (js/captions/cut.js).
+  // Cut silence keeps every word - shortened, never dropped (js/captions/cut.js).
   const lineOpts = opts && opts.keepWords ? { keepWords: true } : undefined;
-  // (phase V82) One lane only, when the sound cut is tied to no picture: nothing from its first tied sound on moves.
+  // One lane only, when the sound cut is tied to no picture: nothing from its first tied sound on moves.
   const only = opts && opts.only && !opts.only.all ? opts.only : null;
   const stopAt = only && Number.isFinite(+only.stopAt) ? +only.stopAt : Infinity;
   for (const t of (tl.tracks || [])) {
@@ -205,7 +204,7 @@ export function rippleCut(tl, a, b, opts) {
       fadeAt(t, c, 'fadeIn');
       out.push(c);
     }
-    // (phase V49) A piece of a film, a sound or a picture the cut left shorter than the shortest a timeline keeps (0.02 s,
+    // A piece of a film, a sound or a picture the cut left shorter than the shortest a timeline keeps (0.02 s,
     // lib/timeline-shape.js) goes: the save would bring it back that long, over the piece after it. Not a talking head's
     // line (`frag`): its pieces are read into the line on the save (lib/line-cuts.js), and a line is never taken off here.
     t.clips = _words(t) ? out : out.filter((c) => +c.dur >= MIN_DUR - EPS || Number(c.frag) > 0);
@@ -213,9 +212,9 @@ export function rippleCut(tl, a, b, opts) {
   }
 }
 
-// ── Cut silence (phase V44) ─────────────────────────────────────────────────
+// ── Cut silence ─────────────────────────────────────────────────────────────
 
-/** Music laid under the film (ы4): a bed on any audio lane but main audio - not cut, not moved. A sound effect is not music. */
+/** Music laid under the film: a bed on any audio lane but main audio - not cut, not moved. A sound effect is not music. */
 export const isMusicBed = (t, c) => !!t && t.kind === 'audio' && !t.main && !!c && !c.sfx && isBed(c);
 
 /** Why `cuts` cannot be made in `tl`, in words - or '' when they can. */

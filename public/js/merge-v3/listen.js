@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — captions from the sound, as the page follows them (phase K1, 2026-10-03).
+   MERGE v3 — captions from the sound, as the page follows them.
 
    The SERVER listens and lays the lines (lib/captions-job.js); this only presses the button and says
    what is happening, for the project that is open:
@@ -11,7 +11,7 @@
                    job goes on, and opening the project again picks it up by its key
      the end       the store reads the timeline the server laid (Store.refresh), which says "Captions
                    laid from the sound" rather than "another device", and is one Ctrl+Z
-     again         "back to what was heard" (K2) is the same press with { stored: true }: the server lays
+     again         "back to what was heard" is the same press with { stored: true }: the server lays
                    again from the answers it keeps, and stops before asking anybody when the sound
                    has changed since
 
@@ -48,7 +48,7 @@ const FELL = { 'no-key': 'No Groq key', network: 'Groq could not be reached', do
   busy: 'Groq is busy', limit: "Groq's limit is used up", 'bad-key': 'Groq did not accept the key',
   refused: 'Groq refused this sound', 'too-large': 'Groq refused this sound' };
 
-// ── This computer's ear (phase K1b) ─────────────────────────────────────────
+// ── This computer's ear ─────────────────────────────────────────────────────
 // Read once when a page asks, again after a model download: the program, the model, the NVIDIA build.
 let _local = null;
 let _localAsked = null;
@@ -60,7 +60,7 @@ export async function readLocal(force) {
   return _localAsked;
 }
 
-// (phase V30, block 1) What a talking head's lines need: the ones no caption lies over, and why nobody heard them by
+// What a talking head's lines need: the ones no caption lies over, and why nobody heard them by
 // themselves - or that they are about to be. '' when every line has its captions.
 function _linesNote(s) {
   const L = s.lines;
@@ -99,16 +99,16 @@ function _said(s) {
     const r = j.result || {};
     const out = [];
     // Every word heard lies under lines the person corrected or typed: something WAS said, and the lane is left
-    // as it is on purpose (review K10 - it said "Nothing was said" and hid the kept and stale counts).
+    // as it is on purpose - so it does not say "Nothing was said", and the kept and stale counts are shown.
     const under = !r.lines && r.dropped && ((+r.dropped.fixed || 0) + (+r.dropped.typed || 0)) > 0;
-    // A talking head's new lines, heard by themselves (phase V30, block 1).
+    // A talking head's new lines, heard by themselves.
     const lead = r.auto ? 'The new ' + (r.heardLines === 1 ? 'line was' : 'lines were') + ' heard by ' + (r.heardLines === 1 ? 'itself' : 'themselves') + ': '
       : r.stored ? 'Laid again from what was heard: ' : '';
     out.push(r.lines ? lead + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
       : under ? 'Every word heard lies under lines you corrected or typed - the lane was left as it was.'
         : 'Nothing was said on those tracks - the lane was left as it was.');
     // A line heard as other words than the script's (a clip that added its own) is laid as heard; a line never heard is
-    // not laid again from nothing (the owner's (с20), "back to what was heard").
+    // not laid again from nothing ("back to what was heard").
     const off = r.offScript || [];
     if (off.length) out.push((off.length === 1 ? 'A line says' : off.length + ' lines say') + ' other words than the script, laid as heard: '
       + off.slice(0, 3).join(', ') + (off.length > 3 ? '...' : '') + '.');
@@ -126,7 +126,7 @@ function _said(s) {
     if (r.lines && !r.asked && r.language) out.push('Heard as ' + _cap(r.language) + '.');
     const typed = r.dropped && r.dropped.typed;
     if (typed) out.push(_n(typed, 'word', 'words') + ' under your typed lines ' + (typed === 1 ? 'was' : 'were') + ' left out.');
-    // The heard lines a person corrected stay as they are (K10) - and one that no longer looks like what is
+    // The heard lines a person corrected stay as they are - and one that no longer looks like what is
     // heard under it is pointed out, for the person to look at: nothing takes it away by itself.
     if (r.kept) out.push(_n(r.kept, 'corrected line', 'corrected lines') + ' kept.');
     if (r.stale) out.push(_n(r.stale, 'corrected line', 'corrected lines') + ' no longer ' + (r.stale === 1 ? 'matches' : 'match')
@@ -146,16 +146,16 @@ function _said(s) {
 
 /**
  * What the subtitle lane's strip shows for a project. `ask` - the run fell over to this computer and the
- * speech model is not there yet: the strip offers to download it, once (the owner, K1b answer 4).
+ * speech model is not there yet: the strip offers to download it, once.
  */
 export function view(key) {
   const k = key || Store.key();
   if (!k) return { busy: false, line: '', ask: false, again: false, heard: false };
   const s = _get(k);
   const busy = !!(s.job && s.job.state === 'listening');
-  // Something was heard and laid for this project (its subs/ file says so): it can be laid again (K2).
+  // Something was heard and laid for this project (its subs/ file says so): it can be laid again.
   const heard = !!(s.last && s.last.at) || !!(s.job && s.job.state === 'done' && s.job.result && s.job.result.lines);
-  // The model is offered too where a talking head's lines wait for it (phase V30): no Groq key, no model.
+  // The model is offered too where a talking head's lines wait for it: no Groq key, no model.
   const wantsModel = !!(s.lines && s.lines.bare > 0 && s.lines.missing === 'need-model');
   return { busy, line: _line(s), ask: !busy && (!!(s.job && s.job.state === 'failed' && s.job.code === 'need-model') || wantsModel),
     again: busy && !!s.job.stored, heard };
@@ -189,7 +189,7 @@ async function _poll(first) {
   if (k !== _key) return;                            // another project opened meanwhile
   const s = _get(k);
   const was = s.job;
-  // Told only when what the strip SAYS changes (review K1): the strip is rebuilt whole, and an open
+  // Told only when what the strip SAYS changes: the strip is rebuilt whole, and an open
   // colour or a menu in it would be torn down every second and a half for the same words.
   const before = JSON.stringify(view(k));
   if (d) { s.job = d.job || null; s.last = d.last || s.last; s.lines = d.lines || null; s.read = true; }
@@ -247,7 +247,7 @@ export async function start(opts) {
 }
 
 // A project opened: what is its job doing? Once, and then every 1.5 s while it listens. And again whenever the server
-// laid something of its own on it (phase V30): a talking head's cut laid again is when its new lines start to be heard.
+// laid something of its own on it: a talking head's cut laid again is when its new lines start to be heard.
 let _seen = 0;
 function _opened() {
   const k = Store.key() || null;

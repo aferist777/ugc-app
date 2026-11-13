@@ -3,13 +3,13 @@
 /* UGC Studio's desktop shell - the Electron main process.
 
    It settles the library, runs the server (desktop/supervisor.js) and shows the app in a window
-   of its own, maximised (phase V60: full screen is F11 or the strip's button, never at the start).
-   The pages still do everything through the server over loopback, as
-   they did in a browser tab. The shell supplies what the tab used to get from the browser: the
-   window, downloads, links that leave the app, a context menu, the usual keys.
+   of its own, maximised (full screen is F11 or the strip's button, never at the start).
+   The pages do everything through the server over loopback, as in a browser tab. The shell
+   supplies what a tab gets from the browser: the window, downloads, links that leave the app,
+   a context menu, the usual keys.
 
    THE LIBRARY is where everything the app writes goes (lib/config.js). Run from source it is
-   local-data/ in the checkout. Built (phase V83), the exe sits in a VERSION folder that an update
+   local-data/ in the checkout. Built, the exe sits in a VERSION folder that an update
    replaces - <root>\versions\<version>\ - so the library is never the exe's folder: the launcher
    names it in UGC_DATA_DIR (which overrides everything, from source too), and an exe started
    straight from its version folder takes <root>\library; anywhere else it does not start.
@@ -40,7 +40,7 @@ const WINDOWED = DEV && process.argv.includes('--windowed');
 // The pages' dark background, so no window flashes white before its page paints.
 const BG = '#0c0f16';
 
-// (phase V83, (н1)) '' - a built exe that is not in a versions folder: there is no library to take.
+// '' - a built exe that is not in a versions folder: there is no library to take.
 function libraryDir() {
   if (process.env.UGC_DATA_DIR) return path.resolve(process.env.UGC_DATA_DIR);
   if (!app.isPackaged) return path.join(APP_DIR, 'local-data');
@@ -49,7 +49,7 @@ function libraryDir() {
   return path.join(path.dirname(path.dirname(version)), 'library');
 }
 const LIBRARY = libraryDir();
-// (phase V83, (н4)) Started by the launcher: the taskbar's pin and its jump list start the LAUNCHER, never this
+// Started by the launcher: the taskbar's pin and its jump list start the LAUNCHER, never this
 // version's exe - an update deletes the folder it is in.
 const LAUNCHER = process.env.UGC_LAUNCHER || '';
 const APP_ID = 'UGCStudio.App';
@@ -67,7 +67,7 @@ function canWrite(dir) {
   }
 }
 
-// (phase V83, block B0) A library a newer program wrote is not opened: said here, before the server is started.
+// A library a newer program wrote is not opened: said here, before the server is started.
 const LIB_FORMAT = require('../lib/library-format');
 const writable = !!LIBRARY && canWrite(LIBRARY);
 const refused = writable ? LIB_FORMAT.check(LIBRARY, require('../lib/app-version').current()) : null;
@@ -98,7 +98,7 @@ function run() {
   fs.mkdirSync(profile, { recursive: true });
   app.setPath('userData', profile);
   app.setPath('sessionData', profile);
-  // (phase V83, (н4)) One taskbar identity for every version the launcher starts.
+  // One taskbar identity for every version the launcher starts.
   if (LAUNCHER && process.platform === 'win32') app.setAppUserModelId(APP_ID);
   if (!app.requestSingleInstanceLock()) {
     app.quit();
@@ -112,13 +112,13 @@ function run() {
   const log = openLog(LOGS_DIR, { echo: DEV });
   log.line(`library: ${LIBRARY}`);
   const server = createSupervisor({ appDir: APP_DIR, libraryDir: LIBRARY, log });
-  // (phase V33.2) The hidden window that counts the faces of the highlights shorts (desktop/faces.js).
+  // The hidden window that counts the faces of the highlights shorts (desktop/faces.js).
   const faces = createFacesWindow({ log });
-  // (phase V84 block 3) ...and the one that draws the effects the page alone draws, for the render (lib/fx-bake.js).
+  // ...and the one that draws the effects the page alone draws, for the render (lib/fx-bake.js).
   const bake = createBakeWindow({ log });
-  // (phase V83, block B2) Started by the launcher: the marks it reads, the old versions tidied, its restart (desktop/home.js).
+  // Started by the launcher: the marks it reads, the old versions tidied, its restart (desktop/home.js).
   const home = createHome({ home: process.env.UGC_HOME, launcher: LAUNCHER, appDir: APP_DIR, log });
-  // (phase V83, block B5) ...and the updater: a new version laid down beside this one (desktop/updater.js).
+  // ...and the updater: a new version laid down beside this one (desktop/updater.js).
   const updater = home ? createUpdater({ home: process.env.UGC_HOME, appDir: APP_DIR, log, key: require('./update-key') }) : null;
 
   let origin = null;         // http://127.0.0.1:<port>, once the server answers
@@ -133,14 +133,14 @@ function run() {
   // Only web and mail addresses leave the app - never file:, never a scheme a page made up.
   const outside = (url) => { if (/^(https?|mailto):/i.test(url)) shell.openExternal(url); };
 
-  // Full screen and back - F11, and the strip's own button (phase V19). Out of full screen the window is maximised,
-  // with Windows' own title bar - (phase V60, the owner's (пп3а)) the way it always opens; nothing is remembered.
+  // Full screen and back - F11, and the strip's own button. Out of full screen the window is maximised,
+  // with Windows' own title bar - the way it always opens; nothing is remembered.
   function toggleFull(win) {
     const full = !win.isFullScreen();
     if (!full) win.once('leave-full-screen', () => win.maximize());
     win.setFullScreen(full);
   }
-  // (phase V19, the owner 2026-10-08) The window's buttons the pages draw at the right of their strip (desktop/preload.js):
+  // The window's buttons the pages draw at the right of their strip (desktop/preload.js):
   // minimise, full screen and back, quit - answered for the app's own pages only.
   const own = (e) => internal(e && e.senderFrame ? e.senderFrame.url : '');
   ipcMain.on('ugc-window', (e, what) => {
@@ -156,7 +156,7 @@ function run() {
     const win = own(e) ? BrowserWindow.fromWebContents(e.sender) : null;
     return !!(win && !win.isDestroyed() && win.isFullScreen());
   });
-  // (phase V33.4, the owner's (х40)) "show in folder": a file of the library shown in Explorer (selected in its folder), or a
+  // "show in folder": a file of the library shown in Explorer (selected in its folder), or a
   // folder of it opened - a highlights project's renders. Only an ADDRESS of the library's own (/media/..., /projects/...) is
   // taken, resolved inside the library and nowhere else: a page never names a path on the disk. Answers whether it was shown.
   ipcMain.handle('ugc-reveal', (e, url) => {
@@ -266,26 +266,25 @@ function run() {
       show: false,
       backgroundColor: BG,
       autoHideMenuBar: true,
-      // (phase V83, (о16)) The app's sign, not Electron's (tools/make-icon.js).
+      // The app's sign, not Electron's (tools/make-icon.js).
       icon: ICON,
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        // What the pages may ask of their window (phase V19) - its buttons, a restart, a picked file's path,
+        // What the pages may ask of their window - its buttons, a restart, a picked file's path,
         // "show in folder" - nothing else.
         preload: path.join(__dirname, 'preload.js'),
         // Pages poll their generations; a minimised window keeps polling, as an app should.
         backgroundThrottling: false,
       },
     });
-    // (phase V83, (н4)) A pin of this window starts the launcher - with its icon, under the app's name.
+    // A pin of this window starts the launcher - with its icon, under the app's name.
     if (LAUNCHER && process.platform === 'win32') {
       try {
         win.setAppDetails({ appId: APP_ID, appIconPath: LAUNCHER, appIconIndex: 0, relaunchCommand: `"${LAUNCHER}"`, relaunchDisplayName: 'UGC Studio' });
       } catch (e) { log.line('the taskbar details were not set: ' + e.message); }
     }
-    // (phase V60, the owner 2026-10-29, (пп3а): "давай при открытии приложения открывать во все окно, но не на полный экран")
     // MAXIMISED at every start - Windows' title bar and the taskbar stay; full screen is the person's (F11, the strip's
     // button), and the next start is maximised again. `--windowed` (checks) is an ordinary window that takes no focus.
     win.once('ready-to-show', () => {
@@ -308,8 +307,8 @@ function run() {
     return win;
   }
 
-  // Closing the window stops the server, and a render with it - which closing a browser tab never
-  // did. So a render still running is asked about first. Asked once: another close while the
+  // Closing the window stops the server, and a render with it. So a render still running is
+  // asked about first. Asked once: another close while the
   // question is open is ignored, or its answer could overrule the one being given.
   async function confirmClose(e, win) {
     if (closeConfirmed || !origin) return;
@@ -338,8 +337,8 @@ function run() {
     return response === 0;
   }
 
-  // (phase V23, the owner 2026-10-09: the whole app, not the server alone) A new version is in the program folder: the
-  // app starts again on it. A running render is asked about first; the draft is not - it is on the disk, and the new run
+  // A new version is in the program folder: the whole app (not the server alone) starts again on it. A running render
+  // is asked about first; the draft is not - it is on the disk, and the new run
   // opens it as it was. will-quit stops the server and its ffmpeg as on any quit.
   async function restartApp(win) {
     if (asking || closeConfirmed) return;
@@ -349,7 +348,7 @@ function run() {
     if (!go) return;
     log.line('restarting for a new version');
     closeConfirmed = true;
-    // (phase V83, (н2)) Started by the launcher, the launcher starts it again - and switches to a new version on the way.
+    // Started by the launcher, the launcher starts it again - and switches to a new version on the way.
     if (home && home.restart()) { app.quit(); return; }
     app.relaunch();
     app.quit();
@@ -358,7 +357,7 @@ function run() {
   async function renderRunning() {
     try {
       const r = await fetch(origin + '/api/mv3q', { signal: AbortSignal.timeout(1500) });
-      // The queue's own, or any render - Export -> Render runs outside the queue (`busy`, lib/render-busy.js; V23).
+      // The queue's own, or any render - Export -> Render runs outside the queue (`busy`, lib/render-busy.js).
       const d = await r.json();
       return !!(d.running || d.busy);
     } catch {
@@ -426,7 +425,7 @@ function run() {
   // Chromium brings no context menu of its own. This one has what a right click is for here: copy
   // and paste, a picture or a clip saved out, a link copied. A page with its own menu (the
   // Library's cards) cancels the event, and this one does not open. There is no Inspect and no F12:
-  // the window has no developer tools at all (the owner, 2026-10-27) - a check of the window reaches
+  // the window has no developer tools at all - a check of the window reaches
   // its pages through --remote-debugging-port.
   function contextMenu(contents, p) {
     const groups = [];
@@ -471,8 +470,7 @@ function run() {
     s.setPermissionRequestHandler((wc, _permission, done, details) => done(internal(details.requestingUrl || wc.getURL())));
     s.setPermissionCheckHandler((_wc, _permission, requestingOrigin) => internal(requestingOrigin));
 
-    // Every download asks where to save it. A browser showed progress in its download bar; here it
-    // is the taskbar button.
+    // Every download asks where to save it. Its progress is shown on the taskbar button.
     s.on('will-download', (_e, item, contents) => {
       const win = contents ? BrowserWindow.fromWebContents(contents) : null;
       item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('downloads'), item.getFilename()) });

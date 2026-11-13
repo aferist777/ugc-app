@@ -4,7 +4,7 @@
    This file draws the words on the preview canvas until libass in the page is up, or when it did not
    start (captions/layer.js).
    HOW A CAPTION LOOKS - the fields, the defaults, where it sits - is public/js/captions/style.js, the
-   one module the server's builder reads too (phase K0), so the screen and the file cannot disagree
+   one module the server's builder reads too, so the screen and the file cannot disagree
    over a default.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -16,7 +16,7 @@ import { spells, typedWords } from '../captions/words.js';
 import { pageBox, rowsPlan, pageKey } from '../captions/place.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
-// at the weight its @font-face is declared at (css/caption-fonts.css, K5).
+// at the weight its @font-face is declared at (css/caption-fonts.css).
 const _css = (st, px) => (st.italic ? 'italic ' : '') + cssWeight(st.font, st.bold) + ' ' + px + 'px "'
   + st.font + '", "Liberation Sans", sans-serif';
 
@@ -24,7 +24,7 @@ export { autoSize, autoWordsPerLine };
 
 /**
  * The style as everything downstream should read it, with the automatic parts filled in - the lane's,
- * or, given a caption, that caption's own on top of it (phase K0).
+ * or, given a caption, that caption's own on top of it.
  */
 export function styleOf(track, fmt, clip) {
   const st = resolveStyle(track && track.style, clip && clip.style);
@@ -113,7 +113,7 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
   // The style speaks in frame pixels; the canvas is a smaller frame of the same shape.
   const frame = renderFrame(fmt);
   const scale = H / frame.h;
-  // (phase V71) A lane in two rows: a page from its In to the end of its Out, standing still in its row (captions/place.js rowsPlan).
+  // A lane in two rows: a page from its In to the end of its Out, standing still in its row (captions/place.js rowsPlan).
   const plan = tr.kind === 'subs' ? rowsPlan(tr, frame.w, frame.h) : null;
   let n = -1;
   const live = plan
@@ -122,14 +122,14 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
   if (!live.length) return;
 
   for (const c of live) {
-    // The lane's style, or this caption's own on top of it (phase K0).
+    // The lane's style, or this caption's own on top of it.
     let st = styleOf(tr, fmt, c);
-    // LINES WHERE THE FILE BREAKS THEM (K2): the .ass is broken by pages.js, not by libass, so the same
+    // LINES WHERE THE FILE BREAKS THEM: the .ass is broken by pages.js, not by libass, so the same
     // rule says where here - and a page holding a word wider than a line is drawn smaller, as there. A
     // line break typed into a caption is a break in both.
-    // Typed text is broken in each paragraph it was typed in, at breakable blanks only (review K2).
+    // Typed text is broken in each paragraph it was typed in, at breakable blanks only.
     // The words only while they spell the text, as the file has them (ass.js) - and a typed line of the subtitle lane
-    // timed by its letters, as the file times it (phase V30, block 1, words.js typedWords), paragraphs as typed.
+    // timed by its letters, as the file times it (words.js typedWords), paragraphs as typed.
     const heard = Array.isArray(c.words) && c.words.length;
     const typed = st.effect === 'karaoke' && !heard && tr.kind === 'subs' ? typedWords(c.name, +c.dur || 0) : null;
     const words = typed ? typed.words : (st.effect === 'karaoke' && spells(c.words, c.name) ? c.words : null);
@@ -150,7 +150,7 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     const lh = Math.max(6, st.size * scale);
     const px = lh / face.line;
     const a = anchorOf(st, W, H);
-    // Never off the frame (phase V30, block 3, (с34)): moved back inside by what the .ass moves it by.
+    // Never off the frame: moved back inside by what the .ass moves it by.
     const pb = pageBox(c, tr.style, tr.kind === 'subs', frame.w, frame.h, plan ? tr : null);
     a.x += pb.dx * scale; a.y += (pb.dy + (pb.lift || 0)) * scale;
     ctx.save();

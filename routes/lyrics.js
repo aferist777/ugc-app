@@ -1,7 +1,7 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAVED LYRICS - AUDIO -> Music -> Lyrics (phase V59.1, (мз6а); the store is lib/lyrics-store.js). Generate music saves
+// SAVED LYRICS - AUDIO -> Music -> Lyrics (the store is lib/lyrics-store.js). Generate music saves
 // into it (its Lyrics' "save", Custom's "save" by the Lyrics field) and reads it (Custom's list of saved texts); the media
 // tree's node `music:lyrics` shows it as tiles (routes/library.js).
 //

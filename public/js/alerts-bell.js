@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    ALERTS — the button in the top bar, on every page.
 
-   What is being generated right now, and what came of what was generated before
-   (docs/local-app/PLAN.md, "Alerts"). The work itself is the server's: it waits for every
+   What is being generated right now, and what came of what was generated before.
+   The work itself is the server's: it waits for every
    generation, files the result and writes the answer into the journal (lib/gen-jobs.js). This is
    only the window onto that journal, which is why it can sit on a page that started none of it.
 
@@ -12,7 +12,7 @@
    announced, so walking from one page to another does not ring twice for the same picture.
 
    Voices are not here. A read takes seconds, and a list of them would bury the things worth
-   waiting for. A source being added is (phase V28.1): its download, transcription and topics are
+   waiting for. A source being added is: its download, transcription and topics are
    minutes of work the person was let go from, and its row is where they come back to it. Its
    window flies into the button on the way (flyToAlerts), with a swoosh, and the button answers.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -27,7 +27,7 @@ import { setFigures } from './num.js';
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
 const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓', highlights: '✂' };
-// (phase V73 block 6, "Меню Alerts") A row's kind as one of the interface's icons, its word under the pointer. The 3D Studio's
+// A row's kind as one of the interface's icons, its word under the pointer. The 3D Studio's
 // page keeps the marks above (OLD_LOOK).
 const KIND_ICON = { image: ['image', 'Picture'], video: ['film', 'Video'], music: ['music', 'Music'], source: ['download', 'Source'],
   highlights: ['scissors', 'Highlights'] };
@@ -39,7 +39,7 @@ let _timer = null;
 let _tick = null;
 let _items = [];
 let _counts = { running: 0, unseen: 0 };
-let _wait = null;                           // the chip that says how long is left (X3)
+let _wait = null;                           // the chip that says how long is left
 let _armed = null;                          // the retry waiting for a second press
 let _audio = null;
 
@@ -51,7 +51,7 @@ const _el = (tag, cls, text) => {
 };
 
 const _json = (url, opt) => fetch(url, opt).then(r => r.json()).catch(() => null);
-// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): there the empty list keeps its own line.
+// The 3D Studio's page keeps its look: there the empty list keeps its own line.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
 // ── the bell ────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ function _ding() {
   } catch (e) { /* no sound is not a failure of the news */ }
 }
 
-// THE SWOOSH (phase V28.1): a window handed over to Alerts flies into the button with it - noise through a
+// THE SWOOSH: a window handed over to Alerts flies into the button with it - noise through a
 // band-pass sweeping down, made here like the bell. Quiet; never a failure of the hand-over.
 function _swoosh() {
   try {
@@ -113,8 +113,8 @@ function _swoosh() {
   } catch (e) { /* no sound is not a failure of the hand-over */ }
 }
 
-// THE TELEGRAM CHIME (phase TG, the owner 2026-10-21: "добавим новый звук при добавлении медиа через телеграм") - a post
-// the bot brought in landed in REFERENCES: three quick rising notes, brighter than the bell, so the two are told apart.
+// THE TELEGRAM CHIME - a post the bot brought in landed in REFERENCES: three quick rising notes, brighter than the
+// bell, so the two are told apart.
 function _tgChime() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -138,7 +138,7 @@ function _tgChime() {
   } catch (e) { /* no sound is not a failure of the news */ }
 }
 
-// ── REFERENCES: a post landed (phase TG) ─────────────────────────────────────
+// ── REFERENCES: a post landed ─────────────────────────────────────
 // Read with the journal. A post newer than the last one this window knew of (kept across pages, so walking from one
 // page to the next does not ring again) chimes, says where it went, and tells the page: `ugc-references` on window -
 // the Library and Merge read their tree and gallery again.
@@ -178,7 +178,7 @@ const _running = (r) => r.state === 'running';
 const _canOpen = (r) => r.state === 'done' && r.result && r.result.path;
 
 // WHERE A ROW TAKES YOU: back to where it was started - except what has landed, which is shown
-// where it was filed, outlined (phase L4, the owner 2026-09-23; the cases below - ?reveal= or ?sel=
+// where it was filed, outlined (the cases below - ?reveal= or ?sel=
 // in the Library, js/library/main.js; ?reveal= in Merge's Library panel, js/merge-v3/main.js). While
 // it runs, or when it failed, the place it was started from is still the place: that is where it is
 // waited for, or asked again.
@@ -186,13 +186,12 @@ function _hrefOf(rec) {
   const w = rec.where || {};
   const spot = w.spot || {};
   const path = (rec.result || {}).path || '';
-  // (phase V64 block 4, the owner's (зг12): "вариант А. ведет в library в ту папку куда файл сгенерировался") A picture or a
+  // A picture or a
   // clip made in a chat's window on the LIBRARY page: once it is filed, the Library - the folder it lies in, it outlined
   // (?reveal=), the window open again (?open=); while it runs, or when it failed, the window over IMAGES / VIDEO (w.href).
   if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'pictures' || spot.view === 'videos')) {
     return '/library?shelf=media&reveal=' + encodeURIComponent(path) + '&open=' + spot.view;
   }
-  // (phase V64, fix (д), the owner 2026-11-01: "если сгенерировано что-то в merge, то вести в библиотеку merge и обвести золотом")
   // Music and sounds of Merge's sound window, an environment or a lookbook made from Merge: once filed, Merge's Library panel -
   // the folder it lies in, every file of the press outlined gold (?reveal=, several for Suno's two tracks).
   if (rec.state === 'done' && path && w.page === 'merge' && ['audio', 'envmake', 'lbmake'].includes(spot.view)) {
@@ -204,32 +203,31 @@ function _hrefOf(rec) {
   if (rec.state === 'done' && path && (spot.view === 'pictures' || spot.view === 'videos') && spot.key) {
     return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
   }
-  // A 4K sheet (phase H): once it is drawn, the row leads to the character itself, selected on the
+  // A 4K sheet: once it is drawn, the row leads to the character itself, selected on the
   // shelf - the row carries it in where.spot.key; while it runs, or when it failed, where it was asked.
   if (rec.state === 'done' && rec.what === 'sheet' && spot.key) {
     return '/library?shelf=characters&sel=' + encodeURIComponent(spot.key);
   }
-  // An environment or a lookbook made from the Library (phase I's chats; phase V58 the generators' window, js/gen-window.js,
-  // with the same place): once it is made, the row leads to it, outlined - (phase V56) in IMAGES -> Environments / Lookbooks
-  // on Media, the shelves having gone; its id there is its file name. While it runs, or when it failed, to the generator.
+  // An environment or a lookbook made from the Library (the generators' window, js/gen-window.js): once it is made, the
+  // row leads to it, outlined - in IMAGES -> Environments / Lookbooks on Media; its id there is its file name. While it
+  // runs, or when it failed, to the generator.
   if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'envmake' || spot.view === 'lbmake')) {
     return '/library?shelf=media&kind=' + (spot.view === 'envmake' ? 'environments' : 'lookbooks')
       + '&sel=' + encodeURIComponent(path.split('/').pop());
   }
-  // (phase V59, the owner 2026-10-29: "клик по alerts будет вести не в окно попап, а в папку с выделением сгенерированного
-  // файла музыки") Music made in the Library's sound window (js/sound/sound-window.js - a
+  // Music made in the Library's sound window (js/sound/sound-window.js - a
   // sound's row leads to SFX → My sounds → Generated the same way): the folder under Music its tracks went into
   // (`spot.key` - the tree's key), both tracks outlined once they are filed (the result's `ids`, lib/audio-gens.js); while it
   // runs, or when it failed, that folder alone.
   if (w.page === 'library' && spot.view === 'musicmake') {
     const ids = rec.state === 'done' ? ((rec.result || {}).ids || []).filter(Boolean) : [];
-    // (phase V64, (зг12)) ...and the sound window open again over it.
+    // ...and the sound window open again over it.
     return '/library?shelf=media&kind=' + encodeURIComponent(spot.key || 'music') + ids.map(id => '&sel=' + encodeURIComponent(id)).join('') + '&open=audio';
   }
   return w.href || '';
 }
 
-// ── HOW LONG IS LEFT (phase X3, the owner 2026-09-22) ───────────────────────
+// ── HOW LONG IS LEFT ───────────────────────
 // A chip to the left of the button, whenever something is running. What it says is the wait: the
 // LONGEST of what is still going, not the sum, because generations run side by side - ten clips
 // started a second apart are done when the slowest is done, not ten times later.
@@ -240,7 +238,7 @@ function _hrefOf(rec) {
 // is replaced the first time something of that kind finishes. Every poll recomputes it, so it ticks
 // down by itself and jumps the moment a fragment lands.
 //
-// BY MODEL (phase V23, V-F): a Seedance clip and a Grok one, a nano-banana picture and a gpt one, are not one kind of
+// BY MODEL: a Seedance clip and a Grok one, a nano-banana picture and a gpt one, are not one kind of
 // wait. The last few of the same kind AND the same model (`engine`, the aggregator after " @ " left off) first, then
 // of the kind, then the built-in number. The MIDDLE of them, not the mean: one row resumed after the app was closed
 // for an hour would pull a mean of six far out. A row of the fake aggregator ("FAKE ·" in its title) is twenty
@@ -276,7 +274,7 @@ function _typical(what, model) {
 }
 
 // The wait, in milliseconds, or 0 when nothing is running. A row that knows when it is expected to end (`etaAt`,
-// phase V28.1: a source being added - its download says what is left) is taken at its word.
+// a source being added - its download says what is left) is taken at its word.
 function _leftMs() {
   const now = Date.now();
   let most = 0;
@@ -304,7 +302,7 @@ function _paintWait() {
   if (!n) { _wait.hidden = true; _wait.textContent = ''; return; }
   const ms = _leftMs();
   _wait.hidden = false;
-  // (phase V73 block 6) its figures in mono, so the chip keeps its width while it counts down
+  // its figures in mono, so the chip keeps its width while it counts down
   if (OLD_LOOK()) _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
   else setFigures(_wait, ms ? _leftSays(ms) : 'any moment now');
   _wait.title = n + (n === 1 ? ' thing is running' : ' things are running side by side')
@@ -338,8 +336,8 @@ function _row(rec) {
   main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || 'generation'));
   // Under the title: what went wrong, or - while it runs and says so - what it is doing right now.
   // A clip spends half a minute having the place and the fragment looked at before anything is
-  // sent to a renderer, and a row that only said "Clip - fragment 3" looked stuck (the owner,
-  // 2026-09-22). Otherwise, where it was started from.
+  // sent to a renderer, and a row that only says "Clip - fragment 3" looks stuck. Otherwise,
+  // where it was started from.
   const stage = _running(rec) ? String(rec.stage || '') : '';
   // A finished row may say what came of it in a word (a source: "12 topics").
   const note = rec.state === 'done' && rec.result && rec.result.note ? String(rec.result.note) : '';
@@ -351,11 +349,11 @@ function _row(rec) {
 
   const when = _el('span', 'sv3-al-state');
   const ago = _running(rec) ? _ago(rec.startedAt) : (rec.state === 'done' ? _ago(rec.doneAt) + ' ago' : '');
-  // (phase V73 block 6) the time in mono, as every figure of the pages
+  // the time in mono, as every figure of the pages
   if (OLD_LOOK()) when.textContent = ago; else setFigures(when, ago);
   row.appendChild(when);
 
-  // (phase V73 block 6) "open" and "retry" are quiet buttons: the row itself is the way to the work
+  // "open" and "retry" are quiet buttons: the row itself is the way to the work
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
     const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', 'Open');
@@ -380,7 +378,7 @@ function _row(rec) {
         return;
       }
       _armed = null;
-      // Said to the page as well (phase I): a panel that shows this row's end - the scenario generator's sources, the
+      // Said to the page as well: a panel that shows this row's end - the scenario generator's sources, the
       // highlights panel - reads itself again, because nothing of its own was waiting any more.
       _json('/api/alerts/' + encodeURIComponent(rec.id) + '/retry', { method: 'POST' })
         .then(() => { try { window.dispatchEvent(new CustomEvent('ugc:alert-retried', { detail: { id: rec.id } })); } catch (e) { /* only a hint */ } })
@@ -415,7 +413,7 @@ function _paintMenu() {
   _menu.appendChild(head);
 
   const list = _el('div', 'sv3-al-list');
-  // (phase V73 block 2) the shared empty part (js/ui-state.js); `sv3-al-empty` its place in the menu
+  // the shared empty part (js/ui-state.js); `sv3-al-empty` its place in the menu
   const none = 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.';
   if (!_items.length) list.appendChild(OLD_LOOK() ? _el('div', 'sv3-al-empty', none) : emptyEl(none, { icon: 'bell', cls: 'sv3-al-empty' }));
   for (const rec of _items) list.appendChild(_row(rec));
@@ -493,7 +491,7 @@ function _close() {
 }
 
 // ── a finished generation announces itself ──────────────────────────────────
-// In the corner of popups (js/notice.js, phase V49.1): it goes by itself, and has a ✕ too.
+// In the corner of popups (js/notice.js): it goes by itself, and has a ✕ too.
 function _announce(rec) {
   const href = _hrefOf(rec);
   showToast({
@@ -509,9 +507,9 @@ function _announce(rec) {
 }
 
 // ── reading the journal ─────────────────────────────────────────────────────
-// ONE READ AT A TIME (phase V58, the owner's "two popups from one task"): the journal is read from several places - the
-// timer, a window handed over (pulseAlerts), the list opened, a retry - and two reads going at once both saw a finished
-// row before either had marked it announced, so it popped up twice. A read asked for while one goes is made once after
+// ONE READ AT A TIME: the journal is read from several places - the
+// timer, a window handed over (pulseAlerts), the list opened, a retry - and two reads going at once would both see a finished
+// row before either had marked it announced, so it would pop up twice. A read asked for while one goes is made once after
 // it (any number of asks - one more read), and the page remembers what it announced: a row is never announced twice
 // here, even when the mark did not reach the server (a row asked again and ended again is news again).
 let _reading = null;                        // the read going on - its promise
@@ -548,7 +546,7 @@ async function _readOnce() {
   });
 }
 
-// ── a window handed over (phase V28.1) ──────────────────────────────────────
+// ── a window handed over ──────────────────────────────────────
 /** The button answers: a little bigger for a moment, and two blinks - this is where to look later. The journal is
  *  read at once, so the new row's count is on it. */
 export function pulseAlerts() {
@@ -588,22 +586,21 @@ export function flyToAlerts(el) {
   });
 }
 
-/** Put the button in the top bar, left of Library, and start reading the journal. */
+/** Put the button in the top bar, left of Admin, and start reading the journal. */
 export function mountAlerts(nav) {
   if (!nav || _btn) return;
   _btn = _el('button', 'sv3-alerts');
   _btn.type = 'button';
-  // (phase V73 block 6) an icon and a word, as Admin beside it
+  // an icon and a word, as Admin beside it
   if (!OLD_LOOK()) _btn.insertAdjacentHTML('beforeend', icon('bell', 14));
   _btn.appendChild(_el('span', null, 'Alerts'));
   _btn.appendChild(_el('span', 'sv3-al-count'));
   _btn.addEventListener('click', _toggle);
-  // ANCHORED ON ADMIN (phase R): Admin is the last thing in the strip on every page and is put
-  // there before this runs (initNav), so the bell lands at the right-hand end wherever it is. It
-  // used to hang off the Library link, which is on the LEFT of the strip since phase R.
+  // ANCHORED ON ADMIN: Admin is the last thing in the strip on every page and is put
+  // there before this runs (initNav), so the bell lands at the right-hand end wherever it is.
   const at = nav.querySelector('a[href="/admin"]');
   // The wait stands to the LEFT of the button, so the two read as one thing: what is running, and
-  // how long it has to go (the owner, 2026-09-22).
+  // how long it has to go.
   _wait = _el('span', 'sv3-al-wait');
   _wait.hidden = true;
   nav.insertBefore(_wait, at);

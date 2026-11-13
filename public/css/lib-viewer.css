@@ -7,8 +7,7 @@
    needs cannot live in either page's stylesheet without being copied into the
    other. Both stylesheets declare the same tokens, so these work under either.
 
-   Moved here from css/library.css rather than duplicated: one popup, one look, one
-   place to change it.
+   Kept here rather than duplicated: one popup, one look, one place to change it.
 
    The item itself, not its thumbnail: a still or a clip with controls. The stage
    takes what is left after the metadata column, and the media is capped by BOTH
@@ -17,14 +16,13 @@
 .lib-view-ov{
   position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
   background:var(--ov-dim-deep, oklch(0 0 0 / .72)); padding:24px;
-  /* (phase V60.1, (пк2а)) Darker than the other windows - one looks at the picture here -, blurred as they are. */
+  /* Darker than the other windows - one looks at the picture here -, blurred as they are. */
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
 .lib-view{ display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(860px, 92vh) }
-/* (phase V73 block 4, rule 5) The frame, its head of 40 px, the name and the ✕ of 28 px are the shared ones (`.u-win`,
+/* The frame, its head of 40 px, the name and the ✕ of 28 px are the shared ones (`.u-win`,
    `.u-win-head`, `.u-win-title`, css/app-shell.css; js/library/viewer.js puts them on); the count is the head's quiet note,
-   its figures in mono. The 3D Studio's page keeps the viewer it had - its old frame below, scoped to it (the owner: «Не
-   трогать»). */
+   its figures in mono. The 3D Studio's page keeps a viewer look of its own - its frame below, scoped to it. */
 :root:has(link[href="css/studio3d.css"]) .lib-view{
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
   box-shadow:var(--shadow); overflow:hidden;
@@ -43,8 +41,7 @@
 /* the item's actions: a row of the shared small buttons, an icon and its word (viewer.js fillAct) */
 :root:not(:has(link[href="css/studio3d.css"])) .lib-view-acts{ display:flex; align-items:center; gap:var(--sp-1); flex:0 0 auto }
 
-/* The old shared button. Since phase V73 block 2 the pages wear the shared part (`.u-btn`, css/app-shell.css); this
-   stays for the 3D Studio's page, which keeps its whole look ((б1-13а)), and for the window heads' ✕ until block 4. */
+/* The 3D Studio's button, which keeps its own look; the other pages wear the shared part (`.u-btn`, css/app-shell.css). */
 .lib-btn{
   padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); text-decoration:none;
@@ -62,7 +59,7 @@
   background:var(--bg); padding:10px;
 }
 .lib-view-media{ max-width:100%; max-height:100%; display:block; object-fit:contain; }
-/* (phase V59.1) A saved text of Music -> Lyrics: the text whole, as written, scrolled in its own column. */
+/* A saved text of Music -> Lyrics: the text whole, as written, scrolled in its own column. */
 .lib-view-text{
   align-self:stretch; width:min(680px, 100%); box-sizing:border-box; overflow-y:auto;
   padding:14px 20px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface);
@@ -94,11 +91,11 @@
 .lib-view-stage.has-under{ flex-direction:column; gap:10px }
 .lib-view-stage.has-under > .lib-view-media{ min-height:0; flex:1 1 auto }
 
-/* ── Cutting pieces out of a video (phase TG, block 7; phase V81 - several fragments, js/cut.js, js/ranges.js) ─────────
+/* ── Cutting pieces out of a video (several fragments; js/cut.js, js/ranges.js) ─────────
    Under the video: how to mark, the bar (a ruler, the film's wave, the fragments in gold, the playhead) and a row - ▶, Scenes,
    how many, Delete original, Save…. As wide as the stage allows, at most 820 px. */
 .cut-box{ flex:0 0 auto; width:min(820px, 100%); display:flex; flex-direction:column; gap:6px }
-/* How to mark a fragment, over the bar (V81 amendment, the owner's (нк1)). */
+/* How to mark a fragment, over the bar. */
 .cut-how{ font:500 10.5px/1.3 var(--font); color:var(--muted) }
 .rg{ position:relative; width:100%; border-radius:var(--r-xs); background:var(--surface-2); border:1px solid var(--border); overflow:hidden }
 .rg-cv{ display:block; width:100%; touch-action:none; user-select:none }
@@ -113,10 +110,10 @@
 .cut-orig input{ margin:2px 0 0 }
 .cut-orig-txt{ display:flex; flex-direction:column; gap:2px; min-width:0 }
 .cut-orig-txt small{ font-weight:500; color:var(--muted); overflow-wrap:anywhere }
-/* The window "save the piece to" is the place picker (js/place-tree.js, phase V39): the post viewer's move menu
+/* The window "save the piece to" is the place picker (js/place-tree.js): the post viewer's move menu
    (css/references.css .ref-move) with the tree's rows (css/media-tree.css .mtp-row) - the clip's own place marked there. */
 
-/* ── The sash before the right column (phase V35, the owner's (т5); js/library/viewer.js wireInfoSash) ──────────────
+/* ── The sash before the right column (js/library/viewer.js wireInfoSash) ──────────────
    Dragged, the column widens or narrows - remembered for every viewer; a double press gives the usual width back. It is
    the column's left edge, so the column draws none of its own. */
 .lib-view-sash{

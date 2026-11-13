@@ -1,16 +1,15 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// HOME (the owner 2026-10-22; the page is public/home.html, its plan and mockup docs/local-app/mockups/home.html) - what
-// the Overview's blocks read that no other route gives in one piece. The rest comes from where it already is: Now from
-// the journal (/api/alerts), the render queue (/api/mv3q), the bot (/api/telegram) and the links (/api/links); The app from
+// HOME (the page is public/home.html) - what
+// the Overview's blocks read that no other route gives in one piece. The rest comes from where it already is: The app from
 // the key check (/api/keys/health - the balances of kie.ai, ElevenLabs and OpenRouter are in its words), /api/telegram,
 // /api/cloudflare.
 //
-//   GET /api/home/projects           -> { kinds: { all, blank, talking, voiceover, highlights } }   (phase V70, P13) the
+//   GET /api/home/projects           -> { kinds: { all, blank, talking, voiceover, highlights } }   the
 //                                       block "projects": the five changed last of each kind, each { key, title, kind, format,
 //                                       updatedAt, createdAt, thumb, dur, clips, frags, fragsAll }; Merge's draft first in
-//                                       `all` and `blank` while something lies on it (the owner's (хп57))
+//                                       `all` and `blank` while something lies on it
 //   GET /api/home/news?since=<iso>   -> { since, refs, renders, made, failed }   what came since the last visit
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -56,14 +55,12 @@ function _durOf(t) {
   return Math.round(end * 10) / 10;
 }
 
-// ── THE BLOCK "PROJECTS" (phase V70, P13, the owner 2026-11-01: "поле проектов - с видом как открытый дропдаун в merge.
-// только отображаться будут последние 5 строк проектов выбранного типа. при наведении на строку показывать"; (хп28)-(хп30),
-// (хп43), (хп57)) - it took the place of Continue. One read of the timelines answers every chip: the five changed last of
+// ── THE BLOCK "PROJECTS". One read of the timelines answers every chip: the five changed last of
 // each kind. The kinds are Merge's list's (js/merge-v3/projects.js): a highlights project is ONE line - its own timeline (a
 // fragment opens from its tiles); a talking head is a `sv3_<id>` timeline of a scenarios project - its `sv3_<id>_<n>` too
 // (js/merge-v3/workshop.js projectIdOf) -, a voiceover the same kind of project whose record says so (THE voiceover draft is
 // not a project yet and is left out); every other timeline is a blank one. MERGE'S DRAFT is first in `all` and `blank` while
-// something lies on it ((хп57)); an empty draft is nothing to open.
+// something lies on it; an empty draft is nothing to open.
 const KINDS = ['blank', 'talking', 'voiceover', 'highlights'];
 const PER_KIND = 5;
 

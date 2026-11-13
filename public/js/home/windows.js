@@ -1,7 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   HOME'S WINDOWS (phase V70, P13, the owner 2026-11-01, (хп27): "зона генераторов - чаты картинок, видео и музыки (и звуков).
-   в отдельном поле персонаж, предмет, look, окружение") - the generations open OVER HOME, as the Library opens them (phase
-   V64 block 4, js/library/main.js _openChat, _openMusic, _openGen, _openProp) - the same modules, untouched:
+   HOME'S WINDOWS - the generations open OVER HOME, as the Library opens them (js/library/main.js _openChat, _openMusic,
+   _openGen, _openProp) - the same modules, untouched:
 
      openChat('pictures' | 'videos')   the pictures chat / the video chat (js/merge-v3/chat-window.js) on THE DRAFT's
                                        conversation - the unbound one, Merge's draft's and the Library's (chat-owner.js
@@ -11,11 +10,11 @@
                                        Music's root, sounds into SFX → My sounds → Generated, the rows to those folders
      openGen('environment' | 'lookbook')   the generators' window (js/gen-window.js openGenerator), the Library's `where`
      openProp()                        New prop (js/prop-window.js)
-   (New Character is main.js's - its window was on Home since phase V60.1.)
+   (New Character is main.js's.)
 
    Home loads none of their sheets up front: each window's are put in at its first opening, waited for, then it opens - a
-   chat's window shows at once with "loading…" meanwhile (V50, chat-window.js openEarly).
-     preload()       (V50, (сп2)) Home drawn and idle: the chats' and the sound window's code and sheets read beforehand
+   chat's window shows at once with "loading…" meanwhile (chat-window.js openEarly).
+     preload()       Home drawn and idle: the chats' and the sound window's code and sheets read beforehand
      setOnMade(fn)   something a window made landed - Home's blocks read again
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -44,7 +43,7 @@ function _css(names) {
     return p;
   }));
 }
-/** (phase V63) The same for Home's quick-start popups (js/home/start.js) - the sheets a window needs, put in once and waited for. */
+/** The same for Home's quick-start popups (js/home/start.js) - the sheets a window needs, put in once and waited for. */
 export const sheets = (names) => _css(names);
 // The chats: Merge's sheets (chat-window.js CHAT_CSS), the attachment window's tree, the viewer's rows, a REFERENCES post.
 const CHAT_SHEETS = ['merge-v3.css', 'mv3-imagen.css', 'folder-column.css', 'media-tree.css', 'dialog.css',
@@ -109,12 +108,12 @@ export async function openSound() {
       SW.configure(HOST);
     }
     await SW.open({ place: () => ({ key: 'music', label: 'Music' }) });
-    // (V50) The key is wanted only by a sound's Alerts row, and the tree is a long read: asked once the window shows.
+    // The key is wanted only by a sound's Alerts row, and the tree is a long read: asked once the window shows.
     _soundsGen();
   } catch (e) { showError('The sound window did not open: ' + ((e && e.message) || e)); }
 }
 
-// (V50, (сп2)) Home drawn and idle: the chats' and the sound window's code and sheets read beforehand, so a first opening is
+// Home drawn and idle: the chats' and the sound window's code and sheets read beforehand, so a first opening is
 // like a second. Code and CSS only - the conversation is asked for at a press (useDraft).
 export function preload() {
   const quiet = () => {};

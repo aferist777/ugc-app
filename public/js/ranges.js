@@ -1,7 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   FRAGMENTS OVER A VIDEO (phase V81, the owner 2026-11-09: "надо пользователю дать возможность на одном видео сделать сразу
-   несколько выделений. то есть пользователь как в merge при выделении волны, может выделять фрагменты на видео и двигать рамки
-   по нему"). The bar under every viewer's video (js/cut.js builds it; js/sound/scrub.js is its brother for a sound): a ruler,
+   FRAGMENTS OVER A VIDEO. The bar under every viewer's video (js/cut.js builds it; js/sound/scrub.js is its brother for a sound): a ruler,
    the film's sound as a wave (GET /api/track-peaks - a video's sound too; a flat line when it has none), the fragments as
    gold frames, the playhead.
 
@@ -11,18 +9,17 @@
      an edge                        trims (the video shows the frame under it - where a cut lands)
      the middle                     moves the fragment between its neighbours
      a press on a fragment          picks it and puts the playhead at its start; Ctrl - adds it to the pick or takes it out,
-                                    Shift - every fragment from the last one picked to it (the owner: "с зажатым ctrl можно
-                                    выделять нужные сцены")
+                                    Shift - every fragment from the last one picked to it
      a press on the ruler           moves the playhead (and a drag goes on moving it)
      the right button               `onMenu(e, { part, picked })` - on a fragment (picked first when it was not) or not
      Alt + wheel                    zooms toward the pointer; the wheel scrolls while zoomed in
    Keys - `key(e)`, called by the page while its viewer is on top and no field has the keyboard: Delete takes the picked
-   fragments off, Escape lets the pick go (true - it was used: the viewer stays open, (в16)), Ctrl+Z / Ctrl+Y step back and on
+   fragments off, Escape lets the pick go (true - it was used: the viewer stays open), Ctrl+Z / Ctrl+Y step back and on
    (every gesture, and a whole set laid by "Scenes", is one step).
 
    PLAYING: while there are fragments the video plays only them, one after another and round again (js/cuts/parts.js - the
-   order the join will have, (в8)); with none, the whole video. The fragments and their steps live in `opts.state`, which the
-   page keeps per video while the viewer is open ((в18)) - stepping to another video and back finds them where they were.
+   order the join will have); with none, the whole video. The fragments and their steps live in `opts.state`, which the
+   page keeps per video while the viewer is open - stepping to another video and back finds them where they were.
 
      rangesBar(video, { src, state, onChange(parts), onMenu(e, hit) })
        -> { el, parts(), picked(), setParts(list), setMarks(times), pick(ids), del(), key(e), redraw(), destroy() }
@@ -439,7 +436,7 @@ export function rangesBar(video, opts) {
     picked: () => normParts(sorted().filter((p) => sel.has(p.id)).map((p) => ({ in: p.in, out: p.out, label: p.label })), dur),
     count: () => st.parts.length,
     dur: () => dur,
-    /** Lay a whole set (the scenes): what was drawn goes - one step back brings it again ((в9)). */
+    /** Lay a whole set (the scenes): what was drawn goes - one step back brings it again. */
     setParts(list) {
       const before = snap();
       st.parts = (list || []).map((p) => ({ id: _id(), in: r2(+p.in), out: r2(+p.out), ...(p.label ? { label: String(p.label) } : {}) }));

@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN -> AI SETTINGS: the agents' ladder (phase V25, the owner 2026-10-13: "кнопку в admin между api keys и
-   import/export с названием ai settings и поместить лесенку туда с пояснением что это такое").
+   ADMIN -> AI SETTINGS: the agents' ladder.
 
    One ladder for every agent of the app - the chats' writers and everything that reads a picture (lib/agents.js):
    a number, the aggregator, the model, a way to move or remove the step; at most five; saved as it is changed, there
    is no Save button. An aggregator with no key on API keys, or whose key was refused at the last check, cannot be
-   chosen (the owner's answer 11), and a step already standing on one is marked as stepped over.
+   chosen, and a step already standing on one is marked as stepped over.
 
    GET /api/ai-settings when the pane shows, PUT /api/ai-settings { agents } on every change - the order written whole.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -16,7 +15,7 @@
   let msg = '';
   let busy = false;
   let failed = false;     // the settings could not be read and nothing is shown yet
-  // (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js); the pane being read or not read is the
+  // A failure is a popup in the corner (js/notice.js); the pane being read or not read is the
   // shared part (js/ui-state.js) - this is a classic script, so the modules come with import().
   const sayError = (t, detail) => { import('/js/notice.js').then(m => m.showError(t, detail ? { detail } : {})).catch(() => {}); };
   const stateEl = (make) => { const hold = el('div'); import('/js/ui-state.js').then(m => { if (hold.isConnected) hold.replaceWith(make(m)); }).catch(() => {}); return hold; };
@@ -29,7 +28,7 @@
   };
   const prov = (id) => ((st && st.providers) || []).find(p => p.id === id) || null;
 
-  // (V38.1, the owner: "из ai settings должна быть стрелка "назад" чтобы вернуться туда где закончил") Come from the
+  // Come from the
   // scenario generator (?back=/library?...), "← back" leads there again - to the same draft. Read once: a tab's press
   // rewrites the address without its query. Only a page of this app's Library is a way back.
   (function backArrow() {
@@ -46,7 +45,7 @@
 
   // ── What this is ─────────────────────────────────────────────────────────
   function explain() {
-    // (phase V73 block 6) One line of what this is; the four paragraphs fold under "How it works".
+    // One line of what this is; the four paragraphs fold under "How it works".
     const box = el('div', 'ai-say');
     box.appendChild(el('p', 'ai-line', 'The first step of the ladder is asked; the next one only when it fails.'));
     const more = el('details', 'ai-how');
@@ -127,7 +126,7 @@
 
     row.appendChild(el('span', 'ai-off', off ? 'stepped over: ' + off : ''));
 
-    // (phase V73 block 6, (к18)) the arrows and the minus are icons (css/admin.css .ai-ico, Lucide's), not ▲ ▼ −
+    // the arrows and the minus are icons (css/admin.css .ai-ico, Lucide's), not ▲ ▼ −
     const move = (to, sym, title) => {
       const b = el('button', 'u-btn is-s is-icon is-quiet ai-mini ai-ico is-' + sym);
       b.type = 'button';

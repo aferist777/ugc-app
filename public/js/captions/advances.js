@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — how wide each letter is, in thousandths of an em, read from the font files (phase K2).
+   CAPTIONS — how wide each letter is, in thousandths of an em, read from the font files.
 
-   MADE BY tools/caption-advances.js - not edited by hand. Run it again when a font changes; the K2 stand
-   checks the table against the files. 0 is a character the font has no glyph for (drawn in PT Sans).
+   MADE BY tools/caption-advances.js - not edited by hand. Run it again when a font changes; its --check
+   compares the table with the files. 0 is a character the font has no glyph for (drawn in PT Sans).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const CHARS = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяЁёІіЇїЄєҐґ«»…—–№₽“”„‘’€£°•·×‰¿¡";

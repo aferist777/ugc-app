@@ -11,9 +11,7 @@
    ahead: warmProxies() when a project opens or a file is filed, and a sweep over every known film at
    boot and every ten minutes after.
 
-   The file this came out of also held the talking-head editor's render, which went with that editor
-   (docs/local-app/PLAN.md, phase 3); the address keeps its /ffmpeg/ prefix so nothing that asks for a
-   proxy has to change. */
+   The address keeps an /ffmpeg/ prefix: it is what everything that asks for a proxy uses. */
 
 const express    = require('express');
 const path       = require('path');
@@ -35,7 +33,7 @@ const _hearing = () => { try { return require('../lib/whisper-local').hearing();
 // the preview decode a small file instead of the full 1080x1920 source.
 // Concurrent requests for the same proxy share one transcode.
 // Where a copy lives and how it is encoded are lib/preview-proxy.js's: the highlights cut makes a piece's copy in
-// the pass that cuts it (phase V33.2 block 0).
+// the pass that cuts it.
 const PREVIEW_CACHE_DIR = PP.CACHE_DIR;
 try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true }); } catch {}
 const _proxyInflight = new Map();
@@ -62,8 +60,8 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low, entry) {
   });
 }
 // ONE QUEUE FOR EVERY PROXY, one ffmpeg at a time. A proxy transcode takes about three
-// cores for a second or two; started as they were asked for - one per request, in parallel -
-// a project of forty clips opened was forty ffmpegs at once, and on four cores that is
+// cores for a second or two; started as they are asked for - one per request, in parallel -
+// a project of forty clips opened would be forty ffmpegs at once, and on four cores that is
 // every preview stalling together. Two priorities: LIVE is a proxy a player is waiting
 // for right now (the /preview-proxy request) and goes to the front; WARM is one made ahead
 // (open, a file filed, the sweep) and goes to the back - and waits altogether while an export
@@ -119,7 +117,7 @@ function _pumpProxies() {
   if (_pqBusy) return;
   const next = _pq[0];
   if (!next) return;
-  // A warm-up waits for the export to finish - and (phase V23) for recognition on this computer, which wants the same
+  // A warm-up waits for the export to finish - and for recognition on this computer, which wants the same
   // processor; a live request does not - a person is watching.
   if (!next.live && (BUSY.busy() || _hearing())) {
     if (!_pqTimer) _pqTimer = setTimeout(() => { _pqTimer = null; _pumpProxies(); }, 2000);
@@ -163,10 +161,10 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     const reqH = parseInt(req.query.h, 10);
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
     const rev = /^(1|true)$/i.test(String(req.query.rev || ''));
-    // (phase V33.2 block 0) A highlights fragment's piece with no copy at this quality yet - cut before its copy was made in
+    // A highlights fragment's piece with no copy at this quality yet - cut before its copy was made in
     // the cutting pass, or the preview set to 360 / 720 - is played AS IT IS (H.264 the size of the video, one layer) and
     // its copy made behind, at the back of the queue: the picture shows at once instead of after the transcode. Not kept
-    // by the browser, so the next request finds the copy. Every other film waits for its copy as before (a 4K birol).
+    // by the browser, so the next request finds the copy. Every other film waits for its copy (a 4K birol).
     if (!rev && !fs.existsSync(_proxyCachePath(abs, h, false)) && require('../lib/highlights-store').isPiece(abs)) {
       _ensureProxy(abs, h, false, false).catch(e => { console.warn('[ffmpeg/preview-proxy]', path.basename(abs), e.message); });
       res.setHeader('Cache-Control', 'no-store');
@@ -185,10 +183,10 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
 // ── Proxies made AHEAD of the preview ────────────────────────────────────────
 // Opening a project and importing one both know every clip the preview is about to ask
 // for, so the transcodes are queued then - at the back of the one queue, behind anything a
-// player is waiting for - instead of on the first play, where each missing proxy was a
+// player is waiting for - instead of on the first play, where each missing proxy would be a
 // freeze for the length of its transcode. Fire and forget: nothing waits on this, and a
-// failure here only means the preview's own request makes the proxy later, as it always
-// did. What is cached already costs a stat. Returns how many were actually queued.
+// failure here only means the preview's own request makes the proxy later. What is cached
+// already costs a stat. Returns how many were actually queued.
 function warmProxies(srcs, h) {
   const hh = PROXY_HEIGHTS.includes(+h) ? +h : 480;
   let queued = 0;

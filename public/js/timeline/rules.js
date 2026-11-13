@@ -1,12 +1,12 @@
-/* rules.js - WHAT THE PREVIEW AND THE RENDER MUST ANSWER THE SAME about a timeline (V91 cleanup block 6, the owner's
-   (чк16): each was written two to four times, and a copy fixed alone made the preview show one thing and the render do
-   another). The page imports it, the server require()s it (Node 24) - as js/sound/fades.js.
+/* rules.js - WHAT THE PREVIEW AND THE RENDER MUST ANSWER THE SAME about a timeline: one copy of each rule, so the preview
+   cannot show one thing while the render does another. The page imports it, the server require()s it (Node 24) - as
+   js/sound/fades.js.
 
      isPlaced(clip)          an insert placed on the frame: `tw` has a value at all - not "smaller than the frame":
                              anchored by its middle, an insert as wide as the film can still be moved, turned and hung
                              over the edge. `tw: null` is the unplaced state, and the only one.
      isStillSrc(src)         a picture, by its file's extension - a still has no length of its own.
-     endOf(timeline)         how long it runs: the end of its last clip, in seconds (each reader rounds as it did).
+     endOf(timeline)         how long it runs: the end of its last clip, in seconds (each reader rounds it its own way).
      gainOf(lane, clip, own) how loud a sound is heard: the clip's volume (`own` - one being dragged, not written yet)
                              times its lane's. 0 or less is not heard at all - left out of the mix, not played silent. */
 

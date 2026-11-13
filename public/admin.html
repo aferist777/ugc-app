@@ -22,8 +22,7 @@
 </nav>
 
 <div class="adm-body">
-  <!-- Four panes, one strip. The address carries the pane (#keys, #ai, #local, #thanks), so a reload stays put. (Import /
-       Export went in phase V54, the owner 2026-10-28.) -->
+  <!-- Four panes, one strip. The address carries the pane (#keys, #ai, #local, #thanks), so a reload stays put. -->
   <div class="adm-tabs u-tabs" role="tablist">
     <button class="adm-tab u-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
     <button class="adm-tab u-tab" type="button" role="tab" data-pane="ai">AI settings</button>
@@ -33,7 +32,7 @@
 
   <!-- The keys every generator reads, saved into settings.json in the library. -->
   <section class="adm-panel" data-pane="keys">
-    <!-- (phase V73 block 6) the head: the name and the buttons; what the pane is, a line under it -->
+    <!-- the head: the name and the buttons; what the pane is, a line under it -->
     <div class="adm-head">
       <span class="adm-title">API keys</span>
       <span class="sp"></span>
@@ -45,10 +44,10 @@
     <div class="adm-status" id="adm-keys-status"></div>
   </section>
 
-  <!-- The agents' ladder: who reads the words and the pictures, and who if the first is silent (js/admin-ai.js, V25). -->
+  <!-- The agents' ladder: who reads the words and the pictures, and who if the first is silent (js/admin-ai.js). -->
   <section class="adm-panel" data-pane="ai" hidden>
     <div class="adm-head">
-      <!-- (V38.1) Back to where the way here started - the scenario generator, on its draft; only when it started there. -->
+      <!-- Back to where the way here started - the scenario generator, on its draft; only when it started there. -->
       <button class="u-btn is-s adm-back" type="button" id="ai-back" hidden>← Back</button>
       <span class="adm-title">AI settings</span>
     </div>
@@ -56,7 +55,7 @@
     <div class="dio-body" id="ai-body"></div>
   </section>
 
-  <!-- Speech recognition on this computer: the program, the model, the NVIDIA build (js/admin-local.js, K1b). -->
+  <!-- Speech recognition on this computer: the program, the model, the NVIDIA build (js/admin-local.js). -->
   <section class="adm-panel" data-pane="local" hidden>
     <div class="adm-head">
       <span class="adm-title">This computer</span>

@@ -21,8 +21,7 @@
                       Space over an enlarged preview means play, not nothing.
 
    Escape is handled here rather than by each window, and only the top one hears it -
-   the reason the enlarged preview and the picture window used to fight over whose
-   Escape it was. A window that refuses to close (a render in flight) still consumes
+   so two windows never both act on one Escape. A window that refuses to close (a render in flight) still consumes
    it: what is on top decides, including deciding to do nothing.
 
    Everything else a window wants from the keyboard stays its own - it asks topIs()

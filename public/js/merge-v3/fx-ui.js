@@ -1,21 +1,19 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S EFFECTS - WHERE THE PERSON PUTS THEM (phase V84, the owner 2026-11-09/10; docs/local-app/plan/, "Подфаза 3 — V84",
-   (р8), (эф4)-(эф7)).
+   A CLIP'S EFFECTS - WHERE THE PERSON PUTS THEM.
 
-   - THE PANEL (the owner 2026-11-10, (эф13)-(эф16); it was a list at the pointer until then): the full-width "+ Effect" under the
+   - THE PANEL: the full-width "+ Effect" under the
      group's rows opens it, it shuts only by that button - chips of the groups, the chosen group's tiles three a row (pictures and
      films made beforehand, public/fx-tiles/ by tools/fx-tiles.js, the film playing only under the pointer, the effect's line over
      its row). The clip's "Add effect…" (timeline-b.js _clipMenu) picks it and opens the group Effects with the panel (openPanel).
-   - ADDED TO THE WHOLE CLIP ((эф4)): it starts with the clip (fx/params.js newEffect) - a moment of its own length lasts that
-     length, one that goes on lasts to the clip's end -, written in one undo step, and the preview plays its stretch once ((эф7)).
-   - (block 1c) BY THE FACE (Snap zoom, Face mosaic - effects.js `face`): added, the clip's film is counted for its faces first
+   - ADDED TO THE WHOLE CLIP: it starts with the clip (fx/params.js newEffect) - a moment of its own length lasts that
+     length, one that goes on lasts to the clip's end -, written in one undo step, and the preview plays its stretch once.
+   - BY THE FACE (Snap zoom, Face mosaic - effects.js `face`): added, the clip's film is counted for its faces first
      (lib/faces.js, the app's hidden window; "finding the face…" in the group meanwhile) and the face's place in the frame over the
      clip written with it (`path`, `pk`) - one write; none found, it works where a face usually is, and the group says why.
    - THE INSPECTOR'S GROUP "Effects" (fxRows, after Color): a row a effect - its name, where it runs, ✕; the row pressed opens its
      Start and End (seconds into the clip; fx/params.js placeEffect). The effect open is the one whose row was pressed (its frame shows on the
-     timeline, focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span; the owner
-     2026-11-10: one row).
-   - (the owner's (эф11), 2026-11-11) ON SEVERAL AT ONCE: several picked clips (fxManyRows) - a tile puts the effect on each as on it
+     timeline, focus) - kept for the clip it belongs to. Start and End are ONE track with two thumbs (controls.js span).
+   - ON SEVERAL AT ONCE: several picked clips (fxManyRows) - a tile puts the effect on each as on it
      alone, ✕ on a kind takes it off all of them, one undo step; the ticked highlights fragments (hl-group.js, laneEffects) - each
      fragment's main video as one film: a moment at its start, one that goes on over the whole of it.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -28,7 +26,7 @@ import { setClipFields, setClipsFields, selectClipById, fxLive } from './timelin
 import { setLive } from './place-b.js';
 import * as C from './controls.js';
 
-// (block 4b, the owner's (б4-12)) A graphic effect's colours as chosen last for it - a new one takes them (this computer only).
+// A graphic effect's colours as chosen last for it - a new one takes them (this computer only).
 const COLORS_KEY = 'mv3_fx_colors_v1';
 function _colorsMem() {
   try { const m = JSON.parse(localStorage.getItem(COLORS_KEY) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; }
@@ -53,10 +51,10 @@ export function onFocus(cb) { if (typeof cb === 'function') _onFocus.push(cb); }
 export function focusOf() { return _focus ? { ..._focus } : null; }
 const _isOpen = (clipId, fxId) => !!(_focus && _focus.clipId === String(clipId) && _focus.fxId === String(fxId));
 
-// ── The panel of tiles (the owner 2026-11-10, (эф13)-(эф16)) ───────────────
+// ── The panel of tiles ───────────────
 // Under the group's rows, the full-width "+ Effect" opens and shuts the PANEL - it never shuts by itself: the chips of the groups
 // on top (the effects' groups - fx/effects.js GROUPS - and Sets), the chosen one's TILES under them, three a row. A tile is a picture made
-// beforehand (public/fx-tiles/<key>.webp - tools/fx-tiles.js, the app's own render on the owner's example clip) and a short film
+// beforehand (public/fx-tiles/<key>.webp - tools/fx-tiles.js, the app's own render on an example clip) and a short film
 // (<key>.webm) played only while the pointer is on it; over it, the width of the strip, its line. A press puts the effect on the
 // whole clip at once, opens its row and outlines its tile. Open / shut and the chip are the viewer's convenience (localStorage).
 const PANEL_KEY = 'mv3_fx_panel_v1';
@@ -74,7 +72,7 @@ function _panelNow() {
 function _panelSave() { try { localStorage.setItem(PANEL_KEY, JSON.stringify(_panelNow())); } catch (e) { /* a private window */ } }
 
 // The inspector opens its group Effects once when asked (an effect opened, an effect added, the clip's
-// "Add effect…") - the owner's (эф19); inspector.js takes the ask when it paints.
+// "Add effect…"); inspector.js takes the ask when it paints.
 let _openAsk = false;
 /** Whether the group Effects is to be opened by this paint (asked once). */
 export function takeOpenAsk() { const v = _openAsk; _openAsk = false; return v; }
@@ -180,7 +178,7 @@ function _panelEl(g, onKey, press) {
 }
 let _picked = null;            // { clipId, key } - the tile pressed last (a set's tile stays outlined while its first effect is open)
 
-// ── Where the face is (block 1c, the owner's (эф12)) ────────────────────────
+// ── Where the face is ────────────────────────
 // The clip's film counted by the app's hidden faces window (lib/faces.js - once a file, kept in cache/faces/; only in the app's
 // window) and its face carried to where the clip shows it in the frame, by the preview's own rule (preview-b.js mapsOf: fill, the
 // frame following the faces, a PiP, a crop, an insert), five a second over the whole clip - `path` of effects.js faceAt. One face
@@ -294,11 +292,11 @@ function _one(clip, k, from = 0, len = 0) {
 /** What `k` (an effect, or 'set:<id>' - each its own afterwards) puts on the whole of clip `clip`: the new effects. */
 function _effectsFor(clip, k) {
   const set = String(k).startsWith('set:') ? SETS[String(k).slice(4)] : null;
-  // (block 4d, the owner's (б4-9)) A set's effects each at its own moment, moved earlier on a clip too short to end with it.
+  // A set's effects each at its own moment, moved earlier on a clip too short to end with it.
   return (set ? setPlacements(set, +clip.dur || 0) : [{ k, at: 0, len: 0 }]).map((it) => _one(clip, it.k, it.at, it.len)).filter(Boolean);
 }
 /**
- * (the owner's (эф11), 2026-11-11) What `k` puts on a LANE of clips taken as one film - a highlights fragment's main video: from the
+ * What `k` puts on a LANE of clips taken as one film - a highlights fragment's main video: from the
  * lane's first moment, a set's effects at their own moments; a moment of its own length (or a set's with a length) on the clip
  * under its moment, from there; one that goes on - on that clip from there and on every clip after it. -> [{ clip, made }]
  */
@@ -323,7 +321,7 @@ export function laneEffects(clips, k) {
   return [...by.values()];
 }
 /**
- * (эф11) The faces of the clips in `work` ([{ track, clip, made }]) whose new effects go by the face, found one clip after another
+ * The faces of the clips in `work` ([{ track, clip, made }]) whose new effects go by the face, found one clip after another
  * (`onStep(i, n, frac)`) and written into those effects (`path`, `pk`) - none found, the reason kept for the inspector.
  */
 export async function facesFor(work, onStep) {
@@ -341,7 +339,7 @@ export async function facesFor(work, onStep) {
 
 /**
  * Effect `k` on the whole of clip `clip` of lane `track` - or a set's effects, `k` 'set:<id>' (each its own afterwards): written
- * (one undo step), the first opened, played once on the preview. An effect by the face waits for its face first (block 1c) - one
+ * (one undo step), the first opened, played once on the preview. An effect by the face waits for its face first - one
  * write still.
  */
 export async function addTo(track, clip, k) {
@@ -378,7 +376,7 @@ export async function addTo(track, clip, k) {
     .catch(() => { /* no preview to play it on */ });
 }
 
-// ── (эф11) Several picked clips at once ────────────────────────────────────
+// ── Several picked clips at once ────────────────────────────────────
 let _many = null;               // { k, i, n, frac } - the faces being found for an effect going on several clips
 /** Effect `k` (or a set) on EACH of the picked clips `items` ([{ track, clip }]) - as on each one alone; one write, one undo step. */
 export async function addToMany(items, k) {
@@ -462,7 +460,7 @@ function _toggleAndPanel(g, press, title) {
   if (st.open) _panelEl(g, null, press);
 }
 /**
- * (эф11) The group "Effects" of SEVERAL picked clips into `g` (inspector.js): the effects they have, each with how many of them and ✕
+ * The group "Effects" of SEVERAL picked clips into `g` (inspector.js): the effects they have, each with how many of them and ✕
  * (off all of them, one undo step); the panel - a tile puts the effect on each of them, as on each one alone. Settings stay each clip's.
  */
 export function fxManyRows(g, items) {
@@ -479,7 +477,7 @@ export function fxManyRows(g, items) {
   _toggleAndPanel(g, (k) => addToMany(items, k), 'Show the effects - a press on one puts it on each of the ' + n + ' clips');
 }
 /**
- * (эф11) The same for a group that is not this page's lanes - the ticked fragments of highlights (hl-group.js): the effects they have
+ * The same for a group that is not this page's lanes - the ticked fragments of highlights (hl-group.js): the effects they have
  * (`kinds` [[k, how many]] of `n`, `off(k)`), the wait (`wait` { k, i, n, frac }), the toggle and the tiles - a press to `press(k)`.
  */
 export function fxGroupRows(g, { n, kinds, off, wait, press, note }) {
@@ -528,7 +526,7 @@ export function fxRows(g, track, c) {
     row.append(name, x);
     g.appendChild(row);
     if (!open) continue;
-    // Start and End, seconds into the clip, on ONE track (the owner 2026-11-10: one row, not two). An 'intro' keeps its length's
+    // Start and End, seconds into the clip, on ONE track. An 'intro' keeps its length's
     // range (0.8-2 of its own): the start moved keeps the end until the length leaves it, then the end follows; one that goes on
     // reaches the clip's end.
     const [lo, hi] = lengthRange(e.k);
@@ -550,7 +548,7 @@ export function fxRows(g, track, c) {
       return [s, t];
     };
     const moveTo = (na, nb) => write(list.map((y) => (y.id === e.id ? placeEffect(c, e, na, nb) : y)));
-    // (the owner 2026-11-10) Its name over it, the strip's whole width, the clip's own length under it; the timeline's frame follows
+    // Its name over it, the strip's whole width, the clip's own length under it; the timeline's frame follows
     // the thumbs while they are held.
     g.appendChild(C.span({
       label: 'Start – End', ends: ['0', _sec(dur)],
@@ -563,12 +561,12 @@ export function fxRows(g, track, c) {
     g.appendChild(C.hint(d.about + (d.kind !== 'intro' ? ''
       : d.hold != null ? ' Set it longer than ' + d.dur.toFixed(2) + ' s and the card stands - up to the clip\'s end; shorter - from ' + lo.toFixed(2) + ' s.'
         : ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.')));
-    // (block 4b, the owner's (б4-12), (б4-13)) Its colours and its settings: a change is one undo step; a slider held shows on the
+    // Its colours and its settings: a change is one undo step; a slider held shows on the
     // preview at once (place-b.js setLive - the clip drawn with the effect as it would be), written on release.
     const withIt = (next) => list.map((y) => (y.id === e.id ? next : y));
     const put = (next) => write(normalizeFx(withIt(next)) || []);
     const live = (next) => setLive(new Map([[c.id, { fx: normalizeFx(withIt(next)) }]]));
-    // (block 4c, the owner's (б4-2), (б4-13) а) A card's words, a field a line - the preview follows the typing, a field left (or
+    // A card's words, a field a line - the preview follows the typing, a field left (or
     // Enter) writes it, one undo step; and its font, one of the captions' (Inter by default).
     if (d.texts && d.texts.length) {
       const now = textsOf(e);
@@ -618,14 +616,14 @@ export function fxRows(g, track, c) {
             : kind === 'pos' ? (Math.abs(v) < 0.005 ? 'as made' : (v < 0 ? 'up ' : 'down ') + Math.round(Math.abs(v) * 100) + ' %')
               : (+v).toFixed(2) + '×');
         const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });
-        // (block 4d) A switch for a setting that is on or off (the cover's barcode).
+        // A switch for a setting that is on or off (the cover's barcode).
         if (kind === 'bool') { g.appendChild(C.row(label, C.toggle(now[key] >= 0.5, (on) => put(withOpt(on ? 1 : 0))))); continue; }
         g.appendChild(C.row(label, C.slider({ min: olo, max: ohi, step, value: now[key], fmt,
           onInput: (v) => live(withOpt(v)),
           onChange: (v) => { setLive(null); put(withOpt(v)); } })));
       }
     }
-    // (block 1c) Where its face is - and found again on a press (one undo step).
+    // Where its face is - and found again on a press (one undo step).
     if (d.face) {
       const main = isMain(track);
       const moved = !!(e.path && e.pk && e.pk !== _placeKey(c, main));
@@ -653,7 +651,7 @@ export function fxRows(g, track, c) {
       }
     }
   }
-  // (block 1c) An effect by the face waiting for its face.
+  // An effect by the face waiting for its face.
   const wait = _pending.get(c.id);
   if (wait) {
     const d = effectOf(wait.k);

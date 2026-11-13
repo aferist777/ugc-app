@@ -1,13 +1,12 @@
 'use strict';
 
-/* make-icon.js - the app's icon, by hand (phase V83, block B1; the owner 2026-11-09, (о16): "по рекомендации" - a
-   simple sign for now, a gold "U" on the dark, the owner's own logo when there is one).
+/* make-icon.js - the app's icon, by hand: a simple sign, a gold "U" on the dark.
 
        node tools/make-icon.js            writes desktop/icon.png (256 px) and desktop/icon.ico (16-256 px)
 
    Drawn as a path, not a letter of a font: the same on every computer. The colours are the app's - the gold of
    public/css/app-shell.css (`--gold`, oklch(.78 .12 85)) on its graphite. The .ico holds PNG pictures (Windows Vista
-   and later read them): the window's icon (desktop/main.js) and the launcher's (desktop/launcher, block B2). */
+   and later read them): the window's icon (desktop/main.js) and the launcher's (desktop/launcher). */
 
 const fs = require('fs');
 const path = require('path');

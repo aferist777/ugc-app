@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the platforms' screens over the preview (phase V30, block 3, K7; the owner's (с9), (с35)-(с37)).
+   MERGE v3 — the platforms' screens over the preview.
 
    Three marks in the preview's header, right of "Preview": TikTok, Shorts, Instagram (Simple Icons, CC0,
    one colour). A press lays that app's screen over the frame - its buttons down the right, the account
@@ -9,12 +9,12 @@
    stay on top), never in a render or a screenshot. 9:16 only - in 16:9 the marks are dim. The one shown is
    remembered (localStorage, mirrored into the library by storage-sync).
 
-   THE SIZES ARE AN ORDINARY POST'S (с35: "обычными постами, не рекламные"), measured on the owner's own
-   phone (iPhone, 1290x2796, 2026-10-15) and said in a 1080x1920 frame: on a tall phone the video fills the
+   THE SIZES ARE AN ORDINARY POST'S (not an ad's), measured on an iPhone (1290x2796) and said in a 1080x1920
+   frame: on a tall phone the video fills the
    screen from the top down to the app's bottom bar, 9:16 stretched to that height, so ~54 px of the frame are
    cut off at each side - dimmed here for all three. The same table is the drawing and the check (zones):
-   a page of captions under an element is outlined in red (cap-place.js) and counted in the strip (с36 -
-   only a mark: nothing is refused or moved).
+   a page of captions under an element is outlined in red (cap-place.js) and counted in the strip (only a
+   mark: nothing is refused or moved).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const LS = 'mv3_pv_platform_v1';
@@ -182,7 +182,7 @@ export function mountButtons() {
   for (const id of ORDER) {
     const b = document.createElement('button');
     b.type = 'button';
-    // (phase V73 block 5, 5a) quiet toggles in the panel's head; the screen shown - pressed (the selected look)
+    // Quiet toggles in the panel's head; the screen shown - pressed (the selected look)
     b.className = 'mv3-pf-btn u-btn is-s is-icon is-quiet';
     b.dataset.platform = id;
     b.appendChild(_svgIcon(ICON[id]));
@@ -254,8 +254,8 @@ function _paint() {
   _svg.style.display = id ? '' : 'none';
   if (id === _drawn) return;
   _drawn = id;
-  // (phase V73 block 0) The screen's words are in the INTERFACE's font - the page's --font, as the stage's own words
-  // (preview-b.js `_uiFont`). This drawing is in the page, so CSS gives it the token as it is; it named "Inter", which on
+  // The screen's words are in the INTERFACE's font - the page's --font, as the stage's own words
+  // (preview-b.js `_uiFont`). This drawing is in the page, so CSS gives it the token as it is; not "Inter", which on
   // these pages is the bold caption file of css/caption-fonts.css.
   _svg.innerHTML = id ? '<defs><filter id="mv3-pf-sh" x="-10%" y="-10%" width="120%" height="120%">'
     + '<feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity=".6"/></filter></defs>'

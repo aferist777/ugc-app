@@ -1,8 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a VOICEOVER FROM ONE'S OWN TEXT (phase V62, the owner 2026-10-30: (во1) "текст можно вставить самостоятельно,
-   типа попап для добавления своего текста, и текст встает в озвучку"; (во16) "весь текст может быть одной строкой. это
-   быстрый режим"; (во27) "в поле вставки текста не давать пользователю вставить текст длиннее 5000 символов и показывать
-   сколько символов уже вставлено"; (во28) 4 500 - the rest is the mood's tags').
+   MERGE — a VOICEOVER FROM ONE'S OWN TEXT.
 
    The "+ your text" button of the voiceover draft's script column (js/merge-v3/vo-script.js) opens it: a name and the text, in
    any language - it is read in the language it is written in, never translated. The whole text is ONE line of the draft
@@ -11,9 +8,9 @@
 
    Its frame and buttons are the scenario window's (css/dialog.css .mv3-x.is-scen).
 
-   (phase V63, P14, the owner's (хп32), (хп58): "По абзацам: каждый Enter — новая строка") A TALKING HEAD'S OWN TEXT too - Home's
+   A TALKING HEAD'S OWN TEXT too - Home's
    quick start (`o.talking`): every paragraph is a line - its own frame and clip -, the count of lines said under the field; in
-   another language it is made English when the project is made (routes/scen3.js, V29). Where the text goes is the caller's
+   another language it is made English when the project is made (routes/scen3.js). Where the text goes is the caller's
    `put(body)` - the voiceover draft in Merge, the popup on Home.
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -28,21 +25,21 @@ const _el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-const _n = int;   // (phase V73 block 5, 5d; (б5-21) а) "4,500" - the page's one figure function
+const _n = int;   // "4,500" - the page's one figure function
 
-/** (phase V63) A talking head's text cut into its lines: every paragraph - every Enter - a line. */
+/** A talking head's text cut into its lines: every paragraph - every Enter - a line. */
 export const paragraphs = (t) => String(t || '').split(/\r?\n/).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean);
 
 /**
  * @param put(body)  where the text goes - { text, name } (a voiceover: one line) or { lines, name } (a talking head) -, answering
- *                   what `done` is given; a refusal is a popup in the corner (V73 block 4), and the window stays
+ *                   what `done` is given; a refusal is a popup in the corner, and the window stays
  * @param done(r)    what `put` answered (in Merge: the voiceover draft as it is now, with its one line)
- * @param o          (phase V63) { talking, text, name } - a talking head's text; what the field and the name start with
+ * @param o          { talking, text, name } - a talking head's text; what the field and the name start with
  */
 export function openOwnText(put, done, o = {}) {
   const talking = !!o.talking;
   const ov = _el('div', 'mv3-x-ov');
-  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
+  // the one window frame (css/app-shell.css .u-win): its head of 40 px, the 28 px ✕, the foot of 52 px
   const box = _el('div', 'mv3-x is-scen is-votext u-win is-float');
   ov.appendChild(box);
 
@@ -127,7 +124,7 @@ export function openOwnText(put, done, o = {}) {
       _close(ov, layer);
       done(r);
     } catch (e) {
-      // (phase V73 block 4) a refusal is a popup in the corner (js/notice.js); the window stays, its line goes quiet
+      // a refusal is a popup in the corner (js/notice.js); the window stays, its line goes quiet
       note.textContent = '';
       showError(e.message || 'The text could not be taken');
       go.disabled = false;

@@ -1,19 +1,18 @@
 /* ════════════════════════════════════════════════════════════════════════════
    THE SOUND WINDOW (js/sound/sound-window.js) - one sheet, linked on every page that opens the window (Merge, the Library,
-   Home). First its middle (it began as Merge's "/ generate audio" view, phase V34.E) - the constructor of the open mode and,
-   under it, the open project's presses (phase V60, (пп12а): "Made here" and its column went) - and, in Video to Music, the
-   VIDEO tree on the right; the "?" of a parameter (js/sound/qmark.js) and the almanac's window (phase V60) are here too.
+   Home). First its middle - the constructor of the open mode and, under it, the open project's presses - and, in Video to
+   Music, the VIDEO tree on the right; the "?" of a parameter (js/sound/qmark.js) and the almanac's window are here too.
    Then the window itself (below). Its settings column is the chats' (.mv3-ig-set, css/mv3-imagen.css).
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* (phase V49) At the panel's narrowest (layout.js MIN_PANEL, 380 px) six crumbs were a few pixels too wide - the draft's and a
-   highlights project's alike, each cut with an ellipsis: there the letters close up instead. */
+/* At the panel's narrowest (layout.js MIN_PANEL, 380 px) six crumbs are a few pixels too wide - the draft's and a
+   highlights project's alike, each cut with an ellipsis otherwise: there the letters close up instead. */
 @container libhead (max-width: 420px){ .mv3-lib-crumb, #mv3-library .mv3-panel-title{letter-spacing:.01em} }
 
 .aal .sp{flex:1}
 .au-set{flex:0 0 232px}
 
-/* (phase V54, block 7) a chip group folded into one row - its name, what is picked in it, how many chips; one open at a time */
+/* a chip group folded into one row - its name, what is picked in it, how many chips; one open at a time */
 .au-chips-h{display:flex; align-items:baseline; gap:6px; width:100%; margin:6px 0 0; padding:6px 8px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
   font:500 11px/1.3 var(--font); text-align:left; cursor:pointer; min-width:0}
@@ -30,13 +29,13 @@
 .au-muted{color:var(--muted)}
 .au-err{color:var(--danger); font-size:11.5px; margin-top:4px}
 .au-err:empty{display:none}
-/* (phase V73 block 2) Video to Music's gallery empty / reading / did not load, the settings column reading and Lyrics' empty list
-   are the shared parts (js/ui-state.js, css/app-shell.css) - .au-empty went; .au-note stays for a mode's note ("No kie.ai key") */
+/* Video to Music's gallery empty / reading / did not load, the settings column reading and Lyrics' empty list
+   are the shared parts (js/ui-state.js, css/app-shell.css); .au-note is for a mode's note ("No kie.ai key") */
 .au-note{font:500 10px/1.4 var(--font); color:var(--muted); margin-top:3px}
 .au-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
 .au-len .au-in{ width:74px }
 .au-len-auto{font-size:10px; color:var(--muted)}
-/* "Length ? [46] s · by the video (46 s)" in one line (phase V59.1 in the Library, V60 in Merge) */
+/* "Length ? [46] s · by the video (46 s)" in one line */
 .au-len-one{flex-wrap:nowrap; margin-top:6px; min-width:0}
 .au-len-one > label{flex:0 0 auto; display:inline-flex; align-items:center; margin-right:2px; font:500 10px/1.3 var(--font); color:var(--muted)}
 .au-len-one .au-in{ flex:0 0 56px; width:56px }
@@ -44,12 +43,12 @@
 /* a value with nothing to choose (ElevenLabs' model) */
 .au-val{font:600 10.5px/1.4 var(--font); color:var(--ink); opacity:.8}
 
-/* ── (phase V60, (пп10а)) the "?" right of a parameter's name (js/sound/qmark.js) ── */
+/* ── the "?" right of a parameter's name (js/sound/qmark.js) ── */
 .qm{display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:13px; height:13px; margin-left:5px;
   box-sizing:border-box; border:1px solid var(--border); border-radius:50%; color:var(--muted); background:none;
   font:700 8.5px/1 var(--font); letter-spacing:0; text-transform:none; vertical-align:1px; cursor:help; user-select:none}
 .qm:hover, .qm.is-on{color:var(--gold); border-color:var(--gold)}
-/* its popup is the app's bubble since phase V61 - css/app-shell.css .bub, js/bubble.js */
+/* its popup is the app's bubble - css/app-shell.css .bub, js/bubble.js */
 .au-set .mv3-ig-row > label, .au-chips-h b, .au-f-n{display:inline-flex; align-items:center}
 .au-set .mv3-ig-row > label{align-self:flex-start}
 .au-sel, .au-in, .au-ta{ width:100%; box-sizing:border-box }
@@ -58,7 +57,7 @@
 .au-chip.on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
 .au-link{border:0; background:none; padding:0; cursor:pointer; color:var(--ink); font:500 11.5px var(--font)}
 .au-link:hover{text-decoration:underline}
-/* (phase V59.1) "save" of a text into Music -> Lyrics - "saved ✓" once it is there; Custom's links under the Lyrics field,
+/* "save" of a text into Music -> Lyrics - "saved ✓" once it is there; Custom's links under the Lyrics field,
    the dropdown of the saved texts over it */
 .au-link[disabled]{cursor:default; text-decoration:none; color:var(--muted)}
 .au-save.is-saved{color:var(--success)}
@@ -70,11 +69,11 @@
 
 /* ── the middle: the word line and the constructor ── */
 .au-mid{flex:1 1 auto; min-width:300px; min-height:0; overflow-y:auto; padding:12px 16px 24px; display:flex; flex-direction:column; gap:12px}
-/* (phase V73 block 4) how the work goes - the one status line (.u-status) */
+/* how the work goes - the one status line (.u-status) */
 .au-status{flex:0 0 auto; overflow-wrap:anywhere}
-/* (phase V73 block 2) an error is a popup in the corner (js/notice.js) - the line says only how the work goes */
+/* an error is a popup in the corner (js/notice.js) - the line says only how the work goes */
 .au-make{flex:0 0 auto}
-/* (phase V73 block 4) the gold card is a PANEL - a hairline, the mode's name in gold at its head (the generator's place) */
+/* the gold card is a PANEL - a hairline, the mode's name in gold at its head (the generator's place) */
 .au-card{position:relative; padding:12px 14px 14px; border:1px solid var(--border-soft); border-radius:var(--r); background:var(--bg); display:flex; flex-direction:column; gap:10px}
 .au-card-h{display:flex; align-items:baseline; gap:8px; font:500 13px/20px var(--font); color:var(--gold)}
 .au-card-h .au-muted{font-weight:400; font-size:11px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -95,12 +94,12 @@
 .au-knob input[type=range]{width:100%}
 .au-knob span:last-child{text-align:right}   /* the value in mono - .u-range-v */
 .au-picked{display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted)}
-/* (V34.F) a highlights mood in Simple: its preset, read only */
+/* a highlights mood in Simple: its preset, read only */
 .au-preset{display:flex; flex-direction:column; gap:4px; padding:8px 10px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface); font-size:12px}
 .au-preset b{font-size:12.5px; text-transform:capitalize}
 .au-preset .au-muted{font-size:11px; line-height:1.4}
 .au-preset-style{font-size:11.5px; line-height:1.45; color:var(--ink); opacity:.85}
-/* (phase V60.1) "edit" on the mood's card: its Style and Exclude to change for one press, "edited" while they differ */
+/* "edit" on the mood's card: its Style and Exclude to change for one press, "edited" while they differ */
 .au-f-act{margin-left:auto; display:inline-flex; align-items:baseline; gap:10px}
 .au-edited{font:500 10px/1 var(--font); color:var(--warn)}
 .au-edited[hidden]{display:none}
@@ -108,7 +107,7 @@
 .au-preset .au-f-h{font-size:10.5px}
 .au-preset .au-ta{ min-height:44px }
 
-/* the video of Video to Music - a clip of the timeline (its lane, from-to, length, price) or a file (phase V54) */
+/* the video of Video to Music - a clip of the timeline (its lane, from-to, length, price) or a file */
 .au-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
 .au-att.is-drop{border-color:var(--sel-line); background:var(--sel-bg)}
 .au-att img, .au-att .au-att-ph{flex:0 0 auto; width:48px; height:64px; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
@@ -117,7 +116,7 @@
 .au-att-tx .au-muted{display:block; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-att-tx .au-err{margin-top:2px; font-size:10.5px}
 
-/* (phase V54, the owner's (зв23)) Video to Music's right column: the gallery of the node open, the VIDEO tree beside it */
+/* Video to Music's right column: the gallery of the node open, the VIDEO tree beside it */
 .au-v2m{flex:0 0 42%; min-width:260px; min-height:0; display:flex; border-left:1px solid var(--border); background:var(--bg)}
 .au-v2m[hidden]{display:none}
 .au-v2m-gal{flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:10px 10px 16px}
@@ -127,12 +126,12 @@
 .au-v2m-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:6px}
 .au-v2m-it{position:relative; display:flex; flex-direction:column; gap:2px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
 .au-v2m-it:hover{border-color:var(--sel-line)}
-.au-v2m-it.is-on{border-color:var(--sel-ring); background:var(--sel-bg)}   /* (б1-21) the white ring of the selected clip */
+.au-v2m-it.is-on{border-color:var(--sel-ring); background:var(--sel-bg)}   /* the white ring of the selected clip */
 .au-v2m-it.is-long{opacity:.45}
 .au-v2m-it img, .au-v2m-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
 .au-v2m-it .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-v2m-it .d{color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums}
-/* ── the open project's presses, under the gold card (phase V60, (пп12а)): a thin line "this project · N", a card each ── */
+/* ── the open project's presses, under the gold card: a thin line "this project · N", a card each ── */
 .au-proj{flex:0 0 auto; margin-top:2px; padding:0 2px 5px; border-bottom:1px solid var(--border-soft);
   font:500 10px/1.3 var(--font); color:var(--muted)}
 /* a heading of a group of presses - the Library window's Lyrics (.au-lyrs, below) */
@@ -163,30 +162,30 @@
 .au-res-n{flex:0 1 210px; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-res .au-muted{font-size:10.5px; white-space:nowrap}
 .au-play{flex:0 0 auto}
-.au-play.u-btn{border-radius:50%; font-size:10px}   /* round, as before */
-.au-res.is-playing .au-play{border-color:var(--sel-line); color:var(--ink)}   /* (б1-17) playing: the selected look */
+.au-play.u-btn{border-radius:50%; font-size:10px}   /* round */
+.au-res.is-playing .au-play{border-color:var(--sel-line); color:var(--ink)}   /* playing: the selected look */
 .au-star{flex:0 0 auto}
 .au-star.u-btn{font-size:13px}
-.au-star.on{color:var(--ink)}   /* (phase V73, (б1-9)) a favourite: light, the text's colour */
+.au-star.on{color:var(--ink)}   /* a favourite: light, the text's colour */
 .au-lyr{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:8px 10px; background:var(--bg)}
 .au-lyr-h{display:flex; align-items:baseline; gap:8px; font-weight:600; font-size:12px; margin-bottom:4px}
 .au-lyr pre{margin:0; white-space:pre-wrap; font:12px/1.5 var(--font); color:var(--ink); max-height:150px; overflow:hidden}
 .au-lyr.open pre{max-height:none}
 
-/* ── the almanac's window (phase V60, (пп13а)-(пп15а); js/sound/suno-form.js openAlmanac) - 860×560 in the middle over the
+/* ── the almanac's window (js/sound/suno-form.js openAlmanac) - 860×560 in the middle over the
    page darkened and a little blurred: the sections on the left, the open one's notes as chips under their categories, the
    note of the chip pressed under them, "your prompt" at the foot ── */
 .aal-ov{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center;
-  /* (phase V60.1) the one look of every window over the page - css/app-shell.css --ov-* */
+  /* the one look of every window over the page - css/app-shell.css --ov-* */
   background:var(--ov-dim, oklch(0 0 0 / .45));
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
-/* (phase V73 block 4, rule 5) the one frame (`.u-win`, `.u-win-head` of 40 px, `.u-win-title`, `.u-win-sub`, the ✕ of 28 px;
-   css/app-shell.css) - its own shadow gone; here only its size */
+/* the one frame (`.u-win`, `.u-win-head` of 40 px, `.u-win-title`, `.u-win-sub`, the ✕ of 28 px;
+   css/app-shell.css) - no shadow of its own; here only its size */
 .aal{width:min(860px, calc(100vw - 32px)); height:min(560px, calc(100vh - 32px)); display:flex; flex-direction:column; min-height:0; color:var(--ink)}
 .aal-x{flex:0 0 auto}
 .aal-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr)}
 .aal-side{min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px; border-right:1px solid var(--border)}
-.aal-g{margin:10px 4px 3px; font:500 11px/16px var(--font); color:var(--muted)}   /* (phase V73 block 4) a section head, sentence case */
+.aal-g{margin:10px 4px 3px; font:500 11px/16px var(--font); color:var(--muted)}   /* a section head, sentence case */
 .aal-g:first-child{margin-top:2px}
 .aal-sec{display:flex; align-items:baseline; gap:6px; width:100%; padding:6px 8px; border:1px solid transparent; border-radius:var(--r-xs);
   background:none; color:var(--ink); font:600 11px/1.3 var(--font); text-align:left; cursor:pointer}
@@ -196,14 +195,14 @@
 .aal-sec.on{border-color:var(--sel-line); background:var(--sel-bg)}
 .aal-right{min-width:0; min-height:0; display:flex; flex-direction:column}
 .aal-chips{flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 14px 12px}
-.aal-title{display:flex; align-items:center; font:500 11px/16px var(--font); color:var(--muted)}   /* (phase V73 block 4) a section head - not gold, sentence case */
+.aal-title{display:flex; align-items:center; font:500 11px/16px var(--font); color:var(--muted)}   /* a section head - not gold, sentence case */
 .aal-cat{margin:10px 0 5px; font:600 10px/1.2 var(--font); color:var(--muted)}
 .aal-row{display:flex; flex-wrap:wrap; gap:5px}
 .aal-chip{padding:4px 9px; border:1px solid var(--border-soft); border-radius:var(--pill); background:transparent; color:var(--ink);
   font:500 11px/1.25 var(--font); cursor:pointer; white-space:nowrap}
 .aal-chip:hover{border-color:var(--muted)}
 .aal-chip.is-advice{border-style:dashed; color:var(--muted)}
-/* (пп14а) its text is in your prompt - (phase V73 block 4) the selected look, a step and a light line, not gold */
+/* its text is in your prompt - the selected look, a step and a light line, not gold */
 .aal-chip.is-in{border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg)}
 /* the chip pressed - its note shows under all of them */
 .aal-chip.on{box-shadow:0 0 0 1px var(--sel-line) inset; border-color:var(--sel-line); background:var(--sel-bg); color:var(--ink)}
@@ -218,12 +217,11 @@
 .aal-btn{flex:0 0 auto}
 .aal-build{flex:0 0 auto; display:flex; flex-direction:column; gap:5px; padding:8px 14px 12px; border-top:1px solid var(--border); background:var(--surface)}
 .aal-build-h{display:flex; align-items:center; gap:8px; min-width:0}
-.aal-lbl{display:inline-flex; align-items:center; font:500 11px/16px var(--font); color:var(--muted)}   /* (phase V73 block 4) a section head, sentence case */
+.aal-lbl{display:inline-flex; align-items:center; font:500 11px/16px var(--font); color:var(--muted)}   /* a section head, sentence case */
 .aal-said{white-space:nowrap}   /* the window's one status line (`.u-status`, green when it went in) */
 .aal-ta{ width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical }
 
-/* ── The Library's music window (phase V59, V59.1) - since phase V64 THE SOUND WINDOW of both
-   pages (js/sound/sound-window.js; Merge and Home load this sheet too) ──
+/* ── The sound window's frame (js/sound/sound-window.js; Merge and Home load this sheet too) ──
    The generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1280×800: the mode's name and its "?" in
    the head, the settings column on the left, the sash, the right column - the gold card (drawn above, .au-*, as are the "?"
    and the almanac's window) and under it the foot:
@@ -247,12 +245,12 @@
 .gw-ov.is-music .gw-crumb.is-here{ overflow:visible }
 .gw-ov.is-music .gw-crumbs > .qm{ width:17px; height:17px; margin-left:2px; font-size:10px }
 
-/* (phase V73 block 4) the foot is the frame's (.u-win-foot), across the whole window: the almanac (a quiet button, as on the
-   showcase) and the line of the last press (the one status line) at the left; where it goes, the price in mono and "generate"
+/* the foot is the frame's (.u-win-foot), across the whole window: the almanac (a quiet button) and the line of the last
+   press (the one status line) at the left; where it goes, the price in mono and "generate"
    at the right */
 .au-foot{ min-width:0 }
 .au-foot-alm{ flex:0 0 auto }
-.gw-ov.is-music .au-foot .mv3-vc-almanac{ margin:0 }   /* its capitals - block 7 */
+.gw-ov.is-music .au-foot .mv3-vc-almanac{ margin:0 }
 .au-foot .au-line{ flex:0 1 auto; min-width:0 }
 .au-into{ flex:0 1 auto; max-width:300px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   color:var(--muted); font:400 11px/1.3 var(--font) }
@@ -298,10 +296,10 @@
 .au-lr.is-open .au-lr-text{ display:block }
 .gw-ov.is-music .sp{ flex:1 }
 
-/* ── THE SOUND WINDOW (phase V64 block 5; js/sound/sound-window.js) - the music window grown into ONE window of music and
+/* ── THE SOUND WINDOW (js/sound/sound-window.js) - ONE window of music and
    sounds on both pages (.gw-ov.is-music.is-sound), 1280×800: MUSIC | SOUNDS over the mode, Video to Music's VIDEO tree
    beside the middle (.au-pair), Merge's project presses under the gold card. ── */
-/* (phase V73 block 4, (б2-12)) Music | Sounds is the shared segment (css/app-shell.css .u-seg): the group lit is the selected
+/* Music | Sounds is the shared segment (css/app-shell.css .u-seg): the group lit is the selected
    look; here only its width. */
 .au-switch-row{ display:flex; align-items:center; gap:7px; margin:2px 0 6px }
 .au-switch.u-seg{ display:flex; flex:1 1 auto; max-width:230px }
@@ -309,8 +307,7 @@
 .au-pair{ flex:1 1 auto; min-width:0; min-height:0; display:flex }
 .gw-body.au-win .au-pair .au-mid{ flex:1 1 auto; min-width:0; min-height:0 }
 .gw-ov.is-sound .au-v2m{ flex:0 0 42%; min-width:300px }
-/* (fix (к), the owner 2026-11-01: "у video to music в попапе странно выглядит поле с деревом и папками. давай там просто папки
-   video будут без дерева справа") Only VIDEO's folders: the path, the folder tiles, the videos - the tree that walks them is
+/* Only VIDEO's folders: the path, the folder tiles, the videos - the tree that walks them is
    there, unseen (js/sound/sound-window.js _v2mOpen). */
 .gw-ov.is-sound .au-v2m-tree{ display:none }
 .gw-ov.is-sound .au-v2m-gal{ padding:10px 12px 16px }

@@ -3,23 +3,21 @@
 // Music for the timeline: the small library of the tracks kept (made by "generate audio" - routes/audio-gen.js - or
 // brought in from this computer).
 //
-//   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer (phase V28.4)
-//   GET    /api/audio/music/highlights       Music -> highlights: { moods: [{ id, label, about, tracks }], root } (V34.F)
+//   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer
+//   GET    /api/audio/music/highlights       Music -> highlights: { moods: [{ id, label, about, tracks }], root }
 //   GET    /api/audio/music/:id/place        where a track lies: { folder, mood, moodMade, moods }
 //   POST   /api/audio/music/:id/place        { folder: '' | 'highlights', mood? } - a mood only for what its preset made
 //
 // The list itself is lib/music-store.js (data/suno-lib.json): read, starred, renamed and deleted (with its file) as
 // the Library's Media shelf's kind 'music' (routes/library.js) - Audio -> Music in the media tree, in the Library and
-// in Merge's Library panel. Its own list and delete routes went with the Music shelf and the music panel's list.
+// in Merge's Library panel.
 //
-// TWO TRACKS PER GENERATION (phase V23, the owner 2026-10-09): Suno makes two variants at once, and both are kept -
+// TWO TRACKS PER GENERATION: Suno makes two variants at once, and both are kept -
 // two files, `suno_<task>_1.mp3` and `_2.mp3`, and two records side by side, "<title> · 1" and "<title> · 2", with
 // the generation (`gen`) and the variant (`variant`) on them. Only the server writes them (lib/audio-gens.js), and a
-// page follows the generation's Alerts row (lib/gen-jobs.js) and reads the list. Older generations were joined into
-// one file; their variants were not kept apart, and they stay as they are.
+// page follows the generation's Alerts row (lib/gen-jobs.js) and reads the list.
 //
-// The address keeps its /audio/ prefix: the media tree's Music calls it. Everything else the old routes/audio.js held - voices and voice design, TTS, avatars,
-// speech-to-text, sound effects and the Birols pipeline - went with the pages that used it.
+// The address keeps its /audio/ prefix: the media tree's Music calls it.
 
 const express    = require('express');
 const path       = require('path');
@@ -31,7 +29,7 @@ const MUSIC = require('../lib/music-store');
 
 const router = express.Router();
 
-// ── A track from this computer (phase V28.4, the owner 2026-10-12: "музыка - пока тоже файл") ─────────────
+// ── A track from this computer ─────────────────────────────────────────────
 // Into media/work first (multer), then lib/music-store.js measures it, moves it into media/audio/ and files it first.
 const MUSIC_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus'];
 const _uploadMusic = multer({
@@ -51,7 +49,7 @@ router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res
   if (!req.file) return res.status(400).json({ success: false, error: 'no music - mp3, wav, m4a, aac, ogg, flac or opus' });
   try {
     const name = String((req.body || {}).name || '').trim() || path.basename(req.file.originalname).replace(/\.[^.]+$/, '');
-    // (phase V54) Let go on an own folder of Music: into it.
+    // Let go on an own folder of Music: into it.
     const item = await MUSIC.add('/media/work/' + req.file.filename, { name, categoryId: String((req.body || {}).cat || '') });
     res.json({ success: true, item });
   } catch (e) {
@@ -64,8 +62,8 @@ router.use('/audio/music/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 
-// ── Music -> highlights and its moods (phase V34.F, the owner's (ф3); the rule is lib/music-store.js `place`) ──────────
-// The list the highlights popup offers (V33.8): every track in highlights - its root and its ten mood folders.
+// ── Music -> highlights and its moods (the rule is lib/music-store.js `place`) ──────────
+// The list the highlights popup offers: every track in highlights - its root and its ten mood folders.
 router.get('/audio/music/highlights', (_req, res) => {
   try { res.json({ success: true, ...MUSIC.highlights() }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }

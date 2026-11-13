@@ -45,7 +45,7 @@ export function startJob(host, { key, label, estimateMs, startedAt, onCancel }) 
   return startInlineProgress(host, { key, label, estimateMs, startedAt, onCancel });
 }
 
-// The cross beside a countdown (phase G1): asks the server to stop the job. The poll then sees it
+// The cross beside a countdown: asks the server to stop the job. The poll then sees it
 // cancelled; an answer that it had already ended is not an error.
 export async function cancelJob(base, jobId) {
   return api(`${base}/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
@@ -76,8 +76,8 @@ export const bucket = (n) => Math.pow(2, Math.round(Math.log2(Math.max(1, +n || 
 export const EST = {
   ingestLink: 300000,
   topics: 45000,
-  hooks: (n) => Math.max(12000, (n || 5) * 4000),     // (V38.4) 1-10 hooks a press
-  remake: 12000,                                       // (V38.4) one hook again
+  hooks: (n) => Math.max(12000, (n || 5) * 4000),     // 1-10 hooks a press
+  remake: 12000,                                       // one hook again
   script: (scenes) => Math.max(40000, (scenes || 15) * 9000),
   rewrite: 20000,
   analyse: 45000,
@@ -102,8 +102,6 @@ export const mb = (b) => (b >= 1048576 ? Math.round(b / 1048576) + ' MB' : Math.
 // How long a paragraph takes to say, at two and a half words a second.
 export const spokenSeconds = (t) => Math.round(String(t || '').trim().split(/\s+/).filter(Boolean).length / 2.5);
 
-// (phase V37) There is no model choice to remember any more: the generator, a source's topics and a narrator's reading
-// are all written by the agents' ladder (Admin -> AI settings). The old `mk_model_v1` in a browser is read by nobody.
 
 export function el(tag, cls, text) {
   const e = document.createElement(tag);

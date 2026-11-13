@@ -1,13 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   "ARE YOU SURE?", anchored to the button that asked - ONE module for every page (phase V73 block 2, step 2b: it was
-   js/merge-v3/ask.js; its look is the shared part in css/app-shell.css, so the Library,
-   Home and Admin, which never load merge-v3.css, ask the same way).
+   "ARE YOU SURE?", anchored to the button that asked - ONE module for every page (its look is the shared part in
+   css/app-shell.css, so the Library, Home and Admin, which never load merge-v3.css, ask the same way).
 
      askDelete(anchor, text, sub, onYes, yes)   Cancel · the verb in red
      askChoice(anchor, text, sub, choices, o)   several answers
      note(anchor, text, sub, o)                 something said, "Got it"
-     ask(anchor, q, o) -> Promise<boolean>      a question that WAITS for its answer - the browser's confirm() of the
-                                                pages before 2b; true on the verb, false on Cancel, Escape, a press away
+     ask(anchor, q, o) -> Promise<boolean>      a question that WAITS for its answer - in place of the browser's
+                                                confirm(); true on the verb, false on Cancel, Escape, a press away
 
    It opens above the button that asked. A popup rather than an armed second click. An armed
    button says nothing about what it is about to remove, and on lanes that look alike - four
@@ -17,9 +16,9 @@
    a video track takes its audio track, and a person who finds that out afterwards has lost work
    they did not offer up.
 
-   (phase V73 block 2) The look is the shared part `.u-ask.is-float` (css/app-shell.css): the question in <b>, what goes
-   with it in <p>, the answers as the shared buttons - Cancel LEFT, the verb right (б2-4, б2-8); the red fill only on an
-   answer that deletes or throws away (`kind: 'danger'`, б2-5) - `kind: 'yes'` is the answer meant, a plain button.
+   The look is the shared part `.u-ask.is-float` (css/app-shell.css): the question in <b>, what goes
+   with it in <p>, the answers as the shared buttons - Cancel LEFT, the verb right; the red fill only on an
+   answer that deletes or throws away (`kind: 'danger'`) - `kind: 'yes'` is the answer meant, a plain button.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
@@ -39,7 +38,7 @@ export function closeAsk() {
   if (!a.answered && typeof a.onClose === 'function') a.onClose();
 }
 
-// The page scrolling under the question closes it - but not its own list scrolling inside it (б2-7).
+// The page scrolling under the question closes it - but not its own list scrolling inside it.
 function _onScroll(e) {
   if (_ask && e && e.target instanceof Node && _ask.el.contains(e.target)) return;
   closeAsk();
@@ -67,7 +66,7 @@ function _panel(anchor, text, sub, buttons, opts) {
   closeAsk();
 
   const el = document.createElement('div');
-  // (б2-7) a list - the projects a file is used in, the names to delete - makes the question wider, the list scrolling inside
+  // a list - the projects a file is used in, the names to delete - makes the question wider, the list scrolling inside
   const wide = Array.isArray(sub) || String(sub || '').length > 160;
   el.className = 'mv3-ask u-ask is-float' + (sub ? ' has-sub' : '') + (wide ? ' is-wide' : '');
   const t = document.createElement('b');
@@ -77,7 +76,7 @@ function _panel(anchor, text, sub, buttons, opts) {
   if (sub) {
     const s = document.createElement('p');
     s.className = 'mv3-ask-s';
-    // A list - one thing per line (phase V23: what `generate all` will do, stage by stage).
+    // A list - one thing per line.
     if (Array.isArray(sub)) { s.classList.add('is-lines'); s.textContent = sub.join('\n'); }
     else s.textContent = sub;
     el.appendChild(s);
@@ -94,7 +93,7 @@ function _panel(anchor, text, sub, buttons, opts) {
     el2.className = 'mv3-ask-b u-btn is-s' + (b.kind === 'danger' ? ' is-danger is-armed' : '');
     el2.dataset.rank = String(rank(b));
     el2.textContent = b.label;
-    // (phase V67, second round (г)) What an answer does, in the app's bubble on hover - "new project" says what becomes of both.
+    // What an answer does, in the app's bubble on hover - "new project" says what becomes of both.
     if (b.hint) hint(el2, b.hint, { side: 'below' });
     // On mousedown, and swallowed: a click here must not reach the lane underneath, where it
     // would start a drag or a selection band on the way to answering a question.
@@ -125,17 +124,17 @@ function _panel(anchor, text, sub, buttons, opts) {
 
   const away = (e) => { if (!el.contains(e.target)) closeAsk(); };
   // Modal, which is what keeps the timeline's own Delete from answering this question from
-  // behind - the reason this used to swallow Delete itself (js/layers.js).
+  // behind (js/layers.js).
   const layer = Layers.open(el, { name: 'ask', onEsc: closeAsk });
   _ask = { el, away, layer, answered: false, onClose: opts && opts.onClose };
   document.addEventListener('mousedown', away, true);
   // A note that says what was LOST stays until it is read (`stay`): the scrolling that follows a new pick - the
-  // strip painted again, the timeline bringing the pick into view - closed it before anyone saw it.
+  // strip painted again, the timeline bringing the pick into view - would close it before anyone saw it.
   if (!(opts && opts.stay)) window.addEventListener('scroll', _onScroll, true);
   return made;
 }
 
-// The answer says the question's verb (б2-4): "Delete X?" - Delete, "Remove X?" - Remove, "Take X out…?" - Take out,
+// The answer says the question's verb: "Delete X?" - Delete, "Remove X?" - Remove, "Take X out…?" - Take out,
 // "Replace…?" - Replace; `yes` names it where the question starts otherwise.
 const VERBS = { delete: 'Delete', remove: 'Remove', take: 'Take out', replace: 'Replace', clear: 'Clear', discard: 'Discard' };
 
@@ -148,10 +147,10 @@ export function askDelete(anchor, text, sub, onYes, yes) {
 }
 
 /**
- * A question with more than two answers (phase C3: delete the timeline only, or its files too). `choices`:
+ * A question with more than two answers (delete the timeline only, or its files too). `choices`:
  * [{ label, kind: 'danger' (deletes - in red) | 'yes' (the one meant) | undefined, on, hint? }]; a choice without `on` only
  * closes - "Cancel" goes left; `hint` -
- * words in a bubble over it on hover (phase V67).
+ * words in a bubble over it on hover.
  * `opts.stay` - not closed by scrolling (an anchor that does not scroll: the project bar). `sub` may be a list of lines.
  */
 export function askChoice(anchor, text, sub, choices, opts) {
@@ -169,14 +168,14 @@ export function note(anchor, text, sub, opts) {
 }
 
 /**
- * A question that WAITS for its answer (phase V73 block 2, step 2b) - in place of the browser's confirm(): resolves true on
+ * A question that WAITS for its answer - in place of the browser's confirm(): resolves true on
  * the verb, false on Cancel, Escape, a press away or another question opened over it.
  *   q   the question; a text of several lines (\n) is its first line as the question and the rest under it - a long list
- *       (the projects a file is used in, the names to delete) scrolls inside a wider question (б2-7)
- *   o   { yes: the verb (б2-4; by default the question's own first word - "Delete 3 items?" -> "Delete 3"),
- *         danger: it deletes or throws away - the red fill (б2-5; a paid answer is a plain button),
+ *       (the projects a file is used in, the names to delete) scrolls inside a wider question
+ *   o   { yes: the verb (by default the question's own first word - "Delete 3 items?" -> "Delete 3"),
+ *         danger: it deletes or throws away - the red fill (a paid answer is a plain button),
  *         lines: what goes with it (in place of the text's own), stay: not closed by scrolling }
- * The anchor is the button pressed - or the tile a menu was about, or the last one picked (б2-6).
+ * The anchor is the button pressed - or the tile a menu was about, or the last one picked.
  */
 export function ask(anchor, q, o) {
   const opt = o || {};

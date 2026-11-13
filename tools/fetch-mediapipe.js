@@ -1,8 +1,7 @@
 'use strict';
 
 /* fetch-mediapipe.js - puts MediaPipe's face detector into vendor/mediapipe/: the highlights shorts follow the face
-   (phase V33.2; docs/local-app/PLAN.md "Фаза V33", the measurement of 2026-10-21) - and its person detector, for a shot
-   with no face (phase V33.6).
+   - and its person detector, for a shot with no face.
 
    npm install runs it (postinstall, with --optional: no network is a warning, not a failed install).
    By hand, after moving a pin:
@@ -13,15 +12,15 @@
        that version): the page module (vision_bundle.mjs) and ONE wasm with its loader - the SIMD build, which Electron's
        Chromium runs (the page names it outright instead of letting FilesetResolver test for SIMD and ask for the other);
      - the BlazeFace FULL RANGE model (float16, version 1) from Google's model bucket, by SHA-256. Full range, not short
-       range: on the owner's sources it found a face in 76% of the frames against 57%, and in the podcasts' wide two-shots
+       range: on test sources it found a face in 76% of the frames against 57%, and in the podcasts' wide two-shots
        99-100% against 62% (short range does not see a small face); 5.8 ms a frame on the window's GPU;
-     - (phase V33.6) the EfficientDet-Lite0 OBJECT detector (float16, version 1), by SHA-256 - whole PEOPLE, where a
-       highlights short has no face to follow. float16, not int8: int8 on the window's GPU found NOTHING at all (measured
-       2026-10-21); 28.5 ms a frame on the GPU;
-     - (phase V43) the FACE LANDMARKER (float16, version 1), by SHA-256 - fragmentation's frame goes to who speaks (the lips
-       moving while words sound) and who reacts (a face's look changing): on the owner's episode it read 68% of the faces of
-       LEGO figures and every frame of a live face, 11 ms a face on a crop around it (PLAN.md V43, block 0, 2026-10-25);
-     - (phase V84 block 6, the owner 2026-11-11 "Да") the SELFIE SEGMENTER (float16, version 1, 249 537 bytes), by SHA-256 - the
+     - the EfficientDet-Lite0 OBJECT detector (float16, version 1), by SHA-256 - whole PEOPLE, where a
+       highlights short has no face to follow. float16, not int8: int8 on the window's GPU found NOTHING at all;
+       28.5 ms a frame on the GPU;
+     - the FACE LANDMARKER (float16, version 1), by SHA-256 - fragmentation's frame goes to who speaks (the lips
+       moving while words sound) and who reacts (a face's look changing): on a test episode it read 68% of the faces of
+       LEGO figures and every frame of a live face, 11 ms a face on a crop around it;
+     - the SELFIE SEGMENTER (float16, version 1, 249 537 bytes), by SHA-256 - the
        person's mask for the clip effects drawn behind the person (js/fx/person.js; the preview and the bake window run it).
    Licences: MediaPipe is Apache-2.0 (its package.json says so; the package carries no text - a note says which it is);
    the model's card gives Apache-2.0 too. */

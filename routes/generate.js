@@ -2,10 +2,6 @@
 
 // GET /api/random-face - a random face to seed a character with (TPDNE in New Character), never
 // written to disk.
-//
-// Everything else this file held - GET /api/status (the Character page's own poll; a portrait is
-// followed through its Alerts row now), the first Character page's generation, pose variations, the
-// reference sheet, edit-pose, the log bridge and Pose Studio - went with the pages that used it.
 
 const express = require('express');
 const axios   = require('axios');

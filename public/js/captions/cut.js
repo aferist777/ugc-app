@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — a stretch of time cut out of a line (phase V36, T5).
+   CAPTIONS — a stretch of time cut out of a line.
 
    Merge cuts a stretch [a, b) out of EVERY lane and closes the gap (js/merge-v3/tl-cut.js); this is what happens to one
-   line of a subtitle or text lane. The rule the owner was given (docs/local-app/PLAN.md, phase V34, "как пересчитываются
-   субтитры", 2026-10-23):
+   line of a subtitle or text lane:
 
      a line wholly before a        stays as it is
      a line wholly after b         moves left by b - a, its words untouched (they are timed from the line's start)
@@ -19,9 +18,9 @@
    Pure: a line in, the new line (a copy; the same object when nothing changes) or null out. Every mark of a word stays
    with it (`h` corrected, `k` stand out); the line keeps every other field (its id, style, place, `voice`).
 
-   KEEPING EVERY WORD (phase V44, `opts.keepWords` - cut silence): what is cut there is silence by its own measure, so a
-   word that reaches into it was heard longer than it is spoken (the hearing stretches a word over the pause after it, the
-   V33.5 measurement) - it is shortened to what is left of it, never dropped, and the text stays as it was.
+   KEEPING EVERY WORD (`opts.keepWords` - cut silence): what is cut there is silence by its own measure, so a
+   word that reaches into it was heard longer than it is spoken (the hearing stretches a word over the pause after it)
+   - it is shortened to what is left of it, never dropped, and the text stays as it was.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { isHeard } from './heard.js';
@@ -46,7 +45,7 @@ export function cutLine(c, a, b, opts) {
   const e = s + (+c.dur || 0);
   if (e <= a + EPS) return c;
   if (s >= b - EPS) return { ...c, start: r2(s - D) };
-  // (V44) Keeping words, a heard line wholly inside the cut stays too - shrunk onto it, below.
+  // Keeping words, a heard line wholly inside the cut stays too - shrunk onto it, below.
   if (s >= a - EPS && e <= b + EPS && !(keepWords && isHeard(c))) return null;
   // A moment of the timeline before the cut -> after it: inside the cut is its start.
   const map = (t) => (t <= a ? t : t >= b ? t - D : a);
@@ -56,7 +55,7 @@ export function cutLine(c, a, b, opts) {
     if (ne - ns < MIN - EPS) return null;
     return { ...c, start: ns, dur: r2(ne - ns) };
   }
-  // A line rewritten before K10 is timed for its text first: the person's text is what stays.
+  // A line whose words no longer spell its text is timed for its text first: the person's text is what stays.
   const words = timedWords(c);
   let dropped = 0;
   const kept = [];

@@ -31,47 +31,47 @@ const base = `http://127.0.0.1:${port}`;
 // '/' opens Home - answered by a redirect.
 const PAGES = ['/', '/home', '/merge', '/library', '/admin', '/3d'];
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
-                 // New Character's modules, moved out of the Character page's folder in phase H8
+                 // New Character's modules
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
                  '/css/char-make.css',
                  // what is known about a made environment or lookbook, and the links module
                  '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css',
-                 // the pictures chat (phase J), on the shell both chats share (phase V1)
+                 // the pictures chat, on the shell both chats share
                  '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
-                 // the captions' one style module, the page's and the server's (phase K0)
+                 // the captions' one style module, the page's and the server's
                  '/js/captions/style.js', '/js/captions/ass.js',
-                 // the fonts captions are drawn in (phase K5)
+                 // the fonts captions are drawn in
                  '/js/captions/fonts.js', '/css/caption-fonts.css', '/fonts/captions/Montserrat-Black.ttf',
                  '/js/captions/presets.js', '/js/captions/measure.js', '/js/captions/advances.js',
-                 // libass in the page for the captions' preview (phase K4; laid out by tools/fetch-jassub.js)
+                 // libass in the page for the captions' preview (laid out by tools/fetch-jassub.js)
                  '/js/captions/layer.js', '/vendor/jassub/jassub.js', '/vendor/jassub/wasm/jassub-worker-modern.wasm',
-                 // captions from the sound, laid by the server (phase K1)
+                 // captions from the sound, laid by the server
                  '/js/captions/heard.js', '/js/merge-v3/listen.js',
-                 // caption presets in the Library panel (phase K6)
+                 // caption presets in the Library panel
                  '/js/captions/pages.js', '/js/captions/preset-use.js', '/js/merge-v3/lib-views.js',
                  '/js/merge-v3/captions-view.js', '/css/mv3-captions.css',
-                 // a highlights project: its view, its popup and the caption style picked in it (phase V33.1)
+                 // a highlights project: its view, its popup and the caption style picked in it
                  '/js/merge-v3/highlights.js', '/js/merge-v3/hl-popup.js', '/js/merge-v3/hl-style.js', '/css/mv3-highlights.css',
-                 // the hidden faces window and MediaPipe's face detector (phase V33.2; laid out by tools/fetch-mediapipe.js)
+                 // the hidden faces window and MediaPipe's face detector (laid out by tools/fetch-mediapipe.js)
                  '/faces-worker.html', '/js/faces-worker.js', '/vendor/mediapipe/vision_bundle.mjs',
                  '/vendor/mediapipe/wasm/vision_wasm_internal.wasm', '/vendor/mediapipe/blaze_face_full_range.tflite',
-                 // speech recognition on this computer, Admin -> This computer (phase K1b)
+                 // speech recognition on this computer, Admin -> This computer
                  '/js/admin-local.js',
                  // Admin -> Thanks: the repositories the app is built on
                  '/js/admin-thanks.js',
-                 // the shared parts of phase V73: the icons, the slider, "really?", the question at a button, and the fonts
+                 // the shared parts: the icons, the slider, "really?", the question at a button, and the fonts
                  '/js/icons.js', '/js/ui-range.js', '/js/really.js', '/js/references/news.js', '/js/ask.js', '/js/ui-state.js', '/icons/LICENSE-lucide.txt',
                  '/fonts/ui/Inter-Regular.woff2', '/fonts/ui/JetBrainsMono-Regular.woff2',
-                 // the 3D Studio (PLAN "3D Studio"): its modules, three.js, a mannequin, a motion library, a piece of furniture
+                 // the 3D Studio: its modules, three.js, a mannequin, a motion library, a piece of furniture
                  '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes',
-                 // Merge's timeline: a sound's waveform, the transport, the stretch cut out of every lane (phase V36)
+                 // Merge's timeline: a sound's waveform, the transport, the stretch cut out of every lane
                  '/js/merge-v3/tl-wave.js', '/css/mv3-timeline.css', '/js/merge-v3/tl-cut.js', '/js/captions/cut.js',
-                 // ...and cut silence (phase V44), and clips in a row merged (phase V45)
+                 // ...and cut silence, and clips in a row merged
                  '/js/merge-v3/tl-silence.js', '/js/merge-v3/tl-merge.js',
-                 // generate audio and sound on the shelves (phases V34.C-F)
+                 // generate audio and sound on the shelves
                  '/js/merge-v3/sound-host.js', '/css/sound-window.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
 // Where an address must land: the app opens on Home.
@@ -79,13 +79,12 @@ const REDIRECTS = [['/', '/home']];
 // Every key routes/settings.js keeps out of the page.
 const HIDDEN_KEYS = ['anthropicApiKey', 'kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'telegramBotToken', 'cloudflareApiToken', 'freesoundApiKey', 'pixabayApiKey'];
-// What the V91 cleanup took away still answers 404 (the earlier removals - the server version, phases A-V49 - are not
-// listed any more: their code is long gone).
+// Routes and files that were removed must answer 404.
 const REMOVED = [
-                 // block 2: dead routes
+                 // dead routes
                  ['POST', '/api/library/cut'], ['DELETE', '/api/audio/lyrics/x'], ['GET', '/api/highlights'], ['GET', '/api/references'],
-                 // block 3: the Render finished window (Ch2), makechat (Ch5), the agent's set of first frames (Ch4), Media's
-                 // duplicates, the /lab/ui showcase (Ch12), the video chat's recipe catalog (Ch1)
+                 // the Render finished window, makechat, the agent's set of first frames, Media's
+                 // duplicates, the /lab/ui showcase, the video chat's recipe catalog
                  ['POST', '/api/mv3/render/finish'], ['POST', '/api/mv3/render/save'], ['POST', '/api/mv3/render/discard'], ['GET', '/api/mv3/timeline/x/source'],
                  ['GET', '/api/makechat/environments'], ['POST', '/api/makechat/environments/send'], ['POST', '/api/makechat/lookbooks/photo'],
                  ['GET', '/api/scen3/frame-sets'], ['GET', '/api/scen3/poses'], ['POST', '/api/scen3/frames/plan'], ['GET', '/api/obrazy/main-images'],
@@ -93,7 +92,7 @@ const REMOVED = [
                  ['GET', '/lab/ui'], ['GET', '/js/lab-ui.js'], ['GET', '/css/ui-v73.css'],
                  ['GET', '/js/merge-v3/vcatalog.js'], ['GET', '/css/mv3-catalog.css'], ['GET', '/api/mv3/video/catalog'], ['GET', '/api/mv3/video/presets'],
                  ['POST', '/api/mv3/video/write'], ['POST', '/api/mv3/video/card/x/again'],
-                 // block 4: the old Character page's address (Ch20)
+                 // the old Character page's address
                  ['GET', '/character']];
 
 async function call(method, url, body) {
@@ -131,8 +130,7 @@ function getRoutes() {
   for (const u of [...PAGES, ...STATICS, ...getRoutes()]) rows.push(['GET', u, await call('GET', u)]);
 
   rows.push(['GET', 'thumb of a shipped preset', await call('GET', '/api/thumb?src=/presets/anatolian-stone.jpg&v=card')]);
-  // The 1K preview of a mannequin went with the Scenarios page (phase G); the thumbnail above is
-  // what is left of this check - one shipped asset, resized on demand.
+  // The thumbnail above checks one shipped asset, resized on demand.
 
   let failed = 0;
   const lines = [];
@@ -171,7 +169,7 @@ function getRoutes() {
   if (unthanked.length) { failed++; console.log('!! not on Admin -> Thanks: ' + unthanked.join(', ')); }
   console.log(`thanks: ${deps.length - unthanked.length}/${deps.length} dependencies thanked`);
 
-  // (phase V23) Recognition on this computer needs whisper.cpp in vendor/ - laid out by npm install, and optional
+  // Recognition on this computer needs whisper.cpp in vendor/ - laid out by npm install, and optional
   // there, so its absence is SAID, not failed: captions are still heard by Groq.
   if (process.platform === 'win32') {
     const exe = path.join(APP_DIR, 'vendor', 'whisper', 'whisper-cli.exe');

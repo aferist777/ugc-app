@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   BEHIND THE PERSON (phase V84 block 6, the owner 2026-11-11 "Делаем остальные блоки одним походом до конца" and "Да" to the
-   model): video-effects-pack's scenes that put things BEHIND the person - Orbit, Icons around, Headline storm and its second kind,
+   BEHIND THE PERSON: video-effects-pack's scenes that put things BEHIND the person - Orbit, Icons around, Headline storm and its second kind,
    Formulas, Green screen, Green background, Paper cutout - and Mix's white silhouette. Each draws in the clip's window
-   (js/fx/box.js), as the graphics of block 4 do (js/merge-v3/fx-draw.js gives `g` and `S`), and lays THE PERSON over what goes
+   (js/fx/box.js), as the graphics over the picture do (js/merge-v3/fx-draw.js gives `g` and `S`), and lays THE PERSON over what goes
    behind - S.person(): the picture cut by the person's mask (js/fx/person.js, MediaPipe's Selfie Segmenter on the window's picture
    now; null until it has loaded - then everything is drawn over the picture and the preview paints again when it comes). The
    pack's numbers - its shares of the frame, its timings, its palette 'minimal' -, its own drawings written again for the canvas

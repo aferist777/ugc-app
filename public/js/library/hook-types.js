@@ -1,14 +1,13 @@
 // ════════════════════════════════════════════════════════════════════════════
-// THE HOOK TYPES (phase V38.4, the owner 2026-10-24: "давай найдем 40 типов хуков, дадим им названия и описания и при
-// генерации хуков пользователь выбирает количество, и при генерации хуков отбирается выбранное количество типов хуков
-// рандомно и пишутся хуки"; the list approved as it is, (э3)).
+// THE HOOK TYPES - forty kinds of hook, each with a name and a description. The person chooses how many hooks a press
+// writes; that many types are picked at random and one hook is written per type.
 //
 // ONE module for the page and the server (routes/scriptgen.js require()s it, like the captions' presets): the page shows
 // a hook's type by its name, its description on hover; the server picks the types at random and gives the writer their
 // names and descriptions - one hook per type - and tells the script's writer how the chosen hook works.
 //
-// An id never changes: drafts keep it. The first five are the kinds the writer was asked for before V38.4, under the
-// same ids, so a draft from before finds its hooks' names here too.
+// An id never changes: drafts keep it. The first five are also the hook kinds older drafts name, under the same ids, so
+// such a draft finds its hooks' names here too.
 // ════════════════════════════════════════════════════════════════════════════
 
 export const HOOK_TYPES = [
@@ -54,13 +53,12 @@ export const HOOK_TYPES = [
   { id: 'definition', name: 'Broken definition', about: 'The dictionary meaning of a word - and then it breaks.' },
 ];
 
-// How many hooks one press writes (the owner: "дропдаун с количеством хуков 1-10"; (э4) five unless chosen otherwise,
-// the last choice remembered).
+// How many hooks one press writes: 1-10 in a dropdown, five unless chosen otherwise, the last choice remembered.
 export const HOOK_COUNT = { min: 1, max: 10, default: 5 };
 
 const _BY = new Map(HOOK_TYPES.map(t => [t.id, t]));
 
-/** A type by its id (a draft from before may say "Number" or "a number": read loosely), or null. */
+/** A type by its id (an older draft may say "Number" or "a number": read loosely), or null. */
 export function hookType(id) {
   const k = String(id || '').trim().toLowerCase();
   if (_BY.has(k)) return _BY.get(k);
@@ -74,7 +72,7 @@ export function hookCount(n) {
   return Number.isInteger(v) && v >= HOOK_COUNT.min && v <= HOOK_COUNT.max ? v : HOOK_COUNT.default;
 }
 
-/** `n` different types, at random (the owner: "отбирается выбранное количество типов хуков рандомно"). */
+/** `n` different types, at random. */
 export function pickTypes(n, rnd = Math.random) {
   const all = HOOK_TYPES.slice();
   const want = Math.min(hookCount(n), all.length);

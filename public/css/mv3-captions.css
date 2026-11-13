@@ -1,10 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — "LIBRARY / captions": the preset tiles (js/merge-v3/captions-view.js, phase K6).
+   MERGE — "LIBRARY / captions": the preset tiles (js/merge-v3/captions-view.js).
 
    The panel's third view: while captions are picked on the timeline and the tiles are open, the
    preset styles fill the panel left of the settings strip (#mv3-over keeps its 350px on the right).
    The header reads "LIBRARY / captions" - "Library" lets the pick go - and the shelf's own controls
-   give way, as they do for the chat.
+   give way.
    ════════════════════════════════════════════════════════════════════════════ */
 
 .mv3-cap{ display:none; flex:1 1 auto; min-height:0; min-width:0; flex-direction:column;
@@ -18,27 +18,27 @@
 /* The categories, and how far the making is. */
 .mv3-cap-top{ flex:0 0 auto; padding:8px 10px 6px; border-bottom:1px solid var(--border-soft) }
 .mv3-cap-cats{ display:flex; flex-wrap:wrap; gap:4px }
-/* (phase V73 block 5, 5d; plan 3.5) A category is the shared chip (`.u-chip`; .is-on its selected look) - its own look went. */
+/* A category is the shared chip (`.u-chip`; .is-on its selected look). */
 .mv3-cap-cat{ flex:0 0 auto; gap:4px }
 .mv3-cap-n{ color:var(--muted) }   /* in mono (`.u-mono`) */
 .mv3-cap-status{ margin-top:6px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .mv3-cap-status[hidden]{ display:none }
-/* A mixed subtitle lane's sections, one per preset (phase V49, (пр22)): closed until opened; its look below it, set in a little. */
+/* A mixed subtitle lane's sections, one per preset: closed until opened; its look below it, set in a little. */
 .mv3-cap-sec{
   display:flex; align-items:baseline; gap:6px; width:100%; margin:4px 0 0; padding:5px 7px; cursor:pointer; text-align:left;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
 }
 .mv3-cap-sec:hover{ border-color:var(--muted) }
 .mv3-cap-sec.is-open{ border-color:var(--sel-line); border-bottom-left-radius:0; border-bottom-right-radius:0 }
-.mv3-cap-sec-c{ flex:0 0 auto; display:flex; align-self:center; color:var(--muted) }   /* Lucide's chevron (V73 block 5) */
+.mv3-cap-sec-c{ flex:0 0 auto; display:flex; align-self:center; color:var(--muted) }   /* Lucide's chevron */
 .mv3-cap-sec-n{ font:var(--fw-strong) var(--fs-11)/1.3 var(--font) }
 .mv3-cap-sec-k{ margin-left:auto; font:500 var(--fs-10)/1.3 var(--font); color:var(--muted); white-space:nowrap }
 .mv3-cap-sec-body{ padding:4px 0 6px 10px; border-left:2px solid var(--sel-bg); margin:0 0 4px 0 }
-/* The animations' tab (phase V49): one line on what a press does, over the pairs' tiles. */
+/* The animations' tab: one line on what a press does, over the pairs' tiles. */
 .mv3-cap-note{ font:600 10.5px/1.4 var(--font); color:var(--muted); max-width:520px }
 
 /* The tiles: squares of 88-96px - a little bigger than the Library's media tiles (64-78px), as many columns
-   as fit (phase S1, the owner 2026-10-05). The loops are 192px, twice the cell. */
+   as fit. The loops are 192px, twice the cell. */
 .mv3-cap-grid{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px;
   display:grid; grid-template-columns:repeat(auto-fill, minmax(88px, 96px)); gap:10px 8px;
@@ -73,15 +73,15 @@
   overflow-wrap:anywhere;
 }
 .mv3-cap-tile.is-on .mv3-cap-nm{ color:var(--ink) }
-.mv3-cap-ed{ flex:0 0 auto; font-size:var(--fs-9); color:var(--ink) }   /* "Edited", sentence case (V73 block 5, 5d) */
+.mv3-cap-ed{ flex:0 0 auto; font-size:var(--fs-9); color:var(--ink) }   /* "Edited", sentence case */
 .mv3-cap-ed[hidden]{ display:none }
 .mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
-/* The fonts tab (phase V68 P4, merge-v3/font-tiles.js): each font's picture (public/fonts/captions/tiles/, drawn by
+/* The fonts tab (merge-v3/font-tiles.js): each font's picture (public/fonts/captions/tiles/, drawn by
    tools/font-tiles.js on the box's own ground). "lat" by the name: no Russian letters, a Russian line in its twin. */
 .mv3-fnt-tw{ flex:0 0 auto; font-size:var(--fs-9); color:var(--muted); opacity:.8 }   /* "Lat", 9 px */
 
 /* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
-/* (phase V73 block 5, 5b) what the settings apply to, under the strip's head (its title is the head's); figures in mono */
+/* what the settings apply to, under the strip's head (its title is the head's); figures in mono */
 .mv3-cap-sub{ margin:0 0 6px; font:500 var(--fs-11)/var(--lh-11) var(--font); color:var(--muted) }
 .mv3-cap-preset{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:5px 7px;
@@ -89,18 +89,18 @@
   background:var(--surface);
 }
 .mv3-cap-based{ font:500 var(--fs-11)/1.3 var(--font); color:var(--muted) }
-/* The person's own presets (phase V30, block 5): "save as my preset" at the right of the row (alone on a look made from no
+/* The person's own presets: "save as my preset" at the right of the row (alone on a look made from no
    preset), the hint of an empty Mine, and a tile just saved, marked for a moment. */
 .mv3-cap-preset.is-plain{ border-left-color:var(--border) }
 .mv3-cap-preset .mv3-cap-save{ margin-left:auto }
 .mv3-cap-preset.is-plain .mv3-cap-save{ margin-left:0 }
-/* (phase V73 block 2) An empty `Mine` is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+/* An empty `Mine` is the shared part (js/ui-state.js emptyEl); here only where it sits. */
 .mv3-cap-empty{ grid-column:1 / -1 }
 .mv3-cap-empty[hidden]{ display:none }
 .mv3-cap-tile.is-new .mv3-cap-box{ border-color:var(--sel-line); box-shadow:0 0 0 3px var(--sel-bg) }   /* just saved: the selected look, not gold */
 .mv3-c-marks{ display:inline-flex; gap:4px }
 
-/* ── A heard line's words, one by one (K10b, word-edit.js) ───────────────────
+/* ── A heard line's words, one by one (word-edit.js) ─────────────────────────
    One focusable list with plain chips: the word and, small, where it starts. The picked one in the primary;
    a word that stands out wears its colour (an "A" beside it); a corrected one a dot in the accent; the word
    at the playhead underlined while the preview plays; one after the line's end pale. */
@@ -121,7 +121,7 @@
 .mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:var(--ink) }
 .mv3-wd-chip.is-now .mv3-wd-w{ text-decoration:underline; text-underline-offset:3px }
 .mv3-wd-chip.is-after{ opacity:.45 }
-/* (phase V73 block 5, 5b, (б1-18) а) a word that stands out in ITS colour - the one it wears on the frame (`--mark`, word-edit.js) -,
+/* a word that stands out in ITS colour - the one it wears on the frame (`--mark`, word-edit.js) -,
    not the interface's gold */
 .mv3-wd-chip.is-k .mv3-wd-w{ color:var(--mark, var(--ink)) }
 .mv3-wd-chip.is-k::before{ content:'A'; font:var(--fw-strong) var(--fs-9)/1 var(--font); color:var(--mark, var(--ink)) }
@@ -131,18 +131,18 @@
 .mv3-wd-row{ display:flex; align-items:center; gap:4px; margin-top:6px }
 .mv3-wd-in{ flex:1 1 auto; min-width:0 }
 .mv3-wd-in.is-insert{ border-style:dashed }
-.mv3-wd-btn{ flex:0 0 auto }   /* .is-on - the part's pressed look (б2-13) */
+.mv3-wd-btn{ flex:0 0 auto }   /* .is-on - the part's pressed look */
 .mv3-wd-time{ margin-top:4px; font:400 var(--fs-10)/1.3 var(--mono); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-wd-msg{ margin-top:4px; font:500 10px/1.4 var(--font); color:var(--danger) }
 .mv3-wd-msg[hidden]{ display:none }
 .mv3-wd-help{ margin-top:4px; font:400 var(--fs-10)/1.45 var(--font); color:var(--muted) }
 
-/* ── The two tabs over the tiles (phase V30, block 2): presets | text ─────────
+/* ── The tabs over the tiles: presets | animation | fonts | text ──────────────
    `text` puts the words of the subtitle and text lanes, as one document, in the tiles' place (caption-doc.js); the
    strip on the right stays as it is. */
-.mv3-cap-tabs{ flex:0 0 auto; padding:6px 10px 0 }   /* the shared tabs (.u-tabs / .u-tab, phase V73 block 2) */
+.mv3-cap-tabs{ flex:0 0 auto; padding:6px 10px 0 }   /* the shared tabs (.u-tabs / .u-tab) */
 .mv3-cap-tab.u-tab{ font-size:var(--fs-11) }
-/* The highlights popup's two tabs over its pickers (phase V49, (пр26)). */
+/* The highlights popup's two tabs over its pickers. */
 .mv3-hlp-captabs{ padding:6px 0 0; margin-top:5px }
 .mv3-hlp-captabs + .mv3-hlp-style, .mv3-hlp-anim{ margin-top:0 }
 .mv3-hlp-anim .mv3-cap-note{ margin:0 0 6px }
@@ -170,7 +170,7 @@
 }
 .mv3-doc-sh.is-sel{ color:var(--ink) }
 .mv3-doc-sec + .mv3-doc-sec{ margin-top:6px; border-top:1px solid var(--border-soft) }
-/* (phase V73 block 2) A lane with no lines - the shared part as a row (js/ui-state.js), under the lines' words. */
+/* A lane with no lines - the shared part as a row (js/ui-state.js), under the lines' words. */
 .mv3-doc-none{ margin-left:62px }
 .mv3-doc-row{ display:flex; align-items:flex-start; gap:6px; padding:0 8px 0 10px; border-left:2px solid transparent }
 .mv3-doc-row:hover{ background:var(--hover) }

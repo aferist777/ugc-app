@@ -1,7 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — THE SCRIPT OF THE VOICEOVER DRAFT, chosen in its script column (phase V62, the owner after block 0, 2026-10-30:
-   "шаг со списком сценариев удаляем из voiceover. список сценариев и кнопка own text в правом столбце, там где появятся строки
-   сценария"; (во30) "можно отменить выбраный сценарий и вернуться к списку сценариев и добавить свой текст").
+   MERGE — THE SCRIPT OF THE VOICEOVER DRAFT, chosen in its script column.
 
    The voiceover draft opens on its setup (js/merge-v3/scen-pick.js openVoiceover); while it has no lines, the column where its
    lines will stand (js/merge-v3/wk-fragments.js _list) is this: "+ your text" (js/merge-v3/vo-text.js - the whole text one line)
@@ -10,10 +8,10 @@
    a snapshot, never translated). With its lines in, the column is the script again, and "other script" over it takes them off
    - back to this list - for as long as it is the draft: its first read makes it a project, and its script stays its own.
 
-   (phase V63, P14) THE SAME LIST IN HOME'S QUICK START - the voiceover's popup and the talking head's (js/home/start.js): `o.put`
+   THE SAME LIST IN HOME'S QUICK START - the voiceover's popup and the talking head's (js/home/start.js): `o.put`
    says where a choice goes (here - into the draft, as above; there - into the popup, nothing written until its "create"), and
    `o.talking` makes it a talking head's text: "+ your text" cut into lines by paragraphs (vo-text.js), a scenario written in the
-   scenario window made English (V29).
+   scenario window made English.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
@@ -21,7 +19,7 @@ import { openScenario } from '../scen-window.js';
 import { openOwnText } from './vo-text.js';
 import { el } from './wk-maker.js';
 import { showError } from '../notice.js';
-// (phase V73 block 2, step 2b) The list being read, empty, or not read - the shared parts.
+// The list being read, empty, or not read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 let _rows = null;             // the scenarios, read once per draft shown - null while not read
@@ -34,14 +32,14 @@ let _busy = false;            // a script being put in
 /**
  * The chooser, into `host` (the script column), for the draft `project`.
  * @param adopt(project) the draft as the server has it now - the column repaints with its lines
- * @param o  (phase V63) { put(body, summary) -> what adopt takes - where a choice goes (the draft by default), talking, hint,
+ * @param o  { put(body, summary) -> what adopt takes - where a choice goes (the draft by default), talking, hint,
  *           isOn(summary) - the row chosen }
  */
 export function paintChooser(host, project, adopt, o = {}) {
   const put = typeof o.put === 'function' ? o.put : (body) => API.voiceoverScript(project.id, body);
   const root = el('div', 'mv3-vos');
   host.appendChild(root);
-  // (the owner 2026-10-31) What to do here is said by the tip of step 1 over this column (js/merge-v3/vo-tips.js).
+  // What to do here is said by the tip of step 1 over this column (js/merge-v3/vo-tips.js).
   root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
@@ -101,7 +99,7 @@ async function _load(repaint) {
     _state = '';
   } catch (e) {
     _rows = [];
-    // (phase V73 block 2, (б2-18), (б2-19)) The reason a popup; the list says it did not load, with Try again.
+    // The reason a popup; the list says it did not load, with Try again.
     _state = 'failed';
     showError('Could not read the scenarios: ' + e.message);
   }
@@ -169,7 +167,7 @@ async function _use(s, put, adopt, btn) {
 }
 
 // The scenario window - a row's text, or a new one: kept in the language it is typed in (a voiceover is read in it; a talking
-// head's is made English, V29); its `use` saves it and puts its lines where the choice goes.
+// head's is made English); its `use` saves it and puts its lines where the choice goes.
 function _open(summary, put, adopt, o) {
   openScenario(summary, {
     voiceover: !o.talking,

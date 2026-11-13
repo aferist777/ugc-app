@@ -1,8 +1,6 @@
 // LIBRARY — the actions: rename, favourite, category, delete, upload.
 //
-// Every action is the server's: the endpoint writes the store and answers. (Until phase V23 this module also kept
-// browser-owned copies of the archives in localStorage in step - the Birols page pushed them back every two seconds.
-// That page and its sync are gone and nothing reads those keys (js/storage-sync.js blocks them), so the copies went.)
+// Every action is the server's: the endpoint writes the store and answers.
 
 import { askName } from '../name-box.js';
 
@@ -28,7 +26,7 @@ async function _json(url, opts) {
 // what has to be judged. Asking only about the derived path called a blank card healthy.
 export async function auditThumbs(items) {
   const payload = items
-    // A sound has no picture to make a thumbnail of - a .webm one too (review V7).
+    // A sound has no picture to make a thumbnail of - a .webm one too.
     .filter(it => it && it.media && it.kind !== 'sounds' && /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(String(it.media)))
     .map(it => ({ id: it.id, video: it.media, thumb: it.thumb || '' }));
   if (!payload.length) return { need: [], link: [], ok: 0, missing: [], total: 0 };
@@ -71,8 +69,8 @@ export async function fixThumb(it) {
 //     part of a path. The stored image URLs would still resolve, but anything that
 //     re-derives the folder from the record would point at a folder that does not exist.
 //     Renaming a look safely means moving the folder and rewriting every URL in the record;
-//     that belongs with the storage rework (moves on rename), not here.
-// (phase V73, the owner's (rn-2) а) a render too - its file, its .srt and its poster take the name (routes/library.js)
+//     that is not done here.
+// A render too - its file, its .srt and its poster take the name (routes/library.js).
 export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds', 'music', 'renders']);
 
 export async function renameItem(it, anchor) {
@@ -118,7 +116,7 @@ export async function loadCats() {
 }
 
 // ── Category vocabulary: create, rename, delete ──────────────────────────────
-// (phase V54 block 6) A folder made where the person asked: in `parent` ('' - the kind itself). A name already there gives
+// A folder made where the person asked: in `parent` ('' - the kind itself). A name already there gives
 // that one (created:false); a path too long is refused in words.
 export async function addFolder(kind, label, parent) {
   return _json('/api/library/cats', {
@@ -155,7 +153,7 @@ export async function setCategory(it, categoryId, categoryLabel) {
   return categoryId;
 }
 
-// A category that did not exist a moment ago, for one kind - (phase V54) a folder at the kind's top, or in `parent`. The
+// A category that did not exist a moment ago, for one kind - a folder at the kind's top, or in `parent`. The
 // server hands back the existing one when the name is already taken there, so asking twice is safe.
 export async function createCategory(kind, label, parent) {
   const d = await _json('/api/library/cats', {
@@ -212,17 +210,16 @@ export function deleteWarning(it) {
       + 'The video' + (mb ? ' (' + mb + ' MB)' : '') + ' and its poster are removed from disk.\n'
       + 'This is the only copy - re-rendering is the only way back.';
   }
-  // (phase V7) A sound has no picture: the file alone goes.
+  // A sound has no picture: the file alone goes.
   if (it.kind === 'sounds') return 'Delete the sound "' + (it.name || '') + '"?\n\nThe sound file is removed from disk.';
-  // (phase V28.4, the owner) A track goes with its file, as everything on Media.
+  // A track goes with its file, as everything on Media.
   if (it.kind === 'music') return 'Delete the track "' + (it.name || '') + '"?\n\nThe music file is removed from disk.';
-  // (phase V59.1) A saved text of Music -> Lyrics - no file goes with it.
+  // A saved text of Music -> Lyrics - no file goes with it.
   if (it.kind === 'lyrics') return 'Delete the lyrics "' + (it.name || '') + '"?\n\nThe text is removed from Music → Lyrics.';
   return 'Delete "' + (it.name || '') + '"?\n\nThe file and its thumbnail are removed from disk.';
 }
 
-// (phase V28.4, the owner 2026-10-12: "при удалении файла обязательно уведомление, что файл используется в проектах и
-// список проектов") The question, with the projects whose timelines hold the file (POST /api/library/usage) - there its
+// The question, with the projects whose timelines hold the file (POST /api/library/usage) - there its
 // clips turn red, to be replaced or removed. A read that fails asks the plain question.
 export async function deleteQuestion(it) {
   const base = deleteWarning(it);
@@ -297,7 +294,7 @@ export async function uploadImages(files, onEach) {
   return { ok, total: list.length };
 }
 
-// (phase V7) Sounds onto the Sounds shelf, into the category open there - one call each, like the pictures.
+// Sounds onto the Sounds shelf, into the category open there - one call each, like the pictures.
 export async function uploadSounds(files, onEach, categoryId) {
   let ok = 0;
   const list = Array.from(files || []);
@@ -316,8 +313,8 @@ export async function uploadSounds(files, onEach, categoryId) {
   return { ok, total: list.length };
 }
 
-// (phase V28.4) Music from this computer into Media -> Audio -> Music (routes/music.js; no categories) - one call each.
-// (phase V54) `categoryId` - an own folder of Music to put them in ('' - Music itself).
+// Music from this computer into Media -> Audio -> Music (routes/music.js) - one call each.
+// `categoryId` - an own folder of Music to put them in ('' - Music itself).
 export async function uploadMusic(files, onEach, categoryId) {
   let ok = 0;
   const list = Array.from(files || []);

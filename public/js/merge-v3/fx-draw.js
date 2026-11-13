@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S EFFECTS ON THE PREVIEW (phase V84; docs/local-app/plan/, "Подфаза 3 — V84"). preview-b.js _showAs draws a clip whose
+   A CLIP'S EFFECTS ON THE PREVIEW. preview-b.js _showAs draws a clip whose
    effects run at this moment ALONE on a layer of the canvas's size (as it does for its opacity) and hands the layer here; what comes
    back is laid at the clip's opacity and blend mode. The numbers are public/js/fx/params.js paramsAt's - the render's
    (lib/fx-render.js) - and the steps are the render's, in its order:
      the colour matrix (an SVG feColorMatrix, its values set for the frame) and the move (the layer drawn transformed) ->
      the channels (the picture drawn three times, each through a filter keeping one channel, moved, added up) ->
      the blocks (down to a small canvas and back without smoothing, the grid from the frame's corner) ->
-     (block 1c) the face's mosaic (the same blocks inside its oval) and Snap zoom's blur (a canvas blur) ->
-     (block 3) the glitch's column jitter (any video lane, baked for the render by the app's window with this code) ->
-     (block 1b) the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
+     the face's mosaic (the same blocks inside its oval) and Snap zoom's blur (a canvas blur) ->
+     the glitch's column jitter (any video lane, baked for the render by the app's window with this code) ->
+     the vertical smear and the soft focus (canvas blurs) -> the vignette, the speed lines and the glitch's dark lines
      (masks drawn by effects.js's rule, laid only where the clip has picture - source-atop) -> the grain.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -23,7 +23,7 @@ import { personOf } from '../fx/person.js';
 import { momentsOf } from '../fx/params.js';
 import { hexRgb, fontsReady, momentAt, coverOf } from '../fx/kit.js';
 
-// (block 4b) The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
+// The graphics' fonts asked for at once - a frame drawn before they are there uses the canvas's own sans.
 fontsReady();
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -50,12 +50,12 @@ function _ensureDefs() {
     svg.appendChild(f);
     return m;
   };
-  // Measured 2026-11-10: the canvas reads a changed feColorMatrix under the same url() when its filter is set again.
+  // Measured: the canvas reads a changed feColorMatrix under the same url() when its filter is set again.
   _colM = filter('mv3-fx-col', '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0');
   filter('mv3-fx-r', '1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0');
   filter('mv3-fx-g', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0');
   filter('mv3-fx-b', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0');
-  // (block 1b) The vertical smear: a Gaussian blur down only, its σ set for the frame.
+  // The vertical smear: a Gaussian blur down only, its σ set for the frame.
   const fv = document.createElementNS(NS, 'filter');
   fv.id = 'mv3-fx-bv';
   fv.setAttribute('color-interpolation-filters', 'sRGB');
@@ -156,7 +156,7 @@ const _f = (v) => String(Math.round(v * 1e5) / 1e5);
 
 /**
  * The clip's layer `layer` (a canvas, the frame at PAD) with the effects' numbers `p` (params.js paramsAt for this W x H frame)
- * applied - a canvas of the same size, the layer itself left as it is. `box` (block 4b) - the clip's window in the frame
+ * applied - a canvas of the same size, the layer itself left as it is. `box` - the clip's window in the frame
  * (js/fx/box.js windowOf: { cx, cy, w, h, angle }) where its graphics are drawn; none - the whole frame.
  */
 export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
@@ -165,7 +165,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
   const u = W / 1080;
   // The colour and the move, in one draw. A clip covering the frame stays in it - the render cuts the frame out after the move;
   // an insert hanging over the edge is drawn as it hangs.
-  // (block 2) Color swing's ECHO first: a frame of the clip's file from another moment mixed into its window (js/fx/kit.js momentAt
+  // Color swing's ECHO first: a frame of the clip's file from another moment mixed into its window (js/fx/kit.js momentAt
   // - the server's pictures, the bake window's too); not there yet - no echo.
   let src = layer;
   const bx = box && box.w > 0 && box.h > 0 ? box : { cx: W / 2, cy: H / 2, w: W, h: H, angle: 0 };
@@ -235,7 +235,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     g.drawImage(sm, 0, 0, sw, sh, PAD, PAD, sw * b, sh * b);
     g.restore();
   }
-  // (block 1c) The face's mosaic: the blocks of the frame's own grid (from its corner, as the render's pixelize) that cover the
+  // The face's mosaic: the blocks of the frame's own grid (from its corner, as the render's pixelize) that cover the
   // oval's box, made small and drawn back without smoothing - inside the oval only, and only where the clip has picture.
   if (p.mosaic) {
     const m = p.mosaic;
@@ -256,7 +256,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     g.drawImage(sm, 0, 0, nw, nh, PAD + gx0, PAD + gy0, gx1 - gx0, gy1 - gy0);
     g.restore();
   }
-  // (block 1c) Snap zoom's blur, both ways.
+  // Snap zoom's blur, both ways.
   if (p.blur > 0.05) {
     const nx = _canvas('e', CW, CH);
     const h = nx.getContext('2d');
@@ -266,7 +266,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     cur = nx;
     g = h;
   }
-  // (block 1b) The vertical smear.
+  // The vertical smear.
   if (p.blurV > 0.05 && _bv) {
     _bv.setAttribute('stdDeviation', '0 ' + _f(p.blurV * u));
     const nx = _canvas('d', CW, CH);
@@ -277,7 +277,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     cur = nx;
     g = h;
   }
-  // (block 3; every video lane since block 4a) The glitch's column jitter: each band of the frame moved down by its own amount, its
+  // The glitch's column jitter (every video lane): each band of the frame moved down by its own amount, its
   // edge row repeated into the gap (video-effects-pack's remap with BORDER_REPLICATE). Drawn by the page only - the app's window
   // bakes it for the render with this very code (js/bake-worker.js).
   if (p.jitter) {
@@ -298,7 +298,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     cur = nx;
     g = h;
   }
-  // (block 1b) Soft sway's soft focus: 0.88 of it blurred by 1.3 u, 0.12 of it by 14 u over that.
+  // Soft sway's soft focus: 0.88 of it blurred by 1.3 u, 0.12 of it by 14 u over that.
   if (p.glow > 0.002) {
     const nx = _canvas('c', CW, CH);
     const h = nx.getContext('2d');
@@ -333,8 +333,8 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
     g.fillRect(PAD, PAD, W, H);
     g.restore();
   }
-  // (block 4b) THE GRAPHICS, last - after every number of blocks 1-3, in the order they were added (the owner's (б4-6)) -, each
-  // inside the clip's window (the owner's (б4-11)): (0, 0) its top-left corner, turned with it, clipped to it (js/fx/overlays.js).
+  // THE GRAPHICS, last - after every number above, in the order they were added -, each
+  // inside the clip's window: (0, 0) its top-left corner, turned with it, clipped to it (js/fx/overlays.js).
   if (p.scenes && p.scenes.length) {
     const b = box && box.w > 0 && box.h > 0 ? box : { cx: W / 2, cy: H / 2, w: W, h: H, angle: 0 };
     const an = (+b.angle || 0) * Math.PI / 180, ca = Math.cos(an), sa = Math.sin(an);
@@ -355,7 +355,7 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       g.beginPath();
       g.rect(0, 0, b.w, b.h);
       g.clip();
-      // (block 4c) The window's picture as it is now, upright - what Chat lays in its card.
+      // The window's picture as it is now, upright - what Chat lays in its card.
       const picture = () => {
         const pc = _canvas('sc-pic', Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));
         const x = pc.getContext('2d');
@@ -371,10 +371,10 @@ export function applyFx(layer, p, { W, H, PAD, inFrame, box }) {
       const canvas = (name, w, h) => _canvas('sc-' + name, Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
       try {
         draw(g, { w: b.w, h: b.h, u: b.w / 1080, tau: sc.tau, live: sc.live, e: sc.e, col, opt: optsOf(sc.e), W, H, toBox, canvas,
-          // (block 2) The clip's file second now, and its picture at another second (null until the server's pictures are there).
+          // The clip's file second now, and its picture at another second (null until the server's pictures are there).
           tf: sc.tf, frame: (t) => (sc.c ? momentAt(sc.c.src, momentsOf(sc.c, sc.e), t) : null),
           picture,
-          // (block 6) The person in the window's picture now - { mask, cut } (js/fx/person.js), null until the segmenter is there.
+          // The person in the window's picture now - { mask, cut } (js/fx/person.js), null until the segmenter is there.
           // Asked BEFORE the effect draws, so the person is the picture's, not the effect's.
           person: () => personOf(picture(), canvas) });
       } finally { g.restore(); }

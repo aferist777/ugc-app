@@ -10,7 +10,7 @@
    from that release's SHA2-256SUMS, so an asset swapped on GitHub after the fact is refused
    rather than shipped. A copy already in place with the right hash is left alone.
 
-   THE NIGHTLY CHANNEL (phase V27, the owner 2026-10-12): yt-dlp's own README calls it "the
+   THE NIGHTLY CHANNEL: yt-dlp's own README calls it "the
    recommended channel for regular users" - the stable one comes out about once a month, and the
    sites it reads change faster than that. Nightly builds are released from their own repository,
    yt-dlp/yt-dlp-nightly-builds, with the same files and the same SHA2-256SUMS.

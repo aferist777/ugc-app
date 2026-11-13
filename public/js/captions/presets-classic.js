@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — the Classic presets (phase V30, block 4; the owner's (с12), (с44): "отлично").
+   CAPTIONS — the Classic presets.
 
    Written by hand, unlike presets.js (made by a tool), which only adds them to its list. Classic subtitles: no
    spoken-word effect, no arrival, two lines, and the lane cut in `sentences` (style.js CUTS, pages.js SENT) - so
    a Classic tile put on a lane cuts it as classic subtitles by itself, and any other tile, which sets every
-   field, puts `pages` back. On picked lines a Classic tile gives the look only: the cut is the lane's (с43).
+   field, puts `pages` back. On picked lines a Classic tile gives the look only: the cut is the lane's.
    Sizes are the height of a line in a 1080x1920 frame, as every preset's.
    ═══════════════════════════════════════════════════════════════════════════ */
 

@@ -1,8 +1,8 @@
-// A NAME, ASKED FOR IN THE PAGE (phase D6, 2026-09-29).
+// A NAME, ASKED FOR IN THE PAGE.
 //
 // window.prompt() does not exist in the app's window: Electron throws "prompt() is not supported."
-// So everything that asked for a name with it - a rename in the Library, a new or renamed category,
-// a new Merge project - asks here instead: a small box beside whatever was pressed (in the middle
+// So everything that asks for a name - a rename in the Library, a new or renamed category,
+// a new Merge project - asks here: a small box beside whatever was pressed (in the middle
 // of the window when nothing was), on the layer stack (js/layers.js), so Escape closes this box and
 // not the viewer or the window it sits over. Enter confirms; a press anywhere else cancels.
 //
@@ -16,8 +16,8 @@
 //
 // One box at a time: opening a second one cancels the first.
 //
-// (phase V73 block 2, (б2-8)) The shared question's look (`.u-ask.is-float`, css/app-shell.css) with the shared field and
-// buttons: Cancel LEFT, the verb right. The 3D Studio's page keeps its old look and order.
+// The shared question's look (`.u-ask.is-float`, css/app-shell.css) with the shared field and
+// buttons: Cancel LEFT, the verb right. The 3D Studio's page keeps a look and order of its own.
 
 import * as Layers from './layers.js';
 
@@ -80,7 +80,7 @@ export function askName(opts) {
     document.body.appendChild(el);
     _place(el, o.anchor);
     inp.focus();
-    // A name to replace is selected; a start to go on from (`select: false` - "2026-09-29 - ") keeps
+    // A name to replace is selected; a start to go on from (`select: false` - "<day> - ") keeps
     // the caret at its end.
     if (o.select === false) inp.setSelectionRange(inp.value.length, inp.value.length);
     else inp.select();

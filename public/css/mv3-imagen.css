@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the chats, each in its window (js/merge-v3/picchat.js, phase J; then the video chat,
+   MERGE — the chats, each in its window (js/merge-v3/picchat.js; then the video chat,
    the frames chat, the picker and the almanac below).
 
    A chat has no chrome of its own - its window's head carries its name. Three columns when
@@ -13,7 +13,7 @@
 
 /* A chat's root: hidden until it shows, then it fills its window (`.gw-body > .mv3-pc.is-shown`, below). */
 .mv3-pc{ display:none; flex:1 1 auto; min-height:0; min-width:0; background:var(--bg) }
-/* Which chat shows is lib-views.js's to say (is-shown) - the pictures chat now, the video chat from phase V3. */
+/* Which chat shows is lib-views.js's to say (is-shown). */
 #mv3-library.is-chat .mv3-pc.is-shown{ display:flex }
 .mv3-col.is-collapsed .mv3-pc{ display:none !important }
 
@@ -53,7 +53,7 @@
 .mv3-ig-said{ flex:0 0 auto; margin:0; padding:8px 12px 10px }   /* the one status line (.u-status), red */
 .mv3-ig-said:empty{ display:none }
 
-/* ── the settings folded into a row (the owner's answer 3) ──
+/* ── the settings folded into a row ──
    The same controls, moved above the message box: aggregator · model · quality · shape · price. */
 .mv3-pc.is-narrow .mv3-ig-set{
   flex:0 0 auto; flex-direction:row; flex-wrap:wrap; align-items:center;
@@ -79,18 +79,18 @@
 .mv3-pc.is-narrow .mv3-ig-atts{ gap:5px; padding:7px 10px }
 .mv3-pc.is-narrow .mv3-ig-att,
 .mv3-pc.is-narrow .mv3-ig-att-slot{ width:40px; height:40px; line-height:38px; font-size:15px }
-/* (phase V55, (гн5)) The box and its small buttons keep one line here too. */
+/* The box and its small buttons keep one line here too. */
 .mv3-pc.is-narrow .mv3-ig-bar{ gap:5px; padding:6px 10px }
 
 /* ── middle: the conversation ── */
-/* (phase V60.3, the owner's point 5) The rest of the width after the right column: a basis of 0, never the width of its
-   longest line - with `auto` a long text in the thread took all the room and the column's sash moved nothing. */
+/* The rest of the width after the right column: a basis of 0, never the width of its
+   longest line - with `auto` a long text in the thread would take all the room and the column's sash would move nothing. */
 .mv3-ig-chat{ flex:1 1 0; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
 .mv3-ig-thread{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
   display:flex; flex-direction:column; gap:12px;
 }
-/* (phase V73 block 2) The empty conversation is the shared part (js/ui-state.js emptyEl); here only where it sits. */
+/* The empty conversation is the shared part (js/ui-state.js emptyEl); here only where it sits. */
 .mv3-ig-empty{ margin:auto; max-width:320px }
 /* A turn. The two sides lean opposite ways and nothing else about them differs. */
 .mv3-ig-msg{
@@ -100,11 +100,11 @@
 }
 .mv3-ig-msg.is-user{ align-self:flex-end; background:var(--surface-2) }
 .mv3-ig-msg.is-agent{ align-self:flex-start }
-/* (phase V77) The page's word after the messages - what came in from the timeline: never kept, a dashed gold edge. */
+/* The page's word after the messages - what came in from the timeline: never kept, a dashed gold edge. */
 .mv3-ig-msg.mv3-ig-notice{ border-style:dashed; border-color:var(--gold-line); gap:4px }
-/* (phase V77) A result started on the timeline goes back to it: the button under it. */
+/* A result started on the timeline goes back to it: the button under it. */
 .mv3-ig-back{ width:100%; margin-top:4px; white-space:nowrap }
-/* (phase V31) The cross that takes a message away: on the message's top right corner, over its border so it never covers
+/* The cross that takes a message away: on the message's top right corner, over its border so it never covers
    what the message says; faint, brighter under the pointer; the first press turns it into "really?". */
 .mv3-ig-msg.has-del{ position:relative }
 .mv3-ig-del{ position:absolute; top:-7px; right:-7px; z-index:2; opacity:.55 }
@@ -124,7 +124,7 @@
   border:1px solid var(--border-soft); background:var(--surface-2);
 }
 .mv3-ig-msg-ref img{ width:100%; height:100%; object-fit:cover; display:block }
-/* (phase V7) A clip or a sound that went: ▶ over its poster or ♪, and the seconds of it that went. */
+/* A clip or a sound that went: ▶ over its poster or ♪, and the seconds of it that went. */
 .mv3-ig-msg-ref .ic{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;
   font:600 13px/1 var(--font); color:var(--muted);
@@ -162,7 +162,7 @@
   position:relative; height:26px; min-width:240px;
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
 }
-/* The frame the picture will fill, at the shape that was asked for - and Kling's first frame waiting (V18.1). */
+/* The frame the picture will fill, at the shape that was asked for - and Kling's first frame waiting. */
 .mv3-ig-shot.is-busy{
   min-width:0; width:132px; max-width:100%; height:auto;
 }
@@ -212,10 +212,10 @@
   border:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
-.mv3-ig-att .x{ position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:2px; --x-size:10px }   /* the cells' sizes stay (b5) */
+.mv3-ig-att .x{ position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:2px; --x-size:10px }   /* the cells' sizes stay */
 .mv3-ig-att-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
 
-/* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
+/* ── the video chat's ZONE: pictures | clips | sounds ──
    Each part grows one empty place at a time and scrolls sideways; a cell of a slot (a frame's place, the frames chat's
    person, place and products) wears its slot's name. */
 .mv3-ig-atts.is-zone{ flex-wrap:nowrap; align-items:stretch; gap:0; padding:7px 12px 6px }
@@ -235,12 +235,12 @@
   overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; padding-bottom:3px;
 }
 .mv3-ig-part-off{ padding:4px 0; font:500 10px/1.35 var(--font); color:var(--muted); opacity:.75; white-space:nowrap }
-/* (phase V16) A part's own word on its head line: frames beside a clip or a sound go as references. */
+/* A part's own word on its head line: frames beside a clip or a sound go as references. */
 .mv3-ig-part-note{
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help;
   font-weight:500; letter-spacing:0; text-transform:none; color:var(--muted);
 }
-/* (phase V16) A picture that does not go as things are: dimmed, its number and cross as they were. */
+/* A picture that does not go as things are: dimmed, its number and cross kept. */
 .mv3-ig-att.is-dim img{ opacity:.3 }
 .mv3-ig-cell{ flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:2px }
 .mv3-ig-cell .lab{
@@ -255,8 +255,8 @@
 @keyframes mv3-ig-flash{ 50%{ border-color:var(--danger); color:var(--danger); background:var(--danger-soft) } }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:6px 10px 5px }
 .mv3-pc.is-narrow .mv3-ig-cell{ width:40px }
-/* HALF THE HEIGHT (the owner, 2026-10-06): the zone's places and what is in them half the size - the pictures chat's
-   row stays as it was. A slot's name may run wider than its place. */
+/* HALF THE HEIGHT: the zone's places and what is in them half the size - the pictures chat's
+   row keeps its size. A slot's name may run wider than its place. */
 .mv3-ig-atts.is-zone{ padding:3px 12px 2px }
 .mv3-ig-atts.is-zone .mv3-ig-part{ gap:2px }
 .mv3-ig-atts.is-zone .mv3-ig-part-h{ font-size:10px }
@@ -276,7 +276,6 @@
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; --x-size:7px }
 
 /* ── the input ──
-   (phase V55, the owner 2026-10-28, (гн5): "текстовое поле ... сделай меньше по высоте ... и кнопки и поле компактней")
    One line of 26 px in a bar of 38, the buttons 24 px; the box grows with its words up to six lines (chat-shell.js _grow). */
 .mv3-ig-bar{
   flex:0 0 auto; display:flex; align-items:flex-end; gap:6px;
@@ -290,10 +289,10 @@
 .mv3-ig-say::placeholder{ color:var(--muted) }
 .mv3-ig-say.is-bad{ border-color:var(--danger) }
 /* The writer, on or off. Filled when on: it changes what is sent. */
-/* The pen, the count and the send: the shared part at 24 (phase V73 block 2); the send is the one action here. */
+/* The pen, the count and the send: the shared part at 24; the send is the one action here. */
 .mv3-ig-bar .pen, .mv3-ig-bar .n{ flex:0 0 auto; margin-bottom:1px }
 .mv3-ig-bar .b{ flex:0 0 auto; min-width:30px; margin-bottom:1px }
-/* (phase V73 block 4, (б4-13) а) the pen, the count and the send as icons; the count's number in mono beside its icon; the price
+/* the pen, the count and the send as icons; the count's number in mono beside its icon; the price
    of the press right before the send */
 .mv3-ig-bar .n{ gap:4px; padding:0 6px }
 .mv3-ig-price{ flex:0 0 auto; align-self:center; margin:0 2px 0 4px }
@@ -306,9 +305,9 @@
 }
 .mv3-ig-sash{ flex:0 0 5px }
 /* Between the chat and the strip, where the markup puts it: Merge's own vertical sash rule sends a
-   sash to the far end with order:2 (phase P). */
+   sash to the far end with order:2. */
 .mv3-sash.is-v.mv3-ig-sash{ order:0 }
-/* (phase V55) Its head, folders and columns of pictures are the folder column's (css/folder-column.css); the tiles here. */
+/* Its head, folders and columns of pictures are the folder column's (css/folder-column.css); the tiles here. */
 .mv3-ig-card{
   position:relative; width:100%; min-height:40px;
   border:1px solid var(--border); border-radius:var(--r-xs);
@@ -326,10 +325,10 @@
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
 .mv3-ig-card.is-fail .sp{ font:500 10px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
-/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in its middle plays it large; a sound - a row with
+/* The video chat's column: a clip - its poster, its length, ▶ in its middle plays it large; a sound - a row with
    ▶ to listen, its name and its length. One the model cannot take (too short) is dimmed, and says why under the pointer. */
 .mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
-/* (V91 block 3, the owner 2026-11-12) THE ROUND BUTTON on a chat's picture or clip (chat-shell.js mediaBtn) - ⤢ in a picture's
+/* THE ROUND BUTTON on a chat's picture or clip (chat-shell.js mediaBtn) - ⤢ in a picture's
    top-right corner opens it large, ▶ in a clip's middle plays it in the Library's viewer; a press on the thing itself does
    nothing. Smaller on a message's attachments. */
 .mv3-ig-mb{
@@ -340,7 +339,7 @@
 .mv3-ig-mb:hover{ background:var(--scrim-strong); color:var(--on-media); opacity:1 }
 .mv3-ig-mb.is-big{ top:4px; right:4px; font-size:14px }
 .mv3-ig-mb.is-play{ left:50%; top:50%; transform:translate(-50%,-50%) }
-.mv3-vc-shot > .mv3-ig-mb.is-play{ width:30px; height:30px; font-size:12px }   /* the thread's clip: its ▶ as large as before */
+.mv3-vc-shot > .mv3-ig-mb.is-play{ width:30px; height:30px; font-size:12px }   /* the thread's clip: a larger ▶ */
 .mv3-ig-msg-ref .mv3-ig-mb{ width:18px; height:18px; font-size:8px }
 .mv3-ig-msg-ref .mv3-ig-mb.is-big{ top:2px; right:2px; font-size:12px }
 .vm-refs-s .mv3-ig-mb{ width:16px; height:16px }
@@ -354,20 +353,20 @@
 .mv3-ig-card.is-sound .nm{ flex:1 1 auto; min-width:0; font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .mv3-ig-card.is-sound .du{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .mv3-ig-splay{ flex:0 0 auto }
-.mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round, as before */
+.mv3-ig-splay.u-btn{ width:22px; height:22px; border-radius:50%; font-size:8px }   /* round */
 .mv3-ig-card.is-short{ opacity:.45 }
 
 /* Hovering a thing in the zone shows it larger, at one fixed place over the conversation - a clip playing in it without its
-   sound, over its poster (V91 block 3). */
+   sound, over its poster. */
 .mv3-ig-peek{
-  position:fixed; z-index:9450; pointer-events:none;     /* (V64) over a chat's window (8900) */
+  position:fixed; z-index:9450; pointer-events:none;     /* over a chat's window (8900) */
   padding:4px; border:1px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface); box-shadow:var(--shadow);
 }
 .mv3-ig-peek img{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
 .mv3-ig-peek .mv3-ig-hvid{ inset:4px; width:calc(100% - 8px); height:calc(100% - 8px); object-fit:contain }
 
-/* ── The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own few pieces ── */
+/* ── The video chat (js/merge-v3/vidchat.js) - the same shell, its own few pieces ── */
 /* A finished clip: its poster at the clip's own shape, a play mark over it, its length in the corner. */
 .mv3-vc-shot{
   position:relative; width:180px; max-width:100%; max-height:320px;
@@ -379,7 +378,7 @@
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
   background:var(--scrim); color:var(--on-media); font:500 10px/1.3 var(--font); pointer-events:none;
 }
-/* Dragged onto a lane (phase V13). */
+/* Dragged onto a lane. */
 .mv3-vc-shot.is-dragging{ opacity:.5 }
 /* A clip or a sound in the zone: its poster or a note, the seconds that go - pressed, the part is chosen. */
 .mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ display:flex; align-items:center; justify-content:center }
@@ -406,13 +405,13 @@
 /* A clip from the timeline held over the part that takes it (timeline-b.js). */
 .mv3-ig-part.is-drop{ background:var(--sel-bg); border-radius:var(--r-xs); outline:1px dashed var(--sel-line); outline-offset:-1px }
 
-/* (phase V7) The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). (phase V73 block 4,
-   (б4-6) а) A panel at its place, not a window: the frame's edges (`u-win is-float`), its head row (`u-win-head` - the clip's
-   name, "N s in all" a quiet note, the 28 px ✕), no backdrop; what it holds in its own padded column under the head. */
-.vtrim{ position:fixed; z-index:9050 }   /* (V64) over a chat's window */
+/* The part of a clip or a sound that goes - a panel over the zone (js/merge-v3/vtrim.js). A panel at its place, not a
+   window: the frame's edges (`u-win is-float`), its head row (`u-win-head` - the clip's name, "N s in all" a quiet note, the 28 px ✕),
+   no backdrop; what it holds in its own padded column under the head. */
+.vtrim{ position:fixed; z-index:9050 }   /* over a chat's window */
 .vtrim-x{ margin-left:auto }
 :root:not(:has(link[href="css/studio3d.css"])) .vtrim-body{ display:flex; flex-direction:column; gap:7px; padding:10px 12px 12px }
-/* what the model does with the part - the quiet text (the gold went: gold is the main button's, (б1-18)) */
+/* what the model does with the part - the quiet text (gold is the main button's) */
 .vtrim-why{ font:500 11px/16px var(--font); color:var(--muted) }
 .vtrim-media{ display:block; width:100%; max-height:200px; background:var(--media-bg); border-radius:var(--r-xs) }
 audio.vtrim-media{ background:none; height:32px }
@@ -430,19 +429,19 @@ audio.vtrim-media{ background:none; height:32px }
 .vtrim-at{ position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--ink); pointer-events:none }
 .vtrim-foot{ display:flex; align-items:center; gap:8px }
 .vtrim-span{ flex:1 1 auto; font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
-/* (phase V17) Kling motion control's first frame: its moment on a slider - the part goes from there. */
+/* Kling motion control's first frame: its moment on a slider - the part goes from there. */
 .vtrim-still{ display:flex; align-items:center; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
-.vtrim-still .k{ flex:0 0 auto; font:500 10px/1.2 var(--font); color:var(--muted) }   /* (V73 block 4) sentence case, not gold */
+.vtrim-still .k{ flex:0 0 auto; font:500 10px/1.2 var(--font); color:var(--muted) }   /* sentence case, not gold */
 .vtrim-still input{ flex:1 1 auto; min-width:0; margin:0 }
 .vtrim-still .u-range{ background:linear-gradient(to right, var(--gold) 0 var(--p), var(--surface-3) var(--p) 100%) }   /* the trimmer's gold */
 .vtrim-still-at{ flex:0 0 auto; color:var(--ink); font-variant-numeric:tabular-nums }
-/* What the chosen model does and what to attach, under its dropdown (phase V6). */
+/* What the chosen model does and what to attach, under its dropdown. */
 .mv3-vc-brief{ margin:1px 0 6px; font:500 10px/1.45 var(--font); color:var(--muted) }
 .mv3-pc.is-narrow .mv3-vc-brief{ flex:1 0 100%; order:99; margin:0 }
 .mv3-vc-params{ display:flex; flex-direction:column }
 .mv3-pc.is-narrow .mv3-vc-params{ flex-direction:row; flex-wrap:wrap; gap:4px 8px }
 
-/* ── The video chat's cards (phase V6, the owner 2026-10-06; the writer's message since V16): the writer's prompt card,
+/* ── The video chat's cards (the writer's message): the writer's prompt card,
    edited before the video is made, its presses under it. ── */
 .vc-card{ max-width:min(640px, 100%); width:100% }
 .vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
@@ -450,7 +449,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-card-h .k::first-letter{ text-transform:uppercase }
 .vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
 .vc-card-note{ font:500 10px/1.45 var(--font); color:var(--muted) }
-/* (moved from the catalog's sheet, css/mv3-catalog.css, when it went in phase V91) A press that reads as a link -
+/* A press that reads as a link -
    "write it again", "attachments back to the zone" (the video chat and the frames chat). */
 .vc-link{
   padding:0; border:0; background:none; color:var(--ink); font:600 10.5px/1.4 var(--font);
@@ -462,7 +461,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
 
 .vc-prompt-ta{ display:block; width:100%; min-height:90px; resize:vertical }
-/* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
+/* What was asked, at the head of its answer - the person's turn is not drawn apart:
    the words (folded after three lines), the attachments. The message drawn at the press says
    "sending…" until its answer takes its place. */
 .vc-asked{ display:flex; flex-direction:column; gap:6px; min-width:0 }
@@ -481,28 +480,27 @@ audio.vtrim-media{ background:none; height:32px }
 @keyframes vc-sending{ 50%{ opacity:.45 } }
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
 .vc-ref .lab{ max-width:100%; font:500 10px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-/* (phase V23) Not in this library any more - a card's character or place deleted since. */
+/* Not in this library any more - a card's character or place deleted since. */
 .vc-ref.is-gone > :first-child{ outline:1.5px solid var(--danger); outline-offset:1px; opacity:.55 }
 .vc-ref.is-gone .lab{ color:var(--danger) }
-/* (phase V15) The video chat's switches in its column - the writer and the storyboard (checkboxes since V16) - and
+/* The video chat's switches in its column - the writer and the storyboard - and
    the almanac at its foot. */
 .mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
 .mv3-vc-switches:empty{ display:none }
-/* (phase V73 block 4) the writer and the storyboard: the shared switch (.u-switch, on green) with its word */
+/* the writer and the storyboard: the shared switch (.u-switch, on green) with its word */
 .mv3-vc-check{ display:flex; align-items:center; gap:8px; padding:2px 2px; font:500 11px/16px var(--font); color:var(--ink); cursor:pointer; user-select:none }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
-/* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
+/* The writer held on by the storyboard: on, and not to be unticked from here. */
 .mv3-vc-check.is-held, .mv3-vc-check.is-held .u-switch{ cursor:default }
-/* (phase V25, the owner 2026-10-13: "в золотой обводке с закругленными краями и золотым шрифтом чтобы было видно что это
-   кнопка") The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
+/* The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
    width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
-.mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px }   /* the shared part at 32; its capitals go in block 7 */
+.mv3-vc-almanac{ flex:0 0 auto; display:flex; width:auto; margin:8px 10px 10px }   /* the shared part at 32 */
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
 .mv3-pc.is-narrow .mv3-vc-almanac{ height:24px; margin:4px 10px 6px; line-height:22px }
 
-/* A storyboard's (a picture's) prompt and its sheets (phase V8; on the message's steps since V16). */
+/* A storyboard's (a picture's) prompt and its sheets, on the message's steps. */
 .vc-prompt-ta.is-board{ min-height:70px }
-/* Kling's first frame (V7.6; the chat's own since V17): the clip's frame at the moment, and the slider over the clip. */
+/* Kling's first frame: the clip's frame at the moment, and the slider over the clip. */
 .vc-moment{ display:flex; gap:10px; align-items:flex-start; margin:2px 0 4px }
 .vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:var(--media-bg); object-fit:contain }
 .vc-moment-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
@@ -523,12 +521,12 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-try-h .k{ font:500 10px/1.2 var(--font); color:var(--muted) }
 .vc-try-h .k::first-letter{ text-transform:uppercase }
 .vc-try-h .is-mine{ color:var(--ink) }
-/* (phase V48) What the agent saw of each clip - the message's first step: the clip's part, who watched it, the description. */
+/* What the agent saw of each clip - the message's first step: the clip's part, who watched it, the description. */
 .vc-watch{ display:flex; flex-direction:column; gap:5px; min-width:0 }
 .vc-watch + .vc-watch{ padding-top:8px; border-top:1px solid var(--border-soft) }
 .vc-watch-ta{ min-height:120px; font:500 11px/1.5 var(--font); white-space:pre-wrap }
 .vc-watch-ta[readonly]{ color:var(--muted); cursor:default }
-/* (phase V16, the owner 2026-10-07) A working message as a SUB-PROJECT of its own (vsteps.js): its steps paged at its top,
+/* A working message as a SUB-PROJECT of its own (vsteps.js): its steps paged at its top,
    the variants of the step shown at its bottom - the chat does not grow with every attempt. */
 .vc-card.is-steps{ display:flex; flex-direction:column; gap:8px }
 .vc-steps, .vc-vars{ display:flex; align-items:center; gap:6px; min-width:0 }
@@ -536,7 +534,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-steps{ padding-bottom:6px; border-bottom:1px solid var(--border-soft) }
 .vc-vars{ padding-top:6px; border-top:1px solid var(--border-soft) }
 .vc-steps-t, .vc-vars-t{ flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-/* (phase V73 block 4) "‹ step k of N ›" in ONE form with the variants' "‹ 2 of 3 ›": the words in sentence case at 10 px, even
+/* "‹ step k of N ›" in ONE form with the variants' "‹ 2 of 3 ›": the words in sentence case at 10 px, even
    figures, arrows of 20 px */
 .vc-steps-t{ font:500 10px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
 .vc-steps-t::first-letter{ text-transform:uppercase }
@@ -546,7 +544,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
 .vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
-/* (phase V18.1, the owner 2026-10-08) Kling's first frame as a result is shown: its own shape, at most 320px high and
+/* Kling's first frame as a result is shown: its own shape, at most 320px high and
    never wider than the message - the box is set before the picture loads, and the one it waits in is the same box. */
 .vc-board.is-frame{ width:min(100%, calc(320px * var(--ar, .5625))); aspect-ratio:var(--ar, .5625); cursor:zoom-in }
 .vc-board.is-frame img{ width:100%; height:100%; object-fit:contain }
@@ -554,10 +552,10 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-frame-busy{ display:flex; flex-direction:column; align-items:flex-start; gap:5px; max-width:100% }
 .vc-step:empty{ display:none }
 
-/* (phase V60.2, the owner 2026-10-29, (вч6а)-(вч17а)) THE COMPACT MESSAGE. Its head: what was asked on the left, the video on
+/* THE COMPACT MESSAGE. Its head: what was asked on the left, the video on
    the right against the message's right edge - 180 px wide at the clip's shape (9:16 180×320, 16:9 180×101). Its steps (two at
    most) under it, every prompt folded into one line; "read more" of the clip shown at its foot. */
-/* (phase V60.3, the owner 2026-10-30, (вс2а)-(вс5а)) TWO COLUMNS: what was asked at the top of the left one, the steps under
+/* TWO COLUMNS: what was asked at the top of the left one, the steps under
    it - the step's text a field down to the bottom of the right column, at least 120 px, scrolling inside -, the video in the
    right one; the presses and "read more" under both. */
 .vm-head{ display:grid; grid-template-columns:minmax(0, 1fr) 180px; column-gap:12px; align-items:stretch; min-width:0 }
@@ -609,7 +607,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fold-part[hidden]{ display:none }
 /* Open: as tall as its text, never a box of its own scrolling or empty under it - and as wide as the message, whatever it holds. */
 .vc-prompt-ta.is-fit{ field-sizing:content; contain:inline-size; min-height:44px; resize:none; overflow:hidden }
-/* (phase V60.3) Where the steps' line stands when the step shown has no field to take it. */
+/* Where the steps' line stands when the step shown has no field to take it. */
 .vc-steps-slot[hidden]{ display:none }
 /* A step's text as a field: its title line - the steps' "‹ step k of N ›", its word, what it is, how many characters, its
    variants' "‹ 2 of 3 ›" -, then the field down to the bottom of the video's column. */
@@ -623,7 +621,7 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fh .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10px/1.3 var(--font); color:var(--muted) }
 .vm-fh .n{ flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
 .vc-prompt-ta.vm-ta{ flex:1 1 0; min-height:120px; resize:none; overflow-y:auto }
-/* (вс8а) Its place while it has no text: dashed, as tall, the countdown (or "sending…") inside, why not in red. */
+/* Its place while it has no text: dashed, as tall, the countdown (or "sending…") inside, why not in red. */
 .vm-wait{
   flex:1 1 0; min-height:120px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-end; gap:6px;
   padding:8px; border:1px dashed var(--border); border-radius:var(--r-xs); background:var(--surface-2);
@@ -632,18 +630,18 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-wait .mv3-ig-prog{ min-width:0; width:100%; background:var(--surface) }
 .vm-wait.is-bad{ border-style:solid; border-color:var(--danger); background:color-mix(in oklch, var(--danger) 6%, var(--surface-2)) }
 .vm-wait.is-bad > .w{ color:var(--danger) }
-/* (вс7а) What goes with the video, under its prompt, in small cells. */
+/* What goes with the video, under its prompt, in small cells. */
 .mv3-ig-msg-refs.vm-refs-s{ flex:0 0 auto; gap:4px }
 .vm-refs-s .vc-ref{ width:40px }
 .vm-refs-s .mv3-ig-msg-ref{ width:40px; height:40px }
-/* (вс7а) The storyboard's sheet in a row under its prompt: 72 px high, at its shape; its countdown or why not beside it. */
+/* The storyboard's sheet in a row under its prompt: 72 px high, at its shape; its countdown or why not beside it. */
 .vm-sheet{ flex:0 0 auto; display:flex; align-items:center; gap:8px; min-width:0; height:72px }
 .vc-board.is-row{ flex:0 0 auto; height:72px; width:auto; aspect-ratio:var(--ar, .5625); cursor:zoom-in }
 .vc-board.is-row img{ width:100%; height:100%; object-fit:contain }
 .vm-sheet > .vc-card-note{ flex:1 1 auto; min-width:0 }
 .vm-sheet > .vc-board.is-busy{ flex:1 1 auto; width:auto; height:72px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-end; padding:5px }
 .vm-sheet > .vc-board.is-bad{ flex:1 1 auto; width:auto; max-height:72px; box-sizing:border-box; overflow:hidden }
-/* (вс6а) Kling's first frame fills its step down to the bottom of the video, at least 160 px, at its shape. */
+/* Kling's first frame fills its step down to the bottom of the video, at least 160 px, at its shape. */
 .vm-fill{ position:relative; flex:1 1 0; min-height:160px; min-width:0 }
 .vm-fill > .vc-board.is-frame{ position:absolute; inset:0; width:auto; aspect-ratio:auto; border:0; background:none }
 .vm-fill > .vc-board.is-frame img{ object-fit:contain; object-position:left top; border-radius:var(--r-xs) }
@@ -655,22 +653,22 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .vm-fill.is-empty > .w{ font:600 10px/1.45 var(--font); color:var(--muted); text-align:center }
 .vm-note2{ flex:0 0 auto; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden }
-/* (вс9б) The presses in ONE line under both columns: the price gives way (whole under the pointer); a narrow panel wraps. */
+/* The presses in ONE line under both columns: the price gives way (whole under the pointer); a narrow panel wraps. */
 .vc-step-acts > .vc-card-why{ flex:1 1 0; min-width:48px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-/* (вс11а) A message of the one press: its words whole, as a block down to the bottom of the video, scrolling inside. */
+/* A message of the one press: its words whole, as a block down to the bottom of the video, scrolling inside. */
 .vm-head-l > .vm-plain{ flex:1 1 auto; min-height:0 }
 .vm-words{
   flex:1 1 0; min-height:60px; overflow-y:auto; padding:6px 8px; box-sizing:border-box;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg);
   font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word;
 }
-/* (вс12б) Side by side always; a message narrower than 460 px has its video 120 px wide (9:16 - 120×213). */
+/* Side by side always; a message narrower than 460 px has its video 120 px wide (9:16 - 120×213). */
 .vc-card{ container:vmsg / inline-size }
 @container vmsg (max-width: 435px){
   .vm-head{ grid-template-columns:minmax(0, 1fr) 120px }
 }
 
-/* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
+/* ── The picker of attachments (js/merge-v3/chat-pick.js) ──
    It fills the page, up to 1720 px wide: where things come from on the left, the tiles in the middle - a picture or a clip at its own
    shape (one height, the width its shape's, never cut to fit a cell), a sound a row. What is in the zone wears the
    name of its place in gold, the one gold of the window. */
@@ -680,9 +678,9 @@ audio.vtrim-media{ background:none; height:32px }
   background:var(--ov-dim, oklch(0 0 0 / .45)); padding:18px;
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
-/* (phase V73 block 4) The window WITH the tree (the chats', New prop's) wears the one frame - `.u-win`, its head and foot
-   (css/app-shell.css; the rules at the end of this window's section); the look below - frame, head, foot - is the OLD
-   window's alone (`:not(.is-tree)`), which only the 3D Studio's page opens, and stays as it was there. */
+/* The window WITH the tree (the chats', New prop's) wears the one frame - `.u-win`, its head and foot
+   (css/app-shell.css; the rules at the end of this window's section); the look below - frame, head, foot - is the
+   treeless window's alone (`:not(.is-tree)`), which only the 3D Studio's page opens. */
 .pk{ position:relative; display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0; overflow:hidden }
 .pk:not(.is-tree){ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow) }
 .pk-head{ display:flex; align-items:center; flex:0 0 auto }
@@ -694,7 +692,7 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-room{ flex:0 0 auto; font-variant-numeric:tabular-nums }
 .pk:not(.is-tree) .pk-room{ font:600 11px/1.2 var(--font); color:var(--muted) }
 .pk-close{ flex:0 0 auto }
-/* the shared ✕; the 3D Studio's page keeps its look (б1-13а) */
+/* the shared ✕; the 3D Studio's page keeps its look */
 :root:has(link[href="css/studio3d.css"]) .pk-close{
   width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
@@ -716,12 +714,12 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-src.is-up{ border-style:dashed; background:transparent; color:var(--muted) }
 .pk-src.is-up:hover{ border-style:solid; border-color:var(--sel-line); color:var(--ink) }
 .pk-up-note{ padding:2px 2px 0; font:500 10px/1.45 var(--font); color:var(--muted) }
-/* (phase V27) "from a link" under "from this computer": the field and "add" (js/merge-v3/chat-pick.js). */
+/* "from a link" under "from this computer": the field and "add" (js/merge-v3/chat-pick.js). */
 .pk-link{ display:flex; gap:4px }
 .pk-link input{ flex:1; min-width:0 }
 :root:has(link[href="css/studio3d.css"]) .pk-link input{ font:500 11px/1.3 var(--font); color:var(--ink); background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:5px 7px; }
 :root:has(link[href="css/studio3d.css"]) .pk-link input:focus{ outline:none; border-color:var(--focus) }
-/* the 3D Studio's page keeps its look (б1-13а); everywhere else this is the shared part */
+/* the 3D Studio's page keeps its look; everywhere else this is the shared part */
 :root:has(link[href="css/studio3d.css"]) .pk-link-go{
   font:600 11px/1 var(--font); color:var(--ink); background:var(--surface-2); cursor:pointer;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:0 10px;
@@ -734,12 +732,12 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .pk-main{ min-height:0; display:flex; flex-direction:column }
 .pk-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-soft) }
-/* (phase V73 block 2) the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+/* the shared field (.u-in.is-s); the 3D Studio's picker keeps its own look */
 .pk-q{ flex:0 1 280px; min-width:120px }
 :root:has(link[href="css/studio3d.css"]) .pk-q{ height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/24px var(--font); }
 :root:has(link[href="css/studio3d.css"]) .pk-q:focus{ outline:none; border-color:var(--focus) }
 :root:has(link[href="css/studio3d.css"]) .pk.is-tree .pk-q, :root:has(link[href="css/studio3d.css"]) .wkc .pk-q{ height:24px }
-.pk-cat{ flex:0 1 260px; min-width:0 }   /* the shared field (.u-in.is-s); the 3D Studio's picker keeps its old look */
+.pk-cat{ flex:0 1 260px; min-width:0 }   /* the shared field (.u-in.is-s); the 3D Studio's picker keeps its own look */
 :root:has(link[href="css/studio3d.css"]) .pk-cat{
   height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
@@ -751,7 +749,7 @@ audio.vtrim-media{ background:none; height:32px }
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px;
   display:flex; flex-wrap:wrap; align-content:flex-start; align-items:flex-start; gap:12px 10px;
 }
-/* (phase V73 block 2) Being read, nothing here, did not load - the shared parts (js/ui-state.js) across the wrapping grid. The
+/* Being read, nothing here, did not load - the shared parts (js/ui-state.js) across the wrapping grid. The
    3D Studio's page keeps its own line (js/merge-v3/chat-pick.js OLD_LOOK). */
 .pk-grid > .u-empty, .pk-grid > .u-loading, .pk-grid > .u-failed{ width:100% }
 :root:has(link[href="css/studio3d.css"]) .pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
@@ -769,7 +767,7 @@ audio.vtrim-media{ background:none; height:32px }
     var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 12px);
 }
 .pk-tile.is-on .pk-box{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset }
-/* (phase V15) The thing the picker was opened on, shown once. */
+/* The thing the picker was opened on, shown once. */
 .pk-tile.is-sel .pk-box{ animation:pk-sel .45s ease-in-out 3 }
 @keyframes pk-sel{ 50%{ box-shadow:0 0 0 3px var(--sel-line) } }
 .pk-mark{
@@ -777,7 +775,7 @@ audio.vtrim-media{ background:none; height:32px }
   background:var(--gold); color:var(--on-fill); font:700 9.5px/15px var(--font);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;
 }
-/* (phase V73, (б1-17)) A picked tile - in who / where and in the attachment window - in the selected thing's white ring, its
+/* A picked tile - in who / where and in the attachment window - in the selected thing's white ring, its
    mark white with a dark word. The 3D Studio's page, which opens this window too, keeps its gold (the two rules above). */
 :root:not(:has(link[href="css/studio3d.css"])) .pk-tile.is-on .pk-box{ border-color:var(--sel-ring); box-shadow:0 0 0 1px var(--sel-ring) inset }
 :root:not(:has(link[href="css/studio3d.css"])) .pk-mark{ background:var(--sel-ring) }
@@ -825,18 +823,18 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-said{ flex:1 1 auto; min-width:0 }
 .pk:not(.is-tree) .pk-said{ font:600 10.5px/1.4 var(--font); color:var(--muted) }
 .pk-done{ flex:0 0 auto }
-:root:has(link[href="css/studio3d.css"]) .pk-done{ padding:3px 14px }   /* the 3D Studio's page keeps its look (б1-13а) */
+:root:has(link[href="css/studio3d.css"]) .pk-done{ padding:3px 14px }   /* the 3D Studio's page keeps its look */
 @media (max-width:760px){
   .pk-ov{ padding:8px }
   .pk-body{ grid-template-columns:150px minmax(0, 1fr) }
   .pk-grid{ --pk-h:132px }
 }
 
-/* ── The chats' attachment window with the tree (phase V55, the owner 2026-10-28, (гн1)-(гн3)) ──
+/* ── The chats' attachment window with the tree ──
    The almanac's size, over the middle of the chat (chat-pick.js places it): on the left the rows that are not folders and
    the media tree of the kind, on the right the path, the search, the folder's folders as tiles and its files; the foot
    brings files from this computer (and a clip by a link). The tiles are the window's above, a size smaller. */
-/* (phase V60.1, (пк2а)) The page darkened and blurred under it too - the one rule of css/app-shell.css. */
+/* The page darkened and blurred under it too - the one rule of css/app-shell.css. */
 .pk-ov.is-tree{ display:block; padding:0 }
 .pk.is-tree{ position:absolute; width:860px; height:560px; max-width:none }
 .pk.is-tree .pk-body{ grid-template-columns:210px minmax(0, 1fr) }
@@ -850,7 +848,7 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-tree.is-rowon .mt-row.is-sel{ background:none }
 .pk-tree.is-rowon .mt-row.is-sel::before{ display:none }
 .pk-tree.is-rowon .mt-row.is-sel .mt-name{ font-weight:inherit }
-/* (phase V56, the owner's п. 1) "characters & looks" open: the characters in place of the tree - the one shown lit, as a
+/* "characters & looks" open: the characters in place of the tree - the one shown lit, as a
    tree's node is; the pointer resting on one shows it. */
 .pk-people{ flex:1 1 auto; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:1px; padding:2px 2px 8px 0 }
 .pk-side.is-people .pk-tree, .pk-side:not(.is-people) .pk-people{ display:none }
@@ -875,19 +873,19 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-grid .mt-folders{ flex:0 0 100%; width:100%; grid-column:1 / -1; margin:0 0 2px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) }
 .pk-grid .mt-ftile{ height:32px }
 .pk-up{ flex:0 0 auto }
-/* (phase V26.6) A place's own way to make what goes into it - the frames chat's product place: "+ new prop" (.u-btn.is-gen). */
+/* A place's own way to make what goes into it - the frames chat's product place: "+ new prop" (.u-btn.is-gen). */
 .pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
 .pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-/* (phase V73 block 4) Its frame, head and foot are the shared ones (chat-pick.js _buildTree: `u-win is-float`, `u-win-head` with
+/* Its frame, head and foot are the shared ones (chat-pick.js _buildTree: `u-win is-float`, `u-win-head` with
    the title, the slot's words and "one more goes here" as quiet notes and the 28 px ✕, `u-win-foot` with "done" the gold one,
    the status line `u-status`). Not on the 3D Studio's page - it never opens this window, and its tiles keep their sizes. */
 :root:not(:has(link[href="css/studio3d.css"])){
-  /* no text under 10 px on the tiles - here and in who / where, which borrow them (rule 2) */
+  /* no text under 10 px on the tiles - here and in who / where, which borrow them */
   .pk-sub, .pk-why, .pk-mark{ font-size:10px }
   .pk-dur{ font-size:10px }
 }
 
-/* ── Talking head's windows (phase V57; V58 - js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
+/* ── Talking head's windows (js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
    "who" and "where" choose from a list in the attachment window's tiles: the characters on the left with the scenario's
    gender and "all" over them, or no left side at all (the environments, wide tiles); the new look's page dresses a
    character - the lookbooks, and at the foot who + what and `apply`. */
@@ -900,7 +898,7 @@ audio.vtrim-media{ background:none; height:32px }
 .wkc .pk-count{ margin-left:auto }
 .wkc .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
 .wkc.is-flat .pk-grid{ --pk-h:150px }
-.wkc-said{ flex:0 0 auto; min-height:0; padding:0 12px }   /* the one status line (.u-status, phase V73 block 4) */
+.wkc-said{ flex:0 0 auto; min-height:0; padding:0 12px }   /* the one status line (.u-status) */
 .wkc-said:not(:empty){ padding:6px 12px; border-top:1px solid var(--border-soft) }
 .pk-ftabs{ flex:0 0 auto; display:flex; gap:4px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
 .pk-ftabs .mv3-sc-tab{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
@@ -910,7 +908,7 @@ audio.vtrim-media{ background:none; height:32px }
 .mk-pair-img.is-empty{ display:flex; align-items:center; justify-content:center; font:500 10px/1 var(--font); color:var(--muted); border-style:dashed }
 .mk-pair-plus{ font:600 13px/1 var(--font); color:var(--muted) }
 .mk-dress .gw-row{ margin-top:0 }
-/* (phase V58) A half of the stage waits for its own work: a box over the half, what is under it blurred, the countdown in
+/* A half of the stage waits for its own work: a box over the half, what is under it blurred, the countdown in
    it (js/progress.js); presses go through it to the stage - the half is still a door. */
 .mv3-half-ov{ position:absolute; left:0; right:0; height:50%; z-index:4; pointer-events:none;
   backdrop-filter:blur(6px) saturate(.85); -webkit-backdrop-filter:blur(6px) saturate(.85) }
@@ -918,11 +916,11 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-half-ov.is-top{ top:0 }
 .mv3-half-ov.is-bottom{ top:50% }
 
-/* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
-   (phase V60.1, (пк3а)) A window in the middle over the page darkened and blurred - the one rule of css/app-shell.css -,
+/* ── The prompt reference, the almanac (at the foot of the column - js/merge-v3/vhelp.js) ──
+   A window in the middle over the page darkened and blurred - the one rule of css/app-shell.css -,
    half the attachment picker: the sections on the left - the ones in development dimmed and saying so -, the tips on the
    right: a still that plays under the pointer, the name, the category, the words. A press copies: a note sits on the
-   prompt field - or at the window's foot when the field is under it - for a moment. (phase V73 block 4) The one frame
+   prompt field - or at the window's foot when the field is under it - for a moment. The one frame
    (`u-win is-float`, its head `u-win-head` with the 28 px ✕); "copy" the quiet button; nothing blinks. */
 .hp-ov{
   position:fixed; inset:0; z-index:9300; background:var(--ov-dim, oklch(0 0 0 / .45));
@@ -946,7 +944,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-sec:hover{ background:var(--surface-2) }
 .hp-sec.on{ border-color:var(--sel-line); background:var(--sel-bg) }
 .hp-sec.is-soon{ color:var(--muted) }
-.hp-sec.is-soon i{ flex:0 0 auto; font:500 10px/1.2 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label (V73 block 4) */
+.hp-sec.is-soon i{ flex:0 0 auto; font:500 10px/1.2 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label */
 .hp-cat{ padding:4px 8px 4px 18px; border:0; color:var(--muted); font:600 10.5px/1.3 var(--font) }
 .hp-cat:hover, .hp-cat.on{ color:var(--ink); background:var(--surface-2) }
 .hp-main{ min-height:0; display:flex; flex-direction:column }
@@ -978,7 +976,7 @@ audio.vtrim-media{ background:none; height:32px }
 .hp-tile.is-fail{ border-color:var(--danger) }
 .hp-soon{ margin:auto; max-width:420px; padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center }
 .hp-soon b{ font:600 13px/1.3 var(--font); color:var(--ink) }
-.hp-soon i{ font:500 10px/1.4 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label (V73 block 4) */
+.hp-soon i{ font:500 10px/1.4 var(--font); font-style:normal; color:var(--faint) }   /* a quiet label */
 .hp-soon p{ margin:0; font:500 11px/1.55 var(--font); color:var(--muted) }
 .hp-src{ padding:6px 2px 2px; font:500 10px/1.4 var(--font); color:var(--muted) }
 .hp-src a{ color:var(--ink); text-decoration:none }
@@ -996,15 +994,14 @@ audio.vtrim-media{ background:none; height:32px }
   .hp-pv{ width:112px; height:63px }
 }
 
-/* ── THE FRAMES CHAT of a talking head (phase V26.5, js/merge-v3/fchat.js) ──
-   In the Setup panel, laid over the place the fields column leaves for it - outside the panel's body, which every
-   paint empties; fchat.js measures that place and puts the chat on it. */
+/* ── THE FRAMES CHAT of a talking head (js/merge-v3/fchat.js) ──
+   Its root is parked in the Setup panel, hidden, and is moved into its window when it opens (fchat.js). */
 #mv3-inspector{ position:relative }
 #mv3-fc.is-shown{ display:flex; flex-direction:column; position:absolute; z-index:4; overflow:hidden }
-/* (phase V61, the owner's (т7)) IN ITS WINDOW (js/gen-window.js, as New Character): the window's whole body - the window's
+/* IN ITS WINDOW (js/gen-window.js, as New Character): the window's whole body - the window's
    crumbs and ✕ say what it is. */
 .gw-body > #mv3-fc.is-shown{ position:relative; inset:auto; z-index:auto; flex:1 1 auto; min-height:0; width:100%; height:100% }
-/* (phase V64 block 3) The pictures chat and the video chat in their windows (js/merge-v3/chat-window.js) - the same: the
+/* The pictures chat and the video chat in their windows (js/merge-v3/chat-window.js) - the same: the
    window's whole body. */
 .gw-body > .mv3-pc.is-shown{ display:flex; flex-direction:column; position:relative; flex:1 1 auto; min-height:0; width:100%; height:100% }
 .mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
@@ -1018,10 +1015,10 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-attsrow{ display:flex; align-items:stretch; min-width:0; border-top:1px solid var(--border-soft) }
 .mv3-ig-attsrow > .mv3-ig-atts{ flex:1 1 auto; min-width:0; border-top:0 }
 /* An almanac still to come (the pictures and frames chats): the same gold button - it IS one -, not pressable, its title
-   saying "in development" (V25: no longer dimmed into the column, the owner wants it seen as a button). */
+   saying "in development". */
 .mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ cursor:not-allowed; background:transparent }
-/* The frames chat's `ideas` (phase V26.5): right of the places above the box, in gold; its answer a list to press. */
-.mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px }   /* a gold line (.u-btn.is-gen); capitals - block 7 */
+/* The frames chat's `ideas`: right of the places above the box, in gold; its answer a list to press. */
+.mv3-fc-ideas{ flex:0 0 auto; align-self:center; margin:0 10px 0 4px }   /* a gold line (.u-btn.is-gen) */
 .mv3-fc-ideaslist{ display:flex; flex-direction:column; gap:5px; margin-top:6px }
 .mv3-fc-idea{
   display:block; width:100%; text-align:left; padding:6px 9px; cursor:pointer;
@@ -1029,17 +1026,17 @@ audio.vtrim-media{ background:none; height:32px }
   font:500 11px/1.4 var(--font);
 }
 .mv3-fc-idea:hover{ border-color:var(--sel-line) }
-/* (phase V26.5, the owner after the first look) The zone as TWO FIELDS: the base - the person and the place, or the frame
+/* The zone as TWO FIELDS: the base - the person and the place, or the frame
    being changed - as wide as its places, and the extra pictures taking the rest. */
 .mv3-ig-part.is-group.is-base{ flex:0 0 auto }
 .mv3-ig-part.is-group.is-extra{ flex:1 1 0 }
 /* The ideas in two columns; one a message went from in gold, "used". */
 .mv3-fc-ideaslist{ display:grid; grid-template-columns:1fr 1fr; gap:5px }
 .mv3-fc-idea{ display:flex; flex-direction:column; gap:3px }
-/* (phase V73 block 4) an idea a frame went from: the selected look and a quiet "Used" (not gold - gold is the main button's) */
+/* an idea a frame went from: the selected look and a quiet "Used" (not gold - gold is the main button's) */
 .mv3-fc-idea .u{ align-self:flex-start; font:500 10px/1 var(--font); color:var(--muted) }
 .mv3-fc-idea.is-used{ border-color:var(--sel-line); color:var(--ink); background:var(--sel-bg) }
-/* (phase V26.5, the owner after the first look) A MESSAGE OF THE FRAMES CHAT: what was asked at its head, then the prompt
+/* A MESSAGE OF THE FRAMES CHAT: what was asked at its head, then the prompt
    on the left and the frame on the right - a box of the project's shape the picture lands in, its arrows under it. */
 .mv3-fc-msg{ max-width:none; width:100% }
 .mv3-fc-asked{ display:flex; flex-direction:column; gap:5px; padding-bottom:7px; margin-bottom:7px; border-bottom:1px solid var(--border-soft) }
@@ -1068,7 +1065,7 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-fc-acts{ display:flex; flex-direction:column; gap:4px }
 .mv3-fc-acts .mv3-c-btn{ width:100% }
 .mv3-pc.is-narrow .mv3-fc-right{ flex-basis:118px }
-/* (phase V26.6, the owner's check 2026-10-31, (а)) The pictures' numbers - "image 1", "image/2" - yellow wherever the frames
+/* The pictures' numbers - "image 1", "image/2" - yellow wherever the frames
    chat shows words, brighter than the gold of what is chosen (js/merge-v3/image-words.js). In a field a layer over it draws
    the same text in the same place, transparent but these words, over the field's own letters. */
 .imw{ color:var(--warn); background:var(--gold-soft); border-radius:2px }
@@ -1078,7 +1075,7 @@ audio.vtrim-media{ background:none; height:32px }
   color:transparent; background:none; user-select:none;
 }
 .mv3-ig-bar > .imw-wrap{ flex:1 1 auto; display:flex }
-/* (phase V26.6, the owner's check 2026-10-31, (в)) An idea's ↻ in its top right corner, shown on hover: that idea written
+/* An idea's ↻ in its top right corner, shown on hover: that idea written
    again as a variation of itself, in its place (js/merge-v3/fchat.js _ideaAgain); the card waits while it is written. */
 .mv3-fc-ideacell{ position:relative; display:flex; min-width:0 }
 .mv3-fc-ideacell > .mv3-fc-idea{ flex:1 1 auto; min-width:0; padding-right:26px }

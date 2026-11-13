@@ -1,21 +1,19 @@
 // LIBRARY — the narrators: "Narrators" beside "New scenario" on the Scenarios shelf, an AREA in place of the
-// scenario list (phase V28.2, the owner 2026-10-12: "кнопка будет открывать не попап, а вместо поля сценариев будет
-// отображаться интерфейс настроек и чтений нарраторов"); the gear by the generator's Narrator field leads here too.
+// scenario list, not a popup; the gear by the generator's Narrator field leads here too.
 // js/library/main.js shows and hides it, as it does the making areas.
 //
-// A narrator is HOW a script is written: samples of an author's writing in, and out of them ONE VOICE (phase V38, the
-// owner 2026-10-23: "the voice должен обновляться если нужно, но только дополняться"). Three columns: the narrators - ONE
+// A narrator is HOW a script is written: samples of an author's writing in, and out of them ONE VOICE that a reading
+// only adds to. Three columns: the narrators - ONE
 // ROW ALWAYS SELECTED, as on every Library shelf, with "+ New narrator" opening a name field right in the list (prompt()
 // throws in the app's Electron) - then the selected one's samples (each says whether it has been read; a source of the
 // Library is one for nothing), then the voice: its lines by field, each corrected in place or deleted (✕ twice), the
-// lines the last reading added saying "new" - the app only ever ADDS to it (the owner's (д15), (д17)). "Read new samples"
-// at the column's foot reads only the samples not read yet. (V38's vocabulary and phrases under crumbs beside the voice
-// were taken out by the owner, V38.1: "для самого нарратора убираем новые крошки".)
+// lines the last reading added saying "new" - the app only ever ADDS to it. "Read new samples"
+// at the column's foot reads only the samples not read yet.
 //
 // TWO PAID KINDS OF WORK, and they belong to the narrator, not to the area: transcribing a file or a link into a sample,
 // and reading the new samples. While one runs, that narrator's buttons are locked and every other narrator is free. The
 // area is built the first time it is shown and only HIDDEN after that, so a job goes on when it is left and its row is
-// where it was on the way back; it does NOT bring the area back when it lands (Library 2 did). Its last line - "1234
+// where it was on the way back; it does NOT bring the area back when it lands. Its last line - "1234
 // words from 8 min", or what went wrong - stays with the narrator and is there the next time it is shown. A reading
 // started before a reload is followed again when the narrator is shown. Errors are said inside the area.
 //
@@ -25,7 +23,7 @@
 import * as J from './jobs.js';
 import * as Layers from '../layers.js';
 import { twoPress } from '../really.js';
-// (phase V73 block 2, step 2b) The question at the button in place of the browser's confirm(); "nothing here" as the
+// The question at the button in place of the browser's confirm(); "nothing here" as the
 // shared part (css/app-shell.css .u-empty).
 import { ask } from '../ask.js';
 import { emptyEl } from '../ui-state.js';
@@ -362,7 +360,7 @@ function _paintSamples() {
     if (s.url) name.title = s.url;
     h.appendChild(name);
     h.appendChild(el('span', null, `${s.words} words`));
-    // (V38) Read or not: "Read new samples" reads only the ones that are not, so none is paid for twice.
+    // Read or not: "Read new samples" reads only the ones that are not, so none is paid for twice.
     const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'Read' : 'Not read');
     tag.title = s.readAt ? 'Read into the voice - it is not read again' : 'Not read yet - "Read new samples" reads it';
     h.appendChild(tag);
@@ -410,7 +408,7 @@ async function _addText() {
   finally { _adding = false; _paintLocks(); }
 }
 
-// (phase V38, block D5) The sources of the Library whose words were heard - read whenever a narrator is shown. One that is
+// The sources of the Library whose words were heard - read whenever a narrator is shown. One that is
 // a sample of this narrator already says so; the server refuses it anyway (by its words too).
 async function _paintSources() {
   if (!_win || !_rec) return;
@@ -471,7 +469,7 @@ function _paintRight() {
   _paintVoice(box);
 }
 
-// A press arms a ✕ ("Really?" for three seconds); the second press within them does it - js/really.js (phase V73 block 2).
+// A press arms a ✕ ("Really?" for three seconds); the second press within them does it - js/really.js.
 function _twice(btn, act) {
   twoPress(btn, { go: (e) => { e.stopPropagation(); act(); } });
 }
@@ -623,7 +621,7 @@ async function _addFile() {
   const input = _win.q('file');
   const file = input.files && input.files[0];
   if (!file) { J.sayJob(_win.q('sjob'), 'Pick a video or audio file first.', true); return; }
-  // Paid - a plain answer (б2-5); the question waits, so a job started meanwhile is not doubled.
+  // Paid - a plain answer; the question waits, so a job started meanwhile is not doubled.
   if (!await ask(_win.q('addfile'), `Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`, { yes: 'Transcribe', stay: true })) return;
   if (id !== _sel || _running(id)) return;
   const form = new FormData();
@@ -634,7 +632,7 @@ async function _addFile() {
   });
 }
 
-// (phase V27) A link instead of a file: the server fetches only its sound, transcribes it and lets it go.
+// A link instead of a file: the server fetches only its sound, transcribes it and lets it go.
 async function _addLink() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id)) return;
@@ -651,7 +649,7 @@ async function _addLink() {
 
 const _readTiming = (words) => ({ key: `l2-read|${J.bucket(words)}`, label: `Reading ${words} words…`, estimateMs: J.EST.analyse });
 
-// (V38) "Read new samples": the ones not read yet - by the agents' ladder (Admin -> AI settings), as every agent.
+// "Read new samples": the ones not read yet - by the agents' ladder (Admin -> AI settings), as every agent.
 async function _read() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id)) return;

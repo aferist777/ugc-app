@@ -1,12 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — the script of a talking head, line by line: the READ, the FRAME and the CLIP of
-   every line (docs/local-app/PLAN.md, "Fragments — полный план по фазам", and phase M of
-   "Сцена, setup и таймлайн-зеркало").
+   every line.
 
    The hub of the setup step (js/merge-v3/wk-setup.js), painted into its panel. Two columns: on
    the left the whole script, one row per line with what it has - the read, the frame, the clip;
    on the right the line that is open, with everything made for it - or, with none open, the
-   GENERAL ZONE. Since phase V61 (the owner 2026-10-30: "нужно чтобы пошагово создавался проект") its fields OPEN ONE
+   GENERAL ZONE. Its fields OPEN ONE
    AFTER ANOTHER: until the character and the place are chosen on the stage they are blurred and take no press (the
    script is there to be read, its rows do nothing); then 1 "mood & voice" - one line, one `generate` that marks the
    script up and reads it -; 2 the frames - the set the lines take theirs from, and the door to the FRAMES CHAT, a window
@@ -14,22 +13,22 @@
    project is made step by step, its frames asked for in words. The list never goes away while a line is open: the script is one
    thing, and judging a line means seeing the ones around it. Who and where are on the stage, not here.
 
-   THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
+   THE READ (v3 only). A line is spoken from the open line's own
    button - tagged by the mood first - and its words can be changed there too, tags and all; a take
    made of other words is stale until the line is read again or the words are put back. The
    speaking itself is js/merge-v3/wk-voice.js.
 
    THE FRAMES are a SET for the whole video, not a frame per line - made in the frames chat, each with the edge it was
-   asked with (`framing`); an older project's may be a set an agent planned before phase V61. THE LINES TAKE FROM THE POOL IN TURN
+   asked with (`framing`); an older project's may be a set an agent planned. THE LINES TAKE FROM THE POOL IN TURN
    (_frameFor): the first line the first frame, the second the second, round again - or, ticked "scattered", one drawn for
    each line - until a line is given a frame by hand, which it keeps.
 
-   THE ANIMATION of a line - the prompt the video model hears - is written by the video stage (W3)
+   THE ANIMATION of a line - the prompt the video model hears - is written by the video stage
    and edited here; a prompt written by hand survives the next pass. The CLIPS are asked for here
    too - Kling avatar's, or a Seedance model's - and the server sees each through (routes/scen3.js).
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
-   scenario project's, as they have always been (routes/scen3.js). Written from here: the video's
+   scenario project's (routes/scen3.js). Written from here: the video's
    settings - the tier, the mood, the set - on `project.video`, merged on the server; a line's
    animation prompt and its frame, through their own routes, which touch nothing else of the line;
    and a line's words.
@@ -45,13 +44,13 @@ import { askDelete, note as askNote } from '../ask.js';
 import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
-// (phase V62) The voiceover draft's script, chosen in its script column.
+// The voiceover draft's script, chosen in its script column.
 import * as VOS from './vo-script.js';
-// (phase V73 block 5, 5d) Lucide's icons in place of the signs, the figures in mono, "4,500".
+// Lucide's icons for the signs, the figures in mono, "4,500".
 import { icon, iconEl } from '../icons.js';
 import { figures, int } from '../num.js';
 
-// A word as a label shows it: sentence case ((к17)) - the words in the code stay as they are.
+// A word as a label shows it: sentence case - the words in the code stay as they are.
 const _cap = (s) => { const t = String(s == null ? '' : s); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // The one ceiling a read has for the chosen model, from its quality (lib/th-video.js: Kling avatar's
@@ -59,7 +58,7 @@ const _cap = (s) => { const t = String(s == null ? '' : s); return t.charAt(0).t
 const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
-// HOW WIDE THE SCRIPT COLUMN IS (phase R, the owner 2026-09-22). The two columns of this step are
+// HOW WIDE THE SCRIPT COLUMN IS. The two columns of this step are
 // rebuilt on every repaint, so the width cannot live in the DOM; it lives here and is put back
 // after each paint, the way the columns' scroll offsets are. 0 means "never dragged" - the CSS
 // default then stands. Kept like the shell's two sashes, in a plain key the server mirrors.
@@ -71,11 +70,11 @@ let _splitW = (() => { try { return parseInt(localStorage.getItem(SPLIT_KEY) || 
 let _ctx = null;
 let _api = null;                          // what the step lends: the voice module's api
 // The open line, 0-based. -1 is NONE open - the right column then speaks for every fragment at
-// once (owner, 2026-09-18). null is "not decided yet", before the project is known.
+// once. null is "not decided yet", before the project is known.
 let _open = null;
 let _editWords = -1;                      // the line whose words are open for editing, in the right column
 let _wordsDraft = '';
-// (phase V26.8) A LINE BEING PUT IN: the line it goes under (-1 - none), the words typed for it, and the press on its way.
+// A LINE BEING PUT IN: the line it goes under (-1 - none), the words typed for it, and the press on its way.
 let _inserting = -1;
 let _insDraft = '';
 let _insSaving = false;
@@ -89,7 +88,7 @@ let _listAt = 0;                          // where the list stood, put back afte
 let _readErr = '';
 const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
 // What is known about the places on the shelf, by address (routes/scen3.js, /scen3/env-meta): the
-// description, and - phase W3a - how the place MOVES. Read once; what is written is put into it from
+// description, and how the place MOVES. Read once; what is written is put into it from
 // the answer. The animation belongs to the place, so it is the same map for every project.
 let _envMeta = null;
 let _envWriting = false;
@@ -98,15 +97,15 @@ let _dragging = '';                       // the frame being dragged along the s
 let _picking = false;                     // the open fragment's frame list is down
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
-// (phase V26.5) The frames chat: a frame of it pressed - on the stage - and whether the script is folded away beside it.
-// WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING (phase X4, the owner 2026-09-22): its clip, playing,
+// The frames chat: a frame of it pressed - on the stage - and whether the script is folded away beside it.
+// WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING: its clip, playing,
 // or its frame. The clip when there is one, because that is the thing that was just made; pressing
 // the frame moves the stage to it, and pressing the clip brings it back. Forgotten when another
 // fragment is opened - each is looked at on its own terms.
 let _stagePick = '';                      // '' | 'clip' | 'frame'
 let _stageFor = -2;                       // the fragment _stagePick belongs to
 
-// ── HOW LONG THIS USUALLY TAKES (phase N, the owner 2026-09-23) ─────────────
+// ── HOW LONG THIS USUALLY TAKES ─────────────────────────────────────────────
 // Two of the four fields cannot count their own progress - the tagging is ONE call to an agent,
 // and a single line being spoken is one call to ElevenLabs - so their border fills by an estimate.
 // An estimate that never learns is a lie the second time, so a finished clip leaves its
@@ -178,7 +177,7 @@ function _remember() {
   } catch (e) { /* a private window */ }
 }
 // What was open when this project was last left: a line, 'all', or - never been here - the
-// general zone (the owner, 2026-09-21): a new talking head starts with the settings of the whole
+// general zone: a new talking head starts with the settings of the whole
 // video, not with its first line.
 function _remembered() {
   try {
@@ -193,7 +192,7 @@ function _remembered() {
 // clip made from words that have since been edited is not this line's any more. The read is the
 // take the line is read BY - tagged when the line has tags (js/merge-v3/scen-api.js, takeOf).
 // The lines that are IN the video: a line taken off keeps its place in the script but nothing
-// counts it, reads it or films it (phase Z; the rule itself is in scen-api.js).
+// counts it, reads it or films it (the rule itself is in scen-api.js).
 const _live = (lines) => (Array.isArray(lines) ? lines : []).filter(isLive);
 const _words = (l) => String((l && l.text) || '');
 const _take = (l) => takeOf(l).take;
@@ -222,7 +221,7 @@ function _order(list, hand) {
   });
 }
 const _handOrder = (p) => ((((p || {}).mix) || {}).order || []).map(String);
-// A frame switched OFF (the ✕ on its thumbnail, the owner 2026-09-21) is out of the rotation: it is
+// A frame switched OFF (the ✕ on its thumbnail) is out of the rotation: it is
 // still in the project and still on the strip, but no line takes it. `mix.banned` holds them
 // (routes/scen3.js, /scen3/frames/ban).
 const _off = (p) => new Set(((((p || {}).mix) || {}).banned || []).map(String));
@@ -231,14 +230,14 @@ function _pool(p) {
   return _order((((p && p.mix) || {}).variants || []).filter(v => !hidden.has(String(v.id))), _handOrder(p));
 }
 // Everything the strip shows: the pool in its order, then the switched-off ones at the tail, out of
-// the way (the owner, 2026-09-21).
+// the way.
 function _poolAll(p) {
   const hidden = _off(p);
   const all = ((p && p.mix) || {}).variants || [];
   return _pool(p).concat(_order(all.filter(v => hidden.has(String(v.id))), _handOrder(p)));
 }
 // The frame a line opens on: the one picked by hand when there is one, else by the rule the person
-// chose for the whole video (decided with the owner 2026-09-21) - the pool IN TURN (line 1 frame A,
+// chose for the whole video - the pool IN TURN (line 1 frame A,
 // line 2 frame B, round again) or one DRAWN for the line. The draw is made from the line's number
 // and the project's id, never from chance: the same line must open on the same frame every time it
 // is looked at, or the video would reshuffle itself between two glances. The server draws the same
@@ -258,30 +257,28 @@ function _frameFor(p, l, i) {
   if (picked) return { v: picked, auto: false };
   if (!pool.length) return { v: null, auto: true };
   const spread = String(((p || {}).video || {}).spread || 'cycle');
-  // (phase V26.8) By the number the line KEEPS when one was put in above it (routes/scen3.js, /line/insert), else by its
+  // By the number the line KEEPS when one was put in above it (routes/scen3.js, /line/insert), else by its
   // place in the list.
   const n = l && Number.isInteger(l.slot) ? l.slot : i;
   const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + n) % pool.length : n % pool.length;
   return { v: pool[at], auto: true };
 }
 // THE CLIP OF A LINE is the one made from the frame the line OPENS ON - which is the frame it was
-// given by the rule as often as one picked by hand (phase F4; before the clips existed this read
-// `frameId`, which is empty for every line the pool serves in turn, and would have called every
-// such line clip-less for ever).
-// WHICH VARIANT THIS PROJECT IS IN. A project read with tags (every Merge project since W1) keeps
-// its clips under `tagged` and remembers the words WITH the tags in them; a project read before
-// that keeps them under `plain`. The server files by this rule; the timeline mirror picks the variant
-// by the LINE instead - tagged when the line has tags (lib/frag-mirror.js, _clipOf). This panel used
-// to read `plain` and compare against the untagged words - so a clip that had been made, filed,
-// journalled and laid on the timeline was invisible in the fragment that paid for it (the owner, 2026-09-22).
+// given by the rule as often as one picked by hand (not `frameId`, which is empty for every line the
+// pool serves in turn).
+// WHICH VARIANT THIS PROJECT IS IN. A project read with tags keeps
+// its clips under `tagged` and remembers the words WITH the tags in them; a project read without
+// them keeps them under `plain`. The server files by this rule; the timeline mirror picks the variant
+// by the LINE instead - tagged when the line has tags (lib/frag-mirror.js, _clipOf). Reading `plain`
+// against the untagged words here would hide a clip that was made, filed and laid on the timeline.
 const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged' : 'plain');
 const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
-// (phase V26.8) A Seedance project shows none of the Kling clips it may have - the timeline lays none of them either
-// (lib/frag-mirror.js); it shows the line's Seedance takes (part 5).
+// A Seedance project shows none of the Kling clips it may have - the timeline lays none of them either
+// (lib/frag-mirror.js); it shows the line's Seedance takes.
 const _sdFragOfLine = (p, l) => _sdFragOf(p, ((p && p.lines) || []).indexOf(l));
 const _clipsOf = (p, l) => (_seedance() ? ((_sdFragOfLine(p, l) || {}).clips || []) : (((l && l.video) || {})[_variant(p)] || []));
 
-// (phase V23, the owner 2026-10-09) A clip CHOSEN BY HAND in the takes is the line's clip whatever it was made
+// A clip CHOSEN BY HAND in the takes is the line's clip whatever it was made
 // from - the timeline lays it too (lib/frag-mirror.js) - and the line counts as settled: making the project's clips
 // leaves it (routes/scen3.js, _clipDone).
 // A new clip or a new read clears the choice (routes/scen3.js).
@@ -291,7 +288,7 @@ const _chosenOf = (p, l) => {
   return id ? (_clipsOf(p, l).find(c => c.id === id) || null) : null;
 };
 function _clipOf(p, l, i) {
-  if (_seedance()) return (_sdFragOf(p, i) || {}).clip || null;     // (V26.8) chosen by hand, else the newest fresh
+  if (_seedance()) return (_sdFragOf(p, i) || {}).clip || null;     // chosen by hand, else the newest fresh
   const clips = _clipsOf(p, l);
   if (!clips.length) return null;
   const hand = _chosenOf(p, l);
@@ -303,11 +300,11 @@ function _clipOf(p, l, i) {
   const mine = clips.filter(c => c.fromFrame === fr);
   return mine.length ? mine[mine.length - 1] : null;
 }
-// Fresh: made from the frame the line opens on, of the words it says now, lipsynced to the read it has now (V23 -
-// a read again is another performance; a clip from before the read was recorded counts as fresh).
+// Fresh: made from the frame the line opens on, of the words it says now, lipsynced to the read it has now (a
+// read again is another performance; a clip that names no read - `fromAudio` - counts as fresh).
 function _clipFresh(p, l, i, c) {
   if (!c) return false;
-  if (_seedance()) return !!c.fresh;      // (V26.8) of the frame, the words and the read the line has now (routes/scen3.js _sdFresh)
+  if (_seedance()) return !!c.fresh;      // of the frame, the words and the read the line has now (routes/scen3.js _sdFresh)
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   const take = _take(l);
   return !!fr && c.fromFrame === fr && c.said === _saidOf(p, l) && (!c.fromAudio || !take || c.fromAudio === take.path);
@@ -344,7 +341,7 @@ function _mark() {
   });
 }
 // `then` is what the row hands over: the read it plays belongs to a fragment, and pressing play is
-// a way of saying "this one" (Y5). The press does NOT reach the row - it would close an open
+// a way of saying "this one". The press does NOT reach the row - it would close an open
 // fragment - so the opening is done here instead.
 function _playBtn(src, what, then) {
   const b = el('button', 'mv3-wk-vplay is-read u-btn is-s is-icon');
@@ -368,9 +365,9 @@ function _loadKit(repaint) {
   const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
   get('/api/scen3/motion-presets').then((m) => {
     _kit = {
-      // (phase V26.8) The models of the clips, each with its qualities - Kling avatar and the Seedances - and
-      // Seedance's ways of voicing a clip (lib/th-video.js). A server started before V26.8 answers Kling's qualities
-      // alone: they are Kling's model, so the field still works until the app is restarted.
+      // The models of the clips, each with its qualities - Kling avatar and the Seedances - and
+      // Seedance's ways of voicing a clip (lib/th-video.js). An answer with `qualities` and no `models` (an older server
+      // still running) is read as Kling's alone, so the field still works until the app is restarted.
       models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'Kling avatar', family: 'kling', qualities: m.qualities }] : []),
       sounds: (m && m.sounds) || [],
       moods: (m && m.moods) || [],
@@ -400,15 +397,15 @@ async function _post(url, body) {
 }
 
 // Is the line's animation written, and written for the words it has now? The same shape as a read:
-// a prompt made from other words is stale until it is written again (phase W3b).
+// a prompt made from other words is stale until it is written again.
 const _animated = (l) => {
   const sh = (l && l.shot) || null;
   return !!(sh && sh.motion && String(sh.said || '') === String((l && l.text) || ''));
 };
 
-// ── How the place moves (phase W3a) ─────────────────────────────────────────
+// ── How the place moves ─────────────────────────────────────────────────────
 // One or two sentences about what is alive in the background - a curtain, steam, traffic far
-// behind. It is the PLACE's, not the project's (the owner, 2026-09-21): every talking head filmed
+// behind. It is the PLACE's, not the project's: every talking head filmed
 // here animates the same way, so it is written beside the picture and read from there.
 function _needEnvMeta() {
   if (_envMeta !== null) return;
@@ -418,7 +415,7 @@ function _needEnvMeta() {
 const _place = (p) => String(((p || {}).casting || {}).locationImage || '');
 const _envMotion = (p) => String(((_envMeta || {})[_place(p)] || {}).motion || '');
 
-// Written by the agent (the field to write it by hand went in V26.8). The answer is the entry the store now holds,
+// Written by the agent. The answer is the entry the store now holds,
 // and the map is put right without reading the whole shelf again.
 async function _writeEnvMotion(p) {
   const path = _place(p);
@@ -436,17 +433,17 @@ async function _writeEnvMotion(p) {
   _ctx.repaint();
 }
 
-// The video zone's `generate`: the place, if it has nothing written yet (W3a), the animation of
-// every line that needs one (W3b), and then the CLIPS of the lines that have none or whose clip is
-// stale (F4). The first two are credits; the clips are dollars, which is why the zone asks a second
+// The video zone's `generate`: the place, if it has nothing written yet, the animation of
+// every line that needs one, and then the CLIPS of the lines that have none or whose clip is
+// stale. The first two are credits; the clips are dollars, which is why the zone asks a second
 // press when there are any.
 let _writing = '';                        // 'place' | 'lines' | 'clips' | ''
-let _writeAt = 0;                         // ...since when (N3)
-// How fast they leave is the SERVER's business now (phase X1): one a second, and it does not wait
+let _writeAt = 0;                         // ...since when
+// How fast they leave is the SERVER's business: one a second, and it does not wait
 // for any of them. The page only asks for the list and follows the rows.
 
-// What a clip of a read this long costs (phase V10.2): kie bills Kling avatar by the WHOLE seconds, rounded down - a read
-// of 7.97 s was billed 7 s (V10.1).
+// What a clip of a read this long costs: kie bills Kling avatar by the WHOLE seconds, rounded down - a read
+// of 7.97 s is billed 7 s.
 const _billSecs = (dur) => Math.max(1, Math.floor((+dur || 0) + 0.001));
 const _clipCost = (dur, tier) => (tier ? _billSecs(dur) * tier.pricePerSec : 0);
 
@@ -455,13 +452,13 @@ const _clipCost = (dur, tier) => (tier ? _billSecs(dur) * tier.pricePerSec : 0);
 function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
-  if (!_video().quality) return null;       // the quality is the person's to choose (phase V24)
-  // (phase V26.8, part 5) A line filmed by Seedance: billed by the whole seconds asked for, its read rounded up
+  if (!_video().quality) return null;       // the quality is the person's to choose
+  // A line filmed by Seedance: billed by the whole seconds asked for, its read rounded up
   // (lib/sd-prompt.js clipSecs).
   if (_seedance()) {
     const f = _sdFragOf(p, i);
     if (!f || f.noRead || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
-    // By the voice sample the length is Seedance's (-1): no price (the owner's answer (я10)).
+    // By the voice sample the length is Seedance's (-1): no price.
     return f.secs > 0 ? { dur: f.secs, cost: f.secs * ((tier && tier.pricePerSec) || 0) } : { dur: 0, cost: 0, auto: true };
   }
   if (_readState(l) !== 'ok' || !take) return null;
@@ -472,7 +469,7 @@ function _clipReady(p, l, i) {
 function _clipWork(p, lines) {
   const out = [];
   lines.forEach((l, i) => {
-    if (!isLive(l)) return;                 // taken off the script (Z): not filmed
+    if (!isLive(l)) return;                 // taken off the script: not filmed
     if (_clipping.has(i)) return;
     if (_clipSettled(p, l, i)) return;
     const can = _clipReady(p, l, i);
@@ -481,10 +478,8 @@ function _clipWork(p, lines) {
   return out;
 }
 
-// EVERY FRAGMENT AT ONCE, ASKED FOR BY THE SERVER (phase X1, the owner 2026-09-22). This used to
-// send five and then WAIT for all five to land before sending five more, which put the run inside
-// the page: leaving it left the rest of the script unmade, and that is exactly what happened to the
-// owner's ten-line project. Now one call hands the whole list over (routes/scen3.js,
+// EVERY FRAGMENT AT ONCE, ASKED FOR BY THE SERVER. The run does not live in the page - leaving the
+// page must not leave the rest of the script unmade -, so one call hands the whole list over (routes/scen3.js,
 // /scen3/fragments/clips), every fragment gets its journal row from the press, and the server sends
 // them a second apart without waiting for any. The panel adopts the rows and shows each fragment
 // waiting, the same way it does after a reload.
@@ -504,7 +499,7 @@ async function _makeClips(p) {
 
 async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
-  // (phase V26.8) The animation prompts and the clips here are Kling's; a Seedance project writes its fragments' own.
+  // The animation prompts and the clips here are Kling's; a Seedance project writes its fragments' own.
   if (_seedance()) return _writeSdVideo(p, opts);
   const withClips = !!(opts && opts.clips);
   _readErr = '';
@@ -542,9 +537,9 @@ async function _writeVideo(p, opts) {
   _ctx.repaint();
 }
 
-// (phase V26.8) THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
+// THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
 // prompt of every line that needs one - one request each, a few at once - then, asked with `clips`, the clips of the
-// lines that have none (part 5).
+// lines that have none.
 async function _writeSdVideo(p, opts) {
   const withClips = !!(opts && opts.clips);
   _readErr = '';
@@ -583,14 +578,14 @@ async function _saveFramePrompt(p, frameId, prompt) {
   _ctx.repaint();
 }
 
-// ── LETTING GO OF SOMETHING THAT IS TAKING TOO LONG (phase N1) ──────────────
+// ── LETTING GO OF SOMETHING THAT IS TAKING TOO LONG ──────────────────────────
 // The cross on a thing being made. It does NOT get the money back - the task was paid for when it
 // was asked for and kie has no cancel - and the button says so: what it stops is the WAITING. The
 // row fails with a word of its own, the server stops asking about it, and a picture that arrives
 // afterwards is not filed.
 let _dropping = '';
 // The rows this panel let go of. The follower is still waiting on them and will see them fail;
-// what it must not do is report that failure as news (N1).
+// what it must not do is report that failure as news.
 const _dropped = new Set();
 async function _dropRow(alertId, what) {
   if (!alertId || _dropping) return;
@@ -631,9 +626,9 @@ async function _pickFrame(i, frameId) {
   _ctx.repaint();
 }
 
-// ── Reframing a first frame (phase V9) ──────────────────────────────────────
+// ── Reframing a first frame ─────────────────────────────────────────────────
 // A first frame is what a clip is made of, so cutting in closer - or off to one side - is done
-// where the frame is being looked at: on the stage (the owner, 2026-09-22). The selection is drawn
+// where the frame is being looked at: on the stage. The selection is drawn
 // on the preview canvas (js/merge-v3/preview-b.js, cropOn); this side only says which frame is
 // being reframed, in what SHAPE, and sends the rectangle. The shape is the project's own format,
 // locked: a frame of any other shape reaches the renderer with bars down its sides.
@@ -643,9 +638,8 @@ async function _pickFrame(i, frameId) {
 let _cropOn = '';                         // the frame being reframed, by id
 let _cropBusy = false;
 
-// (phase V67, second round (в), the owner 2026-11-01: "при просмотре кадра в превью, клик в любом другом месте должен снимать с
-// кадра выделение и показывать Who/where"; (об10) "оба снимать", (об11) a crop under way goes as `cancel`) A PRESS AWAY lets go
-// of what the stage shows - the set's frame pressed in field 2, and the open fragment - and the stage has its halves, who and
+// A PRESS AWAY lets go of what the stage shows - the set's frame pressed in field 2, and the open fragment, a crop under
+// way going as `cancel` - and the stage has its halves, who and
 // where, again. Not a press on the stage itself (the frame, its crop, the clip that plays there), on a frame of the set (its own
 // press shows it), on a row of the script (its own press opens or shuts it), in the open fragment, on the sash or a scrollbar,
 // or with anything on top (a window, a menu, a question - Layers). On the click, after it has done its own work: a press that
@@ -705,7 +699,7 @@ async function _banFrame(p, frameId, banned) {
   _ctx.repaint();
 }
 
-// The strip dragged into another order (the owner, 2026-09-21). What is sent is the WHOLE strip as
+// The strip dragged into another order. What is sent is the WHOLE strip as
 // it now reads, switched-off frames included: the order is the strip's, not the pool's, so turning
 // a frame back on does not drop it somewhere unexpected.
 async function _saveOrder(p, ids) {
@@ -728,16 +722,16 @@ async function _saveShot(i, patch) {
   _ctx.repaint();
 }
 const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
-// (phase V26.8) What films the clips - Kling avatar or a Seedance, for the whole video - and the qualities it makes.
+// What films the clips - Kling avatar or a Seedance, for the whole video - and the qualities it makes.
 const _modelOf = () => ((_kit && _kit.models) || []).find(m => m.id === _video().model) || null;
 // Seedance is the project's mode: asked of the model when the menus are read, else of the server's own word for it.
 const _seedance = () => { const m = _modelOf(); return m ? m.family === 'seedance' : _video().mode === 'seedance'; };
-// (the sixth round) Filmed by Seedance FROM THE VOICE'S SAMPLE: nothing is read - the voice field only chooses the voice -
-// and Seedance picks each clip's length, so no price is said beforehand (the owner's answer (я10)).
+// Filmed by Seedance FROM THE VOICE'S SAMPLE: nothing is read - the voice field only chooses the voice -
+// and Seedance picks each clip's length, so no price is said beforehand.
 const _bySample = () => _seedance() && (_video().sound || 'read') === 'sample';
 
-// THE VOICE'S DEMO, BY THE VOICE SAMPLE (the sixth round, the owner's answer (я7): "генерируем демку после выбора голоса.
-// Кнопка генерации недоступна пока демка не готова ... всплывашку сделаем что демо голоса генерируется"). The server says
+// THE VOICE'S DEMO, BY THE VOICE SAMPLE: made once the voice is chosen; generating waits until it is ready, and a popup
+// says the demo is being made. The server says
 // whether the voice has one (`castVoice.demo`); one without is asked for at once (routes/scen3.js /scen3/voice/demo -
 // ElevenLabs, about ten seconds), once per voice in this page - a failure says so in the voice field, with a way to ask
 // again. While it is missing the voice field is red and the clips wait.
@@ -796,9 +790,9 @@ async function _saveVideo(patch) {
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     p.video = r.project.video;
-    // (phase V26.8, the owner 2026-10-14) What the server works out from these settings comes with them: every line's
-    // Seedance prompt - written for these settings or not - and how long the model takes. Taking only `video` left the
-    // old state on screen until a reload.
+    // What the server works out from these settings comes with them: every line's
+    // Seedance prompt - written for these settings or not - and how long the model takes. Taking only `video` would leave
+    // the old state on screen until a reload.
     p.sdFrags = r.project.sdFrags;
   } catch (e) {
     _said = 'Could not save it: ' + e.message;
@@ -822,22 +816,21 @@ export function paint(host, ctx, api) {
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
   if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); FCHAT.close(); }
-  _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
+  _bars.length = 0;                       // the fields are built fresh; so is the list of bars
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
-  // A line taken off (Z4) has no fragment to open: the general zone is where that press lands.
+  // A line taken off has no fragment to open: the general zone is where that press lands.
   if (_open >= 0 && !isLive(lines[_open])) _open = -1;
   if (_stageFor !== _open) { _stageFor = _open; _stagePick = ''; }
 
   host.classList.add('is-split');
-  // (phase V61) The frames chat is a WINDOW over the page now (js/merge-v3/fchat.js) - it no longer stands where the fields
+  // The frames chat is a WINDOW over the page (js/merge-v3/fchat.js) - not where the fields
   // stand, and the script beside them never folds away.
   const left = el('div', 'mv3-wk-half is-frags');
   host.appendChild(left);
   host.appendChild(_splitSash(host, left));
   if (_inserting >= lines.length) _inserting = -1;
-  // (phase V62, the owner 2026-10-31: "давай добавим центральному полю такую же золотую обводку как и столбце со сценариями")
   // A voiceover's fields stand in a gold frame, as its script does, once there is a script to read - before, they are blurred.
   const right = el('div', 'mv3-wk-half is-guide is-frag' + ((_open >= 0 || _inserting >= 0) ? ' has-close' : '')
     + (_isVo(p) ? ' is-vo' + (_live(lines).length ? ' is-lit' : '') : ''));
@@ -846,19 +839,19 @@ export function paint(host, ctx, api) {
   _keepScroll(right, 'r' + _open);
 
   _pickUpClips();
-  VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint (X2)
-  // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
+  VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint
+  // The list is the script and nothing else: the voice stands in its own field
   // on the right, with everything else that is set once for the whole video.
-  // (phase V61, (т2)) Until the character and the place are chosen the script is there to be read - every word of it - and
+  // Until the character and the place are chosen the script is there to be read - every word of it - and
   // its rows do nothing: no fragment opens, nothing is read or put in.
   _list(left, p, lines);
   if (_missing(p).length) left.classList.add('is-locked');
   // The frames chat's window, when open, takes the project as it is now (the casting may have changed).
   FCHAT.update(p);
-  // (phase V61, (т9)) No counters and no `generate all` in a header any more - the setup has no header of its own; the
+  // No counters and no `generate all` - the setup has no header of its own; the
   // fields go one after another, each opening when the one before it has done its work.
   _notes(right);
-  // (phase V62) A voiceover draft with no script yet still has its fields - blurred until there is one (_all; the owner 2026-10-31).
+  // A voiceover draft with no script yet still has its fields - blurred until there is one (_all).
   if (!lines.length && !_isVo(p)) {
     right.appendChild(_note('This project has no lines. A talking head takes its script when it is made - a scenario or your own text.'));
     return;
@@ -868,8 +861,8 @@ export function paint(host, ctx, api) {
   else _fragment(right, p, lines[_open], _open);
   // The countdown belongs to whatever is being made where you are looking: the clip of the open
   // fragment.
-  // The read that is playing keeps its ❚❚ (Y5). The buttons are built fresh by every paint and the
-  // audio element is not, so without this a repaint - and pressing play is now one - draws every
+  // The read that is playing keeps its ❚❚. The buttons are built fresh by every paint and the
+  // audio element is not, so without this a repaint - and pressing play is one - draws every
   // button idle while the sound goes on.
   _mark();
   const mine = _open >= 0 ? _clipping.get(_open) : null;
@@ -878,13 +871,13 @@ export function paint(host, ctx, api) {
   if (place) holdProgress(place, { label: 'Making the clip', estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
 }
 
-// WHERE THE RIGHT COLUMN STOOD (the owner, 2026-09-22). Every repaint rebuilds the column, and a
-// rebuilt column starts at the top - so picking a frame variant near the bottom threw the person
+// WHERE THE RIGHT COLUMN STOOD. Every repaint rebuilds the column, and a
+// rebuilt column starts at the top - so picking a frame variant near the bottom would throw the person
 // back to the heading. The offset is remembered per FACE (the general zone, each fragment, the
 // voice picker): moving to another fragment should start at its top, coming back to the same one
 // should not. Put back after the paint, which is a microtask away and before anything is drawn.
 const _rightAt = new Map();
-// ── The sash between the fields and the script (R2) ─────────────────────────
+// ── The sash between the fields and the script ──────────────────────────────
 // The script column is the one with a size: the fields take what is left. Dragging LEFT makes it
 // wider, because it stands on the right of them; a double-click gives it back to the stylesheet.
 function _clampSplit(host, px) {
@@ -925,9 +918,8 @@ function _splitSash(host, col) {
   return s;
 }
 
-// (phase V61, the owner 2026-10-30: "кнопка с открытием чата для создания frames давай будет открывать попап с чатом для
-// создания фреймов"; (т7) - as New Character) THE FRAMES CHAT, A WINDOW over the page for this project (js/merge-v3/fchat.js).
-// A frame's ⤢ there opens it large (V91 block 3); a frame put into the set lands on the frames field.
+// THE FRAMES CHAT, A WINDOW over the page for this project, as New Character is (js/merge-v3/fchat.js).
+// A frame's ⤢ there opens it large; a frame put into the set lands on the frames field.
 export function openChat() {
   const p = _ctx && _ctx.project;
   if (!p) return;
@@ -937,7 +929,7 @@ export function openChat() {
 }
 
 function _keepScroll(box, key) {
-  softScroll(box);                          // a gentler wheel in setup (V5)
+  softScroll(box);                          // a gentler wheel in setup
   box.addEventListener('scroll', () => { _rightAt.set(key, box.scrollTop); }, { passive: true });
   const was = _rightAt.get(key) || 0;
   if (was) queueMicrotask(() => { if (box.isConnected) box.scrollTop = was; });
@@ -961,7 +953,7 @@ function _notes(host) {
 function _missing(p) {
   const cast = p.casting || {};
   const out = [];
-  if (_isVo(p)) return out;                          // (phase V62) a voiceover has nobody and nowhere to choose
+  if (_isVo(p)) return out;                          // a voiceover has nobody and nowhere to choose
   if (!cast.obrazImage) out.push('a character in a look');
   if (!cast.locationImage) out.push('an environment');
   return out;
@@ -971,27 +963,26 @@ function _missing(p) {
 // voice just taken is on the character record and the project copy before either is read again.
 const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 
-// WHAT IS NOT CHOSEN YET (phase V24, the owner 2026-10-09): a field with a choice still to make wears
-// a RED dashed frame instead of the gold one, and nothing is paid for until it is made. A project
-// made since starts at none - the mood, the model, the quality (routes/scen3.js _normVideo) - and the
+// WHAT IS NOT CHOSEN YET: a field with a choice still to make wears
+// a RED dashed frame instead of the gold one, and nothing is paid for until it is made. A new project
+// starts at none - the mood, the model, the quality (routes/scen3.js _normVideo) - and the
 // voice is missing while neither the character nor the project has one. Read from the project alone.
 function _needs(p) {
   const v = (p && p.video) || {};
   const out = {};
   if (!v.mood) out.mood = 'a mood';
   if (!_canRead()) out.voice = 'a voice';
-  // (the sixth round) By the voice sample the voice is there once its demo is (the owner's answer (я7)).
+  // By the voice sample the voice is there once its demo is.
   else if (_demoMissing(p)) out.voice = 'a voice with its demo';
-  // (phase V26.8) The model first - Kling avatar or a Seedance - then the quality it makes. (phase V62) A voiceover makes no clips.
+  // The model first - Kling avatar or a Seedance - then the quality it makes. A voiceover makes no clips.
   if (_isVo(p)) return out;
   if (!v.model) out.video = 'the model';
   else if (!v.quality) out.video = 'the quality';
   return out;
 }
-// (phase V62) A VOICEOVER: the script in a voice - field 1 and the B-roll, no who / where, frames or clips.
+// A VOICEOVER: the script in a voice - field 1 and the B-roll, no who / where, frames or clips.
 const _isVo = (p) => !!(p && p.type === 'voiceover');
-// (phase V61, the owner 2026-10-30, (т5): "Кадры и видео открываются, когда прочитаны все строки, а позже переписанная
-// строка их обратно не закрывает") THE FRAMES AND THE VIDEO WAIT FOR THE VOICE: red, and a press on them says why, until
+// THE FRAMES AND THE VIDEO WAIT FOR THE VOICE: red, and a press on them says why, until
 // every line of the video has been read once - a line rewritten later keeps its old take and opens nothing again; only
 // its own clip waits for the new read. A project already past it - a frame in its pool, a clip made - is never shut again.
 // By Seedance's voice sample nothing is read: they wait for a voice with its demo. '' - open.
@@ -1014,16 +1005,13 @@ function _noneOption(sel, word) {
 }
 
 // ── The general zone: the whole video, step by step ─────────────────────────
-// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W; laid out again in phase V61, the owner 2026-10-30,
-// (т13): "давай пока по рекомендации. там посмотрим".) FIELD 1, "mood & voice", across the whole width on top - one line;
+// FIELD 1, "mood & voice", across the whole width on top - one line;
 // under it two columns: 2 the frames on the left, 3 the video on the right, as tall as each other.
 //
-// UNTIL WHO AND WHERE ARE CHOSEN (the owner: "давай заблеривать все поля, кроме поля превью где пользователь должен выбрать
-// персонажа и окружение") the fields are blurred and take no press, with one line over them saying what to do first.
+// UNTIL WHO AND WHERE ARE CHOSEN on the stage the fields are blurred and take no press, with one line over them saying
+// what to do first.
 //
-// (phase V62, the owner 2026-10-31: "нужно заблерить поле с настройками, а активным показывать поле с выбором или созданием
-// текста [...] затем когда пользователь выбирает сценарий или добавляет свой текст нужно подсветить золотой обводкой центральное
-// поле с таким же облачком инструкции по этому шагу") A VOICEOVER with no script has its fields blurred the same way - the
+// A VOICEOVER with no script has its fields blurred the same way - the
 // script column beside them is where to begin. What to do at each step is said by the tips over the page (js/merge-v3/vo-tips.js),
 // over the anchors marked `data-tip`.
 function _all(host, p, lines) {
@@ -1044,7 +1032,7 @@ function _all(host, p, lines) {
   _markWait(zone);
 }
 
-// (phase V73 block 5, 5d; the owner's (б5-6) а) THE FIELD THAT WAITS - the one gold dashed frame ("your move"): the first field in
+// THE FIELD THAT WAITS - the one gold dashed frame ("your move"): the first field in
 // order that is not done and not locked (waiting for the voice); while that one is working, the next that needs a choice; none
 // while the zone is locked (who / where, or a voiceover's script, wait first - on the stage, in the script column). The others
 // stand in a quiet hairline.
@@ -1057,26 +1045,24 @@ function _markWait(zone) {
   if (w) w.classList.add('is-wait');
 }
 
-// ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
+// ONE FIELD: a gold frame with its number before its name, a head, a body and a foot with the
 // field's own `generate`. `spec`: step (the number), name, sub (what it is), summary (where it
 // stands - said in the head beside the name, always, because the field never shuts), done, blocked
 // with its why.
 //
-// THE FRAME IS THE STATE (the owner, 2026-09-22): dashed gold while there is work left in this
-// field, solid gold when there is none. It replaces both the drawer that shut itself and the tick
-// beside the name - a border says it without a word, and four of them say the whole thing at a
-// glance.
+// THE FRAME IS THE STATE: dashed gold while there is work left in this
+// field, solid gold when there is none - a border says it without a word, and four of them say the
+// whole thing at a glance.
 function _stage(host, id, spec) {
   // Blocked outranks done: a pool made before the character was taken off is not a field at rest. And
-  // a choice not made (`need`, phase V24) outranks both: the frame is red and dashed until it is made.
+  // a choice not made (`need`) outranks both: the frame is red and dashed until it is made.
   const done = !!spec.done && !spec.blocked && !spec.need && !spec.lock;
   const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
     + (spec.blocked ? ' is-blocked' : '') + ((spec.need || spec.lock) ? ' is-need' : '') + (spec.half ? ' is-half' : '')
     + (spec.work ? ' is-working' : '') + (spec.lock ? ' is-voicelock' : '') + (spec.wide ? ' is-wide' : ''));
-  box.dataset.stage = id;                 // (phase V62) what a voiceover's tips point at (js/merge-v3/vo-tips.js)
-  // (phase V61, (т5)) WAITING FOR THE VOICE: red, what is in it dimmed and dead - but for what is marked `is-free` - and a
-  // press on it says what to do first (the owner: "при попытке выбрать что то во first frames и video будет говорить что
-  // сначала озвучить нужно строки").
+  box.dataset.stage = id;                 // what a voiceover's tips point at (js/merge-v3/vo-tips.js)
+  // WAITING FOR THE VOICE: red, what is in it dimmed and dead - but for what is marked `is-free` - and a
+  // press on it says to read the lines first.
   if (spec.lock) {
     box.addEventListener('click', (e) => {
       if (e.target.closest && e.target.closest('.is-free')) return;
@@ -1084,12 +1070,11 @@ function _stage(host, id, spec) {
       askNote(box, spec.lock);
     });
   }
-  // ...while there IS work in it, the bottom line of the frame fills up (N3) - a thin grey line since V73 block 5.
+  // ...while there IS work in it, the bottom line of the frame fills up - a thin grey line.
   if (spec.work) _barWatch(box, spec.work);
-  // (phase V73 block 5, 5d; the owner's (б5-7) а) THE HEAD: the field's number before its name - in mono, quiet (it was a circle
-  // on the corner) -, the name 12 / 500 in sentence case (gold capitals before), and DONE - a green tick and "Done" - at its
-  // right, staying (the owner, 2026-09-23: a mark that flashes for two seconds is a mark you miss). What the field is and where
-  // it stands is the second line, and it wraps (б1-24: the VIDEO row is whole).
+  // THE HEAD: the field's number before its name - in mono, quiet -, the name 12 / 500 in sentence case, and DONE - a green
+  // tick and "Done" - at its right, staying (a mark that flashes for two seconds is a mark you miss). What the field is and
+  // where it stands is the second line, and it wraps (the VIDEO row is whole).
   const head = el('div', 'mv3-wk-stage-head');
   if (spec.step) head.appendChild(el('span', 'mv3-wk-snum u-mono', String(spec.step)));
   head.appendChild(el('span', 'mv3-wk-sname', _cap(spec.name)));
@@ -1098,8 +1083,7 @@ function _stage(host, id, spec) {
     d.append(iconEl('circle-check', 14), document.createTextNode('Done'));
     head.appendChild(d);
   }
-  // What the field IS, and then where it stands. The second used to appear only when the drawer
-  // was shut; with nothing to shut, it belongs in the head all the time.
+  // What the field IS, and then where it stands - in the head all the time: the field never shuts.
   const sub = spec.lock ? spec.lock.replace(/ - field 1.*$/, '').replace(/\.$/, '').toLowerCase()
     : spec.need ? 'choose ' + spec.need
     : spec.blocked ? 'needs ' + spec.why
@@ -1123,13 +1107,13 @@ function _stage(host, id, spec) {
 }
 
 function _genButton(foot, spec) {
-  // (phase V73 block 5, 5d) what the press is about - a line of its own over the button, wrapping, its prices and counts in mono
+  // what the press is about - a line of its own over the button, wrapping, its prices and counts in mono
   if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub mv3-wk-gcap')).appendChild(figures(spec.cap));
   const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || 'generate');
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.disabled;
-  // (phase V73 block 2) a paid press armed for its second press: the light step (б2-10) - no time limit here, as before
+  // a paid press armed for its second press: the light step - no time limit here
   if (spec.armed) b.classList.add('is-armed');
   if (spec.on) b.addEventListener('click', spec.on);
   foot.appendChild(b);
@@ -1149,7 +1133,7 @@ function _clipsPart(p, lines) {
 
 // Where the script stands. The frames are a set, not a line each: how many the pool holds.
 function _standing(p) {
-  // The lines of the VIDEO, each still knowing its real place in the script (phase Z) - `i` is what
+  // The lines of the VIDEO, each still knowing its real place in the script - `i` is what
   // the frames, the clips and the journal are addressed by, and it must not become the position in
   // a filtered list.
   const live = liveLines(p.lines);
@@ -1157,16 +1141,15 @@ function _standing(p) {
   return {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
-    // (phase V26.5, the owner 2026-10-10) Done as soon as the set has a frame - how many there are is not a debt the frames
+    // Done as soon as the set has a frame - how many there are is not a debt the frames
     // chat leaves.
     frames: have, framesDone: have > 0,
     clips: live.filter(x => _clipSettled(p, x.l, x.i)).length,
   };
 }
 
-// FIELD 1 - MOOD & VOICE (phase V61, the owner 2026-10-30: "пользователь должен выбрать сначала mood и voice - давай объединим
-// 2 поля в одно горизонтальное. кнопка change должна быть справа от выбранного голоса и никогда не переносится на следующую
-// строку"; (т3) one `generate`; (т12) the mood's own sentence in a bubble over its menu). ONE LINE: the mood ▾ | ▶ the voice
+// FIELD 1 - MOOD & VOICE (one `generate`; the mood's own sentence in a bubble over its menu; `change` right of the chosen
+// voice, never wrapped onto the next line). ONE LINE: the mood ▾ | ▶ the voice
 // · change | stability, speed | generate. The mood is the one vocabulary every stage reads from (the tags of the read, the
 // face in the frames, the movement in the clips), and the script is marked up by it; the voice reads the marked-up words,
 // ElevenLabs v3. The one `generate` does both, one after the other (VOICE.markAndRead): the mark-up when a line of the video
@@ -1179,7 +1162,7 @@ function _stageMoodVoice(host, p, lines) {
   const sample = _bySample();
   const untagged = VOICE.untagged(p).length;
   const read = live.filter(isRead).length;
-  // Read with other settings than the project's now (V26.1): still read, but work left in this field.
+  // Read with other settings than the project's now: still read, but work left in this field.
   const redo = sample ? [] : live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
   const will = sample ? 0 : live.filter(l => !isRead(l)).length;
   const has = _canRead();
@@ -1189,7 +1172,7 @@ function _stageMoodVoice(host, p, lines) {
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
   const { body } = _stage(host, 'moodvoice', {
     step: 1, bare: true, wide: true,
-    // The mark-up is one call to an agent and goes by an estimate that learns (N3); the reads are counted.
+    // The mark-up is one call to an agent and goes by an estimate that learns; the reads are counted.
     work: g.tagging ? () => _byTime(g.tagAt, 'tag')
       : g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
         : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
@@ -1198,14 +1181,12 @@ function _stageMoodVoice(host, p, lines) {
       sample ? (!has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen')
         : read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
   });
-  // TWO LINES (the owner 2026-10-30, after block 1: "давай в поле mood и voice добавим сверху строку с пояснениями что это за
-  // поля: дропдаун mood - сверху mood со всплывашкой при наведении, голос - voice со всплывашкой подсказкой при наведении,
-  // stability и speed аналогично. кнопка generate во второй строке"): the names of the controls on top, each with its bubble,
+  // TWO LINES: the names of the controls on top, each with its bubble,
   // the controls under them - `generate` at the end of that second line. One grid, so a name stands over its control.
   const row = el('div', 'mv3-wk-mvrow' + (sample ? ' is-sample' : ''));
   body.appendChild(row);
   const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', _cap(word)), tip);
-  // The mood. What it means is said in the bubble of its name (the owner's (т12)).
+  // The mood. What it means is said in the bubble of its name.
   const mood = el('select', 'u-in is-s mv3-wk-vsel is-small is-mood');
   if (!now) _noneOption(mood, 'none');
   for (const m of (_kit && _kit.moods) || []) {
@@ -1220,7 +1201,7 @@ function _stageMoodVoice(host, p, lines) {
   const voice = el('div', 'mv3-wk-mvvoice');
   const notes = el('div', 'mv3-wk-mvnotes');
   VOICE.paintRow(voice, _api.voiceApi(), { notes });
-  // How it is spoken (V26.1) - not by the voice sample, where nothing is read.
+  // How it is spoken - not by the voice sample, where nothing is read.
   const how = sample ? null : _voiceSettings(p, g.busy);
   row.append(
     name('mood', () => {
@@ -1260,7 +1241,7 @@ function _stageMoodVoice(host, p, lines) {
     on: () => VOICE.markAndRead(_api.voiceApi(), { read: !sample }),
   });
   body.appendChild(notes);
-  // By the voice sample: the voice's demo, made once (the sixth round of V26.8).
+  // By the voice sample: the voice's demo, made once.
   if (sample && has) {
     if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
     else if (_demoMissing(p)) {
@@ -1274,7 +1255,7 @@ function _stageMoodVoice(host, p, lines) {
   }
 }
 
-// THE STABILITY AND THE SPEED of the read (phase V26.1, the owner 2026-10-10) - one each for the
+// THE STABILITY AND THE SPEED of the read - one each for the
 // whole video, kept on the project. Changing either touches no read: the lines read before stay read,
 // and the field's `generate` redoes them - a read again for the stability, a retiming for the speed.
 const STABILITY = [
@@ -1283,7 +1264,7 @@ const STABILITY = [
   { v: 1, label: 'Robust', tip: 'Very even - follows the tags less' },
 ];
 const SPEED = { min: 0.7, max: 1.2, step: 0.05 };
-// What the two are, said in the bubbles of their names in field 1 (phase V61).
+// What the two are, said in the bubbles of their names in field 1.
 const STAB_TIP = 'How steady the voice is. ElevenLabs v3 knows three: creative - more emotional, and more likely to stray from the words; natural - the closest to the voice as recorded; robust - very even, follows the tags less. A line read before keeps its read until generate reads it again.';
 const SPEED_TIP = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
   + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch, and the timeline follows. A line given its own speed in its fragment keeps it.';
@@ -1311,8 +1292,8 @@ function _voiceSettings(p, busy) {
   return { stab, speed };
 }
 
-// A SPEED IS APPLIED AFTER A PAUSE (the owner, 2026-10-10): the arrows of the field can be pressed several
-// times in a row, and only where they stop is retimed - each press used to save, repaint and shut the field
+// A SPEED IS APPLIED AFTER A PAUSE: the arrows of the field can be pressed several
+// times in a row, and only where they stop is retimed - a save on each press would repaint and shut the field
 // for the length of a retiming. What is typed waits here, so a repaint in between (a read landing, the
 // watcher) shows it rather than the old speed; Enter does not wait.
 const SPEED_PAUSE_MS = 700;
@@ -1340,7 +1321,7 @@ function _speedLater(inp, key, now, body) {
 // A speed typed in, put on the scale the server keeps: 0.7-1.2 in steps of 0.05.
 const _speedVal = (raw) => Math.round(Math.round(Math.min(SPEED.max, Math.max(SPEED.min, parseFloat(raw) || 1)) / SPEED.step) * SPEED.step * 100) / 100;
 
-// THE SPEED, the project's or a line's (phase V26.1, the owner 2026-10-10): saved and applied in one call
+// THE SPEED, the project's or a line's: saved and applied in one call
 // (routes/scen3.js, /scen3/voice/speed) - the reads are retimed before the answer, the timeline follows.
 async function _saveSpeed(body) {
   const p = _ctx && _ctx.project;
@@ -1392,7 +1373,7 @@ function _labelled(word, sel, tip, tight) {
   return box;
 }
 
-// ── A VOICEOVER'S LINE, AT MOST VO_MAX CHARACTERS (phase V62, (во27), (во28)) ──
+// ── A VOICEOVER'S LINE, AT MOST VO_MAX CHARACTERS ──
 // The field of a line's words - edited or put in - stops at the limit (ElevenLabs reads 5 000 at a time, the mood's tags
 // included) and says under it how many are in. Nothing for a talking head. Returns the counter's repaint, or null.
 function _voCount(p, box) {
@@ -1400,7 +1381,7 @@ function _voCount(p, box) {
   box.maxLength = API.VO_MAX;
   const c = el('div', 'mv3-wk-fwhy mv3-vo-count');
   const paint = () => {
-    c.textContent = int(box.value.length) + ' / ' + int(API.VO_MAX);   // (phase V73 block 5, 5d; (б5-21) а) "4,500 / 4,500"
+    c.textContent = int(box.value.length) + ' / ' + int(API.VO_MAX);   // "4,500 / 4,500"
     c.classList.toggle('is-full', box.value.length >= API.VO_MAX);
   };
   paint();
@@ -1408,10 +1389,10 @@ function _voCount(p, box) {
   return paint;
 }
 
-// ── FIELD 2 OF A VOICEOVER - B-ROLL (phase V62) ──
+// ── FIELD 2 OF A VOICEOVER - B-ROLL ──
 // The picture of a voiceover: videos and pictures from the stock, laid over the voice by its sentences. Red until every
-// line is read (the same rule as a talking head's frames and video, _voiceLock); its "find B-roll" comes with V62's block 1.
-// (phase V62, block 1) "find B-roll" - the SERVER finds it (routes/broll.js, lib/broll.js): the sentences from the captions, the
+// line is read (the same rule as a talking head's frames and video, _voiceLock).
+// "find B-roll" - the SERVER finds it (routes/broll.js, lib/broll.js): the sentences from the captions, the
 // agent's English keywords for each, a batch of videos and pictures from the stock per sentence, the pieces laid on main video
 // edge to edge through the voice - and this field follows it ("finding 3 of 14…"). The menu beside it says what is laid -
 // videos and pictures mixed, videos only, pictures only - and lays it again when changed (the pieces chosen by hand stay).
@@ -1489,9 +1470,8 @@ function _stageBroll(host, p, lines) {
   find.dataset.tip = 'broll-find';        // the tip of step 3 stands under it (js/merge-v3/vo-tips.js)
 }
 
-// ── FIELD 2 - FRAMES (phase V61, the owner 2026-10-30, (т6): "поле first frames удаляем, а набор фреймов нужно показывать.
-// это поле нужно, чтобы было видно набор фреймов которые есть и кнопка открытия чата"; (т6а) "scattered" a tick here) ──
-// The set the lines take their frames from - the shelf of phase R, everything it could do came with it: press a frame to put
+// ── FIELD 2 - FRAMES ──
+// The set the lines take their frames from: press a frame to put
 // it on the stage, ✕ to take it out of the rotation, drag to reorder, right-click to see it large - and at its foot the tick
 // "scattered" (off: the lines take the frames in turn, in this order; on: one drawn for each line by its number, never
 // reshuffled) and "frames chat", the window where frames are asked for in words. Red, like the video, until the lines are
@@ -1512,7 +1492,7 @@ function _stageFrames(host, p) {
     const gone = hidden.has(String(fr.id));
     const b = el('button', 'mv3-wk-fsetfr' + (fr.id === _setPick ? ' is-on' : '') + (gone ? ' is-off' : ''));
     b.type = 'button';
-    // DRAGGED INTO ORDER (the owner, 2026-09-21): pick a frame up and drop it where it belongs.
+    // DRAGGED INTO ORDER: pick a frame up and drop it where it belongs.
     // What the strip reads when the drag ends is the order that is saved, and "the pool in turn"
     // then means this order.
     b.draggable = true;
@@ -1540,12 +1520,12 @@ function _stageFrames(host, p) {
       ids.splice(at < 0 ? ids.length : at, 0, from);
       _saveOrder(p, ids);
     });
-    // (phase V26.6) ...and the products it was drawn with.
+    // ...and the products it was drawn with.
     const prods = (Array.isArray(fr.props) ? fr.props : []).map(x => x && x.name).filter(Boolean);
     b.title = (fr.made === 'chat' ? 'from the frames chat · ' : '') + (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
       + (prods.length ? 'product ' + prods.join(', ') + ' · ' : '')
       + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
-    // (phase V26.5) A frame made to order in the frames chat says so on its tile.
+    // A frame made to order in the frames chat says so on its tile.
     if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'Chat'));
     const img = el('img');
     img.alt = '';
@@ -1553,8 +1533,8 @@ function _stageFrames(host, p) {
     img.src = derived(fr.preview || fr.path, 'card');
     b.appendChild(img);
     // The ✕ in the corner takes a frame out of the rotation; the ✓ in the same corner brings it
-    // back (the owner, 2026-09-21). A switched-off frame is dimmed and stands first, out of the way.
-    // (phase V73 block 5, 5d) Lucide's ✕ (the shared mask) and ✓; taking a frame out is not a deletion, so the ✕ is not red
+    // back. A switched-off frame is dimmed and stands last, out of the way.
+    // Lucide's ✕ (the shared mask) and ✓; taking a frame out is not a deletion, so the ✕ is not red
     const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' u-x'));
     if (gone) sw.innerHTML = icon('check', 12);
     sw.type = 'button';
@@ -1587,9 +1567,9 @@ function _stageFrames(host, p) {
   });
 }
 
-// VIDEO - the model and the tier, then `generate`: how the PLACE moves (W3a), the animation of the PERSON, line
-// by line (W3b), and the clips (F4). OPEN FROM THE START (phase V24, the owner
-// 2026-10-09): the model and the quality are chosen at the beginning, and the field is red until the
+// VIDEO - the model and the tier, then `generate`: how the PLACE moves, the animation of the PERSON, line
+// by line, and the clips. OPEN FROM THE START: the model and the quality are chosen at the beginning,
+// and the field is red until the
 // quality is; what it still waits for - the character, the place, a first frame to animate - is said
 // on its `generate`, which stays shut until they are there.
 function _stageVideo(host, p, lines) {
@@ -1598,11 +1578,11 @@ function _stageVideo(host, p, lines) {
   const motion = _envMotion(p);
   const live = _live(lines);
   const written = live.filter(_animated).length;
-  // (phase V23, the owner: "так") Done when every line of the video HAS ITS CLIP - fresh, or chosen by hand - and
+  // Done when every line of the video HAS ITS CLIP - fresh, or chosen by hand - and
   // nothing is being made; the prompts are only the way there.
   const s = _standing(p);
-  // (phase V26.8) Seedance's clips are still being built: the field holds its settings and makes nothing yet - and the
-  // Kling clips a project may already have are not Seedance's, so they do not make it done.
+  // A Seedance project (`soon`) counts its fragments' prompts; the Kling clips a project may already have are not
+  // Seedance's, so they do not make it done.
   const soon = _seedance();
   const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
@@ -1610,7 +1590,7 @@ function _stageVideo(host, p, lines) {
   const { body, foot } = _stage(host, 'video', {
     step: 3, half: true, lock,
     // The clips that have landed, plus the ones in flight; the place and the prompts, which come
-    // first and are quick, go by the estimate of a clip (N3).
+    // first and are quick, go by the estimate of a clip.
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
     summary: soon ? 'clips ' + s.clips + '/' + s.n + ' · prompts ' + _sdFrags(p).filter(f => f.prompt && (!f.stale || f.edited)).length + '/' + _sdFrags(p).length
@@ -1618,9 +1598,9 @@ function _stageVideo(host, p, lines) {
   });
   _needEnvMeta();
   const v = _video();
-  // WHAT FILMS IT AND HOW SHARP, one row (phase V26.8, the owner 2026-10-13): the model of the whole video - Kling avatar,
+  // WHAT FILMS IT AND HOW SHARP, one row: the model of the whole video - Kling avatar,
   // a clip per line, or one of the three Seedances - and the qualities that model makes, each with its price a second.
-  // Neither is chosen for a new project (V24): both say none, and the field is red until they are.
+  // Neither is chosen for a new project: both say none, and the field is red until they are.
   const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
   const model = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
@@ -1651,17 +1631,17 @@ function _stageVideo(host, p, lines) {
   }
   tier.disabled = _saving || !_kit || !v.model;
   tier.addEventListener('change', () => _saveVideo({ quality: tier.value }));
-  // The model first and the quality after it (the owner, 2026-09-22): what makes the clip, then
+  // The model first and the quality after it: what makes the clip, then
   // how good it is - the second only means anything once the first is read.
   sets.append(model, tier);
   body.appendChild(sets);
   const about = (_modelOf() || {}).about;
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
   if (_seedance()) _seedanceSettings(body);
-  // (phase V61) WAITING FOR THE VOICE, the field's choices stay free: what films the video - and by Seedance's voice
+  // WAITING FOR THE VOICE, the field's choices stay free: what films the video - and by Seedance's voice
   // sample nothing is read at all, so that choice cannot wait for a read. What makes waits.
   if (lock) body.querySelectorAll('.mv3-wk-fsets').forEach(r => r.classList.add('is-free'));
-  // How the PLACE moves has no field here (phase V26.8, the owner 2026-10-14: "поле точно не нужно"): `generate` and
+  // How the PLACE moves has no field here: `generate` and
   // a clip have the agent write it first, and its sentence goes into every prompt word for word. It is put right in the
   // Library's environment column, "how it moves" (public/js/library/info.js) - or in the prompt of a line or a fragment.
 
@@ -1671,25 +1651,25 @@ function _stageVideo(host, p, lines) {
   const willWrite = live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
   const clips = _clipWork(p, lines);
   const clipCost = clips.reduce((a, x) => a + x.cost, 0);
-  // HOW LONG THE VIDEO IS, beside what is left to make (the owner, 2026-09-22): the reads of the
+  // HOW LONG THE VIDEO IS, beside what is left to make: the reads of the
   // lines that are in it, added up - which is exactly the length the cut comes to, because a clip
   // is trimmed to its read (lib/frag-mirror.js). A line not read yet has no length to add.
   const secs = live.reduce((a, l) => a + (isRead(l) ? (_take(l) || {}).dur || 0 : 0), 0);
-  // (the sixth round) By the voice sample the length is Seedance's, clip by clip: not known beforehand.
+  // By the voice sample the length is Seedance's, clip by clip: not known beforehand.
   const whole = secs && !_bySample() ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
-  // A clip in flight does not shut this button (V4): the planner skips the fragments that are
+  // A clip in flight does not shut this button: the planner skips the fragments that are
   // already being made, so `generate` here starts the others.
   const busy = !!_writing || _envWriting;
   // The clips are the dollars in this zone, so the button shows the price and waits for a second
   // press when there are any - the words before them are credits and go on the first.
   const armed = _armedVideo && clips.length > 0;
-  // What the press still waits for (phase V24): the field is open, its `generate` is not - the
+  // What the press still waits for: the field is open, its `generate` is not - the
   // character and the place, a first frame to animate, the quality, and the mood the person moves in.
   const wait = [lock && lock.replace(/\.$/, ''), why, need, _needs(p).mood].filter(Boolean);
-  // (phase V26.8, parts 4-5) SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
+  // SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
   // credits - then the clips of the fragments that have none, priced, on a second press.
   if (soon) {
-    // (the sixth round) By the voice sample the clips wait for the voice and its demo too.
+    // By the voice sample the clips wait for the voice and its demo too.
     if (_bySample() && _needs(p).voice) wait.push(_needs(p).voice);
     const sdWant = _sdNeeds(p).length;
     const sample = _bySample();
@@ -1726,9 +1706,9 @@ function _stageVideo(host, p, lines) {
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
         armed,
-    // What this press will SPEND and how long the video is - and nothing else (the owner,
-    // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
-    // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
+    // What this press will SPEND and how long the video is - and nothing else. The chores it also
+    // does - looking at the place, writing the prompts - cost credits, not dollars, and the button's
+    // own tooltip says them.
     cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
       _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
@@ -1748,17 +1728,15 @@ function _stageVideo(host, p, lines) {
   });
 }
 
-// SEEDANCE'S OWN SETTINGS (phase V26.8, the owner 2026-10-13), under the model: how the clip is voiced, how the body
-// moves, the camera. Each says what it does on the line under it (the owner's answer (ш):
-// "пояснение нужно, что это за параметры"). They are kept on the project as they are chosen; the clips that use them
-// come with the later parts of the phase.
+// SEEDANCE'S OWN SETTINGS, under the model: how the clip is voiced, how the body
+// moves, the camera. Each says what it does on the line under it. They are kept on the project as they are chosen.
 function _seedanceSettings(body) {
   const v = _video();
   const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
   const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));
 
   // THE SOUND - what Seedance hears to voice the line itself (lib/th-video.js SOUNDS): the line's read, or the voice's
-  // sample. Not chosen, it is the read (the owner's answer (я13)).
+  // sample. Not chosen, it is the read.
   const sounds = (_kit && _kit.sounds) || [];
   const cur = v.sound || 'read';
   const sound = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
@@ -1775,8 +1753,8 @@ function _seedanceSettings(body) {
   const said = sounds.find(s => s.id === cur);
   if (said) why(said.about);
 
-  // GESTURES - how the head, the hands and the body move (the owner's answer (ц)): one way per mood, the project's mood
-  // until another is picked; the face follows the mood always (answer (щ)). Picking the mood itself follows it again.
+  // GESTURES - how the head, the hands and the body move: one way per mood, the project's mood
+  // until another is picked; the face follows the mood always. Picking the mood itself follows it again.
   const moods = (_kit && _kit.moods) || [];
   const gest = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const curG = v.gestures || v.mood || '';
@@ -1793,7 +1771,7 @@ function _seedanceSettings(body) {
   why('How the head, the hands and the body move while speaking. It follows the mood (field 1) until you pick another;'
     + ' the face always follows the mood.');
 
-  // THE CAMERA - one continuous shot (the owner's answer (е)); several shots in one clip are in development.
+  // THE CAMERA - one continuous shot; several shots in one clip are in development.
   const cam = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
   const one = el('option', '', 'One continuous shot');
   one.value = 'one';
@@ -1807,7 +1785,7 @@ function _seedanceSettings(body) {
 }
 
 function _list(host, p, lines) {
-  // (phase V62, the owner after block 0) THE VOICEOVER DRAFT'S SCRIPT is chosen in this column: with no lines, the scenarios
+  // THE VOICEOVER DRAFT'S SCRIPT is chosen in this column: with no lines, the scenarios
   // and "+ your text" stand where its lines will (js/merge-v3/vo-script.js); with them, "other script" over them takes them
   // off again - while it is the draft.
   if (_isVo(p) && p.draft) {
@@ -1824,9 +1802,8 @@ function _list(host, p, lines) {
     bar.appendChild(other);
     host.appendChild(bar);
   }
-  // HOW THE TWO COLUMNS WORK, said over the list they are about (the owner, 2026-09-22). It used to
-  // sit in grey italics at the foot of the general zone, where somebody scrolling the stages never
-  // reached it; here it is the first thing above the script, and it changes with where you are.
+  // HOW THE TWO COLUMNS WORK, said over the list they are about: the first thing above the script,
+  // where nobody scrolling the stages can miss it, and it changes with where you are.
   const hint = el('div', 'mv3-wk-fhint', _open < 0
     ? 'Pick a fragment to work on it. Right-click one for more.'
     : 'Press fragment ' + _no(lines, _open) + ' again to come back to the whole video.');
@@ -1834,7 +1811,7 @@ function _list(host, p, lines) {
   const list = el('div', 'mv3-wk-flist');
   host.appendChild(list);
   // The video first, numbered 1..N with no gaps; then, at the foot, the lines taken off it - dim,
-  // out of the way, each with the one act it has (the owner, 2026-09-22). They keep their real
+  // out of the way, each with the one act it has. They keep their real
   // places in the script underneath, which is why nothing above them moved when they went.
   const live = liveLines(lines);
   live.forEach((x, pos) => list.appendChild(_row(p, x.l, x.i, pos + 1)));
@@ -1845,14 +1822,14 @@ function _list(host, p, lines) {
   }
   // Where it stood before this paint - a repaint rebuilds the column, and a rebuilt column starts
   // at the top. The column is in the panel by now, so the offset takes.
-  softScroll(list);                         // a gentler wheel in setup (V5)
+  softScroll(list);                         // a gentler wheel in setup
   list.addEventListener('scroll', () => { _listAt = list.scrollTop; }, { passive: true });
   if (_listAt) list.scrollTop = _listAt;
 }
 
-// ── SEEDANCE'S PROMPTS (phase V26.8, part 4) ────────────────────────────────
+// ── SEEDANCE'S PROMPTS ──────────────────────────────────────────────────────
 // The lines Seedance films, as the server works them out (routes/scen3.js _sdView): every read line - by the voice
-// sample, every line with words - a line is a fragment of its own (the sixth round) - each with its frame, the seconds
+// sample, every line with words - a line is a fragment of its own - each with its frame, the seconds
 // of its clip, its prompt and its takes.
 const _sdFrags = (p) => (Array.isArray(p && p.sdFrags) ? p.sdFrags : []);
 const _sdFragOf = (p, i) => _sdFrags(p).find(f => f.line === i) || null;
@@ -1935,7 +1912,7 @@ function _sdPromptCol(p, f) {
 }
 
 // WHAT A LINE IS CALLED. Its place among the lines of the VIDEO, counted from one with no gaps -
-// not its place in the script, which still holds the lines that were taken off (Z4). Everything
+// not its place in the script, which still holds the lines that were taken off. Everything
 // under the panel - the frames, the clips, the journal, ?line=N - is addressed by the real index;
 // this is only what the person reads.
 function _no(lines, i) {
@@ -1953,18 +1930,18 @@ function _row(p, l, i, n) {
   meta.appendChild(el('span', 'mv3-wk-lnum', String(n)));
   meta.appendChild(el('span', 'mv3-wk-ldur', !_bySample() && take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
-  // The read, playable from the row (owner, 2026-09-21): hearing a line is how it is judged, and
-  // the row is where the eye already is. It PLAYS AND NOTHING ELSE (the owner, 2026-10-10): the
-  // fragment does not open and the stage does not change - it used to bring the fragment forward
-  // (Y5), which turned listening down the script into opening every line of it.
-  // (the sixth round) By the voice sample a line is not read: no play, no read.
+  // The read, playable from the row: hearing a line is how it is judged, and
+  // the row is where the eye already is. It PLAYS AND NOTHING ELSE: the
+  // fragment does not open and the stage does not change - listening down the script must not
+  // open every line of it.
+  // By the voice sample a line is not read: no play, no read.
   if (!_bySample()) {
     row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
-    // ...and READ IT, beside its play (the owner, 2026-10-10).
+    // ...and READ IT, beside its play.
     row.appendChild(_rowRead(p, l, i));
   }
 
-  // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
+  // No thumbnail between the number and the words: the frame is judged in the fragment,
   // and the row is read for its words.
   const fr = _frameFor(p, l, i).v;
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
@@ -1980,24 +1957,23 @@ function _row(p, l, i, n) {
   dot(_clipping.has(i) ? 'busy' : _clipState(p, l, i), 'clip');
   row.appendChild(dots);
 
-  // (phase V61, the owner 2026-10-30: "в правом столбце давай отображать полностью текста реплик. при наведении не
-  // показываем всплывашку с полным текстом") The row shows every word of the line; nothing opens on the pointer.
-  // What a line can have DONE to it, out of the way of the list (the owner, 2026-09-22): read it
+  // The row shows every word of the line; nothing opens on the pointer.
+  // What a line can have DONE to it, out of the way of the list: read it
   // again, or take it off the script. The press OPENS this fragment first - a menu about a line you
   // are not looking at is a menu applied to the wrong one - and opening is all it does: a second
   // right-click on the open line does not shut it, unlike a left one.
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (row.closest('.is-locked')) return;           // (phase V61, (т2)) no who / where yet - the rows do nothing
+    if (row.closest('.is-locked')) return;           // no who / where yet - the rows do nothing
     if (_open !== i || _inserting >= 0) { _open = i; _inserting = -1; _picking = false; _pickView = ''; _setPick = ''; _stagePick = ''; _stageFor = i; _remember(); _ctx.repaint(); }
     _rowMenu(e, row, p, l, i, n);
   });
-  // (phase V26.8, the owner 2026-10-13) A LINE PUT IN under this one: a "+" in a square on the middle of the row's bottom
+  // A LINE PUT IN under this one: a "+" in a square on the middle of the row's bottom
   // border - half on the row, half over the one below, nothing moved - while the pointer is on the row.
   row.appendChild(_insPlus(i));
   // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
-    if (row.closest('.is-locked')) return;           // (phase V61, (т2))
+    if (row.closest('.is-locked')) return;
     _inserting = -1;
     _open = _open === i ? -1 : i;
     _picking = false;
@@ -2008,13 +1984,13 @@ function _row(p, l, i, n) {
   return row;
 }
 
-// THE "+" UNDER A ROW (phase V26.8). Not while anything is being made in the project: a read, a clip or a prompt lands
+// THE "+" UNDER A ROW. Not while anything is being made in the project: a read, a clip or a prompt lands
 // on its line by number, and a line put in above it would move it (the server refuses too - /line/insert).
 const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made'
   : _writing ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
-  const plus = el('span', 'mv3-wk-fins u-btn is-icon' + (why ? ' is-off' : ''));   // (V73 block 5, 5d) not gold
+  const plus = el('span', 'mv3-wk-fins u-btn is-icon' + (why ? ' is-off' : ''));   // not gold
   plus.innerHTML = icon('plus', 12);
   plus.setAttribute('role', 'button');
   plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
@@ -2032,7 +2008,7 @@ function _insPlus(i) {
   return plus;
 }
 
-// THE NEW LINE'S WORDS, in the right column (phase V26.8): typed and saved, then it is a fragment like any other - it
+// THE NEW LINE'S WORDS, in the right column: typed and saved, then it is a fragment like any other - it
 // takes the next frame of the set, and is marked up (`mood`) and read in its fragment.
 function _insertEditor(host, p, lines) {
   const after = _inserting;
@@ -2094,7 +2070,7 @@ async function _insertLine(p, after) {
   _ctx.repaint();
 }
 
-// A LINE TAKEN OFF THE SCRIPT (Z4, the owner 2026-09-22), at the foot of the list: dim, unopenable
+// A LINE TAKEN OFF THE SCRIPT, at the foot of the list: dim, unopenable
 // - there is no fragment to work on - and carrying the one act it has. Its read and its clips are
 // still in the project folder and come back with it.
 function _offRow(l, i) {
@@ -2124,7 +2100,7 @@ async function _setOff(i, want) {
     if (want && _open === i) _open = -1;
     _remember();
     // The route has already re-laid the cut by the time it answers, so the timeline under the blur
-    // can be brought up to date on the spot rather than on the watcher's next round (Z'3).
+    // can be brought up to date on the spot rather than on the watcher's next round.
     await Store.refresh();
   } catch (e) {
     _readErr = (want ? 'The line was not taken off: ' : 'The line was not restored: ') + e.message;
@@ -2133,7 +2109,7 @@ async function _setOff(i, want) {
   _ctx.repaint();
 }
 
-// READ, on a row of the list (the owner, 2026-10-10): a send mark while the line has no read of the words it
+// READ, on a row of the list: a send mark while the line has no read of the words it
 // has, a read-again mark once it has. Pressed, it reads at once - credits, the voice field's settings, no
 // question - and does not open or shut the fragment.
 function _rowRead(p, l, i) {
@@ -2141,7 +2117,7 @@ function _rowRead(p, l, i) {
   const reading = (VOICE.reading().lines || []).includes(i);
   const has = isRead(l);
   const b = el('button', 'mv3-wk-vplay is-send u-btn is-s is-icon' + (reading ? ' is-busy' : ''));
-  b.innerHTML = icon(reading ? 'loader-circle' : has ? 'rotate-cw' : 'mic', 10);   // (V73 block 5, 5d) in place of … ↻ ➤
+  b.innerHTML = icon(reading ? 'loader-circle' : has ? 'rotate-cw' : 'mic', 10);
   b.type = 'button';
   b.disabled = !ra.on || reading;
   b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
@@ -2156,7 +2132,7 @@ function _rowRead(p, l, i) {
   return b;
 }
 
-// THE LINE'S SPEED, in its fragment (the owner, 2026-10-10): the project's until it is changed here, then
+// THE LINE'S SPEED, in its fragment: the project's until it is changed here, then
 // the line's own - the project's speed does not touch it - with a way back.
 function _lineSpeed(p, l, i) {
   const own = +l.speed > 0;
@@ -2185,8 +2161,8 @@ function _lineSpeed(p, l, i) {
   return box;
 }
 
-// THE CLIPS OF A LINE, in a window (the owner, 2026-10-10): each one plays there, and `use` makes it the line's -
-// on the timeline too, stale or not (`/scen3/fragments/pick-clip`, V23). A layer (js/layers.js): Escape closes it.
+// THE CLIPS OF A LINE, in a window: each one plays there, and `use` makes it the line's -
+// on the timeline too, stale or not (`/scen3/fragments/pick-clip`). A layer (js/layers.js): Escape closes it.
 let _cwin = null;
 function _closeClipWindow() {
   if (!_cwin) return;
@@ -2198,7 +2174,7 @@ function _closeClipWindow() {
 function _clipWindow(p, l, i, n) {
   _closeClipWindow();
   const shade = el('div', 'mv3-wk-cwin');
-  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - "Fragment N · its clips", the 28 px ✕
+  // the one window frame (css/app-shell.css .u-win): its head - "Fragment N · its clips", the 28 px ✕
   const box = el('div', 'mv3-wk-cwin-box u-win is-float');
   const head = el('div', 'mv3-wk-cwin-head u-win-head');
   head.appendChild(el('span', 'u-win-title', 'Fragment ' + n + ' · its clips'));
@@ -2257,7 +2233,7 @@ function _closeMenu() {
   _menu = null;
 }
 
-// READ / READ AGAIN (phase V23, the owner 2026-10-09): the line's menu and the button beside its words ask the same
+// READ / READ AGAIN: the line's menu and the button beside its words ask the same
 // questions - a voice chosen, the script marked up, the voice free. { label, why, on } - `on` is null when it cannot.
 function _readAct(p, l, i) {
   const rs = _readState(l);
@@ -2285,7 +2261,7 @@ function _rowMenu(ev, row, p, l, i, n) {
   const ra = _readAct(p, l, i);
   item(ra.label, ra.why || 'in place of the take it has', ra.on);
 
-  // CHOOSE A CLIP (the owner, 2026-10-10): every clip the line has, in a window, each to be watched there
+  // CHOOSE A CLIP: every clip the line has, in a window, each to be watched there
   // and picked - a line keeps the clip it had when its read is redone, and this is the way to another.
   const clips = _clipsOf(p, l).filter(c => c && c.path);
   if (!_isVo(p)) {
@@ -2320,8 +2296,8 @@ function _rowMenu(ev, row, p, l, i, n) {
 // and every take the line has under them.
 function _fragment(host, p, l, i) {
   const take = _take(l);
-  // (phase V26.5, the owner 2026-10-10) ITS CROSS, top right in gold: the fragment closes - to the whole video. A second press
-  // on its row does the same, as before.
+  // ITS CROSS, top right in gold: the fragment closes - to the whole video. A second press
+  // on its row does the same.
   const shut = el('button', 'mv3-wk-fclose', '✕');
   shut.type = 'button';
   shut.title = 'Close this fragment - back to the whole video';
@@ -2331,8 +2307,8 @@ function _fragment(host, p, l, i) {
   const va = _api.voiceApi();
   const busyRead = VOICE.reading().busy;
 
-  // NO TITLE ROW (the owner, 2026-09-22). The number and the length of the take stand in this
-  // line's row on the left, where the eye already is, and `read again` moved into that row's
+  // NO TITLE ROW. The number and the length of the take stand in this
+  // line's row on the left, where the eye already is, and `read again` is in that row's
   // right-click menu - so the column starts with the thing it is about: the words.
 
   // The words - with their [tags] once the line has them - pressed, open for editing. A take made
@@ -2362,9 +2338,9 @@ function _fragment(host, p, l, i) {
     host.appendChild(acts);
     setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
   } else {
-    // The read beside the words (phase V23): not while they are being edited - the words are saved first.
+    // The read beside the words: not while they are being edited - the words are saved first.
     const row = el('div', 'mv3-wk-fwrow');
-    // (phase V26.8, the owner 2026-10-13) MOOD - this line alone marked up by the mood of the video: a line put in
+    // MOOD - this line alone marked up by the mood of the video: a line put in
     // between two, or one whose words were changed (a change drops its tags). Red while it has no [tags]: the read is
     // spoken from them, and the voice will not start without them.
     const g = VOICE.reading();
@@ -2377,7 +2353,7 @@ function _fragment(host, p, l, i) {
         : 'This line has no [tags] yet: mark it up by the mood of the video - it is read from them';
     mb.addEventListener('click', () => { if (!mb.disabled) { mb.disabled = true; VOICE.tagLine(va, i); } });
     row.appendChild(mb);
-    // (the sixth round) By the voice sample a line is not read: its read, its speed and its play are not here.
+    // By the voice sample a line is not read: its read, its speed and its play are not here.
     if (!_bySample()) {
       const ra = _readAct(p, l, i);
       const reading = (VOICE.reading().lines || []).includes(i);
@@ -2388,7 +2364,7 @@ function _fragment(host, p, l, i) {
         : (ra.label === 'Read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
       if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
       row.appendChild(rb);
-      // THE LINE'S OWN SPEED and its play, between the read and the words (the owner, 2026-10-10): a new
+      // THE LINE'S OWN SPEED and its play, between the read and the words: a new
       // speed retimes this read at once - the timeline and the play follow.
       row.appendChild(_lineSpeed(p, l, i));
       row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
@@ -2399,11 +2375,11 @@ function _fragment(host, p, l, i) {
     words.addEventListener('click', () => { _editWords = i; _wordsDraft = shown; _ctx.repaint(); });
     row.appendChild(words);
     host.appendChild(row);
-    // (phase V26.8) A `mood` or a `read` pressed here that failed says so here, not only in the fields of the whole video.
+    // A `mood` or a `read` pressed here that failed says so here, not only in the fields of the whole video.
     const fail = VOICE.failed();
     if (fail) host.appendChild(_note(fail, true));
   }
-  // (the owner's answer (я17)) A long line by the voice sample: a word, no refusal - its length is not estimated.
+  // A long line by the voice sample: a word, no refusal - its length is not estimated.
   const sdl = _seedance() ? _sdFragOf(p, i) : null;
   if (sdl && sdl.long) {
     host.appendChild(_note('A long line - Seedance may not say all of it in one clip of ' + _ceiling() + ' s'
@@ -2418,12 +2394,12 @@ function _fragment(host, p, l, i) {
     back.addEventListener('click', () => VOICE.saveText(va, i, take.said));
     host.appendChild(back);
   }
-  // (phase V62) A voiceover's line is its words and its read - no frame, no clip, no takes.
+  // A voiceover's line is its words and its read - no frame, no clip, no takes.
   if (_isVo(p)) return;
 
-  // Two rows, and each is a picture with the words it is made of beside it (the owner, 2026-09-21):
+  // Two rows, and each is a picture with the words it is made of beside it:
   // the frame with the prompt it was drawn from, the clip with the animation prompt it will be made
-  // from. The pictures on the left, the words to their right (the owner's second look at it).
+  // from. The pictures on the left, the words to their right.
   const hasFrame = !!_frameFor(p, l, i).v;
   const grid = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid);
@@ -2436,14 +2412,14 @@ function _fragment(host, p, l, i) {
   const grid2 = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid2);
   grid2.appendChild(_clipCol(p, l, i, rs, take));
-  // (phase V26.8) Filmed by Seedance, a line is a fragment of its own: its Seedance prompt in place of Kling's.
+  // Filmed by Seedance, a line is a fragment of its own: its Seedance prompt in place of Kling's.
   grid2.appendChild(_seedance() ? _sdPromptCol(p, _sdFragOf(p, i)) : _motionCol(l, i, hasFrame));
 
   _takes(host, p, l, i);
 }
 
 // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
-// and one of them is the fragment's (F4). Pressing a row makes it that one. (phase V26.8) A Seedance line's takes too.
+// and one of them is the fragment's. Pressing a row makes it that one. A Seedance line's takes too.
 function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
@@ -2472,7 +2448,7 @@ function _takes(host, p, l, i) {
   }
 }
 
-// THE WORDS OF A LINE, with the [tags] the mood put between them in GOLD (the owner, 2026-09-22):
+// THE WORDS OF A LINE, with the [tags] the mood put between them in GOLD:
 // what the line says is what the person wrote, and what is gold is what the tagger added - the
 // difference is worth seeing at a glance. Only where the words are READ: the editor is a textarea,
 // and a textarea has no coloured pieces.
@@ -2487,14 +2463,14 @@ function _sayWords(host, text) {
   host.appendChild(document.createTextNode('\u201d'));
 }
 
-// THE PROMPT THIS FRAME WAS DRAWN FROM, beside the picture it made (the owner, 2026-09-21): what
+// THE PROMPT THIS FRAME WAS DRAWN FROM, beside the picture it made: what
 // the engine was actually told. Editable: the picture is already drawn and does not change; the
 // words are kept with the frame (routes/scen3.js, /scen3/frames/prompt).
 function _framePromptCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-prompt');
   const { v: fr } = _frameFor(p, l, i);
   col.appendChild(_colHead('frame prompt'));
-  // The field stands there whether or not there is a frame (the owner, 2026-09-21), so the fragment
+  // The field stands there whether or not there is a frame, so the fragment
   // has the same shape from the first look; with no picture beside it there is nothing to edit, and
   // it says what is missing instead of pretending to take words.
   const box = fr
@@ -2547,13 +2523,13 @@ function _frameCol(p, l, i) {
     box.appendChild(el('span', '', 'no frames yet'));
   }
   col.appendChild(box);
-  // No caption under the picture (the owner, 2026-09-22): whether the frame came from the rule or
-  // was picked by hand is already said on the picker bar right below it, and said twice it was just
+  // No caption under the picture: whether the frame came from the rule or
+  // was picked by hand is already said on the picker bar right below it, and said twice it is just
   // noise. With no frames at all there is nothing to say either - the empty box says it.
   return col;
 }
 
-// WHICH FRAME THIS LINE OPENS ON (the owner, 2026-09-21): a thin bar the width of the fragment,
+// WHICH FRAME THIS LINE OPENS ON: a thin bar the width of the fragment,
 // under the frame and its prompt. Pressed, it drops a list of the frames of the set, one under the
 // other; a frame pressed in the list goes onto the stage, and `select` appears in the middle of it -
 // that press is what writes it onto the line. The rule (the pool in turn) is the first row.
@@ -2613,7 +2589,7 @@ function _motionCol(l, i, hasFrame) {
   const col = el('div', 'mv3-wk-fcol is-motion');
   const sh = l.shot || null;
   let action = null;
-  // Nothing to animate until the line has a frame to animate FROM (the owner, 2026-09-21): the
+  // Nothing to animate until the line has a frame to animate FROM: the
   // field is there, says so, and takes no words yet.
   if (!hasFrame) {
     col.appendChild(_colHead('animation prompt'));
@@ -2623,7 +2599,7 @@ function _motionCol(l, i, hasFrame) {
     return col;
   }
   // What is worth knowing about this prompt before it is read: written by hand, or written for
-  // words the line no longer says (phase W3b - the same staleness the read has).
+  // words the line no longer says (the same staleness the read has).
   const staleWords = !!(sh && sh.motion && !_animated(l));
   if ((sh && sh.motionEdited) || staleWords) {
     action = el('span', 'mv3-wk-fedited-row');
@@ -2651,7 +2627,7 @@ function _motionCol(l, i, hasFrame) {
   return col;
 }
 
-// ── The clip of a fragment (phase F4) ───────────────────────────────────────
+// ── The clip of a fragment ──────────────────────────────────────────────────
 // The frame speaks the read: the picture, the take and the line's animation prompt go to Kling avatar
 // (a Seedance project's line goes with its Seedance prompt) and the SERVER sees it through
 // (routes/scen3.js, /scen3/fragments/clip). This panel only asks and
@@ -2683,7 +2659,7 @@ async function _makeClip(p, i) {
 
 async function _followClip(i, alertId) {
   try {
-    // The row says what it is doing (V2): the two analyses before the render, then the render. The
+    // The row says what it is doing: the two analyses before the render, then the render. The
     // fragment repeats it under its button rather than sitting on "making…" for half a minute.
     await API.follow(alertId, (rec) => {
       const at = _clipping.get(i);
@@ -2697,7 +2673,7 @@ async function _followClip(i, alertId) {
   }
   _dropped.delete(alertId);
   const was = _clipping.get(i);
-  if (was && was.startedAt) _paceSaw('clip', Date.now() - was.startedAt);    // the next estimate (N3)
+  if (was && was.startedAt) _paceSaw('clip', Date.now() - was.startedAt);    // the next estimate
   _clipping.delete(i);
   if (!_clipping.size) endProgress('clip', _readErr ? _readErr : undefined);
   if (_ctx) _ctx.repaint();
@@ -2738,7 +2714,7 @@ let _lookedClips = '';
 async function _pickClip(i, clipId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
-  // (phase V26.8) A Seedance take is chosen among the line's Seedance takes (/scen3/sd/pick).
+  // A Seedance take is chosen among the line's Seedance takes (/scen3/sd/pick).
   const route = _seedance() ? '/api/scen3/sd/pick' : '/api/scen3/fragments/pick-clip';
   try { _adopt(await _post(route, { projectId: p.id, line: i, clipId })); }
   catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
@@ -2760,14 +2736,14 @@ function _clipCol(p, l, i, rs, take) {
   } else {
     box.appendChild(el('span', '', _clipping.has(i) ? 'making…' : 'no clip'));
   }
-  // The cross, while this fragment's clip is being made (N1): the longest wait in the workshop,
+  // The cross, while this fragment's clip is being made: the longest wait in the workshop,
   // and the one most worth being able to walk away from.
   if (_clipping.has(i)) box.appendChild(_dropX((_clipping.get(i) || {}).alertId, 'this clip'));
   if (c && c.thumb) {
-    // Pressed, it goes ON the stage - it does not start (the owner, 2026-09-22). A thumbnail picks
+    // Pressed, it goes ON the stage - it does not start. A thumbnail picks
     // which of the two the stage shows, the frame or the clip, and nothing else; PLAYING is a press
-    // on the stage itself, where the film actually is. It used to be both, so switching frame and
-    // clip re-started the video every time. The window is still on the right button, for looking at
+    // on the stage itself, where the film actually is, so switching frame and clip does not restart
+    // the video. The window is on the right button, for looking at
     // one frame of it closely.
     box.title = 'Show it on the stage; press the stage to play it. Right-click to open it large';
     box.addEventListener('click', () => { _stagePick = 'clip'; _ctx.repaint(); });
@@ -2783,10 +2759,10 @@ function _clipCol(p, l, i, rs, take) {
   let cap;
   let ready = false;
   let price = '';
-  // (phase V26.8, part 5) A line filmed by Seedance: its own reasons, its seconds and its price.
+  // A line filmed by Seedance: its own reasons, its seconds and its price.
   const sf = _seedance() ? _sdFragOf(p, i) : null;
   const vlock = _voiceLock(p);
-  if (vlock) cap = vlock.replace(/\.$/, '').toLowerCase();      // (phase V61, (т5))
+  if (vlock) cap = vlock.replace(/\.$/, '').toLowerCase();
   else if (_seedance()) {
     if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
     else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 1)';
@@ -2795,7 +2771,7 @@ function _clipCol(p, l, i, rs, take) {
     else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
     else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
     else if (sf.secs > 0) { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
-    else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price (the owner's answer (я10))
+    else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price
   } else if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make a frame in the frames chat first';
   else if (!_video().model) cap = 'choose the model of the clips first (field 3)';
@@ -2808,9 +2784,9 @@ function _clipCol(p, l, i, rs, take) {
     busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
-  if (_armedClip === i && !busy) make.classList.add('is-armed');   // (phase V73 block 2) paid, armed: the light step
+  if (_armedClip === i && !busy) make.classList.add('is-armed');   // paid, armed: the light step
   // What the press will actually do: with nothing written yet it is two analyses and then the
-  // clip, and that is worth saying before it takes half a minute (phase U4).
+  // clip, and that is worth saying before it takes half a minute.
   const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));
   make.title = !ready ? cap
     : sf ? (needsWords ? 'First the place and this line’s prompt are written (credits), then the clip. ' : '')
@@ -2827,7 +2803,7 @@ function _clipCol(p, l, i, rs, take) {
   });
   col.appendChild(make);
   // While it runs, the caption is the journal's own stage - "analysis 1/2 - the place", then
-  // "rendering" - so the half-minute before anything is sent to Kling is not silence (V2).
+  // "rendering" - so the half-minute before anything is sent to Kling is not silence.
   const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'))).appendChild(figures(
     busy ? (stage || 'making the clip…') : (ready && needsWords) ? (sf ? 'the prompt, then ' : 'analysis, then ') + cap : cap));
@@ -2866,7 +2842,7 @@ export function openPicture(p) {
   const lines = (p && Array.isArray(p.lines)) ? p.lines : [];
   const l = _open >= 0 ? lines[_open] : null;
   // A frame being looked at in the picker wins while the list is down: that is the question on
-  // screen (the owner, 2026-09-21).
+  // screen.
   if (l && _picking && _pickView) {
     const fr = _pool(p).find(v => v.id === _pickView);
     if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
@@ -2898,10 +2874,10 @@ export function openPicture(p) {
   const c = _clipOf(p, l, _open);
   const fr = _frameFor(p, l, _open).v;
   const name = 'fragment ' + _no(lines, _open);
-  // The clip, as a film with its own sound, unless the frame was asked for (X4).
+  // The clip, as a film with its own sound, unless the frame was asked for.
   if (c && c.path && _stagePick !== 'frame') {
-    // What stands on the stage while the video opens (Z5): the clip's own poster, or - a clip
-    // filed before posters - the frame it was made from.
+    // What stands on the stage while the video opens: the clip's own poster, or - a clip
+    // with none - the frame it was made from.
     const poster = c.thumb || (fr ? derived(fr.preview || fr.path, 'main') : '');
     return { film: c.path, caption: name + ' · clip', poster };
   }
@@ -2914,5 +2890,5 @@ export function openPicture(p) {
 export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
   _closeMenu();
-  FCHAT.close();                          // (phase V61) the frames chat's window goes with the step; what is written stays
+  FCHAT.close();                          // the frames chat's window goes with the step; what is written stays
 }

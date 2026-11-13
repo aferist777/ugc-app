@@ -1,44 +1,44 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE - THE TIMELINE'S OWN ADDITIONS OF PHASE V36 (js/merge-v3/timeline-b.js, js/merge-v3/preview-b.js)
+   MERGE - THE TIMELINE'S OWN ADDITIONS (js/merge-v3/timeline-b.js, js/merge-v3/preview-b.js)
 
-   The transport in the timeline's header, right of split (T3); a sound's waveform on its clip (T4); the stretch of time
-   drawn over a waveform to be cut out of every lane (T5). The lanes themselves are styled in merge-v3.css.
+   The transport in the timeline's header, right of split; a sound's waveform on its clip; the stretch of time
+   drawn over a waveform to be cut out of every lane. The lanes themselves are styled in merge-v3.css.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── The transport (T3) ───────────────────────────────────────────────────────
-   Four buttons in the header's own shell (.mv3-iconbtn) - Lucide's icons since phase V73 block 5, 5c -; play a little wider -
+/* ── The transport ───────────────────────────────────────────────────────
+   Four buttons in the header's own shell (.mv3-iconbtn) - Lucide's icons -; play a little wider -
    the one reached for without looking. Its group in the head: merge-v3.css `.mv3-tl-grp`. */
 .mv3-tl-transport{display:flex; align-items:center; gap:4px; flex:0 0 auto}
 .mv3-tl-transport .mv3-iconbtn.is-play.u-btn{width:28px}
 /* While a build step of a talking head holds the stage there is no cut to drive: dimmed and dead, as the preview's bar - the
-   transport and, in its own group since V73 block 5, Cut silence. */
+   transport and, in its own group, Cut silence. */
 body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; pointer-events:none}
 
-/* ── Cut silence (phase V44) ─────────────────────────────────────────────────
+/* ── Cut silence ─────────────────────────────────────────────────
    The button in its own group right of play (dim with nothing picked - a press then says what to pick), its panel above it
    (fixed to the viewport, as the timeline's questions open - js/ask.js), and the glow of what will go over every lane.
-   (phase V73 block 5, 5c; the owner's (б5-16) б) A PANEL AT ITS BUTTON, as the queue and the part of a clip: the frame's edges
+   A PANEL AT ITS BUTTON, as the queue and the part of a clip: the frame's edges
    (`u-win is-float`), its head row of 40 px (`u-win-head`: "Cut silence" 13 / 500, the 28-px ✕), no backdrop; the rows under it,
    the one status line at the left of the foot and the gold "cut" at its right. */
 .mv3-iconbtn.is-silence.u-btn{width:auto; padding:0 3px}
 .mv3-iconbtn.is-silence svg{display:block}
 .mv3-iconbtn.is-silence.is-dim{opacity:.45}
-.mv3-iconbtn.is-silence.is-open{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}   /* pressed - the selected look (б2-13) */
+.mv3-iconbtn.is-silence.is-open{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}   /* pressed - the selected look */
 .mv3-silence{position:fixed; z-index:60; width:300px}
 .mv3-silence-b{display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-3); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font)}
 .mv3-silence-row{display:flex; align-items:center; gap:var(--sp-2)}
 .mv3-silence-row > span:first-child{flex:0 0 96px; color:var(--muted); white-space:nowrap}
 .mv3-silence-k, .mv3-silence-d{flex:1 1 auto; min-width:0}
-/* (phase V44, (ы12)) The threshold's "auto": lit while the sound's own threshold is in use, a press goes back to it. */
+/* The threshold's "auto": lit while the sound's own threshold is in use, a press goes back to it. */
 .mv3-silence-auto{flex:0 0 auto}
-.mv3-silence-auto.is-on{cursor:default}   /* the shared chip; on - the selected look (б2-13) */
+.mv3-silence-auto.is-on{cursor:default}   /* the shared chip; on - the selected look */
 .mv3-silence-v{flex:0 0 auto; min-width:40px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot{margin-top:var(--sp-1); justify-content:space-between}
 .mv3-silence-row.is-foot > .mv3-silence-n{flex:1 1 auto; white-space:normal}   /* the one status line (`.u-status`), its figures mono */
 .mv3-silence-cut{flex:0 0 auto}
-/* (phase V45) "Merge 5 clips into one?" over the last clip picked - one line, as it was. (phase V73 block 5, 5c; the owner's
-   (б5-16) б) Only its edges and its ✕ changed: the frame of the panels at their button (`u-win is-float`) holding just its head
-   row (`u-win-head`, the 28-px ✕ at its right end) - no line under it, and a refusal of two lines still fits. */
+/* "Merge 5 clips into one?" over the last clip picked - one line: the frame of the panels at their button
+   (`u-win is-float`) holding just its head row (`u-win-head`, the 28-px ✕ at its right end) - no line under it, and a
+   refusal of two lines still fits. */
 .mv3-mergeask{position:fixed; z-index:60; width:auto; max-width:340px}
 .mv3-mergeask-r{height:auto; min-height:40px; padding-block:var(--sp-1); border-bottom:0}
 .mv3-mergeask-t{flex:1 1 auto; min-width:0; white-space:normal; color:var(--ink); font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font); font-variant-numeric:tabular-nums}
@@ -51,22 +51,22 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
   box-shadow:inset 1px 0 0 oklch(from var(--danger) l c h / .8), inset -1px 0 0 oklch(from var(--danger) l c h / .8);
 }
 
-/* ── A sound's waveform (T4) ──────────────────────────────────────────────────
+/* ── A sound's waveform ──────────────────────────────────────────────────
    An audio lane is taller than a video one: a strip on top carries the name (and the cross), the wave fills the rest -
    tall enough to see a pause in. The canvas covers only what can be seen (js/merge-v3/tl-wave.js moves it). */
 .mv3b-row.is-audio{height:40px}
 .mv3b-clip.is-audio::before{
   content:''; position:absolute; left:0; right:0; top:0; height:11px; pointer-events:none;
-  background:oklch(from var(--scrim) l c h / .28); border-bottom:1px solid var(--border-soft);   /* (V73 block 5, 5c) from the scrim token */
+  background:oklch(from var(--scrim) l c h / .28); border-bottom:1px solid var(--border-soft);   /* from the scrim token */
 }
-/* (phase V73 block 5, 5c; the owner's (б5-13) б) 8 px as every clip's label (was 7.5) */
+/* 8 px as every clip's label */
 .mv3b-clip.is-audio .mv3b-clip-t{top:1px; bottom:auto; font-size:var(--fs-8); line-height:10px}
 .mv3b-wave{
   position:absolute; left:0; top:12px; height:calc(100% - 13px); display:block; pointer-events:none;
   color:var(--muted);
 }
 .mv3b-clip.is-audio.is-sel .mv3b-wave{color:var(--ink)}
-/* (phase V82, the owner 2026-11-09: "призрачный обрезок показывать слева и справа при сдвиге краев") While an edge is dragged, the
+/* While an edge is dragged, the
    clip as it was lies under it, faint and dashed - a sound with its wave: what the edge trims shows beside the clip. */
 .mv3b-ghost{
   position:absolute; pointer-events:none; box-sizing:border-box;
@@ -75,7 +75,7 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
 }
 .mv3b-ghost .mv3b-wave{color:var(--muted)}
 
-/* ── The stretch to cut out (T5) ──────────────────────────────────────────────
+/* ── The stretch to cut out ──────────────────────────────────────────────
    Drawn over a wave, laid across every lane - it goes from all of them. Red: Delete takes it away. Under the frozen names
    (z-index 2-3) and the playhead (1, laid before it), over the clips; the mouse passes through it. */
 .mv3b-range{
@@ -83,9 +83,9 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
   background:oklch(from var(--danger) l c h / .18);
   border-left:1px solid var(--danger); border-right:1px solid var(--danger);
 }
-/* (phase V41) The label is a button - a press cuts, as Delete does: the one part of the stretch the mouse reaches. It lives
-   in the ruler, which stays on top while the lanes scroll (merge-v3.css); `left` is set where the stretch begins. (phase V73
-   block 5, 5c) Lucide's scissors and the seconds in mono, 9 px. */
+/* The label is a button - a press cuts, as Delete does: the one part of the stretch the mouse reaches. It lives
+   in the ruler, which stays on top while the lanes scroll (merge-v3.css); `left` is set where the stretch begins.
+   Lucide's scissors and the seconds in mono, 9 px. */
 .mv3b-range-t{
   position:absolute; top:2px; left:2px; z-index:1; display:flex; align-items:center; gap:3px; padding:1px 4px; border:0; border-radius:var(--r-xs);
   background:var(--danger-fill); color:var(--on-danger); font:var(--fw-strong) var(--fs-9)/1.25 var(--font); white-space:nowrap;
@@ -94,10 +94,10 @@ body.mv3-workshop :is(.mv3-tl-transport, .mv3-tl-grp.is-silence){opacity:.4; poi
 .mv3b-range-t:hover{filter:brightness(1.15)}
 body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 
-/* ── The ghost of a lane a drop will make (phase V41, the owner's (о12)) ──────────
+/* ── The ghost of a lane a drop will make ──────────
    A tile held over the ruler: a new pair at the top of the video block and the far end of the audio block; held below the
    bottom audio lane: a new audio lane. Dashed, in the accent - not a lane yet; the clip's place on it. Only while dragged. */
-.mv3b-row.is-ghost .mv3b-box{color:var(--ink)}   /* Lucide's plus, 12 px, as the lanes' squares (V73 block 5, 5c) */
+.mv3b-row.is-ghost .mv3b-box{color:var(--ink)}   /* Lucide's plus, 12 px, as the lanes' squares */
 .mv3b-row.is-ghost .mv3b-lbl{color:var(--ink); cursor:copy}
 .mv3b-row.is-ghost .mv3b-lbl::before{border-style:dashed; border-color:var(--sel-line)}
 .mv3b-row.is-ghost .mv3b-lane{background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line)}
@@ -106,20 +106,20 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
   position:absolute; top:2px; bottom:2px; pointer-events:none;
   border:1px dashed var(--sel-line); border-radius:var(--r-xs); background:var(--sel-bg);
 }
-/* Files from Explorer going into the library, and what came of it - one line over the timeline's top right (phase V41). A
-   refusal or a failure is a popup in the corner instead (phase V49.1, js/notice.js). */
+/* Files from Explorer going into the library, and what came of it - one line over the timeline's top right. A
+   refusal or a failure is a popup in the corner instead (js/notice.js). */
 .mv3b-dropnote{
   position:fixed; z-index:45; max-width:min(520px, 60vw); padding:3px 8px; pointer-events:none;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
   font:600 var(--fs-10)/1.35 var(--font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  box-shadow:var(--shadow);   /* (V73 block 5, 5c) the one shadow; 10 px (half sizes down, (к2а)) */
+  box-shadow:var(--shadow);   /* the one shadow; 10 px (half sizes down) */
 }
 
-/* ── A clip's effects (phase V84, the owner's (эф4), (эф5); js/merge-v3/fx-ui.js, timeline-b.js _fxFrames) ─────────────────
-   A clip with effects is OUTLINED IN VIOLET all round, 2 px (the owner's (эф22), 2026-11-11: no gold wash any more) - picked, the
+/* ── A clip's effects (js/merge-v3/fx-ui.js, timeline-b.js _fxFrames) ─────────────────
+   A clip with effects is OUTLINED IN VIOLET all round, 2 px, with no gold wash - picked, the
    white ring outside it and the violet inside; each effect is a gold FRAME on it: its left and right edges where it starts and
-   ends, its name inside - shown only while its effect is open in the inspector on the picked clip (the owner 2026-11-10;
-   timeline-b.js _paintFx), following its Start / End slider (fxLive). */
+   ends, its name inside - shown only while its effect is open in the inspector on the picked clip
+   (timeline-b.js _paintFx), following its Start / End slider (fxLive). */
 .mv3b-clip.is-video.has-fx{border-color:var(--fx-ring); box-shadow:inset 0 0 0 1px var(--fx-ring)}
 .mv3b-clip.is-video.has-fx.is-sel{box-shadow:inset 0 0 0 1px var(--fx-ring), 0 0 0 1px var(--sel-ring), 2px 0 7px var(--scrim)}
 .mv3b-fx{
@@ -143,15 +143,15 @@ body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}
 .mv3-fx-name:hover{background:var(--hover)}
 .mv3-fx-row.is-open .mv3-fx-name{border-color:var(--gold-line); background:var(--gold-soft)}
 .mv3-fx-row.is-out .mv3-fx-name{opacity:.5; cursor:default}
-/* (V84 block 1c) an effect by the face waiting for its face */
+/* an effect by the face waiting for its face */
 .mv3-fx-row.is-wait .mv3-fx-name{opacity:.7; cursor:default}
 .mv3-fx-x{flex:0 0 auto}
-/* (V84, the owner 2026-11-10 (эф13)-(эф16)) The panel of tiles under the effects' rows: the full-width "+ Effect" opens and shuts
+/* The panel of tiles under the effects' rows: the full-width "+ Effect" opens and shuts
    it; chips of the groups, the tiles three a row - a picture made beforehand, its film only under the pointer (fx-ui.js); the
    tile's line over its row, the strip's width. */
 .mv3-fx-add{display:block; width:100%; margin-top:var(--sp-1)}
 .mv3-fx-add.is-on{background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink)}
-/* (phase V84 block 4b) A graphic effect's colours - swatches in one row (js/merge-v3/fx-ui.js). */
+/* A graphic effect's colours - swatches in one row (js/merge-v3/fx-ui.js). */
 .mv3-fx-colors{display:inline-flex; flex-wrap:wrap; gap:var(--sp-1); align-items:center}
 .mv3-fx-panel{position:relative; margin-top:var(--sp-2)}
 .mv3-fx-chips{margin-bottom:var(--sp-2)}

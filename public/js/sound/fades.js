@@ -1,10 +1,9 @@
 /* HOW LONG EACH SOUND FADES IN AND OUT - one rule for the preview (js/merge-v3/preview-b.js, a ramp of the gain) and the
    render (lib/mv3b-render.js, afade), so what is heard while cutting is what the film says.
 
-   A sound's own fades (phase V23: `fadeIn` / `fadeOut`, the inspector's two rows; Suno's two variants laid one after
-   the other cross this way). And (phase V28.4, the owner 2026-10-12: "место перекрытия нужно делать, чтобы один трек
-   затухал а второй увеличивался в громкости для плавности перехода. Это автоматически") where two tracks of MUSIC (a
-   clip marked `bed`) overlap on one lane, they cross over the overlap by themselves: the earlier fades out and the
+   A sound's own fades (`fadeIn` / `fadeOut`, the inspector's two rows; Suno's two variants laid one after
+   the other cross this way). And where two tracks of MUSIC (a clip marked `bed`) overlap on one lane, they cross over
+   the overlap by themselves, for a smooth passage: the earlier fades out and the
    later in. Only music - a voice over a bed is not faded, nor a sound effect, nor a film's sound. One track wholly
    inside another just mixes. Moved, the crossing follows: it is worked out from where the clips are, never stored.
 

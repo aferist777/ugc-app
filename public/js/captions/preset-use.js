@@ -1,22 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — a preset as a project wears it (phase K6, 2026-10-03).
+   CAPTIONS — a preset as a project wears it.
 
    presets.js is made by a tool and not edited by hand, so what the page and the server do WITH a preset
-   lives here. A preset is a BASE (the owner, 2026-10-03): applying it copies its whole style into the
+   lives here. A preset is a BASE: applying it copies its whole style into the
    project, marked with its id (`preset`); what is changed afterwards lives in the project only, and
    "back to the preset" takes it away.
 
-   The person's OWN presets (phase V30, block 5) are bases the same way: the page is told the list
+   The person's OWN presets are bases the same way: the page is told the list
    (merge-v3/my-presets.js -> setMine) and a preset is looked for among the app's first, then among them. One
    deleted is simply not found: "based on" stops being said, and the project keeps the look it copied.
 
-   THE TEXT PRESETS (phase V42, presets-text.js) and the person's own saved from a text lane or line (`kind: 'text'`) are
-   bases the same way - but they carry no place (the owner's (ц3)): applied, the line or lane keeps where it is (placed), and
+   THE TEXT PRESETS (presets-text.js) and the person's own saved from a text lane or line (`kind: 'text'`) are
+   bases the same way - but they carry no place: applied, the line or lane keeps where it is (placed), and
    where it is never counts as an edit of the preset (editedKeys).
 
-   A SUBTITLE'S IN AND OUT ARE NOT ITS PRESET'S (phase V49, the owner's (пр20)): a preset put on the subtitle lane or on its
+   A SUBTITLE'S IN AND OUT ARE NOT ITS PRESET'S: a preset put on the subtitle lane or on its
    lines leaves their In and Out as they were (keepMotion), and an In or Out chosen is never an edit of the preset. A text
-   preset's entrance and exit are its own, as before.
+   preset's entrance and exit are its own.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { presetOf } from './presets.js';
@@ -36,7 +36,7 @@ export function presetStyle(id) {
   const p = _find(id);
   if (!p) return null;
   const st = normalizeStyle(Object.assign({}, p.style, { preset: p.id }));
-  // (V66) A held place is a lane's (style.js `hold`), never a preset's - nor two rows (V71, style.js `rows`).
+  // A held place is a lane's (style.js `hold`), never a preset's - nor two rows (style.js `rows`).
   delete st.hold;
   delete st.rows;
   return st;
@@ -44,7 +44,7 @@ export function presetStyle(id) {
 
 /**
  * The style a preset gives to something that wears `current` now: the whole preset - and for a text preset, the place of
- * `current` kept (ц3). Null for an unknown id.
+ * `current` kept. Null for an unknown id.
  */
 export function placed(id, current) {
   const st = presetStyle(id);
@@ -54,7 +54,7 @@ export function placed(id, current) {
   return normalizeStyle(st);
 }
 
-/** What of a style is its animation, not its look (phase V49, (пр20)). */
+/** What of a style is its animation, not its look. */
 export const MOTION_KEYS = ['enter', 'enterDur', 'leave', 'leaveDur'];
 
 /**
@@ -70,9 +70,9 @@ export function keepMotion(st, cur, line) {
     else if (line) delete out[k];
   }
   if (line && cur) for (const k of ['mixA', 'mixS']) if (cur[k] !== undefined) out[k] = cur[k];
-  // (phase V66, the owner's (хо13)) A LANE whose place was set for several highlights fragments at once keeps it, and the mark.
+  // A LANE whose place was set for several highlights fragments at once keeps it, and the mark.
   if (!line && cur && cur.hold) { for (const k of PLACE_KEYS) if (cur[k] !== undefined) out[k] = cur[k]; out.hold = true; }
-  // (phase V71) Two rows are the lane's: a preset leaves them as they were.
+  // Two rows are the lane's: a preset leaves them as they were.
   if (!line && cur && cur.rows) out.rows = cur.rows;
   return out;
 }
@@ -85,7 +85,7 @@ export function editedKeys(style) {
   const s = normalizeStyle(style || {});
   const base = s.preset ? presetStyle(s.preset) : null;
   if (!base) return [];
-  // (V66) A held place is no edit of the preset either.
+  // A held place is no edit of the preset either.
   const keep = (isTextPreset(s.preset) ? TEXT_KEEP : MOTION_KEYS).concat(s.hold ? PLACE_KEYS : []);
   return Object.keys(DEF).filter((k) => k !== 'preset' && !keep.includes(k) && JSON.stringify(s[k]) !== JSON.stringify(base[k]));
 }

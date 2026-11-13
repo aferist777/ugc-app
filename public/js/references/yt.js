@@ -1,16 +1,15 @@
-// A DOWNLOADED YOUTUBE VIDEO of REFERENCES -> YouTube -> Videos - a source of the scenarios and of highlights (phase TG,
-// after block 8; the owner 2026-10-22: "в references папка youtube->videos будет источником для scenarios и для
-// highlights"). What its viewer offers, on the Library page and in Merge's panel alike (js/library/viewer.js actions):
+// A DOWNLOADED YOUTUBE VIDEO of REFERENCES -> YouTube -> Videos - a source of the scenarios and of highlights.
+// What its viewer offers, on the Library page and in Merge's panel alike (js/library/viewer.js actions):
 //   To highlights   a new highlights project in Merge on it, chosen in its popup already
-//   Delete          pressed twice - "really?" on the button (the owner's (Y4)): the source goes with its transcript and its
+//   Delete          pressed twice - "really?" on the button: the source goes with its transcript and its
 //                   topics (DELETE /api/sources/:id); scenarios written from it keep their text
-// It is not moved anywhere (Y5): its file and its record are the source's.
+// It is not moved anywhere: its file and its record are the source's.
 
 let _armed = null;      // { id, t } - the one whose "Delete" was pressed once
 
-// (phase V73 block 2) one "Really?", 3 s (js/really.js); what goes is said in the line beside it, as before
+// one "Really?", 3 s (js/really.js); what goes is said in the line beside it
 import { REALLY, MS } from '../really.js';
-// (phase V73 block 4) a viewer's action is an icon and its word - put back whole when "Really?" lets go
+// a viewer's action is an icon and its word - put back whole when "Really?" lets go
 import { fillAct } from '../library/viewer.js';
 
 /** The viewer's buttons for a downloaded YouTube video. */

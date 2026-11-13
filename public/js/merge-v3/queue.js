@@ -16,18 +16,18 @@
    Render all starts what is waiting. The encoder does one at a time, so a started entry may
    still stand in line - the row says how many are ahead.
 
-   A HIGHLIGHTS PROJECT IS ONE ROW (phase V33.4, the owner's (х44), (х44а)): its fragments' entries under "▸ <project> ·
+   A HIGHLIGHTS PROJECT IS ONE ROW: its fragments' entries under "▸ <project> ·
    highlights · 5 fragments" with their way along all together ("rendering 2 of 5 · 1:30 left", "3 rendered · 2
-   interrupted"); a press opens its fragments' rows, as any. Its own "Continue" (V73 block 4; "▶ go on" before) starts only ITS interrupted and failed
+   interrupted"); a press opens its fragments' rows, as any. Its own "Continue" starts only ITS interrupted and failed
    renders (POST /api/mv3q/run { hl }) - Render all, as always, starts everything waiting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// (phase V73 block 6, the owner's (б6-1) б: Queue on every page) Merge's store is asked only by addCurrent - Merge's own
+// Queue is on every page. Merge's store is asked only by addCurrent - Merge's own
 // render window -, so it is brought in there: on the other pages the queue loads nothing of Merge but this module.
 import * as Layers from '../layers.js';
-// (phase V73, the owner's (рф-4) а) a ready render opens in the Library's viewer - Rename and Delete there
+// A ready render opens in the Library's viewer - Rename and Delete there
 import { openRender } from '../library/render-view.js';
-// (phase V73 block 2, step 2b) An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
+// An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { iconEl } from '../icons.js';
@@ -36,8 +36,7 @@ let _pop = null;
 let _layer = null;
 let _timer = 0;
 // The panel refreshes on a beat, and a refresh rebuilds it wholesale. While a question is on
-// screen that would erase the question mid-read - which it did: the confirm appeared and was
-// gone before it could be answered. So the beat waits.
+// screen that would erase the question mid-read - gone before it could be answered. So the beat waits.
 let _asking = false;
 
 const $ = (id) => document.getElementById(id);
@@ -51,12 +50,12 @@ function _viewerCss() {
   document.head.appendChild(link);
 }
 
-// `count`: the badge's number alone (V50 speed, J) - the list is megabytes on a long history, and the badge asks every 5 s.
+// `count`: the badge's number alone - the list is megabytes on a long history, and the badge asks every 5 s.
 async function _get(count) {
   try { return await fetch('/api/mv3q' + (count ? '?count=1' : '')).then(r => r.json()); }
   catch (e) { return { success: false, items: [], waiting: 0, error: e.message }; }
 }
-let _failing = false;         // (phase V73 block 2) the list's last read failed - said once, not at every beat
+let _failing = false;         // the list's last read failed - said once, not at every beat
 
 // The badge counts what is still to happen - queued and running - not the whole history.
 // A number that only grows is not something anybody acts on.
@@ -89,7 +88,7 @@ const _mmss = (v) => {
 };
 
 // A row says three things: what it is, what it is made of, and where it has got to. The
-// middle one is why the rows are tall: two projects called "2026-08-19" tell you nothing
+// middle one is why the rows are tall: two projects named by the same date tell you nothing
 // apart, and the composition is what actually distinguishes them.
 function _row(it, refresh) {
   const el = document.createElement('div');
@@ -121,7 +120,7 @@ function _row(it, refresh) {
                         + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : '')))
                  : it.status === 'failed' ? 'failed'
                  : it.armed ? ('in line' + (it.ahead ? ' · ' + it.ahead + ' ahead' : ' · next'))
-                 // (phase V23) Stopped by a closed or restarted app: Render all starts it over.
+                 // Stopped by a closed or restarted app: Render all starts it over.
                  : it.interrupted ? 'interrupted · Render all starts it over'
                  : 'queued';
   top.appendChild(st);
@@ -174,7 +173,7 @@ function _row(it, refresh) {
   // name: rebuilding it from the project would render something else.
   if (it.status === 'failed') {
     const r = document.createElement('button');
-    // (phase V73 block 4) the icon, its words in the title
+    // the icon, its words in the title
     r.type = 'button'; r.className = 'mv3-qx u-btn is-s is-icon is-quiet'; r.appendChild(iconEl('refresh-cw', 14));
     r.title = 'Try this one again';
     r.addEventListener('click', async (e) => {
@@ -186,7 +185,7 @@ function _row(it, refresh) {
   }
   if (it.status !== 'running') {
     const x = document.createElement('button');
-    // (phase V73 block 4) the one ✕ - "take out of a row", red under the pointer
+    // the one ✕ - "take out of a row", red under the pointer
     x.type = 'button'; x.className = 'mv3-qx u-btn is-s is-icon is-quiet is-del u-x';
     x.title = 'Remove from the queue';
     x.addEventListener('click', async (e) => {
@@ -196,7 +195,7 @@ function _row(it, refresh) {
     });
     acts.appendChild(x);
   }
-  // (phase V73 block 4, the owner's (б4-2) а) The one under the encoder is stopped here as in Export's window (POST
+  // The one under the encoder is stopped here as in Export's window (POST
   // /api/mv3q/stop/:id): its encode cut off, nothing of it kept - in its finishing passes it is not stopped and stays.
   // A highlights project's renders keep their own stop on the project bar.
   if (running && !it.hl) {
@@ -219,13 +218,13 @@ function _row(it, refresh) {
 // Clearing with work still waiting is the one press here that cannot be undone, so it asks
 // rather than guesses - and it offers the harmless half as its own answer, because "just tidy
 // away the finished ones" is what is usually meant.
-// (phase V33.4, the owner 2026-10-21) Right UNDER the row with Render all and Clear - where the press was -, not at the end of
+// Right UNDER the row with Render all and Clear - where the press was -, not at the end of
 // the list.
 function _askClear(head, waiting, onDone) {
   if (_asking) return;
   _asking = true;
   const box = document.createElement('div');
-  box.className = 'mv3-qask u-ask';                // (phase V73 block 2) the shared question, in the list
+  box.className = 'mv3-qask u-ask';                // the shared question, in the list
   const t = document.createElement('b');
   t.className = 'mv3-qask-t';
   t.textContent = waiting + (waiting === 1 ? ' project has' : ' projects have') + ' not been rendered yet.';
@@ -259,7 +258,7 @@ async function _paintList() {
   if (!_pop || _asking) return;
   const d = await _get();
   if (!_pop) return;
-  // (phase V73 block 2, (б2-19)) A read that fails is not an empty queue: what is shown stays and the popup says why, once;
+  // A read that fails is not an empty queue: what is shown stays and the popup says why, once;
   // with nothing shown yet, "did not load" and Try again.
   if (!d || !d.success) {
     if (!_failing) showError('The render queue did not load: ' + ((d && d.error) || 'the app did not answer'));
@@ -270,7 +269,7 @@ async function _paintList() {
   _failing = false;
   _pop.textContent = '';
 
-  // (phase V73 block 4, (б4-6) а) a panel at its button: the frame's edges, its head row - the title, Render all, the quiet
+  // A panel at its button: the frame's edges, its head row - the title, Render all, the quiet
   // Clear, the 28 px ✕ that closes it as Escape does -, no backdrop
   const head = document.createElement('div');
   head.className = 'mv3-qhead u-win-head';
@@ -284,7 +283,7 @@ async function _paintList() {
 
   const all = document.createElement('button');
   all.type = 'button';
-  // (phase V33.4, the owner) The app's own buttons - `mv3-btn` has no look in Merge, and they drew as the browser's.
+  // The app's own buttons - `mv3-btn` has no look in Merge, and they drew as the browser's.
   all.className = 'mv3-c-btn mv3-x-go u-btn is-s is-main';
   all.textContent = 'Render all';
   // Yours that have not been started. Once started they are in line whatever the encoder is
@@ -328,7 +327,7 @@ async function _paintList() {
     list.appendChild(emptyEl('Nothing queued. Add a project from its render window.', { icon: 'list' }));
   } else {
     const again = () => { _paintList(); _paintBadge(); };
-    // A highlights project's entries are one row, where its first one stands (phase V33.4).
+    // A highlights project's entries are one row, where its first one stands.
     const groups = new Map();
     for (const it of d.items) {
       if (!it.hl) continue;
@@ -347,13 +346,13 @@ async function _paintList() {
   _paintBadge(d.waiting || 0);
 }
 
-// ── A highlights project's row (phase V33.4) ────────────────────────────────
+// ── A highlights project's row ──────────────────────────────────────────────
 // Which projects' rows are open - kept while the panel repaints on its beat.
 const _openGroups = new Set();
 
-// (phase V40, the owner 2026-10-24) THE PROJECT'S WAY ALONG is its LAST press of Render - the entries of its last batch, as
+// THE PROJECT'S WAY ALONG is its LAST press of Render - the entries of its last batch, as
 // lib/highlights-render.js viewOf counts them -, each fragment weighed by its length: a rendered one whole, the one rendering
-// by its share, the rest nothing. It was the running fragment's own percent: the bar went to 100% and back for each.
+// by its share, the rest nothing - so the bar does not go to 100% and back for each fragment.
 const _secsOf = (x) => (+x.dur > 0 ? +x.dur : 30);
 function _lastBatch(items) {
   const last = items.filter(x => x.batch).map(x => String(x.batch)).sort().pop() || '';
@@ -433,7 +432,7 @@ function _group(id, items, refresh) {
 
   const acts = document.createElement('div');
   acts.className = 'mv3-qrow-acts';
-  // Only its own interrupted and failed ones go on - nobody else's waiting renders start (the owner's (х44)).
+  // Only its own interrupted and failed ones go on - nobody else's waiting renders start.
   if (cut || failed) {
     const go = document.createElement('button');
     go.type = 'button';

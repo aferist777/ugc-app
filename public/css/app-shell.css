@@ -3,10 +3,10 @@
    BEFORE the page's own stylesheet; the top nav is css/app-nav.css.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── The interface's fonts (phase V73 block 1 stage C2; the owner's (к19), (б1-2), (б1-3)) ─────────────────────────────
+/* ── The interface's fonts ─────────────────────────────
    The authors' own web files as they come, public/fonts/ui/: Inter 4.1 (400 / 500 / 600) and JetBrains Mono 2.304 (400 / 500),
    SIL OFL 1.1. Named "UGC Inter" / "UGC Mono" so they never meet the caption fonts of css/caption-fonts.css, where "Inter" is
-   the BOLD caption file (phase S6: Merge, which loads that file, was once drawn bold and wide everywhere through that name). A
+   the BOLD caption file (Merge, which loads that file, would be drawn bold and wide everywhere through that name). A
    weight above 600 is drawn in the 600 file. */
 @font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"UGC Inter"; src:url("/fonts/ui/Inter-Medium.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap }
@@ -18,45 +18,43 @@
 :root{
   --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
   --ease:cubic-bezier(.22,1,.36,1);
-  /* The interface font - Inter as "UGC Inter", Segoe UI where it is not loaded yet; --mono for figures, taken by the pages in
-     blocks 5-6 (б1-15). The 3D Studio's page keeps Segoe UI (its block below). */
+  /* The interface font - Inter as "UGC Inter", Segoe UI where it is not loaded yet; --mono for figures. The 3D Studio's
+     page keeps Segoe UI (its block below). */
   --font:"UGC Inter","Segoe UI",system-ui,-apple-system,sans-serif;
   --mono:"UGC Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
-  /* THE LOOK OF PHASE V73 (block 1 stage C1; the owner 2026-11-03/04, (к15)-(к21а), (б1-1)-(б1-14); the rules of unslop by
-     Damir Sokolovsky, CC BY 4.0): graphite of the old steps' lightness with no blue; three text roles; hairlines - the text at
-     8 % and, for a control's edge, 12 %. The blue (--primary) and the cyan are gone: every place took its role. */
+  /* THE LOOK (the rules of unslop by Damir Sokolovsky, CC BY 4.0): graphite with no blue; three text roles; hairlines - the
+     text at 8 % and, for a control's edge, 12 %. No blue (--primary) and no cyan: every place has its role. */
   --bg-deep:#0a0a0b; --bg:#0f0f10; --surface:#19191b; --surface-2:#232325; --surface-3:#2c2c2f;
   --ink:#ededed; --muted:#a1a1a6; --faint:#85858b;
   --border-soft:rgb(237 237 237 / .08); --border:rgb(237 237 237 / .12);
-  /* ONE gold (к15): the main button of a window or a page (as --main, a FILL with dark text), the generators' places (a gold
-     name, a gold line), the "your move" field (gold dashes); Home keeps its gold frames (к4). A warning is gold too (б1-8). */
+  /* ONE gold: the main button of a window or a page (as --main, a FILL with dark text), the generators' places (a gold
+     name, a gold line), the "your move" field (gold dashes); Home keeps its gold frames. A warning is gold too. */
   --gold:oklch(.78 .12 85); --gold-hover:oklch(.83 .12 85); --on-fill:#0f0f10;
   --gold-soft:oklch(.78 .12 85 / .14); --gold-line:oklch(.78 .12 85 / .5);
   --warn:var(--gold);
   --main:var(--gold); --main-hover:var(--gold-hover); --on-main:var(--on-fill);
-  /* (phase V84, the owner's (эф22), 2026-11-11) one violet: a clip with effects outlined on the timeline */
+  /* one violet: a clip with effects outlined on the timeline */
   --fx-ring:oklch(.66 .2 300);
-  /* red only for delete and error, toned down; one green for done and on (б1-7) */
+  /* red only for delete and error, toned down; one green for done and on */
   --danger:oklch(.66 .15 25); --danger-soft:oklch(.66 .15 25 / .14); --danger-fill:oklch(.55 .17 25); --on-danger:#fff;
   --success:oklch(.74 .13 158); --success-soft:oklch(.74 .13 158 / .16);
-  /* the selected thing has no colour of its own (к16): a step and a light line; over a picture a white ring */
+  /* the selected thing has no colour of its own: a step and a light line; over a picture a white ring */
   --hover:rgb(237 237 237 / .05); --sel-bg:rgb(237 237 237 / .09); --sel-line:rgb(237 237 237 / .24); --sel-ring:#ededed;
   --focus:rgb(237 237 237 / .7);
   /* over pictures and video */
   --media-bg:#000; --scrim:rgb(0 0 0 / .6); --scrim-strong:rgb(0 0 0 / .8); --on-media:#fff; --on-media-line:rgb(255 255 255 / .3);
-  /* sizes, weights, spacing, radii and times of the new look - taken by the parts block by block (blocks 2-7) */
+  /* sizes, weights, spacing, radii and times of the look - taken by the parts */
   --fs-8:8px; --fs-9:9px; --fs-10:10px; --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-15:15px; --fs-20:20px;
   --lh-8:12px; --lh-9:12px; --lh-10:14px; --lh-11:16px; --lh-12:16px; --lh-13:20px; --lh-15:20px; --lh-20:24px;
   --fw-regular:400; --fw-medium:500; --fw-strong:600;
   --sp-half:2px; --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
   --gap-zone:6px; --r-2xs:4px;
-  --r-panel:14px;   /* (phase V73 block 5, the owner's (5а-1): "14, как на витрине") a zone's panel - the windows keep --r-lg */
+  --r-panel:14px;   /* a zone's panel - the windows keep --r-lg */
   --dur-1:140ms; --dur-2:180ms; --dur-3:320ms;
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
-  /* THE PAGE UNDER A WINDOW (phase V60.1, the owner 2026-10-29, (пк1а), (пк2а): "нужно затемнение и блёр на фон. давай это
-     правило делаем для всех попапов") - ONE rule for every window over the page (the generators', the dialogs, the
+  /* THE PAGE UNDER A WINDOW - ONE rule for every window over the page (the generators', the dialogs, the
      attachment and catalog windows, "add a source", Cut, the online search, the draft's question, the video chat's
-     almanac): the page darkened and a little blurred, as the sound almanac first did. The viewer of pictures and videos
+     almanac): the page darkened and a little blurred. The viewer of pictures and videos
      and Merge's enlarged preview are darker - one looks at a picture there - and blurred too. Menus, the Alerts and Queue
      lists, "?", "really?" and the name box have no backdrop. A window's class takes these; a page without this file
      falls back to the same values. */
@@ -65,10 +63,9 @@
   --ov-dim-deepest:oklch(0 0 0 / .86);
   --ov-blur:blur(3px);
 }
-/* THE 3D STUDIO'S PAGE KEEPS ITS WHOLE LOOK (the owner's (б1-13), (б1-13а), 2026-11-04: "не трогаем 3d studio"): its files are
-   its session's, so the shared tokens are set back to what they were on the one page that loads css/studio3d.css - the old
-   blue-tinted greys, its blue and cyan - and the new role tokens, which the shared sheets it loads now take, to what those
-   places looked like there. Its top strip keeps its old rules (css/app-nav.css guards the new ones). */
+/* THE 3D STUDIO'S PAGE KEEPS ITS WHOLE LOOK: the shared tokens are set to its own values on the one page that loads
+   css/studio3d.css - blue-tinted greys, its blue and cyan - and the role tokens, which the shared sheets it loads take,
+   to what those places look like there. Its top strip keeps its own rules (css/app-nav.css guards the shared ones). */
 :root:has(link[href="css/studio3d.css"]){
   --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
   --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
@@ -83,29 +80,28 @@
   --hover:var(--surface-2); --sel-bg:var(--primary-soft); --sel-line:var(--primary); --sel-ring:var(--primary);
   --focus:var(--primary);
 }
-/* (phase V73, the owner's (б1-6)) A link is the main text with a thin underline: the line the text's own colour at 40 %, whole
-   under the pointer. The 3D Studio's page keeps its links as they were. */
+/* A link is the main text with a thin underline: the line the text's own colour at 40 %, whole
+   under the pointer. The 3D Studio's page keeps links of its own. */
 :root:not(:has(link[href="css/studio3d.css"])) a{ text-decoration-color:color-mix(in oklch, currentColor 40%, transparent) }
 :root:not(:has(link[href="css/studio3d.css"])) a:hover{ text-decoration-color:currentColor }
-/* (phase V73, (б1-7)) A check or a choice that is on is green, a native slider grey - for the controls that set no colour of
-   their own, which the browser drew in the system's blue. :where keeps this weaker than any sheet's own rule. */
+/* A check or a choice that is on is green, a native slider grey - for the controls that set no colour of
+   their own, which the browser draws in the system's blue. :where keeps this weaker than any sheet's own rule. */
 :where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=checkbox],
 :where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=radio]{ accent-color:var(--success) }
 :where(:root:not(:has(link[href="css/studio3d.css"]))) input[type=range]{ accent-color:var(--muted) }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   THE SHARED PARTS (phase V73 block 2, step 2a; the owner 2026-11-05, (б2-1)-(б2-27)): ONE button, tab row, chip, close,
-   switch, check, field, slider, menu, question at a button and focus ring for every page - the parts the owner approved on
-   the showcase of block 1 (/lab/ui, removed in V91). A part's class sits NEXT TO the place's own class
-   (`class="mv3-c-btn u-btn is-s"`): the part draws, the own class only places (margins, width, flex, position) - its look
-   rules are gone. A part carries no width: the place gives it.
+   THE SHARED PARTS: ONE button, tab row, chip, close,
+   switch, check, field, slider, menu, question at a button and focus ring for every page. A part's class sits NEXT TO the
+   place's own class (`class="mv3-c-btn u-btn is-s"`): the part draws, the own class only places (margins, width, flex,
+   position) - it has no look rules. A part carries no width: the place gives it.
    Every rule sits under ONE guard, so the 3D Studio's page (the one that loads css/studio3d.css) never gets them and keeps
-   its look whole ((б1-13а)); `:where` keeps a part's weight its own (`.u-btn` is 0,1,0), so a place's rule written after it
-   (every page's sheet loads after this file) can still keep a size where the part must not change a row (б2-2).
-   Heights (б2-2): 24 (.is-s) in rows and strips, 28 in the body of windows and panels, 32 (.is-l) for Export and New
-   Character's feet. Roles: .is-main a gold fill (the place's main action - which buttons wear it stays as it was, (б2-3)),
+   its look whole; `:where` keeps a part's weight its own (`.u-btn` is 0,1,0), so a place's rule written after it
+   (every page's sheet loads after this file) can still keep a size where the part must not change a row.
+   Heights: 24 (.is-s) in rows and strips, 28 in the body of windows and panels, 32 (.is-l) for Export and New
+   Character's feet. Roles: .is-main a gold fill (the place's main action),
    .is-quiet, .is-danger (.is-armed: "Really?" - js/really.js), .is-gen (a generator's place: a gold line, solid gold under
-   the pointer, (б2-24)), .is-icon, .is-on / [aria-pressed=true] (pressed: the selected look, (б2-13)).
+   the pointer), .is-icon, .is-on / [aria-pressed=true] (pressed: the selected look).
    ════════════════════════════════════════════════════════════════════════════ */
 @keyframes u-spin{ to{ transform:rotate(360deg) } }
 @keyframes u-pop{ from{ opacity:0; transform:translateY(-4px) } }
@@ -134,7 +130,7 @@
   .u-btn.is-danger:hover:where(:not([disabled], .is-off)){ background:var(--danger-soft) }
   .u-btn.is-gen{ background:transparent; border-color:var(--gold-line); color:var(--gold) }
   .u-btn.is-gen:hover:where(:not([disabled], .is-off)){ background:var(--gold); border-color:var(--gold); color:var(--on-fill) }
-  /* armed for a second press: a paid press - a light step (б2-10); a delete - the red fill */
+  /* armed for a second press: a paid press - a light step; a delete - the red fill */
   .u-btn.is-armed, .u-btn.is-armed:hover{ background:var(--sel-bg); border-color:var(--sel-line); color:var(--ink) }
   .u-btn.is-danger.is-armed, .u-btn.is-danger.is-armed:hover{ background:var(--danger-fill); border-color:transparent; color:var(--on-danger) }
   .u-btn.is-icon{ width:28px; padding:0 }
@@ -146,12 +142,12 @@
   /* a button that opens a list: the field's look, its words at the left, a chevron at the right */
   .u-btn.is-field{ justify-content:space-between; background:var(--surface-2); border-color:var(--border); color:var(--ink); font-weight:var(--fw-regular); text-align:left }
   .u-btn.is-field:hover:where(:not([disabled], .is-off)){ background:var(--surface-2); border-color:rgb(237 237 237 / .18) }
-  /* a link (б1-6) */
+  /* a link */
   .u-link{ color:var(--ink); text-decoration:underline; text-decoration-color:rgb(237 237 237 / .35); text-decoration-thickness:1px;
     text-underline-offset:3px; cursor:pointer; transition:text-decoration-color var(--dur-1) var(--ease) }
   .u-link:hover{ text-decoration-color:var(--ink) }
 
-  /* ── THE ONE ✕ (б2-11): Lucide's "x" in the text's colour, drawn by the part (a mask) - a cross only says `u-x`. Three roles,
+  /* ── THE ONE ✕: Lucide's "x" in the text's colour, drawn by the part (a mask) - a cross only says `u-x`. Three roles,
      one cross: close (a quiet icon button), take out of a row (.is-del: red under the pointer), delete on a picture
      (.u-onpic.is-del) ── */
   .u-x::before{ content:''; display:block; flex:0 0 auto; width:var(--x-size, 16px); height:var(--x-size, 16px); background:currentColor;
@@ -165,7 +161,7 @@
     border-radius:var(--r-xs); background:var(--scrim); color:var(--on-media); cursor:pointer; transition:background-color var(--dur-1) var(--ease) }
   .u-onpic:hover:where(:not([disabled])){ background:var(--scrim-strong) }
   .u-onpic[disabled]{ opacity:.45; cursor:default }
-  .u-onpic.is-fav .u-ico, .u-onpic.is-on .u-ico{ fill:currentColor }      /* (б1-9): light and filled */
+  .u-onpic.is-fav .u-ico, .u-onpic.is-on .u-ico{ fill:currentColor }      /* light and filled */
   .u-onpic.is-del:hover:where(:not([disabled])){ background:var(--danger-fill); color:var(--on-danger) }
   /* "Really?" on a picture (js/really.js): the cross grows into the red fill with the word */
   .u-onpic.is-armed, .u-onpic.is-armed:hover{ width:auto; padding:0 var(--sp-2); background:var(--danger-fill); color:var(--on-danger);
@@ -209,11 +205,11 @@
   .u-sel > select{ appearance:none; padding-right:28px; cursor:pointer }
   .u-sel > .u-ico{ position:absolute; right:8px; top:6px; color:var(--muted); pointer-events:none }
   .u-area{ height:auto; padding:6px 10px; line-height:var(--lh-12) }
-  /* dense rows (б2-2): the same field at 24 */
+  /* dense rows: the same field at 24 */
   .u-in.is-s, .u-sel.is-s > select{ height:24px; padding-left:8px; border-radius:var(--r-xs); font-size:var(--fs-11) }
   select.u-in.is-s{ padding-right:22px; background-position:right 6px center }
   .u-area.is-s{ padding:4px 8px; border-radius:var(--r-xs); font-size:var(--fs-11) }
-  /* the script's own long text keeps the dark field the owner asked for (V38.8, (б2-14)) */
+  /* the script's own long text keeps its dark field */
   .u-area.is-dark, .u-in.is-dark{ background-color:var(--bg) }
 
   /* ── On and off ── */
@@ -240,7 +236,7 @@
   .u-range:hover::-webkit-slider-thumb{ transform:scale(1.15) }
   .u-range:disabled{ opacity:.45; cursor:default }
 
-  /* ── The menu: 32 px rows; an icon column only in a menu whose rows have icons (б2-16) ── */
+  /* ── The menu: 32 px rows; an icon column only in a menu whose rows have icons ── */
   .u-menu{ min-width:200px; max-width:min(420px, calc(100vw - 16px)); padding:var(--sp-1); display:flex; flex-direction:column; gap:0;
     background:var(--surface-2); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow) }
   .u-menu.is-float{ position:fixed; z-index:9300; animation:u-pop var(--dur-2) var(--ease) }
@@ -269,16 +265,16 @@
   .u-ask > p{ margin:var(--sp-1) 0 0; color:var(--muted); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); white-space:pre-line }
   .u-ask > .u-in{ width:100%; margin-top:var(--sp-2) }
   .u-ask-r{ display:flex; justify-content:flex-end; gap:var(--sp-2); margin-top:var(--sp-3) }
-  /* (б2-7) a list under the question - the projects a file is used in, the names to delete: wider, scrolling inside */
+  /* a list under the question - the projects a file is used in, the names to delete: wider, scrolling inside */
   .u-ask.is-wide{ width:auto; min-width:288px; max-width:min(360px, calc(100vw - 12px)) }
   .u-ask > p.is-lines{ max-height:50vh; overflow-y:auto; color:var(--ink) }
 
-  /* ── THE ONE WINDOW FRAME (phase V73 block 4, rule 5; the showcase's frame, moved here from css/ui-v73.css): one radius,
+  /* ── THE ONE WINDOW FRAME: one radius,
      one hairline, one shadow; a head of 40 px one step lighter - the name (`.u-win-title`) or the crumbs (`.u-crumbs`) at
      13 px, a quiet note right of the name (`.u-win-sub`), the window's own buttons, and the ✕ of 28 px last (the shared
      `u-btn is-icon is-quiet u-x`, "Close (Esc)"); the body is each window's own; a foot of 52 px - what is secondary at the
      left (the almanac, the one status line), the price in mono and ONE gold button at the right, Cancel left of it. A
-     window's own class sits next to these and only places; its own look of the frame is gone. Backdrops and the order of
+     window's own class sits next to these and only places; it has no frame look of its own. Backdrops and the order of
      the windows one over another stay each window's. ── */
   .u-win{ display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-lg); overflow:hidden }
   .u-win.is-float{ box-shadow:var(--shadow) }
@@ -297,14 +293,14 @@
     border-top:1px solid var(--border-soft); background:var(--surface) }
   .u-win-foot > .sp{ flex:1 1 auto }
   .u-price{ color:var(--muted); font:var(--fw-regular) var(--fs-12)/1 var(--mono); white-space:nowrap }
-  /* THE ONE STATUS LINE of a window (б2-25): 11 px in the quiet colour; red only for an error, green only for "done" - under
+  /* THE ONE STATUS LINE of a window: 11 px in the quiet colour; red only for an error, green only for "done" - under
      the names the windows already toggle (`.is-bad` / `.is-err` / `.err`, `.is-ok` / `.ok`). `.is-line`: one line, cut. */
   .u-status{ min-width:0; color:var(--faint); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); letter-spacing:0; text-transform:none }
   .u-status:is(.is-bad, .is-err, .err){ color:var(--danger) }
   .u-status:is(.is-ok, .ok){ color:var(--success) }
   .u-status.is-line{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  /* ── THE SEGMENT (б2-12): one of two or three views of a window lit (the sound window's Music | Sounds). The lit one is
-     the selected look - a step and a light line (к16). ── */
+  /* ── THE SEGMENT: one of two or three views of a window lit (the sound window's Music | Sounds). The lit one is
+     the selected look - a step and a light line. ── */
   .u-seg{ display:inline-flex; align-items:center; gap:2px; height:28px; padding:2px; border:1px solid var(--border); border-radius:var(--r-sm);
     background:var(--bg) }
   .u-seg > button{ height:22px; padding:0 var(--sp-3); border:0; border-radius:var(--r-2xs); background:none; color:var(--muted); cursor:pointer;
@@ -314,10 +310,9 @@
   .u-seg > button:is(.is-on, [aria-pressed="true"]){ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 0 0 1px var(--sel-line); cursor:default }
   .u-seg > button[disabled]{ opacity:.45; cursor:default }
 
-  /* ── THE PANEL (phase V73 block 5, part 5a; (к15), the owner's (б5-1) а, (б5-2) а - the showcase's zones, moved here from
-     css/ui-v73.css): a zone of a page is a panel on the dark base, one step lighter (`--surface`), a hairline, the panel's
-     radius (`--r-panel` 14, the showcase's - (5а-1)), with a 6 px gap of the base between panels (`--gap-zone`). Its head is 40 px
-     with the name (`.u-panel-name`, 13 px 500, sentence case) and the panel's own buttons - no figures in it ((б5-2) а). ── */
+  /* ── THE PANEL: a zone of a page is a panel on the dark base, one step lighter (`--surface`), a hairline, the panel's
+     radius (`--r-panel` 14), with a 6 px gap of the base between panels (`--gap-zone`). Its head is 40 px
+     with the name (`.u-panel-name`, 13 px 500, sentence case) and the panel's own buttons - no figures in it. ── */
   .u-panel{ display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-panel); overflow:hidden }
   .u-panel-head{ display:flex; align-items:center; gap:var(--sp-2); height:40px; flex:0 0 auto; padding:0 var(--sp-2) 0 var(--sp-4);
     border-bottom:1px solid var(--border-soft) }
@@ -325,7 +320,7 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .u-panel-head > .sp{ flex:1 }
 
-  /* ── Empty, loading, did not load (б2-17): in a big body - a gallery, a list - the dashed frame with an icon and the
+  /* ── Empty, loading, did not load: in a big body - a gallery, a list - the dashed frame with an icon and the
      place's own words; in a row, a strip or a menu `.is-line` - the same words with no frame (empty: no icon either).
      js/ui-state.js builds them. A grid gives them the whole row. ── */
   .u-empty, .u-loading, .u-failed{ grid-column:1 / -1; box-sizing:border-box }
@@ -393,9 +388,9 @@ body{
 *::-webkit-scrollbar-corner{background:transparent}
 
 /* ── The name box (js/name-box.js) ─────────────────────────────────────────────
-   A name asked for in the page, because window.prompt() does not exist in the app's window. Since phase V73 block 2 the
+   A name asked for in the page, because window.prompt() does not exist in the app's window. The
    shared question (`.u-ask.is-float`, over the viewers and windows it can be opened over - they sit at 9000-9470) with the
-   shared field and buttons, Cancel left (б2-8). The 3D Studio's page keeps its old look - the rules scoped to it below. */
+   shared field and buttons, Cancel left. The 3D Studio's page keeps a look of its own - the rules scoped to it below. */
 .nm-err{ margin-top:var(--sp-1); font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font); color:var(--danger) }
 .nm-err:empty{ display:none }
 :root:has(link[href="css/studio3d.css"]) .nm-box{
@@ -430,10 +425,10 @@ body{
 
 /* ── Menus ────────────────────────────────────────────────────────────────────
    A right-click menu or a "+" menu, on the layer stack (js/layers.js). Merge's and the Library's
-   (the source menu, phase F2). Since phase V73 block 2 every one is the shared menu: `.mv3-plus-menu u-menu is-float`
+   (the source menu). Every one is the shared menu: `.mv3-plus-menu u-menu is-float`
    (fixed to the viewport, because what it opens out of may scroll and clip its own children) with `.mv3-plus-item u-mi`
-   rows; the icons of the obvious rows are js/icons.js menuIcons. Nothing of their own look is left here. */
-/* (phase V27) The plus's "from a link": a field and "add" where its menu was (js/merge-v3/library.js _linkBox). */
+   rows; the icons of the obvious rows are js/icons.js menuIcons. They have no look of their own here. */
+/* The plus's "from a link": a field and "add" where its menu was (js/merge-v3/library.js _linkBox). */
 .mv3-link-box{ width:280px; gap:5px; padding:6px; }
 .mv3-link-box small{ font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--font); color:var(--faint); padding:0 2px; }
 .mv3-link-box small.is-bad{ color:var(--danger); }
@@ -443,7 +438,7 @@ body{
 /* The cross in the panel's status line that stops the link coming in (the shared ✕). */
 .mv3-lib-stop{ margin-left:6px; }
 
-/* ── THE BUBBLE (phase V61, the owner's (т4), (т4а); js/bubble.js) ─────────────────────────────────────────────────
+/* ── THE BUBBLE (js/bubble.js) ─────────────────────────────────────────────────
    A hint as a speech bubble, as in a comic: over what it is about, its tail pointing down at it (`is-below` - under it,
    the tail up). The setup of a talking head hangs its explanations on it, and every "?" of the app opens it
    (js/sound/qmark.js). The tail is a turned square with two gold edges, at --tail-x from the bubble's left. */
@@ -457,7 +452,7 @@ body{
 .bub b{display:block; margin-bottom:4px; color:var(--gold); font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase}
 .bub p{margin:0}
 .bub p + p{margin-top:5px}
-/* (phase V62, the owner 2026-10-31) A step's tip (js/bubble.js tipBox, js/merge-v3/vo-tips.js): the bubble over the page, a
+/* A step's tip (js/bubble.js tipBox, js/merge-v3/vo-tips.js): the bubble over the page, a
    red ✕ in its corner and "don't show again" at its foot. Under the windows (their backdrops stand higher). */
 .bub.is-tip{z-index:900; max-width:min(330px, calc(100vw - 12px)); padding:9px 30px 9px 13px}
 .bub.is-tip .bub-x{position:absolute; top:5px; right:6px; width:20px; height:20px; padding:0; border:0; border-radius:50%;

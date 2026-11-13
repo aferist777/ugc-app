@@ -3,11 +3,10 @@
 
    The bar (project picker, queue, Export), the geometry (the two sashes, and which of the left
    pair is open), and the editor: the library, the inspector, the timeline and the preview of a
-   project - one kind of project, an ordered list of lanes (docs/local-app/PLAN.md, phase 3).
+   project - one kind of project, an ordered list of lanes.
 
-   No editor state lives in the browser. The timeline has a server owner (js/merge-v3/store.js);
-   the old Merge kept the whole editor model in one localStorage key every session shared, which
-   is what made edits undo each other.
+   No editor state lives in the browser. The timeline has a server owner (js/merge-v3/store.js): an editor
+   model in a localStorage key every session shared would make edits undo each other.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { initNav } from '../app-nav.js';
@@ -29,9 +28,9 @@ import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
 import { initHighlights } from './highlights.js';
-// (phase V62, block 2) A voiceover's B-roll piece, another item for it - a view of the Library panel.
+// A voiceover's B-roll piece, another item for it - a view of the Library panel.
 import { initBroll } from './broll-view.js';
-// (phase V62) A voiceover's tips, step by step, over the page.
+// A voiceover's tips, step by step, over the page.
 import { initVoTips } from './vo-tips.js';
 import { askModelOnce } from './model-ask.js';
 
@@ -57,7 +56,7 @@ initInspector();
 initWorkshop();
 initProjects();
 initBar();
-// (phase V30, block 1) The speech model for captions, offered once, the first time Merge opens in a library
+// The speech model for captions, offered once, the first time Merge opens in a library
 // (js/merge-v3/model-ask.js) - a moment after the page.
 setTimeout(() => { askModelOnce().catch(() => {}); }, 2500);
 
@@ -69,13 +68,13 @@ async function _pictures() {
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   return openPictures();
 }
-// ...and ?open=videos, the video chat's (phase V3), the same way.
+// ...and ?open=videos, the video chat's, the same way.
 async function _videos() {
   await wkSettled();
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   return openVideos();
 }
-// ...and ?open=audio, "generate audio"'s (phase V34.E).
+// ...and ?open=audio, "generate audio"'s.
 async function _audio() {
   await wkSettled();
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
@@ -100,8 +99,8 @@ const _OPENERS = { pictures: _pictures, videos: _videos, audio: _audio };
   });
 })();
 
-// (phase TG, block 5c; the owner's answer (ю)) ?highlights=<a link> - a long video of REFERENCES sent "to highlights": a new
-// highlights project with its popup open and the link written in. Its tile STAYS (after block 8, the owner's (Y2)): the
+// ?highlights=<a link> - a long video of REFERENCES sent "to highlights": a new
+// highlights project with its popup open and the link written in. Its tile STAYS: the
 // project downloads the video, and the server lets the tile go then - the downloaded video is in its place
 // (lib/sources-store.js update). From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
 async function _highlightsFrom(url, sourceId) {
@@ -110,7 +109,7 @@ async function _highlightsFrom(url, sourceId) {
 }
 window.__ugcHighlightsFrom = (url, sourceId) => { _highlightsFrom(url, sourceId).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
 (() => {
-  // (block 6) ?highlights=&source=<id> - a video of YOUTUBE (a source of the Library) chosen in the popup already.
+  // ?highlights=&source=<id> - a video of YOUTUBE (a source of the Library) chosen in the popup already.
   let url = '', source = '';
   try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; source = q.get('source') || ''; } catch (e) { return; }
   if (!url && !source) return;
@@ -129,14 +128,14 @@ window.__ugcHighlightsFrom = (url, sourceId) => { _highlightsFrom(url, sourceId)
 })();
 
 // ?reveal=<a file> in the address - how the Alerts row of a picture that has landed brings
-// somebody to it (js/alerts-bell.js, phase L4): the Library open on the images shelf, the picture
+// somebody to it (js/alerts-bell.js): the Library open on the images shelf, the picture
 // lit. In a talking head the Library comes with the timeline step, so that step is taken first,
 // once the project has been read and its step decided. Said once: the address forgets it, or a
 // reload after walking the shelf would jump back to the picture.
 async function _reveal(path) {
   await wkSettled();
-  // (phase V64) The chats and the generators are windows over the page: the file is shown in the Library panel behind them -
-  // every window goes first (the sound window too, fix (д)).
+  // The chats and the generators are windows over the page: the file is shown in the Library panel behind them -
+  // every window goes first (the sound window too).
   const { closeChatWindows } = await import('./chat-window.js');
   closeChatWindows();
   const GW = await import('../gen-window.js');
@@ -147,7 +146,7 @@ async function _reveal(path) {
 }
 (() => {
   let path = [];
-  // (phase V64, fix (д)) Several (?reveal=a&reveal=b) - the two tracks of a press of Suno, all outlined.
+  // Several (?reveal=a&reveal=b) - the two tracks of a press of Suno, all outlined.
   try { path = new URLSearchParams(location.search).getAll('reveal').filter(Boolean); } catch (e) { return; }
   if (!path.length) return;
   let done = false;
@@ -174,7 +173,7 @@ window.addEventListener('ugc:goto', (e) => {
     _reveal(path).catch(err => console.warn('[merge-v3] reveal:', err.message));
     return;
   }
-  // A picture still being made leads to its chat - on the spot, with this project open (phase J).
+  // A picture still being made leads to its chat - on the spot, with this project open.
   const open = u.searchParams.get('open') || '';
   if (_OPENERS[open]) {
     e.preventDefault();
@@ -183,9 +182,8 @@ window.addEventListener('ugc:goto', (e) => {
 });
 
 // PICKING SOMETHING SHOWS THE LIBRARY, and the settings of what was picked slide over it from
-// the right (phase L5, the owner 2026-09-23; js/merge-v3/inspector.js paints the strip). It used
-// to fold the Library away and bring the Inspector out - which is Setup now, and has nothing to
-// say about a clip. Letting go of the pick takes the strip away, and the Library is still there.
+// the right (js/merge-v3/inspector.js paints the strip). Letting go of the pick takes the strip away, and the
+// Library is still there.
 onSelB((n) => { if (n) setOpenColumn('library'); });
 
 // The timeline and the preview take the panels they draw into as soon as the store has
@@ -205,7 +203,7 @@ Store.onChange(() => {
 // the depth of its own stack, which is empty anyway.
 // Split paints itself (js/merge-v3/bar.js): it needs a project AND a clip under the playhead.
 // The render button is painted by its owner (js/merge-v3/export-b.js): the same rule, and in a highlights project its
-// ticked fragments too (phase V33.4).
+// ticked fragments too.
 const NEEDS_PROJECT = ['mv3-project-del'];
 Store.onChange(() => {
   const has = Store.hasProject();

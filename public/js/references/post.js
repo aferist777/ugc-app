@@ -1,30 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   REFERENCES - A POST (phase TG, block 5; the owner 2026-10-21). ONE module for both places the media tree shows posts:
+   REFERENCES - A POST. ONE module for both places the media tree shows posts:
    the Library's Media shelf (js/library/main.js) and Merge's Library panel (js/merge-v3/library.js).
 
-     decorate(tile, it)     a post's tile: how many files it holds (or ▶ and its length), and on hover (the owner: "при
-                            наведении на плитку поста показывать во всплывашке все миниатюры поста") every miniature of a
+     decorate(tile, it)     a post's tile: how many files it holds (or ▶ and its length), and on hover every miniature of a
                             post of several - a press on one opens the post on it
      openPost(list, at, o)  the post viewer: the file being looked at large, the post's facts on the right, and UNDER the
-                            stage the strip of the post's miniatures, scrolled sideways, with "N selected" (the owner: "клик
-                            по миниатюре - просмотр, галочка в правом верхнем углу - выделение. и добавь кнопку select
-                            all"); the arrows step through the posts; Delete asks "really?" on the button itself.
+                            stage the strip of the post's miniatures, scrolled sideways, with "N selected" (a press on a
+                            miniature shows it, the tick in its top right corner picks it; "select all"); the arrows step through the posts; Delete asks "really?" on the button itself.
                             o.onChanged() - a post deleted: the page reads its gallery again
    A shelf item of kind 'references' (routes/library.js) carries the post's files in meta.items.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-// (phase V39) "Move to…" is the place picker - the media tree's places, folded.
+// "Move to…" is the place picker - the media tree's places, folded.
 import { openPlaces, closePlaces } from '../place-tree.js';
-// (block 7) A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
+// A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
 import * as Cut from '../cut.js';
-// (phase V35) The sash before the right column - one helper and one remembered width with the media viewer.
-// (phase V73 block 4) and the head's actions as the viewer draws them: an icon and its word (fillAct)
+// The sash before the right column - one helper and one remembered width with the media viewer.
+// and the head's actions as the viewer draws them: an icon and its word (fillAct)
 import { wireInfoSash, fillAct } from '../library/viewer.js';
-// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+// A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
 import { twoPress } from '../really.js';
-// (phase V73 block 2, (н2)) a new post's gold dot until it is opened - one module with the YouTube sources' tiles
+// a new post's gold dot until it is opened - one module with the YouTube sources' tiles
 import * as News from './news.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
@@ -52,7 +50,7 @@ const fmtDate = (s) => {
   return isNaN(d) ? String(s) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-// ── deleting (block 5d) ──────────────────────────────────────────────────────
+// ── deleting ─────────────────────────────────────────────────────────────────
 /** The question before a post is deleted - with the projects whose timelines hold its files (POST /api/library/usage), as
  *  every other tile of the Library asks: there its clips turn red, to be replaced or removed. */
 export async function deleteQuestion(it) {
@@ -75,7 +73,7 @@ export async function deleteQuestion(it) {
 // ── the tile ─────────────────────────────────────────────────────────────────
 let _hover = null;          // { box, tile, timer, hideTimer }
 
-// `opts.dragFile(dataTransfer, it, file)` (block 5d, Merge): a miniature of the hover is dragged onto a lane.
+// `opts.dragFile(dataTransfer, it, file)` (Merge): a miniature of the hover is dragged onto a lane.
 export function decorate(tile, it, open, opts) {
   const files = filesOf(it);
   const m = it.meta || {};
@@ -153,12 +151,12 @@ let _v = null;      // { ov, layer, list, at, file, sel: Set, o }
 export function openPost(list, at, o) {
   closePost();
   _hoverOut(true);
-  // (phase V81, (в18)) The fragments drawn over a video live while its viewer is open.
+  // The fragments drawn over a video live while its viewer is open.
   Cut.reset();
   const posts = (list || []).filter(x => x && x.kind === 'references');
   if (!posts.length) return;
   const ov = el('div', 'lib-view-ov ref-view-ov');
-  // (phase V73 block 4, rule 5; the owner's (б4-8) а) The one frame: a head of 40 px - the post's name, its place and the
+  // The one frame: a head of 40 px - the post's name, its place and the
   // count at the left, the actions (an icon and its word) at the right, the ✕ of 28 px last; the window's status line
   // (`.ref-said`) is the first line of the right column, not in the head.
   ov.innerHTML = `
@@ -199,7 +197,7 @@ export function openPost(list, at, o) {
     const files = filesOf(_cur()).filter(f => _v.sel.has(f.id));
     if (files.length) _moveMenu(e.currentTarget, files.map(f => f.id), files);
   });
-  // (phase V73 block 4, (к24-3)) closed by the press beside it (`mousedown`), as every window - a drag let go over the dark
+  // closed by the press beside it (`mousedown`), as every window - a drag let go over the dark
   // does not close it
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closePost(); });
   document.addEventListener('keydown', _onKey);
@@ -236,7 +234,7 @@ function _step(d) {
 
 const _cur = () => (_v ? _v.list[_v.at] : null);
 
-// (phase V73 block 4) The window's ONE status line (`u-status`, the first line of the right column): quiet; red only when
+// The window's ONE status line (`u-status`, the first line of the right column): quiet; red only when
 // it says something did not happen ("not moved: …", "not added: …", a cut that failed).
 function _setSaid(node, t, bad) {
   if (!node) return;
@@ -253,7 +251,7 @@ function _paint() {
   ov.querySelector('.lib-view-title').textContent = it.name || '';
   ov.querySelector('.ref-view-where').textContent = whereOf(it);
   ov.querySelector('.lib-view-count').textContent = 'post ' + (_v.at + 1) + ' / ' + _v.list.length;
-  News.opened(it);                                  // (phase V73 block 2, (н2)) looked at - no longer new
+  News.opened(it);                                  // looked at - no longer new
   _paintStage();
   _paintStrip();
   _paintInfo(it);
@@ -267,7 +265,7 @@ function _paintStage() {
   stage.textContent = '';
   const m = it.meta || {};
   if (m.remote) {
-    // (block 5c; the owner: "при клике на плитку пользователь видит видео") A long video kept as a tile, WATCHED without
+    // A long video kept as a tile, WATCHED without
     // downloading: YouTube in its own player, any other site from the stream yt-dlp names (GET .../watch) - and where a
     // site gives none, its poster and the way to it in the browser.
     const w = el('div', 'ref-remote');
@@ -306,9 +304,9 @@ function _paintStage() {
     const whole = !!(_v.whole && f.original);
     v.src = whole ? f.original.path : f.path; v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
     stage.appendChild(v);
-    // (block 7) The stretch and "Cut…": a NEW clip wherever it is put; the post keeps this file.
+    // The stretch and "Cut…": a NEW clip wherever it is put; the post keeps this file.
     const said = _v.ov.querySelector('.ref-said');
-    // (phase V81) The fragments start where the piece was in its whole video (a join - each of its pieces).
+    // The fragments start where the piece was in its whole video (a join - each of its pieces).
     const start = whole ? (Array.isArray(f.original.parts) && f.original.parts.length ? f.original.parts : [f.original]) : null;
     const box = Cut.cutBox(v, {
       src: whole ? f.original.path : f.path, start, whole, name: whole ? (f.original.name || it.name || '') : (it.name || ''),
@@ -388,7 +386,7 @@ function _row(box, k, v) {
 
 function _paintInfo(it) {
   const box = _v.ov.querySelector('.lib-view-info');
-  const said = box.querySelector('.ref-said');      // (phase V73 block 4) the status line stays the column's first line
+  const said = box.querySelector('.ref-said');      // the status line stays the column's first line
   box.textContent = '';
   if (said) box.appendChild(said);
   const m = it.meta || {};
@@ -409,7 +407,7 @@ function _paintInfo(it) {
     _row(box, 'files', [p ? p + ' photo' + (p === 1 ? '' : 's') : '', v ? v + ' video' + (v === 1 ? '' : 's') : ''].filter(Boolean).join(', '));
     const f = files[_v.file];
     if (f && f.w) _row(box, 'this one', f.w + '×' + f.h + (f.dur ? ' · ' + mmss(f.dur) : ''));
-    // (block 7) A piece cut out of a video: its whole video, on a tick.
+    // A piece cut out of a video: its whole video, on a tick.
     if (f && f.original) _row(box, 'original', Cut.originalTick(f.original, _v.whole, (on) => { _v.whole = on; _paintStage(); }));
   }
   _row(box, 'note', m.note);
@@ -423,25 +421,25 @@ function _paintActs(it) {
   const box = _v.ov.querySelector('.lib-view-acts');
   box.textContent = '';
   // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
-  // picture, into VIDEO or IMAGES (the owner: one of several goes by its files, from the strip).
+  // picture, into VIDEO or IMAGES (one of several goes by its files, from the strip).
   const mv = fillAct(el('button', 'u-btn is-s'), 'Move to…');
   mv.type = 'button';
   mv.title = 'Move the whole post';
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
   box.appendChild(mv);
-  // (block 5c) A long video kept as a tile goes on from here - and leaves REFERENCES (the owner's answer (о)).
+  // A long video kept as a tile goes on from here - once downloaded, its tile is the source's.
   if (it.meta && it.meta.remote && it.meta.link) {
     const src = el('button', 'u-btn is-s', 'To scenario sources');
     src.type = 'button';
     src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
-    // (phase V73 block 2) paid: asked on the button itself by js/really.js - a light step, not a red fill (б2-10)
+    // paid: asked on the button itself by js/really.js - a light step, not a red fill
     twoPress(src, { paid: true, text: 'paid: hearing + topics - press again', go: () => _toSources(it, src) });
     box.appendChild(src);
     const hl = el('button', 'u-btn is-s', 'To highlights');
     hl.type = 'button';
     hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.';
     hl.addEventListener('click', () => {
-      // The tile stays until its video is downloaded for the project (after block 8, the owner's (Y2)).
+      // The tile stays until its video is downloaded for the project.
       const u = '/merge?highlights=' + encodeURIComponent(it.meta.link);
       closePost();
       if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link);
@@ -452,10 +450,9 @@ function _paintActs(it) {
   const del = fillAct(el('button', 'u-btn is-s is-danger'), 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
-  // "Really?" on the button itself (the owner's way), by js/really.js (phase V73 block 2): a second press within 3 s deletes.
+  // "Really?" on the button itself, by js/really.js: a second press within 3 s deletes.
   twoPress(del, {
-    // (block 5d) Its files on a timeline: said before the second press - there its clips turn red. (V73 block 2, (б2-26):
-    // the pattern read `d+` and never matched - it is `\d+`.)
+    // Its files on a timeline: said before the second press - there its clips turn red.
     armed: () => deleteQuestion(it).then((q) => {
       const m = /It is used in (\d+ projects?)/.exec(q);
       if (m && _v && _cur() === it) _said('on the timelines of ' + m[1] + ' - its clips there turn red');
@@ -477,7 +474,7 @@ function _paintActs(it) {
   box.appendChild(del);
 }
 
-// ── to the scenario sources (block 5c) ───────────────────────────────────────
+// ── to the scenario sources ──────────────────────────────────────────────────
 // The same way in as the Sources' "From a link" (POST /api/sources/add/link; lib/source-intake.js): read, then a source -
 // downloaded, heard and its topics found, one row in Alerts. Paid: asked on the button itself, a second press goes. A
 // vertical or square video is asked about there - from here it was chosen as a source. Once it is a source (or was one
@@ -509,7 +506,7 @@ async function _toSources(it, btn) {
     btn.textContent = 'To scenario sources';
     return;
   }
-  // (after block 8; the owner's (Y2): "все видео остаются на своих местах в library") The tile STAYS: the server takes it away
+  // The tile STAYS: the server takes it away
   // only once its video is a downloaded source, whose tile is then in its place (lib/sources-store.js update). A video that
   // was a source already is that source's tile - this one is a second of it and goes now.
   if (already) {
@@ -528,11 +525,11 @@ async function _toSources(it, btn) {
   _said('added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in');
 }
 
-// ── moving (block 5b) ────────────────────────────────────────────────────────
-// Where the files can go, read from the media tree - since phase V39 as a tree of its places, folded each time
-// (js/place-tree.js): REFERENCES' own categories (or back to the post's source folder) and "+ new category", VIDEO's
+// ── moving ───────────────────────────────────────────────────────────────────
+// Where the files can go, read from the media tree as a tree of its places, folded each time
+// (js/place-tree.js): REFERENCES' own categories (or back to the post's source folder) and a "+" for a new one, VIDEO's
 // Generated (a B-roll with no category), B-rolls' categories, Hooks and Uploads, IMAGES and its categories. What cannot
-// take every file chosen is grey with the reason (the owner's answer (ч)): a picture never goes into VIDEO, a video never
+// take every file chosen is grey with the reason: a picture never goes into VIDEO, a video never
 // into IMAGES, a post of several goes out by its files, a tile-only video stays in REFERENCES.
 const VIDEO_KINDS = new Set(['birols', 'uploads', 'hooks']);
 

@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CUTTING A PIECE OUT OF A SOUND (phase V34.D-E; the owner 2026-10-22, (з8): "вырезка тоже нужна"; made over in phase V54,
-   the owner 2026-10-27, (зв25), (зв26), (зв28), (зв29)) - the window for SFX and My sounds in the Library and for EVERY
-   sound in Merge's Library panel (a track of Music in the Library is cut in its player instead, js/sound/player.js).
+   CUTTING A PIECE OUT OF A SOUND - the window for EVERY sound in Merge's Library panel (on the Library's Media shelf a
+   track or a sound is cut in its player instead, js/sound/player.js).
 
-   The sound drawn large with a RULER over it (js/sound/scrub.js, the server's peaks - the same rule as the player's, the
-   owner 2026-10-28): a press on the wave moves the playhead, ▶ plays from it; two gold handles mark the piece, each
+   The sound drawn large with a RULER over it (js/sound/scrub.js, the server's peaks - the same rule as the player's):
+   a press on the wave moves the playhead, ▶ plays from it; two gold handles mark the piece, each
    dragged by its flag on the ruler, "▶ the piece" plays it alone. "Cut" - on the ruler right of the right flag, only while
-   a piece is marked (phase V59, (мг11): the player's rule, scrub.js `cut`; the window opens with the middle third marked,
+   a piece is marked (the player's rule, scrub.js `cut`; the window opens with the middle third marked,
    so it is there at once) - makes the piece a
    NEW sound (POST /api/audio/cut, lib/audio-cut.js) - and where it goes follows WHAT is cut, with no choice: a piece of a
    track of Music into the root of Music, a piece of SFX or My sounds into the root of My sounds. The sound it was cut from
@@ -40,8 +39,8 @@ export async function openCut(it, opts) {
   if (typeof o.stop === 'function') o.stop();
   const music = it.kind === 'music';
   const back = el('div', 'snd-back');
-  // (phase V73 block 4, rule 5) The one frame: a head band of 40 px - the name, the sound as its quiet note, the ✕ of 28 px;
-  // what was the window's padding is its body's.
+  // The one frame: a head band of 40 px - the name, the sound as its quiet note, the ✕ of 28 px;
+  // the padding is its body's.
   const win = el('div', 'snd-win snd-cut u-win is-float');
   const head = el('div', 'snd-win-head u-win-head');
   head.appendChild(el('span', 'u-win-title', 'Cut a piece'));
@@ -59,7 +58,7 @@ export async function openCut(it, opts) {
   const audio = new Audio(it.path);
   let dur = +it.dur || 0;
   let a = 0, b = dur;
-  // A piece offered at first: the middle third, at most 10 s - (phase V59) of a short sound too, so "Cut" by the right
+  // A piece offered at first: the middle third, at most 10 s - of a short sound too, so "Cut" by the right
   // flag is there at once (the whole sound is not cut).
   if (dur > 0.3) { a = dur / 3; b = Math.min(dur, a + Math.min(10, dur / 3)); }
   let playEnd = 0;          // where playing stops: the piece's end, or the sound's
@@ -70,7 +69,7 @@ export async function openCut(it, opts) {
     src: it.path, dur, wave: it.wave, height: 120, handles: true, range: [a, b],
     onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = sc.dur() || dur; paintClock(); },
     onRange: (x0, x1) => { a = x0; b = x1; paintInfo(); },
-    // (phase V59, (мг11)) "Cut" by the right flag, only while a piece is marked.
+    // "Cut" by the right flag, only while a piece is marked.
     cut: { title: music ? 'The piece becomes a new track in Music' : 'The piece becomes a new sound in My sounds', onCut: (x0, x1) => _cut(x0, x1) },
   });
   stage.appendChild(sc.el);
@@ -99,8 +98,8 @@ export async function openCut(it, opts) {
   body.appendChild(row);
   const HINT = 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
     + ' - the sound itself stays as it is.';
-  // (phase V73 block 2) The line says what was done ("Laid on …", "cutting…"); an error is a popup in the corner (js/notice.js).
-  const said = el('div', 'snd-cut-said u-status', HINT);   // (phase V73 block 4) the window's one status line
+  // The line says what was done ("Laid on …", "cutting…"); an error is a popup in the corner (js/notice.js).
+  const said = el('div', 'snd-cut-said u-status', HINT);   // the window's one status line
   body.appendChild(said);
 
   document.body.append(back, win);

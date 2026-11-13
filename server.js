@@ -21,9 +21,8 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 
-// Outgoing HTTPS checks certificates - Node's default, left alone on purpose. The server version
-// switched the check off for every axios call (to get past a corporate proxy's SSL inspection),
-// and every one of those calls carries an API key.
+// Outgoing HTTPS checks certificates - Node's default, left alone on purpose: every axios call
+// carries an API key.
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -32,7 +31,7 @@ const {
   ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, MEDIA, CACHE_DIR,
   LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR,
 } = require('./lib/config');
-// (phase V83, block B0) A library a NEWER program wrote is not opened - in words, before anything reads a store, with
+// A library a NEWER program wrote is not opened - in words, before anything reads a store, with
 // the exit code the desktop shell knows (lib/library-format.js). Then, the first time another program version opens
 // it, its stores go into one zip in backups/ before the start steps below may rewrite them.
 const LIB_FORMAT = require('./lib/library-format');
@@ -52,7 +51,7 @@ const PROGRAM = require('./lib/app-version').current();
 }
 // The format this program writes and the program that opened the library last (lib/library-format.js).
 try { LIB_FORMAT.stamp(ROOT_DIR, PROGRAM); } catch (e) { console.warn('[format] the library was not stamped: ' + e.message); }
-// (V91 block 5) What nothing reads any more goes from the library, once, each file copied into backups/ first
+// What older versions left in the library and nothing reads goes, once, each file copied into backups/ first
 // (lib/library-tidy.js); and the moves older than 30 days are forgotten (lib/moves.js).
 try {
   const t = require('./lib/library-tidy').run(ROOT_DIR);
@@ -71,7 +70,7 @@ const { generateMissingThumbs } = require('./lib/helpers');
 {
   const s = require('./lib/projects-store').sync();
   if (s.added || s.dropped) console.log(`[projects] ${s.added} folder(s) joined the list, ${s.dropped} missing left it`);
-  // (phase V33.1) Before the Merge projects: a highlights project's folder holds timelines too.
+  // Before the Merge projects: a highlights project's folder holds timelines too.
   const h = require('./lib/highlights-store').sync();
   if (h.added) console.log(`[projects] ${h.added} highlights project folder(s) joined the list`);
   const m = require('./lib/merge-store').sync();
@@ -85,7 +84,7 @@ app.use(express.json({ limit: '50mb' }));
 // A save from a page opened before a file moved still carries the old address: rewritten here,
 // before any route reads the body (lib/moves.js).
 app.use('/api', require('./lib/moves').rewriteBodies);
-// (the owner 2026-10-22) The app opens on Home.
+// The app opens on Home.
 app.get('/', (_req, res) => res.redirect('/home'));
 // The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
 // stale script: 'no-cache' uses ETag/Last-Modified - an unchanged file is a cheap 304.
@@ -93,21 +92,21 @@ app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
 // The library: a mount each for projects, media and cache - an address mirrors its folder
-// (lib/layout.js). A file asked for where it no longer is gets sent where it went (lib/moves.js).
+// (lib/layout.js). A file asked for at an address it has moved from gets sent where it went (lib/moves.js).
 app.use('/projects',     express.static(PROJECTS_DIR));
 app.use('/media',        express.static(MEDIA_DIR));
 app.use('/cache',        express.static(CACHE_DIR));
 app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
-// JASSUB, libass in the page for the captions' preview (phase K4): laid out by tools/fetch-jassub.js,
+// JASSUB, libass in the page for the captions' preview: laid out by tools/fetch-jassub.js,
 // part of the program, not of the library.
 app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// MediaPipe's face detector for the highlights shorts' frame (phase V33.2): laid out by tools/fetch-mediapipe.js.
+// MediaPipe's face detector for the highlights shorts' frame: laid out by tools/fetch-mediapipe.js.
 app.use('/vendor/mediapipe', express.static(path.join(__dirname, 'vendor', 'mediapipe'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// The 3D Studio (PLAN "3D Studio"): three.js from its npm package - the build and the addons (controls, loaders) -
+// The 3D Studio: three.js from its npm package - the build and the addons (controls, loaders) -
 // and the mannequins, motions and furniture laid out by tools/fetch-3d.js.
 app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules', 'three', 'build'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
@@ -118,12 +117,12 @@ app.use('/vendor/three/addons', express.static(path.join(__dirname, 'node_module
 app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// (phase V34.C) The built-in sound set - SFX -> Built-in: laid out by tools/fetch-sfx.js (V34.B), part of the program.
+// The built-in sound set - SFX -> Built-in: laid out by tools/fetch-sfx.js, part of the program.
 // Its address is a file's address everywhere (lib/media.js toDisk): a clip on a lane, the render, the missing check.
 app.use('/sfx', express.static(require('./lib/media').SFX_DIR, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// (phase V65) The built-in patterns, picked in Merge's strip of the main video lane: laid out by tools/fetch-patterns.js,
+// The built-in patterns, picked in Merge's strip of the main video lane: laid out by tools/fetch-patterns.js,
 // part of the program, read only, addressed the same way (lib/media.js toDisk).
 app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
@@ -131,10 +130,8 @@ app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
-// <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
-// page: renaming it would churn every import path under public/js/ for no gain.
-// (The audio lab /lab/audio of V34.D went in V34.F: its chat is the sound window now, its tree the media tree's.)
-// (The interface showcase /lab/ui of phase V73 went in V91.)
+// <base href="/"> in each page. merge-v3.html keeps its name: renaming it would churn every import
+// path under public/js/ for no gain.
 const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
@@ -145,43 +142,43 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/alerts'));   // the journal of generations behind the Alerts button
-app.use('/api', require('./routes/app-update'));   // a new commit in the program folder (phase V23)
+app.use('/api', require('./routes/app-update'));   // a new commit in the program folder
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/settings'));
-app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver (phase TG)
-app.use('/api', require('./routes/telegram'));     // the owner's bot: links and media into REFERENCES (phase TG)
-app.use('/api', require('./routes/home'));   // what the Home page's blocks read (2026-10-22)
-app.use('/api', require('./routes/references'));   // REFERENCES: the posts the bot brought in (phase TG)
-app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder (phase V25)
+app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver
+app.use('/api', require('./routes/telegram'));     // the person's own bot: links and media into REFERENCES
+app.use('/api', require('./routes/home'));   // what the Home page's blocks read
+app.use('/api', require('./routes/references'));   // REFERENCES: the posts the bot brought in
+app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
 // how a script is written, routes/scen3.js owns who reads it aloud.
 app.use('/api', require('./routes/narrators'));
 // Sources — long videos brought in whole, transcribed, and later mined for topics.
 app.use('/api', require('./routes/sources'));
-app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts (phase V33.1)
-app.use('/api', require('./routes/faces'));   // the faces of a film, counted by the app's hidden window (phase V33.2)
-app.use('/api', require('./routes/fx-bake'));   // the effects the page alone draws, baked by the app's hidden window (phase V84)
-// The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
+app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts
+app.use('/api', require('./routes/faces'));   // the faces of a film, counted by the app's hidden window
+app.use('/api', require('./routes/fx-bake'));   // the effects the page alone draws, baked by the app's hidden window
+// The yt-dlp links are read with: its version and its checks for a newer one.
 app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, and saving into the scenarios store.
 app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // AUDIO -> Music: a track brought in, Music -> highlights, where a track lies
-app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
+app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs
 app.use('/api', require('./routes/audio-lib'));   // a piece of a sound, and the online CC0 search (Freesound, else Openverse)
-app.use('/api', require('./routes/lyrics'));   // saved lyrics - AUDIO -> Music -> Lyrics (phase V59.1)
+app.use('/api', require('./routes/lyrics'));   // saved lyrics - AUDIO -> Music -> Lyrics
 app.use('/api', require('./routes/proxies'));
-app.use('/api', require('./routes/track-peaks'));   // a sound's peaks for its waveform on Merge's lanes (phase V36)
+app.use('/api', require('./routes/track-peaks'));   // a sound's peaks for its waveform on Merge's lanes
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
-// Captions from the sound: the server listens to a project and lays the lines (phase K1).
+// Captions from the sound: the server listens to a project and lays the lines.
 app.use('/api', require('./routes/mv3-captions'));
 app.use('/api', require('./routes/library'));   // the Library: its shelves, the media tree, moving and deleting
 app.use('/api', require('./routes/scen3'));   // the scenarios store, and the talking head and voiceover projects
-app.use('/api', require('./routes/broll'));   // (phase V62) a voiceover's B-roll engine
-app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat (phase V26.5)
+app.use('/api', require('./routes/broll'));   // a voiceover's B-roll engine
+app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat
 app.use('/api', require('./routes/character-v2'));   // making a character: the portrait, read and drawn (Library, New Character)
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
@@ -194,11 +191,11 @@ app.use('/api', require('./routes/mv3q'));   // the render queue - Export's Rend
 // Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
 // from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
-app.use('/api', require('./routes/mv3-video'));   // the video chat's server (phase V2)
-app.use('/api', require('./routes/studio3d'));   // the 3D Studio's scenes (PLAN "3D Studio")
+app.use('/api', require('./routes/mv3-video'));   // the video chat's server
+app.use('/api', require('./routes/studio3d'));   // the 3D Studio's scenes
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-// Loopback only. There is no sign-in any more, so an app listening on every interface would hand
+// Loopback only. There is no sign-in, so an app listening on every interface would hand
 // its API keys and the whole library to anyone on the same network. The window, and the server's
 // calls to itself, all use 127.0.0.1.
 const server = app.listen(PORT, '127.0.0.1', () => {
@@ -221,7 +218,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
           .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
       } catch { return []; }
     };
-    // And /api/thumb's cache of an earlier size table is cleared.
+    // And /api/thumb's cache of sizes outside its size table is cleared.
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
       ...subdirs(MEDIA.images),
@@ -229,8 +226,8 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
     require('./lib/thumbs').sweepOldSizes();
 
-    // (phase V84 block 3, (б3-8)) The baked effects no timeline needs any more go; (V91 block 5) so do the pitch copies
-    // no clip names (lib/pitch-copy.js). Never on a store read as empty - a timeline unread is not a timeline gone.
+    // The baked effects no timeline needs go; so do the pitch copies no clip names (lib/pitch-copy.js). Never on a
+    // store read as empty - a timeline unread is not a timeline gone.
     let timelines = [];
     try { timelines = Object.values((require('./lib/merge-store').read() || {}).timelines || {}); }
     catch (e) { console.warn('[sweep] the timelines were not read:', e.message); }
@@ -246,10 +243,10 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // and does. This hands the records their loops back.
     try { require('./lib/mv3-gens').resume(); }
     catch (e) { console.warn('[mv3-gens] could not resume:', e.message); }
-    // And the video chat's (phase V2): a clip still being made is followed again, one never asked for fails in words.
+    // And the video chat's: a clip still being made is followed again, one never asked for fails in words.
     try { require('./lib/mv3-video-gens').resume(); }
     catch (e) { console.warn('[mv3-video] could not resume:', e.message); }
-    // (phase V34.C) Suno's lyrics have no Alerts row: the ones still coming are followed again here.
+    // Suno's lyrics have no Alerts row: the ones still coming are followed again here.
     try { require('./lib/audio-gens').resume(); }
     catch (e) { console.warn('[audio-gens] could not resume:', e.message); }
 
@@ -259,13 +256,13 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     try { require('./lib/gen-jobs').resume(); }
     catch (e) { console.warn('[gen-jobs] could not resume:', e.message); }
 
-    // (phase V27) yt-dlp on the nightly channel, kept current: a check now and once a day (lib/ytdlp.js).
+    // yt-dlp on the nightly channel, kept current: a check now and once a day (lib/ytdlp.js).
     try { require('./lib/ytdlp').startChecks(); }
     catch (e) { console.warn('[yt-dlp] could not start its checks:', e.message); }
-    // (phase TG) the owner's Telegram bot: its receiver's folder taken, or Telegram asked, while the app is open.
+    // The person's own Telegram bot: its receiver's folder taken, or Telegram asked, while the app is open.
     try { require('./lib/telegram').start(); }
     catch (e) { console.warn('[telegram] could not start:', e.message); }
-    // ...and what it was sent, worked through into REFERENCES (blocks 3-4): what the app closed in the middle of, again.
+    // ...and what it was sent, worked through into REFERENCES: what the app closed in the middle of, again.
     try { require('./lib/references-intake').start(); }
     catch (e) { console.warn('[references] could not start:', e.message); }
   }, 15000); // start 15s after server is ready — keeps server responsive on page load

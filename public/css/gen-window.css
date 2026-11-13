@@ -1,16 +1,16 @@
-/* ── The generators' windows (phase V58, the owner 2026-10-29, (лк5)-(лк7); js/gen-window.js) ──
+/* ── The generators' windows (js/gen-window.js) ──
    A window the almanac's size over the page: a head of crumbs (the last one where the window is, the others back; one may
    carry a button - "characters / Mute (+ new look)"), a body that is the caller's or a generator's BENCH: a shelf to draw a
    base from on the left, the photo field, the sentence, the line of Alerts and `create` on the right. Its own look, put in
    by the module, so every page shows it the same. Under the viewer (9000), the tile menus (9300) and the delete asks. */
-/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+/* The page under it darkened and blurred - the one rule of css/app-shell.css. */
 .gw-ov{ position:fixed; inset:0; z-index:8900; background:var(--ov-dim, oklch(0 0 0 / .45));
   backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px)) }
-/* (phase V64 block 3, (зг4)) A result dragged out of a chat's window: the windows and their darkening see-through, catching
+/* A result dragged out of a chat's window: the windows and their darkening see-through, catching
    nothing, until it is let go (js/gen-window.js _passing). */
 .gw-ov.is-passing{ opacity:0; pointer-events:none; transition:opacity .12s ease }
 .gw-ov.is-passing *{ pointer-events:none !important }
-/* (phase V73 block 4, rule 5) The frame, its head of 40 px and the ✕ of 28 px are the shared ones (`.u-win`, `.u-win-head`,
+/* The frame, its head of 40 px and the ✕ of 28 px are the shared ones (`.u-win`, `.u-win-head`,
    `.u-crumbs` in css/app-shell.css); here only the place, the body's base text and the crumbs' buttons. */
 .gw{ position:absolute; min-height:0; color:var(--ink); font:500 11px/1.4 var(--font) }
 .gw-crumb{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; padding:0; border:0; background:none;
@@ -18,12 +18,12 @@
 button.gw-crumb{ cursor:pointer }
 button.gw-crumb:hover{ color:var(--ink); text-decoration:underline }
 .gw-crumb.is-here{ color:var(--ink) }
-/* a crumb in sentence case, as the showcase's window: its first letter capital, the words as the caller writes them */
+/* a crumb in sentence case: its first letter capital, the words as the caller writes them */
 .gw-crumb::first-letter{ text-transform:uppercase }
 .gw-sep{ flex:0 0 auto; color:var(--faint) }
 /* a generator's place in the head ("+ new look") - the shared button with the gold line */
 .gw-act{ margin-left:var(--sp-1) }
-/* (phase V64, fix (л)) A window moved by its head and stretched by its edges and corners (js/gen-window.js _wireGeom). */
+/* A window moved by its head and stretched by its edges and corners (js/gen-window.js _wireGeom). */
 .gw.is-movable .gw-head{ cursor:move; touch-action:none }
 .gw.is-movable .gw-head button, .gw.is-movable .gw-head .qm{ cursor:pointer }
 .gw-rs{ position:absolute; z-index:6; touch-action:none }
@@ -38,11 +38,11 @@ button.gw-crumb:hover{ color:var(--ink); text-decoration:underline }
 body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-x{ flex:0 0 auto }
 .gw-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden }
-/* (phase V73 block 2) Reading / empty / did not load of the bench's shelf are the shared parts (js/ui-state.js, css/app-shell.css
+/* Reading / empty / did not load of the bench's shelf are the shared parts (js/ui-state.js, css/app-shell.css
    .u-empty, .u-loading, .u-failed) - `gw-note` only their place; a note not made by them (talking head's who / where) keeps its look. */
 .gw-note:is(.u-empty, .u-loading, .u-failed){ margin:10px }
 .gw-note:not(.u-empty, .u-loading, .u-failed){ padding:14px 12px; color:var(--muted); font:600 11px/1.5 var(--font) }
-/* (V50) A chat's window shown before the chat is loaded (js/merge-v3/chat-window.js openEarly): "Loading…" in its middle. */
+/* A chat's window shown before the chat is loaded (js/merge-v3/chat-window.js openEarly): "Loading…" in its middle. */
 .gw-wait.u-loading{ flex:1 1 auto; border:0; border-radius:0 }
 
 /* The bench: the shelf on the left, what is being made on the right. */
@@ -60,7 +60,7 @@ body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-tile img{ width:100%; height:100%; object-fit:cover; display:block }
 .gw-grid.is-environment .gw-tile img{ object-fit:contain }
 .gw-tile:hover{ border-color:var(--ink) }
-/* (б1-21, б1-25) the white ring of the selected picture, 2 px drawn OVER it (an inset shadow is covered by the picture), under its ✕ */
+/* the white ring of the selected picture, 2 px drawn OVER it (an inset shadow is covered by the picture), under its ✕ */
 .gw-tile.is-on{ border-color:var(--sel-ring) }
 .gw-tile.is-on::after{ content:""; position:absolute; inset:0; z-index:1; pointer-events:none; border:2px solid var(--sel-ring); border-radius:inherit }
 .gw-fieldwrap{ flex:0 0 auto; padding:10px 10px 0 }
@@ -74,12 +74,12 @@ body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-drop img{ width:100%; max-height:240px; object-fit:contain; display:block }
 .gw-dropx{ position:absolute; top:5px; right:5px; z-index:2 }
 .gw-foot{ flex:0 0 auto; margin-top:auto; padding:8px 10px 10px; border-top:1px solid var(--border); background:var(--surface) }
-/* (phase V73 block 4) the agent's refusal, the bench's status and its hint are the one status line (.u-status) */
+/* the agent's refusal, the bench's status and its hint are the one status line (.u-status) */
 .gw-said{ margin-bottom:6px }
 .gw-choice{ margin-bottom:6px }
 .gw-choice-why{ margin-bottom:5px; color:var(--ink); font:600 10.5px/1.4 var(--font) }
 .gw-chips{ display:flex; flex-wrap:wrap; gap:4px }
-/* .gw-chip is the shared chip (.u-chip, css/app-shell.css; phase V73 block 4, (4а-10) а) */
+/* .gw-chip is the shared chip (.u-chip, css/app-shell.css) */
 .gw-say{ display:block; width:100%; min-height:58px; margin:0; resize:vertical; box-sizing:border-box }
 .gw-status{ margin-top:6px }
 .gw-row{ display:flex; align-items:center; gap:8px; margin-top:6px }
@@ -92,7 +92,7 @@ body.gw-sizing, body.gw-sizing *{ user-select:none !important }
 .gw-tile.is-dim img{ filter:brightness(.55) }
 .mk-scroll .gw-grid{ padding:10px }
 
-/* (phase V26.6) NEW PROP (js/prop-window.js): the photo on the left, the name and the words on the right - after `add`, the
+/* NEW PROP (js/prop-window.js): the photo on the left, the name and the words on the right - after `add`, the
    product as it landed and its description. */
 .pw-left{ flex-basis:46% }
 .pw-drop{ min-height:300px }

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE PAGES' FIGURES (phase V73 block 5; the owner's (к21а), (б1-15), (б5-21) а): every time, length, price and count is
+   THE PAGES' FIGURES: every time, length, price and count is
    drawn in mono, like a timecode, and a thousand reads "1,563". One place for both:
 
    - `int(n)`          a whole number with the thousands marked: 4500 -> "4,500";

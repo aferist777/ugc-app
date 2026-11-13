@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE RIGHT BUTTON ON ONE TILE OPENS A GENERATION CHAT WITH IT (phase V78, part A, the owner 2026-11-07, docs/local-app/plan/
-   "Фаза V78", (лч1)-(лч9)) - one module for the Library's Media (js/library/main.js) and Merge's Library panel
-   (js/merge-v3/library.js). The chat opens over the page in its window with the thing in its zone (js/merge-v3/vidchat.js,
-   picchat.js `openVideos(o)` / `openPictures(o)`, the way in of V77): the zone emptied, the thread and the box left, a model
-   that takes it, the page's word first. In the Library the chats talk in the draft's conversation, in Merge in the project's.
+   THE RIGHT BUTTON ON ONE TILE OPENS A GENERATION CHAT WITH IT - one module for the Library's Media (js/library/main.js)
+   and Merge's Library panel (js/merge-v3/library.js). The chat opens over the page in its window with the thing in its zone
+   (js/merge-v3/vidchat.js, picchat.js `openVideos(o)` / `openPictures(o)`, the same way in as the timeline's, tl-gen.js):
+   the zone emptied, the thread and the box left, a model that takes it, the page's word first. In the Library the chats talk in the draft's conversation, in Merge in the project's.
 
      a picture   "Animate…"         the video chat, the picture as the FIRST FRAME
                  "Change…"          the pictures chat
@@ -12,13 +11,13 @@
                                     on it in the zone)
 
    Which tiles: IMAGES (every folder, Environments / Lookbooks / Props too), VIDEO (B-rolls, Hooks, Uploads, Stock, Talking
-   heads), a REFERENCES post of ONE file, a YouTube video that is downloaded. Several picked open no chat ((лч4)); a sound has
+   heads), a REFERENCES post of ONE file, a YouTube video that is downloaded. Several picked open no chat; a sound has
    its own menu. Nothing here costs anything - the chat's own press does.
 
      rowsFor(it, open)  -> [[label, sub, fn]] for js/tile-select.js menuAt; [] when the tile has none
        open(which, o)   the page's way to a chat - 'videos' | 'pictures', o = { attach, as, act, from: 'library' }
 
-   (phase V81, (в2)) A video has "Save audio" too - its sound (the file's first, or default, sound track) into the root of AUDIO
+   A video has "Save audio" too - its sound (the file's first, or default, sound track) into the root of AUDIO
    (js/cut.js saveAudio; the viewer's right button offers every track of a file that has several).
    ═══════════════════════════════════════════════════════════════════════════ */
 

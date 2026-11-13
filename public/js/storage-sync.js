@@ -11,17 +11,16 @@
    - localStorage.setItem/removeItem are patched -> debounced POST of only the
      changed keys ({set,del} per-key merge; no whole-blob writes -> no clobber).
    - Flush on pagehide/hidden via sendBeacon so the last edit isn't lost.
-   - The library's tidy (lib/library-tidy.js, V91 block 5) took the keys nothing reads out of
-     ui-state.json and left its mark there: the first page after it lets go of every key the window
+   - The library's tidy (lib/library-tidy.js) takes the keys nothing reads out of
+     ui-state.json and leaves its mark there: the first page after it lets go of every key the window
      holds that the library does not - or step 2 below would push them all back up.
      Server unreachable -> silently falls back to plain localStorage.
 */
 (function () {
   var API = '/api/ui-state';
-  // 4MB. It was 200000, meant to keep bloated cache blobs out of the mirror - but the check is
-  // silent, so it did not keep data OUT so much as leave it BEHIND: the saved Merge projects
-  // grew past 200KB and simply stopped being mirrored, and the server sat on an old copy while
-  // the browser carried the real one. The server is the source of truth here, so a value being
+  // 4MB. The check is silent, so a smaller ceiling would not keep data OUT so much as leave it
+  // BEHIND: a saved Merge project past it would simply stop being mirrored, and the server would
+  // sit on an old copy while the browser carried the real one. The server is the source of truth here, so a value being
   // large is not a reason to stop telling the server about it. express.json accepts 50MB.
   var MAX_VAL = 4000000;
   // lib/library-tidy.js TIDY_MARK: the tidy's number, written into ui-state.json when it ran.
@@ -83,7 +82,7 @@
     origSet(k, v);
     if (!k) return;
     v = String(v);
-    // Still a ceiling, but never a silent one again: a key that stops syncing is a key whose
+    // Still a ceiling, but not a silent one: a key that stops syncing is a key whose
     // server copy is quietly rotting, and that is worth a line in the console.
     if (v.length > MAX_VAL) {
       try {

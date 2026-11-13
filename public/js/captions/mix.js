@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — SEVERAL PRESETS AND ANIMATIONS DEALT ONTO THE PAGES (phase V49, point 8c; the owner's (пр17), (пр21)-(пр24),
-   2026-10-25).
+   CAPTIONS — SEVERAL PRESETS AND ANIMATIONS DEALT ONTO THE PAGES.
 
-   With Shift, several preset tiles - and several animation tiles - are picked for the SUBTITLE lane ((пр24): only there), and
-   every page wears one of each at random: two pages in a row never the same preset ((пр21)). The lane keeps what was picked
+   With Shift, several preset tiles - and several animation tiles - are picked for the SUBTITLE lane (only there), and
+   every page wears one of each at random: two pages in a row never the same preset. The lane keeps what was picked
    (style.js: `mix` - one look per preset, what its own section of the strip changes; `anims` - the 'in|out' pairs; `mixSeed`) and
    a page only REFERENCES its share (`mixP`, `mixA` and the seed it was dealt with, `mixS`) - so a preset's section changed in
    the strip is every one of its pages at once, and style.js resolveStyle draws a page with the look and the pair it was dealt.
@@ -11,9 +10,9 @@
    DEALT AT THE PRESS - a new seed - and again whenever pages are made (a re-cut, Generate, a fragment laid): a page keeps what
    it was dealt with this seed unless its neighbour before it has the same preset; a new page - or one that must change - is
    dealt by a number made from the seed and its moment, so the same pages dealt again come out the same (a re-cut that changes
-   nothing changes nothing). A lane with no mix any more takes the references away.
+   nothing changes nothing). A lane without a mix has the references taken away.
 
-   FONTS (phase V68 P4, the owner's (хп8)): the lane's `fonts` are dealt the same way - `mixF`, the page's font, two pages in a
+   FONTS: the lane's `fonts` are dealt the same way - `mixF`, the page's font, two pages in a
    row never the same - when there are two or more (one font is every page's and needs no reference); the same seed, so picking
    fonts keeps the presets and animations dealt as they were.
 
@@ -45,7 +44,7 @@ export function refsOf(st) {
 /** A seed for a press: a deal unlike the last. */
 export const newSeed = () => Math.floor(Math.random() * 2147483646) + 1;
 
-// Fonts are dealt when there are two or more (V68 P4).
+// Fonts are dealt when there are two or more.
 const _fontsDealt = (st) => { const f = fontsOf(st); return f && f.length >= 2 ? f : null; };
 
 /** Is there anything to deal on this lane - a mix, animations, fonts, or references left from one? */
@@ -64,7 +63,7 @@ function _rnd(seed, cs, salt) {
 }
 
 /**
- * (V68 P4) The fonts dealt ANEW - after a press on the fonts tab: every page's font picked again from the lane's `fonts` (by the
+ * The fonts dealt ANEW - after a press on the fonts tab: every page's font picked again from the lane's `fonts` (by the
  * seed and its moment, so the same press twice deals the same), its preset and animation kept as they were dealt.
  */
 export function redealFonts(clips, laneStyle) {

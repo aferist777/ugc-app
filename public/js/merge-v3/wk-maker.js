@@ -1,10 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — what talking head's setup and its windows share: the owner's twenty characters and the
+   MERGE — what talking head's setup and its windows share: the twenty-character minimum and the
    keyboard-mess test (the generators' benches, js/gen-window.js), the
    viewer for one picture, a tile's menu, the gentler wheel, the countdown of the script on the
-   whole stage (holdProgress) and - since phase V58 - the countdowns of the casting on the stage's
+   whole stage (holdProgress), the countdowns of the casting on the stage's
    halves (holdHalf) and the list "who" and "where" choose from (paintChoose). The benches
-   themselves moved into js/gen-window.js in phase V58, so they open anywhere.
+   themselves live in js/gen-window.js, so they open anywhere.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -13,7 +13,7 @@ import { startProgress } from '../progress.js';
 import { delX } from '../del-x.js';
 import { derived } from '../chars-store.js';
 import { menuIcons } from '../icons.js';
-// (phase V73 block 2, step 2b) "Nothing here" - the shared part (the groups' column a row of it).
+// "Nothing here" - the shared part (the groups' column a row of it).
 import { emptyEl } from '../ui-state.js';
 
 export const el = (tag, cls, text) => {
@@ -25,7 +25,7 @@ export const el = (tag, cls, text) => {
 
 // ── A gentler wheel ─────────────────────────────────────────────────────────
 // A touchpad in this window moves the workshop a long way for a short gesture: the panel is a tall
-// column of small rows, and one flick jumps past the whole thing (the owner, 2026-09-22). So the
+// column of small rows, and one flick jumps past the whole thing. So the
 // boxes that scroll in `setup` take the wheel themselves and move by a fraction of what was asked.
 //
 // Only a wheel in PIXELS is touched (`deltaMode` 0 - a touchpad and every modern mouse), never a
@@ -49,8 +49,8 @@ export function softScroll(box, factor) {
 
 // ── Words that are words ────────────────────────────────────────────────────
 // With a picture in the field the sentence is an edit - "red shoes" is a complete instruction -
-// but with nothing else to go on, a handful of characters describes nothing, and twenty is the
-// owner's number.
+// but with nothing else to go on, a handful of characters describes nothing - twenty is the
+// minimum.
 //
 // The nonsense test is deliberately shallow and LOCAL: it catches a fist on the keyboard for
 // free and instantly. Anything subtler - a real sentence about nothing, a shopping list, a
@@ -92,8 +92,8 @@ export function showPicture({ src, name, rows, from }) {
 }
 
 // ── The waiting animation belongs to the PLACE ──────────────────────────────
-// Not to the click that started it. The generation itself is the server's (docs/local-app/PLAN.md,
-// "Alerts"): the overlay on the stage is only how a panel says that something of ITS OWN is
+// Not to the click that started it. The generation itself is the server's (the Alerts journal):
+// the overlay on the stage is only how a panel says that something of ITS OWN is
 // running. So whichever place is painted attaches it - with the job's real elapsed time, so coming
 // back mid-generation shows a countdown that is still telling the truth - and a place that is left
 // takes its overlay with it, because a countdown lying on somebody else's stage is about nothing.
@@ -133,9 +133,7 @@ export function endProgress(place, error) {
   } catch (e) { /* the stage was rebuilt under it */ }
 }
 
-// ── THE HALVES OF THE STAGE WAIT APART (phase V58, the owner 2026-10-29: "когда пользователь работает с "кто" ...
-// анимация процесса только на поле "кто" в превью ... чтобы пока генерируется поле "кто" пользователь мог работать с
-// "где"") ─────────────────────────────────────────────────────────────────────
+// ── THE HALVES OF THE STAGE WAIT APART ──────────────────────────────────────
 // Talking head's casting - a look dressed, a lookbook made (who, the upper half), an environment made (where, the lower)
 // - is waited for on ITS half of the stage only: a box over that half (`.mv3-half-ov`, blurring what is under it) holds
 // the countdown (js/progress.js), the other half stays itself. A frame or a clip of the script (the whole stage, above)
@@ -185,7 +183,7 @@ export function endHalf(place, error) {
   }
 }
 
-// ── A LIST TO CHOOSE FROM (phase V58; talking head's "who" and "where" - wk-setup.js, wk-env.js) ──────────────────
+// ── A LIST TO CHOOSE FROM (talking head's "who" and "where" - wk-setup.js, wk-env.js) ──────────────────
 // Painted into a window's body (js/gen-window.js openFrame), in the attachment window's tiles (css/mv3-imagen.css .pk-*):
 // on the left the GROUPS - a filter's two tabs over them ("female · 12", "all · 27") -, the pointer resting on one shows
 // its things and the last one stays; no groups, no left side (the environments, wide tiles). On the right a search over
@@ -323,7 +321,7 @@ export function paintChoose(host, o) {
   return { group };
 }
 
-// ── WHO TO CHOOSE FROM (phase V63: one list for the setup's "who" window - wk-setup.js - and Home's talking head quick start -
+// ── WHO TO CHOOSE FROM (one list for the setup's "who" window - wk-setup.js - and Home's talking head quick start -
 // js/home/start.js) ──
 // A group a character - the most looks first is the caller's order (chars-store.js byLooks) -: its 4K sheet (or portrait) to be
 // seen only, with `say` (a person is cast in a look, never bare), then its looks. `o.say(c)` - what the sheet says when pressed.

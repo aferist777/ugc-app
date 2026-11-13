@@ -13,17 +13,17 @@ function _read(name, fallback = []) {
 
 router.get('/userdata/obrazy',   (_req, res) => res.json({ success: true, list: _read('obrazy') }));
 
-// (POST /userdata/obrazy went in phase C: nothing called it, and one stray call replaced every look with the list it
-// carried. Looks are written by the routes that make and delete them.)
+// No POST here: one stray call would replace every look with the list it carried. Looks are written by the routes that
+// make and delete them.
 
 // ── Generic UI-state KV: server-backed mirror of localStorage ─────────────────
 // Flat { key:string -> value:string }, same shape as localStorage. GET returns
 // the whole blob; POST does a PER-KEY merge ({set:{...}, del:[...]}) so a stale
-// tab can never clobber the whole store (data-incident lesson). Atomic write.
+// tab can never clobber the whole store. Atomic write.
 const UI_STATE = 'ui-state';
-// 4MB, matching public/js/storage-sync.js. It was 200000 here AND there, and both sides
-// dropped an oversized value in silence - so the saved Merge projects stopped being mirrored
-// at 260KB and the server kept serving a 149KB copy as if it were current. The server is the
+// 4MB, matching public/js/storage-sync.js. A smaller limit dropping an oversized value in silence
+// would stop a saved Merge project being mirrored, and the server would keep serving an old copy
+// as if it were current. The server is the
 // source of truth for this app; a value being big is not a reason to quietly refuse it.
 // Anything still over the line is logged and named in the response.
 const MAX_VAL = 4000000;

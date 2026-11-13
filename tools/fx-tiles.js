@@ -1,11 +1,11 @@
 'use strict';
 
-/* fx-tiles.js - the effects panel's tiles (phase V84, the owner 2026-11-10, (эф13)-(эф15); docs/local-app/plan/ "Подфаза 3 — V84",
-   "Правка 2"): for every effect of public/js/fx/effects.js and every set, a short WebM (VP9, square, no sound) that plays while the
+/* fx-tiles.js - the effects panel's tiles: for every effect of public/js/fx/effects.js and every set, a short WebM (VP9,
+   square, no sound) that plays while the
    pointer is on its tile and a WebP of its peak, into public/fx-tiles/<key>.webm|.webp (a set's key 'set-<id>'), with index.json
    saying what they were made from.
 
-   A tile is what Export gives: the app's own render (lib/mv3b-job.js prepare, lib/fx-render.js) on the owner's example clip - a
+   A tile is what Export gives: the app's own render (lib/mv3b-job.js prepare, lib/fx-render.js) on an example clip - a
    talking head's clip, its file named in tools/fx-tiles.json (its face path found once by the app's faces window, written there) - the
    9:16 frame cut to a square on the face's height. A moment of its own length plays from a short lead to a short tail; one that
    goes on plays `loop` seconds.
@@ -17,7 +17,7 @@
        node tools/fx-tiles.js --check                                         says whether every effect and set has its tile, made
                                                                               by the effects as they are now
 
-   (block 3) An effect the page alone draws is baked by the app's hidden window (lib/fx-bake.js), which only a running app has: with
+   An effect the page alone draws is baked by the app's hidden window (lib/fx-bake.js), which only a running app has: with
    `--via http://127.0.0.1:<port> --library <its library folder>` (a test copy of the app run on a throwaway library) every tile is
    rendered by that app's own Export (POST /api/mv3b/render) and fetched from it; the example clip is copied into its media/work and
    the renders it made are deleted after. Without `--via` the tiles are rendered here, and an effect needing the window cannot be. */
@@ -118,7 +118,7 @@ async function main() {
       const lead = intro ? CFG.lead : 0;
       const dur = Math.min(srcDur - 0.05, intro ? lead + longest + CFG.tail : CFG.loop);
       const clip = { id: 'c', src: '/media/work/example.mp4', name: key, start: 0, dur, trimIn: 0, fit: 'fill' };
-      // (block 4d) A set's effects at their moments after the lead - the app's own rule (fx/params.js setPlacements).
+      // A set's effects at their moments after the lead - the app's own rule (fx/params.js setPlacements).
       const placed = set ? P.setPlacements(set, dur - lead) : [{ k: key, at: 0, len: 0 }];
       clip.fx = P.normalizeFx(placed.map((it, i) => ({
         id: 'e' + i, k: it.k, t0: lead + it.at, ...(it.len > 0 ? { len: it.len } : {}), ...(FX.EFFECTS[it.k].face ? { path: CFG.face } : {}),
@@ -136,7 +136,7 @@ async function main() {
       }
       // The square: the frame's width, on the face's height.
       const W = 1080, H = 1920;
-      // (block 4c) A tile's own height when its effect lies elsewhere in the frame (`cropYs` - a card at the bottom).
+      // A tile's own height when its effect lies elsewhere in the frame (`cropYs` - a card at the bottom).
       const cy = CFG.cropYs && CFG.cropYs[key] != null ? +CFG.cropYs[key] : CFG.cropY;
       const y = Math.round(Math.max(0, Math.min(H - W, cy * H - W / 2)));
       const sq = `crop=${W}:${W}:0:${y},scale=${CFG.px}:${CFG.px}:flags=lanczos`;

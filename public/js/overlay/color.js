@@ -1,20 +1,19 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S COLOUR CORRECTION (phase V75, the owner 2026-11-06; docs/local-app/plan/, "Фаза V75", (кп5), (кп6)) - ONE module
+   A CLIP'S COLOUR CORRECTION - ONE module
    for the page and the server (js/merge-v3/preview-b.js, inspector.js, timeline-b.js; lib/timeline-shape.js and
    lib/mv3b-render.js require() it, as they do overlay/look.js).
 
-   It was the render window's, over the whole film (eq), and the preview never showed it. Now it is a clip's own -
-   `color: { brightness, contrast, saturation, gamma }` on any clip of a video lane, only what is not neutral, the field
-   absent when nothing is (a clip without it is drawn and rendered byte for byte as before). A lane's sliders write the same
+   A clip's own correction - `color: { brightness, contrast, saturation, gamma }` on any clip of a video lane, only what is
+   not neutral, the field absent when nothing is (a clip without it is drawn and rendered untouched). A lane's sliders write the same
    value into every clip of it (inspector.js), as its Fit does.
 
    ONE RULE, IN RGB, for the preview and the render - each channel 0..1, clamped after every step:
      1. saturation  - the W3C saturate matrix (CSS saturate(), SVG feColorMatrix), 0 grey .. 1 as is .. 2 twice;
      2. contrast about the middle and brightness added: v * contrast + 0.5 - 0.5 * contrast + brightness;
-     3. gamma: v ^ (1 / gamma) - above 1 lighter, as ffmpeg's eq read it.
+     3. gamma: v ^ (1 / gamma) - above 1 lighter, as ffmpeg's eq reads it.
    The preview draws the clip's file through an SVG filter made of these numbers (svgOf: feColorMatrix, then two
    feComponentTransfer - linear, gamma - in sRGB); the render runs the same arithmetic on the clip's picture first, before
-   it is framed, cropped, blurred or placed (ffOf: colorchannelmixer, then lutrgb). The ranges are the render window's.
+   it is framed, cropped, blurred or placed (ffOf: colorchannelmixer, then lutrgb).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const COLOR_KEYS = ['brightness', 'contrast', 'saturation', 'gamma'];

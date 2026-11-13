@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE BAKE WINDOW (phase V84 block 3, the owner 2026-11-10, (б3-1)-(б3-10); lib/fx-bake.js is the server's side). The app keeps it
+   THE BAKE WINDOW (lib/fx-bake.js is the server's side). The app keeps it
    hidden (desktop/faces.js createBakeWindow). It asks the server for a STRETCH of a clip whose effects the page alone draws, reads
    its frames as the clip lies in the frame (raw I420 from the render's own graph, read by ffmpeg's matrix), draws EVERY effect of the
    clip on each with the PREVIEW'S code - fx/params.js paramsAt and merge-v3/fx-draw.js applyFx, one rule -, reads the drawn frame
-   back and hands it to its encoder (js/bake-encoder.js, a worker: turned into YUV by ffmpeg's own rule - block 4a: left to the
-   encoder, the copy came out a little flatter than the render's frames -, encoded H.264 with WebCodecs, sent to the server in
+   back and hands it to its encoder (js/bake-encoder.js, a worker: turned into YUV by ffmpeg's own rule - left to the
+   encoder, the copy comes out a little flatter than the render's frames -, encoded H.264 with WebCodecs, sent to the server in
    pieces); the server makes it the copy the render lays over the stretch. One stretch at a time.
-   (block 4a, the owner's (б4-1)) A clip ABOVE main comes on a transparent frame (`alpha`): its copy is twice as tall - the colour
+   A clip ABOVE main comes on a transparent frame (`alpha`): its copy is twice as tall - the colour
    above, the alpha below as grey -, as H.264 keeps no alpha; the render joins the two again (lib/mv3b-render.js).
-   (block 6) An effect behind the person waits for the person's segmenter (js/fx/person.js) before the first frame.
+   An effect behind the person waits for the person's segmenter (js/fx/person.js) before the first frame.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { paramsAt, momentsOf } from './fx/params.js';
@@ -18,7 +18,7 @@ import { fontsFor, loadMoments } from './fx/kit.js';
 import { effectOf } from './fx/effects.js';
 import { personReady } from './fx/person.js';
 
-// (block 4b) The size of a clip's file - what its window's shape is made of (js/fx/box.js, the preview's rule): its picture or its
+// The size of a clip's file - what its window's shape is made of (js/fx/box.js, the preview's rule): its picture or its
 // film's metadata, as the preview knows it from its own element. Unknown - the window is the frame.
 const PIC_RE = /\.(png|jpe?g|webp|gif|bmp|avif)$/i;
 function _dimsOf(src) {
@@ -80,11 +80,11 @@ async function bake(job) {
   const t0 = performance.now();
   say(`drawing ${n} frames ${W}x${H}${alpha ? ' with its alpha' : ''}`);
   const cfg = await _encoderConfig(W, alpha ? 2 * H : H, fps);
-  // (block 4b) The graphics' fonts before the first frame (block 4c: a card's own font and its twin too), and the clip's window (main video - the frame).
+  // The graphics' fonts before the first frame (a card's own font and its twin too), and the clip's window (main video - the frame).
   await fontsFor(clip && clip.fx);
-  // (block 2) The other moments its effects show - the same pictures the preview draws.
+  // The other moments its effects show - the same pictures the preview draws.
   await Promise.all(((clip && clip.fx) || []).map((e) => { const sp = momentsOf(clip, e); return sp ? loadMoments(clip.src, sp) : null; }));
-  // (block 6) The person's segmenter, for an effect drawn behind the person (js/fx/person.js) - the preview runs the same one.
+  // The person's segmenter, for an effect drawn behind the person (js/fx/person.js) - the preview runs the same one.
   if (((clip && clip.fx) || []).some((e) => { const d = effectOf(e && e.k); return d && d.person; })) {
     if (!(await personReady())) say('the segmenter of the person could not start - drawn without the person in front');
   }
@@ -113,7 +113,7 @@ async function bake(job) {
   };
   // The clip's frame as it lies in the frame, put on the layer as it came; the effects drawn over it by the preview's code; the
   // result read back through a VideoFrame (copyTo - straight RGBA). getImageData on the effects' canvases makes Chromium move them
-  // off the graphics card after a few frames, and their blurs then cost a second a frame (measured 2026-11-11).
+  // off the graphics card after a few frames, and their blurs then cost a second a frame (measured).
   const layer = document.createElement('canvas');
   layer.width = W;
   layer.height = H;

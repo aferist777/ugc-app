@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S CROP (phase V51, point 1, the owner 2026-10-26) - ONE module for the page and the server
+   A CLIP'S CROP - ONE module for the page and the server
    (lib/timeline-shape.js and lib/mv3b-render.js require() it, as they do framing/path.js).
 
    `crop: { x, y, w, h }` - a piece of the clip's FILE in shares of its width and height, cut FIRST:
    past it the clip behaves as if the file were that piece - no Fit / Fill, Framing, Keep or punch-ins.
    `off: true` - the frame is remembered and not applied (Crop switched off, or "Full frame" on a cropped
-   clip above main; Crop switched on brings it back - (пр43)). `shape` - the form the frame keeps while it is moved ((пр39):
-   9:16, 1:1, 16:9, 4:5 of the piece's own pixels; none - free).
+   clip above main; Crop switched on brings it back). `shape` - the form the frame keeps while it is moved
+   (9:16, 1:1, 16:9, 4:5 of the piece's own pixels; none - free).
 
-   A crop is shown where the piece already was ((пр40): "остается там же, без подстраивания"): the
+   A crop is shown where the piece already was, with nothing adjusted: the
    piece keeps its place and its scale on the screen, as scissors cut a still picture. placeFor() is
    that rule - from what the clip shows now (a rectangle of its file, `view`, drawn in a box of the
    frame, `box`) to the placement (tx, ty, tw, angle) that draws another rectangle of the file with
@@ -18,8 +18,8 @@
 // The smallest piece, in shares of the file: a frame narrower than this is a slip of the mouse.
 export const MIN = 0.02;
 
-// (пр41а) THE BLUR BEHIND A CROPPED PiP ON MAIN is made of the piece itself - the owner 2026-10-26: «из самого куска; на дорожках
-// выше main фона нет, отрезанное исчезает» (false would make it of the whole frame, as a PiP with no crop has it). Both the
+// THE BLUR BEHIND A CROPPED PiP ON MAIN is made of the piece itself; on the lanes above main there is no background and what is
+// cut off is gone (false would make it of the whole frame, as a PiP with no crop has it). Both the
 // preview (merge-v3/preview-b.js _drawPip) and the render (lib/mv3b-render.js) read this.
 export const BLUR_FROM_PIECE = true;
 
@@ -50,7 +50,7 @@ export function active(clip) {
 }
 
 /**
- * THE LARGEST FRAME OF A FORM ((пр39)): `ar` of the piece's pixels, as big as the file allows, its middle where the frame's
+ * THE LARGEST FRAME OF A FORM: `ar` of the piece's pixels, as big as the file allows, its middle where the frame's
  * middle (`cx`, `cy`, shares) is - moved back inside the file where it would hang over an edge.
  */
 export function largest(ar, fileAr, cx = 0.5, cy = 0.5) {
@@ -73,7 +73,7 @@ export function pickMap(maps, k) {
 }
 
 /**
- * THE SCISSORS ((пр40)): the placement that draws the file's rectangle `to` (shares) with the pixels where `map` draws them -
+ * THE SCISSORS: the placement that draws the file's rectangle `to` (shares) with the pixels where `map` draws them -
  * the same scale, the same turn, the same place on the frame. W, H - the frame in the pixels of `map.box`. The numbers are kept
  * within what a placement may hold (timeline-b.js _write): the middle on the frame, the width 0.04-4 of it.
  * `whole` - when `to` is only a PART of the box the placement sizes (a band of a PiP framed into two): where the part lies in
@@ -104,8 +104,7 @@ export function placeFor(map, to, W, H, whole) {
 }
 
 /**
- * (phase V75, the owner's (кп4) а) The frame after a side or a corner of it is dragged - the rule the crop field had
- * (merge-v3/crop-box.js until V75), now the preview's (merge-v3/place-b.js): every side inside the file. `part` 'n' 's' 'e'
+ * The frame after a side or a corner of it is dragged on the preview (merge-v3/place-b.js): every side inside the file. `part` 'n' 's' 'e'
  * 'w' or a corner ('nw' ...), `k0` the frame at the press, `p0` / `p` the pointer at the press and now, in shares of the file;
  * `q` the shape to keep, width over height in shares, or 0 for free. A kept shape grows the other way about its middle.
  */
@@ -153,7 +152,7 @@ export function dragFrame(part, k0, p0, p, q) {
   return { x, y: south ? ay : ay - h, w, h };
 }
 
-/** (phase V75) The frame slid inside the file by `dx`, `dy` (shares of it) - the picture moved inside a frame that stays. */
+/** The frame slid inside the file by `dx`, `dy` (shares of it) - the picture moved inside a frame that stays. */
 export function panFrame(k0, dx, dy) {
   return { x: Math.max(0, Math.min(1 - k0.w, k0.x + dx)), y: Math.max(0, Math.min(1 - k0.h, k0.y + dy)), w: k0.w, h: k0.h };
 }

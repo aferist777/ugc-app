@@ -1,7 +1,7 @@
 'use strict';
 
-/* font-tiles.js - draws the fonts tab's tile pictures (phase V68 P4, the owner's check 2026-11-02: the tab drawn in the live fonts
-   loaded all 33 MB of them and stuttered when scrolled) into public/fonts/captions/tiles/ - one WebP per family of
+/* font-tiles.js - draws the fonts tab's tile pictures (a tab drawn in the live fonts would load all 33 MB of them and
+   stutter when scrolled) into public/fonts/captions/tiles/ - one WebP per family of
    public/js/captions/fonts.js, and tiles/index.json saying what each was drawn from.
 
    Run it by hand when a caption font is added, removed or replaced (after tools/build-fonts.py and tools/caption-advances.js):
@@ -9,7 +9,7 @@
        node tools/font-tiles.js --check    says whether every family has its tile, drawn from the font files as they are now
 
    A tile is what the render draws: the app's own ffmpeg and libass with the caption fonts' folder (fontsdir), 192 px square (the
-   cell is 88-96 px - twice its pixels), on the tile's dark ground: "Captions" in the font and "Субтитры" under it in the font a
+   cell is 88-96 px - twice its pixels), on the tile's dark ground: "Captions" in the font and the Russian word for it under it in the font a
    Russian line is drawn in (fonts.js drawnFamily - the twin where it has no Cyrillic), white with a black outline, each word as
    wide as the square allows (measure.js - the letters' own advances) and no taller than its share; lossless WebP. */
 

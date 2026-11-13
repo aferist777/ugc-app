@@ -18,16 +18,16 @@ const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.jso
 const SECRET_KEYS = [
   'anthropicApiKey', 'kieApiKey', 'replicateApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
-  // The secret of the R2 fields Admin had before the one Cloudflare key: nothing reads it any more, and a library that
+  // The secret of the R2 fields of older versions: nothing reads it, and a library that
   // still holds it never shows it (the key's check wipes it, lib/cloudflare.js).
   'r2SecretAccessKey',
-  // (phase TG) the one Cloudflare key - R2 and the Telegram receiver (lib/cloudflare.js)
+  // the one Cloudflare key - R2 and the Telegram receiver (lib/cloudflare.js)
   'cloudflareApiToken',
-  // (phase TG, block 2) the owner's own bot, made at @BotFather (lib/telegram.js)
+  // the person's own bot, made at @BotFather (lib/telegram.js)
   'telegramBotToken',
-  // (phase V54) the owner's Freesound account - finding CC0 sound effects online (lib/freesound.js)
+  // the person's Freesound account - finding CC0 sound effects online (lib/freesound.js)
   'freesoundApiKey',
-  // (phase V62, block 3) the owner's Pixabay key - a voiceover's B-roll (lib/pixabay.js); it goes in the request's address
+  // the person's Pixabay key - a voiceover's B-roll (lib/pixabay.js); it goes in the request's address
   'pixabayApiKey',
 ];
 // Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
@@ -100,7 +100,7 @@ router.post('/settings', async (req, res) => {
     }
     const changed = (k) => gone.includes(k)
       || (k in clean && String(clean[k]).trim() !== String(current[k] || '').trim());
-    // (phase TG) The Telegram receiver goes down while the keys that put it up are still here: the old bot key to
+    // The Telegram receiver goes down while the keys that put it up are still here: the old bot key to
     // point the bot nowhere, the old Cloudflare key to delete the Worker. The page connects the bot again after the save.
     if (changed('telegramBotToken') || changed('cloudflareApiToken')) {
       try { await require('../lib/telegram').dropReceiver(); }

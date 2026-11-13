@@ -1,13 +1,13 @@
 'use strict';
 
-/* release-worker.js - the program of the Worker `ugc-updates` on the owner's Cloudflare (phase V83, block B4; the
-   owner 2026-11-09: (о1) a bucket of its own behind a Worker, (о2) a token per friend, (о3) who has which version).
+/* release-worker.js - the program of the Worker `ugc-updates` on the publisher's Cloudflare: a bucket of its own behind
+   the Worker, a token per installed copy, and who has which version.
 
-   Uploaded by `node tools/release.js worker`, bound to the bucket `ugc-updates` as UPD. Every request carries a
-   friend's token (`Authorization: Bearer <token>`); the bucket keeps only their SHA-256s, in access/tokens.json
+   Uploaded by `node tools/release.js worker`, bound to the bucket `ugc-updates` as UPD. Every request carries an
+   installed copy's token (`Authorization: Bearer <token>`); the bucket keeps only their SHA-256s, in access/tokens.json
    ({ "<sha256>": { name, channel, added, revoked? } }, read again at most every minute). No token, an unknown or a
    revoked one: 403 "This copy has no access to updates."
-     GET  /v1/channel/<channel>/<platform>   the signed envelope friends read (lib/update-manifest.js)
+     GET  /v1/channel/<channel>/<platform>   the signed envelope installed copies read (lib/update-manifest.js)
      GET  /v1/blob/<sha256>                  a file's content, gzipped
      POST /v1/seen  { version, seq, platform, state }   seen/<name>.json - what that copy has, and when it asked
    The stands run THIS code on this computer (tools/fake-update-worker.js), over a folder instead of R2. */

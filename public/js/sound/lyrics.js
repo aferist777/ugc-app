@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SAVED LYRICS ON THE SHELVES (phase V59.1, the owner 2026-10-29: "текста песен ... давай в music будет своя папка еще
-   для lyrics"; (мз6а)) - AUDIO -> Music -> Lyrics in the Library's Media and in Merge's Library panel: ONE module for
-   both pages. The texts are saved by Generate music (its Lyrics' "save", Custom's "save" by the Lyrics field - sub-session
-   P's) into data/lyrics.json (lib/lyrics-store.js, /api/audio/lyrics); the shelf gives them as tiles of kind `lyrics`
+   SAVED LYRICS ON THE SHELVES - AUDIO -> Music -> Lyrics in the Library's Media and in Merge's Library panel: ONE module for
+   both pages. The texts are saved by Generate music (its Lyrics' "save", Custom's "save" by the Lyrics field) into
+   data/lyrics.json (lib/lyrics-store.js, /api/audio/lyrics); the shelf gives them as tiles of kind `lyrics`
    with no file (routes/library.js _lyricItems).
 
    A tile: the title and the first lines (no [Verse]/[Chorus] tags), and where it came from. A press opens the text whole
@@ -20,7 +19,7 @@
 import { openViewer, closeViewer } from '../library/viewer.js';
 import { deleteQuestion, deleteItem } from '../library/actions.js';
 import { askName } from '../name-box.js';
-// (phase V73 block 2, step 2b) the question at the viewer's Delete in place of the browser's confirm()
+// the question at the viewer's Delete, not the browser's confirm()
 import { ask } from '../ask.js';
 
 export const KIND = 'lyrics';
@@ -58,7 +57,7 @@ export function tileFace(it) {
 /** What a tile says under the pointer. */
 export const tileTitle = (it) => (it.name || 'lyrics') + '\n' + firstLines(textOf(it), 2).join(' / ') + '\na press opens the text';
 
-/** "Use in Custom": the page is told; Generate music opens Custom with the text (sub-session P's). */
+/** "Use in Custom": the page is told; Generate music opens Custom with the text. */
 export function useInCustom(it) {
   window.dispatchEvent(new CustomEvent(USE_EVENT, { detail: { id: String(it.id), title: it.name || '', text: textOf(it) } }));
 }

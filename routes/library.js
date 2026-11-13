@@ -7,12 +7,12 @@
 //                                             media, voices, renders, scenarios...
 //   GET /api/library/info/:kind/:id     what the right column says about one tile
 //   GET /api/library/counts             one number per shelf, for the switcher
-//   GET /api/library/tree               the media tree: REFERENCES, VIDEO, IMAGES, AUDIO with their folders (V28.4)
+//   GET /api/library/tree               the media tree: REFERENCES, VIDEO, IMAGES, AUDIO with their folders
 //   -> { items: [{ id, name, kind, media, thumb, meta }], cats }
 //
 // `thumb` is what the grid draws and `media` is what the viewer opens. They are
-// never the same file unless no thumbnail exists — the old shelf drew full frames
-// and even whole videos into 72px cards, which is the mistake this shape prevents.
+// never the same file unless no thumbnail exists — drawing full frames and even
+// whole videos into 72px cards is the mistake this shape prevents.
 //
 // `cats` are the categories of a Media kind with their counts, Uncategorized first (the
 // 3D Studio's picture picker reads them). The server sends them because only the server
@@ -36,7 +36,7 @@ const {
 const { toUrl, toDiskWithin, toDiskExisting } = require('../lib/media');
 const { siblingsOf } = require('../lib/relocate');
 const LC = require('../lib/library-cats');
-// (phase V78) THIS PROJECT's folders of links to the library's media.
+// THIS PROJECT's folders of links to the library's media.
 const PLINKS = require('../lib/project-links');
 // Where a shelf item's files live - its kind and category's folder - and moving them there.
 const SHELF = require('../lib/shelf-files');
@@ -47,12 +47,12 @@ const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
 const SND = require('../lib/sounds-store');
 const MUSIC = require('../lib/music-store');
-// (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - tiles with no file (_lyricItems).
+// AUDIO -> Music -> Lyrics: the saved texts - tiles with no file (_lyricItems).
 const LY = require('../lib/lyrics-store');
-// (phase V54 block 6) Folders in folders: renamed, moved, emptied with everything in them.
+// Folders in folders: renamed, moved, emptied with everything in them.
 const FOLDERS = require('../lib/folders');
 
-// (phase V28.4) The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
+// The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
 // folded into the first - before anything reads a category.
 try {
   const RC = require('../lib/required-cats');
@@ -62,7 +62,7 @@ try {
       + r.merged.map(m => ' folded a second ' + m.kind + '/' + m.label + ' into the first (' + m.records + ' records)').join(';'));
   }
 } catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
-// (phase V60.2, the owner's (дг4а)) Every B-roll in the folder of the model that made it: the first time, the library is moved
+// Every B-roll in the folder of the model that made it: the first time, the library is moved
 // into the models' folders (its stores copied into backups/ first); after that a clip lying outside them goes into its
 // model's. A library in order is left alone (lib/model-folders.js sweep).
 try { require('../lib/model-folders').sweep(); }
@@ -115,7 +115,7 @@ function _imageShelf(dir, urlPrefix, kind) {
 // ── Characters ──────────────────────────────────────────────────────────────
 // The shelf is the character RECORDS, not the loose files in characters/: a card has
 // to be selectable so its looks can show beside it, and only a record knows its looks.
-// The characters whose 4K sheet is being made right now - a running sheet row in the journal (phase H6).
+// The characters whose 4K sheet is being made right now - a running sheet row in the journal.
 // The shelf marks their tiles, and the tile's rename and delete wait for it: a character deleted under
 // its sheet leaves the wait with nothing to file into, and a name changed there is overwritten from the
 // save form that is still open on the old one.
@@ -159,7 +159,7 @@ function _charactersShelf() {
 }
 
 // ── Looks ───────────────────────────────────────────────────────────────────
-// Not a shelf of its own any more: looks belong to a character and show beside it.
+// Not a shelf of its own: looks belong to a character and show beside it.
 function _looks() {
   const list = _read(path.join(DATA_DIR, 'obrazy.json'), []);
   const arr = Array.isArray(list) ? list : [];
@@ -205,7 +205,7 @@ function _looks() {
 // 10s a dropped image gets is the timeline's decision, not the shelf's.
 const _isUpload = (it) => !!(it && it.source === 'upload');
 
-// (phase TG, block 7) A PIECE CUT OUT OF A VIDEO keeps its whole video (lib/cuts.js) - shown to the viewer only while
+// A PIECE CUT OUT OF A VIDEO keeps its whole video (lib/cuts.js) - shown to the viewer only while
 // that file is on disk: its "original" tick shows it and cuts from it again.
 function _origMeta(o) {
   if (!o || !o.path || !_onDisk(o.path)) return null;
@@ -215,21 +215,21 @@ function _origMeta(o) {
   return m;
 }
 
-// (phase V81) A JOINED piece names every fragment of its whole video it was joined from (lib/cuts.js cutMany).
+// A JOINED piece names every fragment of its whole video it was joined from (lib/cuts.js cutMany).
 function _origParts(o) {
   if (!o || !Array.isArray(o.parts) || !o.parts.length) return null;
   return o.parts.slice(0, 2000).map((p) => ({ in: Math.round((+p.in || 0) * 100) / 100, out: Math.round((+p.out || 0) * 100) / 100 }));
 }
 
 // A clip whose record lost its poster still has one beside it on disk (lib/video-thumb.js) - shown
-// instead of "no thumb" (phase J4), the way the renders shelf finds its own.
+// instead of "no thumb", the way the renders shelf finds its own.
 function _posterOf(thumb, video) {
   if (thumb) return thumb;
   const t = VT.thumbUrlFor(video);
   return (t && _onDisk(t)) ? t : null;
 }
 
-// (phase V34.E) A sound's tags for the search: its own (found online), else the words of its name.
+// A sound's tags for the search: its own (found online), else the words of its name.
 function _soundTags(e) {
   const m = e.meta || {};
   if (Array.isArray(m.tags) && m.tags.length) return m.tags.map(String).slice(0, 20);
@@ -243,7 +243,7 @@ function _soundInfo(e) {
     return {
       author: o.creator || '', authorUrl: o.creatorUrl || '',
       license: (String(o.license || '').toUpperCase() + (o.licenseVersion ? ' ' + o.licenseVersion : '')).trim(), licenseUrl: o.licenseUrl || '',
-      // (phase V54) Found on Freesound directly, or through Openverse (Wikimedia's sounds are its `wikimedia_audio`).
+      // Found on Freesound directly, or through Openverse (Wikimedia's sounds are its `wikimedia_audio`).
       from: (o.source === 'freesound' ? 'Freesound' : /^wikimedia/.test(String(o.source || '')) ? 'Wikimedia Commons' : (o.source || ''))
         + (o.via === 'Freesound' ? '' : ' via Openverse'),
       url: o.landing || '', attribution: o.attribution || '', preview: !!o.preview,
@@ -253,9 +253,9 @@ function _soundInfo(e) {
   return null;
 }
 
-// (phase V28.4) `opts.music`: Suno's tracks and the ones brought in (lib/music-store.js) as a sixth kind, `music` - only
+// `opts.music`: Suno's tracks and the ones brought in (lib/music-store.js) as a sixth kind, `music` - only
 // when asked for (Audio -> Music in the media tree): every other reader of this shelf - the video chat, the pictures
-// chat, the Library's chats, the 3D Studio, Media's checks - reads it as it always was.
+// chat, the Library's chats, the 3D Studio, Media's checks - reads it without them.
 function _mediaShelf(opts) {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
@@ -268,7 +268,7 @@ function _mediaShelf(opts) {
     kind: _isUpload(e) ? 'uploads' : 'birols',
     media: e.videoPath,
     thumb: _posterOf(e.thumbPath, e.videoPath),
-    // The archive has known how long each clip is since it was generated. Sending it lets a
+    // The archive knows how long each clip is from when it was generated. Sending it lets a
     // drop onto a Merge lane land at the right width straight away, instead of appearing at
     // a placeholder length and resizing a moment later once the browser has read the file.
     dur: +e.duration || 0,
@@ -279,11 +279,11 @@ function _mediaShelf(opts) {
       prompt: e.prompt || '',
       // A piece cut out of a video keeps its whole video.
       original: _origMeta(e.original),
-      // (phase V7) The video chat's column lays a clip out at its own shape.
+      // The video chat's column lays a clip out at its own shape.
       w: +e.w || 0, h: +e.h || 0,
-      // (phase V27) Where it came from, when it came by a link; the viewer shows it.
+      // Where it came from, when it came by a link; the viewer shows it.
       link: e.link || '',
-      // (phase V60.2) A B-roll: the model whose folder it lies in - a dropdown offers its own model's folders.
+      // A B-roll: the model whose folder it lies in - a dropdown offers its own model's folders.
       ...(_isUpload(e) ? {} : { model: MF.modelOfCat(cstate, e.categoryId) }),
     },
   }));
@@ -317,8 +317,8 @@ function _mediaShelf(opts) {
     },
   }));
 
-  // (phase V7) Sounds - no picture: the page draws a row of its own for them.
-  // (phase V34.E) With their waveform (lib/audio-wave.js), their tags, where they came from (a sound found online: its
+  // Sounds - no picture: the page draws a row of its own for them.
+  // With their waveform (lib/audio-wave.js), their tags, where they came from (a sound found online: its
   // author, licence and page; one made here: what was asked) and the sound a piece was cut from - the tile's "About".
   const fromSounds = SND.read().filter(e => e && e.audioPath).map(e => ({
     id: String(e.id),
@@ -330,13 +330,13 @@ function _mediaShelf(opts) {
     meta: { categoryId: e.categoryId || '', categoryLabel: e.categoryLabel || '', date: e.date || null, favorite: !!e.favorite,
             source: e.source || 'upload', wave: Array.isArray(e.wave) ? e.wave : [], tags: _soundTags(e), info: _soundInfo(e),
             original: (e.meta && e.meta.original) || null,
-            // (2026-11-09, the owner's (в19)) it lies in AUDIO itself, not in My sounds (lib/sounds-store.js)
+            // it lies in AUDIO itself, not in My sounds (lib/sounds-store.js)
             inAudio: !!e.inAudio },
   }));
 
-  // (phase V28.4) Music - no picture; its length kept on the record (measured once for the older ones). (phase V54) Its own
+  // Music - no picture; its length kept on the record (measured once for the older ones). Its own
   // folders: `categoryId`, as the other kinds.
-  // (phase V35) Where it lies in Music (lib/music-store.js placeOf, V34.F): `folder` 'highlights' or '', `mood` - the mood
+  // Where it lies in Music (lib/music-store.js placeOf): `folder` 'highlights' or '', `mood` - the mood
   // folder it is in, `moodMade` - the preset it was made by (the one mood it may go into).
   const placeOf = typeof MUSIC.placeOf === 'function' ? MUSIC.placeOf : () => ({ folder: '', mood: '', moodMade: '' });
   const fromMusic = !(opts && opts.music) ? [] : MUSIC.read().filter(t => t && t.audioPath).map(t => ({
@@ -350,10 +350,10 @@ function _mediaShelf(opts) {
             favorite: !!t.favorite, style: String(t.style || ''), ...placeOf(t),
             source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0, wave: Array.isArray(t.wave) ? t.wave : [],
             info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' },
-            // (phase V54) a piece cut out of a track names the track and the stretch (lib/audio-cut.js)
+            // a piece cut out of a track names the track and the stretch (lib/audio-cut.js)
             original: t.original || null },
   }));
-  // (phase V34.E) SFX -> Built-in: the program's set (lib/sfx-builtin.js, vendor/sfx/ at /sfx/) - read only, only when
+  // SFX -> Built-in: the program's set (lib/sfx-builtin.js, vendor/sfx/ at /sfx/) - read only, only when
   // asked; a built-in sound's star is kept by its address (lib/sfx-favorites.js).
   let fromSfx = [];
   if (opts && opts.sfx) {
@@ -368,7 +368,7 @@ function _mediaShelf(opts) {
   // The tiles still with no waveform are measured behind this answer.
   if (fromSounds.some(i => !i.meta.wave.length) || fromMusic.some(i => !i.meta.wave.length)) require('../lib/audio-wave').fill();
 
-  // (phase V28.4, second round) The talking heads - every take of every line of every talking-head project (lib/heads.js),
+  // The talking heads - every take of every line of every talking-head project (lib/heads.js),
   // only when asked (VIDEO -> Generated -> Talking heads); the project is its category. A take on a timeline is `used`.
   // Not the library's to delete or re-file while its project lives.
   let fromHeads = [];
@@ -388,17 +388,15 @@ function _mediaShelf(opts) {
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
     .filter(i => _onDisk(i.media)).concat(fromSfx);
-  // (phase V55) IMAGES -> Environments / Lookbooks: the pictures their generators made - only when asked (`filter`), read
+  // IMAGES -> Environments / Lookbooks: the pictures their generators made - only when asked (`filter`), read
   // from their folders (always on the disk).
   if (opts && opts.made && MADE_KINDS.has(opts.made)) items.push(..._madeItems(opts.made));
-  // (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - no file, only when asked.
+  // AUDIO -> Music -> Lyrics: the saved texts - no file, only when asked.
   if (opts && opts.lyrics) items.push(..._lyricItems());
-  // (phase TG, block 6; the owner: "в library на полке media можно смотреть видео скачаные с youtube ... все видео-источники
-  // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
+  // YOUTUBE - every source with its video on the disk that came from
   // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
   // highlights - never deleted or moved from here.
-  // (after block 8; the owner 2026-10-22: "в references папка youtube->videos будет источником для scenarios и для
-  // highlights ... корневая youtube убираем") They are REFERENCES -> YouTube -> Videos now (`folder`), beside the videos
+  // They are REFERENCES -> YouTube -> Videos (`folder`), beside the videos
   // kept as tiles, and come with REFERENCES. `ytKeys` - their links' keys: a tile of the same video is not shown twice.
   const SRCS = require('../lib/sources-store');
   const ytKeys = new Set();
@@ -416,13 +414,13 @@ function _mediaShelf(opts) {
       });
     }
   }
-  // (phase TG, block 5) REFERENCES - one tile per POST, only when asked (the tree's REFERENCES): newest first, after the
+  // REFERENCES - one tile per POST, only when asked (the tree's REFERENCES): newest first, after the
   // rest. A post's files ride along in `meta.items` (the hover's miniatures, the post viewer's strip); a long video kept
   // as a tile (`meta.remote`) has its poster for `media`.
   if (opts && opts.refs) {
     for (const p of require('../lib/references-store').read()) {
       if (!p || !p.id) continue;
-      // A video kept as a tile whose video is a downloaded source already: the source's tile is the one (after block 8).
+      // A video kept as a tile whose video is a downloaded source already: the source's tile is the one.
       if (p.remote && p.linkKey && ytKeys.has(p.linkKey)) continue;
       const files = (Array.isArray(p.media) ? p.media : []).filter(m => m && m.path);
       const first = files[0];
@@ -451,7 +449,7 @@ function _mediaShelf(opts) {
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
-    // (second round) Talking heads after the rest, and read as their projects do: by project, then line by line, the
+    // Talking heads after the rest, and read as their projects do: by project, then line by line, the
     // newest take first.
     || (Number(a.kind === 'heads') - Number(b.kind === 'heads'))
     || ((a.kind === 'heads' && b.kind === 'heads')
@@ -490,7 +488,7 @@ function _mediaCats(items, kind, labelFor) {
   const uncat = scope.filter(i => !(i.meta || {}).categoryId).length;
   const cats = LC.listFor(kind || null, counts, labelFor).map(c => ({
     id: c.id,
-    // (phase V54) A folder in a folder reads as its path - the pictures chat's column offers these.
+    // A folder in a folder reads as its path - the pictures chat's column offers these.
     label: (Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : c.label) + ' · ' + c.count,
     name: c.label,          // the bare name, for the rename box and the dropdowns
     own: c.own,
@@ -501,29 +499,29 @@ function _mediaCats(items, kind, labelFor) {
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
 
-// ── The media tree (phase V28.4 + V28.5, the owner 2026-10-12; the second round) ──
+// ── The media tree ──
 // One answer for both places that draw it - Merge's Library panel and the Library's Media shelf (js/media-tree.js):
 //   REFERENCES -> the sources' folders, its own categories
-//   VIDEO  -> Generated (B-rolls -> categories, Talking heads -> projects; a B-roll with no category in Generated itself),
+//   VIDEO  -> Generated (the models' folders -> their groups, Talking heads -> projects),
 //             Hooks, Uploads -> categories
-//   IMAGES -> Environments, Lookbooks (what their generators made -> references; phase V55, _madeFolders), its categories
+//   IMAGES -> Environments, Lookbooks (what their generators made -> references; _madeFolders), its categories
 //   AUDIO  -> Music (-> highlights -> the moods), SFX -> Favorites, Built-in, My sounds
-// Every node: { key, label, count, q?, loose?, direct?, children? } - since V35 the tree is FOLDERS: `q` is what the shelf is
+// Every node: { key, label, count, q?, loose?, direct?, children? } - the tree is FOLDERS: `q` is what the shelf is
 // asked for what lies DIRECTLY in the node (`filter` and `cat`, `src`, `folder`/`mood`; none - it only holds folders),
-// `children` its folders, `key` what a page remembers it by. In a branch (the owner): the locked first, then those with
-// something in them, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; "2026-08-23" before
-// "2026-10-02"). Generated, Hooks and Uploads are locked; so are the required categories.
+// `children` its folders, `key` what a page remembers it by. In a branch: the locked first, then those with
+// something in them, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; numbers as numbers,
+// "file 9" before "file 10"). Generated, Hooks and Uploads are locked; so are the required categories.
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
-// (phase V34.E) AUDIO holds the built-in sounds too (`sfx`), and SFX is the own and the built-in together (`sfxall`).
+// AUDIO holds the built-in sounds too (`sfx`), and SFX is the own and the built-in together (`sfxall`).
 const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds', 'sfx'],
   sfxall: ['sounds', 'sfx'],
-  // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js); and (after block 8) the
+  // REFERENCES - the posts the Telegram bot brought in (lib/references-store.js); and the
   // sources of the scenarios and of highlights downloaded from YouTube, in its YouTube -> Videos.
   references: ['references', 'youtube'] };
 // Where an item of REFERENCES lies: a post by its site and folder, a downloaded YouTube source in YouTube -> Videos.
 const _siteOf = (i) => (i.kind === 'youtube' ? 'youtube' : (i.meta || {}).source);
 const _inRefs = (i) => i.kind === 'references' || i.kind === 'youtube';
-// A REFERENCES folder, as a node asks for it: "instagram" (all of the source's), "instagram/reels", or (phase V35)
+// A REFERENCES folder, as a node asks for it: "instagram" (all of the source's), "instagram/reels", or
 // "instagram/__uncat__" - what lies in the source itself, in none of its folders. A post under an own category is in that
 // category's folder, not its source's.
 function _inSrc(i, src) {
@@ -537,26 +535,25 @@ function _inSrc(i, src) {
   }
   return m.folder === fo;
 }
-// (2026-11-09, the owner's (в19)) AUDIO's own root: `aroot` '1' - only what lies there, '0' - none of it (My sounds' root, ★).
+// AUDIO's own root: `aroot` '1' - only what lies there, '0' - none of it (My sounds' root, ★).
 const _aroot = (i, want) => (want === '1' ? !!(i.meta || {}).inAudio : want === '0' ? !(i.meta || {}).inAudio : true);
-// (phase V35) A track's place in Music: `folder` / `mood` asked as a value, or UNCAT for none.
+// A track's place in Music: `folder` / `mood` asked as a value, or UNCAT for none.
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
-const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
+const ANYCAT = '__cat__';          // a B-roll in some folder
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
-// (phase V35, the owner's (ф3): "появляется одна папка highlights, а в ней 10 настроений. добавлять можно, но только в
-// корневую highlights") Music -> highlights -> a folder per mood of the highlights presets (lib/music-store.js `moods`,
-// V34.F). highlights and its moods are the app's (locked: never renamed or deleted, no "+"); a mood takes only a track its
+// Music -> highlights -> a folder per mood of the highlights presets (lib/music-store.js `moods`).
+// highlights and its moods are the app's (locked: never renamed or deleted, no "+"); a mood takes only a track its
 // preset made (`moodLock` - the rule is `place` in lib/music-store.js), a person's own track goes into highlights itself.
-// Music's own tracks lie in Music. (phase V54 block 6, (зв22), (зв41)) Beside highlights - after it - Music's OWN folders, in
+// Music's own tracks lie in Music. Beside highlights - after it - Music's OWN folders, in
 // one another as any kind's (lib/library-cats.js kind `music`); none inside highlights or its moods.
 function _musicNode(list, folders) {
   const moods = typeof MUSIC.moods === 'function' ? MUSIC.moods() : [];
-  // (phase V54) What lies in Music itself: in no own folder and not in highlights.
+  // What lies in Music itself: in no own folder and not in highlights.
   const rootN = list.filter(i => !i.meta.categoryId && i.meta.folder !== 'highlights').length;
-  // (phase V59.1, (мз6а)) Lyrics - beside highlights, after it: the app's (locked), only texts, no folders of its own.
+  // Lyrics - beside highlights, after it: the app's (locked), only texts, no folders of its own.
   const lyrics = _lyricsNode();
-  // (phase V59, the owner 2026-10-29: "сделать music в дереве золотым") `make`: its
+  // `make`: its
   // "Generate music" in its menu opens the sound window on Music, on both pages (js/media-tree.js onMake).
   const node = { key: 'music', kind: 'music', label: 'Music', count: list.length + lyrics.count, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
     loose: 'music', direct: rootN, make: 'music', makeLabel: 'Generate music' };
@@ -576,8 +573,7 @@ function _musicNode(list, folders) {
   return Object.assign(node, { children: [hl, lyrics, ...own] });
 }
 
-// (phase V59.1, the owner 2026-10-29: "текста песен ... давай в music будет своя папка еще для lyrics"; (мз6а)) Music ->
-// Lyrics: the texts saved from Generate music (lib/lyrics-store.js) - its Lyrics' "save", Custom's "save" by the Lyrics
+// Music -> Lyrics: the texts saved from Generate music (lib/lyrics-store.js) - its Lyrics' "save", Custom's "save" by the Lyrics
 // field. The app's folder: never renamed, deleted or moved (`locked`), no folder of its own in it and nothing let go or
 // moved into it by hand (`noAdd`, `lyrics` - js/media-tree.js refuses in words); its tiles open the text.
 function _lyricsNode() {
@@ -594,11 +590,10 @@ function _lyricItems() {
   }));
 }
 
-// (phase V35, the owner 2026-10-23, (т2): "как будто папки в library ... при нажатии на корневую категорию показывать
-// вложенные категории как папки. тогда нам uncategorized будет не нужна") THE TREE IS FOLDERS: a node's `q` is what lies
+// THE TREE IS FOLDERS: a node's `q` is what lies
 // DIRECTLY in it - what has no category of its kind (`loose`: that kind; `direct`: how many) - and its children are its
-// folders, shown first as folder tiles (js/media-tree.js). There is no Uncategorized node any more; a node that only holds
-// folders (VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES) has no `q`. `count` is still all under it.
+// folders, shown first as folder tiles (js/media-tree.js). There is no Uncategorized node; a node that only holds
+// folders (VIDEO, AUDIO, SFX, Built-in, Talking heads, REFERENCES) has no `q`. `count` is still all under it.
 // Nothing moves on the disk: what has no category stays in its `nocat/` folder.
 function _tree(opts) {
   const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, sfx: true });
@@ -606,7 +601,7 @@ function _tree(opts) {
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   // A kind's categories, as folders: the locked first, then those with something in them, then the empty ones (pale) -
   // each part alphabetical. What has none is counted for the node that holds them (`uncat`).
-  // (phase V54 block 6) FOLDERS IN FOLDERS: a folder's own folders are its `children`, in the same order at every level;
+  // FOLDERS IN FOLDERS: a folder's own folders are its `children`, in the same order at every level;
   // `count` is all under it, `direct` what lies in it itself (its `q`).
   const catsOf = (kind, list) => {
     const counts = {};
@@ -653,9 +648,9 @@ function _tree(opts) {
     if (out.length) node.children = out;
     return node;
   };
-  // VIDEO -> Generated: (phase V60.2, the owner's (дг4а)-(дг12а)) THE FOLDERS OF THE MODELS that made the B-rolls - Grok
-  // classic, Seedance 2.5... with the groups inside them (lib/model-folders.js; no "B-rolls" folder any more) -, then Talking
-  // heads (a project each). A model's folder shows only while something lies under it ((дг9б)), the folders by name, Other
+  // VIDEO -> Generated: THE FOLDERS OF THE MODELS that made the B-rolls - Grok
+  // classic, Seedance 2.5... with the groups inside them (lib/model-folders.js; no "B-rolls" folder) -, then Talking
+  // heads (a project each). A model's folder shows only while something lies under it, the folders by name, Other
   // last. A folder outside every model's (a library not swept yet) shows after them.
   const birols = byKind.birols || [];
   const inCat = birols.filter(i => (i.meta || {}).categoryId);
@@ -685,11 +680,10 @@ function _tree(opts) {
   const video = { key: 'video', label: 'VIDEO',
     children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
   video.count = video.children.reduce((n, c) => n + c.count, 0);
-  // (phase V34.E, the owner 2026-10-22: "SFX -> Favorites, Built-in, My sounds") SFX: every starred sound first; the
+  // SFX: every starred sound first; the
   // program's set, read only, by its categories; the person's own - the kind `sounds` with its categories (Generated
-  // locked) - under "My sounds", so a category made, renamed or a tile filed works as it always did.
-  // (2026-11-09, the owner's (в19): "должно ложится в корень audio. там пользователь уже распределит по своим папкам") What
-  // lies in AUDIO itself - "Save audio"'s sounds (`inAudio`) - is no sound of My sounds: My sounds, SFX and ★ Favorites count
+  // locked) - under "My sounds", so a category made, renamed or a tile filed works as for any kind.
+  // What lies in AUDIO itself - "Save audio"'s sounds (`inAudio`) - is no sound of My sounds: My sounds, SFX and ★ Favorites count
   // without it, and My sounds' own root does not show it (`aroot: '0'`).
   const aroot = (byKind.sounds || []).filter(i => i.meta.inAudio);
   byKind.sounds = (byKind.sounds || []).filter(i => !i.meta.inAudio);
@@ -707,20 +701,20 @@ function _tree(opts) {
   if (!builtin.children.length) delete builtin.children;
   const favN = own.concat(built).filter(i => i.meta.favorite).length;
   const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1', aroot: '0' } };
-  // SFX holds its three folders; its search looks through all of them (the owner's (у3), js/sound/shelf.js).
+  // SFX holds its three folders; its search looks through all of them (js/sound/shelf.js).
   const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, children: [fav, builtin, mine] };
-  // AUDIO is a folder too (the owner's (в19)): Music and SFX, then what lies in it itself - a sound to be filed from there into
+  // AUDIO is a folder too: Music and SFX, then what lies in it itself - a sound to be filed from there into
   // Music or SFX (lib/audio-kind.js). `aroot` - the page's sign of that place (js/media-tree.js _target).
   const audio = { key: 'audio', label: 'AUDIO', loose: 'sounds', aroot: true, direct: aroot.length, q: { filter: 'sounds', aroot: '1' },
     tip: 'AUDIO - Music and SFX; what lies in it itself ("Save audio" of a video) waits to be dragged into Music or SFX',
     children: [_musicNode(byKind.music || [], catsOf('music', byKind.music || []).out), sfx] };
   audio.count = aroot.length + audio.children.reduce((n, c) => n + c.count, 0);
-  // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
+  // REFERENCES - first, above VIDEO - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
   const refs = (byKind.references || []).concat(byKind.youtube || []);
   const nOf = (s, f) => refs.filter(i => !i.meta.categoryId && _siteOf(i) === s && (!f || i.meta.folder === f)).length;
-  // `kind` on the root: its "+" makes an own category (block 5b); the sources' folders make none (`noAdd`).
-  // (phase V35) Nothing lies in REFERENCES itself: a post is in its source's folder or in an own category. A source with
+  // `kind` on the root: its "+" makes an own category; the sources' folders make none (`noAdd`).
+  // Nothing lies in REFERENCES itself: a post is in its source's folder or in an own category. A source with
   // folders of its own (Instagram: Posts, Reels) holds in itself only a post of none of them.
   const references = { key: 'references', kind: 'references', label: 'REFERENCES', count: refs.length,
     children: require('../lib/references-store').SOURCES.map((s) => {
@@ -729,27 +723,26 @@ function _tree(opts) {
       if (s.folders.length) {
         node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
           label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id },
-          // (phase V35, the owner's (т3)) YouTube's videos are horizontal: their tiles are 16:9, in the Library and in Merge.
+          // YouTube's videos are horizontal: their tiles are 16:9, in the Library and in Merge.
           ...(s.id === 'youtube' && f.id === 'videos' ? { tiles: 'wide' } : {}) }));
       }
       return node;
     }) };
-  // The owner's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
+  // The person's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
   references.children.push(...catsOf('references', refs, false).out);
-  // (after block 8) No root YOUTUBE any more: its videos are REFERENCES -> YouTube -> Videos (the owner 2026-10-22).
   const images = kindNode('images', 'images', 'IMAGES');
   _madeFolders(images);
   const roots = [references, video, images, audio];
   _stampNewest(roots, items, (opts && opts.srcFrom) || 0);
-  // (phase V78) Merge's tree for a project: THIS PROJECT first, above REFERENCES.
-  // A draft has none (the owner 2026-11-07) - Merge's draft, the voiceover draft.
+  // Merge's tree for a project: THIS PROJECT first, above REFERENCES.
+  // A draft has none - Merge's draft, the voiceover draft.
   if (opts && opts.plinks && !PLINKS.isDraft(opts.plinks)) { try { roots.unshift(_plinksNode(opts.plinks, items)); } catch (e) { console.warn('[library] THIS PROJECT:', e.message); } }
   return roots;
 }
 
-// ── THIS PROJECT (phase V78, part B, the owner's (лч10)-(лч17); lib/project-links.js) ──────────────────────────────────────
+// ── THIS PROJECT (lib/project-links.js) ──────────────────────────────────────────────────────────────────────────────────────
 // Every item a link may name: the media shelf's whole set with what the generators of IMAGES made - a link is found by
-// 'kind:id', else by its address. Anything not found is a file deleted from the library: its link goes ((лч14)).
+// 'kind:id', else by its address. Anything not found is a file deleted from the library: its link goes.
 function _linkables(items) {
   const all = (items || _mediaShelf({ music: true, heads: true, refs: true, sfx: true }).items).slice();
   for (const k of MADE_KINDS) { try { all.push(..._madeItems(k)); } catch (e) { /* that shelf did not read */ } }
@@ -789,19 +782,18 @@ function _plinksNode(key, items) {
     q: { plinks: k, plfolder: '' }, children: kids, newest: 0 };
 }
 
-// (phase V55, the owner 2026-10-28, (гн8)-(гн9): "в images нужно сделать так папки Environment (references, а в корневой
-// окружений - сгенерированые изображения); так же и с одеждой") IMAGES -> ENVIRONMENTS and LOOKBOOKS, locked, first among
+// IMAGES -> ENVIRONMENTS and LOOKBOOKS, locked, first among
 // IMAGES' folders. In their root lie the pictures their generators made - the shelves' own files (media/locations/,
 // media/lookbooks/; no records: the file IS the entry, `_imageShelf`), asked for as `filter=environments|lookbooks`; inside
 // each, its `references` - the required category uploads_environments / uploads_lookbooks. That category stays where it is
 // in the list - a TOP folder of IMAGES, found BY NAME (lib/library-cats.js REQUIRED) - and on the disk: the tree only SHOWS
-// it here, under its key, so a remembered selection and the generators' filing work as before. A made
+// it here, under its key, so a remembered selection and the generators' filing still find it. A made
 // picture is opened and deleted here as on its shelf, never moved (descriptions, 3D layouts and looks point at its
 // address - _moveOne); nothing is moved into these two but their references' own (js/media-tree.js).
-// (phase V57, the owner's (ок2)) And NOTHING GOES INTO THOSE REFERENCES BY HAND - only the photo a generator is given
+// And NOTHING GOES INTO THOSE REFERENCES BY HAND - only the photo a generator is given
 // (lib/library-cats.js closedWhy): the node and every folder under it are `closed` - the page refuses a tile, a folder, a
 // file and "New folder" there in words, "Move to…" leaves them out (js/media-targets.js) - and `noAdd`.
-// (phase V26.6, the owner 2026-10-30, (п1) "a"): IMAGES -> PROPS, the third - the products a character holds in a frame,
+// IMAGES -> PROPS, the third - the products a character holds in a frame,
 // one picture each, added by the New prop window (lib/props.js) and described by an agent. No references: the photo IS the
 // product. Its tiles show the product whole (`tiles: 'whole'`).
 const MADE = [
@@ -832,8 +824,8 @@ function _madeFolders(images) {
     const all = n + (ref ? ref.count : 0);
     const node = { key: g.kind, kind: g.kind, label: g.label, locked: true, count: all, direct: n, empty: !all,
       q: { filter: g.kind }, make: g.kind, makeLabel: g.make,
-      // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (V35's `tiles: 'wide'`); a product is
-      // shown whole, never cut to fill its square (phase V26.6).
+      // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (`tiles: 'wide'`); a product is
+      // shown whole, never cut to fill its square.
       ...(g.kind === 'environments' ? { tiles: 'wide' } : g.kind === 'props' ? { tiles: 'whole' } : {}),
       tip: g.kind === 'props'
         ? 'Props - the products a character holds in a frame, each with what is known about it (+ adds one); the frames chat takes them'
@@ -849,8 +841,8 @@ function _madeFolders(images) {
   images.children = made.concat(kids);
   images.count += made.reduce((s, m) => s + m.direct, 0);
 }
-// (phase V74, the owner's (пт6)) The app's patterns (lib/patterns-builtin.js, vendor/patterns/ at /patterns/) are no folder of
-// the media tree any more - IMAGES -> Patterns of phase V65 went, in Merge and in the Library: a pattern is picked only in the
+// The app's patterns (lib/patterns-builtin.js, vendor/patterns/ at /patterns/) are no folder of
+// the media tree: a pattern is picked only in the
 // strip of main video in Merge (js/merge-v3/patterns-ui.js), from this list - where each is and its picture, the tiles to tick.
 // Their authors and licences: Admin -> Thanks and vendor/patterns/LICENSE.txt.
 // `GET /api/patterns` -> { patterns: [{ id, name, path, thumb, size }] }.
@@ -870,7 +862,7 @@ function _madeItems(kind) {
     return Object.assign(it, {
       thumb: '/api/thumb?src=' + encodeURIComponent(it.thumb || it.media) + '&v=card',
       dur: 0,
-      // (phase V26.6) A product goes by the name it was given, not its file's.
+      // A product goes by the name it was given, not its file's.
       ...(kind === 'props' && m.name ? { name: String(m.name) } : {}),
       meta: Object.assign(it.meta, {
         categoryId: '', favorite: false, made: true,
@@ -882,13 +874,12 @@ function _madeItems(kind) {
     });
   });
 }
-// (phase V26.6) Whether the agent is describing a product right now (lib/props.js) - the viewer says "describing…".
+// Whether the agent is describing a product right now (lib/props.js) - the viewer says "describing…".
 const _propReading = (media) => { try { return require('../lib/props').reading(media); } catch (e) { return false; } };
 
-// (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом ... куда добавилось что-то новое") Every node
-// says when the newest thing under it came (`newest`, ms) - the page lights the nodes holding something newer than when they
-// were last opened (js/media-tree.js). Read by the node's own query, as the shelf filters - and (2026-10-22) only posts the
-// bot brought count (`_isNews`), so only REFERENCES ever lights.
+// Every node says when the newest thing under it came (`newest`, ms) - the page lights the nodes holding something newer
+// than when they were last opened (js/media-tree.js). Read by the node's own query, as the shelf filters - and only posts
+// the bot brought count (`_isNews`), so only REFERENCES ever lights.
 function _inNode(i, q) {
   if (!q) return false;
   if (q.group) return !!(GROUPS[q.group] && GROUPS[q.group].includes(i.kind));
@@ -906,25 +897,24 @@ function _inNode(i, q) {
   }
   return true;
 }
-// (the owner 2026-10-22: "почему то подсвечиваются как то рандомно категории в дереве, когда перемещаю из uncategorized.
-// давай подсвечивать новое только в references") Only what the Telegram bot BROUGHT counts: a clip or a picture moved
+// Only what the Telegram bot BROUGHT counts - else categories would light at random after a move: a clip or a picture moved
 // (which stamps its date anew), a piece cut here, a source downloaded - none of them is news. Every other node says 0.
 // A post moved by hand (`handled`) is seen - it does not light the place it was moved to.
-// (phase V73 block 2, the owner's (н3) б, 2026-11-05) And a source downloaded by a link (REFERENCES -> YouTube -> Videos,
+// And a source downloaded by a link (REFERENCES -> YouTube -> Videos,
 // kind `youtube`, its `date` the moment it landed) - but only one that came after `srcFrom`, the moment the page first ran
 // this rule (js/references/news.js `since`, sent as ?srcFrom=): nothing already there lights. Without it - the other trees,
 // which light nothing - a source is never news.
 const _isNews = (i, srcFrom) => (i.kind === 'references' && (i.meta || {}).from === 'telegram' && !(i.meta || {}).handled)
   || (i.kind === 'youtube' && srcFrom > 0 && _ts(i.meta && i.meta.date) > srcFrom);
-// (phase V73 block 2, the owner's (н1) а) `ownNews` - the newest news lying DIRECTLY in the node (its `q` matches only that);
+// `ownNews` - the newest news lying DIRECTLY in the node (its `q` matches only that);
 // `newest` - in it or under it. The page lights a REFERENCES node while its own news is newer than when IT was opened, and
 // a branch while any node under it is lit: the lit path leads down to the inner folder. Read-only, nothing kept.
 function _stampNewest(nodes, items, srcFrom) {
   for (const n of nodes) {
     let best = 0;
     for (const i of items) { if (_isNews(i, srcFrom) && _inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
-    // (phase V78 fix) Its own field: `own` is a folder's "the person's" flag (catsOf) - stamped over, no folder of the person's
-    // could be renamed, moved or deleted, nor hold a folder (js/media-tree.js holds, movable) since V73 block 2.
+    // Its own field: `own` is a folder's "the person's" flag (catsOf) - stamped over, no folder of the person's
+    // could be renamed, moved or deleted, nor hold a folder (js/media-tree.js holds, movable).
     n.ownNews = best;
     if (n.children) { _stampNewest(n.children, items, srcFrom); for (const c of n.children) if (c.newest > best) best = c.newest; }
     n.newest = best;
@@ -933,12 +923,12 @@ function _stampNewest(nodes, items, srcFrom) {
 
 router.get('/library/tree', (req, res) => {
   // ?srcFrom=<ms> - from when a source downloaded by a link counts as news (the page's moment; absent - never)
-  // ?plinks=<timeline key> - (phase V78) Merge's tree for that project: THIS PROJECT first
+  // ?plinks=<timeline key> - Merge's tree for that project: THIS PROJECT first
   try { res.json({ success: true, nodes: _tree({ srcFrom: Math.max(0, Math.floor(+req.query.srcFrom || 0)), plinks: String(req.query.plinks || '') }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── THIS PROJECT's folders and links (phase V78, part B; lib/project-links.js) ─────────────────────────────────────────────
+// ── THIS PROJECT's folders and links (lib/project-links.js) ────────────────────────────────────────────────────────────────
 //   POST   /api/plinks/folder        { key, name, parent }   -> { folder }      a folder ('' parent - THIS PROJECT itself)
 //   PATCH  /api/plinks/folder/:id    { key, name?, parent? } -> { folder }      renamed, moved
 //   DELETE /api/plinks/folder/:id?key=                     -> { folders, links }  the folder and its links - files stay
@@ -1022,7 +1012,7 @@ function _voicesShelf() {
         verifiedLanguages: e.verifiedLanguages || 0,
         dur: e.dur || 0,
         publicOwnerId: String(e.publicOwnerId || ''),
-        // (phase V62) The shared library's id - what brings a released voice back into the account (/scen3/voices/take).
+        // The shared library's id - what brings a released voice back into the account (/scen3/voices/take).
         sharedVoiceId: String(e.sharedVoiceId || ''),
         // Whether the slot is still ours. `accountRemoved` is written when one is released.
         accountRemoved: !!e.accountRemoved,
@@ -1062,11 +1052,11 @@ function _renderFiles() {
   return out;
 }
 
-// BY PROJECT (phase V23, the owner 2026-10-09): every render says which project's folder it is in and that project's
+// BY PROJECT: every render says which project's folder it is in and that project's
 // title - a project deleted since keeps its folder's name, `nocat` and a loose file are no project - and how long it
 // runs. The page draws a row per project (js/library/renders.js).
 //
-// A POSTER IS MADE, NOT MISSED (V23): a render with none gets one in the background (lib/render-posters.js), which
+// A POSTER IS MADE, NOT MISSED: a render with none gets one in the background (lib/render-posters.js), which
 // also measures its length; `unreadable` is only a file ffmpeg could not open, `posterPending` one still waiting.
 // `running` is how many are still to be looked at - the page asks again while there are any.
 function _rendersShelf() {
@@ -1134,8 +1124,8 @@ function _scenariosShelf() {
   const all = _read(SCEN3_FILE, []);
   const list = (Array.isArray(all) ? all : []).filter(Boolean)
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  // Archived ones are not among the shelf's items (phase D5): archiving is taking a scenario out of the list - its
-  // count, its filters. (phase V60, the owner's (пп6а)) They come beside them as `archived`, newest first, for the
+  // Archived ones are not among the shelf's items: archiving is taking a scenario out of the list - its
+  // count, its filters. They come beside them as `archived`, newest first, for the
   // folded "Archive" at the bottom of the list; the archive is Merge's too (PATCH `archived`, routes/scen3.js).
   const items = list.filter(s => !s.archived).map(_scRow);
   const archived = list.filter(s => s.archived).map(_scRow);
@@ -1152,8 +1142,8 @@ function _scRow(s) {
     thumb: null,
     meta: {
       type: s.type || '', vertical: s.vertical || '', product: s.product || '',
-      // Every field the shelf filters by (phase F7): the role's name and gender apart, and the
-      // narrator the scenario IS (its own, or the generator's when not set). No language (phase V29).
+      // Every field the shelf filters by: the role's name and gender apart, and the
+      // narrator the scenario IS (its own, or the generator's when not set). No language.
       role: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).name || '',
       gender: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).gender || '',
       narrator: (_labels(s).narrator || {}).name || '',
@@ -1170,7 +1160,7 @@ function _scRow(s) {
   };
 }
 
-// How many environments are being made right now (phase I) - a chat's, or Merge's maker's.
+// How many environments are being made right now - a chat's, or Merge's maker's.
 // The page asks the shelf again while there are any, so what lands shows up on the grid by itself.
 function _makingNow(type) {
   try {
@@ -1183,7 +1173,7 @@ const SHELVES = {
   characters:   _charactersShelf,
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), running: _makingNow('environment') }),
   // Every character's looks in one list - read, not a shelf of the Library page: the video chat's right column offers
-  // them for a "person" cell of a recipe (phase V6), each with its character (meta.charId) to group them by.
+  // them for a "person" cell of a recipe, each with its character (meta.charId) to group them by.
   looks:        () => ({ items: _looks().items.filter(x => x.media && _onDisk(x.media)) }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
@@ -1196,7 +1186,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    // (phase V78) THIS PROJECT: what lies directly in one of its folders (`plfolder`, '' - itself) - the library's items, each
+    // THIS PROJECT: what lies directly in one of its folders (`plfolder`, '' - itself) - the library's items, each
     // with its `link`.
     if (kind === 'media' && req.query.plinks) {
       const folder = String(req.query.plfolder || '');
@@ -1205,7 +1195,7 @@ router.get('/library/shelf/:kind', (req, res) => {
       return res.json({ success: true, kind, items, cats: [], labelKeys: null, running: 0 });
     }
     // Filtering happens here rather than in the page, so the count the page shows is the
-    // count it received. Media takes two: the kind, and the category within it - or (phase V28.4) a GROUP of kinds,
+    // count it received. Media takes two: the kind, and the category within it - or a GROUP of kinds,
     // a top node of the media tree: video (B-rolls, Hooks, Uploads), images, audio (music, sounds).
     const f = String(req.query.filter || '');
     const cat = String(req.query.cat || '');
@@ -1223,22 +1213,22 @@ router.get('/library/shelf/:kind', (req, res) => {
     let shown = items;
     if (grp) shown = shown.filter(i => grp.includes(i.kind));
     if (f) shown = shown.filter(i => i.kind === f || (f === 'references' && i.kind === 'youtube'));
-    // (phase TG) A REFERENCES folder: "instagram", or "instagram/reels".
+    // A REFERENCES folder: "instagram", or "instagram/reels".
     const src = String(req.query.src || '');
     if (src) shown = shown.filter(i => _inSrc(i, src));
-    // (phase V35) Music's folders: `folder=highlights`, `folder=__uncat__` (Music itself); `mood=<id>`, `mood=__uncat__`.
+    // Music's folders: `folder=highlights`, `folder=__uncat__` (Music itself); `mood=<id>`, `mood=__uncat__`.
     const folder = String(req.query.folder || '');
     const mood = String(req.query.mood || '');
     if (folder) shown = shown.filter(i => _isIn((i.meta || {}).folder, folder));
     if (mood) shown = shown.filter(i => _isIn((i.meta || {}).mood, mood));
-    // (2026-11-09) AUDIO's own root: `aroot=1` what lies there, `aroot=0` the rest.
+    // AUDIO's own root: `aroot=1` what lies there, `aroot=0` the rest.
     const aroot = String(req.query.aroot || '');
     if (aroot) shown = shown.filter(i => _aroot(i, aroot));
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId
       : (i.meta || {}).categoryId === cat);
-    // (phase V34.E) SFX -> Favorites: the starred ones. And the search over a sound shelf: every word in the name, the
+    // SFX -> Favorites: the starred ones. And the search over a sound shelf: every word in the name, the
     // tags or the category.
     if (String(req.query.fav || '') === '1') shown = shown.filter(i => (i.meta || {}).favorite);
     const words = String(req.query.q || '').toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
@@ -1251,12 +1241,12 @@ router.get('/library/shelf/:kind', (req, res) => {
     }
     res.json({ success: true, kind, items: shown,
       cats, labelKeys: labelKeys || null, running: running || 0,
-      // (phase V60) Scenarios: the archived ones beside the live (_scenariosShelf).
+      // Scenarios: the archived ones beside the live (_scenariosShelf).
       ...(Array.isArray(built.archived) ? { archived: built.archived } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── The right column: what one tile is (phase B, the owner 2026-09-29) ───────
+// ── The right column: what one tile is ─────────────────────────────────────────
 // The Library page selects a tile on the Characters shelf and shows
 // what it is beside the grid - read here in one go, on every selection, so a voice given or a look
 // made elsewhere shows up the next time the tile is pressed.
@@ -1315,7 +1305,7 @@ const INFO = {
       looks: _looks().items.filter(l => l.meta.charId === id),
     };
   },
-  // What is known about a lookbook (phase I): its gender and description - either may be empty, and
+  // What is known about a lookbook: its gender and description - either may be empty, and
   // both can be written by hand in the column - and the picture it was made from.
   lookbooks: (id) => {
     const media = _flatEntry(LOOKBOOKS_DIR, id);
@@ -1326,7 +1316,7 @@ const INFO = {
       gender: String(m.gender || ''), description: String(m.description || ''), from: String(m.from || ''),
     };
   },
-  // (phase V26.6) A product: its name, the person's own words and the agent's description - and whether it is being read.
+  // A product: its name, the person's own words and the agent's description - and whether it is being read.
   props: (id) => {
     const media = _flatEntry(PROPS_DIR, id);
     if (!media) return null;
@@ -1336,13 +1326,13 @@ const INFO = {
   },
 };
 
-// WRITTEN BY HAND IN THE COLUMN (phase I, the owner: shown, and filling them is optional). One writer
+// WRITTEN BY HAND IN THE COLUMN (shown; filling them is optional). One writer
 // per field: a lookbook's gender and description, an environment's description here; how a place
 // moves keeps its own route (/api/scen3/env/motion). An empty value takes the field away.
 //   PATCH /api/library/meta/:kind/:id   { description?, gender? }
 // A lookbook's gender decides which lookbooks Merge offers a character, and its description is what
 // the dressing reads - which is the point of correcting them.
-// (phase V26.6) A product's name, the person's words and the description, each written by hand in the viewer.
+// A product's name, the person's words and the description, each written by hand in the viewer.
 const META_FIELDS = { lookbooks: ['description', 'gender'], environments: ['description'], props: ['name', 'words', 'description'] };
 const GENDERS = ['male', 'female', 'unisex'];
 router.patch('/library/meta/:kind/:id', (req, res) => {
@@ -1363,7 +1353,7 @@ router.patch('/library/meta/:kind/:id', (req, res) => {
       const v = String(b[f]).trim().slice(0, f === 'name' ? 120 : 4000);
       if (v) m[f] = v; else delete m[f];
     }
-    // (phase V26.6) A description written by hand is the person's now - "read again" is what gives it back to the agent.
+    // A description written by hand is the person's now - "read again" is what gives it back to the agent.
     if (kind === 'props' && b.description != null) m.by = m.description ? 'you' : '';
     m.at = new Date().toISOString();
     all[media] = m;
@@ -1373,7 +1363,7 @@ router.patch('/library/meta/:kind/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V26.6, the owner's (п3), (пр1)-(пр5)) NEW PROP - a product brought into IMAGES -> Props: a photo (its bytes from this
+// NEW PROP - a product brought into IMAGES -> Props: a photo (its bytes from this
 // computer, or a library address - a picture of IMAGES stays where it is) with a name and what the person knows about it.
 // Answered once the picture lies in Props; the agent writes its description behind the answer (lib/props.js) - no Alerts
 // row, nothing generated.
@@ -1466,7 +1456,7 @@ function _unlink(webPath) {
 function _pathsInUse(doomed) {
   const skip = new Set((doomed || []).map(String));
   const used = new Set();
-  // birols and uploads are one file; the pictures too, since a picture's own copy beside it now goes with it.
+  // birols and uploads are one file; the pictures too, since a picture's own copy beside it goes with it.
   for (const kind of ['birols', 'hooks', 'images', 'sounds', 'music']) {
     let list = [];
     try { list = RECORD_STORES[kind].read(); } catch (e) { continue; }
@@ -1475,7 +1465,7 @@ function _pathsInUse(doomed) {
       for (const p of [e.videoPath, e.thumbPath, e.imagePath, e.audioPath]) if (p) used.add(String(p).split('?')[0]);
     }
   }
-  // (phase TG, block 7) And what a clip delete must never take: the whole video a piece names (lib/cuts.js), a REFERENCES
+  // And what a clip delete must never take: the whole video a piece names (lib/cuts.js), a REFERENCES
   // post's file, a scenario source's video.
   for (const r of CUTS.records()) {
     if (skip.has(r.id)) continue;
@@ -1486,7 +1476,7 @@ function _pathsInUse(doomed) {
 }
 
 // The whole videos the pieces of `doomed` named - for lib/cuts.js dropOrphans once those records are gone.
-// (phase V54) Never a file a record of Music names: a piece of a track keeps the track as its `original` (lib/audio-cut.js),
+// Never a file a record of Music names: a piece of a track keeps the track as its `original` (lib/audio-cut.js),
 // and lib/cuts.js does not look into Music - so a track, or anything a track names, is taken out here, whatever it is.
 function _musicFiles() {
   const keep = new Set();
@@ -1506,7 +1496,7 @@ const _originalsOf = (doomed) => {
 
 // What belongs to a file and goes with it: the derivatives a move carries along (lib/relocate.js siblingsOf) -
 // its thumbs/ copy, a clip's poster, a preview, a clip's loudness mark. A picture made by an engine has a 600px
-// copy in thumbs/ beside it (lib/helpers.js createThumbnail), and deleting the picture used to leave that copy
+// copy in thumbs/ beside it (lib/helpers.js createThumbnail), which goes with the picture rather than staying
 // behind with nothing pointing at it.
 //
 // A thumbs/ or preview/ copy is known only by the file's STEM, so while another file of that stem stays in the
@@ -1551,10 +1541,9 @@ function _unlinkUnused(paths, doomed) {
 // A record store: how to read its list, where the list lives inside the file, which
 // fields the page may set, and which files belong to one entry.
 // `thumbPath` is patchable because the media shelf reads `thumb` from the RECORD, not from disk, so the thumbnail
-// repair in the Library writes the new path back through PATCH. (These stores were once the browser's, kept in step
-// through localStorage - `lsKey` - by the Birols page's sync; that page is gone, and the key with it, phase V23.)
+// repair in the Library writes the new path back through PATCH.
 const RECORD_STORES = {
-  // (phase TG, block 5b) REFERENCES' posts - here for their own categories (renamed, deleted with their posts or with
+  // REFERENCES' posts - here for their own categories (renamed, deleted with their posts or with
   // the posts let go to their sources' folders). A post's name is `title`, its files several.
   references: {
     file: path.join(DATA_DIR, 'references.json'),
@@ -1605,7 +1594,7 @@ const RECORD_STORES = {
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.imagePath],
   },
-  // (phase V7) The Sounds shelf - server-owned like images (lib/sounds-store.js).
+  // The Sounds shelf - server-owned like images (lib/sounds-store.js).
   sounds: {
     file: SND.FILE,
     read: SND.read,
@@ -1613,7 +1602,7 @@ const RECORD_STORES = {
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.audioPath],
   },
-  // (phase V28.4, second round) The talking heads KEPT from deleted projects (lib/heads.js, data/heads.json): deleted one
+  // The talking heads KEPT from deleted projects (lib/heads.js, data/heads.json): deleted one
   // by one, with the file. A take of a project that is still there is not here - it is the project's.
   heads: {
     file: require('../lib/heads').FILE,
@@ -1622,13 +1611,13 @@ const RECORD_STORES = {
     fields: [],
     files: (e) => [e.path],
   },
-  // (phase V28.4) The music (lib/music-store.js): no categories; a track goes with its file, as everything on Media
-  // (the owner); its name is the record's `title`.
+  // The music (lib/music-store.js): a track goes with its file, as everything on Media; its name is the record's
+  // `title`.
   music: {
     file: MUSIC.FILE,
     read: MUSIC.read,
     write: MUSIC.write,
-    // (phase V54) and its own folder
+    // and its own folder
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.audioPath],
   },
@@ -1639,8 +1628,8 @@ RECORD_STORES.uploads = RECORD_STORES.birols;
 // Lookbooks and environments are not records at all — the shelf IS the directory.
 // Delete-only by design: these filenames are referenced by look records (a look can
 // point at a lookbook image), so renaming the file would silently break them.
-// (phase V26.6) And Props: a product deleted takes its picture, thumbnail and description; the frames drawn with it stay
-// (the owner's (п8)) - they keep what they knew of it.
+// And Props: a product deleted takes its picture, thumbnail and description; the frames drawn with it stay - they keep
+// what they knew of it.
 const FILE_SHELVES = {
   lookbooks:    { dir: LOOKBOOKS_DIR,    url: toUrl(LOOKBOOKS_DIR) },
   environments: { dir: ENVIRONMENTS_DIR, url: toUrl(ENVIRONMENTS_DIR) },
@@ -1649,7 +1638,7 @@ const FILE_SHELVES = {
 
 const _r = (status, body) => ({ status, body });
 
-// (phase V54) A BATCH PLACES ITS FILES ONCE. Each item function moves a record's files to its folder (SHELF.placeRecords -
+// A BATCH PLACES ITS FILES ONCE. Each item function moves a record's files to its folder (SHELF.placeRecords -
 // one relocate, every store and project rewritten); a batch of hundreds would do that hundreds of times. While a batch
 // runs, `_placeLater` collects what would have been placed, and `_placeAll` places the records as they are at the end,
 // in ONE call.
@@ -1667,12 +1656,12 @@ function _placeAll(list) {
   if (items.length) SHELF.placeRecords(items);
 }
 
-// (phase V54) The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
+// The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
 // several items exactly what these do to one.
 function _patchOne(kindIn, idIn, bodyIn) {
     const req = { params: { kind: kindIn, id: idIn }, body: bodyIn || {} };   // the route's own names, kept
     const kind = String(req.params.kind || '');
-    // (phase V73, the owner's (rn-2) а) A render's Rename - its only change here: the file takes the name by the rule of
+    // A render's Rename - its only change here: the file takes the name by the rule of
     // lib/render-files.js (its .srt, its poster, the queue's entry and a highlights fragment's record follow; " (2)" when
     // taken). The id is its path inside media/renders/ - a new id comes back.
     if (kind === 'renders') {
@@ -1695,7 +1684,7 @@ function _patchOne(kindIn, idIn, bodyIn) {
       return _r(200, { success: true, kind, id: path.relative(FINALS_DIR, moved.abs).split(path.sep).join('/'), name: stem,
         url: moved.url, thumb: hasThumb ? turl : null });
     }
-    // (phase V34.E) A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
+    // A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
     if (kind === 'sfx') {
       const s = require('../lib/sfx-builtin').read().sounds.find(x => x.id === String(req.params.id || ''));
       if (!s) return _r(404, { success: false, error: 'no such built-in sound' });
@@ -1706,7 +1695,7 @@ function _patchOne(kindIn, idIn, bodyIn) {
       require('../lib/sfx-favorites').set(s.path, !!b.favorite);
       return _r(200, { success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
     }
-    // (phase V55) A made environment or lookbook: written about on its shelf (PATCH /library/meta), never filed elsewhere.
+    // A made environment or lookbook: written about on its shelf (PATCH /library/meta), never filed elsewhere.
     if (MADE_KINDS.has(kind)) return _r(409, { success: false, error: MADE_STAYS[kind] });
     const store = RECORD_STORES[kind];
     if (!store) return _r(400, { success: false, error: `"${kind}" cannot be edited here` });
@@ -1725,7 +1714,7 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
     if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
-    // (phase V60.2, the owner's (дг10а)) A B-roll lies in its model's folder: "no folder" is that folder itself, a folder of
+    // A B-roll lies in its model's folder: "no folder" is that folder itself, a folder of
     // another model's is refused in words (lib/model-folders.js).
     if (kind === 'birols' && 'categoryId' in patch) {
       try {
@@ -1734,15 +1723,15 @@ function _patchOne(kindIn, idIn, bodyIn) {
         patch.categoryLabel = t.label;
       } catch (e) { return _r(e.status || 409, { success: false, error: e.message }); }
     }
-    // (phase V57, the owner's (ок2)) Into the references of Environments / Lookbooks - never by hand: only the photos their
+    // Into the references of Environments / Lookbooks - never by hand: only the photos their
     // generators are given lie there (lib/library-cats.js closedWhy). Out of them - as anywhere.
     if (patch.categoryId && patch.categoryId !== String(it.categoryId || '')) {
       const shut = LC.closedWhy(kind, patch.categoryId);
       if (shut) return _r(409, { success: false, error: shut });
     }
-    // (phase V28.4) A track's name is its title: the music panel and the video chat read that.
+    // A track's name is its title: the music panel and the video chat read that.
     if (kind === 'music' && 'name' in patch) { patch.title = patch.name; delete patch.name; }
-    // (phase V54 block 6) A category is a folder that is there - a nested one is chosen by its id, never guessed from a name.
+    // A category is a folder that is there - a nested one is chosen by its id, never guessed from a name.
     if (patch.categoryId && LC.KINDS.includes(kind)) {
       const cat = LC.find(kind, patch.categoryId);
       if (!cat && LC.isOwn(null, patch.categoryId)) return _r(400, { success: false, error: 'that folder is not one of ' + kind });
@@ -1750,9 +1739,9 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
 
     Object.assign(it, patch);
-    // (2026-11-09) A sound filed into My sounds (or a folder of it) leaves AUDIO's own root - it lies in one place.
+    // A sound filed into My sounds (or a folder of it) leaves AUDIO's own root - it lies in one place.
     if (kind === 'sounds' && 'categoryId' in patch) delete it.inAudio;
-    // (phase V54) A track in an own folder of Music is out of highlights - it lies in one place.
+    // A track in an own folder of Music is out of highlights - it lies in one place.
     if (kind === 'music' && patch.categoryId) { delete it.folder; delete it.mood; }
     store.write(list);
     // Another category is another folder: the files move there, and every path to them with them.
@@ -1772,8 +1761,8 @@ router.patch('/library/item/:kind/:id', (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── Cutting a piece out of a video (phase TG, block 7) ──────────────────────
-   A PIECE IS A NEW FILE AND A NEW TILE (the owner 2026-10-21, "вариант Б"): cut from `src` between `in` and `out` (its
+/* ── Cutting a piece out of a video ──────────────────────────────────────────
+   A PIECE IS A NEW FILE AND A NEW TILE: cut from `src` between `in` and `out` (its
    own seconds), filed where the person chose in the window after choosing the stretch - a kind of VIDEO (birols,
    uploads, hooks; a category by its label, made when new) or REFERENCES (a post of its own: an own category `cat`, or
    the folder of the site its whole video came from, Files when none). The video it was cut from is not touched.
@@ -1796,7 +1785,7 @@ function _cutTo(b) {
 
 /**
  * A piece made by lib/cuts.js (cut, cutMany) filed where the person chose: its poster, then a clip of VIDEO or a post of its
- * own in REFERENCES. -> { kind, id, item, src, thumb, dur, name } (src..name - what a lane needs, phase V81's "Add to
+ * own in REFERENCES. -> { kind, id, item, src, thumb, dur, name } (src..name - what a lane needs, for "Add to
  * timeline"). A piece that cannot be filed goes, with its poster.
  */
 async function _filePiece(made, to, o) {
@@ -1840,17 +1829,16 @@ async function _filePiece(made, to, o) {
   }
 }
 
-/* ── Several pieces at once, and the scenes (phase V81) ───────────────────────
+/* ── Several pieces at once, and the scenes ───────────────────────────────────
    POST   /api/library/cuts { src, parts: [{ in, out, label? }], join, to, drop? }   -> { job }
           the fragments drawn over a video (js/cuts/parts.js): `join` - ONE new clip of them all in the order of time, else
           each a new clip of its own, filed as it is made (lib/cuts.js cutMany, _filePiece) - all into the one place chosen;
           `drop: { kind, id }` - the video's own record (B-rolls, Uploads, Hooks): once every piece is filed it is deleted the
           shelf's way (_deleteOne) and the pieces keep no `original` - unless a project's timeline or THIS PROJECT holds it:
-          then it stays, the pieces keep their original, and the job says where (`kept`) (V81 amendment, the owner's (нк2),
-          (нк3), 2026-11-12)
+          then it stays, the pieces keep their original, and the job says where (`kept`)
    GET    /api/library/cuts/:job      -> { state: working | done | stopped | failed, done, total, pieces: [{ kind, id, src,
                                          thumb, dur, name }], error, dropped, kept }
-   DELETE /api/library/cuts/:job      stop: the pieces made stay, the rest are not made (the owner's (в17))
+   DELETE /api/library/cuts/:job      stop: the pieces made stay, the rest are not made
    A job lives in the server's memory - it goes on while the viewer is closed; the app closed midway, the rest is simply not
    made (nothing is paid: no row in Alerts). Kept an hour after it ends.
 
@@ -1960,7 +1948,7 @@ function _deleteOne(kindIn, idIn, filesIn) {
     const kind = String(req.params.kind || '');
     if (kind === 'sfx') return _r(409, { success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
     const id = String(req.params.id || '');
-    // (phase V59.1) A saved text of Music -> Lyrics: no file goes with it.
+    // A saved text of Music -> Lyrics: no file goes with it.
     if (kind === 'lyrics') {
       try { LY.remove(id); return _r(200, { success: true, kind, id, removed: [] }); }
       catch (e) { return _r(e.status || 500, { success: false, error: e.message }); }
@@ -1974,15 +1962,14 @@ function _deleteOne(kindIn, idIn, filesIn) {
       const base = path.basename(id);
       if (!base || !IMG_RE.test(base)) return _r(400, { success: false, error: 'not an image on this shelf' });
       if (!fs.existsSync(path.join(shelf.dir, base))) return _r(404, { success: false, error: 'not found' });
-      // (phase V58, (лк4)) An environment a talking head is set in, or a 3D scene was laid out from, stays - in words.
+      // An environment a talking head is set in, or a 3D scene was laid out from, stays - in words.
       if (kind === 'environments') {
         const why = require('../lib/casting-use').envRefusal(`${shelf.url}/${base}`);
         if (why) return _r(409, { success: false, error: why });
       }
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
-      // And its preview, made for a large one when it was filed (routes/scen3.js _previewTarget) - it
-      // was left behind before phase I, where every environment the chat makes has one.
+      // And its preview, made for a large one when it was filed (routes/scen3.js _previewTarget).
       _unlink(`${shelf.url}/preview/${base.replace(/\.[^.]+$/, '.jpg')}`);
       // What the agent wrote about it goes with it (lib/shelf-meta.js) - an entry for a picture
       // that no longer exists is only something a later picture of the same name could inherit.
@@ -2003,9 +1990,9 @@ function _deleteOne(kindIn, idIn, filesIn) {
       if (_unlink(url)) removed.push(base);
       const turl = VT.thumbUrlFor(url);
       if (turl) _unlink(turl);
-      // Its subtitles file beside it (phase V30, block 4).
+      // Its subtitles file beside it.
       try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open */ }
-      // (phase V73, the owner's (rn-4) а) and its entry in Queue (routes/mv3q.js removeByUrl) - Queue -> open would open a
+      // and its entry in Queue (routes/mv3q.js removeByUrl) - Queue -> open would open a
       // file that is gone
       try { require('./mv3q').removeByUrl(url); } catch (e) { /* no queue */ }
       return _r(200, { success: true, kind, id, removed });
@@ -2017,7 +2004,7 @@ function _deleteOne(kindIn, idIn, filesIn) {
     const it = list.find(x => x && String(x.id) === id);
     if (!it && kind === 'heads') return _r(409, { success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
     if (!it) return _r(404, { success: false, error: 'not found' });
-    // (phase V58, (лк3)) A look a talking head is cast in stays - in words, with the project's name.
+    // A look a talking head is cast in stays - in words, with the project's name.
     if (kind === 'obrazy') {
       let dir = '';
       try { const abs = store.folder(it); dir = abs ? toUrl(abs) : ''; } catch (e) { dir = ''; }
@@ -2042,8 +2029,8 @@ function _deleteOne(kindIn, idIn, filesIn) {
       }
     }
     store.write(list.filter(x => x !== it));
-    // A piece's whole video, when nothing holds it any more (phase TG, block 7).
-    // (phase V54) A piece of a track names the TRACK - never dropped as an orphan.
+    // A piece's whole video, when nothing holds it any more.
+    // A piece of a track names the TRACK - never dropped as an orphan.
     if (withFiles && kind !== 'music') removed.push(...CUTS.dropOrphans(_originalsOf([it])));
     // `spared` is a file another record is still using, so it stayed put.
     return _r(200, { success: true, kind, id, removed, spared });
@@ -2056,8 +2043,8 @@ router.delete('/library/item/:kind/:id', (req, res) => {
 // ── Take a voice off the shelf ──────────────────────────────────────────────
 // Its own route rather than a RECORD_STORES entry, because of the refusal. A character's
 // voice entry points at the SAME demo file this record does, so unlinking it while somebody
-// still speaks with the voice would silently break their row - the shared-file problem the
-// media shelf already learned the hard way, except here the guard can be exact.
+// still speaks with the voice would silently break their row - the shared-file problem of the
+// media shelf (_pathsInUse), except here the guard can be exact.
 //
 // So: in use is undeletable, like a green frame. Free means the record goes and the demo
 // with it, since nothing else can be pointing at a demo nobody uses.
@@ -2114,7 +2101,7 @@ function _kindOne(fromIn, idIn, toIn) {
     // Same store: flip the flag that decides which kind it reads as. `categoryId` is
     // kept — moving a birol to uploads and back should not lose which category it was in.
     // A MOVED CLIP ARRIVES AS THE NEWEST THING ON ITS NEW SHELF. The shelf is ordered by `date`
-    // (favourites first), and a clip that kept the date it was uploaded landed wherever that old
+    // (favourites first), and a clip that kept the date it was uploaded would land wherever that
     // date put it - in the middle of the grid, looking as if the move had not happened. The
     // original date is kept beside it as `uploadedAt`, so nothing about when it came in is lost.
     const now = new Date().toISOString();
@@ -2123,7 +2110,7 @@ function _kindOne(fromIn, idIn, toIn) {
     if (src.file === dst.file) {
       if (to === 'uploads') it.source = 'upload';
       else delete it.source;
-      // (phase V60.2) A B-roll lies in its model's folder (a clip of before told by its file's name); out of B-rolls, out of
+      // A B-roll lies in its model's folder (an older clip told by its file's name); out of B-rolls, out of
       // it - a folder of B-rolls is no folder of Uploads.
       if (to === 'birols') {
         const f = MF.folderFor(MF.modelOf(Object.assign({}, it, { categoryId: '' }), { byName: true }));
@@ -2151,7 +2138,7 @@ function _kindOne(fromIn, idIn, toIn) {
     };
     // Its length travels with the clip, so a drop onto a lane lands at the right width instead of reading the file first.
     if (it.duration) moved.duration = it.duration;
-    // (phase TG, block 7) A piece keeps its whole video wherever it is filed - and where it came from by a link.
+    // A piece keeps its whole video wherever it is filed - and where it came from by a link.
     if (it.original) moved.original = it.original;
     if (it.w) { moved.w = it.w; moved.h = it.h; }
     if (it.link) moved.link = it.link;
@@ -2166,7 +2153,7 @@ function _kindOne(fromIn, idIn, toIn) {
         status: 'done',
       });
       if (to === 'uploads') moved.source = 'upload';
-      // (phase V60.2) A hook made a B-roll: into its model's folder - Other, unless its file's name says (a clip of before).
+      // A hook made a B-roll: into its model's folder - Other, unless its file's name says (an older clip).
       if (to === 'birols') {
         const f = MF.folderFor(MF.modelOf(moved, { byName: true }));
         moved.categoryId = f.id; moved.categoryLabel = f.label;
@@ -2188,8 +2175,7 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// SEVERAL TILES AT ONCE (phase V54 block 5, the owner 2026-10-27: "выделение нескольких файлов ... с зажатым shift
-// (выделение от и до) и с зажатым ctrl"; (зв17)) - js/tile-select.js picks tiles in Library -> Media and in Merge's
+// SEVERAL TILES AT ONCE - js/tile-select.js picks tiles in Library -> Media and in Merge's
 // Library panel; these do to every one of them what the item routes above do to one, in ONE request and one tick (every
 // step is synchronous).
 //
@@ -2222,8 +2208,8 @@ function _recOf(kind, id) {
   try { return st.read().find(x => x && String(x.id) === String(id)) || null; } catch (e) { return null; }
 }
 const _nameOfRec = (kind, id) => {
-  // (phase V55) A made environment or lookbook has no record: its id is its file's name.
-  // (phase V26.6) A product goes by the name it was given.
+  // A made environment or lookbook has no record: its id is its file's name.
+  // A product goes by the name it was given.
   if (kind === 'props') { const m = SM.read('props')[toUrl(PROPS_DIR) + '/' + path.basename(String(id || ''))] || {}; if (m.name) return String(m.name); }
   if (MADE_KINDS.has(kind)) return String(id || '').replace(/\.[^.]+$/, '');
   if (kind === 'lyrics') { const l = LY.get(id); return l ? l.title : ''; }
@@ -2231,7 +2217,7 @@ const _nameOfRec = (kind, id) => {
   return r ? String(r.name || r.title || '') : '';
 };
 
-// (phase V59.1) What Music -> Lyrics says to a move - the same words as js/media-tree.js.
+// What Music -> Lyrics says to a move - the same words as js/media-tree.js.
 const LYRICS_STAY = 'a text stays in Music → Lyrics';
 const LYRICS_TAKE = 'only Generate music saves texts into Music → Lyrics';
 
@@ -2241,13 +2227,13 @@ function _moveOne(it, to) {
   if (from === 'sfx') return 'a built-in sound stays in Built-in';
   if (from === 'heads') return 'a talking head is its project\'s';
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
-  // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
+  // A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
   if (MADE_KINDS.has(from)) return MADE_STAYS[from];
   if (MADE_KINDS.has(to.kind)) return MADE_TAKES[to.kind];
-  // (phase V59.1, (мз6а)) A saved text stays in Music -> Lyrics, and only Generate music saves into it.
+  // A saved text stays in Music -> Lyrics, and only Generate music saves into it.
   if (from === 'lyrics') return LYRICS_STAY;
   if (to.kind === 'lyrics') return LYRICS_TAKE;
-  // (2026-11-09, the owner's (в20)) A sound and a track: between Music, SFX -> My sounds and AUDIO's root, either way.
+  // A sound and a track: between Music, SFX -> My sounds and AUDIO's root, either way.
   if (AUDIO_MOVES.has(from) && AUDIO_MOVES.has(to.kind) && (from !== to.kind || from === 'sounds')) return _audioMove(it, to);
   if (from === 'music' || to.kind === 'music') {
     if (from !== to.kind) return from === 'music' ? 'a track goes into Music, SFX or AUDIO' : 'only tracks and sounds go into Music';
@@ -2295,8 +2281,7 @@ function _moveOne(it, to) {
   return 'it cannot go there';
 }
 
-// (2026-11-09, the owner's (в19)-(в20): "должно ложится в корень audio. там пользователь уже распределит по своим папкам" -
-// "разрешить переносить") A sound into My sounds, a folder of it or AUDIO's own root (`to.aroot`); a sound into Music, a
+// A sound into My sounds, a folder of it or AUDIO's own root (`to.aroot`); a sound into Music, a
 // track into SFX or AUDIO - the record changes store (lib/audio-kind.js swap). Its file is placed with the rest of a batch,
 // or at once. '' when it went, else why not.
 const AUDIO_MOVES = new Set(['sounds', 'music']);
@@ -2396,7 +2381,7 @@ router.post('/library/batch/move', (req, res) => {
       folder: String(t.folder || ''), mood: String(t.mood || ''), aroot: !!t.aroot && String(t.kind || '') === 'sounds' };
     if (!items.length || !to.kind) return res.status(400).json({ success: false, error: 'what, and where to' });
     if (to.cat === UNCAT) to.cat = '';
-    // (phase V57) The references of Environments / Lookbooks take nothing by hand - said once, nothing moved.
+    // The references of Environments / Lookbooks take nothing by hand - said once, nothing moved.
     const shut = LC.closedWhy(to.kind, to.cat);
     if (shut) return res.status(409).json({ success: false, error: shut });
     const skipped = [];
@@ -2550,7 +2535,7 @@ router.post('/library/media/record', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
-// The filing itself, for the route above and for a clip that came in by a link (phase V27, lib/link-queue.js): the
+// The filing itself, for the route above and for a clip that came in by a link (lib/link-queue.js): the
 // same record, the same place and the same proxy as a file brought in by hand. Throws with `status`.
 function _fileRecord(b) {
   const _no = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
@@ -2581,7 +2566,7 @@ function _fileRecord(b) {
   // to know which id that resolved to - and LC.add is idempotent by label, handing back the
   // existing category rather than making a second one with the same name, so asking for it every
   // time is the same as asking whether it exists. A hook is filed by id only.
-  // (phase V54 block 6) A folder chosen by its id - with folders in folders a name may be in several places.
+  // A folder chosen by its id - with folders in folders a name may be in several places.
   const byId = categoryId ? LC.find(kind, String(categoryId)) : null;
   if (byId) {
     rec.categoryId = byId.id;
@@ -2599,11 +2584,11 @@ function _fileRecord(b) {
   // Only set when given: every other way of filing a record leaves it absent.
   if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
   if (prompt) rec.prompt = String(prompt).slice(0, 2000);
-  // (phase V27) A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
+  // A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
   // spelling of it (lib/ytdlp.js info().key), so the same video is not fetched onto the shelf twice.
   if (b.link) rec.link = String(b.link).slice(0, 2000);
   if (b.linkKey) rec.linkKey = String(b.linkKey).slice(0, 200);
-  // (phase TG, block 7) A piece cut out of a video: its whole video (lib/cuts.js), its length and frame.
+  // A piece cut out of a video: its whole video (lib/cuts.js), its length and frame.
   if (b.original && b.original.path) {
     const o = b.original;
     rec.original = { path: String(o.path), in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: String(o.name || '').slice(0, 120) };
@@ -2612,7 +2597,7 @@ function _fileRecord(b) {
   }
   if (+b.duration > 0) rec.duration = Math.round(+b.duration * 100) / 100;
   if (+b.w > 0 && +b.h > 0) { rec.w = +b.w; rec.h = +b.h; }
-  // (phase V60.2, the owner's (дг4а), (дг10а)) A B-roll lies in the folder of the model that made it - a piece its clip's, a
+  // A B-roll lies in the folder of the model that made it - a piece its clip's, a
   // file brought in Other's: a group asked for by name inside that folder, one of another model's refused in words.
   if (kind === 'birols') {
     const model = MF.modelOf(Object.assign({}, rec, { categoryId: '' }));
@@ -2640,15 +2625,15 @@ function _fileRecord(b) {
 // CATEGORIES - FOLDERS - one list per kind, owned by lib/library-cats.js; moved with their files by lib/folders.js
 //
 //   GET    /api/library/cats?kind=          the lists, for the dropdowns: every folder with its `parent` and `trail` (its
-//                                           names from the top), in the tree's order; `closed` (V57) - nothing goes there by hand
+//                                           names from the top), in the tree's order; `closed` - nothing goes there by hand
 //   POST   /api/library/cats                { kind, label }           filed by name (the code's way: top first, then anywhere)
-//                                           { kind, label, parent }   (phase V54) a new folder in `parent` ('' - the kind)
+//                                           { kind, label, parent }   a new folder in `parent` ('' - the kind)
 //   PATCH  /api/library/cats/:id            { kind, label }           rename (its folder on the disk with everything under it)
-//   POST   /api/library/cats/:id/move       { kind, parent }          (phase V54) into another folder of its kind
+//   POST   /api/library/cats/:id/move       { kind, parent }          into another folder of its kind
 //   DELETE /api/library/cats/:id            ?kind=&media=move|delete
 //
 // Records keep a DENORMALISED copy of the name in `categoryLabel` - lib/folders.js refreshes it on a rename.
-// (phase V54 block 6, the owner 2026-10-27/28) Folders in folders, with no limit of depth - (зв19)-(зв22), (зв27), (зв33)-(зв46).
+// Folders in folders, with no limit of depth.
 // ════════════════════════════════════════════════════════════════════════════
 
 // The records that a category of this kind actually stands for. birols and uploads share one
@@ -2661,10 +2646,10 @@ function _kindRecords(kind) {
     if (!e) return false;
     // birols and uploads are the only two kinds that share a file, so they are the only two
     // that need telling apart; everything else owns its store outright. Written as "which
-    // kinds need the split" rather than "which kind does not" because the old form asked
-    // _isUpload about records it was never meant to judge: an image is filed with
-    // source:'upload', which that predicate reads as true, so every image would have been
-    // excluded from its own kind and no category delete could ever have reached one.
+    // kinds need the split" rather than "which kind does not": the other form would ask
+    // _isUpload about records it is never meant to judge - an image is filed with
+    // source:'upload', which that predicate reads as true, so every image would be
+    // excluded from its own kind and no category delete could reach one.
     if (kind !== 'birols' && kind !== 'uploads') return true;
     return _isUpload(e) === (kind === 'uploads');
   };
@@ -2694,17 +2679,17 @@ function _subtree(kind, id) {
 
 // Every list in one request, in the tree's order (lib/library-cats.js listFor: the locked first, then A-Z, a folder's own
 // after it), each folder with where it is: `parent`, `trail`. A card's dropdown offers its OWN kind's list, by path -
-// "Товары / Обувь / Лето".
+// "Products / Shoes / Summer".
 router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
     const state = LC.read();
-    // (phase V60.2) B-rolls: which model's folder each lies in (`model` - a dropdown offers a clip its own model's), and a
-    // model's folder with nothing under it is not offered ((дг9б)).
+    // B-rolls: which model's folder each lies in (`model` - a dropdown offers a clip its own model's), and a
+    // model's folder with nothing under it is not offered.
     const bUsed = new Set();
     for (const e of RECORD_STORES.birols.read()) if (e && e.categoryId) bUsed.add(MF.modelOfCat(state, e.categoryId));
     for (const k of LC.KINDS) {
-      // (phase V57) `closed` - the references of Environments / Lookbooks and what is under them: a dropdown offers them only
+      // `closed` - the references of Environments / Lookbooks and what is under them: a dropdown offers them only
       // as where a picture already is (lib/library-cats.js closedWhy).
       const list = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title,
         parent: c.parent || '', trail: c.trail || [c.title], ...(LC.closedWhy(k, c.id, state) ? { closed: true } : {}),
@@ -2725,9 +2710,9 @@ router.post('/library/cats', (req, res) => {
     const b = req.body || {};
     const kind = String(b.kind || '');
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    // (phase V60.2) Filed by name at the top of B-rolls - there is no such place: the top is the models' folders.
+    // Filed by name at the top of B-rolls - there is no such place: the top is the models' folders.
     if (kind === 'birols' && !('parent' in b)) return res.status(409).json({ success: false, error: LC.MODELS_TOP });
-    // (phase V54) A folder made where the person asked - in `parent`, or the kind itself.
+    // A folder made where the person asked - in `parent`, or the kind itself.
     const { cat, created } = ('parent' in b) ? LC.make(kind, b.label, String(b.parent || '')) : LC.add(kind, b.label);
     res.json({ success: true, cat, created });
   } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
@@ -2755,8 +2740,8 @@ router.patch('/library/cats/:id', (req, res) => {
   } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
-// (phase V54 block 6) Into another folder of its kind - `parent` '' is the kind itself. A folder of the same name there is
-// refused in words (зв35); so is a required one, and one into itself.
+// Into another folder of its kind - `parent` '' is the kind itself. A folder of the same name there is
+// refused in words; so is a required one, and one into itself.
 router.post('/library/cats/:id/move', (req, res) => {
   try {
     const id = String(req.params.id || '');
@@ -2769,10 +2754,10 @@ router.post('/library/cats/:id/move', (req, res) => {
   } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
-// media=move   (the default) what is in it goes ONE LEVEL UP (phase V54 block 6, (зв46)): its files into the folder it is
+// media=move   (the default) what is in it goes ONE LEVEL UP: its files into the folder it is
 //              in - at the top, into the kind itself (their files into nocat; REFERENCES' posts back to their sources'
 //              folders; Music's tracks into Music) - and its folders become that folder's. A folder there of a name one
-//              of them has is refused in words before anything moves (зв35).
+//              of them has is refused in words before anything moves.
 // media=delete REMOVES what is in it AND IN EVERY FOLDER UNDER IT: files unlinked, records dropped. Irreversible, and the
 //              page names how many and the projects that use them before it can be chosen.
 //
@@ -2826,11 +2811,11 @@ router.delete('/library/cats/:id', (req, res) => {
   } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
-// ── WHERE A FILE IS USED (phase V28.4, the owner 2026-10-12) ───────────────────
+// ── WHERE A FILE IS USED ──────────────────────────────────────────────────────
 // Asked before something is deleted from the library: the projects (the draft too) whose timelines hold it, and how
 // many clips in each - the deleting question names them, and there the clips turn red (lib/timeline-media.js).
 //   POST /api/library/usage { media: [address, ...] }       some files
-//   POST /api/library/usage { kind, cat }                   everything in a category ('__uncat__': in none) - and (phase V54)
+//   POST /api/library/usage { kind, cat }                   everything in a category ('__uncat__': in none) - and
 //                                                           in every folder under it
 //   -> { projects: [{ key, title, draft, clips }] }
 router.post('/library/usage', (req, res) => {
@@ -2850,7 +2835,7 @@ router.post('/library/usage', (req, res) => {
         for (const p of (store.files ? store.files(e) : [])) if (p) media.push(String(p));
       }
     }
-    // (phase V78, (лч14)) And the projects whose THIS PROJECT holds them - a link goes with its file.
+    // And the projects whose THIS PROJECT holds them - a link goes with its file.
     res.json({ success: true, projects: require('../lib/timeline-media').usage(media), linked: PLINKS.usage(media) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2864,14 +2849,14 @@ router.get('/library/counts', (_req, res) => {
     const out = {};
     for (const kind of COUNTED) {
       const build = SHELVES[kind];
-      // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
+      // Media counts its music too - Music is Audio -> Music there.
       try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V27) The filing of a clip brought in, for one that came by a link (lib/link-queue.js).
+// The filing of a clip brought in, for one that came by a link (lib/link-queue.js).
 router.fileRecord = _fileRecord;
 
 module.exports = router;

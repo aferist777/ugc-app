@@ -1,8 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   HOME'S ICONS (phase V70, P13) - the owner's choice in P1 (2026-11-01; docs/local-app/mockups/v68-icons/ kind-*.svg,
-   gen-*.svg, lib-*.svg): filled, on a 24×24 grid, `currentColor` - so they are put into the page AS SVG (never an <img>)
+   HOME'S ICONS - filled, on a 24×24 grid, `currentColor` - so they are put into the page AS SVG (never an <img>)
    and take the tile's gold; the parts with an opacity are shades of the same colour. Their size is the page's (css/home.css);
-   the word under each is text ((хп26)).
+   the word under each is text.
 
      new project   blank - a sheet with a folded corner and "+"; highlights - three sparks; talking - a person and sound
                    waves; voiceover - a sound wave in bars

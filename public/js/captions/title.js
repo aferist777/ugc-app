@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CAPTIONS — THE TITLE ON TOP of a highlights fragment (phase V33.3; the owner's (х10), (х35)-(х37), 2026-10-21).
+   CAPTIONS — THE TITLE ON TOP of a highlights fragment.
 
    The moment's headline, on a TEXT lane of the fragment's timeline for its first three seconds - a line like any typed
    one: edited, drawn out, moved and deleted on the timeline, given another look by the caption tiles when it is picked.
@@ -7,9 +7,9 @@
    (merge-v3/highlights.js adds it to the fragment that is open - a server's write under an open timeline reads to the page
    as somebody else's edit).
 
-   Its look by default ((х37)): large, bold, white on a dark plate, at the top - below the strip the platforms draw there
+   Its look by default: large, bold, white on a dark plate, at the top - below the strip the platforms draw there
    (merge-v3/platforms.js: TikTok's tabs end at 235 px of 1920, Shorts' and Reels' buttons at 220), so it starts at
-   about 270 px. Since phase V42 that look is the TEXT PRESET Dark Plate (presets-text.js; it pops in and fades out) worn
+   about 270 px. That look is the TEXT PRESET Dark Plate (presets-text.js; it pops in and fades out) worn
    from there: the lane says "based on Dark Plate", and a tile of the text gallery gives it another look, its place kept.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -20,7 +20,7 @@ export const TITLE_SECONDS = 3;
 export const TITLE_MAX = 80;
 
 export const TITLE_PRESET = 'tx-dark-plate';
-// The preset's whole style, marked with its id, at the title's place (a text preset has none of its own, (ц3)).
+// The preset's whole style, marked with its id, at the title's place (a text preset has none of its own).
 export const TITLE_STYLE = normalizeStyle(Object.assign({}, textPresetOf(TITLE_PRESET).style, {
   preset: TITLE_PRESET, pos: 'top', tx: 0, ty: 0.045,
 }));
@@ -62,7 +62,7 @@ export function putTitle(tl, text, seconds, makeId) {
 }
 
 /**
- * (phase V69 P12, the owner's (хп90)) The title on top taken off a timeline, inside its one mutation: its line - the one at the very
+ * The title on top taken off a timeline, inside its one mutation: its line - the one at the very
  * beginning of the title lane - goes, and the lane with it when nothing else is on it. False when there is no title.
  */
 export function dropTitle(tl) {
@@ -73,7 +73,7 @@ export function dropTitle(tl) {
   return true;
 }
 
-// (phase V69 P10, the owner's (хп88)) fragmentation's title: "Часть 3 · Зоро против Михоука" - the word for "part" in the language the
+// Fragmentation's title: "Part 3 · <headline>" - the word for "part" in the language the
 // video is spoken in (the hearing's name of it - lib/highlights-job.js languageOf), "Part" for one not here; the number - the part's
 // place among those kept.
 const PART_WORD = {

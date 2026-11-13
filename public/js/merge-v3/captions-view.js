@@ -1,46 +1,45 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — "LIBRARY / captions": the preset tiles (phase K6c, 2026-10-03).
+   MERGE v3 — "LIBRARY / captions": the preset tiles.
 
    While captions are picked on the timeline - a subtitle or text lane, one caption, several - the
-   Library panel shows the 127 preset styles on the left and the settings of what is picked in the strip
+   Library panel shows the 131 preset styles on the left and the settings of what is picked in the strip
    on the right (inspector.js). A press on a tile applies the preset to what is picked, at once and as one
    step to undo; the tile of the preset it wears is lit, and says `edited` when it was changed since.
-   The tiles are always there when the window has room for them (phase S3, the owner 2026-10-05: the
-   `presets` switch that folded them away is gone); a window too narrow shows the strip alone.
+   The tiles are always there when the window has room for them; a window too narrow shows the strip alone.
 
    A tile is a 2.5 s loop made by the SERVER with the render's own builder and ffmpeg
    (lib/caption-tiles.js) - what it shows is what the render draws: a dark square with the words in its
-   middle (phase S1). Until it is made, the tile shows the preset's name in its own font and color. The
-   tiles are built ONCE and live outside the strip, which is rebuilt on every change: 127 animations
+   middle. Until it is made, the tile shows the preset's name in its own font and color. The
+   tiles are built ONCE and live outside the strip, which is rebuilt on every change: 131 animations
    rebuilt per press would be the page's whole evening.
 
-   A TILE SHOWS ITS STILL, AND PLAYS ONLY UNDER THE CURSOR (phase V32, the owner 2026-10-20: every loop loaded at once, and
-   slowly). The view asks for the stills alone - the frame at 0.3 s, made beside each loop (г1). The cursor on a tile asks for
-   its loop (once; then kept) and plays it in the tile over the still, from its start every time (г2); the cursor gone, the
-   loop finishes its round and the still comes back (г3) - back while it finishes, it plays on. The view hidden, another
+   A TILE SHOWS ITS STILL, AND PLAYS ONLY UNDER THE CURSOR (every loop loaded at once is slow). The view asks for the
+   stills alone - the frame at 0.3 s, made beside each loop. The cursor on a tile asks for
+   its loop (once; then kept) and plays it in the tile over the still, from its start every time; the cursor gone, the
+   loop finishes its round and the still comes back - back while it finishes, it plays on. The view hidden, another
    category or tab: the still at once.
 
-   TWO TABS over them (phase V30, block 2, the owner's (с6), (с29)): `presets` - the tiles - and `text` - the words of the
+   TWO TABS over them: `presets` - the tiles - and `text` - the words of the
    subtitle and text lanes as one document, in the tiles' place (caption-doc.js); the strip on the right stays. The tab
    last chosen is remembered.
 
-   THE PERSON'S OWN (phase V30, block 5; the owner's (с13), (с45)-(с52)): `Mine` is the first category after All, and in All
-   they stand first, newest first (с51); their tiles come and go with the list (my-presets.js) without the others being
-   built again. A right-click on one opens Rename / Delete - deleted at once (с47); the app's tiles have no menu. An empty
+   THE PERSON'S OWN: `Mine` is the first category after All, and in All
+   they stand first, newest first; their tiles come and go with the list (my-presets.js) without the others being
+   built again. A right-click on one opens Rename / Delete - deleted at once; the app's tiles have no menu. An empty
    `Mine` says how to fill it.
 
-   TWO GALLERIES (phase V42; the owner's (о14), (ц1)): what is picked says which - a text lane or text lines get the TEXT
-   presets (presets-text.js: Headline, Hook, Label, Callout, Kinetic), everything else the caption presets, as before. Each
+   TWO GALLERIES: what is picked says which - a text lane or text lines get the TEXT
+   presets (presets-text.js: Headline, Hook, Label, Callout, Kinetic), everything else the caption presets. Each
    has its own categories, its own `Mine` (a preset of the person's saved from text is `kind: 'text'`) and its own category
    remembered; the tiles of the other gallery are hidden, not rebuilt. A text tile loops for 3 s (lib/caption-tiles.js).
 
-   THE ANIMATIONS (phase V49, point 8b; the owner's (пр19)): a tab `animation` between `presets` and `text` - tiles of ready In ->
+   THE ANIMATIONS: a tab `animation` between `presets` and `text` - tiles of ready In ->
    Out pairs (captions/page-fx.js PAIRS), drawn by the server like the presets' (lib/caption-tiles.js) and shown the same way:
    the still, the motion under the cursor. A press puts the pair on what is picked (the inspector says how: `onAnim`); the
-   pair it wears is lit. With Shift a press picks several (the owner's (пр17), (пр21)): the inspector deals them out, and every
+   pair it wears is lit. With Shift a press picks several: the inspector deals them out, and every
    preset and pair the pick wears is lit.
 
-   THE FONTS (phase V68 P4, the owner's (хп12), (хп47)): a tab `fonts` between `animation` and `text`, on both kinds of lane - the
+   THE FONTS: a tab `fonts` between `animation` and `text`, on both kinds of lane - the
    fonts drawn as tiles (merge-v3/font-tiles.js, one module with the highlights popup). On a lane a press is its one font, Shift
    several dealt over its preset's (each page as wide as in the preset's font); on lines a press is their own font. The fonts
    the pick wears are lit (`fonts` of what show() is told).
@@ -59,7 +58,7 @@ import * as Layers from '../layers.js';
 import { askName } from '../name-box.js';
 import { note } from '../ask.js';
 import { menuIcons } from '../icons.js';
-// (phase V73 block 2, step 2b) An empty `Mine` - the shared "nothing here".
+// An empty `Mine` - the shared "nothing here".
 import { emptyEl } from '../ui-state.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
@@ -70,7 +69,7 @@ const TABS = [['presets', 'Presets', 'The preset styles - a press applies one to
   ['fonts', 'Fonts', 'The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them'],
   ['text', 'Text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
 const TAB_IDS = TABS.map((t) => t[0]);
-// The animations' tiles (V49): the pair's In -> Out on plain white letters; until the still is made, its name in these.
+// The animations' tiles: the pair's In -> Out on plain white letters; until the still is made, its name in these.
 const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
 const POLL_MS = 1500;
 const MINE = 'mine';
@@ -81,7 +80,7 @@ const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls
 
 let _ui = null;
 const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine, img, over, loop, starting, end }
-const _anims = new Map();          // an animation's pair 'in|out' -> its tile (V49), the same shape
+const _anims = new Map();          // an animation's pair 'in|out' -> its tile, the same shape
 const _loops = new Map();          // a loop's address -> Promise<Blob>: asked at its first hover, then kept
 const _counts = new Map();         // gallery|category ('' for All) -> its number on the chip
 let _target = null;                // what show() was last told: the preset the pick wears
@@ -90,7 +89,7 @@ let _state = null;
 let _timer = 0;
 let _shown = false;
 let _asked = false;
-// The gallery shown - 'subs' or 'text' (V42) - and each one's category.
+// The gallery shown - 'subs' or 'text' - and each one's category.
 let _kind = 'subs';
 const _cats = { subs: _store(LS_CAT, ''), text: _store(LS_CAT_TEXT, '') };
 const _kindOf = (p) => (p && p.kind === 'text' ? 'text' : 'subs');
@@ -98,15 +97,15 @@ let _tab = TAB_IDS.includes(_store(LS_TAB, 'presets')) ? _store(LS_TAB, 'presets
 let _apply = null;
 let _applyAnim = null;
 let _applyFonts = null;
-let _fonts = null;                 // the fonts tab's picker (V68 P4)
+let _fonts = null;                 // the fonts tab's picker
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
 let _reading = false;
 
 /** What a press on a tile does - the inspector knows what is picked. */
 export function onApply(fn) { _apply = typeof fn === 'function' ? fn : null; }
-/** What a press on an animation's tile does (V49): fn(pair 'in|out'). */
+/** What a press on an animation's tile does: fn(pair 'in|out'). */
 export function onAnim(fn) { _applyAnim = typeof fn === 'function' ? fn : null; }
-/** What a press on a font's tile does (V68 P4): fn(families chosen, { shift, family }). */
+/** What a press on a font's tile does: fn(families chosen, { shift, family }). */
 export function onFonts(fn) { _applyFonts = typeof fn === 'function' ? fn : null; }
 
 // Every tile of both kinds, and one by the id its files are named by.
@@ -121,12 +120,12 @@ function _build() {
   host.textContent = '';
   const top = _el('div', 'mv3-cap-top');
   const chips = _el('div', 'mv3-cap-cats');
-  // `Mine` first after All (с51); its number and All's move with the person's list (_paintCounts). A row of chips per gallery
-  // (V42), the other's hidden.
+  // `Mine` first after All; its number and All's move with the person's list (_paintCounts). A row of chips per gallery,
+  // the other's hidden.
   for (const [kind, cats, list] of [['subs', CATEGORIES, PRESETS], ['text', TEXT_CATEGORIES, TEXT_PRESETS]]) {
     const all = [['', 'All', 0], [MINE, 'Mine', 0]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
     for (const [id, label, n] of all) {
-      // (phase V73 block 5, 5d; plan 3.5) the shared chip, its count in mono
+      // the shared chip, its count in mono
       const b = _el('button', 'mv3-cap-cat u-chip', label);
       b.type = 'button';
       b.dataset.cat = id;
@@ -165,7 +164,7 @@ function _build() {
   }
   const presets = _el('div', 'mv3-cap-pane');
   presets.append(top, grid);
-  // The animations (V49): a line on what a press does, and the pairs' tiles.
+  // The animations: a line on what a press does, and the pairs' tiles.
   const anim = _el('div', 'mv3-cap-pane');
   const atop = _el('div', 'mv3-cap-top');
   atop.appendChild(_el('div', 'mv3-cap-note', 'How a page comes in and goes out. A press puts the pair on what is picked; '
@@ -177,7 +176,7 @@ function _build() {
     _anims.set(p.id, t);
   }
   anim.append(atop, agrid);
-  // The fonts (V68 P4): what a press does is the inspector's.
+  // The fonts: what a press does is the inspector's.
   const fonts = _el('div', 'mv3-cap-pane mv3-cap-fonts');
   const ftop = _el('div', 'mv3-cap-top');
   fonts.appendChild(ftop);
@@ -219,7 +218,7 @@ function _tile(p, mine) {
   btn.appendChild(box);
   btn.appendChild(name);
   const t = { btn, box, ed, nm, ph, mine, kind: anim ? 'anim' : _kindOf(p) };
-  // Shift picks several (V49, the owner's (пр17), (пр21)): what is picked deals them out - the inspector says how.
+  // Shift picks several: what is picked deals them out - the inspector says how.
   btn.addEventListener('click', (e) => {
     const o = { shift: !!(e && e.shiftKey) };
     if (anim) { if (_applyAnim) _applyAnim(p.pair, o); } else if (_apply) _apply(p.id, o);
@@ -230,7 +229,7 @@ function _tile(p, mine) {
   return t;
 }
 
-// ── The loop under the cursor (phase V32; the owner's (г2), (г3)) ──────────
+// ── The loop under the cursor ──────────────────────────────────────────────
 // Played from a fresh blob address each time: the same address would go on from the frame it was left at.
 function _loopOf(url) {
   let p = _loops.get(url);
@@ -271,7 +270,7 @@ async function _enter(t) {
   }
 }
 
-// The cursor gone: the loop plays to the end of its round, then the still (г3) - a little early rather than late, where the
+// The cursor gone: the loop plays to the end of its round, then the still - a little early rather than late, where the
 // next round's first frame would flash (empty, for a fade).
 function _leave(t) {
   t.over = false;
@@ -328,7 +327,7 @@ function _paintCounts() {
 }
 
 // The tile of the preset the pick wears is lit, and says `edited` when it was changed since; so is the pair of its In and Out
-// (V49, `anims`). A lane wearing several (V49, `presets`) has them all lit, each `edited` that was (`editedIds`).
+// (`anims`). A lane wearing several (`presets`) has them all lit, each `edited` that was (`editedIds`).
 function _light() {
   const t = _target || {};
   const lit = new Set(Array.isArray(t.presets) ? t.presets : (t.preset ? [t.preset] : []));
@@ -343,7 +342,7 @@ function _light() {
   if (_fonts) _fonts.set(t.fonts || []);
 }
 
-// ── The person's tile's menu: Rename / Delete (с47 - at once) ───────────────
+// ── The person's tile's menu: Rename / Delete - at once ────────────────────
 function _closeMenu() {
   if (!_menu) return;
   _menu.el.remove();
@@ -383,7 +382,7 @@ function _openMenu(ev, id, tile) {
 }
 
 function _rename(p, tile) {
-  // A taken name is refused in the window, in the server's words (с45); the same name is no change.
+  // A taken name is refused in the window, in the server's words; the same name is no change.
   return askName({
     anchor: tile, title: 'Rename preset', value: p.name, okLabel: 'Rename', maxLength: 60,
     submit: (name) => (name === p.name ? null : MyPresets.rename(p.id, name)),
@@ -441,7 +440,7 @@ function _setCat(id) {
   if (_state && _state.making && _cats[_kind]) _read(true);
 }
 
-// The gallery's chips and tiles shown, the other's hidden (V42), and within it the category.
+// The gallery's chips and tiles shown, the other's hidden, and within it the category.
 function _paintCat() {
   if (!_ui) return;
   const cat = _cats[_kind];
@@ -468,7 +467,7 @@ function _paintState() {
     img.decoding = 'async';
     img.draggable = false;
     img.addEventListener('load', () => t.box.classList.add('is-ready'));
-    // The still (phase V32); the loop is asked for under the cursor (_enter).
+    // The still; the loop is asked for under the cursor (_enter).
     img.src = _state.base + encodeURIComponent(id) + (_state.still || '.first.webp');
     t.box.appendChild(img);
     t.img = img;
@@ -486,7 +485,7 @@ const _incomplete = (s) => !!s && !s.making && ((s.ready || []).length + (s.fail
 
 async function _read(make) {
   if (_timer) { clearTimeout(_timer); _timer = 0; }
-  // One read at a time: a repaint during a read used to start a second chain of reads (review K6).
+  // One read at a time: a repaint during a read would start a second chain of reads.
   if (_reading) return;
   _reading = true;
   let d = null;
@@ -499,8 +498,8 @@ async function _read(make) {
   if (d && d.success) { _state = d; _paintState(); }
   if (!d && make) _asked = false;                     // the make never reached the server: the next show asks again
   if (d && (d.making || !_incomplete(d))) _retries = 0;
-  // Asked again, a few times and further apart, when the set is incomplete and nothing is making it (review K6:
-  // after a server restart the page stopped asking, and the rest of the tiles stayed names).
+  // Asked again, a few times and further apart, when the set is incomplete and nothing is making it (after a server
+  // restart the rest of the tiles would otherwise stay names).
   if (_shown && d && d.success && _incomplete(d) && _retries < 3) {
     _retries++;
     _timer = setTimeout(() => { _timer = 0; if (_shown) _read(true); }, 2000 * Math.pow(2, _retries));
@@ -509,7 +508,7 @@ async function _read(make) {
 
 /**
  * The view is up for what is picked: `preset` - the id it wears ('' for none), `edited` - changed since; `kind` - 'text' for a text
- * lane or text lines (their own gallery, V42), else the caption presets'. Cheap and safe to call on every repaint.
+ * lane or text lines (their own gallery), else the caption presets'. Cheap and safe to call on every repaint.
  */
 export function show(target) {
   _build();

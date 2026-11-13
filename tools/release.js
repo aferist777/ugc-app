@@ -1,9 +1,8 @@
 'use strict';
 
-/* release.js - a new version of UGC Studio for the owner's friends, through the owner's Cloudflare (phase V83, block
-   B3; the owner 2026-11-09: (о4а) "я тестирую у себя на пк. и когда даю команду, что пора публиковать в cloudflare
-   то публикуем и друзья получают обновление", (о7) versions 1.x.y with a git tag, (о12) notes from the commits that
-   the owner corrects in Russian, (о14а) the signing key with no password, (о17) tags app-v<version>).
+/* release.js - a new version of UGC Studio for the friends' installed copies, through the publisher's Cloudflare: tested
+   on this computer, published on command; versions 1.x.y, each tagged app-v<version> in git; notes drafted from the
+   commits and corrected by hand; the signing key has no password.
 
      node tools/release.js keygen                 the signing pair: the private key into %USERPROFILE%\.ugc-release\
                                                   (never in git, never inside this folder), the public one into
@@ -14,30 +13,30 @@
                                                   builds the version FROM THE LAST COMMIT (tools/build-app.js) with the
                                                   next sequence number, starts it once on an empty library in %TEMP%
                                                   (it must come up), sends the files the bucket does not have yet, then
-                                                  the signed manifest - friends see it within six hours; tags git
+                                                  the signed manifest - installed copies see it within six hours; tags git
                                                   app-v<version>. --bump raises package.json's patch number and commits
                                                   it first (a version is published once).
      node tools/release.js status                 what the channel holds
      node tools/release.js prune [--keep 3]       deletes the files no release among the last three uses
-     node tools/release.js worker                 (block B4) the bucket ugc-updates and the Worker ugc-updates on the
-                                                  owner's Cloudflare (tools/release-worker.js); its address into
+     node tools/release.js worker                 the bucket ugc-updates and the Worker ugc-updates on the
+                                                  publisher's Cloudflare (tools/release-worker.js); its address into
                                                   desktop/update-key.js - commit that file
      node tools/release.js friend add <name>      a friend's token (its SHA-256 in the bucket, the token itself in
                                                   %USERPROFILE%\.ugc-release\friends\<name>.token for the handoff)
      node tools/release.js friend remove <name>   that copy gets no updates any more
      node tools/release.js friends                who, and which version each copy said it has
      node tools/release.js handoff <name> --to <empty folder> [--with-projects] [--no-library]
-                                                  (block B7) the friend's folder: the launcher, the version the channel
+                                                  the friend's folder: the launcher, the version the channel
                                                   has, the friend's token, a CLEAN copy of library\ (tools/clean-library.js:
                                                   no keys, no Cloudflare or bot, no journal or chats, without the projects
-                                                  and their renders - the owner (о26)) and "Как запустить.txt"; then every
-                                                  file is searched for the owner's keys (tools/key-scan.js) - one found,
-                                                  and the folder is not to be handed over. The owner's app must be closed.
+                                                  and their renders) and a how-to-start text file; then every
+                                                  file is searched for the publisher's keys (tools/key-scan.js) - one found,
+                                                  and the folder is not to be handed over. The publisher's app must be closed.
 
-   Where: the bucket `ugc-updates` on the owner's Cloudflare - the account and the ONE Cloudflare key are READ from
-   library/data/settings.json (the owner (о18): the key on Admin of the owner's library; nothing is written there).
+   Where: the bucket `ugc-updates` on the publisher's Cloudflare - the account and the ONE Cloudflare key are READ from
+   library/data/settings.json (the key on Admin of the publisher's library; nothing is written there).
    A stand: --store <folder> (the same layout in a folder), --keys <folder> (a throwaway pair), --worktree,
-   --version-name, --update-url (baked into the build). The channel is `stable` (the owner (о4а): one channel). */
+   --version-name, --update-url (baked into the build). The channel is `stable` (one channel). */
 
 const fs = require('fs');
 const os = require('os');
@@ -216,7 +215,7 @@ async function publish() {
   const b = build({ out, seq, channel: CHANNEL, worktree: stand && flag('--worktree'), version: arg('--version-name', ''),
     updateKey: stand ? pub : '', updateUrl: stand ? urlKey : '' });
   if (!flag('--no-smoke')) await smokeBuilt(out);
-  // (block B7) No key of the owner's in the program that goes out.
+  // No key of the publisher's in the program that goes out.
   const KS = require('./key-scan');
   if (!KS.report(KS.scan([out]), say)) throw new Error('a key of yours is in the built program - nothing was published');
 
@@ -227,7 +226,7 @@ async function publish() {
   const z = new Map();
   let sent = 0, sentBytes = 0;
   const t0 = Date.now();
-  // What the bucket has, in one listing (a thousand a page) - asking for each of eight thousand files took four minutes.
+  // What the bucket has, in one listing (a thousand a page) - asking for each of eight thousand files takes four minutes.
   const there = new Map((await st.list('blobs/')).map((b) => [b.key, b.size]));
   await pool([...byHash.values()], stand ? 4 : 8, async (f) => {
     const key = UM.keys.blob(f.h);
@@ -241,7 +240,7 @@ async function publish() {
   });
   say(`${sent} new files sent (${(sentBytes / 1048576).toFixed(1)} MB), ${byHash.size - sent} were there; ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 
-  // The signed manifest - the release's first, then the channel's: friends see it from here on.
+  // The signed manifest - the release's first, then the channel's: installed copies see it from here on.
   const manifest = {
     app: UM.APP, channel: CHANNEL, platform: UM.PLATFORM, seq, version, commit: b.info.commit, date: b.info.date,
     format: b.info.format, important: flag('--important'), notes: notesText(version),
@@ -291,7 +290,7 @@ async function prune() {
   return drop.length;
 }
 
-// ── The Worker and the friends (block B4) ──────────────────────────────────
+// ── The Worker and the friends ──────────────────────────────────
 function cfSettings() {
   const s = JSON.parse(fs.readFileSync(path.join(REPO, 'library', 'data', 'settings.json'), 'utf8'));
   const token = String(s.cloudflareApiToken || '').trim();
@@ -392,7 +391,7 @@ async function friends() {
   return rows;
 }
 
-// ── The handoff (block B7) ─────────────────────────────────────────────────
+// ── The handoff ─────────────────────────────────────────────────
 // The version friends have, laid out in `dir`: the local build when it is that very version (every file's hash the
 // manifest's), else unpacked from the bucket's blobs.
 async function layVersion(m, st, dir) {
@@ -467,7 +466,7 @@ async function handoff(name) {
   }
   fs.writeFileSync(path.join(to, 'Как запустить.txt'), README(m.version), 'utf8');
 
-  // No key of the owner's in any of it - the program and the library.
+  // No key of the publisher's in any of it - the program and the library.
   const KS = require('./key-scan');
   const found = KS.scan([to]);
   if (!KS.report(found, say)) throw new Error(`a key of yours is in ${to} - do not hand it over; see the lines above`);

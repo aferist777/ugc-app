@@ -1,9 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   REFERENCES (phase TG, block 5) - a post's tile, its hover of miniatures and the post viewer (js/references/post.js).
+   REFERENCES - a post's tile, its hover of miniatures and the post viewer (js/references/post.js).
    Loaded by the Library and by Merge; the viewer's frame is lib-viewer.css's, these are what a post adds to it.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* (phase V73 block 2, the owner's (н2) б) A new tile of what came from outside - a post of the bot, a source downloaded by
+/* A new tile of what came from outside - a post of the bot, a source downloaded by
    a link - wears a gold dot, the tree's "new" gold, until it is opened (js/references/news.js); a post's badge moves aside. */
 .ref-new{
   position:absolute; left:7px; top:8px; z-index:3; width:8px; height:8px; border-radius:50%; pointer-events:none;
@@ -40,7 +40,7 @@
 /* The post viewer: the stage over the strip of the post's miniatures. One line of head: a long caption-title is cut. */
 .ref-view .lib-view-title{ flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ref-view .lib-view-count, .ref-view-where, .ref-view .lib-view-acts{ flex:0 0 auto; white-space:nowrap; }
-/* (phase V73 block 4) the post's place and its count are the head's quiet notes (`.u-win-sub`; the count in mono -
+/* the post's place and its count are the head's quiet notes (`.u-win-sub`; the count in mono -
    css/lib-viewer.css) */
 .ref-view-mid{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
 .ref-view-mid > .lib-view-stage{ flex:1 1 auto; min-height:0; }
@@ -85,14 +85,14 @@
 .ref-remote-cap a, .lib-view-v a{ color:var(--ink); }
 .ref-none{ font-size:12px; color:var(--muted); }
 
-/* (block 5b) Where the chosen files go - the window of the place picker (js/place-tree.js, phase V39: a folded tree of
+/* Where the chosen files go - the window of the place picker (js/place-tree.js: a folded tree of
    the media tree's places, its rows in css/media-tree.css), grey where they cannot go. Also "save the piece to". */
-/* (phase V73 block 4, (б4-8) а) The post viewer's status line - the window's one status line (`.u-status`, css/app-shell.css), the
+/* The post viewer's status line - the window's one status line (`.u-status`, css/app-shell.css), the
    first line of the right column. */
 .ref-said{ margin:0 0 8px; overflow-wrap:anywhere; }
 .ref-said:empty{ display:none; }
 .ref-move{ width:290px; max-height:min(460px, 70vh); display:flex; flex-direction:column; }
-/* (phase V73 block 2) the frame is the shared menu (.u-menu.is-float) */
+/* the frame is the shared menu (.u-menu.is-float) */
 .ref-move.u-menu{ z-index:9200; padding:0; max-width:none; }
 .ref-move-title{ padding:7px 10px; font:600 11px/1.3 var(--font); color:var(--ink); border-bottom:1px solid var(--border); }
 .ref-move-list{ overflow-y:auto; padding:4px 0; }

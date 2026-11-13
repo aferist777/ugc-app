@@ -1,20 +1,18 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SCENARIOS V3 — the scenario library store, and the server side of the talking
+// SCENARIOS (scen3) — the scenario library store, and the server side of the talking
 // head and voiceover projects: casting, voices and reads, frames, clips, and the
 // New environment / New lookbook / dressing generators.
 //
-// The scenario store is standalone: its own JSON file and its own record shape,
-// which is why the old scenarios backend could be deleted without touching v3.
+// The scenario store is standalone: its own JSON file and its own record shape.
 //
 // Scenario record (_norm) — nothing else is stored:
 //   { id, title, lines:[{text}], type, archived, vertical, product, roles,
 //     origin, narrator, createdAt, updatedAt }
 //
 // lineCount is DERIVED from lines.length on read, never stored, so it cannot
-// drift away from the actual content. There is one text track per line (no
-// clean/colored split — that was the v2 model).
+// drift away from the actual content. There is one text track per line.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -22,7 +20,7 @@ const fs      = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const sharp   = require('sharp');
-// A picture brought in, in a format the aggregators take (phase V24).
+// A picture brought in, in a format the aggregators take.
 const IMGIN   = require('../lib/image-in');
 
 const router = express.Router();
@@ -39,7 +37,7 @@ const PROJECTS = require('../lib/projects-store');
 
 // Minimum usable scenario length, enforced on both ends (the client greys out
 // Save below this, the server refuses it). Three: fewer than that is a note, not an ad,
-// and five turned out to refuse scenarios the owner actually wanted.
+// and five would refuse short scenarios that are wanted.
 const MIN_LINES = 3;
 // The narrator's gender when the scenario states one. It is OPTIONAL: it narrows the
 // character picker, and a scenario that does not say offers every character instead
@@ -66,8 +64,8 @@ function _norm(r, now) {
     lines:     Array.isArray(src.lines)
       ? src.lines.map(l => ({ text: String((l && l.text) || '') }))   // single track: any legacy textColored is dropped
       : [],
-    // What kind of scenario (phase F7: a field and a filter, editable in the Library). Only
-    // talking_head exists so far (the owner, 2026-09-30); whatever a record carries is kept.
+    // What kind of scenario: a field and a filter, editable in the Library. Only
+    // talking_head exists so far; whatever a record carries is kept.
     type:      String(src.type || '').trim() || 'talking_head',
     // Out of the way, not gone: a scenario that has been used and is not wanted in the list
     // any more is archived rather than deleted, because deleting it is the one thing that
@@ -83,14 +81,13 @@ function _norm(r, now) {
     // WHERE THIS SCENARIO CAME FROM, when it was generated rather than typed. Kept because
     // this normaliser drops anything it does not name, so without a home here the answer to
     // "which video was this written from, in whose voice" is lost on the first autosave.
-    // Null for everything written by hand, which is every scenario that existed before
-    // generation did.
+    // Null for everything written by hand.
     origin:    _normOrigin(src.origin),
-    // THE SCENARIO'S OWN LABEL (phase F7): the narrator - the voice of the WRITING, not the reader's
+    // THE SCENARIO'S OWN LABEL: the narrator - the voice of the WRITING, not the reader's
     // gender, which lives on the role. `origin` says what the generator used and stays provenance; this
     // says what the scenario is, editable, and a generated one shows its origin's narrator until it is
     // set. null = never set (the origin shows through); an empty name = set to none on purpose. There is
-    // no language: every scenario is English (phase V29), and a `language` an older record carries is
+    // no language: every scenario is English, and a `language` a record carries is
     // dropped here like any field this normaliser does not name.
     narrator:  _normNarrator(src.narrator),
     createdAt: src.createdAt || now,
@@ -136,8 +133,7 @@ function _normOrigin(o) {
   return Object.values(out).some(v => v && v !== false) ? out : null;
 }
 
-// The store is its own from here on. It used to seed itself from the v2 file on first
-// boot; that file is gone (Ph13.5) and its four scenarios have lived here since.
+// The store; a missing file starts as an empty list.
 function _load() {
   const cur = _read(FILE);
   if (Array.isArray(cur)) return cur;
@@ -158,7 +154,7 @@ function _newId(list) {
 // These are remembered across scenarios: whatever the user types into one of
 // those three fields is HARVESTED into the shared list when the scenario is
 // saved, and offered in that field's dropdown from then on. Removing a value
-// (/scen3/values/remove, phase G4) takes it off the scenarios as well - the
+// (/scen3/values/remove) takes it off the scenarios as well - the
 // dropdowns are built from the scenarios too, so a value left on one of them
 // would come straight back.
 // ════════════════════════════════════════════════════════════════════════════
@@ -220,7 +216,7 @@ router.get('/scen3/options', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// REMOVING A VALUE (phase G4, the owner 2026-09-30: "I added a wrong offer - it has to go somehow"). A value
+// REMOVING A VALUE - a wrong one typed once has to be able to go. A value
 // of type, role, vertical or product leaves the suggestions AND every scenario that carries it, archived
 // ones included: the column's dropdowns and the filters are built from the scenarios themselves, so a value
 // left on one would come straight back. Type falls back to talking_head (which itself cannot be removed),
@@ -275,7 +271,7 @@ const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCa
 // generated scenario can still be edited like any other.
 const _libOf = s => (s.origin ? 'library2' : 'library1');
 
-// THE SOURCE IS NAMED BY ITS CURRENT TITLE (phase F2, the owner 2026-09-30: renaming a source
+// THE SOURCE IS NAMED BY ITS CURRENT TITLE (renaming a source
 // changes "written from"): the copy saved in `origin` is what it was called at the save, and is
 // kept for a source since deleted - then marked `sourceGone`. Read, never rewritten: a rename
 // writes nothing into the scenarios.
@@ -298,7 +294,7 @@ const _summary = (s, titles) => ({
   gender: _genderOf(s),
   lib: _libOf(s),
   narrator: effectiveLabels(s).narrator,
-  // The source it was written from, by id (phase E7) - the id the list's ?source= filter and its
+  // The source it was written from, by id - the id the list's ?source= filter and its
   // source groups go by, not the title, which here is a snapshot.
   sourceId: (s.origin && s.origin.sourceId) || '',
   // Enough of the provenance for a row to say where it came from, without the hook and the
@@ -317,7 +313,7 @@ const _full = s => {
   return { ..._summary(s, titles), lines: s.lines || [], origin: _liveOrigin(s.origin, titles) };
 };
 
-// The generated scenarios by the source they came from (phase E7), newest group first: its id, the
+// The generated scenarios by the source they came from, newest group first: its id, the
 // name to show - the source's CURRENT title, or the last one a scenario remembers when the source is
 // gone, or "deleted source" - and how many. Written without a source is its own count.
 function _bySource(live) {
@@ -394,7 +390,7 @@ router.get('/scen3/scenarios/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// (phase V29, the owner 2026-10-14: "набранное переводится") Lines typed in another language, made English before they
+// Lines typed in another language, made English before they
 // are kept - the scenario window's save, the Library column's lines when they are left, a talking head made from a
 // scenario, a line of one edited or put in, the generator's save. { texts, translated } or { fail } in words.
 async function _englishLines(texts) {
@@ -409,7 +405,7 @@ async function _englishText(text) {
 }
 
 // ── Upsert by id: creates when the id is unknown, else saves edits in place ──
-// This is what line edits and renames hit (autosaved, no Save button). `english` (phase V29): the lines are made English
+// This is what line edits and renames hit (autosaved, no Save button). `english`: the lines are made English
 // first - sent by a save the person made on purpose, never by the autosave while they type, which would put the
 // translation in the field under their hands.
 router.post('/scen3/scenarios', async (req, res) => {
@@ -432,7 +428,7 @@ router.post('/scen3/scenarios', async (req, res) => {
       // keep the original id + createdAt; the request may only carry changed fields
       const merged = _norm({ ...list[i], ...b, id: list[i].id, createdAt: list[i].createdAt }, now);
       // Going INTO the archive is not an edit and keeps the date; coming back is news and gets a new
-      // one, so the scenario heads the list again (phase I1, the owner 2026-10-01).
+      // one, so the scenario heads the list again.
       const sent = Object.keys(b).filter(k => k !== 'id');
       const outOnly = sent.length === 1 && sent[0] === 'archived' && b.archived === true;
       merged.updatedAt = outOnly ? (list[i].updatedAt || now) : now;
@@ -480,13 +476,13 @@ router.createScenario = function createScenario(body) {
 };
 router.MIN_LINES = MIN_LINES;
 router.effectiveLabels = effectiveLabels;
-// (phase V38, block D4) One scenario as the page reads it - the generator makes a draft of it to rewrite in a narrator's voice.
+// One scenario as the page reads it - the generator makes a draft of it to rewrite in a narrator's voice.
 router.getScenario = function getScenario(id) {
   const s = _load().find(x => String(x.id) === String(id));
   return s ? _full(s) : null;
 };
 
-// A source about to be deleted leaves its CURRENT name in the scenarios written from it (phase F2):
+// A source about to be deleted leaves its CURRENT name in the scenarios written from it:
 // the name is read live while the source exists, and once it is gone this copy is all there is.
 // Their edit dates are left alone - the lists sort by them, and nobody edited anything.
 router.keepSourceTitle = function keepSourceTitle(sourceId, title) {
@@ -507,7 +503,7 @@ router.GENDERS = GENDERS;
 
 // ── Delete one scenario (single id only, never a bulk wipe) ─────────────────
 // A scenario the generator wrote from a source's topic is one of that topic's "written" marks
-// (routes/scriptgen.js, save). The mark goes with it (phase D5): the topic would otherwise go on
+// (routes/scriptgen.js, save). The mark goes with it: the topic would otherwise go on
 // counting a script that no longer exists. A mark that cannot be taken off does not stop the delete.
 function _unmarkTopic(s) {
   const o = s && s.origin;
@@ -592,8 +588,7 @@ function _previewTarget(hit) {
 
 const H = require('../lib/helpers');
 
-// THE REALISM MARKERS (owner, 2026-09-18 - research in docs/local-app/PLAN.md, "Модель для
-// картинок мастерской"). What the sources agree on: say "photorealistic" and describe a PHOTOGRAPH
+// THE REALISM MARKERS. What the research on prompting these models agrees on: say "photorealistic" and describe a PHOTOGRAPH
 // being taken; name the material, finish and wear of what is in it rather than piling up quality
 // words; no staging, no grading. Nothing here says 8K, ultra-detailed or hyperrealistic, on
 // purpose - those buy a rendered look, not detail. Each block is said AFTER whatever the agent
@@ -643,8 +638,8 @@ const KNOLL_TAIL =
 //
 // THE FACE OPENING IS OPEN. Real mascot suits hide the wearer behind a dark one-way mesh, and
 // the agent knows it: left alone it draws one, the dressing then puts the character's face
-// BEHIND it, and at the size a sheet is rendered the mesh reads as grain all over the face
-// (the owner's bus costume, 2026-09-17). The person in this costume speaks to the camera.
+// BEHIND it, and at the size a sheet is rendered the mesh reads as grain all over the face.
+// The person in this costume speaks to the camera.
 const NO_MESH =
   ' The face opening is OPEN: no mesh, no net, no screen, no grille, no glass, no visor, no veil and no tinted panel across it.';
 const MASCOT_TAIL =
@@ -667,7 +662,7 @@ const DRESS_LOCK =
 // A MASCOT SUIT IS NOT CLOTHING. It is a shell with its own size and shape, and the person
 // goes inside it: the head is inside the head, the arms are inside the arms, and the body it
 // ends up with is the COSTUME's body, not theirs. Told nothing, the engine paints the picture
-// onto the person like a printed leotard - which is exactly what the owner saw.
+// onto the person like a printed leotard.
 const COSTUME_LOCK =
   ' The person is INSIDE the costume, wearing it as a full-body suit: it has its own volume and proportions,'
   + ' thick and padded where the reference is thick, and it does NOT follow the body underneath.'
@@ -719,7 +714,7 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
   return { kind: plan.kind === 'costume' ? 'costume' : 'outfit', prompt };
 }
 
-// The agents' ladder (lib/agents.js, phase V25: Admin -> AI settings) - the one New Character reads photos with and the
+// The agents' ladder (lib/agents.js, Admin -> AI settings) - the one New Character reads photos with and the
 // chats' writers write with, instead of a cascade of this file's own. One place decides which models look at an image,
 // and every step listed there answered a live call with a real photo. It also reports what went wrong per step.
 const _ask = (messages) => H.callAIVisionWithFallback(messages, { timeout: 60000 });
@@ -758,7 +753,7 @@ async function _readLookbookIdea(note, imageUrl) {
     'Name the fabric of every item concretely - its fibre and its weave or knit (heavyweight cotton twill, washed linen with natural slubs, fine merino rib knit, raw indigo denim, full-grain leather, wool felt, faux fur) and its finish (matte, brushed, glossy, with a soft sheen) - because the picture is a photograph of real garments, and a fabric that is not named comes out as plastic.',
     'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
     'A costume ALWAYS leaves the wearer face uncovered in an open face opening, in the prompt and in the description alike: never mesh, a net, a screen, glass, a visor or a veil over it. Whoever wears it will speak to the camera, and the face has to be seen.',
-    // (phase V29) Everything in English, whatever the person typed in.
+    // Everything in English, whatever the person typed in.
     'Write everything in English - the prompt, the description and "why" - whatever language the person wrote in.',
   ].join(' ');
   const ask = rules
@@ -790,11 +785,10 @@ async function _readLookbookIdea(note, imageUrl) {
 }
 
 // ── The picture itself ──────────────────────────────────────────────────────
-// NANO-BANANA-2 MAKES ALL THREE - the lookbook, the look and the environment - the owner's decision
-// after the A/B of 2026-09-18 (docs/local-app/PLAN.md, "Модель для картинок мастерской"). The
-// gpt-image-2.5 that made them before is gone from the workshop: its "4K" is an upscale in the
-// pixels - halos, over-sharpened edges, surfaces that melt, the textures the owner saw swim - and
-// its honest 2K is too small, while nano-banana-2 kept natural texture at both sizes.
+// NANO-BANANA-2 MAKES ALL THREE - the lookbook, the look and the environment - chosen by an A/B
+// against gpt-image-2.5: its "4K" is an upscale in the pixels - halos, over-sharpened edges,
+// surfaces that melt, textures that swim - and its honest 2K is too small, while nano-banana-2
+// kept natural texture at both sizes.
 //
 // Through the dispatch every other picture on this page already uses (_t2i / _i2i, on kie): this
 // model takes its references as `image_input`, and a wrong name there is accepted and quietly
@@ -813,9 +807,8 @@ const _lbTask = (prompt, urls) => (urls && urls.length
 // ── Lookbook gender ─────────────────────────────────────────────────────────
 // Which gender an outfit suits, judged from the INPUT (the description and/or the
 // uploaded photo) so the call can run while the image is still rendering. Kept in
-// a v3-owned side file keyed by public path — the shared lookbook backend has no
-// metadata of its own and is not touched. Lookbooks that predate this stay
-// unknown on purpose and are always visible.
+// a side file keyed by public path. A lookbook with no gender recorded stays
+// unknown on purpose and is always visible.
 // The store itself is lib/shelf-meta.js - shared with the environments, and with the Library's
 // delete, which drops a picture's entry together with the picture.
 const SHELF_META = require('../lib/shelf-meta');
@@ -1032,10 +1025,10 @@ const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
 const _cleanText = (s) => String(s || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
 
 // Pull the labelled blocks out of the analysis. Anything the model puts before the
-// first label is kept as LIGHTING, which is what a label-less answer used to be.
+// first label is kept as LIGHTING.
 const _BLOCK_KEYS = ['POSE', 'CHARACTER', 'CLOTHES', 'ENVIRONMENT', 'LIGHTING', 'DIRECTION'];
 // The garments of the CLOTHES block, one per line, each with where it is worn in front of it
-// (phase N7). Kept as lines because the frame prompt picks among them by where they are.
+// Kept as lines because the frame prompt picks among them by where they are.
 const CLOTHES_WHERE = ['HEAD', 'TOP', 'BOTTOM', 'FEET', 'HANDS'];
 function _clothesLines(raw) {
   const text = String(raw || '');
@@ -1073,15 +1066,15 @@ function _splitBlocks(raw) {
 // ── Environments ────────────────────────────────────────────────────────────
 // ONE place, photographed empty, that a person is later put into to speak to the camera. Made
 // the way a lookbook is: the agent reads what it was given first, and only then is a picture
-// paid for (docs/local-app/PLAN.md, "create environment").
+// paid for.
 //
-// 3:2, on the owner's instruction (2026-09-17). An environment is not one frame but a set to take
+// 3:2. An environment is not one frame but a set to take
 // frames FROM: a wide room gives several different vertical 9:16 frames - by the window, in the
 // middle, by the wall - with the same place and the same light, so the fragments of a video stop
 // looking identical.
 //
-// 2K since the A/B of 2026-09-18 (the owner): nano-banana-2's 2K is 2528x1696 and clean at 100%.
-// A frame is DRAWN with the environment as its reference (the fragments phase), not cut out of it,
+// 2K: nano-banana-2's 2K is 2528x1696 and clean at 100%.
+// A frame is DRAWN with the environment as its reference, not cut out of it,
 // so the place has to be right more than it has to be enormous.
 const ENV_ASPECT = '3:2';
 const ENV_RES = '2K';
@@ -1090,13 +1083,12 @@ const ENV_RATIO = 3 / 2;
 // Said after whatever the agent wrote, so no rewrite of the words can lose it. The EMPTY rule is
 // the one in capitals: a person left in the place is a second person in every frame made from it.
 //
-// The research behind every clause (PLAN, "Модель для картинок мастерской"): a PHOTOGRAPH being
+// The reasons behind every clause: a PHOTOGRAPH being
 // taken - where the camera stands and with what lens, verticals straight - because camera words
 // steer realism better than quality words; the light of the place itself and no grading, because
 // staged light is the showroom look; and SURFACES, because a wide scene is exactly where a model
-// trades texture for mood unless it is told what each surface is made of. "As taken on a
-// smartphone" is gone: a phone's own processing smooths fine texture away, which is the very fault
-// the owner saw - textures that swim.
+// trades texture for mood unless it is told what each surface is made of. Nothing says "as taken
+// on a smartphone": a phone's own processing smooths fine texture away, and the textures swim.
 const ENV_TAIL =
   ' Photorealistic photograph of a real place, taken handheld at chest height with a 28mm lens, vertical lines straight, natural perspective.'
   + ' The light is the light of the place itself - daylight from its windows or openings, or its own lamps - with true colours,'
@@ -1112,7 +1104,7 @@ const ENV_KEEP =
   ' Keep the SAME place as in the picture - the same architecture, furniture, materials, colours, light and camera -'
   + ' and change only what the prompt asks for.';
 
-// THE TAIL OF A CHANGE (phase V26.4, the owner 2026-10-10). ENV_TAIL describes a photograph being TAKEN - a 28mm lens at
+// THE TAIL OF A CHANGE. ENV_TAIL describes a photograph being TAKEN - a 28mm lens at
 // chest height, the light of the place - and said after a change it asks the model to take the picture again, which is
 // the redraw a change must not be. What it keeps of ENV_TAIL: the change is a real thing photographed here, the place
 // stays EMPTY, 3:2 with no borders. The framing is the picture's own unless the picture has to be continued to 3:2.
@@ -1162,7 +1154,7 @@ async function _sizeOf(input) {
  *   { ok:true, prompt, description }        the place, as a prompt and as a description
  *
  * WHY IT ASKS INSTEAD OF INVENTING. A cup, a logo or a drawing suits a dozen places, and which one
- * the agent would reach for is exactly the unpredictable part (the owner, 2026-09-17). So it names
+ * the agent would reach for is exactly the unpredictable part. So it names
  * a few; the person picks any number; this is called again with those, and only that call writes
  * a prompt. A caller that cannot show the choice does not offer it, and then the agent picks the
  * single best place itself.
@@ -1172,9 +1164,9 @@ async function _sizeOf(input) {
  * light and perspective. The agent is not asked to describe the new part at length; the more it
  * invents there in words, the more the model redraws what was already right.
  *
- * CHANGING AN ENVIRONMENT is the same lesson (phase V26.4, the owner 2026-10-10): the prompt is a SHORT instruction -
- * what changes and where, and what stays - not the whole place described again, which the model took as a picture to
- * draw anew, so every change redrew everything and a chain of changes was a copy of a copy. Google's guide for
+ * CHANGING AN ENVIRONMENT is the same lesson: the prompt is a SHORT instruction -
+ * what changes and where, and what stays - not the whole place described again, which the model takes as a picture to
+ * draw anew, so every change would redraw everything and a chain of changes would be a copy of a copy. Google's guide for
  * nano-banana edits says the same: "change only <this> to <that>, keep everything else exactly the same". The
  * description is still of the whole place, as it will be after the change - the frames are composed from it.
  */
@@ -1213,7 +1205,7 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
   if (shape && shape.extend && source !== '' && !picked.length) {
     rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
   }
-  // (phase V29) Everything in English, whatever the person typed in.
+  // Everything in English, whatever the person typed in.
   rules.push('Write everything in English - the prompt, the description, "why" and any options - whatever language the person wrote in.');
   rules.push('description: 150 words or more, English, for whoever will later compose frames in this place'
     + (editing ? ' - the whole place as it will be AFTER the change, not the change alone' : '') + ': what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
@@ -1252,7 +1244,7 @@ const _envTask = (prompt, urls) => (urls.length
 // ── The picture somebody brought ────────────────────────────────────────────
 // A photo uploaded into a maker is kept for two reasons: a second pass must not send it again
 // (the environment's choice of places), and once something has been MADE from it, it is filed in
-// the library - Images, under uploads_lookbooks or uploads_environments (the owner, 2026-09-17).
+// the library - Images, under uploads_lookbooks or uploads_environments.
 // Until then it waits in scratch, outside the library, under a token the page holds: a photo that
 // came to nothing is not the library's business. Scratch is swept of anything a day old.
 const REF_DIR = path.join(CFG.TEMP_DIR, 'maker-refs');
@@ -1284,8 +1276,8 @@ function _unstash(token) {
 }
 
 // A data URL from the page -> the bytes, what they are, and a token for them. In a format the
-// aggregators take (phase V24, lib/image-in.js): an AVIF went up as it was, named .heic, and kie
-// answered "File type not supported" after the press.
+// aggregators take (lib/image-in.js): an AVIF sent as it is, named .heic, is answered "File type
+// not supported" by kie after the press.
 async function _takeUpload(dataUrl) {
   const raw = String(dataUrl || '').replace(/^data:[^;,]*;base64,/i, '');
   const got = Buffer.from(raw, 'base64');
@@ -1405,7 +1397,7 @@ async function _submitEnv(b) {
 
     // A place picked for a picture that had none keeps the picture only for its atmosphere.
     const mode = choices.length ? 'picked' : source === 'saved' ? 'edit' : source === 'photo' ? 'photo' : 'draw';
-    // A change keeps the picture's own camera and light (phase V26.4): its tail does not describe the photograph again.
+    // A change keeps the picture's own camera and light: its tail does not describe the photograph again.
     const prompt = plan.prompt
       + (mode === 'edit' ? ENV_KEEP + ENV_EDIT_TAIL + _envEditFrame(shape) : '')
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
@@ -1459,11 +1451,11 @@ router.get('/scen3/env-meta', (_req, res) => {
 
    The one or two sentences that say what is alive in the background of a shot filmed here - a
    curtain breathing, steam off a cup, leaves, traffic far behind, light shifting. It belongs to the
-   PLACE and not to a project (the owner, 2026-09-21): every talking head set here animates the same
+   PLACE and not to a project: every talking head set here animates the same
    way, so it lives beside the picture in scen3-env-meta.json and every project reads it.
 
    With `motion` in the body it is written as given - that is the Library's environment column, "how it
-   moves", edited by hand (phase V26.8: the video field's box for it went). Without it the agent looks at
+   moves", edited by hand. Without it the agent looks at
    the picture and writes one, which is what the video zone's `generate` and a clip do.
    People and camera moves are deliberately out: the person is animated by the line's own prompt, and
    a camera move would fight the shot size the frames were drawn in.
@@ -1478,7 +1470,7 @@ const ENV_MOTION_ASK =
   + ' NOT describe any camera movement, cut or zoom. Plain sentences, no list, no heading.';
 
 // Writing a place's motion down, and having the agent write one. Wanted in two places: by the
-// route below, and by a clip about to be made in a place nobody has looked at yet (phase U4) -
+// route below, and by a clip about to be made in a place nobody has looked at yet -
 // a fragment's own `make clip` must not render before that analysis exists.
 function _keepEnvMotion(url, motion) {
   const meta = SHELF_META.read('environments');
@@ -1488,8 +1480,8 @@ function _keepEnvMotion(url, motion) {
   return entry;
 }
 const _envMotionOf = (url) => String((SHELF_META.read('environments')[String(url || '')] || {}).motion || '');
-// ONE ANALYSIS PER PLACE AT A TIME (phase V23, the rest of X0): several clips started together on a place with no
-// motion yet all wait for the same answer - each used to ask the agent for its own.
+// ONE ANALYSIS PER PLACE AT A TIME: several clips started together on a place with no
+// motion yet all wait for the same answer, rather than each asking the agent for its own.
 const _envMotionAsking = new Map();      // address -> the analysis under way
 
 function _askEnvMotion(url) {
@@ -1523,7 +1515,7 @@ router.post('/scen3/env/motion', async (req, res) => {
     }
 
     let given = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
-    // (phase V29) Typed in another language, it is kept in English - it goes into the clip's prompt.
+    // Typed in another language, it is kept in English - it goes into the clip's prompt.
     if (given) {
       const t = await _englishText(given);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
@@ -1541,7 +1533,7 @@ router.post('/scen3/env/motion', async (req, res) => {
 // A generation started from Merge becomes a row in the journal (lib/alerts.js), and the runner
 // (lib/gen-jobs.js) waits for it, files the result and writes the answer back into the row. The
 // page that asked only follows the row, so leaving the page loses nothing - which is the whole
-// point (docs/local-app/PLAN.md, "Alerts").
+// point.
 //
 // `where` is what the panel says about itself - the project, the step, the level inside it - so
 // the row in the journal can take you back to where the work was started.
@@ -1551,7 +1543,7 @@ const JOBS = require('../lib/gen-jobs');
 // is now following (lib/alerts.js).
 const ALERTS = require('../lib/alerts');
 const REFUSAL = require('../lib/gen-refusal');
-// The project's own timeline is a mirror of its lines (lib/frag-mirror.js, phase T'): every
+// The project's own timeline is a mirror of its lines (lib/frag-mirror.js): every
 // place below that changes what a line HAS asks for it to be laid again.
 const MIRROR = require('../lib/frag-mirror');
 
@@ -1576,8 +1568,8 @@ function _journal(type, kind, out, b) {
 }
 
 // The look a project asked for is written into that project's casting here, because by the time it
-// lands the page that asked may be closed. (phase V67) Through the cast route's own move (_applyCast) - its character with
-// it, which the old patch of the look alone left behind - and NOT when it would put work aside: that is asked of the person
+// lands the page that asked may be closed. Through the cast route's own move (_applyCast) - its character with
+// it - and NOT when it would put work aside: that is asked of the person
 // (the look is there in "who" to press).
 function _castMade(projectId, look) {
   const next = _normLook(look);
@@ -1606,9 +1598,8 @@ function _charNameOf(id) {
 const _pollTask = (rec) => H.resolveTask(rec.taskIds[0], CFG.MEDIA.work, 'generated');
 const _fileParams = (rec) => ((rec.job || {}).params || {}).file || {};
 
-// A maker's row has its task from the start (Merge, "try again"). One with none is a row of the old Library chats (gone in
-// V91), written at the press before its task was asked for and left so when the app closed: it fails in words, never asked
-// for again by itself.
+// A maker's row has its task from the start (Merge, "try again"). One with none was written at the press before its
+// task was asked for and left so when the app closed: it fails in words, never asked for again by itself.
 function _pollMaker(rec) {
   if (rec.taskIds && rec.taskIds[0]) return _pollTask(rec);
   return { state: 'failed', error: 'the app was closed before the picture was asked for - try again' };
@@ -1646,7 +1637,7 @@ JOBS.register('look', {
   file: async (rec, landed) => {
     const p = _fileParams(rec);
     const saved = await _saveObraz({ ...p, imagePath: landed.imagePath });
-    // Dressed for a project, so that project wears it - even with nobody looking. (phase V67) As the cast route casts it,
+    // Dressed for a project, so that project wears it - even with nobody looking. As the cast route casts it,
     // and only when that puts nothing aside: work to put aside is the person's question, at their press on the look.
     if (p.projectId) {
       try { _castMade(p.projectId, { characterId: p.charId, characterName: _charNameOf(p.charId) || p.charName, obrazId: String(saved.obrazId), obrazImage: saved.path }); }
@@ -1667,7 +1658,7 @@ async function _submitDress(b) {
   let note   = String(b.note || '').trim();           // optional clothing-only steering
   if (!base) throw Object.assign(new Error('basePath is required'), { status: 400 });
   if (!lb && !note) throw Object.assign(new Error('pick a lookbook or write a note'), { status: 400 });
-  // (phase V29) A note in another language goes into the picture's prompt in English.
+  // A note in another language goes into the picture's prompt in English.
   if (note) {
     const t = await _englishText(note);
     if (t.fail) throw Object.assign(new Error('the note ' + t.fail), { status: 502 });
@@ -1690,7 +1681,7 @@ async function _submitDress(b) {
 
   // keep the output in the base image's shape (a 16:9 sheet must stay 16:9); kie calls "follow the input" `auto`
   const aspect = (await _ratioOf(base)) || 'auto';
-  // 4K (the owner): the result is a reference sheet every frame of the ad is built from, so it is
+  // 4K: the result is a reference sheet every frame of the ad is built from, so it is
   // the one picture in the chain that must not be soft.
   const taskId = await _i2i(prompt, urls, aspect, DRESS_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
@@ -1722,7 +1713,7 @@ router.post('/scen3/gen/dress', async (req, res) => {
 });
 
 // ── Save a dressed result as an obraz on the character ──────────────────────
-// The user chose that dressed looks join the character's own library, so they show up on the Library's
+// Dressed looks join the character's own library, so they show up on the Library's
 // Characters shelf too. Writes are APPEND-ONLY and done here, on the server, so a racing writer cannot drop
 // entries.
 const OBRAZY_JSON = path.join(DATA_DIR, 'obrazy.json');
@@ -1730,7 +1721,7 @@ const OStore = require('../lib/obrazy-store');
 
 // Filing a dressed picture as a look. A FUNCTION, not only a route: when the dressing is started
 // from Merge the server finishes it itself (lib/gen-jobs.js), and that path must file it exactly
-// the way the page used to (docs/local-app/PLAN.md, "Alerts").
+// the way the route does.
 async function _saveObraz(b) {
   const charId   = String(b.charId || '');
   const charName = String(b.charName || 'look');
@@ -1794,7 +1785,7 @@ async function _saveObraz(b) {
 // Filing a finished picture where it belongs: a lookbook or an environment onto its shelf, with its
 // description, the photo it was made from and a preview for the centre column. A FUNCTION for the
 // same reason _saveObraz is one - a generation started in Merge is finished by the server
-// (lib/gen-jobs.js), and it has to be filed exactly as the page used to file it.
+// (lib/gen-jobs.js), and it has to be filed exactly as the route files it.
 async function _fileGenerated(kind, src, b) {
   const hit = _resolveMedia(src);
   if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('result not found'), { status: 400 });
@@ -1818,14 +1809,14 @@ async function _fileGenerated(kind, src, b) {
     try { from = await _fileRef(String(b.refToken), kind, String(b.refName || '')); }
     catch (e) { console.warn('[scen3/file] could not file the reference:', e.message); }
   }
-  // A picture that came by its path is in the library already (phase I).
+  // A picture that came by its path is in the library already.
   if (!from && b.from) from = String(b.from);
 
   if (kind === 'lookbook') {
     // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
     // long description the agent wrote, filed here because this is where the picture gets
-    // its final path - the key everything else refers to it by. A lookbook made before this
-    // existed simply has no entry, and behaves as it always did.
+    // its final path - the key everything else refers to it by. A lookbook may have no
+    // entry at all.
     const gender = String(b.gender || '').toLowerCase();
     const description = String(b.description || '').trim();
     const prompt = String(b.prompt || '').trim();
@@ -1881,7 +1872,7 @@ async function _fileGenerated(kind, src, b) {
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
 const SDP = require('../lib/sd-prompt');
-// (phase V26.8) The writer of a Seedance fragment's performance (thinkTalk), and the
+// The writer of a Seedance fragment's performance (thinkTalk), and the
 // English check and translation of typed lines and prompts (english, toEnglish, toEnglishLines).
 const AGENT = require('../lib/mv3-agent');
 const VF = require('../lib/voice-filters');
@@ -1890,9 +1881,9 @@ const VSHELF = require('../lib/voice-shelf');
 
 
 // What the menus of setup and Home's quick start offer: the models of the clips, each with its qualities and what a
-// second of them costs (phase V26.8, lib/th-video.js), Seedance's ways of voicing a clip, and the
-// moods - with a few words on how each moves the body, for the gestures menu. No defaults (phase
-// V24): a project made since starts at none and the person chooses.
+// second of them costs (lib/th-video.js), Seedance's ways of voicing a clip, and the
+// moods - with a few words on how each moves the body, for the gestures menu. No defaults:
+// a new project starts at none and the person chooses.
 router.get('/scen3/motion-presets', (_req, res) => {
   res.json({
     success: true,
@@ -1949,7 +1940,7 @@ function _tagPrompt(mood, lines) {
     + ' You are only inserting [tags] between the existing words.'
     + '\n- A tag goes immediately before the words it affects.'
     + (mood.voiceover
-      // (phase V62, (во28)) A voiceover is often ONE long line: tags go by its sentences, or the mood would be one tag deep.
+      // A voiceover is often ONE long line: tags go by its sentences, or the mood would be one tag deep.
       ? '\n- Tag by SENTENCES, not by lines: one or two tags every few sentences, wherever a tag changes how those'
         + ' sentences are delivered. A line may be many sentences long - tag through it, all the way to its end.'
       : '\n- Most lines take one or two tags. Some take none: if a tag would not change how the'
@@ -2030,7 +2021,7 @@ async function _retagOnce(mood, lines, want) {
   return out;
 }
 
-// (phase V26.8) The tags are written into the lines by their numbers when the tagger answers: a line put in meanwhile
+// The tags are written into the lines by their numbers when the tagger answers: a line put in meanwhile
 // waits (_holdLines).
 router.post('/scen3/voice/tag', async (req, res) => {
   const free = _holdLines((req.body || {}).projectId);
@@ -2045,7 +2036,7 @@ async function _tagRoute(req, res) {
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
 
-    // A line TAKEN OFF the script (phase Z) is tagged with the rest, and deliberately: tags belong
+    // A line TAKEN OFF the script is tagged with the rest, and deliberately: tags belong
     // to the WORDS, not to the cut, so a line put back comes back already marked and needs no
     // second pass. It costs nothing - it is the same one call - and the zone that asks for the
     // tagging counts only the lines that are in the video when it decides it is done.
@@ -2055,10 +2046,9 @@ async function _tagRoute(req, res) {
 
     const voice = _normVoice(proj.voice);
     // The mood of the VIDEO, always: one vocabulary for the read, the frames and the animation
-    // (lib/motion-presets.js; docs/local-app/PLAN.md, phase W). Every line touched gets its words
+    // (lib/motion-presets.js). Every line touched gets its words
     // back as `tagged`, marked or not, so the tagged read IS the read and the project is switched
-    // to it. The second caller - the Scenarios page, with a mood list of its own - went with the
-    // page in phase G, and its list went with it.
+    // to it.
     const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
     if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'a mood is needed' });
     const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags, voiceover: proj.type === 'voiceover' };
@@ -2111,7 +2101,7 @@ async function _tagRoute(req, res) {
       if (has) report.tagged++; else report.plain++;
     });
 
-    // The tagger thought for a while, and reads and clips write this project meanwhile (phase X0):
+    // The tagger thought for a while, and reads and clips write this project meanwhile:
     // the record is read AGAIN and only the tags of the lines this pass touched are put on it.
     const saved = PROJECTS.apply(id, (fresh) => {
       fresh.lines = (fresh.lines || []).map(_normLine);
@@ -2165,15 +2155,15 @@ function _audioDur(file) {
   });
 }
 
-// (phase V62) A voiceover is read in the language it is written in: Cyrillic - Russian, plain English letters only - English,
+// A voiceover is read in the language it is written in: Cyrillic - Russian, plain English letters only - English,
 // anything else (Spanish with its ñ, German with its ü...) - nothing said, v3 decides by itself. A talking head's lines are
-// always English (V29).
+// always English.
 const _langOfText = (t) => {
   const s = String(t || '').replace(/\[[^\]]*\]/g, ' ');           // the mood's [tags] are English whatever the line is
   if (/\p{Script=Cyrillic}/u.test(s)) return 'ru';
   return /\p{L}/u.test(s) && !/[^\x00-\x7F]/.test(s.replace(/[‘’“”–—… ]/g, '')) ? 'en' : null;
 };
-// (phase V62, (во28)) A voiceover's line, at most: ElevenLabs v3 reads 5 000 characters at a time, tags included - 500 are
+// A voiceover's line, at most: ElevenLabs v3 reads 5 000 characters at a time, tags included - 500 are
 // left for the mood's tags. The page's fields stop at it too.
 const VO_MAX = 4500;
 
@@ -2184,9 +2174,9 @@ async function _speakLine(key, voiceId, model, text, params, lang) {
     {
       text,
       model_id: model,
-      // (phase V29) Every line is English, and v3 is told so - its accent does not drift with a name or a loan word.
-      // multilingual_v2 does not take the code (ElevenLabs' reference, 2026-10-14) and is sent nothing. A voiceover's
-      // line says its own (V62, `lang`).
+      // Every line is English, and v3 is told so - its accent does not drift with a name or a loan word.
+      // multilingual_v2 does not take the code (ElevenLabs' reference) and is sent nothing. A voiceover's
+      // line says its own (`lang`).
       ...(model === EL_MODEL_TAGGED && code ? { language_code: code } : {}),
       voice_settings: {
         stability: typeof params.stability === 'number' ? params.stability : 0.5,
@@ -2195,7 +2185,7 @@ async function _speakLine(key, voiceId, model, text, params, lang) {
         speed: 1,
       },
     },
-    // Two minutes for a line of a talking head; a voiceover's line of up to 4 500 characters (~5 minutes of speech, V62)
+    // Two minutes for a line of a talking head; a voiceover's line of up to 4 500 characters (~5 minutes of speech)
     // is given longer by its length.
     { headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
       responseType: 'arraybuffer', timeout: Math.max(120000, String(text || '').length * 80) },
@@ -2203,26 +2193,24 @@ async function _speakLine(key, voiceId, model, text, params, lang) {
   return Buffer.from(r.data);
 }
 
-/* ── The read, and who drives it (phase X2) ─────────────────────────────
+/* ── The read, and who drives it ─────────────────────────────
    POST /api/scen3/voice/speak      { projectId, only? }  -> { success, project, report }
    POST /api/scen3/voice/speak-all  { projectId }         -> { success, queued, state }
    GET  /api/scen3/voice/state      ?projectId=           -> { success, state }
 
-   The page used to drive the whole script: three lines per call, and the next three only after the
-   previous three had answered. Leaving the page mid-read left the rest unread, and the same shape
-   in the clips is what lost the owner four fragments (PLAN, phase X). So the SERVER reads the
-   script now: `speak-all` works out what needs reading, answers at once, and starts one line a
-   second without waiting for the ones already going. The page follows `state`.
+   The SERVER reads the script, not the page: a page driving it a few lines per call would leave the
+   rest unread when it is left mid-read. `speak-all` works out what needs reading, answers at once,
+   and starts one line a second without waiting for the ones already going. The page follows `state`.
 
-   Reads are NOT in the journal (decided in phase A: a dozen quick rows would bury the things worth
-   waiting for, and phase X3 measures the wait from that journal). The progress lives in memory and
+   Reads are NOT in the journal: a dozen quick rows would bury the things worth
+   waiting for, and the wait shown is measured from that journal. The progress lives in memory and
    the truth lives in the project, so closing the app mid-read keeps every take already spoken and
    simply leaves the rest unread - one press finishes them.
    ─────────────────────────────────────────────────────────────────────────── */
 const READ_GAP_MS = 1000;
-// HOW MANY MAY BE SPEAKING AT ONCE (phase N, the owner 2026-09-23, after ElevenLabs refused a run
-// saying five is the limit). The queue starts a line a second and waits for none of them, so a
-// script of ten with a six-second read had seven in the air. Four, not five: a line read by hand
+// HOW MANY MAY BE SPEAKING AT ONCE: ElevenLabs refuses a run past its limit of five. The queue
+// starts a line a second and waits for none of them, so a script of ten with a six-second read
+// would have seven in the air. Four, not five: a line read by hand
 // from the fragment's own menu goes through the same gate, and it must not be the one that breaks
 // it. The gate is the PROCESS's, not the queue's, for exactly that reason.
 const READ_AT_ONCE = 4;
@@ -2264,7 +2252,7 @@ function _readCtx(proj) {
     variant,
     model: voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN,
     // The cast character's voice when they have one; the project's own pick before a character is
-    // cast, or for a character without a voice (phase W2.5). One ad, one voice, and the same rule
+    // cast, or for a character without a voice. One ad, one voice, and the same rule
     // the page shows (_castVoice). Saying plainly what is missing beats a 404 from ElevenLabs.
     cast: _castVoice(proj),
     dir: PROJECTS.dirOf(proj.id, 'voice'),
@@ -2278,7 +2266,7 @@ async function _speakOne(key, ctx, i) {
   const line = ctx.lines[i] || {};
   const text = _readTextOf(line, ctx.variant);
   if (!text.trim()) return { skipped: true };
-  // Through the gate: at most four of these are inside ElevenLabs at any moment (N2). Everything
+  // Through the gate: at most four of these are inside ElevenLabs at any moment. Everything
   // after the call is ours - the file, the length, the one-tick write - so the slot is given back
   // as soon as the sound is in hand, not when the project has been saved.
   await _speakSlot();
@@ -2291,7 +2279,7 @@ async function _speakOne(key, ctx, i) {
   const { stability } = ctx.voice.ttsParams;
   const speed = _speedOf(line, ctx);
   // Read again only because the settings changed - the same words - and the line's clip stays the
-  // line's until a new one is made (the owner, 2026-10-10).
+  // line's until a new one is made.
   const keep = !!_unsettled(line, ctx);
   // At another speed, the file ElevenLabs sent is kept as it is and the take plays a retimed copy.
   const play = speed === 1 ? abs : await _tempo(abs, speed);
@@ -2302,16 +2290,16 @@ async function _speakOne(key, ctx, i) {
     dur: Math.round(dur * 100) / 100,
     at: new Date().toISOString(),
     said: text,                           // what was actually spoken; the staleness check reads this
-    stability, speed,                     // what it was spoken with (V26.1)
+    stability, speed,                     // what it was spoken with
   };
   return { take: _fileTake(ctx, i, take, '', keep) };
 }
 
 // The take goes onto its line in one tick, and the timeline follows.
-// `keep` (phase V26.1, the owner 2026-10-10): the read is redone only because the stability or the speed
+// `keep`: the read is redone only because the stability or the speed
 // changed - the same words - so the clip the line has now (chosen by hand, else the last made from this
 // frame and this read) is CHOSEN for it and stays on the timeline with its own sound until a new clip is
-// made. Otherwise a new read is asked for a new performance and the choice goes (V23).
+// made. Otherwise a new read is asked for a new performance and the choice goes.
 function _fileTake(ctx, i, take, ifPath, keep, quiet) {
   const saved = PROJECTS.apply(ctx.id, (fresh) => {
     fresh.lines = (fresh.lines || []).map(_normLine);
@@ -2322,19 +2310,19 @@ function _fileTake(ctx, i, take, ifPath, keep, quiet) {
     if (ifPath && ((l.audio[ctx.variant] || {}).path || '') !== ifPath) return;
     const held = keep ? _clipNow(fresh, l, i, ctx.variant) : '';
     l.audio[ctx.variant] = take;
-    // (phase V62, (во36)) A VOICEOVER DRAFT IS A PROJECT FROM ITS FIRST READ: the reads are its files. Its name - the
+    // A VOICEOVER DRAFT IS A PROJECT FROM ITS FIRST READ: the reads are its files. Its name - the
     // scenario's or the text's - and its folder were given when its script was chosen (/scen3/projects/:id/script).
     if (fresh.draft) delete fresh.draft;
     if (held) l.chosen = { ...(l.chosen || {}), [ctx.variant]: held };
     else if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
     fresh.updatedAt = take.at;
   });
-  // The timeline mirrors the lines (T') - unless the caller re-lays it once itself, after several (`quiet`).
+  // The timeline mirrors the lines - unless the caller re-lays it once itself, after several (`quiet`).
   if (saved && !quiet) MIRROR.touch(saved.id, { project: saved });
   return take;
 }
 
-// A READ AT ANOTHER SPEED (phase V26.1): ffmpeg's atempo keeps the pitch of the voice. The copy is
+// A READ AT ANOTHER SPEED: ffmpeg's atempo keeps the pitch of the voice. The copy is
 // written beside the original with the speed in its name; the original stays, so the next speed is
 // made from what ElevenLabs sent and not from a copy of a copy.
 function _tempo(abs, speed) {
@@ -2352,7 +2340,7 @@ function _tempo(abs, speed) {
   });
 }
 
-// Was this line read with the settings the project has now? A take from before them was spoken at
+// Was this line read with the settings the project has now? A take that records no settings was spoken at
 // natural and 1. Only a READ line can be unsettled - one not read is simply to be read.
 function _unsettled(l, ctx) {
   const t = (l.audio || {})[ctx.variant];
@@ -2407,10 +2395,10 @@ async function _retempoOne(ctx, i, quiet) {
 
 // Which lines a read is about: the ones named, or every one that needs it. Without an explicit
 // `only` nobody pays twice for the same words.
-// `settle` (the voice field's own `generate`, V26.1) counts in the lines read with other settings
+// `settle` (the voice field's own `generate`) counts in the lines read with other settings
 // too; the chain and every other caller read only what is not read.
 function _readWanted(ctx, only, settle) {
-  const live = (i) => !(ctx.lines[i] || {}).removed;      // a line taken off is not read (phase Z)
+  const live = (i) => !(ctx.lines[i] || {}).removed;      // a line taken off is not read
   if (Array.isArray(only)) {
     return [...new Set(only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < ctx.lines.length))]
       .filter(live).sort((a, c) => a - c);
@@ -2426,7 +2414,7 @@ const _projNow = (id) => {
 };
 
 // The lines this call is about, spoken together and answered for: one press of a fragment's own
-// button, or an explicit list. (phase V26.8) Each read lands on its line by number: a line put in meanwhile waits.
+// button, or an explicit list. Each read lands on its line by number: a line put in meanwhile waits.
 router.post('/scen3/voice/speak', async (req, res) => {
   const free = _holdLines((req.body || {}).projectId);
   try { await _speakRoute(req, res); } finally { free(); }
@@ -2474,7 +2462,7 @@ async function _readQueue(key, ctx, only) {
   let spoken = 0;
   for (const i of only) {
     // A line that is read and only at another speed is retimed here, without ElevenLabs - and
-    // without the gap, which is there for ElevenLabs (V26.1).
+    // without the gap, which is there for ElevenLabs.
     const retime = _unsettled(ctx.lines[i], ctx) === 'speed';
     if (!retime && spoken++) await _wait(READ_GAP_MS);
     going.push((retime ? _retempoOne(ctx, i) : _speakOne(key, ctx, i)).then(
@@ -2513,7 +2501,7 @@ router.post('/scen3/voice/speak-all', (req, res) => {
     const st = {
       total: only.length, done: 0, skipped: [], failed: [], running: true,
       startedAt: new Date().toISOString(), endedAt: null, variant: ctx.variant,
-      only,                                  // which lines, so a line cannot be taken off mid-read (Z)
+      only,                                  // which lines, so a line cannot be taken off mid-read
     };
     _reads.set(id, st);
     res.json({ success: true, queued: only.length, lines: only.map(i => i + 1), state: st });
@@ -2528,7 +2516,7 @@ router.post('/scen3/voice/speak-all', (req, res) => {
   }
 });
 
-/* ── The speed of the read, applied at once (phase V26.1, the owner 2026-10-10) ──────────────────
+/* ── The speed of the read, applied at once ──────────────────
    POST /api/scen3/voice/speed  { projectId, speed }               the project's speed
                                 { projectId, line, lineSpeed }     a line's own speed; null - back to the project's
    -> { success, project, retimed, failed }
@@ -2537,7 +2525,7 @@ router.post('/scen3/voice/speak-all', (req, res) => {
    and every read line whose take is at another speed is retimed from its original before the answer - the
    timeline follows (MIRROR in _fileTake), and a line with a clip keeps that clip until a new one is made.
    ───────────────────────────────────────────────────────────────────────────────────────────── */
-// (phase V26.8) The retimed reads land on their lines by number: a line put in meanwhile waits.
+// The retimed reads land on their lines by number: a line put in meanwhile waits.
 router.post('/scen3/voice/speed', async (req, res) => {
   const free = _holdLines((req.body || {}).projectId);
   try { await _speedRoute(req, res); } finally { free(); }
@@ -2579,7 +2567,7 @@ async function _speedRoute(req, res) {
       failed.push({ line: i + 1, error: e.message });
     })));
     // The timeline, re-laid ONCE and waited for (as taking a line off is): the page shows it the moment
-    // the answer comes - a new speed is meant to be heard on the timeline at once (the owner).
+    // the answer comes - a new speed is meant to be heard on the timeline at once.
     if (retimed) {
       try { await MIRROR.rebuild(id); }
       catch (e) { console.warn('[scen3/voice/speed] the timeline was not re-laid:', e.message); }
@@ -2620,10 +2608,9 @@ async function _framePreview(finalUrl) {
 async function _fetchClip(taskId, projectId) {
   const r = await axios.get(`${CFG.KIE_BASE}/api/v1/jobs/recordInfo`,
     { params: { taskId }, headers: H.kieHeaders(), timeout: 15000 });
-  // One reader for every kie answer - see H.readKieRecord. This used to compare the state
-  // against 'failed' while kie says 'fail', so a render that died in fifteen seconds went on
-  // being polled as "pending" for twenty minutes and then reported a timeout instead of its
-  // actual reason. `failCode` comes back too: an upload/fetch failure is retryable and the
+  // One reader for every kie answer - see H.readKieRecord: kie says 'fail', not 'failed', and a
+  // reader that compares against the wrong word polls a dead render as "pending" until a timeout
+  // instead of reporting its actual reason. `failCode` comes back too: an upload/fetch failure is retryable and the
   // caller decides that, so it is passed on rather than flattened into the message.
   const read = H.readKieRecord(r.data);
   const data = read.data;
@@ -2713,16 +2700,16 @@ function _normCasting(c) {
   };
 }
 
-/* ── WHOSE WORK IS IN THE FIELDS (phase V67, the owner 2026-11-01, (об2)-(об4), (об9)) ─────────────────────────────────────
+/* ── WHOSE WORK IS IN THE FIELDS ─────────────────────────────────────
    A talking head's reads are its character's VOICE; its frames and its clips show its LOOK. A look of ANOTHER character cast
    PUTS ASIDE what was made - the lines' reads (with their cut silence and merges) and the voice picked by hand under the
    character, the set's frames and the lines' clips (with their prompts and the frames picked by hand) under the look - IN
-   THE PROJECT ITSELF (`shelf`): the files stay in its folder, nothing is deleted ((об2)), and it all comes back as it was
+   THE PROJECT ITSELF (`shelf`): the files stay in its folder, nothing is deleted, and it all comes back as it was
    when that character in that look is cast again. Another look of the SAME character puts aside its frames and clips only
-   - the voice is the same ((об4)). The CHOICES stay ((об3)): the mood and the [tags] it marked, stability and speed, the
+   - the voice is the same. The CHOICES stay: the mood and the [tags] it marked, stability and speed, the
    model, the quality, the shot size, the spread, Seedance's settings; the voice follows the character by itself
-   (_castVoiceOf). `workOf` - the look the fields' work was made for (the cast look before V67); `cast0` - the first look cast
-   (V67 block 3). Asked before it moves anything (POST /scen3/projects/:id/cast, below).
+   (_castVoiceOf). `workOf` - the look the fields' work was made for (the cast look when it is missing); `cast0` - the first
+   look cast. Asked before it moves anything (POST /scen3/projects/:id/cast, below).
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 const SHELF_READ = ['audio', 'cuts', 'merge'];                              // a line's, kept by the character
 const SHELF_LOOK = ['video', 'pick', 'chosen', 'sd', 'shot', 'frameId'];    // a line's, kept by the look
@@ -2764,7 +2751,7 @@ function _normShelf(sh) {
 }
 const _shelfAny = (sh) => !!(sh && (Object.keys(sh.chars || {}).length || Object.keys(sh.looks || {}).length));
 
-// What is in the fields now, counted the way the question says it ((об5)): the lines read, the frames of the set, the clips.
+// What is in the fields now, counted the way the question says it: the lines read, the frames of the set, the clips.
 function _workCount(p) {
   const lines = (Array.isArray(p.lines) ? p.lines : []).map(_normLine);
   return {
@@ -2845,7 +2832,7 @@ function _applyCast(p, next, plan, now) {
   // Whose the fields are: next's; with none cast, still the one whose work they hold (a ✕ on the stage takes nothing aside).
   if (next) p.workOf = next;
   else if (work) p.workOf = work;
-  // (об9) The first look cast - the one there was when the first change came, for a project from before V67.
+  // The first look cast - for a project with none recorded, the one there was when the first change came.
   if (!_normLook(p.cast0) && (work || next)) p.cast0 = work && work.obrazId ? work : next;
   const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
   p.casting = next ? { ...cast, ...next } : { ...cast, characterId: '', characterName: '', obrazId: '', obrazImage: '' };
@@ -2893,26 +2880,26 @@ function _normMix(m) {
         ? { x: +v.crop.x || 0, y: +v.crop.y || 0, w: +v.crop.w || 0, h: +v.crop.h || 0 } : null,
       size:    (v && v.size && typeof v.size === 'object')
         ? { w: +v.size.w || 0, h: +v.size.h || 0 } : null,
-      // The shot size a frame was drawn to (`framing` - the frames chat's edge); a frame of a set an agent planned before
-      // phase V61 also says which set and its number in it - so the pool keeps the order the frames were asked in.
+      // The shot size a frame was drawn to (`framing` - the frames chat's edge); a frame of a set an agent planned
+      // also says which set and its number in it - so the pool keeps the order the frames were asked in.
       set:     String((v && v.set) || ''),
       framing: String((v && v.framing) || ''),
       n:       Number.isInteger(v && v.n) ? v.n : 0,
       // The one sentence that made a frame of such a set different from the others - the head, the hands, the gaze at
-      // that instant - read by the writer of the animation prompts (W3b), which is what a clip made from this frame has
+      // that instant - read by the writer of the animation prompts, which is what a clip made from this frame has
       // to continue. Every other frame carries none and is read from the picture.
       moment:  String((v && v.moment) || ''),
-      // (phase V26.5) A frame made to order in the frames chat: 'chat', and the chat's record it came from.
+      // A frame made to order in the frames chat: 'chat', and the chat's record it came from.
       made:    (v && v.made === 'chat') ? 'chat' : '',
       genId:   String((v && v.genId) || ''),
-      // (phase V26.6) The products it was drawn with in the frames chat - { path, name, description }, at most two: the
+      // The products it was drawn with in the frames chat - { path, name, description }, at most two: the
       // clips' writers of a line that opens on it know them (_writePromptsNow, _writeSdPromptsNow).
       props:   _framePropsOf(v && v.props),
     })).filter(v => v.id && v.path) : [],
-    // The order the frames were dragged into (the owner, 2026-09-21), by id. A frame not named
+    // The order the frames were dragged into, by id. A frame not named
     // here - a new one - keeps its natural place, after the ones that were arranged.
     order: Array.isArray(s.order) ? s.order.map(String).filter(Boolean) : [],
-    // A frame generation's last error; nothing sets it now, a cast only clears it.
+    // A frame generation's last error; a cast clears it.
     lastError: String(s.lastError || ''),
     banned: Array.isArray(s.banned) ? s.banned.map(String) : [],
   };
@@ -2923,7 +2910,7 @@ function _normProject(p, now) {
   return {
     id:         String(src.id != null ? src.id : Date.now()),
     casting:    _normCasting(src.casting),
-    // (phase V67) Whose work the fields hold, the first look cast, and the work of the others put aside (_applyCast).
+    // Whose work the fields hold, the first look cast, and the work of the others put aside (_applyCast).
     ...(_normLook(src.workOf) ? { workOf: _normLook(src.workOf) } : {}),
     ...(_normLook(src.cast0) ? { cast0: _normLook(src.cast0) } : {}),
     ...(_shelfAny(_normShelf(src.shelf)) ? { shelf: _normShelf(src.shelf) } : {}),
@@ -2933,9 +2920,9 @@ function _normProject(p, now) {
     frameRef:   _normFrameRef(src.frameRef),
     name:       String(src.name || '').trim() || 'untitled project',
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
-    // (phase V62) A voiceover is the same record with no who / where, frames or clips; everything else is a talking head.
+    // A voiceover is the same record with no who / where, frames or clips; everything else is a talking head.
     type:       src.type === 'voiceover' ? 'voiceover' : 'talking_head',
-    // (phase V62, (во29), (во35)) THE VOICEOVER DRAFT - one; a project once its first line is read (_fileTake).
+    // THE VOICEOVER DRAFT - one; a project once its first line is read (_fileTake).
     ...(src.type === 'voiceover' && src.draft ? { draft: true } : {}),
     gender:     String(src.gender || '').toLowerCase(),
     title:      String(src.title || ''),
@@ -2945,8 +2932,7 @@ function _normProject(p, now) {
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
-    // (phase V26.8, sixth round) What Seedance keeps is on each LINE (`sd`, _normLine) - the project's `sd.frags` of the
-    // merged fragments is not carried over.
+    // What Seedance keeps is on each LINE (`sd`, _normLine) - a project's `sd.frags` is not carried over.
     createdAt:  src.createdAt || now,
     updatedAt:  src.updatedAt || now,
   };
@@ -2963,7 +2949,7 @@ function _normTake(t) {
   return {
     // A stable handle for one variant, so the page can say WHICH clip a fragment is set
     // to. Derived from the filename when absent, which already carries the task id and a
-    // timestamp — that way clips saved before variants existed get an id without a
+    // timestamp — that way a clip stored with no id gets one without a
     // migration table, and the same file always resolves to the same id.
     id: String(s.id || '').trim() || ('v' + path.basename(p).replace(/\.[^.]+$/, '')),
     path: p, dur: +s.dur || 0, at: String(s.at || ''),
@@ -2986,9 +2972,9 @@ function _normTake(t) {
     // A clip's poster frame. The cards show stills only — the clip itself belongs to a
     // viewer, not to a list of ten of them all decoding at once.
     thumb:   String(s.thumb || ''),
-    // For an audio take (phase V26.1): what it was spoken with, and - when it was retimed - the
+    // For an audio take: what it was spoken with, and - when it was retimed - the
     // file ElevenLabs sent, so another speed is made from it again rather than from a copy.
-    // A take from before carries none: it was spoken at natural and 1.
+    // A take that carries none was spoken at natural and 1.
     ...(s.raw ? { raw: String(s.raw) } : {}),
     ...(s.stability !== undefined && s.stability !== null && s.stability !== '' ? { stability: +s.stability } : {}),
     ...(s.speed ? { speed: +s.speed } : {}),
@@ -3029,10 +3015,10 @@ function _normLine(l) {
     // whole project. Per line it could drift, and two lines showing different takes
     // of the same read has no meaning.
     frameId: String(s.frameId || ''),       // the first frame picked by hand (/fragments/pick-frame)
-    // (phase V26.8) THE NUMBER THE LINE TAKES ITS FRAME BY, kept: given to every line when one is put in above some of
+    // THE NUMBER THE LINE TAKES ITS FRAME BY, kept: given to every line when one is put in above some of
     // them (/line/insert), so the lines that moved down a place stay on their frames. Absent - its place in the list.
     ...(Number.isInteger(s.slot) && s.slot >= 0 ? { slot: s.slot } : {}),
-    // TAKEN OFF THE SCRIPT (phase Z, the owner 2026-09-22). A line is never deleted: it is taken
+    // TAKEN OFF THE SCRIPT. A line is never deleted: it is taken
     // off, keeps its place in this list, and can be put back. Keeping its place is the whole point
     // - a line that is not picked by hand takes its first frame from the set BY ITS NUMBER, and a
     // clip is the take made from the frame its line opens on, so closing the gap would move every
@@ -3040,8 +3026,8 @@ function _normLine(l) {
     // timeline while the files sat there. Nothing reads a line that is off: not the reads, not the
     // clips, not the prompts, not the mirror. The TAGGER is the one exception - see /voice/tag.
     removed: !!s.removed,
-    // How this line is filmed and how the person moves on it - the directing agent's reading (the
-    // fragments step, docs/local-app/PLAN.md F2), or null until the script has been read.
+    // How this line is filmed and how the person moves on it - the directing agent's reading,
+    // or null until the script has been read.
     shot:    _normShot(s.shot),
     audio:   { plain: _normTake((s.audio || {}).plain), tagged: _normTake((s.audio || {}).tagged) },
     // Clips are a LIST per variant, one per first frame. A read has a single take because
@@ -3058,23 +3044,23 @@ function _normLine(l) {
       plain:  String((s.pick || {}).plain  || ''),
       tagged: String((s.pick || {}).tagged || ''),
     },
-    // (phase V23, the owner 2026-10-09) A clip CHOSEN BY HAND in the fragment's takes: it is the line's clip on the
+    // A clip CHOSEN BY HAND in the fragment's takes: it is the line's clip on the
     // timeline even when it is stale - made from another frame, other words or another read. Cleared by a new clip and
     // by a new read of the line.
     chosen:  {
       plain:  String((s.chosen || {}).plain  || ''),
       tagged: String((s.chosen || {}).tagged || ''),
     },
-    // (phase V26.1, the owner 2026-10-10) The line's OWN speed, set in its fragment: the project's speed does not
+    // The line's OWN speed, set in its fragment: the project's speed does not
     // touch it. Absent - the line reads at the project's speed.
     ...(Number(s.speed) > 0 ? { speed: _ttsParams({ speed: s.speed }).speed } : {}),
-    // (phase V26.8, sixth round, the owner 2026-10-15: "Всегда по одной строке") WHAT SEEDANCE KEEPS FOR THIS LINE - a
+    // WHAT SEEDANCE KEEPS FOR THIS LINE - always one line at a time: a
     // line is a fragment of its own: its prompt and its clips (_normSdLine). Absent until it has either.
     ...(s.sd && typeof s.sd === 'object' ? { sd: _normSdLine(s.sd) } : {}),
-    // (phase V44) WHAT CUT SILENCE TOOK OUT OF THE LINE'S SOUND - stretches of its file, bound to the take they were cut in
+    // WHAT CUT SILENCE TOOK OUT OF THE LINE'S SOUND - stretches of its file, bound to the take they were cut in
     // (lib/line-cuts.js): written by a save of its timeline, laid by the mirror. Absent - the line plays whole.
     ...(require('../lib/line-cuts').normalize(s.cuts) ? { cuts: require('../lib/line-cuts').normalize(s.cuts) } : {}),
-    // (phase V45) THE LINES MERGED INTO ONE FILE FROM THIS ONE ON - the file, its length, and each line's take and pieces
+    // THE LINES MERGED INTO ONE FILE FROM THIS ONE ON - the file, its length, and each line's take and pieces
     // (lib/line-cuts.js): written by a save of the timeline, laid by the mirror as one cell while those takes stand.
     ...(require('../lib/line-cuts').normalizeMerge(s.merge) ? { merge: require('../lib/line-cuts').normalizeMerge(s.merge) } : {}),
   };
@@ -3086,10 +3072,10 @@ function _normFrameRef(r) {
   return {
     look: String(r.look), place: String(r.place),
     character: str(r.character, 1500), environment: str(r.environment, 1500), lighting: str(r.lighting, 1200),
-    // One garment a line, where it is worn in front (N7).
+    // One garment a line, where it is worn in front.
     clothes: str(r.clothes, 3000),
-    // Which questions the reading answered: 2 since the clothes were asked for (N7). An older one is
-    // read again once; one that is new and simply has no clothes lines is NOT, or a look the agent
+    // Which questions the reading answered: 2 when the clothes were asked for too. A reading below 2 is
+    // read again once; one at 2 that simply has no clothes lines is NOT, or a look the agent
     // cannot list would cost a vision call on every set for ever.
     v: Number(r.v) || 1,
     at: str(r.at, 40),
@@ -3099,9 +3085,8 @@ function _normFrameRef(r) {
 // A line's animation: the prompt that goes to the video model (`motion`), the agent's own last text
 // for it (`motionAgent`, so a prompt edited by hand survives a new pass and can be put back), and
 // what it was written FROM - the words and the mood - so a line whose words or whose video's mood
-// changed since is stale, which is worked out wherever it is shown rather than stored. The shot
-// size, the pose and the camera of a frame used to live here too (F2); the frames are a set for the
-// whole video now (docs/local-app/PLAN.md, phase W2), and a line only says which one it opens on.
+// changed since is stale, which is worked out wherever it is shown rather than stored. The frames
+// are a set for the whole video, and a line only says which one it opens on.
 function _normShot(sh) {
   if (!sh || typeof sh !== 'object') return null;
   const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
@@ -3120,21 +3105,21 @@ function _normShot(sh) {
 // NOT stored — it is derived from the quality at render time, so a tier being renamed
 // upstream does not leave old projects pointing at a model that no longer exists.
 //
-// CHOSEN, NOT ASSUMED (phase V24, the owner 2026-10-09). A project made since carries `v: 2`, and its
+// CHOSEN, NOT ASSUMED. A new project carries `v: 2`, and its
 // choices start at NONE - '' for the mood, the quality, the shot size and the spread - until the person makes them; the panel's fields are red while one is missing and nothing fills it
-// in here. An older project keeps the defaults it was always read with: 70 of the owner's 80 had no
-// mood stored and were marked up in 'sincere'.
+// in here. A project without `v: 2` keeps the defaults it was always read with: 70 of 80 such projects
+// had no mood stored and were marked up in 'sincere'.
 const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const chosen = s.v === 2;
-  // WHAT FILMS IT (phase V26.8, lib/th-video.js): Kling avatar - a clip per line - or one of the Seedance models. Chosen
-  // like the rest since V24: a project made since starts at none - except one that already chose a quality, which was
-  // Kling's (the only model there was), so a project halfway through on Kling stays on it. An older project is Kling.
+  // WHAT FILMS IT (lib/th-video.js): Kling avatar - a clip per line - or one of the Seedance models. Chosen
+  // like the rest: a `v: 2` project starts at none - except one that already chose a quality with no model, which is
+  // Kling's quality, so a project halfway through on Kling stays on it. An older project is Kling.
   const model = TH.byId(s.model) ? s.model : (chosen && !s.quality ? '' : 'kling');
   return {
     ...(chosen ? { v: 2 } : {}),
     model,
-    // The family of the model, kept for whatever read `mode` before V26.8.
+    // The family of the model, kept for whatever reads `mode`.
     mode:    TH.isSeedance(model) ? 'seedance' : 'kling',
     // The emotion of the whole video (lib/motion-presets.js, MOODS): what the directing agent reads
     // every shot and animation prompt from.
@@ -3143,23 +3128,23 @@ const _normVideo = (v) => {
     // A quality the model makes - another model's is no choice at all (720p is Kling's and Seedance's, 1080p not mini's).
     quality: TH.qualityOf(model, s.quality) ? s.quality
       : (chosen || model !== 'kling' ? '' : MP.DEFAULT_QUALITY),
-    // SEEDANCE'S OWN SETTINGS (phase V26.8; read only while a Seedance model films it). `sound` - how the clip is voiced
+    // SEEDANCE'S OWN SETTINGS (read only while a Seedance model films it). `sound` - how the clip is voiced
     // (lib/th-video.js SOUNDS; '' = SOUND_DEFAULT); `gestures` - whose mood the body moves by ('' = the project's mood).
-    // The lines are never merged (the owner 2026-10-15: "Удаляем эту функцию по объединению фрагментов"): `merge` goes.
+    // The lines are never merged: a `merge` field is dropped.
     sound:    TH.soundById(s.sound) ? s.sound : '',
     gestures: MP.moodById(s.gestures) ? s.gestures : '',
     // The shot size (an id of FRAME_SETS below) of a frame that does not say its own - an older project's; the frames
     // chat's frames carry theirs (`framing`).
     framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : (chosen ? '' : 'half'),
-    // How the lines take frames from the project's set (the owner, 2026-09-21): the pool in turn, or a
+    // How the lines take frames from the project's set: the pool in turn, or a
     // frame drawn for each line - drawn once and always the same one, so a repaint does not
     // reshuffle the video (_frameOfLine).
     spread:  (s.spread === 'random' || s.spread === 'cycle') ? s.spread : (chosen ? '' : 'cycle'),
   };
 };
-// (phase V26.8, part 4; on the line since the sixth round) WHAT SEEDANCE KEEPS FOR A LINE: the prompt as it goes, the
+// WHAT SEEDANCE KEEPS FOR A LINE: the prompt as it goes, the
 // writer's own to go back to, whether it was edited by hand, what it was written for (`sig`, lib/sd-prompt.js), who
-// wrote it and when; (part 5) its clips - every take kept, as Kling's - and the one chosen by hand, whatever it was made from.
+// wrote it and when; its clips - every take kept, as Kling's - and the one chosen by hand, whatever it was made from.
 function _normSdLine(f) {
   const s = (f && typeof f === 'object') ? f : {};
   return {
@@ -3182,13 +3167,13 @@ function _normSdClip(c) {
     sound: TH.soundById(c.sound) ? c.sound : 'read', model: String(c.model || ''), quality: String(c.quality || ''),
     secs: +c.secs > 0 ? +c.secs : 0, at: String(c.at || ''),
     take: String(c.take || ''), words: String(c.words || ''), voice: String(c.voice || ''),
-    // (the sixth round) Where the speech ends in its own sound (lib/speech-end.js) - 0 when it runs to the end.
+    // Where the speech ends in its own sound (lib/speech-end.js) - 0 when it runs to the end.
     speechEnd: +c.speechEnd > 0 ? Math.round(+c.speechEnd * 100) / 100 : 0,
   };
 }
 
-// What a project made since phase V24 has not chosen yet, of the choices a step needs, in words -
-// '' when nothing is missing (an older project never misses any: its defaults stand).
+// What a project has not chosen yet, of the choices a step needs, in words -
+// '' when nothing is missing (a project without `v: 2` never misses any: its defaults stand).
 function _unchosen(video, which) {
   const v = video || {};
   const words = {
@@ -3208,7 +3193,7 @@ const _normVoice = (v) => {
     // provider brings its own set rather than borrowing these.
     provider:  'elevenlabs',
     // The read uses the CAST CHARACTER's voice when there is one. Before a character is cast
-    // the project may choose a voice of its own (the owner, 2026-09-21, phase W2.5): `pick` is
+    // the project may choose a voice of its own: `pick` is
     // that voice - the entry the picker took, as a character's voice list keeps it - and the
     // read falls back to it. A character with a saved voice wins the moment they are cast.
     pick:      (s.pick && typeof s.pick === 'object' && s.pick.voiceId) ? {
@@ -3224,9 +3209,9 @@ const _normVoice = (v) => {
     ttsParams: _ttsParams(p),
   };
 };
-// HOW THE SCRIPT IS SPOKEN (phase V26.1, the owner 2026-10-10): one stability and one speed for the
+// HOW THE SCRIPT IS SPOKEN: one stability and one speed for the
 // whole video. v3 knows three stabilities - creative 0, natural 0.5, robust 1 - so anything else is
-// put on the nearest (`+p.stability || 0.5` used to turn creative into natural). The speed is OURS,
+// put on the nearest (`+p.stability || 0.5` would turn creative into natural). The speed is OURS,
 // not ElevenLabs': v3 takes none, so a read is spoken at 1 and then retimed (_tempo), 0.7-1.2.
 const STABILITIES = [0, 0.5, 1];
 const SPEED_MIN = 0.7;
@@ -3243,7 +3228,7 @@ function _ttsParams(p) {
 }
 
 const _projSummary = p => ({
-  id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type, draft: !!p.draft,   // (phase V62) the voiceover draft
+  id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type, draft: !!p.draft,   // the voiceover draft
   gender: p.gender, title: p.title,
   vertical: p.vertical, product: p.product, roles: p.roles,
   casting: _normCasting(p.casting),
@@ -3252,8 +3237,8 @@ const _projSummary = p => ({
 });
 // The mix workspace is heavy (every generated frame), so it rides on the full
 // record only — the dropdown list stays light.
-// Lines go through the normaliser on the way OUT too: a project saved before voice
-// existed has bare {text, frameId}, and the page would read undefined for
+// Lines go through the normaliser on the way OUT too: a line stored as bare
+// {text, frameId} would have the page read undefined for
 // every audio and video pair.
 // Whether the CAST CHARACTER has a voice, worked out at read time from the character
 // record. Derived and never stored: a copy on the project would go stale the moment a
@@ -3263,13 +3248,13 @@ const _projSummary = p => ({
 // would be refused for the same reason without ever naming the cause.
 function _castVoice(p) {
   const cv = _castVoiceOf(p);
-  // (phase V26.8, sixth round) Whether the voice has a demo - what Seedance takes its timbre from by the voice sample.
+  // Whether the voice has a demo - what Seedance takes its timbre from by the voice sample.
   return cv.has ? { ...cv, demo: !!_sampleOf(cv.id) } : cv;
 }
 function _castVoiceOf(p) {
   const cast = _normCasting((p || {}).casting);
   // The project's own pick reads when there is no character to read for, or the character has
-  // no voice of their own (phase W2.5).
+  // no voice of their own.
   const pick = _normVoice((p || {}).voice).pick;
   const own = pick ? { has: true, id: pick.voiceId, character: '', index: 1, count: 1, own: true, name: pick.name } : null;
   if (!cast.characterId && !cast.characterName) return own || { has: false, reason: 'no character cast yet' };
@@ -3294,7 +3279,7 @@ function _castVoiceOf(p) {
 
 const _projFull = p => ({
   ..._projSummary(p),
-  // (phase V67 block 3) The first look cast - the stage's way back to it (js/merge-v3/wk-setup.js _stageBack).
+  // The first look cast - the stage's way back to it (js/merge-v3/wk-setup.js _stageBack).
   ...(_normLook(p.cast0) ? { cast0: _normLook(p.cast0) } : {}),
   castVoice: _castVoice(p),
   lines: (p.lines || []).map(_normLine),
@@ -3308,8 +3293,8 @@ router.get('/scen3/projects/:id', (req, res) => {
   try {
     const p = _loadProjects().find(x => String(x.id) === String(req.params.id));
     if (!p) return res.status(404).json({ success: false, error: 'not found' });
-    // Opening a project is when the timeline catches up with what was made before the mirror
-    // existed, or while this app was not running (phase U1). It asks a cheap question first and
+    // Opening a project is when the timeline catches up with what was made
+    // while this app was not running. It asks a cheap question first and
     // lays nothing unless the answer differs from what is there.
     MIRROR.catchUp(p.id, { project: p });
     res.json({ success: true, project: _projFull(p) });
@@ -3318,17 +3303,17 @@ router.get('/scen3/projects/:id', (req, res) => {
 
 // Create from a scenario ({ scenarioId }), or upsert an existing project by id
 // (the page's saves of its fields).
-// (phase V63, P14, the owner's (хп32), (хп58)) Or a TALKING HEAD FROM ONE'S OWN TEXT ({ lines, name }) - Home's quick start:
+// Or a TALKING HEAD FROM ONE'S OWN TEXT ({ lines, name }) - Home's quick start:
 // the lines as the window cut them (by paragraphs - every Enter a line), never put on the scenarios shelf; another language is
-// made English first, as a scenario's is (V29). Named after `name`, else its first words.
+// made English first, as a scenario's is. Named after `name`, else its first words.
 router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
-    // (phase V67) Whose the work is and what is put aside are the cast route's alone - never a page's copy written back.
+    // Whose the work is and what is put aside are the cast route's alone - never a page's copy written back.
     delete b.workOf; delete b.cast0; delete b.shelf;
-    // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
-    // came in - gets them in English, and so does the scenario: what is spoken is English. (A voiceover is not made
-    // here: it is THE voiceover draft, /scen3/voiceover/draft - phase V62.)
+    // A talking head made from a scenario with lines in another language gets them in English, and so does the
+    // scenario: what is spoken is English. (A voiceover is not made
+    // here: it is THE voiceover draft, /scen3/voiceover/draft.)
     if (b.id == null && b.scenarioId != null) {
       const s0 = _load().find(x => String(x.id) === String(b.scenarioId));
       const texts = s0 ? (s0.lines || []).map(l => String((l && l.text) || '')) : [];
@@ -3373,8 +3358,8 @@ router.post('/scen3/projects', async (req, res) => {
       const was = _normVideo(list[i].video);
       list[i] = merged;
       _saveProjects(list);
-      // (phase V26.8) The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut -
-      // and another sound (the sixth round: by the voice sample, the reads are not laid).
+      // The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut -
+      // and another sound (by the voice sample, the reads are not laid).
       const nowV = _normVideo(merged.video);
       if (video && (nowV.model !== was.model || nowV.sound !== was.sound)) MIRROR.touch(merged.id, { project: merged });
       return res.json({ success: true, project: _projFull(merged) });
@@ -3395,7 +3380,7 @@ router.post('/scen3/projects', async (req, res) => {
       const rec = _normProject({
         id: _newId(list), name: `${now.slice(0, 10)} — ${title}`,
         scenarioId: '', gender: '', title, lines: texts.map(text => ({ text })),
-        // Its choices start at none and are made by the person (phase V24, _normVideo).
+        // Its choices start at none and are made by the person (_normVideo).
         video: { v: 2 }, createdAt: now, updatedAt: now,
       }, now);
       list.unshift(rec);
@@ -3421,7 +3406,7 @@ router.post('/scen3/projects', async (req, res) => {
       vertical: scen.vertical,
       product: scen.product,
       roles: scen.roles,
-      // Its choices start at none and are made by the person (phase V24, _normVideo).
+      // Its choices start at none and are made by the person (_normVideo).
       video: { v: 2 },
       createdAt: now, updatedAt: now,
     }, now);
@@ -3431,25 +3416,25 @@ router.post('/scen3/projects', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── A LOOK CAST (phase V67, the owner 2026-11-01: "при смене образа спрашивать, точно ли сменить. и если пользователь
-   говорит да, то сбрасывать") - the ONE way "who" is written, the stage's ✕ too (js/merge-v3/wk-setup.js _cast) ──────────
+/* ── A LOOK CAST - asked before it changes, reset after a yes - the ONE way "who" is written, the stage's ✕ too
+   (js/merge-v3/wk-setup.js _cast) ──────────
    POST /api/scen3/projects/:id/cast  { characterId, characterName, obrazId, obrazImage, sure? } | { clear: true }
         -> { success, project, moved, title? }   cast; `moved` - work was put aside or came back, and the timeline was
            re-laid; `title` - the timeline's new title, the character in it (_nameForCast)
         -> { success: false, ask: { reads, frames, clips, from, to, sameChar } }   it would put work aside: asked first,
            cast with `sure` after a yes
         -> 409 { success: false, error }  something of the project is being made - after it
-   The ✕ (`clear`) takes the look off and puts nothing aside: the same look cast again finds everything as it was ((об1)).
+   The ✕ (`clear`) takes the look off and puts nothing aside: the same look cast again finds everything as it was.
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 function _castBusy(id) {
   return _scriptBusy(id);
 }
 
-// (phase V67, the owner 2026-11-01: "в имена проектов нужно вписывать имена используемых персонажей"; (об6)-(об8)) WHO IS IN
+// WHO IS IN
 // THE NAME: a talking head's name - and so its folder (lib/projects-store.js, lib/relocate.js) - and its timeline's title end
 // in the character cast: "<day> — <title> · <character>", "<day> - <title> · <character>" for the title (the picker's), a
-// " (N)" the app added kept. Only while each is still the one the app gave ((об7): a name typed by hand is left alone).
-// Given when a look is cast; a project from before V67 gets it at its next cast - nothing is renamed at start ((об8)).
+// " (N)" the app added kept. Only while each is still the one the app gave (a name typed by hand is left alone).
+// Given when a look is cast; a project without it gets it at its next cast - nothing is renamed at start.
 function _castName(name, sep, title, who) {
   const s = String(name || '');
   const t = String(title || '').trim();
@@ -3508,7 +3493,7 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
       try { await MIRROR.rebuild(id, { project: saved }); }
       catch (e) { console.warn('[scen3/cast] the timeline was not re-laid:', e.message); }
     }
-    // (об6) Who is in the name - the folder and the timeline's title follow.
+    // Who is in the name - the folder and the timeline's title follow.
     const named = next ? _nameForCast(id) : {};
     console.log('[scen3/cast] ' + id + (next ? ' cast ' + next.characterName + ' / ' + next.obrazId : ' cleared') + (moved ? ' - work moved' : '')
       + (named.name ? ' - named "' + named.name + '"' : ''));
@@ -3516,8 +3501,7 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── A NEW PROJECT FOR ANOTHER LOOK (phase V67, second round (г), the owner 2026-11-01: "давай еще вариант в предупреждении
-   "new project" с пояснением во всплывашке"; (об12), (об13)) ─────────────────────────────────────────────────────────────────
+/* ── A NEW PROJECT FOR ANOTHER LOOK - the "new project" answer to the question a cast asks ──────────────────────────────────
    POST /api/scen3/projects/:id/fork  { characterId, characterName, obrazId, obrazImage }   -> { success, project }
    A new talking head of THIS project's script as it is now - the lines' words and their [tags], the lines taken off and put in,
    their numbers kept - with its place and its choices (the mood, stability and speed, the model, the quality, the shot size,
@@ -3560,10 +3544,8 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE VOICEOVER DRAFT (phase V62, the owner 2026-10-30: (во29) "давай проект будет создаваться только когда пользователь
-   сгенерировал голоса. до этого - это черновик voiceover"; (во30) "можно отменить выбраный сценарий и вернуться к списку
-   сценариев и добавить свой текст"; (во35) one, as Merge's draft; (во36) a project from its first read; (во37) then its script
-   stays) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/* ── THE VOICEOVER DRAFT - one, as Merge's draft; a project only once its voices are read, and then its script stays; until
+   then its scenario can be let go - back to the list, or to one's own text ─────────────────────────────────────────────────
    POST /api/scen3/voiceover/draft                               -> { success, project, key, timeline }
         THE draft - the one there is, or a new empty one ("voiceover draft"): what "+ new project -> voiceover" and Home's
         "+ voiceover" open. `timeline` says whether its timeline is made yet (the page makes it, /mv3/timeline/new).
@@ -3650,14 +3632,13 @@ router.post('/scen3/projects/:id/script', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Deletes the project only — the source scenario stays in the library.
-// (DELETE /scen3/projects/:id went in phase C3: nothing called it. A talking head's folder is deleted with its
-// last timeline from Merge - DELETE /mv3/timeline/:key?files=1, routes/mergev3.js.)
+// A project is deleted from Merge: a talking head's folder goes with its last timeline (DELETE
+// /mv3/timeline/:key?files=1, routes/mergev3.js); the source scenario stays in the library.
 
 /* ── The words of ONE line ───────────────────────────────────────────────
    POST /api/scen3/projects/:id/line  { index, text } -> { success, project }
 
-   The words are edited where the read is (docs/local-app/PLAN.md, phase V3): a line is judged by
+   The words are edited where the read is: a line is judged by
    how it sounds, so the place to change it is beside the take of it. Deliberately not a save of
    the whole project - a page holding its own copy of the lines would put that copy's `audio` back
    over whatever a read had just written into them, and a read is the thing most likely to be
@@ -3672,11 +3653,11 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
   try {
     let text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
     if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
-    // (phase V62) A voiceover's line is kept in its own language, and no longer than VO_MAX.
+    // A voiceover's line is kept in its own language, and no longer than VO_MAX.
     const vo = (_loadProjects().find(p => String(p.id) === String(req.params.id)) || {}).type === 'voiceover';
     if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
-    // (phase V29) Typed in another language, the words are made English before they are kept - the field shows the
-    // English. Then the project is read and written in one go, as before.
+    // Typed in another language, the words are made English before they are kept - the field shows the
+    // English. Then the project is read and written in one go.
     if (!vo && !AGENT.english(text)) {
       const t = await _englishLines([text]);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
@@ -3690,7 +3671,7 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
     const i = parseInt((req.body || {}).index, 10);
     if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
 
-    // The words with their [tags], when the page edits those too (Merge, phase W). Kept only when
+    // The words with their [tags], when the page edits those too (Merge). Kept only when
     // the words in it are these words: tags belong to the words they sit between. Sent nothing, a
     // change of words drops the old tags - they were made for other words - and the next read tags
     // the line again.
@@ -3702,7 +3683,7 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): the words of a line
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines: the words of a line
     res.json({ success: true, project: _projFull(proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -3710,7 +3691,7 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
 /* ── A line taken off the script, and put back ───────────────────────────────
    POST /api/scen3/projects/:id/line/state  { index, removed } -> { success, project }
 
-   The owner's decision (2026-09-22): a line is never deleted. It is taken off - the panel dims it
+   A line is never deleted. It is taken off - the panel dims it
    and moves it to the foot of the script with a `restore` on it - and its files stay in the project
    folder. It keeps its PLACE in the list (see `removed` in _normLine), so nothing below it moves
    onto another frame and no clip disappears; putting it back is simply the flag going away.
@@ -3719,8 +3700,8 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
    the lines that are in the video, so the cut closes over the line that went and opens again when
    it comes back (lib/frag-mirror.js). This route WAITS for that re-laying before it answers, unlike
    every other caller of the mirror: the person is looking straight at the timeline through the blur
-   when they press this, and the page refreshes it the moment the answer arrives (phase Z', the
-   owner 2026-09-22). Everywhere else the mirror is fire-and-forget, because nothing is watching.
+   when they press this, and the page refreshes it the moment the answer arrives. Everywhere else
+   the mirror is fire-and-forget, because nothing is watching.
 
    A line cannot be taken off WHILE IT IS BEING MADE: the money would buy a fragment that is no
    longer in the video. Its neighbours are free - the numbers do not move, so a clip in flight
@@ -3759,7 +3740,7 @@ router.post('/scen3/projects/:id/line/state', async (req, res) => {
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    // The cut closes over it, or opens again (T') - and this one is WAITED for, so the page can
+    // The cut closes over it, or opens again - and this one is WAITED for, so the page can
     // show the new timeline the moment it gets the answer. A mirror that could not be built must
     // never fail the thing that prompted it, so a failure is logged and the answer goes anyway.
     try { await MIRROR.rebuild(proj.id, { project: proj }); }
@@ -3769,16 +3750,15 @@ router.post('/scen3/projects/:id/line/state', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── A LINE PUT IN (phase V26.8, the owner 2026-10-13) ───────────────────────
+/* ── A LINE PUT IN ───────────────────────
    POST /api/scen3/projects/:id/line/insert  { after, text } -> { success, project, index }
 
-   The "+" on the border under a fragment: a new line below it, with the words typed for it. The
-   script was only ever shortened before (a line is taken off, never deleted, phase Z) - and that is
-   because a line takes its first frame from the set BY ITS NUMBER: moving the lines below down a
+   The "+" on the border under a fragment: a new line below it, with the words typed for it. A line
+   takes its first frame from the set BY ITS NUMBER: moving the lines below down a
    place would put each of them on another frame, and their clips would drop out of the fragments
    and off the timeline. So before anything moves, every line is given the number it has now to
-   KEEP (`slot`, read by _frameOfLine instead of the index), and the new line takes the one after the
-   line above it - the next frame of the set (the owner's answer (ф)).
+   KEEP (`slot`, read by _frameOfLine instead of the index), and the new line takes a number of its
+   own (below).
 
    NOT WHILE ANYTHING IS BEING MADE in the project: a read, a clip, a tagging or a prompt lands on
    its line by number, and with a line put in above it, it would land on the one above its own. The
@@ -3819,10 +3799,10 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
     const busy = _scriptBusy(id);
     if (busy) return res.status(409).json({ success: false, error: busy + ' - put the line in when it is done' });
-    // (phase V62) A voiceover's line goes in as typed, in its own language, and no longer than VO_MAX.
+    // A voiceover's line goes in as typed, in its own language, and no longer than VO_MAX.
     const vo = proj.type === 'voiceover';
     if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
-    // (phase V29) Typed in another language, it goes in English - and nothing may have started while it was translated.
+    // Typed in another language, it goes in English - and nothing may have started while it was translated.
     if (!vo && !AGENT.english(text)) {
       const t = await _englishLines([text]);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
@@ -3834,7 +3814,7 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     const saved = PROJECTS.apply(id, (fresh) => {
       fresh.lines = (fresh.lines || []).map(_normLine);
       fresh.lines.forEach((l, k) => { if (!Number.isInteger(l.slot)) l.slot = k; });
-      // (phase V61) ITS OWN NUMBER: the one after the line above was the line below's too, so the new line opened on the same
+      // ITS OWN NUMBER: the one after the line above is the line below's too, so the new line would open on the same
       // frame as the next one. It takes a number no line has - the first past the largest whose frame, by the project's own
       // rule, is neither of its neighbours' when the pool has room for that.
       const pool = _framePool(fresh);
@@ -3848,7 +3828,7 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
         if (fr && !near.includes(fr.id)) { slot = base + k; break; }
       }
       fresh.lines.splice(after + 1, 0, _normLine({ text, slot }));
-      _shelfSplice(fresh, after + 1);        // (phase V67) the work put aside keeps its lines' numbers too
+      _shelfSplice(fresh, after + 1);        // the work put aside keeps its lines' numbers too
       fresh.updatedAt = new Date().toISOString();
     });
     if (!saved) return res.status(404).json({ success: false, error: 'not found' });
@@ -3859,18 +3839,18 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE LINES SEEDANCE FILMS, AND THEIR PROMPTS (phase V26.8, part 4, the owner 2026-10-13) ──────────
+/* ── THE LINES SEEDANCE FILMS, AND THEIR PROMPTS ──────────
    POST /api/scen3/sd/prompts  { projectId, lines? }               -> { success, project, report: { written, failed } }
    POST /api/scen3/sd/prompt   { projectId, line, prompt }          a prompt edited by hand
                                { projectId, line, useAgent: true }  back to the writer's own   -> { success, project }
 
-   A LINE IS A FRAGMENT OF ITS OWN (the sixth round, the owner 2026-10-15: "Удаляем эту функцию по объединению
-   фрагментов. Всегда по одной строке") - one clip per line, as Kling. Its prompt is written by ONE request of its own
+   A LINE IS A FRAGMENT OF ITS OWN, never merged with others - one clip per line, as Kling. Its prompt is written by ONE
+   request of its own
    (lib/mv3-agent.js thinkTalk, lib/sd-prompt.js assemble) - the writer sees the frame the line opens on and the
    character's sheet, and is told the line, the mood and the way of moving - and kept on the line (`sd`, _normSdLine).
    `lines` names the lines to write; without it, every line that has no prompt, or one written for other settings and
    not edited by hand. A few at once. Text in seconds and fractions of a cent: no Alerts row, as the animation prompts
-   of Kling (section 9 of the plan). The prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
+   of Kling. The prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
    ──────────────────────────────────────────────────────────────────────────── */
 const SD_WRITE_AT_ONCE = 3;
 
@@ -3886,8 +3866,8 @@ function _sdSetting(p) {
 }
 
 // A take of a line is FRESH while the line opens on the frame it was made from and says the words it was made of -
-// and, by the rule of the sound it was made with (the owner's answer (я16): a take made the other way stays the line's
-// until a new one), with `read` by the read it heard (one from before that was recorded counts as fresh, as Kling's),
+// and, by the rule of the sound it was made with (a take made the other way stays the line's
+// until a new one), with `read` by the read it heard (one that recorded no read counts as fresh, as Kling's),
 // with `sample` in the voice it was made in.
 function _sdFresh(c, frameId, take, words, voice) {
   if (c.frameId !== frameId) return false;
@@ -3895,16 +3875,16 @@ function _sdFresh(c, frameId, take, words, voice) {
   if (c.sound === 'sample') return !c.voice || !voice || c.voice === voice;
   return !c.take || !take || c.take === take.path;
 }
-// (the owner's answer (я17)) A line too long for a clip of the model's length can only be guessed at by `sample` - no
+// A line too long for a clip of the model's length can only be guessed at by `sample` - no
 // length is estimated: it goes as it is, and the open line says so. English is spoken at about 2.5 words a second.
 const SD_WORDS_A_SECOND = 2.5;
 const _wordCount = (l) => String((l && l.text) || '').replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 
 // THE LINES OF A SEEDANCE PROJECT, for the page and for the clips, each with its place in the video (`n`), the frame
 // it opens on, the seconds its clip is asked for, its prompt - edited by hand, written for other settings (`stale`) - or
-// none yet, and its takes (`clip` - chosen by hand, else the newest fresh). BY THE SOUND (the sixth round): with `read`
+// none yet, and its takes (`clip` - chosen by hand, else the newest fresh). BY THE SOUND: with `read`
 // every live line that is read - its read is what Seedance hears, and its length the clip's; with `sample` every live
-// line with words - nothing is read (the owner: "генерировать голоса не нужно"), and the clip's length is Seedance's own
+// line with words - nothing is read (no voices are generated), and the clip's length is Seedance's own
 // (`secs` -1). null for Kling.
 function _sdView(p) {
   const st = _sdSetting(p);
@@ -3919,15 +3899,15 @@ function _sdView(p) {
     if (l.removed) return;
     n++;
     const take = MIRROR.readOf(l);
-    // With `read` a line not read is no fragment - unless it has takes, made by the voice sample before (the owner's
-    // answer (я16): a take made the other way stays the line's, and on the timeline, until a new one is made).
+    // With `read` a line not read is no fragment - unless it has takes, made by the voice sample before (a take
+    // made the other way stays the line's, and on the timeline, until a new one is made).
     const noRead = !sample && !take;
     if (sample ? !String(l.text || '').trim() : (noRead && !(l.sd && l.sd.clips.length))) return;
     const fr = _frameOfLine(pool, l, i, st.video.spread, p.id);
     const frameId = fr ? fr.id : '';
     const words = SDP.wordsSig(l);
     const dur = !sample && take ? Math.round((+take.dur || 0) * 100) / 100 : 0;
-    // (phase V26.6) The products whose pictures go with the clip - another set of them makes the prompt stale.
+    // The products whose pictures go with the clip - another set of them makes the prompt stale.
     const prodSig = _frameProds(fr).filter(x => x.have).map(x => x.path).join('|');
     const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words,
       take: take && !sample ? take.path : '', voice: sample ? voice : '', props: prodSig });
@@ -3982,11 +3962,11 @@ async function _writeSdPromptsNow(id, only) {
   const mood = MP.moodById(st.video.mood);
   const covered = _faceCovered(proj0);
   const facts0 = { mood: { label: mood.label, face: mood.face }, gestures: st.gestures, covered };
-  // (phase V61) The shot of the line's OWN frame - from the frames chat, each with its edge; the project's old menu for a
-  // frame without one: whether it is a selfie, and which garments it shows.
+  // The shot of the line's OWN frame - from the frames chat, each with its edge; the project's shot size (`video.framing`)
+  // for a frame without one: whether it is a selfie, and which garments it shows.
   const shotOf = (fr) => String((fr && fr.framing) || st.video.framing || '');
   const sheet = await _seeable(cast.obrazImage);
-  // (the sixth round, probe P7) Who speaks and, by the voice sample, the voice in words and the mood's own tone - the
+  // Who speaks and, by the voice sample, the voice in words and the mood's own tone - the
   // caption of a piece of the line that has no [tag] (lib/sd-prompt.js captioned).
   const cv = _castVoiceOf(proj0);
   const labels = cv.has ? _voiceLabels(cv.id) : null;
@@ -3999,7 +3979,7 @@ async function _writeSdPromptsNow(id, only) {
       const frame = fr ? await _seeable(fr.preview || fr.path) : '';
       const rows = SDP.rows(lines[f.line]);
       const shot = shotOf(fr);
-      // (phase V26.6, the owner's (пр4)) The products of the line's frame: told to the writer, and their pictures go with the clip
+      // The products of the line's frame: told to the writer, and their pictures go with the clip
       // after the sheet ({{image:3}} on) - each said in the prompt.
       const prods = _frameProds(fr).filter(x => x.have);
       const prodPics = await Promise.all(prods.map(x => _seeable(x.path)));
@@ -4053,7 +4033,7 @@ router.post('/scen3/sd/prompt', async (req, res) => {
     const f = (_sdView(proj) || []).find(x => x.line === i);
     if (!f) return res.status(400).json({ success: false, error: 'no such line, or it is not read yet' });
     let text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
-    // (phase V29) Written by hand in another language, it is kept - and sent - in English.
+    // Written by hand in another language, it is kept - and sent - in English.
     if (text && !b.useAgent) {
       const t = await _englishText(text);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
@@ -4077,7 +4057,7 @@ router.post('/scen3/sd/prompt', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE CLIP OF A LINE FILMED BY SEEDANCE (phase V26.8, part 5, the owner 2026-10-13; a line each since the sixth round) ──
+/* ── THE CLIP OF A LINE FILMED BY SEEDANCE ──
    Asked for through the clip routes of a fragment (/scen3/fragments/clip and /clips hand a Seedance project here),
    addressed by the line. The video chat's way to Seedance (lib/video-models.js, the only place a field is written;
    lib/video-task.js): kie first - Replicate refused our AI faces on Seedance - each rung's references made to its
@@ -4085,8 +4065,8 @@ router.post('/scen3/sd/prompt', async (req, res) => {
 
    What goes: the frame the line opens on (@Image1), the character's 4K sheet (@Image2), the sound (@Audio1 - the
    line's read, or a 10 s sample of the voice), the prompt; the clip as long as the read, rounded up to the whole
-   second; Seedance's own sound always on - it voices the line itself (the read under a silent clip went in the sixth
-   round: its lips drifted from the read, Ch2 and Ch3).
+   second; Seedance's own sound always on - it voices the line itself (a read laid under a silent clip has lips that
+   drift from the read).
 
    EVERYTHING IS SETTLED BEFORE THE MONEY, and said when it cannot be: the model, the quality and the mood chosen, a
    line read and not longer than the model takes, a frame, the look, a voice sample when one is wanted; the place
@@ -4132,14 +4112,13 @@ function _sampleOf(voiceId) {
   return '';
 }
 
-/* ── A VOICE'S DEMO, MADE WHEN IT HAS NONE (phase V26.8, sixth round, the owner's answer (я7)) ──────────
+/* ── A VOICE'S DEMO, MADE WHEN IT HAS NONE ──────────
    POST /api/scen3/voice/demo  { projectId }  -> { success, made, project }
 
-   By the voice sample Seedance takes the timbre of the voice's demo. A voice taken from the ElevenLabs library got its
-   demo when it was taken (/scen3/voices/take); a character's voice set before that has none (6 of the owner's 27,
-   2026-10-15). The owner: "генерируем демку после выбора голоса. Кнопка генерации недоступна пока демка не готова" -
-   so the page asks for it the moment a voice without one is chosen in a project filmed by the voice sample, and its
-   buttons wait. The same phrase a take reads (lib/voice-demo.js) - ElevenLabs credits, about ten seconds - filed into
+   By the voice sample Seedance takes the timbre of the voice's demo. A voice taken from the ElevenLabs library gets its
+   demo when it is taken (/scen3/voices/take); a character's voice set another way may have none. The page asks for
+   it the moment a voice without one is chosen in a project filmed by the voice sample, and its generate buttons wait
+   until it is ready. The same phrase a take reads (lib/voice-demo.js) - ElevenLabs credits, about ten seconds - filed into
    media/voice/demos/ and onto the Voices shelf, so it is made once for every project the voice is in. One at a time
    per voice: a second ask waits for the first.
    ──────────────────────────────────────────────────────────────────────────── */
@@ -4204,7 +4183,7 @@ function _sdClipPlan(proj, i) {
   const quality = TH.qualityOf(video.model, video.quality);
   if (!quality) return { skipped: 'choose the quality of the clips (field 3) first' };
   const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
-  // With `sample` Seedance picks the length (-1) and bills what it made: no price beforehand (the owner's answer (я10)).
+  // With `sample` Seedance picks the length (-1) and bills what it made: no price beforehand.
   return { frag: f, video, sound, sample, voice, quality, cast, cost: f.secs > 0 ? +(quality.pricePerSec * f.secs).toFixed(4) : null };
 }
 function _sdPlanAgain(id, i) {
@@ -4239,7 +4218,7 @@ async function _submitSdClip(b, onStage, onAsk) {
   const f = plan.frag;
   const fr = _framePool(proj).find(v => v.id === f.frameId);
   const srcs = { frame: fr && fr.path, sheet: plan.cast.obrazImage, sound: plan.sound === 'sample' ? plan.sample : f.audio };
-  // (phase V26.6, the owner's (пр4)) The products of the frame go as pictures after the sheet - as many as the prompt was
+  // The products of the frame go as pictures after the sheet - as many as the prompt was
   // written for (its fingerprint holds them); a prompt naming a picture that is not sent is refused in words.
   const prods = _frameProds(fr).filter(x => x.have);
   prods.forEach((x, k) => { srcs['prop' + k] = x.path; });
@@ -4265,7 +4244,7 @@ async function _submitSdClip(b, onStage, onAsk) {
         const VP = require('../lib/video-prep');
         const one = await VP.image(abs.frame, pair);
         const two = await VP.image(abs.sheet, pair);
-        // The sample as long as the model takes a reference sound - all of it when it is shorter (probe P7c: 15 s on 2.0).
+        // The sample as long as the model takes a reference sound - all of it when it is shorter (15 s on 2.0).
         const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample'
           ? { from: 0, to: Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) } : { from: 0, to: f.dur });
         try {
@@ -4482,8 +4461,8 @@ JOBS.register('sdclip', {
 
 // For the timeline mirror (lib/frag-mirror.js): a Seedance project's lines that HAVE a clip, in order - the line, its
 // clip (whose own sound the timeline hears) and how long it lies. null for a project that is not filmed by Seedance.
-// THE CELL ENDS WHERE THE SPEECH ENDS (the sixth round, the owner's answer (я6)), with a breath after it, never past the
-// clip - no fade (answer (я12)). A take from before that was measured: voiced from the read, a breath past the read;
+// THE CELL ENDS WHERE THE SPEECH ENDS, with a breath after it, never past the
+// clip - no fade. A take with no speech end measured: voiced from the read, a breath past the read;
 // by the voice sample, the clip's own length.
 const SD_BREATH = 0.3;
 function _sdCuts(proj) {
@@ -4501,14 +4480,14 @@ function _sdCuts(proj) {
    POST /api/scen3/fragments/shot  { projectId, line, patch: { motion?, useAgentMotion? } }
                                    -> { success, project }
 
-   A prompt written by hand is marked so a new pass (the video stage, phase W3) leaves it alone, and
+   A prompt written by hand is marked so a new pass leaves it alone, and
    useAgentMotion puts the agent's back. Written for the words as they are now and the mood as it is
    now, so it is fresh.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/fragments/shot', async (req, res) => {
   try {
     const b = req.body || {};
-    // (phase V29) A motion written by hand in another language is kept - and sent - in English. First, then the project.
+    // A motion written by hand in another language is kept - and sent - in English. First, then the project.
     let motion = null;
     if (b.patch && typeof b.patch === 'object' && !b.patch.useAgentMotion && 'motion' in b.patch) {
       const t = await _englishText(String(b.patch.motion || ''));
@@ -4546,31 +4525,31 @@ router.post('/scen3/fragments/shot', async (req, res) => {
 // with "to frames" (_addChatFrame). That pool is what the lines take their frames from, in turn
 // (js/merge-v3/wk-fragments.js, _frameFor); no line is written by a frame - which one a line opens on is a rule, until
 // the person picks one by hand (pick-frame). Frames of an older project may carry `set`, `n` and `moment` - the set an
-// agent planned for them before phase V61, which the writer of the animation prompts still reads.
+// agent planned for them, which the writer of the animation prompts reads.
 //
-// NO GAZE RULE (the owner): in a frame the person does not have to look into the lens - they can be
+// NO GAZE RULE: in a frame the person does not have to look into the lens - they can be
 // caught mid-thought. Where the eyes go is the moment's business, and the animation prompt brings
 // them to the lens while the line is spoken.
 // ════════════════════════════════════════════════════════════════════════════
 
 const FRAG_FORMATS = ['9:16', '16:9'];
-const FRAME_SHOW_MAX = 10;              // (phase V61) the frames one animation request may show its writer
-// How a script's clips leave here: one a second (the owner, 2026-09-21). The engine takes a burst well enough, but the
+const FRAME_SHOW_MAX = 10;              // the frames one animation request may show its writer
+// How a script's clips leave here: one a second. The engine takes a burst well enough, but the
 // clips of a whole script are a queue rather than a shout.
 const SUBMIT_GAP_MS = 1000;
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-// The three shot sizes - the EDGE a frame is drawn to in the frames chat (the owner, 2026-09-21). `rule` is what the
+// The three shot sizes - the EDGE a frame is drawn to in the frames chat. `rule` is what the
 // engine and the writers are told first.
 const FRAME_SETS = [
   { id: 'selfie', label: 'selfie',
     rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.',
     // Where the frame CUTS. A shot size said as a name is a suggestion; said as what is outside the
-    // picture it is a rule (the owner, 2026-09-21: half-body sets kept coming out head to toe).
+    // picture it is a rule (said as a name, half-body sets come out head to toe).
     cut: 'The bottom edge of the picture cuts across the middle of the chest. The waist, the hips, the legs, the feet and the floor are NOT in the picture at all.',
     // What a MOMENT may be about: only what this shot size actually shows. A moment that describes
-    // the stance of a body the frame cuts off is a moment that pulls the picture wider (the owner,
-    // 2026-09-21: a half-body set came out full height).
+    // the stance of a body the frame cuts off is a moment that pulls the picture wider (a half-body
+    // set comes out full height).
     visible: 'the head, the face, the eyes, the shoulders and the free hand when it comes up near the face - never the legs, the feet, the floor or the whole stance' },
   { id: 'half', label: 'half body',
     rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.',
@@ -4583,13 +4562,13 @@ const FRAME_SETS = [
 ];
 const _frameSet = (id) => FRAME_SETS.find(s => s.id === String(id || '')) || null;
 
-// The person belongs to the place: the light that falls on them is the place's light (the owner's
-// realism marker for frames, beside the person one of S1).
+// The person belongs to the place: the light that falls on them is the place's light (the
+// realism marker for frames, beside PERSON_REAL).
 const FRAG_LIGHT_MATCH =
   ' The light on the person is the light of the location: the same direction, softness, colour temperature'
   + ' and shadows, so the person is lit by that room and not by a studio.';
 
-// IS THE FACE COVERED, and by what (phase N)? Read out of the sentence the agent already wrote
+// IS THE FACE COVERED, and by what? Read out of the sentence the agent already wrote
 // about the look - it names a balaclava, a mask, a helmet or a scarf plainly when there is one.
 // Only the clause that says so is taken: the rest of the look is the sheet's business, and putting
 // it back into the prompt is what the diet was for.
@@ -4609,7 +4588,7 @@ function _faceCovered(proj) {
   return clause ? clause.slice(0, 300) + '.' : '';
 }
 
-// WHICH GARMENTS A SHOT SIZE SHOWS (N7): a selfie is the head and the top, a half body adds the
+// WHICH GARMENTS A SHOT SIZE SHOWS: a selfie is the head and the top, a half body adds the
 // hands, a full body is everything. Anything else would name a thing the frame must not contain.
 const CLOTHES_BY_SHOT = { selfie: ['HEAD', 'TOP'], half: ['HEAD', 'TOP', 'HANDS'], full: CLOTHES_WHERE };
 function _clothesShown(proj, setId) {
@@ -4622,11 +4601,11 @@ function _clothesShown(proj, setId) {
 
 // How the look and the place read - the person to keep, the place, its light - asked once for a look
 // and a place and kept on the project, so every frame of the video describes them the same way.
-const FRAME_READ_V = 2;                 // 2: the reading lists the clothes (N7)
+const FRAME_READ_V = 2;                 // 2: the reading lists the clothes
 async function _frameRef(projectId, cast) {
   const p = PROJECTS.get(projectId);
   const have = p && _normFrameRef(p.frameRef);
-  // A reading made before the clothes were asked for (N7) is read again, once.
+  // A reading below FRAME_READ_V (no clothes in it) is read again, once.
   if (have && have.look === cast.obrazImage && have.place === cast.locationImage && have.v >= FRAME_READ_V) return have;
   const [lookUrl, placeUrl] = await Promise.all([_hostLocal(cast.obrazImage), _hostLocal(cast.locationImage)]);
   const ask = 'IMAGE 1 is a character reference sheet, IMAGE 2 is an empty location.'
@@ -4634,7 +4613,7 @@ async function _frameRef(projectId, cast) {
     + ' with no lists and no extra headings.'
     + '\nCHARACTER: describe the person on the sheet - face, hair, build, skin tone and the clothing they'
     + ' are wearing, as the traits to preserve.'
-    // THE CLOTHES, garment by garment (phase N7, the owner 2026-09-23). The frame prompt checks
+    // THE CLOTHES, garment by garment. The frame prompt checks
     // them against the sheet, and picks the ones a shot size shows - so each line says where it is
     // worn, and the details that drift first (the colour of a logo, the words of a print) are asked
     // for exactly.
@@ -4667,9 +4646,9 @@ async function _frameRef(projectId, cast) {
   return ref;
 }
 
-// (phase V61) THE FRAMES CHAT READS THE LOOK AND THE PLACE ITSELF. What a frame must keep that a picture cannot say - a covered
-// face, the clothes garment by garment - came from this reading, and only a set drawn in the first-frames field asked for it;
-// that field is gone, so the chat asks the first time a message or its ideas need it (routes/scen3-fchat.js). The same reading
+// THE FRAMES CHAT READS THE LOOK AND THE PLACE ITSELF. What a frame must keep that a picture cannot say - a covered
+// face, the clothes garment by garment - comes from this reading, and the chat asks for it the first time a message or
+// its ideas need it (routes/scen3-fchat.js). The same reading
 // and the same keeping: once per look and place, read again for another one. One at a time per project.
 const _frameReading = new Map();
 function _fchatRead(projectId) {
@@ -4709,7 +4688,7 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     }
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame picked by hand
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines: a frame picked by hand
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4718,8 +4697,8 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
    POST /api/scen3/video/prompts  { projectId, only? } -> { success, project, report }
 
    What the person DOES while a line is spoken - the expression, the head, the hands, the gaze -
-   written for every line at once by one agent that sees the set of frames (phase W3b). It is
-   what the clip of that line is made from (F4): Kling hears the frame, the read and this, and
+   written for every line at once by one agent that sees the set of frames. It is
+   what the clip of that line is made from: Kling hears the frame, the read and this, and
    nothing else.
 
    ONE CALL FOR THE WHOLE SCRIPT, not one per line: the lines are an arc - the doubt at the top, the
@@ -4737,7 +4716,7 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
 // there as the one picture.
 function _framePool(p) {
   const mix = _normMix((p || {}).mix);
-  // A frame the person switched OFF is out of the rotation (the owner, 2026-09-21): it stays in the
+  // A frame the person switched OFF is out of the rotation: it stays in the
   // project, dimmed at the tail of the strip, and nothing takes it until it is switched back on.
   const off = new Set((mix.banned || []).map(String));
   const all = (mix.variants || []).filter(v => !off.has(String(v.id))).slice();
@@ -4763,8 +4742,7 @@ function _framePool(p) {
 // itself between two looks at it.
 // FNV-1a with a final avalanche. A plain rolling hash will not do here: the strings differ by one
 // character at the end, so `h * 31 + code` moves the result by exactly one and every modulo of it
-// comes out a shifted cycle - which is what the first version of this drew, to nobody's surprise
-// but mine. The page draws with the same function (js/merge-v3/wk-fragments.js, _seed).
+// comes out a shifted cycle. The page draws with the same function (js/merge-v3/wk-fragments.js, _seed).
 function _seed(s) {
   let h = 2166136261 >>> 0;
   for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; }
@@ -4775,7 +4753,7 @@ function _frameOfLine(pool, line, i, spread, projectId) {
   if (!pool.length) return null;
   const picked = line && line.frameId ? pool.find(v => v.id === String(line.frameId)) : null;
   if (picked) return picked;
-  // (phase V26.8) By the number the line KEEPS when it has one (a line was put in above it, /line/insert), else by
+  // By the number the line KEEPS when it has one (a line was put in above it, /line/insert), else by
   // its place - the same rule on the page (js/merge-v3/wk-fragments.js, _frameFor).
   const n = line && Number.isInteger(line.slot) ? line.slot : i;
   if (spread === 'random') return pool[_seed(String(projectId || '') + ':' + n) % pool.length];
@@ -4791,15 +4769,15 @@ const MOTION_RULES =
   + ' the body. Present tense, plain sentences, 2 to 4 of them, no lists. Do NOT write the words they'
   + ' say, do not mention the script, the camera operator, cuts, zooms or any camera move, and do not'
   + ' add objects, people or light that are not already in the frame.'
-  // WHERE THE EYES GO (the owner, 2026-09-22). This is somebody talking TO the person watching, and
+  // WHERE THE EYES GO. This is somebody talking TO the person watching, and
   // a gaze that wanders reads as a person talking to somebody off to the side. The glance away is
   // allowed because a face that never blinks its attention reads as a recital - but it is a beat,
   // and the eyes come back.
   + ' THE GAZE: the person is speaking into the lens and holds it. Now and then, where a thought'
   + ' turns or a phrase lands, the eyes flick away for a beat and come straight back to the lens.'
   + ' They never settle anywhere else and never address anyone off camera.';
-// THE TALKING IS VISIBLE (phase Y3, the owner 2026-09-22). This stands at the HEAD of every prompt,
-// the way the place's own movement stands at its foot (X6): one sentence, the same for every mood,
+// THE TALKING IS VISIBLE. This stands at the HEAD of every prompt,
+// the way the place's own movement stands at its foot: one sentence, the same for every mood,
 // written by us and not by the agent, so it cannot be forgotten or reworded into nothing.
 //
 // Being honest about what it can do: Kling avatar drives the mouth from the AUDIO - the lipsync is
@@ -4811,7 +4789,7 @@ const MOTION_LIPS =
   + ' words, so the talking is plainly visible on the face.';
 
 // The one shot size that has a hand in the shot: it is holding the phone, and it must not wander.
-// (phase V26.6, the owner's (п7)) A product in the person's hand in the frame - Kling avatar moves the hands and may let it
+// A product in the person's hand in the frame - Kling avatar moves the hands and may let it
 // drift; the agent is told it stays as it is.
 const MOTION_PRODUCT = ' THE PRODUCT in the lines that hold one: it stays exactly as it is in the frame - in the same hand, its'
   + ' label turned to the camera, never changing its shape or its letters, never disappearing, never doubling; the hand moves it'
@@ -4823,7 +4801,7 @@ const MOTION_SELFIE =
   + ' camera shake.';
 
 // IS THIS LINE'S ANIMATION PROMPT STILL GOOD? Three ways it is not: it was never written, the words
-// have changed since it was, or - phase X6 - the place's own movement is not in it. The last one is
+// have changed since it was, or the place's own movement is not in it. The last one is
 // what makes a prompt written before the place was analysed, or before somebody changed how the
 // place moves, get written again: what goes to the renderer is ONE text, and half of it being out
 // of date is not a prompt.
@@ -4831,7 +4809,7 @@ function _motionStale(line, envMotion) {
   const shot = line && line.shot;
   if (!shot || !shot.motion) return true;
   if (String(shot.said || '') !== String((line && line.text) || '')) return true;
-  // Written before the articulation sentence existed (Y3), or before the place had one (X6): either
+  // Without the articulation sentence (MOTION_LIPS), or without the place's current movement: either
   // half being out of date makes it a prompt that is no longer what we send.
   if (String(shot.motion).indexOf(MOTION_LIPS) < 0) return true;
   return !!envMotion && String(shot.motion).indexOf(envMotion) < 0;
@@ -4839,7 +4817,7 @@ function _motionStale(line, envMotion) {
 
 /**
  * Write the animation prompts of a project's lines. The route below is one caller; a clip about
- * to be rendered is the other, asking for the one line it is about (phase U4). (phase V26.8) The
+ * to be rendered is the other, asking for the one line it is about. The
  * prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
  */
 async function _writePrompts(id, want) {
@@ -4856,23 +4834,22 @@ async function _writePromptsNow(id, want) {
     const pool = _framePool(proj);
     if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip is made from one'), { status: 400 });
     const video = _normVideo(proj.video);
-    // The person moves in the mood they chose (phase V24): not chosen yet is said, not assumed.
+    // The person moves in the mood they chose: not chosen yet is said, not assumed.
     const missing = _unchosen(video, ['mood']);
     if (missing) throw Object.assign(new Error(missing), { status: 400 });
     const mood = MP.moodById(video.mood) || MP.MOODS[0];
-    // (phase V61) THE SHOT OF EACH LINE'S OWN FRAME: the frames come from the frames chat now, each with the edge it was asked
-    // with (`framing`; none - half body); a set drawn before the phase has one for all of its frames, and the project's old
-    // menu is what a frame without one falls back to.
+    // THE SHOT OF EACH LINE'S OWN FRAME: the frames come from the frames chat, each with the edge it was asked
+    // with (`framing`); a frame without one falls back to the project's shot size (`video.framing`), else half body.
     const setOf = (fr) => _frameSet((fr && fr.framing) || video.framing) || _frameSet('half');
 
     // The place's own movement. It is written once per PLACE and belongs to the place, not to this
-    // project (phase W3a) - and since X6 it is also part of every line's prompt, which is why it is
+    // project - and it is also part of every line's prompt, which is why it is
     // read before the lines are chosen.
     const envMotion = _envMotionOf(_normCasting(proj.casting).locationImage);
 
     // Which lines this touches: the ones named, or every line whose prompt is stale - and never one
     // edited by hand unless named.
-    const live = (i) => !lines[i].removed;               // a line taken off is not written for (Z)
+    const live = (i) => !lines[i].removed;               // a line taken off is not written for
     const only = Array.isArray(want)
       ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].filter(live).sort((a, c) => a - c)
       : lines.map((_, i) => i).filter(i => live(i) && _motionStale(lines[i], envMotion) && !(lines[i].shot && lines[i].shot.motionEdited));
@@ -4883,8 +4860,8 @@ async function _writePromptsNow(id, want) {
     // For the whole script the agent sees the set; for ONE line it sees that line's frame and
     // nothing else - the other frames are not about it, and hosting them would be attention paid
     // to a picture the answer has to ignore.
-    // (phase V61) The frames the lines open on, each once - the pool's first five were all it saw, and a line opening on the
-    // sixth frame of the chat's was written for "frame unknown". At most FRAME_SHOW_MAX pictures in one request.
+    // The frames the lines open on, each once - not only the pool's first few, or a line opening on a later frame
+    // would be written for "frame unknown". At most FRAME_SHOW_MAX pictures in one request.
     const shown = (Array.isArray(want) && want.length === 1)
       ? [_frameOfLine(pool, lines[only[0]], only[0], _normVideo(proj.video).spread, id)].filter(Boolean)
       : [...new Map(only.map(i => _frameOfLine(pool, lines[i], i, video.spread, id)).filter(Boolean).map(f => [f.id, f])).values()]
@@ -4898,7 +4875,7 @@ async function _writePromptsNow(id, want) {
 
     const sets = [...new Map(only.map(i => { const s = setOf(where(i).fr); return [s.id, s]; })).values()];
     const one = sets.length === 1;
-    // (phase V26.6, the owner's (п7), (пр4)) The products the line's frame was drawn with: said in the line's row, and one rule.
+    // The products the line's frame was drawn with: said in the line's row, and one rule.
     const prodsOf = (i) => _frameProds(where(i).fr);
     const anyProd = only.some(i => prodsOf(i).length);
     const ask = 'You are directing a talking-head video: one person, one place, spoken'
@@ -4945,9 +4922,8 @@ async function _writePromptsNow(id, want) {
       const hit = got.find(x => (parseInt(x && x.n, 10) || 0) === i + 1);
       const said = _cleanText((hit && hit.motion) || '').slice(0, 900);
       if (!said) { report.skipped.push(i + 1); continue; }
-      // ONE TEXT, THE PERSON AND THE PLACE (the owner, 2026-09-22). The agent is told how the place
-      // moves and told not to describe it again, so what it writes is the person alone - and the
-      // renderer was never hearing about the background at all. The place's own sentence is added
+      // ONE TEXT, THE PERSON AND THE PLACE. The agent is told how the place
+      // moves and told not to describe it again, so what it writes is the person alone. The place's own sentence is added
       // here, word for word as it stands on the place, so the field in the fragment shows exactly
       // what is sent and editing that field edits the whole of it.
       const body = envMotion && said.indexOf(envMotion) < 0 ? said + ' ' + envMotion : said;
@@ -4961,7 +4937,7 @@ async function _writePromptsNow(id, want) {
       report.written++;
     }
     // The agent took half a minute to answer, and other things write this project while it thinks
-    // (phase X0: ten clips and ten reads go at once now). So the record is read AGAIN here and only
+    // (ten clips and ten reads may go at once). So the record is read AGAIN here and only
     // the lines this call is about are touched - the copy read before the agent was asked would
     // carry back whatever landed meanwhile and undo it.
     const saved = PROJECTS.apply(id, (fresh) => {
@@ -4994,8 +4970,8 @@ router.post('/scen3/video/prompts', async (req, res) => {
 /* ── A frame switched off ────────────────────────────────────────────────────
    POST /api/scen3/frames/ban  { projectId, frameId, banned } -> { success, project }
 
-   The ✕ on a frame of the frames shelf (the owner, 2026-09-21): the frame stays in the project and
-   on the strip - dimmed, and first, so it is out of the way - but no line takes it any more. The ✓
+   The ✕ on a frame of the frames shelf: the frame stays in the project and
+   on the strip - dimmed, and last, so it is out of the way - but no line takes it any more. The ✓
    in the same corner brings it back. The list of them is `mix.banned`.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/frames/ban', (req, res) => {
@@ -5018,7 +4994,7 @@ router.post('/scen3/frames/ban', (req, res) => {
     }
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame switched off
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines: a frame switched off
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -5026,7 +5002,7 @@ router.post('/scen3/frames/ban', (req, res) => {
 /* ── The order the frames stand in ───────────────────────────────────────────
    POST /api/scen3/frames/order  { projectId, order: [frameId, ...] } -> { success, project }
 
-   The strip is dragged into the order the person wants (the owner, 2026-09-21), and that order is
+   The strip is dragged into the order the person wants, and that order is
    what "the pool in turn" then means. Ids that are not in the list - a frame made after the
    dragging - keep their natural place behind the arranged ones.
    ──────────────────────────────────────────────────────────────────────────── */
@@ -5043,16 +5019,16 @@ router.post('/scen3/frames/order', (req, res) => {
     p.mix.order = want;
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): the order of the frames
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines: the order of the frames
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── A frame cropped, and filed as a frame (phase V9) ────────────────────────
+/* ── A frame cropped, and filed as a frame ────────────────────────
    POST /api/scen3/frames/crop  { projectId, frameId, rect: {x,y,w,h} } -> { success, project, frameId }
 
    The person reframes a first frame on the stage and the cut lands in the SET, beside the frames it
-   was cut from, in the project's own folder (the owner, 2026-09-22). The page does not own the
+   was cut from, in the project's own folder. The page does not own the
    project, so it does not file anything: it sends the rectangle it drew and gets the project back.
 
    The rectangle arrives as FRACTIONS of the picture, so the page never has to know the real pixel
@@ -5114,11 +5090,11 @@ router.post('/scen3/frames/crop', async (req, res) => {
       size: { w, h },
       set: src.set || '', framing: src.framing || '', n: src.n || 0,
       moment: src.moment || '',
-      // (phase V26.6) A frame cut from one with a product keeps it.
+      // A frame cut from one with a product keeps it.
       props: _framePropsOf(src.props),
     };
     // Cutting the picture and making its preview took a moment, and other things write this project
-    // (phase X0). Read it again and add the frame to the set AS IT IS NOW.
+    // meanwhile. Read it again and add the frame to the set AS IT IS NOW.
     const saved = PROJECTS.apply(p.id, (fresh) => {
       fresh.mix = _normMix(fresh.mix);
       fresh.mix.variants.push(variant);
@@ -5130,7 +5106,7 @@ router.post('/scen3/frames/crop', async (req, res) => {
       }
       fresh.updatedAt = variant.at;
     });
-    MIRROR.touch(p.id, { project: saved || p });   // the timeline mirrors the lines (T'): a frame added
+    MIRROR.touch(p.id, { project: saved || p });   // the timeline mirrors the lines: a frame added
     res.json({ success: true, project: _projFull(saved || p), frameId: variant.id });
   } catch (e) {
     console.error('[scen3/frames/crop]', e.message);
@@ -5142,13 +5118,13 @@ router.post('/scen3/frames/crop', async (req, res) => {
    POST /api/scen3/frames/prompt  { projectId, frameId, prompt } -> { success, project }
 
    Every frame keeps the prompt it was made from, and the open fragment shows it beside the
-   picture (the owner, 2026-09-21). It is EDITABLE there: the picture on screen does not change - it
+   picture. It is EDITABLE there: the picture on screen does not change - it
    is already drawn - and the words written here are kept with the frame.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/frames/prompt', async (req, res) => {
   try {
     const b = req.body || {};
-    // (phase V29) A frame's prompt written by hand in another language is kept - and drawn - in English.
+    // A frame's prompt written by hand in another language is kept - and drawn - in English.
     const t = await _englishText(String(b.prompt == null ? '' : b.prompt));
     if (t.fail) return res.status(502).json({ success: false, error: t.fail });
     const list = _loadProjects();
@@ -5164,7 +5140,7 @@ router.post('/scen3/frames/prompt', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── The frames chat (phase V26.5, routes/scen3-fchat.js) ──────────────────────
+// ── The frames chat (routes/scen3-fchat.js) ──────────────────────
 // What the chat's writers are told about the project: the shape, the casting, where the frame's edge is (a shot size
 // of the set, or none), the mood, how the look was read - a covered face, the clothes that shot shows - and the light
 // and realism sentences every frame of the set ends with. Read from the project as it is; nothing is asked for.
@@ -5187,14 +5163,14 @@ function _fchatFacts(projectId, shot) {
   };
 }
 
-// (phase V26.6) A frame's products as kept on it: { path, name, description }, at most two.
+// A frame's products as kept on it: { path, name, description }, at most two.
 function _framePropsOf(list) {
   return (Array.isArray(list) ? list : []).filter(p => p && p.path).slice(0, 2)
     .map(p => ({ path: String(p.path), name: String(p.name || '').slice(0, 120), description: String(p.description || '').slice(0, 4000) }));
 }
 
-// (phase V26.6, the owner's (п7), (пр4)) The products of a line's frame as its clip's writers are told of them: the name and
-// the description as kept in Props now (lib/props.js), else as the frame remembered them (a product deleted - (п8)); its
+// The products of a line's frame as its clip's writers are told of them: the name and
+// the description as kept in Props now (lib/props.js), else as the frame remembered them (a product deleted); its
 // LABEL and HOW IT IS HELD read out of the description; `have` - its picture is still in Props (Seedance is sent it).
 const _descPart = (d, key) => {
   const m = new RegExp('^' + key + ':\\s*(.+)$', 'mi').exec(String(d || ''));
@@ -5211,7 +5187,7 @@ function _frameProds(fr) {
 }
 
 // A frame of the chat put into the set (`to frames`): it joins the pool like any frame - the lines take from it by the
-// rule (the owner's answer (d): option 1) - marked as made to order, with the prompt it was drawn from. Once per file.
+// rule - marked as made to order, with the prompt it was drawn from. Once per file.
 async function _addChatFrame(projectId, o) {
   const pathUrl = String((o && o.path) || '');
   const preview = await _framePreview(pathUrl);
@@ -5233,7 +5209,7 @@ async function _addChatFrame(projectId, o) {
     fresh.updatedAt = variant.at;
   });
   if (!saved) throw Object.assign(new Error('no such project'), { status: 404 });
-  if (!already) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T'): a frame added
+  if (!already) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines: a frame added
   return { project: _projFull(saved), frameId: variant.id, already };
 }
 
@@ -5259,21 +5235,21 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
       return res.status(404).json({ success: false, error: 'no such clip on this fragment' });
     }
     p.lines[i].pick = { ...(p.lines[i].pick || {}), [variant]: want };
-    // Chosen by hand (V23): the line's clip on the timeline whether or not it is fresh.
+    // Chosen by hand: the line's clip on the timeline whether or not it is fresh.
     p.lines[i].chosen = { ...(p.lines[i].chosen || {}), [variant]: want };
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a clip picked
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines: a clip picked
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE CLIP OF A FRAGMENT (phase F4) ───────────────────────────────────────
+/* ── THE CLIP OF A FRAGMENT ───────────────────────────────────────
    POST /api/scen3/fragments/clip  { projectId, line, where } -> { success, alertId, taskId }
                                                               -> { success, skipped: '<why>' }
 
    The frame of the line speaks its read: Kling avatar hears the picture, the take and the
-   animation prompt (W3b), and nothing else. This is the journalled path - a row in Alerts from the
+   animation prompt, and nothing else. This is the journalled path - a row in Alerts from the
    moment it is asked for, and the SERVER sees it through (lib/gen-jobs.js): it polls kie, downloads
    the clip once into the project's clips/, makes a poster, normalises it for the browser, measures
    it and files it as a take of that line. Leaving the page loses nothing.
@@ -5293,11 +5269,11 @@ function _clipPlan(proj, i) {
   const video = _normVideo(proj.video);
   const voice = _normVoice(proj.voice);
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
-  // The clip is made by the model and in the quality the person chose (phase V24, V26.8) - before the money, a missing
+  // The clip is made by the model and in the quality the person chose - before the money, a missing
   // one is a fragment skipped in words.
   const missing = _unchosen(video, ['model', 'quality']);
   if (missing) return { skipped: missing };
-  // (phase V26.8) A project filmed by Seedance is clipped by its fragments (_sdClipPlan) - never by a Kling clip it did
+  // A project filmed by Seedance is clipped by its fragments (_sdClipPlan) - never by a Kling clip it did
   // not ask for.
   if (TH.isSeedance(video.model)) return { skipped: 'this project is filmed by Seedance - its fragments are clipped by it' };
   const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
@@ -5313,15 +5289,14 @@ function _clipPlan(proj, i) {
   }
   return {
     variant, quality, said, frame, take, line,
-    // The animation prompt of this line (W3b) is what Kling is told. A line that has none - a
-    // project made before the video zone - falls back to the old motion preset rather than refusing
-    // to render at all.
+    // The animation prompt of this line is what Kling is told. A line that has none falls back to
+    // the project's motion preset rather than refusing to render at all.
     prompt: String((line.shot || {}).motion || '').trim() || MP.promptFor(video.preset),
     motionFrom: (line.shot || {}).motion ? 'line' : 'preset',
   };
 }
 
-// WHAT A CLIP NEEDS WRITTEN FIRST (phase U4, the owner 2026-09-22). A clip is the frame moving as
+// WHAT A CLIP NEEDS WRITTEN FIRST. A clip is the frame moving as
 // the animation prompt says, in a place that moves as its own prompt says - so before any money is
 // committed, both are made sure of:
 //
@@ -5334,7 +5309,7 @@ function _clipPlan(proj, i) {
 // so a line analysed first would be written about a place nobody had looked at yet.
 //
 // `onStage` is how the journal row says what is happening while nothing has been sent to a renderer
-// yet (the owner, 2026-09-22): the steps are counted first, so the row says "analysis 1/2 - the
+// yet: the steps are counted first, so the row says "analysis 1/2 - the
 // place" only when there really are two of them.
 async function _readyForClip(id, i, onStage) {
   const say = typeof onStage === 'function' ? onStage : () => {};
@@ -5343,7 +5318,7 @@ async function _readyForClip(id, i, onStage) {
   const place = _normCasting(proj.casting).locationImage;
   const line = (proj.lines || []).map(_normLine)[i];
   const wantPlace = !!(place && !_envMotionOf(place));
-  // The same staleness rule the writer uses (X6), so a prompt written before the place was analysed
+  // The same staleness rule the writer uses, so a prompt written before the place was analysed
   // is written again before this clip is paid for. A place about to be analysed for the FIRST time
   // makes every prompt stale by definition: its sentence cannot be in any of them yet.
   const stale = !line || wantPlace || _motionStale(line, _envMotionOf(place));
@@ -5404,7 +5379,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    // (phase V26.8, part 5) A project filmed by Seedance: the fragment's Seedance clip.
+    // A project filmed by Seedance: the fragment's Seedance clip.
     if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipRoute(req, res, proj);
     const i = parseInt(b.line, 10);
     const plan = _clipPlan(proj, i);
@@ -5416,9 +5391,9 @@ router.post('/scen3/fragments/clip', async (req, res) => {
       && String(r.job.params.file.projectId) === id && Number(r.job.params.file.line) === i);
     if (running) return res.json({ success: true, skipped: 'this fragment is already being made' });
 
-    // THE ROW IS WRITTEN FIRST, before any agent is asked anything (the owner, 2026-09-22). A clip
-    // begins with up to two analyses, and for the half-minute they take the person used to see
-    // nothing but a spinner on the button. Now the journal has the row from the press, with no task
+    // THE ROW IS WRITTEN FIRST, before any agent is asked anything. A clip
+    // begins with up to two analyses, and the half-minute they take would otherwise show the person
+    // nothing but a spinner on the button. The journal has the row from the press, with no task
     // number yet and the stage saying what is being looked at; the row is also what stops a second
     // press starting the same fragment twice, and what puts the waiting back after a reload.
     const request = { projectId: id, line: i };
@@ -5452,14 +5427,13 @@ router.post('/scen3/fragments/clip', async (req, res) => {
   }
 });
 
-/* ── EVERY CLIP OF A PROJECT, ASKED FOR BY THE SERVER (phase X1) ───────────────
+/* ── EVERY CLIP OF A PROJECT, ASKED FOR BY THE SERVER ───────────────
    POST /api/scen3/fragments/clips  { projectId, key }
        -> { success, queued: [{ line, alertId }], skipped: [{ line, why }] }
 
-   WHY THIS EXISTS. The page used to walk the fragments itself: five at once, and the next five only
-   after all five had LANDED - four or five minutes later. The owner pressed `generate all` on a
-   script of ten, five clips were made, and the other four were never asked for, because by then the
-   page that was holding the loop had gone (PLAN, phase X). A run that belongs to a page is lost
+   WHY THIS EXISTS. A page walking the fragments itself - a few at once, and the next only after
+   those had LANDED, minutes later - leaves the rest never asked for once the page holding the loop
+   is gone. A run that belongs to a page is lost
    with the page; that is the rule the journal was built on, and this is the clips obeying it.
 
    So: one call works out what can be made, writes a journal row for every one of them AT ONCE - so
@@ -5468,7 +5442,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
    longer than the model takes) is named in `skipped` and stepped over; one that is already being
    made is left alone; one that already has its clip is not paid for twice.
 
-   A FAILURE STOPS NOTHING (decided with the owner 2026-09-22). A render that fails is already paid
+   A FAILURE STOPS NOTHING. A render that fails is already paid
    for and says nothing about its neighbours, so it fails its own row and the rest go on. Nor does
    the queue lock anything: a fragment's own button stays live throughout, and the only bar is the
    old one - one clip per fragment at a time.
@@ -5477,8 +5451,8 @@ router.post('/scen3/fragments/clip', async (req, res) => {
 // Does this fragment already have its clip - a take made from the frame it opens on, of the words
 // it says now? The same question the panel asks (js/merge-v3/wk-fragments.js, _clipState), asked
 // here because the server is the one deciding what to pay for.
-// (phase V23) A clip is fresh only when it was lipsynced to the read the line has NOW - a read again with the same
-// words is another performance (a clip with no read recorded, made before that was kept, counts as fresh). A clip
+// A clip is fresh only when it was lipsynced to the read the line has NOW - a read again with the same
+// words is another performance (a clip with no read recorded counts as fresh). A clip
 // CHOSEN BY HAND counts too: the person decided what the line's clip is.
 function _clipDone(proj, i) {
   const plan = _clipPlan(proj, i);
@@ -5494,14 +5468,14 @@ function _clipDone(proj, i) {
 // the open timeline's key and the row is addressed from it, so every row of a queue points at its
 // own fragment (js/merge-v3/wk-fragments.js, _whereLine says the same thing for one clip).
 // `n` is what a person reads - the fragment's place in the VIDEO, which is not its index once a
-// line has been taken off (phase Z). The address and `spot` keep the index: that is what opens it.
+// line has been taken off. The address and `spot` keep the index: that is what opens it.
 const _whereClip = (key, title, i, n) => ({
   page: 'merge',
   href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
   label: 'Merge \u00b7 ' + title + ' \u00b7 fragment ' + (n || i + 1),
   spot: { key, step: 'setup', line: i + 1 },
 });
-/** A line's place among the lines that are in the video, counted from one (phase Z). */
+/** A line's place among the lines that are in the video, counted from one. */
 function _lineNo(lines, i) {
   let n = 0;
   for (let k = 0; k <= i && k < lines.length; k++) if (!lines[k].removed) n++;
@@ -5534,7 +5508,7 @@ router.post('/scen3/fragments/clips', (req, res) => {
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    // (phase V26.8, part 5) A project filmed by Seedance: its fragments' Seedance clips.
+    // A project filmed by Seedance: its fragments' Seedance clips.
     if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipsRoute(req, res, proj);
     const key = String(b.key || '');
     const title = String(proj.name || proj.title || 'talking head');
@@ -5547,7 +5521,7 @@ router.post('/scen3/fragments/clips', (req, res) => {
         && String(r.job.params.file.projectId) === id)
       .map(r => Number(r.job.params.file.line)));
 
-    // Every line that needs a clip. (A list of lines, `only`, was `generate all`'s - gone in phase V61.)
+    // Every line that needs a clip.
     const queued = [], skipped = [];
     for (let i = 0; i < lines.length; i++) {
       if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
@@ -5623,7 +5597,7 @@ JOBS.register('clip', {
     if (line.chosen) line.chosen = { ...line.chosen, [variant]: '' };
     proj.updatedAt = clip.at;
     _saveProjects(list);
-    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a clip filed
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines: a clip filed
     // The preview's proxy, made now rather than on the first play in Merge.
     try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
     return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
@@ -5710,9 +5684,9 @@ router.post('/scen3/voices/take', async (req, res) => {
     //
     // The add above is idempotent - measured: adding a voice the account already holds returns
     // the SAME id and the account count does not move - so no slot is spent either way, and it
-    // doubles as the way back in if the slot had been released. What WAS being spent is this:
-    // every take recorded a fresh 30-second demo through TTS and then pointed the shelf at the
-    // new file, leaving the old mp3 on disk with nothing referencing it. So when the shelf
+    // doubles as the way back in if the slot had been released. What a take WOULD spend is a
+    // fresh 30-second demo through TTS every time, the shelf pointed at the new file and the
+    // old mp3 left on disk with nothing referencing it. So when the shelf
     // already has a demo, keep it and read nothing.
     //
     // By the id the ADD returned, with the shared id as a fallback - that is the id the shelf
@@ -5744,7 +5718,7 @@ router.post('/scen3/voices/take', async (req, res) => {
       console.warn('[scen3/voices] demo failed for', id, sampleError);
     }
     // On the shelf the moment it is ours. Everything the account knows about the voice - its
-    // tags, and the owner id that can add it back - is readable only while the slot exists, and
+    // tags, and the public owner id that can add it back - is readable only while the slot exists, and
     // the slot is exactly what gets freed later to make room. Recording it now is what lets a
     // voice be archived rather than lost. Non-fatal: the voice is taken either way.
     try {
@@ -5773,14 +5747,14 @@ router.loadProjects = _loadProjects;
 // stand in, and which of them a line opens on. One rule, read by the page, by the agent that writes
 // the animation prompts and by the cut on the timeline.
 router.framePool = _framePool;
-// (phase V26.5) The frames chat (routes/scen3-fchat.js).
+// The frames chat (routes/scen3-fchat.js).
 router.fchatFacts = _fchatFacts;
 router.fchatRead = _fchatRead;
 router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
-// (phase V26.8) A Seedance project's fragments with their clips, for the timeline mirror.
+// A Seedance project's fragments with their clips, for the timeline mirror.
 router.sdCuts = _sdCuts;
-// (phase V30, block 1) Is the script being read now? Its captions are heard by themselves after the last read lands
+// Is the script being read now? Its captions are heard by themselves after the last read lands
 // (lib/captions-auto.js).
 router.readsRunning = (id) => !!((_reads.get(String(id)) || {}).running);
 module.exports = router;

@@ -2,16 +2,16 @@
 
 // ════════════════════════════════════════════════════════════════════════════
 // SOUND ON THE SHELVES - what Merge's Library panel and the Library's Media shelf ask beside the Library's own routes
-// (phase V34.C-D; the lab's tree, tiles and star went with the lab in V34.F - the media tree is routes/library.js):
+// (the media tree is routes/library.js):
 //
 //   POST /api/audio/cut { src, in, out }           a piece of any sound as a NEW one (lib/audio-cut.js): of a track of
 //                                                  Music - a track in Music's root, of anything else - a sound in My
-//                                                  sounds' root (phase V54); the answer says which (`where`)
-//   GET  /api/audio/online?q=&page=                CC0 only: Freesound with the owner's key (lib/freesound.js, phase V54),
+//                                                  sounds' root; the answer says which (`where`)
+//   GET  /api/audio/online?q=&page=                CC0 only: Freesound with the person's key (lib/freesound.js),
 //                                                  Openverse when there is no key or Freesound did not answer
 //                                                  (lib/openverse.js) - the answer says which (`via`) and why (`note`)
 //   POST /api/audio/online/add { id, cat, label }  a found sound into My sounds - `fs-<n>` is Freesound's, the rest Openverse's
-//   (phase V81) "Save audio" of a video:
+//   "Save audio" of a video:
 //   GET  /api/audio/tracks?src=                    the video's sound tracks [{ k, label }] - none: it has no sound
 //   POST /api/audio/from-video { src, track?, in?, out?, name? }
 //                                                  one track, whole or [in, out), as a sound in AUDIO's own root

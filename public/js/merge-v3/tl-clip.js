@@ -1,25 +1,25 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — CTRL+C / CTRL+V ON THE TIMELINE (phase V51, points 2 and 4; the owner 2026-10-26, answers (пр45)-(пр50), (пр52)).
+   MERGE v3 — CTRL+C / CTRL+V ON THE TIMELINE.
 
    Ctrl+C puts what is picked into THE APP'S OWN BUFFER, not the system's: clips of video, pictures and sound and lines of the
-   text lanes. Lines of the subtitle lane are not copied ((пр45): they are heard words - a copy would say the speech twice);
+   text lanes. Lines of the subtitle lane are not copied (they are heard words - a copy would say the speech twice);
    picked with clips, they are left out. A film with its sound goes as a PAIR: one half picked brings the other, and the copy
-   is a pair of its own (a new pairId). A talking head's cell copied is THE PERSON'S clip: nothing ties it to its line any more
+   is a pair of its own (a new pairId). A talking head's cell copied is THE PERSON'S clip: nothing ties it to its line
    (`frag`, `voice`, `merge` - lib/frag-mirror.js), so the mirror never touches it. A clip's framing (`frame`), its crop and
    every look go with it as they are.
 
    Ctrl+V lays a copy, ONE mutation - one step to undo -, and what it laid is picked:
      - in the timeline it was copied from: on THE SAME LANES, over what is there (later in the lane's list - drawn on top),
        a third of the copied stretch to the right - several clips together, as they lay, the third of the whole group's
-       stretch, first start to last end ((пр46)); pressed again, a third further on from the copy laid last ((пр47), a ladder);
-     - in ANOTHER timeline - another project, another fragment of highlights ((пр50), (пр52)): at the playhead, on the lanes of
+       stretch, first start to last end; pressed again, a third further on from the copy laid last (a ladder);
+     - in ANOTHER timeline - another project, another fragment of highlights: at the playhead, on the lanes of
        the same PLACE - main video to main video, main audio to main audio, "audio 2" to "audio 2", text to text, the upper
        video lanes by their number; a lane missing there is made as a drop makes one (timeline-b.js), in the same step. A
        pair's sound goes to the lane linked to its picture's lane. Pressed again with the playhead where it was, the ladder
        goes on there too;
      - a highlights project's own timeline takes nothing: "Open a fragment first." (lib-views.js noFragment).
 
-   THE BUFFER LIVES while the app is open ((пр49)): in the window's session storage, so it outlives a walk to the Library and
+   THE BUFFER LIVES while the app is open: in the window's session storage, so it outlives a walk to the Library and
    back and dies with the window - and in this page's memory, for a window where the storage cannot be written.
 
    timeline-b.js hands this its accessors (wireClip): ids() the picked clip ids, newId(), select(ids), playhead(), and the

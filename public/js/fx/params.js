@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S EFFECTS - WHERE THEY ARE AND WHAT THEY ADD UP TO (phase V84; docs/local-app/plan/, "Подфаза 3 — V84"). ONE module for
+   A CLIP'S EFFECTS - WHERE THEY ARE AND WHAT THEY ADD UP TO. ONE module for
    the page (js/merge-v3/preview-b.js through fx-draw.js, inspector, timeline) and the server (lib/timeline-shape.js,
    lib/fx-render.js - require()d as overlay/color.js is).
 
@@ -7,13 +7,13 @@
      [{ id, k, t0, len }]   k - the effect (effects.js EFFECTS); t0 - the FILE's second it starts at (a trim, a split, a copy, cut
                             silence keep it on the same moment of the picture, as the frame's path does - framing/path.js); len -
                             its length in the timeline's seconds, absent - to the clip's end. A list in the order they were added.
-   THE OWNER'S (эф4): an effect covers the whole clip - added, it starts with the clip; a moment of its own length ('intro') lasts
+   An effect covers the whole clip - added, it starts with the clip; a moment of its own length ('intro') lasts
    that length (the clip's, when shorter), one that goes on ('loop') lasts to the clip's end; the inspector moves its start and end.
    Its clock τ is the timeline's seconds from where it starts (a clip played faster gets through it in fewer seconds of the file).
 
    WHAT THEY ADD UP TO (paramsAt): every effect running at a moment, read at its τ, made ONE set of numbers - always in this order:
-   the colour matrix, then the move, then the channels, the pixels, (block 1c) the face's mosaic and the blur, the vignette, the
-   lines. (block 1c) An effect by the face keeps where the face is in `path` (effects.js faceAt) - found by the page when it is
+   the colour matrix, then the move, then the channels, the pixels, the face's mosaic and the blur, the vignette, the
+   lines. An effect by the face keeps where the face is in `path` (effects.js faceAt) - found by the page when it is
    added (js/merge-v3/fx-ui.js), the same numbers for the preview and the render. The move is a similarity in the
    frame's PIXELS - { a, b, e, f }: x' = a·x − b·y + e, y' = b·x + a·y + f - each effect's after the one before it (the list's
    order); colours likewise; channels add up; the pixel block, the vignette and the lines take the largest.
@@ -25,7 +25,7 @@ import { effectOf, COL_ID, colThen, MOSAIC_BLOCK, SWING_ECHO, optsOf } from './e
 import { isStillSrc, isPlaced } from '../timeline/rules.js';
 
 export const FX_MAX = 20;
-/** (block 4c) The longest words a card takes in one field. */
+/** The longest words a card takes in one field. */
 export const TEXT_MAX = 120;
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const _still = (c) => !!c && isStillSrc(c.src);
@@ -37,15 +37,15 @@ export function lengthRange(k) {
   const d = effectOf(k);
   if (!d) return [0.3, 3600];
   if (d.kind !== 'intro') return [0.3, 3600];
-  // (block 4c, the owner's (б4-3)) A card stands as long as it is set - to the clip's end.
+  // A card stands as long as it is set - to the clip's end.
   if (d.hold != null) return [r3(d.dur * d.lo), 3600];
   return [r3(d.dur * d.lo), r3(d.dur * d.hi)];
 }
 
 /**
- * (block 4c) An 'intro' effect's own time at `tau` seconds into its stretch of `len`: shorter than its own length - played faster;
- * longer - a card's (`hold`) stands at its moment for the time over, its way in and out at their own speed (the owner's (б4-3));
- * longer without one - played slower, as before.
+ * An 'intro' effect's own time at `tau` seconds into its stretch of `len`: shorter than its own length - played faster;
+ * longer - a card's (`hold`) stands at its moment for the time over, its way in and out at their own speed;
+ * longer without one - played slower.
  */
 export function ownTime(d, tau, len) {
   if (!(len > 0)) return tau;
@@ -71,14 +71,14 @@ export function normalizeFx(list) {
       const [lo, hi] = lengthRange(one.k);
       one.len = r3(Math.max(lo, Math.min(hi, +e.len)));
     }
-    // (block 1c) Where the face is - an effect by the face only: [[the file's second, x, y, w, h], ...] (effects.js faceAt), and
+    // Where the face is - an effect by the face only: [[the file's second, x, y, w, h], ...] (effects.js faceAt), and
     // `pk` - how the clip lay in the frame when it was found (js/merge-v3/fx-ui.js).
     if (effectOf(one.k).face) {
       const path = normalizePath(e.path);
       if (path) one.path = path;
       if (typeof e.pk === 'string' && /^[a-z0-9]{1,12}$/.test(e.pk)) one.pk = e.pk;
     }
-    // (block 4b) The person's colours and settings (the owner's (б4-12), (б4-13)) - only those the table knows and that differ from
+    // The person's colours and settings - only those the table knows and that differ from
     // its own: `col` '#rrggbb' by key, `opt` numbers in their range.
     const d = effectOf(one.k);
     if (d.colors && e.col && typeof e.col === 'object') {
@@ -100,7 +100,7 @@ export function normalizeFx(list) {
       }
       if (Object.keys(opt).length) one.opt = opt;
     }
-    // (block 4c) Its words (`txt` - by key, '' not drawn, at most 120 characters) and its font (one of the captions', by name).
+    // Its words (`txt` - by key, '' not drawn, at most 120 characters) and its font (one of the captions', by name).
     if (d.texts && e.txt && typeof e.txt === 'object') {
       const txt = {};
       for (const [key, , def] of d.texts) {
@@ -117,7 +117,7 @@ export function normalizeFx(list) {
   return out.length ? out : null;
 }
 
-/** (block 1c) A face's path as it is kept: at most PATH_MAX samples in the order of their seconds, each five numbers. */
+/** A face's path as it is kept: at most PATH_MAX samples in the order of their seconds, each five numbers. */
 export const PATH_MAX = 1500;
 const r4 = (x) => Math.round(x * 10000) / 10000;
 export function normalizePath(list) {
@@ -167,7 +167,7 @@ export function spanOf(c, e) {
   return { a, b: Math.min(end, a + len), len, whole };
 }
 
-/** A new effect `k` for clip `c` - the owner's (эф4): from the clip's start; an 'intro' its length, or the clip's when shorter. */
+/** A new effect `k` for clip `c`: from the clip's start; an 'intro' its length, or the clip's when shorter. */
 export function newEffect(c, k, id) {
   const d = effectOf(k);
   if (!d) return null;
@@ -180,7 +180,7 @@ export function newEffect(c, k, id) {
 }
 
 /**
- * (block 2) The other moments of its clip's file effect `e` shows - { ranges: [[from, to], ...] (the file's seconds, kept inside the
+ * The other moments of its clip's file effect `e` shows - { ranges: [[from, to], ...] (the file's seconds, kept inside the
  * clip's own), w (px) } or null: Grid dive's tiles (2.2 s round it, small), PiP delay's late copy (its delay before it), Color swing's
  * echo (round each of its echoes). One rule for the page (js/fx/kit.js loadMoments) and the bake window, which waits for them.
  */
@@ -212,7 +212,7 @@ export function momentsOf(c, e) {
 }
 
 /**
- * (block 4d, the owner's (б4-9)) Where a set's effects go on a clip `clipDur` long: [{ k, at, len }] - each at its own moment (`at`,
+ * Where a set's effects go on a clip `clipDur` long: [{ k, at, len }] - each at its own moment (`at`,
  * seconds into the clip); one that would run past the clip's end moved earlier to end with it; `len` an 'intro' its own length
  * (cut to the clip) or the set's own (Hook's glitch), 0 - a 'loop' to the clip's end.
  */
@@ -276,7 +276,7 @@ function _moveOf(n, W, H, anchor) {
   const ax = (n.ax != null ? +n.ax : anchor.x) * W, ay = (n.ay != null ? +n.ay : anchor.y) * H;
   let m = { ...MOVE_ID };
   if (s !== 1) m = moveThen(m, { a: s, b: 0, e: ax - s * ax, f: ay - s * ay });
-  // (block 1b) A measured camera's move, its e and f shares of the frame.
+  // A measured camera's move, its e and f shares of the frame.
   if (n.mv) m = moveThen(m, { a: +n.mv.a, b: +n.mv.b, e: (+n.mv.e || 0) * W, f: (+n.mv.f || 0) * H });
   return m;
 }
@@ -328,7 +328,7 @@ export function paramsAt(c, t, W, H, main) {
   const tf = fileAt(c, t);
   let move = null, col = null, ch = null, px = 0, vig = 0, lines = 0, glow = 0, blurV = 0, stripes = 0, grain = 0, cover = 1, any = false;
   let blur = 0, mos = null, jitter = null, echo = null;
-  // (block 4b) The graphics running now, in the order they were added (the owner's (б4-6)): drawn last, by the page.
+  // The graphics running now, in the order they were added: drawn last, by the page.
   const scenes = [];
   for (const e of c.fx) {
     const d = effectOf(e.k);
@@ -340,11 +340,11 @@ export function paramsAt(c, t, W, H, main) {
     const n = d.at(Math.max(0, tau), e, tf) || {};
     any = true;
     if (d.draw) scenes.push({ k: e.k, draw: d.draw, e, c, tf, tau: Math.max(0, tau), live: Math.max(0, t - sp.a) });
-    // (block 2) Color swing's echo: a frame of the clip's file from another moment, mixed in first (js/merge-v3/fx-draw.js).
+    // Color swing's echo: a frame of the clip's file from another moment, mixed in first (js/merge-v3/fx-draw.js).
     if (n.echo && !echo && main != null) echo = { src: c.src, spec: momentsOf(c, e), tf: tf + n.echo.dt, a: n.echo.a };
     if (n.blur > blur) blur = +n.blur;
     if (n.mosaic && !mos) mos = n.mosaic;
-    // (block 3; block 4a - every lane) What only the page draws: the render lays the copy the app's window baked with this code.
+    // What only the page draws, on every lane: the render lays the copy the app's window baked with this code.
     if (n.jitter && d.engine && !jitter) jitter = n.jitter;
     if ((n.s != null && Math.abs(n.s - 1) > 1e-6) || n.mv) move = moveThen(move || MOVE_ID, _moveOf(n, W, H, anchor));
     if (n.cover) cover = Math.max(cover, _coverOf(e.k, W, H));
@@ -363,7 +363,7 @@ export function paramsAt(c, t, W, H, main) {
   }
   if (!any) return null;
   if (move && cover > 1) move = moveThen(move, { a: cover, b: 0, e: W / 2 - cover * W / 2, f: H / 2 - cover * H / 2 });
-  // (block 1c) The mosaic's box in pixels: the face's middle carried by the move (the oval sits on the face where the move puts
+  // The mosaic's box in pixels: the face's middle carried by the move (the oval sits on the face where the move puts
   // it), the size the clip's one (mosaicSizeOf - the render has one mask a clip), the corner on a whole pixel.
   let mosaic = null;
   if (mos) {
@@ -376,9 +376,9 @@ export function paramsAt(c, t, W, H, main) {
 }
 
 /**
- * (block 3) Where clip `c` needs the bake engine: the timeline's stretches [[a, b], ...] of its effects with `engine: true`,
+ * Where clip `c` needs the bake engine: the timeline's stretches [[a, b], ...] of its effects with `engine: true`,
  * merged - there every effect of the clip is drawn by the page's code in the app's window (lib/fx-bake.js) and the render lays
- * that copy (lib/mv3b-render.js). Block 4a (the owner's (б4-1)): on every video lane - above main the copy carries its alpha.
+ * that copy (lib/mv3b-render.js). On every video lane - above main the copy carries its alpha.
  * None on a band (the halfer's) - nothing is drawn there.
  */
 export function engineSpans(c) {
@@ -402,7 +402,7 @@ export function engineSpans(c) {
 
 const _evenBox = (w, h) => ({ w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) });
 /**
- * (block 1c) The size in pixels of a W x H frame of clip `c`'s face mosaic - its first mosaic's, at its start (one size a clip:
+ * The size in pixels of a W x H frame of clip `c`'s face mosaic - its first mosaic's, at its start (one size a clip:
  * the render lays one oval mask, lib/fx-assets.js) - or null when it has none.
  */
 export function mosaicSizeOf(c, W, H) {

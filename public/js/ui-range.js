@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE SLIDER'S FILL (phase V73 block 2, the shared part `.u-range` of css/app-shell.css).
+   THE SLIDER'S FILL (the shared part `.u-range` of css/app-shell.css).
 
    The part draws its track filled up to the thumb from the custom property --p; a native range cannot say where its
    thumb is, so the page says it: on every move, and once when it is built. Where code sets a slider's value itself

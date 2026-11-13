@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   A CLIP'S WINDOW - where an effect's GRAPHICS are drawn (phase V84 block 4b, the owner's (б4-11): "вариант Б" - inside the clip's
+   A CLIP'S WINDOW - where an effect's GRAPHICS are drawn (inside the clip's
    window). Main video and a clip that covers the frame: the whole frame. A clip of a lane above main that is PLACED (`tw`) or CUT
    (its crop on): its rectangle with its turn - a frame of light round it, sparkles in it, a card inside it. ONE rule for the
    preview (js/merge-v3/preview-b.js _showAs) and the app's bake window (js/bake-worker.js), written after the preview's own

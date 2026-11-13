@@ -1,43 +1,39 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — a chat's PICKER of attachments (phase V13, the owner 2026-10-07; docs/local-app/PLAN.md "Фаза V13").
+   MERGE — a chat's PICKER of attachments.
 
-   The first window - the 3D Studio's now; the chats open the window with the tree (below). It is opened for ONE
+   The plain window - the 3D Studio's; the chats open the window with the tree (below). It is opened for ONE
    place - a part of the zone (pictures | clips | sounds) and, in a part with slots, its slot - and it shows only that
    kind:
 
      left    where it comes from - the Library's shelves of that kind, as the chat's description lists them - and
              "from this computer": files of this kind through the chat's own door, and every file let go over the
-             window; each is filed into the root of its kind (phase V56) and goes straight into this place
+             window; each is filed into the root of its kind and goes straight into this place
      centre  a search by name, the categories of a shelf that has them (the project's own first), and the tiles:
              pictures at their own shape with a larger look while the pointer rests on one, clips as posters that
              play in their tile (▶ with the sound), sounds as rows to listen to
 
    A press puts the thing into the place the window was opened for (the shell keeps that slot armed while it is
    open), a second press takes it back off, and what is in the zone already wears the name of its place. The window
-   stays open while the place has room and closes by itself when it has none (the owner's answer 2); Escape, the
-   cross, `done` and a press beside it close it too. It fills the page, up to 1720 px wide (the owner's answer 3).
+   stays open while the place has room and closes by itself when it has none; Escape, the
+   cross, `done` and a press beside it close it too. It fills the page, up to 1720 px wide.
 
    It knows nothing of the chat: the shell opens it with what to show and what a press does (`openPick`), tells it
    when the zone changed (`pickChanged`) and what the chat has to say (`pickSay`).
 
-   THE WINDOW WITH THE TREE (phase V55, the owner 2026-10-28, (гн1)-(гн4), (гн6): "попапы для прикрепления медиа ... давай
-   сделаем аккуратней. типа размером как попап альманаха. в попапе слева дерево, а с права файлы с папками"). The chats
-   open it with `tree` - the pictures chat, the video chat and the frames chat; the 3D Studio opens the window above, as
-   it was (гн4). It is the almanac's size (860×560), over the middle of the chat (`anchor`):
+   THE WINDOW WITH THE TREE. The chats
+   open it with `tree` - the pictures chat, the video chat and the frames chat; the 3D Studio opens the window above.
+   It is the almanac's size (860×560), over the middle of the chat (`anchor`):
 
      left    what is not a folder as rows (`sources`: characters & looks, made in this project, voices), under them the
              media tree of that kind (js/media-tree.js, `tree.roots`: pictures REFERENCES and IMAGES, clips REFERENCES
              and VIDEO, sounds AUDIO) - a node pressed opens its folder
      right   the path, a search by name - in the open folder and every folder under it -, the folder's own folders as
-             tiles (a press opens one), then what lies DIRECTLY in it (the tree's `q`, V35; a REFERENCES post gives its
+             tiles (a press opens one), then what lies DIRECTLY in it (the tree's `q`; a REFERENCES post gives its
              files of this kind one by one - js/folder-column.js filesOf)
      foot    "from this computer…" (and a clip by a link), what the chat says, "done"; files let go over the window come
-             in as before.
+             in the same way.
 
-   A press attaches or takes off, and the window stays open while the place has room - as before. (V91 block 3, the owner's
-   (чк19г): it is no longer opened on a thing in the zone - the zone's "put another in its place" went.)
-
-   PHASE V56 (the owner's check of V55 2026-10-28, п. 1, 2, 9; (ги1)-(ги4), (ги8)):
+   A press attaches or takes off, and the window stays open while the place has room - as in the plain window. Besides:
      - "characters & looks" pressed: in place of the tree, the CHARACTERS - the ones with the most looks first, the first
        shown at once; the pointer resting on one shows its sheet and its looks on the right, and the last one stays when
        the pointer leaves the list; a look pressed is attached. Pressed again, the row lets go and the tree comes back on
@@ -46,13 +42,12 @@
        folder-column.js folderIndex / pruneTree): no empty folders, no folders of clips among the pictures. What a folder
        shows and a search looks through is that same reading.
      - A file brought in (let go over the window, "+ from this computer…", a link) lies in the kind's root - IMAGES,
-       VIDEO -> Uploads, My sounds (the chats' upload routes) - and the window opens that root with it in view (`home`).
-     - No larger look while the pointer rests on a picture (the old window keeps it - the 3D Studio's).
-
-   PHASE V57 (the owner's check of V56 2026-10-29, п. 6, 8, 10, 12; (ок1)-(ок4)):
+       VIDEO -> Uploads, My sounds (the chats' upload routes), or the folder open (below) - and the window opens where it
+       went with it in view (`home`).
+     - No larger look while the pointer rests on a picture (the plain window keeps it - the 3D Studio's).
      - Clips: only the ones the chosen model takes by their length (`tree.fit`, the video chat's - its limits are lib/
        video-models.js's, given to the page in the matrix); the folders count only those, so REFERENCES -> YouTube ->
-       Videos (long videos) is gone by itself. The window is read anew at every opening - another model, another limit.
+       Videos (long videos) drops out by itself. The window is read anew at every opening - another model, another limit.
      - A file let go over the window or taken by "+ from this computer…" goes INTO THE FOLDER OPEN in it (`pickFolder`):
        a folder of the person's own in IMAGES / VIDEO -> Uploads / My sounds; anything else open - a row, REFERENCES, a
        made Environments / Lookbooks, a required folder - is the kind's root (the server says the last word: nothing goes
@@ -60,21 +55,18 @@
        in view and attached (`pickRefresh` `at`).
      - A picture's LINK let go over the window (from a browser) is downloaded by the server into the same folder
        (`computer.link`); a page's link is refused in words.
-     - (V57's openChoose for talking head's who / where moved into their own windows in phase V58 - js/merge-v3/wk-setup.js,
-       wk-env.js on js/gen-window.js.)
 
-   (V91 block 3, the owner's (чк19е): "из чата мы не можем удалять из библиотеки") Nothing is deleted from the window - the ✕
-   of phase V58 ((лк1)) on its pictures went; files are deleted in the Library.
+   Nothing is deleted from the window; files are deleted in the Library.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-// (phase V73 block 2) The 3D Studio's page keeps its look (б1-13а): its cross keeps the glyph, everywhere else the part draws it.
+// The 3D Studio's page keeps its look: its cross keeps the glyph, everywhere else the part draws it.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
 import { nodeFiles, folderIndex, pruneTree, filesUnder } from '../folder-column.js';
-// (phase V73 block 2, step 2b) Being read, nothing here, could not be read - the shared parts, the reason a popup in the
-// corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own, б1-13а).
+// Being read, nothing here, could not be read - the shared parts, the reason a popup in the
+// corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own).
 import { emptyEl, loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
 
@@ -91,12 +83,12 @@ const _cache = new Map();         // source id -> { items, cats, why } for one o
 const _catMemo = new Map();       // '<project>|<source>' -> the category last shown there, for the page's life
 const _hp = hoverPlayer('pk-vid');
 let _sound = null;                // { path, audio, btn } - the one sound being listened to
-// (phase V55) The window with the tree: { tree, node, index, shapeOn, groups, group, all, qT } (_openTree) - null for the
+// The window with the tree: { tree, node, index, shapeOn, groups, group, all, qT } (_openTree) - null for the
 // window without it.
 let _t = null;
 
-// (phase V26.6, the owner's check 2026-10-31) The window's look is css/mv3-imagen.css: Merge and the 3D Studio link it,
-// the Library does not - New prop's "from IMAGES…" opened it there with no look, under the window. So it puts the sheet in
+// The window's look is css/mv3-imagen.css: Merge and the 3D Studio link it,
+// the Library does not (New prop's "from IMAGES…" opens it there). So it puts the sheet in
 // itself the first time, as js/gen-window.js does, and stays hidden until the sheet has come.
 let _css = null;                  // a promise - the sheet in
 let _cssIn = false;
@@ -141,18 +133,18 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *             of the place, when it is one that is there ('' - "N more go here")
  *   press(it) attach it, or take it off; why(it) why it cannot go ('' - it can)
  *   computer  { word, hint, open(), accepts(file), drop(files), lands, link(url)? } - `lands` is the source a file goes to;
- *             `link` (V57) a picture's link let go over the window - resolves with what to say ('' - in)
- *   link      (phase V27) { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
- *   make      (phase V26.6) { label, title, on() } - the place's own way to make what goes into it, a button in the foot
+ *             `link` a picture's link let go over the window - resolves with what to say ('' - in)
+ *   link      { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
+ *   make      { label, title, on() } - the place's own way to make what goes into it, a button in the foot
  *             (the frames chat's product place: "+ new prop")
  *   onClose()
- *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
+ *   tree      the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
  *             tree's top nodes, the key it remembers its branches under, the node opened the first time, what of a folder
- *             is shown ('photo' | 'video' | 'audio'), how one of its files becomes an item and (V56) the node a file brought
+ *             is shown ('photo' | 'video' | 'audio'), how one of its files becomes an item and the node a file brought
  *             in lies in. Then `sources` are the rows above the tree (`unless`: a path in the tree that makes the row
- *             needless; a loader may answer `groups` [{ key, label, sub, n, items }] - shown in place of the tree, V56),
+ *             needless; a loader may answer `groups` [{ key, label, sub, n, items }] - shown in place of the tree),
  *             `start` is a list of 'row:<id>' / 'node:<key>[/<label>…]' tried in order, and `anchor` the chat the window
- *             stands over. (V57) `fit(it)` - only what it takes is shown and
+ *             stands over. `fit(it)` - only what it takes is shown and
  *             counted (a clip by its seconds, `it.dur`); `note` - what the window says of that beside the slot's words.
  */
 export function openPick(o) {
@@ -208,11 +200,11 @@ export function pickSay(t) {
   if (_w) _w.said.textContent = t || '';
 }
 
-/** A file came in through the door of this kind: its shelf is read again. `paths` - (phase V56) what came in; `at` -
- *  (V57) the node of the tree it went into (the kind's root when none). */
+/** A file came in through the door of this kind: its shelf is read again. `paths` - what came in; `at` -
+ *  the node of the tree it went into (the kind's root when none). */
 export function pickRefresh(sourceId, paths, at) {
   if (!_w) return;
-  // (phase V56, (ги4); V57, (ок2)) With the tree: the window opens the folder the file went into - the open one, or the
+  // With the tree: the window opens the folder the file went into - the open one, or the
   // kind's root (`tree.home`) - the file in view.
   if (_t) {
     if (!_t.tree) return;
@@ -225,8 +217,7 @@ export function pickRefresh(sourceId, paths, at) {
 }
 
 /**
- * (phase V57, the owner's (ок2): "она в попапе падает в корневую images либо в папку которую создал пользователь и кинул в
- * нее") Where a file brought in through the open window goes: the id of the folder open in it when that is a folder of
+ * Where a file brought in through the open window goes: the id of the folder open in it when that is a folder of
  * the person's own of the kind's root (IMAGES, VIDEO -> Uploads, My sounds) - '' for the root: a row, REFERENCES, a made
  * Environments / Lookbooks, a required (locked) folder. The server checks it again (routes/mv3-img.js `_folderFor`).
  */
@@ -264,7 +255,7 @@ function _build() {
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
   const grid = el('div', 'pk-grid');
-  // NO MENU ON A TILE (phase V23, as on the Library's shelves, V13.1): the window's own "Save image as" would save the
+  // NO MENU ON A TILE (as on the Library's shelves): the window's own "Save image as" would save the
   // miniature, not the file. The hover's video and the sound rows are tiles too.
   grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
   main.append(bar, grid);
@@ -303,7 +294,7 @@ function _build() {
 
 // Files let go anywhere over the window come in through the door of this kind - and only there: the Library panel's own
 // drop is under the window and must never file them a second time.
-// (phase V57, (ок4)) A LINK let go here too - a picture's, dragged from a browser - where the chat takes one
+// A LINK let go here too - a picture's, dragged from a browser - where the chat takes one
 // (`computer.link`): the server downloads it into the folder open (dropLink below).
 function _takeFiles(ov, box) {
   const types = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])];
@@ -352,7 +343,7 @@ function _dropWords() {
 }
 
 /**
- * (phase V57, the owner's (ок4)) The address of what was dragged from a browser: the picture itself when the drag carries
+ * The address of what was dragged from a browser: the picture itself when the drag carries
  * one (`<img src>` of its HTML - a picture inside a link gives the picture, not the page), else the link. '' - none, or one
  * of this app's own (a tile dragged inside the window is not a download).
  */
@@ -373,9 +364,9 @@ export function dropLink(dt) {
 
 function _paintHead() {
   const o = _o;
-  // (phase V73 block 4) the window with the tree: its title in sentence case ("Pictures · first frame 1"); the old window as it was
+  // the window with the tree: its title in sentence case ("Pictures · first frame 1"); the plain window's as given
   _w.h.textContent = o.tree ? cap(o.title) : o.title;
-  // (phase V57, (ок1)) What the window leaves out, beside the slot's own words ("clips up to 15 s - Seedance 2.0").
+  // What the window leaves out, beside the slot's own words ("clips up to 15 s - Seedance 2.0").
   const note = (o.tree && o.tree.note) || '';
   const hint = [o.hint || '', note].filter(Boolean).join(' · ');
   _w.hint.textContent = hint;
@@ -411,7 +402,7 @@ function _paintSources() {
   up.addEventListener('click', () => c.open());
   S.appendChild(up);
   S.appendChild(el('div', 'pk-up-note', (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.'));
-  // (phase V27) A clip by a link, where the description takes one (`link`): the server downloads it and it goes into
+  // A clip by a link, where the description takes one (`link`): the server downloads it and it goes into
   // this place - the place says how far meanwhile.
   const L = _o.link;
   if (!L) return;
@@ -445,8 +436,8 @@ function _paintSources() {
 
 const _memoKey = () => (_o.project.key || '') + '|' + _st.src;
 
-// (phase V73 block 2, (б2-19)) A read that FAILED is not an empty shelf or folder: the grid says "<what> did not load" with
-// Try again (`retry`), the reason is a popup. Not cached, so Try again reads it again. The 3D Studio's page: its old line.
+// A read that FAILED is not an empty shelf or folder: the grid says "<what> did not load" with
+// Try again (`retry`), the reason is a popup. Not cached, so Try again reads it again. The 3D Studio's page: its own line.
 function _failedAs(got, what, retry) {
   if (!got || !got.failed) return null;
   if (OLD_LOOK()) return null;
@@ -488,7 +479,7 @@ async function _load(keepCat) {
   _paintGrid();
 }
 
-// A file brought in (phase V56, (ги4)): drawn, in view, blinking once.
+// A file brought in: drawn, in view, blinking once.
 function _reveal(path) {
   if (!_w) return;
   const i = _st.list.findIndex(x => x.path === path);
@@ -532,7 +523,7 @@ function _paintGrid() {
   G.scrollTop = 0;
   G.classList.toggle('is-rows', _o.kind === 'audio');
   if (_st.loading) { G.appendChild(OLD_LOOK() ? el('div', 'pk-none', 'reading…') : loadingEl('reading…')); _w.count.textContent = ''; return; }
-  // (phase V55) With the tree: the open folder's own folders first, as tiles - not while a search looks deeper.
+  // With the tree: the open folder's own folders first, as tiles - not while a search looks deeper.
   const node = _t && !_st.src ? _t.node : null;
   const look = _st.q.trim();
   const fold = node && !look ? _t.tree.foldersEl(node) : null;
@@ -644,7 +635,7 @@ function _tile(it) {
     });
     t.appendChild(play);
   } else if (it.big && !_t) {
-    // The larger look is the old window's (the 3D Studio's): the window with the tree has none (phase V56, (ги8)).
+    // The larger look is the plain window's (the 3D Studio's): the window with the tree has none.
     hit.addEventListener('pointerenter', () => _peekShow(it.big, t));
     hit.addEventListener('pointerleave', _peekHide);
   }
@@ -700,7 +691,7 @@ function _quiet() {
   if (s.btn) s.btn.textContent = '▶';
 }
 
-// ── THE WINDOW WITH THE TREE (phase V55) ────────────────────────────────────
+// ── THE WINDOW WITH THE TREE ────────────────────────────────────────────────
 const W_TREE = 860, H_TREE = 560;          // the almanac's size (vhelp.js)
 
 function _openTree(o) {
@@ -720,7 +711,7 @@ function _openTree(o) {
 function _buildTree() {
   const T = _o.tree;
   const ov = el('div', 'pk-ov is-tree');
-  // (phase V73 block 4) the one window frame (css/app-shell.css .u-win): its head - the title, then the slot's words and
+  // the one window frame (css/app-shell.css .u-win): its head - the title, then the slot's words and
   // "one more goes here" as quiet notes, the 28 px ✕ -, its foot with "done" the gold one at the right
   const box = el('div', 'pk is-tree u-win is-float');
   box.setAttribute('role', 'dialog');
@@ -733,7 +724,7 @@ function _buildTree() {
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
 
-  // Left: the rows that are not folders, then the tree - or, while a row read in groups is open, its groups (V56).
+  // Left: the rows that are not folders, then the tree - or, while a row read in groups is open, its groups.
   const side = el('div', 'pk-side');
   const rows = el('div', 'pk-rows');
   const people = el('div', 'pk-people');
@@ -769,7 +760,7 @@ function _buildTree() {
   up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
   up.addEventListener('click', () => c.open());
   foot.appendChild(up);
-  // (phase V26.6, the owner's (пр3)) The place's own way to make what goes into it: the product place's "+ new prop".
+  // The place's own way to make what goes into it: the product place's "+ new prop".
   const M = _o.make;
   if (M && typeof M.on === 'function') {
     const mk = el('button', 'pk-up is-make u-btn is-s is-gen', M.label || '+ new');
@@ -832,11 +823,11 @@ function _buildTree() {
   const t = _t;
   _t.tree = createTree(treeHost, {
     page: T.page, roots: T.roots, fallback: T.fallback,
-    // (phase V78, (лч16)) THIS PROJECT - the chat's project's folders, only the files of this window's kind.
+    // THIS PROJECT - the chat's project's folders, only the files of this window's kind.
     plinks: () => (_o && _o.project && _o.project.plinks) || '',
-    // (phase V56, the owner's п. 2, (ги2)) Only the folders holding this kind - in them or under them -, each counting
+    // Only the folders holding this kind - in them or under them -, each counting
     // them; the files read for that are what a folder shows and what a search looks through.
-    // (phase V57, (ок1)) ...and of those only what `fit` takes - the clips the chosen model takes by their length.
+    // ...and of those only what `fit` takes - the clips the chosen model takes by their length.
     shape: async (nodes) => {
       const idx = await folderIndex(nodes, T.type, null, T.fit || null).catch(() => null);
       if (!idx) return nodes;
@@ -852,7 +843,7 @@ function _buildTree() {
   });
 }
 
-// (phase V78, the owner 2026-11-07: "чтобы была только одна папка this project") ONE THIS PROJECT: the row of what was made in
+// ONE THIS PROJECT: the row of what was made in
 // this project (a source with `unless: 'plinks'` - the video chat's "Made in this project") gives way to the tree's THIS PROJECT,
 // and what it holds lies in THIS PROJECT's top beside its links.
 async function _madeIntoProject(nodes, idx) {
@@ -909,7 +900,7 @@ function _paintRows() {
   for (const s of vis) {
     const b = el('button', 'pk-src' + (s.id === _st.src ? ' on' : ''), s.label);
     b.type = 'button';
-    // (phase V56, the owner's п. 1) Pressed again, the open row lets go: the tree comes back, on the kind's root.
+    // Pressed again, the open row lets go: the tree comes back, on the kind's root.
     b.title = s.id === _st.src ? 'Press again to go back to the folders' : '';
     b.addEventListener('click', () => { if (_st.src === s.id) _leaveRow(); else _openRow(s.id); });
     R.appendChild(b);
@@ -933,7 +924,7 @@ function _paintSide() {
     b.dataset.key = g.key;
     b.title = g.label + (g.sub ? ' · ' + g.sub : '');
     b.append(el('span', 'pk-person-t', g.label), el('span', 'pk-person-n', String(g.n)));
-    // The pointer resting on a row shows its things; the last one stays when the pointer leaves the list (the owner).
+    // The pointer resting on a row shows its things; the last one stays when the pointer leaves the list.
     b.addEventListener('pointerenter', () => _pickGroup(g.key));
     b.addEventListener('click', () => _pickGroup(g.key));
     P.appendChild(b);
@@ -964,7 +955,7 @@ function _paintPath() {
 // A file of a folder as the window's item.
 const _itemOf = (f) => _o.tree.map(f) || null;
 
-// (phase V57, (ок1)) What the window may show at all: everything, unless the tree says what it takes (`fit`).
+// What the window may show at all: everything, unless the tree says what it takes (`fit`).
 const _fits = (x) => !(_o && _o.tree && typeof _o.tree.fit === 'function') || !!_o.tree.fit(x);
 
 async function _rowItems(s) {
@@ -986,7 +977,7 @@ async function _freshIndex() {
   if (!t || t.shapeOn) return;
   const nodes = (_o.tree.roots || []).map(k => t.tree.node(k)).filter(Boolean);
   let why = '';
-  t.reading = true;                                   // (2b-2) a search meanwhile waits, it is not told the folders failed
+  t.reading = true;                                   // a search meanwhile waits, it is not told the folders failed
   let idx = null;
   try {
     idx = nodes.length ? await folderIndex(nodes, _o.tree.type, null, _o.tree.fit || null).catch((e) => { why = (e && e.message) || ''; return null; }) : null;
@@ -1070,8 +1061,7 @@ function _rowShow() {
   _paintGrid();
 }
 
-// (phase V56, the owner's п. 1: "повторный клик по кнопке characters & looks снимает выделение этой кнопки и показывает
-// содержание корневой images") The open row let go of: the tree on the kind's own root - IMAGES, VIDEO, AUDIO.
+// The open row let go of: the tree on the kind's own root - IMAGES, VIDEO, AUDIO.
 function _leaveRow() {
   const roots = _o.tree.roots || [];
   const k = [roots[roots.length - 1]].concat(roots).find(x => x && _t.tree.node(x));
@@ -1130,9 +1120,9 @@ function _searchTree(now) {
     ++_seq;
     _st.loading = false;
     _st.failed = null;
-    // (phase V73 block 2, the owner's (2b-2) а) The folders not read in one go - a search needs them all: "The folders did not
-    // load" with Try again (which reads them again), the reason a popup once - not at every letter typed (б2-19).
-    // ...but while they are being read (again) it is only "Reading…" - no popup, no failure ((2b-2)): the read runs the search
+    // The folders not read in one go - a search needs them all: "The folders did not
+    // load" with Try again (which reads them again), the reason a popup once - not at every letter typed.
+    // ...but while they are being read (again) it is only "Reading…" - no popup, no failure: the read runs the search
     // again when it is done.
     if (!_t.index && _t.reading && !OLD_LOOK()) {
       _st.items = [];
@@ -1167,13 +1157,13 @@ function _searchTree(now) {
 }
 
 // Something came in, or a folder changed: the tree and what it holds are read again - the tree too, unless it did that
-// itself. `land` { node, path } (phase V56, (ги4)): a file brought in - the window opens the kind's root it went into, the
+// itself. `land` { node, path }: a file brought in - the window opens the kind's root it went into, the
 // file in view.
 async function _refreshTree(treeDone, land) {
   const t = _t;
   if (!t) return;
   _cache.clear();
-  // (phase V73 block 2, (2b-2)) The folders are being read AGAIN: a search typed meanwhile waits ("Reading…") - nothing failed,
+  // The folders are being read AGAIN: a search typed meanwhile waits ("Reading…") - nothing failed,
   // the index is only not back yet. The `_openNode` at the end runs the search again once it is.
   t.reading = true;
   try {

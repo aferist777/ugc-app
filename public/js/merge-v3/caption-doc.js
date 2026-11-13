@@ -1,21 +1,20 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the captions view's `text` tab: the lanes of words as ONE DOCUMENT (phase V30, block 2, the owner
-   2026-10-15).
+   MERGE v3 — the captions view's `text` tab: the lanes of words as ONE DOCUMENT.
 
    In place of the preset tiles (the `presets` tab), the lines of the subtitle lane and, under it, of each text lane -
    a line of the document is a caption, in time order, its start pale on the left and a dot where a person corrected
    it. The settings strip on the right stays what it is. What the document does is captions/doc.js (pure); here is only
    the page:
      - a press on a line puts the playhead on its start and picks it on the timeline - the document stays whole and
-       lights the lines picked (the owner's (с25));
+       lights the lines picked;
      - typing in a line is written when the line is left - a press elsewhere, the arrows past its edge, Tab, Escape -
-       as ONE step to undo (the owner's (с27)); a heard line keeps its timing (retext). Enter cuts the line between its
+       as ONE step to undo; a heard line keeps its timing (retext). Enter cuts the line between its
        words, Delete at its end joins it with the next one, Backspace at its start with the one before - at once. A
        word carried across the end of a line goes with its time. Typed lines are cut by their letters, and a typed
-       line joined to a heard one becomes part of it (с26). Text lanes are cut and joined only within themselves (с28);
+       line joined to a heard one becomes part of it. Text lanes are cut and joined only within themselves;
      - a talking head's lines of the script never join - refused, and said under the document;
      - find and replace above it: the count, every match lit, Enter the next, Shift+Enter the one before; `replace`,
-       `replace all` (ONE step to undo); `Aa` the case, `W` whole words (с30). Over the subtitles and the text lanes.
+       `replace all` (ONE step to undo); `Aa` the case, `W` whole words. Over the subtitles and the text lanes.
    The keys are the document's own (`data-own-keys`: the timeline's Delete never reaches them); a window on top owns
    the keyboard (Layers.blocked). Ctrl+Z in a line being typed is the field's own; in a line not touched, or on the
    document, it is the project's undo - the pick waits on the lane meanwhile, so a line it took back does not close the
@@ -35,7 +34,7 @@ import { note } from '../ask.js';
 import { linesOf, textOfLine, isWordsLane, editLine, splitLine, joinLines, rewrite, matcher, matchesIn, replaceIn } from '../captions/doc.js';
 import { isHeard } from '../captions/heard.js';
 import { isCorrected } from '../captions/words.js';
-// (phase V73 block 2, step 2b) A lane with no lines - the shared "nothing here", a row of the document.
+// A lane with no lines - the shared "nothing here", a row of the document.
 import { emptyEl } from '../ui-state.js';
 import { setFigures } from '../num.js';
 
@@ -192,7 +191,7 @@ export function paint() {
       sec.el.dataset.track = t.id;
       const lines = linesOf(t);
       const name = t.name || (t.kind === 'subs' ? 'Subtitles' : 'Text');
-      // (phase V73 block 5, 5d) sentence case ("Text 1"), its count in mono
+      // sentence case ("Text 1"), its count in mono
       const head = name.charAt(0).toUpperCase() + name.slice(1) + ' · ' + lines.length + (lines.length === 1 ? ' line' : ' lines');
       if (sec.head.dataset.t !== head) { sec.head.dataset.t = head; setFigures(sec.head, head); }
       const nodes = [];

@@ -1,20 +1,19 @@
 'use strict';
 
-/* key-scan.js - no key of the owner's leaves this computer in what friends get (phase V83, block B7; the owner
-   2026-11-09: "api ключи все должны быть чистыми и проверить что в коде не прошел ни один ключ").
+/* key-scan.js - no key of the publisher's leaves this computer in what is handed out or released.
 
        node tools/key-scan.js <folder> [<folder> ...]
 
    What is looked for - by VALUE, never printed:
-     keys     every value of a field named like a key, token, secret or password in the owner's library/data/settings.json,
+     keys     every value of a field named like a key, token, secret or password in the publisher's library/data/settings.json,
               library/data/telegram.json, local-data/data/settings.json and local-data/.env, and each one's SHA-256 (the R2
               secret is the SHA-256 of the Cloudflare token); and the shapes of known keys (sk-ant-, r8_, gsk_, AKIA, ghp_,
               AIza, a PEM private key)
-     links    the owner's Cloudflare account id and the public address of the owner's bucket - not secrets, but the
-              owner's; said, not refused
+     links    the publisher's Cloudflare account id and the public address of the publisher's bucket - not secrets, but
+              the publisher's; said, not refused
      paths    this computer's user folder (C:\Users\<name>) - said, not refused
    A media file (pictures, video, sound, fonts, models) is not read: no key is in one. Used by tools/release.js
-   (handoff, publish): one of the owner's keys found stops it, anywhere; a key's SHAPE stops it in our code and in the
+   (handoff, publish): one of the publisher's keys found stops it, anywhere; a key's SHAPE stops it in our code and in the
    library, and is only said in third-party files - node_modules, vendor and the runtime's .exe / .dll - where public
    examples have it (dotenv's README, a presigned link in ffmpeg-static's install.js, TLS strings in ffmpeg and Electron). */
 

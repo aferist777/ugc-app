@@ -10,7 +10,7 @@
    reads (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Pixabay, Telegram,
    Cloudflare).
 
-   THE ONE CLOUDFLARE KEY (phase TG): saved, it is checked step by step at once (POST /api/cloudflare/check - the key,
+   THE ONE CLOUDFLARE KEY: saved, it is checked step by step at once (POST /api/cloudflare/check - the key,
    the account, the bucket, an upload), the steps shown under it with a "check" of its own and "How to get this key"
    under them; once it has passed, R2 is spoken to with it. It is the only way R2 is set up.
 
@@ -20,7 +20,7 @@
 
 (function () {
 
-// (phase V25, the owner 2026-10-13) Claude first; every description says what the key does in the app as it is now.
+// Claude first; every description says what the key does in the app.
 const ROWS = [
   {
     label: 'Claude (Anthropic):', settingsKey: 'anthropicApiKey', probe: 'anthropic',
@@ -59,21 +59,21 @@ const ROWS = [
     desc: 'Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.',
   },
   {
-    // (phase V54, the owner 2026-10-27, (зв1)) Finding sound effects online - Freesound directly; Openverse without it.
+    // Finding sound effects online - Freesound directly; Openverse without it.
     label: 'Freesound API:', settingsKey: 'freesoundApiKey', probe: 'freesound',
     placeholder: '••• (freesound.org → API credentials)',
     link: 'https://freesound.org/apiv2/apply', linkText: 'freesound.org/apiv2/apply (a free account)',
     desc: 'SFX → "find online…": free sound effects (CC0 only) straight from Freesound. Without it the search goes through Openverse, which is often down.',
   },
   {
-    // (phase V62, block 3, the owner's (во43)) A voiceover's B-roll - stock videos and photos from Pixabay (lib/pixabay.js).
+    // A voiceover's B-roll - stock videos and photos from Pixabay (lib/pixabay.js).
     label: 'Pixabay API:', settingsKey: 'pixabayApiKey', probe: 'pixabay',
     placeholder: '12345678-••• (pixabay.com → API docs)',
     link: 'https://pixabay.com/api/docs/', linkText: 'pixabay.com/api/docs (a free account - the key is on that page)',
     desc: 'Voiceover → field 2 "find B-roll": stock videos (1080p) and photos for every sentence of the voice. Free.',
   },
   {
-    // (phase TG, block 2; the owner: the bot's key "в админке над r2") The owner's own bot: what it is sent goes into
+    // The person's own bot, its key above Cloudflare's: what it is sent goes into
     // REFERENCES. Under it: who it listens to (the code), how its messages come in, the queue (lib/telegram.js).
     group: 'Telegram bot · links, photos and videos you send it go into REFERENCES',
     label: 'Telegram bot token:', settingsKey: 'telegramBotToken', probe: 'telegram', telegram: true,
@@ -82,8 +82,8 @@ const ROWS = [
     link: 'https://t.me/BotFather', linkText: '@BotFather in Telegram',
   },
   {
-    // (phase TG, the owner 2026-10-21: "хочу решить вопрос одним ключом") ONE key for Cloudflare: R2 is spoken to with the
-    // pair made from it, and (block 2) the Telegram receiver is set up with it. Checked step by step once saved
+    // ONE key for Cloudflare: R2 is spoken to with the
+    // pair made from it, and the Telegram receiver is set up with it. Checked step by step once saved
     // (lib/cloudflare.js).
     group: 'Cloudflare · where reference media are hosted (R2)',
     label: 'Cloudflare API token:', settingsKey: 'cloudflareApiToken', probe: 'cloudflare', cloudflare: true,
@@ -94,8 +94,8 @@ const ROWS = [
 
 const $ = (id) => document.getElementById(id);
 
-// HOW TO GET THE CLOUDFLARE KEY (the owner 2026-10-21: the instruction "в дропдауне под новым ключом ... типа хелпера").
-// Cloudflare's own words for its buttons (developers.cloudflare.com, "Create API token"), checked 2026-10-21.
+// HOW TO GET THE CLOUDFLARE KEY - an instruction under the key's field.
+// Cloudflare's own words for its buttons (developers.cloudflare.com, "Create API token").
 const CF_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens';
 // R2 of whichever account is signed in (Cloudflare's own deep link, `?to=/:account/...`); after a check, the account's own.
 const CF_R2 = 'https://dash.cloudflare.com/?to=/:account/r2/overview';
@@ -112,11 +112,11 @@ const CF_HOWTO = [
   ['Turn R2 on once in ', ['dash.cloudflare.com → R2 Object Storage', CF_R2], ' - Cloudflare asks for a payment card for it, even within the free allowance. Then press “check” beside the steps.'],
   ['The bucket “ugc-studio” (or the one you had) is then in ', ['dash.cloudflare.com → R2 Object Storage → Buckets', CF_R2], '; the line “bucket” of the check links straight to it.'],
 ];
-// (phase TG, block 8: a new account showed it) Cloudflare asks for a payment card to turn R2 on, even within its free allowance.
+// Cloudflare asks for a payment card to turn R2 on, even within its free allowance.
 const CF_NOTE = 'The bucket is found, or made, by the app. The free allowance of R2 - 10 GB stored, a million uploads a month - is far '
   + 'more than the app uses.';
 const CF_STEP = { key: 'key', account: 'account', bucket: 'bucket', upload: 'upload' };
-// How to make the bot (phase TG, block 2).
+// How to make the bot.
 const TG_HOWTO = [
   ['In Telegram open ', ['@BotFather', 'https://t.me/BotFather'], ' and send /newbot.'],
   ['Give the bot a name, then a username that ends in “bot” (for example ugc_studio_inbox_bot).'],
@@ -168,7 +168,7 @@ function buildRow(r) {
 
   const lbl = document.createElement('label');
   lbl.className = 'bk-label';
-  // (phase V73 block 6) a label at the left, without its colon
+  // a label at the left, without its colon
   lbl.textContent = String(r.label || '').replace(/:s*$/, '');
   line.appendChild(lbl);
 
@@ -179,8 +179,7 @@ function buildRow(r) {
   field.autocomplete = 'off';
   field.spellcheck = false;
   lbl.htmlFor = field.id = 'bk-' + r.settingsKey;
-  // (phase TG, block 8; the owner 2026-10-22: "сделай инструкции под полями для ключей, а не в правом столбце") The field
-  // and its x in a column of their own - a key's instruction opens UNDER its field.
+  // The field and its x in a column of their own - a key's instruction opens UNDER its field.
   const col = document.createElement('div');
   col.className = 'bk-col';
   const frow = document.createElement('div');
@@ -189,7 +188,7 @@ function buildRow(r) {
   col.appendChild(frow);
   line.appendChild(col);
 
-  // Remove on Save. Where the eye used to be; the opposite of a reveal.
+  // Remove on Save; the opposite of a reveal.
   const x = document.createElement('button');
   x.type = 'button';
   x.className = 'bk-x u-btn is-icon is-quiet is-del u-x';
@@ -200,7 +199,7 @@ function buildRow(r) {
   // row is one line tall and twelve keys fit on one screen (an instruction, when there is one, under the field).
   const side = document.createElement('div');
   side.className = 'bk-side';
-  // (phase V73 block 6) the key's state is a dot and its words - no longer the colour of the field's border
+  // the key's state is a dot and its words - not the colour of the field's border
   const stateRow = document.createElement('div');
   stateRow.className = 'bk-staterow';
   const dot = document.createElement('span');
@@ -288,7 +287,7 @@ function setStatus(text, kind) {
   el.textContent = text || '';
   el.className = 'adm-status' + (kind ? ' ' + kind : '');
 }
-// (phase V73 block 2, step 2b) A failure is a popup in the corner (js/notice.js) - this is a classic script, so the module
+// A failure is a popup in the corner (js/notice.js) - this is a classic script, so the module
 // comes with import(); the status line keeps progress and calm news, a field keeps its own state.
 function sayError(text, detail) {
   import('/js/notice.js').then((m) => m.showError(text, detail ? { detail } : {})).catch(() => {});
@@ -299,7 +298,7 @@ function sayError(text, detail) {
 function paint(row) {
   const { field, state, x } = row;
   field.classList.remove('is-ok', 'is-down', 'is-missing', 'is-cleared', 'is-mask');
-  // (phase V73 block 6) the shared ✕ draws itself (.u-x) - the "×" written into it made two crosses; "keep it after all"
+  // the shared ✕ draws itself (.u-x) - a "×" written into it would make two crosses; "keep it after all"
   // is Lucide's undo arrow (css/admin.css .bk-undo)
   x.textContent = '';
   x.classList.toggle('u-x', row.mode !== 'cleared');
@@ -385,7 +384,7 @@ async function health(force) {
   }
 }
 
-// ── the Cloudflare key's check (phase TG) ─────────────────────────────────
+// ── the Cloudflare key's check ─────────────────────────────────
 // Its steps under the field, in green or red.
 function cfPaint(v) {
   const row = byKey.get('cloudflareApiToken');
@@ -401,7 +400,7 @@ function cfPaint(v) {
     const e = document.createElement('div');
     e.className = 'bk-step ' + (s.ok ? 'ok' : 'down');
     e.textContent = (s.ok ? '✓ ' : '✗ ') + (CF_STEP[s.id] || s.id) + ' · ' + (s.words || '');
-    // (block 8) Where the bucket is - or where R2 is turned on - in this account of Cloudflare's dashboard.
+    // Where the bucket is - or where R2 is turned on - in this account of Cloudflare's dashboard.
     const acc = c.account || v.account, bkt = c.bucket || (s.ok ? v.bucket : '');
     if (s.id === 'bucket' && acc) {
       const a = document.createElement('a');
@@ -423,7 +422,7 @@ function cfPaint(v) {
 async function cfLoad() {
   try {
     const v = await fetch('/api/cloudflare').then(r => r.json());
-    if (!v || !v.success) sayError('Could not read the Cloudflare key', (v && v.error) || 'no answer');   // (б2-19) said, not silent
+    if (!v || !v.success) sayError('Could not read the Cloudflare key', (v && v.error) || 'no answer');   // said, not silent
     cfPaint(v && v.success ? v : null);
     return v;
   } catch (e) { sayError('Could not read the Cloudflare key', e.message); cfPaint(null); return null; }
@@ -445,8 +444,8 @@ async function cfCheck() {
   }
 }
 
-// ── the bot (phase TG, block 2) ───────────────────────────────────────────
-// Who it listens to (the code until the owner pressed Start), how messages come in, the queue; read again every few
+// ── the bot ───────────────────────────────────────────
+// Who it listens to (the code until the person presses Start), how messages come in, the queue; read again every few
 // seconds while the code is waiting, so the line turns into "listens to you only" as soon as Start is pressed.
 let _tgTimer = null;
 function _tgLine(cls, ...parts) {
@@ -479,8 +478,7 @@ function tgPaint(v) {
   if (v.error) box.appendChild(_tgLine('down', '✗ ' + v.error, { button: 'connect', title: 'Look at the keys again and connect', click: tgConnect }));
   const bot = v.bot && v.bot.username ? v.bot.username : '';
   if (bot && v.code) {
-    // The code alone is enough (phase TG, the owner 2026-10-21: "пишет not connected" - Start pressed on the bot itself
-    // sends "/start" without the code).
+    // The code alone is enough (Start pressed on the bot itself sends "/start" without the code).
     box.appendChild(_tgLine('down', `✗ not connected yet: send the code ${v.code} to @${bot} in Telegram - or open `,
       { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` }, ' and press Start'));
     _tgTimer = setTimeout(tgLoad, 3000);
@@ -502,7 +500,7 @@ function tgPaint(v) {
 async function tgLoad() {
   try {
     const v = await fetch('/api/telegram').then(r => r.json());
-    if (!v || !v.success) sayError('Could not read the bot', (v && v.error) || 'no answer');   // (б2-19) said, not silent
+    if (!v || !v.success) sayError('Could not read the bot', (v && v.error) || 'no answer');   // said, not silent
     tgPaint(v && v.success ? v : null);
     return v;
   } catch (e) { sayError('Could not read the bot', e.message); tgPaint(null); return null; }
@@ -537,7 +535,7 @@ async function save(btn) {
   }
   if (!Object.keys(payload).length) { setStatus('Nothing to change - type a key to replace it, or × to remove one.', 'ok'); return; }
   // Removing is asked about once: an empty key is a feature that stops working.
-  // (phase V73 block 2) one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
+  // one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
   if (removals && !_armed) {
     _armed = setTimeout(() => { _armed = null; btn.textContent = 'Save'; btn.classList.remove('is-danger', 'is-armed'); }, 3000);
     btn.textContent = 'Really? · ' + removals + (removals === 1 ? ' key' : ' keys');
@@ -547,7 +545,7 @@ async function save(btn) {
   if (_armed) { clearTimeout(_armed); _armed = null; }
   btn.classList.remove('is-danger', 'is-armed');
   btn.disabled = true;
-  btn.textContent = 'Saving';   // (phase V73 block 6) no emoji, no dots
+  btn.textContent = 'Saving';   // no emoji, no dots
   try {
     const r = await fetch('/api/settings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -1,6 +1,6 @@
 'use strict';
 
-/* fake-update-worker.js - the Worker `ugc-updates` on THIS computer, for stands (phase V83, block B4).
+/* fake-update-worker.js - the Worker `ugc-updates` on THIS computer, for stands.
 
        node tools/fake-update-worker.js --store <folder> [--port 3199] [--cut <n>]
 
