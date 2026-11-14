@@ -12,7 +12,7 @@
        their own on Admin -> API keys;
      - the journal of generations and what the chats said: data\alerts.json, mv3-chat.json, mv3-gens.json,
        mv3-video-gens.json, audio-gens.json, mv3-queue.json - gone (their records name the source's kie.ai tasks and
-       bucket links; what the chats made stays on the shelves);
+       bucket links; what the chats made stays on the shelves); the assistant's chats, data\assistant\ - gone too;
      - without --with-projects: every project deleted BY THE APP ITSELF - the server is started on the copy (keys gone,
        nothing paid can start), each timeline deleted with its files as Merge deletes it (DELETE /api/mv3/timeline/:key
        ?files=1 - what a shelf still uses is moved to media\work first), each 3D Studio scene; then media\renders\;
@@ -28,6 +28,8 @@ const REPO = path.join(__dirname, '..');
 const say = (s) => console.log('[clean] ' + s);
 const GONE_DATA = ['telegram.json', 'tg-inbox.json', 'alerts.json', 'mv3-chat.json', 'mv3-gens.json', 'mv3-video-gens.json',
   'audio-gens.json', 'mv3-queue.json'];
+// Folders of data\ left out the same way: the assistant's chats (one file a chat).
+const GONE_DATA_DIRS = ['assistant'];
 const SECRET_FIELD = /(key|token|secret|password|passwd)(id)?$/i;
 const ACCOUNT_FIELD = /^(r2|cloudflare|telegram)/i;
 
@@ -163,8 +165,10 @@ async function cleanCopy({ from, to, withProjects = false, allowOpen = false }) 
   if (!allowOpen && await answers(38417)) throw new Error('UGC Studio is open - close it first, or the copy would be torn');
   const t0 = Date.now();
 
-  robocopy(src, dest, ['/XD', path.join(src, 'cache'), path.join(src, 'logs'), path.join(src, 'backups'), '/XF', '.env', '*.tmp',
+  robocopy(src, dest, ['/XD', path.join(src, 'cache'), path.join(src, 'logs'), path.join(src, 'backups'),
+    ...GONE_DATA_DIRS.map((d) => path.join(src, 'data', d)), '/XF', '.env', '*.tmp',
     ...GONE_DATA.map((n) => path.join(src, 'data', n))]);
+  for (const d of GONE_DATA_DIRS) fs.rmSync(path.join(dest, 'data', d), { recursive: true, force: true });
   if (fs.existsSync(path.join(src, 'cache', 'thumbs'))) robocopy(path.join(src, 'cache', 'thumbs'), path.join(dest, 'cache', 'thumbs'));
   // The small records the app keeps in cache\ (render-posters.json - the renders' posters already made): without them
   // the recipient's first start would do that work again.

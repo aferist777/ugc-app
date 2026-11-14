@@ -78,6 +78,25 @@ function _queueButton(nav) {
   import('./merge-v3/queue.js').then((m) => m.initQueue()).catch(() => { b.hidden = true; });
 }
 
+// THE ASSISTANT right of Library - an icon and a word, lit while its window is open; its module and look are brought in
+// at the first press (js/assistant/assistant.js), so no page loads them before. Not on the 3D Studio's page (OLD_LOOK).
+function _assistantButton(nav) {
+  if (OLD_LOOK() || nav.querySelector('.sv3-asst')) return;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sv3-navbtn sv3-asst has-ico';
+  b.title = 'Assistant - brainstorm ideas and prompts, or ask how to do something in the app';
+  b.append(iconEl('message-square', 14), document.createTextNode('Assistant'));
+  const lib = nav.querySelector('a[href="/library"]');
+  nav.insertBefore(b, lib ? lib.nextSibling : nav.querySelector('.sp'));
+  b.addEventListener('click', () => {
+    import('./assistant/assistant.js').then((m) => {
+      m.onOpenChange((open) => b.classList.toggle('is-on', !!open));
+      return m.openAssistant();
+    }).catch((e) => { console.warn('[assistant]', e); });
+  });
+}
+
 // THE WINDOW'S BUTTONS at the far right, in the app only - the shell gives its pages
 // `ugcWindow` (desktop/preload.js); a browser has none and draws none. Full screen: minimise, into a window, quit - the
 // quit goes the way of the window's own close, a running render asked about first. In a window Windows' own title bar
@@ -123,6 +142,7 @@ export function initNav() {
   _adminLink(nav);
   _lightCurrent(nav);
   _soon3d(nav);
+  _assistantButton(nav);
   _queueButton(nav);
   // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
   // the list is the same wherever you are standing.

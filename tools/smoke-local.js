@@ -73,7 +73,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  '/js/merge-v3/tl-silence.js', '/js/merge-v3/tl-merge.js',
                  // generate audio and sound on the shelves
                  '/js/merge-v3/sound-host.js', '/css/sound-window.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
-                 '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
+                 '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights',
+                 // the assistant in the top strip: its window, its reader of answers, its look, the guide Help answers by
+                 '/js/assistant/assistant.js', '/js/assistant/md.js', '/css/assistant.css', '/guide/guide.md'];
 // Where an address must land: the app opens on Home.
 const REDIRECTS = [['/', '/home']];
 // Every key routes/settings.js keeps out of the page.

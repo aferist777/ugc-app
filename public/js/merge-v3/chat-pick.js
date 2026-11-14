@@ -133,7 +133,8 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *             of the place, when it is one that is there ('' - "N more go here")
  *   press(it) attach it, or take it off; why(it) why it cannot go ('' - it can)
  *   computer  { word, hint, open(), accepts(file), drop(files), lands, link(url)? } - `lands` is the source a file goes to;
- *             `link` a picture's link let go over the window - resolves with what to say ('' - in)
+ *             `link` a picture's link let go over the window - resolves with what to say ('' - in). The window with the
+ *             tree may go without it: then nothing comes in from this computer (the assistant's attachments)
  *   link      { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
  *   make      { label, title, on() } - the place's own way to make what goes into it, a button in the foot
  *             (the frames chat's product place: "+ new prop")
@@ -754,12 +755,15 @@ function _buildTree() {
 
   // The foot: this computer (and a clip by a link), what the chat says, done.
   const foot = el('div', 'pk-foot u-win-foot');
+  // A window opened without `computer` takes only what is in the library (the assistant's attachments).
   const c = _o.computer;
-  const up = el('button', 'pk-up u-btn is-s', '+ From this computer…');
-  up.type = 'button';
-  up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
-  up.addEventListener('click', () => c.open());
-  foot.appendChild(up);
+  if (c) {
+    const up = el('button', 'pk-up u-btn is-s', '+ From this computer…');
+    up.type = 'button';
+    up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
+    up.addEventListener('click', () => c.open());
+    foot.appendChild(up);
+  }
   // The place's own way to make what goes into it: the product place's "+ new prop".
   const M = _o.make;
   if (M && typeof M.on === 'function') {
@@ -800,7 +804,7 @@ function _buildTree() {
   done.type = 'button';
   foot.append(said, done);
 
-  const drop = el('div', 'pk-drop', 'Let go to add ' + (c.word || 'them') + ' from this computer');
+  const drop = el('div', 'pk-drop', c ? 'Let go to add ' + (c.word || 'them') + ' from this computer' : '');
   box.append(head, body, foot, drop);
   ov.appendChild(box);
   document.body.appendChild(ov);
@@ -814,7 +818,7 @@ function _buildTree() {
     _st.q = q.value;
     if (_st.src) _rowShow(); else _searchTree();
   });
-  _takeFiles(ov, box);
+  if (c) _takeFiles(ov, box);
   const place = () => _placeTree(box);
   window.addEventListener('resize', place);
   _w = { ov, box, h, hint, left, side, rows, people, treeHost, path, q, cat, count, grid, said, drop, layer, io: null, shut: 0, sentinel: null, place };

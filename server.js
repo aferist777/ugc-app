@@ -151,6 +151,7 @@ app.use('/api', require('./routes/telegram'));     // the person's own bot: link
 app.use('/api', require('./routes/home'));   // what the Home page's blocks read
 app.use('/api', require('./routes/references'));   // REFERENCES: the posts the bot brought in
 app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder
+app.use('/api', require('./routes/assistant'));   // the assistant's chat in the top strip: Ideas and Help
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
 // how a script is written, routes/scen3.js owns who reads it aloud.
 app.use('/api', require('./routes/narrators'));
