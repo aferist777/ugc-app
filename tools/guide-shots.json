@@ -12,6 +12,16 @@
       ["ugc-app","my-media"]
     ],
     "projects": [
+      ["Psychology, lecture 1","Psychology, lecture 1"],
+      ["Personality types, lecture 20","Personality types, lecture 20"],
+      ["A podcast on gold","A podcast on gold"],
+      ["A cartoon lore video.?","A cartoon lore video","re"],
+      ["lecture_[^\n·]*","A lecture on success","re"],
+      ["An AI explainer[^\n·]*","An AI explainer","re"],
+      ["A TV show review","A TV show review"],
+      ["A six-hour stream[^\n·]*","A six-hour stream","re"],
+      ["An actor[^\n·]*","An actor, a long interview","re"],
+      ["A true crime story, 2 hours","A true crime story, 2 hours"],
       ["Packing light, for real","Packing light, for real"],
       ["the pump[^\\n·]*Passenger 2 - F","Packing light, for real","re"],
       ["Honeye?fil - \\d+[^\\n·]*","Honey morning story","re"],
@@ -53,6 +63,14 @@
     {"name":"merge-cut-silence","reload":true,"chapter":"04-merge","page":"/merge?p=sv3_1793376490591","mask":["private","projects","words"],"settle":3500,"steps":[{"press":"#mv3-tl .mv3b-clip.is-audio@1","wait":600},{"press":"#mv3-silence","wait":900}],"crop":[".mv3-silence","#mv3-timeline"],"pad":0,"escape":2},
     {"name":"merge-effects","reload":true,"chapter":"04-merge","page":"/merge?p=sv3_1793376490591","mask":["private","projects","words"],"settle":3500,"steps":[{"press":"#mv3-tl .mv3b-clip.is-video@2","wait":900},{"eval":"const h = __byText('.mv3-ins-grp-h', 'Effects'); if (h) h.click();","wait":1200},{"press":"#mv3-over .mv3-fx-add","wait":1500},{"eval":"if (!document.querySelector('.mv3-fx-panel')) { const b = document.querySelector('#mv3-over .mv3-fx-add'); if (b) b.click(); }","wait":1500}],"crop":"#mv3-over","pad":0,"escape":3},
     {"name":"merge-captions","chapter":"04-merge","page":"/merge?p=sv3_1793376490591","mask":["private","projects","words"],"settle":3500,"steps":[{"eval":"document.getElementById('mv3-lib-cap').click();","wait":1200},{"eval":"const t = __byText('button', 'Presets'); if (t) t.click();","wait":1500}],"crop":"#mv3-library","pad":0},
-    {"name":"merge-captions-text","chapter":"04-merge","page":"/merge?p=sv3_1793376490591","mask":["private","projects","words"],"settle":3500,"steps":[{"eval":"const t = __byText('button', 'text') || __byText('button', 'Text'); if (t) t.click(); else throw new Error('no text tab');","wait":1200}],"crop":"#mv3-library","pad":0}
+    {"name":"merge-captions-text","chapter":"04-merge","page":"/merge?p=sv3_1793376490591","mask":["private","projects","words"],"settle":3500,"steps":[{"eval":"const t = __byText('button', 'text') || __byText('button', 'Text'); if (t) t.click(); else throw new Error('no text tab');","wait":1200}],"crop":"#mv3-library","pad":0},
+    {"name":"start-home","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/home"},
+    {"name":"start-the-app","chapter":"01-getting-started","page":"/home","mask":["private","projects","words"],"settle":3000,"crop":"[data-block=\"app\"]"},
+    {"name":"around-strip","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","crop":".sv3-nav"},
+    {"name":"around-alerts","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","steps":[{"press":".sv3-alerts","wait":900}],"crop":".sv3-al-menu","pad":6,"escape":1},
+    {"name":"around-queue","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","steps":[{"press":"#mv3-queue","wait":1200}],"crop":".mv3-qpop","pad":1,"escape":1},
+    {"name":"around-window","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","steps":[{"eval":"const t = __byText('.hm-tile .hm-tile-t', 'Blank'); t.closest('a').click();","wait":1200}],"escape":1},
+    {"name":"start-admin-keys","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/admin","crop":[0,46,940,420],"steps":[{"eval":"__byText('.adm-tab', 'API keys').click();","wait":800}]},
+    {"name":"start-admin-local","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/admin","crop":[0,46,1100,600],"steps":[{"eval":"__byText('.adm-tab', 'This computer').click();","wait":3500}],"size":[1100,760],"reload":true}
   ]
 }
