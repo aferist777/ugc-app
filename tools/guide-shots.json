@@ -49,7 +49,8 @@
       ["land","land"],
       ["hit hard by opioids","hit hard by opioids"],
       ["badly","badly"],
-      ["nonsense\\w*","******","re"]
+      ["nonsense\\w*","******","re"],
+      ["like a beginner","like a beginner"]
     ]
   },
   "shots": [
@@ -71,6 +72,12 @@
     {"name":"around-queue","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","steps":[{"press":"#mv3-queue","wait":1200}],"crop":".mv3-qpop","pad":1,"escape":1},
     {"name":"around-window","mask":["private","projects","words"],"settle":3000,"chapter":"02-around-the-app","page":"/home","steps":[{"eval":"const t = __byText('.hm-tile .hm-tile-t', 'Blank'); t.closest('a').click();","wait":1200}],"escape":1},
     {"name":"start-admin-keys","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/admin","crop":[0,46,940,420],"steps":[{"eval":"__byText('.adm-tab', 'API keys').click();","wait":800}]},
-    {"name":"start-admin-local","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/admin","crop":[0,46,1100,600],"steps":[{"eval":"__byText('.adm-tab', 'This computer').click();","wait":3500}],"size":[1100,760],"reload":true}
+    {"name":"start-admin-local","mask":["private","projects","words"],"settle":3000,"chapter":"01-getting-started","page":"/admin","crop":[0,46,1100,600],"steps":[{"eval":"__byText('.adm-tab', 'This computer').click();","wait":3500}],"size":[1100,760],"reload":true},
+    {"name":"lib-media","mask":["private","projects","words"],"settle":3500,"chapter":"03-the-library","page":"/library?shelf=media"},
+    {"name":"lib-folder","mask":["private","projects","words"],"settle":3500,"chapter":"03-the-library","page":"/library?shelf=media","reload":true,"steps":[{"eval":"const s = [...document.querySelectorAll('.mt-fname')].find((e) => e.textContent.trim() === 'IMAGES'); if (!s) throw new Error('no folder IMAGES'); s.closest('.mt-ftile').click();","wait":1500},{"eval":"const s = [...document.querySelectorAll('.mt-fname')].find((e) => e.textContent.trim() === 'Stock'); if (!s) throw new Error('no folder Stock'); s.closest('.mt-ftile').click();","wait":4000}]},
+    {"name":"lib-tile-menu","mask":["private","projects","words"],"settle":3500,"chapter":"03-the-library","steps":[{"press":"#lib-grid .lib-card@3","button":"right","wait":800}],"crop":["#lib-grid .lib-card@3",".u-menu.is-float"],"pad":8,"escape":1},
+    {"name":"lib-viewer","mask":["private","projects","words"],"settle":3500,"chapter":"03-the-library","page":"/library?shelf=media","reload":true,"steps":[{"eval":"const s = [...document.querySelectorAll('.mt-name')].find((e) => e.textContent.trim().startsWith('VIDEO')); if (!s) throw new Error('no node VIDEO'); s.click();","wait":1500},{"eval":"const s = [...document.querySelectorAll('.mt-fname')].find((e) => e.textContent.trim() === 'Uploads'); if (!s) throw new Error('no folder Uploads'); s.closest('.mt-ftile').click();","wait":1500},{"eval":"const s = [...document.querySelectorAll('.mt-fname')].find((e) => e.textContent.trim() === 'Stock'); if (!s) throw new Error('no folder Stock'); s.closest('.mt-ftile').click();","wait":3000},{"press":"#lib-grid .lib-card@1","fy":0.35,"wait":3500},{"drag":".lib-view .rg-cv","from":[0.08,0.5],"to":[0.32,0.5],"wait":500},{"drag":".lib-view .rg-cv","from":[0.52,0.5],"to":[0.8,0.5],"wait":800}],"crop":".lib-view","pad":0,"escape":2},
+    {"name":"lib-characters","mask":["private","projects","words"],"settle":5000,"chapter":"03-the-library","page":"/library?shelf=characters","crop":"#lib-info"},
+    {"name":"lib-scenarios","mask":["private","projects","words"],"settle":3500,"chapter":"03-the-library","page":"/library?shelf=scenarios","steps":[{"eval":"document.querySelector('.lib-sc-arch').click();","wait":800},{"eval":"const b = [...document.querySelectorAll('.lib-srow')].find((e) => /Bowie Kills/.test(e.textContent)); if (!b) throw new Error('no Bowie'); b.click();","wait":1800}],"crop":"#lib-info-body"}
   ]
 }
