@@ -1,14 +1,7 @@
 # UGC Studio - the guide (draft)
 
 This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2),
-The Library (3), Merge (4) and Talking head (5) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
-
-## Voiceover
-
-Your script read in a voice, with B-roll:
-1. In setup pick the script (a scenario or **+ your text**), then **mood & voice** - the voice reads it.
-2. **find B-roll** - the app finds stock videos and pictures (Pixabay) for every sentence and lays them under the words.
-3. Press a B-roll piece on main video to see its sentence, its search words and other choices - a press swaps it.
+The Library (3), Merge (4), Talking head (5) and Voiceover (6) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
 
 ## Highlights
 

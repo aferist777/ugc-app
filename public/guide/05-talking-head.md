@@ -55,7 +55,8 @@ nothing.
 The frames are the pictures the lines are spoken from - the person, in the place, close up, medium or wide.
 
 - The set shows the frames; the lines take theirs from it in turn - the first line the first frame, the second the
-  second, and round again. **scattered** gives each line one frame drawn by its number instead.
+  second, and round again. **scattered** gives each line one frame drawn by its number instead. Drag a frame to put it
+  elsewhere in the turn; the ✕ in its corner takes it out of the turn (✓ brings it back); the right button opens it large.
 - **Frames chat** opens a chat window for the frames: say what the person does and how it is framed; a frame made there
   goes into the set. It keeps the person's face and clothes, and up to two **products** of IMAGES → Props, held exactly
   as on their picture.
