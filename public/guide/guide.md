@@ -1,65 +1,7 @@
 # UGC Studio - the guide (draft)
 
-This is the draft of the app's guide - the part not yet written as chapters of the book. Merge has its own chapter
-(4 Merge). The Assistant's Help mode answers by the chapters and by this draft.
-
-## What UGC Studio is
-
-UGC Studio is a desktop app for making UGC ads and short vertical videos (TikTok, Shorts, Reels) on your own computer.
-Everything it makes lies in its library - a folder on this computer. It talks to AI services with your own keys: kie.ai
-and Replicate (pictures, video, music, the agents), ElevenLabs (voices, music, sound effects), Anthropic (Claude),
-Groq (hearing speech), Cloudflare (a bucket the models fetch reference pictures from), Pixabay (free stock).
-
-What you can make:
-- a **talking head** - a character speaks your script in a place, line by line;
-- a **voiceover** - your script read in a voice, with stock B-roll found for every sentence;
-- **highlights** - a long video (a podcast, a stream, a lecture) cut into vertical shorts with captions and music;
-- anything on a **blank** timeline - clips, pictures, music, captions, effects - rendered to a video.
-
-## The top strip
-
-Every page has the same strip at the top:
-- **Home** - the start page.
-- **Merge** - the editor: projects and their timelines.
-- **3D Studio** - blurred: it is still being built.
-- **Library** - everything the app keeps: characters, media, voices, scenarios, renders.
-- **Assistant** - this chat: **Ideas** for brainstorming, **Help** for questions about the app.
-- On the right: **Queue** (the render queue), the wait, **Alerts** (everything being generated), **Admin** (keys and
-  settings), and in the app window its own buttons: minimise, into a window, quit.
-
-Every window over a page darkens the page behind it. **Escape** closes the topmost window. A window with a head can be
-moved by its head and stretched by its edges; a double press on the head puts it back to its own size.
-
-## Home
-
-Home is made of blocks you can drag anywhere ("Reset layout" puts them back):
-- **New project** - quick starts: **Blank** (a name and a format), **Highlights** (a long video into shorts),
-  **Talking head** (a script and who speaks it), **Voiceover** (a text, a mood, a voice). The press makes the project and
-  opens it in Merge.
-- **Generate** - **Pictures**, **Video**, **Music & sounds**: the generators' windows open over Home; what they make
-  goes into the Library.
-- **Library** - **Character**, **Prop**, **Look**, **Environment**: making the things your videos are built from.
-- **Projects** - the projects you changed last, by kind.
-- **First steps** - what is left to set up (keys, the first character, the speech model).
-- **The app** - your keys and balances, the Telegram bot.
-
-## Admin
-
-- **API keys** - paste each service's key; the app checks it and says whether it works. The Cloudflare key is one key,
-  checked step by step. The Telegram bot is connected here too.
-- **AI settings** - the agents' ladder: which models write prompts, read pictures and answer, in order. If the first
-  does not answer, the next one is asked.
-- **This computer** - whisper (hearing speech on this computer, free) and yt-dlp (downloading videos by a link).
-- **Thanks** - the free software the app is made with.
-
-## Alerts and the Queue
-
-**Alerts** lists every paid generation - pictures, clips, music, sounds, characters, environments, lookbooks - while it
-is made and after. A row says its stage and how long is left; a finished row opens the place the result went; a failed
-row has **retry**. Generations run on the app's side: you can leave the page, the result is still filed.
-Errors show as popups in the top-right corner.
-
-**Queue** lists the renders waiting: open one, **Continue**, **Stop** or **Clear**.
+This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2)
+and Merge (4) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
 
 ## The Library
 
