@@ -59,7 +59,8 @@ The frames are the pictures the lines are spoken from - the person, in the place
   elsewhere in the turn; the ✕ in its corner takes it out of the turn (✓ brings it back); the right button opens it large.
 - **Frames chat** opens a chat window for the frames: say what the person does and how it is framed; a frame made there
   goes into the set. It keeps the person's face and clothes, and up to two **products** of IMAGES → Props, held exactly
-  as on their picture.
+  as on their picture. On its left: the model, the quality and the **Shot** - selfie, half body or full body; the shape
+  is the project's own.
 - On an open line, pick which frame of the set it is spoken from; **Back to the rule** returns it to the set in turn.
   **Crop** reframes a picture as a frame of its own.
 
