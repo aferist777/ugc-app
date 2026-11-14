@@ -42,19 +42,35 @@ What each key does:
 
 | Key | What it is for | Without it |
 |---|---|---|
-| **kie.ai** | The main one: pictures and video in the chats, New Character, the talking head's frames and clips, Suno music, the agents that write prompts | Most generation stops; Replicate can stand in for some of it |
-| **Replicate** | Pictures and video as a second way in; the agents; transcribing sources | The app goes through kie.ai only |
-| **ElevenLabs** | Voices - the talking head and the voiceover read their scripts with it; music from a description, Video to Music, sound effects | No reading, no voices |
+| **kie.ai** | The main one: pictures and video in the chats, the talking head's frames and clips, environments and lookbooks, Suno music, the agents that write prompts | Most generation stops; Replicate can stand in for some of it |
+| **Replicate** | New Character (the portrait, then its 4K sheet); pictures and video as a second way in; the agents; transcribing sources | No New Character; the chats go through kie.ai only |
+| **ElevenLabs** | Voices - the talking head and the voiceover read their scripts with it; music from a description, Video to Music, sound effects | No talking head or voiceover - nothing is read |
 | **Claude (Anthropic)** | Claude as one of the agents (AI settings), and the Assistant | Other agents answer |
 | **Groq** | Hearing the words for captions, fast | This computer hears them (free, slower - see below) |
-| **Cloudflare** | One key for R2 - the place the models fetch your reference pictures and clips from; also keeps your Telegram bot's messages while the app is closed | The models cannot be given a reference |
-| **Pixabay** | Free stock videos and photos - the voiceover's B-roll | No B-roll |
-| **Freesound** | Free sound effects online (SFX → find online…) | The search goes through Openverse |
-| **Telegram bot token** | Your own bot: send it links, photos and videos from your phone - they arrive in REFERENCES | No bot |
+| **Cloudflare** | One key for R2 - the place the models fetch your reference pictures and clips from; also keeps your Telegram bot's messages while the app is closed | The models cannot be given a reference - no talking head, no New Character |
+| **Pixabay** | Free stock videos and photos - the voiceover's B-roll | No voiceover |
+| **Freesound** | Free sound effects online (SFX → find online…) | No online search |
+| **Telegram bot token** | Your own bot: send it links, photos and videos from your phone - they arrive in REFERENCES | No bot; REFERENCES is locked |
 | **OpenRouter** | Not used at the moment | - |
 
-Start with **kie.ai**, **ElevenLabs** and **Cloudflare** - with those three every kind of project works. The others add
-speed or options.
+Start with **kie.ai**, **ElevenLabs** and **Cloudflare** - with those three the generators, talking heads and the agents
+work. New Character also needs **Replicate**, a voiceover **Pixabay**, highlights **Groq** or the free speech model on this
+computer (see below), REFERENCES the **Telegram bot**.
+
+### A place without its key
+
+A part of the app that needs a key you have not added stays closed until you add it. A generator's window - the pictures
+or video chat, music and sounds, New environment, New lookbook, New Character, New prop, the Assistant, SFX's **find
+online…** - does not open: a popup in the top right corner says which key it needs and why. A talking head's or a
+voiceover's setup is blurred under a lock; highlights do not start; REFERENCES is locked without the bot. Inside an open
+chat, attaching a picture or a clip waits for the Cloudflare key, and the writer for an AI key.
+
+![The popup of a place without its key](shots/start-key-popup.webp)
+
+**Open API keys** in the popup opens Admin with the fields it needs lit in gold; **← Back** there returns you to where
+you were. Where one of several keys will do - kie.ai or Replicate, any key of the agents' ladder - the popup names them
+all. Highlights and captions can also hear the words on this computer for free: the popup's **This computer** leads to
+the speech model. A key its service refused counts as none; the popup says why it was refused.
 
 ### Cloudflare, step by step
 

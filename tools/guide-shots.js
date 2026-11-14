@@ -16,8 +16,9 @@
    picture becomes public/guide/shots/<name>.webp.
 
    The library must hold NO KEYS (a test copy): a library whose settings carry a key is refused, so neither a key nor a
-   balance can reach a picture and no step can spend anything. Nothing is written into the library by this tool; the app's
-   own start may write what it always writes.
+   balance can reach a picture and no step can spend anything. The server is started with UGC_KEYS_OPEN=1, so the places
+   that need a key are drawn open as a person with keys sees them (`--base` names a server that must be started so too).
+   Nothing is written into the library by this tool; the app's own start may write what it always writes.
 
    --check  says, without starting anything, which pictures a chapter names that the file has no row for, which rows have
             no picture yet, and which pictures no chapter names.
@@ -105,7 +106,7 @@ async function main() {
       const port = await freePort();
       const log = fs.openSync(path.join(work, 'server.log'), 'w');
       const srv = spawn(process.execPath, [path.join(APP, 'server.js')], {
-        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '' }),
+        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '', UGC_KEYS_OPEN: '1' }),
         stdio: ['ignore', log, log], windowsHide: true });
       kids.push(srv.pid);
       base = 'http://127.0.0.1:' + port;

@@ -1,20 +1,7 @@
 # UGC Studio - the guide (draft)
 
 This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2),
-The Library (3) and Merge (4) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
-
-## Talking head
-
-A character speaks your script in a place. It starts in **setup**:
-1. **who** and **where** - pick a character's look and an environment (each opens a window; "+ new look", "+ new
-   environment" make new ones). Until both are chosen the rest waits.
-2. **mood & voice** - pick the voice (a menu: the character's voices, saved voices, the ElevenLabs library…) and
-   press **generate**: the script is marked up for the mood and read line by line.
-3. **frames** - the frames of the person in the place; **frames chat** makes more (close-up, medium, wide, with your
-   products of Props).
-4. **video** - **kling avatar** or **omnihuman 2.0** makes one clip per line from its frame and its read.
-Each finished clip lands on the timeline in order. A line is never deleted, only taken off. Changing the character puts
-the work aside in the project - casting the old one again brings it back.
+The Library (3), Merge (4) and Talking head (5) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
 
 ## Voiceover
 
