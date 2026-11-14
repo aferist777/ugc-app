@@ -246,6 +246,8 @@ async function _openGen(kind, fromTree) {
         onClose: () => { _genWins[kind] = null; },
       });
     } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
+    // Not opened - a key it needs is missing (the popup said which): nothing is selected behind it.
+    if (!_genWins[kind]) return;
   }
   await _selectBehind(kind);
 }
@@ -283,6 +285,8 @@ function _genLanded(kind, path) {
 // (the event `ugc:lyric-use`, from its tile and viewer): the window on Custom with it, the gallery staying where it is.
 async function _openMusic(fromTree, lyric, stay) {
   if (_shelf !== 'media' || !_tree) return;
+  // No key for either engine: the popup, and the gallery stays where it is.
+  if (!allow('sound', null, { open: 'audio' })) return;
   // `stay` - an Alerts row led to a folder (SFX → My sounds → Generated too): the window opens over it as it is.
   const toMusic = !stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music');
   const at = toMusic ? _tree.node('music') : _musicish(_node) ? _node : null;
@@ -301,6 +305,8 @@ async function _openMusic(fromTree, lyric, stay) {
 const _chatOn = {};
 async function _openChat(which, o) {
   openEarly(which);
+  // Not opened - no key for its models (the popup said so): nothing more is read for it.
+  if (!wanted(which)) return;
   try {
     await ensureChatCss();
     const O = await import('../merge-v3/chat-owner.js');

@@ -20,6 +20,7 @@ import { openPick, closePick, ensurePickCss } from './merge-v3/chat-pick.js';
 import * as Src from './merge-v3/chat-sources.js';
 import { showPicture } from './merge-v3/wk-maker.js';
 import { showError } from './notice.js';
+import { allow } from './key-gate.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -49,8 +50,10 @@ const _blank = () => ({ photo: null, name: '', words: '', busy: false, added: nu
 
 /** The window of New prop - over everything open; the one open already when there is one. */
 export function openNewProp(o) {
+  if (_win && _win.alive()) { _o = o || {}; return _win; }
+  // The product is described by an agent looking at its photo - without an AI key, the popup in place of the window.
+  if (!allow('prop')) return null;
   _o = o || {};
-  if (_win && _win.alive()) return _win;
   ensureCss();
   ensurePickCss();                         // "from IMAGES…" opens the attachment window - its look ready before
   _s = _blank();
