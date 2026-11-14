@@ -112,6 +112,7 @@ import { askName } from './name-box.js';
 import { menuIcons, iconEl } from './icons.js';
 import { int } from './num.js';
 import { since as newsSince } from './references/news.js';
+import * as KG from './key-gate.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -381,6 +382,16 @@ export function createTree(host, o) {
   }
   // A node of REFERENCES or under it - its own rule of what is new.
   const _isRef = (key) => isUnderKey(key, 'references');
+  // REFERENCES is what the person's Telegram bot receives: without the bot's key it is locked - its row and tile carry
+  // the lock, a press on it or on anything under it is the popup (js/key-gate.js), and nothing under it is selected.
+  const _refsShut = (key) => !!key && _isRef(key) && !KG.isOpen('references');
+  const _refsLock = (box) => {
+    const lock = _el('span', 'mt-lock is-key');
+    lock.appendChild(iconEl('lock', 12));
+    lock.title = 'Needs the Telegram bot\'s key - Admin → API keys';
+    box.appendChild(lock);
+  };
+  KG.onChange(() => { if (!loaded || !el.isConnected) return; if (_refsShut(sel)) { if (opt.home) home(true); else select(byKey.has(opt.fallback) ? opt.fallback : (nodes[0] || {}).key, true, true); } else paint(); });
   // Opened: under REFERENCES the node alone sees what lies in it (its folders keep theirs); elsewhere it and
   // everything under it.
   function _seeAll(n, save = true) {
@@ -394,6 +405,7 @@ export function createTree(host, o) {
 
   async function load() {
     let d;
+    try { await KG.ready(); } catch (e) { /* unknown is open */ }
     const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
     try { d = await fetch('/api/library/tree?srcFrom=' + newsSince() + (pk ? '&plinks=' + encodeURIComponent(pk) : '')).then(r => r.json()); }
     catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
@@ -408,13 +420,14 @@ export function createTree(host, o) {
     // A remembered node that is not there any more (a category deleted, renamed elsewhere): its kind, else the fallback -
     // and the page is told, once it has had its first answer (it reads the gallery for the first one itself).
     const before = sel;
-    if (!atHome() && !byKey.has(sel)) {
+    const shut = _refsShut(sel);
+    if (!atHome() && (!byKey.has(sel) || shut)) {
       // A remembered "Uncategorized" is not there either: what it held lies in its kind - a B-roll's in Generated.
       // There is no B-rolls node (VIDEO -> Generated holds the models' folders): a remembered B-roll place that
       // is not there - B-rolls itself, a folder deleted, a model's folder emptied - opens Generated.
       const kind = /^birols(:|$)/.test(String(sel)) ? 'generated' : String(sel).split(':')[0];
       // With `home`, no kind to fall back on is the roots.
-      sel = byKey.has(kind) ? kind : opt.home ? '' : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
+      sel = byKey.has(kind) && !shut ? kind : opt.home ? '' : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
       _lsSet(K_SEL, sel);
     }
     // What is open: at the first answer one path to the node selected (what was kept, when it is one); later
@@ -543,7 +556,8 @@ export function createTree(host, o) {
     const btnCol = _el('span', 'mt-bt');
     side.append(lockCol, btnCol);
     row.appendChild(side);
-    if (n.locked) {
+    if (n.key === 'references' && _refsShut(n.key)) { _refsLock(lockCol); row.classList.add('is-keyshut'); }
+    else if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
       lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
@@ -558,7 +572,7 @@ export function createTree(host, o) {
       add.type = 'button';
       add.tabIndex = -1;
       add.title = 'New folder in ' + (n.label || n.kind);
-      add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
+      add.addEventListener('click', (e) => { e.stopPropagation(); if (_refsShut(n.key)) KG.explain('references', add); else _newFolder(n, add); });
       btnCol.appendChild(add);
     }
     // Environments / Lookbooks / Props: "create", in a blue frame
@@ -594,6 +608,7 @@ export function createTree(host, o) {
 
     // A press selects; the second press of a double one does not read the gallery again.
     row.addEventListener('click', () => {
+      if (_refsShut(n.key)) { KG.explain('references', row); return; }
       const now = Date.now();
       // Right after a top node's press drew the rows again, the row now under the pointer is not pressed.
       if (now < settle.until && n.key !== settle.key) return;
@@ -772,13 +787,14 @@ export function createTree(host, o) {
       t.appendChild(ic);
       const nm = _el('span', 'mt-fname', c.label);
       t.appendChild(nm);
-      if (c.locked) {
+      if (c.key === 'references' && _refsShut(c.key)) { _refsLock(t); t.classList.add('is-keyshut'); }
+      else if (c.locked) {
         const lock = _el('span', 'mt-lock');
         lock.innerHTML = LOCK_SVG;
         t.appendChild(lock);
       }
       t.appendChild(_el('span', 'mt-fn', int(c.count || 0)));
-      t.addEventListener('click', () => openNode(c.key));
+      t.addEventListener('click', () => { if (_refsShut(c.key)) KG.explain('references', t); else openNode(c.key); });
       t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(c, t, e.clientX, e.clientY); });
       _takesDrops(t, c);
       if (movable(c)) _draggable(t, c);
@@ -830,6 +846,7 @@ export function createTree(host, o) {
   // rows stay. -> whether what is open changed.
   function _choose(key, how) {
     if (!byKey.has(key)) return false;
+    if (_refsShut(key)) return false;
     const h = how || {};
     sel = key;
     _lsSet(K_SEL, sel);
@@ -1227,6 +1244,7 @@ export function createTree(host, o) {
   }
 
   function _menu(n, row, x, y) {
+    if (_refsShut(n.key)) { KG.explain('references', row); return; }
     _closeMenu();
     const items = [];
     // A new folder INSIDE the one pressed; none in the references of Environments / Lookbooks.

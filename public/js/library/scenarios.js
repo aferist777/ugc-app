@@ -51,6 +51,7 @@ import { ask } from '../ask.js';
 import { icon } from '../icons.js';
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -876,6 +877,7 @@ window.addEventListener('pagehide', () => {
 async function _makeVideo(a, btn) {
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
   if (!_linesOf(a).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
+  if (!allow('talking', btn)) return;
   btn.disabled = true;
   if (!(await _flushA(a, true))) { btn.disabled = false; return; }
   say('making the project…');

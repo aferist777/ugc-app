@@ -193,7 +193,7 @@ const WIN = chatWindow({ chat: CHAT, id: 'mv3-pc', ...CHAT_WIN.pictures });
 
 /** Every way in - IMAGES' "generate", the gallery's "+" on IMAGES, the lane's right-click, ?open=pictures: its window. */
 export async function openPictures(o) {
-  await WIN.open();
+  if (!(await WIN.open())) return;
   // Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) _api.fromTimeline(o);
 }

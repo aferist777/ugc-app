@@ -67,6 +67,7 @@ import { markField, markText } from './image-words.js';
 import { icon } from '../icons.js';
 import { hoverPlayer } from './hover-play.js';
 import { openViewer } from '../library/viewer.js';
+import * as KG from '../key-gate.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -288,8 +289,8 @@ export function createChat(make) {
     text: () => (_ui ? _ui.ta.value : ''),
     setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
     placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
-    // Whether the writer is on.
-    writing: () => _write,
+    // Whether the writer is on - never while no agent of the ladder can be asked (js/key-gate.js).
+    writing: () => _writeOn(),
     // The writer switched from the description's own control (the video chat's column).
     setWriting: (v) => _setWriting(v),
     saveDraft: () => _draftLater(),
@@ -733,6 +734,7 @@ export function createChat(make) {
     const host = _ui.atts;
     host.textContent = '';
     _linkShown = false;
+    KG.lock(host, 'attach', { line: true });
     const z = _zone();
     host.classList.toggle('is-zone', !!z);
     if (!z) {
@@ -1663,7 +1665,7 @@ export function createChat(make) {
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
-          n: _n, write: _write,
+          n: _n, write: _writeOn(),
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or
           // the place the description names (the frames chat's).
           // From the Library's unbound chat - the Library (chat-owner.js whereOf).
@@ -1715,16 +1717,24 @@ export function createChat(make) {
     p.title = [...box.children].map(c => c.textContent.trim()).filter(Boolean).join(' · ');
     p.hidden = !fig;
   }
+  // The writer as it works now: switched on, and an agent of the ladder can be asked. The choice itself is kept as it
+  // was - a key added, the writer is back as the person left it.
+  const _writeOn = () => _write && KG.isOpen('writer');
   function _paintPen() {
     const pen = _ui && _ui.pen;
     if (!pen) return;
-    pen.classList.toggle('on', _write);
-    pen.classList.toggle('is-on', _write);   // pressed: the selected look
-    pen.title = _write
+    const on = _writeOn();
+    pen.classList.toggle('on', on);
+    pen.classList.toggle('is-on', on);   // pressed: the selected look
+    pen.classList.toggle('is-keyshut', !KG.isOpen('writer'));
+    if (!KG.isOpen('writer')) { pen.title = 'The writer needs an AI key for the agents - press to see which'; return; }
+    pen.title = on
       ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
       : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
   }
   function _setWriting(v) {
+    // Switched on with no agent to write: the popup says which key, and nothing changes.
+    if (v && !KG.allow('writer', _ui && _ui.pen)) { _paintPen(); return; }
     _write = !!v;
     keep(S.keys.write, _write);
     _paintPen();
@@ -2169,6 +2179,7 @@ export function createChat(make) {
       });
       _col.setOwn(_feed);
     }
+    if (stripBox) KG.lock(stripBox, 'attach');
     if (sash) _wireStripSash(sash, stripBox);
 
     for (const input of Object.values(files)) {
@@ -2181,8 +2192,9 @@ export function createChat(make) {
       set.onCount();
     });
     if (pen) {
-      pen.addEventListener('click', () => _setWriting(!_write));
+      pen.addEventListener('click', () => _setWriting(!_writeOn()));
       _paintPen();
+      KG.onChange(() => { if (_ui && _ui.pen === pen) { _paintPen(); if (typeof set.onPen === 'function') set.onPen(_writeOn()); } });
     }
     go.addEventListener('click', () => _send());
     ta.addEventListener('keydown', (ev) => {

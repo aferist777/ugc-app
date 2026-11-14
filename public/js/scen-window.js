@@ -16,6 +16,7 @@
 import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
 import { showError } from './notice.js';
+import { allow } from './key-gate.js';
 
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
@@ -238,6 +239,8 @@ export async function openScenario(summary, hooks = {}) {
       return;
     }
     if (gate() || !hooks.use) return;
+    // A talking head is not made without its keys - the popup says which, and the window stays.
+    if (!allow('talking', use)) return;
     use.disabled = true;
     try {
       await hooks.use(await store());

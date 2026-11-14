@@ -54,6 +54,7 @@ import { createSunoForm, el, api, post, ls, lsSet, copyText, titleOf, qmark, wit
 import { ask } from '../ask.js';
 import { showError } from '../notice.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { allow } from '../key-gate.js';
 
 // ── the modes, in two groups ──────────────────────────────────────────────────
 const GROUPS = { music: ['simple', 'custom', 'lyrics', 'compose', 'video'], sounds: ['sounds', 'sfx'] };
@@ -595,6 +596,8 @@ function _body() {
 
 async function _generate(btn) {
   if (_going || !_cat()) return;
+  // A mode whose engine has no key is not pressed: the popup says which (Suno - kie.ai, the rest - ElevenLabs).
+  if (!allow(_engineOf(S().mode) === 'eleven' ? 'eleven' : 'suno', btn, { open: 'audio' })) return;
   _going = true;
   btn.disabled = true;
   _err = '';
@@ -989,6 +992,8 @@ function _apply(o) {
  */
 export async function open(o) {
   const opt = Object.assign({ mode: 'simple' }, o || {});
+  // Neither Suno's key (kie.ai) nor ElevenLabs': the window does not open - the popup says so (js/key-gate.js).
+  if (!(_win && _win.alive()) && !allow('sound', opt.anchor, { open: 'audio' })) return null;
   if (typeof opt.place === 'function') _o.place = opt.place; else if (!_win) _o.place = null;
   if (opt.anchor) _o.anchor = opt.anchor;
   _form();

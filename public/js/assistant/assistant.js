@@ -27,6 +27,7 @@ import { twoPress } from '../really.js';
 import * as Layers from '../layers.js';
 import { loadingEl, failedEl } from '../ui-state.js';
 import { openGuide, ensureCss } from './guide.js';
+import { allow } from '../key-gate.js';
 
 const GEOM = Object.freeze({ key: 'assistant', resize: true, move: true, keepSize: true, keepPos: true });
 const LS = 'as_state_v1';                     // { mode, cur: {ideas, help}, pick: {ideas, help} }
@@ -120,6 +121,8 @@ export function onOpenChange(fn) { _onOpenChange = fn; }
 /** Opens the window (or, open already, puts the cursor in its field). */
 export async function openAssistant() {
   if (isOpen()) { W.field.focus(); return; }
+  // No model of the agents' ladder can be asked: the popup in its place (js/key-gate.js).
+  if (!allow('assistant')) return;
   await ensureCss();
   const win = openFrame({ name: 'assistant', size: GEN_SIZE, geom: GEOM, cls: 'is-assistant',
     onClose: () => { clearTimeout(_poll); W = null; if (_onOpenChange) _onOpenChange(false); } });

@@ -23,6 +23,7 @@ import { createHighlights, homeOf } from './highlights.js';
 // A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 // A kind with no projects - the shared "nothing here", a row of the list.
 import { emptyEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
@@ -394,9 +395,11 @@ function _kindMenu(anchor) {
   item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
   // Nothing asked about the draft: the view opens in it, and a talking head made from it leaves
   // it a draft.
-  item('talking head', 'from a scenario - pick or write one', () => { openScenarios(); });
+  // A kind whose keys are not all there is not started: the popup says which (js/key-gate.js).
+  item('talking head', 'from a scenario - pick or write one', () => { if (allow('talking', anchor)) openScenarios(); });
   // A long video in, vertical shorts out - a project of its own, and its popup.
   item('highlights', 'a long video → shorts', async () => {
+    if (!allow('highlights', anchor)) return;
     _note('creating…');
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });

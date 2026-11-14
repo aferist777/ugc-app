@@ -26,6 +26,7 @@ import { twoPress } from '../really.js';
 // The question at the button in place of the browser's confirm(); "nothing here" as the
 // shared part (css/app-shell.css .u-empty).
 import { ask } from '../ask.js';
+import { allow } from '../key-gate.js';
 import { emptyEl } from '../ui-state.js';
 
 const el = J.el;
@@ -618,6 +619,8 @@ async function _start(id, kind, start, timing) {
 async function _addFile() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id)) return;
+  // A sample of sound is transcribed on Replicate.
+  if (!allow('sources')) return;
   const input = _win.q('file');
   const file = input.files && input.files[0];
   if (!file) { J.sayJob(_win.q('sjob'), 'Pick a video or audio file first.', true); return; }
@@ -636,6 +639,7 @@ async function _addFile() {
 async function _addLink() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id)) return;
+  if (!allow('sources')) return;
   const input = _win.q('url');
   const url = input.value.trim();
   if (!url) { J.sayJob(_win.q('sjob'), 'Paste a link first.', true); return; }
@@ -653,6 +657,8 @@ const _readTiming = (words) => ({ key: `l2-read|${J.bucket(words)}`, label: `Rea
 async function _read() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id)) return;
+  // The samples are read by the agents' ladder - without a key for it, the popup (js/key-gate.js).
+  if (!allow('scenarios')) return;
   const words = _unread().reduce((s, x) => s + (x.words || 0), 0);
   const done = await _start(id, 'read', () => _post(_nurl(id, '/read')), _readTiming(words));
   if (done) _announce();

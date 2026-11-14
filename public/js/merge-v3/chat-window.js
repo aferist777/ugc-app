@@ -24,6 +24,7 @@
 
 import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { loadingEl } from '../ui-state.js';
+import { allow } from '../key-gate.js';
 
 // Where a chat's root waits while its window is closed: in the document (the chat finds its root by its id when it hides
 // and when it is built), never seen.
@@ -70,7 +71,8 @@ function _frame(name, title, onClose) {
 // "loading…" in it; the chat's open() takes that frame when its sheets, modules and conversation are in. Closed meanwhile (✕, Escape, a press beside it),
 // it is gone and the page opens nothing later (wanted()); pressed again meanwhile, the one window stays.
 // The two chats' names and titles - picchat.js and vidchat.js take theirs from here, so the early window is always theirs.
-export const CHAT_WIN = { pictures: { name: 'pictures chat', title: 'generate image' }, videos: { name: 'video chat', title: 'generate video' } };
+export const CHAT_WIN = { pictures: { name: 'pictures chat', title: 'generate image', gate: 'pictures' },
+  videos: { name: 'video chat', title: 'generate video', gate: 'videos' } };
 const EARLY = CHAT_WIN;
 const _early = new Map();     // a window's name -> { win, park } - shown, not taken by its chat yet
 const _shown = (name) => [..._all].some(w => w.name === name && w.isOpen());
@@ -79,6 +81,8 @@ const _shown = (name) => [..._all].some(w => w.name === name && w.isOpen());
 export function openEarly(which) {
   const E = EARLY[which];
   if (!E || _shown(E.name)) return;
+  // Without a key for its models it does not open at all - the popup instead, and wanted() says no.
+  if (!allow(E.gate, null, { open: which })) return;
   const was = _early.get(E.name);
   if (was && was.win.alive()) return;
   const rec = { win: null, park: null };
@@ -129,8 +133,10 @@ export function chatWindow(o) {
     win = null;
   }
 
-  /** The window, over everything open; opened again while open, it stays as it is. */
+  /** The window, over everything open; opened again while open, it stays as it is. -> false when it could not open: a
+   *  key its models need is missing (the popup says which, js/key-gate.js). */
   async function open() {
+    if (!isOpen() && o.gate && !allow(o.gate, null, { open: o.gate })) return false;
     const r = root();
     if (!isOpen()) {
       // Its early window showing "loading…" is taken as it is; else a frame of its own.
@@ -148,6 +154,7 @@ export function chatWindow(o) {
     }
     if (!o.chat.isOpen()) await o.chat.open();
     o.chat.fit();
+    return true;
   }
 
   const api = { open, close: () => { if (isOpen()) win.close(); }, isOpen, name: o.name };

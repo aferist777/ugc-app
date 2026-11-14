@@ -35,6 +35,7 @@ import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
 import { ask } from '../ask.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 
 const $ = (id) => document.getElementById(id);
 const el = J.el;
@@ -2183,6 +2184,8 @@ async function _paintLib() {
       b.type = 'button';
       b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
       b.addEventListener('click', async () => {
+        // A source is heard on Replicate and its topics found by an agent - without their keys, the popup.
+        if (!allow('sources', b)) return;
         b.disabled = true;
         _addSay('');
         try {
@@ -2205,6 +2208,7 @@ function _addSay(text, err) {
 async function _addLink(input) {
   const url = input.value.trim();
   if (!url) { _addSay('Paste a link first.', true); return; }
+  if (!allow('sources', input)) return;
   _addSay('');
   try {
     const d = await _post('/api/sources/add/link', { url });
@@ -2216,6 +2220,7 @@ async function _addLink(input) {
 async function _addFile(input, titleIn) {
   const file = input.files && input.files[0];
   if (!file) { _addSay('Pick a file first.', true); return; }
+  if (!allow('sources', input)) return;
   // The app's own window says where the file lies; the server copies it from there itself, so leaving the page
   // cuts nothing off. A browser tab cannot say.
   const pathOf = window.ugcWindow && window.ugcWindow.pathOf;

@@ -24,6 +24,7 @@
 
 import { openFrame, GEN_SIZE, POPUP_SIZE } from '../gen-window.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 import { loadingEl, failedEl } from '../ui-state.js';
 import { el, api, ls, lsSet } from './util.js';
 import { sheets } from './windows.js';
@@ -55,6 +56,9 @@ let _cur = null;                   // the popup open: { kind, frame }
 /** A tile pressed: `kind` - 'blank' | 'talking' | 'highlights' | 'voiceover'. */
 export async function openStart(kind) {
   if (_cur && _cur.frame.alive()) return;
+  // A kind whose keys are not all there does not start: the popup instead (js/key-gate.js).
+  const gate = { talking: 'talking', voiceover: 'voiceover', highlights: 'highlights' }[kind];
+  if (gate && !allow(gate)) return;
   try {
     await sheets(SHEETS[kind] || BASE);
     if (kind === 'blank') _blank();

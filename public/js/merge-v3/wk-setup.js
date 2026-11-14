@@ -67,6 +67,7 @@ import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
 import * as FRAG from './wk-fragments.js';
 import { iconEl } from '../icons.js';
+import * as KG from '../key-gate.js';
 import * as GW from '../gen-window.js';
 import { delX } from '../del-x.js';
 import {
@@ -259,6 +260,11 @@ export function paint(host, ctx) {
   _host = host;
   _active = true;
   host.classList.add('is-wk');
+  // Without every key the kind needs, the WHOLE setup - the panel and the stage - is blurred under a lock; a press on it
+  // says which keys (js/key-gate.js). The timeline step stays the person's.
+  const gate = ctx.project && ctx.project.type === 'voiceover' ? 'voiceover' : 'talking';
+  _unlock();
+  _locks = [KG.lock(host, gate), KG.lock(document.getElementById('mv3-stage'), gate, { keep: true, bare: true })];
 
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
@@ -293,6 +299,10 @@ export function paint(host, ctx) {
     setTimeout(() => _openAsked(a), 0);
   }
 }
+
+// The setup's locks (js/key-gate.js), taken away when the step is left.
+let _locks = [];
+function _unlock() { for (const drop of _locks) drop(); _locks = []; }
 
 const _castChar = () => (_chars || []).find(c => c.id === String(_casting().characterId || '')) || null;
 
@@ -924,6 +934,7 @@ function _note(text, bad) {
  *  that was playing, close the windows of this step, and take what it laid over the stage. */
 export function leave() {
   _active = false;
+  _unlock();
   _savingWord();
   VOICE.closeVoices();
   VOICE.leave();
