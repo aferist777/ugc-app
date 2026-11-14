@@ -64,6 +64,24 @@ function _adminLink(nav) {
   if (!OLD_LOOK() && !a.querySelector('.u-ico')) { a.classList.add('has-ico'); a.insertBefore(iconEl('settings', 14), a.firstChild); }
 }
 
+// DONATE, right of Admin: the author's DonationAlerts page, opened in the person's own browser (the window sends every
+// outside link there - desktop/main.js). Not on the 3D Studio's page (OLD_LOOK).
+const DONATE_URL = 'https://www.donationalerts.com/r/fellows';
+const HEART = '<svg class="u-ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13.6 2.7 8.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 5.3 4.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+function _donateLink(nav) {
+  if (OLD_LOOK() || nav.querySelector('.sv3-donate')) return;
+  const admin = nav.querySelector('a[href="/admin"]');
+  const a = document.createElement('a');
+  a.className = 'sv3-donate has-ico';
+  a.href = DONATE_URL;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.title = 'Thank you for using UGC Studio! If it helps you, you can support it on DonationAlerts - and write there what you would like to see in the next updates.';
+  a.innerHTML = HEART;
+  a.appendChild(document.createTextNode('Donate'));
+  if (admin) admin.after(a); else nav.appendChild(a);
+}
+
 // THE RENDER QUEUE on every page, right of the spacer and left
 // of the wait - Merge's markup carries its own button and Merge starts it (js/merge-v3/main.js); on every other page it is put
 // in here and the same module (js/merge-v3/queue.js - the server's /api/mv3q list, open / Continue / Stop / Clear) is brought
@@ -142,6 +160,7 @@ export function initNav() {
   if (!nav) return;
   _homeLink(nav);
   _adminLink(nav);
+  _donateLink(nav);
   _lightCurrent(nav);
   _soon3d(nav);
   _assistantButton(nav);

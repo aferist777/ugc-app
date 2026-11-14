@@ -65,7 +65,7 @@ const _and = (parts) => parts.length < 2 ? parts[0] : parts.slice(0, -1).join(',
 
 // The keys' fields on Admin -> API keys, to light the ones that are missing.
 const FIELDS = { kie: 'kieApiKey', replicate: 'replicateApiKey', elevenlabs: 'elevenLabsApiKey', groq: 'groqApiKey',
-  pixabay: 'pixabayApiKey', cloudflare: 'cloudflareApiToken', telegram: 'telegramBotToken' };
+  pixabay: 'pixabayApiKey', cloudflare: 'cloudflareApiToken', telegram: 'telegramBotToken', freesound: 'freesoundApiKey' };
 const LADDER_KEYS = ['kieApiKey', 'replicateApiKey', 'anthropicApiKey', 'openRouterApiKey'];
 
 function _words(p) {
@@ -117,6 +117,27 @@ export function explain(place, anchor, o) {
   }
   if (keys.length) choices.push({ label: 'Open API keys', kind: 'yes', on: () => { location.href = _href('keys', keys, o); } });
   askChoice(anchor || null, title, lines.length > 1 ? lines : (lines[0] || ''), choices, { stay: true });
+  _toCorner();
+}
+
+// The popup in the top right corner, where the app's notices come (js/notice.js): the same place whatever was pressed -
+// a button at the window's foot or a page with no button at all - below the page's own top bars.
+const BARS = ['.sv3-nav', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
+function _toCorner() {
+  const all = document.querySelectorAll('.u-ask.is-float');
+  const el = all[all.length - 1];
+  if (!el) return;
+  let top = 0;
+  for (const sel of BARS) {
+    const b = document.querySelector(sel);
+    if (!b) continue;
+    const r = b.getBoundingClientRect();
+    if (r.height > 0 && r.top < 160) top = Math.max(top, r.bottom);
+  }
+  el.classList.add('kg-ask');
+  el.style.left = 'auto';
+  el.style.right = '12px';
+  el.style.top = Math.round((top || 40) + 6) + 'px';
 }
 
 /** Whether the place can be used now; when it cannot - the popup, and false. */
@@ -208,6 +229,7 @@ function _drop(L) {
     '.kg-line .kg-box{flex-direction:row;padding:4px 10px;gap:8px;max-width:95%}',
     '.kg-line .kg-go{display:none}',
     '.is-keyshut{opacity:.5}',
+    '.u-ask.kg-ask{width:320px;border-color:var(--gold)}',
   ].join('\n');
   document.head.appendChild(s);
 })();

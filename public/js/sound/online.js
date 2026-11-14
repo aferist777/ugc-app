@@ -14,6 +14,7 @@
 import * as Layers from '../layers.js';
 import { waveEl, secs } from './wave.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 
 const el = (tag, cls, text) => {
@@ -37,6 +38,8 @@ let _last = { q: '', page: 1 };
  * Open the window. opts: { cats: [{ id, label }], cat: the category to offer first ('' - Downloaded), q, stop(), added(item) }
  */
 export function openOnline(opts) {
+  // Without the Freesound key the window does not open - the popup says so (js/key-gate.js).
+  if (!allow('online')) return;
   const o = opts || {};
   if (typeof o.stop === 'function') o.stop();
   const back = el('div', 'snd-back');
