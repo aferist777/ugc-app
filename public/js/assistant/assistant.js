@@ -13,6 +13,8 @@
 //          character's look, a product of IMAGES -> Props or a scenario (js/merge-v3/chat-pick.js with the tree) - the
 //          server reads them as words.
 //
+// Help: "Guide" under "+ New chat" opens the app's book (js/assistant/guide.js); an answer of Help keeps the section of the
+// guide it was answered from - "Guide: <chapter › section>" under it opens the book there.
 // The answer is shown as it is written (routes/assistant.js - lines of JSON); a closed window does not stop it: the
 // server writes it to the end and keeps it, and the chat shows it when opened again. Errors are the corner's popups.
 // Nothing here is a generation: no Alerts row.
@@ -24,6 +26,7 @@ import { showError } from '../notice.js';
 import { twoPress } from '../really.js';
 import * as Layers from '../layers.js';
 import { loadingEl, failedEl } from '../ui-state.js';
+import { openGuide, ensureCss } from './guide.js';
 
 const GEOM = Object.freeze({ key: 'assistant', resize: true, move: true, keepSize: true, keepPos: true });
 const LS = 'as_state_v1';                     // { mode, cur: {ideas, help}, pick: {ideas, help} }
@@ -114,23 +117,10 @@ export const isOpen = () => !!(W && W.win.alive());
 /** `fn(open)` is told when the window opens and closes - the strip's button lights while it is open. */
 export function onOpenChange(fn) { _onOpenChange = fn; }
 
-let _css = null;
-function _ensureCss() {
-  if (_css) return _css;
-  if (document.querySelector('link[data-assistant]')) return (_css = Promise.resolve());
-  const l = document.createElement('link');
-  l.rel = 'stylesheet';
-  l.href = '/css/assistant.css';
-  l.dataset.assistant = '1';
-  _css = new Promise((res) => { l.onload = l.onerror = () => res(); });
-  document.head.appendChild(l);
-  return _css;
-}
-
 /** Opens the window (or, open already, puts the cursor in its field). */
 export async function openAssistant() {
   if (isOpen()) { W.field.focus(); return; }
-  await _ensureCss();
+  await ensureCss();
   const win = openFrame({ name: 'assistant', size: GEN_SIZE, geom: GEOM, cls: 'is-assistant',
     onClose: () => { clearTimeout(_poll); W = null; if (_onOpenChange) _onOpenChange(false); } });
   _build(win);
@@ -166,8 +156,15 @@ function _build(win) {
   const nb = el('button', 'as-new u-btn is-s', '+ New chat');
   nb.type = 'button';
   nb.addEventListener('click', _newChat);
+  // Help's book: the app's guide in its own window, at the place read last.
+  const gb = el('button', 'as-guide u-btn is-s', 'Guide');
+  gb.type = 'button';
+  gb.title = 'The guide to the app - every page, window and button, with pictures';
+  gb.addEventListener('click', () => openGuide());
+  const brow = el('div', 'as-brow');
+  brow.append(nb, gb);
   const list = el('div', 'as-list');
-  left.append(tabs, mrow, nb, list);
+  left.append(tabs, mrow, brow, list);
 
   const right = el('div', 'as-right');
   const head = el('div', 'as-rhead');
@@ -195,7 +192,7 @@ function _build(win) {
   const note = el('div', 'as-note u-status is-line', '');
   right.append(head, thread, atts, box, note);
   body.append(left, right);
-  W = { win, tIdeas, tHelp, model, nb, list, title, price, thread, atts, plus, field, go, note, liveEl: null };
+  W = { win, tIdeas, tHelp, model, nb, gb, list, title, price, thread, atts, plus, field, go, note, liveEl: null };
 }
 
 function _grow() {
@@ -292,6 +289,7 @@ function _paint() {
   W.tIdeas.classList.toggle('is-cur', S.mode === 'ideas');
   W.tHelp.classList.toggle('is-cur', S.mode === 'help');
   W.plus.hidden = S.mode !== 'ideas';
+  W.gb.hidden = S.mode !== 'help';
   W.field.value = S.draft[S.mode] || '';
   W.field.placeholder = S.mode === 'ideas' ? 'Ask for ideas, hooks, music, a prompt…  (Enter sends, Shift+Enter a new line)'
     : 'Ask how to do something in the app…  (Enter sends, Shift+Enter a new line)';
@@ -461,7 +459,7 @@ function _paintChat() {
   const live = id ? S.live.get(id) : null;
   if (!msgs.length && !live) { T.appendChild(_starts()); return; }
   for (const m of msgs) T.appendChild(m.role === 'user' ? _userEl(m) : _answerEl(m));
-  if (live) { W.liveEl = _answerEl({ text: live.text, by: live.by }, true); T.appendChild(W.liveEl); }
+  if (live) { W.liveEl = _answerEl({ text: live.text, by: live.by, stage: live.stage }, true); T.appendChild(W.liveEl); }
   T.scrollTop = T.scrollHeight;
 }
 
@@ -513,11 +511,19 @@ function _answerEl(m, live) {
   }
   const foot = el('div', 'as-afoot');
   const who = m.by ? m.by.label : '';
-  if (live) foot.appendChild(el('span', 'as-by', who ? 'writing · ' + who : 'asking…'));
+  if (live) foot.appendChild(el('span', 'as-by', who ? 'writing · ' + who : (m.stage || 'asking…')));
   else {
     if (who) foot.appendChild(el('span', 'as-by', who));
     if (m.usd != null && m.usd > 0) foot.appendChild(el('span', 'as-cost u-mono', '≈ ' + money(m.usd)));
     else if (m.usage && (m.usage.in || m.usage.out)) foot.appendChild(el('span', 'as-cost u-mono', tokens((m.usage.in || 0) + (m.usage.out || 0) + (m.usage.cacheRead || 0))));
+    // Help's answer: the section of the guide it was answered from - the book opens there.
+    if (m.guide && m.guide.chapter) {
+      const g = el('button', 'as-glink-b', 'Guide: ' + (m.guide.title || 'open'));
+      g.type = 'button';
+      g.title = 'Open the guide at this place';
+      g.addEventListener('click', () => openGuide({ chapter: m.guide.chapter, section: m.guide.section || '' }));
+      foot.appendChild(g);
+    }
     if (m.text) foot.appendChild(copyButton(m.text, 'copy answer'));
   }
   w.appendChild(foot);
@@ -539,7 +545,7 @@ function _paintGo() {
   W.go.classList.toggle('is-main', !busy);
   W.go.title = busy ? 'Stop the answer where it is' : 'Send (Enter)';
   const live = S.cur[S.mode] ? S.live.get(S.cur[S.mode]) : null;
-  W.note.textContent = live ? (live.by ? 'writing · ' + live.by.label : 'asking the model…') : '';
+  W.note.textContent = live ? (live.by ? 'writing · ' + live.by.label : (live.stage || 'asking the model…')) : '';
 }
 
 // The answer being written, drawn again at most once a frame.
@@ -554,7 +560,7 @@ function _paintLive() {
     if (!live) return;
     const T = W.thread;
     const atEnd = T.scrollHeight - T.scrollTop - T.clientHeight < 40;
-    const fresh = _answerEl({ text: live.text, by: live.by }, true);
+    const fresh = _answerEl({ text: live.text, by: live.by, stage: live.stage }, true);
     if (W.liveEl && W.liveEl.isConnected) W.liveEl.replaceWith(fresh);
     else { const s = T.querySelector('.as-starts'); if (s) s.remove(); T.appendChild(fresh); }
     W.liveEl = fresh;
@@ -709,7 +715,8 @@ async function _read(id, res, local) {
       _summaryIn(o.summary);
       _paintList();
       _paintHead();
-    } else if (o.t === 'step' && live) { live.by = o.by; live.text = ''; _visible(id) && _paintLive(); }
+    } else if (o.t === 'stage' && live) { live.stage = o.text; _visible(id) && _paintLive(); }
+    else if (o.t === 'step' && live) { live.by = o.by; live.text = ''; _visible(id) && _paintLive(); }
     else if (o.t === 'delta' && live) { live.text += o.text; _visible(id) && _paintLive(); }
     else if (o.t === 'replace' && live) { live.text = o.text; _visible(id) && _paintLive(); }
     else if (o.t === 'done') {

@@ -105,3 +105,51 @@
 .as-field{ flex:1 1 auto; min-height:36px; max-height:200px; padding:7px 10px; resize:none; font-size:var(--fs-13); line-height:20px }
 .as-go{ height:36px; min-width:76px }
 .as-note{ flex:0 0 auto; min-height:22px; padding:2px var(--sp-5) var(--sp-2); color:var(--faint) }
+
+/* "+ New chat" and, in Help, "Guide" side by side; "Guide: <section>" under a Help answer */
+.as-brow{ display:flex; gap:var(--sp-2) }
+.as-brow .as-new{ flex:1 1 auto }
+.as-brow .as-guide[hidden]{ display:none }
+.as-glink-b{ max-width:60%; padding:0; border:0; background:none; color:var(--muted); cursor:pointer; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; text-decoration:underline; text-decoration-color:color-mix(in oklch, currentColor 40%, transparent);
+  font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font) }
+.as-glink-b:hover{ color:var(--ink); text-decoration-color:currentColor }
+
+/* ── THE GUIDE'S WINDOW (js/assistant/guide.js): the chapters left, the page right ── */
+.gw-body.gd-body{ flex-direction:row }
+.gd-nav{ flex:0 0 268px; min-height:0; overflow-y:auto; padding:var(--sp-3) var(--sp-2); border-right:1px solid var(--border-soft);
+  background:var(--bg) }
+.gd-ch{ display:flex; align-items:baseline; gap:var(--sp-2); width:100%; padding:7px 8px; border:0; border-radius:var(--r-xs);
+  background:none; color:var(--muted); text-align:left; cursor:pointer; font:var(--fw-medium) var(--fs-12)/var(--lh-12) var(--font) }
+.gd-ch:hover{ background:var(--hover); color:var(--ink) }
+.gd-ch.is-cur{ color:var(--ink) }
+.gd-num{ flex:0 0 18px; color:var(--faint); font:var(--fw-regular) var(--fs-11)/var(--lh-11) var(--mono); text-align:right }
+.gd-cht{ flex:1 1 auto; min-width:0 }
+.gd-secs{ display:flex; flex-direction:column; margin:2px 0 var(--sp-2) 26px; border-left:1px solid var(--border-soft) }
+.gd-sec{ padding:4px 8px 4px 10px; border:0; background:none; color:var(--muted); text-align:left; cursor:pointer;
+  font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); margin-left:-1px; border-left:1px solid transparent }
+.gd-sec:hover{ color:var(--ink) }
+.gd-sec.is-cur{ color:var(--ink); border-left-color:var(--ink) }
+.gd-page{ position:relative; flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:var(--sp-6) var(--sp-8) var(--sp-10) }
+.gd-doc{ max-width:780px; margin:0 auto; color:var(--ink); font:var(--fw-regular) 14px/22px var(--font) }
+.gd-doc h1{ margin:0 0 var(--sp-3); font:var(--fw-strong) 26px/32px var(--font) }
+.gd-doc h2{ margin:var(--sp-8) 0 var(--sp-2); padding-top:var(--sp-4); border-top:1px solid var(--border-soft);
+  font:var(--fw-strong) var(--fs-20)/var(--lh-20) var(--font) }
+.gd-doc h3{ margin:var(--sp-5) 0 var(--sp-1); font:var(--fw-strong) var(--fs-15)/var(--lh-15) var(--font) }
+.gd-doc h4{ margin:var(--sp-4) 0 var(--sp-1); font:var(--fw-strong) var(--fs-13)/var(--lh-13) var(--font) }
+.gd-doc p{ margin:0 0 12px }
+.gd-doc ul, .gd-doc ol{ margin:0 0 12px; padding-left:22px }
+.gd-doc li{ margin:3px 0 }
+.gd-doc li::marker{ color:var(--muted) }
+.gd-doc strong{ font-weight:var(--fw-strong) }
+.gd-doc code{ padding:1px 5px; border-radius:var(--r-2xs); background:var(--surface-2); font:var(--fw-regular) 12.5px/1 var(--mono) }
+.gd-doc blockquote{ margin:0 0 12px; padding:8px 12px; border-left:2px solid var(--sel-line); border-radius:0 var(--r-xs) var(--r-xs) 0;
+  background:var(--surface); color:var(--ink) }
+.gd-doc a{ color:var(--ink) }
+.gd-doc hr{ height:1px; margin:var(--sp-6) 0; border:0; background:var(--border-soft) }
+.as-fig{ margin:var(--sp-3) 0 var(--sp-5) }
+.as-fig img{ display:block; max-width:100%; height:auto; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg-deep) }
+.as-fig figcaption{ margin-top:6px; color:var(--muted); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font) }
+.as-table{ width:100%; margin:0 0 12px; border-collapse:collapse; font-size:var(--fs-13) }
+.as-table th, .as-table td{ padding:6px 10px; border-bottom:1px solid var(--border-soft); text-align:left; vertical-align:top }
+.as-table th{ color:var(--muted); font-weight:var(--fw-medium) }
