@@ -4,6 +4,7 @@
 // Ideas (brainstorming videos, music and prompts for the app's generators) and Help (how to do things in the app).
 //
 //   GET    /api/assistant/models              the models that can be asked now, and the one a new chat takes
+//   GET    /api/assistant/guide               the guide's table of contents - its chapters and their sections
 //   GET    /api/assistant/chats?mode=ideas    the chats of a mode, the newest first; `running` - the ids answering now
 //   POST   /api/assistant/chats               { mode, step } -> a new empty chat
 //   GET    /api/assistant/chats/:id           the chat whole; `live` - the answer being written now, so far
@@ -13,6 +14,8 @@
 //                                             JSON (application/x-ndjson) - user, step, delta, replace, done | error
 //   POST   /api/assistant/chats/:id/stop      the answer ends where it is
 //
+// HELP answers in two calls: the model picks 1-3 chapters of the guide by its table of contents, then answers by them
+// alone (lib/assistant-know.js); the answer keeps the section it pointed at (`guide`) - "Guide: <section>" under it.
 // The person's message is kept before anything is asked; the answer is kept when it ends - written whole, stopped or
 // broken off with its reason. A page that goes away does not stop it: the answer is written to the end and kept, and the
 // chat shows it again (`live` while it is being written). Not a generation: no journal row, no Alerts.
@@ -55,6 +58,11 @@ const _stepOk = (s) => !!(s && s.provider && s.model && AGENTS.PROVIDERS.some(p 
 
 router.get('/assistant/models', (req, res) => {
   try { res.json({ success: true, ...(FAKE.on() ? Object.assign(_models(), { fake: true }) : _models()) }); }
+  catch (e) { _bad(res, 500, e.message); }
+});
+
+router.get('/assistant/guide', (req, res) => {
+  try { res.json({ success: true, chapters: KNOW.contents() }); }
   catch (e) { _bad(res, 500, e.message); }
 });
 
@@ -122,10 +130,10 @@ router.post('/assistant/chats/:id/stop', (req, res) => {
   res.json({ success: true, stopped: !!L });
 });
 
-// The conversation as the model reads it: the mode's system text, then every turn - a message with what was attached to
-// it in words before its own text.
-function _messages(c) {
-  const out = [{ role: 'system', content: KNOW.system(c.mode) }];
+// The conversation as the model reads it: the system text, then every turn - a message with what was attached to it in
+// words before its own text.
+function _messages(c, system) {
+  const out = [{ role: 'system', content: system }];
   for (const m of c.messages) {
     if (m.role === 'user') out.push({ role: 'user', content: (m.context ? m.context + '\n\n' : '') + String(m.text || '') });
     else if (String(m.text || '').trim()) out.push({ role: 'assistant', content: String(m.text) });
@@ -155,6 +163,22 @@ async function _fake(c, text, o) {
   }
   return { text: out, by: step, tried: ['fake'], usage: { in: 0, out: 0 }, usd: 0 };
 }
+
+// The fake model's pick: the book's first chapter and its first section.
+function _fakePick() {
+  const ch = KNOW.book()[0];
+  if (!ch) return { chapters: [], at: null, usage: null, usd: 0 };
+  const s = ch.sections[0];
+  return { chapters: [ch.id], at: { chapter: ch.id, section: s ? s.id : '', title: ch.title + (s ? ' › ' + s.title : '') }, usage: null, usd: 0 };
+}
+
+// Two usages, two prices: added up; a price is unknown only when neither call said one.
+const _sumUsage = (a, b) => (!a && !b ? null : ['in', 'out', 'cacheRead', 'cacheWrite'].reduce((o, k) => {
+  const v = (+((a || {})[k]) || 0) + (+((b || {})[k]) || 0);
+  if (v) o[k] = v;
+  return o;
+}, { in: 0, out: 0 }));
+const _sumUsd = (a, b) => (a == null && b == null ? null : (+a || 0) + (+b || 0));
 
 router.post('/assistant/chats/:id/send', async (req, res) => {
   const id = String(req.params.id || '');
@@ -195,15 +219,28 @@ router.post('/assistant/chats/:id/send', async (req, res) => {
     onReplace: (all) => { L.text = all; say({ t: 'replace', text: all }); },
   };
   let r;
+  let pick = null;
   try {
-    r = FAKE.on() ? await _fake(c, text, o) : await AGENTS.stream(_messages(c), o);
+    // Help: first the chapters that answer it.
+    if (c.mode === 'help') {
+      say({ t: 'stage', text: 'looking in the guide…' });
+      if (FAKE.on()) pick = _fakePick();
+      else {
+        const p = await AGENTS.stream(KNOW.pickMessages(c), { step: c.step, signal: ctl.signal, maxTokens: 2000 });
+        pick = Object.assign(KNOW.pickOf(p.text), { usage: p.usage, usd: p.usd });
+      }
+    }
+    if (ctl.signal.aborted) r = { text: '', by: null, tried: [], stopped: true };
+    else if (FAKE.on()) r = await _fake(c, text, o);
+    else r = await AGENTS.stream(_messages(c, c.mode === 'help' ? KNOW.helpSystem(pick.chapters) : KNOW.system(c.mode)), o);
   } catch (e) {
     r = { text: L.text, by: null, tried: [], error: String((e && e.message) || e) };
   }
   _live.delete(id);
   if (L.gone) { if (open) res.end(); return; }
   const answer = { id: STORE.newId('m'), role: 'assistant', text: String(r.text || ''), at: new Date().toISOString(),
-                   by: by(r.by), usage: r.usage || null, usd: r.usd != null ? r.usd : null };
+                   by: by(r.by), usage: _sumUsage(r.usage, pick && pick.usage), usd: _sumUsd(r.usd, pick && pick.usd) };
+  if (pick && pick.at && answer.text) answer.guide = pick.at;
   if (r.cut) answer.cut = true;
   if (r.stopped) answer.stopped = true;
   if (r.error) answer.error = r.error;

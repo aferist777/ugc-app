@@ -1,7 +1,7 @@
 # UGC Studio - the guide (draft)
 
-This is the draft of the app's guide. The Assistant's Help mode answers by it. The full illustrated book will replace it
-chapter by chapter.
+This is the draft of the app's guide - the part not yet written as chapters of the book. Merge has its own chapter
+(4 Merge). The Assistant's Help mode answers by the chapters and by this draft.
 
 ## What UGC Studio is
 
@@ -107,63 +107,6 @@ Archive / Restore).
 Every finished render, by project. The right button on a render, or its viewer, offers **Show in folder** - Explorer
 on its folder with the file picked.
 
-## Merge - the editor
-
-Merge is one editor: the project picker and the project bar on top, the preview on the left, the Library panel on the
-right, the timeline at the bottom.
-
-### Projects
-
-The project picker lists the draft first, then your projects. **+ new project** offers: **blank** (an empty timeline),
-**talking head** (from a scenario), **highlights** (a long video into shorts), **voiceover** (a scenario or your own
-text, read in a voice). With no project open you are in **the draft** - always there: **clear** empties it, **save**
-names it and a new draft takes its place.
-
-### The timeline
-
-Lanes, top to bottom: video lanes, **main video**, **main audio**, other sound lanes, **Subtitles** and text lanes.
-- Drag a file from the Library panel (or from Explorer) onto a lane. A lane takes only its own media; letting go above
-  the top lane or below the bottom one makes a new lane.
-- The playhead moves only by the **ruler**. A press and sweep on the lanes draws a stretch; Shift + a click picks clips
-  one by one.
-- **Delete** over a drawn stretch cuts it out of every lane and moves the rest left.
-- **Cut silence** (the button right of ⏩, or the key **S**): first draw a stretch over a wave or pick clips - with
-  nothing drawn or picked the button only asks you to. The pauses of main audio inside the stretch or the picked clips
-  are shortened to the length you set, on every lane at once, in one undo step. "Silent below" is the loudness counted
-  as silence (auto by default).
-- Several clips in a row picked: **Merge N clips into one?**
-- **Ctrl+C / Ctrl+V** copy picked clips, also into another timeline. **Ctrl+Z** undoes.
-- **Space** plays; with clips picked it plays only them.
-- **Alt + wheel** zooms toward the playhead.
-
-### A clip's settings (the inspector)
-
-Pick a clip and its settings open in groups (one group open at a time):
-- **Crop** - cut the frame on the preview: drag a side; Alt + the middle slides the picture inside. On main video a
-  cropped clip becomes a picture-in-picture over its own blur.
-- **Opacity**, **Color** (brightness, contrast, saturation, gamma), **Blend** mode for clips above main video.
-- **Pitch** of a sound: −12 to +12 semitones, the voice's timbre kept or not.
-- **Effects**: **+ Effect** opens the effects panel - tiles by group (Hook, graphics, cards, screens, glitches, behind the
-  person…); an effect covers the whole clip, **Start / End** set its part. A clip with effects is outlined in violet.
-- **Patterns**: on the main video lane's strip, tick patterns to lay over the whole video.
-
-### Captions
-
-The **captions** view of the Library panel has tabs **presets**, **animation**, **fonts**, **text**:
-- **presets** - styles for the Subtitles lane (Shift mixes several);
-- **animation** - how pages come in and go out;
-- **fonts** - one font or several dealt over the pages;
-- **text** - all lines as one document to correct.
-Captions are heard by Groq, or by whisper on this computer when there is no Groq key (Admin → This computer). Drag a
-caption on the preview to move it; **Rows: one / two** draws pages in two rows. TikTok / Shorts / Instagram screens over
-the preview show what the platform's buttons cover.
-
-### Rendering
-
-**Export** (gold, on the project bar) opens the render window: format, quality, then **Render** (now) or
-**Add to queue** (later, from **Queue**). The video goes into the project's renders folder (Library → **Renders**), with
-an .srt of the subtitles beside it when the project has them.
-
 ## Talking head
 
 A character speaks your script in a place. It starts in **setup**:
@@ -232,7 +175,9 @@ The **Assistant** button (right of Library) opens this chat on any page but the 
 - **Ideas** - brainstorm videos, hooks, scripts and music; ask for prompts - each prompt comes in its own block with
   **copy** and the generator it is for. **+** beside the field attaches a character's look, a product of Props or a
   scenario (the model reads them as words).
-- **Help** - ask how to do something in the app.
+- **Help** - ask how to do something in the app. Help first finds the chapters of this guide that answer, then answers
+  by them; **Guide: <chapter › section>** under its answer opens the guide at that place. **Guide** beside "+ New chat"
+  (in Help) opens the guide where you stopped reading - chapters on the left, the page with its pictures on the right.
 - The **Model** list chooses who answers; a chat keeps its model. Each chat shows what it cost.
 - Enter sends, Shift+Enter makes a new line; **Stop** ends an answer. A double press on a chat's name renames it; its ✕
   pressed twice deletes it.
