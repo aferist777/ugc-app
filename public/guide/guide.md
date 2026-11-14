@@ -1,19 +1,7 @@
 # UGC Studio - the guide (draft)
 
 This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2),
-The Library (3), Merge (4), Talking head (5) and Voiceover (6) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
-
-## Highlights
-
-A long video into vertical shorts:
-1. **+ new project → highlights** (or Home → Highlights). The window has two steps: the video (a link, a file of this
-   computer or a video of the Library) and the kind (auto, podcast · interview, true crime · bodycam, documentary,
-   lecture, fragmentation), the length and how many; then the music moods and the captions' style.
-2. The app hears the words, an agent finds the moments, and each becomes a 9:16 fragment with captions, its frame
-   following the faces (or the speaker).
-3. Tick fragments to change their settings together (Subtitles, Main video, Main audio, Music · for all N) and
-   **Render N** to render them all.
-A file of this computer is not copied into the library - it is read where it lies.
+The Library (3), Merge (4), Talking head (5), Voiceover (6) and Highlights (7) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
 
 ## The generators
 
