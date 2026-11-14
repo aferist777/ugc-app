@@ -8,7 +8,8 @@
 
    Every picture of the guide (public/guide/<nn>-<name>.md, `![…](shots/<name>.webp)`) is a row of tools/guide-shots.json:
    the page it is taken on, the steps that bring the app to the moment (eval, click - the page's own events; press, hover
-   - the mouse's real ones, `button` "right" or a `double` press; key; wait; waitFor), what is put in
+   - the mouse's real ones, `button` "right" or a `double` press; drag - the real mouse from one point of an element to
+   another; key; wait; waitFor), what is put in
    place of private words in the frame (the file's `masks`, by name), and what is cut out of the window (`crop`: a
    selector - "sel@2" its third match -, several - the box round them all -, a box [x, y, w, h], or the whole window). The app is the one in this folder: its server is started on the library given (or `--base` names one
    already running), a HIDDEN Electron window - the size and scale of the file - goes through the rows in order, and each
@@ -198,7 +199,8 @@ const HELPERS = `(() => {
     await document.fonts.ready;
     const imgs = [...document.images].filter((i) => i.offsetParent && i.getAttribute('src'));
     await Promise.all(imgs.map((i) => (i.complete && i.naturalWidth) ? 1 : new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); setTimeout(r, 8000); })));
-    await Promise.all(imgs.map((i) => (i.decode ? i.decode().catch(() => {}) : 1)));
+    // Decoded before the frame - only what has loaded (a lazy picture out of view never loads), and never longer than 5 s.
+    await Promise.all(imgs.filter((i) => i.complete && i.naturalWidth && i.decode).map((i) => Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 5000))])));
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return true;
   };
@@ -252,7 +254,9 @@ function camera() {
         const [cw, ch] = win.getContentSize();
         if (cw !== size[0] || ch !== size[1]) win.setContentSize(size[0], size[1]);
         if (s.page && (s.page !== at || s.reload)) {
-          await wc.loadURL(job.base + s.page);
+          // A shelf of many large pictures may keep the page loading for minutes: past 20 s the steps go on,
+          // and only the pictures in view are waited for (__settled).
+          await Promise.race([wc.loadURL(job.base + s.page).catch(() => {}), sleep(s.loadMs || 20000)]);
           at = s.page;
           await sleep(s.settle || 1500);
         }
@@ -276,6 +280,20 @@ function camera() {
               wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button, clickCount, modifiers: st.mods || [] });
               wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button, clickCount, modifiers: st.mods || [] });
             }
+          } else if (st.drag) {
+            // A drag with the real mouse inside one element, from one point to another (fractions of its box) - a band, a
+            // fragment drawn over a wave.
+            const at = (p) => js('__at(' + JSON.stringify(st.drag) + ', ' + p[0] + ', ' + p[1] + ')');
+            const a0 = await at(st.from || [0.2, 0.5]);
+            const b0 = await at(st.to || [0.8, 0.5]);
+            if (!a0 || !b0) throw new Error('nothing to drag on: ' + st.drag);
+            wc.sendInputEvent({ type: 'mouseMove', x: a0.x, y: a0.y });
+            wc.sendInputEvent({ type: 'mouseDown', x: a0.x, y: a0.y, button: 'left', clickCount: 1 });
+            for (let k = 1; k <= 10; k++) {
+              wc.sendInputEvent({ type: 'mouseMove', x: Math.round(a0.x + (b0.x - a0.x) * k / 10), y: Math.round(a0.y + (b0.y - a0.y) * k / 10), modifiers: ['leftButtonDown'] });
+              await sleep(25);
+            }
+            wc.sendInputEvent({ type: 'mouseUp', x: b0.x, y: b0.y, button: 'left', clickCount: 1 });
           } else if (st.key) {
             for (const type of ['keyDown', 'char', 'keyUp']) if (type !== 'char' || st.key.length === 1) wc.sendInputEvent({ type, keyCode: st.key, modifiers: st.mods || [] });
           }

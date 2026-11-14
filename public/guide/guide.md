@@ -1,53 +1,7 @@
 # UGC Studio - the guide (draft)
 
-This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2)
-and Merge (4) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
-
-## The Library
-
-The Library has shelves on the left: **Characters**, **Media**, **Voices**, **Scenarios**, **Renders**.
-
-### Media - the media tree
-
-**Media** opens on its roots: **REFERENCES**, **IMAGES**, **VIDEO**, **AUDIO**.
-- **REFERENCES** - what your Telegram bot brought in (links and media from your phone), and YouTube videos downloaded as
-  sources.
-- **IMAGES** - **Environments** and **Lookbooks** (what their generators made), **Props** (your products), **Generated**,
-  **Screenshots**, **Stock**, and your own folders.
-- **VIDEO** - **Generated** (a folder per video model, and Talking heads), **Hooks**, **Uploads** (your files, Stock).
-- **AUDIO** - **Music** (with **highlights** moods and **Lyrics**), **SFX** (Favorites, Built-in, My sounds).
-
-How the tree works:
-- A press on a root opens it; deeper, a press selects a folder and a double press opens it.
-- **generate** (gold) beside IMAGES, VIDEO and AUDIO opens that generator's window. **create** beside Environments,
-  Lookbooks and Props opens their makers.
-- **New folder**: the "+" of a kind, or the right button on a folder or the gallery's empty space. Folders go inside
-  folders; drag a folder onto another to move it. A few folders are locked (Generated, Screenshots and the references of
-  Environments and Lookbooks) - they are filled by the app.
-- Tiles: Ctrl and Shift pick several, a band picks a group, **Delete** deletes, drag them onto a folder to move them,
-  or use the right button: **Move to…**, ★, **Delete**. The right button on one picture also offers **Animate** or
-  **Change** (a chat with it); on a clip **Continue** or **As a reference**.
-- A press on a tile opens it large. Under a video: **Cut** pieces out of it (the bar of fragments, **Scenes**, **Save…**),
-  and the right button: **Save audio**, **Save video as…**.
-- Music plays in the player under the gallery; **Cut…** on a track or a sound cuts a piece of it into a new file.
-
-### Characters
-
-**New Character** makes a character: a portrait from your description (or a photo), then a 4K sheet of the character -
-the reference every frame of a talking head keeps. A character can have several **looks** (outfits), dressed from a
-lookbook. Its voices are ElevenLabs voices.
-
-### Scenarios
-
-Scripts for talking heads and voiceovers. **New scenario** is a menu: **blank** (write it yourself) or **narrator**
-(the generator: hooks of forty types, a script in a narrator's voice, rewrites). A source - a YouTube video or a file -
-gives the generator topics. Scenarios no longer needed go into the **Archive** at the bottom of the list (right button:
-Archive / Restore).
-
-### Renders
-
-Every finished render, by project. The right button on a render, or its viewer, offers **Show in folder** - Explorer
-on its folder with the file picked.
+This is the draft of the app's guide - the part not yet written as chapters of the book. Getting started (1), Around the app (2),
+The Library (3) and Merge (4) have their own chapters. The Assistant's Help mode answers by the chapters and by this draft.
 
 ## Talking head
 
@@ -105,11 +59,6 @@ style, lyrics), Lyrics, From a description, Video to Music. **SOUNDS**: Sounds, 
 
 **create** beside Environments / Lookbooks in the tree: a photo and a sentence → a new place or outfit. **Props**:
 **New prop** adds a product photo with its name and your words; the app writes its description.
-
-## The Telegram bot
-
-Admin → API keys: give the bot's key and pair it with the code. Send it links and media from your phone - they arrive in
-**REFERENCES** (a post is one tile). With the Cloudflare key working, messages wait for you while the app is closed.
 
 ## The Assistant
 
