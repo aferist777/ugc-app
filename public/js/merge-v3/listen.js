@@ -20,6 +20,7 @@
 
 import * as Store from './store.js';
 import { soundPieces } from '../captions/heard.js';
+import { allow } from '../key-gate.js';
 
 const POLL_MS = 1500;
 
@@ -213,6 +214,9 @@ function _schedule() {
 export async function start(opts) {
   const k = Store.key();
   if (!k) return;
+  // Nobody to hear the words - no Groq key and no speech model on this computer: the popup says so (js/key-gate.js).
+  // Laying again from the answers kept, or downloading the model, needs neither.
+  if (!(opts && (opts.stored || opts.download)) && !allow('hearing')) return;
   const s = _get(k);
   s.refused = '';
   if (!soundPieces(Store.timeline()).length) {

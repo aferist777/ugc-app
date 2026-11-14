@@ -579,6 +579,29 @@ if (host) {
   $('adm-keys-save')?.addEventListener('click', (e) => save(e.currentTarget));
   $('adm-keys-check')?.addEventListener('click', () => health(true));
   load().then(() => health(false));
+  backAndNeed();
+}
+
+// Come from a place that needs a key (js/key-gate.js: ?back=<that page>&need=<fields>): "← Back" leads there again, and
+// the fields it needs are lit until one is typed into. Read once - a tab's press rewrites the address without its query.
+// Only a page of this app is a way back.
+function backAndNeed() {
+  let q = null;
+  try { q = new URLSearchParams(location.search); } catch (e) { return; }
+  const back = q.get('back') || '';
+  const btn = $('adm-keys-back');
+  if (btn && /^\/(?!\/)/.test(back) && !/^\/admin\b/.test(back)) {
+    btn.hidden = false;
+    btn.title = 'Back to where the key was needed';
+    btn.addEventListener('click', () => { location.href = back; });
+  }
+  const need = String(q.get('need') || '').split(',').filter(k => byKey.has(k));
+  need.forEach((k, i) => {
+    const row = byKey.get(k);
+    row.wrap.classList.add('is-needed');
+    row.field.addEventListener('input', () => row.wrap.classList.remove('is-needed'), { once: true });
+    if (!i) setTimeout(() => row.wrap.scrollIntoView({ block: 'center' }), 0);
+  });
 }
 
 })();

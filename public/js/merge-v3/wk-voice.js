@@ -45,6 +45,7 @@ import * as GW from '../gen-window.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { icon } from '../icons.js';
+import { allow } from '../key-gate.js';
 
 const PAGE = 20;                       // results per page
 
@@ -958,6 +959,7 @@ let _vwin = null;                        // { win, api }
 export const voicesOpen = () => !!(_vwin && _vwin.win.alive());
 export function openVoices(api, o = {}) {
   if (voicesOpen()) { paintVoices(api); return _vwin.win; }
+  if (!allow('voices')) return null;
   languageFor(String(o.key || ''), o.lang);
   // Moved and stretched; its size kept.
   const win = GW.openFrame({

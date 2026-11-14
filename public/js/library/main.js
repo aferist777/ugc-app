@@ -59,6 +59,7 @@ import { showError } from '../notice.js';
 // at the tile a menu or the Delete key was about; "nothing here" and "did not load" as the shared
 // parts (css/app-shell.css .u-empty, .u-failed).
 import { ask } from '../ask.js';
+import { allow } from '../key-gate.js';
 import { icon } from '../icons.js';
 import { int } from '../num.js';
 import { emptyEl, failedEl } from '../ui-state.js';
@@ -520,7 +521,8 @@ function _newMenu(anchor) {
     menu.appendChild(b);
   };
   item('blank', 'write the lines yourself', _newBlank);
-  item('narrator', 'generate a script in a narrator’s voice - from a source or a topic', () => _openMaker());
+  // The generator writes with the agents' ladder: without a key for it the popup instead (js/key-gate.js).
+  item('narrator', 'generate a script in a narrator’s voice - from a source or a topic', () => { if (allow('scenarios')) _openMaker(); });
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.left))) + 'px';

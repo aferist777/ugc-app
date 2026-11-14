@@ -20,4 +20,11 @@ router.get('/keys/health', async (req, res) => {
   }
 });
 
+// GET /api/keys/gates - which places of the app can be used with the keys there are, and what each one lacks
+// (lib/key-gates.js). Read from the cached verdict and the settings, never a probe: a page asks it on every load.
+router.get('/keys/gates', (_req, res) => {
+  try { res.json(require('../lib/key-gates').state()); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 module.exports = router;

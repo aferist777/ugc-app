@@ -2649,7 +2649,7 @@ const WIN = chatWindow({ chat: CHAT, id: 'mv3-vc', cls: 'is-video', ...CHAT_WIN.
 
 /** Every way in - VIDEO's "generate", the lane's right-click, ?open=videos, Alerts: its window. */
 export async function openVideos(o) {
-  await WIN.open();
+  if (!(await WIN.open())) return;
   // Opened with a thing from the timeline (js/merge-v3/tl-gen.js).
   if (o && o.attach && _api) await _api.fromTimeline(o);
 }

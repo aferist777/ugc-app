@@ -43,6 +43,7 @@ import { openFrame, GEN_SIZE } from '../gen-window.js';
 // "Start over" asks at its button in place of the browser's confirm().
 import { showError } from '../notice.js';
 import { ask } from '../ask.js';
+import { allow } from '../key-gate.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
@@ -851,6 +852,7 @@ let _opened = false;
 export function open() {
   const host = $('lib-chmake');
   if (!host) return;
+  if (!isOpen() && !allow('character', null, { back: '/library?shelf=characters&make=1' })) return;
   if (!_built) _build();
   if (!isOpen()) {
     // Moved and stretched; its size kept, its place not (it opens in the middle).

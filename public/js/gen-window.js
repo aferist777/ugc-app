@@ -36,6 +36,7 @@ import { showPicture, tileMenu, MIN_WORDS_ALONE, nonsense } from './merge-v3/wk-
 import { delX } from './del-x.js';
 import { showError } from './notice.js';
 import { emptyEl, loadingEl, failedEl } from './ui-state.js';
+import { allow } from './key-gate.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -332,6 +333,8 @@ export function paintBench(host, o) {
 /** A window of the bench alone. */
 export function openGenerator(o) {
   const kind = KINDS[o && o.kind] ? o.kind : 'environment';
+  // Without the keys it needs the window does not open: the popup says which (js/key-gate.js). -> null.
+  if (!allow(kind, o && o.anchor, { open: kind === 'environment' ? 'envmake' : 'lbmake' })) return null;
   const win = openFrame({ name: KINDS[kind].title, anchor: o.anchor, cls: 'is-gen', onClose: o.onClose });
   win.setCrumbs([{ label: KINDS[kind].title }]);
   paintBench(win.body, Object.assign({}, o, { kind }));

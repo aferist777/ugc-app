@@ -12,6 +12,8 @@
 import { mountAlerts } from './alerts-bell.js';
 import { mountUpdate } from './app-update.js';
 import { iconEl } from './icons.js';
+// Which places the keys there are open - read on every page from its first moment (js/key-gate.js).
+import './key-gate.js';
 
 // The 3D Studio's page keeps its whole look - its strip too: nothing below adds to it there.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');

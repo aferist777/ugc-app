@@ -45,6 +45,7 @@ import { fontPicker, fontLabel } from './font-tiles.js';
 // Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 
 const GEOM = Object.freeze({ key: 'highlights', resize: true, move: true, keepSize: true, keepPos: true });
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -74,6 +75,8 @@ export function closePopup() { if (_win) _win.frame.close(); }
  */
 export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   if (_win) return;
+  // Nobody to hear the words or to find the moments: the whole way in is closed - the popup says what is missing.
+  if (!allow('highlights')) return;
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'Up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
   // The kinds - the server's: auto, podcast · interview, documentary, fragmentation (its own lengths, no count).

@@ -207,6 +207,10 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`║  http://localhost:${PORT}                 ║`);
   console.log(`╚════════════════════════════════════════╝`);
 
+  // Every key asked once, soon after the start (free calls, lib/keys-health.js): a key that was refused closes the places
+  // that need it at once (lib/key-gates.js) rather than after the first visit to Home or Admin.
+  setTimeout(() => { require('./lib/keys-health').getHealth().catch((e) => console.warn('[keys] the first check failed:', e.message)); }, 1500);
+
   // Defer heavy startup tasks so server is responsive immediately
   setTimeout(() => {
     // Generate missing thumbnails for all image directories in the background: the asset shelves,

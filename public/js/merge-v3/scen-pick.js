@@ -37,6 +37,7 @@ import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
 // A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
+import { allow } from '../key-gate.js';
 // The list being read, empty, or not read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { REALLY } from '../really.js';
@@ -104,6 +105,7 @@ export async function openScenarios() {
  * draft, opened on its setup - its script column offers the scenarios and "+ your text" (js/merge-v3/vo-script.js).
  */
 export async function openVoiceover() {
+  if (!allow('voiceover')) return '';
   return _open(await API.voiceoverDraft());
 }
 
@@ -369,6 +371,7 @@ function _paintList() {
     go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
       if (s.archived) return _archive(s, false);
+      if (!allow('talking', go)) return;
       _disarm();
       for (const b of acts.children) b.disabled = true;     // the cross waits for the project too
       go.textContent = '…';
@@ -486,11 +489,14 @@ function _disarm() {
 // this view as its own: back in the draft, the scenarios are where they were.
 // It THROWS when it cannot: who called this is who knows where to put the news - a button in
 // the list, a line in the form.
+// Without the keys a talking head needs nothing is made: the popup says which, and '' comes back.
 async function _use(scenarioId) {
+  if (!allow('talking')) return '';
   return _open(await API.talkingHead(scenarioId));
 }
 // A scenario into THE voiceover draft - its lines in their own language, never translated - and the draft opened.
 async function _toVoiceover(scenarioId) {
+  if (!allow('voiceover')) return '';
   const key = await API.voiceoverDraft();
   await API.voiceoverScript(WK.projectIdOf(key), { scenarioId });
   return _open(key);

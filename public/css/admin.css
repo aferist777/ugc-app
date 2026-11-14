@@ -40,6 +40,9 @@
 .adm-keys{ padding:var(--sp-3) var(--sp-4); }
 .bk-row{ margin-bottom:6px; }
 .bk-row:last-child{ margin-bottom:0; }
+/* a field a closed place needs (js/key-gate.js -> ?need=): a gold edge until something is typed into it */
+.bk-row.is-needed{ box-shadow:inset 3px 0 0 var(--gold); border-radius:var(--r-xs); }
+.bk-row.is-needed .bk-field{ border-color:var(--gold); }
 /* One line per key: label, the field at a fixed width, the x, and to the right of it the
    verdict with the description under it - the row is as tall as the description makes it. */
 .bk-line{ display:flex; align-items:flex-start; gap:6px; }
