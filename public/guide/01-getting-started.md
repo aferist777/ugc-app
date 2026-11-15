@@ -97,9 +97,9 @@ the service tells one: kie.ai's credits, ElevenLabs' characters left.
 ## Hearing speech on this computer
 
 Captions need the words that are spoken. With a Groq key they are heard by Groq in seconds. Without one - or when Groq
-cannot be asked - this computer hears them, for free, with **whisper**. Its speech model (574 MB) is downloaded once - by
-itself, the first time this computer hears something, or ahead of time on **Admin → This computer** (or the line in First
-steps). Merge also offers it once, the first time you open it.
+cannot be asked - this computer hears them, for free, with **whisper**. Its speech model (574 MB) is downloaded once - the
+first time you ask this computer to hear, or ahead of time on **Admin → This computer** (or the line in First steps); what
+hears by itself never downloads it. Merge also offers it once, the first time you open it.
 
 ![Admin → This computer](shots/start-admin-local.webp)
 
