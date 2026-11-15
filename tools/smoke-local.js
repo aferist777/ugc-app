@@ -75,7 +75,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg',
                  '/js/merge-v3/sound-host.js', '/css/sound-window.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights',
                  // the assistant in the top strip: its window, its reader of answers, its look, the guide Help answers by
-                 '/js/assistant/assistant.js', '/js/assistant/md.js', '/css/assistant.css', '/guide/guide.md',
+                 '/js/assistant/assistant.js', '/js/assistant/md.js', '/css/assistant.css', '/guide/01-getting-started.md',
                  // the guide's window, its table of contents, a chapter and one of its pictures
                  '/js/assistant/guide.js', '/js/assistant/guide-toc.js', '/guide/04-merge.md', '/guide/shots/merge-page.webp'];
 // Where an address must land: the app opens on Home.

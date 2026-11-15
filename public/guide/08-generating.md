@@ -18,7 +18,7 @@ Merge, into **THIS PROJECT** too.
 ![The pictures chat: the settings on the left, the conversation in the middle, the folders on the right](shots/gen-pictures.webp)
 
 - **On the left** - **Aggregator** (kie.ai or Replicate), **Model** (nano-banana-2, nano-banana-2-lite, seedream-4.5,
-  gpt-image-2.5, grok-imagine-image-2), **Quality** (1K, 2K, 4K - as the model offers), **Shape** (9:16, 16:9, 1:1 and
+  gpt-image-2.5-sunburst, grok-imagine-image-2), **Quality** (1K, 2K, 4K - as the model offers), **Shape** (9:16, 16:9, 1:1 and
   more). "If it refuses" names the other aggregator and its price: a refused picture is asked there.
 - **In the middle** - the conversation. **Pictures 0 / 5** above the box are the pictures attached: **+** opens a window to
   pick them - characters and their looks, REFERENCES, IMAGES, or a file from this computer (it goes into IMAGES first).
