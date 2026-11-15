@@ -18,6 +18,9 @@
    The library must hold NO KEYS (a test copy): a library whose settings carry a key is refused, so neither a key nor a
    balance can reach a picture and no step can spend anything. The server is started with UGC_KEYS_OPEN=1, so the places
    that need a key are drawn open as a person with keys sees them (`--base` names a server that must be started so too).
+   What a library with no keys cannot have at all - an assistant's conversation - a row takes from RECORDED ANSWERS:
+   `answers` { "<address>": "<file>" } - a GET of exactly that address is answered with the JSON of tools/guide-answers/<file>,
+   recorded once on a library with keys.
    Nothing is written into the library by this tool; the app's own start may write what it always writes.
 
    --check  says, without starting anything, which pictures a chapter names that the file has no row for, which rows have
@@ -93,6 +96,14 @@ async function main() {
   const only = new Set(String(arg('--only') || '').split(',').map((s) => s.trim()).filter(Boolean));
   const shots = list.shots.filter((s) => !only.size || only.has(s.name));
   if (!shots.length) throw new Error('no row by those names');
+  // A row's recorded answers: { "<address>": "<file of tools/guide-answers/>" } - read here, handed to the page as they are.
+  for (const s of shots) {
+    if (!s.answers) continue;
+    s.answerData = {};
+    for (const [url, file] of Object.entries(s.answers)) {
+      s.answerData[url] = JSON.parse(fs.readFileSync(path.join(__dirname, 'guide-answers', path.basename(file)), 'utf8'));
+    }
+  }
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'guide-shots-'));
   const kids = [];
   try {
@@ -230,6 +241,20 @@ const HELPERS = `(() => {
     return { x: Math.round(b.x + (fx == null ? 0.5 : fx) * b.width), y: Math.round(b.y + (fy == null ? 0.5 : fy) * b.height) };
   };
   window.__byText = (sel, text) => [...document.querySelectorAll(sel)].find((e) => e.textContent.trim() === text) || null;
+  // Recorded answers: a GET of exactly one of these addresses (path and query) is answered with its JSON instead of the
+  // server's - what a library with no keys cannot show, recorded once on a library with them.
+  window.__answer = (map) => {
+    if (!window.__fetch0) window.__fetch0 = window.fetch;
+    const f0 = window.__fetch0;
+    window.fetch = (u, o) => {
+      const url = String((u && u.url) || u).replace(location.origin, '');
+      const get = !o || !o.method || String(o.method).toUpperCase() === 'GET';
+      return get && Object.prototype.hasOwnProperty.call(map, url)
+        ? Promise.resolve(new Response(JSON.stringify(map[url]), { headers: { 'Content-Type': 'application/json' } }))
+        : f0(u, o);
+    };
+    return true;
+  };
   return true;
 })()`;
 
@@ -264,6 +289,7 @@ function camera() {
         await js(HELPERS);
         const rules = [].concat(...(s.mask || []).map((m) => job.masks[m] || []), s.rules || []);
         if (rules.length) await js('__mask(' + JSON.stringify(rules) + ')');
+        if (s.answerData) await js('__answer(' + JSON.stringify(s.answerData) + ')');
         for (const st of s.steps || []) {
           if (st.eval) await js('(async () => { ' + st.eval + ' })()');
           else if (st.click) await js('__click(' + JSON.stringify(st.click) + ', ' + JSON.stringify(st.opts || {}) + ')');

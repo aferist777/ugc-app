@@ -1,0 +1,22 @@
+{
+ "success": true,
+ "chats": [
+  {
+   "id": "cmwgtod4o0fba01",
+   "mode": "help",
+   "title": "How do I cut the long pauses out of my…",
+   "named": false,
+   "step": {
+    "provider": "kie",
+    "model": "gemini-3-8-flash-openai"
+   },
+   "createdAt": "2026-11-14T19:52:29.304Z",
+   "updatedAt": "2026-11-14T19:53:04.084Z",
+   "n": 2,
+   "usd": 0.0015500000000000002,
+   "tokens": 6122,
+   "priced": true
+  }
+ ],
+ "running": []
+}
