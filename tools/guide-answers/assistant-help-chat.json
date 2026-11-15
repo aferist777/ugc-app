@@ -1,0 +1,63 @@
+{
+ "success": true,
+ "chat": {
+  "id": "cmwgtod4o0fba01",
+  "mode": "help",
+  "title": "How do I cut the long pauses out of my…",
+  "named": false,
+  "step": {
+   "provider": "kie",
+   "model": "gemini-3-8-flash-openai"
+  },
+  "createdAt": "2026-11-14T19:52:29.304Z",
+  "updatedAt": "2026-11-14T19:53:04.084Z",
+  "messages": [
+   {
+    "id": "mmwgtod59beb1e9",
+    "role": "user",
+    "text": "How do I cut the long pauses out of my voiceover?",
+    "at": "2026-11-14T19:52:29.325Z",
+    "attached": [],
+    "context": ""
+   },
+   {
+    "id": "mmwgtp3yq5c4346",
+    "role": "assistant",
+    "text": "To shorten the pauses in your voiceover read, use **Cut silence** in Merge:\n\n1. **Pick the read** on the timeline (press the clip on the audio lane), or **press and sweep** to draw a stretch over the audio wave.\n2. Press **Cut silence** (the scissors button in the timeline's head) or press the key **S**.\n3. In the window that opens, set:\n   - **Keep pauses up to** — the maximum length allowed for a pause.\n   - **Silent below** — how quiet counts as silence (set to **auto** by default).\n   The window will show how many pauses will be cut and how much time will be saved, marking them red on the lanes.\n4. Press **Cut**.\n\nThis shortens the pauses across the lanes at once in a single undo step.",
+    "at": "2026-11-14T19:53:04.082Z",
+    "by": {
+     "provider": "kie",
+     "model": "gemini-3-8-flash-openai",
+     "label": "Gemini 3.8 Flash · kie.ai"
+    },
+    "usage": {
+     "in": 5911,
+     "out": 211
+    },
+    "usd": 0.0015500000000000002,
+    "guide": {
+     "chapter": "04-merge",
+     "section": "cut-silence",
+     "title": "Merge › Cut silence"
+    }
+   }
+  ]
+ },
+ "summary": {
+  "id": "cmwgtod4o0fba01",
+  "mode": "help",
+  "title": "How do I cut the long pauses out of my…",
+  "named": false,
+  "step": {
+   "provider": "kie",
+   "model": "gemini-3-8-flash-openai"
+  },
+  "createdAt": "2026-11-14T19:52:29.304Z",
+  "updatedAt": "2026-11-14T19:53:04.084Z",
+  "n": 2,
+  "usd": 0.0015500000000000002,
+  "tokens": 6122,
+  "priced": true
+ },
+ "live": null
+}
