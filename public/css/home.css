@@ -87,6 +87,17 @@
 .hm-bar{height:4px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin-top:4px}
 .hm-bar i{display:block; height:100%; background:var(--muted); transition:width .4s var(--ease)}   /* gold only at the next step */
 
+/* ── Guide: the lead row (a row as above, its button gold until the book has been opened), then the book's parts in two
+   columns - a number in mono and the chapter's name; the chapter being read has its number gold ── */
+.hm-gd-lead .hm-btn{flex:0 0 auto}
+.hm-gd-list{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); grid-template-rows:repeat(6, auto); grid-auto-flow:column; gap:2px 12px}
+.hm-gd-list > .u-loading, .hm-gd-list > .u-failed{grid-column:1 / -1; grid-row:1 / -1}
+.hm-gd-ch{display:flex; align-items:baseline; gap:8px; min-width:0; padding:4px 6px; border:0; border-radius:var(--r-xs); background:none; color:var(--ink); font:var(--fw-regular) var(--fs-12)/var(--lh-12) var(--font); text-align:left; cursor:pointer}
+.hm-gd-ch:hover{background:var(--hover)}
+.hm-gd-n{flex:0 0 16px; color:var(--muted); font:var(--fw-regular) var(--fs-11)/1 var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+.hm-gd-ch.is-cur .hm-gd-n{color:var(--gold)}
+.hm-gd-t{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
 /* ── First steps: a ring each - ticked in the one green when done; gold, dashed, only at the first step
    not done, whose button is the only gold one; the rest dashed grey with quiet buttons ── */
 .hm-progress{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}

@@ -117,6 +117,25 @@ function _assistantButton(nav) {
   });
 }
 
+// THE GUIDE right of Donate - the app's book in its window (js/assistant/guide.js), an icon and a word, lit while the book is
+// open (the window says so by the event `ugc:guide`, wherever it was opened from). The book needs no key, so the button is
+// there from the very first start, when the assistant is still closed. Its module and look are brought in at the first
+// press. Not on the 3D Studio's page (OLD_LOOK).
+function _guideButton(nav) {
+  if (OLD_LOOK() || nav.querySelector('.sv3-gd')) return;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sv3-navbtn sv3-gd has-ico';
+  b.title = 'Guide - the app\'s book: how every part of UGC Studio works';
+  b.append(iconEl('book-open', 14), document.createTextNode('Guide'));
+  const donate = nav.querySelector('.sv3-donate');
+  if (donate) donate.after(b); else nav.appendChild(b);
+  window.addEventListener('ugc:guide', (e) => b.classList.toggle('is-on', !!(e.detail && e.detail.open)));
+  b.addEventListener('click', () => {
+    import('./assistant/guide.js').then((m) => m.openGuide()).catch((e) => { console.warn('[guide]', e); });
+  });
+}
+
 // THE WINDOW'S BUTTONS at the far right, in the app only - the shell gives its pages
 // `ugcWindow` (desktop/preload.js); a browser has none and draws none. Full screen: minimise, into a window, quit - the
 // quit goes the way of the window's own close, a running render asked about first. In a window Windows' own title bar
@@ -161,6 +180,7 @@ export function initNav() {
   _homeLink(nav);
   _adminLink(nav);
   _donateLink(nav);
+  _guideButton(nav);
   _lightCurrent(nav);
   _soon3d(nav);
   _assistantButton(nav);

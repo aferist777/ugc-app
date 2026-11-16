@@ -1,15 +1,21 @@
 // ════════════════════════════════════════════════════════════════════════════
-// THE GUIDE - the app's book in a window, opened by "Guide" in the assistant's Help and by "Guide: <section>" under a Help
-// answer. A generation's window (js/gen-window.js openFrame, 1280×800, moved and stretched, kept under `guide`) over the
-// assistant's.
+// THE GUIDE - the app's book in a window, opened by "Guide" in the top strip (js/app-nav.js), by Home's Guide block and its
+// first step (js/home/main.js), by "Guide" in the assistant's Help and by "Guide: <section>" under a Help answer. The book
+// needs no key: nothing here asks for one. A generation's window (js/gen-window.js openFrame, 1280×800, moved and
+// stretched, kept under `guide`) over the page.
 //
 //   left   the chapters in order (GET /api/assistant/guide - the server reads the book's table of contents by the rule
 //          of guide-toc.js); the open chapter shows its sections, the one being read lit as the page scrolls
 //   right  the chapter as a page (md.js `page`: its pictures, its sections with their ids), a section scrolled to the top;
 //          a link to another chapter or section opens it here
 //
-// The place read last is kept in the browser (`gd_place_v1`), so "Guide" opens where you stopped.
+// The place read last is kept in the browser (`gd_place_v1`), so "Guide" opens where you stopped; so are the chapters ever
+// opened (`gd_read_v1`) - Home's first step "Read Getting started" is ticked by them. The window tells the page when it opens
+// and closes: the window event `ugc:guide` { open }.
 //   openGuide({ chapter, section })    chapter '04-merge', section 'the-timeline' ('' - its top); none - the place kept
+//   contents()                         the table of contents - [{ id, file, title, sections }], read once
+//   placeKept()                        { chapter, section } where the book was left ({} - never opened)
+//   chaptersRead()                     the ids of the chapters ever opened
 // ════════════════════════════════════════════════════════════════════════════
 
 import { openFrame, GEN_SIZE } from '../gen-window.js';
@@ -18,6 +24,7 @@ import { loadingEl, failedEl } from '../ui-state.js';
 
 const GEOM = Object.freeze({ key: 'guide', resize: true, move: true, keepSize: true, keepPos: true });
 const LS = 'gd_place_v1';
+const READ = 'gd_read_v1';
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -46,6 +53,36 @@ let _at = { chapter: '', section: '' };
 
 const _kept = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { return {}; } };
 const _keep = () => { try { localStorage.setItem(LS, JSON.stringify(_at)); } catch (e) { /* a private window */ } };
+const _tell = (open) => window.dispatchEvent(new CustomEvent('ugc:guide', { detail: { open } }));
+
+/** Where the book was left - { chapter, section }; {} when it was never opened. */
+export const placeKept = () => _kept();
+
+/** The ids of the chapters ever opened. */
+export function chaptersRead() {
+  try { const a = JSON.parse(localStorage.getItem(READ) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function _markRead(id) {
+  const a = chaptersRead();
+  if (a.includes(id)) return;
+  a.push(id);
+  try { localStorage.setItem(READ, JSON.stringify(a)); } catch (e) { /* a private window */ }
+}
+
+let _tocAsk = null;
+/** The book's table of contents, read once; a read that failed is asked again the next time. */
+export function contents() {
+  if (_toc) return Promise.resolve(_toc);
+  if (!_tocAsk) {
+    _tocAsk = fetch('/api/assistant/guide').then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.success) throw new Error(j.error || 'HTTP ' + r.status);
+      _toc = j.chapters || [];
+      return _toc;
+    }).finally(() => { _tocAsk = null; });
+  }
+  return _tocAsk;
+}
 
 /** Opens the book at a place (or, open already, goes there). */
 export async function openGuide(where) {
@@ -58,7 +95,7 @@ export async function openGuide(where) {
 }
 
 function _build() {
-  const win = openFrame({ name: 'guide', size: GEN_SIZE, geom: GEOM, cls: 'is-guide', onClose: () => { W = null; } });
+  const win = openFrame({ name: 'guide', size: GEN_SIZE, geom: GEOM, cls: 'is-guide', onClose: () => { W = null; _tell(false); } });
   win.body.classList.add('gd-body');
   const nav = el('nav', 'gd-nav');
   const page = el('div', 'gd-page');
@@ -76,15 +113,12 @@ function _build() {
   });
   W = { win, nav, page, doc };
   win.setCrumbs([{ label: 'guide' }]);
+  _tell(true);
 }
 
 async function _loadToc() {
-  try {
-    const r = await fetch('/api/assistant/guide');
-    const j = await r.json();
-    if (!r.ok || !j.success) throw new Error(j.error || 'HTTP ' + r.status);
-    _toc = j.chapters || [];
-  } catch (e) {
+  try { await contents(); }
+  catch (e) {
     _toc = null;
     if (W) { W.doc.textContent = ''; W.doc.appendChild(failedEl('The guide', () => openGuide(_at))); }
   }
@@ -106,6 +140,7 @@ async function _go(chapter, section) {
   const same = _at.chapter === chapter && W.doc.dataset.ch === chapter;
   _at = { chapter, section: section || '' };
   _keep();
+  _markRead(chapter);
   W.win.setCrumbs([{ label: 'guide', on: () => _go(_toc[0].id, '') }, { label: ch.title }]);
   _paintNav();
   if (!same) {

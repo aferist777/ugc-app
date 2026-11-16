@@ -214,8 +214,9 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico,
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.has-ico,
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts{ display:inline-flex; align-items:center; gap:6px }
-/* the assistant right of Library (js/app-nav.js): lit while its window is open */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-asst.is-on{ color:var(--ink); background:var(--sel-bg) }
+/* the assistant right of Library and the guide right of Donate (js/app-nav.js): lit while their window is open */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-asst.is-on,
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-gd.is-on{ color:var(--ink); background:var(--sel-bg) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico .u-ico,
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts .u-ico{ color:currentColor }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait,
