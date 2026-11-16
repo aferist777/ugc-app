@@ -5,6 +5,8 @@
        node tools/guide-shots.js --library <a library with no keys> [--only a,b] [--base http://127.0.0.1:<port>]
        node tools/guide-shots.js --check
    --list <file> another list than tools/guide-shots.json, --out <folder> another folder than public/guide/shots (a preview).
+   The README's pictures are such a list: --list tools/readme-shots.json --out docs/readme. A list with no `masks` of its
+   own takes the guide's, so the private words are kept in one place.
 
    Every picture of the guide (public/guide/<nn>-<name>.md, `![…](shots/<name>.webp)`) is a row of tools/guide-shots.json:
    the page it is taken on, the steps that bring the app to the moment (eval, click - the page's own events; press, hover
@@ -40,6 +42,10 @@ const SHOTS = arg('--out') ? path.resolve(arg('--out')) : path.join(GUIDE, 'shot
 function arg(k) { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : ''; }
 const say = (s) => console.log('[shots] ' + s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function guideMasks() {
+  return JSON.parse(fs.readFileSync(path.join(__dirname, 'guide-shots.json'), 'utf8')).masks || {};
+}
 
 function readList() {
   const j = JSON.parse(fs.readFileSync(LIST, 'utf8'));
@@ -126,7 +132,7 @@ async function main() {
       say('the app on ' + base + ' over ' + lib);
     } else if (!(await answers(base))) throw new Error('nothing answers at ' + base);
 
-    const job = { base, size: list.size || [1536, 864], scale: list.scale || 2, masks: list.masks || {}, shots, out: work,
+    const job = { base, size: list.size || [1536, 864], scale: list.scale || 2, masks: list.masks || guideMasks(), shots, out: work,
                   profile: path.join(work, 'profile') };
     fs.writeFileSync(path.join(work, 'job.json'), JSON.stringify(job));
     const electron = require('electron');
