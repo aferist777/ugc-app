@@ -483,11 +483,12 @@ for (const id of Object.keys(BLOCKS)) {
 function place(order) {
   const seen = new Set();
   order.forEach((ids, i) => ids.forEach((id) => { if (made[id] && !seen.has(id)) { cols[i].appendChild(made[id].el); seen.add(id); } }));
-  // A block the kept order does not know (one added since, or brought back) goes where it stands at first: before the
-  // first block that follows it there.
+  // A block the kept order does not know (one added since, or brought back) goes where it stands at first: on top of its
+  // column when it is first there, else before the first block that follows it there.
   FIRST.forEach((ids, i) => ids.forEach((id, at) => {
     if (!made[id] || seen.has(id)) return;
-    const next = ids.slice(at + 1).map((x) => made[x] && made[x].el).find((x) => x && x.parentNode === cols[i]);
+    const next = at === 0 ? cols[i].firstElementChild
+      : ids.slice(at + 1).map((x) => made[x] && made[x].el).find((x) => x && x.parentNode === cols[i]);
     cols[i].insertBefore(made[id].el, next || null);
     seen.add(id);
   }));
