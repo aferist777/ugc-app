@@ -14,7 +14,9 @@
      Library       character (New Character), prop (New prop), look (New lookbook), environment (New environment) - windows
      Projects      the chips and the five changed last of a kind, a card on hover (js/home/projects.js)
      New           what came since the last visit (GET /api/home/news?since=) - "mark as seen"
-   and the right one: First steps and The app.
+   and the right one:
+     Guide         the app's book (js/assistant/guide.js) - "Start here", then "Continue", and its parts; no key needed
+     First steps   what a new person does first, ticked off by what is really there
      The app       the keys and their balances (GET /api/keys/health), the bot, Cloudflare
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -33,6 +35,7 @@ import { figures } from '../num.js';
 import * as WIN from './windows.js';
 import { projectsBlock } from './projects.js';
 import { openStart } from './start.js';
+import { openGuide, contents as guideContents, placeKept, chaptersRead } from '../assistant/guide.js';
 
 initNav();
 
@@ -186,12 +189,66 @@ BLOCKS.new = () => {
   return { el: f.st, paint, every: 30000 };
 };
 
+// ── Guide ──
+// The app's book, here from the very first start - it needs no key. The lead row says "Start here" and opens Getting
+// started until the book has been opened, then "Continue" and opens it where it was left; under it the book's parts, a press
+// opening the book's window over Home at that chapter.
+const FIRST_CHAPTER = '01-getting-started';
+BLOCKS.guide = () => {
+  const f = frame('guide', 'Guide');
+  f.what.textContent = '· how everything here works · no key needed';
+  const lead = el('div', 'hm-row hm-gd-lead');
+  const list = el('div', 'hm-gd-list');
+  list.appendChild(loadingEl('Loading'));
+  f.body.append(lead, list);
+  let shown = false;
+  const paint = async () => {
+    let toc;
+    try { toc = await guideContents(); }
+    catch (e) {
+      showError('Could not read the guide', { detail: e.message, key: 'home-guide' });
+      if (!shown) { lead.hidden = true; list.replaceChildren(failedEl('The guide', () => paint())); }
+      return;
+    }
+    const at = placeKept();
+    const ch = at.chapter && toc.find((c) => c.id === at.chapter);
+    const sec = ch && at.section && ch.sections.find((s) => s.id === at.section);
+    const first = toc.find((c) => c.id === FIRST_CHAPTER) || toc[0];
+    const mark = el('span', 'hm-ico');
+    mark.innerHTML = icon('book-open', 14);
+    const tx = el('div', 'hm-tx');
+    const go = el('button', 'hm-btn u-btn is-s ' + (ch ? 'is-quiet' : 'is-gen'), ch ? 'continue' : 'read');
+    go.type = 'button';
+    if (ch) {
+      tx.append(el('b', null, 'Continue'), el('span', null, ch.title + (sec ? ' › ' + sec.title : '')));
+      go.addEventListener('click', () => openGuide(at));
+    } else {
+      tx.append(el('b', null, 'Start here · ' + (first ? first.title : 'Getting started')), el('span', null, 'the keys, Home, your first project'));
+      go.addEventListener('click', () => openGuide({ chapter: first ? first.id : FIRST_CHAPTER }));
+    }
+    lead.hidden = false;
+    lead.replaceChildren(mark, tx, go);
+    list.replaceChildren(...toc.map((c) => {
+      const b = el('button', 'hm-gd-ch' + (ch && c.id === ch.id ? ' is-cur' : ''));
+      b.type = 'button';
+      b.title = c.title;
+      const num = /^(\d\d)-/.exec(c.id);
+      b.append(el('span', 'hm-gd-n', num ? String(+num[1]) : '·'), el('span', 'hm-gd-t', c.title));
+      b.addEventListener('click', () => openGuide({ chapter: c.id }));
+      return b;
+    }));
+    shown = true;
+  };
+  return { el: f.st, paint };
+};
+
 // ── First steps ──
-// Seven things a new
-// person does first, each ticked off by what is really there - never by a press here; the frame is dashed while any is
-// left, solid when none is, and the block stays until "hide" puts it away for good (back from Admin -> This computer).
+// Eight things a new person does first, each ticked off by what is really there - never by a press here: the first is
+// reading Getting started (the book remembers the chapters opened); the frame is dashed while any is left, solid when
+// none is, and the block stays until "hide" puts it away for good (back from Admin -> This computer).
 const STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
 const STEPS = [
+  { id: 'guide', title: 'Read Getting started', sub: 'the guide\'s first chapter - the keys, Home, your first project', go: 'read', href: '#', run: () => openGuide({ chapter: FIRST_CHAPTER }) },
   { id: 'kie', title: 'Add the kie.ai key', sub: 'pictures, video, music - the main aggregator', go: 'add', href: '/admin#keys' },
   { id: 'eleven', title: 'Add the ElevenLabs key', sub: 'the voices of the talking heads', go: 'add', href: '/admin#keys' },
   { id: 'cf', title: 'Add the Cloudflare key', sub: 'hosts the references the models fetch · R2 needs a card once', go: 'add', href: '/admin#keys' },
@@ -242,6 +299,7 @@ BLOCKS.steps = () => {
     const prov = (id) => ((health && health.providers) || []).find((p) => p.id === id) || {};
     const sp = speech && speech.state;
     const done = {
+      guide: chaptersRead().includes(FIRST_CHAPTER),
       kie: prov('kie.ai').state === 'ok',
       eleven: prov('elevenlabs').state === 'ok',
       cf: !!(cf && cf.inUse),
@@ -271,8 +329,9 @@ BLOCKS.steps = () => {
       if (!done[s.id]) {
         const a = el('a', 'hm-btn u-btn is-s ' + (s === next ? 'is-gen' : 'is-quiet'), s.go);
         a.href = s.href;
-        // The first character is made here, in New Character's window.
+        // The first character is made here, in New Character's window; the guide opens over Home.
         if (s.id === 'char') a.addEventListener('click', _newCharacter);
+        if (s.run) a.addEventListener('click', (e) => { e.preventDefault(); s.run(); });
         li.appendChild(a);
       }
       return li;
@@ -413,7 +472,7 @@ BLOCKS.app = () => {
 
 // ── the layout: two columns, a block anywhere, kept ──────────────────────────
 const LAYOUT = 'ugc_home_layout_v2';
-const FIRST = [['start', 'generate', 'library', 'projects', 'new'], ['steps', 'app']];
+const FIRST = [['start', 'generate', 'library', 'projects', 'new'], ['guide', 'steps', 'app']];
 const cols = [...document.querySelectorAll('#hm-cols .hm-col')];
 const made = {};
 for (const id of Object.keys(BLOCKS)) {
@@ -481,3 +540,5 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('ugc-references', () => _paint('new'));
 // Something a window made landed (js/home/windows.js): what is new, at once.
 WIN.setOnMade(() => _paint('new'));
+// The guide's window closed: where it was left, and whether Getting started has been read.
+window.addEventListener('ugc:guide', (e) => { if (!(e.detail && e.detail.open)) { _paint('guide'); _paint('steps'); } });
