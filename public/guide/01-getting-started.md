@@ -30,6 +30,10 @@ else. To move your work to another computer, copy that folder.
 
 Only one window of the app can be open on one library. Closing it while a render is running asks first.
 
+This guide is there from the first start, before any key is added: the **Guide** block on Home - first in the right
+column - and **Guide** at the right end of the top strip, on every page. Its window opens over the page and remembers
+where you stopped.
+
 ## The keys
 
 A key is how a service knows the work is yours and bills you for it. Keys are entered on **Admin → API keys**: paste a
@@ -86,8 +90,8 @@ bot listens to you only.
 ## First steps
 
 The **First steps** block on Home lists what is still to do - each line with its button - and ticks it off when it is
-done: the three main keys, the bot, the first character, the first talking head, the speech model. **hide** puts it away
-once you no longer need it.
+done: this chapter read, the three main keys, the bot, the first character, the first talking head, the speech model.
+**hide** puts it away once you no longer need it.
 
 **The app** block shows every key with what it does - "no key · add it in Admin" until it is there - and its balance where
 the service tells one: kie.ai's credits, ElevenLabs' characters left.

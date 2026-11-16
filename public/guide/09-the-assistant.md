@@ -43,7 +43,8 @@ Ask in your own words - "how do I cut the long pauses out of my voiceover?". Hel
 guide that answer the question, then answers by them alone, so its answer is the app as it is. Under the answer,
 **Guide: <chapter › section>** opens the guide at the place the answer came from.
 
-**Guide**, beside **+ New chat** in Help, opens the guide where you stopped reading.
+**Guide**, beside **+ New chat** in Help, opens the guide where you stopped reading. Help needs an AI key; the guide
+itself needs none - it also opens from **Guide** at the right end of the top strip and from Home's **Guide** block.
 
 ## The guide
 
@@ -51,7 +52,7 @@ guide that answer the question, then answers by them alone, so its answer is the
 
 The guide is this book: the chapters on the left - the open one with its sections -, the page with its pictures on the
 right. A press on a section goes there; a link in the text leads to another chapter. The window remembers where you
-were. The parts of the app no chapter covers yet are in **The rest of the app (draft)**, last in the list.
+were.
 
 ## What it costs
 
