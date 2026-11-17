@@ -32,6 +32,8 @@ const { spawnSync } = require('child_process');
 const REPO = path.join(__dirname, '..');
 const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'server.js', 'package.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses'];
 const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
+// The vendor/ folders those scripts lay out - the only ones shipped: a folder an earlier program fetched stays out.
+const VENDOR = ['yt-dlp', 'jassub', 'whisper', '3d', 'mediapipe', 'sfx', 'patterns'];
 
 const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt; };
 const say = (s) => console.log('[build] ' + s);
@@ -153,9 +155,12 @@ function build(opts = {}) {
   compileLauncher(path.join(app, 'desktop', 'launcher', 'Launcher.cs'), path.join(app, 'desktop', 'icon.ico'), path.join(app, 'launcher', 'UGC Studio.exe'));
 
   // 5. vendor/ and the production node_modules from this checkout.
-  fs.cpSync(path.join(REPO, 'vendor'), path.join(app, 'vendor'), { recursive: true });
+  // dereference: a checkout whose vendor/ or node_modules/ is a junction to another copies the files, not the link.
+  for (const v of VENDOR) fs.cpSync(path.join(REPO, 'vendor', v), path.join(app, 'vendor', v), { recursive: true, dereference: true });
+  const left = fs.readdirSync(path.join(REPO, 'vendor')).filter((v) => !VENDOR.includes(v));
+  if (left.length) say('vendor/ left out (no fetch script lays it out): ' + left.join(', '));
   const pkgs = prodPackages();
-  for (const k of pkgs) fs.cpSync(path.join(REPO, k), path.join(app, k), { recursive: true });
+  for (const k of pkgs) fs.cpSync(path.join(REPO, k), path.join(app, k), { recursive: true, dereference: true });
 
   // 6. What this version is, and every file of it.
   const seq = Number(opts.seq) || 0;
