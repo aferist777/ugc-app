@@ -160,8 +160,9 @@ const HOW_TO = (version) => [
   '',
   'The folder "library" (made at the first start) is yours: everything you make is kept in it.',
   'The folders "versions" and "updates" are the program and its updates.',
-  'From an older copy: close it, delete its folder "updates" (only the old updates\' own files), then unpack this zip over',
-  'the old "UGC Studio" folder, replacing the files - "library" stays where it is.',
+  'From an older copy: close it, delete its folder "updates" (only the old updates\' own files), then unpack this zip into',
+  'the folder that HOLDS the old "UGC Studio" (C:\\ for C:\\UGC Studio) - the two "UGC Studio" folders merge; replace the',
+  'files when asked. "library" stays where it is.',
   'If something does not start, the logs are updates\\launcher.log and library\\logs\\app.log.',
   '',
 ].join('\r\n');
