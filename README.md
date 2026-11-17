@@ -7,9 +7,6 @@ timeline editor — from an idea to a finished mp4.**
 
 Version 0.9: usable, still in development. Windows only for now.
 
-> **The code and the first build are on their way.** This page comes first, so you know what is coming. Star or watch
-> the repository to be told when they are out.
-
 ![Home](docs/readme/home.webp)
 
 ## Who it is for
@@ -141,9 +138,10 @@ says which key it needs.
 
 ## Download and run
 
-1. Download the latest zip from [Releases](https://github.com/aferist777/ugc-app/releases) *(coming soon)*.
-2. Unpack it anywhere and run **UGC Studio.exe**. The app is not code-signed, so Windows may say "Windows protected your
-   PC" — press **More info → Run anyway**.
+1. Download **UGC-Studio-0.9.0-win32-x64.zip** from the [latest release](https://github.com/aferist777/ugc-app/releases/latest).
+2. Unpack it to a folder of your own — not one OneDrive syncs: the library grows to gigabytes — and run
+   **UGC Studio.exe**. The app is not code-signed, so Windows may say "Windows protected your PC" — press
+   **More info → Run anyway**.
 3. Enter your keys on **Admin → API keys** and open **Guide** in the top strip.
 
 Windows 10 or 11, 64-bit. ffmpeg, yt-dlp, Whisper, MediaPipe, the sound effects, patterns and fonts are inside.
