@@ -1,8 +1,18 @@
 {
-  "name": "ugc-character-generator",
+  "name": "ugc-app",
   "version": "1.0.1",
   "productName": "UGC Studio",
   "description": "UGC Studio - vertical video ads from an idea to a finished mp4, as a desktop app",
+  "license": "AGPL-3.0-or-later",
+  "author": "aferist777",
+  "homepage": "https://github.com/aferist777/ugc-app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aferist777/ugc-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aferist777/ugc-app/issues"
+  },
   "main": "desktop/main.js",
   "scripts": {
     "start": "electron .",

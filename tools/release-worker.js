@@ -14,7 +14,7 @@
 
 const VERSION = 1;
 
-const WORKER = `// UGC Studio - updates v${VERSION}. Put here by tools/release.js worker; it hands friends the owner's releases.
+const WORKER = `// UGC Studio - updates v${VERSION}. Put here by tools/release.js worker; it hands your releases to the copies that ask.
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 let cache = { at: 0, tokens: null };
 

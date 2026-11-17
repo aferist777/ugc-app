@@ -1,6 +1,6 @@
 'use strict';
 
-/* fetch-3d.js - puts the 3D Studio's models into vendor/3d/ (docs/local-app/PLAN.md "3D Studio - план по этапам", 3D1).
+/* fetch-3d.js - puts the 3D Studio's models into vendor/3d/.
 
    npm install runs it (postinstall, with --optional: no network is a warning, not a failed install).
    By hand, after moving a pin:
@@ -36,7 +36,7 @@ const KENNEY = {
 const DIR = path.join(__dirname, '..', 'vendor', '3d');
 const MARK = path.join(DIR, 'PINNED.json');
 // `layout` moves when what is taken from the files changes, so an installed copy is laid out again
-// (2: the kit's isometric picture of each model, for the furniture window).
+// (layout 2 includes the kit's isometric picture of each model, for the furniture window).
 const PIN = { people: PEOPLE.map(f => f.sha256), kenney: KENNEY.sha256, layout: 2 };
 const optional = process.argv.includes('--optional');
 

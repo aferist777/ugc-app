@@ -1,15 +1,15 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — where everything is at a moment of a fragment (PLAN "3D Studio", 3D2).
+   3D STUDIO — where everything is at a moment of a fragment.
 
    ONE pure function of time: evaluate(scene, fragment, t) gives every object's position, turn, size and
    visibility at t, from the scene's one arrangement and the fragment's keys. Nothing is accumulated from frame to
    frame, so scrubbing, playing and recording all see the same thing - and every camera of a recording can be drawn
-   from the same moment (Unreal, Cinemachine, CozyClay all work this way; PLAN "Что взято из чужих проектов").
-   No three.js in here: the server reads it too (the agent's checks, 3D5).
+   from the same moment (Unreal, Cinemachine, CozyClay all work this way).
+   No three.js in here, so the module can run on the server as well as in the page.
 
    A fragment: { id, name, length (s, at most 30), tracks: { <object id>: { p: [key], r: [key], s: [key], v: [key] } } }
    A key:      { t (s), v: value, ease } - the ease shapes the stretch from this key to the NEXT one:
-               'linear' | 'smooth' (slow in and out) | 'abrupt' (fast start - "встаёт резко") | 'gentle' (slow start)
+               'linear' | 'smooth' (slow in and out) | 'abrupt' (fast start, like getting up sharply) | 'gentle' (slow start)
                | 'hold' (stays until the next key) | [x1, y1, x2, y2] (a CSS cubic-bezier).
    p and s are [x, y, z]; r is degrees [x, y, z] in three.js XYZ order, interpolated as a quaternion along the
    shorter way - or, when the turn round Y between two keys is 180° or more, round Y degree by degree, so a full

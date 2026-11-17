@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — turning a scene's object into something three.js can draw (PLAN "3D Studio", 3D1).
+   3D STUDIO — turning a scene's object into something three.js can draw.
 
    build(obj) answers a Group holding the object's figure, scaled and seated so that its own (0,0,0) is the middle
    of its footprint on the floor; the scene's position, rotation and scale are put on that Group by the viewport.
@@ -104,7 +104,7 @@ function _wall(w, h, holes, mat) {
 /**
  * A room: a floor and four walls that face INWARD and are drawn from their inside only - from outside, the walls
  * nearest the eye vanish and the room stays open to look into, from inside it is closed. Its openings are the
- * windows and doors an environment's layout found (3D9: [{ wall, kind, center, width, height, sill }], the centre
+ * windows and doors an environment's layout found ([{ wall, kind, center, width, height, sill }], the centre
  * measured along the wall - x for the back and front walls, z for the left and right ones); without them, a window
  * in the back wall and a door in the right one. No ceiling.
  */

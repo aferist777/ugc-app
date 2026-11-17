@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO (docs/local-app/PLAN.md "3D Studio - план по этапам"; js/studio3d/).
+   3D STUDIO (js/studio3d/).
    The left column is the selected object, the middle the scene, the right the shot camera.
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -173,7 +173,7 @@
 .s3-gal-a:hover{ color:var(--ink); text-decoration:underline }
 .s3-gal-a.is-del:hover, .s3-gal-a.armed{ color:var(--danger) }
 
-/* ── The tracks (3D2, js/studio3d/timeline.js) ── */
+/* ── The tracks (js/studio3d/timeline.js) ── */
 .s3-app{ --tl-h:230px }
 .s3-tl{ flex:0 0 var(--tl-h); min-height:0; display:flex; flex-direction:column; background:var(--surface); border-top:1px solid var(--border) }
 .s3-tl-bar{ display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border-soft); flex:0 0 auto; flex-wrap:wrap }

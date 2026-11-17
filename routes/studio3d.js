@@ -1,6 +1,6 @@
 'use strict';
 
-/* studio3d.js - the 3D Studio's scenes over HTTP (docs/local-app/PLAN.md "3D Studio - план по этапам", 3D1).
+/* studio3d.js - the 3D Studio's scenes over HTTP.
 
      GET    /api/3d/scenes               the gallery: every scene, the newest change first
      POST   /api/3d/scenes   {name}      a new scene

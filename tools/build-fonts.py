@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""build-fonts.py - lays the caption fonts of phase V68 P4 into public/fonts/captions/ (the owner 2026-11-01/02, answers
-(hp52)-(hp55) of docs/local-app/plan/: the 80 fonts the owner picked, all from Google Fonts).
+"""build-fonts.py - lays the caption fonts into public/fonts/captions/: the 80 fonts of tools/fonts-list.json, all from
+Google Fonts.
 
 Run by hand when the set changes; npm install never runs it. Needs Python 3 and fontTools (pip install fonttools):
     python tools/build-fonts.py                  downloads what is missing into <temp>/ugc-fonts-cache/, writes the fonts
@@ -14,10 +14,10 @@ pinned by its git blob SHA-1 (what GitHub's tree lists), checked before use.
 
 WHAT IS DONE TO A FONT, and nothing else:
   - a VARIABLE file (one file, every weight) is made the static font of the weight picked - libass draws a variable file at
-    its default instance, and the owner picked 700-900: every axis pinned (wght to the weight, the rest to their defaults),
+    its default instance, and the list asks for 700-900: every axis pinned (wght to the weight, the rest to their defaults),
     the names Google's static files have ("Caveat" Bold; "Big Shoulders Display Black" for 800/900);
   - a font whose licence reserves no font name is CUT to Latin and Cyrillic with their punctuation (the list's `keep`;
-    (hp53) - the seven Japanese fonts weighed 24 MB for letters captions never draw); the OFL allows a modified font under
+    the seven Japanese fonts weighed 24 MB for letters captions never draw); the OFL allows a modified font under
     the same name when no name is reserved. A font with a reserved name (`reserved`) is shipped exactly as it came; so are
     the Apache-2.0 ones (they are small).
 Each licence goes beside the fonts, licenses/OFL-<folder>.txt or licenses/Apache-2.0-<folder>.txt."""

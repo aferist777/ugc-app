@@ -11,7 +11,8 @@
      - a thumbnail of a shipped preset;
      - the settings view: no secret and no retired key reaches the page;
      - the routes that were removed still answer 404;
-     - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js);
+     - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js), and THIRD_PARTY_NOTICES.md
+       is made from that list as it is now (tools/third-party.js);
      - (said, not failed) whether whisper.cpp for recognition on this computer is in vendor/whisper.
    It spends nothing: no request here starts a generation or a render.
 
@@ -177,6 +178,8 @@ function getRoutes() {
   const unthanked = deps.filter(d => !thanked.includes('npm: ' + JSON.stringify(d)));
   if (unthanked.length) { failed++; console.log('!! not on Admin -> Thanks: ' + unthanked.join(', ')); }
   console.log(`thanks: ${deps.length - unthanked.length}/${deps.length} dependencies thanked`);
+  // THIRD_PARTY_NOTICES.md is made from that same list: a line added there needs the file made again.
+  if (!require('./third-party.js').current()) { failed++; console.log('!! THIRD_PARTY_NOTICES.md is not current - node tools/third-party.js'); }
 
   // Recognition on this computer needs whisper.cpp in vendor/ - laid out by npm install, and optional
   // there, so its absence is SAID, not failed: captions are still heard by Groq.

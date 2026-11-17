@@ -1,5 +1,5 @@
 {
-  "about": "The effects panel's tiles (phase V84): made by tools/fx-tiles.js from the example clip below. face - its face found once by the app's faces window: [the file's second, x, y, w, h], shares of the 9:16 frame (the clip is 720x1280, laid filled).",
+  "about": "The effects panel's tiles: made by tools/fx-tiles.js from the example clip below. face - its face found once by the app's faces window: [the file's second, x, y, w, h], shares of the 9:16 frame (the clip is 720x1280, laid filled).",
   "source": {
     "clip": "clips/c1b83e22549674d00246eea7bda49c72f_1793991102840.mp4"
   },

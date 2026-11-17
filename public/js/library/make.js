@@ -107,7 +107,7 @@ const HTML = `
             <button class="u-btn is-icon mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
           </span></span>
         </div>
-        <!-- (V38.6) The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
+        <!-- The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
         <div class="mk-hookset" id="mk-hook-stage" hidden>
           <button class="mk-fold" type="button" id="mk-hooks-fold" hidden></button>
           <div class="mk-hooks" id="mk-hook-list"></div>

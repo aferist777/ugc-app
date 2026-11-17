@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the field the scene is built in (PLAN "3D Studio", 3D1).
+   3D STUDIO — the field the scene is built in.
 
    One three.js scene, two kinds of eyes:
      the EDITOR's eye   orbits, pans and zooms - free (perspective), or straight from the top, the front or the side
@@ -10,7 +10,7 @@
 
    The scene is drawn when something changed (`invalidate`), not sixty times a second for nothing.
 
-   Mouse or touchpad (PLAN "Ввод"): the wheel of a mouse and two fingers on a touchpad reach the page as the same
+   Mouse or touchpad: the wheel of a mouse and two fingers on a touchpad reach the page as the same
    event, so the person says which it is - or the first gesture guesses. Mouse: the left button turns the view, the
    right one moves it, the wheel zooms. Touchpad (as Blender): two fingers turn it, Shift + two fingers move it, a
    pinch zooms (Chromium hands a pinch over as a wheel with Ctrl).
@@ -120,8 +120,8 @@ export function createViewport(host, hooks) {
   new ResizeObserver(resize).observe(host);
 
   // ── Views ────────────────────────────────────────────────────────────────
-  // There is no button for the free view (the owner, 2026-10-09): it is where the field starts, and a straight view
-  // turns into it the moment the person starts turning - from the very direction the straight view looked.
+  // There is no button for the free view: it is where the field starts, and a straight view turns into it the
+  // moment the person starts turning - from the very direction the straight view looked.
   function setView(v) {
     if (v === view) return;
     view = v;
@@ -201,7 +201,7 @@ export function createViewport(host, hooks) {
     if (input === 'mouse') return;                          // OrbitControls zooms, in every view
     e.preventDefault();
     e.stopImmediatePropagation();
-    // A pinch: soft - a touchpad sends many small steps, and a firm factor made the view jump (the owner, 2026-10-09).
+    // A pinch: soft - a touchpad sends many small steps, and a firmer factor makes the view jump.
     if (e.ctrlKey) _zoom(THREE.MathUtils.clamp(Math.exp(-e.deltaY * 0.0035), 0.94, 1.06));
     else if (e.shiftKey) _pan(e.deltaX || e.deltaY, 0);
     else { if (view !== 'free') setView('free'); _turn(e.deltaX * 0.004, e.deltaY * 0.004); }
@@ -353,7 +353,7 @@ export function createViewport(host, hooks) {
     _boxes();
   }
 
-  // ── The moment of a fragment (3D2) ───────────────────────────────────────
+  // ── The moment of a fragment ─────────────────────────────────────────────
   // A pose for every object and camera at the playhead (public/js/studio3d/evaluate.js): what has a track in the
   // open fragment stands where its keys put it; the rest stands in the arrangement. Without a fragment, the arrangement.
   let poses = null;                     // Map id -> { p, r, s, v, moves } | null
@@ -378,8 +378,8 @@ export function createViewport(host, hooks) {
     invalidate();
   }
 
-  // "The still ones see-through" (the owner, 2026-10-09): only in the editor's eye, never in a preview or a recording -
-  // the materials go half-clear for the editor's drawing and come back before anything else draws.
+  // What stands still, see-through: only in the editor's eye, never in a preview or a recording - the materials go
+  // half-clear for the editor's drawing and come back before anything else draws.
   let ghost = false;
   const setGhost = (on) => { ghost = !!on; invalidate(); };
   function _ghostOn() {

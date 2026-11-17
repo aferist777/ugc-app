@@ -17,6 +17,26 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   var THANKS = [
+    { group: "Video and audio tools", name: "Rubber Band Library",
+      url: "https://github.com/breakfastquay/rubberband", license: "GPL-2.0-or-later",
+      what: "A library for changing the pitch and the speed of audio independently, by Breakfast Quay.",
+      how: "Inside FFmpeg (its rubberband filter) it makes a sound clip's copy at another pitch - the timbre kept or moving with it - which the preview plays and the render takes (lib/pitch-copy.js, public/js/sound/pitch.js)." },
+    { group: "Video and audio tools", name: "NVENC (nv-codec-headers)",
+      url: "https://github.com/FFmpeg/nv-codec-headers", license: "MIT (the headers in our FFmpeg build; the encoder itself is NVIDIA's driver)",
+      what: "The headers through which FFmpeg reaches the video encoder of NVIDIA graphics cards.",
+      how: "On a computer with an NVIDIA card, clips merged into one on the timeline are encoded by the card; without one, x264 does it (lib/merge-clips.js)." },
+    { group: "Video and audio tools", name: "Opus (libopus)",
+      url: "https://github.com/xiph/opus", license: "BSD-3-Clause",
+      what: "The open audio codec of the Xiph.Org Foundation.",
+      how: "Inside FFmpeg it encoded the built-in sound effects of AUDIO -> SFX as .ogg files (tools/build-sfx.js)." },
+    { group: "Video and audio tools", name: "libvpx",
+      url: "https://chromium.googlesource.com/webm/libvpx", license: "BSD-3-Clause",
+      what: "The WebM project's VP8 and VP9 video codecs.",
+      how: "Inside FFmpeg it encoded the moving tiles of the clip effects panel as VP9 WebM (tools/fx-tiles.js)." },
+    { group: "Ideas and rules we follow", name: "AI-Youtube-Shorts-Generator",
+      url: "https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator", license: "MIT",
+      what: "An open-source tool that turns long YouTube videos into vertical shorts, with an LLM picking the highlights.",
+      how: "Highlights' agent is told two of its ideas, in our own words: its eight signals of a strong moment, with strong first sentences, for podcasts and interviews, and a quote card's test for a moment's first line (lib/highlights-agent.js). None of its code is used." },
     { group: "App and server", name: "Node.js",
       url: "https://github.com/nodejs/node", license: "MIT",
       what: "The JavaScript runtime the app's server is written for.",
@@ -60,7 +80,7 @@
     { group: "Desktop", name: "Electron", npm: "electron",
       url: "https://github.com/electron/electron", license: "MIT",
       what: "A framework for desktop apps that bundles Chromium and Node.js.",
-      how: "It is the desktop app itself. It opens the full-screen window, handles keys, the right-click menu, links and downloads, asks before quitting during a render, and keeps the server running behind the window (desktop/main.js, desktop/supervisor.js)." },
+      how: "It is the desktop app itself. It opens the window - maximised at every start -, handles keys, the right-click menu, links and downloads, asks before quitting during a render, and keeps the server running behind the window (desktop/main.js, desktop/supervisor.js)." },
     { group: "Desktop", name: "Chromium",
       url: "https://chromium.googlesource.com/chromium/src", license: "BSD-3-Clause",
       what: "The open-source browser engine behind Google Chrome.",
@@ -68,11 +88,11 @@
     { group: "Video and audio tools", name: "FFmpeg",
       url: "https://github.com/FFmpeg/FFmpeg", license: "GPL-3.0-or-later (our build; FFmpeg's own code is LGPL-2.1-or-later)",
       what: "The standard toolkit for decoding, editing and encoding video and audio.",
-      how: "Does all the media work: the final render of a Merge timeline with its burnt-in captions, preview proxies, posters, voice loudness, the sound sent for captions, the fades where music beds overlap, pieces cut from a sound or saved from a video, a phone's HEIC photo, and yt-dlp's joins (lib/mv3b-render.js, lib/render-finish.js, routes/proxies.js, lib/loudness.js, lib/captions-job.js, lib/audio-cut.js, lib/heic.js, lib/ytdlp.js)." },
+      how: "Does all the media work: the final render of a Merge timeline with its burnt-in captions, preview proxies, posters, voice loudness, the sound sent for captions, the fades where music beds overlap, pieces cut from a sound or saved from a video, a phone's HEIC photo, and yt-dlp's joins (lib/mv3b-render.js, lib/render-finish.js, routes/proxies.js, lib/loudness.js, lib/captions-job.js, lib/audio-cut.js, lib/heic.js, lib/ytdlp.js). Our build is FFmpeg 6.1.1 \"essentials\" by gyan.dev, made with --enable-gpl --enable-version3, so the program as shipped is GPL-3.0-or-later; its source is FFmpeg's tag n6.1.1 (https://github.com/FFmpeg/FFmpeg/tree/n6.1.1), and the build's recipe is on gyan.dev." },
     { group: "Video and audio tools", name: "ffmpeg-static", npm: "ffmpeg-static",
       url: "https://github.com/eugeneware/ffmpeg-static", license: "GPL-3.0-or-later",
       what: "An npm package that fetches a ready-made ffmpeg program for Windows.",
-      how: "It is how FFmpeg gets into the app. npm install downloads the 6.1.1 build, and every ffmpeg run the app starts uses the path it gives (require('ffmpeg-static') in 18 files)." },
+      how: "It is how FFmpeg gets into the app. npm install downloads FFmpeg 6.1.1 - on Windows the \"essentials\" build by gyan.dev - and every ffmpeg run the app starts uses the path it gives (require('ffmpeg-static') in 37 files)." },
     { group: "Video and audio tools", name: "x264",
       url: "https://code.videolan.org/videolan/x264", license: "GPL-2.0-or-later",
       what: "The best-known free H.264 video encoder.",
@@ -82,7 +102,7 @@
       what: "The classic free MP3 encoder.",
       how: "Inside FFmpeg it writes the MP3 of a piece cut from a sound and of the sound saved from a video (lib/audio-cut.js)." },
     { group: "Video and audio tools", name: "yt-dlp",
-      url: "https://github.com/yt-dlp/yt-dlp", license: "Unlicense",
+      url: "https://github.com/yt-dlp/yt-dlp", license: "Unlicense; the Windows program we ship: GPL-3.0-or-later (it bundles GPL code)",
       what: "A command-line downloader for YouTube and many other video sites.",
       how: "Reads a link from YouTube, TikTok, Instagram and the other sites it knows - a Source in the scenario generator - and downloads the video at the best quality there is, without a login. A pinned nightly build (2026.10.10) ships with the app; a copy in the library's cache is kept current on the nightly channel - checked when the app starts and once a day, and on Admin -> This computer (lib/ytdlp.js, routes/sources.js, routes/links.js)." },
     { group: "Video and audio tools", name: "yt-dlp EJS",
@@ -172,7 +192,7 @@
     { group: "Speech", name: "OpenBLAS",
       url: "https://github.com/OpenMathLib/OpenBLAS", license: "BSD-3-Clause",
       what: "A fast library for the matrix maths that models need.",
-      how: "Ships with the whisper.cpp build we chose. On the owner's laptop processor, that build made captions about 15% faster than the plain one (vendor/whisper/, tools/fetch-whisper.js)." },
+      how: "Ships with the whisper.cpp build we chose. On the laptop processor it was measured on, that build made captions about 15% faster than the plain one (vendor/whisper/, tools/fetch-whisper.js)." },
     { group: "Speech", name: "insanely-fast-whisper",
       url: "https://github.com/Vaibhavs10/insanely-fast-whisper", license: "Apache-2.0",
       what: "A recipe that runs Whisper large-v3 very fast on a GPU.",
@@ -224,15 +244,15 @@
     { group: "Fonts", name: "Inter",
       url: "https://github.com/rsms/inter", license: "OFL-1.1",
       what: "A sans-serif by Rasmus Andersson, designed for screens.",
-      how: "Shipped in Black, ExtraBold and Bold and used by 12 presets. A style that names IBM Plex Sans or Plus Jakarta Sans is drawn in it (public/js/captions/fonts.js). Its Regular, Medium and SemiBold, version 4.1, are the interface font (public/fonts/ui/, named \"UGC Inter\" in the new look so it never meets the caption \"Inter\"; phase V73)." },
+      how: "Shipped in Black, ExtraBold and Bold and used by 12 presets. A style that names IBM Plex Sans or Plus Jakarta Sans is drawn in it (public/js/captions/fonts.js). Its Regular, Medium and SemiBold, version 4.1, are the interface font (public/fonts/ui/, named \"UGC Inter\" in the new look so it never meets the caption \"Inter\")." },
     { group: "Fonts", name: "JetBrains Mono",
       url: "https://github.com/JetBrains/JetBrainsMono", license: "OFL-1.1",
       what: "JetBrains' monospaced typeface, made for reading code.",
-      how: "Every figure of the interface - times, lengths, prices, counts - in its Regular and Medium, version 2.304, so figures never jump as they change (public/fonts/ui/, named \"UGC Mono\"; phase V73)." },
+      how: "Every figure of the interface - times, lengths, prices, counts - in its Regular and Medium, version 2.304, so figures never jump as they change (public/fonts/ui/, named \"UGC Mono\")." },
     { group: "Interface", name: "Lucide",
       url: "https://github.com/lucide-icons/lucide", license: "ISC",
       what: "A set of line icons, a fork of Feather (some of its icons are Feather's, MIT).",
-      how: "The interface's icons: 51 of them copied as SVG from lucide-static 1.60.0 into public/js/icons.js, 16 px with a 1.5 stroke in the colour of their text; the license is public/icons/LICENSE-lucide.txt (phase V73)." },
+      how: "The interface's icons: 60 of them copied as SVG from lucide-static 1.60.0 into public/js/icons.js, 16 px with a 1.5 stroke in the colour of their text; the license is public/icons/LICENSE-lucide.txt." },
     { group: "Fonts", name: "Liberation Sans",
       url: "https://github.com/liberationfonts/liberation-fonts", license: "OFL-1.1",
       what: "Red Hat's font with the same letter widths as Arial.",
@@ -248,7 +268,7 @@
     { group: "Fonts", name: "Rubik Mono One",
       url: "https://github.com/alexeiva/rubikmonoone", license: "OFL-1.1",
       what: "A heavy monospaced display face from the Rubik family, with Cyrillic.",
-      how: "The comic-style face of 10 presets. It stands in for Komika Axis (the owner's choice), and draws a line with a Russian letter set in Bangers or Luckiest Guy, which have no Cyrillic (public/js/captions/fonts.js)." },
+      how: "The comic-style face of 10 presets. It stands in for Komika Axis, and draws a line with a Russian letter set in Bangers or Luckiest Guy, which have no Cyrillic (public/js/captions/fonts.js)." },
     { group: "Fonts", name: "Russo One",
       url: "https://github.com/google/fonts/tree/main/ofl/russoone", license: "OFL-1.1",
       what: "A sporty, technical display sans by Jovanny Lemonad.",
@@ -648,7 +668,7 @@
     { group: "Video almanac", name: "AI Camera Movements",
       url: "https://aicameramovements.com", license: "a free reference - no license stated · prompts and previews © their author",
       what: "A free visual library of camera movement prompts for AI filmmakers: 46 moves in 7 categories, each with a prompt and a looping example.",
-      how: "The first section of the video chat's prompt reference, its Almanac (phase V14): the 46 moves with their categories and prompts as the site writes them, and each example made small - a still and a looping WebP (public/presets/helper/, tools/fetch-camera.js). Credited here and in the reference; any one is removed at its author's request." },
+      how: "The first section of the video chat's prompt reference, its Almanac: the 46 moves with their categories and prompts as the site writes them, and each example made small - a still and a looping WebP (public/presets/helper/, tools/fetch-camera.js). Credited here and in the reference; any one is removed at its author's request." },
     { group: "3D Studio", name: "three.js", npm: "three",
       url: "https://github.com/mrdoob/three.js", license: "MIT",
       what: "The most widely used 3D library for the web, drawing with WebGL.",
@@ -726,6 +746,14 @@
     built = true;
     var count = document.getElementById('thx-count');
     if (count) count.textContent = 'The open-source work this app is built on - ' + THANKS.length + ' repositories';
+    var legal = el('p', 'thx-intro', 'UGC Studio · Copyright (C) 2026 aferist777 · free software under the GNU Affero General Public License, '
+      + 'version 3 or (at your option) any later version · it comes with ABSOLUTELY NO WARRANTY · its source code: ');
+    var src = el('a', '', 'github.com/aferist777/ugc-app');
+    src.href = 'https://github.com/aferist777/ugc-app';
+    src.target = '_blank';
+    src.rel = 'noopener noreferrer';
+    legal.appendChild(src);
+    body.appendChild(legal);
     body.appendChild(el('p', 'thx-intro', 'UGC Studio stands on the work of these projects and the people behind them. '
       + 'Each is listed with its license, what it is, and what it does in this app. Thank you.'));
     var coll = null;

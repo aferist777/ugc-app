@@ -149,6 +149,7 @@
 /* ── Thanks (js/admin-thanks.js): the repositories the app is built on ─────── */
 .thx-body{ max-width:none; }   /* the whole width */
 .thx-intro{ margin:0 0 14px; font:var(--fw-regular) var(--fs-12)/1.5 var(--font); color:var(--muted); }
+.thx-intro a{ color:var(--ink); text-decoration:underline; }   /* the app's own notice: where its source is */
 .thx-group{ margin:0 0 18px; }
 .thx-row{ padding:7px 0 8px; border-bottom:1px solid var(--border-soft); }
 .thx-row:last-child{ border-bottom:0; }

@@ -30,7 +30,7 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const REPO = path.join(__dirname, '..');
-const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'server.js', 'package.json'];
+const APP_PATHS = ['desktop', 'lib', 'routes', 'public', 'server.js', 'package.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses'];
 const FETCH = ['fetch-yt-dlp', 'fetch-jassub', 'fetch-whisper', 'fetch-3d', 'fetch-mediapipe', 'fetch-sfx', 'fetch-patterns'];
 
 const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt; };

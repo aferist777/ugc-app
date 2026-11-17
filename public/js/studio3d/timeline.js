@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the tracks of a fragment, at the bottom (PLAN "3D Studio", 3D2; the owner 2026-10-08/09).
+   3D STUDIO — the tracks of a fragment, at the bottom.
 
    Its bar: the fragment (choose, "+ Fragment" from the shared arrangement or from the end of another, rename,
    delete, its length - at most 30 s), play / pause and the time, loop, the filter (all / cameras / moving), "Key",
@@ -7,11 +7,11 @@
    opened, a row per channel: position, turn, size, visibility. A key is a diamond whose shape says how it eases to
    the next one: smooth ◆, linear ◇, abrupt (fast start) ▶, gentle (slow start) ◀, hold ■.
 
-   What the hands do (borrowed from Theatre.js, Blender and TiXL - PLAN "Что взято из чужих проектов"):
+   What the hands do (borrowed from Theatre.js, Blender and TiXL):
      a press picks a key, Shift / Ctrl add or take one; a drag on empty lanes draws a box; a press on empty lane or on
      the ruler moves the playhead there;
-     a drag moves the picked keys freely - with Shift they snap to frames and to the playhead (the owner: free by
-     default, Shift to snap); a key dropped on a moment its channel has a key at already replaces it, never doubles;
+     a drag moves the picked keys freely - with Shift they snap to frames and to the playhead; a key dropped on a
+     moment its channel has a key at already replaces it, never doubles;
      the object's own row moves all its keys at that moment;
      a right press on a key: how it eases, or delete it; Delete removes the picked keys, Ctrl+C / Ctrl+V copy them to
      the playhead; K keys what is selected where it stands now;
@@ -406,7 +406,7 @@ function _dragKeys(e, d) {
 }
 
 // After keys moved: every channel in time order, and a key that landed on a moment its channel had a key at
-// replaces that one (the owner: several presses with the playhead in place must not stack keys in one spot).
+// replaces that one (several presses with the playhead in place must not stack keys in one spot).
 function _settle(moved) {
   const f = A.frag();
   const mset = new Set(moved);
@@ -512,7 +512,7 @@ function _zoom(k, atClientX) {
 }
 
 // Ctrl / Shift + wheel and a pinch (Chromium hands it over with Ctrl) zoom round the pointer - mouse and touchpad
-// alike (the owner); sideways the lanes scroll along time, up and down through the rows.
+// alike; sideways the lanes scroll along time, up and down through the rows.
 function _wheel(e) {
   if (e.ctrlKey || e.shiftKey) {
     e.preventDefault();

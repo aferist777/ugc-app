@@ -1,15 +1,15 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the page (PLAN "3D Studio - план по этапам", 3D1).
+   3D STUDIO — the page.
 
    It holds the open scene and is the only one that changes it: every change goes through `change(fn)`, which keeps
    the scene as it was for Ctrl+Z, redraws what the change touched and saves a moment later. The server keeps the
    scene (routes/studio3d.js); a page that leaves takes nothing with it.
 
-   A save carries the rev the copy was made from. Another window (or, from 3D5, the agent) saving meanwhile turns it
-   down with the scene as it is now - and the page takes that copy, says so, and goes on from it.
+   A save carries the rev the copy was made from. Another window (or the server's own change) saving meanwhile turns
+   it down with the scene as it is now - and the page takes that copy, says so, and goes on from it.
 
-   The scene open in this session is remembered in sessionStorage (like Merge's project, the owner: strictly this
-   session); with none, the studio opens on the gallery.
+   The scene open in this session is remembered in sessionStorage (like Merge's project: this session only); with
+   none, the studio opens on the gallery.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -39,7 +39,7 @@ const S = {
   timer: 0, pending: false,             // a change waiting for its save
   saving: null, again: false,           // the save in the air, and whether another is owed after it
   thumbAt: 0,
-  frag: '',                             // the open fragment's id (3D2)
+  frag: '',                             // the open fragment's id
   t: 0,                                 // the playhead, seconds into it
   playing: false, raf: 0, loop: true, last: 0,
 };
@@ -86,7 +86,7 @@ function paintAll() {
   Timeline.paint();
 }
 
-// ── Fragments and the playhead (3D2) ─────────────────────────────────────
+// ── Fragments and the playhead ───────────────────────────────────────────
 function frag() { return S.scene ? S.scene.fragments.find(x => x.id === S.frag) || null : null; }
 function applyPose() { vp.setPose(frag() ? evaluate(S.scene, frag(), S.t) : null); }
 
