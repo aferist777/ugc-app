@@ -110,4 +110,4 @@ if (require.main === module) {
   process.exit(report(scan(roots)) ? 0 : 1);
 }
 
-module.exports = { targets, scan, report };
+module.exports = { targets, scan, report, SHAPES };
