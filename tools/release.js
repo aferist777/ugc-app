@@ -1,42 +1,35 @@
 'use strict';
 
-/* release.js - a new version of UGC Studio for the friends' installed copies, through the publisher's Cloudflare: tested
-   on this computer, published on command; versions 1.x.y, each tagged app-v<version> in git; notes drafted from the
-   commits and corrected by hand; the signing key has no password.
+/* release.js - a new version of UGC Studio on the program's GitHub Releases: built and tested on this computer,
+   uploaded on command; each tagged app-v<version>; notes drafted from the commits and corrected by hand; the signing key
+   has no password.
 
      node tools/release.js keygen                 the signing pair: the private key into %USERPROFILE%\.ugc-release\
                                                   (never in git, never inside this folder), the public one into
                                                   desktop/update-key.js - commit that file. Never makes a second pair.
      node tools/release.js notes                  docs/releases/<version>.md - a draft from the commits since the last
-                                                  app-v tag, to be corrected before publishing
-     node tools/release.js publish [--bump] [--important]
+                                                  app-v tag, to be rewritten before publishing: it is the release page
+                                                  and what the update window shows
+     node tools/release.js publish [--bump] [--important] [--seq <n>]
                                                   builds the version FROM THE LAST COMMIT (tools/build-app.js) with the
-                                                  next sequence number, starts it once on an empty library in %TEMP%
-                                                  (it must come up), sends the files the bucket does not have yet, then
-                                                  the signed manifest - installed copies see it within six hours; tags git
+                                                  next sequence number (the published one's + 1, or --seq), starts it
+                                                  once on an empty library in %TEMP% (it must come up), searches it for
+                                                  your keys, then lays out the release in %LOCALAPPDATA%\ugc-release\
+                                                  <version>\: the zip a person unpacks, the signed manifest of what is in
+                                                  it and where (lib/update-manifest.js), the notes. Tags git
                                                   app-v<version>. --bump raises package.json's patch number and commits
-                                                  it first (a version is published once).
-     node tools/release.js status                 what the channel holds
-     node tools/release.js prune [--keep 3]       deletes the files no release among the last three uses
-     node tools/release.js worker                 the bucket ugc-updates and the Worker ugc-updates on the
-                                                  publisher's Cloudflare (tools/release-worker.js); its address into
-                                                  desktop/update-key.js - commit that file
-     node tools/release.js friend add <name>      a friend's token (its SHA-256 in the bucket, the token itself in
-                                                  %USERPROFILE%\.ugc-release\friends\<name>.token for the handoff)
-     node tools/release.js friend remove <name>   that copy gets no updates any more
-     node tools/release.js friends                who, and which version each copy said it has
-     node tools/release.js handoff <name> --to <empty folder> [--with-projects] [--no-library]
-                                                  the friend's folder: the launcher, the version the channel
-                                                  has, the friend's token, a CLEAN copy of library\ (tools/clean-library.js:
-                                                  no keys, no Cloudflare or bot, no journal or chats, without the projects
-                                                  and their renders) and a how-to-start text file; then every
-                                                  file is searched for the publisher's keys (tools/key-scan.js) - one found,
-                                                  and the folder is not to be handed over. The publisher's app must be closed.
+                                                  it first (a version is published once). Nothing is sent.
+     node tools/release.js upload [--target <commit>] [--history <folder>]
+                                                  the laid-out release onto GitHub (`gh release create`, the repository
+                                                  of desktop/update-key.js RELEASES): the tag on the PUBLIC commit -
+                                                  --target, or the one tools/publish-history.js made of the release's
+                                                  commit (its commits.txt, %TEMP%\ugc-public by default). Installed copies
+                                                  see it within six hours.
+     node tools/release.js status                 what GitHub's latest release is, and the releases laid out here
 
-   Where: the bucket `ugc-updates` on the publisher's Cloudflare - the account and the ONE Cloudflare key are READ from
-   library/data/settings.json (the key on Admin of the publisher's library; nothing is written there).
-   A stand: --store <folder> (the same layout in a folder), --keys <folder> (a throwaway pair), --worktree,
-   --version-name, --update-url (baked into the build). The channel is `stable` (one channel). */
+   A stand: --keys <folder> (a throwaway pair), --update-url <releases address> (baked into the build; publish reads the
+   published sequence number there), --worktree, --version-name, --no-smoke, --out <folder> (instead of
+   %LOCALAPPDATA%\ugc-release); `upload --dir <folder>` puts the release into a folder tools/fake-releases.js serves. */
 
 const fs = require('fs');
 const os = require('os');
@@ -46,24 +39,28 @@ const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
 
 const UM = require('../lib/update-manifest');
-const { createDirStore, createS3Store } = require('../lib/update-store');
 
 const REPO = path.join(__dirname, '..');
-const CHANNEL = 'stable';
-const BUCKET = 'ugc-updates';
 const DEFAULT_KEYS = path.join(os.homedir(), '.ugc-release');
+const FOLDER = 'UGC Studio';
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
 const arg = (name, dflt) => { const i = argv.indexOf(name); return i > 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : dflt; };
 const flag = (name) => argv.includes(name);
 const say = (s) => console.log('[release] ' + s);
+const mb = (b) => (b / 1048576).toFixed(1);
 
 function git(args) {
   const r = spawnSync('git', args, { cwd: REPO, encoding: 'utf8', windowsHide: true });
   if (r.status !== 0) throw new Error('git ' + args.join(' ') + ': ' + (r.stderr || '').trim());
   return r.stdout.trim();
 }
+
+const appKey = () => { const f = require.resolve('../desktop/update-key'); delete require.cache[f]; return require(f); };
+const releasesUrl = () => (arg('--update-url', '') || appKey().RELEASES || '').replace(/\/+$/, '');
+const outRoot = () => path.resolve(arg('--out', path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'ugc-release')));
+const versionOf = () => arg('--version-name', '') || JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
 
 // ── Keys ────────────────────────────────────────────────────────────────────
 const keysDir = () => path.resolve(arg('--keys', DEFAULT_KEYS));
@@ -77,10 +74,9 @@ function readPrivate() {
 
 function writeAppKey(fields) {
   const file = path.join(REPO, 'desktop', 'update-key.js');
-  delete require.cache[require.resolve(file)];
-  const now = { ...require(file), ...fields };
+  const now = { ...appKey(), ...fields };
   const text = fs.readFileSync(file, 'utf8')
-    .replace(/module\.exports = \{[\s\S]*\};\s*$/, `module.exports = {\n  PUBLIC_KEY: ${JSON.stringify(now.PUBLIC_KEY)},\n  WORKER_URL: ${JSON.stringify(now.WORKER_URL)},\n};\n`);
+    .replace(/module\.exports = \{[\s\S]*\};\s*$/, `module.exports = {\n  PUBLIC_KEY: ${JSON.stringify(now.PUBLIC_KEY || '')},\n  RELEASES: ${JSON.stringify(now.RELEASES || '')},\n};\n`);
   fs.writeFileSync(file, text);
 }
 
@@ -88,7 +84,7 @@ function keygen() {
   const dir = keysDir();
   if (path.resolve(dir).toLowerCase().startsWith(path.resolve(REPO).toLowerCase() + path.sep)) throw new Error('the private key must not lie inside the program folder');
   const f = path.join(dir, 'signing-key.pem');
-  if (fs.existsSync(f)) throw new Error(`a signing key is there already (${f}) - a second one would cut every friend off`);
+  if (fs.existsSync(f)) throw new Error(`a signing key is there already (${f}) - a second one would cut every installed copy off`);
   const pair = UM.keyPair();
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(f, pair.privateKey, { mode: 0o600 });
@@ -100,44 +96,20 @@ function keygen() {
   say(`the private key: ${f} - copy it onto a flash drive and keep it there; it is never sent anywhere`);
 }
 
-// ── Where ───────────────────────────────────────────────────────────────────
-function store() {
-  const dir = arg('--store', '');
-  if (dir) return createDirStore(path.resolve(dir));
-  const settingsFile = path.join(REPO, 'library', 'data', 'settings.json');
-  let s = {};
-  try { s = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch (e) { throw new Error('your library\'s settings cannot be read: ' + settingsFile); }
-  const token = String(s.cloudflareApiToken || '').trim();
-  const tokenId = String(s.cloudflareTokenId || '').trim();
-  const account = String(s.r2AccountId || '').trim();
-  if (!token || !tokenId || !account) throw new Error('the Cloudflare key on Admin -> API keys has not passed its check (no token id or account)');
-  return createS3Store({
-    account, bucket: BUCKET,
-    key: tokenId, secret: crypto.createHash('sha256').update(token).digest('hex'),
-  });
-}
-
-// A few at once - the first release sends ten thousand files.
-async function pool(items, n, fn) {
-  let i = 0;
-  const workers = Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } });
-  await Promise.all(workers);
-}
-
 // ── Notes ───────────────────────────────────────────────────────────────────
 function lastTag() {
   try { return git(['describe', '--tags', '--match', 'app-v*', '--abbrev=0']); } catch (e) { return ''; }
 }
 
 function notes(version) {
-  const v = version || JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
+  const v = version || versionOf();
   const since = lastTag();
   const log = git(['log', '--no-merges', '--pretty=%s', since ? `${since}..HEAD` : '-40']).split('\n')
     .filter((s) => s && !/^Docs:/i.test(s));
   const file = path.join(REPO, 'docs', 'releases', `${v}.md`);
-  if (fs.existsSync(file)) { say(`${path.relative(REPO, file)} is there already - correct it, it is what friends read`); return file; }
+  if (fs.existsSync(file)) { say(`${path.relative(REPO, file)} is there already - correct it, it is the release page`); return file; }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `# UGC Studio ${v}\n\n<!-- Draft from the commits${since ? ' since ' + since : ''}: rewrite it in Russian, short, for a friend. -->\n\n`
+  fs.writeFileSync(file, `# UGC Studio ${v}\n\n<!-- Draft from the commits${since ? ' since ' + since : ''}: rewrite it - short, in English; it is the release page and the update window. -->\n\n`
     + log.map((s) => `- ${s}`).join('\n') + '\n');
   say(`draft: ${path.relative(REPO, file)} (${log.length} commits) - rewrite it before publishing`);
   return file;
@@ -170,29 +142,132 @@ async function smokeBuilt(out) {
   spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
   await new Promise((r) => setTimeout(r, 1500));
   try { fs.rmSync(lib, { recursive: true, force: true, maxRetries: 5 }); } catch (e) { /* %TEMP% */ }
-  if (!ok) throw new Error('the built version did not come up on an empty library - nothing was published');
+  if (!ok) throw new Error('the built version did not come up on an empty library - nothing was laid out');
   say('the built version came up on an empty library');
 }
 
-// ── Publish ─────────────────────────────────────────────────────────────────
+// ── The zip ─────────────────────────────────────────────────────────────────
+const HOW_TO = (version) => [
+  `UGC Studio ${version} - how to start`,
+  '',
+  '1. Put the folder "UGC Studio" somewhere of your own, for example C:\\UGC Studio - not inside a folder OneDrive',
+  '   syncs (the Desktop and Documents often are): your library will grow to gigabytes.',
+  '2. Open "UGC Studio.exe" in it. The program is not signed, so Windows may say "Windows protected your PC":',
+  '   press "More info", then "Run anyway". The first start can take up to a minute.',
+  '3. In the app, open Admin -> API keys and enter your own keys (Guide, chapter 12 "Keys and prices", says which).',
+  '4. Updates come by themselves: when a new version is downloaded, a chip "Update ..." appears in the top strip -',
+  '   press it, then "Restart and update".',
+  '',
+  'The folder "library" (made at the first start) is yours: everything you make is kept in it.',
+  'The folders "versions" and "updates" are the program and its updates.',
+  'From an older copy: close it, delete its folder "updates" (only the old updates\' own files), then unpack this zip over',
+  'the old "UGC Studio" folder, replacing the files - "library" stays where it is.',
+  'If something does not start, the logs are updates\\launcher.log and library\\logs\\app.log.',
+  '',
+].join('\r\n');
+
+function makeZip(zipFile, entries) {
+  const archiver = require('archiver');
+  return new Promise((resolve, reject) => {
+    const sink = fs.createWriteStream(zipFile);
+    const a = archiver('zip', { zlib: { level: 6 } });
+    sink.on('close', resolve);
+    sink.on('error', reject);
+    a.on('error', reject);
+    a.on('warning', reject);
+    a.pipe(sink);
+    for (const e of entries) {
+      if (e.file) a.file(e.file, { name: e.name });
+      else a.append(e.data, { name: e.name });
+    }
+    a.finalize();
+  });
+}
+
+/** Where each entry's bytes lie in a zip: name -> { o, z, m, s } (no zip64 - a release is far below 4 GB). */
+function zipIndex(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const tailLen = Math.min(size, 65557);
+    const tail = Buffer.alloc(tailLen);
+    fs.readSync(fd, tail, 0, tailLen, size - tailLen);
+    let e = -1;
+    for (let i = tailLen - 22; i >= 0; i--) if (tail.readUInt32LE(i) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('the zip has no end record');
+    const count = tail.readUInt16LE(e + 10);
+    const cdSize = tail.readUInt32LE(e + 12);
+    const cdOff = tail.readUInt32LE(e + 16);
+    if (count === 0xffff || cdOff === 0xffffffff || cdSize === 0xffffffff) throw new Error('the zip is a zip64 - not read here');
+    const cd = Buffer.alloc(cdSize);
+    fs.readSync(fd, cd, 0, cdSize, cdOff);
+    const lh = Buffer.alloc(30);
+    const entries = new Map();
+    for (let p = 0, k = 0; k < count; k++) {
+      if (cd.readUInt32LE(p) !== 0x02014b50) throw new Error('the zip\'s directory is broken');
+      const m = cd.readUInt16LE(p + 10);
+      const z = cd.readUInt32LE(p + 20);
+      const s = cd.readUInt32LE(p + 24);
+      const n = cd.readUInt16LE(p + 28);
+      const x = cd.readUInt16LE(p + 30);
+      const c = cd.readUInt16LE(p + 32);
+      const off = cd.readUInt32LE(p + 42);
+      const name = cd.toString('utf8', p + 46, p + 46 + n);
+      fs.readSync(fd, lh, 0, 30, off);
+      if (lh.readUInt32LE(0) !== 0x04034b50) throw new Error('the zip\'s entry has no header: ' + name);
+      entries.set(name, { o: off + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28), z, m, s });
+      p += 46 + n + x + c;
+    }
+    return { size, entries };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Every file of the manifest read back from the zip the way the updater reads it - its sha256 must be the one listed. */
+function checkZip(zipFile, files) {
+  const fd = fs.openSync(zipFile, 'r');
+  try {
+    for (const f of files) {
+      const raw = Buffer.allocUnsafe(f.z);
+      fs.readSync(fd, raw, 0, f.z, f.o);
+      const data = f.m === 8 ? zlib.inflateRawSync(raw) : raw;
+      if (crypto.createHash('sha256').update(data).digest('hex') !== f.h) throw new Error('the zip does not give back ' + f.p);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// ── What is published ───────────────────────────────────────────────────────
+async function published(pub) {
+  const base = releasesUrl();
+  if (!base) return null;
+  const r = await fetch(`${base}/latest/download/${UM.MANIFEST}`, { signal: AbortSignal.timeout(30000) });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`${base} answered ${r.status}`);
+  return UM.open(Buffer.from(await r.arrayBuffer()), pub);
+}
+
+// ── Publish: the release laid out here ──────────────────────────────────────
 async function publish() {
-  const st = store();
   const priv = readPrivate();
   const pub = publicOf(priv);
-  const stand = !!arg('--store', '');
+  const stand = !!arg('--update-url', '');
   if (!stand) {
-    const appKey = String(require('../desktop/update-key').PUBLIC_KEY || '').trim();
-    if (appKey !== pub.trim()) throw new Error('desktop/update-key.js does not hold the public half of this signing key - friends would refuse the update');
+    if (String(appKey().PUBLIC_KEY || '').trim() !== pub.trim()) throw new Error('desktop/update-key.js does not hold the public half of this signing key - installed copies would refuse the update');
+    if (!appKey().RELEASES) throw new Error('desktop/update-key.js names no RELEASES page');
     if (git(['status', '--porcelain', '--', 'desktop', 'lib', 'routes', 'public', 'server.js', 'package.json'])) {
       say('note: there are uncommitted changes - they are NOT in this release (it is built from the last commit)');
     }
   }
 
-  // The channel as it is.
-  const had = await st.get(UM.keys.channel(CHANNEL));
-  const was = had ? UM.open(had, pub) : null;
-  if (was) say(`the channel holds ${was.version} (seq ${was.seq})`);
-
+  let was = null;
+  try { was = await published(pub); } catch (e) {
+    if (!arg('--seq', '')) throw new Error(`the published release cannot be read (${e.message}) - give --seq <n>`);
+    say(`note: the published release cannot be read (${e.message}) - seq ${arg('--seq', '')} as given`);
+  }
+  if (was) say(`the latest published release is ${was.version} (seq ${was.seq})`);
   if (flag('--bump')) {
     const pf = path.join(REPO, 'package.json');
     const pkg = JSON.parse(fs.readFileSync(pf, 'utf8'));
@@ -203,290 +278,141 @@ async function publish() {
     git(['commit', '-m', `Release ${pkg.version}`, '--', 'package.json']);
     say(`package.json -> ${pkg.version}, committed`);
   }
-  const version = arg('--version-name', '') || JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
+  const version = versionOf();
   if (!UM.VERSION_NAME.test(version)) throw new Error('not a version name: ' + version);
-  if (await st.has(UM.keys.release(version)) >= 0) throw new Error(`${version} is published already - raise the version (--bump)`);
-  const seq = (was ? was.seq : 0) + 1;
+  if (was && was.version === version) throw new Error(`${version} is published already - raise the version (--bump)`);
+  const seq = Number(arg('--seq', '')) || (was ? was.seq : 0) + 1;
+  if (was && seq <= was.seq) throw new Error(`seq ${seq} is not above the published ${was.seq}`);
 
   // Built from the commit (a stand may take the folder as it is).
   const { build } = require('./build-app');
   const out = path.join(os.tmpdir(), 'ugcb', version);
-  const urlKey = arg('--update-url', '');
-  const b = build({ out, seq, channel: CHANNEL, worktree: stand && flag('--worktree'), version: arg('--version-name', ''),
-    updateKey: stand ? pub : '', updateUrl: stand ? urlKey : '' });
+  const b = build({ out, seq, channel: 'stable', worktree: stand && flag('--worktree'), version: arg('--version-name', ''),
+    updateKey: stand ? pub : '', updateUrl: stand ? releasesUrl() : '' });
   if (!flag('--no-smoke')) await smokeBuilt(out);
   // No key of the publisher's in the program that goes out.
   const KS = require('./key-scan');
-  if (!KS.report(KS.scan([out]), say)) throw new Error('a key of yours is in the built program - nothing was published');
+  if (!KS.report(KS.scan([out]), say)) throw new Error('a key of yours is in the built program - nothing was laid out');
 
-  // The files the bucket does not have yet.
-  const list = JSON.parse(fs.readFileSync(path.join(out, 'resources', 'app', 'files.json'), 'utf8')).files;
-  const byHash = new Map();
-  for (const f of list) if (!byHash.has(f.h)) byHash.set(f.h, f);
-  const z = new Map();
-  let sent = 0, sentBytes = 0;
+  // The zip: UGC Studio\ - the launcher, versions\<version>\ and versions\current.json, the how-to.
+  const dir = path.join(outRoot(), version);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const zipFile = path.join(dir, UM.zipName(version));
+  const own = JSON.parse(fs.readFileSync(path.join(out, 'resources', 'app', 'files.json'), 'utf8'));
+  const list = own.files;
+  const inVersion = (p) => `${FOLDER}/versions/${version}/${p}`;
   const t0 = Date.now();
-  // What the bucket has, in one listing (a thousand a page) - asking for each of eight thousand files takes four minutes.
-  const there = new Map((await st.list('blobs/')).map((b) => [b.key, b.size]));
-  await pool([...byHash.values()], stand ? 4 : 8, async (f) => {
-    const key = UM.keys.blob(f.h);
-    const size = there.has(key) ? there.get(key) : -1;
-    if (size >= 0) { z.set(f.h, size); return; }
-    const gz = zlib.gzipSync(fs.readFileSync(path.join(out, ...f.p.split('/'))), { level: 6 });
-    await st.put(key, gz, 'application/gzip');
-    z.set(f.h, gz.length);
-    sent++; sentBytes += gz.length;
-    if (sent % 500 === 0) say(`${sent} files sent (${(sentBytes / 1048576).toFixed(0)} MB)`);
-  });
-  say(`${sent} new files sent (${(sentBytes / 1048576).toFixed(1)} MB), ${byHash.size - sent} were there; ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+  await makeZip(zipFile, [
+    { name: `${FOLDER}/UGC Studio.exe`, file: path.join(out, 'resources', 'app', 'launcher', 'UGC Studio.exe') },
+    { name: `${FOLDER}/How to start.txt`, data: Buffer.from(HOW_TO(version), 'utf8') },
+    { name: `${FOLDER}/versions/current.json`, data: Buffer.from(JSON.stringify({ current: version, previous: null, tries: 0, bad: [] })) },
+    ...list.map((f) => ({ name: inVersion(f.p), file: path.join(out, ...f.p.split('/')) })),
+    { name: inVersion('resources/app/files.json'), file: path.join(out, 'resources', 'app', 'files.json') },
+  ]);
+  const idx = zipIndex(zipFile);
+  say(`${path.basename(zipFile)}: ${idx.entries.size} entries, ${mb(idx.size)} MB, ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 
-  // The signed manifest - the release's first, then the channel's: installed copies see it from here on.
+  const files = list.map((f) => {
+    const e = idx.entries.get(inVersion(f.p));
+    if (!e || e.s !== f.s) throw new Error('the zip does not hold ' + f.p + ' as built');
+    return { p: f.p, h: f.h, s: f.s, o: e.o, z: e.z, m: e.m };
+  });
+  checkZip(zipFile, files);
+  say('every file reads back from the zip by its place, sha256 as built');
+
   const manifest = {
-    app: UM.APP, channel: CHANNEL, platform: UM.PLATFORM, seq, version, commit: b.info.commit, date: b.info.date,
+    app: UM.APP, platform: UM.PLATFORM, seq, version, tag: UM.tagOf(version), commit: b.info.commit, date: b.info.date,
     format: b.info.format, important: flag('--important'), notes: notesText(version),
-    files: list.map((f) => ({ p: f.p, h: f.h, s: f.s, z: z.get(f.h) })),
+    zip: { name: path.basename(zipFile), size: idx.size }, files,
   };
   const env = UM.seal(manifest, priv);
   UM.open(env, pub);
-  await st.put(UM.keys.release(version), env, 'application/json');
-  await st.put(UM.keys.channel(CHANNEL), env, 'application/json');
-  say(`published ${version} (seq ${seq}) to ${st.where}`);
+  fs.writeFileSync(path.join(dir, UM.MANIFEST), env);
+  fs.writeFileSync(path.join(dir, 'notes.md'), (notesText(version) || `UGC Studio ${version}`) + '\n');
+  say(`laid out ${version} (seq ${seq}, commit ${b.info.commit.slice(0, 12)}) in ${dir} - nothing sent; "upload" puts it on GitHub`);
 
   if (!stand) {
-    try { git(['tag', `app-v${version}`, b.info.commit]); say(`tagged app-v${version}`); } catch (e) { say('not tagged: ' + e.message); }
+    try { git(['tag', UM.tagOf(version), b.info.commit]); say(`tagged ${UM.tagOf(version)}`); } catch (e) { say('not tagged: ' + e.message); }
   }
-  return { version, seq, sent, sentBytes, out };
+  return { version, seq, dir, zip: zipFile, out };
 }
 
-async function status() {
-  const st = store();
-  const pub = publicOf(readPrivate());
-  const had = await st.get(UM.keys.channel(CHANNEL));
-  if (!had) { say('the channel is empty'); return null; }
-  const m = UM.open(had, pub);
-  say(`${CHANNEL}: ${m.version} (seq ${m.seq}, ${m.date}, ${m.files.length} files${m.important ? ', important' : ''})`);
-  const rel = await st.list('releases/');
-  say(`releases: ${rel.map((r) => r.key.split('/')[1]).join(', ')}`);
+// ── Upload: the laid-out release onto GitHub (or a stand's folder) ──────────
+function laidOut(version) {
+  const dir = path.join(outRoot(), version);
+  const env = path.join(dir, UM.MANIFEST);
+  if (!fs.existsSync(env)) throw new Error(`no release of ${version} is laid out in ${dir} - "publish" first`);
+  const m = UM.open(fs.readFileSync(env), publicOf(readPrivate()));
+  const zip = path.join(dir, m.zip.name);
+  if (!fs.existsSync(zip) || fs.statSync(zip).size !== m.zip.size) throw new Error(`${zip} is not the zip the manifest names`);
+  return { dir, m, env, zip, notes: path.join(dir, 'notes.md') };
+}
+
+function gh(args) {
+  const r = spawnSync('gh', args, { cwd: REPO, encoding: 'utf8', windowsHide: true, maxBuffer: 1 << 24 });
+  if (r.error) throw r.error;
+  return r;
+}
+
+async function upload() {
+  const version = argv[1] && !argv[1].startsWith('--') ? argv[1] : versionOf();
+  const { m, env, zip, notes: notesFile } = laidOut(version);
+
+  const to = arg('--dir', '');
+  if (to) {
+    const d = path.join(path.resolve(to), m.tag);
+    fs.mkdirSync(d, { recursive: true });
+    fs.copyFileSync(zip, path.join(d, m.zip.name));
+    fs.copyFileSync(env, path.join(d, UM.MANIFEST));
+    fs.writeFileSync(path.join(path.resolve(to), 'latest.txt'), m.tag);
+    say(`${m.tag} put into ${d} - the latest there`);
+    return m;
+  }
+
+  const hit = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases$/.exec(releasesUrl());
+  if (!hit) throw new Error('desktop/update-key.js RELEASES is not a GitHub releases page: ' + releasesUrl());
+  const repo = hit[1];
+  let target = arg('--target', '');
+  if (!target) {
+    const map = path.join(path.resolve(arg('--history', path.join(os.tmpdir(), 'ugc-public'))), 'commits.txt');
+    if (!fs.existsSync(map)) throw new Error(`no ${map} - run tools/publish-history.js first, or give --target <public commit>`);
+    const line = fs.readFileSync(map, 'utf8').split('\n').find((l) => l.startsWith(m.commit + ' '));
+    if (!line) throw new Error(`the release's commit ${m.commit.slice(0, 12)} is not in ${map} - publish the history from it first`);
+    target = line.split(' ')[1].trim();
+  }
+  if (gh(['release', 'view', m.tag, '--repo', repo]).status === 0) throw new Error(`${repo} has a release ${m.tag} already`);
+  say(`${m.tag} -> ${repo} at ${target.slice(0, 12)}: ${path.basename(zip)} (${mb(m.zip.size)} MB) and ${UM.MANIFEST}`);
+  const r = gh(['release', 'create', m.tag, zip, env, '--repo', repo, '--target', target,
+    '--title', `UGC Studio ${m.version}`, '--notes-file', notesFile]);
+  if (r.status !== 0) throw new Error('gh release create: ' + (r.stderr || r.stdout || '').trim());
+  say((r.stdout || '').trim());
+
+  // What installed copies will read.
+  const now = await published(publicOf(readPrivate()));
+  if (!now || now.seq !== m.seq) throw new Error(`GitHub's latest release does not answer ${m.version} yet (${now ? now.version : 'none'})`);
+  say(`installed copies read ${now.version} (seq ${now.seq}) from ${releasesUrl()}`);
   return m;
 }
 
-async function prune() {
-  const st = store();
+async function status() {
   const pub = publicOf(readPrivate());
-  const keep = Math.max(1, Number(arg('--keep', '3')) || 3);
-  const rels = [];
-  for (const r of await st.list('releases/')) {
-    try { rels.push(UM.open(await st.get(r.key), pub)); } catch (e) { say(`${r.key} is not readable - its files are kept`); return; }
-  }
-  rels.sort((a, b) => b.seq - a.seq);
-  const kept = rels.slice(0, keep);
-  const chan = await st.get(UM.keys.channel(CHANNEL));
-  if (chan) kept.push(UM.open(chan, pub));
-  const used = new Set(kept.flatMap((m) => m.files.map((f) => f.h)));
-  const blobs = await st.list('blobs/');
-  const drop = blobs.filter((b) => !used.has(b.key.slice('blobs/'.length)));
-  await pool(drop, 8, (b) => st.del(b.key));
-  say(`kept the files of ${kept.map((m) => m.version).filter((v, i, a) => a.indexOf(v) === i).join(', ')}; ${drop.length} files deleted (${(drop.reduce((s, b) => s + b.size, 0) / 1048576).toFixed(1)} MB)`);
-  return drop.length;
-}
-
-// ── The Worker and the friends ──────────────────────────────────
-function cfSettings() {
-  const s = JSON.parse(fs.readFileSync(path.join(REPO, 'library', 'data', 'settings.json'), 'utf8'));
-  const token = String(s.cloudflareApiToken || '').trim();
-  const account = String(s.r2AccountId || '').trim();
-  if (!token || !account) throw new Error('the Cloudflare key on Admin -> API keys has not passed its check');
-  return { token, account };
-}
-
-async function cf(method, url, body) {
-  const { token } = cfSettings();
-  const form = typeof FormData !== 'undefined' && body instanceof FormData;
-  const r = await fetch('https://api.cloudflare.com/client/v4' + url, {
-    method,
-    headers: { Authorization: 'Bearer ' + token, ...(body && !form ? { 'content-type': 'application/json' } : {}) },
-    body: body ? (form ? body : JSON.stringify(body)) : undefined,
-    signal: AbortSignal.timeout(60000),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.success === false) {
-    const e = new Error(`Cloudflare ${method} ${url.replace(/accounts\/[^/]+/, 'accounts/…')}: ${r.status} ${(j.errors || []).map((x) => x.message).join('; ')}`);
-    e.status = r.status;
-    throw e;
-  }
-  return j.result;
-}
-
-// The bucket, the Worker bound to it, its workers.dev address - written into desktop/update-key.js (commit it).
-async function worker() {
-  const { account } = cfSettings();
-  const acc = encodeURIComponent(account);
-  const W = require('./release-worker');
-  try { await cf('GET', `/accounts/${acc}/r2/buckets/${BUCKET}`); say(`the bucket ${BUCKET} is there`); }
-  catch (e) {
-    if (e.status !== 404) throw e;
-    await cf('POST', `/accounts/${acc}/r2/buckets`, { name: BUCKET });
-    say(`the bucket ${BUCKET} was made`);
-  }
-  let sub = '';
-  try { sub = ((await cf('GET', `/accounts/${acc}/workers/subdomain`)) || {}).subdomain || ''; } catch (e) { /* none yet */ }
-  if (!sub) sub = (await cf('PUT', `/accounts/${acc}/workers/subdomain`, { subdomain: 'ugc-' + crypto.randomBytes(4).toString('hex') })).subdomain;
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify({
-    main_module: 'worker.js', compatibility_date: '2025-01-01',
-    bindings: [{ type: 'r2_bucket', name: 'UPD', bucket_name: BUCKET }],
-  })], { type: 'application/json' }));
-  form.append('worker.js', new Blob([W.WORKER], { type: 'application/javascript+module' }), 'worker.js');
-  await cf('PUT', `/accounts/${acc}/workers/scripts/${W.NAME}`, form);
-  await cf('POST', `/accounts/${acc}/workers/scripts/${W.NAME}/subdomain`, { enabled: true });
-  const url = `https://${W.NAME}.${sub}.workers.dev`;
-  writeAppKey({ WORKER_URL: url });
-  say(`the Worker answers at ${url} - desktop/update-key.js holds it; commit it`);
-  return url;
-}
-
-const FRIEND = /^[a-z0-9][a-z0-9_-]{0,31}$/;
-const tokenFile = (name) => path.join(keysDir(), 'friends', `${name}.token`);
-
-async function readTokens(st) {
-  const b = await st.get('access/tokens.json');
-  try { return b ? JSON.parse(b.toString('utf8')) : {}; } catch (e) { throw new Error('access/tokens.json is not readable - nothing changed'); }
-}
-
-/** A friend's token: made, its SHA-256 into the bucket, the token itself into <keys>\friends\<name>.token (for handoff). */
-async function friendAdd(name) {
-  if (!FRIEND.test(String(name || ''))) throw new Error('a friend\'s name: small Latin letters, digits, - and _');
-  const st = store();
-  const t = await readTokens(st);
-  if (Object.values(t).some((f) => f.name === name && !f.revoked)) throw new Error(`${name} has a token already (friend remove ${name} first)`);
-  const token = crypto.randomBytes(24).toString('base64url');
-  t[crypto.createHash('sha256').update(token).digest('hex')] = { name, channel: CHANNEL, added: new Date().toISOString() };
-  await st.put('access/tokens.json', Buffer.from(JSON.stringify(t, null, 2)), 'application/json');
-  fs.mkdirSync(path.dirname(tokenFile(name)), { recursive: true });
-  fs.writeFileSync(tokenFile(name), token, { mode: 0o600 });
-  say(`${name}: a token made - it goes into the copy as updates\\token (release.js handoff); kept in ${tokenFile(name)}`);
-  return token;
-}
-
-async function friendRemove(name) {
-  const st = store();
-  const t = await readTokens(st);
-  let n = 0;
-  for (const f of Object.values(t)) if (f.name === name && !f.revoked) { f.revoked = new Date().toISOString(); n++; }
-  if (!n) throw new Error(`${name} has no token`);
-  await st.put('access/tokens.json', Buffer.from(JSON.stringify(t, null, 2)), 'application/json');
-  say(`${name}: no access to updates any more (within a minute)`);
-}
-
-async function friends() {
-  const st = store();
-  const t = await readTokens(st);
-  const rows = [];
-  for (const f of Object.values(t)) {
-    let seen = null;
-    try { const b = await st.get(`seen/${f.name}.json`); seen = b ? JSON.parse(b.toString('utf8')) : null; } catch (e) { seen = null; }
-    rows.push(`${f.name}${f.revoked ? ' (revoked)' : ''}: ${seen ? `${seen.version} (seq ${seen.seq}, ${seen.state || 'checked'}) ${seen.at}` : 'never asked'}`);
-  }
-  for (const r of rows) say(r);
-  return rows;
-}
-
-// ── The handoff ─────────────────────────────────────────────────
-// The version friends have, laid out in `dir`: the local build when it is that very version (every file's hash the
-// manifest's), else unpacked from the bucket's blobs.
-async function layVersion(m, st, dir) {
-  const local = path.join(os.tmpdir(), 'ugcb', m.version);
-  const lf = (() => { try { return JSON.parse(fs.readFileSync(path.join(local, 'resources', 'app', 'files.json'), 'utf8')); } catch (e) { return null; } })();
-  const same = lf && lf.seq === m.seq && lf.files.length === m.files.length && (() => {
-    const h = new Map(lf.files.map((f) => [f.p, f.h]));
-    return m.files.every((f) => h.get(f.p) === f.h);
-  })();
-  if (same) {
-    const r = spawnSync('robocopy', [local, dir, '/E', '/MT:16', '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { windowsHide: true });
-    if (r.status >= 8) throw new Error('the version was not copied (robocopy ' + r.status + ')');
-    say(`${m.version}: copied from the build in ${local}`);
-    return;
-  }
-  say(`${m.version}: unpacked from the bucket (${m.files.length} files)`);
-  const byHash = new Map();
-  for (const f of m.files) { if (!byHash.has(f.h)) byHash.set(f.h, []); byHash.get(f.h).push(f); }
-  await pool([...byHash.entries()], 8, async ([h, files]) => {
-    const gz = await st.get(UM.keys.blob(h));
-    if (!gz) throw new Error('the bucket has no file ' + h);
-    const buf = zlib.gunzipSync(gz);
-    if (crypto.createHash('sha256').update(buf).digest('hex') !== h) throw new Error('a file of the bucket does not match its checksum: ' + h);
-    for (const f of files) { const t = path.join(dir, ...f.p.split('/')); fs.mkdirSync(path.dirname(t), { recursive: true }); fs.writeFileSync(t, buf); }
-  });
-  fs.writeFileSync(path.join(dir, 'resources', 'app', 'files.json'), JSON.stringify({ version: m.version, seq: m.seq, commit: m.commit, files: m.files.map((f) => ({ p: f.p, h: f.h, s: f.s })) }));
-}
-
-const README = (version) => [
-  `UGC Studio ${version} — как запустить`,
-  '',
-  '1. Скопируйте папку «UGC Studio» целиком на диск C: (например, C:\\UGC Studio).',
-  '   Не кладите её на Рабочий стол или в Документы, если их синхронизирует OneDrive.',
-  '2. Откройте «UGC Studio.exe» в этой папке. Если удобно — закрепите его на панели задач.',
-  '   Первый запуск может занять до минуты.',
-  '3. В приложении откройте Admin → API keys и введите свои ключи (kie.ai, ElevenLabs, Cloudflare и другие).',
-  '4. Обновления приходят сами. Когда новая версия скачается, справа вверху появится кнопка «Update …» —',
-  '   нажмите её, затем «Restart and update».',
-  '',
-  'Папка library — ваша библиотека: всё, что вы делаете, хранится в ней. Не удаляйте её.',
-  'Папки versions и updates — программа и её обновления, трогать их не нужно.',
-  'Если что-то не запускается — пришлите файл updates\\launcher.log.',
-  '',
-].join('\r\n');
-
-async function handoff(name) {
-  if (!FRIEND.test(String(name || ''))) throw new Error('a friend\'s name: small Latin letters, digits, - and _');
-  const to = path.resolve(arg('--to', ''));
-  if (!arg('--to', '')) throw new Error('--to <empty folder>, outside OneDrive');
-  if (fs.existsSync(to) && fs.readdirSync(to).length) throw new Error('the folder is not empty: ' + to);
-  if (/\\OneDrive/i.test(to)) say('note: this folder is inside OneDrive - gigabytes will go into the sync');
-  const st = store();
-  const pub = publicOf(readPrivate());
-  const env = await st.get(UM.keys.channel(CHANNEL));
-  if (!env) throw new Error('nothing is published yet - "publish" first: a friend\'s copy is the version the channel has');
-  const m = UM.open(env, pub);
-  const t0 = Date.now();
-
-  const vdir = path.join(to, 'versions', m.version);
-  await layVersion(m, st, vdir);
-  fs.copyFileSync(path.join(vdir, 'resources', 'app', 'launcher', 'UGC Studio.exe'), path.join(to, 'UGC Studio.exe'));
-  fs.writeFileSync(path.join(to, 'versions', 'current.json'), JSON.stringify({ current: m.version, previous: null, tries: 0, bad: [] }));
-
-  const token = fs.existsSync(tokenFile(name)) ? fs.readFileSync(tokenFile(name), 'utf8').trim() : await friendAdd(name);
-  fs.mkdirSync(path.join(to, 'updates'), { recursive: true });
-  fs.writeFileSync(path.join(to, 'updates', 'token'), token);
-
-  if (!flag('--no-library')) {
-    const { cleanCopy } = require('./clean-library');
-    await cleanCopy({ from: path.resolve(arg('--library', path.join(REPO, 'library'))), to: path.join(to, 'library'),
-      withProjects: flag('--with-projects'), allowOpen: flag('--allow-open') });
-  }
-  fs.writeFileSync(path.join(to, 'Как запустить.txt'), README(m.version), 'utf8');
-
-  // No key of the publisher's in any of it - the program and the library.
-  const KS = require('./key-scan');
-  const found = KS.scan([to]);
-  if (!KS.report(found, say)) throw new Error(`a key of yours is in ${to} - do not hand it over; see the lines above`);
-  say(`${name}'s copy: ${to} (UGC Studio ${m.version}, seq ${m.seq}) in ${((Date.now() - t0) / 1000).toFixed(0)} s - copy the folder onto the flash drive`);
-  return { to, version: m.version, found };
+  const m = await published(pub);
+  say(m ? `${releasesUrl()}: ${m.version} (seq ${m.seq}, ${m.date}, ${m.files.length} files, zip ${mb(m.zip.size)} MB${m.important ? ', important' : ''})`
+    : `${releasesUrl()}: nothing published`);
+  let here = [];
+  try { here = fs.readdirSync(outRoot()).filter((d) => fs.existsSync(path.join(outRoot(), d, UM.MANIFEST))); } catch (e) { here = []; }
+  say(`laid out in ${outRoot()}: ${here.join(', ') || 'none'}`);
+  return m;
 }
 
 async function main() {
-  if (cmd === 'handoff') return handoff(argv[1]);
   if (cmd === 'keygen') return keygen();
   if (cmd === 'notes') return notes();
   if (cmd === 'publish') return publish();
+  if (cmd === 'upload') return upload();
   if (cmd === 'status') return status();
-  if (cmd === 'prune') return prune();
-  if (cmd === 'worker') return worker();
-  if (cmd === 'friend' && argv[1] === 'add') return friendAdd(argv[2]);
-  if (cmd === 'friend' && argv[1] === 'remove') return friendRemove(argv[2]);
-  if (cmd === 'friends') return friends();
-  console.log('node tools/release.js keygen | notes | publish [--bump] [--important] | status | prune [--keep 3]\n'
-    + '                       worker | friend add <name> | friend remove <name> | friends');
+  console.log('node tools/release.js keygen | notes | publish [--bump] [--important] [--seq <n>] | upload [--target <commit>] | status');
   return null;
 }
 
@@ -494,4 +420,4 @@ if (require.main === module) {
   main().catch((e) => { console.error('[release] ' + e.message); process.exit(1); });
 }
 
-module.exports = { publicOf, store, notes };
+module.exports = { publicOf, notes, zipIndex, checkZip, makeZip };

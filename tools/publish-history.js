@@ -23,6 +23,8 @@
      - no version of any file and no message holds anything a rule looks for (text and binary alike);
      - no version of any file holds a key of this computer's libraries or the shape of one (tools/key-scan.js);
      - the pictures the history keeps, by path, for a look.
+   <out>/commits.txt pairs every commit of the branch with the public commit it became ("<branch's> <public>"; a
+   left-out commit with the one its children took) - where tools/release.js upload puts a release's tag.
    Nothing is sent anywhere: publishing <out>/public.git is a separate step. */
 const fs = require('fs');
 const os = require('os');
@@ -146,7 +148,8 @@ async function run() {
   git(['init', '-q', '--bare', '--initial-branch=main', dst]);
 
   const exp = spawn('git', ['-C', src, 'fast-export', '--reencode=yes', '--show-original-ids', '--signed-tags=strip', '--tag-of-filtered-object=drop', ref], { windowsHide: true });
-  const imp = spawn('git', ['-C', dst, 'fast-import', '--quiet', '--done'], { windowsHide: true, stdio: ['pipe', 'inherit', 'pipe'] });
+  const marksFile = path.join(OUT, 'marks.txt');
+  const imp = spawn('git', ['-C', dst, 'fast-import', '--quiet', '--done', '--export-marks=' + marksFile], { windowsHide: true, stdio: ['pipe', 'inherit', 'pipe'] });
   let impErr = '';
   let expErr = '';
   imp.stderr.on('data', (d) => { impErr += d; });
@@ -167,6 +170,7 @@ async function run() {
   const droppedBlob = new Set();
   const alias = new Map();              // a left-out commit's mark -> the mark its children take instead ('' = none)
   const resolve = (m) => { while (alias.has(m)) m = alias.get(m); return m; };
+  const commitMarks = new Map();        // a commit's original oid -> its mark
   const stat = { blobs: 0, blobsLeft: 0, textChanged: 0, commits: 0, commitsLeft: 0, msgChanged: 0, opsLeft: 0, pinned: 0 };
   let tipMark = '';
   const sign = (l) => l.replace(/^(author|committer) .*? <[^>]*> /, (m0, who) => who + ' ' + rules.author.name + ' <' + rules.author.email + '> ');
@@ -247,6 +251,7 @@ async function run() {
       for (const p of parents) { const r = resolve(p); if (r && !ps.includes(r)) ps.push(r); }
       if (parents.length && !resolve(parents[0]) && ps.length) throw new Error('a commit lost its first parent but keeps another: ' + mark);
       if (oid === head) tipMark = mark;
+      if (oid) commitMarks.set(oid, mark);
       if (!ops.length && ps.length <= 1) { alias.set(mark, ps[0] || ''); stat.commitsLeft++; continue; }
       const body = Buffer.from(msg, 'utf8');
       await write(Buffer.concat([
@@ -268,6 +273,12 @@ async function run() {
   const [ec, ic] = await Promise.all([expClosed, impClosed]);
   if (ec !== 0) throw new Error('fast-export stopped with ' + ec);
   if (ic !== 0) throw new Error('fast-import stopped with ' + ic + ': ' + impErr.trim());
+  // Each commit of the branch and the public one it became.
+  const shaOf = new Map(fs.readFileSync(marksFile, 'utf8').split('\n').filter(Boolean).map((l) => l.split(' ')));
+  const pairs = [];
+  for (const [oid, mark] of commitMarks) { const m = resolve(mark); if (m && shaOf.has(m)) pairs.push(oid + ' ' + shaOf.get(m)); }
+  fs.writeFileSync(path.join(OUT, 'commits.txt'), pairs.join('\n') + '\n');
+  fs.rmSync(marksFile, { force: true });
   say('written: ' + (stat.commits - stat.commitsLeft) + ' commits of ' + stat.commits + ' (' + stat.commitsLeft + ' had nothing left), '
     + (stat.blobs - stat.blobsLeft) + ' file versions (' + stat.blobsLeft + ' only in dropped paths), ' + stat.textChanged + ' rewritten, '
     + stat.msgChanged + ' messages rewritten, ' + stat.pinned + ' earlier versions of tipOnly paths given their last one');

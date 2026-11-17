@@ -93,7 +93,7 @@ function prodPackages() {
 
 /**
  * opts: { out, seq, channel, worktree, version, updateKey, updateUrl } - the last three for stands only: another
- * version name than package.json's, and the public key (PEM) and Worker address baked into desktop/update-key.js.
+ * version name than package.json's, and the public key (PEM) and releases address baked into desktop/update-key.js.
  */
 function build(opts = {}) {
   const t0 = Date.now();
@@ -141,9 +141,9 @@ function build(opts = {}) {
     fs.rmSync(tar, { force: true });
   }
 
-  // 4a. A stand's key and Worker address (never a release's: tools/release.js passes neither).
+  // 4a. A stand's key and releases address (never a release's: tools/release.js passes neither).
   if (opts.updateKey || opts.updateUrl) {
-    const baked = { PUBLIC_KEY: opts.updateKey || '', WORKER_URL: opts.updateUrl || '' };
+    const baked = { PUBLIC_KEY: opts.updateKey || '', RELEASES: opts.updateUrl || '' };
     fs.writeFileSync(path.join(app, 'desktop', 'update-key.js'),
       `'use strict';\n// Baked in by tools/build-app.js for a stand.\nmodule.exports = ${JSON.stringify(baked, null, 2)};\n`);
   }
