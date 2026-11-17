@@ -106,7 +106,7 @@ function store() {
   if (dir) return createDirStore(path.resolve(dir));
   const settingsFile = path.join(REPO, 'library', 'data', 'settings.json');
   let s = {};
-  try { s = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch (e) { throw new Error('the owner\'s settings cannot be read: ' + settingsFile); }
+  try { s = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch (e) { throw new Error('your library\'s settings cannot be read: ' + settingsFile); }
   const token = String(s.cloudflareApiToken || '').trim();
   const tokenId = String(s.cloudflareTokenId || '').trim();
   const account = String(s.r2AccountId || '').trim();

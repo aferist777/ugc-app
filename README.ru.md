@@ -188,5 +188,8 @@ npm start
 
 ## Лицензия
 
-[AGPL-3.0](LICENSE). Библиотеки, модели, шрифты, звуки и паттерны, которыми пользуется приложение, перечислены с их
-лицензиями в [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md) и в самом приложении на **Admin → Thanks**.
+Copyright (C) 2026 aferist777. UGC Studio — свободная программа под GNU Affero General Public License версии 3 или
+(по вашему выбору) любой более поздней — [LICENSE](LICENSE). Без каких-либо гарантий.
+
+Библиотеки, модели, шрифты, звуки и паттерны, которыми пользуется приложение, перечислены с их лицензиями в
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md) и в самом приложении на **Admin → Thanks**.

@@ -4,13 +4,13 @@ node_modules/
 /vendor/
 # The library when the app runs from source (lib/config.js): everything it writes.
 local-data/
-# The owner's own library, which UGC Studio.cmd opens. Rooted: public/js/library/ is code.
+# The library UGC Studio.cmd opens. Rooted: public/js/library/ is code.
 /library/
 *.log
 *.zip
-# ...except the built-in sound set (phase V34.B, the owner 2026-10-22: kept in git, laid out by tools/fetch-sfx.js).
+# ...except the built-in sound set: kept in git, laid out by tools/fetch-sfx.js.
 !/tools/sfx/*.zip
-# ...and the built-in pattern set (phase V65): kept in git the same way, laid out by tools/fetch-patterns.js.
+# ...and the built-in pattern set: kept in git the same way, laid out by tools/fetch-patterns.js.
 !/tools/patterns/*.zip
 # Claude Code's local settings and preview launch configurations.
 .claude/

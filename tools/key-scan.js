@@ -96,7 +96,7 @@ function scan(roots, { list = targets() } = {}) {
 
 function report(found, say = console.log) {
   say(`[keys] ${found.files} files read: ${found.keys.length} keys, ${found.shapes.length} key shapes, `
-    + `${found.links.length} links to the owner's Cloudflare, ${found.paths.length} paths of this computer`
+    + `${found.links.length} links to your Cloudflare, ${found.paths.length} paths of this computer`
     + (found.thirdParty.length ? `; ${found.thirdParty.length} key-like strings in third-party files (public examples, not ours)` : ''));
   for (const r of [...found.keys, ...found.shapes].slice(0, 20)) say(`[keys]   KEY ${r.what} in ${r.file}`);
   for (const r of found.links.slice(0, 10)) say(`[keys]   link: ${r.what} in ${r.file}`);

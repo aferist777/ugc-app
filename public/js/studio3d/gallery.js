@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the gallery of scenes (PLAN "3D Studio", 3D1; the owner 2026-10-09).
+   3D STUDIO — the gallery of scenes.
 
-   Every scene as a tile: the photo it was built from when it has one (3D9), otherwise what its camera saw when it
+   Every scene as a tile: the photo it was built from when it has one, otherwise what its camera saw when it
    was last saved; its name, when it was changed, how many things and fragments it holds. A press opens it; under
    each tile: rename, copy, delete - delete in two presses ("really?" for three seconds, as the scenario archive).
    The first tile makes a new scene. Scenes save themselves, so there is no "save" here; "save as" is the copy.

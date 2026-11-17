@@ -1,12 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — putting things in the scene (PLAN "3D Studio", 3D1).
+   3D STUDIO — putting things in the scene.
 
    "Add ▾" offers three:
      Character…     the Library's characters and their looks, through the same picker the video chat uses
                     (merge-v3/chat-pick.js). The character becomes a mannequin of its gender, under its name; the
                     picture pressed - the character's sheet or one of its looks - is its reference for Seedance.
-     Environment…   the Library's environments: the agent lays the room out from the picture (lib/studio3d-env.js,
-                    3D9) - its size, windows and doors, its LARGE furniture, where the photo was taken from - and it
+     Environment…   the Library's environments: the agent lays the room out from the picture (lib/studio3d-env.js)
+                    - its size, windows and doors, its LARGE furniture, where the photo was taken from - and it
                     comes into the scene in one step: the room takes the picture as its reference and the scene as
                     its photo, an earlier environment's furniture goes, the first camera stands where the photo did.
      Furniture…     Kenney's kit, by group, a picture of each; a press puts one in and the window stays open.

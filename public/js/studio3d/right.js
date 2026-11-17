@@ -1,10 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the right column: the shot camera (PLAN "3D Studio", 3D1).
+   3D STUDIO — the right column: the shot camera.
 
    Its focal length (18-85 mm, read against 36 mm on the frame's long side), the frame's shape, and below them
    what the camera sees - drawn by a renderer of its own from the scene's layer 0 only, on the clay background the
    recording will have, with the thirds over it. It is drawn whenever the field is.
-   (3D4 adds more cameras, their aim on a point of an object and where it stands in the frame, and following.)
+   Not built yet: adding cameras, aiming one at a point of an object placed in the frame, and following.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as THREE from 'three';
@@ -164,7 +164,6 @@ export function snapshot() {
 
 /**
  * What `cam` sees at exactly w x h pixels, drawn off screen by the preview's renderer, on a 2D canvas.
- * (The recording, 3D6, draws its frames the same way.)
  */
 export function grab(cam, w, h) {
   const r = pv.renderer;

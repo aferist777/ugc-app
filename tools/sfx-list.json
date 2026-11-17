@@ -1,7 +1,7 @@
 {
   "version": 1,
   "built": "2026-10-22",
-  "about": ["The built-in sound set (phase V34.B): what tools/build-sfx.js makes vendor/sfx/ of. All CC0.","An id and its category NEVER change (projects point at /sfx/<category>/<id>.ogg); a new version only adds sounds.","from.source + from.file: a file in a Kenney pack of `sources`; from.url: a file found through Openverse, pinned by bytes and sha256.","cut: start (seconds skipped), max (seconds kept; an ambience 30 by default)."],
+  "about": ["The built-in sound set: what tools/build-sfx.js makes vendor/sfx/ of. All CC0.","An id and its category NEVER change (projects point at /sfx/<category>/<id>.ogg); a new version only adds sounds.","from.source + from.file: a file in a Kenney pack of `sources`; from.url: a file found through Openverse, pinned by bytes and sha256.","cut: start (seconds skipped), max (seconds kept; an ambience 30 by default)."],
   "categories": [
     {"id":"whoosh","name":"Whoosh & transitions"},
     {"id":"pops","name":"Pops & clicks"},

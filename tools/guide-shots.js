@@ -5,14 +5,16 @@
        node tools/guide-shots.js --library <a library with no keys> [--only a,b] [--base http://127.0.0.1:<port>]
        node tools/guide-shots.js --check
    --list <file> another list than tools/guide-shots.json, --out <folder> another folder than public/guide/shots (a preview).
-   The README's pictures are such a list: --list tools/readme-shots.json --out docs/readme. A list with no `masks` of its
-   own takes the guide's, so the private words are kept in one place.
+   The README's pictures are such a list: --list tools/readme-shots.json --out docs/readme.
+   --masks <file> the private words, by default ~/.ugc-release/guide-masks.json: { masks: { <name>: [[word, in its place,
+   're' for a pattern], ...] } }. They are kept OUTSIDE the project and never in git - the lists name the masks only - and a
+   list whose rows name a mask the file does not have is refused, so nothing is shot unmasked.
 
    Every picture of the guide (public/guide/<nn>-<name>.md, `![…](shots/<name>.webp)`) is a row of tools/guide-shots.json:
    the page it is taken on, the steps that bring the app to the moment (eval, click - the page's own events; press, hover
    - the mouse's real ones, `button` "right" or a `double` press; drag - the real mouse from one point of an element to
    another; key; wait; waitFor), what is put in
-   place of private words in the frame (the file's `masks`, by name), and what is cut out of the window (`crop`: a
+   place of private words in the frame (`mask`: the masks by name), and what is cut out of the window (`crop`: a
    selector - "sel@2" its third match -, several - the box round them all -, a box [x, y, w, h], or the whole window). The app is the one in this folder: its server is started on the library given (or `--base` names one
    already running), a HIDDEN Electron window - the size and scale of the file - goes through the rows in order, and each
    picture becomes public/guide/shots/<name>.webp.
@@ -43,8 +45,17 @@ function arg(k) { const i = process.argv.indexOf(k); return i > 0 ? process.argv
 const say = (s) => console.log('[shots] ' + s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function guideMasks() {
-  return JSON.parse(fs.readFileSync(path.join(__dirname, 'guide-shots.json'), 'utf8')).masks || {};
+// The private words, outside the project: every mask a row names must be there.
+function privateMasks(shots) {
+  const file = path.resolve(arg('--masks') || path.join(os.homedir(), '.ugc-release', 'guide-masks.json'));
+  const want = [...new Set(shots.flatMap((s) => s.mask || []))];
+  if (!want.length) return {};
+  let masks = null;
+  try { masks = JSON.parse(fs.readFileSync(file, 'utf8')).masks; } catch (e) { /* said below */ }
+  if (!masks) throw new Error('the private words are needed to shoot these rows - ' + file + ' (or --masks <file>)');
+  const missing = want.filter((m) => !Array.isArray(masks[m]));
+  if (missing.length) throw new Error('the masks file has no ' + missing.join(', ') + ' - ' + file);
+  return masks;
 }
 
 function readList() {
@@ -102,6 +113,7 @@ async function main() {
   const only = new Set(String(arg('--only') || '').split(',').map((s) => s.trim()).filter(Boolean));
   const shots = list.shots.filter((s) => !only.size || only.has(s.name));
   if (!shots.length) throw new Error('no row by those names');
+  const masks = privateMasks(shots);
   // A row's recorded answers: { "<address>": "<file of tools/guide-answers/>" } - read here, handed to the page as they are.
   for (const s of shots) {
     if (!s.answers) continue;
@@ -132,7 +144,7 @@ async function main() {
       say('the app on ' + base + ' over ' + lib);
     } else if (!(await answers(base))) throw new Error('nothing answers at ' + base);
 
-    const job = { base, size: list.size || [1536, 864], scale: list.scale || 2, masks: list.masks || guideMasks(), shots, out: work,
+    const job = { base, size: list.size || [1536, 864], scale: list.scale || 2, masks, shots, out: work,
                   profile: path.join(work, 'profile') };
     fs.writeFileSync(path.join(work, 'job.json'), JSON.stringify(job));
     const electron = require('electron');

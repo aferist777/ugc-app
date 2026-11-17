@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — what can be put in a scene (PLAN "3D Studio - план по этапам", 3D1).
+   3D STUDIO — what can be put in a scene.
 
    The furniture is Kenney's Furniture Kit (CC0, vendor/3d/furniture/, tools/fetch-3d.js). Its sizes are its own -
    a doorway is about one unit - so every model is scaled UNIFORMLY to one real measure written here:
@@ -99,8 +99,8 @@ const _byId = new Map(FURNITURE.flatMap(g => g.items).map(it => [it.id, it]));
 export const furnitureItem = (id) => _byId.get(id) || null;
 
 // The colours a new object takes, in turn: far apart in hue, light enough to read on the dark editor and on the
-// clay background. A track on the timeline (3D2) wears its object's colour.
+// clay background. A track on the timeline wears its object's colour.
 export const PALETTE = ['#e5484d', '#3e8ef7', '#46a758', '#f5a524', '#a259ff', '#12a5b4', '#e8659c', '#8fb83d', '#f07a3a', '#6e7bf2', '#c79a5b', '#3fbfa0'];
 export const ROOM_COLOR = '#b9b9b9';
-// Cameras: their own run of colours (3D4), the first one gold.
+// Cameras: their own run of colours, the first one gold.
 export const CAMERA_COLORS = ['#e8c35a', '#5ad1e8', '#e85ac8', '#9be85a', '#e8875a', '#8a7cf0'];

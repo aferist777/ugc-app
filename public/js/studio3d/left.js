@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   3D STUDIO — the left column: what is in the scene, and the one selected (PLAN "3D Studio", 3D1).
+   3D STUDIO — the left column: what is in the scene, and the one selected.
 
    Top: every object and camera, a row each with its colour - a press selects it, Shift or Ctrl adds it to the
    selection. Below: the selected object's card - its name, the picture it stands for (its reference for Seedance),
@@ -81,7 +81,7 @@ function _build(sc, o) {
     return;
   }
   C.appendChild(el('div', 's3-h', KIND[o.kind]));
-  // Moves in the open fragment (3D2): a track of its own on the timeline. Then the handles and the numbers below key
+  // Moves in the open fragment: a track of its own on the timeline. Then the handles and the numbers below key
   // it at the playhead; without it, they move it in the shared arrangement - in every fragment.
   const fr = A.frag();
   if (fr && o.kind !== 'room') {

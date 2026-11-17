@@ -189,5 +189,8 @@ If the app saves you money, you can [buy me a coffee](https://www.donationalerts
 
 ## License
 
-[AGPL-3.0](LICENSE). The libraries, models, fonts, sounds and patterns the app uses are listed with their licenses in
+Copyright (C) 2026 aferist777. UGC Studio is free software under the GNU Affero General Public License, version 3 or
+(at your option) any later version — [LICENSE](LICENSE). It comes with no warranty.
+
+The libraries, models, fonts, sounds and patterns the app uses are listed with their licenses in
 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md) and in the app on **Admin → Thanks**.

@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "about": "The video chat's prompt reference (phase V14, js/merge-v3/vhelp.js). A section with a file is ready; one without is in development and says what it will hold. A section is added by its file and its line here.",
+  "about": "The video chat's prompt reference (js/merge-v3/vhelp.js). A section with a file is ready; one without is in development and says what it will hold. A section is added by its file and its line here.",
   "sections": [
     { "id": "camera", "label": "Camera movement", "file": "camera.json",
       "about": "How the camera moves through the shot - 46 moves, each with a looping example." },

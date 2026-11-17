@@ -346,7 +346,7 @@ const ROLE = { 'kie.ai': 'pictures · video · music', elevenlabs: 'voices', ope
 const ORDER = ['kie.ai', 'elevenlabs', 'openrouter', 'replicate', 'groq', 'anthropic'];
 const BILLING = { replicate: 'https://replicate.com/account/billing', groq: 'https://console.groq.com/settings/usage',
   anthropic: 'https://console.anthropic.com/settings/billing' };
-// What a key's check said, as its balance where there is one: kie.ai "22,975 cr", ElevenLabs "940 of 100,000 chars" (used of
+// What a key's check said, as its balance where there is one: kie.ai "1,250 cr", ElevenLabs "940 of 100,000 chars" (used of
 // the month's), OpenRouter "active, 7.4 of 10 left".
 function balanceOf(p) {
   const d = String(p.detail || '');
