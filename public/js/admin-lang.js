@@ -67,7 +67,7 @@ async function pick(l, btn) {
   askChoice(anchor, t('Restart now?'), t('The app closes and opens again in {name}. Everything open is saved.', { name: NAMES[l] || l }), [
     { label: t('Later') },
     { label: t('Restart'), kind: 'yes', on: restart },
-  ]);
+  ], { stay: true });   // the pane below repaints as its parts are read - that is no reason to close the question
 }
 
 function restart() {
