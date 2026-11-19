@@ -22,6 +22,8 @@
 import * as Layers from './layers.js';
 import { showError } from './notice.js';
 import { emptyEl, loadingEl, failedEl } from './ui-state.js';
+// The app's words as T.t: this module's own `t`s are file types and tiles.
+import * as T from './i18n/t.js';
 
 const UNCAT = '__uncat__';
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2c.6 0 1.2.24 1.65.66L12.8 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11z"/></svg>';
@@ -73,7 +75,7 @@ export function filesOf(items, type) {
     if (i.kind === 'references') {
       const files = (Array.isArray(m.items) ? m.items : []).filter(f => f && f.path && f.type === t);
       files.forEach((f, k) => out.push({
-        path: f.path, name: String(i.name || 'post') + (files.length > 1 ? ' · ' + (k + 1) + ' of ' + files.length : ''),
+        path: f.path, name: String(i.name || T.t('post')) + (files.length > 1 ? ' · ' + T.t('{k} of {n}', { k: k + 1, n: files.length }) : ''),
         aspect: _ar(+f.w, +f.h), w: +f.w || 0, h: +f.h || 0, thumb: f.thumb || '', dur: +f.dur || 0,
         kind: 'references', libId: '', item: i, ftype: t,
       }));
@@ -94,7 +96,7 @@ export function filesOf(items, type) {
 export async function nodeFiles(node, type) {
   if (!node || !node.q) return [];
   const d = await _json('/api/library/shelf/media?' + new URLSearchParams(node.q));
-  if (!d || !d.success) throw new Error((d && d.error) || 'the shelf could not be read');
+  if (!d || !d.success) throw new Error((d && d.error) || T.t('the shelf could not be read'));
   return filesOf(d.items, type);
 }
 
@@ -124,7 +126,7 @@ export async function folderIndex(nodes, type, cache, fit) {
     const k = JSON.stringify(q);
     if (!C.has(k)) {
       C.set(k, _json('/api/library/shelf/media?' + new URLSearchParams(q)).then((d) => {
-        if (!d || !d.success) throw new Error((d && d.error) || 'the shelf could not be read');
+        if (!d || !d.success) throw new Error((d && d.error) || T.t('the shelf could not be read'));
         return d.items || [];
       }));
     }
@@ -279,7 +281,7 @@ function _inQ(i, q, foldersOf) {
  *    paint()  the pictures drawn again - the caller's marks changed, or the column's width.
  */
 export function createFolderColumn(host, o) {
-  const opt = Object.assign({ files: 'photo', empty: 'Nothing in this folder.', title: 'Show' }, o || {});
+  const opt = Object.assign({ files: 'photo', empty: T.t('Nothing in this folder.'), title: T.t('Show') }, o || {});
   const OWN = 'own';
   const PL = 'plinks';            // THIS PROJECT's node - one with the own row
   let tree = null;              // _shaped's answer - only the folders holding files of `files`, and their files; `partial`
@@ -358,7 +360,7 @@ export function createFolderColumn(host, o) {
     if (mine !== loads) return;
     // No answer is a failed reading too (readTree answers null), never an empty column. The reason
     // goes to the corner (js/notice.js); a column read before keeps what it shows.
-    const failed = (why) => { showError(why || 'the folders could not be read'); if (!tree) { state = 'error'; paint(); } };
+    const failed = (why) => { showError(why || T.t('the folders could not be read')); if (!tree) { state = 'error'; paint(); } };
     if (!raw) { failed(); return; }
     // So the column shows at once, the folder that opens is
     // counted FIRST - its own folders only, one shelf read for most - and drawn; the whole tree is counted after (below). The
@@ -406,7 +408,7 @@ export function createFolderColumn(host, o) {
     if (mine !== loads) return;
     full = null;
     let index = null;
-    try { index = await folderIndex(raw.nodes, opt.files, cache, fit); } catch (e) { err = e.message || 'the folders could not be read'; }
+    try { index = await folderIndex(raw.nodes, opt.files, cache, fit); } catch (e) { err = e.message || T.t('the folders could not be read'); }
     if (mine !== loads) return;
     if (!index) { showError(err); tree.failed = true; if (menu) menu.paint(); return; }
     const shownNow = () => (sel === OWN ? _ownShown() : files).map(f => f && f.path).join('\n');
@@ -453,12 +455,12 @@ export function createFolderColumn(host, o) {
     const n = node(sel);
     const path = own ? [opt.own.label] : pathOf(sel);
     pickName.textContent = path.length ? path[path.length - 1] : '…';
-    pick.title = (path.join(' / ') || '') + ' - press to choose another folder';
+    pick.title = T.t('{path} - press to choose another folder', { path: path.join(' / ') || '' });
     pickN.textContent = own ? (tree ? String(_ownCount()) : '') : n ? String(n.count || 0) : '';
     const p = own ? '' : parentKey(sel);
     // a parent not counted yet shows once the whole tree is
     up.hidden = !p || !_valid(p);
-    up.title = p ? 'Up to ' + (p === OWN ? opt.own.label : node(p).label) : '';
+    up.title = p ? T.t('Up to {place}', { place: p === OWN ? opt.own.label : node(p).label }) : '';
   }
 
   // The folders of the one open, as tiles - pressed, one opens.
@@ -496,12 +498,12 @@ export function createFolderColumn(host, o) {
     // reading, did not load (Try again reads the tree again; the reason was said in the corner) and empty
     // are the shared parts (js/ui-state.js); `fc-none` is their place in the list
     // the own row's pictures show before the tree is read - "reading…" only while it has none
-    if ((state === 'reading' || state === 'idle') && !(own && shown.length)) { list.replaceChildren(loadingEl('reading…', { cls: 'fc-none' })); return; }
-    if (state === 'error' && !own) { list.replaceChildren(failedEl('the folders', () => { state = 'reading'; paint(); load(); }, { cls: 'fc-none' })); return; }
+    if ((state === 'reading' || state === 'idle') && !(own && shown.length)) { list.replaceChildren(loadingEl(T.t('reading…'), { cls: 'fc-none' })); return; }
+    if (state === 'error' && !own) { list.replaceChildren(failedEl(T.t('the folders'), () => { state = 'reading'; paint(); load(); }, { cls: 'fc-none' })); return; }
     if (!shown.length) {
       const n = own ? null : node(sel);
       // A folder that holds folders says nothing of its own emptiness - its tiles are above.
-      const words = own ? (((node(PL) || {}).children || []).length ? '' : (opt.own.empty || 'Nothing here yet.'))
+      const words = own ? (((node(PL) || {}).children || []).length ? '' : (opt.own.empty || T.t('Nothing here yet.')))
         : n && (!n.q || (n.children && n.children.length)) ? '' : opt.empty;
       list.replaceChildren(...[words ? emptyEl(words, { icon: own ? 'image' : 'folder', cls: 'fc-none' }) : null, lead].filter(Boolean));
       return;
@@ -558,7 +560,7 @@ export function createFolderColumn(host, o) {
       b.style.paddingLeft = (3 + depth * 11) + 'px';
       const tw = el('span', 'mt-tw' + (has && open.has(key) ? ' is-open' : ''), has ? '▸' : '');
       if (has) {
-        tw.title = open.has(key) ? 'Fold' : 'Open';
+        tw.title = open.has(key) ? T.t('Fold') : T.t('Open');
         tw.addEventListener('click', (e) => { e.stopPropagation(); if (open.has(key)) open.delete(key); else open.add(key); paintMenu(); });
       }
       b.appendChild(tw);
@@ -577,8 +579,8 @@ export function createFolderColumn(host, o) {
       // Only the folders holding the type, with their numbers - offered once the whole tree is
       // counted: until then a line that says so, and the count starts at once.
       if (!tree || tree.partial) {
-        lst.appendChild(tree && tree.failed ? failedEl('the folders', () => { _closeMenu(); load(); }, { line: true })
-          : loadingEl('counting the folders…', { line: true }));
+        lst.appendChild(tree && tree.failed ? failedEl(T.t('the folders'), () => { _closeMenu(); load(); }, { line: true })
+          : loadingEl(T.t('counting the folders…'), { line: true }));
         waited = true;
         if (full) full();
         return;

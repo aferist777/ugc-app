@@ -9,8 +9,9 @@ import common from './ru/common.js';
 import shell from './ru/shell.js';
 import home from './ru/home.js';
 import admin from './ru/admin.js';
+import tree from './ru/tree.js';
 
-export const PARTS = { common, shell, home, admin };
+export const PARTS = { common, shell, home, admin, tree };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

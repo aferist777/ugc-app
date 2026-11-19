@@ -31,6 +31,8 @@
 import * as Layers from './layers.js';
 import { openPlaces } from './place-tree.js';
 import { menuIcons } from './icons.js';
+// The app's words as T.t / T.tn: this module's own `t`s are tiles.
+import * as T from './i18n/t.js';
 
 const BAND_FROM = 5;          // px a press moves before it is a band
 // The most a batch takes at once - routes/library.js BATCH_MAX says the same; more is refused in words before anything.
@@ -63,7 +65,7 @@ export function createSelection(o) {
   const chipX = document.createElement('button');
   chipX.type = 'button';
   chipX.className = 'u-btn is-s is-icon is-quiet u-x';
-  chipX.title = 'Pick nothing (Escape)';
+  chipX.title = T.t('Pick nothing (Escape)');
   chipX.addEventListener('click', (e) => { e.stopPropagation(); clear(); });
   chip.append(chipText, chipX);
   document.body.appendChild(chip);
@@ -71,7 +73,7 @@ export function createSelection(o) {
     const n = picked.size;
     chip.hidden = n < 2 || !shown();
     if (chip.hidden) return;
-    chipText.textContent = n + ' picked · drag them onto the tree · the right button · Delete';
+    chipText.textContent = T.t('{n} picked · drag them onto the tree · the right button · Delete', { n });
     const r = host.getBoundingClientRect();
     chip.style.top = Math.round(Math.max(4, r.top + 4)) + 'px';
     chip.style.left = Math.round(r.left + 6) + 'px';
@@ -268,7 +270,12 @@ export function menuAt(x, y, rows) {
 
 
 const VIDEO = new Set(['birols', 'uploads', 'hooks']);
-const _plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+// A count with its noun, in the app's language.
+const COUNT = {
+  item: (n) => T.tn(n, '{n} item', '{n} items'), clip: (n) => T.tn(n, '{n} clip', '{n} clips'),
+  project: (n) => T.tn(n, '{n} project', '{n} projects'),
+};
+const _plural = (n, w) => (COUNT[w] ? COUNT[w](n) : n + ' ' + w + (n === 1 ? '' : 's'));
 
 /** Whether a tile of `kind` can go to the place `to` - one tile let go on a node, as js/media-tree.js _dropAction. */
 export function canGo(kind, to) {
@@ -284,7 +291,7 @@ export function canGo(kind, to) {
 
 /** POST /api/library/batch/<op> for the items; the answer, or it throws in words. */
 export async function batch(op, items, extra) {
-  if (items.length > BATCH_MAX) throw new Error('At most ' + BATCH_MAX + ' at once - ' + items.length + ' are picked.');
+  if (items.length > BATCH_MAX) throw new Error(T.t('At most {max} at once - {n} are picked.', { max: BATCH_MAX, n: items.length }));
   const r = await fetch('/api/library/batch/' + op, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(Object.assign({ items: items.map(x => ({ kind: x.kind, id: String(x.id) })) }, extra || {})),
@@ -298,19 +305,20 @@ export async function batch(op, items, extra) {
 export function saidOf(d, verb) {
   const sk = (d && d.skipped) || [];
   const whys = [...new Set(sk.map(x => x.why))].slice(0, 3).join('; ');
-  return (d.done ? _plural(d.done, 'item') + ' ' + verb : 'Nothing ' + verb) + (sk.length ? ' · ' + sk.length + ' stayed: ' + whys : '');
+  return (d.done ? T.t('{what} {verb}', { what: _plural(d.done, 'item'), verb }) : T.t('Nothing {verb}', { verb }))
+    + (sk.length ? ' · ' + T.t('{n} stayed: {why}', { n: sk.length, why: whys }) : '');
 }
 
 /** The ONE question before several are deleted - their names, and the projects whose timelines hold their files. */
 export async function deleteQuestion(items) {
   const n = items.length;
   const names = items.slice(0, 8).map(i => '  ' + (i.name || i.id));
-  if (n > 8) names.push('  … and ' + (n - 8) + ' more');
+  if (n > 8) names.push('  ' + T.t('… and {n} more', { n: n - 8 }));
   // Saved texts of Music -> Lyrics have no file.
   const texts = items.every(i => i.kind === 'lyrics');
-  let text = 'Delete ' + _plural(n, 'item') + '?\n\n' + names.join('\n') + '\n\n'
-    + (texts ? 'The texts are removed from Music → Lyrics.' : 'Their files are removed from disk.');
-  if (items.some(i => i.kind === 'sfx')) text += '\nBuilt-in sounds are the app\'s - they stay.';
+  let text = T.t('Delete {what}?', { what: _plural(n, 'item') }) + '\n\n' + names.join('\n') + '\n\n'
+    + (texts ? T.t('The texts are removed from Music → Lyrics.') : T.t('Their files are removed from disk.'));
+  if (items.some(i => i.kind === 'sfx')) text += '\n' + T.t('Built-in sounds are the app\'s - they stay.');
   const media = [];
   for (const i of items) {
     if (i.media) media.push(String(i.media));
@@ -324,8 +332,9 @@ export async function deleteQuestion(items) {
   } catch (e) { projects = []; }
   if (projects.length) {
     const lines = projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + _plural(p.clips, 'clip'));
-    if (projects.length > 10) lines.push('  … and ' + (projects.length - 10) + ' more');
-    text += '\n\nUsed in ' + _plural(projects.length, 'project') + ':\n' + lines.join('\n') + '\n\nThere their clips turn red - to be replaced or removed.';
+    if (projects.length > 10) lines.push('  ' + T.t('… and {n} more', { n: projects.length - 10 }));
+    text += '\n\n' + T.t('Used in {what}:', { what: _plural(projects.length, 'project') }) + '\n' + lines.join('\n') + '\n\n'
+      + T.t('There their clips turn red - to be replaced or removed.');
   }
   return text;
 }
@@ -345,16 +354,16 @@ export async function moveMany(x, y, items, o) {
   try { tree = ((await fetch('/api/library/tree').then(r => r.json())) || {}).nodes || []; } catch (e) { tree = []; }
   const kinds = [...new Set(items.map(i => i.kind))];
   openPlaces(_anchorAt(x, y), {
-    title: 'Move ' + _plural(items.length, 'item') + ' to', tree, name: 'move several',
+    title: T.t('Move {what} to', { what: _plural(items.length, 'item') }), tree, name: 'move several',
     places: { audio: true, newCats: kinds.filter(k => ['birols', 'uploads', 'hooks', 'images', 'sounds', 'references', 'music'].includes(k)) },
-    why: (to) => (kinds.some(k => canGo(k, to)) ? '' : 'none of them goes there'),
+    why: (to) => (kinds.some(k => canGo(k, to)) ? '' : T.t('none of them goes there')),
     onPick: async (to) => {
       try {
         const d = await batch('move', items, { to: { kind: to.kind, cat: to.cat || '', label: to.label || '', folder: to.folder || '', mood: to.mood || '',
           ...(to.aroot ? { aroot: true } : {}) } });
         await (opt.done ? opt.done(d) : null);
-        if (opt.status) opt.status(saidOf(d, 'moved to ' + (to.text || to.label || to.kind)), !d.done && (d.skipped || []).length > 0);
-      } catch (e) { if (opt.status) opt.status('Could not move them: ' + e.message, true); }
+        if (opt.status) opt.status(saidOf(d, T.t('moved to {place}', { place: to.text || to.label || to.kind })), !d.done && (d.skipped || []).length > 0);
+      } catch (e) { if (opt.status) opt.status(T.t('Could not move them: {why}', { why: e.message }), true); }
     },
   });
 }

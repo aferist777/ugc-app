@@ -19,7 +19,11 @@
 // folder and the moods (`to.folder`, `to.mood` - a mood takes only the tracks its preset made, the server says so), My
 // sounds and its categories; never Built-in or ★ Favorites. And AUDIO itself (`to.aroot`).
 
+import * as T from './i18n/t.js';
+
 const KINDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references']);
+// The program's folders as the person reads them; their names on the disk and in the stores stay as they are.
+const REFS = T.t('REFERENCES');
 // The kinds whose own node holds folders (its key is the kind) - and their folders do.
 const HOLDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references', 'sounds', 'music']);
 const AUDIO_KINDS = new Set(['sounds', 'music']);
@@ -47,7 +51,7 @@ export function placesOf(tree, opts) {
     // A kind's own node (its key is the kind) and every folder of it take a new folder - not the app's
     // (highlights, its moods, the sources' folders: `noAdd`).
     const holds = adds.has(n.kind) && HOLDS.has(n.kind) && !n.noAdd && !n.project && (n.key === n.kind || (n.cat && (n.own || n.locked)));
-    if (holds) kids.push({ key: 'new:' + n.key, label: '+ new folder…', newIn: { kind: n.kind, parent: n.cat || '', label: n.label } });
+    if (holds) kids.push({ key: 'new:' + n.key, label: '+ ' + T.t('new folder…'), newIn: { kind: n.kind, parent: n.cat || '', label: n.label } });
     if (!to && !kids.length) return null;
     const p = { key: n.key, label: n.label, count: n.count || 0, locked: !!n.locked };
     if (to) p.to = to;
@@ -57,15 +61,15 @@ export function placesOf(tree, opts) {
   const root = (key) => (tree || []).find(n => n.key === key);
   const out = [];
   const refs = root('references');
-  const home = o.refHome || 'the source\'s folder (no folder of yours)';
-  const r = (refs && map(refs, 'REFERENCES')) || { key: 'references', label: 'REFERENCES', count: 0, locked: false };
-  r.children = [{ key: 'references:home', label: home, to: { kind: 'references', cat: '', label: '', text: 'REFERENCES · ' + home } }]
+  const home = o.refHome || T.t('the source\'s folder (no folder of yours)');
+  const r = (refs && map(refs, REFS)) || { key: 'references', label: REFS, count: 0, locked: false };
+  r.children = [{ key: 'references:home', label: home, to: { kind: 'references', cat: '', label: '', text: REFS + ' · ' + home } }]
     .concat(r.children || []);
   out.push(r);
   const video = root('video') && map(root('video'), '');
   if (video) out.push(video);
   if (o.images !== false) {
-    const images = root('images') && map(root('images'), 'IMAGES');
+    const images = root('images') && map(root('images'), T.t('IMAGES'));
     if (images) out.push(images);
   }
   if (o.audio) {
@@ -80,10 +84,10 @@ export function whereText(to) {
   if (!to) return '';
   // A folder in a folder: the whole path the picker built.
   if (to.cat && to.text && to.kind !== 'references') return to.text;
-  if (to.kind === 'references') return 'REFERENCES · ' + (to.cat ? (to.text ? to.text.replace(/^REFERENCES · /, '') : to.label) : 'its site\'s folder');
-  if (to.kind === 'images') return 'IMAGES' + (to.cat ? ' · ' + to.label : '');
-  if (to.kind === 'sounds') return to.aroot ? 'AUDIO' : 'My sounds' + (to.cat ? ' · ' + to.label : '');
-  if (to.kind === 'music') return to.text || 'Music';
-  if (to.kind === 'birols' && !to.cat) return 'Generated';
-  return ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'references') return REFS + ' · ' + (to.cat ? (to.text ? to.text.replace(REFS + ' · ', '') : to.label) : T.t('its site\'s folder'));
+  if (to.kind === 'images') return T.t('IMAGES') + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'sounds') return to.aroot ? T.t('AUDIO') : T.t('My sounds') + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'music') return to.text || T.t('Music');
+  if (to.kind === 'birols' && !to.cat) return T.t('Generated');
+  return ({ uploads: T.t('Uploads'), birols: T.t('B-rolls'), hooks: T.t('Hooks') }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : '');
 }

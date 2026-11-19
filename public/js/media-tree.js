@@ -113,6 +113,8 @@ import { menuIcons, iconEl } from './icons.js';
 import { int } from './num.js';
 import { since as newsSince } from './references/news.js';
 import * as KG from './key-gate.js';
+// The app's words as T.t / T.tn: this module's own `t`s are tiles and targets.
+import * as T from './i18n/t.js';
 
 export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
@@ -126,23 +128,37 @@ let _dragging = null;       // { kind, id, key, label } while a folder of this p
 const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound', plinks: 'link' };
 // What the generators of IMAGES -> Environments / Lookbooks made: their own kinds, never moved.
 // And IMAGES -> Props: the products, added by New prop.
-const MADE = { environments: 'Environments', lookbooks: 'Lookbooks', props: 'Props' };
-const MADE_BY = { environments: 'New environment', lookbooks: 'New lookbook', props: 'New prop' };
+const MADE = { environments: T.t('Environments'), lookbooks: T.t('Lookbooks'), props: T.t('Props') };
+const MADE_BY = { environments: T.t('New environment'), lookbooks: T.t('New lookbook'), props: T.t('New prop') };
 // The roots that make what lies in them - their "generate" (`onGenerate`).
 const GEN_ROOTS = new Set(['images', 'video', 'audio']);
-const GEN_TIP = { images: 'Generate pictures - the pictures chat', video: 'Generate video - the video chat', audio: 'Generate music and sounds' };
+const GEN_TIP = { images: T.t('Generate pictures - the pictures chat'), video: T.t('Generate video - the video chat'), audio: T.t('Generate music and sounds') };
 const MADE_SAYS = {
-  props: 'A prop stays in Props - its description is kept by its place there',
-  environments: 'A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
-  lookbooks: 'A made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
+  props: T.t('A prop stays in Props - its description is kept by its place there'),
+  environments: T.t('A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it'),
+  lookbooks: T.t('A made lookbook stays in Lookbooks - its description and the looks dressed in it point at it'),
 };
 // AUDIO -> Music -> Lyrics: the saved texts - nothing goes in by hand, nothing of it goes out.
-const LYRICS_STAY = 'A text stays in Music → Lyrics - a press opens it; "Use in Custom" takes it into Generate music';
-const LYRICS_TAKE = 'Music → Lyrics holds only texts - saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics)';
+const LYRICS_STAY = T.t('A text stays in Music → Lyrics - a press opens it; "Use in Custom" takes it into Generate music');
+const LYRICS_TAKE = T.t('Music → Lyrics holds only texts - saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics)');
 // What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
-const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+// A count with its noun, in the app's language: each noun's forms are the dictionary's.
+const COUNT = {
+  clip: (n) => T.tn(n, '{n} clip', '{n} clips'), picture: (n) => T.tn(n, '{n} picture', '{n} pictures'),
+  sound: (n) => T.tn(n, '{n} sound', '{n} sounds'), track: (n) => T.tn(n, '{n} track', '{n} tracks'),
+  post: (n) => T.tn(n, '{n} post', '{n} posts'), link: (n) => T.tn(n, '{n} link', '{n} links'),
+  item: (n) => T.tn(n, '{n} item', '{n} items'), folder: (n) => T.tn(n, '{n} folder', '{n} folders'),
+  project: (n) => T.tn(n, '{n} project', '{n} projects'),
+};
+const _plural = (n, word) => (COUNT[word] ? COUNT[word](n) : n + ' ' + word + (n === 1 ? '' : 's'));
+// "The clips stay on the disk." - a noun's plural with no number.
+const STAY = {
+  clip: T.t('The clips stay on the disk.'), picture: T.t('The pictures stay on the disk.'), sound: T.t('The sounds stay on the disk.'),
+  track: T.t('The tracks stay on the disk.'), post: T.t('The posts stay on the disk.'), link: T.t('The links stay on the disk.'),
+  item: T.t('The items stay on the disk.'),
+};
 // The kinds that go into one another: a sound and a track.
 const AUDIO_KINDS = new Set(['sounds', 'music']);
 
@@ -337,8 +353,8 @@ export function createTree(host, o) {
     let m = n;
     while (m && !MADE[m.make]) m = byKey.get(parentOf.get(m.key));
     const env = !m || m.make !== 'lookbooks';
-    return 'Nothing goes into ' + (env ? 'Environments' : 'Lookbooks') + ' / references by hand - only the photo '
-      + (env ? 'New environment makes an environment' : 'New lookbook makes a lookbook') + ' from lands there.';
+    return env ? T.t('Nothing goes into Environments / references by hand - only the photo New environment makes an environment from lands there.')
+      : T.t('Nothing goes into Lookbooks / references by hand - only the photo New lookbook makes a lookbook from lands there.');
   }
   const _hasType = (dt, t) => Array.from((dt && dt.types) || []).some(x => x === t || x.startsWith(t));
 
@@ -388,7 +404,7 @@ export function createTree(host, o) {
   const _refsLock = (box) => {
     const lock = _el('span', 'mt-lock is-key');
     lock.appendChild(iconEl('lock', 12));
-    lock.title = 'Needs the Telegram bot\'s key - Admin → API keys';
+    lock.title = T.t('Needs the Telegram bot\'s key - Admin → API keys');
     box.appendChild(lock);
   };
   KG.onChange(() => { if (!loaded || !el.isConnected) return; if (_refsShut(sel)) { if (opt.home) home(true); else select(byKey.has(opt.fallback) ? opt.fallback : (nodes[0] || {}).key, true, true); } else paint(); });
@@ -408,8 +424,8 @@ export function createTree(host, o) {
     try { await KG.ready(); } catch (e) { /* unknown is open */ }
     const pk = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
     try { d = await fetch('/api/library/tree?srcFrom=' + newsSince() + (pk ? '&plinks=' + encodeURIComponent(pk) : '')).then(r => r.json()); }
-    catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
-    if (!d || !d.success) { opt.status((d && d.error) || 'Could not read the media tree', true); return nodes; }
+    catch (e) { opt.status(T.t('Could not read the media tree: {why}', { why: e.message }), true); return nodes; }
+    if (!d || !d.success) { opt.status((d && d.error) || T.t('Could not read the media tree'), true); return nodes; }
     nodes = d.nodes || [];
     // A tree of some roots only - Merge's Video to Music shows VIDEO alone.
     if (Array.isArray(opt.roots) && opt.roots.length) nodes = nodes.filter(n => opt.roots.includes(n.key));
@@ -539,7 +555,7 @@ export function createTree(host, o) {
     tw.tabIndex = -1;
     if (has) {
       tw.classList.toggle('is-open', open.has(n.key));
-      tw.title = open.has(n.key) ? 'Fold' : 'Open';
+      tw.title = open.has(n.key) ? T.t('Fold') : T.t('Open');
       tw.addEventListener('click', (e) => { e.stopPropagation(); toggle(n.key); });
     } else tw.disabled = true;
     row.appendChild(tw);
@@ -560,7 +576,7 @@ export function createTree(host, o) {
     else if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
-      lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
+      lock.title = n.tip || (n.builtin ? T.t('Built into the app - read only') : T.t('Required - it cannot be renamed, moved or deleted'));
       lockCol.appendChild(lock);
     }
     // A kind that can have folders: "+" makes one at its top - unless a generator has the row (a root's "generate";
@@ -571,24 +587,24 @@ export function createTree(host, o) {
       add.appendChild(iconEl('plus', 14));
       add.type = 'button';
       add.tabIndex = -1;
-      add.title = 'New folder in ' + (n.label || n.kind);
+      add.title = T.t('New folder in {place}', { place: n.label || n.kind });
       add.addEventListener('click', (e) => { e.stopPropagation(); if (_refsShut(n.key)) KG.explain('references', add); else _newFolder(n, add); });
       btnCol.appendChild(add);
     }
     // Environments / Lookbooks / Props: "create", in a blue frame
     // (gold under the pointer itself), opens their generator - where, the page says (`onMake`).
     if (creates) {
-      const mk = _el('button', 'mt-make u-btn is-s is-gen', 'Create');
+      const mk = _el('button', 'mt-make u-btn is-s is-gen', T.t('Create'));
       mk.type = 'button';
       mk.tabIndex = -1;
-      mk.title = n.makeLabel + ' - opens the generator';
+      mk.title = T.t('{what} - opens the generator', { what: n.makeLabel });
       mk.addEventListener('click', (e) => { e.stopPropagation(); opt.onMake(n, mk); });
       mk.addEventListener('dblclick', (e) => e.stopPropagation());
       btnCol.appendChild(mk);
     }
     // A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
     if (gens) {
-      const g = _el('button', 'mt-gen u-btn is-s is-gen', 'Generate');
+      const g = _el('button', 'mt-gen u-btn is-s is-gen', T.t('Generate'));
       g.type = 'button';
       g.tabIndex = -1;
       g.title = GEN_TIP[n.key];
@@ -600,7 +616,7 @@ export function createTree(host, o) {
       const x = _el('button', 'mt-act mt-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
       x.tabIndex = -1;
-      x.title = 'Delete this folder';
+      x.title = T.t('Delete this folder');
       x.addEventListener('mousedown', (e) => e.stopPropagation());
       x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(n, row); });
       btnCol.appendChild(x);
@@ -730,7 +746,7 @@ export function createTree(host, o) {
           e.preventDefault();
           e.stopPropagation();
           _dragging = null;
-          opt.status(n.lyrics ? LYRICS_TAKE : n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
+          opt.status(n.lyrics ? LYRICS_TAKE : n.closed ? closedSays(n) : T.t('{place} holds only what its generator made - a folder does not go into it', { place: MADE[n.kind] }), true);
           return;
         }
         if (!takesFolder(n)) return;
@@ -766,9 +782,9 @@ export function createTree(host, o) {
   }
 
   // What a node's tooltip says: the server's own word (`tip`), else what it is.
-  const _tipOf = (n) => n.tip || (n.builtin ? n.label + ' - built into the app: read only'
-    : n.locked ? n.label + ' - required: it cannot be renamed, moved or deleted'
-    : n.empty ? n.label + ' - empty' : n.label);
+  const _tipOf = (n) => n.tip || (n.builtin ? T.t('{name} - built into the app: read only', { name: n.label })
+    : n.locked ? T.t('{name} - required: it cannot be renamed, moved or deleted', { name: n.label })
+    : n.empty ? T.t('{name} - empty', { name: n.label }) : n.label);
 
   /** The folders of a node, as tiles - first in its gallery. null when it has none. With `home` and no node:
    *  the roots - REFERENCES, VIDEO, IMAGES, AUDIO. */
@@ -815,7 +831,7 @@ export function createTree(host, o) {
       const w = _el(here ? 'span' : 'button', 'mt-crumb is-home' + (here ? ' is-here' : ''), word);
       if (!here) {
         w.type = 'button';
-        w.title = 'Back to ' + word + ' - REFERENCES, VIDEO, IMAGES, AUDIO';
+        w.title = T.t('Back to {place} - REFERENCES, VIDEO, IMAGES, AUDIO', { place: word });
         w.addEventListener('click', () => home(true));
       }
       box.appendChild(w);
@@ -826,7 +842,7 @@ export function createTree(host, o) {
       const w = _el(last ? 'span' : 'button', 'mt-crumb' + (last ? ' is-here' : '') + (i === 0 ? ' is-top' : ''), c.label);
       if (!last) {
         w.type = 'button';
-        w.title = 'Open ' + c.label;
+        w.title = T.t('Open {name}', { name: c.label });
         w.addEventListener('click', () => openNode(c.key));
       }
       _takesDrops(w, c);
@@ -892,10 +908,10 @@ export function createTree(host, o) {
 
   const kindLabel = (kind) => ((byKey.get(kind) || {}).label) || kind;
   // Where what has no category of a kind lies, in words: the kind itself - a B-roll's, Generated.
-  const homeName = (kind) => (kind === 'birols' ? 'Generated' : kindLabel(kind));
+  const homeName = (kind) => (kind === 'birols' ? T.t('Generated') : kindLabel(kind));
   // A place in Music, in words: "Music", "Music · highlights", "highlights · calm".
-  const musicPlace = (folder, mood) => (mood ? 'highlights · ' + (((byKey.get('music:highlights:' + mood)) || {}).label || mood)
-    : folder ? 'Music · highlights' : 'Music');
+  const musicPlace = (folder, mood) => (mood ? T.t('highlights') + ' · ' + (((byKey.get('music:highlights:' + mood)) || {}).label || mood)
+    : folder ? T.t('Music') + ' · ' + T.t('highlights') : T.t('Music'));
 
   // After the page has read its gallery again - a read may end by clearing the status line.
   async function _after(msg, what) {
@@ -914,10 +930,9 @@ export function createTree(host, o) {
       if (t.closed && !MADE[it.kind] && !(Array.isArray(it.many) && it.many.length > 1) && (it.cat || '') === t.cat) return;
       opt.status(it.kind === 'lyrics' ? LYRICS_STAY : t.lyrics ? LYRICS_TAKE
         : MADE[it.kind] ? MADE_SAYS[it.kind]
-        : t.made ? 'Only ' + MADE_BY[t.kind] + ' puts pictures into ' + MADE[t.kind]
-          + ' (+ on it)'
+        : t.made ? T.t('Only {maker} puts pictures into {place} (+ on it)', { maker: MADE_BY[t.kind], place: MADE[t.kind] })
         : t.closed ? closedSays(n)
-        : 'A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
+        : T.t('A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own'), true);
       return;
     }
     // THIS PROJECT: linked there (or, a link of it, moved there) - the file stays where it lies.
@@ -938,15 +953,15 @@ export function createTree(host, o) {
         if (t.cat) {
           if ((it.cat || '') === t.cat) return;
           await A.setCategory(item, t.cat, t.name);
-          await _after('"' + (it.name || 'It') + '" is in ' + n.label, { moved: it });
+          await _after(T.t('"{name}" is in {place}', { name: it.name || T.t('It'), place: n.label }), { moved: it });
           return;
         }
         if ((it.folder || '') === t.folder && (it.mood || '') === t.mood && !it.cat) return;
         const r = await fetch('/api/audio/music/' + encodeURIComponent(it.id) + '/place', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: t.folder, mood: t.mood }),
         }).then(x => x.json()).catch(() => null);
-        if (!r || !r.success) { opt.status((r && r.error) || 'Could not move the track', true); return; }
-        await _after('"' + (it.name || 'It') + '" is in ' + musicPlace(r.folder, r.mood), { moved: it });
+        if (!r || !r.success) { opt.status((r && r.error) || T.t('Could not move the track'), true); return; }
+        await _after(T.t('"{name}" is in {place}', { name: it.name || T.t('It'), place: musicPlace(r.folder, r.mood) }), { moved: it });
         return;
       }
       // A post: filed within REFERENCES, or - one video, one picture - out of it into VIDEO or IMAGES.
@@ -956,59 +971,61 @@ export function createTree(host, o) {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files: 'all', to: { kind: t.kind, cat: t.cat, label: t.name } }),
         }).then(x => x.json());
-        if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
+        if (!r || !r.success) throw new Error((r && r.error) || T.t('not moved'));
         if (r.skipped && r.skipped.length && !r.moved) throw new Error(r.skipped[0].why);
-        const there = act === 'ref' ? (t.cat ? 'REFERENCES · ' + n.label : 'its source\'s folder in REFERENCES') : where;
-        await _after('"' + (it.name || 'It') + '" is in ' + there, { moved: it });
+        const there = act === 'ref' ? (t.cat ? T.t('REFERENCES') + ' · ' + n.label : T.t('its source\'s folder in REFERENCES')) : where;
+        await _after(T.t('"{name}" is in {place}', { name: it.name || T.t('It'), place: there }), { moved: it });
         return;
       }
       if (act === 'cat') {
         if ((it.cat || '') === t.cat) return;
         await A.setCategory(item, t.cat, t.name);
-        await _after('"' + (it.name || 'It') + '" is in ' + where, { moved: it });
+        await _after(T.t('"{name}" is in {place}', { name: it.name || T.t('It'), place: where }), { moved: it });
       } else if (act === 'kind') {
         // Off its own kind's category first: a category is one kind's, and kept across it would come back as a stray.
         if (it.cat) await A.setCategory(item, '', '');
         await A.setKind(item, t.kind);
         if (t.cat) await A.setCategory({ kind: t.kind, id: it.id }, t.cat, t.name);
-        await _after('"' + (it.name || 'It') + '" moved to ' + (t.kind === 'birols' && !t.cat ? where : kindLabel(t.kind) + (t.cat ? ' · ' + n.label : '')), { moved: it });
+        await _after(T.t('"{name}" moved to {place}', { name: it.name || T.t('It'), place: t.kind === 'birols' && !t.cat ? where : kindLabel(t.kind) + (t.cat ? ' · ' + n.label : '') }), { moved: it });
       }
-    } catch (e) { opt.status('Could not move it: ' + e.message, true); await load(); }
+    } catch (e) { opt.status(T.t('Could not move it: {why}', { why: e.message }), true); await load(); }
   }
 
   // Things let go on THIS PROJECT or one of its folders: links there - one request for all.
   async function _link(n, it) {
     const key = typeof opt.plinks === 'function' ? String(opt.plinks() || '') : '';
-    if (!key) { opt.status('Open a project first - THIS PROJECT is its own', true); return; }
+    if (!key) { opt.status(T.t('Open a project first - THIS PROJECT is its own'), true); return; }
     const many = Array.isArray(it.many) && it.many.length > 1 ? it.many : [{ kind: it.kind, id: it.id, link: it.link || '' }];
     let r = null;
     try {
       r = await fetch('/api/plinks/put', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, folder: n.cat || '', items: many.map(x => ({ kind: x.kind, id: x.id, ...(x.link ? { link: x.link } : {}) })) }) }).then(x => x.json());
-      if (!r || !r.success) throw new Error((r && r.error) || 'not linked');
-    } catch (e) { opt.status('Could not put it there: ' + e.message, true); return; }
-    const said = [r.added ? _plural(r.added, 'link') + ' in ' + n.label : '', r.moved ? _plural(r.moved, 'link') + ' moved to ' + n.label : '',
-      r.had ? (r.had === 1 ? 'one was there already' : r.had + ' were there already') : ''].filter(Boolean).join(' · ');
-    await _after(said || 'Already in ' + n.label, { linked: true });
+      if (!r || !r.success) throw new Error((r && r.error) || T.t('not linked'));
+    } catch (e) { opt.status(T.t('Could not put it there: {why}', { why: e.message }), true); return; }
+    const said = [r.added ? T.t('{what} in {place}', { what: _plural(r.added, 'link'), place: n.label }) : '',
+      r.moved ? T.t('{what} moved to {place}', { what: _plural(r.moved, 'link'), place: n.label }) : '',
+      r.had ? T.tn(r.had, 'one was there already', '{n} were there already') : ''].filter(Boolean).join(' · ');
+    await _after(said || T.t('Already in {place}', { place: n.label }), { linked: true });
   }
 
   // `one` - the name of the one tile moved this way (a sound or a track): said by its name.
   async function _takeMany(n, t, many, where, one) {
     const there = t.kind === 'music' ? (t.cat ? n.label : musicPlace(t.folder, t.mood))
-      : t.kind === 'references' ? (t.cat ? 'REFERENCES · ' + n.label : 'their sources\' folders in REFERENCES') : where;
+      : t.kind === 'references' ? (t.cat ? T.t('REFERENCES') + ' · ' + n.label : T.t('their sources\' folders in REFERENCES')) : where;
     let r = null;
     try {
       r = await fetch('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: many, to: { kind: t.kind, cat: t.cat || '', label: t.name || '', folder: t.folder || '', mood: t.mood || '',
           ...(t.aroot ? { aroot: true } : {}) } }),
       }).then(x => x.json());
-      if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
-    } catch (e) { opt.status('Could not move ' + (one ? 'it' : 'them') + ': ' + e.message, true); await load(); return; }
+      if (!r || !r.success) throw new Error((r && r.error) || T.t('not moved'));
+    } catch (e) { opt.status((one ? T.t('Could not move it: {why}', { why: e.message }) : T.t('Could not move them: {why}', { why: e.message })), true); await load(); return; }
     const sk = r.skipped || [];
     const whys = [...new Set(sk.map(x => x.why))].slice(0, 3).join('; ');
     const msg = one != null && many.length === 1
-      ? (r.done ? '"' + (one || 'It') + '" is in ' + there : 'Not moved: ' + whys)
-      : (r.done ? _plural(r.done, 'item') + ' in ' + there : 'Nothing moved') + (sk.length ? ' · ' + sk.length + ' stayed: ' + whys : '');
+      ? (r.done ? T.t('"{name}" is in {place}', { name: one || T.t('It'), place: there }) : T.t('Not moved: {why}', { why: whys }))
+      : (r.done ? T.t('{what} in {place}', { what: _plural(r.done, 'item'), place: there }) : T.t('Nothing moved'))
+        + (sk.length ? ' · ' + T.t('{n} stayed: {why}', { n: sk.length, why: whys }) : '');
     await _after(sk.length && !r.done ? '' : msg, { moved: { many } });
     if (sk.length && !r.done) opt.status(msg, true);
   }
@@ -1034,25 +1051,25 @@ export function createTree(host, o) {
     if (!holds(n)) return;
     const kind = n.kind;
     const cat = await askName({
-      anchor, title: 'New folder in ' + (n.label || kind), okLabel: 'Create', maxLength: 60,
+      anchor, title: T.t('New folder in {place}', { place: n.label || kind }), okLabel: T.t('Create'), maxLength: 60,
       check: (name) => {
         const taken = kidFolders(n).find(c => _lcName(c) === name.toLowerCase());
-        return taken ? 'There is already a folder called ' + taken.label + ' here.' : '';
+        return taken ? T.t('There is already a folder called {name} here.', { name: taken.label }) : '';
       },
       submit: async (name) => (kind === 'plinks' ? (await _pl('POST', '/api/plinks/folder', { name, parent: n.cat || '' })) : await A.addFolder(kind, name, n.cat || '')).cat,
     });
     if (!cat) return;
     _setOpen(n.key, true);
-    await _after('Made the folder "' + cat.label + '"', { cats: kind });
+    await _after(T.t('Made the folder "{name}"', { name: cat.label }), { cats: kind });
   }
 
   async function _rename(n, anchor) {
     const parent = byKey.get(parentOf.get(n.key));
     const next = await askName({
-      anchor, title: 'Rename folder', value: n.name || n.label, okLabel: 'Rename', maxLength: 60,
+      anchor, title: T.t('Rename folder'), value: n.name || n.label, okLabel: T.t('Rename'), maxLength: 60,
       check: (name) => {
         const taken = kidFolders(parent).find(c => c.key !== n.key && _lcName(c) === name.toLowerCase());
-        return taken ? 'There is already a folder called ' + taken.label + ' here.' : '';
+        return taken ? T.t('There is already a folder called {name} here.', { name: taken.label }) : '';
       },
       submit: async (name) => {
         if (name === (n.name || n.label)) return null;
@@ -1060,7 +1077,7 @@ export function createTree(host, o) {
       },
     });
     if (!next) return;
-    await _after('Renamed to "' + next.label + '"', { cats: n.kind });
+    await _after(T.t('Renamed to "{name}"', { name: next.label }), { cats: n.kind });
   }
 
   // Into another folder of its kind, or the kind's top (`t` is the kind's own node). Refused in words by the server.
@@ -1070,9 +1087,9 @@ export function createTree(host, o) {
     // A folder of THIS PROJECT moves among its folders.
     if (d.kind === 'plinks') {
       try { r = await _pl('PATCH', '/api/plinks/folder/' + encodeURIComponent(d.id), { parent: t.cat || '' }); }
-      catch (e) { opt.status(e.message || 'Could not move the folder', true); return; }
+      catch (e) { opt.status(e.message || T.t('Could not move the folder'), true); return; }
       _setOpen(t.key, true);
-      await _after('"' + d.label + '" is in ' + t.label + ' now', { cats: 'plinks' });
+      await _after(T.t('"{name}" is in {place} now', { name: d.label, place: t.label }), { cats: 'plinks' });
       return;
     }
     try {
@@ -1080,9 +1097,9 @@ export function createTree(host, o) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: d.kind, parent: t.cat || '' }),
       }).then(x => x.json());
     } catch (e) { r = { success: false, error: e.message }; }
-    if (!r || !r.success) { opt.status((r && r.error) || 'Could not move the folder', true); return; }
+    if (!r || !r.success) { opt.status((r && r.error) || T.t('Could not move the folder'), true); return; }
     _setOpen(t.key, true);
-    await _after('"' + d.label + '" is in ' + (t.cat ? t.label : (t.label || kindLabel(d.kind))) + ' now', { cats: d.kind, moved: { folder: d.id } });
+    await _after(T.t('"{name}" is in {place} now', { name: d.label, place: t.cat ? t.label : (t.label || kindLabel(d.kind)) }), { cats: d.kind, moved: { folder: d.id } });
   }
 
   // Delete: what is in it ONE LEVEL UP - its files into the folder it is in (at the top, the kind
@@ -1103,7 +1120,7 @@ export function createTree(host, o) {
     const r = await fetch(url + (method === 'DELETE' ? (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key) : ''), {
       method, headers: { 'Content-Type': 'application/json' }, body: method === 'DELETE' ? undefined : JSON.stringify(Object.assign({ key }, body || {})),
     }).then(x => x.json()).catch(() => null);
-    if (!r || !r.success) throw new Error((r && r.error) || 'the server did not answer');
+    if (!r || !r.success) throw new Error((r && r.error) || T.t('the server did not answer'));
     return r;
   }
   // A folder of THIS PROJECT: only its links go - the files stay where they lie in the library.
@@ -1112,13 +1129,13 @@ export function createTree(host, o) {
     let folders = 0;
     const walk = (x) => { for (const c of kidFolders(x)) { folders++; walk(c); } };
     walk(n);
-    box.appendChild(_el('b', 'mt-pop-head', 'Delete "' + n.label + '"?'));
-    box.appendChild(_el('div', 'mt-pop-note', (n.count ? _plural(n.count, 'link') : 'No links') + (folders ? ' and ' + _plural(folders, 'folder') : '')
-      + ' go with it - the files stay in the library.'));
+    box.appendChild(_el('b', 'mt-pop-head', T.t('Delete "{name}"?', { name: n.label })));
+    box.appendChild(_el('div', 'mt-pop-note', T.t('{what} go with it - the files stay in the library.', {
+      what: (n.count ? _plural(n.count, 'link') : T.t('No links')) + (folders ? ' ' + T.t('and') + ' ' + _plural(folders, 'folder') : '') })));
     const btns = _el('div', 'mt-pop-btns u-ask-r');
-    const cancel = _el('button', 'mt-pop-btn u-btn is-s', 'Cancel');
+    const cancel = _el('button', 'mt-pop-btn u-btn is-s', T.t('Cancel'));
     cancel.type = 'button';
-    const go = _el('button', 'mt-pop-btn u-btn is-s', 'Delete folder');
+    const go = _el('button', 'mt-pop-btn u-btn is-s', T.t('Delete folder'));
     go.type = 'button';
     btns.append(cancel, go);
     box.appendChild(btns);
@@ -1137,7 +1154,7 @@ export function createTree(host, o) {
       try {
         const d = await _pl('DELETE', '/api/plinks/folder/' + encodeURIComponent(n.cat));
         _closePop();
-        await _after('Deleted the folder' + (d.links ? ' and ' + _plural(d.links, 'link') + ' - the files stay' : ''), { cats: 'plinks' });
+        await _after(d.links ? T.t('Deleted the folder and {what} - the files stay', { what: _plural(d.links, 'link') }) : T.t('Deleted the folder'), { cats: 'plinks' });
       } catch (e) { _closePop(); opt.status(e.message, true); }
     });
   }
@@ -1157,22 +1174,24 @@ export function createTree(host, o) {
     // its source's folder, a track into Music.
     const up = byKey.get(parentOf.get(n.key));
     const home = up && up.cat ? '"' + up.label + '"'
-      : n.kind === 'references' ? 'their sources\' folders' : n.kind === 'music' ? 'Music' : homeName(n.kind);
-    box.appendChild(_el('b', 'mt-pop-head', 'Delete "' + n.label + '"?'));
-    if (count || folders) box.appendChild(_el('div', 'mt-pop-note', 'Inside: ' + [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' and ') + '.'));
+      : n.kind === 'references' ? T.t('their sources\' folders') : n.kind === 'music' ? T.t('Music') : homeName(n.kind);
+    box.appendChild(_el('b', 'mt-pop-head', T.t('Delete "{name}"?', { name: n.label })));
+    if (count || folders) box.appendChild(_el('div', 'mt-pop-note', T.t('Inside: {what}.', { what: [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' ' + T.t('and') + ' ') })));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = true;                       // the safe branch is the default
     lab.appendChild(cb);
-    lab.appendChild(_el('span', null, (count || folders) ? 'Move what is in it up into ' + home + (folders ? ' - its folders stay folders' : '') : 'Nothing in it to move'));
+    lab.appendChild(_el('span', null, (count || folders)
+      ? (folders ? T.t('Move what is in it up into {place} - its folders stay folders', { place: home }) : T.t('Move what is in it up into {place}', { place: home }))
+      : T.t('Nothing in it to move')));
     box.appendChild(lab);
     const note = _el('div', 'mt-pop-note');
     box.appendChild(note);
     const used = _el('div', 'mt-pop-used');
     box.appendChild(used);
     const btns = _el('div', 'mt-pop-btns u-ask-r');
-    const cancel = _el('button', 'mt-pop-btn u-btn is-s', 'Cancel');
+    const cancel = _el('button', 'mt-pop-btn u-btn is-s', T.t('Cancel'));
     cancel.type = 'button';
     const go = _el('button', 'mt-pop-btn u-btn is-s', '');
     go.type = 'button';
@@ -1183,18 +1202,19 @@ export function createTree(host, o) {
     let projects = null;
     const paintPop = () => {
       const keep = cb.checked || (!count && !folders);
-      note.textContent = keep ? (count ? 'The ' + noun + 's stay on the disk.' : '')
-        : count ? 'Its ' + _plural(count, noun) + (folders ? ' - in it and in every folder under it -' : '') + ' will be deleted from the disk. This cannot be undone.'
-        : 'Its folders go with it.';
-      go.textContent = keep ? 'Delete folder' : count ? 'Delete folder and ' + _plural(count, noun) : 'Delete folder and its folders';
+      note.textContent = keep ? (count ? (STAY[noun] || STAY.item) : '')
+        : count ? (folders ? T.t('Its {what} - in it and in every folder under it - will be deleted from the disk. This cannot be undone.', { what: _plural(count, noun) })
+          : T.t('Its {what} will be deleted from the disk. This cannot be undone.', { what: _plural(count, noun) }))
+        : T.t('Its folders go with it.');
+      go.textContent = keep ? T.t('Delete folder') : count ? T.t('Delete folder and {what}', { what: _plural(count, noun) }) : T.t('Delete folder and its folders');
       go.classList.toggle('is-danger', !keep);           // red only when files go
       go.classList.toggle('is-armed', !keep);
       used.textContent = '';
       used.hidden = keep || !projects || !projects.length;
       if (!used.hidden) {
-        used.appendChild(_el('div', 'mt-pop-used-head', 'Used in ' + _plural(projects.length, 'project') + ' - there it turns red, to be replaced or removed:'));
+        used.appendChild(_el('div', 'mt-pop-used-head', T.t('Used in {what} - there it turns red, to be replaced or removed:', { what: _plural(projects.length, 'project') })));
         for (const p of projects.slice(0, 8)) used.appendChild(_el('div', 'mt-pop-used-row', '«' + p.title + '» · ' + _plural(p.clips, 'clip')));
-        if (projects.length > 8) used.appendChild(_el('div', 'mt-pop-used-row', '… and ' + (projects.length - 8) + ' more'));
+        if (projects.length > 8) used.appendChild(_el('div', 'mt-pop-used-row', T.t('… and {n} more', { n: projects.length - 8 })));
       }
     };
     cb.addEventListener('change', paintPop);
@@ -1222,8 +1242,8 @@ export function createTree(host, o) {
         const d = await A.deleteCat(n.kind, n.cat, mode);
         _closePop();
         const msg = d.mode === 'delete'
-          ? 'Deleted the folder and ' + _plural(d.affected || 0, noun)
-          : 'Deleted the folder' + (d.affected || d.folders ? '; what was in it is in ' + home : '');
+          ? T.t('Deleted the folder and {what}', { what: _plural(d.affected || 0, noun) })
+          : (d.affected || d.folders ? T.t('Deleted the folder; what was in it is in {place}', { place: home }) : T.t('Deleted the folder'));
         await _after(msg, { cats: n.kind, deleted: d.mode === 'delete' });
       } catch (e) {
         _closePop();
@@ -1248,20 +1268,20 @@ export function createTree(host, o) {
     _closeMenu();
     const items = [];
     // A new folder INSIDE the one pressed; none in the references of Environments / Lookbooks.
-    if (holds(n)) items.push(['New folder', 'in ' + n.label, () => _newFolder(n, row)]);
-    else if (n.closed) items.push(['New folder', 'not here - nothing goes into references by hand', null]);
+    if (holds(n)) items.push([T.t('New folder'), T.t('in {place}', { place: n.label }), () => _newFolder(n, row)]);
+    else if (n.closed) items.push([T.t('New folder'), T.t('not here - nothing goes into references by hand'), null]);
     // Environments / Lookbooks: their generator; what they hold is the app's to keep where it is.
     if (n.make && typeof opt.onMake === 'function') {
-      items.push([n.makeLabel, 'opens the generator', () => opt.onMake(n, row)]);
+      items.push([n.makeLabel, T.t('opens the generator'), () => opt.onMake(n, row)]);
       // Only the generators' own folders keep what they made; Music's tracks move as any.
-      if (MADE[n.kind]) items.push(['Required', 'what its generator made stays here - open it or delete it', null]);
+      if (MADE[n.kind]) items.push([T.t('Required'), T.t('what its generator made stays here - open it or delete it'), null]);
     }
     if (n.cat && !n.uncat && !n.project) {
-      if (n.builtin) items.push(['Built-in', 'part of the app - read only', null]);
-      else if (n.locked) items.push(['Required', 'it cannot be renamed, moved or deleted', null]);
+      if (n.builtin) items.push([T.t('Built-in'), T.t('part of the app - read only'), null]);
+      else if (n.locked) items.push([T.t('Required'), T.t('it cannot be renamed, moved or deleted'), null]);
       else if (n.own) {
-        items.push(['Rename', n.label, () => _rename(n, row)]);
-        items.push(['Delete', n.kind === 'plinks' ? 'the folder and its links - the files stay' : 'the folder - what is in it goes up a level, or with it', () => _askDelete(n, row)]);
+        items.push([T.t('Rename'), n.label, () => _rename(n, row)]);
+        items.push([T.t('Delete'), n.kind === 'plinks' ? T.t('the folder and its links - the files stay') : T.t('the folder - what is in it goes up a level, or with it'), () => _askDelete(n, row)]);
       }
     }
     if (!items.length) return;

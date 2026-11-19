@@ -17,8 +17,10 @@
 import * as Layers from './layers.js';
 import { placesOf } from './media-targets.js';
 import { askName } from './name-box.js';
+import * as T from './i18n/t.js';
 
-const KIND_WORD = { references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks', images: 'IMAGES', sounds: 'My sounds', music: 'Music' };
+const KIND_WORD = { references: T.t('REFERENCES'), uploads: T.t('Uploads'), birols: T.t('B-rolls'), hooks: T.t('Hooks'), images: T.t('IMAGES'),
+  sounds: T.t('My sounds'), music: T.t('Music') };
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1zm-2 6V4.5a2 2 0 1 1 4 0V7H6z"/></svg>';
 
 const el = (tag, cls, text) => {
@@ -82,7 +84,7 @@ export function openPlaces(anchor, o) {
   const open = new Set();
   let chosen = null;                 // { to, key } - with `confirm`: the place chosen, not yet picked
   const box = el('div', 'ref-move mtp-box u-menu is-float' + (opt.cls ? ' ' + opt.cls : ''));
-  box.appendChild(el('div', 'ref-move-title', opt.title || 'Where to?'));
+  box.appendChild(el('div', 'ref-move-title', opt.title || T.t('Where to?')));
   const list = el('div', 'ref-move-list mt mtp');
   list.setAttribute('role', 'tree');
   box.appendChild(list);
@@ -90,7 +92,7 @@ export function openPlaces(anchor, o) {
   let footText = null, footGo = null;
   if (opt.confirm) {
     const foot = el('div', 'mtp-foot');
-    footText = el('span', 'mtp-chosen', 'Choose a folder');
+    footText = el('span', 'mtp-chosen', T.t('Choose a folder'));
     footGo = el('button', 'u-btn is-s is-main', opt.confirm);
     footGo.type = 'button';
     footGo.disabled = true;
@@ -124,7 +126,7 @@ export function openPlaces(anchor, o) {
     b.style.paddingLeft = (3 + depth * 11) + 'px';
     const tw = el('span', 'mt-tw' + (has && open.has(p.key) ? ' is-open' : ''), has ? '▸' : '');
     if (has) {
-      tw.title = open.has(p.key) ? 'Fold' : 'Open';
+      tw.title = open.has(p.key) ? T.t('Fold') : T.t('Open');
       tw.addEventListener('click', (e) => { e.stopPropagation(); if (e.detail < 2) toggle(p.key); });
     }
     b.appendChild(tw);
@@ -141,11 +143,11 @@ export function openPlaces(anchor, o) {
     if (add) {
       const plus = el('span', 'mtp-add', '+');
       plus.setAttribute('role', 'button');
-      plus.title = 'New folder in ' + (add.newIn.label || KIND_WORD[add.newIn.kind] || add.newIn.kind);
+      plus.title = T.t('New folder in {place}', { place: add.newIn.label || KIND_WORD[add.newIn.kind] || add.newIn.kind });
       plus.addEventListener('click', (e) => { e.stopPropagation(); if (e.detail < 2) _newFolder(add.newIn, plus, p); });
       b.appendChild(plus);
     }
-    b.title = no || (p.to ? p.to.text : (open.has(p.key) ? 'Fold ' : 'Open ') + p.label);
+    b.title = no || (p.to ? p.to.text : (open.has(p.key) ? T.t('Fold {name}', { name: p.label }) : T.t('Open {name}', { name: p.label })));
     // The second press of a double one (the media tree's way to open a branch) does nothing: it would fold what the first
     // opened, or pick a row that came under the pointer.
     b.addEventListener('click', (e) => {
@@ -163,7 +165,7 @@ export function openPlaces(anchor, o) {
     const top = list.scrollTop;
     list.textContent = '';
     if (hereNode) {
-      list.appendChild(el('div', 'ref-move-head', 'Beside it'));
+      list.appendChild(el('div', 'ref-move-head', T.t('Beside it')));
       list.appendChild(row(hereNode, 0, true));
       list.appendChild(el('div', 'mtp-sep'));
     }
@@ -194,11 +196,11 @@ export function openPlaces(anchor, o) {
   async function _newFolder(at, b, parentNode) {
     const kind = at.kind;
     const cat = await askName({
-      anchor: b, title: 'New folder in ' + (at.label || KIND_WORD[kind] || kind), okLabel: 'Create', maxLength: 60,
+      anchor: b, title: T.t('New folder in {place}', { place: at.label || KIND_WORD[kind] || kind }), okLabel: T.t('Create'), maxLength: 60,
       submit: async (name) => {
         const r = await fetch('/api/library/cats', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ kind, label: name, parent: at.parent || '' }) }).then(x => x.json());
-        if (!r || !r.success) throw new Error((r && r.error) || 'not made');
+        if (!r || !r.success) throw new Error((r && r.error) || T.t('not made'));
         return r.cat;
       },
     });
