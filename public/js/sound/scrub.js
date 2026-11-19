@@ -22,6 +22,8 @@
        -> { el, setTime(t), time(), setRange(a, b), range(), piece(), dur(), dragging(), redraw(), destroy() }
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import * as T from '../i18n/t.js';
+
 const RULER = 16;          // the ruler's band, px
 const FLAG = 10;           // a handle's flag on the ruler: its width from the pole, px
 const FLAG_H = 12;         // ... and its height from the ruler's top
@@ -30,7 +32,7 @@ const MIN_PIECE = 0.1;     // the shortest piece, s - lib/audio-cut.js refuses l
 
 // Seconds as a ruler says them: a sound under a minute in seconds ("0.5 s", "12 s"), a longer one as "1:30".
 function _label(t, step, dur) {
-  if (dur < 60) return (step < 1 ? t.toFixed(1) : String(Math.round(t))) + ' s';
+  if (dur < 60) return T.t('{n} s', { n: step < 1 ? t.toFixed(1) : String(Math.round(t)) });
   const m = Math.floor(t / 60);
   const s = t - m * 60;
   const ss = step < 1 ? s.toFixed(1) : String(Math.round(s));
@@ -58,8 +60,8 @@ export function scrubber(opts) {
     cutBtn = document.createElement('button');
     cutBtn.type = 'button';
     cutBtn.className = 'snd-scrub-cut u-btn is-main';
-    cutBtn.textContent = 'Cut';
-    cutBtn.title = o.cut.title || 'The piece between the gold flags becomes a new sound - this one stays as it is';
+    cutBtn.textContent = T.tc('wave', 'Cut');
+    cutBtn.title = o.cut.title || T.t('The piece between the gold flags becomes a new sound - this one stays as it is');
     cutBtn.style.height = RULER + 'px';
     cutBtn.hidden = true;
     cutBtn.addEventListener('pointerdown', (e) => e.stopPropagation());

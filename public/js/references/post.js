@@ -24,9 +24,12 @@ import { showError } from '../notice.js';
 import { twoPress } from '../really.js';
 // a new post's gold dot until it is opened - one module with the YouTube sources' tiles
 import * as News from './news.js';
+import * as T from '../i18n/t.js';
 
-const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
-const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
+const SRC_LABEL = { files: T.t('Files'), instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: T.t('Other') };
+const FOLDER_LABEL = { posts: T.t('Posts'), reels: 'Reels', shorts: 'Shorts', videos: T.t('Videos') };
+// Text that lands in an attribute of the viewer's markup.
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -47,26 +50,33 @@ const whereOf = (it) => {
 const fmtDate = (s) => {
   if (!s) return '';
   const d = new Date(s);
-  return isNaN(d) ? String(s) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return isNaN(d) ? String(s) : d.toLocaleDateString(T.lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 // ── deleting ─────────────────────────────────────────────────────────────────
-/** The question before a post is deleted - with the projects whose timelines hold its files (POST /api/library/usage), as
- *  every other tile of the Library asks: there its clips turn red, to be replaced or removed. */
-export async function deleteQuestion(it) {
-  const files = filesOf(it).map(f => f.path).filter(Boolean);
-  let q = `Delete the post "${it.name}"` + (files.length ? ` and its ${files.length} file${files.length === 1 ? '' : 's'}?` : '?');
-  if (!files.length) return q;
+const _paths = (it) => filesOf(it).map(f => f.path).filter(Boolean);
+
+/** The projects whose timelines hold these files (POST /api/library/usage) - none when the read fails. */
+async function _projectsOf(files) {
   try {
     const d = await fetch('/api/library/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ media: files }) }).then(r => r.json());
-    const projects = (d && d.projects) || [];
-    if (projects.length) {
-      q += '\n\nIt is used in ' + projects.length + (projects.length === 1 ? ' project' : ' projects') + ':\n'
-        + projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + p.clips + (p.clips === 1 ? ' clip' : ' clips')).join('\n')
-        + '\n\nThere its clips turn red - to be replaced or removed.';
-    }
-  } catch (e) { /* the plain question */ }
+    return (d && d.projects) || [];
+  } catch (e) { return []; }
+}
+
+/** The question before a post is deleted - with the projects whose timelines hold its files, as every other tile of the
+ *  Library asks: there its clips turn red, to be replaced or removed. */
+export async function deleteQuestion(it) {
+  const files = _paths(it);
+  if (!files.length) return T.t('Delete the post "{name}"?', { name: it.name });
+  let q = T.tn(files.length, 'Delete the post "{name}" and its {n} file?', 'Delete the post "{name}" and its {n} files?', { name: it.name });
+  const projects = await _projectsOf(files);
+  if (projects.length) {
+    q += '\n\n' + T.tn(projects.length, 'It is used in {n} project:', 'It is used in {n} projects:') + '\n'
+      + projects.slice(0, 10).map(p => '  ' + T.t('«{title}» - {clips}', { title: p.title, clips: T.tn(p.clips, '{n} clip', '{n} clips') })).join('\n')
+      + '\n\n' + T.t('There its clips turn red - to be replaced or removed.');
+  }
   return q;
 }
 
@@ -117,20 +127,21 @@ function _hoverShow(tile, it, open, opts) {
   files.forEach((f, i) => {
     const c = el('button', 'ref-hover-cell');
     c.type = 'button';
-    c.title = (f.type === 'video' ? 'video ' + mmss(f.dur) : 'photo') + ' - open the post on it';
+    const what = f.type === 'video' ? T.t('video {len}', { len: mmss(f.dur) }) : T.t('photo');
+    c.title = T.t('{what} - open the post on it', { what });
     if (f.thumb) { const im = el('img'); im.src = f.thumb; im.alt = ''; im.loading = 'lazy'; c.appendChild(im); }
     if (f.type === 'video') c.appendChild(el('span', 'ref-hover-v', '▶'));
     c.addEventListener('click', (e) => { e.stopPropagation(); _hoverOut(true); if (open) open(it, i); });
     if (opts && typeof opts.dragFile === 'function') {
       c.draggable = true;
-      c.title += ' - or drag it onto a lane';
+      c.title = T.t('{what} - open the post on it - or drag it onto a lane', { what });
       c.addEventListener('dragstart', (e) => { e.stopPropagation(); opts.dragFile(e.dataTransfer, it, f); });
       c.addEventListener('dragend', () => _hoverOut(true));
     }
     grid.appendChild(c);
   });
   box.appendChild(grid);
-  box.appendChild(el('div', 'ref-hover-cap', files.length + ' files · ' + (it.name || '')));
+  box.appendChild(el('div', 'ref-hover-cap', T.tn(files.length, '{n} file · {name}', '{n} files · {name}', { name: it.name || '' })));
   box.addEventListener('mouseenter', () => { if (_hover) clearTimeout(_hover.hideTimer); });
   box.addEventListener('mouseleave', () => _hoverOut());
   document.body.appendChild(box);
@@ -167,21 +178,21 @@ export function openPost(list, at, o) {
         <span class="lib-view-count u-win-sub"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <button class="u-btn is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
+        <button class="u-btn is-icon is-quiet u-x" data-x="close" type="button" title="${esc(T.t('Close (Esc)'))}"></button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="${esc(T.t('The previous post (left arrow)'))}">&#8249;</button>
         <div class="ref-view-mid">
           <div class="lib-view-stage"></div>
           <div class="ref-strip-bar">
             <span class="ref-strip-n"></span>
             <button class="u-btn is-s" data-x="all" type="button"></button>
             <span class="sp"></span>
-            <button class="u-btn is-s" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
+            <button class="u-btn is-s" data-x="move" type="button" title="${esc(T.t('Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES'))}"></button>
           </div>
           <div class="ref-strip"></div>
         </div>
-        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="${esc(T.t('The next post (right arrow)'))}">&#8250;</button>
         <aside class="lib-view-info"><div class="ref-said u-status" aria-live="polite"></div></aside>
       </div>
     </div>`;
@@ -236,12 +247,12 @@ const _cur = () => (_v ? _v.list[_v.at] : null);
 
 // The window's ONE status line (`u-status`, the first line of the right column): quiet; red only when
 // it says something did not happen ("not moved: …", "not added: …", a cut that failed).
-function _setSaid(node, t, bad) {
+function _setSaid(node, text, bad) {
   if (!node) return;
-  node.textContent = t || '';
-  node.classList.toggle('is-bad', !!(bad || /^not /i.test(String(t || ''))));
+  node.textContent = text || '';
+  node.classList.toggle('is-bad', !!(bad || /^not /i.test(String(text || ''))));
 }
-function _said(t, bad) { if (_v) _setSaid(_v.ov.querySelector('.ref-said'), t, bad); }
+function _said(text, bad) { if (_v) _setSaid(_v.ov.querySelector('.ref-said'), text, bad); }
 
 function _paint() {
   const it = _cur();
@@ -250,7 +261,7 @@ function _paint() {
   const ov = _v.ov;
   ov.querySelector('.lib-view-title').textContent = it.name || '';
   ov.querySelector('.ref-view-where').textContent = whereOf(it);
-  ov.querySelector('.lib-view-count').textContent = 'post ' + (_v.at + 1) + ' / ' + _v.list.length;
+  ov.querySelector('.lib-view-count').textContent = T.t('post {k} / {n}', { k: _v.at + 1, n: _v.list.length });
   News.opened(it);                                  // looked at - no longer new
   _paintStage();
   _paintStrip();
@@ -270,8 +281,8 @@ function _paintStage() {
     // site gives none, its poster and the way to it in the browser.
     const w = el('div', 'ref-remote');
     const cap = el('div', 'ref-remote-cap');
-    cap.appendChild(el('span', null, '▷ ' + mmss(m.remote.dur) + ' · watched from the site, not downloaded · '));
-    if (m.link) { const a = el('a', null, 'open it in the browser'); a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; cap.appendChild(a); }
+    cap.appendChild(el('span', null, '▷ ' + mmss(m.remote.dur) + ' · ' + T.t('watched from the site, not downloaded') + ' · '));
+    if (m.link) { const a = el('a', null, T.t('open it in the browser')); a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; cap.appendChild(a); }
     const yt = /youtube/i.test(String(m.remote.site || '')) && m.remote.id;
     if (yt) {
       const f = el('iframe', 'ref-player');
@@ -288,7 +299,7 @@ function _paintStage() {
         if (!_v || _cur() !== it0 || !d || !d.success) { if (d && !d.success) cap.firstChild.textContent = '▷ ' + mmss(m.remote.dur) + ' · ' + d.error + ' · '; return; }
         const v = el('video', 'lib-view-media');
         v.src = d.url; v.controls = true; v.autoplay = true; v.playsInline = true;
-        v.addEventListener('error', () => { cap.firstChild.textContent = '▷ the site would not play it here · '; v.replaceWith(im); }, { once: true });
+        v.addEventListener('error', () => { cap.firstChild.textContent = '▷ ' + T.t('the site would not play it here') + ' · '; v.replaceWith(im); }, { once: true });
         if (im.isConnected) im.replaceWith(v); else w.insertBefore(v, cap);
       }).catch(() => { /* the poster stays */ });
     }
@@ -297,7 +308,7 @@ function _paintStage() {
     return;
   }
   const f = filesOf(it)[_v.file];
-  if (!f) { stage.appendChild(el('div', 'ref-none', 'No file in this post.')); return; }
+  if (!f) { stage.appendChild(el('div', 'ref-none', T.t('No file in this post.'))); return; }
   stage.classList.remove('has-under');
   if (f.type === 'video') {
     const v = el('video', 'lib-view-media');
@@ -313,9 +324,9 @@ function _paintStage() {
       key: 'post:' + it.id + ':' + (f.id || _v.file) + (whole ? ':whole' : ''),
       here: { kind: 'references', cat: (it.meta && it.meta.categoryId) || '' },
     }, {
-      say: (t, err) => { if (_v && said.isConnected) _setSaid(said, t, err); },
+      say: (text, err) => { if (_v && said.isConnected) _setSaid(said, text, err); },
       onSaved: (r) => {
-        if (_v && said.isConnected) _setSaid(said, 'saved as a new clip in ' + r.where);
+        if (_v && said.isConnected) _setSaid(said, T.t('saved as a new clip in {place}', { place: r.where }));
         if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ cut: it }); } catch (e) { /* the page's */ } }
       },
     });
@@ -341,13 +352,14 @@ function _paintStrip() {
   if (!show) return;
   files.forEach((f, i) => {
     const c = el('div', 'ref-cell' + (i === _v.file ? ' is-cur' : '') + (_v.sel.has(f.id) ? ' is-sel' : ''));
-    c.title = (f.type === 'video' ? 'video ' + mmss(f.dur) : 'photo') + (f.w ? ' · ' + f.w + '×' + f.h : '') + ' - a press shows it';
+    const what = (f.type === 'video' ? T.t('video {len}', { len: mmss(f.dur) }) : T.t('photo')) + (f.w ? ' · ' + f.w + '×' + f.h : '');
+    c.title = T.t('{what} - a press shows it', { what });
     if (f.thumb) { const im = el('img'); im.src = f.thumb; im.alt = ''; im.loading = 'lazy'; c.appendChild(im); }
-    else c.appendChild(el('span', 'ref-cell-none', f.type));
+    else c.appendChild(el('span', 'ref-cell-none', f.type === 'video' ? T.t('video') : f.type === 'photo' ? T.t('photo') : f.type));
     if (f.type === 'video') c.appendChild(el('span', 'ref-cell-dur', '▶ ' + mmss(f.dur)));
     const tick = el('button', 'ref-tick', '✓');
     tick.type = 'button';
-    tick.title = _v.sel.has(f.id) ? 'Selected - press to let go' : 'Select';
+    tick.title = _v.sel.has(f.id) ? T.t('Selected - press to let go') : T.t('Select');
     tick.addEventListener('click', (e) => {
       e.stopPropagation();
       if (_v.sel.has(f.id)) _v.sel.delete(f.id); else _v.sel.add(f.id);
@@ -358,10 +370,11 @@ function _paintStrip() {
     strip.appendChild(c);
   });
   const n = _v.sel.size;
-  bar.querySelector('.ref-strip-n').textContent = n ? n + ' of ' + files.length + ' selected' : files.length + ' files · none selected';
-  bar.querySelector('[data-x="all"]').textContent = n === files.length ? 'Select none' : 'Select all';
+  bar.querySelector('.ref-strip-n').textContent = n ? T.t('{k} of {n} selected', { k: n, n: files.length })
+    : T.tn(files.length, '{n} file · none selected', '{n} files · none selected');
+  bar.querySelector('[data-x="all"]').textContent = n === files.length ? T.t('Select none') : T.t('Select all');
   const mv = bar.querySelector('[data-x="move"]');
-  mv.textContent = n ? `move ${n} to…` : 'move to…';
+  mv.textContent = n ? T.t('move {n} to…', { n }) : T.t('move to…');
   mv.disabled = !n;
   const cur = strip.children[_v.file];
   if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -391,29 +404,29 @@ function _paintInfo(it) {
   if (said) box.appendChild(said);
   const m = it.meta || {};
   const files = filesOf(it);
-  _row(box, 'where', whereOf(it));
+  _row(box, T.t('where'), whereOf(it));
   // Filed under an own category of REFERENCES: said beside the site it came from.
-  _row(box, 'category', m.categoryId ? (m.categoryLabel || '') : '');
-  _row(box, 'author', m.author || m.origin);
-  _row(box, 'posted', fmtDate(m.postedAt));
-  _row(box, 'received', fmtDate(m.date));
+  _row(box, T.t('category'), m.categoryId ? (m.categoryLabel || '') : '');
+  _row(box, T.t('author'), m.author || m.origin);
+  _row(box, T.t('posted'), fmtDate(m.postedAt));
+  _row(box, T.t('received'), fmtDate(m.date));
   if (m.link) {
     const a = el('a', null, String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60));
     a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; a.title = m.link;
-    _row(box, 'link', a);
+    _row(box, T.t('link'), a);
   }
   if (files.length) {
     const p = files.filter(f => f.type === 'photo').length, v = files.length - p;
-    _row(box, 'files', [p ? p + ' photo' + (p === 1 ? '' : 's') : '', v ? v + ' video' + (v === 1 ? '' : 's') : ''].filter(Boolean).join(', '));
+    _row(box, T.t('files'), [p ? T.tn(p, '{n} photo', '{n} photos') : '', v ? T.tn(v, '{n} video', '{n} videos') : ''].filter(Boolean).join(', '));
     const f = files[_v.file];
-    if (f && f.w) _row(box, 'this one', f.w + '×' + f.h + (f.dur ? ' · ' + mmss(f.dur) : ''));
+    if (f && f.w) _row(box, T.t('this one'), f.w + '×' + f.h + (f.dur ? ' · ' + mmss(f.dur) : ''));
     // A piece cut out of a video: its whole video, on a tick.
-    if (f && f.original) _row(box, 'original', Cut.originalTick(f.original, _v.whole, (on) => { _v.whole = on; _paintStage(); }));
+    if (f && f.original) _row(box, T.t('original'), Cut.originalTick(f.original, _v.whole, (on) => { _v.whole = on; _paintStage(); }));
   }
-  _row(box, 'note', m.note);
+  _row(box, T.t('note'), m.note);
   if (m.caption) {
     const c = el('div', 'ref-caption', m.caption);
-    _row(box, 'caption', c);
+    _row(box, T.t('caption'), c);
   }
 }
 
@@ -422,22 +435,22 @@ function _paintActs(it) {
   box.textContent = '';
   // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
   // picture, into VIDEO or IMAGES (one of several goes by its files, from the strip).
-  const mv = fillAct(el('button', 'u-btn is-s'), 'Move to…');
+  const mv = fillAct(el('button', 'u-btn is-s'), T.t('Move to…'));
   mv.type = 'button';
-  mv.title = 'Move the whole post';
+  mv.title = T.t('Move the whole post');
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
   box.appendChild(mv);
   // A long video kept as a tile goes on from here - once downloaded, its tile is the source's.
   if (it.meta && it.meta.remote && it.meta.link) {
-    const src = el('button', 'u-btn is-s', 'To scenario sources');
+    const src = el('button', 'u-btn is-s', T.t('To scenario sources'));
     src.type = 'button';
-    src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
+    src.title = T.t('Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.');
     // paid: asked on the button itself by js/really.js - a light step, not a red fill
-    twoPress(src, { paid: true, text: 'paid: hearing + topics - press again', go: () => _toSources(it, src) });
+    twoPress(src, { paid: true, text: T.t('paid: hearing + topics - press again'), go: () => _toSources(it, src) });
     box.appendChild(src);
-    const hl = el('button', 'u-btn is-s', 'To highlights');
+    const hl = el('button', 'u-btn is-s', T.t('To highlights'));
     hl.type = 'button';
-    hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.';
+    hl.title = T.t('A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.');
     hl.addEventListener('click', () => {
       // The tile stays until its video is downloaded for the project.
       const u = '/merge?highlights=' + encodeURIComponent(it.meta.link);
@@ -447,22 +460,27 @@ function _paintActs(it) {
     });
     box.appendChild(hl);
   }
-  const del = fillAct(el('button', 'u-btn is-s is-danger'), 'Delete');
+  const del = fillAct(el('button', 'u-btn is-s is-danger'), T.t('Delete'));
   del.type = 'button';
-  del.title = 'Delete this post and its files';
+  del.title = T.t('Delete this post and its files');
   // "Really?" on the button itself, by js/really.js: a second press within 3 s deletes.
   twoPress(del, {
     // Its files on a timeline: said before the second press - there its clips turn red.
-    armed: () => deleteQuestion(it).then((q) => {
-      const m = /It is used in (\d+ projects?)/.exec(q);
-      if (m && _v && _cur() === it) _said('on the timelines of ' + m[1] + ' - its clips there turn red');
-    }),
+    armed: () => {
+      const files = _paths(it);
+      if (!files.length) return Promise.resolve();
+      return _projectsOf(files).then((projects) => {
+        if (projects.length && _v && _cur() === it) {
+          _said(T.tn(projects.length, 'on the timelines of {n} project - its clips there turn red', 'on the timelines of {n} projects - its clips there turn red'));
+        }
+      });
+    },
     go: async () => {
     del.disabled = true;
     try {
       const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
-      if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
-    } catch (e) { del.disabled = false; fillAct(del, 'Delete'); showError('Not deleted: ' + e.message); return; }
+      if (!r || !r.success) throw new Error((r && r.error) || T.t('not deleted'));
+    } catch (e) { del.disabled = false; fillAct(del, T.t('Delete')); showError(T.t('Not deleted: {why}', { why: e.message })); return; }
     if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
     _v.list = _v.list.filter(x => x !== it);
     if (!_v.list.length) return closePost();
@@ -482,12 +500,12 @@ function _paintActs(it) {
 async function _toSources(it, btn) {
   btn.disabled = true;
   const said = _v.ov.querySelector('.ref-said');
-  const say = (t) => { if (_v && said.isConnected) _setSaid(said, t); btn.textContent = t.length < 40 ? t : 'To scenario sources'; };
-  say('reading the link…');
+  const say = (text, bad) => { if (_v && said.isConnected) _setSaid(said, text, bad); btn.textContent = text.length < 40 ? text : T.t('To scenario sources'); };
+  say(T.t('reading the link…'));
   const api = async (url, body) => {
     const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
     const d = await r.json().catch(() => null);
-    if (!d || !d.success) throw new Error((d && d.error) || 'no answer');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('no answer'));
     return d;
   };
   let read = null;
@@ -498,12 +516,12 @@ async function _toSources(it, btn) {
       read = (await api('/api/sources/add/' + encodeURIComponent(read.id))).read;
     }
     if (read && read.state === 'ask') read = (await api('/api/sources/add/' + encodeURIComponent(read.id) + '/answer', { as: 'source' })).read;
-  } catch (e) { say('not added: ' + e.message); btn.disabled = false; return; }
+  } catch (e) { say(T.t('not added: {why}', { why: e.message }), true); btn.disabled = false; return; }
   const already = read && read.state === 'error' && /source already/i.test(String(read.error || ''));
   if (!read || (read.state !== 'source' && !already)) {
-    say('not added: ' + ((read && (read.error || read.step)) || 'the link was not read'));
+    say(T.t('not added: {why}', { why: (read && (read.error || read.step)) || T.t('the link was not read') }), true);
     btn.disabled = false;
-    btn.textContent = 'To scenario sources';
+    btn.textContent = T.t('To scenario sources');
     return;
   }
   // The tile STAYS: the server takes it away
@@ -518,11 +536,11 @@ async function _toSources(it, btn) {
     _v.file = 0;
     _v.sel = new Set();
     _paint();
-    _said('it is a source already - its downloaded video is in YouTube · Videos');
+    _said(T.t('it is a source already - its downloaded video is in YouTube · Videos'));
     return;
   }
-  btn.textContent = 'To scenario sources';
-  _said('added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in');
+  btn.textContent = T.t('To scenario sources');
+  _said(T.t('added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in'));
 }
 
 // ── moving ───────────────────────────────────────────────────────────────────
@@ -544,16 +562,16 @@ async function _moveMenu(anchor, ids, files, whole) {
   const photos = files.filter(f => f.type === 'photo').length;
   const videos = files.length - photos;
   const remote = !!(it.meta && it.meta.remote);
-  const why = (t) => {
-    if (t.kind === 'references') return (whole && (it.meta.categoryId || '') === t.cat) ? 'it is there now' : '';
-    if (remote) return 'a video kept as a tile stays in REFERENCES';
-    if (whole && filesOf(it).length > 1) return 'a post of several goes out by its files - select them below';
-    if (VIDEO_KINDS.has(t.kind)) return photos ? 'pictures do not go into VIDEO' : '';
-    if (t.kind === 'images') return videos ? 'videos do not go into IMAGES' : '';
+  const why = (to) => {
+    if (to.kind === 'references') return (whole && (it.meta.categoryId || '') === to.cat) ? T.t('it is there now') : '';
+    if (remote) return T.t('a video kept as a tile stays in REFERENCES');
+    if (whole && filesOf(it).length > 1) return T.t('a post of several goes out by its files - select them below');
+    if (VIDEO_KINDS.has(to.kind)) return photos ? T.t('pictures do not go into VIDEO') : '';
+    if (to.kind === 'images') return videos ? T.t('videos do not go into IMAGES') : '';
     return '';
   };
   openPlaces(anchor, {
-    title: whole ? 'Move the post to' : `Move ${files.length} file${files.length === 1 ? '' : 's'} to`,
+    title: whole ? T.t('Move the post to') : T.tn(files.length, 'Move {n} file to', 'Move {n} files to'),
     tree, why, name: 'ref-move', places: { newCats: ['references'] },
     onPick: (to) => { if (_v && _cur() === it) _doMove(it, ids, to); },
   });
@@ -561,18 +579,18 @@ async function _moveMenu(anchor, ids, files, whole) {
 
 async function _doMove(it, ids, to) {
   const said = _v.ov.querySelector('.ref-said');
-  _setSaid(said, 'moving…');
+  _setSaid(said, T.t('moving…'));
   let r = null;
   try {
     r = await fetch('/api/references/' + encodeURIComponent(it.id) + '/move', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: ids, to }),
     }).then(x => x.json());
-    if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
-  } catch (e) { if (_v) _setSaid(said, 'not moved: ' + e.message, true); return; }
+    if (!r || !r.success) throw new Error((r && r.error) || T.t('not moved'));
+  } catch (e) { if (_v) _setSaid(said, T.t('not moved: {why}', { why: e.message }), true); return; }
   if (!_v) return;
-  const where = (to.kind === 'references' ? 'REFERENCES · ' + (to.cat ? to.label : 'its source folder')
-    : to.kind === 'images' ? 'IMAGES' + (to.cat ? ' · ' + to.label : '')
-    : ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : ''));
+  const where = (to.kind === 'references' ? T.t('REFERENCES') + ' · ' + (to.cat ? to.label : T.t('its source folder'))
+    : to.kind === 'images' ? T.t('IMAGES') + (to.cat ? ' · ' + to.label : '')
+    : ({ uploads: T.t('Uploads'), birols: T.t('B-rolls'), hooks: T.t('Hooks') }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : ''));
   const skipped = (r.skipped || []).length;
   if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ moved: it }); } catch (e) { /* the page's */ } }
   // The post as it is now: gone, filed elsewhere whole, or smaller.
@@ -592,6 +610,6 @@ async function _doMove(it, ids, to) {
   _v.file = 0;
   _v.sel = new Set();
   _paint();
-  _said((r.moved ? r.moved + ' moved to ' + where : 'nothing moved')
-    + (skipped ? ' · ' + skipped + ' stayed: ' + r.skipped[0].why : ''));
+  _said((r.moved ? T.t('{n} moved to {place}', { n: r.moved, place: where }) : T.t('nothing moved'))
+    + (skipped ? ' · ' + T.t('{n} stayed: {why}', { n: skipped, why: r.skipped[0].why }) : ''));
 }

@@ -5,8 +5,13 @@
 // lookbook.
 
 // And IMAGES -> Props: a product's name, the person's own words and the agent's description (_propRows).
+import { t, tc, tn } from '../i18n/t.js';
+
 const MADE = new Set(['environments', 'lookbooks', 'props']);
 const GENDERS = ['male', 'female', 'unisex'];
+// A gender as its chip says it, and who wears it - the value sent stays the English word.
+const GENDER_WORD = { male: tc('gender', 'male'), female: tc('gender', 'female'), unisex: tc('gender', 'unisex') };
+const GENDER_TITLE = { male: t('Worn by a male character'), female: t('Worn by a female character'), unisex: t('Worn by either') };
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -37,7 +42,7 @@ function _textRow(value, placeholder, rows, store) {
   ta.spellcheck = true;
   const foot = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const save = el('button', 'u-btn is-s made-ed-save', 'Save');
+  const save = el('button', 'u-btn is-s made-ed-save', t('Save'));
   save.type = 'button';
   save.hidden = true;
   let kept = ta.value;
@@ -48,7 +53,7 @@ function _textRow(value, placeholder, rows, store) {
       kept = await store(ta.value);
       ta.value = kept;
       save.hidden = true;
-      said.textContent = 'saved';
+      said.textContent = t('saved');
     } catch (e) { said.textContent = e.message; }
     save.disabled = false;
   });
@@ -64,10 +69,10 @@ function _genderRow(it, m) {
   let cur = GENDERS.includes(m.gender) ? m.gender : '';
   const paint = () => row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === cur));
   for (const g of GENDERS.concat([''])) {
-    const b = el('button', 'made-ed-chip u-chip', g || '—');
+    const b = el('button', 'made-ed-chip u-chip', g ? GENDER_WORD[g] : '—');
     b.type = 'button';
     b.dataset.g = g;
-    b.title = g ? 'Worn by ' + (g === 'unisex' ? 'either' : 'a ' + g + ' character') : 'Not said';
+    b.title = g ? GENDER_TITLE[g] : t('Not said');
     b.addEventListener('click', async () => {
       if (g === cur) return;
       const was = cur;
@@ -89,27 +94,26 @@ export function madeRows(it) {
   if (it.kind === 'props') return _propRows(it, m);
   const rows = [];
   const look = it.kind === 'lookbooks';
-  if (look) rows.push(['gender', _genderRow(it, m)]);
-  rows.push([look ? 'the outfit' : 'the place', _textRow(m.description, look
-    ? 'What it is - not written yet. Optional: the dressing reads it.'
-    : 'What the place is - not written yet. Optional: the first frames are composed from it.', 4,
+  if (look) rows.push([t('gender'), _genderRow(it, m)]);
+  rows.push([look ? t('the outfit') : t('the place'), _textRow(m.description, look
+    ? t('What it is - not written yet. Optional: the dressing reads it.')
+    : t('What the place is - not written yet. Optional: the first frames are composed from it.'), 4,
   async (text) => (m.description = (await _patchMeta(it, { description: text })).description))]);
   if (!look) {
-    const how = _textRow(m.motion, 'How it moves - not written yet. The agent writes it the first time a video is filmed here.', 3,
+    const how = _textRow(m.motion, t('How it moves - not written yet. The agent writes it the first time a video is filmed here.'), 3,
       async (text) => (m.motion = String(((await post('/api/scen3/env/motion', { path: it.media, motion: text })).entry || {}).motion || '')));
-    how.title = 'What moves in the background by itself. Every video filmed here animates by it, word for word -'
-      + ' a prompt written with the old words is written again.';
-    rows.push(['how it moves', how]);
+    how.title = t('What moves in the background by itself. Every video filmed here animates by it, word for word - a prompt written with the old words is written again.');
+    rows.push([t('how it moves'), how]);
   }
   if (look) {
     // The looks dressed in it - read when the viewer asks (routes/library.js INFO.lookbooks).
     const n = el('span', 'made-ed-looks', '…');
     json('/api/library/info/lookbooks/' + encodeURIComponent(it.id))
-      .then((d) => { const k = (d.looks || []).length; n.textContent = k ? k + ' dressed in it' : 'none dressed in it yet'; })
+      .then((d) => { const k = (d.looks || []).length; n.textContent = k ? tn(k, '{n} dressed in it', '{n} dressed in it') : t('none dressed in it yet'); })
       .catch(() => { n.textContent = '—'; });
-    rows.push(['looks', n]);
+    rows.push([t('looks'), n]);
   }
-  if (m.from) rows.push(['made from', String(m.from).split('/').pop()]);
+  if (m.from) rows.push([t('made from'), String(m.from).split('/').pop()]);
   return rows;
 }
 
@@ -117,15 +121,15 @@ export function madeRows(it) {
 // typed) and the agent's description (English, in sections) - each written by hand here, "save" under it. The frames chat
 // reads the name and the description.
 function _propRows(it, m) {
-  const name = _textRow(it.name || '', 'What it is called', 1,
+  const name = _textRow(it.name || '', t('What it is called'), 1,
     async (text) => { const d = await _patchMeta(it, { name: text }); it.name = d.name || it.name; return d.name; });
   name.classList.add('is-line');
-  const words = _textRow(m.words, 'What you know about the product - what it is, its size, what matters to show. Any language.', 3,
+  const words = _textRow(m.words, t('What you know about the product - what it is, its size, what matters to show. Any language.'), 3,
     async (text) => (m.words = (await _patchMeta(it, { words: text })).words));
-  const desc = _textRow(m.description, m.reading ? 'describing…' : m.fail ? 'Not described: ' + m.fail : 'Not described yet.', 8,
+  const desc = _textRow(m.description, m.reading ? t('describing…') : m.fail ? t('Not described: {why}', { why: m.fail }) : t('Not described yet.'), 8,
     async (text) => (m.description = (await _patchMeta(it, { description: text })).description));
-  desc.title = 'What the frames chat is told about this product, in English. Written by the agent from the picture and your words; yours once you edit it.';
-  return [['name', name], ['your words', words], ['description', desc], ['', _readAgain(it, m, desc)]];
+  desc.title = t('What the frames chat is told about this product, in English. Written by the agent from the picture and your words; yours once you edit it.');
+  return [[t('name'), name], [t('your words'), words], [t('description'), desc], ['', _readAgain(it, m, desc)]];
 }
 
 // "read again": the agent looks at the picture and reads the words as they are saved now, and its
@@ -133,9 +137,9 @@ function _propRows(it, m) {
 function _readAgain(it, m, desc) {
   const box = el('div', 'made-ed-foot');
   const said = el('span', 'made-ed-said');
-  const b = el('button', 'u-btn is-s made-ed-save', 'Read again');
+  const b = el('button', 'u-btn is-s made-ed-save', t('Read again'));
   b.type = 'button';
-  b.title = 'The agent writes the description anew from the picture and your words (saved) - it replaces the one here';
+  b.title = t('The agent writes the description anew from the picture and your words (saved) - it replaces the one here');
   const ta = desc.querySelector('textarea');
   const id = encodeURIComponent(it.id);
   const wait = async (n) => {
@@ -147,20 +151,20 @@ function _readAgain(it, m, desc) {
     m.fail = d.fail || '';
     m.reading = false;
     desc.setKept(m.description);
-    if (ta) ta.placeholder = m.fail ? 'Not described: ' + m.fail : 'Not described yet.';
-    said.textContent = m.fail && !d.description ? 'not described' : 'described';
+    if (ta) ta.placeholder = m.fail ? t('Not described: {why}', { why: m.fail }) : t('Not described yet.');
+    said.textContent = m.fail && !d.description ? t('not described') : t('described');
     if (d.name) it.name = d.name;
     b.disabled = false;
   };
   b.addEventListener('click', async () => {
     b.disabled = true;
-    said.textContent = 'describing…';
+    said.textContent = t('describing…');
     try { await post('/api/props/' + id + '/read', {}); }
     catch (e) { said.textContent = e.message; b.disabled = false; return; }
-    if (ta) { ta.value = ''; ta.placeholder = 'describing…'; }
+    if (ta) { ta.value = ''; ta.placeholder = t('describing…'); }
     wait(0);
   });
-  if (m.reading) { b.disabled = true; said.textContent = 'describing…'; setTimeout(() => wait(0), 1500); }
+  if (m.reading) { b.disabled = true; said.textContent = t('describing…'); setTimeout(() => wait(0), 1500); }
   box.append(said, b);
   return box;
 }

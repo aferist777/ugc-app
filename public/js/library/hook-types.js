@@ -3,8 +3,10 @@
 // writes; that many types are picked at random and one hook is written per type.
 //
 // ONE module for the page and the server (routes/scriptgen.js require()s it, like the captions' presets): the page shows
-// a hook's type by its name, its description on hover; the server picks the types at random and gives the writer their
-// names and descriptions - one hook per type - and tells the script's writer how the chosen hook works.
+// a hook's type by its name, its description on hover - both in the app's language (js/library/make.js passes them
+// through t(), so they need their lines in the dictionary); the server picks the types at random and gives the writer
+// their names and descriptions in English, as they are written here - one hook per type - and tells the script's writer
+// how the chosen hook works.
 //
 // An id never changes: drafts keep it. The first five are also the hook kinds older drafts name, under the same ids, so
 // such a draft finds its hooks' names here too.

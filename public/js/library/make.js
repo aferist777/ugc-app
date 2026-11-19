@@ -36,6 +36,8 @@ import { ask } from '../ask.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { allow } from '../key-gate.js';
+// The module has locals called `t` (transcripts, tips, timings): the words are T.t / T.tn / T.tc.
+import * as T from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 const el = J.el;
@@ -63,20 +65,20 @@ let _embedded = false;         // the form stands on the Scenarios shelf, not in
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
   <aside class="mk-src" id="mk-src">
-    <button class="mk-add u-btn is-s" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
+    <button class="mk-add u-btn is-s" id="mk-add" type="button" title="${T.t('Add a source - a long video, by a link or from a file')}">+</button>
     <div class="mk-src-list" id="mk-src-list"></div>
   </aside>
-  <div class="mk-sash" id="mk-sash" title="Drag to resize, double-click for the usual width"></div>
+  <div class="mk-sash" id="mk-sash" title="${T.t('Drag to resize, double-click for the usual width')}"></div>
   <section class="mk-main">
     <div class="mk-said" id="mk-said" hidden></div>
     <div class="mk-view" id="mk-topics" hidden>
       <div class="mk-head">
         <input class="mk-title-in" id="mk-src-title" type="text" spellcheck="false"
-               title="The name of this source - click to rename" placeholder="Untitled source">
+               title="${T.t('The name of this source - click to rename')}" placeholder="${T.t('Untitled source')}">
         <span class="mk-note" id="mk-title-saved"></span>
         <span class="sp"></span>
-        <button class="u-btn is-s" type="button" id="mk-mine">Find topics</button>
-        <button class="u-btn is-s is-icon is-quiet u-x" type="button" id="mk-src-off" title="Let go of this source and write without one"></button>
+        <button class="u-btn is-s" type="button" id="mk-mine">${T.t('Find topics')}</button>
+        <button class="u-btn is-s is-icon is-quiet u-x" type="button" id="mk-src-off" title="${T.t('Let go of this source and write without one')}"></button>
       </div>
       <div class="mk-body">
         <div class="mk-summary" id="mk-summary"></div>
@@ -86,25 +88,25 @@ const HTML = `
     </div>
     <div class="mk-view" id="mk-form">
       <div class="mk-head">
-        <button class="u-btn is-s" type="button" id="mk-to-topics" hidden title="Back to this source's topics">← topics</button>
-        <span class="mk-col-title">Generate script</span>
+        <button class="u-btn is-s" type="button" id="mk-to-topics" hidden title="${T.t('Back to this source\'s topics')}">${T.t('← topics')}</button>
+        <span class="mk-col-title">${T.t('Generate script')}</span>
         <span class="mk-note" id="mk-from"></span>
         <span class="sp"></span>
-        <button class="u-btn is-s is-danger" type="button" id="mk-discard" hidden>Discard draft</button>
+        <button class="u-btn is-s is-danger" type="button" id="mk-discard" hidden>${T.t('Discard draft')}</button>
       </div>
       <div class="mk-body">
-        <label class="mk-field"><span>Topic</span>
-          <input type="text" id="mk-topic" class="u-in" placeholder="What the video is about"></label>
+        <label class="mk-field"><span>${T.t('Topic')}</span>
+          <input type="text" id="mk-topic" class="u-in" placeholder="${T.t('What the video is about')}"></label>
         <div class="mk-note-line" id="mk-nar-note" hidden></div>
         <div class="mk-step1">
         <div class="mk-box" id="mk-box1">
           <div class="mk-ctls" id="mk-controls"></div>
-          <label class="mk-ctl" for="mk-hook-n"><span>Hooks</span>
-            <select id="mk-hook-n" class="u-in" title="How many hooks to write - each of a type picked at random"></select></label>
+          <label class="mk-ctl" for="mk-hook-n"><span>${T.t('Hooks')}</span>
+            <select id="mk-hook-n" class="u-in" title="${T.t('How many hooks to write - each of a type picked at random')}"></select></label>
           <span class="sp"></span>
           <span class="mk-ctl"><span>&nbsp;</span><span class="mk-btns">
-            <button class="u-btn is-main" type="button" id="mk-go">Write hooks</button>
-            <button class="u-btn is-icon mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
+            <button class="u-btn is-main" type="button" id="mk-go">${T.t('Write hooks')}</button>
+            <button class="u-btn is-icon mk-ai" type="button" id="mk-ai" aria-label="${T.t('AI settings')}"></button>
           </span></span>
         </div>
         <!-- The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
@@ -116,27 +118,27 @@ const HTML = `
         <div class="mk-job" id="mk-job" hidden></div>
         <div class="mk-box mk-box2" id="mk-box2" hidden>
           <div class="mk-box-row">
-            <label class="mk-ctl mk-ctl-hook" for="mk-hook"><span>Hook</span>
-              <textarea id="mk-hook" class="u-area" rows="1" spellcheck="false" placeholder="Pick a hook above - or type one"></textarea></label>
-            <label class="mk-ctl" for="mk-c-scenes"><span>Lines</span><select id="mk-c-scenes" class="u-in"></select></label>
+            <label class="mk-ctl mk-ctl-hook" for="mk-hook"><span>${T.t('Hook')}</span>
+              <textarea id="mk-hook" class="u-area" rows="1" spellcheck="false" placeholder="${T.t('Pick a hook above - or type one')}"></textarea></label>
+            <label class="mk-ctl" for="mk-c-scenes"><span>${T.t('Lines')}</span><select id="mk-c-scenes" class="u-in"></select></label>
             <span class="mk-ctl"><span>&nbsp;</span>
-              <button class="u-btn is-main" type="button" id="mk-write">Write scenario</button></span>
+              <button class="u-btn is-main" type="button" id="mk-write">${T.t('Write scenario')}</button></span>
           </div>
           <textarea class="mk-ad-t u-area" id="mk-ad" rows="2" spellcheck="false"
-            placeholder="Advertise - optional. What to advertise and what to say about it: worked into 2 paragraphs, natively; a call to buy or a link only if you write it here. Empty - no ad."></textarea>
+            placeholder="${T.t('Advertise - optional. What to advertise and what to say about it: worked into 2 paragraphs, natively; a call to buy or a link only if you write it here. Empty - no ad.')}"></textarea>
         </div>
         <div class="mk-stage" id="mk-save-stage" hidden>
           <div class="mk-stage-h">
-            <span>Save as a scenario</span>
+            <span>${T.t('Save as a scenario')}</span>
             <span class="sp"></span>
-            <button class="u-btn is-main" type="button" id="mk-save">Save to Scenarios</button>
+            <button class="u-btn is-main" type="button" id="mk-save">${T.t('Save to Scenarios')}</button>
           </div>
           <div class="mk-save-row">
-            <label class="mk-field"><span>Title</span><input type="text" id="mk-title" class="u-in"></label>
-            <label class="mk-field"><span>Narrator gender <em>- the store requires it</em></span>
-              <select id="mk-gender" class="u-in"><option value="male">Male</option><option value="female">Female</option></select></label>
-            <label class="mk-field"><span>Vertical</span><input type="text" id="mk-vertical" class="u-in" placeholder="e.g. history"></label>
-            <label class="mk-field"><span>Product</span><input type="text" id="mk-product" class="u-in" placeholder="what it sells, if anything"></label>
+            <label class="mk-field"><span>${T.t('Title')}</span><input type="text" id="mk-title" class="u-in"></label>
+            <label class="mk-field"><span>${T.t('Narrator gender')} <em>${T.t('- the store requires it')}</em></span>
+              <select id="mk-gender" class="u-in"><option value="male">${T.t('Male')}</option><option value="female">${T.t('Female')}</option></select></label>
+            <label class="mk-field"><span>${T.tc('scenario', 'Vertical')}</span><input type="text" id="mk-vertical" class="u-in" placeholder="${T.t('e.g. history')}"></label>
+            <label class="mk-field"><span>${T.t('Product')}</span><input type="text" id="mk-product" class="u-in" placeholder="${T.t('what it sells, if anything')}"></label>
           </div>
           <div class="mk-stage-h">
             <span class="lib-status" id="mk-save-status"></span>
@@ -144,7 +146,7 @@ const HTML = `
         </div>
         <div class="mk-stage" id="mk-script-stage" hidden>
           <div class="mk-stage-h">
-            <span>Script</span>
+            <span>${T.t('Script')}</span>
             <span class="sp"></span>
           </div>
           <div class="mk-scenes" id="mk-scenes"></div>
@@ -188,7 +190,7 @@ function _build() {
   // How many hooks a press writes: kept in the draft, and as the last choice for the next new one.
   const nSel = $('mk-hook-n');
   for (let n = HT.HOOK_COUNT.min; n <= HT.HOOK_COUNT.max; n++) {
-    const opt = el('option', '', n + (n === 1 ? ' hook' : ' hooks'));
+    const opt = el('option', '', T.tn(n, '{n} hook', '{n} hooks'));
     opt.value = String(n);
     nSel.appendChild(opt);
   }
@@ -363,12 +365,14 @@ function _pollWhileBusy() {
   else if (!adding && _tickT) { clearInterval(_tickT); _tickT = null; }
 }
 
-const _leftSays = (ms) => '~' + J.clock(Math.max(0, Math.ceil(ms / 1000))) + ' left';
+const _leftSays = (ms) => T.t('~{time} left', { time: J.clock(Math.max(0, Math.ceil(ms / 1000))) });
 function _tickLeft() {
   document.querySelectorAll('#mk-src-list [data-end]').forEach((n) => { n.textContent = _leftSays(+n.dataset.end - Date.now()); });
 }
-const _ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
-const STEP_WORD = { download: 'downloading', copy: 'copying', process: 'transcribing', topics: 'finding topics' };
+// A place in the line said as the language says it: 1st, 2nd, 3rd - or 1-й, 2-й.
+const _ordinal = (n) => (T.lang() === 'ru' ? n + '-й'
+  : n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'));
+const STEP_WORD = { download: T.t('downloading'), copy: T.t('copying'), process: T.t('transcribing'), topics: T.t('finding topics') };
 // A line that is a source to write from: not one being added, not one waiting for a decision.
 const _offer = (it) => it.state === 'nospeech' || it.state === 'notopics';
 const _choosable = (it) => !!it && !it.progress && !_offer(it);
@@ -377,21 +381,22 @@ function _stateLine(it) {
   const t = it.transcript || {};
   const way = it.intake || null;
   // Its video stays on the disk and is not there any more.
-  if (it.disk && it.disk.missing) return 'the file is not where it was';
-  if (it.state === 'nospeech') return 'no speech - not a source';
-  if (it.state === 'notopics') return 'no topics - not a source';
+  if (it.disk && it.disk.missing) return T.t('the file is not where it was');
+  if (it.state === 'nospeech') return T.t('no speech - not a source');
+  if (it.state === 'notopics') return T.t('no topics - not a source');
   if (it.state === 'error') {
-    const cut = /interrupted/i.test(it.error || '') ? 'interrupted' : 'failed';
+    const cut = /interrupted/i.test(it.error || '');
     // Its way in is an Alerts row: "retry" is there.
-    return way && way.alertId ? cut + ' - retry in Alerts' : cut;
+    if (way && way.alertId) return cut ? T.t('interrupted - retry in Alerts') : T.t('failed - retry in Alerts');
+    return cut ? T.t('interrupted') : T.t('failed');
   }
-  if (it.state === 'downloading' || it.state === 'waiting') return 'downloading…';
-  if (_reading(it)) return 'transcribing…';
-  if (t.state !== 'ready') return 'no transcript';
+  if (it.state === 'downloading' || it.state === 'waiting') return T.t('downloading…');
+  if (_reading(it)) return T.t('transcribing…');
+  if (t.state !== 'ready') return T.t('no transcript');
   const run = _srcJobs.get(String(it.id));
-  if (run && run.kind === 'topics') return 'finding topics…';
-  if (!it.topics && way && (way.interrupted || way.error)) return 'no topics yet - retry in Alerts';
-  return it.topics ? `${it.topicsUsed || 0} of ${it.topics} topics used` : 'no topics yet';
+  if (run && run.kind === 'topics') return T.t('finding topics…');
+  if (!it.topics && way && (way.interrupted || way.error)) return T.t('no topics yet - retry in Alerts');
+  return it.topics ? T.tn(it.topics, '{k} of {n} topic used', '{k} of {n} topics used', { k: it.topicsUsed || 0 }) : T.t('no topics yet');
 }
 
 // While only a share and a time move (a source being added, read every 2 s), the lines are updated IN PLACE: a line
@@ -409,7 +414,7 @@ function _paintSources() {
   _painted = key;
   box.textContent = '';
   if (!_sources.length) {
-    box.appendChild(emptyEl('No sources yet. A long video, added with +, becomes material to write from.'));
+    box.appendChild(emptyEl(T.t('No sources yet. A long video, added with +, becomes material to write from.')));
     return;
   }
   for (const it of _sources) box.appendChild(_srcLine(it));
@@ -427,7 +432,7 @@ function _paintProgress(box) {
     if (left) { left.dataset.end = String(Date.now() + p.leftMs); left.textContent = _leftSays(p.leftMs); }
     const fill = row.querySelector('.mk-srow-bar > i');
     if (fill) fill.style.width = (p.pct * 100).toFixed(1) + '%';
-    row.title = it.title + '\n' + (p.words || '') + '\nIt is being added - follow it in Alerts';
+    row.title = it.title + '\n' + (p.words || '') + '\n' + T.t('It is being added - follow it in Alerts');
   }
 }
 
@@ -441,7 +446,7 @@ function _srcLine(it) {
   const cur = !!(_src && String(_src.id) === id);
   const row = el('div', 'mk-srow' + (cur ? ' cur' : '') + (p ? ' adding' : '') + (offer ? ' offer' : ''));
   row.dataset.id = id;
-  row.title = it.title + (cur ? '\nPress again to write without a source' : '');
+  row.title = it.title + (cur ? '\n' + T.t('Press again to write without a source') : '');
   row.appendChild(el('span', 'mk-srow-k', '▶'));
   const main = el('div', 'mk-srow-main');
   main.appendChild(el('div', 'mk-srow-t', it.title));
@@ -451,13 +456,13 @@ function _srcLine(it) {
     const left = el('span', null, _leftSays(p.leftMs));
     left.dataset.end = String(Date.now() + p.leftMs);
     sub.appendChild(left);
-    sub.appendChild(el('span', null, p.step === 'wait' ? (p.place ? `${_ordinal(p.place)} in the queue` : 'waiting') : (STEP_WORD[p.step] || p.step)));
-    row.title = it.title + '\n' + (p.words || '') + '\nIt is being added - follow it in Alerts';
+    sub.appendChild(el('span', null, p.step === 'wait' ? (p.place ? T.t('{nth} in the queue', { nth: _ordinal(p.place) }) : T.t('waiting')) : (STEP_WORD[p.step] || p.step)));
+    row.title = it.title + '\n' + (p.words || '') + '\n' + T.t('It is being added - follow it in Alerts');
   } else {
     sub.appendChild(el('span', null, _stateLine(it)));
     if (it.seconds) sub.appendChild(el('span', null, J.clock(it.seconds)));
     const nd = _drafts.filter(d => String(d.sourceId) === id).length;
-    if (nd) sub.appendChild(el('span', 'mk-src-draft', nd === 1 ? '1 draft' : `${nd} drafts`));
+    if (nd) sub.appendChild(el('span', 'mk-src-draft', T.tn(nd, '{n} draft', '{n} drafts')));
   }
   main.appendChild(sub);
   if (p) {
@@ -475,22 +480,22 @@ function _srcLine(it) {
     where.style.color = 'var(--danger)';
     main.appendChild(where);
     const acts = el('div', 'mk-srow-acts');
-    const re = el('button', 'u-btn is-s', 'Point at the file…');
+    const re = el('button', 'u-btn is-s', T.t('Point at the file…'));
     re.type = 'button';
-    re.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
+    re.title = T.t('The video was moved or renamed: show where it is now - the same file, its words are kept');
     re.addEventListener('click', (e) => { e.stopPropagation(); _relinkSource(it); });
-    const del = el('button', 'u-btn is-s', 'Delete…');
+    const del = el('button', 'u-btn is-s', T.t('Delete…'));
     del.type = 'button';
-    del.title = 'Delete this source - your files on the disk are not touched';
+    del.title = T.t('Delete this source - your files on the disk are not touched');
     del.addEventListener('click', (e) => { e.stopPropagation(); _deleteMissing(it); });
     acts.append(re, del);
     main.appendChild(acts);
   }
   if (offer) {
     const acts = el('div', 'mk-srow-acts');
-    const up = el('button', 'u-btn is-s', 'Put on Uploads');
+    const up = el('button', 'u-btn is-s', T.t('Put on Uploads'));
     up.type = 'button';
-    up.title = 'The video goes onto Uploads in Media, and is not kept as a source';
+    up.title = T.t('The video goes onto Uploads in Media, and is not kept as a source');
     up.addEventListener('click', (e) => { e.stopPropagation(); _sourceToUploads(it, up); });
     acts.appendChild(up);
     main.appendChild(acts);
@@ -501,11 +506,11 @@ function _srcLine(it) {
   x.type = 'button';
   if (p) {
     x.title = p.step === 'topics'
-      ? 'Stop finding its topics - its words stay, and "Find topics" finds them later'
-      : 'Stop adding it - it is removed, with what was downloaded';
+      ? T.t('Stop finding its topics - its words stay, and "Find topics" finds them later')
+      : T.t('Stop adding it - it is removed, with what was downloaded');
     x.addEventListener('click', (e) => { e.stopPropagation(); _stopAdding(it); });
   } else {
-    x.title = offer ? 'Delete it, and its file' : 'Delete this source, its video and its transcript';
+    x.title = offer ? T.t('Delete it, and its file') : T.t('Delete this source, its video and its transcript');
     x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it, x); });
   }
   row.appendChild(x);
@@ -538,7 +543,7 @@ async function _sourceToUploads(it, btn) {
   if (btn) btn.disabled = true;
   try {
     await J.api('/api/sources/' + encodeURIComponent(it.id) + '/to-uploads', { method: 'POST' });
-    _say(`"${it.title}" is on Uploads in Media.`, 'ok');
+    _say(T.t('"{name}" is on Uploads in Media.', { name: it.title }), 'ok');
   } catch (e) { _say(e.message, 'err'); if (btn) btn.disabled = false; }
   await _readSources();
   _paintSources();
@@ -636,10 +641,10 @@ function _relinkSource(it) {
     const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
     let where = '';
     try { where = file && typeof pathOf === 'function' ? String(pathOf(file) || '') : ''; } catch (e) { where = ''; }
-    if (!where) { _say('Pointing at a file works in the app\'s own window - it hands the file over.', 'err'); return; }
+    if (!where) { _say(T.t('Pointing at a file works in the app\'s own window - it hands the file over.'), 'err'); return; }
     try {
       await J.api('/api/sources/' + encodeURIComponent(it.id) + '/relink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: where }) });
-      _say(`"${it.title}" - its video is found again.`, 'ok');
+      _say(T.t('"{name}" - its video is found again.', { name: it.title }), 'ok');
     } catch (e) { _say(e.message, 'err'); }
     await _readSources();
     _paintSources();
@@ -656,17 +661,17 @@ function _deleteMissing(it) {
   const box = el('div', 'nm-box dr-box u-ask is-float mk-delq');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
-  box.appendChild(el('b', 'nm-t', `Delete "${it.title}"?`));
-  box.appendChild(el('p', 'mk-delq-p', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
+  box.appendChild(el('b', 'nm-t', T.t('Delete "{name}"?', { name: it.title })));
+  box.appendChild(el('p', 'mk-delq-p', T.t('Its video is not where it was ({path}). The source and its poster go; your files on the disk are not touched.', { path: (it.disk && it.disk.path) || '' })));
   const lab = el('label', 'mk-delq-tick');
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.classList.add('u-check');
-  lab.append(cb, el('span', null, 'and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
+  lab.append(cb, el('span', null, T.t('and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time')));
   box.appendChild(lab);
   const row = el('div', 'nm-r u-ask-r');
-  const cancel = el('button', 'u-btn is-s', 'Cancel');
+  const cancel = el('button', 'u-btn is-s', T.t('Cancel'));
   cancel.type = 'button';
-  const go = el('button', 'u-btn is-s is-danger is-armed', 'Delete');
+  const go = el('button', 'u-btn is-s is-danger is-armed', T.t('Delete'));
   go.type = 'button';
   row.append(cancel, go);
   box.appendChild(row);
@@ -695,12 +700,12 @@ function _deleteMissing(it) {
 async function _deleteSource(it, anchor) {
   const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
   // A video that stays on the disk is never deleted by the app - only what the library holds goes.
-  const lines = [`Delete "${it.title}"?`, '',
-    it.disk ? 'Its poster and its transcript are removed. Your video stays where it is on the disk (' + it.disk.path + ').'
-      : `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
-  if (nd) lines.push('', `${nd === 1 ? 'Its draft is' : `Its ${nd} drafts are`} kept, and carry on without a source.`);
+  const lines = [T.t('Delete "{name}"?', { name: it.title }), '',
+    it.disk ? T.t('Its poster and its transcript are removed. Your video stays where it is on the disk ({path}).', { path: it.disk.path })
+      : T.t('The video ({size}), its poster and its transcript are removed from disk.', { size: J.mb(it.bytes || 0) })];
+  if (nd) lines.push('', T.tn(nd, 'Its {n} draft is kept, and carries on without a source.', 'Its {n} drafts are kept, and carry on without a source.'));
   // `stay`: the column repaints as its sources move along, and a repaint's scroll must not answer "no" for the person.
-  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
+  if (!await ask(anchor, lines.join('\n'), { yes: T.t('Delete'), danger: true, stay: true })) return;
   // What is typed goes first, with the source it was written from - the server then detaches it.
   await _flushDraft();
   try {
@@ -725,7 +730,7 @@ function _showTopics() {
   $('mk-title-saved').textContent = '';
   const ready = rec.transcript && rec.transcript.state === 'ready';
   const has = (rec.topics || []).length > 0;
-  $('mk-mine').textContent = has ? 'Find topics again' : 'Find topics';
+  $('mk-mine').textContent = has ? T.t('Find topics again') : T.t('Find topics');
   $('mk-mine').disabled = !ready || _srcJobs.has(String(rec.id));
   $('mk-summary').textContent = rec.videoSummary || '';
   _paintTopics(rec);
@@ -738,24 +743,25 @@ function _paintTopics(rec) {
   const t = rec.transcript || {};
   // No topics to show - the shared part, in the source's own words.
   if (_reading(rec)) {
-    box.appendChild(emptyEl('Still being read. The topics can be found the moment the words are in.'));
+    box.appendChild(emptyEl(T.t('Still being read. The topics can be found the moment the words are in.')));
     return;
   }
   if (t.state !== 'ready') {
     // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
     // again. Paid - it is the same speech-to-text call. Its button inside the part, under the words.
     const offer = rec.videoPath && !_srcJobs.has(String(rec.id));
+    const why = rec.error || T.t('unknown reason');
     const e = emptyEl(rec.state === 'error'
-      ? `This source failed: ${rec.error || 'unknown reason'}${rec.intake && rec.intake.alertId ? ' - its row in Alerts has "retry".' : ''}`
-      : 'No transcript yet.', offer ? { action: { label: 'Transcribe again', on: (ev) => _transcribeAgain(rec, ev.currentTarget) } } : {});
+      ? (rec.intake && rec.intake.alertId ? T.t('This source failed: {why} - its row in Alerts has "retry".', { why }) : T.t('This source failed: {why}', { why }))
+      : T.t('No transcript yet.'), offer ? { action: { label: T.t('Transcribe again'), on: (ev) => _transcribeAgain(rec, ev.currentTarget) } } : {});
     const again = offer ? e.querySelector('button') : null;
-    if (again) again.title = 'Read the words out of this source again - a paid transcription';
+    if (again) again.title = T.t('Read the words out of this source again - a paid transcription');
     box.appendChild(e);
     return;
   }
   const topics = rec.topics || [];
   if (!topics.length) {
-    box.appendChild(emptyEl('No topics found yet. Press “Find topics” above - one long video usually holds several.'));
+    box.appendChild(emptyEl(T.t('No topics found yet. Press “Find topics” above - one long video usually holds several.')));
     return;
   }
   for (const tp of topics) {
@@ -766,18 +772,20 @@ function _paintTopics(rec) {
     const used = Array.isArray(tp.usedBy) ? tp.usedBy : [];
     if (used.length) {
       card.classList.add('used');
-      const tag = el('span', 'mk-tag ready', used.length === 1 ? 'Written' : `Written ×${used.length}`);
+      const tag = el('span', 'mk-tag ready', used.length === 1 ? T.t('Written') : T.t('Written ×{n}', { n: used.length }));
       tag.title = used.map(u => u.title).join('\n');
       h.appendChild(tag);
     }
     const draft = _draftFor(rec.id, tp.id);
-    if (draft) h.appendChild(el('span', 'mk-tag wait', draft.running ? 'Draft · writing…' : 'Draft · ' + (draft.stageLabel || '')));
+    // The stage is the server's English label (lib/script-drafts.js, _noteDraft below), said in the app's language.
+    if (draft) h.appendChild(el('span', 'mk-tag wait', draft.running ? T.t('Draft · writing…') : T.t('Draft · {stage}', { stage: draft.stageLabel ? T.t(draft.stageLabel) : '' })));
     card.appendChild(h);
     card.appendChild(el('p', 'mk-topic-s', tp.summary));
     const f = el('div', 'mk-topic-f');
-    f.appendChild(el('span', 'mk-topic-name', `${tp.projectName || ''} · ${String(tp.text || '').length} chars of transcript`));
+    const chars = String(tp.text || '').length;
+    f.appendChild(el('span', 'mk-topic-name', `${tp.projectName || ''} · ` + T.tn(chars, '{n} char of transcript', '{n} chars of transcript')));
     f.appendChild(el('span', 'sp'));
-    const write = el('button', 'u-btn is-main', draft ? 'Continue the draft' : 'Write a script');
+    const write = el('button', 'u-btn is-main', draft ? T.t('Continue the draft') : T.t('Write a script'));
     write.type = 'button';
     f.appendChild(write);
     card.appendChild(f);
@@ -830,7 +838,7 @@ async function _saveTitle() {
   try {
     await _renameSource(id, title);
     if (_src && String(_src.id) === id) {
-      $('mk-title-saved').textContent = 'saved';
+      $('mk-title-saved').textContent = T.t('saved');
       setTimeout(() => { if ($('mk-title-saved')) $('mk-title-saved').textContent = ''; }, 1600);
     }
   } catch (e) { if (_src && String(_src.id) === id) $('mk-title-saved').textContent = e.message; }
@@ -861,8 +869,8 @@ function _sourceMenu(ev, it) {
     b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
     m.appendChild(b);
   };
-  item('change name', 'what this source is called everywhere', () => _openSourceWin(it, false));
-  item('play', it.media ? 'watch it' : 'no file to play - it never downloaded', () => _openSourceWin(it, true), !it.media);
+  item(T.t('change name'), T.t('what this source is called everywhere'), () => _openSourceWin(it, false));
+  item(T.t('play'), it.media ? T.t('watch it') : T.t('no file to play - it never downloaded'), () => _openSourceWin(it, true), !it.media);
   document.body.appendChild(m);
   m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - m.offsetWidth - 6, ev.clientX))) + 'px';
   m.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - m.offsetHeight - 6, ev.clientY))) + 'px';
@@ -891,18 +899,18 @@ function _openSourceWin(it, play) {
   const id = String(it.id);
   const ov = el('div', 'mk-ov');
   ov.innerHTML = `
-    <div class="mk-panel src-panel u-win is-float" role="dialog" aria-modal="true" aria-label="Source">
+    <div class="mk-panel src-panel u-win is-float" role="dialog" aria-modal="true" aria-label="${T.t('Source')}">
       <div class="mk-panel-head u-win-head">
         <span class="mk-panel-t u-win-title" data-f="head"></span>
         <span class="sp"></span>
-        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="${T.t('Close (Esc)')}"></button>
       </div>
       <div class="src-body">
         <div class="src-stage" data-f="stage"></div>
         <aside class="src-side">
-          <label class="mk-field"><span>Name</span><input type="text" class="u-in" data-f="name" maxlength="200" spellcheck="false"></label>
+          <label class="mk-field"><span>${T.tc('source', 'Name')}</span><input type="text" class="u-in" data-f="name" maxlength="200" spellcheck="false"></label>
           <div class="src-save">
-            <button class="u-btn is-main" type="button" data-f="save">Save name</button>
+            <button class="u-btn is-main" type="button" data-f="save">${T.t('Save name')}</button>
             <span class="u-status" data-f="st"></span>
           </div>
           <div class="lib-vi" data-f="facts"></div>
@@ -919,7 +927,7 @@ function _openSourceWin(it, play) {
   // The picture side: the file itself, played from the library - the server serves it in ranges,
   // so an hour-long source opens at once and seeks.
   const stage = q('stage');
-  if (!it.media) stage.appendChild(el('div', 'src-none', 'There is no file for this source - it never downloaded.'));
+  if (!it.media) stage.appendChild(el('div', 'src-none', T.t('There is no file for this source - it never downloaded.')));
   else {
     const media = el(AUDIO_RE.test(it.media) ? 'audio' : 'video');
     media.controls = true;
@@ -933,7 +941,7 @@ function _openSourceWin(it, play) {
     media.addEventListener('error', () => {
       if (!_srcWin || _srcWin.ov !== ov) return;
       stage.textContent = '';
-      stage.appendChild(el('div', 'src-none', 'This file cannot be played here - its format is not one the window knows.'));
+      stage.appendChild(el('div', 'src-none', T.t('This file cannot be played here - its format is not one the window knows.')));
     });
     media.src = it.media;
     stage.appendChild(media);
@@ -947,28 +955,29 @@ function _openSourceWin(it, play) {
     q('facts').appendChild(r);
   };
   const t = it.transcript || {};
-  fact('length', it.seconds ? J.clock(it.seconds) : '');
-  fact('size', it.bytes ? J.mb(it.bytes) : '');
-  fact('added', J.fmtDate(it.addedAt));
-  fact('from', it.kind === 'youtube' ? (it.url || 'a link') : 'a file');
-  fact('transcript', t.state === 'ready'
-    ? ((t.chars || 0) >= 1000 ? `${Math.round(t.chars / 1000)}k characters` : `${t.chars || 0} characters`) : _stateLine(it));
-  fact('topics', it.topics ? `${it.topicsUsed || 0} of ${it.topics} used` : '');
+  fact(T.t('length'), it.seconds ? J.clock(it.seconds) : '');
+  fact(T.t('size'), it.bytes ? J.mb(it.bytes) : '');
+  fact(T.t('added'), J.fmtDate(it.addedAt));
+  fact(T.t('from'), it.kind === 'youtube' ? (it.url || T.t('a link')) : T.t('a file'));
+  fact(T.t('transcript'), t.state === 'ready'
+    // "characters" of text - the plain "{n} characters" is the Library's count of people.
+    ? ((t.chars || 0) >= 1000 ? T.t('{n}k characters', { n: Math.round(t.chars / 1000) }) : T.tc('text', '{n} characters', { n: t.chars || 0 })) : _stateLine(it));
+  fact(T.t('topics'), it.topics ? T.t('{k} of {n} used', { k: it.topicsUsed || 0, n: it.topics }) : '');
 
   const name = q('name');
   name.value = it.title;
   const doSave = async () => {
     const title = name.value.trim();
     const st = q('st');
-    if (!title) { st.textContent = 'A name is needed.'; st.className = 'u-status err'; return; }
-    if (title === it.title) { st.textContent = 'unchanged'; st.className = 'u-status'; return; }
+    if (!title) { st.textContent = T.t('A name is needed.'); st.className = 'u-status err'; return; }
+    if (title === it.title) { st.textContent = T.t('unchanged'); st.className = 'u-status'; return; }
     q('save').disabled = true;
     try {
       const saved = await _renameSource(id, title);
       it = { ...it, title: saved };
       if (_srcWin && _srcWin.ov === ov) {
         q('head').textContent = saved;
-        st.textContent = 'saved';
+        st.textContent = T.t('saved');
         st.className = 'u-status ok';
       }
     } catch (e) {
@@ -989,9 +998,9 @@ function _srcTiming(kind, rec) {
   if (kind === 'topics') {
     const chars = (rec && rec.transcript && rec.transcript.chars) || 0;
     return { key: `l2-topics|${J.bucket(chars)}`, estimateMs: J.EST.topics,
-      label: chars ? `Reading ${Math.round(chars / 1000)}k of transcript…` : 'Finding topics…' };
+      label: chars ? T.t('Reading {n}k of transcript…', { n: Math.round(chars / 1000) }) : T.t('Finding topics…') };
   }
-  return { key: 'l2-ingest|again', label: 'Transcribing again…', estimateMs: J.EST.ingestLink };
+  return { key: 'l2-ingest|again', label: T.t('Transcribing again…'), estimateMs: J.EST.ingestLink };
 }
 
 // The countdown for the source on screen: its job's row, or its last word, or nothing.
@@ -999,7 +1008,7 @@ function _reattachSrcJob(rec) {
   const id = String(rec.id);
   const host = $('mk-topics-job');
   const adding = (_sources.find(s => String(s.id) === id) || {}).progress;
-  if (adding) { J.sayJob(host, `${adding.words} · ${Math.round(adding.pct * 100)}% - follow it in Alerts`); return; }
+  if (adding) { J.sayJob(host, T.t('{words} · {pct}% - follow it in Alerts', { words: adding.words, pct: Math.round(adding.pct * 100) })); return; }
   const run = _srcJobs.get(id);
   if (!run) {
     const last = _srcLast.get(id);
@@ -1050,7 +1059,7 @@ async function _mineTopics() {
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
   // Paid - a plain answer; the question waits, so a job picked up meanwhile is not started twice.
-  if ((rec.topics || []).length && !await ask($('mk-mine'), 'Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.', { yes: 'Find again', stay: true })) return;
+  if ((rec.topics || []).length && !await ask($('mk-mine'), T.t('Find the topics of this source again?\n\nIt is a paid read of the transcript. The new topics replace these; a "written" mark and a draft stay with a topic only if it comes back the same.'), { yes: T.t('Find again'), stay: true })) return;
   if (_srcJobs.has(id)) return;
   $('mk-mine').disabled = true;
   let run = null;
@@ -1076,7 +1085,7 @@ async function _mineTopics() {
 async function _transcribeAgain(rec, anchor) {
   const id = String(rec.id);
   if (_srcJobs.has(id)) return;
-  if (!await ask(anchor, `Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`, { yes: 'Transcribe', stay: true })) return;
+  if (!await ask(anchor, T.t('Transcribe "{name}" again?\n\nIt is a paid speech-to-text read of the whole file.', { name: rec.title }), { yes: T.t('Transcribe'), stay: true })) return;
   if (_srcJobs.has(id)) return;
   try {
     // When it has no topics yet, they are found after the words - by the agents' ladder.
@@ -1097,7 +1106,7 @@ async function _transcribeAgain(rec, anchor) {
 
 // A source's own button retried its way in: the row in Alerts runs again, and the line in the column shows it.
 async function _afterRetry() {
-  _say('It goes on from where it stopped - follow it in Alerts.');
+  _say(T.t('It goes on from where it stopped - follow it in Alerts.'));
   pulseAlerts();
   await _readSources();
   _paintSources();
@@ -1115,8 +1124,8 @@ function _showForm() {
 function _paintFrom() {
   if (!_gen) return;
   $('mk-from').textContent = _gen.sourceTitle
-    ? `from “${_gen.sourceTitle}”${_gen.topicSpan ? ' · ' + _gen.topicSpan : ''}`
-    : 'without a source';
+    ? T.t('from “{name}”', { name: _gen.sourceTitle }) + (_gen.topicSpan ? ' · ' + _gen.topicSpan : '')
+    : T.t('without a source');
 }
 
 // A field of the form: its name above it, and beside the name anything that belongs to the field (the
@@ -1140,8 +1149,8 @@ function _narratorsGear() {
   const b = el('button', 'mk-gear u-btn is-icon is-quiet');
   b.type = 'button';
   b.id = 'mk-narrators';
-  b.title = 'The narrators - how a script is written';
-  b.setAttribute('aria-label', 'Narrators');
+  b.title = T.t('The narrators - how a script is written');
+  b.setAttribute('aria-label', T.t('Narrators'));
   b.innerHTML = GEAR_SVG;
   b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (_hooks.narrators) _hooks.narrators(); });
   return b;
@@ -1153,6 +1162,7 @@ function _select(id, values, current) {
   for (const v of values) {
     const o = el('option', null, typeof v === 'string' ? v : v.label);
     o.value = typeof v === 'string' ? v : v.value;
+    if (v && v.name != null) o.dataset.name = v.name;
     if (v && v.disabled) o.disabled = true;
     s.appendChild(o);
   }
@@ -1170,18 +1180,18 @@ async function _buildControls(settings) {
   // Box 1 holds Tone,
   // Narrator and the hook count (static, beside these); the number of lines is box 2's list, filled here once the limits
   // are read.
-  box.appendChild(_ctl('Tone', _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
-  const nar = _select('mk-c-narrator', [{ value: 'neutral', label: 'Neutral' }], 'neutral');
-  box.appendChild(_ctl('Narrator', nar, _narratorsGear()));
+  box.appendChild(_ctl(T.t('Tone'), _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
+  const nar = _select('mk-c-narrator', [NEUTRAL], 'neutral');
+  box.appendChild(_ctl(T.t('Narrator'), nar, _narratorsGear()));
   const sc = $('mk-c-scenes');
   sc.textContent = '';
   for (let n = _reg.scenes.min; n <= _reg.scenes.max; n++) {
-    const o = el('option', null, n + ' lines');
+    const o = el('option', null, T.tn(n, '{n} line', '{n} lines'));
     o.value = String(n);
     sc.appendChild(o);
   }
   sc.value = String(Math.min(_reg.scenes.max, Math.max(_reg.scenes.min, parseInt(s.scenes, 10) || _reg.scenes.default)));
-  sc.title = `How many lines the script has, the hook the first; the scenarios store needs at least ${_reg.minLines}`;
+  sc.title = T.t('How many lines the script has, the hook the first; the scenarios store needs at least {n}', { n: _reg.minLines });
   // No model chosen: the AGENTS' LADDER writes, at effort medium - the gear says which step is asked first.
   $('mk-ai').title = _aiTitle();
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
@@ -1198,29 +1208,36 @@ async function _paintNarrators(want, wantName) {
   const cur = want != null ? want : sel.value;
   let list = [];
   try { list = (await J.api('/api/narrators')).narrators || []; } catch (e) { list = []; }
-  const values = [{ value: 'neutral', label: 'Neutral' }];
-  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' - not read') });
+  const values = [NEUTRAL];
+  for (const n of list) values.push({ value: n.id, label: n.ready ? n.name : T.t('{name} - not read', { name: n.name }), name: n.name });
   let pick = String(cur || 'neutral').split('#')[0];
   const note = $('mk-nar-note');
   note.hidden = true;
   if (!values.some(v => v.value === pick) && pick !== 'neutral') {
-    const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ - (?:not read|deleted)$/, '')) || 'the narrator';
-    values.push({ value: pick, label: name + ' - deleted' });
+    const name = wantName || _narName(sel.selectedOptions[0]) || T.t('the narrator');
+    values.push({ value: pick, label: T.t('{name} - deleted', { name }), name });
     note.hidden = false;
-    note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
+    note.textContent = T.t('{name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.', { name });
   }
   sel.textContent = '';
-  for (const v of values) { const o = el('option', null, v.label); o.value = v.value; sel.appendChild(o); }
+  for (const v of values) { const o = el('option', null, v.label); o.value = v.value; if (v.name != null) o.dataset.name = v.name; sel.appendChild(o); }
   sel.value = pick;
 }
+
+// Neutral is the generator's own voice. An option keeps the narrator's NAME apart from its label ("Azazin - not read",
+// in the app's language): the name is what a draft remembers the narrator by.
+const NEUTRAL = { value: 'neutral', label: T.t('Neutral'), name: 'Neutral' };
+const _narName = (o) => (!o ? '' : o.dataset.name != null ? o.dataset.name : o.textContent.replace(/ - (?:not read|deleted)$/, ''));
 
 // The gear right of "Write hooks" (there is no model to choose): Admin -> AI settings, where the agents' ladder that
 // writes is ordered. The way there saves the draft first and carries the way back: AI settings shows "← back" to this
 // generator, on this draft.
 function _aiTitle() {
   const first = (_reg && _reg.ladder && _reg.ladder[0]) || null;
-  return 'AI settings - the agents\' ladder writes' + (first ? `, ${first.model} asked first` : '')
-    + '; the next step only when one refuses or is down. Every stage here at effort ' + ((_reg && _reg.effort) || 'medium') + '.';
+  const effort = (_reg && _reg.effort) || 'medium';
+  return first
+    ? T.t('AI settings - the agents\' ladder writes, {model} asked first; the next step only when one refuses or is down. Every stage here at effort {effort}.', { model: first.model, effort })
+    : T.t('AI settings - the agents\' ladder writes; the next step only when one refuses or is down. Every stage here at effort {effort}.', { effort });
 }
 async function _toAiSettings() {
   if (_gen) { try { await _saveDraft(); } catch (x) { /* the way there is not held up by a save */ } }
@@ -1240,7 +1257,7 @@ function _opts() {
     narratorId,
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
-    narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ - (?:not read|deleted)$/, '') : '',
+    narratorName: _narName(nar.selectedOptions[0]),
     // What to advertise in two paragraphs - empty, no ad.
     advertise: $('mk-ad') ? $('mk-ad').value.trim() : '',
     // How many hooks a press writes.
@@ -1264,13 +1281,13 @@ function _paintGo() {
   const hooks = !!(_gen && (_gen.hooks || []).length);
   const busy = _busy();
   const go = $('mk-go');
-  go.textContent = _stage === 'hooks' ? 'Writing hooks…' : hooks ? 'Write again' : 'Write hooks';
+  go.textContent = _stage === 'hooks' ? T.t('Writing hooks…') : hooks ? T.t('Write again') : T.t('Write hooks');
   go.disabled = busy;
   go.classList.toggle('primary', !hooks);
   go.classList.toggle('is-main', !hooks);
   const wr = $('mk-write');
   // On two lines, in a taller button: "Write / scenario".
-  wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
+  wr.textContent = _stage === 'script' ? T.t('Writing\nthe script…') : written ? T.t('Write\nagain') : T.t('Write\nscenario');
   wr.disabled = busy || !String((_gen && _gen.hook) || '').trim();
   // Blue while there is no script - and again when box 2 holds another hook than the script's first line.
   const other = written && String((_gen && _gen.hook) || '').trim() !== String(_gen.paragraphs[0] || '').trim();
@@ -1305,8 +1322,8 @@ function _paintFold() {
   const open = !foldable || _hooksOpen;
   const f = $('mk-hooks-fold');
   f.hidden = !foldable;
-  f.textContent = (open ? '▾ ' : '▸ ') + n + (n === 1 ? ' hook' : ' hooks');
-  f.title = open ? 'Fold the hooks away' : 'Show the hooks - pick another';
+  f.textContent = (open ? '▾ ' : '▸ ') + T.tn(n, '{n} hook', '{n} hooks');
+  f.title = open ? T.t('Fold the hooks away') : T.t('Show the hooks - pick another');
   $('mk-hook-list').hidden = !open;
   $('mk-box1').classList.toggle('glued', foldable);
 }
@@ -1420,7 +1437,7 @@ async function _ensureDraft() {
 
 async function _discardDraft() {
   if (!_gen || !_gen.draftId) return;
-  if (!await ask($('mk-discard'), 'Discard this draft? What was generated into it is lost.', { yes: 'Discard', danger: true, stay: true })) return;
+  if (!await ask($('mk-discard'), T.t('Discard this draft? What was generated into it is lost.'), { yes: T.t('Discard'), danger: true, stay: true })) return;
   if (!_gen || !_gen.draftId) return;
   // A save still waiting would land after the delete and bring the draft back.
   clearTimeout(_saveT);
@@ -1477,7 +1494,7 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     ? HT.hookCount(full.settings.hookCount) : _lastCount());
   _showForm();
   try { await _buildControls(full ? full.settings : null); }
-  catch (e) { J.sayJob($('mk-job'), 'the model list could not be read: ' + e.message, true); }
+  catch (e) { J.sayJob($('mk-job'), T.t('the model list could not be read: {why}', { why: e.message }), true); }
   _showHooks();
   if (_gen.paragraphs.length) _renderScenes();
   _setStage(_pickOrIdle());
@@ -1499,7 +1516,7 @@ async function _resumeDraft(id) {
     const i = _drafts.findIndex(x => String(x.id) === String(d.id));
     if (i >= 0) _drafts[i] = { ..._drafts[i], running: r.running || null };
     else _drafts.push({ id: d.id, running: r.running || null });
-  } catch (e) { _say('That draft could not be opened: ' + e.message, 'err'); return false; }
+  } catch (e) { _say(T.t('That draft could not be opened: {why}', { why: e.message }), 'err'); return false; }
   let src = null;
   let topic = null;
   if (d.sourceId) {
@@ -1508,7 +1525,8 @@ async function _resumeDraft(id) {
   }
   let lost = '';
   if (d.sourceId && (!src || (d.topicId && !topic))) {
-    lost = !src ? 'Its source is gone' : 'Its topic did not come back when the topics were found again';
+    lost = !src ? T.t('Its source is gone - this draft carries on without a source.')
+      : T.t('Its topic did not come back when the topics were found again - this draft carries on without a source.');
     d.sourceId = ''; d.topicId = ''; d.sourceTitle = ''; d.topicTitle = '';
     src = null; topic = null;
   }
@@ -1518,7 +1536,7 @@ async function _resumeDraft(id) {
   if (topic) { _gen.topicSpan = `${J.clock(topic.start)}–${J.clock(topic.end)}`; _paintFrom(); }
   if (lost) {
     await _saveDraft();
-    _say(lost + ' - this draft carries on without a source.', 'err');
+    _say(lost, 'err');
   }
   return true;
 }
@@ -1553,9 +1571,9 @@ function _renderHooks(hooks) {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
     // Blue, as the main buttons are, so it is easy to see.
-    const use = el('button', 'u-btn is-s is-main mk-hook-use', 'Use hook');
+    const use = el('button', 'u-btn is-s is-main mk-hook-use', T.t('Use hook'));
     use.type = 'button';
-    use.title = 'Put this hook into the box below - the script is written from it there';
+    use.title = T.t('Put this hook into the box below - the script is written from it there');
     use.disabled = _busy();
     const ta = el('textarea', 'mk-hook-t');
     ta.rows = 1;
@@ -1581,14 +1599,15 @@ function _renderHooks(hooks) {
       // Saved at once, so the draft's row in the list says "hook chosen".
       _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
-    const remake = el('button', 'u-btn is-s mk-hook-remake', 'Remake');
+    const remake = el('button', 'u-btn is-s mk-hook-remake', T.t('Remake'));
     remake.type = 'button';
     remake.dataset.type = type ? type.id : '';
-    remake.title = type ? `Write this hook again - another ${type.name.toLowerCase()} on the same topic`
-      : 'This hook has no type to write it again in';
+    // A type's name and description are said in the app's language; the writer is given them in English.
+    remake.title = type ? T.t('Write this hook again - another {type} on the same topic', { type: T.t(type.name).toLowerCase() })
+      : T.t('This hook has no type to write it again in');
     remake.disabled = _busy() || !type;
     remake.addEventListener('click', () => _remakeHook(i, type, ta, row, remake));
-    const k = el('span', 'mk-hook-k' + (type ? ' typed' : ''), type ? type.name : (h.type || h.kind || ''));
+    const k = el('span', 'mk-hook-k' + (type ? ' typed' : ''), type ? T.t(type.name) : (h.type || h.kind || ''));
     if (type) {
       k.addEventListener('mouseenter', () => _showTip(k, type));
       k.addEventListener('mouseleave', _hideTip);
@@ -1606,11 +1625,11 @@ function _renderHooks(hooks) {
 async function _remakeHook(i, type, ta, row, btn) {
   if (!type || _busy()) return;
   const topic = $('mk-topic').value.trim();
-  if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); return; }
+  if (!topic) { J.sayJob($('mk-job'), T.t('Describe the topic first.'), true); return; }
   const gen = _gen;
   _setStage('working');
   row.classList.add('remaking');
-  btn.textContent = 'Remaking…';
+  btn.textContent = T.t('Remaking…');
   ta.readOnly = true;
   const o = _opts();
   const others = (_gen.hooks || []).filter((_, j) => j !== i).map(x => x.text);
@@ -1641,7 +1660,7 @@ function _hideTip() { if (_tipEl) { _tipEl.remove(); _tipEl = null; } }
 function _showTip(anchor, type) {
   _hideTip();
   const t = el('div', 'mk-tip');
-  t.append(el('b', '', type.name), el('span', '', type.about));
+  t.append(el('b', '', T.t(type.name)), el('span', '', T.t(type.about)));
   document.body.appendChild(t);
   const r = anchor.getBoundingClientRect();
   const w = t.offsetWidth, h = t.offsetHeight;
@@ -1660,18 +1679,18 @@ const _TIMING = {
   // 1-10 hooks: each count its own measured time.
   hooks: (o) => {
     const n = HT.hookCount(o.hookCount);
-    return { key: `l2-hooks|${o.model}|${o.effort}|${n}`, label: `Writing ${n} ${n === 1 ? 'hook' : 'hooks'}…`, estimateMs: J.EST.hooks(n) };
+    return { key: `l2-hooks|${o.model}|${o.effort}|${n}`, label: T.tn(n, 'Writing {n} hook…', 'Writing {n} hooks…'), estimateMs: J.EST.hooks(n) };
   },
-  remake: (o, i) => ({ key: `l2-remake|${o.model}|${o.effort}`, label: `Writing hook ${i + 1} again…`, estimateMs: J.EST.remake }),
-  script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
-  rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
+  remake: (o, i) => ({ key: `l2-remake|${o.model}|${o.effort}`, label: T.t('Writing hook {n} again…', { n: i + 1 }), estimateMs: J.EST.remake }),
+  script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: T.tn(o.scenes, 'Writing {n} paragraph…', 'Writing {n} paragraphs…'), estimateMs: J.EST.script(o.scenes) }),
+  rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: T.t('Rewriting paragraph {n}…', { n: i + 1 }), estimateMs: J.EST.rewrite }),
 };
 
 // Starts a stage on the server and follows it. A draft that is already being written into is not
 // started twice: the server says so (409), and the page follows the job that is running instead.
 async function _runStage(path, body, timing, onResult) {
   const gen = _gen;
-  if (!(await _ensureDraft())) { J.sayJob($('mk-job'), 'The draft could not be saved, so nothing was started.', true); return false; }
+  if (!(await _ensureDraft())) { J.sayJob($('mk-job'), T.t('The draft could not be saved, so nothing was started.'), true); return false; }
   const send = { ...body, ..._draftKey() };
   const what = path.split('/').pop();              // hooks | remake | script | rewrite
   let jobId;
@@ -1679,7 +1698,7 @@ async function _runStage(path, body, timing, onResult) {
     jobId = (await J.api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(send) })).jobId;
   } catch (e) {
     if (e.status === 409 && e.data && e.data.jobId) {
-      J.sayJob($('mk-job'), 'This draft is already being written - following that instead.');
+      J.sayJob($('mk-job'), T.t('This draft is already being written - following that instead.'));
       return _followStage(e.data.jobId, e.data, gen, null);
     }
     J.sayJob($('mk-job'), e.message, true);
@@ -1719,7 +1738,7 @@ async function _followStage(jobId, run, gen, onResult) {
       // and a reload would put the draft's copy over edits still waiting out their pause.
       rec.rows.forEach(r => r.detach());
       if (here()) {
-        _sayBriefly('canceled - what was already sent is paid for');
+        _sayBriefly(T.t('canceled - what was already sent is paid for'));
         if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
         if ((_gen.paragraphs || []).length) _renderScenes();
         // A stage this form did not start has no caller to set the stage back.
@@ -1773,7 +1792,7 @@ function _stageRow(rec) {
   const run = rec.run || {};
   const t = run.timing
     || (_TIMING[run.what] ? _TIMING[run.what](run, run.index || 0)
-      : { key: 'l2-stage', label: 'Still writing…', estimateMs: J.EST.script(15) });
+      : { key: 'l2-stage', label: T.t('Still writing…'), estimateMs: J.EST.script(15) });
   const row = J.startJob($('mk-job'), { ...t, startedAt: run.startedAt || Date.now(), onCancel: () => _cancelStage(rec) });
   rec.rows.push(row);
   return row;
@@ -1789,7 +1808,7 @@ async function _cancelStage(rec) {
   catch (e) {
     rec.cancelling = false;
     const row = rec.rows[rec.rows.length - 1];
-    if (row) row.say('could not cancel: ' + e.message);
+    if (row) row.say(T.t('could not cancel: {why}', { why: e.message }));
   }
 }
 
@@ -1821,13 +1840,13 @@ async function _reloadDraftInto() {
 // Box 1's button: hooks - as many as the list beside it says; "Write again" once a batch is there. The
 // script is box 2's button.
 async function _runGo() {
-  if (!_controlsReady()) { J.sayJob($('mk-job'), 'the model list is not loaded yet', true); return; }
+  if (!_controlsReady()) { J.sayJob($('mk-job'), T.t('the model list is not loaded yet'), true); return; }
   _writeHooks();
 }
 
 async function _writeHooks() {
   const topic = $('mk-topic').value.trim();
-  if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); return; }
+  if (!topic) { J.sayJob($('mk-job'), T.t('Describe the topic first.'), true); return; }
   const gen = _gen;
   _setStage('hooks');
   $('mk-hook-list').textContent = '';
@@ -1845,8 +1864,8 @@ async function _writeHooks() {
 async function _runScript() {
   const topic = $('mk-topic').value.trim();
   const hook = String(_gen.hook || '').trim();
-  if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); _setStage(_pickOrIdle()); return; }
-  if (!hook) { J.sayJob($('mk-job'), 'Pick a hook first.', true); _setStage(_pickOrIdle()); return; }
+  if (!topic) { J.sayJob($('mk-job'), T.t('Describe the topic first.'), true); _setStage(_pickOrIdle()); return; }
+  if (!hook) { J.sayJob($('mk-job'), T.t('Pick a hook first.'), true); _setStage(_pickOrIdle()); return; }
   const gen = _gen;
   _setStage('script');
   const o = _opts();
@@ -1859,7 +1878,7 @@ async function _runScript() {
     _renderScenes();
     await _saveDraft();
     if (r.asked && r.paragraphs && r.paragraphs.length !== r.asked) {
-      J.sayJob($('mk-job'), `Note: ${r.paragraphs.length} paragraphs came back, ${r.asked} were asked for.`);
+      J.sayJob($('mk-job'), T.t('Note: {got} paragraphs came back, {asked} were asked for.', { got: r.paragraphs.length, asked: r.asked }));
     }
   });
   // A script that did not come leaves everything as it was - "Write scenario" is a press away again.
@@ -1882,27 +1901,27 @@ function _renderScenes() {
   list.forEach((text, i) => {
     const row = el('div', 'mk-scene' + (i === 0 ? ' hook' : ''));
     // Paragraph one is the hook, and says so instead of saying "1".
-    row.appendChild(el('div', 'mk-scene-n' + (i === 0 ? ' is-hook' : ''), i === 0 ? 'hook' : String(i + 1)));
+    row.appendChild(el('div', 'mk-scene-n' + (i === 0 ? ' is-hook' : ''), i === 0 ? T.t('hook') : String(i + 1)));
     const ta = el('textarea', 'mk-scene-t u-area is-dark');
     ta.rows = 2;
     ta.value = text;
     const acts = el('div', 'mk-scene-a');
-    const secs = el('div', 'mk-scene-secs', J.spokenSeconds(text) + 's');
+    const secs = el('div', 'mk-scene-secs', T.t('{n}s', { n: J.spokenSeconds(text) }));
     acts.appendChild(secs);
     const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
     ta.addEventListener('input', () => {
       _gen.paragraphs[i] = ta.value;
       // Editing the first paragraph edits the hook: "Write again" writes from what is on screen - box 2 says the same.
       if (i === 0) { _gen.hook = ta.value; $('mk-hook').value = ta.value; _markUsed(); }
-      secs.textContent = J.spokenSeconds(ta.value) + 's';
+      secs.textContent = T.t('{n}s', { n: J.spokenSeconds(ta.value) });
       fit();
       _queueDraft();
     });
     setTimeout(fit, 0);
     if (i > 0) {
-      const rw = el('button', 'mk-scene-rw u-btn is-s', 'Rewrite');
+      const rw = el('button', 'mk-scene-rw u-btn is-s', T.t('Rewrite'));
       rw.type = 'button';
-      rw.title = 'Rewrite this paragraph from a different angle - or select some of its words to rewrite only them';
+      rw.title = T.t('Rewrite this paragraph from a different angle - or select some of its words to rewrite only them');
       rw.addEventListener('click', () => _rewrite(i, rw));
       acts.appendChild(rw);
       _wireFragment(ta, i);
@@ -1925,7 +1944,7 @@ async function _rewrite(index, btn, fragment) {
   const t = _TIMING.rewrite(o, index);
   await _runStage('/api/scriptgen/rewrite',
     { ...o, topic: $('mk-topic').value.trim(), script: _gen.paragraphs, index, ...(fragment ? { fragment } : {}) },
-    fragment ? { ...t, key: t.key + '|fragment', label: `Rewriting a fragment of paragraph ${index + 1}…` } : t,
+    fragment ? { ...t, key: t.key + '|fragment', label: T.t('Rewriting a fragment of paragraph {n}…', { n: index + 1 }) } : t,
     async (r) => {
       _gen.paragraphs[index] = r.paragraph ? _spliced(r, _gen.paragraphs[index]) : _gen.paragraphs[index];
       _renderScenes();
@@ -1960,9 +1979,9 @@ function _fragFrom(ta, index, ev) {
   const text = ta.value.slice(start, end);
   if (end <= start || text.trim().length < 2 || text.trim() === ta.value.trim()) { _hideFragBtn(); return; }
   _hideFragBtn();
-  const btn = el('button', 'u-btn is-s mk-frag-btn', 'Rewrite fragment');
+  const btn = el('button', 'u-btn is-s mk-frag-btn', T.t('Rewrite fragment'));
   btn.type = 'button';
-  btn.title = 'Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is';
+  btn.title = T.t('Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is');
   // Pressed without taking the focus: the selection - and the textarea's own blur - stay as they are.
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', () => {
@@ -1997,7 +2016,7 @@ async function _saveScript() {
   const st = $('mk-save-status');
   const btn = $('mk-save');
   btn.disabled = true;
-  st.textContent = 'saving…';
+  st.textContent = T.t('saving…');
   st.className = 'lib-status';
   try {
     const o = _opts();
@@ -2023,14 +2042,14 @@ async function _saveScript() {
     if (_embedded) {
       const n0 = (d.scenario.lines || []).length;
       if (_hooks.counts) _hooks.counts();
-      if (_hooks.saved) await _hooks.saved(d.scenario.id, `Saved “${d.scenario.title}” - ${n0} lines.`);
+      if (_hooks.saved) await _hooks.saved(d.scenario.id, T.tn(n0, 'Saved “{name}” - {n} line.', 'Saved “{name}” - {n} lines.', { name: d.scenario.title }));
       return;
     }
     await Promise.all([_readDrafts(), _readSources()]);
     _paintSources();
     if (_src) { await _refreshSource(); _showTopics(); } else await _enterScript({});
     const n = (d.scenario.lines || []).length;
-    _say(`Saved “${d.scenario.title}” - ${n} lines, on the Scenarios shelf.`, 'ok', d.scenario.id);
+    _say(T.tn(n, 'Saved “{name}” - {n} line, on the Scenarios shelf.', 'Saved “{name}” - {n} lines, on the Scenarios shelf.', { name: d.scenario.title }), 'ok', d.scenario.id);
     if (_hooks.counts) _hooks.counts();
   } catch (e) {
     st.textContent = e.message;
@@ -2052,7 +2071,7 @@ function _say(text, kind, scenarioId) {
   box.className = 'mk-said' + (kind ? ' ' + kind : '');
   box.appendChild(el('span', null, text));
   if (scenarioId && _hooks.openScenario) {
-    const a = el('button', 'u-btn is-s', 'Open');
+    const a = el('button', 'u-btn is-s', T.t('Open'));
     a.type = 'button';
     a.addEventListener('click', () => _hooks.openScenario(scenarioId));
     box.appendChild(a);
@@ -2089,34 +2108,34 @@ function _closeAddSource() {
   Layers.close(w.layer);
 }
 
-const ADD_NOTE = ['A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once.',
-  'A vertical or square one is asked about: onto Uploads in Media, or a source after all. A sound without a picture - in development. Links are read without a login: a video a site shows only to signed-in people - add it as a file. The transcription and the topics are paid calls.'];
+const ADD_NOTE = [T.t('A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once.'),
+  T.t('A vertical or square one is asked about: onto Uploads in Media, or a source after all. A sound without a picture - in development. Links are read without a login: a video a site shows only to signed-in people - add it as a file. The transcription and the topics are paid calls.')];
 function _openAddSource() {
   if (_addWin) return;
   const ov = el('div', 'mk-ov');
   ov.innerHTML = `
     <div class="mk-panel u-win is-float" role="dialog" aria-modal="true">
-      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">Add a source</span><span class="sp"></span>
-        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
+      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">${T.t('Add a source')}</span><span class="sp"></span>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="${T.t('Close (Esc)')}"></button></div>
       <div class="mk-panel-body">
         <div class="mk-choice u-tabs">
-          <button class="mk-choice-btn u-tab cur" type="button" data-route="link">From a link</button>
-          <button class="mk-choice-btn u-tab" type="button" data-route="file">From a file</button>
-          <button class="mk-choice-btn u-tab" type="button" data-route="lib">From the Library</button>
+          <button class="mk-choice-btn u-tab cur" type="button" data-route="link">${T.t('From a link')}</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="file">${T.t('From a file')}</button>
+          <button class="mk-choice-btn u-tab" type="button" data-route="lib">${T.t('From the Library')}</button>
         </div>
         <section class="mk-route" data-r="link">
-          <label class="mk-field"><span>Link to a single video</span>
+          <label class="mk-field"><span>${T.t('Link to a single video')}</span>
             <input type="text" class="u-in" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
-          <button class="u-btn is-main" type="button" data-go="link">Add</button>
+          <button class="u-btn is-main" type="button" data-go="link">${T.t('Add')}</button>
         </section>
         <section class="mk-route" data-r="file" hidden>
-          <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
-          <label class="mk-field"><span>Title <em>optional - the file name is used otherwise</em></span>
-            <input type="text" class="u-in" data-f="title" placeholder="What this source is"></label>
-          <button class="u-btn is-main" type="button" data-go="file">Add</button>
+          <label class="mk-field"><span>${T.t('Video file')}</span><input type="file" data-f="file" accept="video/*"></label>
+          <label class="mk-field"><span>${T.t('Title')} <em>${T.t('optional - the file name is used otherwise')}</em></span>
+            <input type="text" class="u-in" data-f="title" placeholder="${T.t('What this source is')}"></label>
+          <button class="u-btn is-main" type="button" data-go="file">${T.t('Add')}</button>
         </section>
         <section class="mk-route" data-r="lib" hidden>
-          <span class="mk-lib-head">REFERENCES · YouTube · Videos</span>
+          <span class="mk-lib-head">${T.t('REFERENCES · YouTube · Videos')}</span>
           <div class="mk-lib" data-f="lib"></div>
         </section>
         <p class="mk-pnote u-status is-line" data-f="note"></p>
@@ -2128,7 +2147,7 @@ function _openAddSource() {
   const q = (s) => ov.querySelector(s);
   const f = (name) => q(`[data-f="${name}"]`);
   // The long note is ONE line - the one about money, the whole under the pointer.
-  f('note').textContent = 'The transcription and the topics are paid calls.';
+  f('note').textContent = T.t('The transcription and the topics are paid calls.');
   f('note').title = ADD_NOTE.join(' ');
   const route = (r) => {
     ov.querySelectorAll('.mk-choice-btn').forEach(b => b.classList.toggle('cur', b.dataset.route === r));
@@ -2158,31 +2177,31 @@ async function _paintLib() {
   box.textContent = '';
   // Reading, nothing there, did not load - the shared parts, as rows; a failed read is not "nothing
   // there": "did not load" with Try again, the reason in the corner.
-  box.appendChild(loadingEl('reading…', { line: true }));
+  box.appendChild(loadingEl(T.t('reading…'), { line: true }));
   let items = [];
   try { items = (await J.api('/api/references/youtube')).items || []; }
   catch (e) {
     if (!_addWin || _addWin.f('lib') !== box) return;
     box.textContent = '';
-    box.appendChild(failedEl('YouTube videos', () => _paintLib(), { line: true }));
-    showError('YouTube videos did not load: ' + e.message);
+    box.appendChild(failedEl(T.t('YouTube videos'), () => _paintLib(), { line: true }));
+    showError(T.t('YouTube videos did not load: {why}', { why: e.message }));
     return;
   }
   if (!_addWin || _addWin.f('lib') !== box) return;
   box.textContent = '';
-  if (!items.length) { box.appendChild(emptyEl('Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.', { line: true })); return; }
+  if (!items.length) { box.appendChild(emptyEl(T.t('Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.'), { line: true })); return; }
   for (const it of items) {
     const row = el('div', 'mk-lib-row');
     if (it.thumb) { const im = el('img'); im.src = it.thumb; im.alt = ''; im.loading = 'lazy'; row.appendChild(im); }
     const t = el('div', 'mk-lib-t');
-    t.appendChild(el('b', null, it.title || 'video'));
-    t.appendChild(el('small', null, _mmss(it.seconds) + (it.type === 'source'
-      ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
+    t.appendChild(el('b', null, it.title || T.t('video')));
+    t.appendChild(el('small', null, _mmss(it.seconds) + ' · ' + (it.type === 'source'
+      ? T.t('a source already') + (it.topics ? ' · ' + T.tn(it.topics, '{n} topic', '{n} topics') : '') : T.t('not downloaded'))));
     row.appendChild(t);
     if (it.type === 'remote') {
-      const b = el('button', 'u-btn is-s', 'Add');   // plain - one gold per route
+      const b = el('button', 'u-btn is-s', T.t('Add'));   // plain - one gold per route
       b.type = 'button';
-      b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
+      b.title = T.t('Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.');
       b.addEventListener('click', async () => {
         // A source is heard on Replicate and its topics found by an agent - without their keys, the popup.
         if (!allow('sources', b)) return;
@@ -2190,7 +2209,7 @@ async function _paintLib() {
         _addSay('');
         try {
           const d = await _post('/api/sources/add/link', { url: it.link });
-          b.textContent = 'added';
+          b.textContent = T.t('added');
           _track(d.read);
         } catch (e) { b.disabled = false; _addSay(e.message, true); }
       });
@@ -2207,7 +2226,7 @@ function _addSay(text, err) {
 
 async function _addLink(input) {
   const url = input.value.trim();
-  if (!url) { _addSay('Paste a link first.', true); return; }
+  if (!url) { _addSay(T.t('Paste a link first.'), true); return; }
   if (!allow('sources', input)) return;
   _addSay('');
   try {
@@ -2219,14 +2238,14 @@ async function _addLink(input) {
 
 async function _addFile(input, titleIn) {
   const file = input.files && input.files[0];
-  if (!file) { _addSay('Pick a file first.', true); return; }
+  if (!file) { _addSay(T.t('Pick a file first.'), true); return; }
   if (!allow('sources', input)) return;
   // The app's own window says where the file lies; the server copies it from there itself, so leaving the page
   // cuts nothing off. A browser tab cannot say.
   const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
   let where = '';
   try { where = typeof pathOf === 'function' ? String(pathOf(file) || '') : ''; } catch (e) { where = ''; }
-  if (!where) { _addSay('Adding a file works in the app\'s own window - it hands the file over. Here, add it by a link.', true); return; }
+  if (!where) { _addSay(T.t('Adding a file works in the app\'s own window - it hands the file over. Here, add it by a link.'), true); return; }
   _addSay('');
   try {
     const d = await _post('/api/sources/add/file', { path: where, title: titleIn.value.trim() });
@@ -2261,7 +2280,7 @@ function _followAdds() {
     for (const r of pending) {
       let fresh = null;
       try { fresh = (await J.api('/api/sources/add/' + encodeURIComponent(r.id))).read; }
-      catch (e) { fresh = { ...r, state: 'error', error: e.status === 404 ? 'lost - add it again' : e.message }; }
+      catch (e) { fresh = { ...r, state: 'error', error: e.status === 404 ? T.t('lost - add it again') : e.message }; }
       if (!_adds.has(r.id)) continue;
       _adds.set(r.id, fresh);
       _landRead(fresh);
@@ -2321,7 +2340,7 @@ function _paintAdds() {
 
 function _addLine(r) {
   const line = el('div', 'mk-addl');
-  line.appendChild(el('div', 'mk-addl-t', r.title || r.url || 'a file'));
+  line.appendChild(el('div', 'mk-addl-t', r.title || r.url || T.t('a file')));
   const say = (text, err) => { const s = el('div', 'mk-addl-s u-status' + (err ? ' err' : ''), text); if (err) line.classList.add('err'); line.appendChild(s); };
   const acts = el('div', 'mk-addl-acts');
   const btn = (label, title, on, cls) => {
@@ -2333,36 +2352,38 @@ function _addLine(r) {
     acts.appendChild(b);
     return b;
   };
-  if (r.state === 'reading') say(r.step || 'reading…');
+  if (r.state === 'reading') say(r.step || T.t('reading…'));
   else if (r.state === 'ask') {
     const a = r.ask || {};
     if (a.kind === 'unknown') {
-      say('The site did not say what this is' + (a.seconds ? ` (${J.clock(a.seconds)})` : '') + ' - a video, or a sound?');
-      btn('A video with topics - a source', 'Downloaded, transcribed and its topics found, in Alerts', () => _answer(r, 'source'), 'primary');
-      btn('A video - onto Uploads', 'Downloaded onto Uploads in Media, nothing read out of it', () => _answer(r, 'uploads'));
-      btn('A sound - in development', 'A sound without a picture cannot be added yet');
+      say(a.seconds ? T.t('The site did not say what this is ({time}) - a video, or a sound?', { time: J.clock(a.seconds) })
+        : T.t('The site did not say what this is - a video, or a sound?'));
+      btn(T.t('A video with topics - a source'), T.t('Downloaded, transcribed and its topics found, in Alerts'), () => _answer(r, 'source'), 'primary');
+      btn(T.t('A video - onto Uploads'), T.t('Downloaded onto Uploads in Media, nothing read out of it'), () => _answer(r, 'uploads'));
+      btn(T.t('A sound - in development'), T.t('A sound without a picture cannot be added yet'));
     } else {
-      say(`A ${a.kind === 'square' ? 'square' : 'vertical'} video (${_dims(a)}). It goes onto Uploads in Media - unless it has topics to write from.`);
-      btn('Onto Uploads', 'Downloaded onto Uploads in Media, nothing read out of it', () => _answer(r, 'uploads'), 'primary');
-      btn('It has topics - add it as a source', 'Yes, this vertical video is a source: downloaded, transcribed and its topics found, in Alerts', () => _answer(r, 'source'));
+      say(a.kind === 'square' ? T.t('A square video ({dims}). It goes onto Uploads in Media - unless it has topics to write from.', { dims: _dims(a) })
+        : T.t('A vertical video ({dims}). It goes onto Uploads in Media - unless it has topics to write from.', { dims: _dims(a) }));
+      btn(T.t('Onto Uploads'), T.t('Downloaded onto Uploads in Media, nothing read out of it'), () => _answer(r, 'uploads'), 'primary');
+      btn(T.t('It has topics - add it as a source'), T.t('Yes, this vertical video is a source: downloaded, transcribed and its topics found, in Alerts'), () => _answer(r, 'source'));
     }
   } else if (r.state === 'uploads') {
     const lj = r.link || null;
     const item = (lj && lj.items && lj.items[0]) || r.item || null;
-    if (lj && lj.state === 'error') say(lj.error || 'it did not come', true);
-    else if (lj && lj.state === 'stopped') say('stopped');
+    if (lj && lj.state === 'error') say(lj.error || T.t('it did not come'), true);
+    else if (lj && lj.state === 'stopped') say(T.t('stopped'));
     else if ((lj && lj.state === 'done') || r.landed) {
-      say('On Uploads in Media.');
-      if (item && item.id) btn('Show', 'The clip on the Media shelf', () => _showOnMedia(item.id));
-    } else say((lj ? lj.step : r.step) || 'onto Uploads…');
-  } else if (r.state === 'audio') say(r.step || 'Audio only - in development.');
-  else if (r.state === 'error') say(r.error || 'it failed', true);
+      say(T.t('On Uploads in Media.'));
+      if (item && item.id) btn(T.t('Show'), T.t('The clip on the Media shelf'), () => _showOnMedia(item.id));
+    } else say((lj ? lj.step : r.step) || T.t('onto Uploads…'));
+  } else if (r.state === 'audio') say(r.step || T.t('Audio only - in development.'));
+  else if (r.state === 'error') say(r.error || T.t('it failed'), true);
   if (acts.childNodes.length) line.appendChild(acts);
   // A line that has ended is let go of by its cross; a question is let go of too (nothing was downloaded).
   if (r.state === 'ask' || _addSettled(r)) {
     const x = el('button', 'mk-x u-onpic is-del u-x', '');
     x.type = 'button';
-    x.title = r.state === 'ask' ? 'Let go of it - nothing was downloaded' : 'Take this line away';
+    x.title = r.state === 'ask' ? T.t('Let go of it - nothing was downloaded') : T.t('Take this line away');
     x.addEventListener('click', () => { if (r.state === 'ask') _answer(r, 'drop'); else { _adds.delete(r.id); _paintAdds(); } });
     line.appendChild(x);
   }

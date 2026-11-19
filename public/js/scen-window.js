@@ -17,6 +17,7 @@ import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
 import { showError } from './notice.js';
 import { allow } from './key-gate.js';
+import { t, tn, tc } from './i18n/t.js';
 
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
@@ -39,11 +40,11 @@ export async function openScenario(summary, hooks = {}) {
   const head = _el('div', 'mv3-x-head u-win-head');
   const h3 = document.createElement('h3');
   h3.className = 'u-win-title';
-  h3.textContent = isNew ? 'New scenario' : 'Scenario';
+  h3.textContent = isNew ? t('New scenario') : t('Scenario');
   head.appendChild(h3);
   const close = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   close.type = 'button';
-  close.title = 'Close (Esc)';
+  close.title = t('Close (Esc)');
   head.appendChild(close);
   box.appendChild(head);
 
@@ -66,18 +67,18 @@ export async function openScenario(summary, hooks = {}) {
     return i;
   };
 
-  const title = field('Title', input('what this ad is called'));
-  const vertical = field('Vertical', input('optional', 'mv3-sc-verticals'));
-  const product = field('Product', input('optional', 'mv3-sc-products'));
-  const role = field('Role', input('optional', 'mv3-sc-roles'));
+  const title = field(t('Title'), input(t('what this ad is called')));
+  const vertical = field(tc('scenario', 'Vertical'), input(t('optional'), 'mv3-sc-verticals'));
+  const product = field(t('Product'), input(t('optional'), 'mv3-sc-products'));
+  const role = field(t('Role'), input(t('optional'), 'mv3-sc-roles'));
   // The presenter's gender ("Gender", not "Narrator" - in the Library a narrator is the
   // voice a script is WRITTEN in, a field of its own).
-  const gender = field('Gender', (() => {
+  const gender = field(t('Gender'), (() => {
     const s = document.createElement('select');
     s.className = 'u-in';                             // the shared field, as the window's others
-    for (const [v, t] of [['', 'Any - every character is offered'], ['female', 'Female'], ['male', 'Male']]) {
+    for (const [v, word] of [['', t('Any - every character is offered')], ['female', t('Female')], ['male', t('Male')]]) {
       const o = document.createElement('option');
-      o.value = v; o.textContent = t;
+      o.value = v; o.textContent = word;
       s.appendChild(o);
     }
     return s;
@@ -92,23 +93,22 @@ export async function openScenario(summary, hooks = {}) {
     }
   }
 
-  body.appendChild(_el('div', 'mv3-x-hdr', 'The lines'));
+  body.appendChild(_el('div', 'mv3-x-hdr', t('The lines')));
   const lines = _el('textarea', 'mv3-sc-lines u-area is-dark');
   lines.spellcheck = false;
-  lines.placeholder = 'One line per row. Each line becomes one fragment: it is spoken in one take and animated as one clip.';
+  lines.placeholder = t('One line per row. Each line becomes one fragment: it is spoken in one take and animated as one clip.');
   body.appendChild(lines);
   const count = _el('p', 'mv3-x-note');
   body.appendChild(count);
   body.appendChild(_el('p', 'mv3-x-note',
-    'This is the scenario in the library. A project made from it keeps its own copy of the text, '
-    + 'so editing here never changes a project that already exists.'));
+    t('This is the scenario in the library. A project made from it keeps its own copy of the text, so editing here never changes a project that already exists.')));
 
   // the foot: save and the window's one status line (u-status) at the left, use alone at the right
   const foot = _el('div', 'mv3-x-foot u-win-foot');
   const note = _el('span', 'u-status');
-  const save = _el('button', 'mv3-c-btn u-btn', 'Save');
+  const save = _el('button', 'mv3-c-btn u-btn', t('Save'));
   save.type = 'button';
-  save.title = 'Keep it in the library';
+  save.title = t('Keep it in the library');
   // `use` worn like `save` and standing at the far right, away from it. For a scenario in the
   // archive the same place says `restore`: the row and its menu
   // offer nothing to build with until it is back, and neither does this window.
@@ -116,9 +116,9 @@ export async function openScenario(summary, hooks = {}) {
   const use = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main');
   use.type = 'button';
   const dressUse = () => {
-    use.textContent = archived ? 'Restore' : 'Use';
-    use.title = archived ? 'Put it back in the library'
-      : 'Save it and make a ' + (hooks.voiceover ? 'voiceover' : 'talking-head') + ' project from it';
+    use.textContent = archived ? t('Restore') : t('Use');
+    use.title = archived ? t('Put it back in the library')
+      : hooks.voiceover ? t('Save it and make a voiceover project from it') : t('Save it and make a talking-head project from it');
   };
   dressUse();
   foot.append(save, note, use);
@@ -130,10 +130,10 @@ export async function openScenario(summary, hooks = {}) {
   const linesOf = () => lines.value.split('\n').map(s => s.trim()).filter(Boolean);
   const gate = () => {
     const n = linesOf().length;
-    const why = !title.value.trim() ? 'A title is needed.'
-      : n < MIN_LINES ? `At least ${MIN_LINES} lines are needed - there ${n === 1 ? 'is' : 'are'} ${n}.`
+    const why = !title.value.trim() ? t('A title is needed.')
+      : n < MIN_LINES ? tn(n, 'At least {min} lines are needed - there is {n}.', 'At least {min} lines are needed - there are {n}.', { min: MIN_LINES })
         : '';
-    count.textContent = why || `${n} lines - ${n} fragments.`;
+    count.textContent = why || tn(n, '{n} line - {n} fragment.', '{n} lines - {n} fragments.');
     // An EDIT is never refused by the server, only a new scenario is: a half-typed title
     // must not be able to fail a save of something that already exists.
     save.disabled = !!why && isNew;
@@ -167,7 +167,7 @@ export async function openScenario(summary, hooks = {}) {
   }).catch(() => { /* suggestions are a convenience */ });
 
   if (!isNew) {
-    note.textContent = 'reading…';
+    note.textContent = t('reading…');
     try {
       rec = await API.get(summary.id);
       title.value = rec.title || '';
@@ -181,7 +181,7 @@ export async function openScenario(summary, hooks = {}) {
       dressUse();
       note.textContent = '';
     } catch (e) {
-      fail('Could not read it: ' + e.message);
+      fail(t('Could not read it: {why}', { why: e.message }));
     }
   }
   gate();
@@ -204,11 +204,11 @@ export async function openScenario(summary, hooks = {}) {
 
   const store = async () => {
     const sent = lines.value;
-    note.textContent = !hooks.voiceover && /(?!\p{Script=Latin})\p{L}/u.test(sent) ? 'translating into English…' : 'saving…';
+    note.textContent = !hooks.voiceover && /(?!\p{Script=Latin})\p{L}/u.test(sent) ? t('translating into English…') : t('saving…');
     rec = await API.save(collect());
     // What is kept is what the window shows - the English, when the lines were typed in another language.
     if (lines.value === sent && Array.isArray(rec.lines)) { lines.value = rec.lines.map(l => l.text || '').join('\n'); gate(); }
-    note.textContent = 'saved';
+    note.textContent = t('saved');
     saved(rec);                    // the list behind the window shows the new title
     return rec;
   };
@@ -224,13 +224,13 @@ export async function openScenario(summary, hooks = {}) {
   use.addEventListener('click', async () => {
     if (archived) {
       use.disabled = true;
-      note.textContent = 'restoring…';
+      note.textContent = t('restoring…');
       try {
         // By the list's id when the record could not be read: rec.id is null then.
         await API.archive(rec.id || summary.id, false);
         archived = false;
         dressUse();
-        note.textContent = 'back in the library';
+        note.textContent = t('back in the library');
         saved(rec);
       } catch (e) {
         fail(e.message);

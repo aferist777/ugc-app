@@ -20,9 +20,10 @@
 // preset's example image above its prompt. The parameters stay collapsed and cannot be opened
 // while a preset is active — clearing the preset is the way back to building by hand.
 
-import { PARAM_SCHEMA, MARKS_KEYS, NONE_DEFAULT, RND_ORDER, allowedOpts, paramByKey, allParamKeys, genName } from './schema.js';
+import { PARAM_SCHEMA, MARKS_KEYS, NONE_DEFAULT, RND_ORDER, allowedOpts, paramByKey, allParamKeys, genName, groupLabel, paramLabel, optLabel } from './schema.js';
 import { PRESETS, presetById, exampleUrl, promptSegments, presetLabel } from './presets.js';
 import * as Layers from '../../layers.js';
+import { t, tc } from '../../i18n/t.js';
 
 const SEL_ID = (k) => 'cv2-p-' + k;
 const LS_PRESET = 'cv2_preset_v1';
@@ -64,7 +65,7 @@ function refreshOptions() {
     for (const o of allowed) {
       if (!o) continue;
       const opt = document.createElement('option');
-      opt.value = o; opt.textContent = o;
+      opt.value = o; opt.textContent = optLabel(k, o);
       el.appendChild(opt);
     }
     el.value = keep;
@@ -81,7 +82,7 @@ function row(p) {
   r.className = 'cv2-row';
   const lab = document.createElement('label');
   lab.className = 'cv2-row-lab';
-  lab.textContent = p.label;
+  lab.textContent = paramLabel(p);
   lab.htmlFor = SEL_ID(p.k);
   const sel = document.createElement('select');
   sel.className = 'cv2-row-sel u-in is-s';
@@ -99,7 +100,7 @@ function setValues(values) {
     // The option may not exist yet on this pass; refreshOptions rebuilds and re-applies.
     if (![...el.options].some(o => o.value === want)) {
       const opt = document.createElement('option');
-      opt.value = want; opt.textContent = want || '—';
+      opt.value = want; opt.textContent = want ? optLabel(k, want) : '—';
       el.appendChild(opt);
     }
     el.value = want;
@@ -172,7 +173,7 @@ function paintPresetState() {
     // Through the thumbnail door, like every picture on the page.
     if (p) {
       img.src = '/api/thumb?v=preset&src=' + encodeURIComponent(exampleUrl(p.id));
-      img.alt = p.name + ' example';
+      img.alt = t('{name} example', { name: p.name });
     }
     else { img.removeAttribute('src'); img.alt = ''; }
   }
@@ -189,8 +190,8 @@ function paintPresetState() {
   // The same button, two jobs - so it has to say which one it is on right now.
   const rnd = document.getElementById('cv2-rnd');
   if (rnd) rnd.title = p
-    ? 'Show a different preset'
-    : 'Randomize every parameter except marks, and the name';
+    ? t('Show a different preset')
+    : t('Randomize every parameter except marks, and the name');
 }
 
 // A token changed, so the values have left the preset behind. The example still shows - it is
@@ -200,6 +201,8 @@ function _markEdited() {
 }
 
 // ── The prompt, with every value clickable ──────────────────────────────────
+// Shown as it is sent: in English, its values the prompt's own words. The picker a value opens says them in the
+// app's language.
 function renderPrompt() {
   const box = document.getElementById('cv2-prompt');
   if (!box) return;
@@ -215,7 +218,7 @@ function renderPrompt() {
     tok.type = 'button';
     tok.className = 'cv2-tok' + (!seg.value || seg.value === 'none' ? ' is-off' : '');
     tok.dataset.k = seg.k;
-    tok.title = (p ? p.label : seg.k) + ' - click to change';
+    tok.title = t('{what} - click to change', { what: p ? paramLabel(p) : seg.k });
     tok.textContent = '[' + (seg.value || '—') + ']';
     tok.addEventListener('click', (e) => { e.stopPropagation(); openTokenPicker(tok, seg.k); });
     box.appendChild(tok);
@@ -248,7 +251,7 @@ function openTokenPicker(anchor, k) {
 
   const title = document.createElement('div');
   title.className = 'cv2-pop-t';
-  title.textContent = p.label;
+  title.textContent = paramLabel(p);
   pop.appendChild(title);
 
   const addRow = (label, list, cls) => {
@@ -260,12 +263,12 @@ function openTokenPicker(anchor, k) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'cv2-pop-opt u-chip' + (values[k] === o ? ' cur' : '');
-      b.textContent = o;
+      b.textContent = optLabel(k, o);
       b.addEventListener('click', () => {
         const el = document.getElementById(SEL_ID(k));
         if (el) {
           if (![...el.options].some(x => x.value === o)) {
-            const opt = document.createElement('option'); opt.value = o; opt.textContent = o; el.appendChild(opt);
+            const opt = document.createElement('option'); opt.value = o; opt.textContent = optLabel(k, o); el.appendChild(opt);
           }
           el.value = o;
         }
@@ -277,8 +280,8 @@ function openTokenPicker(anchor, k) {
     }
     pop.appendChild(r);
   };
-  addRow('fits', allowed, 'is-fits');
-  addRow('other', rest, 'is-other');
+  addRow(tc('char.picker', 'fits'), allowed, 'is-fits');
+  addRow(tc('char.picker', 'other'), rest, 'is-other');
 
   document.body.appendChild(pop);
   // Above the token, and nudged back on screen rather than hanging off an edge.
@@ -306,19 +309,19 @@ export function buildHead(host, hooks) {
   const head = document.createElement('div');
   head.className = 'cv2-crhead';
   const name = document.createElement('input');
-  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name u-in'; name.placeholder = 'Name (auto)';
+  name.type = 'text'; name.id = 'cv2-name'; name.className = 'cv2-name u-in'; name.placeholder = t('Name (auto)');
   const rnd = document.createElement('button');
-  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = 'Randomize';
-  rnd.title = 'Randomize every parameter except marks, and the name';
+  rnd.type = 'button'; rnd.id = 'cv2-rnd'; rnd.className = 'cv2-rnd u-btn'; rnd.textContent = t('Randomize');
+  rnd.title = t('Randomize every parameter except marks, and the name');
   rnd.addEventListener('click', randomize);
   const gen = document.createElement('button');
-  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen u-btn is-l is-main'; gen.textContent = '▶ Create';
-  gen.title = 'Generate the character from the values below';
+  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen u-btn is-l is-main'; gen.textContent = t('▶ Create');
+  gen.title = t('Generate the character from the values below');
   gen.addEventListener('click', () => { if (_onGenerate) _onGenerate(currentValues(), name.value.trim(), _preset); });
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);
   host.appendChild(head);
 
-  return { setName: (t) => { name.value = t || ''; }, name: () => name.value.trim() };
+  return { setName: (s) => { name.value = s || ''; }, name: () => name.value.trim() };
 }
 
 // ── The foot: TPDNE, on the bottom edge in both states ──────────────────────
@@ -331,12 +334,12 @@ export function buildFoot(host, hooks) {
   const tprow = document.createElement('div');
   tprow.className = 'cv2-crfoot-row';
   const tp = document.createElement('button');
-  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = 'Random face';
-  tp.title = 'Take a random synthetic face from thispersondoesnotexist.com - press again for another';
+  tp.type = 'button'; tp.className = 'cv2-tpdne u-btn'; tp.textContent = t('Random face');
+  tp.title = t('Take a random synthetic face from thispersondoesnotexist.com - press again for another');
   tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
   const tpnote = document.createElement('div');
   tpnote.className = 'cv2-crfoot-note';
-  tpnote.textContent = 'A face that belongs to no one, refined by words.';
+  tpnote.textContent = t('A face that belongs to no one, refined by words.');
   tprow.appendChild(tp); tprow.appendChild(tpnote);
   foot.appendChild(tprow);
   host.appendChild(foot);
@@ -356,9 +359,9 @@ export function build(host, hooks) {
   prow.className = 'cv2-presetrow';
   const psel = document.createElement('select');
   psel.className = 'cv2-preset u-in'; psel.id = 'cv2-preset';
-  psel.title = 'A preset fills every parameter and names the character';
+  psel.title = t('A preset fills every parameter and names the character');
   const none = document.createElement('option');
-  none.value = ''; none.textContent = 'No preset - build by hand';
+  none.value = ''; none.textContent = t('No preset - build by hand');
   psel.appendChild(none);
   for (const p of PRESETS) {
     const o = document.createElement('option');
@@ -378,8 +381,8 @@ export function build(host, hooks) {
   puse.type = 'button';
   puse.className = 'cv2-preset-use u-btn';
   puse.id = 'cv2-preset-use';
-  puse.textContent = 'Use';
-  puse.title = 'Put this preset\u2019s face in the middle column and start editing it - no generation';
+  puse.textContent = tc('char.preset', 'Use');
+  puse.title = t('Put this preset\u2019s face in the middle column and start editing it - no generation');
   puse.addEventListener('click', () => {
     const p2 = presetById(_preset);
     if (p2 && hooks && typeof hooks.onUse === 'function') hooks.onUse(p2);
@@ -393,7 +396,7 @@ export function build(host, hooks) {
   pclr.type = 'button';
   pclr.className = 'cv2-preset-clear u-btn is-icon is-quiet is-del u-x';
   pclr.id = 'cv2-preset-clear';
-  pclr.title = 'Clear the preset and go back to the parameters';
+  pclr.title = t('Clear the preset and go back to the parameters');
   pclr.addEventListener('click', () => clearPreset());
   prow.appendChild(pclr);
 
@@ -404,10 +407,10 @@ export function build(host, hooks) {
   rows.className = 'cv2-rows';
   rows.id = 'cv2-rows';
   for (const g of PARAM_SCHEMA) {
-    const t = document.createElement('div');
-    t.className = 'cv2-grp';
-    t.textContent = g.group;
-    rows.appendChild(t);
+    const gh = document.createElement('div');
+    gh.className = 'cv2-grp';
+    gh.textContent = groupLabel(g.group);
+    rows.appendChild(gh);
     for (const p of g.params) rows.appendChild(row(p));
   }
   panel.appendChild(rows);
@@ -433,18 +436,18 @@ export function build(host, hooks) {
   head2.className = 'cv2-fld-head';
   const lbl = document.createElement('span');
   lbl.className = 'cv2-fld-lbl';
-  lbl.textContent = 'Prompt';
+  lbl.textContent = t('Prompt');
   const help = document.createElement('span');
   help.className = 'cv2-help';
   help.tabIndex = 0;
   help.textContent = '?';
   const tip = document.createElement('span');
   tip.className = 'cv2-tip';
-  tip.textContent = 'Click any bracketed value to change it. Realism markers are added at generation and are not part of this text.';
+  tip.textContent = t('Click any bracketed value to change it. Realism markers are added at generation and are not part of this text.');
   help.appendChild(tip);
   const edited = document.createElement('span');
   edited.className = 'cv2-edited'; edited.id = 'cv2-edited'; edited.hidden = true;
-  edited.textContent = 'edited';
+  edited.textContent = tc('char.prompt', 'edited');
   head2.appendChild(lbl); head2.appendChild(help); head2.appendChild(edited);
   pv.appendChild(head2);
 
@@ -481,7 +484,8 @@ export function build(host, hooks) {
 // The examples are appearance only - no clothing among them, because the analyzer is forbidden
 // to change clothing and a placeholder should not advertise what will be refused. They run from
 // the everyday to the outright synthetic, so the field shows how far it can be pushed.
-const REFINE_PLACEHOLDER = 'E.g.: bald \u00b7 shaved head \u00b7 silver hair \u00b7 green eyes \u00b7 heterochromia \u00b7 freckles \u00b7 sharper jawline \u00b7 full beard \u00b7 scar across the cheek \u00b7 vitiligo patches \u00b7 heavier build \u00b7 very slim \u00b7 broader shoulders \u00b7 bone leg \u00b7 mechanical arm \u00b7 cybernetic eye';
+// The person may write in any language: the analyzer reads it and answers in English.
+const REFINE_PLACEHOLDER = t('E.g.: bald \u00b7 shaved head \u00b7 silver hair \u00b7 green eyes \u00b7 heterochromia \u00b7 freckles \u00b7 sharper jawline \u00b7 full beard \u00b7 scar across the cheek \u00b7 vitiligo patches \u00b7 heavier build \u00b7 very slim \u00b7 broader shoulders \u00b7 bone leg \u00b7 mechanical arm \u00b7 cybernetic eye');
 
 export function buildRef(host, hooks) {
   const onApply = (hooks || {}).onApply || null;
@@ -498,7 +502,7 @@ export function buildRef(host, hooks) {
   out.type = 'button';
   out.className = 'cv2-refout';
   out.id = 'cv2-refout';
-  out.title = 'Back to the parameters - discards this face';
+  out.title = t('Back to the parameters - discards this face');
   out.appendChild(document.createElement('i'));
   out.addEventListener('click', () => { if (onExit) onExit(); });
   wrap.appendChild(out);
@@ -507,14 +511,14 @@ export function buildRef(host, hooks) {
   head.className = 'cv2-fld-head';
   const lbl = document.createElement('span');
   lbl.className = 'cv2-fld-lbl';
-  lbl.textContent = 'Text changes';
+  lbl.textContent = t('Text changes');
   const help = document.createElement('span');
   help.className = 'cv2-help';
   help.tabIndex = 0;
   help.textContent = '?';
   const tip = document.createElement('span');
   tip.className = 'cv2-tip';
-  tip.textContent = 'This face came from outside, so no dropdown describes it - describe the change instead. Appearance only: hair, skin, eyes, face and build. Clothing, background and pose stay as they are.';
+  tip.textContent = t('This face came from outside, so no dropdown describes it - describe the change instead. Appearance only: hair, skin, eyes, face and build. Clothing, background and pose stay as they are.');
   help.appendChild(tip);
   head.appendChild(lbl); head.appendChild(help);
   wrap.appendChild(head);
@@ -540,10 +544,10 @@ export function buildRef(host, hooks) {
     const typed = !!ta.value.trim();
     const tpdne = src === 'tpdne';
     apply.disabled = tpdne ? false : !typed;
-    apply.textContent = tpdne ? 'Generate' : 'Apply';
+    apply.textContent = tpdne ? t('Generate') : t('Apply');
     apply.title = tpdne
-      ? 'Build the studio portrait from this face, with whatever is described above'
-      : 'Apply the described change and keep the rest of the image as it is';
+      ? t('Build the studio portrait from this face, with whatever is described above')
+      : t('Apply the described change and keep the rest of the image as it is');
   };
   apply.addEventListener('click', () => {
     const text = ta.value.trim();
@@ -556,7 +560,7 @@ export function buildRef(host, hooks) {
 
   const note = document.createElement('div');
   note.className = 'cv2-textpanel-note';
-  note.textContent = 'Random face below swaps the face. The arrow above, or the cross on the image, goes back to the parameters.';
+  note.textContent = t('Random face below swaps the face. The arrow above, or the cross on the image, goes back to the parameters.');
   wrap.appendChild(note);
 
   host.appendChild(wrap);

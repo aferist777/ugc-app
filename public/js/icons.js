@@ -94,8 +94,10 @@ export function iconEl(name, size = 16) {
 // New folder - folder-plus. A menu with such a row gets the icon column (`.u-menu.has-icons`, css/app-shell.css) and its
 // other rows keep their words in the second column; a menu with none has no empty column. A leading ★ in the words goes -
 // the icon says it. Called once the rows are in, before the menu is measured.
-const MENU_ICONS = [[/^★/, 'star'], [/^(un)?favou?rite\b/i, 'star'], [/^delete\b/i, 'trash-2'], [/^rename\b/i, 'pencil'],
-  [/^cut…/i, 'scissors'], [/^move to\b/i, 'folder'], [/^new folder\b/i, 'folder-plus']];
+// The words in either language the app speaks.
+const MENU_ICONS = [[/^★/, 'star'], [/^((un)?favou?rite\b|в избранное|из избранного)/i, 'star'], [/^(delete\b|удалить)/i, 'trash-2'],
+  [/^(rename\b|переименовать)/i, 'pencil'], [/^(cut…|вырезать…)/i, 'scissors'], [/^(move to\b|перенести в)/i, 'folder'],
+  [/^(new folder\b|новая папка)/i, 'folder-plus']];
 
 export function menuIcons(menu) {
   if (!menu) return menu;

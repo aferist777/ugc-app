@@ -21,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { scrubber, clock } from './scrub.js';
+import * as T from '../i18n/t.js';
 
 const LS = 'lib_player_v1';
 const el = (tag, cls, text) => {
@@ -48,19 +49,19 @@ export function createPlayer(host, opts) {
   // ── The bar ──
   const play = el('button', 'snd-btn snd-pl-play u-btn is-l is-icon', '▶');
   play.type = 'button';
-  play.title = 'Play / pause (Space)';
+  play.title = T.t('Play / pause (Space)');
   const time = el('span', 'snd-clock', '');
   // The name over the wave, in one column with it.
   const mid = el('div', 'snd-pl-mid');
-  const name = el('span', 'snd-pl-name', 'Choose a track');
+  const name = el('span', 'snd-pl-name', T.t('Choose a track'));
   const wave = el('div', 'snd-pl-wave');
   mid.append(name, wave);
-  const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', '▶ The piece');
+  const piece = el('button', 'snd-btn snd-pl-tool u-btn is-s', T.t('▶ The piece'));
   piece.type = 'button';
-  piece.title = 'Play only the piece between the gold handles';
+  piece.title = T.t('Play only the piece between the gold handles');
   const x = el('button', 'snd-btn snd-pl-x snd-pl-tool u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Take the track off the player';
+  x.title = T.t('Take the track off the player');
   host.append(play, time, mid, piece, x);
 
   const D = () => (sc && sc.dur()) || (cur && cur.dur) || 0;
@@ -73,7 +74,7 @@ export function createPlayer(host, opts) {
     const on = !!cur;
     for (const b of [play, piece, x]) b.disabled = !on;
     host.classList.toggle('is-empty', !on);
-    name.textContent = on ? cur.name : 'choose a track or a sound - press one';
+    name.textContent = on ? cur.name : T.t('choose a track or a sound - press one');
     name.title = on ? cur.name : '';
     const short = D() < 10;
     time.textContent = on ? clock(audio.paused && sc ? sc.time() : audio.currentTime, short) + ' / ' + clock(D(), short) : '';
@@ -102,7 +103,7 @@ export function createPlayer(host, opts) {
   function _load(it, at, range) {
     if (sc) { sc.destroy(); sc = null; }
     // Its kind too - a track of Music, or a sound of SFX: the page knows it picked by "<kind>:<id>".
-    cur = { id: String(it.id), kind: String(it.kind || 'music'), path: String(it.path || it.media), name: String(it.name || 'track'), dur: +it.dur || 0,
+    cur = { id: String(it.id), kind: String(it.kind || 'music'), path: String(it.path || it.media), name: String(it.name || T.t('track')), dur: +it.dur || 0,
       wave: Array.isArray(it.wave) ? it.wave : ((it.meta && it.meta.wave) || []) };
     audio.src = cur.path;
     playEnd = 0;
@@ -113,8 +114,8 @@ export function createPlayer(host, opts) {
       onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = 0; paint(); },
       onRange: () => save(),
       // "Cut" by the right flag, only while a piece is marked.
-      cut: { title: cur.kind === 'music' ? 'The piece between the gold flags becomes a new track in Music - the track itself stays as it is'
-        : 'The piece between the gold flags becomes a new sound in My sounds - the sound itself stays as it is', onCut: _cut },
+      cut: { title: cur.kind === 'music' ? T.t('The piece between the gold flags becomes a new track in Music - the track itself stays as it is')
+        : T.t('The piece between the gold flags becomes a new sound in My sounds - the sound itself stays as it is'), onCut: _cut },
     });
     wave.textContent = '';
     wave.appendChild(sc.el);
@@ -142,13 +143,13 @@ export function createPlayer(host, opts) {
       audio.pause();
       audio.currentTime = a; sc.setTime(a);
       host.classList.remove('is-flash'); void host.offsetWidth; host.classList.add('is-flash');
-      o.status('Drag the gold flags on the ruler round the piece, then Cut by the right flag - the piece becomes a new track in Music.');
+      o.status(T.t('Drag the gold flags on the ruler round the piece, then Cut by the right flag - the piece becomes a new track in Music.'));
       save(); paint();
       return;
     }
     if (same) { toggle(); return; }
     _load(it, 0, null);
-    if (h.play !== false) audio.play().catch(() => o.status('That file will not play', true));
+    if (h.play !== false) audio.play().catch(() => o.status(T.t('That file will not play'), true));
     save();
   }
 
@@ -159,7 +160,7 @@ export function createPlayer(host, opts) {
     const t = sc ? sc.time() : 0;
     if (t >= D() - 0.05) { audio.currentTime = 0; if (sc) sc.setTime(0); }
     else audio.currentTime = t;
-    audio.play().catch(() => o.status('That file will not play', true));
+    audio.play().catch(() => o.status(T.t('That file will not play'), true));
   }
   play.addEventListener('click', toggle);
   piece.addEventListener('click', () => {
@@ -168,21 +169,22 @@ export function createPlayer(host, opts) {
     const [a, b] = sc.range();
     audio.currentTime = a;
     playEnd = b;
-    audio.play().catch(() => o.status('That file will not play', true));
+    audio.play().catch(() => o.status(T.t('That file will not play'), true));
   });
   x.addEventListener('click', () => forget(cur && cur.id));
   // The piece a new track - only a piece: with the flags at the very ends the wave shows no "Cut".
   async function _cut(a, b) {
     if (!cur || !sc || !sc.piece()) return;
-    o.status('Cutting…');
+    o.status(T.t('Cutting…'));
     try {
       const r = await fetch('/api/audio/cut', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src: cur.path, in: +a.toFixed(3), out: +b.toFixed(3) }) });
       const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'it could not be cut');
+      if (!d.success) throw new Error(d.error || T.t('it could not be cut'));
       await o.changed();
       const made = d.item || {};
-      o.status('"' + (made.title || made.name || 'The piece') + '" is a new ' + (d.where === 'music' ? 'track in Music' : 'sound in My sounds'));
+      const nm = made.title || made.name || T.t('The piece');
+      o.status(d.where === 'music' ? T.t('"{name}" is a new track in Music', { name: nm }) : T.t('"{name}" is a new sound in My sounds', { name: nm }));
     } catch (e) { o.status(e.message, true); }
   }
 

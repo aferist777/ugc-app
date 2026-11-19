@@ -16,6 +16,7 @@ import { waveEl, secs } from './wave.js';
 import { showError } from '../notice.js';
 import { allow } from '../key-gate.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { t } from '../i18n/t.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -25,11 +26,11 @@ const el = (tag, cls, text) => {
 };
 
 const GALLERIES = [
-  { name: 'Kenney', url: 'https://kenney.nl/assets/category:Audio', note: 'game and interface packs · CC0' },
-  { name: 'BigSoundBank', url: 'https://bigsoundbank.com/', note: 'thousands of recordings · CC0' },
-  { name: 'Freesound', url: 'https://freesound.org/search/?f=license:%22Creative+Commons+0%22', note: 'everything · pick CC0 (a free account to download)' },
-  { name: 'Pixabay', url: 'https://pixabay.com/sound-effects/', note: 'fine in your own videos - not to be passed on' },
-  { name: 'Mixkit', url: 'https://mixkit.co/free-sound-effects/', note: 'fine in your own videos - not to be passed on' },
+  { name: 'Kenney', url: 'https://kenney.nl/assets/category:Audio', note: t('game and interface packs · CC0') },
+  { name: 'BigSoundBank', url: 'https://bigsoundbank.com/', note: t('thousands of recordings · CC0') },
+  { name: 'Freesound', url: 'https://freesound.org/search/?f=license:%22Creative+Commons+0%22', note: t('everything · pick CC0 (a free account to download)') },
+  { name: 'Pixabay', url: 'https://pixabay.com/sound-effects/', note: t('fine in your own videos - not to be passed on') },
+  { name: 'Mixkit', url: 'https://mixkit.co/free-sound-effects/', note: t('fine in your own videos - not to be passed on') },
 ];
 
 let _last = { q: '', page: 1 };
@@ -47,12 +48,12 @@ export function openOnline(opts) {
   // the padding is its body's.
   const win = el('div', 'snd-win snd-online u-win is-float');
   const head = el('div', 'snd-win-head u-win-head');
-  head.appendChild(el('span', 'u-win-title', 'Find sounds online'));
-  const sub = el('span', 'u-win-sub', 'free to use in any video, sold or not (CC0)');
+  head.appendChild(el('span', 'u-win-title', t('Find sounds online')));
+  const sub = el('span', 'u-win-sub', t('free to use in any video, sold or not (CC0)'));
   head.append(sub, el('span', 'sp'));
   const x = el('button', 'u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = t('Close (Esc)');
   head.appendChild(x);
   win.appendChild(head);
   const body = el('div', 'snd-win-body');
@@ -61,15 +62,16 @@ export function openOnline(opts) {
   const bar = el('form', 'snd-on-bar');
   const q = el('input', 'snd-search u-in');
   q.type = 'search';
-  q.placeholder = 'whoosh, camera shutter, crowd laugh, pop…';
+  q.placeholder = t('whoosh, camera shutter, crowd laugh, pop…');
   q.value = o.q ? String(o.q) : _last.q;
-  const go = el('button', 'snd-btn is-primary u-btn is-main', 'Search');
+  const go = el('button', 'snd-btn is-primary u-btn is-main', t('Search'));
   go.type = 'submit';
   bar.append(q, go);
   bar.appendChild(el('span', 'sp'));
-  bar.appendChild(el('span', 'snd-muted', 'Add into'));
+  bar.appendChild(el('span', 'snd-muted', t('Add into')));
   const into = el('select', 'snd-sel u-in');
-  const dl = el('option', null, 'Downloaded');
+  // "Downloaded" is the folder of My sounds the server makes by that name - the name sent and compared stays English.
+  const dl = el('option', null, t('Downloaded'));
   dl.value = '';
   into.appendChild(dl);
   for (const c of (o.cats || [])) {
@@ -89,7 +91,7 @@ export function openOnline(opts) {
 
   const foot = el('div', 'snd-on-foot');
   const g = el('div', 'snd-on-gal');
-  g.appendChild(el('span', 'snd-muted', 'Or download by hand, then drop the file onto a folder in the tree:'));
+  g.appendChild(el('span', 'snd-muted', t('Or download by hand, then drop the file onto a folder in the tree:')));
   for (const s of GALLERIES) {
     const a = el('a', 'snd-on-link', s.name);
     a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
@@ -102,10 +104,10 @@ export function openOnline(opts) {
   // Whoever answered is credited, as its terms ask (Freesound first, Openverse the second way).
   const credited = (via, note) => {
     credit.textContent = (via === 'freesound'
-      ? 'Search made using the Freesound API (freesound.org).'
-      : 'Search made using Openverse (openverse.org) - not endorsed or certified by Openverse.')
-      + ' Each sound keeps its author, license and page.';
-    sub.textContent = 'free to use in any video, sold or not (CC0) - ' + (via === 'freesound' ? 'Freesound' : 'Freesound and Wikimedia Commons through Openverse')
+      ? t('Search made using the Freesound API (freesound.org).')
+      : t('Search made using Openverse (openverse.org) - not endorsed or certified by Openverse.'))
+      + ' ' + t('Each sound keeps its author, license and page.');
+    sub.textContent = t('free to use in any video, sold or not (CC0) - {via}', { via: via === 'freesound' ? 'Freesound' : t('Freesound and Wikimedia Commons through Openverse') })
       + (note ? ' · ' + note : '');
     sub.title = sub.textContent;
   };
@@ -130,12 +132,12 @@ export function openOnline(opts) {
     list.textContent = '';
     pager.textContent = '';
     // empty, searching and did not load are the shared parts (js/ui-state.js)
-    if (!d.results.length) { list.appendChild(emptyEl('Nothing CC0 for "' + _last.q + '" - other words?', { icon: 'music' })); return; }
+    if (!d.results.length) { list.appendChild(emptyEl(t('Nothing CC0 for "{q}" - other words?', { q: _last.q }), { icon: 'music' })); return; }
     for (const r of d.results) {
       const row = el('div', 'snd-on-row');
       const pb = el('button', 'snd-play u-btn is-s is-icon', '▶');
       pb.type = 'button';
-      pb.title = 'Listen';
+      pb.title = t('Listen');
       pb.addEventListener('click', () => {
         if (playingBtn === pb) { stopPreview(); return; }
         stopPreview();
@@ -151,14 +153,14 @@ export function openOnline(opts) {
       if (r.tags.length) tx.appendChild(el('span', 'snd-on-tags', r.tags.slice(0, 8).join(', ')));
       row.appendChild(tx);
       row.appendChild(waveEl(r.wave, 'snd-on-wave'));
-      const page = el('a', 'snd-on-link', 'Page');
+      const page = el('a', 'snd-on-link', t('Page'));
       page.href = r.landing || r.url; page.target = '_blank'; page.rel = 'noopener';
       row.appendChild(page);
-      const add = el('button', 'snd-btn u-btn is-s', 'Add');
+      const add = el('button', 'snd-btn u-btn is-s', t('Add'));
       add.type = 'button';
       add.addEventListener('click', async () => {
         add.disabled = true;
-        add.textContent = 'Adding…';
+        add.textContent = t('Adding…');
         try {
           const cat = into.value;
           const res = await fetch('/api/audio/online/add', {
@@ -166,12 +168,12 @@ export function openOnline(opts) {
             body: JSON.stringify({ id: r.id, cat, label: cat ? '' : 'Downloaded' }),
           });
           const j = await res.json();
-          if (!j.success) throw new Error(j.error || 'not added');
-          add.textContent = j.added ? 'Added ✓' : 'Already yours ✓';
+          if (!j.success) throw new Error(j.error || t('not added'));
+          add.textContent = j.added ? t('Added ✓') : t('Already yours ✓');
           if (o.added) o.added(j.item);
         } catch (e) {
           add.disabled = false;
-          add.textContent = 'Add';
+          add.textContent = t('Add');
           add.title = e.message;
           showError(e.message);                 // in the corner (js/notice.js), not under the row
         }
@@ -180,14 +182,14 @@ export function openOnline(opts) {
       list.appendChild(row);
     }
     if (d.pageCount > 1) {
-      const prev = el('button', 'snd-btn u-btn is-s', '‹ Back');
-      const next = el('button', 'snd-btn u-btn is-s', 'More ›');
+      const prev = el('button', 'snd-btn u-btn is-s', t('‹ Back'));
+      const next = el('button', 'snd-btn u-btn is-s', t('More ›'));
       prev.type = next.type = 'button';
       prev.disabled = d.page <= 1;
       next.disabled = d.page >= Math.min(12, d.pageCount);
       prev.addEventListener('click', () => run(d.page - 1));
       next.addEventListener('click', () => run(d.page + 1));
-      pager.append(prev, el('span', 'snd-muted', 'page ' + d.page + ' of ' + Math.min(12, d.pageCount) + ' · ' + d.count + ' found'), next);
+      pager.append(prev, el('span', 'snd-muted', t('page {k} of {n} · {count} found', { k: d.page, n: Math.min(12, d.pageCount), count: d.count })), next);
     }
   };
 
@@ -197,18 +199,18 @@ export function openOnline(opts) {
     _last = { q: words, page };
     stopPreview();
     list.textContent = '';
-    list.appendChild(loadingEl('searching…'));
+    list.appendChild(loadingEl(t('searching…')));
     go.disabled = true;
     try {
       const r = await fetch('/api/audio/online?q=' + encodeURIComponent(words) + '&page=' + page);
       const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'no answer');
-      credited(d.via, d.note ? d.note + ' - searched Openverse' : '');
+      if (!d.success) throw new Error(d.error || t('no answer'));
+      credited(d.via, d.note ? t('{note} - searched Openverse', { note: d.note }) : '');
       paint(d);
     } catch (e) {
       // the search not answered: "did not load" and Try again in the list, the reason in the corner
       list.textContent = '';
-      list.appendChild(failedEl('the results', () => run(page)));
+      list.appendChild(failedEl(t('the results'), () => run(page)));
       showError(e.message);
     } finally { go.disabled = false; }
   };

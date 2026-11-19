@@ -12,6 +12,8 @@
 //   openLinkWindow({ where, prefill, onAdd })                the Library's small window: links, one per line
 // ════════════════════════════════════════════════════════════════════════════
 import * as Layers from '../layers.js';
+// The app's words as T.t: a drag's types are this module's own `t`.
+import * as T from '../i18n/t.js';
 
 const URL_RE = /^https?:\/\/\S+$/i;
 
@@ -19,7 +21,7 @@ async function _json(url, init) {
   const r = await fetch(url, init);
   let d = null;
   try { d = await r.json(); } catch (e) { d = null; }
-  if (!r.ok || !d || d.success === false) throw new Error((d && d.error) || ('the server answered ' + r.status));
+  if (!r.ok || !d || d.success === false) throw new Error((d && d.error) || T.t('the server answered {n}', { n: r.status }));
   return d;
 }
 
@@ -58,7 +60,10 @@ export async function follow(ids, onTick) {
 export function shortStep(step) {
   const s = String(step || '');
   const m = /(\d+)% of ([\d.]+\w+)(?: at [^\s·]+)?(?: · ([\d:]+) left)?/.exec(s);
-  if (m) return m[1] + '% of ' + m[2] + (m[3] && m[3] !== '00:00' ? ' · ' + m[3] + ' left' : '');
+  if (m) {
+    return m[3] && m[3] !== '00:00' ? T.t('{p}% of {size} · {time} left', { p: m[1], size: m[2], time: m[3] })
+      : T.t('{p}% of {size}', { p: m[1], size: m[2] });
+  }
   return s.replace(/^Downloading · /, '');
 }
 
@@ -94,14 +99,14 @@ export function openLinkWindow({ where, prefill, onAdd }) {
   ov.className = 'mk-ov';
   ov.innerHTML = `
     <div class="mk-panel lk-panel u-win is-float" role="dialog" aria-modal="true">
-      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">Add by a link</span><span class="sp"></span>
-        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="Close (Esc)"></button></div>
+      <div class="mk-panel-head u-win-head"><span class="mk-panel-t u-win-title">${T.t('Add by a link')}</span><span class="sp"></span>
+        <button class="u-btn is-icon is-quiet u-x" type="button" data-x="close" title="${T.t('Close (Esc)')}"></button></div>
       <div class="mk-panel-body">
-        <textarea class="lk-ta u-area" rows="5" placeholder="One link per line - YouTube, TikTok, Instagram and the other sites yt-dlp reads"></textarea>
+        <textarea class="lk-ta u-area" rows="5" placeholder="${T.t('One link per line - YouTube, TikTok, Instagram and the other sites yt-dlp reads')}"></textarea>
         <p class="mk-pnote u-status is-line"></p>
       </div>
       <div class="lk-row u-win-foot"><span class="lk-said u-status"></span><span class="sp"></span>
-        <button class="u-btn is-main" type="button" data-go="add">Add</button></div>
+        <button class="u-btn is-main" type="button" data-go="add">${T.t('Add')}</button></div>
     </div>`;
   document.body.appendChild(ov);
   const ta = ov.querySelector('.lk-ta');
@@ -109,13 +114,12 @@ export function openLinkWindow({ where, prefill, onAdd }) {
   // The one frame: the note ONE line - its first sentence shown, the whole under the pointer; the
   // last row is the frame's foot (the status line left, "Add" right).
   const note = ov.querySelector('.mk-pnote');
-  note.textContent = 'Each lands in ' + (where || 'Uploads') + ' as a file brought in would, at the best quality '
-    + 'there is - one at a time, the progress in the shelf\'s status line.';
-  note.title = note.textContent + ' Without a login: a video a site shows only to signed-in people cannot be fetched - add it as a file then.';
+  note.textContent = T.t('Each lands in {place} as a file brought in would, at the best quality there is - one at a time, the progress in the shelf\'s status line.', { place: where || T.t('Uploads') });
+  note.title = note.textContent + ' ' + T.t('Without a login: a video a site shows only to signed-in people cannot be fetched - add it as a file then.');
   if (prefill) ta.value = prefill;
   const go = () => {
     const urls = parseLinks(ta.value);
-    if (!urls.length) { said.textContent = 'No link in it yet.'; return; }
+    if (!urls.length) { said.textContent = T.t('No link in it yet.'); return; }
     _close();
     onAdd(urls);
   };

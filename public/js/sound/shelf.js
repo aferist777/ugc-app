@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openSites } from './sites.js';
+import { t } from '../i18n/t.js';
 
 export const UNCAT = '__uncat__';
 
@@ -48,13 +49,13 @@ export function searchHead(o) {
   const head = el('div', 'snd-shelf-head');
   const s = el('input', 'snd-search u-in');
   s.type = 'search';
-  s.placeholder = 'search SFX - name or tag (whoosh, click, pop…)';
+  s.placeholder = t('search SFX - name or tag (whoosh, click, pop…)');
   s.value = o.q || '';
-  let t = 0;
+  let timer = 0;
   s.addEventListener('input', () => {
     _typedAt = Date.now(); _caret = s.selectionStart;
-    clearTimeout(t);
-    t = setTimeout(() => o.onSearch(s.value.trim()), 200);
+    clearTimeout(timer);
+    timer = setTimeout(() => o.onSearch(s.value.trim()), 200);
   });
   s.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && s.value) { e.preventDefault(); e.stopPropagation(); _typedAt = Date.now(); _caret = 0; s.value = ''; o.onSearch(''); }
@@ -63,16 +64,16 @@ export function searchHead(o) {
   // "?" - the sites to download from by hand, with the words as typed now.
   const help = el('button', 'snd-btn snd-help u-btn is-icon', '?');
   help.type = 'button';
-  help.title = 'Where else to find free sounds - the sites open in your browser';
+  help.title = t('Where else to find free sounds - the sites open in your browser');
   help.addEventListener('click', () => openSites(help, s.value));
   head.appendChild(help);
   // One button: found nothing - it turns gold with the words in it.
   const missed = !!(o.q && !o.found);
   const on = el('button', 'snd-btn u-btn' + (missed ? ' is-gold is-gen' : ''),
-    missed ? 'find «' + (o.q.length > 28 ? o.q.slice(0, 26) + '…' : o.q) + '» online' : 'find online…');
+    missed ? t('find «{words}» online', { words: o.q.length > 28 ? o.q.slice(0, 26) + '…' : o.q }) : t('find online…'));
   on.type = 'button';
-  on.title = missed ? 'Nothing here - search the free (CC0) libraries with these words'
-    : 'Search free (CC0) sounds online - Freesound (with its key on Admin -> API keys), else Openverse';
+  on.title = missed ? t('Nothing here - search the free (CC0) libraries with these words')
+    : t('Search free (CC0) sounds online - Freesound (with its key on Admin -> API keys), else Openverse');
   on.addEventListener('click', () => o.onOnline(o.q || ''));
   head.appendChild(on);
   // Typing goes on where it was: the shelf is painted again under the caret.

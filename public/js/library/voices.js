@@ -17,6 +17,7 @@
 // "no voices yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
+import { t, tn } from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,6 +26,8 @@ let _items = [];
 let _hooks = {};
 
 const _pretty = (s) => String(s || '').replace(/_/g, ' ');
+// ElevenLabs' tag names as the column says them; the tags themselves are ElevenLabs' words.
+const LABEL = { gender: t('gender'), age: t('age'), accent: t('accent'), descriptive: t('descriptive'), use_case: t('use case'), language: t('language') };
 
 // The tail on a row: enough of the tags to tell two voices apart at a glance, in the order
 // you would say them out loud. The full set is in the info column.
@@ -50,7 +53,7 @@ function _row(it) {
 
   const play = document.createElement('button');
   play.type = 'button'; play.className = 'lib-vplay u-btn is-s is-icon'; play.innerHTML = icon('play', 12);
-  play.title = 'Play our demo';
+  play.title = t('Play our demo');
   play.addEventListener('click', (e) => {
     e.stopPropagation();
     _stopAll(audio);
@@ -60,7 +63,7 @@ function _row(it) {
   const mark = () => {
     const on = !audio.paused;
     play.innerHTML = icon(on ? 'pause' : 'play', 12);
-    play.title = (on ? 'Pause' : 'Play') + ' our demo';
+    play.title = on ? t('Pause our demo') : t('Play our demo');
     play.classList.toggle('is-playing', on);
     row.classList.toggle('is-playing', on);
   };
@@ -83,22 +86,22 @@ function _row(it) {
   const use = document.createElement('span');
   use.className = 'lib-vuse' + (m.characters && m.characters.length ? '' : ' is-free');
   use.textContent = (m.characters && m.characters.length)
-    ? (m.characters.length === 1 ? m.characters[0].name : m.characters.length + ' characters')
-    : 'free';
+    ? (m.characters.length === 1 ? m.characters[0].name : tn(m.characters.length, '{n} character', '{n} characters'))
+    : t('free');
   row.appendChild(use);
 
   // The slot in the account, which is the thing this whole shelf exists to let you free.
   if (m.accountRemoved) {
     const rel = document.createElement('span');
     rel.className = 'lib-vslot';
-    rel.textContent = 'slot freed';
-    rel.title = 'Released from the ElevenLabs account. The demo still plays; the voice cannot speak until it is added back.';
+    rel.textContent = t('slot freed');
+    rel.title = t('Released from the ElevenLabs account. The demo still plays; the voice cannot speak until it is added back.');
     row.appendChild(rel);
   }
 
   const x = document.createElement('button');
   x.type = 'button'; x.className = 'lib-vx u-btn is-s is-icon is-quiet is-del u-x';
-  x.title = 'Forget this voice and delete its demo';
+  x.title = t('Forget this voice and delete its demo');
   x.addEventListener('click', (e) => { e.stopPropagation(); _del(it); });
   row.appendChild(x);
 
@@ -111,9 +114,11 @@ async function _del(it) {
   try {
     const r = await fetch('/api/library/voices/' + encodeURIComponent(m.voiceId), { method: 'DELETE' });
     const d = await r.json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'it could not be removed');
-    if (_hooks.status) _hooks.status('Removed "' + it.name + '" from the shelf'
-      + (d.removed && d.removed.length ? ' with its demo' : ''));
+    if (!d || !d.success) throw new Error((d && d.error) || t('it could not be removed'));
+    if (_hooks.status) {
+      _hooks.status(d.removed && d.removed.length ? t('Removed "{name}" from the shelf with its demo', { name: it.name })
+        : t('Removed "{name}" from the shelf', { name: it.name }));
+    }
     if (_sel === m.voiceId) _sel = '';
     if (_hooks.reload) _hooks.reload();
   } catch (e) {
@@ -145,12 +150,12 @@ function _line(box, label, value, opts) {
   v.textContent = value;
   if (o.copy) {
     v.classList.add('is-copy');
-    v.title = 'Click to copy';
+    v.title = t('Click to copy');
     v.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(value);
-        if (_hooks.status) _hooks.status('Copied ' + value);
-      } catch (e) { if (_hooks.status) _hooks.status('Could not copy - select it by hand', 'err'); }
+        if (_hooks.status) _hooks.status(t('Copied {what}', { what: value }));
+      } catch (e) { if (_hooks.status) _hooks.status(t('Could not copy - select it by hand'), 'err'); }
     });
   }
   r.appendChild(l); r.appendChild(v);
@@ -167,8 +172,8 @@ function _info() {
 
   const it = _items.find(i => i.meta.voiceId === _sel);
   if (!it) {
-    head.textContent = 'Voice';
-    body.appendChild(emptyEl(_items.length ? 'Pick a voice on the left.' : 'No voices with a demo yet.', { icon: 'music', cls: 'lib-empty' }));
+    head.textContent = t('Voice');
+    body.appendChild(emptyEl(_items.length ? t('Pick a voice on the left.') : t('No voices with a demo yet.'), { icon: 'music', cls: 'lib-empty' }));
     return;
   }
   const m = it.meta;
@@ -176,31 +181,31 @@ function _info() {
 
   const info = document.createElement('div');
   info.className = 'lib-vi';
-  _line(info, 'voice id', m.voiceId, { mono: true, copy: true });
-  _line(info, 'category', _pretty(m.category));
+  _line(info, t('voice id'), m.voiceId, { mono: true, copy: true });
+  _line(info, t('category'), _pretty(m.category));
   for (const k of (_hooks.labelKeys || Object.keys(m.labels || {}))) {
-    if (m.labels && m.labels[k]) _line(info, _pretty(k), _pretty(m.labels[k]));
+    if (m.labels && m.labels[k]) _line(info, LABEL[k] || _pretty(k), _pretty(m.labels[k]));
   }
-  if (m.verifiedLanguages) _line(info, 'verified', m.verifiedLanguages + ' languages');
-  if (m.dur) _line(info, 'our demo', m.dur.toFixed(1) + ' s');
-  _line(info, 'account', m.accountRemoved ? 'slot freed - cannot speak until added back' : 'slot present',
+  if (m.verifiedLanguages) _line(info, t('verified'), tn(m.verifiedLanguages, '{n} language', '{n} languages'));
+  if (m.dur) _line(info, t('our demo'), t('{s} s', { s: m.dur.toFixed(1) }));
+  _line(info, t('account'), m.accountRemoved ? t('slot freed - cannot speak until added back') : t('slot present'),
     m.accountRemoved ? { warn: true } : undefined);
   // Only useful while it means something: this pair is what adds the voice back.
-  _line(info, 'owner id', m.publicOwnerId, { mono: true, copy: true });
-  if (m.description) _line(info, 'described', m.description);
+  _line(info, t('owner id'), m.publicOwnerId, { mono: true, copy: true });
+  if (m.description) _line(info, t('described'), m.description);
   body.appendChild(info);
 
   const sep = document.createElement('div');
   sep.className = 'lib-vi-sep';
   sep.textContent = m.characters.length
-    ? (m.characters.length === 1 ? 'Used by' : 'Used by ' + m.characters.length + ' characters')
-    : 'Used by nobody';
+    ? (m.characters.length === 1 ? t('Used by') : tn(m.characters.length, 'Used by {n} character', 'Used by {n} characters'))
+    : t('Used by nobody');
   body.appendChild(sep);
 
   if (!m.characters.length) {
     const e = document.createElement('div');
     e.className = 'lib-vi-none';
-    e.textContent = 'Free to take off the shelf.';
+    e.textContent = t('Free to take off the shelf.');
     body.appendChild(e);
     return;
   }
@@ -210,7 +215,7 @@ function _info() {
   for (const c of m.characters) {
     const cell = document.createElement('div');
     cell.className = 'lib-vchar' + (c.gold ? ' is-gold' : '');
-    cell.title = c.name + (c.gold ? '\nThis is their voice' : '\nOne of their saved voices');
+    cell.title = c.name + '\n' + (c.gold ? t('This is their voice') : t('One of their saved voices'));
     if (c.thumb) {
       const img = document.createElement('img');
       img.src = c.thumb; img.alt = c.name; img.decoding = 'async';
@@ -240,7 +245,7 @@ export function render(items, hooks) {
   if (!_items.some(i => i.meta.voiceId === _sel)) _sel = _items.length ? _items[0].meta.voiceId : '';
 
   if (!_items.length) {
-    grid.appendChild(emptyEl('No voices with a demo yet. Take one in a character’s Voice panel.', { icon: 'music', cls: 'lib-empty' }));
+    grid.appendChild(emptyEl(t('No voices with a demo yet. Take one in a character’s Voice panel.'), { icon: 'music', cls: 'lib-empty' }));
     _info();
     return;
   }

@@ -63,6 +63,8 @@ import { allow } from '../key-gate.js';
 import { icon } from '../icons.js';
 import { int } from '../num.js';
 import { emptyEl, failedEl } from '../ui-state.js';
+// The app's words as T.t / T.tn: this module's own `t`s are spans and texts.
+import * as T from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -72,11 +74,11 @@ const LS_TREE_W = 'library_tree_w_v1';   // the media tree's width on Media
 // Lookbooks / Environments on Media, with their generators there. An old address or a remembered shelf of theirs
 // lands there (_place, boot); the server's shelves stay - the talking head and the 3D Studio read them.
 const SHELVES = {
-  characters:   'Characters',
-  media:        'Media',
-  voices:       'Voices',
-  renders:      'Renders',
-  scenarios:    'Scenarios',
+  characters:   T.t('Characters'),
+  media:        T.t('Media'),
+  voices:       T.t('Voices'),
+  renders:      T.t('Renders'),
+  scenarios:    T.t('Scenarios'),
 };
 
 let _shelf = 'characters';
@@ -114,25 +116,25 @@ let _reqId = 0;
 // painted anywhere else would be undone by the next read.
 const MAKERS = {
   scenarios: {
-    mod: MK, host: 'lib-make', label: 'New scenario', back: '← Scenarios',
-    title: 'A new scenario - written by hand, or generated in a narrator’s voice',
-    backTitle: 'Back to the list of scenarios - what is being written goes on',
+    mod: MK, host: 'lib-make', label: T.t('New scenario'), back: T.t('← Scenarios'),
+    title: T.t('A new scenario - written by hand, or generated in a narrator’s voice'),
+    backTitle: T.t('Back to the list of scenarios - what is being written goes on'),
   },
 };
 // NEW CHARACTER IS A WINDOW over the Characters shelf (js/library/chmake.js): the
 // header's "New Character" opens it, there is no "← Characters"; hidden, its work goes on and its bench stays.
-const CHAR_WIN = { label: 'New Character', title: 'Make a character - from the parameters, a preset, a random face or your own picture; in a window' };
+const CHAR_WIN = { label: T.t('New Character'), title: T.t('Make a character - from the parameters, a preset, a random face or your own picture; in a window') };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
 // ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the
 // tree's row, its menu, the bar's "New …") opens their generator as a WINDOW over the page (_openGen) - the gallery and the
 // tree stay where they are.
 const GEN = {
-  environments: { label: 'New environment', title: 'Make an environment - from words, from a photo, or one already made changed' },
-  lookbooks: { label: 'New lookbook', title: 'Make a lookbook - from words, from a photo, or one already made built on' },
+  environments: { label: T.t('New environment'), title: T.t('Make an environment - from words, from a photo, or one already made changed') },
+  lookbooks: { label: T.t('New lookbook'), title: T.t('Make a lookbook - from words, from a photo, or one already made built on') },
   // while Music or any folder under it is selected - the tracks go into that folder.
-  music: { label: 'Generate music', title: 'Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open' },
+  music: { label: T.t('Generate music'), title: T.t('Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open') },
   // IMAGES -> Props: the New prop window (js/prop-window.js) - a photo and what you know about the product.
-  props: { label: 'New prop', title: 'Add a product - a photo and what you know about it; an agent describes it for the frames chat' },
+  props: { label: T.t('New prop'), title: T.t('Add a product - a photo and what you know about it; an agent describes it for the frames chat') },
 };
 // IMAGES -> Props too: the products, added by New prop.
 const MADE_KINDS = new Set(['environments', 'lookbooks', 'props']);
@@ -204,8 +206,8 @@ function _paintMake() {
     bb.hidden = w ? true : (!m || !(_makingOn || _narrOn));
     if (w) bb.textContent = '';
     else if (_narrOn) {
-      bb.textContent = _makingOn ? '← Generate script' : '← Scenarios';
-      bb.title = _makingOn ? 'Back to the generator, as it was' : 'Back to the list of scenarios';
+      bb.textContent = _makingOn ? T.t('← Generate script') : T.t('← Scenarios');
+      bb.title = _makingOn ? T.t('Back to the generator, as it was') : T.t('Back to the list of scenarios');
     } else if (m) { bb.textContent = m.back; bb.title = m.backTitle; }
   }
   if (nr) nr.hidden = _shelf !== 'scenarios' || _narrOn;
@@ -227,8 +229,8 @@ function _paintMake() {
 // again - and its `spot`, so a row that ended leads to the picture outlined in its folder
 // (alerts-bell.js `_hrefOf`) and a row running is picked up by the window opened again here.
 const GEN_WHERE = {
-  environments: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
-  lookbooks: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: 'Library · New lookbook', spot: { view: 'lbmake' } },
+  environments: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: T.t('Library · New environment'), spot: { view: 'envmake' } },
+  lookbooks: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: T.t('Library · New lookbook'), spot: { view: 'lbmake' } },
 };
 const GEN_KIND = { environments: 'environment', lookbooks: 'lookbook' };
 const _genWins = {};          // the window open per kind - pressed again, the same one stays
@@ -245,7 +247,7 @@ async function _openGen(kind, fromTree) {
         onMade: (path) => _genLanded(kind, path),
         onClose: () => { _genWins[kind] = null; },
       });
-    } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
+    } catch (e) { _status((e && e.message) || T.t('The generator did not open'), 'err'); }
     // Not opened - a key it needs is missing (the popup said which): nothing is selected behind it.
     if (!_genWins[kind]) return;
   }
@@ -292,7 +294,7 @@ async function _openMusic(fromTree, lyric, stay) {
   const at = toMusic ? _tree.node('music') : _musicish(_node) ? _node : null;
   // The window first; Music is selected and the gallery read behind it.
   const shown = SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric })
-    .catch((e) => { _status((e && e.message) || 'The music generator did not open', 'err'); });
+    .catch((e) => { _status((e && e.message) || T.t('The music generator did not open'), 'err'); });
   if (toMusic) await _selectBehind('music');
   await shown;
 }
@@ -321,7 +323,7 @@ async function _openChat(which, o) {
       if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
       if (wanted(which)) await P.openPictures(o);
     }
-  } catch (e) { dropEarly(which); _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
+  } catch (e) { dropEarly(which); _status(T.t('The chat did not open: {why}', { why: (e && e.message) || e }), 'err'); }
 }
 // The Library drawn and idle: the chats' code and sheets read beforehand, so a first opening is like a second.
 // Code and CSS only - the conversation is asked for at a press (useDraft). The sound window's are the page's own.
@@ -345,7 +347,7 @@ async function _revealPath(path) {
     const d = await fetch('/api/library/shelf/media?filter=' + kind).then(r => r.json());
     it = ((d && d.items) || []).find(x => String(x.media || '').split('?')[0] === want) || null;
   } catch (e) { it = null; }
-  if (!it) { _status('That file is no longer in the Library', 'err'); return; }
+  if (!it) { _status(T.t('That file is no longer in the Library'), 'err'); return; }
   await _tree.load();
   _tree.selectFor(kind, String((it.meta || {}).categoryId || '') || '__uncat__', false);
   _node = _tree.selected();
@@ -375,7 +377,7 @@ const _soundHost = {
   soundsNode: _soundsGenKey,
   where: (d, label) => ({
     page: 'library', href: '/library?shelf=media&kind=' + encodeURIComponent(d.node),
-    label: 'Library · ' + (d.label || 'Generate audio') + ' · ' + label, spot: { view: 'musicmake', key: d.node, label: d.label },
+    label: [T.t('Library'), d.label || T.t('Generate audio'), label].join(' · '), spot: { view: 'musicmake', key: d.node, label: d.label },
   }),
   onLanded: (gen, dest) => _musicLanded(gen, dest),
   onSaved: () => _lyricsSaved(),
@@ -388,11 +390,13 @@ async function _lyricsSaved() {
 }
 // The folder the window puts its tracks into, as the window wants it: its key, its folder's id, and its path under Music.
 function _musicPlace(n) {
-  if (!n) return { key: 'music', label: 'Music' };
+  if (!n) return { key: 'music', label: T.t('Music') };
   let trail = '';
   try {
     const names = [...(_tree.crumbsEl(n).querySelectorAll('.mt-crumb'))].map(e => e.textContent);
-    const i = names.indexOf('Music');
+    // Music's own word in the path, in whatever language the tree says it.
+    const mus = _tree.node('music');
+    const i = names.indexOf(mus ? mus.label : 'Music');
     trail = i >= 0 ? names.slice(i + 1).join(' / ') : '';
   } catch (e) { trail = ''; }
   return { key: n.key, cat: n.cat || '', folder: n.folder || '', label: n.label, trail: trail || n.label };
@@ -442,7 +446,7 @@ function _openChar() {
   if (_shelf !== 'characters') return;
   INFO.leave();
   _status('');
-  try { CM.open(); } catch (e) { _status((e && e.message) || 'New Character did not open', 'err'); }
+  try { CM.open(); } catch (e) { _status((e && e.message) || T.t('New Character did not open'), 'err'); }
 }
 
 // The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (they
@@ -526,9 +530,9 @@ function _newMenu(anchor) {
     b.addEventListener('click', (e) => { e.stopPropagation(); _closeNewMenu(); on(); });
     menu.appendChild(b);
   };
-  item('blank', 'write the lines yourself', _newBlank);
+  item(T.t('blank'), T.t('write the lines yourself'), _newBlank);
   // The generator writes with the agents' ladder: without a key for it the popup instead (js/key-gate.js).
-  item('narrator', 'generate a script in a narrator’s voice - from a source or a topic', () => { if (allow('scenarios')) _openMaker(); });
+  item(T.t('narrator'), T.t('generate a script in a narrator’s voice - from a source or a topic'), () => { if (allow('scenarios')) _openMaker(); });
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.left))) + 'px';
@@ -547,7 +551,7 @@ function _newBlank() {
       _counts();
       if (_shelf !== 'scenarios' || _makingOn) return;
       SC.select(rec.id);
-      _load({ keepScroll: true }).then(() => _status('Saved “' + (rec.title || 'untitled') + '”'));
+      _load({ keepScroll: true }).then(() => _status(T.t('Saved “{name}”', { name: rec.title || T.t('untitled') })));
     },
     // Merge's "use": the talking head made from it, and Merge opened on its setup.
     use: async (rec) => {
@@ -565,7 +569,7 @@ function _initTree() {
   if (!host || _tree) return _tree;
   _tree = createTree(host, {
     // Nothing selected is the roots; the path begins with "Media", which goes back to them.
-    page: 'lib', home: 'Media', start: _treeStart,
+    page: 'lib', home: T.t('Media'), start: _treeStart,
     status: (t, bad) => _status(t, bad ? 'err' : ''),
     onSelect: (n) => {
       _node = n || null;
@@ -733,20 +737,20 @@ function _actionsFor(it) {
   const out = [];
   if (it.kind === 'youtube') return YT.ytActions(it);
   if (_fixed(it)) return out;
-  if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: 'Rename' });
+  if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: T.t('Rename') });
   if (_FAVABLE.has(it.kind)) {
     const on = !!(it.meta && it.meta.favorite);
-    out.push({ id: 'fav', label: on ? 'Unfavorite' : 'Favorite' });
+    out.push({ id: 'fav', label: on ? T.t('Unfavorite') : T.t('Favorite') });
   }
   // a render's Delete in its viewer takes two presses - "Really?" first (js/really.js)
   if (it.kind === 'renders') {
     // Explorer on its folder, the file picked - the app's window only.
-    if (canReveal()) out.push({ id: 'reveal', label: 'Show in folder' });
+    if (canReveal()) out.push({ id: 'reveal', label: T.t('Show in folder') });
     const armed = !!(_rArmed && _rArmed.id === it.id);
-    out.push({ id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed });
+    out.push({ id: 'del', label: armed ? REALLY : T.t('Delete'), danger: true, armed });
     return out;
   }
-  out.push({ id: 'del', label: 'Delete', danger: true });
+  out.push({ id: 'del', label: T.t('Delete'), danger: true });
   return out;
 }
 let _rArmed = null;       // { id, t } - the render whose Delete was pressed once in the viewer
@@ -757,21 +761,21 @@ let _rArmed = null;       // { id, t } - the render whose Delete was pressed onc
 async function _runAction(id, it, anchor) {
   // A character whose sheet is being made is left alone until it lands.
   if ((id === 'rename' || id === 'del') && it.kind === 'characters' && it.meta && it.meta.sheetRunning) {
-    return { msg: 'Its 4K sheet is being made - wait for it, or let it go in Alerts first', err: true };
+    return { msg: T.t('Its 4K sheet is being made - wait for it, or let it go in Alerts first'), err: true };
   }
   if (id === 'rename') {
     const name = await A.renameItem(it);
     if (name) it.name = name;
     // a render's file moved: the shelf is read again (its id is new)
-    if (name && it.kind === 'renders') return { reload: true, msg: 'Renamed' };
-    return { changed: !!name, msg: name ? 'Renamed' : '' };
+    if (name && it.kind === 'renders') return { reload: true, msg: T.t('Renamed') };
+    return { changed: !!name, msg: name ? T.t('Renamed') : '' };
   }
   if (id === 'fav') {
     const fav = await A.toggleFavorite(it);
     it.meta = it.meta || {}; it.meta.favorite = fav;
     // reload, not repaint: the card has to jump to the front, and that order is the
     // server's (favorites first, then date). A local repaint would leave it where it was.
-    return { reload: true, msg: fav ? 'Added to favorites' : 'Removed from favorites' };
+    return { reload: true, msg: fav ? T.t('Added to favorites') : T.t('Removed from favorites') };
   }
   // A video of YOUTUBE into a new highlights project, chosen in its popup already.
   if (id === 'hl') { location.href = '/merge?source=' + encodeURIComponent((it.meta && it.meta.source) || it.id); return { changed: false }; }
@@ -780,22 +784,22 @@ async function _runAction(id, it, anchor) {
     const r = await YT.ytDelete(it);
     if (r.armed) return { actionsOnly: true, msg: r.msg };
     _items = _items.filter(x => x !== it);
-    return { removed: true, reload: true, msg: 'Source deleted' };
+    return { removed: true, reload: true, msg: T.t('Source deleted') };
   }
   if (id === 'del' && it.kind === 'references') {
     // A post of REFERENCES goes with its files - its own route.
     // `stay`: the projects it is used in are a list that scrolls inside the question - scrolling it must not close it.
-    if (!await ask(anchor, await RP.deleteQuestion(it), { yes: 'Delete', danger: true, stay: true })) return { changed: false };
+    if (!await ask(anchor, await RP.deleteQuestion(it), { yes: T.t('Delete'), danger: true, stay: true })) return { changed: false };
     const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
-    if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
+    if (!r || !r.success) throw new Error((r && r.error) || T.t('not deleted'));
     _items = _items.filter(x => x !== it);
-    return { removed: true, reload: true, msg: 'Post deleted' };
+    return { removed: true, reload: true, msg: T.t('Post deleted') };
   }
   if (id === 'del') {
-    if (!await ask(anchor, await A.deleteQuestion(it), { yes: 'Delete', danger: true, stay: true })) return { changed: false };
+    if (!await ask(anchor, await A.deleteQuestion(it), { yes: T.t('Delete'), danger: true, stay: true })) return { changed: false };
     await A.deleteItem(it);
     _items = _items.filter(x => x !== it);
-    return { removed: true, reload: true, msg: 'Deleted' };
+    return { removed: true, reload: true, msg: T.t('Deleted') };
   }
   return { changed: false };
 }
@@ -828,9 +832,9 @@ window.addEventListener('ugc-references', () => {
 function _openPost(it, file) {
   const posts = _items.filter(x => x.kind === 'references');
   const at = posts.findIndex(x => String(x.id) === String(it.id));
-  if (at < 0) { _status('That post is no longer here', 'err'); return; }
+  if (at < 0) { _status(T.t('That post is no longer here'), 'err'); return; }
   // Deleted, moved, or a piece cut out of it into a new clip - the post viewer says which itself.
-  RP.openPost(posts, at, { file, onChanged: (w) => _apply({ removed: !!(w && w.deleted), reload: true, msg: (w && w.deleted) ? 'Post deleted' : '' }) });
+  RP.openPost(posts, at, { file, onChanged: (w) => _apply({ removed: !!(w && w.deleted), reload: true, msg: (w && w.deleted) ? T.t('Post deleted') : '' }) });
 }
 
 // A saved text of Music -> Lyrics, whole, in the viewer - paging through the texts here (js/sound/lyrics.js):
@@ -852,7 +856,7 @@ function _open(it, list, follow) {
   // reload returns -1, which clamped to 0 and opened whatever happened to be first.
   let at = items.indexOf(it);
   if (at < 0) at = items.findIndex(x => x && String(x.id) === String(it.id) && x.kind === it.kind);
-  if (at < 0) { _status('That item is no longer on this shelf', 'err'); return; }
+  if (at < 0) { _status(T.t('That item is no longer on this shelf'), 'err'); return; }
   Cut.reset();
   openViewer(items, at, {
     onIndex: typeof follow === 'function' ? (_i, item) => follow(item) : null,
@@ -860,7 +864,9 @@ function _open(it, list, follow) {
     // A video is cut into new pieces under the stage; a piece shows its whole video on a tick (js/cut.js).
     underStage: (item, video) => Cut.underStage(item, video, {
       say: (t, err) => _status(t, err ? 'err' : ''),
-      onSaved: (r) => _apply({ reload: true, msg: 'Saved ' + (r.pieces && r.pieces.length > 1 ? r.pieces.length + ' new clips' : 'as a new clip') + ' in ' + r.where + '.' }),
+      onSaved: (r) => _apply({ reload: true, msg: r.pieces && r.pieces.length > 1
+        ? T.tn(r.pieces.length, 'Saved {n} new clip in {where}.', 'Saved {n} new clips in {where}.', { where: r.where })
+        : T.t('Saved as a new clip in {where}.', { where: r.where }) }),
     }),
     videoSrc: Cut.videoSrc,
     // Kind and category belong in the right column rather than the button row: they are
@@ -868,13 +874,13 @@ function _open(it, list, follow) {
     extraRows: (item) => {
       const rows = [];
       if (_KINDABLE.has(item.kind)) {
-        rows.push(['kind', _picker('lib-view-sel u-in is-s', item.kind, () => A.KINDS,
-          (k) => _setKind(item, k), 'Which kind of clip this is')]);
+        rows.push([T.t('kind'), _picker('lib-view-sel u-in is-s', item.kind, () => A.KINDS,
+          (k) => _setKind(item, k), T.t('Which kind of clip this is'))]);
       }
       if (_CATABLE.has(item.kind)) {
-        rows.push(['category', _picker('lib-view-sel u-in is-s', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: 'No folder' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
-          (id) => _setCat(item, id), 'Folder')]);
+        rows.push([T.t('category'), _picker('lib-view-sel u-in is-s', (item.meta && item.meta.categoryId) || '',
+          () => [{ id: '', label: T.t('No folder') }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
+          (id) => _setCat(item, id), T.t('Folder'))]);
       }
       const orig = Cut.originalRow(item, repaintViewer);
       if (orig) rows.push(orig);
@@ -895,7 +901,7 @@ function _open(it, list, follow) {
         _rArmed = null;
         await A.deleteItem(item);
         _items = _items.filter(x => x !== item);
-        const r = { removed: true, reload: true, msg: 'Deleted' };
+        const r = { removed: true, reload: true, msg: T.t('Deleted') };
         await _apply(r);
         return r;
       }
@@ -953,7 +959,7 @@ function _picker(cls, current, options, onPick, title) {
   // one option to start with, so the closed control still reads correctly
   const shown = document.createElement('option');
   shown.value = current;
-  shown.textContent = (options().find(o => o.id === current) || { label: 'None' }).label;
+  shown.textContent = (options().find(o => o.id === current) || { label: T.tc('pick', 'None') }).label;
   sel.appendChild(shown);
   sel.addEventListener('mousedown', fill);
   sel.addEventListener('focus', fill);
@@ -1004,7 +1010,7 @@ function _hearToggle(it, card) {
   card.classList.add('is-playing');
   audio.addEventListener('ended', () => { if (_hearing && _hearing.audio === audio) _stopHearing(); });
   document.addEventListener('mousedown', away, true);
-  audio.play().catch(() => { _stopHearing(); _status('That file will not play', 'err'); });
+  audio.play().catch(() => { _stopHearing(); _status(T.t('That file will not play'), 'err'); });
 }
 
 function _card(it, extra) {
@@ -1038,7 +1044,7 @@ function _card(it, extra) {
       const d = document.createElement('span');
       d.className = 'lib-snd-dur';
       const m = Math.floor(it.dur / 60);
-      d.textContent = m ? m + ':' + String(Math.round(it.dur - m * 60)).padStart(2, '0') : (+it.dur).toFixed(1) + ' s';
+      d.textContent = m ? m + ':' + String(Math.round(it.dur - m * 60)).padStart(2, '0') : T.t('{s} s', { s: (+it.dur).toFixed(1) });
       box.appendChild(d);
     }
   } else {
@@ -1061,8 +1067,8 @@ function _card(it, extra) {
     box.classList.add('lib-thumb-broken');
     const bad = document.createElement('span');
     bad.className = 'lib-broken-tag';
-    bad.textContent = 'Unreadable';   // sentence case
-    bad.title = 'The file is truncated - the render did not finish writing, so it cannot be played.';
+    bad.textContent = T.t('Unreadable');   // sentence case
+    bad.title = T.t('The file is truncated - the render did not finish writing, so it cannot be played.');
     box.appendChild(bad);
   }
 
@@ -1075,7 +1081,7 @@ function _card(it, extra) {
     // ★ and ✕ as Merge's gallery has them: the shared on-picture part, Lucide's icons
     star.className = 'lib-star u-onpic' + ((it.meta && it.meta.favorite) ? ' is-fav' : '');
     star.innerHTML = icon('star', 12);
-    star.title = (it.meta && it.meta.favorite) ? 'Remove from favorites' : 'Add to favorites';
+    star.title = (it.meta && it.meta.favorite) ? T.t('Remove from favorites') : T.t('Add to favorites');
     star.addEventListener('click', async (e) => {
       e.stopPropagation();
       star.disabled = true;
@@ -1088,7 +1094,7 @@ function _card(it, extra) {
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'lib-x u-onpic is-del u-x';
-    x.title = 'Delete';
+    x.title = T.t('Delete');
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
       try { await _apply(await _runAction('del', it, x)); } catch (err) { _status(err.message, 'err'); }
@@ -1102,11 +1108,11 @@ function _card(it, extra) {
   // A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
   if (it.kind === 'heads') {
     const m = it.meta || {};
-    card.title = [m.project, it.name, m.used ? 'on a timeline' : ''].filter(Boolean).join('\n');
+    card.title = [m.project, it.name, m.used ? T.t('on a timeline') : ''].filter(Boolean).join('\n');
     if (m.used) {
       const tag = document.createElement('b');
       tag.className = 'lib-hid is-used';
-      tag.textContent = 'in use';
+      tag.textContent = T.t('in use');
       name.appendChild(tag);
     }
   }
@@ -1116,7 +1122,7 @@ function _card(it, extra) {
   if (AUDIO.has(it.kind)) box.appendChild(name); else if (!LYR.isLyrics(it)) card.appendChild(name);
   // A sound's or a track's name is changed where it is read - it has no window to do it in.
   if (AUDIO.has(it.kind) && it.kind !== 'sfx') {
-    name.title = it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') + ' - a double press renames it';
+    name.title = T.t('{name} - a double press renames it', { name: it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') });
     name.addEventListener('dblclick', async (e) => {
       e.stopPropagation();
       try { await _apply(await _runAction('rename', it)); } catch (err) { _status(err.message, 'err'); }
@@ -1137,9 +1143,9 @@ function _card(it, extra) {
     const snd = it.kind === 'sounds';
     const here = snd && (it.meta || {}).inAudio ? AROOT_PICK : (it.meta && it.meta.categoryId) || '';
     card.appendChild(_picker('lib-cat-sel', here,
-      () => (snd ? [{ id: AROOT_PICK, label: 'AUDIO' }] : []).concat([{ id: '', label: snd ? 'My sounds' : 'No folder' }],
+      () => (snd ? [{ id: AROOT_PICK, label: T.t('AUDIO') }] : []).concat([{ id: '', label: snd ? T.t('My sounds') : T.t('No folder') }],
         _catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
-      (id) => (id === AROOT_PICK ? _toAudioRoot(it) : _setCat(it, id)), 'Folder'));
+      (id) => (id === AROOT_PICK ? _toAudioRoot(it) : _setCat(it, id)), T.t('Folder')));
   }
 
   if (extra) card.appendChild(extra);
@@ -1158,7 +1164,7 @@ function _card(it, extra) {
     if (many) { _manyMenu(many, e); return; }
     // A render: one row - Explorer on its folder, the file picked (the app's window only; none in a browser).
     if (it.kind === 'renders') {
-      if (canReveal()) TS.menuAt(e.clientX, e.clientY, [['Show in folder', '', () => revealRender(it.media)]]);
+      if (canReveal()) TS.menuAt(e.clientX, e.clientY, [[T.t('Show in folder'), '', () => revealRender(it.media)]]);
       return;
     }
     // A picture or a video: the generation chats over the page with it (js/gen-menu.js).
@@ -1218,18 +1224,18 @@ function _manyMenu(items, e) {
   const tile = e.target && e.target.closest ? e.target.closest('.lib-card') : null;
   TS.menuAt(e.clientX, e.clientY, [
     // Saved texts stay in Music -> Lyrics.
-    items.every(LYR.isLyrics) ? ['Move to…', 'texts stay in Music → Lyrics', null]
-    : madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
-      : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
+    items.every(LYR.isLyrics) ? [T.t('Move to…'), T.t('texts stay in Music → Lyrics'), null]
+    : madeOnly ? [T.t('Move to…'), T.t('made by its generator - it stays where it is'), null]
+      : [T.t('Move to…'), T.tn(n, '{n} item - each where it can go', '{n} items - each where it can go'), () => TS.moveMany(e.clientX, e.clientY, items, {
         done: (d) => _afterMany(null, '', false).then(() => d),
         status: (t, bad) => _status(t, bad ? 'err' : ''),
       })],
-    [allFav ? '★ Remove from favorites' : '★ Add to favorites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
+    [allFav ? T.t('★ Remove from favorites') : T.t('★ Add to favorites'), !starable.length ? T.t('they have no star') : starable.length < n ? T.t('some of them have no star') : '',
       starable.length ? async () => {
-        try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favorites' : 'in favorites'); }
+        try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? T.t('taken off favorites') : T.t('in favorites')); }
         catch (err) { _status(err.message, 'err'); }
       } : null],
-    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items, tile), true],
+    [T.t('Delete {n}', { n }), T.t('with their files - asked first'), () => _deleteMany(items, tile), true],
   ]);
 }
 // The tile pressed last among the picked - where the Delete key's question opens; the last one picked otherwise.
@@ -1245,17 +1251,17 @@ async function _deleteMany(all, anchor) {
   // The app's own sounds, a project's talking head and a YouTube source (two presses on its tile) are not deleted here -
   // the question names only what will go (as in Merge).
   const items = all.filter(x => x.kind !== 'sfx' && !_fixed(x));
-  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds, a project\'s talking heads and YouTube sources stay', 'err'); return; }
-  if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', 'err'); return; }
+  if (!items.length) { _status(T.t('Nothing picked here can be deleted - built-in sounds, a project\'s talking heads and YouTube sources stay'), 'err'); return; }
+  if (items.length > TS.BATCH_MAX) { _status(T.t('At most {max} at once - {n} are picked.', { max: TS.BATCH_MAX, n: items.length }), 'err'); return; }
   // One alone: its own question.
   if (items.length === 1) {
     try { await _apply(await _runAction('del', items[0], anchor)); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }
     return;
   }
   // `stay`: the names and the projects are a list that scrolls inside the question.
-  if (!await ask(anchor, await TS.deleteQuestion(items), { yes: 'Delete ' + items.length, danger: true, stay: true })) return;
+  if (!await ask(anchor, await TS.deleteQuestion(items), { yes: T.t('Delete {n}', { n: items.length }), danger: true, stay: true })) return;
   _stopHearing();
-  try { await _afterMany(await TS.batch('delete', items), 'deleted', true); }
+  try { await _afterMany(await TS.batch('delete', items), T.t('deleted'), true); }
   catch (err) { _status(err.message, 'err'); }
 }
 
@@ -1289,12 +1295,13 @@ async function _online(q) {
     added: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); } });
 }
 
+// A video kind's folder, as the page says it.
+const KIND_PLACE = { birols: T.t('B-rolls'), uploads: T.t('Uploads'), hooks: T.t('Hooks') };
 async function _setKind(it, kind) {
-  const label = (A.KINDS.find(k => k.id === kind) || {}).label || kind;
   try {
     await A.setKind(it, kind);
     it.kind = kind;
-    await _apply({ removed: true, reload: true, msg: 'Moved to ' + label + 's' });
+    await _apply({ removed: true, reload: true, msg: T.t('Moved to {place}', { place: KIND_PLACE[kind] || kind }) });
   } catch (e) { _status(e.message, 'err'); }
 }
 
@@ -1305,8 +1312,8 @@ const AROOT_PICK = '__audio__';
 async function _toAudioRoot(it) {
   try {
     const d = await TS.batch('move', [it], { to: { kind: 'sounds', aroot: true } });
-    if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || 'not moved');
-    await _apply({ changed: true, reload: true, msg: 'In AUDIO' });
+    if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || T.t('not moved'));
+    await _apply({ changed: true, reload: true, msg: T.t('In {place}', { place: T.t('AUDIO') }) });
   } catch (e) { _status(e.message, 'err'); }
 }
 
@@ -1315,7 +1322,7 @@ async function _setCat(it, id) {
   try {
     await A.setCategory(it, c.id, c.label);
     it.meta = it.meta || {}; it.meta.categoryId = c.id;
-    await _apply({ changed: true, reload: true, msg: c.id ? ('In ' + c.label) : 'Out of its folder' });
+    await _apply({ changed: true, reload: true, msg: c.id ? T.t('In {place}', { place: c.label }) : T.t('Out of its folder') });
   } catch (e) { _status(e.message, 'err'); }
 }
 
@@ -1381,10 +1388,10 @@ function _renderGrid() {
 
   if (!_items.length) {
     if (folders) return;
-    const said = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
+    const said = _shelf === 'media' ? (searching ? T.t('Nothing with "{q}" in SFX.', { q: _q })
       // Music -> Lyrics: where its texts come from.
-      : _mkind() === 'lyrics' ? 'No saved lyrics yet - Generate music saves them here (its Lyrics, or "save" by Custom\'s Lyrics).'
-      : 'Nothing here' + (_node && _node.cat ? ' in this folder.' : ' yet.')) : 'Nothing on this shelf yet.';
+      : _mkind() === 'lyrics' ? T.t('No saved lyrics yet - Generate music saves them here (its Lyrics, or "save" by Custom\'s Lyrics).')
+      : (_node && _node.cat ? T.t('Nothing in this folder.') : T.t('Nothing here yet.'))) : T.t('Nothing on this shelf yet.');
     // The shared part, its icon by what the folder holds: sound, pictures, or a folder.
     const k = _mkind();
     const icon = _shelf !== 'media' ? 'folder'
@@ -1403,15 +1410,15 @@ function _renderGrid() {
       sub.className = 'lib-sub';
       const n = it.meta.looks || 0;
       const looks = document.createElement('span');
-      looks.textContent = n + (n === 1 ? ' look' : ' looks');
+      looks.textContent = T.tn(n, '{n} look', '{n} looks');
       sub.appendChild(looks);
-      if (it.meta.voices) { const v = document.createElement('span'); v.textContent = '· voice'; sub.appendChild(v); }
+      if (it.meta.voices) { const v = document.createElement('span'); v.textContent = '· ' + T.t('voice'); sub.appendChild(v); }
       // Its 4K sheet is still being made: the tile shows the face until it lands.
       if (it.meta.sheetRunning) {
         const s = document.createElement('span');
         s.className = 'lib-sub-run';
-        s.textContent = '· sheet…';
-        s.title = 'The 4K reference sheet is being made - it replaces the face when it lands';
+        s.textContent = '· ' + T.t('sheet…');
+        s.title = T.t('The 4K reference sheet is being made - it replaces the face when it lands');
         sub.appendChild(s);
       }
     }
@@ -1541,7 +1548,7 @@ async function _load(opts) {
   const grid0 = $('lib-grid');
   const scroll = (opts && opts.keepScroll && grid0) ? grid0.scrollTop : null;
   const my = ++_reqId;
-  _status('Reading…');
+  _status(T.t('Reading…'));
   _paintShelves();
   // The right column belongs to the picture shelves, where it says what the selected tile is, and to
   // Voices and Scenarios, whose modules fill it with the selected row. Every other shelf has the
@@ -1560,7 +1567,7 @@ async function _load(opts) {
       ? fetch('/api/scriptgen/drafts').then(r => r.json()).catch(() => null) : null;
     const d = (_shelf === 'media' && !mq) ? { success: true, items: [] } : await (await fetch(url)).json();
     if (my !== _reqId) return;
-    if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('read failed'));
     if (draftsP) {
       const dd = await draftsP;
       if (my !== _reqId) return;
@@ -1588,7 +1595,7 @@ async function _load(opts) {
     _renderGrid();
     _showSelected();
     _shelfFailed();
-    _status((SHELVES[_shelf] || 'The shelf') + ' did not load: ' + e.message, 'err');
+    _status(T.t('{what} did not load: {why}', { what: SHELVES[_shelf] || T.t('The shelf'), why: e.message }), 'err');
   }
 }
 
@@ -1599,7 +1606,7 @@ async function _load(opts) {
 // Both are the shared part "did not load" (js/ui-state.js failedEl, css/app-shell.css
 // .u-failed): the grid's whole, with Try again; the column's in the form of the "nothing here" it replaces, with none.
 function _shelfFailed() {
-  const what = SHELVES[_shelf] || 'the shelf';
+  const what = SHELVES[_shelf] || T.t('the shelf');
   const grid = $('lib-grid');
   if (grid) {
     for (const e of grid.querySelectorAll(':scope > .u-empty')) e.remove();
@@ -1677,8 +1684,8 @@ function _pressShelf(kind) {
 // row pressed looks across the WHOLE library (never the filtered view - a repair whose number moved with the folder open
 // would be worse than useless), then asks at "⋯" what to do with what it found, or says there is nothing.
 const CHECKS = [
-  { name: 'Broken records', about: 'Records whose file is not on disk - found, then removed', run: _checkBroken },
-  { name: 'Thumbnails', about: 'Clips with no thumbnail, or a full frame as one - found, then made', run: _checkThumbs },
+  { name: T.t('Broken records'), about: T.t('Records whose file is not on disk - found, then removed'), run: _checkBroken },
+  { name: T.t('Thumbnails'), about: T.t('Clips with no thumbnail, or a full frame as one - found, then made'), run: _checkThumbs },
 ];
 let _morePop = null;
 let _checking = false;          // one check at a time: the rows wait while one runs
@@ -1732,35 +1739,35 @@ async function _runCheck(run) {
 // Invisible until you notice the count: every shelf hides a record whose file is gone, so it
 // shows up only as the gap between "shown" and "total".
 async function _checkBroken() {
-  _status('Looking for broken records…');
+  _status(T.t('Looking for broken records…'));
   let found;
   try { found = await A.findBroken(); } catch (e) { _status(e.message, 'err'); return; }
   if (_shelf !== 'media') return;                       // Media was left meanwhile
-  if (!found.total) { _status('No broken records'); return; }
+  if (!found.total) { _status(T.t('No broken records')); return; }
   const NL = String.fromCharCode(10);
-  const lines = ['Records pointing at a file that is not there.', ''];
+  const lines = [T.t('Records pointing at a file that is not there.'), ''];
   for (const kind of ['birols', 'uploads', 'hooks']) {
     const b = (found.media || {})[kind];
     if (!b) continue;
-    for (const e of b.missingFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why);
-    for (const e of b.noFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why + (e.status ? ' (status ' + e.status + ')' : ''));
+    for (const e of b.missingFile) lines.push('  ' + KIND_PLACE[kind] + ': ' + e.name + '   - ' + e.why);
+    for (const e of b.noFile) lines.push('  ' + KIND_PLACE[kind] + ': ' + e.name + '   - ' + e.why + (e.status ? ' (' + T.t('status {n}', { n: e.status }) + ')' : ''));
   }
-  for (const l of (found.looks || [])) lines.push('  look: ' + l.name + '   - every image is gone');
+  for (const l of (found.looks || [])) lines.push('  ' + T.t('look: {name} - every image is gone', { name: l.name }));
   lines.push('');
-  lines.push('The records are removed. There is no file to delete - that is the point.');
-  lines.push('', 'Go ahead?');
+  lines.push(T.t('The records are removed. There is no file to delete - that is the point.'));
+  lines.push('', T.t('Go ahead?'));
   _status('');
   // At "⋯"; the records are a list that scrolls inside - `stay`, so scrolling it does not close it.
-  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Remove records', danger: true, stay: true })) return;
+  if (!await ask($('lib-more'), lines.join(NL), { yes: T.t('Remove records'), danger: true, stay: true })) return;
 
   try {
     const r = await A.cleanBroken();
     await _load();
     _counts();
     const parts = [];
-    if (r.media) parts.push(r.media + ' media record' + (r.media === 1 ? '' : 's'));
-    if (r.looks) parts.push(r.looks + ' look' + (r.looks === 1 ? '' : 's'));
-    _status(parts.length ? ('Removed ' + parts.join(', ') + '; no files were deleted') : 'Nothing to remove');
+    if (r.media) parts.push(T.tn(r.media, '{n} media record', '{n} media records'));
+    if (r.looks) parts.push(T.tn(r.looks, '{n} look', '{n} looks'));
+    _status(parts.length ? T.t('Removed {what}; no files were deleted', { what: parts.join(', ') }) : T.t('Nothing to remove'));
   } catch (e) { _status(e.message, 'err'); }
 }
 
@@ -1768,7 +1775,7 @@ async function _checkBroken() {
 // A clip qualifies when it has no thumbnail, or when what it calls a thumbnail is really the full frame - both make the
 // shelf cost megabytes to draw.
 async function _checkThumbs() {
-  _status('Looking at the thumbnails…');
+  _status(T.t('Looking at the thumbnails…'));
   let audit, byId;
   try {
     const d = await (await fetch('/api/library/shelf/media')).json();
@@ -1783,48 +1790,47 @@ async function _checkThumbs() {
   const link = (audit.link || []).filter(x => byId.has(String(x.id)));
   let linked = 0;
   if (link.length) {
-    _status('Reconnecting ' + link.length + ' thumbnail' + (link.length === 1 ? '' : 's') + '…');
+    _status(T.tn(link.length, 'Reconnecting {n} thumbnail…', 'Reconnecting {n} thumbnails…'));
     for (const x of link) {
       try { await A.linkThumb(byId.get(String(x.id)), x.thumb); linked++; } catch (e) {}
     }
     // The grid with the new posters - only while Media is open.
     if (linked && _shelf === 'media') await _load({ keepScroll: true });
   }
-  const said = linked ? 'Reconnected ' + linked + ' thumbnail' + (linked === 1 ? '' : 's') : '';
+  const said = linked ? T.tn(linked, 'Reconnected {n} thumbnail', 'Reconnected {n} thumbnails') : '';
   const need = audit.need || [];
   if (!need.length || _shelf !== 'media') {
-    _status(said ? said + '; every clip has one now' : 'Every clip has its thumbnail');
+    _status(said ? T.t('{done}; every clip has one now', { done: said }) : T.t('Every clip has its thumbnail'));
     return;
   }
   const NL = String.fromCharCode(10);
   const lines = [
-    need.length + ' clip' + (need.length === 1 ? ' needs' : 's need') + ' a thumbnail.',
+    T.tn(need.length, '{n} clip needs a thumbnail.', '{n} clips need a thumbnail.'),
     '',
-    'Each one is read once and a 320px poster is written next to it. Nothing is',
-    'deleted and no clip is re-encoded.',
+    T.t('Each one is read once and a 320px poster is written next to it. Nothing is deleted and no clip is re-encoded.'),
   ];
-  if (said) lines.unshift(said + ' the records had lost.', '');
+  if (said) lines.unshift(T.tn(linked, 'Reconnected {n} thumbnail the records had lost.', 'Reconnected {n} thumbnails the records had lost.'), '');
   // Said up front rather than discovered halfway: a clip whose file lives on another
   // machine cannot be fixed here, and its card will stay as it is.
   const gone = (audit.missing || []).length;
-  if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
-  lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
+  if (gone) lines.push('', T.tn(gone, '{n} more is not on this machine and will be skipped.', '{n} more are not on this machine and will be skipped.'));
+  lines.push('', T.t('One at a time, so a render in progress keeps its CPU. Go ahead?'));
   _status(said);
   // Nothing is deleted - a plain answer.
-  if (!await ask($('lib-more'), lines.join(NL), { yes: 'Make thumbnails', stay: true })) return;
+  if (!await ask($('lib-more'), lines.join(NL), { yes: T.t('Make thumbnails'), stay: true })) return;
 
   let done = 0, failed = 0;
   for (const n of need) {
     const it = byId.get(String(n.id));
     if (!it) { failed++; continue; }
     try { await A.fixThumb(it); done++; } catch (e) { failed++; }
-    _status('Making thumbnails · ' + (done + failed) + ' of ' + need.length);
+    _status(T.t('Making thumbnails · {k} of {n}', { k: done + failed, n: need.length }));
   }
   await _load();
   _counts();
   _status(
-    'Made ' + done + ' thumbnail' + (done === 1 ? '' : 's') +
-    (failed ? ('; ' + failed + ' could not be read') : ''),
+    T.tn(done, 'Made {n} thumbnail', 'Made {n} thumbnails') +
+    (failed ? ('; ' + T.tn(failed, '{n} could not be read', '{n} could not be read')) : ''),
     failed && !done ? 'err' : '',
   );
 }
@@ -1843,71 +1849,69 @@ function _paintUpload() {
   const lk = $('lib-link');
   if (lk) {
     lk.hidden = !_linkKind();
-    lk.title = 'Add videos from YouTube, TikTok, Instagram and other sites to ' + _landName(_linkKind())
-      + ' - one link per line, or let a link go over the shelf';
+    lk.title = T.t('Add videos from YouTube, TikTok, Instagram and other sites to {place} - one link per line, or let a link go over the shelf', { place: _landName(_linkKind()) });
   }
   if (btn.hidden) return;
   // The NODE selected in the media tree decides what can be brought in and where it lands.
   const kind = _mkind();
   btn.disabled = false;
   if (kind === 'images') {
-    btn.textContent = 'Upload images';
+    btn.textContent = T.t('Upload images');
     // In the references of Environments / Lookbooks it says why not, and a press says it again (`_shut`).
-    btn.title = _shut() || 'Add pictures to the library. A PNG keeps its transparency.';
+    btn.title = _shut() || T.t('Add pictures to the library. A PNG keeps its transparency.');
     if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
   // Built-in is the app's, Favorites the starred: nothing is brought in there. SFX itself takes sounds.
   if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
-    btn.textContent = 'Upload';
+    btn.textContent = T.t('Upload');
     btn.disabled = true;
-    btn.title = _node.key === 'sfx-fav' ? 'Favorites are the starred sounds - the ★ on a card' : 'Built into the app - read only';
+    btn.title = _node.key === 'sfx-fav' ? T.t('Favorites are the starred sounds - the ★ on a card') : T.t('Built into the app - read only');
     return;
   }
   if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
-    btn.textContent = 'Upload sounds';
-    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into SFX' + (_mcat() ? ', the folder selected' : '') + '.';
+    btn.textContent = T.t('Upload sounds');
+    btn.title = _mcat() ? T.t('Add sounds - mp3, wav, m4a, ogg, flac - into SFX, the folder selected.') : T.t('Add sounds - mp3, wav, m4a, ogg, flac - into SFX.');
     if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
     return;
   }
   if (kind === 'music') {
-    btn.textContent = 'Upload music';
-    btn.title = 'Add tracks - mp3, wav, m4a, ogg, flac - to Music.';
+    btn.textContent = T.t('Upload music');
+    btn.title = T.t('Add tracks - mp3, wav, m4a, ogg, flac - to Music.');
     if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
     return;
   }
   if (_node && _node.key === 'audio') {
-    btn.textContent = 'Upload';
+    btn.textContent = T.t('Upload');
     btn.disabled = true;
-    btn.title = 'Pick Music or SFX in the tree first';
+    btn.title = T.t('Pick Music or SFX in the tree first');
     return;
   }
   if (kind === 'heads') {
-    btn.textContent = 'Upload';
+    btn.textContent = T.t('Upload');
     btn.disabled = true;
-    btn.title = 'Talking heads come from the talking-head projects - nothing is uploaded here';
+    btn.title = T.t('Talking heads come from the talking-head projects - nothing is uploaded here');
     return;
   }
   // Music -> Lyrics: texts saved by Generate music - no file.
   if (kind === 'lyrics') {
-    btn.textContent = 'Upload';
+    btn.textContent = T.t('Upload');
     btn.disabled = true;
-    btn.title = 'Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is uploaded here';
+    btn.title = T.t('Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is uploaded here');
     return;
   }
   if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
-  btn.textContent = 'Upload to ' + _landName(_linkKind());
-  btn.title = 'Add video files to ' + _landName(_linkKind());
+  btn.textContent = T.t('Upload to {place}', { place: _landName(_linkKind()) });
+  btn.title = T.t('Add video files to {place}', { place: _landName(_linkKind()) });
 }
 
 // ── By a link ───────────────────────────────────────────────────────────────
 // The kind a link's clip goes to, as an upload's would: the kind selected, Uploads under Video; '' where no clip goes.
 // Where a clip brought in lands, in words: a B-roll comes in with no category - into Generated.
 function _landName(kind) {
-  if (kind === 'birols') return 'Generated';
-  const k = A.KINDS.find(x => x.id === kind);
-  return k ? k.label + 's' : 'Uploads';
+  if (kind === 'birols') return T.t('Generated');
+  return KIND_PLACE[kind] || T.t('Uploads');
 }
 
 function _linkKind() {
@@ -1949,7 +1953,7 @@ async function _addLinks(urls, kind) {
         _linking.reading = (_tree ? _tree.load() : Promise.resolve()).then(() => _load()).then(() => _counts());
       }
       if (stop) { stop.hidden = !run; stop.dataset.id = run ? run.id : ''; }
-      if (run) _status('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step));
+      if (run) _status(T.t('link {k}/{n} · {step}', { k: Math.min(done + 1, _linking.total), n: _linking.total, step: LK.shortStep(run.step) }));
     });
     // Links added while these came in are followed too.
     if (_linking.ids.length === ids.length) break;
@@ -1962,14 +1966,16 @@ async function _addLinks(urls, kind) {
   const stopped = ended.filter(j => j.state === 'stopped').length;
   const clips = ok.reduce((n, j) => n + (j.items || []).length, 0);
   _linking = null;
-  _status(!bad.length && !stopped ? ('Added ' + clips + (clips === 1 ? ' clip' : ' clips'))
-    : (ok.length + ' of ' + ended.length + ' added' + (stopped ? ' · ' + stopped + ' stopped' : '')
+  _status(!bad.length && !stopped ? T.tn(clips, 'Added {n} clip', 'Added {n} clips')
+    : (T.t('{k} of {n} added', { k: ok.length, n: ended.length }) + (stopped ? ' · ' + T.t('{n} stopped', { n: stopped }) : '')
       + (bad.length ? ' - ' + bad[0].error : '')), bad.length ? 'err' : '');
 }
 
 // The node selected is the references of Environments / Lookbooks or a folder in them: nothing
 // goes there by hand - why, in words (js/media-tree.js closedSays); '' anywhere else.
 function _shut() { return _shelf === 'media' && _tree && _node ? _tree.closedSays(_node) : ''; }
+// The line while files go up, one by one.
+const _uploading = (i, n, name) => _status(T.t('Uploading {k}/{n} - {name}', { k: i, n, name }));
 
 async function _upload(files) {
   const list = Array.from(files || []);
@@ -1980,54 +1986,54 @@ async function _upload(files) {
   const kind = _mkind();
   const landed = async (k) => { _showLanded(k); if (_tree) await _tree.load(); await _load(); _counts(); };
   if (kind === 'images') {
-    const ri = await A.uploadImages(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
+    const ri = await A.uploadImages(list, _uploading);
     if (btn) btn.disabled = false;
     if (ri.ok) await landed('images');
     _status(ri.ok === ri.total
-      ? ('Uploaded ' + ri.ok + (ri.ok === 1 ? ' image' : ' images'))
-      : (ri.ok + ' of ' + ri.total + ' uploaded'), ri.ok === ri.total ? '' : 'err');
+      ? T.tn(ri.ok, 'Uploaded {n} image', 'Uploaded {n} images')
+      : T.t('{k} of {n} uploaded', { k: ri.ok, n: ri.total }), ri.ok === ri.total ? '' : 'err');
     return;
   }
   if (kind === 'music') {
     // Into the own folder of Music selected, if one is.
-    const rm = await A.uploadMusic(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), _mcat());
+    const rm = await A.uploadMusic(list, _uploading, _mcat());
     if (btn) btn.disabled = false;
     if (rm.ok) await landed('music');
     _status(rm.ok === rm.total
-      ? ('Uploaded ' + rm.ok + (rm.ok === 1 ? ' track' : ' tracks'))
-      : (rm.ok + ' of ' + rm.total + ' uploaded - only sound files are taken'), rm.ok === rm.total ? '' : 'err');
+      ? T.tn(rm.ok, 'Uploaded {n} track', 'Uploaded {n} tracks')
+      : T.t('{k} of {n} uploaded - only sound files are taken', { k: rm.ok, n: rm.total }), rm.ok === rm.total ? '' : 'err');
     return;
   }
   if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
     if (btn) btn.disabled = false;
-    _status('Built-in and Favorites take no files - pick My sounds or a folder of it', 'err');
+    _status(T.t('Built-in and Favorites take no files - pick My sounds or a folder of it'), 'err');
     return;
   }
   if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
     // Into the category selected, if one is - so it stays where it is looked at.
     const cat = kind === 'sounds' ? _mcat() : '';
-    const rs = await A.uploadSounds(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), cat);
+    const rs = await A.uploadSounds(list, _uploading, cat);
     if (btn) btn.disabled = false;
     if (rs.ok) { if (_tree) await _tree.load(); await _load(); _counts(); }
     _status(rs.ok === rs.total
-      ? ('Uploaded ' + rs.ok + (rs.ok === 1 ? ' sound' : ' sounds'))
-      : (rs.ok + ' of ' + rs.total + ' uploaded - only sound files are taken'), rs.ok === rs.total ? '' : 'err');
+      ? T.tn(rs.ok, 'Uploaded {n} sound', 'Uploaded {n} sounds')
+      : T.t('{k} of {n} uploaded - only sound files are taken', { k: rs.ok, n: rs.total }), rs.ok === rs.total ? '' : 'err');
     return;
   }
-  if (_node && _node.key === 'audio') { if (btn) btn.disabled = false; _status('Pick Music or SFX in the tree first', 'err'); return; }
-  if (kind === 'heads') { if (btn) btn.disabled = false; _status('Talking heads come from the talking-head projects', 'err'); return; }
-  if (kind === 'lyrics') { _status('Music → Lyrics holds only texts - saved from Generate music', 'err'); return; }
+  if (_node && _node.key === 'audio') { if (btn) btn.disabled = false; _status(T.t('Pick Music or SFX in the tree first'), 'err'); return; }
+  if (kind === 'heads') { if (btn) btn.disabled = false; _status(T.t('Talking heads come from the talking-head projects'), 'err'); return; }
+  if (kind === 'lyrics') { _status(T.t('Music → Lyrics holds only texts - saved from Generate music'), 'err'); return; }
   // The kind selected decides where the clips are filed: looking at Hooks and pressing Upload means "add hooks"; under
   // Video they go to Uploads, which is what a file brought in from outside is. They arrive with no category - filed
   // afterwards, on the tree or in the viewer - and the kind is shown so they are seen.
   const target = _linkKind() || 'uploads';
-  const r = await A.uploadVideos(list, target, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
+  const r = await A.uploadVideos(list, target, _uploading);
   if (btn) btn.disabled = false;
   if (r.ok) await landed(target);
   // After the reload, never before: _load() signs off with _status('') and would wipe this.
   _status(r.ok === r.total
-    ? ('Uploaded ' + r.ok + (r.ok === 1 ? ' clip' : ' clips'))
-    : (r.ok + ' of ' + r.total + ' uploaded'), r.ok === r.total ? '' : 'err');
+    ? T.tn(r.ok, 'Uploaded {n} clip', 'Uploaded {n} clips')
+    : T.t('{k} of {n} uploaded', { k: r.ok, n: r.total }), r.ok === r.total ? '' : 'err');
 }
 
 // ── An address to land on ────────────────────────────────────────────────────
@@ -2170,7 +2176,7 @@ function boot() {
       if (id) { _sel = String(id); _scrollSel = true; }
       await _load({ keepScroll: true });
       _counts();
-      _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved');
+      _status(name ? T.t('Saved “{name}” - its voices are chosen in the column on the right', { name }) : T.t('Saved'));
     },
     // Hidden by the person: the shelf read again - something may have been made. After the press that hid it has done what
     // else it does (another shelf pressed reads that one).
@@ -2262,9 +2268,9 @@ function boot() {
       if (!shut && !_tree.holds(_node)) return;
       if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
       e.preventDefault();
-      if (shut) { TS.menuAt(e.clientX, e.clientY, [['New folder', 'not here - nothing goes into references by hand', null]]); return; }
+      if (shut) { TS.menuAt(e.clientX, e.clientY, [[T.t('New folder'), T.t('not here - nothing goes into references by hand'), null]]); return; }
       const here = _node;
-      TS.menuAt(e.clientX, e.clientY, [['New folder', 'in ' + here.label, async () => {
+      TS.menuAt(e.clientX, e.clientY, [[T.t('New folder'), T.t('in {place}', { place: here.label }), async () => {
         const mark = document.createElement('div');
         mark.style.cssText = 'position:fixed;left:' + e.clientX + 'px;top:' + e.clientY + 'px;width:1px;height:1px;pointer-events:none';
         document.body.appendChild(mark);

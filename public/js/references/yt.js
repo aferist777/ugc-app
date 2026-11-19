@@ -11,14 +11,15 @@ let _armed = null;      // { id, t } - the one whose "Delete" was pressed once
 import { REALLY, MS } from '../really.js';
 // a viewer's action is an icon and its word - put back whole when "Really?" lets go
 import { fillAct } from '../library/viewer.js';
+import { t, tn } from '../i18n/t.js';
 
 /** The viewer's buttons for a downloaded YouTube video. */
 export function ytActions(it) {
   const armed = !!(_armed && _armed.id === it.id);
   return [
-    { id: 'hl', label: 'To highlights', title: 'A new highlights project in Merge on this video - its words are heard once and kept with it' },
-    { id: 'srcdel', label: armed ? REALLY : 'Delete', danger: true, armed,
-      title: 'Delete this source - its video, its transcript and its topics. Scenarios written from it keep their text.' },
+    { id: 'hl', label: t('To highlights'), title: t('A new highlights project in Merge on this video - its words are heard once and kept with it') },
+    { id: 'srcdel', label: armed ? REALLY : t('Delete'), danger: true, armed,
+      title: t('Delete this source - its video, its transcript and its topics. Scenarios written from it keep their text.') },
   ];
 }
 
@@ -28,7 +29,7 @@ async function _usage(it) {
     const r = await fetch('/api/library/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ media: [it.media] }) }).then(x => x.json());
     const n = ((r && r.projects) || []).length;
-    return n ? ' It is on the timelines of ' + n + ' project' + (n === 1 ? '' : 's') + ' - its clips there turn red.' : '';
+    return n ? ' ' + tn(n, 'It is on the timelines of {n} project - its clips there turn red.', 'It is on the timelines of {n} projects - its clips there turn red.') : '';
   } catch (e) { return ''; }
 }
 
@@ -44,14 +45,14 @@ export async function ytDelete(it) {
       if (!_armed || _armed.id !== id) return;
       _armed = null;
       // The button goes back to itself where it is still on screen - without drawing the viewer again (that restarts the video).
-      document.querySelectorAll('.lib-view-acts button').forEach((b) => { if (b.textContent === REALLY) { fillAct(b, 'Delete'); b.classList.remove('is-armed'); } });
+      document.querySelectorAll('.lib-view-acts button').forEach((b) => { if (b.textContent === REALLY) { fillAct(b, t('Delete')); b.classList.remove('is-armed'); } });
     }, MS) };
-    return { armed: true, msg: 'Press again to delete the source - its video, its transcript and its topics.' + await _usage(it) };
+    return { armed: true, msg: t('Press again to delete the source - its video, its transcript and its topics.') + await _usage(it) };
   }
   clearTimeout(_armed.t);
   _armed = null;
   const r = await fetch('/api/sources/' + encodeURIComponent((it.meta && it.meta.source) || it.id), { method: 'DELETE' })
     .then(x => x.json()).catch(() => null);
-  if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
+  if (!r || !r.success) throw new Error((r && r.error) || t('not deleted'));
   return { removed: true };
 }

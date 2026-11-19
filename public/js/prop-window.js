@@ -21,6 +21,7 @@ import * as Src from './merge-v3/chat-sources.js';
 import { showPicture } from './merge-v3/wk-maker.js';
 import { showError } from './notice.js';
 import { allow } from './key-gate.js';
+import { t, tc } from './i18n/t.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -59,7 +60,7 @@ export function openNewProp(o) {
   _s = _blank();
   // The almanac's size, over its place - not a generation's 1280×800.
   _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', onClose: _closed });
-  _win.setCrumbs([{ label: 'New prop' }]);
+  _win.setCrumbs([{ label: t('New prop') }]);
   document.addEventListener('paste', _onPaste, true);
   _render();
   return _win;
@@ -86,9 +87,9 @@ function _onPaste(e) {
 // A refused or unread file, and a failed `add`, are said in the corner (js/notice.js).
 async function _take(file) {
   if (!file) return;
-  if (!isPictureFile(file)) { showError('That is not a picture.'); return; }
-  try { _s.photo = { dataUrl: await pictureDataUrl(file), name: file.name || 'photo' }; }
-  catch (e) { showError((e && e.message) || 'The file could not be read'); return; }
+  if (!isPictureFile(file)) { showError(t('That is not a picture.')); return; }
+  try { _s.photo = { dataUrl: await pictureDataUrl(file), name: file.name || t('photo') }; }
+  catch (e) { showError((e && e.message) || t('The file could not be read')); return; }
   _render();
 }
 
@@ -96,9 +97,9 @@ async function _take(file) {
 function _fromLibrary(anchor) {
   const T = Src.TREE.image;
   openPick({
-    kind: 'image', title: 'a photo of the product', hint: 'It is copied into Props - the picture stays where it is',
+    kind: 'image', title: t('a photo of the product'), hint: t('It is copied into Props - the picture stays where it is'),
     sources: [], tree: T, start: ['node:images'], anchor: (_win && _win.box) || anchor,
-    left: () => 1, mark: () => '', room: () => 'One photo of the product',
+    left: () => 1, mark: () => '', room: () => t('One photo of the product'),
     why: () => '',
     press: (it) => {
       _s.photo = { path: it.path, name: it.name || String(it.path).split('/').pop(), src: it.big || it.thumb || it.path };
@@ -106,7 +107,7 @@ function _fromLibrary(anchor) {
       _render();
     },
     computer: {
-      word: 'a photo', hint: 'A photo of the product from this computer.',
+      word: t('a photo'), hint: t('A photo of the product from this computer.'),
       open: () => { closePick(); if (_input) _input.click(); },
       accepts: isPictureFile,
       drop: (files) => { closePick(); _take(files[0]); },
@@ -141,18 +142,18 @@ function _left() {
     if (!done) {
       const x = el('button', 'gw-dropx u-onpic is-del u-x', '');
       x.type = 'button';
-      x.title = 'Take it off';
+      x.title = t('Take it off');
       x.addEventListener('click', (e) => { e.stopPropagation(); _s.photo = null; _render(); });
       box.appendChild(x);
     }
-    box.title = done ? 'Press to look at it large' : 'Press to look at it large - let another photo go here to replace it';
+    box.title = done ? t('Press to look at it large') : t('Press to look at it large - let another photo go here to replace it');
   } else {
-    box.appendChild(el('span', null, 'A photo of the product - press to choose one from this computer, let it go here, or Ctrl+V'));
-    box.title = 'One photo of the product: the whole product, its label readable';
+    box.appendChild(el('span', null, t('A photo of the product - press to choose one from this computer, let it go here, or Ctrl+V')));
+    box.title = t('One photo of the product: the whole product, its label readable');
   }
   box.addEventListener('click', () => {
     if (!src) { _input.click(); return; }
-    showPicture({ src, name: _s.photo.name || 'the product' });
+    showPicture({ src, name: _s.photo.name || t('the product') });
   });
   if (!done) {
     box.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); box.classList.add('is-over'); });
@@ -168,9 +169,9 @@ function _left() {
   wrap.append(box, _input);
   left.appendChild(wrap);
   if (!done) {
-    const lib = el('button', 'pw-lib u-btn is-s', 'From IMAGES…');
+    const lib = el('button', 'pw-lib u-btn is-s', t('From IMAGES…'));
     lib.type = 'button';
-    lib.title = 'A picture of the Library - it is copied into Props, and stays where it is';
+    lib.title = t('A picture of the Library - it is copied into Props, and stays where it is');
     lib.addEventListener('click', () => _fromLibrary(lib));
     left.appendChild(lib);
   }
@@ -181,17 +182,17 @@ function _left() {
 function _form() {
   const right = el('div', 'gw-half is-make pw-right');
   const body = el('div', 'pw-fields');
-  body.appendChild(el('label', 'pw-lab u-label', 'Name'));
+  body.appendChild(el('label', 'pw-lab u-label', tc('prop', 'Name')));
   const name = el('input', 'pw-name u-in');
   name.type = 'text';
   name.maxLength = 120;
-  name.placeholder = 'Optional - the agent names it from the picture';
+  name.placeholder = t('Optional - the agent names it from the picture');
   name.value = _s.name;
   name.addEventListener('input', () => { _s.name = name.value; });
   body.appendChild(name);
-  body.appendChild(el('label', 'pw-lab u-label', 'What you know about the product'));
+  body.appendChild(el('label', 'pw-lab u-label', t('What you know about the product')));
   const words = el('textarea', 'gw-say pw-words u-area');
-  words.placeholder = 'What it is, its size, what it does, what matters to show - in any language. What the photo does not show comes from here.';
+  words.placeholder = t('What it is, its size, what it does, what matters to show - in any language. What the photo does not show comes from here.');
   words.value = _s.words;
   words.addEventListener('input', () => { _s.words = words.value; });
   body.appendChild(words);
@@ -199,11 +200,11 @@ function _form() {
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
   const hint = el('span', 'gw-hint u-status',
-    _s.photo ? 'An agent describes it for the frames chat - fractions of a cent, nothing is drawn' : 'a photo of the product first');
-  const go = el('button', 'gw-create u-btn is-main', _s.busy ? 'adding…' : 'add');
+    _s.photo ? t('An agent describes it for the frames chat - fractions of a cent, nothing is drawn') : t('a photo of the product first'));
+  const go = el('button', 'gw-create u-btn is-main', _s.busy ? t('adding…') : t('add'));
   go.type = 'button';
   go.disabled = !_s.photo || _s.busy;
-  go.title = _s.photo ? 'Into IMAGES → Props' : 'a photo of the product first';
+  go.title = _s.photo ? t('Into IMAGES → Props') : t('a photo of the product first');
   go.addEventListener('click', _add);
   row.append(hint, go);
   foot.appendChild(row);
@@ -224,7 +225,7 @@ async function _add() {
     _s.polls = 0;
     if (typeof _o.onAdded === 'function') { try { _o.onAdded(_s.added); } catch (e) { /* the caller's */ } }
     _follow();
-  } catch (e) { showError('Not added: ' + e.message); }
+  } catch (e) { showError(t('Not added: {why}', { why: e.message })); }
   _s.busy = false;
   _render();
 }
@@ -250,16 +251,16 @@ function _result() {
   const right = el('div', 'gw-half is-make pw-right');
   const i = _s.info || {};
   const body = el('div', 'pw-fields');
-  body.appendChild(el('div', 'pw-landed u-status is-ok', 'In IMAGES → Props'));
-  body.appendChild(el('div', 'pw-title', i.name || _s.added.name || 'the product'));
-  body.appendChild(el('label', 'pw-lab u-label', 'Description'));
-  if (i.reading) body.appendChild(el('div', 'pw-desc is-wait', 'describing…'));
+  body.appendChild(el('div', 'pw-landed u-status is-ok', t('In IMAGES → Props')));
+  body.appendChild(el('div', 'pw-title', i.name || _s.added.name || t('the product')));
+  body.appendChild(el('label', 'pw-lab u-label', t('Description')));
+  if (i.reading) body.appendChild(el('div', 'pw-desc is-wait', t('describing…')));
   else if (i.description) body.appendChild(el('div', 'pw-desc', i.description));
   else {
-    body.appendChild(el('div', 'pw-desc is-fail', 'Not described: ' + (i.fail || 'the agent did not answer') + '.'));
-    const again = el('button', 'pw-again u-btn is-s', 'Read again');
+    body.appendChild(el('div', 'pw-desc is-fail', t('Not described: {why}.', { why: i.fail || t('the agent did not answer') })));
+    const again = el('button', 'pw-again u-btn is-s', t('Read again'));
     again.type = 'button';
-    again.title = 'The agent looks at the picture and reads your words again';
+    again.title = t('The agent looks at the picture and reads your words again');
     again.addEventListener('click', async () => {
       again.disabled = true;
       try { await post('/api/props/' + encodeURIComponent(_s.added.id) + '/read', {}); _s.info = Object.assign({}, i, { reading: true, fail: '' }); _s.polls = 0; _render(); _follow(); }
@@ -268,15 +269,15 @@ function _result() {
     });
     body.appendChild(again);
   }
-  body.appendChild(el('div', 'pw-note u-status', 'Change the name, your words or the description in its viewer - open it in Props.'
-    + ' The frames chat takes it into its product place.'));
+  body.appendChild(el('div', 'pw-note u-status', t('Change the name, your words or the description in its viewer - open it in Props.')
+    + ' ' + t('The frames chat takes it into its product place.')));
   right.appendChild(body);
   const foot = el('div', 'gw-foot');
   const row = el('div', 'gw-row');
   row.appendChild(el('span', 'gw-hint u-status'));
-  const more = el('button', 'gw-create u-btn is-main', 'Add another');
+  const more = el('button', 'gw-create u-btn is-main', t('Add another'));
   more.type = 'button';
-  more.title = 'A new product - the window empties';
+  more.title = t('A new product - the window empties');
   more.addEventListener('click', () => { clearTimeout(_poll); _s = _blank(); _render(); });
   row.appendChild(more);
   foot.appendChild(row);

@@ -18,6 +18,8 @@
      since()          the moment - the media tree counts sources as news only after it
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { t } from '../i18n/t.js';
+
 const KEY = 'ugc_ref_opened_v1';
 const KEEP = 3000;
 
@@ -55,7 +57,7 @@ export function mark(tile, it) {
   tile.classList.add('is-new-file');
   const d = document.createElement('span');
   d.className = 'ref-new';
-  d.title = 'New - not opened yet';
+  d.title = t('New - not opened yet');
   tile.appendChild(d);
 }
 
@@ -69,9 +71,9 @@ export function opened(it) {
     if (keys.length > KEEP) keys.sort((a, b) => s.ids[a] - s.ids[b]).slice(0, keys.length - KEEP).forEach(x => delete s.ids[x]);
     _write(s);
   }
-  document.querySelectorAll('[data-new="' + CSS.escape(k) + '"]').forEach((t) => {
-    t.removeAttribute('data-new');
-    t.classList.remove('is-new-file');
-    t.querySelectorAll('.ref-new').forEach(x => x.remove());
+  document.querySelectorAll('[data-new="' + CSS.escape(k) + '"]').forEach((tile) => {
+    tile.removeAttribute('data-new');
+    tile.classList.remove('is-new-file');
+    tile.querySelectorAll('.ref-new').forEach(x => x.remove());
   });
 }

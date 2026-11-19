@@ -7,6 +7,8 @@
 // per key).
 
 import { startInlineProgress } from '../progress.js';
+// The app's words as T.t: a text to time is this module's own `t`.
+import * as T from '../i18n/t.js';
 
 export async function api(url, opts) {
   const r = await fetch(url, opts);
@@ -26,14 +28,14 @@ export async function api(url, opts) {
 export async function pollJob(base, jobId, onStep, stop) {
   for (;;) {
     await new Promise(r => setTimeout(r, 1500));
-    if (typeof stop === 'function' && stop()) throw Object.assign(new Error('stopped waiting'), { stopped: true });
+    if (typeof stop === 'function' && stop()) throw Object.assign(new Error(T.t('stopped waiting')), { stopped: true });
     let job;
     try { job = await api(`${base}/${encodeURIComponent(jobId)}`); }
-    catch (e) { throw new Error('lost track of the job: ' + e.message); }
+    catch (e) { throw new Error(T.t('lost track of the job: {why}', { why: e.message })); }
     if (onStep) onStep(job);
     if (job.state === 'done') return job;
-    if (job.state === 'error') throw new Error(job.error || 'the job failed');
-    if (job.state === 'cancelled') throw Object.assign(new Error('cancelled'), { cancelled: true });
+    if (job.state === 'error') throw new Error(job.error || T.t('the job failed'));
+    if (job.state === 'cancelled') throw Object.assign(new Error(T.t('cancelled')), { cancelled: true });
   }
 }
 
@@ -87,7 +89,7 @@ export const EST = {
 export const fmtDate = (s) => {
   if (!s) return '';
   const d = new Date(s);
-  return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return isNaN(d) ? '' : d.toLocaleDateString(T.lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 export const clock = (s) => {
@@ -97,7 +99,7 @@ export const clock = (s) => {
   return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(n % 60).padStart(2, '0');
 };
 
-export const mb = (b) => (b >= 1048576 ? Math.round(b / 1048576) + ' MB' : Math.round(b / 1024) + ' KB');
+export const mb = (b) => (b >= 1048576 ? T.t('{n} MB', { n: Math.round(b / 1048576) }) : T.t('{n} KB', { n: Math.round(b / 1024) }));
 
 // How long a paragraph takes to say, at two and a half words a second.
 export const spokenSeconds = (t) => Math.round(String(t || '').trim().split(/\s+/).filter(Boolean).length / 2.5);

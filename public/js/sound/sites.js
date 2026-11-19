@@ -11,20 +11,21 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { t } from '../i18n/t.js';
 
 const q = (w) => encodeURIComponent(String(w || '').trim());
 const slug = (w) => String(w || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
 export const SITES = [
-  { name: 'Freesound', note: 'CC0 only - the filter is already on; a free account to download',
+  { name: 'Freesound', note: t('CC0 only - the filter is already on; a free account to download'),
     url: (w) => 'https://freesound.org/search/?' + (w ? 'q=' + q(w) + '&' : '') + 'f=license%3A%22Creative+Commons+0%22' },
-  { name: 'Pixabay Sound Effects', note: 'free in your videos, no credit',
+  { name: 'Pixabay Sound Effects', note: t('free in your videos, no credit'),
     url: (w) => (w ? 'https://pixabay.com/sound-effects/search/' + q(w) + '/' : 'https://pixabay.com/sound-effects/') },
-  { name: 'Mixkit', note: 'free in your videos, no credit',
+  { name: 'Mixkit', note: t('free in your videos, no credit'),
     url: (w) => (slug(w) ? 'https://mixkit.co/free-sound-effects/discover/' + slug(w) + '/' : 'https://mixkit.co/free-sound-effects/') },
-  { name: 'Kenney', note: 'game and interface packs · CC0',
+  { name: 'Kenney', note: t('game and interface packs · CC0'),
     url: () => 'https://kenney.nl/assets/category:Audio' },
-  { name: 'Sonniss GDC', note: 'big free bundles a year · no credit',
+  { name: 'Sonniss GDC', note: t('big free bundles a year · no credit'),
     url: () => 'https://sonniss.com/gameaudiogdc/' },
 ];
 
@@ -51,9 +52,9 @@ export function openSites(anchor, words) {
   if (was) return;                       // the "?" pressed again folds it
   const w = String(words || '').trim();
   const box = el('div', 'mt-pop snd-sites u-ask is-float');
-  box.appendChild(el('b', 'mt-pop-head', 'Free sounds on other sites'));
-  box.appendChild(el('div', 'snd-sites-sub', (w ? 'They open searching for «' + w + '». ' : '')
-    + 'Download a sound there, then drop the file onto My sounds in the tree.'));
+  box.appendChild(el('b', 'mt-pop-head', t('Free sounds on other sites')));
+  box.appendChild(el('div', 'snd-sites-sub', (w ? t('They open searching for «{words}».', { words: w }) + ' ' : '')
+    + t('Download a sound there, then drop the file onto My sounds in the tree.')));
   for (const s of SITES) {
     const a = el('a', 'snd-sites-row');
     a.href = s.url(w);

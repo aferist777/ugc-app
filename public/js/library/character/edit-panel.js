@@ -14,16 +14,19 @@
 // The values are the schema's, not a list written out here. They are the same words the create
 // column offers, which is what makes the result predictable.
 
-import { PARAM_SCHEMA } from './schema.js';
+import { PARAM_SCHEMA, paramLabel, optLabel } from './schema.js';
+import { t } from '../../i18n/t.js';
 
 // The eight the user asked for, in that order.
 const GROUP_KEYS = ['age', 'skin', 'hairColor', 'hairLength', 'eyeColor', 'facialHair', 'scars', 'freckles'];
 
+// What a chip writes into the field is English - the label's key and the value, as the analyzer reads them; the row's
+// label and the chip's caption are said in the app's language.
 function groups() {
   const byKey = {};
   PARAM_SCHEMA.forEach(g => g.params.forEach(p => { byKey[p.k] = p; }));
   return GROUP_KEYS.map(k => byKey[k]).filter(Boolean)
-    .map(p => ({ k: p.k, key: String(p.label || p.k).toLowerCase(), label: p.label,
+    .map(p => ({ k: p.k, key: String(p.label || p.k).toLowerCase(), label: paramLabel(p),
                  opts: (p.opts || []).filter(o => o !== '') }));
 }
 
@@ -56,7 +59,7 @@ export function build(host, hooks) {
 
   const note = document.createElement('div');
   note.className = 'cv2-edit-note';
-  note.textContent = 'Change what the portrait looks like: tap a trait, or describe it yourself.';
+  note.textContent = t('Change what the portrait looks like: tap a trait, or describe it yourself.');
   wrap.appendChild(note);
 
   const chipBox = document.createElement('div');
@@ -67,22 +70,22 @@ export function build(host, hooks) {
   ta.className = 'cv2-edit-txt u-area';
   ta.id = 'cv2-edit-txt';
   ta.rows = 3;
-  ta.placeholder = 'e.g. age: 40; hair color: red; longer nose, a scar across the brow';
+  ta.placeholder = t('e.g. age: 40; hair color: red; longer nose, a scar across the brow');
 
   const foot = document.createElement('div');
   foot.className = 'cv2-edit-foot';
   const cancel = document.createElement('button');
   cancel.type = 'button'; cancel.id = 'cv2-edit-cancel'; cancel.className = 'cv2-edit-btn u-btn is-l';
-  cancel.textContent = 'Cancel';
-  cancel.title = 'Leave the portrait as it is and go back to the parameters';
+  cancel.textContent = t('Cancel');
+  cancel.title = t('Leave the portrait as it is and go back to the parameters');
   cancel.addEventListener('click', () => { if (onCancel) onCancel(); });
   const go = document.createElement('button');
   go.type = 'button'; go.id = 'cv2-edit-go'; go.className = 'cv2-edit-btn is-go u-btn is-l is-main';
-  go.textContent = 'Edit';
-  go.title = 'Apply these changes to the portrait';
+  go.textContent = t('Edit');
+  go.title = t('Apply these changes to the portrait');
   go.addEventListener('click', () => {
-    const t = ta.value.trim();
-    if (t && onEdit) onEdit(t);
+    const text = ta.value.trim();
+    if (text && onEdit) onEdit(text);
   });
 
   const G = groups();
@@ -102,7 +105,7 @@ export function build(host, hooks) {
         b.type = 'button';
         const on = pairs.get(g.key) === o;
         b.className = 'cv2-chip u-chip' + (on ? ' is-on' : '');
-        b.textContent = o;
+        b.textContent = optLabel(g.k, o);
         b.addEventListener('click', () => {
           const cur = parse(ta.value);
           // Tapping the lit one clears it; tapping another replaces it. One per group.

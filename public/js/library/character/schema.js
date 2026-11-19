@@ -13,6 +13,8 @@
 // Nothing here touches the DOM. allowedOpts(param, picked) answers "given what is chosen so
 // far, which values may this parameter take", and that is all the panel needs.
 
+import { t, tc } from '../../i18n/t.js';
+
 // ── The 18 parameters, in five groups ───────────────────────────────────────
 const PARAM_SCHEMA = [
   { group: 'Basics', params: [
@@ -112,6 +114,99 @@ export function genName() {
   const pk = (a) => a[Math.floor(Math.random() * a.length)];
   return pk(_GN_FIRST) + ' "' + pk(_GN_NICK) + '" ' + pk(_GN_LAST);
 }
+
+// ── What a person reads ─────────────────────────────────────────────────────
+// The groups, labels and values above stay English: a value is written into the image model's prompt and kept in the
+// character's record, and a label, lowercased, is the key the edit field's "hair color: red" pairs are written with
+// for the analyzer. These are only the words shown for them. A value is said by its parameter, since one English word
+// can mean two things ("brown" hair and "brown" eyes).
+const _GROUP_SAY = { 'Basics': t('Basics'), 'Hair': t('Hair'), 'Eyes & face': t('Eyes & face'), 'Style': t('Style'), 'Marks': t('Marks') };
+const _LABEL_SAY = {
+  age: t('Age'), gender: t('Gender'), ethnicity: t('Ethnicity'), body: t('Body type'), skin: t('Skin tone'),
+  hairColor: t('Hair color'), hairLength: t('Hair length'), hairStyle: t('Hair style'),
+  eyeColor: t('Eye color'), eyeShape: t('Eye shape'), faceShape: t('Face shape'), eyebrows: t('Eyebrows'), facialHair: t('Facial hair'),
+  makeup: t('Makeup'),
+  scars: t('Scars'), tattoos: t('Face tattoos'), piercings: t('Piercings'), freckles: t('Freckles/moles'),
+};
+const _OPT_SAY = {
+  age: { '20s': tc('char.age', '20s'), '30s': tc('char.age', '30s'), '40s': tc('char.age', '40s'), '50s': tc('char.age', '50s'), '60+': tc('char.age', '60+') },
+  gender: { 'female': tc('char.gender', 'female'), 'male': tc('char.gender', 'male'), 'androgynous': tc('char.gender', 'androgynous') },
+  ethnicity: {
+    'Caucasian': tc('char.ethnicity', 'Caucasian'), 'African': tc('char.ethnicity', 'African'), 'East Asian': tc('char.ethnicity', 'East Asian'),
+    'South Asian': tc('char.ethnicity', 'South Asian'), 'Hispanic': tc('char.ethnicity', 'Hispanic'),
+    'Middle Eastern': tc('char.ethnicity', 'Middle Eastern'), 'mixed': tc('char.ethnicity', 'mixed'),
+  },
+  body: {
+    'slim': tc('char.body', 'slim'), 'athletic': tc('char.body', 'athletic'), 'average': tc('char.body', 'average'),
+    'curvy': tc('char.body', 'curvy'), 'plus-size': tc('char.body', 'plus-size'),
+  },
+  skin: {
+    'very fair': tc('char.skin', 'very fair'), 'fair': tc('char.skin', 'fair'), 'light': tc('char.skin', 'light'),
+    'medium': tc('char.skin', 'medium'), 'olive': tc('char.skin', 'olive'), 'tan': tc('char.skin', 'tan'),
+    'brown': tc('char.skin', 'brown'), 'dark': tc('char.skin', 'dark'), 'deep': tc('char.skin', 'deep'),
+  },
+  hairColor: {
+    'black': tc('char.hairColor', 'black'), 'dark brown': tc('char.hairColor', 'dark brown'), 'brown': tc('char.hairColor', 'brown'),
+    'light brown': tc('char.hairColor', 'light brown'), 'blonde': tc('char.hairColor', 'blonde'), 'platinum': tc('char.hairColor', 'platinum'),
+    'red': tc('char.hairColor', 'red'), 'auburn': tc('char.hairColor', 'auburn'), 'grey': tc('char.hairColor', 'grey'),
+    'white': tc('char.hairColor', 'white'), 'vivid dyed': tc('char.hairColor', 'vivid dyed'),
+  },
+  hairLength: {
+    'bald': tc('char.hairLength', 'bald'), 'buzzcut': tc('char.hairLength', 'buzzcut'), 'short': tc('char.hairLength', 'short'),
+    'medium': tc('char.hairLength', 'medium'), 'long': tc('char.hairLength', 'long'), 'very long': tc('char.hairLength', 'very long'),
+  },
+  hairStyle: {
+    'straight': tc('char.hairStyle', 'straight'), 'wavy': tc('char.hairStyle', 'wavy'), 'curly': tc('char.hairStyle', 'curly'),
+    'coily': tc('char.hairStyle', 'coily'), 'ponytail': tc('char.hairStyle', 'ponytail'), 'bun': tc('char.hairStyle', 'bun'),
+    'braids': tc('char.hairStyle', 'braids'), 'undercut': tc('char.hairStyle', 'undercut'), 'slicked back': tc('char.hairStyle', 'slicked back'),
+  },
+  eyeColor: {
+    'brown': tc('char.eyeColor', 'brown'), 'hazel': tc('char.eyeColor', 'hazel'), 'green': tc('char.eyeColor', 'green'),
+    'blue': tc('char.eyeColor', 'blue'), 'grey': tc('char.eyeColor', 'grey'), 'amber': tc('char.eyeColor', 'amber'),
+  },
+  eyeShape: {
+    'almond': tc('char.eyeShape', 'almond'), 'round': tc('char.eyeShape', 'round'), 'hooded': tc('char.eyeShape', 'hooded'),
+    'monolid': tc('char.eyeShape', 'monolid'), 'downturned': tc('char.eyeShape', 'downturned'), 'upturned': tc('char.eyeShape', 'upturned'),
+  },
+  faceShape: {
+    'oval': tc('char.faceShape', 'oval'), 'round': tc('char.faceShape', 'round'), 'square': tc('char.faceShape', 'square'),
+    'heart': tc('char.faceShape', 'heart'), 'diamond': tc('char.faceShape', 'diamond'), 'long': tc('char.faceShape', 'long'),
+  },
+  eyebrows: {
+    'natural': tc('char.eyebrows', 'natural'), 'thick': tc('char.eyebrows', 'thick'), 'thin': tc('char.eyebrows', 'thin'),
+    'arched': tc('char.eyebrows', 'arched'), 'straight': tc('char.eyebrows', 'straight'), 'bushy': tc('char.eyebrows', 'bushy'),
+  },
+  facialHair: {
+    'none': tc('char.facialHair', 'none'), 'stubble': tc('char.facialHair', 'stubble'), 'short beard': tc('char.facialHair', 'short beard'),
+    'full beard': tc('char.facialHair', 'full beard'), 'goatee': tc('char.facialHair', 'goatee'), 'moustache': tc('char.facialHair', 'moustache'),
+  },
+  makeup: {
+    'none': tc('char.makeup', 'none'), 'natural': tc('char.makeup', 'natural'), 'glam': tc('char.makeup', 'glam'),
+    'smoky': tc('char.makeup', 'smoky'), 'editorial': tc('char.makeup', 'editorial'), 'bold lip': tc('char.makeup', 'bold lip'),
+  },
+  scars: {
+    'none': tc('char.scars', 'none'), 'cheek scar': tc('char.scars', 'cheek scar'), 'brow scar': tc('char.scars', 'brow scar'),
+    'lip scar': tc('char.scars', 'lip scar'), 'multiple scars': tc('char.scars', 'multiple scars'),
+  },
+  tattoos: {
+    'none': tc('char.tattoos', 'none'), 'small teardrop': tc('char.tattoos', 'small teardrop'), 'tribal': tc('char.tattoos', 'tribal'),
+    'script': tc('char.tattoos', 'script'), 'geometric': tc('char.tattoos', 'geometric'),
+  },
+  piercings: {
+    'none': tc('char.piercings', 'none'), 'nose stud': tc('char.piercings', 'nose stud'), 'septum': tc('char.piercings', 'septum'),
+    'eyebrow': tc('char.piercings', 'eyebrow'), 'lip': tc('char.piercings', 'lip'), 'multiple ear': tc('char.piercings', 'multiple ear'),
+  },
+  freckles: {
+    'none': tc('char.freckles', 'none'), 'light freckles': tc('char.freckles', 'light freckles'),
+    'heavy freckles': tc('char.freckles', 'heavy freckles'), 'beauty mark': tc('char.freckles', 'beauty mark'),
+  },
+};
+/** A group's name as shown. */
+export const groupLabel = (g) => _GROUP_SAY[g] || g;
+/** A parameter's label as shown (its `label` stays the English key). */
+export const paramLabel = (p) => (p && (_LABEL_SAY[p.k] || p.label || p.k)) || '';
+/** A value of parameter `k` as shown; the value itself is what is kept and sent. */
+export const optLabel = (k, o) => (o && _OPT_SAY[k] && _OPT_SAY[k][o]) || o;
 
 export function paramByKey(k) {
   let r = null;

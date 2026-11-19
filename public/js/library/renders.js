@@ -14,6 +14,7 @@
 // "no renders yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
+import { t, tn } from '../i18n/t.js';
 
 const LS_OPEN = 'lib-renders-open';
 const NONE = '~none';
@@ -53,7 +54,7 @@ export function render(items, hooks) {
   grid.className = 'lib-rows is-renders';
   grid.textContent = '';
   if (!items.length) {
-    grid.appendChild(emptyEl('No renders yet. Render a project in Merge.', { cls: 'lib-empty' }));
+    grid.appendChild(emptyEl(t('No renders yet. Render a project in Merge.'), { cls: 'lib-empty' }));
     return;
   }
 
@@ -62,7 +63,7 @@ export function render(items, hooks) {
   for (const it of items) {
     const m = it.meta || {};
     const key = m.folder ? 'f:' + String(m.folder).toLowerCase() : NONE;
-    if (!groups.has(key)) groups.set(key, { key, title: m.folder ? (m.project || m.folder) : 'No project', items: [] });
+    if (!groups.has(key)) groups.set(key, { key, title: m.folder ? (m.project || m.folder) : t('No project'), items: [] });
     groups.get(key).items.push(it);
   }
   const rows = [...groups.values()].sort((a, b) => (a.key === NONE) - (b.key === NONE));
@@ -77,10 +78,10 @@ export function render(items, hooks) {
     main.appendChild(_el('div', 'lib-srow-t', g.title));
     const n = g.items.length;
     const making = g.items.filter(it => it.meta && it.meta.posterPending).length;
-    main.appendChild(_el('div', 'lib-srow-s', n + (n === 1 ? ' render' : ' renders') + (making ? ' · posters being made: ' + making : '')));
+    main.appendChild(_el('div', 'lib-srow-s', tn(n, '{n} render', '{n} renders') + (making ? ' · ' + t('posters being made: {n}', { n: making }) : '')));
     head.appendChild(main);
     head.appendChild(_el('span', 'lib-srow-d', _when((g.items[0].meta || {}).date)));
-    head.title = open.has(g.key) ? 'Close' : 'Show the renders of this project';
+    head.title = open.has(g.key) ? t('Close') : t('Show the renders of this project');
     wrap.appendChild(head);
 
     const strip = _el('div', 'lib-rstrip');
@@ -93,7 +94,7 @@ export function render(items, hooks) {
         if (len) sub.appendChild(_el('span', 'lib-rlen', len));
         // Short under a narrow card: the month and day and the time - the year is the row's.
         sub.appendChild(_el('span', '', _when(m.date).slice(5)));
-        if (m.posterPending) sub.appendChild(_el('span', 'lib-sub-run', '· poster…'));
+        if (m.posterPending) sub.appendChild(_el('span', 'lib-sub-run', '· ' + t('poster…')));
         const card = h.card ? h.card(it, sub) : _el('div', 'lib-card', it.name);
         if (m.unreadable && m.why) card.title = it.name + '\n' + m.why;
         card.addEventListener('click', () => { if (h.open) h.open(it, g.items); });
@@ -106,7 +107,7 @@ export function render(items, hooks) {
     head.addEventListener('click', () => {
       const now = !wrap.classList.contains('is-open');
       wrap.classList.toggle('is-open', now);
-      head.title = now ? 'Close' : 'Show the renders of this project';
+      head.title = now ? t('Close') : t('Show the renders of this project');
       const set = _loadOpen();
       if (now) { set.add(g.key); if (!strip.childNodes.length) fill(); } else set.delete(g.key);
       _saveOpen(set);

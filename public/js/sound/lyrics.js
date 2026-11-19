@@ -21,13 +21,15 @@ import { deleteQuestion, deleteItem } from '../library/actions.js';
 import { askName } from '../name-box.js';
 // the question at the viewer's Delete, not the browser's confirm()
 import { ask } from '../ask.js';
+import * as T from '../i18n/t.js';
 
 export const KIND = 'lyrics';
 export const isLyrics = (it) => !!it && it.kind === KIND;
 /** The window event "Use in Custom" sends - Generate music listens. */
 export const USE_EVENT = 'ugc:lyric-use';
 
-const FROM = { suno: 'Suno · Lyrics', own: 'your own' };
+// Suno's mode keeps its name.
+const FROM = { suno: 'Suno · Lyrics', own: T.t('your own') };
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -45,7 +47,7 @@ export function firstLines(text, n) {
 /** A tile's face - its title, its first lines, where it came from (css/sound.css .lyr-*). */
 export function tileFace(it) {
   const face = el('div', 'lyr-face');
-  face.appendChild(el('b', 'lyr-title', it.name || 'lyrics'));
+  face.appendChild(el('b', 'lyr-title', it.name || T.t('lyrics')));
   const lines = el('div', 'lyr-lines');
   for (const l of firstLines(textOf(it), 6)) lines.appendChild(el('span', null, l));
   face.appendChild(lines);
@@ -55,7 +57,7 @@ export function tileFace(it) {
 }
 
 /** What a tile says under the pointer. */
-export const tileTitle = (it) => (it.name || 'lyrics') + '\n' + firstLines(textOf(it), 2).join(' / ') + '\na press opens the text';
+export const tileTitle = (it) => (it.name || T.t('lyrics')) + '\n' + firstLines(textOf(it), 2).join(' / ') + '\n' + T.t('a press opens the text');
 
 /** "Use in Custom": the page is told; Generate music opens Custom with the text. */
 export function useInCustom(it) {
@@ -79,18 +81,19 @@ async function _copy(text) {
 }
 
 const ACTIONS = [
-  { id: 'lycopy', label: 'Copy', title: 'The whole text into the clipboard' },
-  { id: 'lyuse', label: 'Use in Custom', title: 'Generate music opens Custom with this text in its Lyrics field' },
-  { id: 'lyrename', label: 'Rename' },
-  { id: 'lydel', label: 'Delete', danger: true },
+  { id: 'lycopy', label: T.t('Copy'), title: T.t('The whole text into the clipboard') },
+  { id: 'lyuse', label: T.t('Use in Custom'), title: T.t('Generate music opens Custom with this text in its Lyrics field') },
+  { id: 'lyrename', label: T.t('Rename') },
+  { id: 'lydel', label: T.t('Delete'), danger: true },
 ];
 
 // The right column: where it came from, when, how long.
 function _rows(it) {
   const m = it.meta || {};
-  const t = textOf(it);
-  const lines = t ? t.split('\n').filter(s => s.trim()).length : 0;
-  return [['Kind', 'lyrics · Music → Lyrics'], ['From', FROM[m.from] || ''], ['Length', lines + (lines === 1 ? ' line' : ' lines') + ' · ' + t.length + ' characters']];
+  const text = textOf(it);
+  const lines = text ? text.split('\n').filter(s => s.trim()).length : 0;
+  return [[T.t('Kind'), T.t('lyrics · Music → Lyrics')], [T.tc('lyrics', 'From'), FROM[m.from] || ''],
+    [T.t('Length'), T.tn(lines, '{n} line · {c} characters', '{n} lines · {c} characters', { c: text.length })]];
 }
 
 /**
@@ -102,13 +105,13 @@ export function openLyrics(list, it, o) {
   const texts = (list || []).filter(isLyrics);
   let at = texts.findIndex(x => String(x.id) === String(it.id));
   if (at < 0) { texts.unshift(it); at = 0; }
-  const say = (t, bad) => { if (typeof opt.status === 'function') opt.status(t, !!bad); };
+  const say = (text, bad) => { if (typeof opt.status === 'function') opt.status(text, !!bad); };
   openViewer(texts, at, {
     actionsFor: (x) => (isLyrics(x) ? ACTIONS : []),
     extraRows: (x) => (isLyrics(x) ? _rows(x) : []),
     onAction: async (id, x) => {
       if (id === 'lycopy') {
-        say(await _copy(textOf(x)) ? 'Copied "' + x.name + '"' : 'The clipboard refused - select the text and press Ctrl+C', false);
+        say(await _copy(textOf(x)) ? T.t('Copied "{name}"', { name: x.name }) : T.t('The clipboard refused - select the text and press Ctrl+C'), false);
         return { actionsOnly: true };
       }
       if (id === 'lyuse') {
@@ -118,13 +121,13 @@ export function openLyrics(list, it, o) {
       }
       if (id === 'lyrename') {
         const name = await askName({
-          title: 'Rename', value: x.name || '', okLabel: 'Rename', maxLength: 120,
+          title: T.t('Rename'), value: x.name || '', okLabel: T.t('Rename'), maxLength: 120,
           submit: async (n) => {
             const r = await fetch('/api/audio/lyrics/' + encodeURIComponent(x.id), {
               method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: n }),
             });
             const d = await r.json().catch(() => null);
-            if (!d || !d.success) throw new Error((d && d.error) || 'not renamed');
+            if (!d || !d.success) throw new Error((d && d.error) || T.t('not renamed'));
             return d.item.title;
           },
         });
@@ -132,17 +135,17 @@ export function openLyrics(list, it, o) {
         x.name = name;
         // The page reads its gallery again first - that read clears its status line.
         if (typeof opt.changed === 'function') await opt.changed({ renamed: x });
-        say('Renamed', false);
+        say(T.t('Renamed'), false);
         return null;
       }
       if (id === 'lydel') {
         // At the viewer's Delete (js/library/viewer.js draws the row - the action's label is its button).
         const label = (ACTIONS.find(a => a.id === 'lydel') || {}).label;
         const btn = [...document.querySelectorAll('.lib-view-acts button')].find(b => b.textContent === label) || null;
-        if (!await ask(btn, await deleteQuestion(x), { yes: 'Delete', danger: true, stay: true })) return { actionsOnly: true };
+        if (!await ask(btn, await deleteQuestion(x), { yes: T.t('Delete'), danger: true, stay: true })) return { actionsOnly: true };
         await deleteItem(x);
         if (typeof opt.changed === 'function') await opt.changed({ removed: x });
-        say('Deleted "' + x.name + '"', false);
+        say(T.t('Deleted "{name}"', { name: x.name }), false);
         return { removed: true };
       }
       return null;

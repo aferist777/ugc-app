@@ -20,12 +20,18 @@ import { startInlineProgress } from '../progress.js';
 import { ask } from '../ask.js';
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
+// The app's words as T.t / T.tn: a voice taken is this module's own `t`.
+import * as T from '../i18n/t.js';
 
 // play and pause as the interface's icons
 const PLAY = icon('play', 12), PAUSE = icon('pause', 12);
 
 const PAGE = 20;
 const GENDERS = ['female', 'male'];
+// A gender as the column says it - the value sent stays the English word.
+const GENDER_WORD = { female: T.tc('gender', 'female'), male: T.tc('gender', 'male'), neutral: T.tc('gender', 'neutral') };
+const IS = { female: T.t('This character is female'), male: T.t('This character is male') };
+const MAKE = { female: T.t('Make this character female'), male: T.t('Make this character male') };
 
 function _el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -69,7 +75,7 @@ function _playBtn(src, title) {
   b.innerHTML = PLAY;
   b.type = 'button';
   b.disabled = !src;
-  b.title = src ? title : 'There is nothing to play for this voice';
+  b.title = src ? title : T.t('There is nothing to play for this voice');
   b.addEventListener('click', () => _play(src, b));
   return b;
 }
@@ -90,18 +96,18 @@ export function paint(body, it, voices, hooks) {
 
   // ── gender ──
   const gRow = _el('div', 'lib-cv-gender');
-  gRow.appendChild(_el('span', 'lib-cv-l', 'Gender'));
+  gRow.appendChild(_el('span', 'lib-cv-l', T.t('Gender')));
   const gBtns = GENDERS.map(g => {
-    const b = _el('button', 'lib-cv-g u-chip', g);
+    const b = _el('button', 'lib-cv-g u-chip', GENDER_WORD[g]);
     b.type = 'button';
     b.addEventListener('click', () => {
       if (String((it.meta || {}).gender || '') === g) return;
-      run('Setting the gender…', async () => {
+      run(T.t('Setting the gender…'), async () => {
         await _send('/api/char-store/' + encodeURIComponent(id), 'PATCH', { gender: g });
         it.meta = { ...(it.meta || {}), gender: g };
         paintGender();
         if (!searched) fGender.value = g;
-        say('Gender set to ' + g, 'ok');
+        say(T.t('Gender set to {g}', { g: GENDER_WORD[g] }), 'ok');
         if (hooks && hooks.changed) hooks.changed(it);
       });
     });
@@ -113,7 +119,7 @@ export function paint(body, it, voices, hooks) {
     gBtns.forEach((b, i) => {
       const on = GENDERS[i] === cur;
       b.classList.toggle('is-on', on);
-      b.title = on ? 'This character is ' + cur : 'Make this character ' + GENDERS[i];
+      b.title = on ? IS[cur] : MAKE[GENDERS[i]];
     });
   };
   paintGender();
@@ -135,43 +141,43 @@ export function paint(body, it, voices, hooks) {
   };
 
   const paintSaved = () => {
-    sec.textContent = saved.length > 1 ? 'Voices · ' + saved.length : 'Voice';
+    sec.textContent = saved.length > 1 ? T.t('Voices · {n}', { n: saved.length }) : T.t('Voice');
     list.textContent = '';
-    if (!saved.length) { list.appendChild(emptyEl('No voice yet - find one below.', { line: true, cls: 'lib-info-note' })); return; }
+    if (!saved.length) { list.appendChild(emptyEl(T.t('No voice yet - find one below.'), { line: true, cls: 'lib-info-note' })); return; }
     for (const v of saved) {
       const row = _el('div', 'lib-info-voice lib-cv-row' + (v.main ? ' is-main' : ''));
-      row.title = v.main ? 'The voice every read uses' : 'One of the voices saved for this character';
-      row.appendChild(_playBtn(v.demo, 'Play our demo'));
+      row.title = v.main ? T.t('The voice every read uses') : T.t('One of the voices saved for this character');
+      row.appendChild(_playBtn(v.demo, T.t('Play our demo')));
       const txt = _el('div', 'lib-vtxt');
-      txt.appendChild(_el('div', 'lib-vname', v.name || 'Not on the Voices shelf'));
+      txt.appendChild(_el('div', 'lib-vname', v.name || T.t('Not on the Voices shelf')));
       txt.appendChild(_el('div', 'lib-vsub', (v.tags || []).map(_pretty).join(' · ') || v.voiceId));
       row.appendChild(txt);
       // the main voice: a neutral label "Main" in the column of the star, not gold
-      if (v.main) row.appendChild(_el('span', 'lib-info-main', 'Main'));
+      if (v.main) row.appendChild(_el('span', 'lib-info-main', T.t('Main')));
       else {
         const star = _el('button', 'lib-cv-star u-btn is-s is-icon is-quiet');
         star.innerHTML = icon('star', 14);
         star.type = 'button';
-        star.title = 'Make this the voice every read uses';
-        star.addEventListener('click', () => run('Setting the main voice…', async () => {
+        star.title = T.t('Make this the voice every read uses');
+        star.addEventListener('click', () => run(T.t('Setting the main voice…'), async () => {
           await _send('/api/char-store/' + encodeURIComponent(id), 'PATCH', { voice: v.voiceId });
           await reread();
-          say('“' + (v.name || v.voiceId) + '” is the main voice now', 'ok');
+          say(T.t('“{name}” is the main voice now', { name: v.name || v.voiceId }), 'ok');
         }));
         row.appendChild(star);
       }
       const x = _el('button', 'lib-cv-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
-      x.title = 'Unbind this voice: it stays on the Voices shelf with its demo, its ElevenLabs slot is freed';
+      x.title = T.t('Unbind this voice: it stays on the Voices shelf with its demo, its ElevenLabs slot is freed');
       x.addEventListener('click', async () => {
-        if (!await ask(x, 'Unbind “' + (v.name || v.voiceId) + '” from ' + (it.name || 'this character') + '?\n\n'
-          + 'It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.', { yes: 'Unbind', danger: true, stay: true })) return;
-        run('Unbinding the voice…', async () => {
+        if (!await ask(x, T.t('Unbind “{name}” from {who}?', { name: v.name || v.voiceId, who: it.name || T.t('this character') }) + '\n\n'
+          + T.t('It stays on the Voices shelf with its demo; its ElevenLabs slot is given back.'), { yes: T.t('Unbind'), danger: true, stay: true })) return;
+        run(T.t('Unbinding the voice…'), async () => {
           const d = await _json('/api/char-store/' + encodeURIComponent(id) + '/voice/' + encodeURIComponent(v.voiceId), { method: 'DELETE' });
           await reread();
           const slot = d.slot || {};
-          say('“' + (v.name || v.voiceId) + '” is on the Voices shelf. '
-            + (slot.released ? 'Its ElevenLabs slot is free.' : 'Slot ' + (slot.reason || 'kept') + '.'), 'ok');
+          say(T.t('“{name}” is on the Voices shelf.', { name: v.name || v.voiceId }) + ' '
+            + (slot.released ? T.t('Its ElevenLabs slot is free.') : T.t('Slot: {why}.', { why: slot.reason || T.t('kept') })), 'ok');
         });
       });
       row.appendChild(x);
@@ -191,7 +197,7 @@ export function paint(body, it, voices, hooks) {
 
   // ── the search ──
   const find = _el('div', 'lib-cv-find');
-  find.appendChild(_el('div', 'lib-info-sec', 'Find a voice'));
+  find.appendChild(_el('div', 'lib-info-sec', T.t('Find a voice')));
   const bar = _el('div', 'lib-cv-bar');
   const sel = (cls) => { const s = _el('select', 'lib-cv-sel u-in is-s' + (cls ? ' ' + cls : '')); return s; };
   const fill = (s, values, anyLabel, def) => {
@@ -201,24 +207,24 @@ export function paint(body, it, voices, hooks) {
     if (def && (values || []).includes(def)) s.value = def;
   };
   const fGender = sel();
-  for (const g of ['female', 'male', 'neutral']) { const o = _el('option', null, g); o.value = g; fGender.appendChild(o); }
+  for (const g of ['female', 'male', 'neutral']) { const o = _el('option', null, GENDER_WORD[g]); o.value = g; fGender.appendChild(o); }
   fGender.value = String((it.meta || {}).gender || '') === 'male' ? 'male' : 'female';
   const fLang = sel(), fAccent = sel('is-wide');
-  fill(fLang, [], 'any language');
-  fill(fAccent, [], 'any accent');
+  fill(fLang, [], T.t('any language'));
+  fill(fAccent, [], T.t('any accent'));
   _json('/api/scen3/voices/filters').then(d => {
-    fill(fLang, d.languages, 'any language', 'en');
-    fill(fAccent, d.accents, 'any accent');
+    fill(fLang, d.languages, T.t('any language'), 'en');
+    fill(fAccent, d.accents, T.t('any accent'));
   }).catch(() => { /* the lists stay "any" */ });
-  const go = _el('button', 'u-btn is-s lib-cv-go', 'Search');
+  const go = _el('button', 'u-btn is-s lib-cv-go', T.t('Search'));
   go.type = 'button';
-  go.title = 'Search the ElevenLabs voice library';
+  go.title = T.t('Search the ElevenLabs voice library');
   bar.appendChild(fGender); bar.appendChild(fLang); bar.appendChild(fAccent); bar.appendChild(go);
   find.appendChild(bar);
   const results = _el('div', 'lib-cv-results');
   find.appendChild(results);
 
-  const search = () => run('Searching the voice library…', async () => {
+  const search = () => run(T.t('Searching the voice library…'), async () => {
     // The library counts pages from zero; the pager here from one.
     const q = new URLSearchParams({ page_size: String(PAGE), page: String(page - 1) });
     if (fGender.value) q.set('gender', fGender.value);
@@ -229,7 +235,7 @@ export function paint(body, it, voices, hooks) {
     searched = true;
     total = d.total || (d.voices || []).length;
     paintResults(d.voices || []);
-    say((d.voices || []).length ? ((d.voices || []).length + ' of ' + total + ' - listen, then Save') : 'Nothing matched that.',
+    say((d.voices || []).length ? T.t('{k} of {n} - listen, then Save', { k: (d.voices || []).length, n: total }) : T.t('Nothing matched that.'),
       (d.voices || []).length ? '' : 'err');
   });
   go.addEventListener('click', () => { page = 1; search(); });
@@ -239,29 +245,29 @@ export function paint(body, it, voices, hooks) {
     results.textContent = '';
     for (const v of found) {
       const row = _el('div', 'lib-info-voice lib-cv-row');
-      row.appendChild(_playBtn(v.preview_url, 'Play the library sample'));
+      row.appendChild(_playBtn(v.preview_url, T.t('Play the library sample')));
       const txt = _el('div', 'lib-vtxt');
       txt.appendChild(_el('div', 'lib-vname', v.name || v.voice_id));
       txt.appendChild(_el('div', 'lib-vsub', [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).map(_pretty).join(' · ')));
       row.appendChild(txt);
-      const take = _el('button', 'u-btn is-s lib-cv-take', 'Save');
+      const take = _el('button', 'u-btn is-s lib-cv-take', T.t('Save'));
       take.type = 'button';
-      take.title = 'Add it to the account and make it this character’s main voice';
-      take.addEventListener('click', () => run('Saving the voice…', async () => {
+      take.title = T.t('Add it to the account and make it this character’s main voice');
+      take.addEventListener('click', () => run(T.t('Saving the voice…'), async () => {
         const t = await _send('/api/scen3/voices/take', 'POST', { ownerId: v.public_owner_id, voiceId: v.voice_id, name: v.name });
         const all = await _json('/api/char-store/list');
         const rec = (all.chars || []).find(c => String(c.id) === id);
-        if (!rec) throw new Error('this character is gone');
+        if (!rec) throw new Error(T.t('this character is gone'));
         const had = (rec.voices || []).some(x => x && x.voiceId === t.voiceId);
         const kept = (rec.voices || []).filter(x => x && x.voiceId !== t.voiceId);
         const entry = { voiceId: t.voiceId, name: t.name || v.name, gender: v.gender || '', age: v.age || '',
           accent: v.accent || '', descriptive: v.descriptive || '', sample: t.sample || '', dur: t.dur || 0 };
         await _send('/api/char-store/' + encodeURIComponent(id), 'PATCH', { voice: t.voiceId, voices: kept.concat([entry]) });
         await reread();
-        say(had ? 'Already this character’s - it is the main voice now.'
-          : t.reused ? 'Already on the Voices shelf, so its demo was kept. Bound to this character.'
-          : t.sampleError ? 'Saved. Its demo failed to record, which is cosmetic.'
-          : 'Saved - the main voice now.', 'ok');
+        say(had ? T.t('Already this character’s - it is the main voice now.')
+          : t.reused ? T.t('Already on the Voices shelf, so its demo was kept. Bound to this character.')
+          : t.sampleError ? T.t('Saved. Its demo failed to record, which is cosmetic.')
+          : T.t('Saved - the main voice now.'), 'ok');
       }));
       row.appendChild(take);
       results.appendChild(row);
@@ -285,7 +291,7 @@ export function paint(body, it, voices, hooks) {
 
   // One thing at a time, everything in the column locked while it runs, a countdown row over the status.
   async function run(label, fn) {
-    if (busy) { say('Already working - one at a time', 'err'); return; }
+    if (busy) { say(T.t('Already working - one at a time'), 'err'); return; }
     busy = true;
     const touched = [];
     for (const b of [gRow, part, find].flatMap(n => [...n.querySelectorAll('button, select')])) {

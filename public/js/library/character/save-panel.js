@@ -19,6 +19,10 @@
 // you end up with a character that has none. What can still go wrong is the sheet, so that is
 // what gets the retry - offered only once it has stopped running.
 
+import { optLabel } from './schema.js';
+import { t, tc } from '../../i18n/t.js';
+
+// Kept and sent in English; shown as the create column's Gender says them.
 const GENDERS = ['female', 'male'];
 
 let _hooks = {};
@@ -36,10 +40,10 @@ let _ready = false;
 function _sec(title) {
   const s = document.createElement('div');
   s.className = 'cv2-save-sec';
-  const t = document.createElement('div');
-  t.className = 'cv2-save-sec-t';
-  t.textContent = title;
-  s.appendChild(t);
+  const head = document.createElement('div');
+  head.className = 'cv2-save-sec-t';
+  head.textContent = title;
+  s.appendChild(head);
   return s;
 }
 
@@ -57,18 +61,18 @@ function _syncFoot() {
   const failed = _lastKind === 'err';
   retry.classList.toggle('is-retry', failed);
   retry.classList.toggle('is-danger', failed);
-  retry.textContent = failed ? 'Try again' : 'Regenerate';
-  retry.title = failed ? 'The sheet did not generate - submit it again' : 'Submit the 4K sheet again';
+  retry.textContent = failed ? t('Try again') : t('Regenerate');
+  retry.title = failed ? t('The sheet did not generate - submit it again') : t('Submit the 4K sheet again');
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
   go.disabled = busy || (_state === 'form' && !name.value.trim());
   // The button says what pressing it does NOW, not what the stage is called. From the form it
   // starts a 4K generation; once that has stopped, the only thing left is to keep the character.
   // With the sheet already in hand there is no generation to offer: the form is down to a name
   // and a gender, and the button that ends it should say what it does - Save.
-  go.textContent = _state === 'saved' ? 'Save'
-    : _state === 'sheet' ? 'Generating…'
-    : _state === 'saving' ? 'Saving…'
-    : _ready ? 'Save' : 'Generate 4K reference';
+  go.textContent = _state === 'saved' ? t('Save')
+    : _state === 'sheet' ? t('Generating…')
+    : _state === 'saving' ? t('Saving…')
+    : _ready ? t('Save') : t('Generate 4K reference');
   // Editable in `form`, and again once the record exists: the sheet takes minutes, and a name is
   // exactly what you reconsider while waiting. Locked only while the record is being made, when
   // there is nothing yet to write a change to.
@@ -84,15 +88,15 @@ export function build(host, hooks) {
   wrap.className = 'cv2-save';
 
   // ── who it is ──
-  const idn = _sec('Identity');
+  const idn = _sec(t('Identity'));
   const nameRow = document.createElement('div');
   nameRow.className = 'cv2-save-row';
   const nameLab = document.createElement('span');
   nameLab.className = 'cv2-save-lab';
-  nameLab.textContent = 'Name';
+  nameLab.textContent = t('Name');
   const name = document.createElement('input');
   name.type = 'text'; name.id = 'cv2-save-name'; name.className = 'cv2-save-in u-in';
-  name.placeholder = 'Required';
+  name.placeholder = tc('char.name', 'Required');
   name.addEventListener('input', () => {
     _syncFoot();
     // Once the character is real, a change here is a change to it. Debounced, because this fires
@@ -112,12 +116,12 @@ export function build(host, hooks) {
   genRow.className = 'cv2-save-row';
   const genLab = document.createElement('span');
   genLab.className = 'cv2-save-lab';
-  genLab.textContent = 'Gender';
+  genLab.textContent = t('Gender');
   const gender = document.createElement('select');
   gender.id = 'cv2-save-gender'; gender.className = 'cv2-save-in u-in';
   for (const g of GENDERS) {
     const o = document.createElement('option');
-    o.value = g; o.textContent = g;
+    o.value = g; o.textContent = optLabel('gender', g);
     gender.appendChild(o);
   }
   gender.addEventListener('change', () => {
@@ -131,21 +135,18 @@ export function build(host, hooks) {
   // Chosen in view mode, not here. Attaching needs a character id anyway, so the form could only
   // ever have offered it after the save - and view mode is where the character is actually looked
   // at, with its reference and its voices in one place. A pointer, not a second copy of the UI.
-  const voice = _sec('Voice');
+  const voice = _sec(t('Voice'));
   const vnote = document.createElement('div');
   vnote.className = 'cv2-save-note';
-  vnote.textContent = 'Chosen after saving, in the character’s column on the Characters shelf - where '
-    + 'the character and its voices are looked at together.';
+  vnote.textContent = t('Chosen after saving, in the character’s column on the Characters shelf - where the character and its voices are looked at together.');
   voice.appendChild(vnote);
   wrap.appendChild(voice);
 
   // ── the sheet ──
-  const sheet = _sec('Reference sheet');
+  const sheet = _sec(t('Reference sheet'));
   const snote = document.createElement('div');
   snote.className = 'cv2-save-note';
-  snote.textContent = 'A 4K sheet is generated from the image on the left: a large portrait plus '
-    + 'three full-body views in a neutral bodysuit. It runs in the background, so saving does not '
-    + 'wait for it, and it is what Scenarios reads later.';
+  snote.textContent = t('A 4K sheet is generated from the image on the left: a large portrait plus three full-body views in a neutral bodysuit. It runs in the background, so saving does not wait for it, and it is what Scenarios reads later.');
   sheet.appendChild(snote);
   const sstat = document.createElement('div');
   sstat.className = 'cv2-save-stat u-status';
@@ -158,18 +159,18 @@ export function build(host, hooks) {
   foot.className = 'cv2-save-foot';
   const cancel = document.createElement('button');
   cancel.type = 'button'; cancel.id = 'cv2-save-cancel'; cancel.className = 'cv2-save-btn u-btn is-l';
-  cancel.textContent = 'Cancel';
-  cancel.title = 'Back to building, and nothing is saved';
+  cancel.textContent = t('Cancel');
+  cancel.title = t('Back to building, and nothing is saved');
   cancel.addEventListener('click', () => { if (_hooks.onCancel) _hooks.onCancel(); });
   const retry = document.createElement('button');
   retry.type = 'button'; retry.id = 'cv2-save-retry'; retry.className = 'cv2-save-btn u-btn is-l';
-  retry.textContent = 'Regenerate sheet';
-  retry.title = 'Submit the 4K sheet again';
+  retry.textContent = t('Regenerate sheet');
+  retry.title = t('Submit the 4K sheet again');
   retry.hidden = true;
   retry.addEventListener('click', () => { if (_hooks.onRetrySheet) _hooks.onRetrySheet(); });
   const go = document.createElement('button');
   go.type = 'button'; go.id = 'cv2-save-go'; go.className = 'cv2-save-btn is-go u-btn is-l is-main';
-  go.textContent = 'Save character';
+  go.textContent = t('Save character');
   go.addEventListener('click', () => {
     if (_state === 'sheet') return;              // disabled anyway; belt as well as braces
     if (_state === 'saved') return _hooks.onDone && _hooks.onDone();

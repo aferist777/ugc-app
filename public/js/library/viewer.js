@@ -14,6 +14,8 @@ import { showError } from '../notice.js';
 // a source downloaded by a link is new until it is looked at here
 import { opened as openedNew } from '../references/news.js';
 import { iconEl } from '../icons.js';
+// The app's words as T.t: this module's own `t`s are elements.
+import * as T from '../i18n/t.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 // The 3D Studio's page keeps its own look - the viewer reaches it through Alerts "open"; there it is drawn with none of
@@ -24,8 +26,10 @@ const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]')
 // js/icons.js menuIcons): Rename pencil, Favorite star, Delete trash, Move to folder, Copy copy, Cut… scissors; any other
 // keeps its word alone. The word sits in a <span>, so `button.textContent` is still the label - the pages find a viewer's
 // button by it (library/main.js _viewerBtn, sound/lyrics.js, references/yt.js). On the 3D Studio's page: the word only.
-const ACT_ICONS = [[/^(un)?favou?rite\b/i, 'star'], [/^delete\b/i, 'trash-2'], [/^rename\b/i, 'pencil'],
-  [/^move to\b/i, 'folder'], [/^copy\b/i, 'copy'], [/^cut…/i, 'scissors']];
+// The words in either language the app speaks.
+const ACT_ICONS = [[/^((un)?favou?rite\b|в избранное|из избранного)/i, 'star'], [/^(delete\b|удалить)/i, 'trash-2'],
+  [/^(rename\b|переименовать)/i, 'pencil'], [/^(move to\b|перенести)/i, 'folder'], [/^(copy\b|копировать)/i, 'copy'],
+  [/^(cut…|вырезать…)/i, 'scissors']];
 export function fillAct(btn, label) {
   btn.textContent = '';
   const text = String(label == null ? '' : label);
@@ -61,30 +65,30 @@ const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)(\?|$)/i;
 function _fmtDate(s) {
   if (!s) return '';
   const d = new Date(s);
-  return isNaN(d) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return isNaN(d) ? '' : d.toLocaleString(T.lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function _meta(it) {
   const rows = [];
-  rows.push(['Kind', it.kind || '']);
+  rows.push([T.t('Kind'), it.kind || '']);
   const m = it.meta || {};
-  if (m.character) rows.push(['Character', m.character]);
-  if (m.gender) rows.push(['Gender', m.gender]);
-  if (m.looks != null) rows.push(['Looks', String(m.looks)]);
-  if (m.voices) rows.push(['Voices', String(m.voices)]);
-  if (m.variations) rows.push(['Variations', String(m.variations)]);
-  if (m.categoryId) rows.push(['Category', m.categoryId]);
-  if (m.favorite) rows.push(['Favorite', 'yes']);
-  if (m.date) rows.push(['Date', _fmtDate(m.date)]);
+  if (m.character) rows.push([T.t('Character'), m.character]);
+  if (m.gender) rows.push([T.t('Gender'), m.gender]);
+  if (m.looks != null) rows.push([T.t('Looks'), String(m.looks)]);
+  if (m.voices) rows.push([T.t('Voices'), String(m.voices)]);
+  if (m.variations) rows.push([T.t('Variations'), String(m.variations)]);
+  if (m.categoryId) rows.push([T.t('Category'), m.categoryId]);
+  if (m.favorite) rows.push([T.t('Favorite'), T.t('yes')]);
+  if (m.date) rows.push([T.t('Date'), _fmtDate(m.date)]);
   // A clip that came by a link: where from, opened in the browser.
   if (m.link) {
     const a = document.createElement('a');
     a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer';
     a.title = m.link;
     a.textContent = String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60) + (String(m.link).length > 70 ? '…' : '');
-    rows.push(['Link', a]);
+    rows.push([T.t('Link'), a]);
   }
-  rows.push(['File', String(it.media || '').split('/').pop()]);
+  rows.push([T.t('File'), String(it.media || '').split('/').pop()]);
   return rows;
 }
 
@@ -165,14 +169,14 @@ function _paint() {
   if (ref) {
     const row = document.createElement('div');
     row.className = 'lib-view-row lib-view-ref';
-    const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = 'From';
+    const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = T.t('From');
     const val = document.createElement('span'); val.className = 'lib-view-v';
     const a = document.createElement('a');
     a.href = ref; a.target = '_blank'; a.rel = 'noreferrer';
-    a.title = 'Open the picture this was animated from';
+    a.title = T.t('Open the picture this was animated from');
     const im = document.createElement('img');
     im.src = '/api/thumb?src=' + encodeURIComponent(ref) + '&v=card';
-    im.alt = 'reference';
+    im.alt = T.t('reference');
     a.appendChild(im);
     val.appendChild(a);
     row.appendChild(key); row.appendChild(val);
@@ -224,7 +228,7 @@ export function wireInfoSash(ov) {
   if (!info || !body) return;
   const sash = document.createElement('div');
   sash.className = 'lib-view-sash';
-  sash.title = 'Drag to resize the column - a double press gives its usual width back';
+  sash.title = T.t('Drag to resize the column - a double press gives its usual width back');
   body.insertBefore(sash, info);
   // The two arrows (40px each) and the stage stay; the column takes the rest at most.
   const max = () => Math.max(INFO_MIN, body.getBoundingClientRect().width - STAGE_MIN - 80);
@@ -320,12 +324,12 @@ export function openViewer(items, index, opts) {
         <span class="lib-view-count${NEW ? ' u-win-sub' : ''}"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <button class="u-btn${NEW ? '' : ' is-s'} is-icon is-quiet u-x" data-x="close" type="button" title="Close (Esc)"></button>
+        <button class="u-btn${NEW ? '' : ' is-s'} is-icon is-quiet u-x" data-x="close" type="button" title="${T.t('Close (Esc)')}"></button>
       </div>
       <div class="lib-view-body">
-        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="Previous (left arrow)">&#8249;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="prev" type="button" title="${T.t('Previous (left arrow)')}">&#8249;</button>
         <div class="lib-view-stage"></div>
-        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="Next (right arrow)">&#8250;</button>
+        <button class="lib-view-arrow u-btn is-icon is-quiet" data-x="next" type="button" title="${T.t('Next (right arrow)')}">&#8250;</button>
         <aside class="lib-view-info"></aside>
       </div>
     </div>`;

@@ -17,12 +17,13 @@ import { openViewer, repaint } from './viewer.js';
 import { askName } from '../name-box.js';
 import { showError } from '../notice.js';
 import { REALLY, MS } from '../really.js';
+import { t } from '../i18n/t.js';
 
 const _plain = (u) => String(u || '').split('?')[0];
 const _json = async (url, opts) => {
   let r = null, d = null;
   try { r = await fetch(url, opts); d = await r.json(); } catch (e) { d = null; }
-  if (!r || !r.ok || !d || d.success === false) throw new Error((d && d.error) || 'the app did not answer');
+  if (!r || !r.ok || !d || d.success === false) throw new Error((d && d.error) || t('the app did not answer'));
   return d;
 };
 
@@ -36,7 +37,7 @@ export async function revealRender(url) {
   if (!reveal) return false;
   let ok = false;
   try { ok = await reveal(_plain(url)); } catch (e) { ok = false; }
-  if (!ok) showError('That render is not in the library any more');
+  if (!ok) showError(t('That render is not in the library any more'));
   return ok;
 }
 
@@ -47,24 +48,24 @@ export async function openRender(url, o = {}) {
   try {
     const d = await _json('/api/library/shelf/renders');
     it = (d.items || []).find(x => _plain(x.media) === want) || null;
-  } catch (e) { showError('The renders did not load: ' + e.message); return false; }
-  if (!it) { showError('That render is no longer on the Renders shelf'); return false; }
+  } catch (e) { showError(t('The renders did not load: {why}', { why: e.message })); return false; }
+  if (!it) { showError(t('That render is no longer on the Renders shelf')); return false; }
 
   let armed = 0;                       // the timer of a Delete pressed once
   const letGo = () => { if (armed) clearTimeout(armed); armed = 0; };
   const changed = () => { if (typeof o.onChanged === 'function') { try { o.onChanged(); } catch (e) { /* the page's */ } } };
   openViewer([it], 0, {
     actionsFor: () => [
-      { id: 'rename', label: 'Rename' },
-      ...(canReveal() ? [{ id: 'reveal', label: 'Show in folder', title: 'Explorer on the folder of this render, the file picked' }] : []),
-      { id: 'del', label: armed ? REALLY : 'Delete', danger: true, armed: !!armed, title: 'Delete this render - its file, its .srt and its entry in Queue' },
+      { id: 'rename', label: t('Rename') },
+      ...(canReveal() ? [{ id: 'reveal', label: t('Show in folder'), title: t('Explorer on the folder of this render, the file picked') }] : []),
+      { id: 'del', label: armed ? REALLY : t('Delete'), danger: true, armed: !!armed, title: t('Delete this render - its file, its .srt and its entry in Queue') },
     ],
     onAction: async (id, item) => {
       if (id === 'reveal') { letGo(); await revealRender(item.media); return { actionsOnly: true }; }
       if (id === 'rename') {
         letGo();
-        const btn = [...document.querySelectorAll('.lib-view-acts button')].find(b => b.textContent === 'Rename') || null;
-        const next = await askName({ anchor: btn, title: 'Rename', value: item.name || '', okLabel: 'Rename' });
+        const btn = [...document.querySelectorAll('.lib-view-acts button')].find(b => b.textContent === t('Rename')) || null;
+        const next = await askName({ anchor: btn, title: t('Rename'), value: item.name || '', okLabel: t('Rename') });
         const name = String(next == null ? '' : next).trim();
         if (!name || name === item.name) return { changed: false };
         const d = await _json('/api/library/item/renders/' + encodeURIComponent(item.id), {

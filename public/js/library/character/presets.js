@@ -13,6 +13,8 @@
 // Coverage is deliberate: all six ethnicities plus mixed, teen through 60+, both genders plus
 // androgynous, and every one of the five body types.
 
+import { optLabel } from './schema.js';
+
 export const PRESETS = [
   { id: 'nordic-frost',     name: 'Nordic Frost',     v: { age: '20s', gender: 'female', ethnicity: 'Caucasian', body: 'slim', skin: 'very fair', hairColor: 'platinum', hairLength: 'long', hairStyle: 'straight', eyeColor: 'blue', eyeShape: 'almond', faceShape: 'oval', eyebrows: 'thin', facialHair: 'none', makeup: 'natural', scars: 'none', tattoos: 'none', piercings: 'none', freckles: 'light freckles' } },
   { id: 'sahel-gold',       name: 'Sahel Gold',       v: { age: '30s', gender: 'female', ethnicity: 'African', body: 'athletic', skin: 'brown', hairColor: 'black', hairLength: 'medium', hairStyle: 'coily', eyeColor: 'amber', eyeShape: 'almond', faceShape: 'heart', eyebrows: 'thick', facialHair: 'none', makeup: 'natural', scars: 'none', tattoos: 'none', piercings: 'none', freckles: 'none' } },
@@ -42,11 +44,12 @@ export const presetById = (id) => PRESETS.find(p => p.id === id) || null;
 //
 // They ride in the option's own text because a native <select> renders every option at one
 // size - there is no way to set the details smaller inside it. The em-dash carries the
-// separation instead: capitalised name, then lowercase detail.
+// separation instead: capitalised name, then lowercase detail. The details are said as the dropdowns say them; the
+// values themselves stay as they are (they are the prompt's words).
 export const PRESET_SUMMARY_KEYS = ['age', 'gender', 'ethnicity', 'body', 'skin'];
 export function presetLabel(p) {
   if (!p) return '';
-  const bits = PRESET_SUMMARY_KEYS.map(k => p.v[k]).filter(Boolean);
+  const bits = PRESET_SUMMARY_KEYS.filter(k => p.v[k]).map(k => optLabel(k, p.v[k]));
   return bits.length ? p.name + ' — ' + bits.join(', ') : p.name;
 }
 // 3:2, so an example fills the column's width without letterboxing.

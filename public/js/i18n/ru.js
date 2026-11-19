@@ -12,8 +12,12 @@ import admin from './ru/admin.js';
 import tree from './ru/tree.js';
 import windows from './ru/windows.js';
 import thanks from './ru/thanks.js';
+import library from './ru/library.js';
+import scenarios from './ru/scenarios.js';
+import character from './ru/character.js';
+import shelf from './ru/shelf.js';
 
-export const PARTS = { common, shell, home, admin, tree, windows, thanks };
+export const PARTS = { common, shell, home, admin, tree, windows, thanks, library, scenarios, character, shelf };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

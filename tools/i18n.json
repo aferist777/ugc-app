@@ -1,5 +1,5 @@
 {
-  "html": [],
+  "html": ["public/library.html"],
   "keep": ["UGC Studio", "Language · Язык"],
   "thanks": true
 }

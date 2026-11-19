@@ -44,14 +44,19 @@ import { openFrame, GEN_SIZE } from '../gen-window.js';
 import { showError } from '../notice.js';
 import { ask } from '../ask.js';
 import { allow } from '../key-gate.js';
+import { t } from '../i18n/t.js';
+import { optLabel } from './character/schema.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
 const ADDRESS = '/library?shelf=characters&make=1';
 
 // Where a generation here was asked from, for the Alerts list: pressing its row brings the Library back
-// onto this area (js/library/main.js reads the address and hears ugc:goto).
-const _where = (what) => ({ page: 'library', href: ADDRESS, label: 'Library · New Character · ' + what, spot: { view: 'chmake' } });
+// onto this area (js/library/main.js reads the address and hears ugc:goto). `label` is the row's words as shown.
+const _where = (label) => ({ page: 'library', href: ADDRESS, label, spot: { view: 'chmake' } });
+
+// A text put into the markup below.
+const _h = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Every picture through the thumbnail door; a data URL (TPDNE, an upload) passes straight through.
 const _thumb = (src, v) => (src && String(src).startsWith('/'))
@@ -126,8 +131,8 @@ function _status(text, kind) {
 // A job that failed: ONE popup - what was being attempted and exactly what came back (an engine's own words say whether to
 // wait or to change something), until its ✕.
 function _showErr(label, message, detail) {
-  const what = String(label || 'That did not work').replace(/(…|\.\.\.)\s*$/, '');
-  showError(what + ': ' + String(message || 'no reason was given'), detail ? { detail } : {});
+  const what = String(label || t('That did not work')).replace(/(…|\.\.\.)\s*$/, '');
+  showError(t('{what}: {why}', { what, why: String(message || t('no reason was given')) }), detail ? { detail } : {});
 }
 
 // ── Following a row of the journal ──────────────────────────────────────────
@@ -152,7 +157,7 @@ async function _followRow(alertId, onStage) {
       throw Object.assign(new Error('its row is gone from Alerts'), { gone: true });
     }
     if (it.state === 'done') return (it.result && it.result.path) || '';
-    if (it.state === 'failed') throw Object.assign(new Error(it.error || 'the generation failed'), { cancelled: !!it.cancelled });
+    if (it.state === 'failed') throw Object.assign(new Error(it.error || t('the generation failed')), { cancelled: !!it.cancelled });
     const s = it.stage || '';
     if (s && s !== said) { said = s; if (onStage) { try { onStage(s); } catch (e) { /* only words */ } } }
   }
@@ -190,7 +195,7 @@ function _controls() {
 // fn receives the overlay's handle. opts.startedAt picks a running wait up at its real age; opts.onCancel
 // offers the overlay's own Cancel once the wait is longer than usual; opts.detail reaches the error popup's second line.
 async function _run(label, fn, opts = {}) {
-  if (_busy) { _status('Already working - one thing at a time', 'err'); return false; }
+  if (_busy) { _status(t('Already working - one thing at a time'), 'err'); return false; }
   _busy = true;
   const unlock = lockControls(_controls());
   const pr = startProgress($('chm-drop'), { label, total: 1, startedAt: opts.startedAt || 0, onCancel: opts.onCancel || null });
@@ -201,7 +206,7 @@ async function _run(label, fn, opts = {}) {
     ok = true;
   } catch (e) {
     if (e && e.stopped) pr.detach();             // the bench was emptied under it: nothing to report
-    else if (e && e.cancelled) { pr.detach(); _status('Let go of - what was asked for is paid for'); }
+    else if (e && e.cancelled) { pr.detach(); _status(t('Let go of - what was asked for is paid for')); }
     else if (e && e.soft) { pr.detach(); _status(e.message); }
     // The overlay goes without its red label, the line is cleared, the failure is the popup alone.
     else { pr.detach(); _status(''); _showErr(label, e && e.message, opts.detail); }
@@ -229,8 +234,8 @@ function _paintPresetCancel() {
   const undo = _isPresetFace();
   b.classList.toggle('is-drop', undo);
   b.classList.toggle('is-danger', undo);
-  b.textContent = undo ? 'Cancel selection' : 'Cancel';
-  b.title = undo ? 'Drop this preset and go back to the parameters' : 'Leave the portrait as it is and go back to the parameters';
+  b.textContent = undo ? t('Cancel selection') : t('Cancel');
+  b.title = undo ? t('Drop this preset and go back to the parameters') : t('Leave the portrait as it is and go back to the parameters');
 }
 
 // A portrait still coming (not one kept after it failed).
@@ -287,7 +292,7 @@ function _paintDrop(src) {
   if (!src) return;
   const img = document.createElement('img');
   img.src = _thumb(src, 'main');
-  img.alt = 'the portrait';
+  img.alt = t('the portrait');
   drop.appendChild(img);
   // The cross acts on the TAKE, so only while the take is what is shown - not over a sheet, and not once
   // the character has been saved from it.
@@ -295,7 +300,7 @@ function _paintDrop(src) {
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'cv2-drop-del u-onpic is-del u-x';
-  del.title = _vars.length > 1 ? 'Delete this take' : 'Delete this image and go back to the parameters';
+  del.title = _vars.length > 1 ? t('Delete this take') : t('Delete this image and go back to the parameters');
   del.addEventListener('click', (e) => { e.stopPropagation(); if (!_busy) _deleteVar(); });
   drop.appendChild(del);
 }
@@ -330,7 +335,7 @@ function _deleteVar() {
   _paintVars();
   _paintPresetCancel();
   if (_refPanel) _refPanel.setSource(_face.source);
-  _status('Take deleted');
+  _status(t('Take deleted'));
 }
 
 // The takes under the portrait, newest on the left. Every change to them passes here, so this is the
@@ -349,7 +354,7 @@ function _paintVars() {
     const v = _vars[i];
     const cell = document.createElement('div');
     cell.className = 'cv2-var' + (i === _varAt ? ' is-cur' : '');
-    cell.title = i === 0 ? 'the first take' : (v.label || ('take ' + (i + 1)));
+    cell.title = i === 0 ? t('the first take') : (v.label || t('take {n}', { n: i + 1 }));
     const img = document.createElement('img');
     img.src = _thumb(v.src, 'card');
     img.alt = '';
@@ -358,7 +363,7 @@ function _paintVars() {
     box.appendChild(cell);
   });
   const del = document.querySelector('#chm-drop .cv2-drop-del');
-  if (del) del.title = _vars.length > 1 ? 'Delete this take' : 'Delete this image and go back to the parameters';
+  if (del) del.title = _vars.length > 1 ? t('Delete this take') : t('Delete this image and go back to the parameters');
   const cur = box.children[order.indexOf(_varAt)];
   if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -371,10 +376,10 @@ function _paintVars() {
 async function _askPortrait(body, p) {
   const r = await (await fetch('/api/character-v2/generate', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, where: _where('portrait') }),
+    body: JSON.stringify({ ...body, where: _where(t('Library · New Character · portrait')) }),
   })).json();
-  if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
-  if (!r.alertId) throw new Error('the portrait was asked for, but the server wrote no row to follow');
+  if (!r || !r.success) throw new Error((r && r.error) || t('the engine refused the prompt'));
+  if (!r.alertId) throw new Error(t('the portrait was asked for, but the server wrote no row to follow'));
   _pending = { ...p, alertId: r.alertId, startedAt: Date.now() };
   _remember();
   _paintSaveBtn();
@@ -387,7 +392,7 @@ async function _followPending(pr) {
   const p = _pending;
   try {
     const path = await _followRow(p.alertId, (s) => pr.tick(s));
-    if (!path) throw new Error('the portrait finished without a picture');
+    if (!path) throw new Error(t('the portrait finished without a picture'));
     if (_pending === p) _landPortrait(path, p);
   } catch (e) {
     if (e.stopped) throw e;
@@ -395,7 +400,7 @@ async function _followPending(pr) {
       if (e.gone) {
         _pending = null;
         _remember();
-        throw Object.assign(new Error('the portrait ended, but its row was cleared from Alerts - what it made is in media/work'), { soft: true });
+        throw Object.assign(new Error(t('the portrait ended, but its row was cleared from Alerts - what it made is in media/work')), { soft: true });
       }
       p.failed = true;
       _remember();
@@ -428,13 +433,13 @@ function _landPortrait(path, p) {
     _face.figure = (p.values && p.values.body) || '';
     _face.values = p.values ? { ...p.values } : null;
     _vars = []; _varAt = -1;
-    _pushVar('the first take');
+    _pushVar(t('the first take'));
     if (_editPanel) _editPanel.clear();
     _setMode('edit');
     if (_headPanel && p.name) _headPanel.setName(p.name);
   } else {
     _showFace(path, 'gen');
-    _pushVar(p.text || 'an edit');
+    _pushVar(p.text || t('an edit'));
     if (p.panel === 'ref' && _refPanel) _refPanel.clear();
     if (p.panel === 'edit' && _editPanel) _editPanel.clear();
     _setMode(p.panel === 'ref' ? 'ref' : 'edit');
@@ -447,7 +452,7 @@ function _landPortrait(path, p) {
 function _awaitPortrait() {
   const p = _pending;
   if (!p || p.failed) return Promise.resolve(false);
-  return _run(p.label || 'Generating the portrait…', (pr) => _followPending(pr),
+  return _run(p.label || t('Generating the portrait…'), (pr) => _followPending(pr),
     { startedAt: p.startedAt, onCancel: () => _letGo(p.alertId) }).then((ok) => { _paintSaveBtn(); return ok; });
 }
 
@@ -455,18 +460,18 @@ function _awaitPortrait() {
 // answers with prompt material or a refusal (a refusal costs no engine call), then the engine draws it.
 // A bare TPDNE crop is CONVERTED into the house portrait; anything else is edited where it stands.
 async function _fromText(text, panel, pr) {
-  if (!_face.src) throw new Error('Nothing to work from - make a portrait first');
+  if (!_face.src) throw new Error(t('Nothing to work from - make a portrait first'));
   const convert = panel === 'ref' && _face.source === 'tpdne';
   const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
   const a = await (await fetch('/api/character-v2/analyze', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ref, text }),
   })).json();
-  if (!a || !a.success) throw new Error((a && a.error) || 'the analyzer failed');
+  if (!a || !a.success) throw new Error((a && a.error) || t('the analyzer failed'));
   if (!a.ok) throw new Error(a.reason);
-  if (pr) pr.tick('Drawing…');
+  if (pr) pr.tick(t('Drawing…'));
   return {
     body: { prompt: convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change), imageUrl: a.imageUrl, aspect: convert ? '3:2' : 'match_input_image' },
-    p: { from: 'text', text, panel, label: panel === 'ref' ? 'Reading the reference…' : 'Reading the portrait…' },
+    p: { from: 'text', text, panel, label: panel === 'ref' ? t('Reading the reference…') : t('Reading the portrait…') },
   };
 }
 
@@ -481,16 +486,16 @@ function _awaitSheet() {
   const s = _saving;
   if (!s || !s.alertId) return Promise.resolve(false);
   _savePanel.setState('sheet');
-  _savePanel.status(s.note || 'The 4K sheet is being made…');
-  return _run('Generating the 4K sheet…', async (pr) => {
+  _savePanel.status(s.note || t('The 4K sheet is being made…'));
+  return _run(t('Generating the 4K sheet…'), async (pr) => {
     try {
-      const sheet = await _followRow(s.alertId, (st) => { pr.tick('4K sheet · ' + st); _savePanel.status(st); s.note = st; _remember(); });
+      const sheet = await _followRow(s.alertId, (st) => { pr.tick(t('4K sheet · {stage}', { stage: st })); _savePanel.status(st); s.note = st; _remember(); });
       if (_saving !== s) return;
-      s.sheet = sheet; s.state = 'saved'; s.note = 'The sheet is ready.'; s.kind = 'ok';
+      s.sheet = sheet; s.state = 'saved'; s.note = t('The sheet is ready.'); s.kind = 'ok';
       _remember();
       if (sheet) _paintDrop(sheet);
       _savePanel.setState('saved');
-      _savePanel.status('The sheet is ready.', 'ok');
+      _savePanel.status(t('The sheet is ready.'), 'ok');
     } catch (e) {
       if (e.stopped || _saving !== s) throw e;
       if (e.gone) {
@@ -499,7 +504,7 @@ function _awaitSheet() {
         return;
       }
       s.state = 'saved'; s.kind = 'err';
-      s.note = (e.cancelled ? 'The sheet was let go of' : e.message) + ' - the character is saved; Try again draws it again.';
+      s.note = t('{why} - the character is saved; Try again draws it again.', { why: e.cancelled ? t('The sheet was let go of') : e.message });
       _remember();
       _savePanel.setState('saved');
       _savePanel.status(s.note, 'err');
@@ -517,9 +522,12 @@ async function _settleFromCharacter(s) {
     c = ((d && d.chars) || []).find(x => String(x.id) === String(s.charId)) || null;
   } catch (e) { c = null; }
   if (_saving !== s) return;
-  if (c && c.sheet) { s.sheet = c.sheet; s.state = 'saved'; s.kind = 'ok'; s.note = 'The sheet is ready.'; _paintDrop(c.sheet); }
-  else if (c && c.sheetTask) { s.state = 'saved'; s.kind = ''; s.note = 'The sheet is still being drawn - it lands on the character by itself.'; }
-  else { s.state = 'saved'; s.kind = 'err'; s.note = ((c && c.sheetError) || (c ? 'The sheet did not come' : 'This character is gone')) + ' - Try again draws it again.'; }
+  if (c && c.sheet) { s.sheet = c.sheet; s.state = 'saved'; s.kind = 'ok'; s.note = t('The sheet is ready.'); _paintDrop(c.sheet); }
+  else if (c && c.sheetTask) { s.state = 'saved'; s.kind = ''; s.note = t('The sheet is still being drawn - it lands on the character by itself.'); }
+  else {
+    s.state = 'saved'; s.kind = 'err';
+    s.note = t('{why} - Try again draws it again.', { why: (c && c.sheetError) || (c ? t('The sheet did not come') : t('This character is gone')) });
+  }
   _remember();
   _savePanel.setState('saved');
   _savePanel.status(s.note, s.kind || undefined);
@@ -557,7 +565,7 @@ async function _finishSave() {
   const name = typed || s.name || '';
   if (id && typed && typed !== s.name) {
     try { await _patchChar(id, { name: typed }); }
-    catch (e) { _status('The new name was not saved: ' + e.message, 'err'); }
+    catch (e) { _status(t('The new name was not saved: {why}', { why: e.message }), 'err'); }
   }
   _saving = null;
   _follow++;
@@ -573,7 +581,7 @@ async function _patchChar(id, fields) {
   const p = await (await fetch('/api/char-store/' + encodeURIComponent(id), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
   })).json();
-  if (!p || !p.success) throw new Error((p && p.error) || 'the character could not be changed');
+  if (!p || !p.success) throw new Error((p && p.error) || t('the character could not be changed'));
   return p.char;
 }
 
@@ -582,10 +590,10 @@ async function _patchChar(id, fields) {
 function _retrySheet() {
   const s = _saving;
   if (!s || !s.charId) return;
-  return _run('Asking for the sheet again…', async () => {
+  return _run(t('Asking for the sheet again…'), async () => {
     // No face: the server draws from what the character was saved with (its sheet, then its face) - the
     // bench may hold another take by now.
-    const body = { charId: s.charId, figure: _face.figure || '', where: _where('sheet') };
+    const body = { charId: s.charId, figure: _face.figure || '', where: _where(t('Library · New Character · sheet')) };
     const r = await (await fetch('/api/char-store/regen-ref', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })).json();
@@ -595,7 +603,7 @@ function _retrySheet() {
       _remember();
       return;
     }
-    if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be asked for again');
+    if (!r || !r.success) throw new Error((r && r.error) || t('the sheet could not be asked for again'));
     s.alertId = r.alertId || ''; s.state = 'sheet'; s.note = ''; s.kind = ''; s.startedAt = Date.now();
     _remember();
   }).then((ok) => { if (ok && s.alertId) return _awaitSheet(); });
@@ -607,11 +615,11 @@ function _build() {
   if (!host || _built) return;
   host.innerHTML = `
     <div class="chm" data-create-mode="main" data-portrait="">
-      <section class="chm-col chm-params" aria-label="Create model">
-        <div class="chm-spine">Create model</div>
+      <section class="chm-col chm-params" aria-label="${_h(t('Create model'))}">
+        <div class="chm-spine">${_h(t('Create model'))}</div>
         <div class="chm-head">
-          <span class="chm-t">Create model</span><span class="sp"></span>
-          <button class="u-btn is-s chm-over" type="button" id="chm-over" title="Empty the bench: the portrait and its takes go (their files stay in media/work)">Start over</button>
+          <span class="chm-t">${_h(t('Create model'))}</span><span class="sp"></span>
+          <button class="u-btn is-s chm-over" type="button" id="chm-over" title="${_h(t('Empty the bench: the portrait and its takes go (their files stay in media/work)'))}">${_h(t('Start over'))}</button>
         </div>
         <div class="chm-body">
           <div id="chm-head-host"></div>
@@ -621,24 +629,24 @@ function _build() {
           <div id="chm-foot-host"></div>
         </div>
       </section>
-      <section class="chm-col chm-work" aria-label="Portrait">
-        <div class="chm-head"><span class="chm-t">Portrait</span><span class="sp"></span><span class="chm-status u-status" id="chm-status"></span></div>
+      <section class="chm-col chm-work" aria-label="${_h(t('Portrait'))}">
+        <div class="chm-head"><span class="chm-t">${_h(t('Portrait'))}</span><span class="sp"></span><span class="chm-status u-status" id="chm-status"></span></div>
         <div class="chm-body">
           <div class="cv2-drop" id="chm-drop">
-            <button class="cv2-page is-prev" type="button" id="chm-prev" title="Previous take"></button>
-            <button class="cv2-page is-next" type="button" id="chm-next" title="Next take"></button>
-            <div class="cv2-drop-hint" id="chm-drop-hint">Nothing here yet.<br>Set the parameters and press Create, take a preset as it is with “Use”, or a random face with Random face.<br>You can also drop your own picture here, or click to pick one.</div>
+            <button class="cv2-page is-prev" type="button" id="chm-prev" title="${_h(t('Previous take'))}"></button>
+            <button class="cv2-page is-next" type="button" id="chm-next" title="${_h(t('Next take'))}"></button>
+            <div class="cv2-drop-hint" id="chm-drop-hint">${_h(t('Nothing here yet.'))}<br>${_h(t('Set the parameters and press Create, take a preset as it is with “Use”, or a random face with Random face.'))}<br>${_h(t('You can also drop your own picture here, or click to pick one.'))}</div>
           </div>
           <div class="cv2-mid-bar">
             <div class="cv2-vars" id="chm-vars" hidden></div>
             <div class="cv2-mid-foot">
-              <button class="cv2-savemodel u-btn is-l is-main" type="button" id="chm-savemodel" disabled title="Name this character and draw its 4K reference sheet">Save character</button>
+              <button class="cv2-savemodel u-btn is-l is-main" type="button" id="chm-savemodel" disabled title="${_h(t('Name this character and draw its 4K reference sheet'))}">${_h(t('Save character'))}</button>
             </div>
           </div>
         </div>
       </section>
-      <section class="chm-col chm-save" aria-label="Save character">
-        <div class="chm-head"><span class="chm-t">Save character</span></div>
+      <section class="chm-col chm-save" aria-label="${_h(t('Save character'))}">
+        <div class="chm-head"><span class="chm-t">${_h(t('Save character'))}</span></div>
         <div class="chm-body" id="chm-save-host"></div>
       </section>
     </div>`;
@@ -648,9 +656,9 @@ function _build() {
   // No "Save image as" on a miniature: every picture here cancels the window's own menu.
   host.addEventListener('contextmenu', (e) => { if (e.target.closest('img')) e.preventDefault(); });
 
-  const onGenerate = (values, name) => _makePortrait('Generating the character…', async () => ({
+  const onGenerate = (values, name) => _makePortrait(t('Generating the character…'), async () => ({
     body: { prompt: genPrompt(values) },
-    p: { from: 'create', values: { ...values }, name: name || '', label: 'Generating the character…' },
+    p: { from: 'create', values: { ...values }, name: name || '', label: t('Generating the character…') },
   }));
 
   _headPanel = CreatePanel.buildHead($('chm-head-host'), { onGenerate });
@@ -666,22 +674,22 @@ function _build() {
       _face.figure = (p.v && p.v.body) || '';
       _face.values = { ...(p.v || {}) };
       _vars = []; _varAt = -1;
-      _pushVar('the preset’s own face');
+      _pushVar(t('the preset’s own face'));
       if (_editPanel) _editPanel.clear();
       _setMode('edit');
       _paintSaveBtn();
-      _status('Using the ' + p.name + ' preset - edit it, or save it as it is');
+      _status(t('Using the {name} preset - edit it, or save it as it is', { name: p.name }));
     },
   });
   CreatePanel.buildFoot($('chm-foot-host'), {
-    onTpdne: () => _run('Fetching a face…', async () => {
+    onTpdne: () => _run(t('Fetching a face…'), async () => {
       const d = await (await fetch('/api/random-face')).json();
-      if (!d || !d.success) throw new Error((d && d.error) || 'The random face service did not answer with a face');
+      if (!d || !d.success) throw new Error((d && d.error) || t('The random face service did not answer with a face'));
       _showFace(d.dataUrl, 'tpdne');
     }),
   });
   _refPanel = CreatePanel.buildRef($('chm-ref-host'), {
-    onApply: (text) => _makePortrait('Reading the reference…', (pr) => _fromText(text, 'ref', pr)),
+    onApply: (text) => _makePortrait(t('Reading the reference…'), (pr) => _fromText(text, 'ref', pr)),
     onExit: () => { if (!_busy) _showFace(null); },
   });
   _editPanel = EditPanel.build($('chm-edit-host'), {
@@ -689,13 +697,13 @@ function _build() {
       if (_isPresetFace()) {
         _showFace(null);
         CreatePanel.clearPreset();
-        _status('Preset dropped');
+        _status(t('Preset dropped'));
         return;
       }
       _setMode('main');
-      _status('Portrait kept as it is');
+      _status(t('Portrait kept as it is'));
     },
-    onEdit: (text) => _makePortrait('Reading the portrait…', (pr) => _fromText(text, 'edit', pr)),
+    onEdit: (text) => _makePortrait(t('Reading the portrait…'), (pr) => _fromText(text, 'edit', pr)),
   });
 
   for (const [id, step] of [['chm-prev', -1], ['chm-next', 1]]) {
@@ -710,7 +718,7 @@ function _build() {
   $('chm-over').addEventListener('click', async () => {
     if (_busy) return;
     // Only when there is something on the bench; at the button, the answer red - it throws the takes away.
-    if ((_face.src || _vars.length) && !await ask($('chm-over'), 'Start over? The portrait and its takes leave the bench - their files stay in media/work.', { yes: 'Start over', danger: true, stay: true })) return;
+    if ((_face.src || _vars.length) && !await ask($('chm-over'), t('Start over? The portrait and its takes leave the bench - their files stay in media/work.'), { yes: t('Start over'), danger: true, stay: true })) return;
     if (_busy) return;
     _pending = null;
     _follow++;
@@ -722,31 +730,31 @@ function _build() {
     onCancel: () => {
       _setStage(false);
       _paintDrop(_face.src);
-      _status('Not saved - the portrait is still here');
+      _status(t('Not saved - the portrait is still here'));
     },
     onDone: () => _finishSave(),
-    onSave: ({ name, gender }) => _run('Saving the character…', async () => {
-      const body = { name, gender, figure: _face.figure || '', where: _where('sheet') };
+    onSave: ({ name, gender }) => _run(t('Saving the character…'), async () => {
+      const body = { name, gender, figure: _face.figure || '', where: _where(t('Library · New Character · sheet')) };
       if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
       const r = await (await fetch('/api/char-store/create', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })).json();
-      if (!r || !r.success) throw new Error((r && r.error) || 'the character could not be saved');
+      if (!r || !r.success) throw new Error((r && r.error) || t('the character could not be saved'));
       _saving = { charId: String(r.char.id), alertId: r.alertId || '', name, gender, state: 'sheet', startedAt: Date.now(), note: '', kind: '' };
       _remember();
       // An untouched preset came with its sheet: nothing to wait for, straight out.
       if (r.char.sheet) { await _finishSave(); return; }
-      if (!r.alertId) throw new Error('the character is saved, but its sheet has no row to follow - see Alerts');
+      if (!r.alertId) throw new Error(t('the character is saved, but its sheet has no row to follow - see Alerts'));
     }).then((ok) => { if (ok && _saving && _saving.state === 'sheet') return _awaitSheet(); }),
     onRename: (name) => {
       if (!_saving) return;
       _saving.name = name; _remember();
-      _patchChar(_saving.charId, { name }).then(() => _status('Renamed to “' + name + '”')).catch(e => _status(e.message, 'err'));
+      _patchChar(_saving.charId, { name }).then(() => _status(t('Renamed to “{name}”', { name }))).catch(e => _status(e.message, 'err'));
     },
     onRegender: (gender) => {
       if (!_saving) return;
       _saving.gender = gender; _remember();
-      _patchChar(_saving.charId, { gender }).then(() => _status('Gender set to ' + gender)).catch(e => _status(e.message, 'err'));
+      _patchChar(_saving.charId, { gender }).then(() => _status(t('Gender set to {gender}', { gender: optLabel('gender', gender) }))).catch(e => _status(e.message, 'err'));
     },
     onRetrySheet: () => _retrySheet(),
   });
@@ -784,12 +792,12 @@ function _wireUpload() {
   // A phone's HEIC too - made a JPEG by the server first, the page cannot show one.
   const take = async (file) => {
     if (!file) return;
-    if (!isPictureFile(file)) { _status('That file is not a picture', 'err'); return; }
-    if (file.size > _UPLOAD_MAX) { _status('That picture is ' + Math.round(file.size / 1048576) + ' MB - the limit is 20', 'err'); return; }
+    if (!isPictureFile(file)) { _status(t('That file is not a picture'), 'err'); return; }
+    if (file.size > _UPLOAD_MAX) { _status(t('That picture is {mb} MB - the limit is 20', { mb: Math.round(file.size / 1048576) }), 'err'); return; }
     let url = '';
     try { url = await pictureDataUrl(file); }
-    catch (e) { _status('Could not read that file: ' + e.message, 'err'); return; }
-    if (_busy || _waiting() || (_root && _root.dataset.stage === 'save')) { _status('Busy - drop it again in a moment', 'err'); return; }
+    catch (e) { _status(t('Could not read that file: {why}', { why: e.message }), 'err'); return; }
+    if (_busy || _waiting() || (_root && _root.dataset.stage === 'save')) { _status(t('Busy - drop it again in a moment'), 'err'); return; }
     _status('');
     _showFace(url, 'upload');
   };
@@ -856,9 +864,9 @@ export function open() {
   if (!_built) _build();
   if (!isOpen()) {
     // Moved and stretched; its size kept, its place not (it opens in the middle).
-    _win = openFrame({ name: 'New Character', size: GEN_SIZE, geom: { key: 'chmake', resize: true, move: true, keepSize: true },
+    _win = openFrame({ name: t('New Character'), size: GEN_SIZE, geom: { key: 'chmake', resize: true, move: true, keepSize: true },
       cls: 'is-chmake', onClose: _park });
-    _win.setCrumbs([{ label: 'New Character' }]);
+    _win.setCrumbs([{ label: t('New Character') }]);
     // The same nodes, moved - what is typed, picked, waited for and drawn stays as it was.
     _win.body.appendChild(_root);
   }

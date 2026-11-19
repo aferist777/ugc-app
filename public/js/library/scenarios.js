@@ -52,6 +52,7 @@ import { icon } from '../icons.js';
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { allow } from '../key-gate.js';
+import { t, tn, tc, lang } from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -65,7 +66,7 @@ function _el(tag, cls, text) {
 const _fmtDate = (s) => {
   if (!s) return '';
   const d = new Date(s);
-  return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return isNaN(d) ? '' : d.toLocaleDateString(lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 // The tail under a title: what tells two scenarios for the same product apart, in the order you
@@ -73,7 +74,7 @@ const _fmtDate = (s) => {
 function _tail(m) {
   const n = m.lines || 0;
   return [
-    n + (n === 1 ? ' line' : ' lines'),
+    tn(n, '{n} line', '{n} lines'),
     m.vertical,
     m.product,
     m.roles,
@@ -82,11 +83,21 @@ function _tail(m) {
 }
 
 // ── Filters ─────────────────────────────────────────────────────────────────
+// Each field's own words - "any", "no" and the hint are whole phrases, since a field's name changes the words around it
+// in other languages.
 const FIELDS = [
-  { key: 'type', label: 'Type' }, { key: 'role', label: 'Role' }, { key: 'gender', label: 'Gender' },
-  { key: 'vertical', label: 'Vertical' }, { key: 'product', label: 'Product' },
-  { key: 'narrator', label: 'Narrator' },
+  { key: 'type', any: t('any Type'), no: t('no Type'), tip: t('Show only the scenarios with this Type') },
+  { key: 'role', any: t('any Role'), no: t('no Role'), tip: t('Show only the scenarios with this Role') },
+  { key: 'gender', any: t('any Gender'), no: t('no Gender'), tip: t('Show only the scenarios with this Gender') },
+  { key: 'vertical', any: t('any Vertical'), no: t('no Vertical'), tip: t('Show only the scenarios with this Vertical') },
+  { key: 'product', any: t('any Product'), no: t('no Product'), tip: t('Show only the scenarios with this Product') },
+  { key: 'narrator', any: t('any Narrator'), no: t('no Narrator'), tip: t('Show only the scenarios with this Narrator') },
 ];
+// A field's name in the column and in what a save or a removal says.
+const FIELD_NAME = { type: t('type'), role: t('role'), gender: t('gender'), vertical: tc('scenario', 'vertical'),
+  product: t('product'), narrator: t('narrator') };
+// The two genders are the app's own words; every other value is what a person typed.
+const GENDER = { female: t('female'), male: t('male') };
 const NONE = '__none__';
 const LS_FILTERS = 'library_sc_filters_v1';
 let _filters = (() => { try { return JSON.parse(localStorage.getItem(LS_FILTERS) || '{}') || {}; } catch (e) { return {}; } })();
@@ -112,15 +123,16 @@ function _filterRow() {
     let none = 0;
     for (const it of _items) { const v = _val(it, f.key); if (v) counts.set(v, (counts.get(v) || 0) + 1); else none++; }
     const sel = _el('select', 'lib-sc-filter u-in is-s' + (_filters[f.key] ? ' is-on' : ''));
-    sel.title = 'Show only the scenarios with this ' + f.label;
+    sel.title = f.tip;
     const add = (value, text) => { const o = _el('option', null, text); o.value = value; sel.appendChild(o); };
-    add('', 'any ' + f.label);
-    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).forEach(([v, n]) => add(v, v + ' · ' + n));
-    if (none && counts.size) add(NONE, 'no ' + f.label + ' · ' + none);
+    const shown = (v) => (f.key === 'gender' && GENDER[v]) || v;
+    add('', f.any);
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).forEach(([v, n]) => add(v, shown(v) + ' · ' + n));
+    if (none && counts.size) add(NONE, f.no + ' · ' + none);
     // A remembered choice nothing has any more still shows, at 0: the list is never cut by
     // something invisible.
     const cur = _filters[f.key] || '';
-    if (cur && ![...sel.options].some(o => o.value === cur)) add(cur, (cur === NONE ? 'no ' + f.label : cur) + ' · 0');
+    if (cur && ![...sel.options].some(o => o.value === cur)) add(cur, (cur === NONE ? f.no : shown(cur)) + ' · 0');
     sel.value = cur;
     sel.addEventListener('change', () => {
       if (sel.value) _filters[f.key] = sel.value; else delete _filters[f.key];
@@ -131,9 +143,9 @@ function _filterRow() {
     row.appendChild(sel);
   }
   if (Object.keys(_filters).length) {
-    const x = _el('button', 'lib-sc-filter-x u-btn is-s is-quiet', 'Clear');
+    const x = _el('button', 'lib-sc-filter-x u-btn is-s is-quiet', t('Clear'));
     x.type = 'button';
-    x.title = 'Show every scenario again';
+    x.title = t('Show every scenario again');
     x.addEventListener('click', () => {
       _filters = {};
       _saveFilters();
@@ -179,15 +191,16 @@ function _draftRow(dr) {
   const row = _el('button', 'lib-srow is-draft' + (_sel === key ? ' cur' : ''));
   row.type = 'button';
   row.dataset.id = key;
-  row.title = 'This draft on the right - its fields and its script';
+  row.title = t('This draft on the right - its fields and its script');
   const main = _el('div', 'lib-srow-main');
-  main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
-  const tail = [dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
-    dr.paragraphs ? dr.paragraphs + (dr.paragraphs === 1 ? ' paragraph' : ' paragraphs') : '',
+  main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || t('untitled draft')));
+  const tail = [dr.sourceTitle ? t('from {source}', { source: dr.sourceTitle }) : t('no source'),
+    dr.paragraphs ? tn(dr.paragraphs, '{n} paragraph', '{n} paragraphs') : '',
     String(dr.narratorName || '').replace(/ - (?:not read|deleted)$/, '')].filter(Boolean).join(' · ');
   main.appendChild(_el('div', 'lib-srow-s', tail));
+  // The stage is the server's English label (lib/script-drafts.js), said in the app's language here.
   row.appendChild(_el('span', 'lib-sc-tag' + (dr.running ? ' run' : ''),
-    'draft · ' + (dr.running ? 'writing…' : (dr.stageLabel || dr.stage || ''))));
+    t('draft') + ' · ' + (dr.running ? t('writing…') : (dr.stageLabel ? t(dr.stageLabel) : dr.stage || ''))));
   row.appendChild(main);
   row.appendChild(_el('div', 'lib-srow-d', _fmtDate(dr.updatedAt)));
   row.addEventListener('click', () => _pickDraft(dr));
@@ -235,8 +248,8 @@ export function render(items, hooks = {}) {
   }
   for (const dr of drafts) grid.appendChild(_draftRow(dr));
 
-  if (!_items.length) grid.appendChild(emptyEl(_archived.length ? 'Every scenario is in the archive.' : 'No scenarios yet. “New scenario” above writes one.', { cls: 'lib-empty' }));
-  else if (!shown.length) grid.appendChild(emptyEl('Nothing under these filters.', { cls: 'lib-empty' }));
+  if (!_items.length) grid.appendChild(emptyEl(_archived.length ? t('Every scenario is in the archive.') : t('No scenarios yet. “New scenario” above writes one.'), { cls: 'lib-empty' }));
+  else if (!shown.length) grid.appendChild(emptyEl(t('Nothing under these filters.'), { cls: 'lib-empty' }));
   for (const it of shown) grid.appendChild(_row(it, false));
   if (_archShown()) {
     grid.appendChild(_archHead());
@@ -244,7 +257,7 @@ export function render(items, hooks = {}) {
   }
   if (_sel.startsWith('d:')) { _showDraft(_sel.slice(2)); return; }
   const cur = shown.concat(arch).find(i => String(i.id) === _sel);
-  if (!cur) { _empty(_items.length ? 'Nothing under these filters.' : undefined); return; }
+  if (!cur) { _empty(_items.length ? t('Nothing under these filters.') : undefined); return; }
   _show(cur);
 }
 
@@ -254,8 +267,8 @@ function _row(it, archived) {
   const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : '') + (archived ? ' is-archived' : ''));
   row.type = 'button';
   row.dataset.id = String(it.id);
-  if (outside) row.title = 'Outside the filters - shown because it was opened';
-  else if (archived) row.title = 'Archived - the right button puts it back';
+  if (outside) row.title = t('Outside the filters - shown because it was opened');
+  else if (archived) row.title = t('Archived - the right button puts it back');
   const main = _el('div', 'lib-srow-main');
   main.appendChild(_el('div', 'lib-srow-t', it.name));
   main.appendChild(_el('div', 'lib-srow-s', _tail(it.meta || {})));
@@ -267,8 +280,8 @@ function _row(it, archived) {
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     menuAt(e.clientX, e.clientY, [archived
-      ? ['Restore', 'back into the list of scenarios', () => _setArchived(it, false)]
-      : ['Archive', 'out of the list - into Archive at the bottom', () => _setArchived(it, true)]]);
+      ? [t('Restore'), t('back into the list of scenarios'), () => _setArchived(it, false)]
+      : [tc('menu', 'Archive'), t('out of the list - into Archive at the bottom'), () => _setArchived(it, true)]]);
   });
   return row;
 }
@@ -278,9 +291,9 @@ function _archHead() {
   const b = _el('button', 'lib-sc-arch u-btn is-quiet' + (_archOpen ? ' is-open' : ''));
   b.type = 'button';
   b.setAttribute('aria-expanded', _archOpen ? 'true' : 'false');
-  b.title = _archOpen ? 'Fold the archive' : 'The archived scenarios';
+  b.title = _archOpen ? t('Fold the archive') : t('The archived scenarios');
   b.appendChild(_el('span', 'lib-sc-arch-c')).innerHTML = icon('chevron-right', 14);
-  b.appendChild(_el('span', 'lib-sc-arch-t', 'Archive'));
+  b.appendChild(_el('span', 'lib-sc-arch-t', t('Archive')));
   b.appendChild(_el('span', 'lib-sc-arch-n', '· ' + _archived.length));
   b.addEventListener('click', () => {
     _archOpen = !_archOpen;
@@ -301,14 +314,15 @@ async function _setArchived(it, yes) {
   try {
     await archiveScenario(id, yes);
   } catch (e) {
-    if (_hooks.status) _hooks.status((yes ? 'Not archived: ' : 'Not restored: ') + e.message, 'err');
+    if (_hooks.status) _hooks.status(yes ? t('Not archived: {why}', { why: e.message }) : t('Not restored: {why}', { why: e.message }), 'err');
     return;
   }
   if (!yes || _sel === id) _sel = id;
   if (!yes) _keep = id;
   if (_hooks.reload) await _hooks.reload();
   if (_hooks.counts) _hooks.counts();
-  if (_hooks.status) _hooks.status(yes ? 'Archived “' + (it.name || 'untitled') + '” - Archive, at the bottom of the list' : 'Restored “' + (it.name || 'untitled') + '”');
+  const name = it.name || t('untitled');
+  if (_hooks.status) _hooks.status(yes ? t('Archived “{name}” - Archive, at the bottom of the list', { name }) : t('Restored “{name}”', { name }));
 }
 
 // ── The column ──────────────────────────────────────────────────────────────
@@ -324,14 +338,14 @@ function _pane() {
   pane.hidden = false;
   body.className = 'lib-info-body is-scenarios';
   body.textContent = '';
-  if (head) head.textContent = 'Scenario';
+  if (head) head.textContent = t('Scenario');
   return body;
 }
 
 function _empty(note) {
   _seq++;
   const body = _pane();
-  if (body) body.appendChild(emptyEl(note || 'Nothing on this shelf yet.', { line: true, cls: 'lib-info-note' }));
+  if (body) body.appendChild(emptyEl(note || t('Nothing on this shelf yet.'), { line: true, cls: 'lib-info-note' }));
 }
 
 // ── The fields, as dropdowns ────────────────────────────────────────────────
@@ -370,7 +384,7 @@ function _fieldRow(box, label, current, values, onPick, o = {}) {
   btn.type = 'button';
   const f = { value: current || '' };
   const labelOf = (v) => {
-    if (!v) return o.noneLabel || 'none';
+    if (!v) return o.noneLabel || t('none');
     const hit = values.find(x => x.value === v);
     return hit ? hit.label : (o.missingLabel ? o.missingLabel(v) : v);
   };
@@ -384,7 +398,7 @@ function _fieldRow(box, label, current, values, onPick, o = {}) {
   paint();
   const choose = async (v) => {
     if (v === '__new__') {
-      const name = await askName({ anchor: btn, title: 'New ' + label, okLabel: 'Set', maxLength: 60 });
+      const name = await askName({ anchor: btn, title: o.newTitle || label, okLabel: t('Set'), maxLength: 60 });
       v = String(name || '').trim();
       if (!v) return;
       if (!values.some(x => x.value === v)) values.push({ value: v, label: v });
@@ -401,7 +415,7 @@ function _fieldRow(box, label, current, values, onPick, o = {}) {
   btn.addEventListener('click', () => {
     if (_fmenu && _fmenu.anchor === btn) { _closeFieldMenu(); return; }
     const rows = [];
-    if (o.none) rows.push({ value: '', label: o.noneLabel || 'none' });
+    if (o.none) rows.push({ value: '', label: o.noneLabel || t('none') });
     rows.push(...values);
     // The value it holds, when the list no longer has it (a narrator since deleted), is still shown.
     if (f.value && !values.some(x => x.value === f.value)) rows.push({ value: f.value, label: labelOf(f.value) });
@@ -457,8 +471,8 @@ function _fieldMenu(anchor, m) {
     if (m.removable && m.removable(r.value)) {
       const x = _el('button', 'lib-sc-mx u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
-      x.title = 'Remove "' + r.label + '" - from the list and from every scenario that has it';
-      x.setAttribute('aria-label', 'Remove ' + r.label);
+      x.title = t('Remove "{name}" - from the list and from every scenario that has it', { name: r.label });
+      x.setAttribute('aria-label', t('Remove {name}', { name: r.label }));
       let ask = 0;   // which question is standing: the answer to an older one is dropped
       const back = () => { ask++; row.classList.remove('is-asking'); delete row.dataset.count; txt.textContent = r.label; it.disabled = false; };
       row.addEventListener('mouseleave', () => { if (row.classList.contains('is-asking')) back(); });
@@ -468,14 +482,14 @@ function _fieldMenu(anchor, m) {
           const my = ++ask;
           row.classList.add('is-asking');
           it.disabled = true;
-          txt.textContent = 'counting…';
+          txt.textContent = t('counting…');
           const n = await _valueCount(m.field, r.value);
           if (my !== ask) return;
-          if (n.error) { txt.textContent = 'cannot say - ' + n.error; return; }
+          if (n.error) { txt.textContent = t('cannot say - {why}', { why: n.error }); return; }
           row.dataset.count = String(n.count);
-          txt.textContent = n.count
-            ? 'remove from ' + n.count + (n.count === 1 ? ' scenario' : ' scenarios') + (n.archived ? ' (' + n.archived + ' archived)' : '') + '?'
-            : 'remove?';
+          txt.textContent = !n.count ? t('remove?')
+            : n.archived ? tn(n.count, 'remove from {n} scenario ({k} archived)?', 'remove from {n} scenarios ({k} archived)?', { k: n.archived })
+              : tn(n.count, 'remove from {n} scenario?', 'remove from {n} scenarios?');
           return;
         }
         // The second press - only once the count has come back.
@@ -494,7 +508,7 @@ function _fieldMenu(anchor, m) {
     const row = _el('div', 'lib-sc-mrow');
     const it = _el('button', 'mv3-plus-item u-mi is-new');
     it.type = 'button';
-    it.appendChild(_el('span', null, 'new…'));
+    it.appendChild(_el('span', null, t('new…')));
     it.addEventListener('click', (e) => { e.stopPropagation(); pick('__new__'); });
     row.appendChild(it);
     menu.appendChild(row);
@@ -526,7 +540,7 @@ async function _valueCount(field, value) {
       body: JSON.stringify({ field, value, dry: true }),
     });
     const d = await r.json().catch(() => null);
-    if (!d || !d.success) return { count: 0, error: (d && d.error) || 'refused' };
+    if (!d || !d.success) return { count: 0, error: (d && d.error) || t('refused') };
     return { count: d.count || 0, archived: d.archived || 0 };
   } catch (e) { return { count: 0, error: e.message }; }
 }
@@ -536,15 +550,16 @@ async function _valueCount(field, value) {
 // A filter set to the removed value is let go, or it would hide everything behind a value nobody has.
 async function _removeValue(field, value, count, onDone) {
   const st = document.querySelector('#lib-info-body .lib-sc-status');
-  const say = (t, k) => { if (st) { st.textContent = t; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
-  say('removing ' + field + ' “' + value + '”…');
+  const say = (text, k) => { if (st) { st.textContent = text; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
+  const fieldName = FIELD_NAME[field] || field;
+  say(t('removing {field} “{value}”…', { field: fieldName, value }));
   try {
     const r = await fetch('/api/scen3/values/remove', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ field, value }),
     });
     const d = await r.json().catch(() => null);
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || t('refused'));
     _lists = null;
     if (onDone) onDone();
     // The generator's form may hold it too (js/library/make.js clears it there).
@@ -552,7 +567,8 @@ async function _removeValue(field, value, count, onDone) {
     const dropped = !!(_filters[field] && _filters[field].toLowerCase() === value.toLowerCase());
     if (dropped) { delete _filters[field]; _saveFilters(); }
     const n = d.count || 0;
-    const note = 'removed ' + field + ' “' + value + '”' + (n ? ' from ' + n + (n === 1 ? ' scenario' : ' scenarios') : '');
+    const note = n ? tn(n, 'removed {field} “{value}” from {n} scenario', 'removed {field} “{value}” from {n} scenarios', { field: fieldName, value })
+      : t('removed {field} “{value}”', { field: fieldName, value });
     if (n || count) {
       _say = { id: _sel, text: note, kind: 'ok' };
       if (_hooks.reload) await _hooks.reload();
@@ -561,23 +577,23 @@ async function _removeValue(field, value, count, onDone) {
       _say = { id: _sel, text: note, kind: 'ok' };
       render(_items, _hooks);
     } else say(note, 'ok');
-  } catch (e) { say('Not removed: ' + e.message, 'err'); }
+  } catch (e) { say(t('Not removed: {why}', { why: e.message }), 'err'); }
 }
 
 // A field saved on its own - only that field, as an edit, so nothing else the column painted can be
 // sent back over a newer copy, and the lines being typed stay where they are.
 async function _patch(s, patch, what) {
   const st = document.querySelector('#lib-info-body .lib-sc-status');
-  const say = (t, k) => { if (st) { st.textContent = t; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
-  say('saving ' + what + '…');
+  const say = (text, k) => { if (st) { st.textContent = text; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
+  say(t('saving {what}…', { what }));
   try {
     const r = await fetch('/api/scen3/scenarios', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: s.id, edit: true, ...patch }),
     });
     const d = await r.json().catch(() => null);
-    if (r.status === 404) { say('this scenario was deleted elsewhere', 'err'); return false; }
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (r.status === 404) { say(t('this scenario was deleted elsewhere'), 'err'); return false; }
+    if (!d || !d.success) throw new Error((d && d.error) || t('refused'));
     Object.assign(s, d.scenario);
     // The row and the filters read the shelf's items: this one is told what it is now.
     const it = _any(s.id);
@@ -595,9 +611,9 @@ async function _patch(s, patch, what) {
       const fr = document.querySelector('#lib-grid .lib-sc-filters');
       if (fr) fr.replaceWith(_filterRow());
     }
-    say('saved · ' + what, 'ok');
+    say(t('saved · {what}', { what }), 'ok');
     return true;
-  } catch (e) { say('Not saved: ' + e.message, 'err'); return false; }
+  } catch (e) { say(t('Not saved: {why}', { why: e.message }), 'err'); return false; }
 }
 
 async function _paintFields(box, s) {
@@ -608,30 +624,31 @@ async function _paintFields(box, s) {
   // What a ✕ may take away: the four vocabularies a person types into. talking_head is the
   // type everything falls back to; gender is two words, narrators go in their own window.
   const rm = (field, fallback) => ({ field, fallback, can: (v) => !(field === 'type' && v === 'talking_head') });
-  _fieldRow(box, 'type', s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
-    v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true, remove: rm('type', 'talking_head') });
-  const roleF = _fieldRow(box, 'role', role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
-    v => _patch(s, { roles: roleOf(v, genderF.value) }, 'role'), { none: true, newItem: true, remove: rm('role', '') });
-  const genderF = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }],
-    v => _patch(s, { roles: roleOf(roleF.value, v) }, 'gender'), { none: true });
-  _fieldRow(box, 'vertical', s.vertical, opt(_uniq([..._inUse('vertical'), ...L.verticals])),
-    v => _patch(s, { vertical: v }, 'vertical'), { none: true, newItem: true, remove: rm('vertical', '') });
-  _fieldRow(box, 'product', s.product, opt(_uniq([..._inUse('product'), ...L.products])),
-    v => _patch(s, { product: v }, 'product'), { none: true, newItem: true, remove: rm('product', '') });
+  const F = FIELD_NAME;
+  _fieldRow(box, F.type, s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
+    v => _patch(s, { type: v || 'talking_head' }, F.type), { newItem: true, newTitle: t('New type'), remove: rm('type', 'talking_head') });
+  const roleF = _fieldRow(box, F.role, role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
+    v => _patch(s, { roles: roleOf(v, genderF.value) }, F.role), { none: true, newItem: true, newTitle: t('New role'), remove: rm('role', '') });
+  const genderF = _fieldRow(box, F.gender, role.gender, [{ value: 'female', label: t('Female') }, { value: 'male', label: t('Male') }],
+    v => _patch(s, { roles: roleOf(roleF.value, v) }, F.gender), { none: true });
+  _fieldRow(box, F.vertical, s.vertical, opt(_uniq([..._inUse('vertical'), ...L.verticals])),
+    v => _patch(s, { vertical: v }, F.vertical), { none: true, newItem: true, newTitle: tc('scenario', 'New vertical'), remove: rm('vertical', '') });
+  _fieldRow(box, F.product, s.product, opt(_uniq([..._inUse('product'), ...L.products])),
+    v => _patch(s, { product: v }, F.product), { none: true, newItem: true, newTitle: t('New product'), remove: rm('product', '') });
   // The narrator by id; one the list does not have any more is named, marked deleted.
   const nar = s.narrator || null;
   const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
   const curNar = nar ? (nar.id || (L.narrators.find(n => n.name === nar.name) || {}).id || '__name__:' + nar.name) : '';
-  _fieldRow(box, 'narrator', curNar, narValues, (v) => {
-    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator');
+  _fieldRow(box, F.narrator, curNar, narValues, (v) => {
+    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, F.narrator);
     const n = L.narrators.find(x => x.id === v);
-    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator');
+    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, F.narrator);
     // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
-    return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
-  }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' - deleted' });
+    return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, F.narrator);
+  }, { none: true, missingLabel: () => t('{name} - deleted', { name: nar ? nar.name : '' }) });
 }
 
-const _linesSay = (n) => n + (n === 1 ? ' line' : ' lines');
+const _linesSay = (n) => tn(n, '{n} line', '{n} lines');
 
 async function _show(it) {
   const my = ++_seq;
@@ -643,13 +660,13 @@ async function _show(it) {
   if (my !== _seq) return;
   try {
     const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(it.id)).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'it could not be read');
+    if (!d || !d.success) throw new Error((d && d.error) || t('it could not be read'));
     s = d.scenario;
   } catch (e) {
     if (my !== _seq) return;
     // A scenario whose read failed: "did not load" with Try again under its title, the reason in the corner.
-    body.appendChild(failedEl('the scenario', () => _show(it), { line: true, cls: 'lib-info-note' }));
-    showError('The scenario did not load: ' + e.message);
+    body.appendChild(failedEl(t('the scenario'), () => _show(it), { line: true, cls: 'lib-info-note' }));
+    showError(t('The scenario did not load: {why}', { why: e.message }));
     return;
   }
   if (my !== _seq) return;
@@ -658,9 +675,9 @@ async function _show(it) {
   // how many lines and when it was last edited.
   const lines = s.lines || [];
   const top = _el('div', 'lib-sc-top');
-  top.appendChild(_el('div', 'lib-sc-title', s.title || 'untitled'));
+  top.appendChild(_el('div', 'lib-sc-title', s.title || t('untitled')));
   const count = _el('span', 'lib-sc-meta', _linesSay(lines.length));
-  top.append(count, _el('span', 'lib-sc-meta', 'edited ' + _fmtDate(s.updatedAt || s.createdAt)));
+  top.append(count, _el('span', 'lib-sc-meta', t('edited {date}', { date: _fmtDate(s.updatedAt || s.createdAt) })));
   body.appendChild(top);
   const facts = _el('div', 'lib-sc-grid lib-sc-fields');
   body.appendChild(facts);
@@ -671,14 +688,14 @@ async function _show(it) {
   // An archived one: "Restore" where "Make video" stands - no video from the archive.
   const foot = _el('div', 'lib-sc-bar');
   const archived = !!s.archived;
-  const make = _el('button', 'u-btn is-main', archived ? 'Restore' : 'Make video');
+  const make = _el('button', 'u-btn is-main', archived ? t('Restore') : t('Make video'));
   make.type = 'button';
-  make.title = archived ? 'Archived - put it back into the list of scenarios (a video is made from the list)'
-    : 'Make a talking-head project from this scenario and open it in Merge';
+  make.title = archived ? t('Archived - put it back into the list of scenarios (a video is made from the list)')
+    : t('Make a talking-head project from this scenario and open it in Merge');
   const st = _el('span', 'lib-sc-status');
-  const del = _el('button', 'u-btn is-danger', 'Delete');
+  const del = _el('button', 'u-btn is-danger', t('Delete'));
   del.type = 'button';
-  del.title = 'Delete this scenario';
+  del.title = t('Delete this scenario');
   foot.append(make, st, _el('span', 'sp'), del);
   body.appendChild(foot);
   const box = _el('div', 'lib-sc-cards');
@@ -738,7 +755,7 @@ function _card(a, text) {
 
 function _paintCards(a, texts) {
   a.box.textContent = '';
-  a.cards = (texts.length ? texts : ['']).map(t => _card(a, t));
+  a.cards = (texts.length ? texts : ['']).map(text => _card(a, text));
   for (const c of a.cards) a.box.appendChild(c.row);
   _number(a);
 }
@@ -747,8 +764,8 @@ function _number(a) {
   a.cards.forEach((c, i) => {
     c.row.classList.toggle('hook', i === 0);
     c.n.classList.toggle('is-hook', i === 0);
-    c.n.textContent = i === 0 ? 'hook' : String(i + 1);
-    c.secs.textContent = spokenSeconds(c.ta.value) + 's';
+    c.n.textContent = i === 0 ? t('hook') : String(i + 1);
+    c.secs.textContent = t('{n}s', { n: spokenSeconds(c.ta.value) });
   });
 }
 
@@ -764,14 +781,14 @@ function _cardInput(a, c) {
     const off = before.length - (before.lastIndexOf('\n') + 1);
     const parts = v.split('\n');
     c.ta.value = parts[0];
-    const more = parts.slice(1).map(t => _card(a, t));
+    const more = parts.slice(1).map(text => _card(a, text));
     const i = a.cards.indexOf(c);
     a.cards.splice(i + 1, 0, ...more);
     let after = c.row;
     for (const m of more) { after.after(m.row); after = m.row; }
     _number(a);
     _caret([c, ...more][k].ta, off);
-  } else c.secs.textContent = spokenSeconds(v) + 's';
+  } else c.secs.textContent = t('{n}s', { n: spokenSeconds(v) });
   _queueSave(a);
 }
 
@@ -817,14 +834,14 @@ function _flushA(a, english) {
 
 async function _save(a, keepalive, english) {
   const value = _valueOf(a);
-  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  const say = (text, k) => { a.st.textContent = text; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
   const toEnglish = !!english && !keepalive && _foreign(value);
   // Typed back to what is stored: nothing to save, and "every line is empty" is not true any more.
   if (value === a.was && !toEnglish) { if (a.empty) { a.empty = false; say(''); } return true; }
   const lines = _linesOf(a);
   a.empty = !lines.length;
-  if (a.empty) { say('Every line is empty - not saved; the scenario keeps the lines it had.', 'err'); return false; }
-  if (!keepalive) say(toEnglish ? 'translating into English…' : 'saving…');
+  if (a.empty) { say(t('Every line is empty - not saved; the scenario keeps the lines it had.'), 'err'); return false; }
+  if (!keepalive) say(toEnglish ? t('translating into English…') : t('saving…'));
   try {
     // Only what the column edits: the title it painted may have been renamed since, in Merge. And an
     // EDIT, so a scenario deleted meanwhile is not made again from these lines alone.
@@ -836,13 +853,13 @@ async function _save(a, keepalive, english) {
     const d = await r.json().catch(() => null);
     if (r.status === 404) {
       a.was = value;                            // nothing left to save it into
-      if (_hooks.status) _hooks.status('"' + (a.s.title || 'untitled') + '" was deleted elsewhere', 'err');
+      if (_hooks.status) _hooks.status(t('"{name}" was deleted elsewhere', { name: a.s.title || t('untitled') }), 'err');
       _sel = '';
       if (_hooks.reload) await _hooks.reload();
       if (_hooks.counts) _hooks.counts();
       return false;
     }
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || t('refused'));
     a.was = value;
     // Made English: the cards show what is stored - unless they were typed into while the translation came.
     if (toEnglish && d.scenario && Array.isArray(d.scenario.lines)) {
@@ -859,10 +876,10 @@ async function _save(a, keepalive, english) {
       if (row) row.textContent = _tail(it.meta);
     }
     if (a.count) a.count.textContent = _linesSay(n);
-    say((toEnglish ? 'saved in English · ' : 'saved · ') + n + (n === 1 ? ' line' : ' lines'), 'ok');
+    say(toEnglish ? tn(n, 'saved in English · {n} line', 'saved in English · {n} lines') : tn(n, 'saved · {n} line', 'saved · {n} lines'), 'ok');
     return true;
   } catch (e) {
-    say('Not saved: ' + e.message, 'err');
+    say(t('Not saved: {why}', { why: e.message }), 'err');
     return false;
   }
 }
@@ -875,36 +892,37 @@ window.addEventListener('pagehide', () => {
 // MAKE VIDEO: the lines stored first - a project is made from what is STORED - then the talking head (its own
 // copy of the lines and its empty timeline), and Merge opened on its setup.
 async function _makeVideo(a, btn) {
-  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
-  if (!_linesOf(a).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
+  const say = (text, k) => { a.st.textContent = text; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  if (!_linesOf(a).length) { say(t('Every line is empty - nothing to make a video of.'), 'err'); return; }
   if (!allow('talking', btn)) return;
   btn.disabled = true;
   if (!(await _flushA(a, true))) { btn.disabled = false; return; }
-  say('making the project…');
+  say(t('making the project…'));
   try {
     const key = await talkingHead(a.s.id);
     location.href = '/merge?p=' + encodeURIComponent(key) + '&step=setup';
   } catch (e) {
-    say('Not made: ' + e.message, 'err');
+    say(t('Not made: {why}', { why: e.message }), 'err');
     btn.disabled = false;
   }
 }
 
 async function _delete(s, btn) {
-  if (!await ask(btn, 'Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.', { yes: 'Delete', danger: true, stay: true })) return;
+  const name = s.title || t('untitled');
+  if (!await ask(btn, t('Delete "{name}"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.', { name }), { yes: t('Delete'), danger: true, stay: true })) return;
   // Its lines are not saved on the way out: it is going.
   if (_auto && String(_auto.s.id) === String(s.id)) { clearTimeout(_auto.timer); _auto.was = _valueOf(_auto); }
   btn.disabled = true;
   try {
     const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || t('refused'));
     _sel = '';                                  // the first one is selected after the reload
     if (_hooks.reload) await _hooks.reload();
     if (_hooks.counts) _hooks.counts();
-    if (_hooks.status) _hooks.status('Deleted "' + (s.title || 'untitled') + '"');
+    if (_hooks.status) _hooks.status(t('Deleted "{name}"', { name }));
   } catch (e) {
     btn.disabled = false;
-    if (_hooks.status) _hooks.status('Not deleted: ' + e.message, 'err');
+    if (_hooks.status) _hooks.status(t('Not deleted: {why}', { why: e.message }), 'err');
   }
 }
 

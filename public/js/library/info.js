@@ -15,6 +15,7 @@ import * as CV from './char-voices.js';
 // failed read is the popup in the corner
 import { emptyEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { t } from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,7 +34,7 @@ let _cur = null;          // { kind, id } of the tile the column is about
 const _big = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=sheet';
 
 // What the head says.
-const _title = (it) => it.name || 'character';
+const _title = (it) => it.name || t('character');
 
 const _note = (text) => emptyEl(text, { line: true, cls: 'lib-info-note' });
 
@@ -41,7 +42,7 @@ const _note = (text) => emptyEl(text, { line: true, cls: 'lib-info-note' });
 function _ref(kind, it, hooks) {
   const b = _el('button', 'lib-info-ref is-' + kind);
   b.type = 'button';
-  b.title = 'Open it large';
+  b.title = t('Open it large');
   const img = _el('img');
   img.alt = it.name || '';
   img.decoding = 'async';
@@ -60,7 +61,7 @@ function _ref(kind, it, hooks) {
 // ── Looks: a character's own, or the ones dressed in a lookbook ─────────────
 function _looks(list, hooks, none) {
   const box = _el('div', 'lib-info-part');
-  box.appendChild(_el('div', 'lib-info-sec', list.length ? 'Looks · ' + list.length : 'Looks'));
+  box.appendChild(_el('div', 'lib-info-sec', list.length ? t('Looks · {n}', { n: list.length }) : t('Looks')));
   if (!list.length) { box.appendChild(_note(none)); return box; }
   const grid = _el('div', 'lib-info-looks');
   for (const l of list) {
@@ -96,14 +97,14 @@ export async function show(kind, it, hooks) {
   if (my !== _seq) return;
   // A column whose read failed is not an empty one: "did not load" with Try again, the reason in the corner.
   if (!d || !d.success) {
-    const what = kind === 'characters' ? 'this character' : 'this';
+    const what = kind === 'characters' ? t('this character') : t('this');
     body.appendChild(failedEl(what, () => show(kind, it, hooks), { line: true, cls: 'lib-info-note' }));
-    showError(cap(what) + ' did not load: ' + ((d && d.error) || 'It could not be read.'));
+    showError(t('{what} did not load: {why}', { what: cap(what), why: (d && d.error) || t('It could not be read.') }));
     return;
   }
   if (kind === 'characters') {
     CV.paint(body, it, d.voices || [], { changed: hooks.changed, alive: () => my === _seq });
-    body.appendChild(_looks(d.looks || [], hooks, 'No looks for this character yet.'));
+    body.appendChild(_looks(d.looks || [], hooks, t('No looks for this character yet.')));
   }
 }
 
@@ -124,7 +125,7 @@ export function empty(label) {
   body.className = 'lib-info-body';
   body.textContent = '';
   if (head) head.textContent = label || '';
-  body.appendChild(_note('Nothing on this shelf yet.'));
+  body.appendChild(_note(t('Nothing on this shelf yet.')));
 }
 
 /** Stop what the column is doing - a demo playing, an answer still on its way. */

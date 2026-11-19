@@ -3,6 +3,7 @@
 // Every action is the server's: the endpoint writes the store and answers.
 
 import { askName } from '../name-box.js';
+import * as T from '../i18n/t.js';
 
 const CHAR_KIND = 'characters';
 
@@ -74,7 +75,7 @@ export async function fixThumb(it) {
 export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds', 'music', 'renders']);
 
 export async function renameItem(it, anchor) {
-  const next = await askName({ anchor, title: 'Rename', value: it.name || '', okLabel: 'Rename' });
+  const next = await askName({ anchor, title: T.t('Rename'), value: it.name || '', okLabel: T.t('Rename') });
   if (next == null) return null;
   const name = String(next).trim();
   if (!name || name === it.name) return null;
@@ -167,9 +168,9 @@ export async function createCategory(kind, label, parent) {
 // birols <-> uploads is one field in one store; anything involving hooks is a record
 // moving between two files. The server does both so a move cannot land half-applied.
 export const KINDS = [
-  { id: 'birols',  label: 'Birol' },
-  { id: 'uploads', label: 'Upload' },
-  { id: 'hooks',   label: 'Hook' },
+  { id: 'birols',  label: T.tc('kind', 'Birol') },
+  { id: 'uploads', label: T.tc('kind', 'Upload') },
+  { id: 'hooks',   label: T.tc('kind', 'Hook') },
 ];
 
 export async function setKind(it, kind) {
@@ -188,35 +189,36 @@ export async function setKind(it, kind) {
 export function deleteWarning(it) {
   if (it.kind === CHAR_KIND) {
     const n = (it.meta && it.meta.looks) || 0;
-    return 'Delete the character "' + (it.name || '') + '"?\n\n'
-      + 'Its record goes, and its ElevenLabs voice too unless another character uses it.\n'
-      + (n ? 'Its ' + n + ' look' + (n === 1 ? '' : 's') + ' stay on the Characters shelf until deleted separately.\n' : '')
-      + '\nThe character sheet file stays on disk.';
+    return T.t('Delete the character "{name}"?', { name: it.name || '' }) + '\n\n'
+      + T.t('Its record goes, and its ElevenLabs voice too unless another character uses it.') + '\n'
+      + (n ? T.tn(n, 'Its {n} look stays on the Characters shelf until deleted separately.', 'Its {n} looks stay on the Characters shelf until deleted separately.') + '\n' : '')
+      + '\n' + T.t('The character sheet file stays on disk.');
   }
   if (it.kind === 'obrazy') {
     const v = (it.meta && it.meta.variations) || 0;
-    return 'Delete the look "' + (it.name || '') + '"?\n\n'
-      + 'Its folder goes with it' + (v ? ' - the look image and ' + v + ' pose variation' + (v === 1 ? '' : 's') : '') + '.';
+    return T.t('Delete the look "{name}"?', { name: it.name || '' }) + '\n\n'
+      + (v ? T.tn(v, 'Its folder goes with it - the look image and {n} pose variation.', 'Its folder goes with it - the look image and {n} pose variations.')
+        : T.t('Its folder goes with it.'));
   }
   if (it.kind === 'lookbooks' || it.kind === 'environments') {
-    return 'Delete the file "' + (it.name || '') + '"?\n\nThe image and its thumbnail are removed from disk.';
+    return T.t('Delete the file "{name}"?', { name: it.name || '' }) + '\n\n' + T.t('The image and its thumbnail are removed from disk.');
   }
   // A render is a finished video and the only copy: there is no record it can be rebuilt from,
   // and re-rendering costs what it cost the first time. So this warning carries the weight -
   // the size, and the fact that nothing else holds it.
   if (it.kind === 'renders') {
     const mb = (it.meta && it.meta.sizeMb) || 0;
-    return 'Delete the render "' + (it.name || '') + '"?\n\n'
-      + 'The video' + (mb ? ' (' + mb + ' MB)' : '') + ' and its poster are removed from disk.\n'
-      + 'This is the only copy - re-rendering is the only way back.';
+    return T.t('Delete the render "{name}"?', { name: it.name || '' }) + '\n\n'
+      + (mb ? T.t('The video ({mb} MB) and its poster are removed from disk.', { mb }) : T.t('The video and its poster are removed from disk.')) + '\n'
+      + T.t('This is the only copy - re-rendering is the only way back.');
   }
   // A sound has no picture: the file alone goes.
-  if (it.kind === 'sounds') return 'Delete the sound "' + (it.name || '') + '"?\n\nThe sound file is removed from disk.';
+  if (it.kind === 'sounds') return T.t('Delete the sound "{name}"?', { name: it.name || '' }) + '\n\n' + T.t('The sound file is removed from disk.');
   // A track goes with its file, as everything on Media.
-  if (it.kind === 'music') return 'Delete the track "' + (it.name || '') + '"?\n\nThe music file is removed from disk.';
+  if (it.kind === 'music') return T.t('Delete the track "{name}"?', { name: it.name || '' }) + '\n\n' + T.t('The music file is removed from disk.');
   // A saved text of Music -> Lyrics - no file goes with it.
-  if (it.kind === 'lyrics') return 'Delete the lyrics "' + (it.name || '') + '"?\n\nThe text is removed from Music → Lyrics.';
-  return 'Delete "' + (it.name || '') + '"?\n\nThe file and its thumbnail are removed from disk.';
+  if (it.kind === 'lyrics') return T.t('Delete the lyrics "{name}"?', { name: it.name || '' }) + '\n\n' + T.t('The text is removed from Music → Lyrics.');
+  return T.t('Delete "{name}"?', { name: it.name || '' }) + '\n\n' + T.t('The file and its thumbnail are removed from disk.');
 }
 
 // The question, with the projects whose timelines hold the file (POST /api/library/usage) - there its
@@ -230,10 +232,10 @@ export async function deleteQuestion(it) {
     projects = d.projects || [];
   } catch (e) { projects = []; }
   if (!projects.length) return base;
-  const lines = projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + p.clips + (p.clips === 1 ? ' clip' : ' clips'));
-  if (projects.length > 10) lines.push('  … and ' + (projects.length - 10) + ' more');
-  return base + '\n\nIt is used in ' + projects.length + (projects.length === 1 ? ' project' : ' projects') + ':\n' + lines.join('\n')
-    + '\n\nThere its clips turn red - to be replaced or removed.';
+  const lines = projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + T.tn(p.clips, '{n} clip', '{n} clips'));
+  if (projects.length > 10) lines.push('  ' + T.t('… and {n} more', { n: projects.length - 10 }));
+  return base + '\n\n' + T.tn(projects.length, 'It is used in {n} project:', 'It is used in {n} projects:') + '\n' + lines.join('\n')
+    + '\n\n' + T.t('There its clips turn red - to be replaced or removed.');
 }
 
 export async function deleteItem(it) {

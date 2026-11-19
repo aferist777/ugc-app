@@ -6,6 +6,9 @@
      waveEl(wave, cls)    an SVG; a flat line while a sound has no waveform yet (it is measured in the background)
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// The app's words as T.t: a length is this module's own `t`.
+import * as T from '../i18n/t.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 
 export function waveEl(wave, cls) {
@@ -37,7 +40,7 @@ export function waveEl(wave, cls) {
 export function secs(s) {
   const t = +s || 0;
   if (t <= 0) return '';
-  if (t < 10) return t.toFixed(1) + ' s';
-  if (t < 60) return Math.round(t) + ' s';
+  if (t < 10) return T.t('{s} s', { s: t.toFixed(1) });
+  if (t < 60) return T.t('{s} s', { s: Math.round(t) });
   return Math.floor(t / 60) + ':' + String(Math.round(t % 60)).padStart(2, '0');
 }

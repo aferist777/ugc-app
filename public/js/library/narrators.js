@@ -28,6 +28,7 @@ import { twoPress } from '../really.js';
 import { ask } from '../ask.js';
 import { allow } from '../key-gate.js';
 import { emptyEl } from '../ui-state.js';
+import { t, tn, tc } from '../i18n/t.js';
 
 const el = J.el;
 
@@ -45,10 +46,10 @@ const _typed = new Map();  // narratorId -> text pasted and not added yet
 const _jobs = new Map();
 
 const VOICE_ROWS = [
-  ['summary', 'Who this voice is'], ['sentences', 'Sentences'], ['rhythm', 'Rhythm'],
-  ['address', 'Address'], ['register', 'Register'], ['imagery', 'Imagery'],
-  ['humour', 'Humor'], ['openings', 'Openings'], ['endings', 'Endings'], ['stance', 'Stance'],
-  ['signature_moves', 'Signature moves'], ['never_does', 'Never does'],
+  ['summary', t('Who this voice is')], ['sentences', t('Sentences')], ['rhythm', t('Rhythm')],
+  ['address', t('Address')], ['register', t('Register')], ['imagery', t('Imagery')],
+  ['humour', t('Humor')], ['openings', t('Openings')], ['endings', t('Endings')], ['stance', t('Stance')],
+  ['signature_moves', t('Signature moves')], ['never_does', t('Never does')],
 ];
 
 const _announce = () => document.dispatchEvent(new CustomEvent('lib:narrators'));
@@ -60,48 +61,46 @@ const _nurl = (id, rest) => `/api/narrators/${encodeURIComponent(id)}${rest || '
 // ── The area ────────────────────────────────────────────────────────────────
 const HTML = `
     <div class="mk-panel-head">
-      <span class="mk-panel-t">Narrators</span>
-      <span class="mk-note">how a script is written - writing by an author in, a voice out</span>
+      <span class="mk-panel-t">${t('Narrators')}</span>
+      <span class="mk-note">${t('how a script is written - writing by an author in, a voice out')}</span>
     </div>
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
       <aside class="nr-list-col">
-        <button class="mk-add nr-new u-btn is-s" type="button" data-f="new" title="Make a narrator - a name first, samples after">+ New narrator</button>
+        <button class="mk-add nr-new u-btn is-s" type="button" data-f="new" title="${t('Make a narrator - a name first, samples after')}">${t('+ New narrator')}</button>
         <div class="nr-list" data-f="list"></div>
       </aside>
       <section class="nr-col">
-        <div class="nr-col-h">Samples <em>- writing by this author</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
+        <div class="nr-col-h">${t('Samples')} <em>${t('- writing by this author')}</em><span class="sp"></span><span class="nr-words" data-f="words"></span></div>
         <div class="nr-samples" data-f="samples"></div>
         <div class="nr-add">
-          <textarea class="u-area" data-f="text" rows="4" placeholder="Paste writing by this author…"></textarea>
+          <textarea class="u-area" data-f="text" rows="4" placeholder="${t('Paste writing by this author…')}"></textarea>
           <div class="nr-add-row">
-            <button class="u-btn is-s" type="button" data-f="addtext">Add text</button>
+            <button class="u-btn is-s" type="button" data-f="addtext">${t('Add text')}</button>
             <span class="sp"></span>
             <input type="file" data-f="file" accept="video/*,audio/*">
-            <button class="u-btn is-s" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
+            <button class="u-btn is-s" type="button" data-f="addfile" title="${t('Transcribe the file and keep its words as a sample - a paid call')}">${t('Transcribe a file')}</button>
           </div>
           <div class="nr-add-row">
-            <input type="text" class="nr-url u-in" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
-            <button class="u-btn is-s" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
+            <input type="text" class="nr-url u-in" data-f="url" placeholder="${t('…or a link - YouTube, TikTok, Instagram')}">
+            <button class="u-btn is-s" type="button" data-f="addlink" title="${t('Fetch the video\'s sound, transcribe it and keep its words as a sample - a paid call')}">${t('Transcribe a link')}</button>
           </div>
           <div class="nr-add-row">
-            <select class="nr-url nr-src-pick u-in" data-f="src"><option value="">…or a source of the Library</option></select>
-            <button class="u-btn is-s" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
+            <select class="nr-url nr-src-pick u-in" data-f="src"><option value="">${t('…or a source of the Library')}</option></select>
+            <button class="u-btn is-s" type="button" data-f="addsrc" title="${t('Its words were heard when it came in - they become the sample, for nothing')}">${t('Add the source')}</button>
           </div>
-          <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
-            transcribed (a paid call), and its words become the sample. A source of the Library was heard when it came in:
-            its words become the sample for nothing.</p>
+          <p class="mk-pnote">${t('A video or audio file - or a link, of which only the sound is fetched, without a login - is transcribed (a paid call), and its words become the sample. A source of the Library was heard when it came in: its words become the sample for nothing.')}</p>
           <div class="mk-job" data-f="sjob" hidden></div>
         </div>
       </section>
       <section class="nr-col nr-right">
-        <div class="nr-col-h">The voice <em>- as a model will be told it</em></div>
+        <div class="nr-col-h">${t('The voice')} <em>${t('- as a model will be told it')}</em></div>
         <div class="nr-view" data-f="view"></div>
         <div class="nr-foot">
           <div class="mk-job" data-f="vjob" hidden></div>
           <div class="nr-foot-row">
             <span class="nr-foot-note" data-f="readnote"></span>
-            <button class="u-btn is-main" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
+            <button class="u-btn is-main" type="button" data-f="read" title="${t('Read the samples not read yet - only what is new is added to the voice - a paid call')}">${t('Read new samples')}</button>
           </div>
         </div>
       </section>
@@ -162,10 +161,10 @@ async function _readList() {
 }
 
 function _tag(it) {
-  if (_running(it.id)) return ['run', _jobs.get(String(it.id)).kind === 'read' ? 'Reading…' : 'Transcribing…'];
-  if (!it.ready) return ['wait', it.enough ? 'Not read yet' : `Needs ${_minWords}+ words`];
-  if (it.unread) return ['wait', it.unread === 1 ? '1 new sample' : `${it.unread} new samples`];
-  return ['ready', 'Voice read'];
+  if (_running(it.id)) return ['run', _jobs.get(String(it.id)).kind === 'read' ? t('Reading…') : t('Transcribing…')];
+  if (!it.ready) return ['wait', it.enough ? t('Not read yet') : t('Needs {n}+ words', { n: _minWords })];
+  if (it.unread) return ['wait', tn(it.unread, '{n} new sample', '{n} new samples')];
+  return ['ready', t('Voice read')];
 }
 
 function _paintList() {
@@ -179,7 +178,7 @@ function _paintList() {
   for (const n of [...box.children]) if (n !== keep) n.remove();
   if (keep && keep.parentNode !== box) box.prepend(keep);
   if (!_list.length && !keep) {
-    box.appendChild(emptyEl('No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.'));
+    box.appendChild(emptyEl(t('No narrators yet. A narrator is HOW a script is written - make one out of writing by an author you want to sound like.')));
     return;
   }
   for (const it of _list) {
@@ -188,13 +187,13 @@ function _paintList() {
     row.dataset.id = String(it.id);
     const main = el('div', 'nr-row-main');
     main.appendChild(el('div', 'nr-row-t', it.name));
-    main.appendChild(el('div', 'nr-row-s', [it.samples + (it.samples === 1 ? ' sample' : ' samples'), it.words + ' words'].join(' · ')));
+    main.appendChild(el('div', 'nr-row-s', [tn(it.samples, '{n} sample', '{n} samples'), tn(it.words, '{n} word', '{n} words')].join(' · ')));
     row.appendChild(main);
     const [kind, text] = _tag(it);
     row.appendChild(el('span', 'mk-tag ' + (kind === 'run' ? 'wait' : kind), text));
     const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
-    x.title = 'Delete this narrator';
+    x.title = t('Delete this narrator');
     x.disabled = _running(it.id);
     x.addEventListener('click', (e) => { e.stopPropagation(); _delete(it, x); });
     row.appendChild(x);
@@ -215,7 +214,7 @@ function _askName() {
   const row = el('div', 'nr-name');
   const input = el('input', 'u-in');
   input.type = 'text';
-  input.placeholder = 'Name, then Enter';
+  input.placeholder = t('Name, then Enter');
   input.maxLength = 80;
   input.spellcheck = false;
   const err = el('div', 'nr-name-err');
@@ -226,7 +225,7 @@ function _askName() {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const name = input.value.trim();
-    if (!name) { err.textContent = 'Give it a name.'; return; }
+    if (!name) { err.textContent = t('Give it a name.'); return; }
     if (_nameBox.busy) return;
     _nameBox.busy = true;
     err.textContent = '';
@@ -262,10 +261,11 @@ async function _delete(it, anchor) {
     const d = await J.api('/api/scriptgen/drafts');
     n = (d.drafts || []).filter(x => String(x.narratorId || '') === String(it.id)).length;
   } catch (e) { /* the count is a courtesy */ }
-  const lines = [`Delete the narrator "${it.name}"?`, '', 'Its samples and its voice go with it, and that cannot be undone.'];
-  if (n) lines.push('', `${n === 1 ? 'One draft was' : `${n} drafts were`} written with it - ${n === 1 ? 'it keeps its' : 'they keep their'} text, and the form will ask for another narrator.`);
+  const lines = [t('Delete the narrator "{name}"?', { name: it.name }), '', t('Its samples and its voice go with it, and that cannot be undone.')];
+  if (n) lines.push('', tn(n, 'One draft was written with it - it keeps its text, and the form will ask for another narrator.',
+    '{n} drafts were written with it - they keep their text, and the form will ask for another narrator.'));
   // `stay`: the list repaints as a narrator's job lands, and a repaint's scroll must not answer "no" for the person.
-  if (!await ask(anchor, lines.join('\n'), { yes: 'Delete', danger: true, stay: true })) return;
+  if (!await ask(anchor, lines.join('\n'), { yes: t('Delete'), danger: true, stay: true })) return;
   if (_running(it.id)) return;
   try {
     await J.api(_nurl(it.id), { method: 'DELETE' });
@@ -313,8 +313,8 @@ function _paintWords() {
   const n = _rec.narrator;
   const unread = (n.samples || []).filter(s => !s.readAt).length;
   _win.q('words').textContent = [
-    `${_rec.words} words`, !_hasVoice(n) && _rec.words < _rec.minWords ? `needs ${_rec.minWords}` : '',
-    unread ? `${unread} not read` : '',
+    tn(_rec.words, '{n} word', '{n} words'), !_hasVoice(n) && _rec.words < _rec.minWords ? t('needs {n}', { n: _rec.minWords }) : '',
+    unread ? t('{n} not read', { n: unread }) : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -342,9 +342,9 @@ function _paintLocks() {
   const first = !none && !_hasVoice(_rec.narrator);
   const short = first && words < ((_rec && _rec.minWords) || _minWords);
   q('read').disabled = none || busy || !unread.length || short;
-  q('read').textContent = unread.length > 1 ? `Read new samples · ${unread.length}` : 'Read new samples';
-  q('readnote').textContent = none || busy ? '' : !unread.length ? ((_rec.narrator.samples || []).length ? 'every sample has been read' : 'add a sample first')
-    : short ? `${words} words to read - at least ${_rec.minWords} the first time` : '';
+  q('read').textContent = unread.length > 1 ? t('Read new samples · {n}', { n: unread.length }) : t('Read new samples');
+  q('readnote').textContent = none || busy ? '' : !unread.length ? ((_rec.narrator.samples || []).length ? t('every sample has been read') : t('add a sample first'))
+    : short ? tn(words, '{n} word to read - at least {min} the first time', '{n} words to read - at least {min} the first time', { min: _rec.minWords }) : '';
   _win.host.querySelectorAll('.nr-sample .nr-x').forEach(b => { b.disabled = busy; });
 }
 
@@ -353,21 +353,23 @@ function _paintSamples() {
   box.textContent = '';
   const owner = String(_rec.narrator.id);
   const samples = (_rec.narrator.samples || []);
-  if (!samples.length) { box.appendChild(emptyEl('No samples yet.')); return; }
+  if (!samples.length) { box.appendChild(emptyEl(t('No samples yet.'))); return; }
   samples.forEach((s, i) => {
     const card = el('div', 'nr-sample' + (s.readAt ? '' : ' unread'));
     const h = el('div', 'nr-sample-h');
-    const name = el('b', null, s.label || (s.kind === 'file' ? 'a file' : s.kind === 'link' ? 'a link' : s.kind === 'source' ? 'a source' : 'pasted text'));
+    // A pasted sample is stored under the server's English label; any other label is a file's, a link's or a source's name.
+    const name = el('b', null, s.label && s.label !== 'pasted text' ? s.label
+      : s.kind === 'file' ? t('a file') : s.kind === 'link' ? t('a link') : s.kind === 'source' ? t('a source') : t('pasted text'));
     if (s.url) name.title = s.url;
     h.appendChild(name);
-    h.appendChild(el('span', null, `${s.words} words`));
+    h.appendChild(el('span', null, tn(s.words, '{n} word', '{n} words')));
     // Read or not: "Read new samples" reads only the ones that are not, so none is paid for twice.
-    const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? 'Read' : 'Not read');
-    tag.title = s.readAt ? 'Read into the voice - it is not read again' : 'Not read yet - "Read new samples" reads it';
+    const tag = el('span', 'mk-tag ' + (s.readAt ? 'ready' : 'wait'), s.readAt ? t('Read') : t('Not read'));
+    tag.title = s.readAt ? t('Read into the voice - it is not read again') : t('Not read yet - "Read new samples" reads it');
     h.appendChild(tag);
     const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
-    x.title = 'Remove this sample';
+    x.title = t('Remove this sample');
     x.addEventListener('click', () => _removeSample(owner, i, s, x));
     h.appendChild(x);
     card.appendChild(h);
@@ -378,9 +380,9 @@ function _paintSamples() {
 }
 
 async function _removeSample(id, i, s, anchor) {
-  const said = s && s.readAt ? 'What was read from it stays in the voice.' : 'It has not been read yet.';
+  const q = s && s.readAt ? t('Remove this sample? What was read from it stays in the voice.') : t('Remove this sample? It has not been read yet.');
   if (id !== _sel || _running(id)) return;
-  if (!await ask(anchor, `Remove this sample? ${said}`, { yes: 'Remove', danger: true, stay: true })) return;
+  if (!await ask(anchor, q, { yes: t('Remove'), danger: true, stay: true })) return;
   if (id !== _sel || _running(id)) return;
   try {
     await J.api(_nurl(id, `/samples/${i}`), { method: 'DELETE' });
@@ -394,11 +396,11 @@ async function _addText() {
   const id = _rec ? String(_rec.narrator.id) : '';
   if (!id || id !== _sel || _running(id) || _adding) return;
   const text = _win.q('text').value.trim();
-  if (!text) { J.sayJob(_win.q('sjob'), 'Paste some writing first.', true); return; }
+  if (!text) { J.sayJob(_win.q('sjob'), t('Paste some writing first.'), true); return; }
   _adding = true;
   _paintLocks();
   try {
-    await _post(_nurl(id, '/samples'), { text, label: 'pasted text' });
+    await _post(_nurl(id, '/samples'), { text, label: 'pasted text' });   // stored as it is: the label stays English
     _typed.delete(id);
     if (_win) _win.q('text').value = '';
     if (_win) J.clearJob(_win.q('sjob'));
@@ -420,13 +422,14 @@ async function _paintSources() {
   if (!_rec) return;
   const mine = new Set((_rec.narrator.samples || []).map(s => String(s.sourceId || '')).filter(Boolean));
   sel.textContent = '';
-  const first = el('option', null, '…or a source of the Library');
+  const first = el('option', null, t('…or a source of the Library'));
   first.value = '';
   sel.appendChild(first);
   for (const s of list) {
-    const t = s.transcript || {};
-    if (t.state !== 'ready' || !t.chars) continue;
-    const o = el('option', null, `${s.title}${s.seconds ? ' · ' + J.clock(s.seconds) : ''}${mine.has(String(s.id)) ? ' - a sample already' : ''}`);
+    const tr = s.transcript || {};
+    if (tr.state !== 'ready' || !tr.chars) continue;
+    const label = `${s.title}${s.seconds ? ' · ' + J.clock(s.seconds) : ''}`;
+    const o = el('option', null, mine.has(String(s.id)) ? t('{name} - a sample already', { name: label }) : label);
     o.value = String(s.id);
     o.disabled = mine.has(String(s.id));
     sel.appendChild(o);
@@ -439,7 +442,7 @@ async function _addSource() {
   if (!id || id !== _sel || _running(id)) return;
   const sel = _win.q('src');
   const sourceId = sel.value;
-  if (!sourceId) { J.sayJob(_win.q('sjob'), 'Choose a source first.', true); return; }
+  if (!sourceId) { J.sayJob(_win.q('sjob'), t('Choose a source first.'), true); return; }
   const btn = _win.q('addsrc');
   btn.disabled = true;
   try {
@@ -448,7 +451,7 @@ async function _addSource() {
     await _readList();
     _paintList();
     if (_sel === id) await _show();
-    if (_win && _sel === id) J.sayJob(_win.q('sjob'), `Added · ${d.words} words, not read yet`);
+    if (_win && _sel === id) J.sayJob(_win.q('sjob'), tn(d.words, 'Added · {n} word, not read yet', 'Added · {n} words, not read yet'));
   } catch (e) { J.sayJob(_win.q('sjob'), e.message, true); }
   finally { btn.disabled = false; _paintLocks(); }
 }
@@ -521,14 +524,14 @@ function _paintVoice(box) {
   const n = _rec.narrator;
   if (!_hasVoice(n)) {
     box.appendChild(emptyEl((n.samples || []).length
-      ? 'Not read yet. Press “Read new samples” - the voice is read out of the samples.'
-      : 'Not read yet. Add samples, then press “Read new samples”.'));
+      ? t('Not read yet. Press “Read new samples” - the voice is read out of the samples.')
+      : t('Not read yet. Add samples, then press “Read new samples”.')));
     return;
   }
   const last = n.lastRead || {};
   if (last.at) {
     const head = el('div', 'nr-voice-h');
-    head.appendChild(el('span', 'nr-voice-at', ['last read ' + J.fmtDate(last.at), last.model].filter(Boolean).join(' · ')));
+    head.appendChild(el('span', 'nr-voice-at', [t('last read {date}', { date: J.fmtDate(last.at) }), last.model].filter(Boolean).join(' · ')));
     box.appendChild(head);
   }
   const owner = String(n.id);
@@ -539,14 +542,14 @@ function _paintVoice(box) {
     row.appendChild(el('div', 'nr-prof-k', label));
     for (const l of lines) {
       const line = el('div', 'nr-vline');
-      const t = el('div', 'nr-vline-t');
-      _editable(t, l.text, async (text) => (await _post(_nurl(owner, `/voice/${encodeURIComponent(l.id)}`), { text }, 'PATCH')).narrator, { multiline: true });
-      line.appendChild(t);
+      const cell = el('div', 'nr-vline-t');
+      _editable(cell, l.text, async (text) => (await _post(_nurl(owner, `/voice/${encodeURIComponent(l.id)}`), { text }, 'PATCH')).narrator, { multiline: true });
+      line.appendChild(cell);
       // What the last reading added - when it was not the first.
-      if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', 'New'));
+      if (!last.first && last.id && l.by === last.id) line.appendChild(el('span', 'nr-new-tag', tc('voice', 'New')));
       const x = el('button', 'nr-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
-      x.title = 'Delete this line of the voice';
+      x.title = t('Delete this line of the voice');
       _twice(x, async () => {
         try {
           const d = await J.api(_nurl(owner, `/voice/${encodeURIComponent(l.id)}`), { method: 'DELETE' });
@@ -597,7 +600,8 @@ async function _start(id, kind, start, timing) {
     job.row = null;
     job.busy = false;
     job.jobId = '';
-    job.last = { text: kind === 'read' ? `Read · ${done.step || 'done'}` : `Transcribed · ${done.step || 'done'}`, err: false };
+    const what = done.step || t('done');
+    job.last = { text: kind === 'read' ? t('Read · {what}', { what }) : t('Transcribed · {what}', { what }), err: false };
     return done;
   } catch (e) {
     if (job.row) job.row.detach();
@@ -623,15 +627,15 @@ async function _addFile() {
   if (!allow('sources')) return;
   const input = _win.q('file');
   const file = input.files && input.files[0];
-  if (!file) { J.sayJob(_win.q('sjob'), 'Pick a video or audio file first.', true); return; }
+  if (!file) { J.sayJob(_win.q('sjob'), t('Pick a video or audio file first.'), true); return; }
   // Paid - a plain answer; the question waits, so a job started meanwhile is not doubled.
-  if (!await ask(_win.q('addfile'), `Transcribe "${file.name}" (${J.mb(file.size)}) into a sample?\n\nIt is a paid speech-to-text call.`, { yes: 'Transcribe', stay: true })) return;
+  if (!await ask(_win.q('addfile'), t('Transcribe "{name}" ({size}) into a sample?\n\nIt is a paid speech-to-text call.', { name: file.name, size: J.mb(file.size) }), { yes: t('Transcribe'), stay: true })) return;
   if (id !== _sel || _running(id)) return;
   const form = new FormData();
   form.append('file', file);
   input.value = '';
   await _start(id, 'sample', () => J.api(_nurl(id, '/samples/upload'), { method: 'POST', body: form }), {
-    key: `l2-sample|${J.bucket(file.size / 1048576)}mb`, label: `Uploading ${J.mb(file.size)}…`, estimateMs: J.EST.sample(file.size),
+    key: `l2-sample|${J.bucket(file.size / 1048576)}mb`, label: t('Uploading {size}…', { size: J.mb(file.size) }), estimateMs: J.EST.sample(file.size),
   });
 }
 
@@ -642,16 +646,16 @@ async function _addLink() {
   if (!allow('sources')) return;
   const input = _win.q('url');
   const url = input.value.trim();
-  if (!url) { J.sayJob(_win.q('sjob'), 'Paste a link first.', true); return; }
+  if (!url) { J.sayJob(_win.q('sjob'), t('Paste a link first.'), true); return; }
   // At "add link" whether it was pressed or Enter was pressed in the field.
-  if (!await ask(_win.q('addlink'), 'Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.', { yes: 'Transcribe', stay: true })) return;
+  if (!await ask(_win.q('addlink'), t('Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.'), { yes: t('Transcribe'), stay: true })) return;
   if (id !== _sel || _running(id)) return;
   input.value = '';
   await _start(id, 'sample', () => _post(_nurl(id, '/samples/link'), { url }),
-    { key: 'l2-sample|link', label: 'Reading the link…', estimateMs: J.EST.ingestLink });
+    { key: 'l2-sample|link', label: t('Reading the link…'), estimateMs: J.EST.ingestLink });
 }
 
-const _readTiming = (words) => ({ key: `l2-read|${J.bucket(words)}`, label: `Reading ${words} words…`, estimateMs: J.EST.analyse });
+const _readTiming = (words) => ({ key: `l2-read|${J.bucket(words)}`, label: tn(words, 'Reading {n} word…', 'Reading {n} words…'), estimateMs: J.EST.analyse });
 
 // "Read new samples": the ones not read yet - by the agents' ladder (Admin -> AI settings), as every agent.
 async function _read() {

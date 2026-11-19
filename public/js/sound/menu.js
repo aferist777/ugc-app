@@ -30,6 +30,7 @@ import { askName } from '../name-box.js';
 import { openCut } from './cut-window.js';
 import { secs } from './wave.js';
 import { menuIcons } from '../icons.js';
+import { t } from '../i18n/t.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -91,24 +92,25 @@ export async function soundMenu(it, ev, opts) {
   for (const [label, sub, fn] of (Array.isArray(o.extra) ? o.extra : [])) item(label, sub, fn);
   // Where the piece goes follows what is cut: a track's into Music, the rest into My sounds - no choice.
   const inPlayer = it.kind === 'music' && typeof o.cut === 'function';
-  item('Cut…', inPlayer ? 'in the player - a piece of it as a new track in Music'
-    : 'a piece of it as a new ' + (it.kind === 'music' ? 'track in Music' : 'sound in My sounds'), () => {
+  item(t('Cut…'), inPlayer ? t('in the player - a piece of it as a new track in Music')
+    : it.kind === 'music' ? t('a piece of it as a new track in Music') : t('a piece of it as a new sound in My sounds'), () => {
     if (typeof o.cut === 'function' && o.cut(it)) return;
     openCut({ kind: it.kind, id: it.id, path: it.media, name: it.name, dur: it.dur, wave: (it.meta || {}).wave }, {
       stop: o.stop, toTimeline: o.toTimeline,
       done: async (made, where) => {
         await o.changed();
-        o.status('"' + ((made && (made.name || made.title)) || 'The piece') + '" is a new ' + (where === 'music' ? 'track in Music' : 'sound in My sounds'));
+        const name = (made && (made.name || made.title)) || t('The piece');
+        o.status(where === 'music' ? t('"{name}" is a new track in Music', { name }) : t('"{name}" is a new sound in My sounds', { name }));
       },
     });
   });
   if (!builtin) {
-    item('Rename', it.kind === 'music' ? 'the track\'s name' : 'the sound\'s name', async () => {
+    item(t('Rename'), it.kind === 'music' ? t('the track\'s name') : t('the sound\'s name'), async () => {
       const done = await askName({
-        anchor: null, title: 'Rename', value: it.name, select: true, okLabel: 'Rename', maxLength: 120,
+        anchor: null, title: t('Rename'), value: it.name, select: true, okLabel: t('Rename'), maxLength: 120,
         submit: async (name) => (name === it.name ? null : _patch(it, { name })),
       });
-      if (done) { await o.changed(); o.status('Renamed.'); }
+      if (done) { await o.changed(); o.status(t('Renamed.')); }
     });
   }
   // A track and the highlights folder: its root takes any track, a mood only its own.
@@ -125,10 +127,15 @@ export async function soundMenu(it, ev, opts) {
           o.status(said);
         } catch (e) { o.status(e.message, true); }
       };
-      if (!pl.folder) item('Into highlights', 'the highlights popup offers it', put({ folder: 'highlights' }, '"' + it.name + '" is in Music → highlights.'));
-      if (pl.folder && pl.mood) item('Into highlights itself', 'out of the mood ' + moodLabel(pl.mood), put({ folder: 'highlights' }, '"' + it.name + '" is in Music → highlights.'));
-      if (pl.folder && !pl.mood && pl.moodMade) item('Back into ' + moodLabel(pl.moodMade), 'the mood its preset made it for', put({ folder: 'highlights', mood: pl.moodMade }, '"' + it.name + '" is in highlights → ' + moodLabel(pl.moodMade) + '.'));
-      if (pl.folder) item('Out of highlights', 'into Music itself - the popup stops offering it', put({ folder: '' }, '"' + it.name + '" is out of highlights.'));
+      const name = it.name;
+      const inHl = t('"{name}" is in Music → highlights.', { name });
+      if (!pl.folder) item(t('Into highlights'), t('the highlights popup offers it'), put({ folder: 'highlights' }, inHl));
+      if (pl.folder && pl.mood) item(t('Into highlights itself'), t('out of the mood {mood}', { mood: moodLabel(pl.mood) }), put({ folder: 'highlights' }, inHl));
+      if (pl.folder && !pl.mood && pl.moodMade) {
+        item(t('Back into {mood}', { mood: moodLabel(pl.moodMade) }), t('the mood its preset made it for'),
+          put({ folder: 'highlights', mood: pl.moodMade }, t('"{name}" is in highlights → {mood}.', { name, mood: moodLabel(pl.moodMade) })));
+      }
+      if (pl.folder) item(t('Out of highlights'), t('into Music itself - the popup stops offering it'), put({ folder: '' }, t('"{name}" is out of highlights.', { name })));
     }
   }
   // A sound and a track go into one another and into AUDIO itself - the server's move.
@@ -136,32 +143,32 @@ export async function soundMenu(it, ev, opts) {
     try {
       const d = await _api('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: [{ kind: it.kind, id: String(it.id) }], to }) });
-      if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || 'not moved');
+      if (!d.done) throw new Error(((d.skipped || [])[0] || {}).why || t('not moved'));
       await o.changed();
-      o.status('"' + it.name + '" is in ' + said + '.');
+      o.status(t('"{name}" is in {place}.', { name: it.name, place: said }));
     } catch (e) { o.status(e.message, true); }
   };
   if (it.kind === 'music') {
-    item('Move to AUDIO', 'a sound in AUDIO itself', moveTo({ kind: 'sounds', aroot: true }, 'AUDIO'));
-    item('Move to My sounds', 'a sound of SFX → My sounds', moveTo({ kind: 'sounds' }, 'My sounds'));
+    item(t('Move to {place}', { place: t('AUDIO') }), t('a sound in AUDIO itself'), moveTo({ kind: 'sounds', aroot: true }, t('AUDIO')));
+    item(t('Move to {place}', { place: t('My sounds') }), t('a sound of SFX → My sounds'), moveTo({ kind: 'sounds' }, t('My sounds')));
   }
   if (own) {
     const cats = await myCats();
     const inAudio = !!(it.meta || {}).inAudio;
     // A sound in AUDIO itself is in no folder of My sounds - My sounds itself is a place for it too.
     const here = inAudio ? null : ((it.meta || {}).categoryId || '');
-    if (!inAudio) item('Move to AUDIO', 'AUDIO itself - beside Music and SFX', moveTo({ kind: 'sounds', aroot: true }, 'AUDIO'));
-    item('Move to Music', 'a track of Music', moveTo({ kind: 'music' }, 'Music'));
-    for (const c of [{ id: '', label: 'My sounds' }].concat(cats)) {
+    if (!inAudio) item(t('Move to {place}', { place: t('AUDIO') }), t('AUDIO itself - beside Music and SFX'), moveTo({ kind: 'sounds', aroot: true }, t('AUDIO')));
+    item(t('Move to {place}', { place: t('Music') }), t('a track of Music'), moveTo({ kind: 'music' }, t('Music')));
+    for (const c of [{ id: '', label: t('My sounds') }].concat(cats)) {
       if (c.id === here) continue;
-      item('Move to ' + c.label, c.id ? '' : inAudio ? 'SFX → My sounds itself' : 'out of its folder', async () => {
-        try { await _patch(it, { categoryId: c.id, categoryLabel: c.id ? c.label : '' }); await o.changed(); o.status('"' + it.name + '" is in ' + c.label + '.'); }
+      item(t('Move to {place}', { place: c.label }), c.id ? '' : inAudio ? t('SFX → My sounds itself') : t('out of its folder'), async () => {
+        try { await _patch(it, { categoryId: c.id, categoryLabel: c.id ? c.label : '' }); await o.changed(); o.status(t('"{name}" is in {place}.', { name: it.name, place: c.label })); }
         catch (e) { o.status(e.message, true); }
       });
     }
   }
-  item('About', builtin ? 'the built-in set: its author and license' : 'where it came from', () => about(it, ev));
-  if (!builtin && typeof o.del === 'function') item('Delete', it.kind === 'music' ? 'the track and its file' : 'the sound and its file', () => o.del(it), true);
+  item(t('About'), builtin ? t('the built-in set: its author and license') : t('where it came from'), () => about(it, ev));
+  if (!builtin && typeof o.del === 'function') item(t('Delete'), it.kind === 'music' ? t('the track and its file') : t('the sound and its file'), () => o.del(it), true);
 
   menuIcons(m);
   document.body.appendChild(m);
@@ -187,23 +194,23 @@ export function about(it, ev) {
   };
   const m = it.meta || {};
   const i = m.info || {};
-  row('length', secs(it.dur));
-  row('where', it.kind === 'sfx' ? 'Built-in · ' + (m.categoryLabel || '') : it.kind === 'music' ? 'Music'
-    : m.inAudio ? 'AUDIO' : 'My sounds' + (m.categoryLabel ? ' · ' + m.categoryLabel : ''));
-  row('file', it.media, it.media);
-  row('from', i.from);
-  row('author', i.author, i.authorUrl || '');
-  row('license', i.license, i.licenseUrl || '');
-  row('page', i.url, i.url);
-  if (i.preview) row('note', 'Freesound\'s preview (~128 kbit/s) - the original needs a Freesound sign-in');
-  row('credit', i.attribution);
-  row('made by', i.engine ? (i.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + (i.mode ? ' · ' + i.mode : '') : '');
-  row('asked', i.prompt);
-  row('style', i.style || m.style);
-  if (m.original) row('cut from', (m.original.name || '') + ' · ' + m.original.in + '–' + m.original.out + ' s');
-  if (Array.isArray(m.tags) && m.tags.length) row('tags', m.tags.join(', '));
+  row(t('length'), secs(it.dur));
+  row(t('where'), it.kind === 'sfx' ? t('Built-in') + ' · ' + (m.categoryLabel || '') : it.kind === 'music' ? t('Music')
+    : m.inAudio ? t('AUDIO') : t('My sounds') + (m.categoryLabel ? ' · ' + m.categoryLabel : ''));
+  row(t('file'), it.media, it.media);
+  row(t('from'), i.from);
+  row(t('author'), i.author, i.authorUrl || '');
+  row(t('license'), i.license, i.licenseUrl || '');
+  row(t('page'), i.url, i.url);
+  if (i.preview) row(t('note'), t('Freesound\'s preview (~128 kbit/s) - the original needs a Freesound sign-in'));
+  row(t('credit'), i.attribution);
+  row(t('made by'), i.engine ? (i.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + (i.mode ? ' · ' + i.mode : '') : '');
+  row(t('asked'), i.prompt);
+  row(t('style'), i.style || m.style);
+  if (m.original) row(t('cut from'), (m.original.name || '') + ' · ' + t('{from}–{to} s', { from: m.original.in, to: m.original.out }));
+  if (Array.isArray(m.tags) && m.tags.length) row(t('tags'), m.tags.join(', '));
   const btns = el('div', 'mt-pop-btns u-ask-r');
-  const ok = el('button', 'mt-pop-btn u-btn is-s', 'Close');
+  const ok = el('button', 'mt-pop-btn u-btn is-s', t('Close'));
   ok.type = 'button';
   btns.appendChild(ok);
   pop.appendChild(btns);

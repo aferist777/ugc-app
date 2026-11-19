@@ -21,6 +21,7 @@
 import * as Layers from '../layers.js';
 import { scrubber, clock } from './scrub.js';
 import { showError } from '../notice.js';
+import * as T from '../i18n/t.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -28,7 +29,7 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-const fmt = (s, long) => (long ? Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0') : s.toFixed(2) + ' s');
+const fmt = (s, long) => (long ? Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0') : T.t('{n} s', { n: s.toFixed(2) }));
 
 /**
  * Open the window for `it` (a tile: { kind, id, name, path, dur, wave }).
@@ -43,13 +44,13 @@ export async function openCut(it, opts) {
   // the padding is its body's.
   const win = el('div', 'snd-win snd-cut u-win is-float');
   const head = el('div', 'snd-win-head u-win-head');
-  head.appendChild(el('span', 'u-win-title', 'Cut a piece'));
+  head.appendChild(el('span', 'u-win-title', T.t('Cut a piece')));
   const sub = el('span', 'u-win-sub', it.name);
   sub.title = it.name || '';
   head.append(sub, el('span', 'sp'));
   const x = el('button', 'u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = T.t('Close (Esc)');
   head.appendChild(x);
   win.appendChild(head);
   const body = el('div', 'snd-win-body');
@@ -70,7 +71,7 @@ export async function openCut(it, opts) {
     onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = sc.dur() || dur; paintClock(); },
     onRange: (x0, x1) => { a = x0; b = x1; paintInfo(); },
     // "Cut" by the right flag, only while a piece is marked.
-    cut: { title: music ? 'The piece becomes a new track in Music' : 'The piece becomes a new sound in My sounds', onCut: (x0, x1) => _cut(x0, x1) },
+    cut: { title: music ? T.t('The piece becomes a new track in Music') : T.t('The piece becomes a new sound in My sounds'), onCut: (x0, x1) => _cut(x0, x1) },
   });
   stage.appendChild(sc.el);
   body.appendChild(stage);
@@ -81,23 +82,23 @@ export async function openCut(it, opts) {
 
   const row = el('div', 'snd-cut-row');
   const play = el('button', 'snd-btn snd-cut-play u-btn is-s is-icon', '▶');
-  play.title = 'Play from the playhead (Space) - a press on the wave moves it';
-  const piece = el('button', 'snd-btn u-btn is-s', '▶ The piece');
-  piece.title = 'Play only the piece between the gold handles';
+  play.title = T.t('Play from the playhead (Space) - a press on the wave moves it');
+  const piece = el('button', 'snd-btn u-btn is-s', T.t('▶ The piece'));
+  piece.title = T.t('Play only the piece between the gold handles');
   play.type = piece.type = 'button';
   const time = el('span', 'snd-clock', '');
   row.append(play, piece, time);
   row.appendChild(el('span', 'sp'));
   let lay = null;
   if (typeof o.toTimeline === 'function') {
-    lay = el('button', 'snd-btn u-btn is-s', 'To timeline');
+    lay = el('button', 'snd-btn u-btn is-s', T.t('To timeline'));
     lay.type = 'button';
-    lay.title = 'Lay the piece at the playhead of the timeline - the same file, cut to the piece';
+    lay.title = T.t('Lay the piece at the playhead of the timeline - the same file, cut to the piece');
     row.appendChild(lay);
   }
   body.appendChild(row);
-  const HINT = 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
-    + ' - the sound itself stays as it is.';
+  const HINT = music ? T.t('Cut by the right flag makes the piece a new track in Music - the sound itself stays as it is.')
+    : T.t('Cut by the right flag makes the piece a new sound in My sounds - the sound itself stays as it is.');
   // The line says what was done ("Laid on …", "cutting…"); an error is a popup in the corner (js/notice.js).
   const said = el('div', 'snd-cut-said u-status', HINT);   // the window's one status line
   body.appendChild(said);
@@ -117,8 +118,8 @@ export async function openCut(it, opts) {
   const D = () => sc.dur() || dur || 1;
   const paintInfo = () => {
     const long = D() >= 60;
-    info.textContent = 'from ' + fmt(a, long) + ' to ' + fmt(b, long) + ' · ' + (b - a).toFixed(2) + ' s of ' + fmt(D(), long)
-      + ' - drag the gold flags on the ruler; a press on the wave moves the playhead';
+    info.textContent = T.t('from {a} to {b} · {len} s of {all} - drag the gold flags on the ruler; a press on the wave moves the playhead',
+      { a: fmt(a, long), b: fmt(b, long), len: (b - a).toFixed(2), all: fmt(D(), long) });
   };
   const paintClock = () => {
     const short = D() < 10;
@@ -135,7 +136,7 @@ export async function openCut(it, opts) {
   const startAt = (from, to) => {
     audio.currentTime = from;
     playEnd = to;
-    audio.play().then(() => { if (!raf) raf = requestAnimationFrame(tick); }).catch(() => { showError('That file will not play'); });
+    audio.play().then(() => { if (!raf) raf = requestAnimationFrame(tick); }).catch(() => { showError(T.t('That file will not play')); });
   };
   audio.addEventListener('pause', paintClock);
   audio.addEventListener('ended', () => { sc.setTime(audio.currentTime); paintClock(); });
@@ -164,24 +165,24 @@ export async function openCut(it, opts) {
           trimIn: +a.toFixed(3), dur: +(b - a).toFixed(3), srcDur: +D().toFixed(3) });
       } catch (e) { r = { ok: false, why: e.message }; }
       if (r && r.ok) {
-        said.textContent = 'Laid on ' + (r.lane || 'an audio lane') + ' at ' + clock(r.at || 0, true) + ' - Ctrl+Z on the timeline takes it off.';
+        said.textContent = T.t('Laid on {lane} at {at} - Ctrl+Z on the timeline takes it off.', { lane: r.lane || T.t('an audio lane'), at: clock(r.at || 0, true) });
       } else {
         said.textContent = HINT;
-        showError((r && r.why) || 'The piece could not be laid.');
+        showError((r && r.why) || T.t('The piece could not be laid.'));
       }
     });
   }
 
   // "Cut" by the right flag (scrub.js waits on its button while this goes).
   async function _cut(x0, x1) {
-    said.textContent = 'cutting…';
+    said.textContent = T.t('cutting…');
     try {
       const r = await fetch('/api/audio/cut', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src: it.path, in: +x0.toFixed(3), out: +x1.toFixed(3) }),
       });
       const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'it could not be cut');
+      if (!d.success) throw new Error(d.error || T.t('it could not be cut'));
       close();
       if (o.done) o.done(d.item, d.where);
     } catch (e) {
