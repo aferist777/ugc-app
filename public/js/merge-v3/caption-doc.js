@@ -37,6 +37,8 @@ import { isCorrected } from '../captions/words.js';
 // A lane with no lines - the shared "nothing here", a row of the document.
 import { emptyEl } from '../ui-state.js';
 import { setFigures } from '../num.js';
+// The module's own variables are called `t` (lanes, times): the words come in as T.t.
+import * as T from '../i18n/t.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 0:12.4 - minutes and seconds to a tenth.
@@ -70,9 +72,9 @@ export function mount(host) {
   const r1 = _el('div', 'mv3-doc-fr');
   const q = _el('input', 'mv3-doc-q u-in is-s');
   q.type = 'text';
-  q.placeholder = 'find';
+  q.placeholder = T.t('find');
   q.spellcheck = false;
-  q.setAttribute('aria-label', 'Find in the subtitles and the text lanes');
+  q.setAttribute('aria-label', T.t('Find in the subtitles and the text lanes'));
   const count = _el('span', 'mv3-doc-n');
   const opt = (label, title, key) => {
     const b = _el('button', 'mv3-doc-opt u-btn is-s', label);
@@ -88,29 +90,28 @@ export function mount(host) {
     });
     return b;
   };
-  r1.append(q, count, opt('Aa', 'Match case', 'cased'), opt('W', 'Whole words only', 'whole'));
+  r1.append(q, count, opt('Aa', T.t('Match case'), 'cased'), opt('W', T.t('Whole words only'), 'whole'));
   const r2 = _el('div', 'mv3-doc-fr');
   const rep = _el('input', 'mv3-doc-r u-in is-s');
   rep.type = 'text';
-  rep.placeholder = 'replace with';
+  rep.placeholder = T.t('replace with');
   rep.spellcheck = false;
-  const one = _el('button', 'mv3-c-btn u-btn is-s', 'Replace');
+  const one = _el('button', 'mv3-c-btn u-btn is-s', T.t('Replace'));
   one.type = 'button';
-  one.title = 'Replace the lit match and go on to the next';
-  const all = _el('button', 'mv3-c-btn u-btn is-s', 'Replace all');
+  one.title = T.t('Replace the lit match and go on to the next');
+  const all = _el('button', 'mv3-c-btn u-btn is-s', T.t('Replace all'));
   all.type = 'button';
-  all.title = 'Replace every match - one step to undo';
+  all.title = T.t('Replace every match - one step to undo');
   r2.append(rep, one, all);
   find.append(r1, r2);
   // The lines.
   const body = _el('div', 'mv3-doc-body');
   body.tabIndex = -1;
   body.dataset.ownKeys = '1';
-  body.setAttribute('aria-label', 'The text of the subtitles and the text lanes');
+  body.setAttribute('aria-label', T.t('The text of the subtitles and the text lanes'));
   const msg = _el('div', 'mv3-doc-msg');
   msg.hidden = true;
-  const help = _el('div', 'mv3-doc-help', 'Enter cuts a line · Delete at its end joins the next · Backspace at its start '
-    + 'the one before · Tab, ↑ ↓ the next line · a line is written when you leave it');
+  const help = _el('div', 'mv3-doc-help', T.t('Enter cuts a line · Delete at its end joins the next · Backspace at its start the one before · Tab, ↑ ↓ the next line · a line is written when you leave it'));
   root.append(find, body, msg, help);
   host.appendChild(root);
   _ui = { root, q, count, rep, one, all, body, msg };
@@ -149,6 +150,17 @@ export function setShown(on) {
 }
 
 // ── Painting ────────────────────────────────────────────────────────────────
+// A lane's name as the document's head shows it: the names the app gives its lanes ("Subtitles", "text 1") in the app's
+// language, a name of the person's as it is - sentence case.
+function _laneName(t) {
+  const n = String(t.name || '');
+  if (t.kind === 'subs' && (!n || /^subtitles$/i.test(n))) return T.t('Subtitles');
+  const m = /^text (\d+)$/i.exec(n);
+  if (m) return T.t('Text {n}', { n: m[1] });
+  if (!n) return T.t('Text');
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
 function _lanes() {
   const tl = Store.timeline();
   const lanes = ((tl && tl.tracks) || []).filter(isWordsLane);
@@ -190,9 +202,8 @@ export function paint() {
       }
       sec.el.dataset.track = t.id;
       const lines = linesOf(t);
-      const name = t.name || (t.kind === 'subs' ? 'Subtitles' : 'Text');
       // sentence case ("Text 1"), its count in mono
-      const head = name.charAt(0).toUpperCase() + name.slice(1) + ' · ' + lines.length + (lines.length === 1 ? ' line' : ' lines');
+      const head = T.tn(lines.length, '{name} · {n} line', '{name} · {n} lines', { name: _laneName(t) });
       if (sec.head.dataset.t !== head) { sec.head.dataset.t = head; setFigures(sec.head, head); }
       const nodes = [];
       let voice = null;
@@ -209,7 +220,7 @@ export function paint() {
         seen.add(c.id);
       }
       if (!lines.length) {
-        const said = t.kind === 'subs' ? 'No lines yet - Generate from the sound, or Add a line, in the strip.' : 'No lines yet - Add a line in the strip.';
+        const said = t.kind === 'subs' ? T.t('No lines yet - Generate from the sound, or Add a line, in the strip.') : T.t('No lines yet - Add a line in the strip.');
         if (!sec.empty || sec.empty.dataset.said !== said) {
           sec.empty = emptyEl(said, { line: true, cls: 'mv3-doc-none' });
           sec.empty.dataset.said = said;
@@ -267,7 +278,8 @@ function _fill(r, c, t) {
   const tt = _fmt(start);
   if (r.t.textContent !== tt) r.t.textContent = tt;
   const fixed = r.heard && isCorrected(c);
-  r.t.title = _fmt2(start) + ' → ' + _fmt2(end) + (r.heard ? ' · heard' + (fixed ? ', corrected by hand' : '') : ' · typed');
+  const span = { from: _fmt2(start), to: _fmt2(end) };
+  r.t.title = !r.heard ? T.t('{from} → {to} · typed', span) : fixed ? T.t('{from} → {to} · heard, corrected by hand', span) : T.t('{from} → {to} · heard', span);
   r.el.classList.toggle('is-fix', fixed);
   r.el.classList.toggle('is-typed', !r.heard);
   const text = textOfLine(c);
@@ -354,8 +366,8 @@ function _onBlur(r, e) {
     const typed = r.ta.value;
     r.ta.value = r.ta.__painted;
     _paintMarks(r);
-    if (_shown) _say('Not written: ' + why + '. You typed: «' + typed + '»');
-    else note(document.getElementById('mv3-lib-cap') || document.body, 'A line of the captions was not written.', why + ' - you typed: «' + typed + '»', { stay: true });
+    if (_shown) _say(T.t('Not written: {why}. You typed: «{typed}»', { why, typed }));
+    else note(document.getElementById('mv3-lib-cap') || document.body, T.t('A line of the captions was not written.'), T.t('{why} - you typed: «{typed}»', { why, typed }), { stay: true });
   }
 }
 
@@ -429,7 +441,7 @@ function _join(r, d) {
   const lines = lane ? linesOf(lane) : [];
   const i = lines.findIndex(c => c.id === r.c.id);
   const other = lines[i + d];
-  if (i < 0 || !other) { _say(d > 0 ? 'The last line of this lane - nothing after it to join' : 'The first line of this lane - nothing before it to join'); return; }
+  if (i < 0 || !other) { _say(d > 0 ? T.t('The last line of this lane - nothing after it to join') : T.t('The first line of this lane - nothing before it to join')); return; }
   const ta = r.ta;
   const cur = ta.value;
   let res, caret;
@@ -577,7 +589,7 @@ function _flushTyping() {
     const why = _apply(r);
     if (why) {
       r.ta.value = r.ta.__painted;
-      note(document.getElementById('mv3-lib-cap') || document.body, 'A line of the captions was not written.', why + ' - you typed: «' + typed + '»', { stay: true });
+      note(document.getElementById('mv3-lib-cap') || document.body, T.t('A line of the captions was not written.'), T.t('{why} - you typed: «{typed}»', { why, typed }), { stay: true });
     }
   }, 0);
 }
@@ -606,7 +618,7 @@ function _search(reveal) {
   _hits = hits;
   if (!hits.length) _cur = -1;
   else if (_cur < 0 || _cur >= hits.length) _cur = 0;
-  _ui.count.textContent = !Q.text ? '' : hits.length ? (_cur + 1) + ' of ' + hits.length : 'no matches';
+  _ui.count.textContent = !Q.text ? '' : hits.length ? T.t('{n} of {total}', { n: _cur + 1, total: hits.length }) : T.t('no matches');
   _ui.count.classList.toggle('is-none', !!Q.text && !hits.length);
   for (const id of _order) { const r = _rows.get(id); if (r) _paintMarks(r); }
   if (reveal && _cur >= 0) _reveal(hits[_cur]);
@@ -644,7 +656,7 @@ function _reveal(h, pick) {
 function _step(d) {
   if (!_hits.length) { _search(false); return; }
   _cur = (_cur + d + _hits.length) % _hits.length;
-  _ui.count.textContent = (_cur + 1) + ' of ' + _hits.length;
+  _ui.count.textContent = T.t('{n} of {total}', { n: _cur + 1, total: _hits.length });
   for (const id of _order) { const r = _rows.get(id); if (r) _paintMarks(r); }
   _reveal(_hits[_cur], true);
 }
@@ -687,7 +699,11 @@ function _replaceAll() {
   const bad = res.refused || [];
   _cur = 0;
   _search(false);
-  if (!res.done) _say('Nothing was replaced' + (bad.length ? ': ' + bad[0].why : ''));
-  else _say('Replaced ' + n + (n === 1 ? ' match' : ' matches') + ' in ' + res.done + (res.done === 1 ? ' line' : ' lines')
-    + (bad.length ? ' - ' + bad.length + (bad.length === 1 ? ' line was' : ' lines were') + ' left as ' + (bad.length === 1 ? 'it was' : 'they were') + ': ' + bad[0].why : '') + '. One step to undo.', !bad.length);
+  if (!res.done) { _say(bad.length ? T.t('Nothing was replaced: {why}', { why: bad[0].why }) : T.t('Nothing was replaced')); return; }
+  // Two counts in one sentence: each said whole in its own words, then put together.
+  const where = T.tn(res.done, 'in {n} line', 'in {n} lines');
+  const replaced = T.tn(n, 'Replaced {n} match {where}', 'Replaced {n} matches {where}', { where });
+  if (!bad.length) { _say(T.t('{done}. One step to undo.', { done: replaced }), true); return; }
+  const left = T.tn(bad.length, '{n} line was left as it was: {why}', '{n} lines were left as they were: {why}', { why: bad[0].why });
+  _say(T.t('{done} - {left}. One step to undo.', { done: replaced, left }), false);
 }

@@ -17,6 +17,8 @@
    mark: nothing is refused or moved).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { t, tc } from '../i18n/t.js';
+
 const LS = 'mv3_pv_platform_v1';
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -28,36 +30,39 @@ const ICON = {
 };
 
 // ── The table: what each app lays over an ordinary post, x0, y0, x1, y1 in a 1080x1920 frame ──
-const STATUS = { g: 'status bar', r: [0, 0, 1080, 100] };
-const PROGRESS = { g: 'progress bar', r: [0, 1895, 1080, 1920] };
-const EDGES = [{ g: 'edges a tall phone cuts off', r: [0, 0, 54, 1920] }, { g: 'edges a tall phone cuts off', r: [1026, 0, 1080, 1920] }];
+// `g` is only shown (the strip names what a page lies under), so it is in the app's language.
+const STATUS = { g: tc('platform', 'status bar'), r: [0, 0, 1080, 100] };
+const PROGRESS = { g: tc('platform', 'progress bar'), r: [0, 1895, 1080, 1920] };
+const EDGES = [{ g: tc('platform', 'edges a tall phone cuts off'), r: [0, 0, 54, 1920] }, { g: tc('platform', 'edges a tall phone cuts off'), r: [1026, 0, 1080, 1920] }];
+const TABS = tc('platform', 'tabs'), BUTTONS = tc('platform', 'buttons'), TOP = tc('platform', 'top buttons');
+const ACCOUNT = tc('platform', 'account'), ABOUT = tc('platform', 'description');
 
 export const PLATFORMS = {
   tiktok: {
     name: 'TikTok',
     zones: [STATUS,
-      { g: 'tabs', r: [80, 150, 1000, 235] },
-      { g: 'buttons', r: [900, 1010, 1010, 1895] },
-      { g: 'account', r: [78, 1735, 405, 1788] },
-      { g: 'description', r: [78, 1808, 795, 1895] },
+      { g: TABS, r: [80, 150, 1000, 235] },
+      { g: BUTTONS, r: [900, 1010, 1010, 1895] },
+      { g: ACCOUNT, r: [78, 1735, 405, 1788] },
+      { g: ABOUT, r: [78, 1808, 795, 1895] },
       PROGRESS, ...EDGES],
   },
   shorts: {
     name: 'Shorts',
     zones: [STATUS,
-      { g: 'top buttons', r: [96, 160, 133, 214] }, { g: 'top buttons', r: [821, 159, 878, 216] }, { g: 'top buttons', r: [945, 163, 970, 212] },
-      { g: 'buttons', r: [905, 1115, 1002, 1885] },
-      { g: 'account', r: [86, 1668, 166, 1750] }, { g: 'account', r: [176, 1688, 362, 1735] }, { g: 'account', r: [375, 1668, 577, 1752] },
-      { g: 'description', r: [86, 1760, 790, 1808] }, { g: 'description', r: [86, 1824, 848, 1887] },
+      { g: TOP, r: [96, 160, 133, 214] }, { g: TOP, r: [821, 159, 878, 216] }, { g: TOP, r: [945, 163, 970, 212] },
+      { g: BUTTONS, r: [905, 1115, 1002, 1885] },
+      { g: ACCOUNT, r: [86, 1668, 166, 1750] }, { g: ACCOUNT, r: [176, 1688, 362, 1735] }, { g: ACCOUNT, r: [375, 1668, 577, 1752] },
+      { g: ABOUT, r: [86, 1760, 790, 1808] }, { g: ABOUT, r: [86, 1824, 848, 1887] },
       PROGRESS, ...EDGES],
   },
   reels: {
     name: 'Instagram',
     zones: [STATUS,
-      { g: 'top buttons', r: [118, 160, 160, 220] },
-      { g: 'buttons', r: [905, 1000, 1005, 1866] },
-      { g: 'account', r: [86, 1705, 192, 1812] }, { g: 'account', r: [204, 1712, 575, 1797] }, { g: 'account', r: [592, 1729, 735, 1790] },
-      { g: 'description', r: [86, 1830, 580, 1876] },
+      { g: TOP, r: [118, 160, 160, 220] },
+      { g: BUTTONS, r: [905, 1000, 1005, 1866] },
+      { g: ACCOUNT, r: [86, 1705, 192, 1812] }, { g: ACCOUNT, r: [204, 1712, 575, 1797] }, { g: ACCOUNT, r: [592, 1729, 735, 1790] },
+      { g: ABOUT, r: [86, 1830, 580, 1876] },
       PROGRESS, ...EDGES],
   },
 };
@@ -81,7 +86,11 @@ const G = {
 };
 const icon = (name, cx, cy, size) => '<g transform="translate(' + (cx - size / 2) + ' ' + (cy - size / 2) + ') scale(' + (size / 100) + ')">' + G[name] + '</g>';
 const text = (x, y, s, size, o) => '<text x="' + x + '" y="' + y + '" font-size="' + size + '"' + (o && o.bold ? ' font-weight="700"' : '')
-  + (o && o.mid ? ' text-anchor="middle"' : '') + (o && o.fill ? ' fill="' + o.fill + '"' : '') + '>' + s + '</text>';
+  + (o && o.mid ? ' text-anchor="middle"' : '') + (o && o.fill ? ' fill="' + o.fill + '"' : '') + '>'
+  + String(s).replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;')) + '</text>';
+// The screens' words are the app's language, as the apps show theirs; a word longer than the slot it is drawn in (a
+// button, a tab) is drawn smaller to fit - about 0.6 em a letter.
+const fit = (s, size, width) => Math.min(size, Math.floor(width / (Math.max(1, String(s).length) * 0.6)));
 const counted = (name, cx, cy, size, label) => icon(name, cx, cy, size) + (label ? text(cx, cy + size / 2 + 34, label, 27, { bold: true, mid: true }) : '');
 
 function _status() {
@@ -101,8 +110,8 @@ const _edges = () => '<g filter="none"><rect x="0" y="0" width="54" height="1920
 const DRAW = {
   tiktok: () => _status()
     + text(122, 207, 'LIVE', 34, { bold: true, mid: true })
-    + text(330, 207, 'Friends', 40, { mid: true }) + text(545, 207, 'Following', 40, { mid: true })
-    + text(770, 207, 'For You', 42, { bold: true, mid: true }) + '<rect x="732" y="224" width="76" height="6" rx="3"/>'
+    + text(330, 207, t('Friends'), 40, { mid: true }) + text(545, 207, t('Following'), 40, { mid: true })
+    + text(770, 207, t('For You'), fit(t('For You'), 42, 240), { bold: true, mid: true }) + '<rect x="732" y="224" width="76" height="6" rx="3"/>'
     + icon('search', 958, 192, 50)
     + '<circle cx="955" cy="1062" r="46" fill="#fff" fill-opacity=".35" stroke="#fff" stroke-width="5"/>'
     + '<circle cx="955" cy="1110" r="18"/><path stroke="#222" stroke-width="5" d="M945 1110H965M955 1100V1120"/>'
@@ -110,21 +119,21 @@ const DRAW = {
     + counted('mark', 955, 1525, 64, '3,210') + counted('share', 955, 1685, 72, '512')
     + '<circle cx="955" cy="1840" r="42" fill="#222" stroke="#fff" stroke-width="6"/><circle cx="955" cy="1840" r="14"/>'
     + text(78, 1778, '@your.account', 40, { bold: true })
-    + text(78, 1844, 'The description sits here and can run', 33) + text(78, 1886, 'on to a second line #fyp #ugc ... more', 33)
+    + t('The description sits here and can run\non to a second line #fyp #ugc ... more').split('\n').slice(0, 2).map((s, i) => text(78, 1844 + i * 42, s, 33)).join('')
     + _progress(320),
   shorts: () => _status()
     + '<path fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M126 166L102 187L126 208M102 187H133"/>'
     + icon('search', 849, 187, 50) + icon('dots', 957, 187, 46).replace('translate(', 'rotate(90 957 187) translate(')
     + counted('up', 953, 1150, 62, '12K') + counted('bubble', 953, 1280, 62, '386')
-    + counted('mark', 953, 1410, 56, 'Save') + counted('share', 953, 1540, 62, 'Share')
-    + counted('remix', 953, 1670, 62, 'Remix')
+    + counted('mark', 953, 1410, 56, t('Save')) + counted('share', 953, 1540, 62, t('Share'))
+    + counted('remix', 953, 1670, 62, t('Remix'))
     + '<rect x="922" y="1800" width="62" height="62" rx="12" fill="#fff" fill-opacity=".35" stroke="#fff" stroke-width="5"/>'
     + '<circle cx="126" cy="1709" r="38" fill="#fff" fill-opacity=".35" stroke="#fff" stroke-width="4"/>'
     + text(176, 1724, '@channel', 34, { bold: true })
-    + '<rect x="375" y="1676" width="202" height="68" rx="34"/>' + text(476, 1721, 'Subscribe', 30, { bold: true, mid: true, fill: '#0f0f0f' })
-    + text(86, 1797, 'The title of your Short goes on this line', 33)
+    + '<rect x="375" y="1676" width="202" height="68" rx="34"/>' + text(476, 1721, t('Subscribe'), fit(t('Subscribe'), 30, 186), { bold: true, mid: true, fill: '#0f0f0f' })
+    + text(86, 1797, t('The title of your Short goes on this line'), 33)
     + '<rect x="86" y="1826" width="762" height="58" rx="14" fill-opacity=".22"/><path d="M108 1840L132 1855L108 1870Z"/>'
-    + text(148, 1865, 'Related video  ·  its title', 28)
+    + text(148, 1865, t('Related video  ·  its title'), 28)
     + _progress(300),
   reels: () => _status()
     + '<path fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" d="M154 166L124 190L154 214"/>'
@@ -132,9 +141,9 @@ const DRAW = {
     + counted('repost', 955, 1345, 64, '51') + counted('send', 955, 1500, 62, '120')
     + icon('mark', 955, 1660, 58) + icon('dots', 955, 1830, 52)
     + '<circle cx="139" cy="1758" r="50" fill="#fff" fill-opacity=".35" stroke="#fff" stroke-width="4"/>'
-    + text(212, 1750, 'your.account', 34, { bold: true }) + text(212, 1792, '♫ Original audio', 28)
-    + '<rect x="594" y="1731" width="139" height="57" rx="14" fill="none" stroke="#fff" stroke-width="3"/>' + text(663, 1770, 'Follow', 30, { bold: true, mid: true })
-    + text(86, 1866, 'Your caption sits here... more', 32)
+    + text(212, 1750, 'your.account', 34, { bold: true }) + text(212, 1792, t('♫ Original audio'), 28)
+    + '<rect x="594" y="1731" width="139" height="57" rx="14" fill="none" stroke="#fff" stroke-width="3"/>' + text(663, 1770, t('Follow'), fit(t('Follow'), 30, 125), { bold: true, mid: true })
+    + text(86, 1866, t('Your caption sits here... more'), 32)
     + _progress(280),
 };
 
@@ -202,9 +211,10 @@ function _paintButtons() {
     b.classList.toggle('is-on', on);
     b.classList.toggle('is-off', wide);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    b.title = wide ? TITLE[id] + ' - only for 9:16'
-      : on ? TITLE[id] + ' over the frame - press again to take it off'
-        : TITLE[id] + ': its buttons, account and description over the frame, to keep captions clear of them (the preview only - never in the video)';
+    const name = TITLE[id];
+    b.title = wide ? t('{name} - only for 9:16', { name })
+      : on ? t('{name} over the frame - press again to take it off', { name })
+        : t('{name}: its buttons, account and description over the frame, to keep captions clear of them (the preview only - never in the video)', { name });
   }
 }
 

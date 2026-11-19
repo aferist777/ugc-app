@@ -27,8 +27,12 @@ import { showError } from '../notice.js';
 // Lucide's icons for ▸ ▾ ✓ ↑ ↓ ↻ ↺ and the eight ways of a drift; the figures in mono
 import { icon, iconEl } from '../icons.js';
 import { setFigures } from '../num.js';
+import { t } from '../i18n/t.js';
 const DIR_ICON = { e: 'arrow-right', ne: 'arrow-up-right', n: 'arrow-up', nw: 'arrow-up-left', w: 'arrow-left', sw: 'arrow-down-left',
   s: 'arrow-down', se: 'arrow-down-right' };
+// Each way's words under the pointer.
+const DIR_TITLE = { e: t('Drift e'), ne: t('Drift ne'), n: t('Drift n'), nw: t('Drift nw'), w: t('Drift w'), sw: t('Drift sw'),
+  s: t('Drift s'), se: t('Drift se') };
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -42,12 +46,12 @@ function _readSet(repaint) {
   if (repaint) _waiting.add(repaint);
   if (_asking || Date.now() - _failedAt < 5000) return;
   _asking = fetch('/api/patterns').then((r) => r.json()).then((d) => {
-    if (!d || !d.success || !Array.isArray(d.patterns)) throw new Error('no set');
+    if (!d || !d.success || !Array.isArray(d.patterns)) throw new Error(t('no set'));
     _set = d.patterns;
   }).catch((e) => {
     _set = null;
     _failedAt = Date.now();
-    showError('The patterns could not be read', { detail: (e && e.message) || '' });
+    showError(t('The patterns could not be read'), { detail: (e && e.message) || '' });
   }).then(() => {
     _asking = null;
     const list = [..._waiting];
@@ -86,10 +90,10 @@ export function renderPatterns(host, io) {
   if (io.note) host.appendChild(C.hint(io.note));
   const fold = _el('button', 'mv3-patf' + (_gridOpen ? ' is-open' : ''));
   fold.type = 'button';
-  fold.title = _gridOpen ? 'Fold the patterns' : 'The app\'s patterns - tick one to lay it over main video';
+  fold.title = _gridOpen ? t('Fold the patterns') : t('The app\'s patterns - tick one to lay it over main video');
   // the strip's one fold form: a chevron, then the title
   fold.appendChild(iconEl(_gridOpen ? 'chevron-down' : 'chevron-right', 14));
-  fold.appendChild(setFigures(_el('span', 'mv3-patf-name'), 'Patterns' + (list.length ? ' · ' + list.length : '')));
+  fold.appendChild(setFigures(_el('span', 'mv3-patf-name'), t('Patterns') + (list.length ? ' · ' + list.length : '')));
   fold.addEventListener('click', () => { _setGrid(!_gridOpen); _keep(() => io.repaint()); });
   host.appendChild(fold);
   if (!_set) {
@@ -97,17 +101,17 @@ export function renderPatterns(host, io) {
     const failed = !_asking && Date.now() - _failedAt < 5000;
     // Not read: "did not load" with Try again; the reason was the popup (_readSet).
     if (_gridOpen) {
-      host.appendChild(failed ? failedEl('The patterns', () => { _failedAt = 0; _readSet(io.repaint); _keep(() => io.repaint()); }, { line: true })
-        : loadingEl('reading the patterns…', { line: true }));
+      host.appendChild(failed ? failedEl(t('The patterns'), () => { _failedAt = 0; _readSet(io.repaint); _keep(() => io.repaint()); }, { line: true })
+        : loadingEl(t('reading the patterns…'), { line: true }));
     }
     if (!failed) _readSet(io.repaint);
   } else if (!_set.length) {
-    if (_gridOpen) host.appendChild(C.hint('The app\'s patterns are not installed.'));
+    if (_gridOpen) host.appendChild(C.hint(t('The app\'s patterns are not installed.')));
   } else if (_gridOpen) _grid(host, io, list);
-  if (io.empty) host.appendChild(emptyEl('Nothing on main video yet - the patterns show over it once it has something.', { line: true }));
+  if (io.empty) host.appendChild(emptyEl(t('Nothing on main video yet - the patterns show over it once it has something.'), { line: true }));
   if (!list.length) {
-    host.appendChild(C.hint((_gridOpen ? 'Tick a pattern' : 'Open «Patterns» and tick one')
-      + ': it lies over the whole of main video and every lane on it, under the words.'));
+    host.appendChild(C.hint(_gridOpen ? t('Tick a pattern: it lies over the whole of main video and every lane on it, under the words.')
+      : t('Open «Patterns» and tick one: it lies over the whole of main video and every lane on it, under the words.')));
     return;
   }
   _layers(host, io, list);
@@ -120,7 +124,7 @@ function _grid(host, io, list) {
     const on = list.some((x) => x.src === p.path);
     const b = _el('button', 'mv3-patg-tile' + (on ? ' is-on' : ''));
     b.type = 'button';
-    b.title = p.name + (on ? ' - untick to take it off main video' : ' - tick to lay it over main video');
+    b.title = on ? t('{name} - untick to take it off main video', { name: p.name }) : t('{name} - tick to lay it over main video', { name: p.name });
     const img = document.createElement('img');
     img.src = p.thumb || p.path;
     img.alt = p.name;
@@ -151,7 +155,7 @@ function _layers(host, io, list) {
     const open = _open === e.src;
     const row = _el('div', 'mv3-patl-row' + (open ? ' is-open' : ''));
     const head = _el('div', 'mv3-patl-head');
-    head.title = open ? 'Fold its settings' : 'Its settings';
+    head.title = open ? t('Fold its settings') : t('Its settings');
     const img = document.createElement('img');
     const p = _of(e.src);
     img.src = (p && p.thumb) || e.src;
@@ -168,7 +172,7 @@ function _layers(host, io, list) {
       [next[k], next[j]] = [next[j], next[k]];
       _keep(() => io.write(next));
     };
-    for (const [d, ico, title] of [[-1, 'arrow-up', 'One layer up'], [1, 'arrow-down', 'One layer down']]) {
+    for (const [d, ico, title] of [[-1, 'arrow-up', t('One layer up')], [1, 'arrow-down', t('One layer down')]]) {
       const a = _el('button', 'mv3-patl-arrow u-btn is-s is-icon');
       a.innerHTML = icon(ico, 14);
       a.type = 'button';
@@ -195,7 +199,8 @@ function _lookOf(e) {
   const bits = [Math.round(opacityOf(e) * 100) + '%'];
   const b = blendOf(e);
   if (b.id !== 'none') bits.push(b.label);
-  if (f.move !== 'none') bits.push(f.move);
+  // the movement's own word, small ("rotate", "drift")
+  if (f.move !== 'none') bits.push((PAT.MOVES.find((m) => m[0] === f.move) || [f.move, f.move])[1].toLowerCase());
   return bits.join(' · ');
 }
 
@@ -213,38 +218,38 @@ function _rows(host, e, io) {
     onChange: (v) => { live(null); setPat({ [key]: fromV(v) }); },
   })));
   const pct = (v) => Math.round(v) + '%';
-  slider('Scale', 'scale', { min: PAT.SCALE.min * 100, max: PAT.SCALE.max * 100, step: PAT.SCALE.step * 100 }, pct,
+  slider(t('Scale'), 'scale', { min: PAT.SCALE.min * 100, max: PAT.SCALE.max * 100, step: PAT.SCALE.step * 100 }, pct,
     (s) => Math.round(s * 100), (v) => v / 100);
   const col = C.color(f0.color, (v) => setPat({ color: v }));
-  col.title = 'The color its white becomes';
-  host.appendChild(C.row('Color', col));
-  slider('Angle', 'angle', { min: 0, max: 359, step: 1 }, (v) => Math.round(v) + '°', (a) => a, (v) => v);
-  host.appendChild(C.row('Movement', C.select(PAT.MOVES, f0.move, (m) => setPat({
+  col.title = t('The color its white becomes');
+  host.appendChild(C.row(t('Color'), col));
+  slider(t('Angle'), 'angle', { min: 0, max: 359, step: 1 }, (v) => Math.round(v) + '°', (a) => a, (v) => v);
+  host.appendChild(C.row(t('Movement'), C.select(PAT.MOVES, f0.move, (m) => setPat({
     move: m, speed: m === 'drift' ? PAT.DRIFT.def : PAT.ROTATE.def, dir: m === 'drift' ? 'e' : 'cw',
   }))));
   if (f0.move === 'rotate') {
-    slider('Speed', 'speed', PAT.ROTATE, (v) => (+v).toFixed(1) + '°/s', (s) => s, (v) => v);
+    slider(t('Speed'), 'speed', PAT.ROTATE, (v) => t('{v}°/s', { v: (+v).toFixed(1) }), (s) => s, (v) => v);
     const way = _el('span', 'mv3-pat-dirs');
-    for (const [d, label, title, ico] of [['cw', '↻', 'Clockwise', 'rotate-cw'], ['ccw', '↺', 'Counter-clockwise', 'rotate-ccw']]) {
+    for (const [d, label, title, ico] of [['cw', '↻', t('Clockwise'), 'rotate-cw'], ['ccw', '↺', t('Counter-clockwise'), 'rotate-ccw']]) {
       way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), title, ico));
     }
-    host.appendChild(C.row('Direction', way));
+    host.appendChild(C.row(t('Direction'), way));
   } else if (f0.move === 'drift') {
-    slider('Speed', 'speed', PAT.DRIFT, (v) => Math.round(v) + ' px/s', (s) => s, (v) => v);
+    slider(t('Speed'), 'speed', PAT.DRIFT, (v) => t('{v} px/s', { v: Math.round(v) }), (s) => s, (v) => v);
     const way = _el('span', 'mv3-pat-dirs');
-    for (const [d, label] of PAT.DIRS) way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), 'Drift ' + d, DIR_ICON[d]));
-    host.appendChild(C.row('Direction', way));
+    for (const [d, label] of PAT.DIRS) way.appendChild(C.toggleNamed(label, f0.dir === d, () => setPat({ dir: d }), DIR_TITLE[d], DIR_ICON[d]));
+    host.appendChild(C.row(t('Direction'), way));
   }
   const op = C.slider({
     min: 0, max: 100, step: 1, value: Math.round(opacityOf(e) * 100), fmt: pct,
     onInput: (v) => live({ opacity: v / 100 }),
     onChange: (v) => { live(null); change((x) => ({ ...x, opacity: v / 100 })); },
   });
-  op.title = 'How much of the pattern is seen - 100% all of it';
-  host.appendChild(C.row('Opacity', op));
-  host.appendChild(C.row('Blend', blendButton({
+  op.title = t('How much of the pattern is seen - 100% all of it');
+  host.appendChild(C.row(t('Opacity'), op));
+  host.appendChild(C.row(t('Blend'), blendButton({
     current: blendOf(e).id,
-    title: 'How the pattern mixes with the video under it - rest the pointer on a mode to see it',
+    title: t('How the pattern mixes with the video under it - rest the pointer on a mode to see it'),
     live: (m) => live(m ? { blend: m } : null),
     write: (m) => change((x) => ({ ...x, blend: m })),
   })));

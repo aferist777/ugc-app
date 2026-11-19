@@ -42,6 +42,8 @@ import { isBed } from '../captions/heard.js';
 // The pauses' cuts are one rule for the page and the server - js/sound/pause-cuts.js; re-exported here.
 import { SEAM_FADE, MIN_SILENCE_CUT, MIN_KEEP, cutsOfPauses, mapThrough } from '../sound/pause-cuts.js';
 export { SEAM_FADE, MIN_SILENCE_CUT, MIN_KEEP, cutsOfPauses, mapThrough };
+// The interface's words (`t` is a lane here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const EPS = 1e-6;
@@ -53,8 +55,7 @@ const MIN_DUR = 0.02;
 const _end = (c) => (+c.start || 0) + (+c.dur || 0);
 const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
 
-const LINE_GONE = 'A whole line of the talking head is inside the stretch - take it off the script in Setup instead, '
-  + 'or cut a shorter stretch.';
+const LINE_GONE = T.t('A whole line of the talking head is inside the stretch - take it off the script in Setup instead, or cut a shorter stretch.');
 
 // The lanes a cut of `scope` (cutScope) touches: every lane, or its lane and - for main audio - the subtitles.
 const _inScope = (scope, t) => !scope || scope.all || t.id === scope.lane || (!!scope.subs && t.kind === 'subs');
@@ -71,7 +72,7 @@ function _lineGone(tl, cuts, scope) {
   return false;
 }
 
-const MERGED_LINES = 'Merged lines of the talking head are one file - cut inside them before merging, or take the merge back (Ctrl+Z).';
+const MERGED_LINES = T.t('Merged lines of the talking head are one file - cut inside them before merging, or take the merge back (Ctrl+Z).');
 
 // Would `cuts` reach into a talking head's lines merged into one file (a cell with `merge`)?
 function _mergedHit(tl, cuts, scope) {
@@ -87,8 +88,8 @@ function _mergedHit(tl, cuts, scope) {
 
 /** Why [a, b) cannot be cut out of `tl` (of the lanes `scope` takes - cutScope; every lane without one), in words - or ''. */
 export function cutRefused(tl, a, b, scope) {
-  if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
-  if (!(b - a >= MIN_CUT)) return 'Draw a longer stretch over the wave to cut it out';
+  if (!tl || !Array.isArray(tl.tracks)) return T.t('Nothing is open to cut');
+  if (!(b - a >= MIN_CUT)) return T.t('Draw a longer stretch over the wave to cut it out');
   if (_mergedHit(tl, [{ a, b }], scope)) return MERGED_LINES;
   return _lineGone(tl, [{ a, b }], scope) ? LINE_GONE : '';
 }
@@ -219,8 +220,8 @@ export const isMusicBed = (t, c) => !!t && t.kind === 'audio' && !t.main && !!c 
 
 /** Why `cuts` cannot be made in `tl`, in words - or '' when they can. */
 export function silenceRefused(tl, cuts) {
-  if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
-  if (!cuts || !cuts.length) return 'No pause here is longer than that';
+  if (!tl || !Array.isArray(tl.tracks)) return T.t('Nothing is open to cut');
+  if (!cuts || !cuts.length) return T.t('No pause here is longer than that');
   if (_mergedHit(tl, cuts)) return MERGED_LINES;
   return _lineGone(tl, cuts) ? LINE_GONE : '';
 }

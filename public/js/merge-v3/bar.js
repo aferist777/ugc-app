@@ -16,6 +16,8 @@ import { grabFrame } from './preview-b.js';
 import { showError } from '../notice.js';
 import { icon } from '../icons.js';
 import { wire as wireRange } from '../ui-range.js';
+// The interface's words (`t` is a target and a time here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,8 +31,8 @@ function _history() {
   if (r) r.addEventListener('click', () => History.redo());
   History.onChange(() => {
     const d = History.depth();
-    if (u) { u.disabled = !History.canUndo(); u.title = 'Undo (Ctrl+Z)' + (d.undo ? ' - ' + d.undo : ' - nothing yet'); }
-    if (r) { r.disabled = !History.canRedo(); r.title = 'Redo (Ctrl+Y)' + (d.redo ? ' - ' + d.redo : ' - nothing yet'); }
+    if (u) { u.disabled = !History.canUndo(); u.title = d.undo ? T.t('Undo (Ctrl+Z) - {n}', { n: d.undo }) : T.t('Undo (Ctrl+Z) - nothing yet'); }
+    if (r) { r.disabled = !History.canRedo(); r.title = d.redo ? T.t('Redo (Ctrl+Y) - {n}', { n: d.redo }) : T.t('Redo (Ctrl+Y) - nothing yet'); }
   });
   document.addEventListener('keydown', (e) => {
     if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
@@ -102,9 +104,9 @@ function _split() {
   // Enabled only when there is something to cut, so the button reports the state instead of
   // accepting a click and doing nothing. The playhead moves far more often than the selection.
   const paint = () => {
-    const r = Store.hasProject() ? canSplit() : { ok: false, why: 'Open a project to edit it' };
+    const r = Store.hasProject() ? canSplit() : { ok: false, why: T.t('Open a project to edit it') };
     b.disabled = !r.ok;
-    b.title = r.ok ? 'Cut the selected clip at the playhead' : r.why;
+    b.title = r.ok ? T.t('Cut the selected clip at the playhead') : r.why;
   };
   Store.onChange(paint);
   onSelChange(paint);
@@ -165,7 +167,7 @@ function _openBig() {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'mv3-big-x u-btn is-icon is-quiet u-x';
-  close.title = 'Close (Esc)';
+  close.title = T.t('Close (Esc)');
   close.addEventListener('click', _closeBig);
   ov.append(box, close);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) _closeBig(); });
@@ -195,7 +197,7 @@ async function _shoot() {
   btn.classList.add('is-busy');
   try {
     const r = await grabFrame();
-    if (!r || !r.ok) throw new Error('the frame could not be read');
+    if (!r || !r.ok) throw new Error(T.t('the frame could not be read'));
     const fd = new FormData();
     fd.append('image', r.blob, 'shot.png');
     const title = Store.title() || '';
@@ -204,21 +206,21 @@ async function _shoot() {
     fd.append('at', String(r.at));
     // No words on it: the frame is the picture alone (the captions are libass's own layer).
     const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'the server would not take it');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('the server would not take it'));
     btn.classList.remove('is-busy');
     btn.innerHTML = icon('check');
     // Show where it landed rather than saying it.
     try { const L = await import('./library.js'); await L.showGroup('images', 'Screenshots'); } catch (e) { /* the shelf is optional */ }
-    if (!r.full) btn.title = 'Saved at preview size (' + r.w + '×' + r.h + ') - the original files did not load in time';
+    if (!r.full) btn.title = T.t('Saved at preview size ({w}×{h}) - the original files did not load in time', { w: r.w, h: r.h });
   } catch (e) {
     btn.classList.remove('is-busy');
     btn.innerHTML = icon('x');
-    btn.title = 'Could not save the frame: ' + e.message;
+    btn.title = T.t('Could not save the frame: {why}', { why: e.message });
   } finally {
     setTimeout(() => {
       btn.classList.remove('is-busy');
       btn.innerHTML = was;
-      btn.title = 'Save this frame to the library (Images / Screenshots)';
+      btn.title = T.t('Save this frame to the library (Images / Screenshots)');
       btn.disabled = false;
     }, 1400);
   }
@@ -236,7 +238,7 @@ function _frames() {
     if (b) b.addEventListener('click', () => {
       if (b.disabled) return;
       import('./tl-gen.js').then(G => G.fromFrame(chat, b))
-        .catch(err => showError('The frame did not go to the chat', { detail: (err && err.message) || String(err) }));
+        .catch(err => showError(T.t('The frame did not go to the chat'), { detail: (err && err.message) || String(err) }));
     });
   }
 }

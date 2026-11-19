@@ -77,6 +77,8 @@ import { emptyEl } from '../ui-state.js';
 // The groups' chevrons, and the strip's figures in mono (js/num.js).
 import { iconEl } from '../icons.js';
 import { setFigures } from '../num.js';
+// The interface's words - as T: in this module `t` is a lane or a time.
+import * as T from '../i18n/t.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -166,6 +168,29 @@ function _removeRow(host, btn) {
   host.appendChild(r);
 }
 const _cap1 = (s) => { const t = String(s || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+// A LANE'S NAME AS IT IS SAID. The app names every lane itself - 'main video', 'video 2', 'main audio', 'audio 2', 'text 1',
+// 'Subtitles' (timeline-b.js numbers them again at every change) - and keeps that name in English in the timeline; the strip
+// says it in the interface's language. A name of no such shape is said as it is; a lane with none by its kind.
+function _laneName(track) {
+  const raw = String((track && track.name) || '');
+  const low = raw.trim().toLowerCase();
+  if (low === 'main video') return T.t('main video');
+  if (low === 'main audio') return T.t('main audio');
+  if (low === 'subtitles') return T.t('Subtitles');
+  const m = /^(video|audio|text) (\d+)$/.exec(low);
+  if (m) {
+    if (m[1] === 'video') return T.t('video {n}', { n: m[2] });
+    if (m[1] === 'audio') return T.t('audio {n}', { n: m[2] });
+    return T.t('text {n}', { n: m[2] });
+  }
+  if (raw) return raw;
+  const kind = track && track.kind;
+  if (kind === 'subs') return T.t('Subtitles');
+  if (kind === 'text') return T.t('Text');
+  if (kind === 'audio') return T.t('audio');
+  if (kind === 'video') return T.t('video');
+  return String(kind || '');
+}
 function _paintHead(over) {
   let t = _title;
   const own = over && over.querySelector('[data-strip-title]');
@@ -221,13 +246,13 @@ function _freshenField() {
 // the file.
 const _bsep = (host) => host.appendChild(_el('div', 'mv3-c-sep'));
 
-const FITS = [['fit', 'Fit'], ['fill', 'Fill']];
+const FITS = [['fit', T.t('Fit')], ['fill', T.t('Fill')]];
 // WHICH PART SURVIVES when a filled clip is cropped. Only ONE axis is ever cut - a source
 // wider than the frame loses its sides, a taller one loses its top and bottom - so the five
 // answers are one list rather than two controls, and whichever axis is not being cut ignores
 // its own answer and stays centred.
-const CROPS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right'],
-               ['top', 'Top'], ['bottom', 'Bottom']];
+const CROPS = [['left', T.t('Left')], ['center', T.t('Center')], ['right', T.t('Right')],
+               ['top', T.t('Top')], ['bottom', T.t('Bottom')]];
 
 // ── An insert on the frame ──────────────────────────────────────────────────
 // PLACED BY HAND, ON THE PREVIEW. There is nothing here for where it sits, how big it is or
@@ -245,17 +270,17 @@ function _pipRows(host, track, c) {
 
   // A fraction of the insert's shorter side rather than pixels, so the number means the same
   // thing on the preview canvas and in the render, which are different sizes.
-  host.appendChild(C.row('Soft edge', C.slider({
+  host.appendChild(C.row(T.t('Soft edge'), C.slider({
     min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
-    fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
+    fmt: (v) => (v <= 0.005 ? T.t('hard') : Math.round(v * 100) + '%'),
     onChange: (v) => set('feather', v),
   })));
-  host.appendChild(C.row('', C.button('Full frame', () => setManyB(track.id, c.id, {
+  host.appendChild(C.row('', C.button(T.t('Full frame'), () => setManyB(track.id, c.id, {
     tx: null, ty: null, tw: null, angle: null, feather: null,
-  }), { title: 'Drop the placement and cover the whole frame again' })));
-  host.appendChild(C.hint('Placed on the frame'
-    + ((+c.angle) ? ' and turned ' + Math.round(+c.angle) + '\u00b0' : '')
-    + ', so it is no longer fitted to it.'));
+  }), { title: T.t('Drop the placement and cover the whole frame again') })));
+  host.appendChild(C.hint((+c.angle)
+    ? T.t('Placed on the frame and turned {deg}\u00b0, so it is no longer fitted to it.', { deg: Math.round(+c.angle) })
+    : T.t('Placed on the frame, so it is no longer fitted to it.')));
 }
 
 // ── A main clip as a picture in the picture ─────────────────────────────────
@@ -275,7 +300,7 @@ const noFraming = (track) => isMainVideo(track) && WK.isTalking();
 // (place-b.js setLive, as the crop's frame) - and written into all of them on release, ONE undo step. On main video the
 // clip is over black, so less of it is darker. `items` - [{ track, clip }] of video lanes.
 function _opacityRow(host, items) {
-  host.appendChild(C.row(items.length > 1 ? 'Opacity · ' + items.length : 'Opacity', _opacitySlider(items)));
+  host.appendChild(C.row(items.length > 1 ? T.t('Opacity · {n}', { n: items.length }) : T.t('Opacity'), _opacitySlider(items)));
 }
 function _opacitySlider(items) {
   const vals = items.map(x => opacityOf(x.clip));
@@ -289,8 +314,14 @@ function _opacitySlider(items) {
       setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { opacity: v / 100 } })));
     },
   });
-  sl.title = 'How much of ' + (items.length > 1 ? 'these clips' : 'this clip') + ' is seen - 100% all of it'
-    + (items.some(x => isMainVideo(x.track)) ? '; on main video, under it is black' : '');
+  const onMain = items.some(x => isMainVideo(x.track));
+  if (items.length > 1) {
+    sl.title = onMain ? T.t('How much of these clips is seen - 100% all of it; on main video, under it is black')
+      : T.t('How much of these clips is seen - 100% all of it');
+  } else {
+    sl.title = onMain ? T.t('How much of this clip is seen - 100% all of it; on main video, under it is black')
+      : T.t('How much of this clip is seen - 100% all of it');
+  }
   return sl;
 }
 
@@ -299,7 +330,7 @@ function _opacitySlider(items) {
 // (place-b.js setLive - nothing written), a press chooses it - written into every one picked, ONE undo step -, Escape, a
 // press away or the pointer leaving the list puts the preview back as it was. `items` - [{ track, clip }] off main.
 function _blendRow(host, items) {
-  host.appendChild(C.row(items.length > 1 ? 'Blend · ' + items.length : 'Blend', _blendButton(items)));
+  host.appendChild(C.row(items.length > 1 ? T.t('Blend · {n}', { n: items.length }) : T.t('Blend'), _blendButton(items)));
 }
 // The list itself is js/merge-v3/blend-menu.js - the patterns of main video take it too.
 function _blendButton(items) {
@@ -307,8 +338,8 @@ function _blendButton(items) {
   const mixed = ids.some(v => v !== ids[0]);
   return blendButton({
     current: mixed ? '' : ids[0],
-    title: 'How ' + (items.length > 1 ? 'these clips mix' : 'this clip mixes') + ' with what is under it'
-      + ' - rest the pointer on a mode to see it',
+    title: items.length > 1 ? T.t('How these clips mix with what is under it - rest the pointer on a mode to see it')
+      : T.t('How this clip mixes with what is under it - rest the pointer on a mode to see it'),
     live: (id) => setLivePlace(id ? new Map(items.map(x => [x.clip.id, { blend: id }])) : null),
     write: (id) => setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch: { blend: id } }))),
   });
@@ -322,18 +353,22 @@ function _pipSection(host, items) {
   if (!on.length) return false;
   const write = (patch) => setClipsB(on.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch })));
   const many = on.length > 1;
-  if (on.length < items.length) host.appendChild(C.hint('The edges below are for the ' + on.length + ' picked clips that are a PiP.'));
+  if (on.length < items.length) {
+    host.appendChild(C.hint(T.tn(on.length, 'The edges below are for the {n} picked clip that is a PiP.',
+      'The edges below are for the {n} picked clips that are a PiP.')));
+  }
   _edgeRows(host, on[0].clip, write);
-  const size = C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
-    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' });
+  const size = C.button(T.t('Full size'), () => write({ tx: null, ty: null, tw: null, angle: null }),
+    { title: T.t('Back to the size and place it had when it became a PiP - the whole frame it showed') });
   const uncut = on.filter(x => !cropActive(x.clip));
   host.appendChild(C.row('', uncut.length
-    ? C.pair(size, C.button('Full frame', () => setClipsB(uncut.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id,
+    ? C.pair(size, C.button(T.t('Full frame'), () => setClipsB(uncut.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id,
       patch: { pip: null, tx: null, ty: null, tw: null, angle: null } }))),
-      { title: 'Not a picture in the picture any more - the whole frame again' }))
+      { title: T.t('Not a picture in the picture any more - the whole frame again') }))
     : size));
-  host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
-    + (many ? ' - all ' + on.length + ' picked clips move together.' : '.')));
+  host.appendChild(C.hint(many
+    ? T.t('Drag a corner on the preview to size it, drag it to move it, the knob to turn it - all {n} picked clips move together.', { n: on.length })
+    : T.t('Drag a corner on the preview to size it, drag it to move it, the knob to turn it.')));
   return true;
 }
 
@@ -343,7 +378,7 @@ function _pipSection(host, items) {
 // (as its Fit does); a clip added later comes as it is.
 function _colorGroup(host, items) {
   if (!items.length) return;
-  const g = _group(host, 'color', 'Color');
+  const g = _group(host, 'color', T.t('Color'));
   for (const k of COLOR_KEYS) {
     const [min, max, , step] = COLOR_RANGE[k];
     const vals = items.map(x => colorOf(x.clip)[k]);
@@ -363,23 +398,23 @@ function _colorGroup(host, items) {
 // A PiP's edges - and a cropped clip's of a lane above, by the same rule: its soft edge, its rounded
 // corners, its outline. `write(patch)` writes them into what is picked.
 function _edgeRows(host, c0, write) {
-  host.appendChild(C.row('Soft edge', C.slider({
+  host.appendChild(C.row(T.t('Soft edge'), C.slider({
     min: 0, max: 0.4, step: 0.01, value: +c0.feather || 0,
-    fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
+    fmt: (v) => (v <= 0.005 ? T.t('hard') : Math.round(v * 100) + '%'),
     onChange: (v) => write({ feather: v }),
   })));
   // Rounded corners - a share of the shorter side, half of it round ends - and an outline inside the edge, its
   // thickness a share of the frame's width (said in the pixels of a 1080-wide film) and its color.
-  host.appendChild(C.row('Corners', C.slider({
+  host.appendChild(C.row(T.t('Corners'), C.slider({
     min: 0, max: 0.5, step: 0.01, value: +c0.radius || 0,
-    fmt: (v) => (v <= 0.005 ? 'square' : v >= 0.495 ? 'round' : Math.round(v * 200) + '%'),
+    fmt: (v) => (v <= 0.005 ? T.tc('corners', 'square') : v >= 0.495 ? T.tc('corners', 'round') : Math.round(v * 200) + '%'),
     onChange: (v) => write({ radius: v }),
   })));
   const col = C.color(c0.outlineColor || '#ffffff', (v) => write({ outlineColor: v }));
-  col.title = 'The outline’s color';
-  host.appendChild(C.row('Outline', C.pair(C.slider({
+  col.title = T.t('The outline’s color');
+  host.appendChild(C.row(T.t('Outline'), C.pair(C.slider({
     min: 0, max: 0.03, step: 0.001, value: +c0.outline || 0,
-    fmt: (v) => (v <= 0.0005 ? 'none' : Math.round(v * 1080) + ' px'),
+    fmt: (v) => (v <= 0.0005 ? T.t('none') : Math.round(v * 1080) + ' px'),
     onChange: (v) => write({ outline: v }),
   }), col)));
 }
@@ -388,10 +423,10 @@ function _edgeRows(host, c0, write) {
 // edges, and the way back to the whole frame (the crop remembered).
 function _cutRows(host, track, c) {
   _edgeRows(host, c, (patch) => setManyB(track.id, c.id, patch));
-  host.appendChild(C.row('', C.button('Full frame', () => setManyB(track.id, c.id, {
+  host.appendChild(C.row('', C.button(T.t('Full frame'), () => setManyB(track.id, c.id, {
     tx: null, ty: null, tw: null, angle: null, feather: null, ...pipOffCrop(c),
-  }), { title: 'Drop the crop and the placement and cover the whole frame again - the crop is remembered' })));
-  host.appendChild(C.hint('Drag it on the preview to move it, a corner to size it, the knob to turn it.'));
+  }), { title: T.t('Drop the crop and the placement and cover the whole frame again - the crop is remembered') })));
+  host.appendChild(C.hint(T.t('Drag it on the preview to move it, a corner to size it, the knob to turn it.')));
 }
 
 // How a clip meets a frame of another shape. The second row appears only when there is
@@ -400,22 +435,23 @@ function _cutRows(host, track, c) {
 // the face, the middle, the whole frame over its blur, two faces as bands - and a shift for the whole clip
 // (public/js/merge-v3/framing-ui.js; the path itself is public/js/framing/path.js, which the render reads too).
 function _frameRows(host, c, set) {
-  host.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
+  host.appendChild(C.row(T.tc('row', 'Fit'), C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
     (v) => set('fit', v))));
   if (c.fit !== 'fill') return;
   // A part of fragmentation follows the most active - its own choice while it has it - with punch-ins on or off.
   const mode = FRAMING.modeOf(c);
   const pickFraming = C.select(FRAMING.framingsOf(c), mode, (v) => { FRAMING.choose(c, v, set); });
-  host.appendChild(C.row('Tracking', pickFraming));
+  host.appendChild(C.row(T.t('Tracking'), pickFraming));
   const zoomRow = FRAMING.zoomRow(c, C);
   if (zoomRow) host.appendChild(zoomRow);
   if (mode === 'fixed') {
-    host.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center',
+    host.appendChild(C.row(T.t('Align'), C.select(CROPS, c.cropAlign || 'center',
       (v) => set('cropAlign', v))));
   } else if (mode !== 'whole') {
-    host.appendChild(C.row('Offset', C.slider({
+    host.appendChild(C.row(T.t('Offset'), C.slider({
       min: -1, max: 1, step: 0.05, value: +c.frame.shift || 0,
-      fmt: (v) => (Math.abs(v) < 0.01 ? 'none' : (v < 0 ? 'left ' : 'right ') + Math.round(Math.abs(v) * 100) + '%'),
+      fmt: (v) => (Math.abs(v) < 0.01 ? T.t('none')
+        : v < 0 ? T.t('left {n}%', { n: Math.round(Math.abs(v) * 100) }) : T.t('right {n}%', { n: Math.round(Math.abs(v) * 100) })),
       onChange: (v) => set('frame', { ...c.frame, shift: v }),
     })));
   }
@@ -439,11 +475,11 @@ function _frameRows(host, c, set) {
 // The defaults: against the top, two fifths of the frame, turned 90.
 function _halferRows(host, c, set) {
   const on = !!c.halfer;
-  const head = C.row('Halfer', C.toggle(on, (v) => set('halfer', v)));
+  const head = C.row(T.t('Halfer'), C.toggle(on, (v) => set('halfer', v)));
   head.classList.add('mv3-c-fold');
   if (on) head.classList.add('is-open');
-  head.title = on ? 'A band across the frame. Switch off to make it a picture again - the band keeps its settings.'
-                  : 'Make this clip a band across the frame';
+  head.title = on ? T.t('A band across the frame. Switch off to make it a picture again - the band keeps its settings.')
+                  : T.t('Make this clip a band across the frame');
   host.appendChild(head);
   if (!on) return;
 
@@ -451,38 +487,37 @@ function _halferRows(host, c, set) {
   const rot = [0, 90, 180, 270].includes(+c.rotation) && c.rotation != null ? +c.rotation : 90;
   const sideways = (rot === 90 || rot === 270);
 
-  host.appendChild(C.row('Band', C.slider({
+  host.appendChild(C.row(T.tc('halfer', 'Band'), C.slider({
     min: 0, max: 100, step: 1, value: num(c.halferPos, 100),
-    fmt: (v) => (v >= 99 ? 'top' : v <= 1 ? 'bottom' : v === 50 ? 'middle' : v + '%'),
+    fmt: (v) => (v >= 99 ? T.t('top') : v <= 1 ? T.t('bottom') : v === 50 ? T.t('middle') : v + '%'),
     onChange: (v) => set('halferPos', v),
   })));
-  host.appendChild(C.row('Thickness', C.slider({
+  host.appendChild(C.row(T.t('Thickness'), C.slider({
     min: 5, max: 100, step: 1, value: num(c.halferThick, 40),
-    fmt: (v) => (v >= 100 ? 'full frame' : v + '%'),
+    fmt: (v) => (v >= 100 ? T.t('full frame') : v + '%'),
     onChange: (v) => set('halferThick', v),
   })));
-  host.appendChild(C.row('Rotation', C.select([[0, '0\u00b0'], [90, '90\u00b0'], [180, '180\u00b0'], [270, '270\u00b0']],
+  host.appendChild(C.row(T.t('Rotation'), C.select([[0, '0\u00b0'], [90, '90\u00b0'], [180, '180\u00b0'], [270, '270\u00b0']],
     String(rot), (v) => set('rotation', +v))));
   // The band is covered, never stretched, so there is always a slice to choose - and WHICH WAY it
   // slides depends on the turn: upright, the spare is above and below; on its side, to the sides.
-  host.appendChild(C.row('Slice', C.slider({
+  host.appendChild(C.row(T.t('Slice'), C.slider({
     min: 0, max: 100, step: 1, value: num(c.halferKeep, 100),
-    fmt: (v) => (v >= 99 ? (sideways ? 'right' : 'top')
-               : v <= 1 ? (sideways ? 'left' : 'bottom')
-               : v === 50 ? 'middle' : v + '%'),
+    fmt: (v) => (v >= 99 ? (sideways ? T.t('right') : T.t('top'))
+               : v <= 1 ? (sideways ? T.t('left') : T.t('bottom'))
+               : v === 50 ? T.t('middle') : v + '%'),
     onChange: (v) => set('halferKeep', v),
   })));
   // Only the edges facing INTO the frame, as a share of the band. Written as a number even at
   // zero: nothing written is the default softness, and hard has to be something else.
-  host.appendChild(C.row('Soft edge', C.slider({
+  host.appendChild(C.row(T.t('Soft edge'), C.slider({
     min: 0, max: 40, step: 1, value: c.feather == null ? 3 : Math.round(+c.feather * 100),
-    fmt: (v) => (v <= 0 ? 'hard' : v + '%'),
+    fmt: (v) => (v <= 0 ? T.t('hard') : v + '%'),
     onChange: (v) => set('feather', v / 100),
   })));
-  host.appendChild(C.hint('A band across the frame: where it sits, how thick it is, and which slice of the '
-    + 'picture survives the crop. ' + (sideways ? 'On its side, so the slice slides left to right.'
-                                              : 'Upright, so the slice slides bottom to top.')
-    + ' No framing, placement or effects while it is a band.'));
+  host.appendChild(C.hint(sideways
+    ? T.t('A band across the frame: where it sits, how thick it is, and which slice of the picture survives the crop. On its side, so the slice slides left to right. No framing, placement or effects while it is a band.')
+    : T.t('A band across the frame: where it sits, how thick it is, and which slice of the picture survives the crop. Upright, so the slice slides bottom to top. No framing, placement or effects while it is a band.')));
 }
 
 // A film. Speed retimes it, reverse runs it backwards, and the level belongs to the sound
@@ -491,16 +526,16 @@ function _blankFilm(host, track, c, set, pair) {
   // THE GROUPS: Picture - how it runs, how much of it is seen, how it mixes, the band, and under a
   // line the crop, how it meets the frame, the PiP; Color; Effects; Sound - its sound's level.
   const main = isMainVideo(track);
-  const pic = _group(host, 'picture', 'Picture');
+  const pic = _group(host, 'picture', T.t('Picture'));
   // Reverse rides beside the speed slider rather than taking a row of its own: the two are
   // one question about how the clip runs, and a row apiece spent a fifth of the panel saying
   // it twice.
-  pic.appendChild(C.row('Speed', C.pair(
+  pic.appendChild(C.row(T.t('Speed'), C.pair(
     C.slider({
       min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
       onChange: (v) => set('speed', v),
     }),
-    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards', 'rotate-ccw'),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), T.t('Play it backwards'), 'rotate-ccw'),
   )));
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
@@ -526,27 +561,27 @@ function _blankFilm(host, track, c, set, pair) {
     }
   }
   _colorGroup(host, [{ track, clip: c }]);
-  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
+  if (!c.halfer) fxRows(_group(host, 'effects', T.t('Effects')), track, c);
 
-  const snd = _group(host, 'sound', 'Sound');
+  const snd = _group(host, 'sound', T.t('Sound'));
   if (pair) {
     // THE LEVEL LIVES ON THE OTHER HALF. A video clip's own volume is read by nothing - the
     // graph mixes audio lanes - so a slider writing it here would be a dial connected to
     // nothing. It writes to the sound instead, which is what "turn this clip up" means.
     const vol = C.volume(pair.clip.volume == null ? 1 : +pair.clip.volume,
       (v) => setB(pair.track.id, pair.clip.id, 'volume', v));
-    vol.title = 'This clip\u2019s own sound, on ' + pair.track.name;
-    snd.appendChild(C.row('Volume', vol));
+    vol.title = T.t('This clip\u2019s own sound, on {lane}', { lane: _laneName(pair.track) });
+    snd.appendChild(C.row(T.t('Volume'), vol));
     // Its pitch, on the sound as its level is.
     pitchRows(snd, [pair.clip.pitch], (fn) => setB(pair.track.id, pair.clip.id, 'pitch', fn(pair.clip.pitch)));
   } else {
-    snd.appendChild(C.hint('No sound attached to this clip.'));
+    snd.appendChild(C.hint(T.t('No sound attached to this clip.')));
   }
 
-  _removeRow(host, C.button('Remove from timeline', () => removeB(track.id, c.id), {
+  _removeRow(host, C.button(T.t('Remove from timeline'), () => removeB(track.id, c.id), {
     danger: true,
-    title: pair ? 'Takes the clip off the timeline, and its sound with it. The library keeps the file.'
-                : 'Takes the clip off the timeline. The library keeps the file.',
+    title: pair ? T.t('Takes the clip off the timeline, and its sound with it. The library keeps the file.')
+                : T.t('Takes the clip off the timeline. The library keeps the file.'),
   }));
 }
 
@@ -561,7 +596,7 @@ function _blankStill(host, track, c, set) {
   // A cropped picture: the piece is the picture - its settings are the crop's.
   const cropped = !c.halfer && !!cropActive(c);
 
-  const pic = _group(host, 'picture', 'Picture');
+  const pic = _group(host, 'picture', T.t('Picture'));
   _opacityRow(pic, [{ track, clip: c }]);
   if (!main) _blendRow(pic, [{ track, clip: c }]);
   if (!main) _halferRows(pic, c, set);
@@ -578,25 +613,25 @@ function _blankStill(host, track, c, set) {
       _pipRows(fr, track, c);
     } else if (!noFraming(track)) {
       _bsep(fr);
-      fr.appendChild(C.row('Fit', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
-      if (c.fit === 'fill') fr.appendChild(C.row('Align', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
+      fr.appendChild(C.row(T.tc('row', 'Fit'), C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v))));
+      if (c.fit === 'fill') fr.appendChild(C.row(T.t('Align'), C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v))));
     }
     if (main && c.pip) { _bsep(fr); _pipSection(fr, [{ track, clip: c }]); }
   }
   _colorGroup(host, [{ track, clip: c }]);
-  if (!c.halfer) fxRows(_group(host, 'effects', 'Effects'), track, c);
+  if (!c.halfer) fxRows(_group(host, 'effects', T.t('Effects')), track, c);
 
-  _removeRow(host, C.button('Remove', () => removeB(track.id, c.id), {
-    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
+  _removeRow(host, C.button(T.t('Remove'), () => removeB(track.id, c.id), {
+    danger: true, title: T.t('Takes the picture off the timeline. The library keeps the file.'),
   }));
 }
 
 // A fade's length: seconds, the 15 ms of a seam (cut silence) in milliseconds, none "off".
-const _fadeLbl = (v) => (v >= 0.05 ? (+v).toFixed(1) + 's' : v > 0 ? Math.round(v * 1000) + ' ms' : 'off');
+const _fadeLbl = (v) => (v >= 0.05 ? T.t('{n}s', { n: (+v).toFixed(1) }) : v > 0 ? T.t('{n} ms', { n: Math.round(v * 1000) }) : T.t('off'));
 // A talking head's line on its project's timeline (a mirror's cell, lib/frag-mirror.js): its level
 // can be changed, and the mirror evens the lines' levels again when it lays the line anew.
 const _isLine = (c) => Number(c && c.frag) > 0;
-const LINE_HINT = 'A line of the talking head: a new take or a change of the line puts the mirror’s level back on it.';
+const LINE_HINT = T.t('A line of the talking head: a new take or a change of the line puts the mirror’s level back on it.');
 
 // ── The sound of several clips ──────────────────────────────────────────────
 // What of the pick is HEARD: the clips of the audio lanes and the sound half of a picked film - each once, a pair picked
@@ -641,7 +676,7 @@ function _runsOf(sounds) {
 // one; one past an end already is not pulled to it.
 const SHIFT_DB = 24;
 const FLOOR_DB = C.DB_MIN + 0.5;
-const _shiftLbl = (db) => (Math.abs(db) < 0.05 ? '0 dB' : (db > 0 ? '+' : '−') + Math.abs(db).toFixed(1) + ' dB');
+const _shiftLbl = (db) => T.t('{db} dB', { db: Math.abs(db) < 0.05 ? '0' : (db > 0 ? '+' : '−') + Math.abs(db).toFixed(1) });
 function _shifted(vol, db) {
   const v = vol == null ? 1 : +vol;
   if (!(v > 0)) return 0;
@@ -655,8 +690,8 @@ function _shifted(vol, db) {
 // neighbours - overlaps and holes. `alone` - every clip picked is a sound, so the rows need no "for N".
 function _soundSection(box, sounds, alone) {
   // its title is its group's
-  const host = _group(box, 'sound', alone ? 'Sound'
-    : 'Sound · for ' + sounds.length + (sounds.length === 1 ? ' sound clip' : ' sound clips'));
+  const host = _group(box, 'sound', alone ? T.t('Sound')
+    : T.tn(sounds.length, 'Sound · for {n} sound clip', 'Sound · for {n} sound clips'));
   const base = sounds.map(s => ({ s, v: s.clip.volume == null ? 1 : +s.clip.volume }));
   const levelsAt = (db) => base.map(({ s, v }) => ({ trackId: s.track.id, clipId: s.clip.id, volume: _shifted(v, db) }));
   const vol = C.slider({
@@ -669,11 +704,13 @@ function _soundSection(box, sounds, alone) {
       render();
     },
   });
-  vol.title = 'Moves every level by the same number of dB - the differences between them stay';
-  host.appendChild(C.row('Volume', vol));
+  vol.title = T.t('Moves every level by the same number of dB - the differences between them stay');
+  host.appendChild(C.row(T.t('Volume'), vol));
   const muted = base.filter(x => !(x.v > 0)).length;
-  host.appendChild(C.hint('Moves them all by the same dB, the differences kept. One at +12 dB stays there'
-    + (muted ? '; ' + (muted === 1 ? 'the muted one stays' : muted + ' muted ones stay') + ' muted.' : '.')));
+  host.appendChild(C.hint(muted
+    ? T.tn(muted, 'Moves them all by the same dB, the differences kept. One at +12 dB stays there; the muted one stays muted.',
+      'Moves them all by the same dB, the differences kept. One at +12 dB stays there; {n} muted ones stay muted.')
+    : T.t('Moves them all by the same dB, the differences kept. One at +12 dB stays there.')));
 
   const runs = _runsOf(sounds);
   const fadeRow = (label, key, ends) => {
@@ -684,10 +721,10 @@ function _soundSection(box, sounds, alone) {
       onChange: (v) => setClipsB(ends.map(s => ({ trackId: s.track.id, clipId: s.clip.id, patch: { [key]: v } }))),
     })));
   };
-  fadeRow('Fade in', 'fadeIn', runs.map(r => r[0]));
-  fadeRow('Fade out', 'fadeOut', runs.map(r => r[r.length - 1]));
+  fadeRow(T.t('Fade in'), 'fadeIn', runs.map(r => r[0]));
+  fadeRow(T.t('Fade out'), 'fadeOut', runs.map(r => r[r.length - 1]));
   if (runs.some(r => r.length > 1)) {
-    host.appendChild(C.hint('Clips in a row on one lane fade as one - in at the first, out at the last; the seams between them keep their 15 ms.'));
+    host.appendChild(C.hint(T.t('Clips in a row on one lane fade as one - in at the first, out at the last; the seams between them keep their 15 ms.')));
   }
   // One pitch for all of them - "Mixed" while they disagree.
   pitchRows(host, sounds.map(s => s.clip.pitch),
@@ -702,41 +739,41 @@ function _blankSound(host, track, c, set, pair) {
   const ex = Views.laneExtraFor(track, c);
   if (ex) ex.render(host, track, c);
   // ONE GROUP, Sound.
-  const g = _group(host, 'sound', 'Sound');
-  g.appendChild(C.row('Volume', C.volume(c.volume == null ? 1 : +c.volume,
+  const g = _group(host, 'sound', T.t('Sound'));
+  g.appendChild(C.row(T.t('Volume'), C.volume(c.volume == null ? 1 : +c.volume,
     (v) => set('volume', v))));
   g.appendChild(C.hint((+c.volume || 0) > 0
-    ? 'Muted is the bottom of the travel.'
-    : 'Silent. Raise it to hear this clip in the preview and in the export.'));
+    ? T.t('Muted is the bottom of the travel.')
+    : T.t('Silent. Raise it to hear this clip in the preview and in the export.')));
 
   // Its own fades - the two variants of a Suno track cross into each other over three seconds.
-  g.appendChild(C.row('Fade in', C.slider({
+  g.appendChild(C.row(T.t('Fade in'), C.slider({
     min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeIn || 0), fmt: _fadeLbl, onChange: (v) => set('fadeIn', v),
   })));
-  g.appendChild(C.row('Fade out', C.slider({
+  g.appendChild(C.row(T.t('Fade out'), C.slider({
     min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeOut || 0), fmt: _fadeLbl, onChange: (v) => set('fadeOut', v),
   })));
 
-  g.appendChild(C.row('Speed', C.pair(
+  g.appendChild(C.row(T.t('Speed'), C.pair(
     C.slider({
       min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
       onChange: (v) => set('speed', v),
     }),
-    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards', 'rotate-ccw'),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), T.t('Play it backwards'), 'rotate-ccw'),
   )));
   // Its pitch - the speed above keeps it.
   pitchRows(g, [c.pitch], (fn) => set('pitch', fn(c.pitch)));
 
   if (pair) {
-    g.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
-      + 'picture on ' + pair.track.name + '. The level is not.'));
+    g.appendChild(C.hint(T.t('Half of a pair: length, speed and direction are shared with the picture on {lane}. The level is not.',
+      { lane: _laneName(pair.track) })));
   }
   if (_isLine(c)) g.appendChild(C.hint(LINE_HINT));
 
-  _removeRow(host, C.button('Remove from timeline', () => removeB(track.id, c.id), {
+  _removeRow(host, C.button(T.t('Remove from timeline'), () => removeB(track.id, c.id), {
     danger: true,
-    title: pair ? 'The picture stays where it is, and goes silent.'
-                : 'Takes the sound off the timeline. The library keeps the file.',
+    title: pair ? T.t('The picture stays where it is, and goes silent.')
+                : T.t('Takes the sound off the timeline. The library keeps the file.'),
   }));
 }
 
@@ -751,16 +788,16 @@ function _laneRemove(host, track) {
   // on the timeline either, and a sentence explaining an absence is an absence with a paragraph
   // attached to it.
   if (track.main) return;
-  const btn = C.button('Remove this track', null, {
+  const btn = C.button(T.t('Remove this track'), null, {
     danger: true,
     title: track.kind === 'video'
-      ? 'Takes the track off the project, and the audio track paired with it'
-      : 'Takes the track off the project. Any video paired with it stays, and goes silent',
+      ? T.t('Takes the track off the project, and the audio track paired with it')
+      : T.t('Takes the track off the project. Any video paired with it stays, and goes silent'),
   });
   btn.addEventListener('click', () => {
-    askDelete(btn, 'Delete ' + track.name + '?',
-      track.kind === 'video' && track.linkId ? 'Its audio track goes with it.'
-        : (track.kind === 'audio' ? 'Any picture paired with it stays, and goes silent.' : ''),
+    askDelete(btn, T.t('Delete {lane}?', { lane: _laneName(track) }),
+      track.kind === 'video' && track.linkId ? T.t('Its audio track goes with it.')
+        : (track.kind === 'audio' ? T.t('Any picture paired with it stays, and goes silent.') : ''),
       () => removeTrackB(track.id));
   });
   _removeRow(host, btn);
@@ -782,24 +819,23 @@ function _blankVideoTrack(host, track) {
   const clips = (track.clips || []).filter(c => c && c.src).length;
 
   if (!clips) {
-    host.appendChild(emptyEl('Nothing on this lane yet. A setting for the whole lane is written '
-      + 'into the clips on it, so there is nothing here to write it into.', { line: true }));
+    host.appendChild(emptyEl(T.t('Nothing on this lane yet. A setting for the whole lane is written into the clips on it, so there is nothing here to write it into.'),
+      { line: true }));
   } else {
     // The lane's rows - its one group. (None on a talking head's or a voiceover's main
     // video; its colour below stays.)
     if (!noFraming(track)) {
-      const g = _group(host, 'lane', 'Frame');
-      g.appendChild(C.row('Fit', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
+      const g = _group(host, 'lane', T.t('Frame'));
+      g.appendChild(C.row(T.tc('row', 'Fit'), C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
         (v) => stampB(track.id, { fit: v }))));
       if (_commonOf(track, 'fit') === 'fill') {
-        g.appendChild(C.row('Align', C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
+        g.appendChild(C.row(T.t('Align'), C.select(CROPS, _commonOf(track, 'cropAlign') || 'center',
           (v) => stampB(track.id, { cropAlign: v }))));
       }
       // Choosing one of these writes it into every clip on the lane, over whatever each had. The
       // warning lives in the tooltip of the control that does it, and the undo arrow is the way back.
-      g.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
-        title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
-             + 'placement and levels are left alone.',
+      g.appendChild(C.row('', C.button(T.t('Reset lane'), () => resetTrackB(track.id), {
+        title: T.t('Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, placement and levels are left alone.'),
       })));
     }
     // The lane's colour: written into every clip on it, as its Fit is.
@@ -825,7 +861,7 @@ function _blankAudioTrack(host, track) {
   // The lane's pitch under its volume: written into every clip on it, one undo step, as a video lane's
   // colour is.
   const clips = (track.clips || []).filter(c => c && c.src);
-  M.renderMusicTrack(_group(host, 'lane', 'Sound'), track, clips.length ? (g) => pitchRows(g, clips.map(c => c.pitch),
+  M.renderMusicTrack(_group(host, 'lane', T.t('Sound')), track, clips.length ? (g) => pitchRows(g, clips.map(c => c.pitch),
     (fn) => setClipsB(clips.map(c => ({ trackId: track.id, clipId: c.id, patch: { pitch: fn(c.pitch) } })))) : null);
 
   _laneRemove(host, track);
@@ -835,47 +871,54 @@ function _blankAudioTrack(host, track) {
 // The SERVER listens to the project and lays the lines (lib/captions-job.js); the strip
 // presses the button and says what the job of THIS project is doing (listen.js).
 // The key decides: Groq when there is one, this computer when not - or this computer always.
-const ENGINES = [['cloud', 'Groq when there is a key, else this computer'], ['local', 'This computer']];
+const ENGINES = [['cloud', T.t('Groq when there is a key, else this computer')], ['local', T.t('This computer')]];
 // What the subtitle strip was last built for: while only the words of its status line change (a percent),
 // the line is rewritten in place - rebuilding the strip every 1.5 s would tear down an open menu.
 let _listenShape = null;
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
-const POS = [['top', 'Top'], ['center', 'Middle'], ['bottom', 'Bottom']];
+const POS = [['top', T.t('Top')], ['center', T.t('Middle')], ['bottom', T.t('Bottom')]];
 // How a heard lane is cut: style.js CUTS.
-const CUT_OPTS = [['pages', 'Pages - a few words at a time'], ['sentences', 'Sentences - classic subtitles']];
+const CUT_OPTS = [['pages', T.t('Pages - a few words at a time')], ['sentences', T.t('Sentences - classic subtitles')]];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
 // step: a page cut for one font is not a page in another. The list is pages.js's.
 const CUTS = CUT_KEYS;
 const _cuts = (patch) => Object.keys(patch || {}).some(k => CUTS.includes(k));
 
 // What a word does while it is spoken, how it is cased, what stands behind it.
-const EFFECTS = [['none', 'None'], ['color', 'Color'], ['box', 'A box'], ['pop', 'Pop'], ['bounce', 'Jump'],
-  ['sweep', 'Sweep'], ['karaoke', 'Karaoke']];
+// The names are said in the interface's language; the single words of a motion take the context 'motion' (another
+// part of the app says "Zoom" or "Pop" of something else).
+const EFFECTS = [['none', T.tc('mode', 'None')], ['color', T.t('Color')], ['box', T.t('A box')], ['pop', T.tc('motion', 'Pop')],
+  ['bounce', T.tc('motion', 'Jump')], ['sweep', T.tc('motion', 'Sweep')], ['karaoke', T.t('Karaoke')]];
 // HOW A SUBTITLE PAGE COMES IN AND GOES OUT: motions of the whole page, their lengths the
 // app's (captions/page-fx.js). A preset's own way of arriving shows as its In until one is chosen.
-const PAGE_IN = [['at-once', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['grow', 'Grow'], ['from-top', 'From the top'],
-  ['rise', 'From below'], ['from-left', 'From the left'], ['from-right', 'From the right'], ['drop', 'Drop'], ['blur', 'Blur'],
-  ['swing', 'Swing']];
-const PAGE_OUT = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['shrink', 'Shrink'], ['zoom', 'Zoom'], ['rise', 'Up'],
-  ['sink', 'Down'], ['to-left', 'To the left'], ['to-right', 'To the right'], ['fall', 'Fall'], ['blur', 'Blur']];
-const CASINGS = [['none', 'As typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
-const BEHIND = [['outline', 'Nothing'], ['box', 'A box'], ['boxline', 'Box + outline']];
+const AT_ONCE = T.t('At once');
+const PAGE_IN = [['at-once', AT_ONCE], ['fade', T.tc('motion', 'Fade')], ['pop', T.tc('motion', 'Pop')], ['zoom', T.tc('motion', 'Zoom')],
+  ['grow', T.tc('motion', 'Grow')], ['from-top', T.t('From the top')], ['rise', T.t('From below')], ['from-left', T.t('From the left')],
+  ['from-right', T.t('From the right')], ['drop', T.tc('motion', 'Drop')], ['blur', T.tc('motion', 'Blur')], ['swing', T.tc('motion', 'Swing')]];
+const PAGE_OUT = [['none', AT_ONCE], ['fade', T.tc('motion', 'Fade')], ['pop', T.tc('motion', 'Pop')], ['shrink', T.tc('motion', 'Shrink')],
+  ['zoom', T.tc('motion', 'Zoom')], ['rise', T.tc('motion', 'Up')], ['sink', T.tc('motion', 'Down')], ['to-left', T.t('To the left')],
+  ['to-right', T.t('To the right')], ['fall', T.tc('motion', 'Fall')], ['blur', T.tc('motion', 'Blur')]];
+const CASINGS = [['none', T.t('As typed')], ['upper', T.t('UPPER')], ['lower', T.t('lower')], ['title', T.tc('casing', 'Title')]];
+const BEHIND = [['outline', T.t('Nothing')], ['box', T.t('A box')], ['boxline', T.t('Box + outline')]];
 // A TEXT line's: what stands behind it besides a box - a plate in the box's color - and how it
 // comes in and goes out (style.js ENTERS / LEAVES, drawn by captions/text-fx.js).
-const BEHIND_TEXT = BEHIND.concat([['round', 'A rounded box'], ['pill', 'A pill'], ['marker', 'A marker stroke'],
-  ['underline', 'An underline'], ['circle', 'A circle'], ['tag', 'A tag with a stripe'], ['sticker', 'A sticker']]);
-const ENTER_OPTS = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['grow', 'Grow'], ['rise', 'Rise'],
-  ['from-left', 'From the left'], ['from-right', 'From the right'], ['drop', 'Drop'], ['blur', 'Blur'], ['stretch', 'Stretch'],
-  ['swing', 'Swing'], ['wipe', 'Wipe'], ['mask-rise', 'Slot'], ['rows', 'Line by line'], ['words', 'Word by word'],
-  ['words-pop', 'Words pop'], ['letters', 'Letter by letter'], ['letters-pop', 'Letters pop'], ['letters-drop', 'Letters drop'],
-  ['typewriter', 'Typewriter'], ['glitch', 'Glitch'], ['flicker', 'Flicker']];
-const LEAVE_OPTS = [['none', 'At once'], ['fade', 'Fade'], ['pop', 'Pop'], ['zoom', 'Zoom'], ['shrink', 'Shrink'], ['rise', 'Rise'],
-  ['sink', 'Sink'], ['to-left', 'To the left'], ['to-right', 'To the right'], ['fall', 'Fall'], ['blur', 'Blur'], ['stretch', 'Stretch'],
-  ['wipe', 'Wipe'], ['mask-sink', 'Slot'], ['rows', 'Line by line'], ['words', 'Word by word'], ['letters', 'Letter by letter'],
-  ['letters-fall', 'Letters fall'], ['backspace', 'Backspace'], ['glitch', 'Glitch'], ['flicker', 'Flicker']];
-const _secs = (v) => (Math.round(v * 100) / 100) + ' s';
+const BEHIND_TEXT = BEHIND.concat([['round', T.t('A rounded box')], ['pill', T.t('A pill')], ['marker', T.t('A marker stroke')],
+  ['underline', T.t('An underline')], ['circle', T.t('A circle')], ['tag', T.t('A tag with a stripe')], ['sticker', T.t('A sticker')]]);
+const ENTER_OPTS = [['none', AT_ONCE], ['fade', T.tc('motion', 'Fade')], ['pop', T.tc('motion', 'Pop')], ['zoom', T.tc('motion', 'Zoom')],
+  ['grow', T.tc('motion', 'Grow')], ['rise', T.tc('motion', 'Rise')], ['from-left', T.t('From the left')], ['from-right', T.t('From the right')],
+  ['drop', T.tc('motion', 'Drop')], ['blur', T.tc('motion', 'Blur')], ['stretch', T.tc('motion', 'Stretch')], ['swing', T.tc('motion', 'Swing')],
+  ['wipe', T.tc('motion', 'Wipe')], ['mask-rise', T.tc('motion', 'Slot')], ['rows', T.t('Line by line')], ['words', T.t('Word by word')],
+  ['words-pop', T.t('Words pop')], ['letters', T.t('Letter by letter')], ['letters-pop', T.t('Letters pop')], ['letters-drop', T.t('Letters drop')],
+  ['typewriter', T.tc('motion', 'Typewriter')], ['glitch', T.tc('motion', 'Glitch')], ['flicker', T.tc('motion', 'Flicker')]];
+const LEAVE_OPTS = [['none', AT_ONCE], ['fade', T.tc('motion', 'Fade')], ['pop', T.tc('motion', 'Pop')], ['zoom', T.tc('motion', 'Zoom')],
+  ['shrink', T.tc('motion', 'Shrink')], ['rise', T.tc('motion', 'Rise')], ['sink', T.tc('motion', 'Sink')], ['to-left', T.t('To the left')],
+  ['to-right', T.t('To the right')], ['fall', T.tc('motion', 'Fall')], ['blur', T.tc('motion', 'Blur')], ['stretch', T.tc('motion', 'Stretch')],
+  ['wipe', T.tc('motion', 'Wipe')], ['mask-sink', T.tc('motion', 'Slot')], ['rows', T.t('Line by line')], ['words', T.t('Word by word')],
+  ['letters', T.t('Letter by letter')], ['letters-fall', T.t('Letters fall')], ['backspace', T.tc('motion', 'Backspace')],
+  ['glitch', T.tc('motion', 'Glitch')], ['flicker', T.tc('motion', 'Flicker')]];
+const _secs = (v) => T.t('{n} s', { n: Math.round(v * 100) / 100 });
 
 /** What choosing `v` in Behind writes, for a look that is `st` now: a box or a plate, never both; one that would be clear is given
  * an opacity - a plate solid, a box 0.6. */
@@ -916,24 +959,24 @@ function _blankWordsTrack(host, track) {
   };
   const pagesNow = (track.clips || []).filter(isHeard).length;
   // the lane's name in the strip's head, what it holds under it
-  _capHead(host, _cap1(track.name || (isSubs ? 'Subtitles' : 'Text')), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : '')
-    + (mix ? ' · ' + mix.length + ' presets' : ''));
+  _capHead(host, _cap1(_laneName(track)), [T.t('the whole lane'),
+    isSubs && pagesNow ? T.tn(pagesNow, '{n} page', '{n} pages') : '',
+    mix ? T.tn(mix.length, '{n} preset', '{n} presets') : ''].filter(Boolean).join(' · '));
   // Several presets are no one look: they are named instead.
   if (mix) _mixLine(host, mix);
   else _presetLine(host, raw, () => apply(raw.preset));
 
   // FOUR GROUPS: Text - where the lines come from and how they are cut; Look; Motion - In and
   // Out; Place - where and how big.
-  const tx = _group(host, 'text', 'Text');
-  const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
-    { title: 'One line at the playhead, to type yourself' });
+  const tx = _group(host, 'text', T.t('Text'));
+  // The words of the new line are the person's to replace - written into the line in the interface's language.
+  const add = C.button(T.t('Add a line'), () => addCapB(track.id, playheadB(), T.t('New line')),
+    { title: T.t('One line at the playhead, to type yourself') });
   if (isSubs) {
     // The two ways a line gets onto this lane, side by side: heard, or typed.
     const v = Listen.view(Store.key());
-    const gen = C.button(v.busy && !v.again ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
-      title: 'Listens to the audible sound - the main audio lane first, music beds and reversed clips left '
-        + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are. In a talking head '
-        + 'every line is heard by itself, its words taken from the script, and a line with a new take is heard by itself.',
+    const gen = C.button(v.busy && !v.again ? T.t('Listening...') : T.t('Generate from the sound'), () => Listen.start(), {
+      title: T.t('Listens to the audible sound - the main audio lane first, music beds and reversed clips left out - and lays the words on this lane. Lines you typed or corrected stay as they are. In a talking head every line is heard by itself, its words taken from the script, and a line with a new take is heard by itself.'),
     });
     gen.disabled = v.busy || !Store.key();
     // BACK TO WHAT WAS HEARD: the pages laid again from the answers this project keeps - the hand
@@ -942,16 +985,17 @@ function _blankWordsTrack(host, track) {
     if (v.heard) {
       // The words corrected by hand go with it - said before the press.
       fixed = (track.clips || []).reduce((n, c) => n + correctedCount(c), 0);
-      back = C.button(v.again ? 'Re-laying...' : 'back to what was heard', () => Listen.start({ stored: true }), {
-        title: 'Lays the heard lines again exactly as they were first heard and cut - your cuts, trims and '
-          + 'corrections of them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound '
-          + 'has changed since, Generate from the sound hears the new part.',
+      back = C.button(v.again ? T.t('Re-laying...') : T.t('back to what was heard'), () => Listen.start({ stored: true }), {
+        title: T.t('Lays the heard lines again exactly as they were first heard and cut - your cuts, trims and corrections of them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound has changed since, Generate from the sound hears the new part.'),
       });
       back.disabled = v.busy;
     }
     // The ways a line gets onto this lane - heard, typed, heard again - in ONE row.
     tx.appendChild(C.acts([gen, add, back]));
-    if (fixed) tx.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with "back to what was heard".', true));
+    if (fixed) {
+      tx.appendChild(C.hint(T.tn(fixed, 'Your {n} corrected word goes with "back to what was heard".',
+        'Your {n} corrected words go with "back to what was heard".'), true));
+    }
     // No Language row: the listener detects the language by itself.
     const how = listenOf(track) || {};
     // WHO LISTENS: Groq, or this computer - which is also where a run goes by itself when Groq
@@ -963,13 +1007,14 @@ function _blankWordsTrack(host, track) {
     const engine = how.engine === 'local' ? 'local' : 'cloud';
     const on = C.select(ENGINES, engine, (val) => setListenB(track.id, { engine: val }));
     on.disabled = !can && engine !== 'local';
-    tx.appendChild(C.row('Listen on', on));
+    tx.appendChild(C.row(T.t('Listen on'), on));
     if (L && !can) {
-      tx.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - '
-        + (engine === 'local' ? 'switch Listen on to cloud (Groq).' : 'Groq only.')));
+      tx.appendChild(C.hint(engine === 'local'
+        ? T.t('Recognition on this computer is not installed in this copy of the app - switch Listen on to cloud (Groq).')
+        : T.t('Recognition on this computer is not installed in this copy of the app - Groq only.')));
     } else if (engine === 'local' && L && !L.model.present) {
-      tx.appendChild(C.hint('The first time downloads the speech model (' + Math.round(L.model.bytes / 1e6)
-        + ' MB) into the library\'s cache - after that it needs no internet.'));
+      tx.appendChild(C.hint(T.t('The first time downloads the speech model ({mb} MB) into the library\'s cache - after that it needs no internet.',
+        { mb: Math.round(L.model.bytes / 1e6) })));
     }
     // The line is marked, so a percent that moves rewrites it in place instead of rebuilding the strip.
     const ln = C.hint(v.line || '');
@@ -979,13 +1024,12 @@ function _blankWordsTrack(host, track) {
     _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, again: v.again, heard: v.heard, local: L };
     // A run that fell over here with no model asks once.
     if (v.ask && L) {
-      tx.appendChild(C.row('', C.button('Download the model (' + Math.round(L.model.bytes / 1e6)
-        + ' MB)', () => Listen.start({ download: true }), { title: 'Download the speech model and listen on this computer' })));
+      tx.appendChild(C.row('', C.button(T.t('Download the model ({mb} MB)', { mb: Math.round(L.model.bytes / 1e6) }),
+        () => Listen.start({ download: true }), { title: T.t('Download the speech model and listen on this computer') })));
     }
   } else {
     tx.appendChild(C.acts([add]));
-    tx.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
-      + 'and never touches this one.', true));
+    tx.appendChild(C.hint(T.t('Typed, not heard: a transcription writes to the Subtitles lane and never touches this one.'), true));
   }
 
   // AT ONCE, not at the next transcription. The words and their timings are on the lane
@@ -994,35 +1038,34 @@ function _blankWordsTrack(host, track) {
   // themselves (pages.js) are not settings: Words and Lines are what a person chooses.
   const heard = wordsOf(track).length;
   if (isSubs) {
-    const recut = C.button('re-cut', () => setSubsStyleB(track.id, {}, true), {
-      title: 'Cuts the heard words into pages again by the rules, without changing anything else - for a '
-        + 'lane cut before, or after cuts of your own',
+    const recut = C.button(T.t('re-cut'), () => setSubsStyleB(track.id, {}, true), {
+      title: T.t('Cuts the heard words into pages again by the rules, without changing anything else - for a lane cut before, or after cuts of your own'),
     });
     recut.disabled = !heard;
     // HOW THE LANE IS CUT: a few words a page, or classic subtitles - a sentence or a
     // part of one in two lines of up to 42 characters. Changing it cuts the heard words again in the same step.
     const sent = raw.cut === 'sentences';
-    tx.appendChild(C.row('Cut', C.pair(C.select(CUT_OPTS, sent ? 'sentences' : 'pages', (v) => set({ cut: v })), sent ? recut : null)));
+    tx.appendChild(C.row(T.tc('lane', 'Cut'), C.pair(C.select(CUT_OPTS, sent ? 'sentences' : 'pages', (v) => set({ cut: v })), sent ? recut : null)));
     const pages = (track.clips || []).filter(c => Array.isArray(c.words) && c.words.length).length;
-    const counted = heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
-      + '; changing this cuts them again straight away, lines you typed stay as they are.';
+    const counted = T.t('{words} {pages}; changing this cuts them again straight away, lines you typed stay as they are.', {
+      words: T.tn(heard, '{n} heard word', '{n} heard words'), pages: T.tn(pages, 'on {n} page', 'on {n} pages') });
     if (sent) {
       // One rule, no Words or Lines; Rows under Cut; In and Out in the group Motion.
       _rowsRow(tx, raw, set);
       tx.appendChild(C.hint(heard
-        ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
-          + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
-        : 'Classic subtitles, a sentence at a time. Nothing has been transcribed yet, so this waits for the first Generate.'));
+        ? T.t('Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and 78% of the frame), 1-7 s on screen; a pause of a second ends it.')
+          + ' ' + counted
+        : T.t('Classic subtitles, a sentence at a time. Nothing has been transcribed yet, so this waits for the first Generate.')));
     } else {
-      tx.appendChild(C.row('Words', C.pair(C.slider({
+      tx.appendChild(C.row(T.t('Words'), C.pair(C.slider({
         min: 0, max: 12, step: 1, value: +raw.wordsPerLine || 0,
-        fmt: (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine(fmt) + ')'),
+        fmt: (v) => (v > 0 ? T.t('up to {n}', { n: v }) : T.t('auto (up to {n})', { n: autoWordsPerLine(fmt) })),
         onChange: (v) => set({ wordsPerLine: v }),
       }), recut)));
       // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
       const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
-      const LINES = [['1', 'One'], ['2', 'Two']].concat(lines === 3 ? [['3', 'Three']] : []);
-      tx.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
+      const LINES = [['1', T.t('One')], ['2', T.t('Two')]].concat(lines === 3 ? [['3', T.t('Three')]] : []);
+      tx.appendChild(C.row(T.tc('page', 'Lines'), C.select(LINES, String(lines), (v) => set({ lines: +v }))));
       // Rows under Lines; In and Out in the group Motion.
       _rowsRow(tx, raw, set);
     }
@@ -1031,23 +1074,23 @@ function _blankWordsTrack(host, track) {
   const marks = (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k));
   const rowsO = { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks,
     pages: () => (track.clips || []).map(c => ({ track, clip: c })), laneFonts: fontsOf(raw) };
-  const lk = _group(host, 'look', 'Look');
+  const lk = _group(host, 'look', T.tc('group', 'Look'));
   // The fonts chosen in the fonts tab, said with a ✕ that takes them all away - the preset's own font again.
   if (fontsOf(raw)) _fontsRow(lk, track, raw);
   // Several presets: a section per preset, closed until opened; the common rows - Where, Nudge, Size - are Place's.
   if (mix) _mixSections(lk, track, raw, mix, fmt, marks);
   else _lookRows(lk, st, set, rowsO);
   // A subtitle lane's In and Out - with several animations dealt, "mixed" where they differ.
-  _motionRows(_group(host, 'motion', 'Motion'), st, set, rowsO, anims);
-  _placeRows(_group(host, 'place', 'Place'), st, set, rowsO);
+  _motionRows(_group(host, 'motion', T.tc('group', 'Motion')), st, set, rowsO, anims);
+  _placeRows(_group(host, 'place', T.t('Place')), st, set, rowsO);
 
   // Lines that wear a style of their own keep it when the lane's changes. What a mix dealt them is no
   // style of their own, and stays.
   const own = (track.clips || []).filter(c => c && withoutRefs(c.style));
   if (own.length) {
-    _actRow(host, C.button(own.length + (own.length === 1 ? ' line has its' : ' lines have their') + ' own style - reset',
+    _actRow(host, C.button(T.tn(own.length, '{n} line has its own style - reset', '{n} lines have their own style - reset'),
       () => setCapStyleB(own.map(c => c.id), (c) => refsOf(c.style), { replace: true, cut: isSubs }),
-      { title: 'Puts those lines back on the lane\'s style' }));
+      { title: T.t('Puts those lines back on the lane\'s style') }));
   }
   _presetsHint(host);
   _laneRemove(host, track);
@@ -1071,12 +1114,12 @@ function _fontsRow(host, track, raw) {
   const list = fontsOf(raw);
   const names = list.map(f => (CAP_FONTS.find(x => x.family === f) || { label: f }).label);
   const said = _el('span', 'mv3-c-fonts', names.join(', '));
-  said.title = list.length > 1 ? 'Each page one of them, two in a row never the same - the fonts tab; each page as wide as in the preset\'s font'
-    : 'Every page in it - the fonts tab; each page as wide as in the preset\'s font';
-  const x = C.button('', () => _laneFonts(track, raw, []), { title: 'Takes the fonts away - the preset\'s own font again' });
+  said.title = list.length > 1 ? T.t('Each page one of them, two in a row never the same - the fonts tab; each page as wide as in the preset\'s font')
+    : T.t('Every page in it - the fonts tab; each page as wide as in the preset\'s font');
+  const x = C.button('', () => _laneFonts(track, raw, []), { title: T.t('Takes the fonts away - the preset\'s own font again') });
   x.classList.add('is-icon', 'is-quiet', 'is-del', 'u-x');   // the one ✕
-  x.setAttribute('aria-label', 'Take the fonts away');
-  host.appendChild(C.row(list.length > 1 ? list.length + ' fonts' : 'Font tab', C.pair(said, x)));
+  x.setAttribute('aria-label', T.t('Take the fonts away'));
+  host.appendChild(C.row(list.length > 1 ? T.tn(list.length, '{n} font', '{n} fonts') : T.t('Font tab'), C.pair(said, x)));
 }
 function _laneFonts(track, raw, list) {
   const fonts = Array.isArray(list) ? list.slice() : [];
@@ -1129,11 +1172,17 @@ function _shiftAnim(track, raw, st, pair) {
   setSubsStyleB(track.id, Object.assign(pairOf(next[0] || 'at-once|none'), { anims: [] }), false);
 }
 
+// A preset's name as shown: the presets' table keeps its English names, the dictionary has their lines.
+function _presetShown(id) {
+  const n = presetName(id);
+  return n ? T.t(n) : '';
+}
+
 // The row of a mixed lane where "based on" stands: which presets, and that their mix is saved as no preset of its own.
 function _mixLine(host, mix) {
   const row = _el('div', 'mv3-cap-preset');
-  row.appendChild(_el('span', 'mv3-cap-based', 'mixed: ' + mix.map(e => presetName(e.preset) || 'a look').join(', ')));
-  row.title = 'Every page wears one of these, at random - Shift on a tile adds a preset or takes it away, a tile without Shift is one preset again';
+  row.appendChild(_el('span', 'mv3-cap-based', T.t('mixed: {names}', { names: mix.map(e => _presetShown(e.preset) || T.tc('caption', 'a look')).join(', ') })));
+  row.title = T.t('Every page wears one of these, at random - Shift on a tile adds a preset or takes it away, a tile without Shift is one preset again');
   host.appendChild(row);
 }
 
@@ -1150,12 +1199,12 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     const edited = _entryEdited(e);
     const head = _el('button', 'mv3-cap-sec' + (open ? ' is-open' : ''));
     head.type = 'button';
-    head.title = open ? 'Fold it' : 'The look of these pages - font, colors, the spoken word, outline, shadow, box';
+    head.title = open ? T.t('Fold it') : T.t('The look of these pages - font, colors, the spoken word, outline, shadow, box');
     const c = _el('span', 'mv3-cap-sec-c');
     c.appendChild(iconEl(open ? 'chevron-down' : 'chevron-right', 14));   // Lucide's chevrons
     head.appendChild(c);
-    head.appendChild(_el('span', 'mv3-cap-sec-n', presetName(e.preset) || 'a look'));
-    head.appendChild(setFigures(_el('span', 'mv3-cap-sec-k'), n + (n === 1 ? ' page' : ' pages') + (edited ? ' · edited' : '')));
+    head.appendChild(_el('span', 'mv3-cap-sec-n', _presetShown(e.preset) || T.tc('caption', 'a look')));
+    head.appendChild(setFigures(_el('span', 'mv3-cap-sec-k'), T.tn(n, '{n} page', '{n} pages') + (edited ? ' · ' + T.t('edited') : '')));
     head.addEventListener('click', () => { if (_openSec.has(key)) _openSec.delete(key); else _openSec.add(key); render(); });
     host.appendChild(head);
     if (!open) return;
@@ -1170,7 +1219,7 @@ function _mixSections(host, track, raw, mix, fmt, marks) {
     };
     if (edited) {
       const base = presetStyle(e.preset);
-      const b = C.button('Back to the preset', () => put(_lookEntry(base), true), { title: 'Takes away what was changed in this look' });
+      const b = C.button(T.t('Back to the preset'), () => put(_lookEntry(base), true), { title: T.t('Takes away what was changed in this look') });
       body.appendChild(C.row('', b));
     }
     _lookRows(body, stK, setK, { fmt, textLane: false, motion: false, marks, setBehind: (v) => setK(_behind(v, stK)) });
@@ -1190,13 +1239,13 @@ function _capHead(host, title, sub) {
 // a look made from no preset has no row.
 function _presetLine(host, style, back, editedAny) {
   const id = style && style.preset;
-  const name = id ? presetName(id) : '';
+  const name = id ? _presetShown(id) : '';
   if (!name) return;
   const row = _el('div', 'mv3-cap-preset');
   const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
-  row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
+  row.appendChild(_el('span', 'mv3-cap-based', T.t('based on {name}', { name }) + (edited ? ' · ' + T.t('edited') : '')));
   if (edited) {
-    const b = C.button('Back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
+    const b = C.button(T.t('Back to the preset'), back, { title: T.t('Takes away what was changed since {name} was applied', { name }) });
     row.appendChild(b);
   }
   host.appendChild(row);
@@ -1205,7 +1254,7 @@ function _presetLine(host, style, back, editedAny) {
 // The tiles are always beside the settings when there is room - the presets are what the view is for. Only a
 // window too narrow for them says so.
 function _presetsHint(host) {
-  if (_narrow()) host.appendChild(C.hint('The window is too narrow for the presets and the text beside these settings - make it wider.', true));
+  if (_narrow()) host.appendChild(C.hint(T.t('The window is too narrow for the presets and the text beside these settings - make it wider.'), true));
 }
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
@@ -1214,29 +1263,32 @@ function _presetsHint(host) {
 // (_lookRows), which each of them has its own of.
 // In groups: Look · Motion · Place - after a line's own Text.
 function _styleRows(host, st, set, o) {
-  _lookRows(_group(host, 'look', 'Look'), st, set, o);
-  _motionRows(_group(host, 'motion', 'Motion'), st, set, o);
-  _placeRows(_group(host, 'place', 'Place'), st, set, o);
+  _lookRows(_group(host, 'look', T.tc('group', 'Look')), st, set, o);
+  _motionRows(_group(host, 'motion', T.tc('group', 'Motion')), st, set, o);
+  _placeRows(_group(host, 'place', T.t('Place')), st, set, o);
 }
 
 function _placeRows(host, st, set, o) {
-  host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
+  host.appendChild(C.row(T.t('Where'), C.select(POS, st.pos, (v) => set({ pos: v }))));
   // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
   // thing after the format changes, which a number of pixels would not. ±80%: a page dragged
   // on the preview anywhere on the frame is still on the slider.
   const side = +st.tx || 0;
-  const across = Math.abs(side) < 0.005 ? '' : (side < 0 ? 'left ' : 'right ') + Math.abs(Math.round(side * 100)) + '%';
+  const by = Math.abs(Math.round(side * 100));
+  const across = Math.abs(side) < 0.005 ? '' : side < 0 ? T.t('left {n}%', { n: by }) : T.t('right {n}%', { n: by });
   // Across, it is moved on the preview only; here it is said, and taken back to the middle.
-  const centre = C.button('Center', () => set({ tx: 0 }), {
-    title: across ? 'Moved ' + across + ' on the preview - back to the middle across' : 'In the middle across - drag it on the preview to move it sideways',
+  const centre = C.button(T.t('Center'), () => set({ tx: 0 }), {
+    title: across ? T.t('Moved {by} on the preview - back to the middle across', { by: across })
+      : T.t('In the middle across - drag it on the preview to move it sideways'),
   });
   centre.disabled = !across;
   const sideBox = _el('span', 'mv3-c-marks');
   if (across) sideBox.appendChild(_el('span', 'mv3-c-num', across));
   sideBox.appendChild(centre);
-  host.appendChild(C.row('Nudge', C.pair(C.slider({
+  host.appendChild(C.row(T.t('Nudge'), C.pair(C.slider({
     min: -0.80, max: 0.80, step: 0.01, value: +st.ty || 0,
-    fmt: (v) => (Math.abs(v) < 0.005 ? 'none' : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '%'),
+    fmt: (v) => (Math.abs(v) < 0.005 ? T.t('none')
+      : v > 0 ? T.t('down {n}%', { n: Math.abs(Math.round(v * 100)) }) : T.t('up {n}%', { n: Math.abs(Math.round(v * 100)) })),
     onChange: (v) => set({ ty: v }),
   }), sideBox)));
   // Under a platform's buttons or text: said, never refused - on the preview in red.
@@ -1244,11 +1296,11 @@ function _placeRows(host, st, set, o) {
   // SIZE IS THE FORMAT'S until it is touched (a lane's): "auto" while nobody has chosen. Up to 200, as a
   // style allows - presets go to 170, and a slider stopping at 120 would write 120 over them.
   const autoS = !!o.autoS;
-  const size = C.slider({ min: 20, max: 200, step: 1, value: st.size, fmt: (v) => v + (autoS ? ' (auto)' : ''),
+  const size = C.slider({ min: 20, max: 200, step: 1, value: st.size, fmt: (v) => (autoS ? T.t('{n} (auto)', { n: v }) : String(v)),
     onChange: (v) => set({ size: v, sizeAuto: false }) });
-  host.appendChild(C.row('Size', o.autoS === undefined ? size : C.pair(size,
-    C.toggleNamed('Auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
-      'Let the format choose the size'))));
+  host.appendChild(C.row(T.t('Size'), o.autoS === undefined ? size : C.pair(size,
+    C.toggleNamed(T.t('Auto'), autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
+      T.t('Let the format choose the size')))));
 }
 
 function _lookRows(host, st, set, o) {
@@ -1258,58 +1310,58 @@ function _lookRows(host, st, set, o) {
   const dealt = !!o.laneFonts;
   const fontSel = C.select(FONTS, dealt ? (st.fitTo || st.font) : st.font, (v) => set(dealt ? { font: v, fonts: [] } : { font: v }));
   const marks = [];
-  if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold', 'bold'));
-  marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), 'Italic', 'italic'));
+  if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), T.t('Bold'), 'bold'));
+  marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), T.t('Italic'), 'italic'));
   const markBox = _el('span', 'mv3-c-marks');
   for (const m of marks) markBox.appendChild(m);
-  host.appendChild(C.row('Font', C.pair(fontSel, markBox)));
+  host.appendChild(C.row(T.t('Font'), C.pair(fontSel, markBox)));
   const twin = fontOf(st.font).twin;
-  if (twin) host.appendChild(C.hint(fontOf(st.font).label + ' has no Russian letters - a line with them is drawn in ' + twin + '.'));
-  host.appendChild(C.row('Casing', C.select(CASINGS, st.casing, (v) => set({ casing: v }))));
-  host.appendChild(C.row('Color', C.color(st.primary, (v) => set({ primary: v }))));
+  if (twin) host.appendChild(C.hint(T.t('{font} has no Russian letters - a line with them is drawn in {twin}.', { font: fontOf(st.font).label, twin })));
+  host.appendChild(C.row(T.t('Casing'), C.select(CASINGS, st.casing, (v) => set({ casing: v }))));
+  host.appendChild(C.row(T.t('Color'), C.color(st.primary, (v) => set({ primary: v }))));
   // What the spoken word does - and the color it is done in.
-  host.appendChild(C.row('Spoken', C.select(EFFECTS, st.effect, (v) => set({ effect: v }))));
+  host.appendChild(C.row(T.t('Spoken'), C.select(EFFECTS, st.effect, (v) => set({ effect: v }))));
   if (['color', 'box', 'pop', 'bounce'].includes(st.effect)) {
-    host.appendChild(C.row('Its color', C.color(st.highlight, (v) => set({ highlight: v }))));
+    host.appendChild(C.row(T.t('Its color'), C.color(st.highlight, (v) => set({ highlight: v }))));
   } else if (st.effect === 'karaoke' || st.effect === 'sweep') {
-    host.appendChild(C.row('Not yet', C.color(st.secondary, (v) => set({ secondary: v }))));
+    host.appendChild(C.row(T.t('Not yet'), C.color(st.secondary, (v) => set({ secondary: v }))));
   }
   // A WORD MADE TO STAND OUT wears this color for its whole page. Shown where a line has one, or once
   // it was set by hand; "auto" is the spoken word's color - or, where that is the text's own (23 presets),
   // yellow, red or blue, whichever stands out (style.js markedColour).
   if (o.marks || st.marked) {
-    host.appendChild(C.row('Marked', C.pair(
+    host.appendChild(C.row(T.t('Marked'), C.pair(
       C.color(markedColour(st), (v) => set({ marked: v })),
-      C.toggleNamed('Auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
-        'The color that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
+      C.toggleNamed(T.t('Auto'), !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
+        T.t('The color that stands out from this style: the spoken word\'s, or yellow, red or blue')))));
   }
   // A typed line of the subtitle lane plays the spoken word by its letters; a text lane holds titles.
   if (o.textLane && st.effect !== 'none') {
-    host.appendChild(C.hint('A text lane has no spoken word - it plays on the Subtitles lane.'));
+    host.appendChild(C.hint(T.t('A text lane has no spoken word - it plays on the Subtitles lane.')));
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  host.appendChild(C.row('Outline', C.pair(
+  host.appendChild(C.row(T.t('Outline'), C.pair(
     C.slider({ min: 0, max: 10, step: 0.5, value: +st.outline || 0,
-               fmt: (v) => (v > 0 ? v + ' px' : 'none'), onChange: (v) => set({ outline: v }) }),
+               fmt: (v) => (v > 0 ? v + ' px' : T.t('none')), onChange: (v) => set({ outline: v }) }),
     C.color(st.outlineColor, (v) => set({ outlineColor: v })),
   )));
-  host.appendChild(C.row('Shadow', C.pair(
+  host.appendChild(C.row(T.t('Shadow'), C.pair(
     C.slider({ min: 0, max: 10, step: 0.5, value: +st.shadow || 0,
-               fmt: (v) => (v > 0 ? v + ' px' : 'none'), onChange: (v) => set({ shadow: v }) }),
+               fmt: (v) => (v > 0 ? v + ' px' : T.t('none')), onChange: (v) => set({ shadow: v }) }),
     C.color(st.shadowColor, (v) => set({ shadowColor: v })),
   )));
   if ((+st.shadow || 0) > 0) {
-    host.appendChild(C.row('Its opacity', C.slider({ min: 0, max: 1, step: 0.05, value: st.shadowAlpha == null ? 0.75 : +st.shadowAlpha,
+    host.appendChild(C.row(T.t('Its opacity'), C.slider({ min: 0, max: 1, step: 0.05, value: st.shadowAlpha == null ? 0.75 : +st.shadowAlpha,
       fmt: C.pct, onChange: (v) => set({ shadowAlpha: v }) })));
   }
   // A box given an opacity only where it would be invisible - never the shown one's copied over another's
   // (a band would write the first line's opacity into every line).
   const plate = o.textLane && st.plate && st.plate !== 'none' ? st.plate : '';
-  host.appendChild(C.row('Behind', C.select(o.textLane ? BEHIND_TEXT : BEHIND, plate || st.borderStyle,
+  host.appendChild(C.row(T.t('Behind'), C.select(o.textLane ? BEHIND_TEXT : BEHIND, plate || st.borderStyle,
     (v) => (o.setBehind ? o.setBehind(v) : set(_behind(v, st))))));
   if (plate || st.borderStyle === 'box' || st.borderStyle === 'boxline') {
-    host.appendChild(C.row('Box', C.pair(
+    host.appendChild(C.row(T.t('Box'), C.pair(
       C.slider({ min: 0, max: 1, step: 0.05, value: +st.backAlpha || 0, fmt: C.pct,
                  onChange: (v) => set({ backAlpha: v }) }),
       C.color(st.backColor, (v) => set({ backColor: v })),
@@ -1318,13 +1370,13 @@ function _lookRows(host, st, set, o) {
   if (!o.textLane) return;
   // A tag's stripe and a typewriter's cursor are the accent (`highlight` - a text lane has no spoken word).
   if (plate === 'tag' || st.enter === 'typewriter' || st.leave === 'backspace') {
-    host.appendChild(C.row('Accent', C.color(st.highlight, (v) => set({ highlight: v }))));
+    host.appendChild(C.row(T.t('Accent'), C.color(st.highlight, (v) => set({ highlight: v }))));
   }
-  host.appendChild(C.row('Tilt', C.slider({ min: -15, max: 15, step: 0.5, value: +st.tilt || 0,
+  host.appendChild(C.row(T.t('Tilt'), C.slider({ min: -15, max: 15, step: 0.5, value: +st.tilt || 0,
     // Counter-clockwise is positive, as libass turns.
-    fmt: (v) => (Math.abs(v) < 0.05 ? 'none' : (v > 0 ? '↺ ' : '↻ ') + Math.abs(v) + '°'), onChange: (v) => set({ tilt: v }) })));
-  host.appendChild(C.row('Glow', C.pair(
-    C.slider({ min: 0, max: 10, step: 0.5, value: +st.glow || 0, fmt: (v) => (v > 0 ? String(v) : 'none'), onChange: (v) => set({ glow: v }) }),
+    fmt: (v) => (Math.abs(v) < 0.05 ? T.t('none') : (v > 0 ? '↺ ' : '↻ ') + Math.abs(v) + '°'), onChange: (v) => set({ tilt: v }) })));
+  host.appendChild(C.row(T.t('Glow'), C.pair(
+    C.slider({ min: 0, max: 10, step: 0.5, value: +st.glow || 0, fmt: (v) => (v > 0 ? String(v) : T.t('none')), onChange: (v) => set({ glow: v }) }),
     C.color(st.glowColor || st.primary, (v) => set({ glowColor: v })),
   )));
 }
@@ -1334,15 +1386,15 @@ function _lookRows(host, st, set, o) {
 function _motionRows(host, st, set, o, anims) {
   if (!o.textLane) { _pageMotionRows(host, st, set, anims); return; }
   const enter = st.enter && st.enter !== 'none' ? st.enter : (APPEAR_AS[st.appear] || 'none');
-  host.appendChild(C.row('In', C.select(ENTER_OPTS, enter, (v) => set({ enter: v, appear: 'none' }))));
+  host.appendChild(C.row(T.t('In'), C.select(ENTER_OPTS, enter, (v) => set({ enter: v, appear: 'none' }))));
   if (enter !== 'none') {
-    host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.enterDur || 0.5, fmt: _secs,
+    host.appendChild(C.row(T.t('Its length'), C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.enterDur || 0.5, fmt: _secs,
       onChange: (v) => set({ enterDur: v }) })));
   }
   const leave = st.leave || 'none';
-  host.appendChild(C.row('Out', C.select(LEAVE_OPTS, leave, (v) => set({ leave: v }))));
+  host.appendChild(C.row(T.t('Out'), C.select(LEAVE_OPTS, leave, (v) => set({ leave: v }))));
   if (leave !== 'none') {
-    host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
+    host.appendChild(C.row(T.t('Its length'), C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
       onChange: (v) => set({ leaveDur: v }) })));
   }
 }
@@ -1352,27 +1404,26 @@ function _motionRows(host, st, set, o, anims) {
 // With several animations dealt (`anims`): a side the pairs do not share says "mixed", and choosing one puts it on every pair -
 // the other side stays dealt.
 // TWO ROWS: the lane's (captions/style.js `rows`) - one undo step; one row is no field.
-const ROWS_OPTS = [['1', 'One'], ['2', 'Two']];
+const ROWS_OPTS = [['1', T.tc('rows', 'One')], ['2', T.tc('rows', 'Two')]];
 function _rowsRow(host, raw, set) {
   const sel = C.select(ROWS_OPTS, rowsOn(raw) ? '2' : '1', (v) => set({ rows: v === '2' ? 2 : undefined }));
-  sel.title = 'Two: a page is whole while its words are spoken - its In before the first word, its Out after its end, '
-    + 'at least 0.8 s - and every other page stands in a second row, so the next one does not flash in its place';
-  host.appendChild(C.row('Rows', sel));
+  sel.title = T.t('Two: a page is whole while its words are spoken - its In before the first word, its Out after its end, at least 0.8 s - and every other page stands in a second row, so the next one does not flash in its place');
+  host.appendChild(C.row(T.t('Rows'), sel));
 }
 
 function _pageMotionRows(host, st, set, anims) {
   if (anims) {
     const side = (k) => [...new Set(anims.map(p => pairOf(p)[k]))];
     const ins = side('enter'), outs = side('leave');
-    const mixed = (n) => [['', 'mixed · ' + n]];
-    host.appendChild(C.row('In', C.select(ins.length > 1 ? mixed(ins.length).concat(PAGE_IN) : PAGE_IN, ins.length > 1 ? '' : ins[0],
+    const mixed = (n) => [['', T.t('mixed · {n}', { n })]];
+    host.appendChild(C.row(T.t('In'), C.select(ins.length > 1 ? mixed(ins.length).concat(PAGE_IN) : PAGE_IN, ins.length > 1 ? '' : ins[0],
       (v) => { if (v) set({ anims: anims.map(p => v + '|' + pairOf(p).leave) }); })));
-    host.appendChild(C.row('Out', C.select(outs.length > 1 ? mixed(outs.length).concat(PAGE_OUT) : PAGE_OUT, outs.length > 1 ? '' : outs[0],
+    host.appendChild(C.row(T.t('Out'), C.select(outs.length > 1 ? mixed(outs.length).concat(PAGE_OUT) : PAGE_OUT, outs.length > 1 ? '' : outs[0],
       (v) => { if (v) set({ anims: anims.map(p => pairOf(p).enter + '|' + v) }); })));
     return;
   }
-  host.appendChild(C.row('In', C.select(PAGE_IN, shownEnter(st) || 'at-once', (v) => set({ enter: v }))));
-  host.appendChild(C.row('Out', C.select(PAGE_OUT, PAGE_LEAVES.includes(st.leave) ? st.leave : 'none', (v) => set({ leave: v }))));
+  host.appendChild(C.row(T.t('In'), C.select(PAGE_IN, shownEnter(st) || 'at-once', (v) => set({ enter: v }))));
+  host.appendChild(C.row(T.t('Out'), C.select(PAGE_OUT, PAGE_LEAVES.includes(st.leave) ? st.leave : 'none', (v) => set({ leave: v }))));
 }
 
 // WHAT A PLATFORM'S SCREEN COVERS (a mark, nothing refused or moved): with
@@ -1395,8 +1446,12 @@ function _crossHint(host, items) {
   }
   if (!n) return;
   const many = items.length > 1;
-  const h = C.hint((many ? n + (n === 1 ? ' page crosses' : ' pages cross') : 'This page crosses') + ' the '
-    + Platforms.nameOf(id) + ' ' + [...groups].join(' / ') + ' - outlined in red on the preview; drag it clear, or leave it.');
+  // The groups are platforms.js's words, said in the interface's language there.
+  const said = { platform: Platforms.nameOf(id), what: [...groups].join(' / ') };
+  const h = C.hint(many
+    ? T.tn(n, '{n} page crosses the {platform} {what} - outlined in red on the preview; drag it clear, or leave it.',
+      '{n} pages cross the {platform} {what} - outlined in red on the preview; drag it clear, or leave it.', said)
+    : T.t('This page crosses the {platform} {what} - outlined in red on the preview; drag it clear, or leave it.', said));
   h.classList.add('is-warn');
   host.appendChild(h);
 }
@@ -1407,9 +1462,11 @@ function _renderCaptions(host, items) {
   const tl = Store.timeline();
   const fmt = (tl && tl.format) || '9:16';
   const ids = items.map(x => x.clip.id);
-  const lanes = [...new Set(items.map(x => x.track.name || x.track.kind))];
+  const lanes = [...new Set(items.map(x => _laneName(x.track)))];
   _kind = 'lines';
-  _capHead(host, items.length + ' lines', 'on ' + lanes.join(' and '));
+  // On one lane of words or two.
+  _capHead(host, T.tn(items.length, '{n} caption line', '{n} caption lines'), lanes.length > 1
+    ? T.t('on {a} and {b}', { a: lanes[0], b: lanes.slice(1).join(', ') }) : T.t('on {lane}', { lane: lanes[0] || '' }));
   const first = items[0];
   // "based on" only when EVERY picked line wears the same preset - one line's preset put on the others by
   // "back to the preset" would replace theirs; edited when any of them is.
@@ -1431,12 +1488,12 @@ function _renderCaptions(host, items) {
   _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
     pages: () => items });
   if (items.some(x => x.clip.style)) {
-    _actRow(host, C.button('Back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
-      { title: 'These lines wear their lane\'s style again' }));
+    _actRow(host, C.button(T.t('Back to the lane\'s style'), () => setCapStyleB(ids, null, { cut: true }),
+      { title: T.t('These lines wear their lane\'s style again') }));
   }
   _presetsHint(host);
-  _removeRow(host, C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
-    { danger: true, title: 'Also on the Delete key' }));
+  _removeRow(host, C.button(T.tn(items.length, 'Delete {n} line', 'Delete {n} lines'), () => deleteMultiB(),
+    { danger: true, title: T.t('Also on the Delete key') }));
   // The pair they all wear is lit; a press puts one on each.
   const pairs = new Set(items.map(x => pairNow(styleOf(x.track, fmt, x.clip))));
   return { preset: common, edited: anyEdited, apply: wear,
@@ -1455,9 +1512,9 @@ function _blankCaption(host, track, clip) {
   // What a lane's mix dealt it is not a style of its own: its own is what is left.
   const own = !!withoutRefs(clip.style);
   const drawn = styleOf(track, fmt, clip);
-  const dealt = track.kind === 'subs' && !!mixOf(track.style) && !own && drawn.preset ? presetName(drawn.preset) : '';
+  const dealt = track.kind === 'subs' && !!mixOf(track.style) && !own && drawn.preset ? _presetShown(drawn.preset) : '';
   // "Line · Subtitles" in the strip's head
-  _capHead(host, 'Line · ' + _cap1(track.name || track.kind), own ? 'its own style' : dealt);
+  _capHead(host, T.t('Line · {lane}', { lane: _cap1(_laneName(track)) }), own ? T.t('its own style') : dealt);
   // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
   // A text preset keeps where the line is now.
   const wear = (id, cut) => {
@@ -1467,22 +1524,25 @@ function _blankCaption(host, track, clip) {
   _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true));
   const heardLine = isHeard(clip);
   // its words - the group Text; then Look · Motion · Place
-  const tx = _group(host, 'text', 'Text');
+  const tx = _group(host, 'text', T.t('Text'));
   const area = C.textarea(clip.name || '', (v) => {
     // NEVER THE OLD TEXT OVER A NEWER ONE: the box writes the WHOLE text, and the line may have
     // changed after the box was painted - a word corrected just before the box was clicked, a lay. Then what
     // was typed is not written over it, and is said in the note to be put in again.
     const cur = _captionName(track.id, clip.id);
     if (cur == null) {
-      if (v !== area.__painted) note(area, 'That line is not on the lane any more - your text was not written.', 'You typed: «' + v + '»');
+      if (v !== area.__painted) note(area, T.t('That line is not on the lane any more - your text was not written.'), T.t('You typed: «{text}»', { text: v }));
       return;
     }
     if (cur !== area.__painted) {
-      if (v !== area.__painted) note(area, 'The line changed meanwhile - your text was not written over it.', 'It reads now: «' + cur + '». You typed: «' + v + '»');
+      if (v !== area.__painted) {
+        note(area, T.t('The line changed meanwhile - your text was not written over it.'),
+          T.t('It reads now: «{now}». You typed: «{text}»', { now: cur, text: v }));
+      }
       return;
     }
     const r = setCapTextB(track.id, clip.id, v);
-    if (r && r.why) note(area, 'The text was not changed.', r.why);
+    if (r && r.why) note(area, T.t('The text was not changed.'), r.why);
   }, 3);
   area.maxLength = 400;
   area.__painted = clip.name || '';
@@ -1509,30 +1569,30 @@ function _blankCaption(host, track, clip) {
     }
   });
   tx.appendChild(area);
-  tx.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
-    + 'stays up.'));
+  tx.appendChild(C.hint(T.t('Drag the caption to move it, and its edges to change how long it stays up.')));
 
   if (heardLine) {
     // A HEARD LINE KEEPS ITS TIMING WHEN IT IS REWRITTEN: the words that stay keep their moments, new
     // ones share the time of what they replace (words.js) - and each word can be changed by itself.
     const fixed = correctedCount(clip);
-    tx.appendChild(_fact('Timed', clip.words.length + ' words' + (fixed ? ' · ' + fixed + ' corrected' : '')));
+    tx.appendChild(_fact(T.t('Timed'), T.tn(clip.words.length, '{n} word', '{n} words')
+      + (fixed ? ' · ' + T.t('{n} corrected', { n: fixed }) : '')));
     if (spells(clip.words, clip.name)) {
       WordEdit.paint(tx, track, clip, { mark: markedColour(styleOf(track, fmt, clip)) });
       // Corrections can make a line more than a page of its lane holds; a correction never cuts by itself.
       const over = isCorrected(clip) ? overPage(clip, track.style, fmt) : null;
       if (over) {
-        tx.appendChild(C.hint('Longer than a page of this lane: ' + over + '.'));
-        tx.appendChild(C.row('', C.button('Re-cut this line', () => recutLinesB(track.id, [clip.id]),
-          { title: 'Cuts this line into pages by the lane\'s rules, keeping its words and corrections' })));
+        tx.appendChild(C.hint(T.t('Longer than a page of this lane: {why}.', { why: over })));
+        tx.appendChild(C.row('', C.button(T.t('Re-cut this line'), () => recutLinesB(track.id, [clip.id]),
+          { title: T.t('Cuts this line into pages by the lane\'s rules, keeping its words and corrections') })));
       }
     } else {
       // Rewritten and not timed: its words still say what was heard, and it is drawn as one piece until timed.
-      tx.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
-      tx.appendChild(C.row('', C.button('Time the text', () => {
+      tx.appendChild(C.hint(T.t('The text was changed by hand; its words still say: {words}', { words: textOf(clip.words) })));
+      tx.appendChild(C.row('', C.button(T.t('Time the text'), () => {
         const r = setCapTextB(track.id, clip.id, clip.name || '');
-        if (r && r.why) note(area, 'Not timed.', r.why);
-      }, { title: 'Gives the words of the text the moments of the words heard there' })));
+        if (r && r.why) note(area, T.t('Not timed.'), r.why);
+      }, { title: T.t('Gives the words of the text the moments of the words heard there') })));
     }
   }
   // Arrived by Tab from the last word of the line before, on a line with no chips (typed, or rewritten and not
@@ -1548,12 +1608,12 @@ function _blankCaption(host, track, clip) {
     { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
       pages: () => [{ track, clip }] });
   if (own) {
-    _actRow(host, C.button('Back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
-      { title: 'This line wears its lane\'s style again' }));
+    _actRow(host, C.button(T.t('Back to the lane\'s style'), () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
+      { title: T.t('This line wears its lane\'s style again') }));
   }
   _presetsHint(host);
-  _removeRow(host, C.button('Remove this line', () => removeB(track.id, clip.id), {
-    danger: true, title: 'Takes the caption off the lane',
+  _removeRow(host, C.button(T.t('Remove this line'), () => removeB(track.id, clip.id), {
+    danger: true, title: T.t('Takes the caption off the lane'),
   }));
   // ITS tiles lit: the preset it is drawn with - its own, the one its lane's mix dealt it, or its lane's.
   const s = own ? clip.style : null;
@@ -1575,7 +1635,7 @@ function _ownFonts(clips) {
 function _renderBlankTrack(host, track) {
   // Its name in the strip's head ("Main video"); its folded groups kept per kind of lane.
   _kind = 'lane-' + track.kind + (track.main ? '-main' : '');
-  _title = _cap1(track.name || track.kind);
+  _title = _cap1(_laneName(track));
   if (track.kind === 'video') return _blankVideoTrack(host, track);
   if (track.kind === 'audio') return _blankAudioTrack(host, track);
   if (track.kind === 'subs' || track.kind === 'text') return _blankWordsTrack(host, track);
@@ -1590,17 +1650,18 @@ function _renderBlankClip(host, { track, clip }) {
   // What it is and its name in the strip's head; its folded groups kept per kind of clip.
   const words = track.kind === 'subs' || track.kind === 'text';
   _kind = words ? 'line' : track.kind === 'audio' ? 'sound' : still ? 'picture' : 'clip';
-  _title = (track.kind === 'audio' ? 'Sound' : still ? 'Picture' : 'Clip') + ' · ' + (clip.name || 'untitled');
+  const name = clip.name || T.t('untitled');
+  _title = track.kind === 'audio' ? T.t('Sound · {name}', { name }) : still ? T.t('Picture · {name}', { name }) : T.t('Clip · {name}', { name });
 
   // Its file was deleted from the library: said first, with the way to be rid of it - and the way to
   // replace it, which is a tile from the Library let go on the clip.
   if (Store.isGone(clip)) {
     const g = _el('div', 'mv3-ins-gone');
-    g.appendChild(_el('b', null, 'The file of this clip was deleted from the library'));
-    g.appendChild(_el('span', null, 'Let a tile from the Library go on the red clip to replace it - from the same second, at its own length - or remove it.'));
+    g.appendChild(_el('b', null, T.t('The file of this clip was deleted from the library')));
+    g.appendChild(_el('span', null, T.t('Let a tile from the Library go on the red clip to replace it - from the same second, at its own length - or remove it.')));
     host.appendChild(g);
-    host.appendChild(C.row('', C.button('Remove', () => removeB(track.id, clip.id),
-      { danger: true, title: track.kind === 'video' && pair ? 'Its sound goes with it' : 'Take it off the timeline' })));
+    host.appendChild(C.row('', C.button(T.t('Remove'), () => removeB(track.id, clip.id),
+      { danger: true, title: track.kind === 'video' && pair ? T.t('Its sound goes with it') : T.t('Take it off the timeline') })));
     host.appendChild(_el('div', 'mv3-c-sep'));
   }
 
@@ -1613,7 +1674,7 @@ function _renderBlankClip(host, { track, clip }) {
 function _renderMany(host, n) {
   // "5 clips" in the strip's head; their rows in the groups Sound · Picture (Frame's rows in it)
   _kind = 'many';
-  _title = n + ' clips';
+  _title = T.tn(n, '{n} clip', '{n} clips');
 
   const picked = pickedB();
   // Their sound - the audio lanes' clips and the sound of the films among them - shifted and faded at once.
@@ -1622,14 +1683,20 @@ function _renderMany(host, n) {
   // The video clips among them - every video lane - seen as much as one another: one slider, one step.
   const videos = picked.filter(x => x.track.kind === 'video');
   if (videos.length) {
-    const pic = _group(host, 'picture', 'Picture');
+    const pic = _group(host, 'picture', T.t('Picture'));
     _opacityRow(pic, videos);
-    if (videos.length < n) pic.appendChild(C.hint('Opacity is for the ' + videos.length + ' picked clips of the video lanes.'));
+    if (videos.length < n) {
+      pic.appendChild(C.hint(T.tn(videos.length, 'Opacity is for the {n} picked clip of the video lanes.',
+        'Opacity is for the {n} picked clips of the video lanes.')));
+    }
     // The blend mode - for those of lanes above main.
     const above = videos.filter(x => !isMainVideo(x.track));
     if (above.length) {
       _blendRow(pic, above);
-      if (above.length < videos.length) pic.appendChild(C.hint('Blend is for the ' + above.length + ' picked clips above main video.'));
+      if (above.length < videos.length) {
+        pic.appendChild(C.hint(T.tn(above.length, 'Blend is for the {n} picked clip above main video.',
+          'Blend is for the {n} picked clips above main video.')));
+      }
     }
     // Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once. In Picture,
     // under a line.
@@ -1637,7 +1704,10 @@ function _renderMany(host, n) {
     if (mains.length) {
       const fr = pic;
       _bsep(fr);
-      if (mains.length < n) fr.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
+      if (mains.length < n) {
+        fr.appendChild(C.hint(T.tn(mains.length, 'The crop and the PiP below are for the {n} picked clip of main video.',
+          'The crop and the PiP below are for the {n} picked clips of main video.')));
+      }
       // One crop frame for all of them.
       cropRows(fr, mains);
       if (mains.some(x => x.clip.pip)) { _bsep(fr); _pipSection(fr, mains); }
@@ -1647,20 +1717,22 @@ function _renderMany(host, n) {
     // Their effects - a tile puts the effect on each of them, as on each one alone.
     const fxable = videos.filter(x => !x.clip.halfer);
     if (fxable.length) {
-      const g = _group(host, 'effects', 'Effects');
-      if (fxable.length < n) g.appendChild(C.hint('Effects are for the ' + fxable.length + ' picked clips of the video lanes.'));
+      const g = _group(host, 'effects', T.t('Effects'));
+      if (fxable.length < n) {
+        g.appendChild(C.hint(T.tn(fxable.length, 'Effects are for the {n} picked clip of the video lanes.',
+          'Effects are for the {n} picked clips of the video lanes.')));
+      }
       fxManyRows(g, fxable);
     }
   } else if (!sounds.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
-    p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
-                  + 'What can be done to all of them is remove them.';
+    p.textContent = T.t('Settings are per clip, so there is nothing here to set for several at once. What can be done to all of them is remove them.');
     host.appendChild(p);
   }
 
-  _removeRow(host, C.button('Delete ' + n + ' clips', () => deleteMultiB(),
-    { danger: true, title: 'Also on the Delete key' }));
+  _removeRow(host, C.button(T.tn(n, 'Delete {n} clip', 'Delete {n} clips'), () => deleteMultiB(),
+    { danger: true, title: T.t('Also on the Delete key') }));
 }
 
 // What the strip is about, as a key: the clip, the lane, the clips picked together - or nothing.

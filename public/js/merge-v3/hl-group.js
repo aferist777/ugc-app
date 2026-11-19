@@ -55,6 +55,8 @@ import { showError } from '../notice.js';
 // The buttons over the timeline: "+" and "‹" as Lucide's icons, N in mono.
 import { iconEl } from '../icons.js';
 import { figures } from '../num.js';
+import { moodName } from './hl-music.js';
+import * as T from '../i18n/t.js';
 
 let _A = null;             // what highlights.js lends: { pid, rec, ticked, openN, load, say, whole, tiles(host) }
 let _own = '';              // a fragment opened from its row with its OWN Subtitles picked - its key
@@ -70,7 +72,7 @@ const _enc = encodeURIComponent;
 async function _post(url, body) {
   let r = null, d = null;
   try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); d = await r.json(); } catch (e) { d = null; }
-  if (!r || !d || !d.success) throw new Error((d && d.error) || 'The app did not answer - try again in a moment.');
+  if (!r || !d || !d.success) throw new Error((d && d.error) || T.t('The app did not answer - try again in a moment.'));
   return d;
 }
 
@@ -145,7 +147,7 @@ function _subsPatch(patch, said) {
  * rest by the server, the latest list only while one is on its way (a tick after a tick sends both).
  */
 async function _patternsAll(next) {
-  if (_busy && _busy !== 'pattern') { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy && _busy !== 'pattern') { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   const { open, rest } = _split();
   if (open) setPatterns(next);
   if (!rest.length) { Views.altChanged(); return; }
@@ -180,9 +182,11 @@ function _videoOf(f) {
 }
 // A fragment's frame as the switch says it: 'kind' while it is the app's, its one mode, or 'mixed'.
 const _frameState = (v) => (!v.was ? 'kind' : v.modes.length === 1 ? v.modes[0] : 'mixed');
-const FRAME_WORDS = Object.fromEntries([['kind', 'By the kind'], ...FRAMINGS, ['mixed', 'Mixed'], ['active', 'By the kind']]);
+// The words in the app's language (FRAMINGS says its own so).
+const FRAME_WORDS = Object.fromEntries([['kind', T.t('By the kind')], ...FRAMINGS, ['mixed', T.t('Mixed')], ['active', T.t('By the kind')]]);
+const _frameWord = (k) => FRAME_WORDS[k] || k;
 function _videoAll(patch) {
-  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy) { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   _forAll('video', () => {
     const lane = mainVideo();
     if (!lane) return;
@@ -197,7 +201,7 @@ function _videoAll(patch) {
   }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/video', { ns, ...patch }));
 }
 async function _framingAll(mode) {
-  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy) { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   const { list, open } = _split();
   _busy = 'video';
   Views.altChanged();
@@ -208,8 +212,8 @@ async function _framingAll(mode) {
       const items = Object.entries(d.open).map(([id, ch]) => ({ trackId: lane.id, clipId: id, patch: { frame: ch.frame || null, frameWas: ch.frameWas || null } }));
       if (items.length) setClipsFields(items);
     }
-    _A.say(d.missed ? d.missed + (d.missed === 1 ? ' fragment kept its frame: ' : ' fragments kept their frame: ') + d.why
-      : 'framed: ' + (FRAME_WORDS[mode] || mode).toLowerCase(), !!d.missed);
+    _A.say(d.missed ? T.tn(d.missed, '{n} fragment kept its frame: {why}', '{n} fragments kept their frame: {why}', { why: d.why })
+      : T.t('framed: {how}', { how: _frameWord(mode).toLowerCase() }), !!d.missed);
   } catch (e) { _A.say(e.message, true); }
   _busy = '';
   await _A.load();
@@ -223,7 +227,8 @@ async function _framingAll(mode) {
 // fragments' main video read for it; the open one written by the page (one undo step), the rest by the server (POST /fx, `add`). ✕ on
 // a kind takes it off all of them.
 let _fxWait = null;         // { k, i, n, frac } while the faces of the ticked are found
-const _fxName = (k) => (String(k).startsWith('set:') ? ((SETS[String(k).slice(4)] || {}).name || 'The set') : ((EFFECTS[k] || {}).name || 'The effect'));
+// The effects' names are the table's, in the app's language already.
+const _fxName = (k) => (String(k).startsWith('set:') ? ((SETS[String(k).slice(4)] || {}).name || T.t('The set')) : ((EFFECTS[k] || {}).name || T.t('The effect')));
 /** The kinds of effects a ticked fragment's main video has: the open one's from its timeline, the others' as the server read them. */
 function _fxKindsOf(f) {
   if (f.n === _A.openN()) { const set = new Set(); for (const c of _mainOpen()) for (const e of (c.fx || [])) set.add(e.k); return [...set]; }
@@ -236,7 +241,7 @@ async function _mainOf(f, open) {
   return d && d.success && d.found !== false && d.timeline ? ((d.timeline.tracks || []).find((t) => t && t.kind === 'video' && t.main) || null) : null;
 }
 async function _fxAll(k) {
-  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy) { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   const { list, open } = _split();
   _busy = 'fx';
   _fxWait = null;
@@ -247,7 +252,7 @@ async function _fxAll(k) {
       const lane = await _mainOf(f, open);
       if (lane) for (const w of laneEffects(lane.clips, k)) work.push({ f, track: lane, clip: w.clip, made: w.made });
     }
-    if (!work.length) throw new Error('Their main video has nothing to put it on.');
+    if (!work.length) throw new Error(T.t('Their main video has nothing to put it on.'));
     await facesFor(work, (i, n, frac) => { _fxWait = { k: work[0].made[0].k, i, n, frac }; Views.altChanged(); });
     _fxWait = null;
     // The open one by the page (one undo step) - its clips as they are now.
@@ -264,13 +269,13 @@ async function _fxAll(k) {
     for (const w of work) { if (w.f === open) continue; (add[w.f.n] = add[w.f.n] || {})[w.clip.id] = w.made; }
     if (Object.keys(add).length) await _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { add });
     const nf = new Set(work.map((w) => w.f.n)).size;
-    _A.say(_fxName(k) + ' is on ' + nf + (nf === 1 ? ' fragment' : ' fragments'));
+    _A.say(T.tn(nf, '{name} is on {n} fragment', '{name} is on {n} fragments', { name: _fxName(k) }));
   } catch (e) { _A.say(e.message, true); } finally { _busy = ''; _fxWait = null; }
   await _A.load();
   Views.altChanged();
 }
 function _fxOff(k) {
-  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy) { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   _forAll('fx', () => {
     const lane = mainVideo();
     if (!lane) return;
@@ -279,12 +284,12 @@ function _fxOff(k) {
       return { trackId: lane.id, clipId: c.id, patch: { fx: left.length ? left : null } };
     });
     if (items.length) setClipsFields(items);
-  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { ns, remove: k }), _fxName(k) + ' is off them');
+  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/fx', { ns, remove: k }), T.t('{name} is off them', { name: _fxName(k) }));
 }
 
 // ── Main audio's pitch for all the ticked - the open one by the page, the rest by the server (the part changed).
 function _pitchAll(fn, part) {
-  if (_busy) { _A.say('A moment - the last change is still being put on them.', true); return; }
+  if (_busy) { _A.say(T.t('A moment - the last change is still being put on them.'), true); return; }
   _forAll('speech', () => {
     const a1 = _openA1();
     if (!a1) return;
@@ -303,7 +308,7 @@ function _titleAll(on) {
       const text = topTitleOf(open, { whole: _A.whole(), language: (rec && rec.agent && rec.agent.language) || '' });
       Store.mutate((tl) => { putTitle(tl, text, open.length || open.seconds, () => 'ht' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)); });
     } else Store.mutate((tl) => { dropTitle(tl); });
-  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/title-on-top', { ns, on: !!on }), on ? 'the title is on top of them' : 'the title is off them');
+  }, (ns) => _post('/api/highlights/' + _enc(_A.pid()) + '/title-on-top', { ns, on: !!on }), on ? T.t('the title is on top of them') : T.t('the title is off them'));
 }
 
 /** A lane's volume - 'speech' (main audio) or 'music' - for all the ticked, or for one (`only`). */
@@ -344,7 +349,7 @@ async function _musicOne(f, how) {
   try {
     const d = await _post('/api/highlights/' + _enc(_A.pid()) + '/fragments/' + f.n + '/music', { how, taken, open });
     if (open) _layOpenMusic(d.clips || []);
-    _A.say(d.music ? '«' + f.title + '»: ' + d.music.title : '«' + f.title + '»: no music');
+    _A.say(d.music ? '«' + f.title + '»: ' + d.music.title : T.t('«{name}»: no music', { name: f.title }));
   } catch (e) { _A.say(e.message, true); }
   _busy = '';
   await _A.load();
@@ -355,13 +360,14 @@ async function _musicOne(f, how) {
 async function _musicAll(none) {
   if (_busy) return;
   const { list, open } = _split();
-  if (!none && !_dealMoods.length) { _A.say('choose a mood or more first', true); return; }
+  if (!none && !_dealMoods.length) { _A.say(T.t('choose a mood or more first'), true); return; }
   _busy = 'music';
   Views.altChanged();
   try {
     const d = await _post('/api/highlights/' + _enc(_A.pid()) + '/music', { ns: list.map((f) => f.n), ...(none ? { none: true } : { moods: _dealMoods.slice() }), open: open ? open.n : 0 });
     if (d.open) _layOpenMusic(d.open.clips || []);
-    _A.say((none ? 'no music on ' : 'music dealt again to ') + d.n + ' fragments' + (d.missed ? ' - ' + d.missed + ' could not be laid' : ''), !!d.missed);
+    const what = none ? T.tn(d.n, 'no music on {n} fragment', 'no music on {n} fragments') : T.tn(d.n, 'music dealt again to {n} fragment', 'music dealt again to {n} fragments');
+    _A.say(d.missed ? T.t('{what} - {n} could not be laid', { what, n: d.missed }) : what, !!d.missed);
   } catch (e) { _A.say(e.message, true); }
   _busy = '';
   await _A.load();
@@ -381,7 +387,7 @@ async function _readMoods() {
   } catch (e) {
     // Not read is not "no moods": the strip says "did not load" with Try again.
     _moodsAsk = 'failed';
-    showError('Music → highlights could not be read', { detail: (e && e.message) || '' });
+    showError(T.t('Music → highlights could not be read'), { detail: (e && e.message) || '' });
   }
   Views.altChanged();
 }
@@ -389,13 +395,19 @@ async function _readMoods() {
 // ── Painting ────────────────────────────────────────────────────────────────
 // The strip's head takes this title (inspector.js _paintHead, `data-strip-title`).
 function _head(host, what, n) {
-  const h = _el('div', 'mv3-ins-title', what + ' · for all ' + n);
+  const h = _el('div', 'mv3-ins-title', T.t('{what} · for all {n}', { what, n }));
   h.dataset.stripTitle = '1';
   host.appendChild(h);
 }
 // a section title in sentence case
-function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', 'Each fragment')); }
-const _wordsSaid = (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine('9:16') + ')');
+function _each(host) { host.appendChild(_el('div', 'mv3-c-sep')); host.appendChild(_el('div', 'mv3-hlg-each', T.t('Each fragment'))); }
+const _wordsSaid = (v) => (v > 0 ? T.t('up to {n}', { n: v }) : T.t('auto (up to {n})', { n: autoWordsPerLine('9:16') }));
+// Where a page stands, as the Where slider says it: its anchor alone, or up / down from it.
+function _whereSaid(v, pos) {
+  if (Math.abs(v) < 0.005) return T.tc('pos', pos);
+  const o = { pct: Math.abs(Math.round(v * 100)), pos: T.tc('from', pos) };
+  return v > 0 ? T.t('down {pct}% from {pos}', o) : T.t('up {pct}% from {pos}', o);
+}
 
 /**
  * The Subtitles block - the top of the captions of several (highlights.js captionsAlt) and of the Subtitles lane's name pressed.
@@ -406,44 +418,43 @@ export function renderSubs(host, target) {
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
   box.dataset.hlGroup = 'subs';
   host.appendChild(box);
-  _head(box, 'Subtitles', list.length);
+  _head(box, T.t('Subtitles'), list.length);
   const subs = list.map(_subsOf).filter(Boolean);
   const ref = (list.find((f) => f.n === _A.openN()) && _subsOf(list.find((f) => f.n === _A.openN()))) || subs[0] || {};
   const mixed = (k) => !_same(subs.map((s) => s[k]));
   // Where: up and down from its anchor, as the one lane's Nudge - and «example» dragged on the preview.
   const pos = POSITIONS.includes(ref.pos) ? ref.pos : 'bottom';
-  box.appendChild(C.row('Where', C.slider({
+  box.appendChild(C.row(T.t('Where'), C.slider({
     min: -0.80, max: 0.80, step: 0.01, value: +ref.ty || 0, mixed: mixed('ty') || mixed('pos'),
-    fmt: (v) => (Math.abs(v) < 0.005 ? pos : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '% from ' + pos),
+    fmt: (v) => _whereSaid(v, pos),
     onChange: (v) => _subsPatch({ place: { pos, ty: v } }),
   })));
   // Size: one number for all, or the format's.
   const autoS = subs.length > 0 && subs.every((s) => s.sizeAuto);
   const size = C.slider({ min: 20, max: 200, step: 1, value: +ref.size || 60, mixed: mixed('size') || mixed('sizeAuto'),
-    fmt: (v) => v + (autoS ? ' (auto)' : ''), onChange: (v) => _subsPatch({ size: v }) });
-  box.appendChild(C.row('Size', C.pair(size, C.toggleNamed('Auto', autoS, (on) => _subsPatch({ size: on ? 'auto' : (+ref.size || 60) }),
-    'Let the format choose the size'))));
-  box.appendChild(C.row('Words', C.slider({ min: 0, max: 12, step: 1, value: +ref.wordsPerLine || 0, mixed: mixed('wordsPerLine'),
+    fmt: (v) => (autoS ? T.t('{n} (auto)', { n: v }) : String(v)), onChange: (v) => _subsPatch({ size: v }) });
+  box.appendChild(C.row(T.t('Size'), C.pair(size, C.toggleNamed(T.t('Auto'), autoS, (on) => _subsPatch({ size: on ? 'auto' : (+ref.size || 60) }),
+    T.t('Let the format choose the size')))));
+  box.appendChild(C.row(T.t('Words'), C.slider({ min: 0, max: 12, step: 1, value: +ref.wordsPerLine || 0, mixed: mixed('wordsPerLine'),
     fmt: _wordsSaid, onChange: (v) => _subsPatch({ wordsPerLine: v }) })));
   const lines = Math.max(1, Math.min(3, Math.round(+ref.lines || 2)));
-  const LINES = [['1', 'One'], ['2', 'Two']].concat(subs.some((s) => +s.lines === 3) ? [['3', 'Three']] : []);
+  const LINES = [['1', T.t('One')], ['2', T.t('Two')]].concat(subs.some((s) => +s.lines === 3) ? [['3', T.t('Three')]] : []);
   const ls = C.select(LINES, String(lines), (v) => _subsPatch({ lines: +v }));
-  if (mixed('lines')) ls.title = 'Not the same on all of them now - a choice gives them one';
-  box.appendChild(C.row('Lines', ls));
+  if (mixed('lines')) ls.title = T.t('Not the same on all of them now - a choice gives them one');
+  box.appendChild(C.row(T.tc('page', 'Lines'), ls));
   // Two rows for all of them - each page whole while it is spoken, every other one in a second row.
-  const rows = C.select([['1', 'One'], ['2', 'Two']], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
-  if (mixed('rows')) rows.title = 'Not the same on all of them now - a choice gives them one';
-  box.appendChild(C.row('Rows', rows));
+  const rows = C.select([['1', T.tc('rows', 'One')], ['2', T.tc('rows', 'Two')]], String(ref.rows === 2 ? 2 : 1), (v) => _subsPatch({ rows: +v }));
+  if (mixed('rows')) rows.title = T.t('Not the same on all of them now - a choice gives them one');
+  box.appendChild(C.row(T.t('Rows'), rows));
   // The title on top.
   const titled = list.filter(_titled).length;
-  const tOn = C.button('On', () => _titleAll(true), { title: 'Its headline at the top for the first three seconds - on every ticked fragment' });
-  const tOff = C.button('Off', () => _titleAll(false), { title: 'The title on top taken off every ticked fragment' });
+  const tOn = C.button(T.tc('title', 'On'), () => _titleAll(true), { title: T.t('Its headline at the top for the first three seconds - on every ticked fragment') });
+  const tOff = C.button(T.tc('title', 'Off'), () => _titleAll(false), { title: T.t('The title on top taken off every ticked fragment') });
   tOn.classList.toggle('is-on', titled === list.length);
   tOff.classList.toggle('is-on', titled === 0);
-  box.appendChild(C.row('Title on top', C.pair(tOn, C.pair(tOff, titled && titled < list.length ? _el('span', 'mv3-c-num', titled + ' of ' + list.length) : null))));
-  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'subs' ? 'Putting it on them…'
-    : 'Drag «example» on the preview up or down - let go, and all of them are there. A place set here stays when a preset is pressed; '
-      + 'the size, the words and the lines are the preset\'s. Lines with a place of their own stay where they are.'));
+  box.appendChild(C.row(T.t('Title on top'), C.pair(tOn, C.pair(tOff, titled && titled < list.length ? _el('span', 'mv3-c-num', T.t('{k} of {n}', { k: titled, n: list.length })) : null))));
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'subs' ? T.t('Putting it on them…')
+    : T.t('Drag «example» on the preview up or down - let go, and all of them are there. A place set here stays when a preset is pressed; the size, the words and the lines are the preset\'s. Lines with a place of their own stay where they are.')));
   // The tiles' tabs, as the captions of several have them (highlights.js).
   const out = target(box);
   // Each fragment.
@@ -454,9 +465,11 @@ export function renderSubs(host, target) {
     const c = f.n === _A.openN() ? _A.capOpen() : f.cap;
     const li = _el('li', 'mv3-hlg-item');
     li.appendChild(_el('span', 'mv3-hlg-name', f.title));
-    li.appendChild(_el('span', 'mv3-hlg-what', (c && c.name ? c.name + (c.edited ? ' (edited)' : '') : 'a style of its own')
-      + (s.own ? ' · ' + s.own + (s.own === 1 ? ' line in its own place' : ' lines in their own place') : '')));
-    li.title = 'Open «' + f.title + '» with its own Subtitles - all of its settings';
+    // A preset's name (the server says the others' in English) shown in the app's language.
+    const style = c && c.name ? (c.edited ? T.t('{name} (edited)', { name: T.t(c.name) }) : T.t(c.name)) : T.t('a style of its own');
+    li.appendChild(_el('span', 'mv3-hlg-what', style
+      + (s.own ? ' · ' + T.tn(s.own, '{n} line in its own place', '{n} lines in their own place') : '')));
+    li.title = T.t('Open «{name}» with its own Subtitles - all of its settings', { name: f.title });
     li.addEventListener('click', () => _openOwn(f, 'subs'));
     ul.appendChild(li);
   }
@@ -472,7 +485,7 @@ function renderVideo(host) {
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
   box.dataset.hlGroup = 'video';
   host.appendChild(box);
-  _head(box, 'Main video', list.length);
+  _head(box, T.t('Main video'), list.length);
   const vids = list.map(_videoOf);
   // Colour - each slider one value for all of them, "mixed" while they differ; the other sliders stay each clip's.
   for (const k of COLOR_KEYS) {
@@ -488,36 +501,36 @@ function renderVideo(host) {
   // The frame - "By the kind" while it is the app's, back to it from any other.
   const states = vids.map(_frameState);
   const now = states.every((s) => s === states[0]) ? states[0] : 'mixed';
-  const opts = [['kind', 'By the kind'], ...FRAMINGS];
-  if (now === 'mixed') opts.unshift(['mixed', 'Mixed']);
+  const opts = [['kind', T.t('By the kind')], ...FRAMINGS];
+  if (now === 'mixed') opts.unshift(['mixed', T.t('Mixed')]);
   const sel = C.select(opts, now, (v) => { if (v !== 'mixed' && v !== now) _framingAll(v); });
   sel.disabled = !!_busy;
-  sel.title = 'Every clip of main video of every ticked fragment. By the kind - the frame the app gave it (the speaker, the most active, a lecture\u2019s shots)';
-  box.appendChild(C.row('Framing', sel));
+  sel.title = T.t('Every clip of main video of every ticked fragment. By the kind - the frame the app gave it (the speaker, the most active, a lecture\u2019s shots)');
+  box.appendChild(C.row(T.t('Framing'), sel));
   const zooms = vids.reduce((s, v) => s + v.zooms, 0);
   if (zooms) {
     const off = vids.reduce((s, v) => s + v.zoomOff, 0);
     const sw = C.toggle(off === 0, (on) => _videoAll({ zoom: on }));
-    sw.title = off && off < zooms ? 'Mixed - on for some of them' : 'The punch-ins on the key lines';
-    box.appendChild(C.row('Punch-ins', sw));
+    sw.title = off && off < zooms ? T.t('Mixed - on for some of them') : T.t('The punch-ins on the key lines');
+    box.appendChild(C.row(T.t('Punch-ins'), sw));
   }
-  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'video' ? 'Putting it on them…'
-    : 'Into every clip of main video of every ticked fragment. Following a face uses the faces counted when they were cut.'));
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'video' ? T.t('Putting it on them…')
+    : T.t('Into every clip of main video of every ticked fragment. Following a face uses the faces counted when they were cut.')));
   box.appendChild(_el('div', 'mv3-c-sep'));
   renderPatterns(box, {
     list: () => patternsOf(), write: (next) => { _patternsAll(next); }, repaint: () => Views.altChanged(),
-    note: _busy === 'pattern' ? 'Putting them on them…' : 'Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.',
+    note: _busy === 'pattern' ? T.t('Putting them on them…') : T.t('Over the whole of main video, under the words. A change puts this list - every pattern and its settings - on every ticked fragment.'),
   });
   // Its effects - a tile on all of them.
   box.appendChild(_el('div', 'mv3-c-sep'));
-  box.appendChild(_el('div', 'mv3-hlg-each', 'Effects'));
+  box.appendChild(_el('div', 'mv3-hlg-each', T.t('Effects')));
   const counts = new Map();
   for (const f of list) for (const k of _fxKindsOf(f)) counts.set(k, (counts.get(k) || 0) + 1);
   fxGroupRows(box, {
     n: list.length, kinds: [...counts], off: (k) => _fxOff(k), wait: _fxWait,
     press: (k) => _fxAll(k),
-    note: _busy === 'fx' ? (_fxWait ? '' : 'Putting it on them…')
-      : 'A tile puts the effect on every ticked fragment: a moment at its start, one that goes on over the whole fragment. Its settings are each fragment\u2019s own - open one to change them.',
+    note: _busy === 'fx' ? (_fxWait ? '' : T.t('Putting it on them…'))
+      : T.t('A tile puts the effect on every ticked fragment: a moment at its start, one that goes on over the whole fragment. Its settings are each fragment\u2019s own - open one to change them.'),
   });
   _each(box);
   const ul = _el('ul', 'mv3-hlg-list');
@@ -526,10 +539,10 @@ function renderVideo(host) {
     const li = _el('li', 'mv3-hlg-item');
     li.appendChild(_el('span', 'mv3-hlg-name', f.title));
     const fxs = _fxKindsOf(f).map((k) => (EFFECTS[k] || {}).name).filter(Boolean);
-    li.appendChild(_el('span', 'mv3-hlg-what', (FRAME_WORDS[states[i]] || states[i]).toLowerCase()
-      + ' · ' + (mine.length ? mine.map((p) => patternName(p.src)).join(', ') : 'no pattern')
+    li.appendChild(_el('span', 'mv3-hlg-what', _frameWord(states[i]).toLowerCase()
+      + ' · ' + (mine.length ? mine.map((p) => patternName(p.src)).join(', ') : T.t('no pattern'))
       + (fxs.length ? ' · ' + fxs.join(', ') : '')));
-    li.title = 'Open «' + f.title + '» with its own main video';
+    li.title = T.t('Open «{name}» with its own main video', { name: f.title });
     li.addEventListener('click', () => _openOwn(f, 'main'));
     ul.appendChild(li);
   });
@@ -541,16 +554,16 @@ function renderSpeech(host) {
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
   box.dataset.hlGroup = 'speech';
   host.appendChild(box);
-  _head(box, 'Main audio', list.length);
+  _head(box, T.t('Main audio'), list.length);
   const vol = (f) => (f.n === _A.openN() ? ((_openA1() || {}).volume != null ? +_openA1().volume : 1) : ((f.lanes && f.lanes.speech && f.lanes.speech.volume) != null ? +f.lanes.speech.volume : 1));
   const vols = list.map(vol);
-  box.appendChild(C.row('Volume', _mixedVolume(vols, (v) => _volume('speech', v))));
+  box.appendChild(C.row(T.t('Volume'), _mixedVolume(vols, (v) => _volume('speech', v))));
   // One pitch of the speech for all of them - "Mixed" while it differs; the music stays as it is.
   const pitches = list.flatMap((f) => (f.n === _A.openN()
     ? (((_openA1() || {}).clips) || []).filter((c) => c && c.src).map((c) => pitchOf(c))
     : ((f.lanes && f.lanes.speech && f.lanes.speech.pitches) || [])));
   pitchRows(box, pitches, _pitchAll);
-  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'speech' ? 'Putting it on them…' : 'The speech of every ticked fragment - its music stays as it is.'));
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'speech' ? T.t('Putting it on them…') : T.t('The speech of every ticked fragment - its music stays as it is.')));
   _each(box);
   for (const f of list) box.appendChild(C.row(f.title, C.volume(vol(f), (v) => _volume('speech', v, f))));
 }
@@ -560,21 +573,21 @@ function renderMusic(host) {
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
   box.dataset.hlGroup = 'music';
   host.appendChild(box);
-  _head(box, 'Music', list.length);
+  _head(box, T.t('Music'), list.length);
   const lane = (f) => (f.n === _A.openN() ? openMusicLane() : null);
   const vol = (f) => {
     if (f.n === _A.openN()) { const l = lane(f); return l && l.volume != null ? +l.volume : 1; }
     return f.lanes && f.lanes.music && f.lanes.music.volume != null ? +f.lanes.music.volume : 1;
   };
-  box.appendChild(C.row('Volume', _mixedVolume(list.map(vol), (v) => _volume('music', v))));
+  box.appendChild(C.row(T.t('Volume'), _mixedVolume(list.map(vol), (v) => _volume('music', v))));
   // Deal again: the moods as chips, then the press.
   if (!_moods && _moodsAsk === 'failed') {
-    box.appendChild(failedEl('Music → highlights', () => { _moodsAsk = ''; _readMoods(); Views.altChanged(); }, { line: true }));
-  } else if (!_moods) { _readMoods(); box.appendChild(loadingEl('reading Music → highlights…', { line: true })); }
+    box.appendChild(failedEl(T.t('Music → highlights'), () => { _moodsAsk = ''; _readMoods(); Views.altChanged(); }, { line: true }));
+  } else if (!_moods) { _readMoods(); box.appendChild(loadingEl(T.t('reading Music → highlights…'), { line: true })); }
   else {
     const chips = _el('div', 'mv3-hlp-chips mv3-hlg-moods');
     for (const m of _moods) {
-      const b = _el('button', 'mv3-hlp-chip u-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), m.label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (_dealMoods.includes(m.id) ? ' is-on' : ''), moodName(m.id, m.label));
       b.type = 'button';
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + m.n));
       b.disabled = !m.n;
@@ -584,12 +597,12 @@ function renderMusic(host) {
       });
       chips.appendChild(b);
     }
-    box.appendChild(_el('div', 'mv3-hlg-sub', 'Moods'));
+    box.appendChild(_el('div', 'mv3-hlg-sub', T.t('Moods')));
     box.appendChild(chips);
-    const deal = C.button(_busy === 'music' ? 'dealing…' : 'deal again', () => _musicAll(false),
-      { title: 'Each ticked fragment a new track of these moods - none twice while there are tracks' });
+    const deal = C.button(_busy === 'music' ? T.t('dealing…') : T.t('deal again'), () => _musicAll(false),
+      { title: T.t('Each ticked fragment a new track of these moods - none twice while there are tracks') });
     deal.disabled = !!_busy || !_dealMoods.length;
-    const none = C.button('no music', () => _musicAll(true), { title: 'The music taken off every ticked fragment - what you put there yourself stays' });
+    const none = C.button(T.t('no music'), () => _musicAll(true), { title: T.t('The music taken off every ticked fragment - what you put there yourself stays') });
     none.disabled = !!_busy;
     box.appendChild(C.row('', C.pair(deal, none)));
   }
@@ -604,12 +617,14 @@ const _openFrag = () => {
   const n = _A ? _A.openN() : 0;
   return n > 0 ? ((rec && rec.fragments) || []).find((x) => x.n === n && x.state === 'ready' && !x.deletedAt && x.key) || null : null;
 };
+// A track's mood as the record names it (its id), in the app's language.
+const _moodShown = (id) => moodName(id, id);
 function _trackChoice(f) {
   const m = f.music;
-  const opts = [['', m ? m.title + (m.mood ? ' · ' + m.mood : '') : 'no music']];
-  if (m) opts.push(['another', 'another track of ' + (m.mood || 'its tracks')]);
-  for (const x of (_moods || [])) if (x.n) opts.push(['mood:' + x.id, 'a track of ' + x.label]);
-  if (m) opts.push(['none', 'no music']);
+  const opts = [['', m ? m.title + (m.mood ? ' · ' + _moodShown(m.mood) : '') : T.t('no music')]];
+  if (m) opts.push(['another', m.mood === 'yours' ? T.t('another track of yours') : m.mood ? T.t('another track of {mood}', { mood: _moodShown(m.mood) }) : T.t('another track of its tracks')]);
+  for (const x of (_moods || [])) if (x.n) opts.push(['mood:' + x.id, x.id === 'yours' ? T.t('a track of yours') : T.t('a track of {mood}', { mood: moodName(x.id, x.label) })]);
+  if (m) opts.push(['none', T.t('no music')]);
   const sel = C.select(opts, '', (v) => {
     sel.value = '';
     if (!v) return;
@@ -624,10 +639,10 @@ function renderOneMusic(host) {
   if (!f) return;
   if (!_moods) _readMoods();
   const box = _el('div', 'mv3-hlg' + (_busy ? ' is-busy' : ''));
-  box.appendChild(_el('div', 'mv3-ins-title', 'Music of this fragment'));
-  box.appendChild(C.row('Track', _trackChoice(f)));
-  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'music' ? 'Laying the track…'
-    : 'Another of the standard tracks of Music → highlights - it goes in place of this one, at -12 dB. What you put on this lane yourself stays.'));
+  box.appendChild(_el('div', 'mv3-ins-title', T.t('Music of this fragment')));
+  box.appendChild(C.row(T.t('Track'), _trackChoice(f)));
+  box.appendChild(_el('p', 'mv3-ins-note', _busy === 'music' ? T.t('Laying the track…')
+    : T.t('Another of the standard tracks of Music → highlights - it goes in place of this one, at -12 dB. What you put on this lane yourself stays.')));
   box.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(box);
 }
@@ -670,7 +685,7 @@ export function pickMusic() {
   if (!lane) {
     let id = '';
     Store.mutate((tl) => { const l = newBedLane(tl.tracks); id = l ? l.id : ''; });
-    if (!id) { _A.say('four audio lanes is the limit', true); return; }
+    if (!id) { _A.say(T.t('four audio lanes is the limit'), true); return; }
     lane = { id };
   }
   selectTrackById(lane.id);
@@ -708,9 +723,11 @@ function _sampleTl(over) {
   const per = +style.wordsPerLine > 0 ? +style.wordsPerLine : autoWordsPerLine(fmt);
   const n = per * Math.max(1, Math.min(3, Math.round(+style.lines || 2)));
   // Cut by the very rule a page is cut by (pages.js): as many as fit in its lines at its size - the page a real one can be.
-  const said = Array.from({ length: n }, (_, i) => ({ text: 'example', start: i * 0.3, end: i * 0.3 + 0.25 }));
+  // Only the preview draws it - the word is the app's language.
+  const word = T.t('example');
+  const said = Array.from({ length: n }, (_, i) => ({ text: word, start: i * 0.3, end: i * 0.3 + 0.25 }));
   const first = (paginate(said, { lane: style, format: fmt })[0] || {}).words || [];
-  const words = (first.length ? first : said.slice(0, 1).map(() => ({ w: 'example' }))).map((w) => ({ w: w.w || 'example', s: 0, e: 0 }));
+  const words = (first.length ? first : said.slice(0, 1).map(() => ({ w: word }))).map((w) => ({ w: w.w || word, s: 0, e: 0 }));
   const clips = [{ id: 'hlg-sample', start: 0, dur: 36000, name: words.map((w) => w.w).join(' '), words, src: null }];
   // In two rows: a second page of the sample, where the second row stands - the two move together.
   if (rowsOn(style)) clips.push({ ...clips[0], id: 'hlg-sample2' });
@@ -758,10 +775,10 @@ function _panelPaint(tl) {
   _panel.dataset.sig = sig;
   _panel.textContent = '';
   // ONE FORM: the four as wide as the widest, their words from the left, "+" of music Lucide's plus, N in mono
-  for (const [k, label, plus] of [['subs', 'Subtitles'], ['video', 'Main video'], ['speech', 'Main audio'], ['music', 'Music', !music]]) {
+  for (const [k, label, plus] of [['subs', T.t('Subtitles')], ['video', T.t('Main video')], ['speech', T.t('Main audio')], ['music', T.t('Music'), !music]]) {
     const b = _el('button', 'mv3-hlg-pbtn u-btn is-s' + (on === k ? ' is-on' : ''));
     if (plus) b.appendChild(iconEl('plus', 14));
-    b.appendChild(_el('span')).appendChild(figures(label + ' · for all ' + n));
+    b.appendChild(_el('span')).appendChild(figures(T.t('{what} · for all {n}', { what: label, n })));
     b.type = 'button';
     b.disabled = !!_busy;
     b.addEventListener('click', () => pickLane(k));
@@ -775,14 +792,14 @@ function _backPaint() {
   if (!_back || !head.contains(_back)) {
     _back = _el('button', 'u-btn is-s is-quiet mv3-hlg-back');
     _back.type = 'button';
-    _back.title = 'Back to the buttons of the ticked fragments';
+    _back.title = T.t('Back to the buttons of the ticked fragments');
     _back.addEventListener('click', () => { _own = ''; pickLane('subs'); _sync(); });
     const title = head.querySelector('.mv3-panel-title');
     if (title && title.nextSibling) head.insertBefore(_back, title.nextSibling); else head.appendChild(_back);
   }
   // Lucide's chevron in place of "‹", N in mono; 24 px in the head's 35, which does not grow
   _back.replaceChildren(iconEl('chevron-left', 14), _el('span'));
-  _back.lastChild.appendChild(figures('all ' + _A.ticked().length));
+  _back.lastChild.appendChild(figures(T.t('all {n}', { n: _A.ticked().length })));
 }
 let _panelWas = false;
 function _panelSync() {
@@ -824,7 +841,7 @@ export function initGroup(api) {
     render: (host, track) => {
       const k = _kindOf(track);
       // The project's own timeline: the first ticked opens, the lane picked there.
-      if (_A.openN() <= 0) { host.appendChild(_el('p', 'mv3-ins-note', 'Opening the first ticked fragment…')); _openFirst(k); return null; }
+      if (_A.openN() <= 0) { host.appendChild(_el('p', 'mv3-ins-note', T.t('Opening the first ticked fragment…'))); _openFirst(k); return null; }
       let out = null;
       if (k === 'subs') out = renderSubs(host, (box) => _A.tiles(box));
       else if (k === 'speech') renderSpeech(host);

@@ -25,6 +25,8 @@ import { isStillSrc, endOf } from '../timeline/rules.js';
 import { isHeard } from '../captions/heard.js';
 import { recutClips, recutWithLooks, lookOf, CUT_KEYS, timedWords } from '../captions/pages.js';
 import { isCorrected } from '../captions/words.js';
+// The interface's words (`t` is a timeline here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const SAVE_DEBOUNCE = 500;
 
@@ -101,17 +103,17 @@ export function markSaved(t) { _draft = false; if (t != null) _title = String(t)
  */
 export async function clearDraft() {
   const k = _key;
-  if (!k || !_draft) throw new Error('only the draft is cleared');
+  if (!k || !_draft) throw new Error(T.t('only the draft is cleared'));
   const d = await fetch('/api/mv3/blank').then(r => r.json());
   const tracks = d && d.success && d.timeline && d.timeline.tracks;
-  if (!Array.isArray(tracks)) throw new Error((d && d.error) || 'could not read a new timeline');
+  if (!Array.isArray(tracks)) throw new Error((d && d.error) || T.t('could not read a new timeline'));
   // Another project opened while the shape was on its way: nothing of it is cleared.
-  if (_key !== k || !_draft) throw new Error('the draft is not open any more');
+  if (_key !== k || !_draft) throw new Error(T.t('the draft is not open any more'));
   // Nothing on it and the lanes of a new timeline already: no step to undo.
   const have = (_timeline && _timeline.tracks) || [];
   const ids = (l) => l.map(x => (x && x.kind) + ':' + (x && x.id)).join(',');
   if (have.every(x => !((x && x.clips) || []).length) && ids(have) === ids(tracks)) return 'empty';
-  if (!mutate((t) => { t.tracks = clone(tracks); })) throw new Error(_status || 'not cleared');
+  if (!mutate((t) => { t.tracks = clone(tracks); })) throw new Error(_status || T.t('not cleared'));
   return 'cleared';
 }
 let _timer = null;
@@ -135,22 +137,23 @@ export function version() { return _version; }
 export function status() { return _status; }
 // WHAT KIND OF NEWS the status is. Red is for "an edit of yours is not on the server"; the server laying
 // its own cells - the fragments, the lines heard from the sound - is news, not a fault, and is said in a
-// quiet colour (bar.js). Kept as the texts themselves, so a new message is a warning unless listed here.
+// quiet colour (bar.js). Kept as the texts themselves - in the running language, as the status is said -, so a new message
+// is a warning unless listed here.
 const _INFO = new Set([
-  'Fragments re-laid - the reads and the clips of this script are on the timeline.',
-  'Captions laid from the sound.',
-  'The fragments were laid again - it will merge in when your edit saves.',
-  'The captions were laid from the sound - they merge in when your edit saves.',
-  'The fragments were laid again while you edited - your edit was kept and merged in.',
-  'The captions were laid from the sound while you edited - your edit was kept and merged in.',
+  T.t('Fragments re-laid - the reads and the clips of this script are on the timeline.'),
+  T.t('Captions laid from the sound.'),
+  T.t('The fragments were laid again - it will merge in when your edit saves.'),
+  T.t('The captions were laid from the sound - they merge in when your edit saves.'),
+  T.t('The fragments were laid again while you edited - your edit was kept and merged in.'),
+  T.t('The captions were laid from the sound while you edited - your edit was kept and merged in.'),
   // Video to Music's track laid under its clip by the server.
-  'Music laid under its clip.',
-  'The music was laid under its clip - it merges in when your edit saves.',
-  'The music was laid under its clip while you edited - your edit was kept and merged in.',
+  T.t('Music laid under its clip.'),
+  T.t('The music was laid under its clip - it merges in when your edit saves.'),
+  T.t('The music was laid under its clip while you edited - your edit was kept and merged in.'),
   // A voiceover's B-roll laid by its engine (lib/broll.js).
-  'B-roll laid on main video.',
-  'The B-roll was laid - it merges in when your edit saves.',
-  'The B-roll was laid while you edited - your edit was kept and merged in.',
+  T.t('B-roll laid on main video.'),
+  T.t('The B-roll was laid - it merges in when your edit saves.'),
+  T.t('The B-roll was laid while you edited - your edit was kept and merged in.'),
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
 // A REFUSAL OR A FAILURE - an edit refused (no project, a rule of the lanes) or
@@ -196,7 +199,7 @@ export function setAdv(a) { _adv = (a && typeof a === 'object') ? a : null; }
 // that is not this page (Home, the Library, the server).
 export async function listFull() {
   const d = await fetch('/api/mv3/timelines').then(r => r.json());
-  if (!d || !d.success) throw new Error((d && d.error) || 'could not list projects');
+  if (!d || !d.success) throw new Error((d && d.error) || T.t('could not list projects'));
   return { list: d.list || [] };
 }
 export async function list() { return (await listFull()).list; }
@@ -254,7 +257,7 @@ export async function load(k) {
     if (dr && dr.success && dr.key) return load(dr.key);
     // The draft could not be had: the empty timeline, nothing open - edits wait for a project.
     const d = await fetch('/api/mv3/blank').then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'could not read the blank timeline');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('could not read the blank timeline'));
     _timeline = d.timeline;
     _gone = new Set();
     _version = -1;
@@ -275,13 +278,13 @@ export async function load(k) {
   // A REMEMBERED project that is no longer there must not stop the page: it was deleted, or
   // the app was pointed at another library. Forget it and open empty.
   if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
-  if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
+  if (!d || !d.success) throw new Error((d && d.error) || T.t('could not read the timeline'));
   // A project that is not there any more - one deleted, an old Alerts link - opens the draft, not whichever
   // project the server would pick in its place. Its ?p= goes from the address first, or the draft's load would read it
   // straight back. So does the empty shape the server answers with when there is no timeline at all (`found`).
   if (d.key !== want || d.found === false) {
     // Never round and round: a draft that cannot be had a few times over is an error, not another try.
-    if (_misses++ > 2) { _misses = 0; throw new Error('the project could not be opened'); }
+    if (_misses++ > 2) { _misses = 0; throw new Error(T.t('the project could not be opened')); }
     try {
       const u = new URL(location.href);
       u.searchParams.delete('p');
@@ -562,7 +565,7 @@ export function mutate(fn, opts) {
   if (!_timeline || typeof fn !== 'function') return false;
   // With no project open the blank timeline is a prompt, not a workspace: there is nowhere to
   // save an edit to, so it is refused out loud instead of being accepted and then lost.
-  if (!_key) { _status = 'Choose a project first - there is nothing open to edit.'; _emit(); return false; }
+  if (!_key) { _status = T.t('Choose a project first - there is nothing open to edit.'); _emit(); return false; }
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
   // A change that changes nothing (a re-cut that comes out the same, a value set to itself) is no step to
@@ -591,7 +594,7 @@ export async function save(_merges = 0) {
   // during one save; a fourth is a server that refuses everything, and hammering it is worse
   // than stopping and saying so.
   if (_merges > 3) {
-    _status = 'The timeline kept changing while it saved - your edit is still here but not saved yet.';
+    _status = T.t('The timeline kept changing while it saved - your edit is still here but not saved yet.');
     _emit();
     return;
   }
@@ -620,10 +623,10 @@ export async function save(_merges = 0) {
       if (!untouched) {
         // The server laying its own cells is said as what it is (_serverOnly); any other change is merged in without a word -
         // there is no other device.
-        _status = (who && who.frag) ? 'The fragments were laid again while you edited - your edit was kept and merged in.'
-          : who && who.broll ? 'The B-roll was laid while you edited - your edit was kept and merged in.'
-          : who && who.laid && !who.heard ? 'The music was laid under its clip while you edited - your edit was kept and merged in.'
-          : who ? 'The captions were laid from the sound while you edited - your edit was kept and merged in.'
+        _status = (who && who.frag) ? T.t('The fragments were laid again while you edited - your edit was kept and merged in.')
+          : who && who.broll ? T.t('The B-roll was laid while you edited - your edit was kept and merged in.')
+          : who && who.laid && !who.heard ? T.t('The music was laid under its clip while you edited - your edit was kept and merged in.')
+          : who ? T.t('The captions were laid from the sound while you edited - your edit was kept and merged in.')
           : null;
       }
       _emit();
@@ -633,7 +636,7 @@ export async function save(_merges = 0) {
       // The project is not there any more - deleted while this edit waited (the server never makes one
       // from a save): nothing to save it into, and trying again would only be refused again.
       if (d.key === _key) _dirty = false;
-      _status = 'Not saved: this project is not there any more.';
+      _status = T.t('Not saved: this project is not there any more.');
     } else if (d && d.success) {
       // An edit that landed while this was in the air is newer than this answer. It stays
       // dirty so the next save carries it up, and the answer is NOT adopted into the live copy
@@ -661,11 +664,11 @@ export async function save(_merges = 0) {
       // otherwise wipe it at once.
       if (!(_merges > 0 && statusIsInfo())) _status = null;
     } else {
-      throw new Error((d && d.error) || 'save refused');
+      throw new Error((d && d.error) || T.t('save refused'));
     }
   } catch (e) {
     // Still dirty on purpose: the next mutate reschedules, so a blip does not lose work.
-    _status = 'Not saved: ' + e.message;
+    _status = T.t('Not saved: {why}', { why: e.message });
   } finally {
     _saving = false;
     _emit();
@@ -750,10 +753,10 @@ async function _checkRemote() {
   if (typing) _heldForTyping = true;
   if (_dirty || typing) {
     _status = !who ? null
-      : who.frag ? 'The fragments were laid again - it will merge in when your edit saves.'
-      : who.broll ? 'The B-roll was laid - it merges in when your edit saves.'
-      : who.laid && !who.heard ? 'The music was laid under its clip - it merges in when your edit saves.'
-      : 'The captions were laid from the sound - they merge in when your edit saves.';
+      : who.frag ? T.t('The fragments were laid again - it will merge in when your edit saves.')
+      : who.broll ? T.t('The B-roll was laid - it merges in when your edit saves.')
+      : who.laid && !who.heard ? T.t('The music was laid under its clip - it merges in when your edit saves.')
+      : T.t('The captions were laid from the sound - they merge in when your edit saves.');
     _emit();
     return;
   }
@@ -770,10 +773,10 @@ async function _checkRemote() {
   if (!undoable) _bindHistory();
   // A piece swapped by the person in the view "b-roll" (js/merge-v3/broll-view.js) comes in quietly.
   _status = !who || (Date.now() < _hushUntil && who.broll && !who.frag && !who.heard && !who.laid) ? null
-    : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
-    : who.broll ? 'B-roll laid on main video.'
-    : who.laid && !who.heard ? 'Music laid under its clip.'
-    : 'Captions laid from the sound.';
+    : who.frag ? T.t('Fragments re-laid - the reads and the clips of this script are on the timeline.')
+    : who.broll ? T.t('B-roll laid on main video.')
+    : who.laid && !who.heard ? T.t('Music laid under its clip.')
+    : T.t('Captions laid from the sound.');
   _emit();
 }
 

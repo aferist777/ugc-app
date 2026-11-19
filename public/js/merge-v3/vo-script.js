@@ -21,6 +21,7 @@ import { el } from './wk-maker.js';
 import { showError } from '../notice.js';
 // The list being read, empty, or not read - the shared parts.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
+import { t, tc, tn } from '../i18n/t.js';
 
 let _rows = null;             // the scenarios, read once per draft shown - null while not read
 let _counts = null;
@@ -40,18 +41,18 @@ export function paintChooser(host, project, adopt, o = {}) {
   const root = el('div', 'mv3-vos');
   host.appendChild(root);
   // What to do here is said by the tip of step 1 over this column (js/merge-v3/vo-tips.js).
-  root.appendChild(el('div', 'mv3-wk-fhint', o.hint || 'The script of this voiceover: a scenario, or your own text.'));
+  root.appendChild(el('div', 'mv3-wk-fhint', o.hint || t('The script of this voiceover: a scenario, or your own text.')));
 
   const top = el('div', 'mv3-vos-top');
-  const own = el('button', 'mv3-sc-new u-btn is-s', '+ Your text');
+  const own = el('button', 'mv3-sc-new u-btn is-s', t('+ Your text'));
   own.type = 'button';
-  own.title = o.talking ? 'Your own text, pasted or typed - every paragraph a line of the talking head'
-    : 'Your own text, pasted or typed in any language - the whole of it one line';
+  own.title = o.talking ? t('Your own text, pasted or typed - every paragraph a line of the talking head')
+    : t('Your own text, pasted or typed in any language - the whole of it one line');
   own.disabled = _busy;
   own.addEventListener('click', () => openOwnText(put, adopt, { talking: !!o.talking, ...(o.ownText ? o.ownText() : {}) }));
-  const add = el('button', 'mv3-sc-new u-btn is-s', '+ Scenario');
+  const add = el('button', 'mv3-sc-new u-btn is-s', t('+ Scenario'));
   add.type = 'button';
-  add.title = 'Write a new scenario - it is kept in the library, and "use" puts it here';
+  add.title = t('Write a new scenario - it is kept in the library, and "use" puts it here');
   add.disabled = _busy;
   add.addEventListener('click', () => _open(null, put, adopt, o));
   top.append(own, add);
@@ -59,7 +60,7 @@ export function paintChooser(host, project, adopt, o = {}) {
 
   const bar = el('div', 'mv3-vos-top');
   const cat = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-vos-cat');
-  cat.title = 'Which scenarios';
+  cat.title = t('Which scenarios');
   for (const c of _choices()) {
     const o = el('option', '', c.label + ' · ' + c.n);
     o.value = c.id;
@@ -69,7 +70,7 @@ export function paintChooser(host, project, adopt, o = {}) {
   cat.addEventListener('change', () => { _lib = cat.value; _rows = null; _load(adopt.repaint); });
   const search = el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
-  search.placeholder = 'search by title, product, role';
+  search.placeholder = t('search by title, product, role');
   search.value = _q;
   const list = el('div', 'mv3-sc-list mv3-vos-list');
   search.addEventListener('input', () => { _q = search.value; _paintRows(list, put, adopt, o); });
@@ -86,7 +87,7 @@ export async function clearScript(project, adopt) {
   if (_busy) return;
   _busy = true;
   try { adopt(await API.voiceoverScript(project.id, { clear: true })); }
-  catch (e) { showError('The script was not taken off: ' + e.message); }
+  catch (e) { showError(t('The script was not taken off: {why}', { why: e.message })); }
   _busy = false;
 }
 
@@ -101,16 +102,16 @@ async function _load(repaint) {
     _rows = [];
     // The reason a popup; the list says it did not load, with Try again.
     _state = 'failed';
-    showError('Could not read the scenarios: ' + e.message);
+    showError(t('Could not read the scenarios: {why}', { why: e.message }));
   }
   if (repaint) repaint();
 }
 
 function _choices() {
   const c = _counts || {};
-  const out = [{ id: '', label: 'All', n: c.all || 0 }, { id: 'library1', label: 'Saved', n: c.library1 || 0 }];
-  for (const s of (Array.isArray(c.sources) ? c.sources : [])) out.push({ id: 'src:' + s.id, label: String(s.title || 'untitled source'), n: s.n || 0 });
-  if (c.noSource) out.push({ id: 'nosrc', label: 'No source', n: c.noSource });
+  const out = [{ id: '', label: t('All'), n: c.all || 0 }, { id: 'library1', label: tc('scenarios', 'Saved'), n: c.library1 || 0 }];
+  for (const s of (Array.isArray(c.sources) ? c.sources : [])) out.push({ id: 'src:' + s.id, label: String(s.title || t('untitled source')), n: s.n || 0 });
+  if (c.noSource) out.push({ id: 'nosrc', label: t('No source'), n: c.noSource });
   if (_lib && !out.some(x => x.id === _lib)) _lib = '';
   return out;
 }
@@ -124,32 +125,32 @@ function _matches(s) {
 
 function _paintRows(list, put, adopt, o) {
   list.textContent = '';
-  if (_state === 'loading' || _rows === null) { list.appendChild(loadingEl('reading the scenarios…')); return; }
+  if (_state === 'loading' || _rows === null) { list.appendChild(loadingEl(t('reading the scenarios…'))); return; }
   if (_state) {
-    list.appendChild(failedEl('The scenarios', () => { _rows = null; _load(adopt.repaint); _paintRows(list, put, adopt, o); }));
+    list.appendChild(failedEl(t('The scenarios'), () => { _rows = null; _load(adopt.repaint); _paintRows(list, put, adopt, o); }));
     return;
   }
   const rows = _rows.filter(_matches);
   if (!rows.length) {
-    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.' : 'No scenarios here. Write one with "+ scenario", or use your own text.',
+    list.appendChild(emptyEl(_rows.length ? t('Nothing matches that.') : t('No scenarios here. Write one with "+ scenario", or use your own text.'),
       { icon: _rows.length ? 'search' : 'list' }));
     return;
   }
   for (const s of rows) {
     const row = el('div', 'mv3-sc-row' + (o.isOn && o.isOn(s) ? ' is-on' : ''));
-    row.title = 'Open the text';
+    row.title = t('Open the text');
     const acts = el('div', 'mv3-sc-acts');
-    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', 'Use');
+    const go = el('button', 'mv3-sc-btn is-use u-btn is-s', t('Use'));
     go.type = 'button';
-    go.title = o.put ? 'Take this scenario' : 'Put its lines into this voiceover';
+    go.title = o.put ? t('Take this scenario') : t('Put its lines into this voiceover');
     go.disabled = _busy;
     go.addEventListener('click', (e) => { e.stopPropagation(); _use(s, put, adopt, go); });
     acts.appendChild(go);
     row.appendChild(acts);
     const txt = el('div', 'mv3-sc-txt');
-    txt.appendChild(el('b', null, s.title || 'untitled'));
+    txt.appendChild(el('b', null, s.title || t('untitled')));
     const n = +s.lineCount || 0;
-    txt.appendChild(el('span', 'mv3-sc-meta', [n + (n === 1 ? ' line' : ' lines'), s.vertical, s.product,
+    txt.appendChild(el('span', 'mv3-sc-meta', [tn(n, '{n} line', '{n} lines'), s.vertical, s.product,
       String(s.updatedAt || s.createdAt || '').slice(0, 10)].filter(Boolean).join(' · ')));
     row.appendChild(txt);
     row.addEventListener('click', () => _open(s, put, adopt, o));
@@ -162,7 +163,7 @@ async function _use(s, put, adopt, btn) {
   _busy = true;
   if (btn) btn.textContent = '…';
   try { adopt(await put({ scenarioId: s.id }, s)); }
-  catch (e) { showError('Could not use it: ' + e.message); if (btn) btn.textContent = 'Use'; }
+  catch (e) { showError(t('Could not use it: {why}', { why: e.message })); if (btn) btn.textContent = t('Use'); }
   _busy = false;
 }
 

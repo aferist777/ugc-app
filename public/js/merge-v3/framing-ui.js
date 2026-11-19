@@ -15,20 +15,22 @@
 import * as Store from './store.js';
 import { SQUARE, plan, normalize } from '../framing/path.js';
 import { placeBySplit } from '../captions/split.js';
+// The interface's words - as T: in this module `t` is a lane.
+import * as T from '../i18n/t.js';
 
 // 'camera + game' - a stream's webcam on top, the game below (public/js/framing/cam.js); on any clip, so a
-// stream's frame can be seen while the stream kind is in development.
-export const FRAMINGS = [['fixed', 'Fixed'], ['face', 'Follow the face'], ['center', 'Middle'],
-                         ['whole', 'Whole + blur'], ['bands', 'Two faces'], ['cam', 'Camera + game']];
+// stream's frame can be seen while the stream kind is in development. The values are stored; the names only shown.
+export const FRAMINGS = [['fixed', T.t('Fixed')], ['face', T.t('Follow the face')], ['center', T.t('Middle')],
+                         ['whole', T.t('Whole + blur')], ['bands', T.t('Two faces')], ['cam', T.t('Camera + game')]];
 
 // A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
 // marked `active`, planned on the server from the counted source, the words and the key moments. The switch shows it as its
 // own choice while the clip has it (another choice replaces it; Ctrl+Z brings it back); and its punch-ins have a switch of their
 // own - on or off, nothing to edit by hand.
-const ACTIVE = ['active', 'The most active'];
+const ACTIVE = ['active', T.t('The most active')];
 // A podcast's or a true crime fragment's clip follows THE SPEAKER - the same planner by its kind's rules
 // (public/js/framing/active.js `speaker`): its switch says so.
-const SPEAKER = ['active', 'The speaker'];
+const SPEAKER = ['active', T.t('The speaker')];
 /** The switch's value for the clip: 'active' for a part of fragmentation, else its record's mode, or fixed. */
 export const modeOf = (c) => (c && c.frame && c.frame.active ? 'active' : (c && c.frame && c.frame.mode) || 'fixed');
 /** The choices the switch offers this clip - the most active only on a clip that has it. */
@@ -43,9 +45,9 @@ export function zoomRow(c, C) {
     if (!on) next.noZoom = true; else delete next.noZoom;
     _setFrame(c, next);
   });
-  const row = C.row('Punch-ins', sw);
-  row.title = f.zooms.length + (f.zooms.length === 1 ? ' punch-in' : ' punch-ins') + ' on its key moments, x' + f.zooms[0].z
-    + ' - the program places them; off: none';
+  const row = C.row(T.t('Punch-ins'), sw);
+  row.title = T.tn(f.zooms.length, '{n} punch-in on its key moments, x{z} - the program places them; off: none',
+    '{n} punch-ins on its key moments, x{z} - the program places them; off: none', { z: f.zooms[0].z });
   return row;
 }
 
@@ -65,9 +67,11 @@ const _say = () => { if (_tick) { try { _tick(); } catch (e) { /* the panel went
 export function noteOf(c) {
   const w = _wait.get(c.id);
   if (w && w.error) return w.error;
-  if (w) return w.frac > 0 ? `finding the faces... ${Math.round(w.frac * 100)}%` : 'finding the faces...';
+  if (w) return w.frac > 0 ? T.t('finding the faces... {p}%', { p: Math.round(w.frac * 100) }) : T.t('finding the faces...');
   const f = c && c.frame;
   if (!f) return '';
+  // Its facts, one after another: ' · ' between them.
+  const facts = (list) => list.filter(Boolean).join(' · ');
   if (f.active) {
     // The most active: what it follows, and its punch-ins.
     const shots = (f.shots || []).length;
@@ -76,18 +80,22 @@ export function noteOf(c) {
     // The speaker's: its shots with no face shown as the square.
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
     const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
-    return `${f.speaker ? 'the speaker' : 'the most active'} · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
-      + (none ? ` · ${none} with no face as a square` : '') + (cams ? ` · ${cams} camera + game` : '')
-      + (z ? ` · ${z} punch-in${z === 1 ? '' : 's'}${f.noZoom ? ' (off)' : ''}` : '');
+    return facts([f.speaker ? T.t('the speaker') : T.t('the most active'), T.tn(shots, '{n} shot', '{n} shots'),
+      bands ? T.t('{n} as two bands', { n: bands }) : '', none ? T.t('{n} with no face as a square', { n: none }) : '',
+      cams ? T.t('{n} camera + game', { n: cams }) : '',
+      z ? (f.noZoom ? T.tn(z, '{n} punch-in (off)', '{n} punch-ins (off)') : T.tn(z, '{n} punch-in', '{n} punch-ins')) : '']);
   }
   if (f.mode === 'face' || f.mode === 'bands' || f.mode === 'cam') {
     const shots = (f.shots || []).length;
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
     // camera + game: how many shots show the streamer's webcam.
     const cams = (f.shots || []).filter((s) => s.kind === 'cam').length;
-    if (f.mode === 'cam') return `camera + game in ${cams} of ${shots} shot${shots === 1 ? '' : 's'}` + (none ? ` · ${none} with no face as a square` : '');
-    return `a face in ${Math.round((+f.found || 0) * 100)}% of the frames · ${shots} shot${shots === 1 ? '' : 's'}`
-      + (none ? ` · ${none} with no face shown whole` : '');
+    if (f.mode === 'cam') {
+      return facts([T.tn(shots, 'camera + game in {k} of {n} shot', 'camera + game in {k} of {n} shots', { k: cams }),
+        none ? T.t('{n} with no face as a square', { n: none }) : '']);
+    }
+    return facts([T.t('a face in {p}% of the frames', { p: Math.round((+f.found || 0) * 100) }), T.tn(shots, '{n} shot', '{n} shots'),
+      none ? T.t('{n} with no face shown whole', { n: none }) : '']);
   }
   return '';
 }
@@ -125,7 +133,7 @@ export async function choose(c, mode) {
   if (mode === 'fixed') { _setFrame(c, null); _say(); return; }
   if (mode === 'center' || mode === 'whole') {
     const p = await _json('/api/media/probe?src=' + encodeURIComponent(c.src));
-    if (!p || !(p.w > 0)) { _wait.set(c.id, { mode, error: 'the film could not be read' }); _say(); return; }
+    if (!p || !(p.w > 0)) { _wait.set(c.id, { mode, error: T.t('the film could not be read') }); _say(); return; }
     const side = p.rotate === 90 || p.rotate === 270;
     // "whole + blur" is the square from the middle over the blur.
     _setFrame(c, { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [], ...(mode === 'whole' ? { wide: SQUARE } : {}) });
@@ -137,7 +145,7 @@ export async function choose(c, mode) {
   _say();
   const src = encodeURIComponent(c.src);
   const start = await _json('/api/faces/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ src: c.src }) });
-  if (!start || !start.success) { mine.error = (start && start.error) || 'the faces could not be asked for'; _say(); return; }
+  if (!start || !start.success) { mine.error = (start && start.error) || T.t('the faces could not be asked for'); _say(); return; }
   for (let k = 0; k < 1800; k++) {
     if (_wait.get(c.id) !== mine) return;                 // the switch moved again meanwhile
     const st = await _json('/api/faces/of?full=1&src=' + src);
@@ -150,8 +158,8 @@ export async function choose(c, mode) {
       return;
     }
     if (!st || st.state === 'failed' || st.state === 'none') {
-      mine.error = st && st.noWorker ? 'faces are found in the app window - it is not running here'
-        : 'the faces could not be found' + (st && st.error ? ': ' + st.error : '');
+      mine.error = st && st.noWorker ? T.t('faces are found in the app window - it is not running here')
+        : st && st.error ? T.t('the faces could not be found: {why}', { why: st.error }) : T.t('the faces could not be found');
       _say();
       return;
     }

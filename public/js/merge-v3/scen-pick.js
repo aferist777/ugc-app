@@ -44,6 +44,7 @@ import { REALLY } from '../really.js';
 import { menuIcons, iconEl } from '../icons.js';
 import { figures } from '../num.js';
 import { isHl } from '../highlights/keys.js';
+import * as T from '../i18n/t.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -142,7 +143,7 @@ function _onStore() {
 export function initScenarios() {
   Views.registerChat(NAME, {
     root: 'mv3-sc', crumb: 'mv3-lib-scen',
-    crumbTitle: 'The scenarios - "use" one to make a talking head',
+    crumbTitle: T.t('The scenarios - "use" one to make a talking head'),
     onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => { openScenarios(); },
   });
   Store.onChange(_onStore);
@@ -168,7 +169,7 @@ async function _load() {
     _rows = [];
     // The reason a popup; the list says it did not load, with Try again.
     _state = 'failed';
-    showError('Could not read the scenarios: ' + e.message);
+    showError(T.t('Could not read the scenarios: {why}', { why: e.message }));
   }
   _paintFilter();
   _paintList();
@@ -187,18 +188,18 @@ function _choices() {
   const srcs = Array.isArray(c.sources) ? c.sources : [];
   const seen = new Map();
   const sources = srcs.map(s => {
-    const name = String(s.title || 'untitled source').trim();
+    const name = String(s.title || T.t('untitled source')).trim();
     const k = (seen.get(name) || 0) + 1;
     seen.set(name, k);
     return { id: 'src:' + s.id, label: k > 1 ? name + ' ' + k : name, n: s.n, src: true, gone: !!s.gone,
-      title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title };
+      title: s.gone ? T.t('A source since deleted: {name}', { name: s.title }) : T.t('Written from {name}', { name: s.title }) };
   });
   const out = [
-    { id: '', label: 'All', n: c.all || 0 },
-    { id: 'library1', label: 'Saved', n: c.library1 || 0, title: 'Written or pasted by hand' },
+    { id: '', label: T.t('All'), n: c.all || 0 },
+    { id: 'library1', label: T.tc('scenarios', 'Saved'), n: c.library1 || 0, title: T.t('Written or pasted by hand') },
   ].concat(sources);
-  if (c.noSource) out.push({ id: 'nosrc', label: 'No source', n: c.noSource, title: 'Generated from a topic alone' });
-  out.push({ id: 'archive', label: 'Archive', n: c.archive || 0 });
+  if (c.noSource) out.push({ id: 'nosrc', label: T.t('No source'), n: c.noSource, title: T.t('Generated from a topic alone') });
+  out.push({ id: 'archive', label: T.t('Archive'), n: c.archive || 0 });
   return out;
 }
 
@@ -234,14 +235,14 @@ async function _filterMenu() {
   const el = _el('div', 'mv3-plus-menu mv3-sc-menu u-menu is-float');
   let srcHead = false;
   for (const t of _choices()) {
-    if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'Written from')); srcHead = true; }
+    if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', T.t('Written from'))); srcHead = true; }
     if (!t.src && srcHead && (t.id === 'nosrc' || t.id === 'archive') && !el.querySelector('.mv3-sc-menu-sep.is-end')) {
       el.appendChild(_el('div', 'mv3-sc-menu-sep is-end'));
     }
     const b = _el('button', 'mv3-plus-item u-mi' + (t.id === _lib ? ' is-on' : ''));
     b.type = 'button';
     b.appendChild(_el('span', null, t.label));
-    b.appendChild(_el('small', null, t.n + (t.n === 1 ? ' scenario' : ' scenarios') + (t.gone ? ' · source deleted' : '')));
+    b.appendChild(_el('small', null, T.tn(t.n, '{n} scenario', '{n} scenarios') + (t.gone ? ' · ' + T.t('source deleted') : '')));
     if (t.title) b.title = t.title;
     b.addEventListener('click', (e) => { e.stopPropagation(); _closeCatMenu(); _filter(t.id); });
     el.appendChild(b);
@@ -255,17 +256,20 @@ async function _filterMenu() {
   _catMenu = { el, away, layer: Layers.open(el, { name: 'scenario category', modal: false, onEsc: _closeCatMenu }) };
 }
 
+// The two genders are the app's own words; every other value is what a person typed.
+const GENDER = { female: T.t('female'), male: T.t('male') };
+
 // What a row says about itself, beyond its title: the three labels the casting reads, and
 // how many lines there are - which is how many fragments the project will have.
 function _meta(s) {
   const bits = [];
   const n = +s.lineCount || 0;
-  bits.push(n + (n === 1 ? ' line' : ' lines'));
+  bits.push(T.tn(n, '{n} line', '{n} lines'));
   if (s.vertical) bits.push(s.vertical);
   if (s.product) bits.push(s.product);
   const role = ((s.roles || [])[0] || {});
   if (role.name) bits.push(role.name);
-  if (s.gender) bits.push(s.gender);
+  if (s.gender) bits.push(GENDER[s.gender] || s.gender);
   const day = String(s.updatedAt || s.createdAt || '').slice(0, 10);
   if (day) bits.push(day);
   return bits.join(' · ');
@@ -288,9 +292,9 @@ function _build() {
   if (!root) return;
   const top = _el('div', 'mv3-scv-top');
   const add = _el('button', 'mv3-sc-new u-btn is-s');
-  add.append(iconEl('plus', 14), document.createTextNode('scenario'));   // Lucide's plus
+  add.append(iconEl('plus', 14), document.createTextNode(T.t('scenario')));   // Lucide's plus
   add.type = 'button';
-  add.title = 'Write a new scenario';
+  add.title = T.t('Write a new scenario');
   add.addEventListener('click', () => openForm(null));
   top.appendChild(add);
 
@@ -303,7 +307,7 @@ function _build() {
 
   const search = _el('input', 'mv3-sc-search u-in is-s');
   search.type = 'search';
-  search.placeholder = 'search by title, product, role';
+  search.placeholder = T.t('search by title, product, role');
   search.addEventListener('input', () => { _q = search.value; _paintList(); });
   top.appendChild(search);
   root.appendChild(top);
@@ -315,10 +319,10 @@ function _build() {
 
 function _paintFilter() {
   if (!_ui) return;
-  const cur = _choices().find(t => t.id === _lib) || { label: 'All', n: _counts.all || 0 };
+  const cur = _choices().find(t => t.id === _lib) || { label: T.t('All'), n: _counts.all || 0 };
   const b = _ui.filter;
   b.classList.toggle('is-on', !!_lib);
-  b.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
+  b.title = (cur.title ? cur.title + '\n' : '') + T.t('Which scenarios - press to choose');
   b.textContent = '';
   b.appendChild(_el('span', 'mv3-sc-filter-t', cur.label));
   b.appendChild(_el('span', 'mv3-sc-filter-n')).appendChild(figures('· ' + cur.n));
@@ -329,18 +333,18 @@ function _paintList() {
   if (!_ui) return;
   const list = _ui.list;
   list.textContent = '';
-  if (_state === 'loading') { list.appendChild(loadingEl('reading the scenarios…')); return; }
-  if (_state) { list.appendChild(failedEl('The scenarios', () => _load())); return; }
+  if (_state === 'loading') { list.appendChild(loadingEl(T.t('reading the scenarios…'))); return; }
+  if (_state) { list.appendChild(failedEl(T.t('The scenarios'), () => _load())); return; }
 
   const rows = _rows.filter(_matches);
   if (!rows.length) {
-    list.appendChild(emptyEl(_rows.length ? 'Nothing matches that.'
-      : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".', { icon: _rows.length ? 'search' : 'list' }));
+    list.appendChild(emptyEl(_rows.length ? T.t('Nothing matches that.')
+      : _lib ? T.t('Nothing under this filter.') : T.t('No scenarios yet. Write one with "+ scenario".'), { icon: _rows.length ? 'search' : 'list' }));
     return;
   }
   for (const s of rows) {
     const row = _el('div', 'mv3-sc-row' + (s.archived ? ' is-archived' : ''));
-    row.title = 'Open the text. Right-click for the rest.';
+    row.title = T.t('Open the text. Right-click for the rest.');
     // THE BUTTONS RIGHT OF THE TITLE: the title -
     // use - ✕. The button depends on where the scenario is: an archived one is not offered as something to build with until it
     // is back in the library.
@@ -352,7 +356,7 @@ function _paintList() {
       const armed = !!_armed && _armed.id === s.id;
       const x = _el('button', 'mv3-sc-btn is-x u-btn is-s' + (armed ? ' is-danger is-armed' : ' is-icon is-quiet is-del u-x'), armed ? REALLY : '');
       x.type = 'button';
-      x.title = 'Move to the archive - press twice';
+      x.title = T.t('Move to the archive - press twice');
       if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
       x.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -363,11 +367,11 @@ function _paintList() {
       });
       acts.appendChild(x);
     }
-    const go = _el('button', 'mv3-sc-btn is-use u-btn is-s', s.archived ? 'restore' : 'use');
+    const go = _el('button', 'mv3-sc-btn is-use u-btn is-s', s.archived ? T.t('restore') : T.t('use'));
     go.type = 'button';
     go.title = s.archived
-      ? 'Put it back in the library'
-      : 'Make a talking head from this scenario and open it';
+      ? T.t('Put it back in the library')
+      : T.t('Make a talking head from this scenario and open it');
     go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
       if (s.archived) return _archive(s, false);
@@ -379,14 +383,14 @@ function _paintList() {
         await _use(s.id);
       } catch (err) {
         for (const b of acts.children) b.disabled = false;
-        go.textContent = 'Use';
-        showError('Could not make the project: ' + err.message);
+        go.textContent = T.t('use');
+        showError(T.t('Could not make the project: {why}', { why: err.message }));
       }
     });
     acts.insertBefore(go, acts.firstChild);
 
     const txt = _el('div', 'mv3-sc-txt');
-    txt.appendChild(_el('b', null, s.title || 'untitled'));
+    txt.appendChild(_el('b', null, s.title || T.t('untitled')));
     txt.appendChild(_el('span', 'mv3-sc-meta')).appendChild(figures(_meta(s)));   // its count and date in mono
     row.appendChild(txt);
     row.appendChild(acts);
@@ -422,20 +426,20 @@ function _rowMenu(ev, s, row) {
     el.appendChild(b);
   };
 
-  item('open', 'read and edit the text', () => openForm(s));
+  item(T.t('open'), T.t('read and edit the text'), () => openForm(s));
   // Both kinds from the same scenario, whichever way the view was opened.
-  if (!s.archived) item('talking head', 'make a talking head from it', () => _use(s.id).catch(e => showError('Could not make the project: ' + e.message)));
+  if (!s.archived) item(T.t('talking head'), T.t('make a talking head from it'), () => _use(s.id).catch(e => showError(T.t('Could not make the project: {why}', { why: e.message }))));
   // Into THE voiceover draft, which opens.
-  if (!s.archived) item('voiceover', 'read it in a voice - B-roll over it', () => _toVoiceover(s.id).catch(e => showError('Could not put it into the voiceover: ' + e.message)));
-  if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
-  else item('archive', 'out of the list, kept', () => _archive(s, true));
+  if (!s.archived) item(T.t('voiceover'), T.t('read it in a voice - B-roll over it'), () => _toVoiceover(s.id).catch(e => showError(T.t('Could not put it into the voiceover: {why}', { why: e.message }))));
+  if (s.archived) item(T.t('restore'), T.t('put it back in the library'), () => _archive(s, false));
+  else item(T.t('archive'), T.t('out of the list, kept'), () => _archive(s, true));
   // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
   // this runs, and a question hanging off a removed element opens in the corner of the screen.
-  item('delete', 'for good', () => {
-    askDelete(row, 'Delete "' + (s.title || 'untitled') + '"?',
-      'The scenario goes for good. Projects already made from it keep their own copy of the text.',
+  item(T.t('delete'), T.t('for good'), () => {
+    askDelete(row, T.t('Delete "{name}"?', { name: s.title || T.t('untitled') }),
+      T.t('The scenario goes for good. Projects already made from it keep their own copy of the text.'),
       async () => {
-        try { await API.remove(s.id); } catch (e) { showError('Could not delete it: ' + e.message); }
+        try { await API.remove(s.id); } catch (e) { showError(T.t('Could not delete it: {why}', { why: e.message })); }
         _load();
       });
   }, true);
@@ -456,7 +460,7 @@ function _rowMenu(ev, s, row) {
 // Out of the library or back into it. Same call either way - the server merges the flag into
 // the stored record - and the list is read again so the counts move with it.
 async function _archive(s, yes) {
-  try { await API.archive(s.id, yes); } catch (e) { showError('Could not change it: ' + e.message); }
+  try { await API.archive(s.id, yes); } catch (e) { showError(T.t('Could not change it: {why}', { why: e.message })); }
   _load();
 }
 
@@ -468,7 +472,7 @@ let _armed = null;
 function _arm(id, x) {
   _disarm();
   _armed = { id, x, timer: setTimeout(_disarm, 3000) };
-  x.textContent = 'really?';
+  x.textContent = T.t('really?');
   x.classList.add('is-armed');
 }
 

@@ -28,6 +28,7 @@ import { allow } from '../key-gate.js';
 import { emptyEl } from '../ui-state.js';
 import { REALLY, MS } from '../really.js';
 import { icon } from '../icons.js';
+import * as T from '../i18n/t.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -50,7 +51,7 @@ function _fail(text) {
 const _fmtDate = (s) => {
   if (!s) return '';
   const d = new Date(s);
-  return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return isNaN(d) ? '' : d.toLocaleDateString(T.lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short' });
 };
 
 async function _paint() {
@@ -73,10 +74,12 @@ async function _paint() {
     // Clip count in the label because two projects from the same day are otherwise told
     // apart only by their title, and imported titles all start with the date. The draft says what it is.
     // A talking head says so before its name, as highlights does - in the list and in the closed field.
-    o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
-      : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
-      : p.vodraft ? 'draft · voiceover' + (p.clips ? ' · ' + p.clips : '')
-      : projectIdOf(p.key) ? (p.voiceover ? 'voiceover · ' : 'talking head · ') + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
+    // The kind's words are the interface's, the title is the project's own and goes in as it is.
+    o.textContent = p.draft ? T.t('draft · not saved') + (p.clips ? ' · ' + p.clips : '')
+      : p.highlights ? T.t('highlights · {name}', { name: p.title }) + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
+      : p.vodraft ? T.t('draft · voiceover') + (p.clips ? ' · ' + p.clips : '')
+      : projectIdOf(p.key) ? (p.voiceover ? T.t('voiceover · {name}', { name: p.title }) : T.t('talking head · {name}', { name: p.title }))
+        + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     // Its kind, for the list's filter (_openList).
     o.dataset.kind = p.draft ? 'draft' : p.highlights ? 'highlights' : p.vodraft ? 'voiceover'
@@ -93,10 +96,10 @@ async function _paint() {
   } else {
     const o = document.createElement('option');
     o.value = '';
-    o.textContent = 'Choose a project';
+    o.textContent = T.t('Choose a project');
     sel.insertBefore(o, sel.firstChild);
     sel.value = '';
-    _note(_after || (shown.length ? 'nothing open yet' : 'no projects yet'));
+    _note(_after || (shown.length ? T.t('nothing open yet') : T.t('no projects yet')));
     _after = '';
   }
 }
@@ -127,7 +130,7 @@ function _show(k) {
 // heads every kind; the voiceover draft is a voiceover; a project of Merge's own is in "all" only; the open project, when it is
 // not of the kind, stays at the top. The select stays what holds the choice - its options (painted by _paint, each with its
 // `kind`), its value, its `change` -, so everything that reads the picker reads the select.
-const KINDS = [['all', 'All'], ['talking', 'Talking head'], ['voiceover', 'Voiceover'], ['highlights', 'Highlights']];
+const KINDS = [['all', T.t('All')], ['talking', T.t('Talking head')], ['voiceover', T.t('Voiceover')], ['highlights', T.t('Highlights')]];
 const FILTER_KEY = 'mv3_proj_filter_v1';
 function _filter() {
   let v = 'all';
@@ -164,6 +167,7 @@ async function _openList() {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'mv3-plist-kind u-chip' + (k === f ? ' is-on' : '');
+      b.dataset.kind = k;
       b.textContent = label;
       b.addEventListener('click', (e) => { e.stopPropagation(); _setFilter(k); fill(); });
       head.appendChild(b);
@@ -190,7 +194,8 @@ async function _openList() {
       rows.appendChild(b);
     }
     if (shown.length === drafts.length) {
-      rows.appendChild(emptyEl('No ' + (KINDS.find(k => k[0] === f) || ['', 'such'])[1] + ' projects yet.', { line: true, cls: 'mv3-plist-none' }));
+      const kind = KINDS.find(k => k[0] === f);
+      rows.appendChild(emptyEl(kind ? T.t('No {kind} projects yet.', { kind: kind[1] }) : T.t('No such projects yet.'), { line: true, cls: 'mv3-plist-none' }));
     }
     const on = rows.querySelector('.is-on');
     if (on) on.scrollIntoView({ block: 'nearest' });
@@ -216,7 +221,7 @@ export function initProjects() {
     const want = sel.value;
     if (!want) return;              // the "choose a project" placeholder
     // Away from the draft: nothing is asked - it stays as it is, first in this list.
-    _note('opening…');
+    _note(T.t('opening…'));
     try {
       await Store.open(want);
       _note('');
@@ -269,12 +274,12 @@ function _paintDraft() {
   const e = document.getElementById('mv3-project-edit');
   const x = document.getElementById('mv3-project-del');
   if (e && !_editing) {
-    e.textContent = d ? 'Save' : 'Edit';
-    e.title = d ? 'Save this draft under a name - what it made goes into the name\'s folder' : 'Rename this project';
+    e.textContent = d ? T.t('Save') : T.t('Edit');
+    e.title = d ? T.t('Save this draft under a name - what it made goes into the name\'s folder') : T.t('Rename this project');
   }
   if (x && !_armed) {
-    x.textContent = d ? 'Clear' : 'Delete';
-    x.title = d ? 'Empty the lanes of this draft - it stays the draft, with its chats; Ctrl+Z brings the clips back' : 'Delete this project';
+    x.textContent = d ? T.t('Clear') : T.t('Delete');
+    x.title = d ? T.t('Empty the lanes of this draft - it stays the draft, with its chats; Ctrl+Z brings the clips back') : T.t('Delete this project');
   }
   _delLook(x, d);
 }
@@ -298,7 +303,7 @@ function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
   // the "+" is Lucide's plus
-  b.innerHTML = icon('plus', 14) + '<span>New project</span>';
+  b.innerHTML = icon('plus', 14) + '<span>' + T.t('New project') + '</span>';
   // Several kinds of project, so the button asks which (_kindMenu). A blank project is an empty
   // timeline and is made here; a talking head starts from a scenario: the Library's "scenarios" view
   // opens in the project that is open (js/merge-v3/scen-pick.js) - the project itself is
@@ -318,7 +323,7 @@ function _wireNew() {
       else if (want === 'voiceover') _voiceover();
       else if (want === 'highlights') {
         (async () => {
-          _note('creating…');
+          _note(T.t('creating…'));
           try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
         })();
       } else _kindMenu(b);
@@ -326,13 +331,13 @@ function _wireNew() {
   }
   _newBlank = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const title = await askName({ anchor: b, title: 'New project', value: today + ' - ', select: false, okLabel: 'Create' });
+    const title = await askName({ anchor: b, title: T.t('New project'), value: today + ' - ', select: false, okLabel: T.t('Create') });
     if (title === null) return;                       // cancelled, not an empty name
     const clean = title.trim();
-    if (!clean) { _fail('a name is needed'); return; }
+    if (!clean) { _fail(T.t('a name is needed')); return; }
 
     b.disabled = true;
-    _note('creating…');
+    _note(T.t('creating…'));
     try {
       const d = await fetch('/api/mv3/timeline/new', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -341,7 +346,7 @@ function _wireNew() {
         // hide it.
         body: JSON.stringify({ title: clean, kind: Store.BLANK_KIND }),
       }).then(r => r.json());
-      if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+      if (!d || !d.success) throw new Error((d && d.error) || T.t('refused'));
       // Opening it is the point of having made it. The picker repaints off the store change.
       await Store.open(d.key);
       roomForWork();                                  // a new project is opened to be worked on
@@ -356,7 +361,7 @@ function _wireNew() {
 
 // THE voiceover draft opened (js/merge-v3/scen-pick.js openVoiceover); a refusal is a popup.
 async function _voiceover() {
-  _note('opening…');
+  _note(T.t('opening…'));
   try { await openVoiceover(); _note(''); } catch (e) { _fail(e.message); }
 }
 
@@ -392,19 +397,19 @@ function _kindMenu(anchor) {
     if (on) btn.addEventListener('click', (e) => { e.stopPropagation(); _closeKind(); on(); });
     el.appendChild(btn);
   };
-  item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
+  item(T.t('blank'), T.t('an empty timeline to build on'), () => { if (_newBlank) _newBlank(); });
   // Nothing asked about the draft: the view opens in it, and a talking head made from it leaves
   // it a draft.
   // A kind whose keys are not all there is not started: the popup says which (js/key-gate.js).
-  item('talking head', 'from a scenario - pick or write one', () => { if (allow('talking', anchor)) openScenarios(); });
+  item(T.t('talking head'), T.t('from a scenario - pick or write one'), () => { if (allow('talking', anchor)) openScenarios(); });
   // A long video in, vertical shorts out - a project of its own, and its popup.
-  item('highlights', 'a long video → shorts', async () => {
+  item(T.t('highlights'), T.t('a long video → shorts'), async () => {
     if (!allow('highlights', anchor)) return;
-    _note('creating…');
+    _note(T.t('creating…'));
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
   // A voiceover: the script's text read in a voice - THE voiceover draft, on its setup.
-  item('voiceover', 'a scenario or your own text, read in a voice', () => { _voiceover(); });
+  item(T.t('voiceover'), T.t('a scenario or your own text, read in a voice'), () => { _voiceover(); });
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
@@ -428,7 +433,7 @@ function _cancelRename() {
   _editing = false;
   if (box) { box.hidden = true; box.value = ''; }
   if (sel) sel.hidden = false;
-  if (b) b.textContent = Store.isDraft() ? 'Save' : 'Edit';
+  if (b) b.textContent = Store.isDraft() ? T.t('Save') : T.t('Edit');
   _note('');
 }
 
@@ -437,12 +442,12 @@ async function _saveRename() {
   const key = _projKey();
   if (!box || !key) return _cancelRename();
   const title = box.value.trim();
-  if (!title) { _fail('a name is needed'); box.focus(); return; }
+  if (!title) { _fail(T.t('a name is needed')); box.focus(); return; }
   const was = key === Store.key() ? Store.title() : (_titles.get(key) || '');
   if (title === was && !Store.isDraft()) return _cancelRename();
   const saving = Store.isDraft();
 
-  _note(saving ? 'saving…' : 'renaming…');
+  _note(saving ? T.t('saving…') : T.t('renaming…'));
   try {
     const r = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/title', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -451,7 +456,7 @@ async function _saveRename() {
     const d = await r.json();
     // A name already taken is not a failure to be swept away - the box stays open with what
     // was typed still in it, because the next thing to do is change one word of it.
-    if (!d || !d.success) { _fail(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
+    if (!d || !d.success) { _fail(d && d.error ? d.error : T.t('refused')); box.focus(); box.select(); return; }
     // A draft named is a draft saved.
     if (saving) Store.markSaved(d.title); else if (key === Store.key()) Store.setTitle(d.title);
     _cancelRename();
@@ -471,14 +476,14 @@ function _wireRename() {
   b.addEventListener('click', () => {
     if (_editing) { _saveRename(); return; }
     const key = Store.key();
-    if (!key) { _fail('open a project first'); return; }
+    if (!key) { _fail(T.t('open a project first')); return; }
     _editing = true;
     // A draft is named the way a new project is: the day, then its name.
     const draft = Store.isDraft();
     box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (_projKey() === key ? (Store.title() || '') : (_titles.get(_projKey()) || ''));
     box.hidden = false;
     sel.hidden = true;
-    b.textContent = 'Save';
+    b.textContent = T.t('Save');
     box.focus();
     if (draft) box.setSelectionRange(box.value.length, box.value.length); else box.select();
   });
@@ -508,7 +513,7 @@ function _disarm() {
   const b = document.getElementById('mv3-project-del');
   _armed = false;
   if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-  if (b) { b.textContent = Store.isDraft() ? 'Clear' : 'Delete'; b.classList.remove('is-armed'); _delLook(b, Store.isDraft()); }
+  if (b) { b.textContent = Store.isDraft() ? T.t('Clear') : T.t('Delete'); b.classList.remove('is-armed'); _delLook(b, Store.isDraft()); }
 }
 
 function _wireDelete() {
@@ -535,11 +540,11 @@ function _wireDelete() {
     let rec = null;
     try { rec = (await Store.list()).find(p => p.key === key) || null; } catch (e) { rec = null; }
     if (rec && rec.ownFiles) {
-      askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
-        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, at the top of their kind.', [
-          { label: 'Timeline only', on: () => _delete(key, false) },
-          { label: 'And its files', kind: 'danger', on: () => _askHeads(b, key) },
-          { label: 'Cancel' },
+      askChoice(b, T.t('Delete «{name}»?', { name: Store.title() || T.t('this project') }),
+        T.t('Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, at the top of their kind.'), [
+          { label: T.t('Timeline only'), on: () => _delete(key, false) },
+          { label: T.t('And its files'), kind: 'danger', on: () => _askHeads(b, key) },
+          { label: T.t('Cancel') },
         ], { stay: true });   // the bar does not scroll; a project still opening scrolls the page under it
       return;
     }
@@ -550,10 +555,10 @@ function _wireDelete() {
 // "clear": the draft's lanes emptied to a new timeline's, one step to undo (store.js
 // clearDraft); its name, folder and chats stay, and so does what it made - on the shelves.
 async function _clear() {
-  _note('clearing…');
+  _note(T.t('clearing…'));
   try {
     const r = await Store.clearDraft();
-    _note(r === 'empty' ? 'the draft is empty already' : 'cleared - Ctrl+Z brings the clips back');
+    _note(r === 'empty' ? T.t('the draft is empty already') : T.t('cleared - Ctrl+Z brings the clips back'));
   } catch (e) { _fail(e.message); }
 }
 
@@ -570,31 +575,31 @@ async function _askHeads(anchor, key) {
     } catch (e) { n = 0; }
   }
   if (!n) { _delete(key, true); return; }
-  askChoice(anchor, 'Its ' + n + (n === 1 ? ' talking head' : ' talking heads') + '?',
-    'Every take made in this project. Kept, they stay in the Library - Generated · Talking heads · «' + (Store.title() || 'this project')
-      + '» - until you delete them there; a timeline of another project that uses one keeps it.', [
-      { label: 'Keep in the Library', kind: 'yes', on: () => _delete(key, true, 'keep') },
-      { label: 'Delete them too', kind: 'danger', on: () => _delete(key, true, 'delete') },
-      { label: 'Cancel' },
+  askChoice(anchor, T.tn(n, 'Its {n} talking head?', 'Its {n} talking heads?'),
+    T.t('Every take made in this project. Kept, they stay in the Library - Generated · Talking heads · «{name}» - until you delete them there; a timeline of another project that uses one keeps it.',
+      { name: Store.title() || T.t('this project') }), [
+      { label: T.t('Keep in the Library'), kind: 'yes', on: () => _delete(key, true, 'keep') },
+      { label: T.t('Delete them too'), kind: 'danger', on: () => _delete(key, true, 'delete') },
+      { label: T.t('Cancel') },
     ], { stay: true });
 }
 
 async function _delete(key, files, heads) {
-  _note('deleting…');
+  _note(T.t('deleting…'));
   // An edit still waiting goes up first: a save after the delete would be refused (the project is gone).
   try { await Store.flush(); } catch (e) { /* refused or offline - the delete goes on */ }
   try {
     const q = files ? '?files=1' + (heads ? '&heads=' + heads : '') : '';
     const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + q, { method: 'DELETE' }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('refused'));
     // Back to nothing open rather than to whatever is left. Deleting a project and finding
     // yourself editing a different one is how the wrong video gets edited.
     const kept = d.files && d.files.kept;
     // Not `heads`: that name is the parameter ('keep' | 'delete') the address above reads, and a const of the
     // same name in this block would make that read throw before the request ("Cannot access 'heads' before initialization").
     const keptHeads = d.files && d.files.heads;
-    _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
-      keptHeads ? keptHeads + (keptHeads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
+    _after = [kept ? T.tn(kept, '{n} file still used elsewhere moved to media/work', '{n} files still used elsewhere moved to media/work') : '',
+      keptHeads ? T.tn(keptHeads, '{n} talking head kept in the Library', '{n} talking heads kept in the Library') : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _fail(e.message); }
 }

@@ -11,18 +11,19 @@
 
 import * as C from './controls.js';
 import { PITCH_MIN, PITCH_MAX, pitchOf, stLabel, normalizePitch } from '../sound/pitch.js';
+import { t } from '../i18n/t.js';
 
 export function pitchRows(host, pitches, write) {
   const ps = (pitches && pitches.length ? pitches : [null]).map((v) => pitchOf({ pitch: v }));
   const first = ps[0];
   const mixedSt = ps.some((p) => p.st !== first.st);
-  host.appendChild(C.row('Pitch', C.slider({
+  host.appendChild(C.row(t('Pitch'), C.slider({
     min: PITCH_MIN, max: PITCH_MAX, step: 1, value: first.st, fmt: stLabel, mixed: mixedSt,
     onChange: (v) => write((was) => normalizePitch({ st: v, shift: pitchOf({ pitch: was }).shift }), { st: v }),
   })));
   const keep = C.toggle(!first.shift, (on) => write((was) => normalizePitch({ st: pitchOf({ pitch: was }).st, shift: !on }), { shift: !on }));
   const still = ps.every((p) => p.st === 0);
-  if (still) { keep.disabled = true; keep.title = 'Nothing to keep at 0 st'; }
-  else keep.title = 'On: the same voice, higher or lower. Off: the timbre moves with the pitch, as a tape sped up or slowed down';
-  host.appendChild(C.row('Keep timbre', keep));
+  if (still) { keep.disabled = true; keep.title = t('Nothing to keep at 0 st'); }
+  else keep.title = t('On: the same voice, higher or lower. Off: the timbre moves with the pitch, as a tape sped up or slowed down');
+  host.appendChild(C.row(t('Keep timbre'), keep));
 }

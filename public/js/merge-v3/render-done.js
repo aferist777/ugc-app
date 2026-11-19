@@ -10,6 +10,7 @@
 
 import { showToast, showError } from '../notice.js';
 import { openRender } from '../library/render-view.js';
+import { t } from '../i18n/t.js';
 
 const _nameOf = (url) => {
   const f = String(url || '').split('?')[0].split('/').pop() || '';
@@ -22,13 +23,13 @@ const _nameOf = (url) => {
 export function renderDone(url) {
   const w = window.ugcWindow;
   const reveal = w && typeof w.reveal === 'function' ? w.reveal : null;
-  const acts = [{ label: 'Open', title: 'Watch it in the Library\'s viewer - Rename and Delete are there', run: () => openRender(url) }];
+  const acts = [{ label: t('Open'), title: t('Watch it in the Library\'s viewer - Rename and Delete are there'), run: () => openRender(url) }];
   if (reveal) {
-    acts.push({ label: 'Show in folder', title: 'Explorer on the file, in the library\'s renders folder', run: async () => {
+    acts.push({ label: t('Show in folder'), title: t('Explorer on the file, in the library\'s renders folder'), run: async () => {
       let ok = false;
       try { ok = await reveal(url); } catch (e) { ok = false; }
-      if (!ok) showError('That render is not in the library any more');
+      if (!ok) showError(t('That render is not in the library any more'));
     } });
   }
-  showToast({ mark: '▣', title: 'Rendered', where: _nameOf(url), ms: 15000, acts });
+  showToast({ mark: '▣', title: t('Rendered'), where: _nameOf(url), ms: 15000, acts });
 }

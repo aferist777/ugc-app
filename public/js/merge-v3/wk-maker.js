@@ -15,6 +15,8 @@ import { derived } from '../chars-store.js';
 import { menuIcons } from '../icons.js';
 // "Nothing here" - the shared part (the groups' column a row of it).
 import { emptyEl } from '../ui-state.js';
+// The app's words as T.t: this module's own `t`s are texts and tiles.
+import * as T from '../i18n/t.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -84,7 +86,8 @@ export function showPicture({ src, name, rows, from }) {
   if (!src) return;
   // "kind" is claimed with nothing in it, which keeps the viewer's own kind row out, and "file"
   // is claimed with the name, so a data URL's tail never lands in the column as gibberish.
-  const extra = (rows || []).filter(r => r && r[1]).concat([['kind', ''], ['file', name || '']]);
+  // Said in the app's language, so they stand for the viewer's own facts "Kind" and "File" in it.
+  const extra = (rows || []).filter(r => r && r[1]).concat([[T.t('kind'), ''], [T.t('file'), name || '']]);
   openViewer(
     [{ id: src, name: name || '', kind: 'picture', media: src, meta: from ? { refImage: from } : {} }], 0,
     { extraRows: () => extra },
@@ -108,7 +111,7 @@ export function holdProgress(place, spec) {
   if (!stage) return null;
   const s = spec || {};
   const pr = startProgress(stage, {
-    label: s.label || 'Making it', total: 1,
+    label: s.label || T.t('Making it'), total: 1,
     startedAt: s.startedAt || 0, estimateMs: s.estimateMs || 90000,
   });
   _held = { place, pr };
@@ -153,7 +156,7 @@ export function holdHalf(half, place, spec) {
   const host = el('div', 'mv3-half-ov is-' + half);
   stage.appendChild(host);
   const s = spec || {};
-  const pr = startProgress(host, { label: s.label || 'Making it', total: 1, startedAt: s.startedAt || 0, estimateMs: s.estimateMs || 90000 });
+  const pr = startProgress(host, { label: s.label || T.t('Making it'), total: 1, startedAt: s.startedAt || 0, estimateMs: s.estimateMs || 90000 });
   _halves[half] = { place, pr, host };
   return pr;
 }
@@ -207,7 +210,7 @@ export function paintChoose(host, o) {
   const bar = el('div', 'pk-bar');
   const q = el('input', 'pk-q u-in is-s');
   q.type = 'search';
-  q.placeholder = 'search by name';
+  q.placeholder = T.t('search by name');
   q.spellcheck = false;
   q.value = st.q || '';
   const count = el('span', 'pk-count', '');
@@ -240,11 +243,12 @@ export function paintChoose(host, o) {
         });
         return b;
       };
-      tabs.append(tab(f.label + ' · ' + groups.filter(f.test).length, st.filterOn, true), tab('all · ' + groups.length, !st.filterOn, false));
+      // The filter's label is a value (a scenario's gender): said in the app's language when it has a line.
+      tabs.append(tab(T.t(f.label) + ' · ' + groups.filter(f.test).length, st.filterOn, true), tab(T.t('all · {n}', { n: groups.length }), !st.filterOn, false));
       people.appendChild(tabs);
     }
     const vis = shown();
-    if (!vis.length && groups.length) people.appendChild(emptyEl('Nobody of that kind - show all.', { line: true }));
+    if (!vis.length && groups.length) people.appendChild(emptyEl(T.t('Nobody of that kind - show all.'), { line: true }));
     for (const g of vis) {
       const b = el('button', 'pk-person' + (g.key === st.group ? ' on' : ''));
       b.type = 'button';
@@ -306,9 +310,9 @@ export function paintChoose(host, o) {
     const g = group();
     const pool = groups ? (look ? shown().flatMap(x => x.items || []) : (g ? g.items : [])) : (o.items || []);
     const list = look ? pool.filter(it => String(it.name || '').toLowerCase().includes(look) || String(it.sub || '').toLowerCase().includes(look)) : pool;
-    count.textContent = look ? list.length + ' of ' + pool.length : String(pool.length);
+    count.textContent = look ? T.t('{k} of {n}', { k: list.length, n: pool.length }) : String(pool.length);
     if (!list.length) {
-      grid.appendChild(emptyEl(o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.')), { icon: look ? 'search' : 'image' }));
+      grid.appendChild(emptyEl(o.why || (look ? T.t('Nothing here is called “{q}”.', { q: look }) : (o.empty || T.t('Nothing here yet.'))), { icon: look ? 'search' : 'image' }));
       return;
     }
     for (const it of list) grid.appendChild(tile(it));
@@ -326,17 +330,17 @@ export function paintChoose(host, o) {
 // A group a character - the most looks first is the caller's order (chars-store.js byLooks) -: its 4K sheet (or portrait) to be
 // seen only, with `say` (a person is cast in a look, never bare), then its looks. `o.say(c)` - what the sheet says when pressed.
 export function lookGroups(chars, o = {}) {
-  const nLooks = (n) => (n === 1 ? '1 look' : n ? n + ' looks' : 'no looks yet');
+  const nLooks = (n) => (n ? T.tn(n, '{n} look', '{n} looks') : T.t('no looks yet'));
   return (chars || []).map((c) => {
     const sheet = c.sheet || c.face || '';
     const items = [];
     if (sheet) {
-      items.push({ path: sheet, name: c.name, sub: c.sheet ? '4K sheet' : 'portrait', aspect: c.sheet ? '16:9' : '',
+      items.push({ path: sheet, name: c.name, sub: c.sheet ? T.t('4K sheet') : T.t('portrait'), aspect: c.sheet ? '16:9' : '',
         thumb: derived(sheet, 'card'), char: c,
-        say: typeof o.say === 'function' ? o.say(c) : c.name + ' is cast in a look - press one of the looks.' });
+        say: typeof o.say === 'function' ? o.say(c) : T.t('{name} is cast in a look - press one of the looks.', { name: c.name }) });
     }
     for (const lk of c.obrazy) {
-      items.push({ path: lk.image, name: lk.name || 'look', sub: 'look', thumb: derived(lk.image, 'card'), char: c, look: lk });
+      items.push({ path: lk.image, name: lk.name || T.t('look'), sub: T.t('look'), thumb: derived(lk.image, 'card'), char: c, look: lk });
     }
     return { key: c.id, label: c.name, n: c.obrazy.length, sub: nLooks(c.obrazy.length), items, char: c };
   });

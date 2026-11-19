@@ -65,9 +65,35 @@ import { showError } from '../notice.js';
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
 import { isHl } from '../highlights/keys.js';
+// The interface's words (`t` is a time here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
+/**
+ * A lane's name in the interface's language. The names the program gives its lanes - main video, video 2, main audio,
+ * audio 3, text 1, Subtitles - are stored in English and said in the running language here; any other name is shown as it
+ * is. Never written back into a timeline.
+ */
+export function laneName(n) {
+  const s = String(n || '');
+  let m;
+  if (s === 'main video') return T.t('main video');
+  if (s === 'main audio') return T.t('main audio');
+  if (s === 'Subtitles') return T.t('Subtitles');
+  if ((m = /^video (\d+)$/.exec(s))) return T.t('video {n}', { n: m[1] });
+  if ((m = /^audio (\d+)$/.exec(s))) return T.t('audio {n}', { n: m[1] });
+  if ((m = /^text (\d+)$/.exec(s))) return T.t('text {n}', { n: m[1] });
+  return s;
+}
 // A lane's name as it is shown: sentence case ("Main video") - the stored name stays as it is ("main video").
-const _shownName = (n) => { const s = String(n || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
+const _shownName = (n) => { const s = laneName(n); return s.charAt(0).toUpperCase() + s.slice(1); };
+
+// A clip's name as it is shown: the one name the program gives a clip itself - a merge's "merged · 3 clips" - is said in
+// the running language; every other name is the person's or its file's.
+export function clipName(name) {
+  const s = String(name || '');
+  const m = /^merged · (\d+) clips$/.exec(s);
+  return m ? T.tn(+m[1], 'merged · {n} clip', 'merged · {n} clips') : s;
+}
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -80,8 +106,9 @@ let _on = false;        // is this module the one currently showing?
 const _host = () => document.getElementById(HOST);
 
 // The label column's width is shared with the CSS (--mv3-lbl-w): the playhead is positioned in pixels,
-// so both have to agree. 88: at 84 "Main video" in 500 11 px with its link icon ends in "…" by a pixel.
-const LBL_W = 88;
+// so both have to agree. 88: at 84 "Main video" in 500 11 px with its link icon ends in "…" by a pixel; 118 for the
+// Russian «Основное видео».
+const LBL_W = T.lang() === 'ru' ? 118 : 88;
 // The square column sits to the LEFT of the labels, so the lanes begin 20px further in than
 // the label width alone says. The playhead is positioned in pixels from the timeline's left
 // edge; LBL_W by itself would put the line over the names it is meant to stand beside.
@@ -844,10 +871,10 @@ function _paintRange() {
     ruler.appendChild(lbl);
   }
   lbl.title = scope.all
-    ? 'Cut this stretch out of every lane - or press Delete'
-    : 'Cut this stretch out of this lane only - no picture is tied to this sound. Or press Delete';
+    ? T.t('Cut this stretch out of every lane - or press Delete')
+    : T.t('Cut this stretch out of this lane only - no picture is tied to this sound. Or press Delete');
   lbl.style.left = (_range.a * z + 2) + 'px';
-  lbl.lastChild.replaceChildren(figures((_range.b - _range.a).toFixed(2) + ' s · Delete'));
+  lbl.lastChild.replaceChildren(figures(T.t('{n} s · Delete', { n: (_range.b - _range.a).toFixed(2) })));
 }
 
 /**
@@ -856,12 +883,12 @@ function _paintRange() {
  * sound tied to no picture is cut out of its own lane alone (tl-cut.js cutScope).
  */
 export function cutRange() {
-  if (!_range) return { ok: false, why: 'Draw a stretch over a wave first' };
+  if (!_range) return { ok: false, why: T.t('Draw a stretch over a wave first') };
   const { a, b, lane } = _range;
   const why = cutRefused(Store.timeline(), a, b, _rangeScope());
   if (why) {
     const at = _host() && _host().querySelector('.mv3b-range-t, .mv3b-range');
-    if (at) note(at, 'Not cut', why);
+    if (at) note(at, T.t('Not cut'), why);
     return { ok: false, why };
   }
   _clearSel();
@@ -902,7 +929,7 @@ function _silenceCut(cuts) {
   const at = mapThrough(cuts, _playhead);
   _clearSel();
   const ok = Store.mutate(tl => silenceCut(tl, cuts, { newId: _id, isStill }));
-  if (!ok) return { ok: false, why: Store.status() || 'Not cut' };
+  if (!ok) return { ok: false, why: Store.status() || T.t('Not cut') };
   _range = null;
   _paintRange();
   _seekTo(at);
@@ -1310,9 +1337,9 @@ async function _sendFile(f, onProgress) {
     x.onload = () => {
       const r = x.response;
       if (r && r.success && r.item) resolve(r.item);
-      else reject(new Error((r && r.error) || ('refused (' + x.status + ')')));
+      else reject(new Error((r && r.error) || T.t('refused ({status})', { status: x.status })));
     };
-    x.onerror = () => reject(new Error('the file did not reach the app'));
+    x.onerror = () => reject(new Error(T.t('the file did not reach the app')));
     x.send(fd);
   });
 }
@@ -1349,8 +1376,8 @@ let _dropping = false;
 async function _dropFiles(files, place) {
   const list = (files || []).filter(f => f && _mediaOfFile(f));
   const skipped = (files || []).length - list.length;
-  if (!list.length) { _dropSay('Only videos, pictures and sounds go on the timeline', true); return; }
-  if (_dropping) { _dropSay('Files are still going in - wait for them, then drop these', true); return; }
+  if (!list.length) { _dropSay(T.t('Only videos, pictures and sounds go on the timeline'), true); return; }
+  if (_dropping) { _dropSay(T.t('Files are still going in - wait for them, then drop these'), true); return; }
   _dropping = true;
   let trackId = place.trackId || '', make = place.make || '', at = Math.max(0, +place.at || 0);
   let laid = 0, copied = 0;
@@ -1361,18 +1388,20 @@ async function _dropFiles(files, place) {
       const media = _mediaOfFile(f);
       const lane = make || (((Store.timeline() || {}).tracks || []).find(x => x.id === trackId) || {}).kind;
       if (!_laneTakes(lane, media)) {
-        bad.push(f.name + ' - ' + ({ video: 'a video', image: 'a picture', audio: 'a sound' }[media]) + ' does not go on '
-          + (lane === 'audio' ? 'an audio' : 'a ' + (lane || '')) + ' lane');
+        // A lane takes video and pictures, or video and sounds (_laneTakes): what is refused is one of these two.
+        bad.push(lane === 'video' ? T.t('{file} - a sound does not go on a video lane', { file: f.name })
+          : lane === 'audio' ? T.t('{file} - a picture does not go on an audio lane', { file: f.name })
+          : T.t('{file} - this lane does not take it', { file: f.name }));
         continue;
       }
       const head = (list.length > 1 ? (i + 1) + '/' + list.length + ' · ' : '') + f.name;
-      _dropSay('into the library · ' + head, false, true);
+      _dropSay(T.t('into the library · {file}', { file: head }), false, true);
       let item = null;
-      try { item = await _sendFile(f, (p) => _dropSay('into the library ' + Math.round(p * 100) + '% · ' + head, false, true)); }
-      catch (err) { bad.push(f.name + ' - ' + ((err && err.message) || 'not taken')); continue; }
+      try { item = await _sendFile(f, (p) => _dropSay(T.t('into the library {pct}% · {file}', { pct: Math.round(p * 100), file: head }), false, true)); }
+      catch (err) { bad.push(T.t('{file} - {why}', { file: f.name, why: (err && err.message) || T.t('not taken') })); continue; }
       copied++;
       const r = _drop(trackId, at, item, make);
-      if (!r) { bad.push(f.name + ' - ' + (Store.status() || 'not laid')); continue; }
+      if (!r) { bad.push(T.t('{file} - {why}', { file: f.name, why: Store.status() || T.t('not laid') })); continue; }
       laid++;
       // The next one straight after it, on the same lane - the one just made, for a drop that made one.
       trackId = r.lane; make = ''; at = _r2(at + r.dur);
@@ -1381,9 +1410,9 @@ async function _dropFiles(files, place) {
     _dropping = false;
   }
   if (copied) window.dispatchEvent(new CustomEvent('mv3:lib-reload'));
-  if (skipped) bad.push(skipped + (skipped === 1 ? ' file is' : ' files are') + ' not a video, a picture or a sound');
-  if (bad.length) _dropSay((laid ? laid + ' laid · ' : '') + bad.join(' · '), true);
-  else _dropSay(laid === 1 ? 'Laid, and kept in the library' : laid + ' laid, and kept in the library');
+  if (skipped) bad.push(T.tn(skipped, '{n} file is not a video, a picture or a sound', '{n} files are not a video, a picture or a sound'));
+  if (bad.length) _dropSay(laid ? T.t('{n} laid · {rest}', { n: laid, rest: bad.join(' · ') }) : bad.join(' · '), true);
+  else _dropSay(laid === 1 ? T.t('Laid, and kept in the library') : T.t('{n} laid, and kept in the library', { n: laid }));
 }
 
 function _wireLane(lane, t) {
@@ -1496,15 +1525,15 @@ function _showGhost(side, media, clientX) {
       rows.push(row);
     };
     if (side === 'video') {
-      const v = _ghostRow('video', side, 'new video', true);
+      const v = _ghostRow('video', side, T.t('new video'), true);
       if (vz) vz.insertBefore(v, vz.firstChild); else ruler.after(v);
       rows.push(v);
       // Its sound lane comes with it - with the clip's sound on it, unless it is a picture (_newVideoLane).
-      if (_count(tracks, 'audio') < MAX_PER_SIDE) putAudio(_ghostRow('audio', side, 'new audio', media !== 'image'));
+      if (_count(tracks, 'audio') < MAX_PER_SIDE) putAudio(_ghostRow('audio', side, T.t('new audio'), media !== 'image'));
       // In sight: the new lane is the top one, and the lanes may be scrolled under the ruler.
       host.scrollTop = 0;
     } else {
-      putAudio(_ghostRow('audio', side, 'new audio', true));
+      putAudio(_ghostRow('audio', side, T.t('new audio'), true));
       // In sight: the words block stuck to the floor may cover the bottom lanes.
       if (host.scrollHeight > host.clientHeight) host.scrollTop = host.scrollHeight;
     }
@@ -1591,17 +1620,16 @@ function _lane(t) {
       const full = _count(all, 'text') >= MAX_TEXT;
       btn.innerHTML = icon('plus', 12);
       btn.disabled = full;
-      btn.title = full ? 'Two text lanes is the limit'
-                       : 'Add a lane for text you type yourself';
+      btn.title = full ? T.t('Two text lanes is the limit')
+                       : T.t('Add a lane for text you type yourself');
       btn.addEventListener('click', (e) => { e.stopPropagation(); addTextTrack(); });
     } else {
       btn.innerHTML = icon('minus', 12);
-      btn.title = 'Remove ' + t.name + ' and the lines on it';
+      btn.title = T.t('Remove {lane} and the lines on it', { lane: laneName(t.name) });
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        askDelete(btn, 'Delete ' + t.name + '?',
-          (t.clips || []).length ? (t.clips.length === 1 ? 'Its line goes with it.'
-                                                         : 'Its ' + t.clips.length + ' lines go with it.') : '',
+        askDelete(btn, T.t('Delete {lane}?', { lane: laneName(t.name) }),
+          (t.clips || []).length ? T.tn(t.clips.length, 'Its line goes with it.', 'Its {n} lines go with it.') : '',
           () => removeTrack(t.id));
       });
     }
@@ -1617,10 +1645,11 @@ function _lane(t) {
       btn.innerHTML = icon('plus', 12);
       btn.disabled = full;
       btn.title = full
-        ? 'Three ' + t.kind + ' tracks beside the main one is the limit'
+        ? (t.kind === 'video' ? T.t('Three video tracks beside the main one is the limit')
+                              : T.t('Three audio tracks beside the main one is the limit'))
         : (t.kind === 'video'
-            ? 'Add a video track, and the audio track its sound will land on'
-            : 'Add an audio track on its own - for music, with no picture paired to it');
+            ? T.t('Add a video track, and the audio track its sound will land on')
+            : T.t('Add an audio track on its own - for music, with no picture paired to it'));
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (t.kind === 'video') addVideoTrack(); else addAudioTrack();
@@ -1628,12 +1657,12 @@ function _lane(t) {
     } else {
       btn.innerHTML = icon('minus', 12);
       btn.title = t.kind === 'video'
-        ? 'Remove ' + t.name + ' and the audio track paired with it'
-        : 'Remove ' + t.name + ' - any video paired with it stays, and goes silent';
+        ? T.t('Remove {lane} and the audio track paired with it', { lane: laneName(t.name) })
+        : T.t('Remove {lane} - any video paired with it stays, and goes silent', { lane: laneName(t.name) });
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        askDelete(btn, 'Delete ' + t.name + '?',
-          t.kind === 'video' && t.linkId ? 'Its audio track goes with it.' : '',
+        askDelete(btn, T.t('Delete {lane}?', { lane: laneName(t.name) }),
+          t.kind === 'video' && t.linkId ? T.t('Its audio track goes with it.') : '',
           () => removeTrack(t.id));
       });
     }
@@ -1658,11 +1687,12 @@ function _lane(t) {
     mk.innerHTML = icon('link', 10);                // Lucide's link
     lbl.appendChild(mk);
   }
-  lbl.title = (mate
-    ? (t.kind === 'video' ? t.name + ' - its sound is on ' + mate.name
-                          : t.name + ' - carries the sound of ' + mate.name)
-    : (t.kind === 'video' ? t.name + ' - silent, no audio track paired with it' : t.name))
-    + '. Click for its settings.';
+  const lane0 = laneName(t.name);
+  lbl.title = mate
+    ? (t.kind === 'video' ? T.t('{lane} - its sound is on {mate}. Click for its settings.', { lane: lane0, mate: laneName(mate.name) })
+                          : T.t('{lane} - carries the sound of {mate}. Click for its settings.', { lane: lane0, mate: laneName(mate.name) }))
+    : (t.kind === 'video' ? T.t('{lane} - silent, no audio track paired with it. Click for its settings.', { lane: lane0 })
+                          : T.t('{lane}. Click for its settings.', { lane: lane0 }));
   // The NAME is what picks the lane, not the whole row: the row is mostly lane, and a click
   // on lane already means something - it starts the band (_beginBand).
   lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
@@ -1729,8 +1759,10 @@ function _fxFrames(el, c) {
     f.dataset.dur = String(d);
     f.style.left = (a / d * 100).toFixed(3) + '%';
     f.style.width = ((b - a) / d * 100).toFixed(3) + '%';
-    f.title = fd.name + ' · ' + a.toFixed(2) + '–' + b.toFixed(2) + ' s of the clip';
-    f.textContent = fd.name;
+    // The effects' table gives its names in the running language already.
+    const fxName = fd.name;
+    f.title = T.t('{name} · {a}–{b} s of the clip', { name: fxName, a: a.toFixed(2), b: b.toFixed(2) });
+    f.textContent = fxName;
     el.appendChild(f);
   }
 }
@@ -1763,7 +1795,9 @@ function _clipEl(t, c, over) {
   // Its file was deleted from the library: red, to be replaced (a tile let go on it) or removed.
   if (Store.isGone(c)) {
     el.classList.add('is-gone');
-    el.title = (c.name || 'This clip') + ' - its file was deleted from the library. Let a tile from the Library go on it to replace it, or remove it.';
+    el.title = c.name
+      ? T.t('{name} - its file was deleted from the library. Let a tile from the Library go on it to replace it, or remove it.', { name: clipName(c.name) })
+      : T.t('This clip - its file was deleted from the library. Let a tile from the Library go on it to replace it, or remove it.');
   }
   el.style.left = (c.start * _zoom()) + 'px';
   el.style.width = Math.max(2, c.dur * _zoom()) + 'px';
@@ -1809,7 +1843,7 @@ function _clipEl(t, c, over) {
   if (t.kind === 'video' && Array.isArray(c.fx) && c.fx.length && !Store.isGone(c)) _fxFrames(el, c);
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
-  cap.textContent = (Store.isGone(c) ? 'Deleted · ' : '') + (c.name || '');   // sentence case
+  cap.textContent = Store.isGone(c) ? T.t('Deleted · {name}', { name: clipName(c.name) }) : clipName(c.name);   // sentence case
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
@@ -1820,13 +1854,13 @@ function _clipEl(t, c, over) {
   const x = document.createElement('button');
   x.type = 'button';
   x.className = 'mv3b-clipx u-onpic is-del u-x';
-  x.title = 'Remove this clip';
+  x.title = T.t('Remove this clip');
   x.addEventListener('mousedown', (e) => e.stopPropagation());   // not a drag
   x.addEventListener('click', (e) => {
     e.stopPropagation();
-    askDelete(x, 'Remove ' + short(c.name) + '?',
-      t.kind === 'video' && c.pairId ? 'Its sound goes with it.'
-        : (t.kind === 'audio' && c.pairId ? 'The picture stays, and goes silent.' : ''),
+    askDelete(x, T.t('Remove {name}?', { name: short(clipName(c.name)) }),
+      t.kind === 'video' && c.pairId ? T.t('Its sound goes with it.')
+        : (t.kind === 'audio' && c.pairId ? T.t('The picture stays, and goes silent.') : ''),
       () => removeClip(t.id, c.id));
   });
   el.appendChild(x);
@@ -1838,9 +1872,12 @@ function _clipEl(t, c, over) {
   });
   el.addEventListener('mousedown', (e) => _beginDrag(e, t, c, el));
 
-  el.title = (c.name || 'clip') + (fixed ? ' - corrected by hand' : '') +
-    (t.kind === 'audio' && !(+c.volume) ? ' - silent; turn its sound on in the inspector' : '') +
-    (c.pairId ? '' : (t.kind === 'video' ? ' - no sound of its own' : ''));
+  // Its name, then what is to know about it - each note one phrase after a dash.
+  let tip = c.name ? clipName(c.name) : T.t('clip');
+  if (fixed) tip = T.t('{name} - corrected by hand', { name: tip });
+  if (t.kind === 'audio' && !(+c.volume)) tip = T.t('{name} - silent; turn its sound on in the inspector', { name: tip });
+  if (!c.pairId && t.kind === 'video') tip = T.t('{name} - no sound of its own', { name: tip });
+  el.title = tip;
   return el;
 }
 
@@ -2087,11 +2124,11 @@ export function fit() {
 const MIN_SPLIT = 0.1;
 
 export function canSplit() {
-  if (!_on) return { ok: false, why: 'Nothing to cut here' };
+  if (!_on) return { ok: false, why: T.t('Nothing to cut here') };
   const one = selectedOne();
-  if (!one) return { ok: false, why: 'Select one clip to cut it at the playhead' };
+  if (!one) return { ok: false, why: T.t('Select one clip to cut it at the playhead') };
   const s = +one.clip.start, e = s + (+one.clip.dur);
-  if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: 'Put the playhead inside the selected clip' };
+  if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: T.t('Put the playhead inside the selected clip') };
   // A heard caption is cut BETWEEN its words: a half with none would keep the whole text as a typed copy
   // of the page - and a page stays up past its last word, so that would be most of its tail.
   const words = isHeard(one.clip) ? timedWords(one.clip) : null;
@@ -2101,7 +2138,7 @@ export function canSplit() {
     // before the first word giving a typed copy of the whole text.
     const left = _r2(_r2(_playhead) - s);
     if (!words.some(w => _r2(+w.s) >= left) || !words.some(w => _r2(+w.s) < left)) {
-      return { ok: false, why: 'No word starts on that side of the playhead - drag the edge of the line to shorten it' };
+      return { ok: false, why: T.t('No word starts on that side of the playhead - drag the edge of the line to shorten it') };
     }
   }
   return { ok: true };
@@ -2204,13 +2241,13 @@ function _paintGone() {
   mark.classList.add('mv3-tl-gone-i');
   el.appendChild(mark);
   const t = document.createElement('span');
-  t.appendChild(figures(n + (n === 1 ? ' piece of media' : ' pieces of media') + ' of this project ' + (n === 1 ? 'was' : 'were')
-    + ' deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.'));
+  t.appendChild(figures(T.tn(n, '{n} piece of media of this project was deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.',
+    '{n} pieces of media of this project were deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.')));
   el.appendChild(t);
   const x = document.createElement('button');
   x.type = 'button';
   x.className = 'mv3-tl-gone-x u-btn is-s is-icon is-quiet u-x';
-  x.title = 'Close - the clips stay red';
+  x.title = T.t('Close - the clips stay red');
   x.addEventListener('click', () => { _goneShut = key; _paintGone(); });
   el.appendChild(x);
 }
@@ -2581,15 +2618,15 @@ const GEN_LOOK = ['fit', 'cropAlign', 'crop', 'pip', 'tx', 'ty', 'tw', 'angle', 
  * `item` - { kind: 'image' | 'video', src, thumb, libId, name, dur, w, h }. -> { ok, lane, at } | { ok: false, why }
  */
 export async function genBack(o, item) {
-  if (!_on) return { ok: false, why: 'The timeline is not showing.' };
-  if (!o || !item || !item.src) return { ok: false, why: 'Nothing to lay.' };
-  if (Store.key() !== o.key) return { ok: false, why: 'Its project is not the one open.' };
+  if (!_on) return { ok: false, why: T.t('The timeline is not showing.') };
+  if (!o || !item || !item.src) return { ok: false, why: T.t('Nothing to lay.') };
+  if (Store.key() !== o.key) return { ok: false, why: T.t('Its project is not the one open.') };
   const find = (tracks) => {
     for (const t of tracks || []) { const c = (t.clips || []).find(x => x.id === o.clipId); if (c) return { t, c }; }
     return null;
   };
   const now = find((Store.timeline() || {}).tracks);
-  if (!now) return { ok: false, why: 'The clip is not on the timeline any more.' };
+  if (!now) return { ok: false, why: T.t('The clip is not on the timeline any more.') };
   const video = item.kind === 'video';
   let dur = video ? (+item.dur || 0) : 0;
   let w = +item.w || 0, h = +item.h || 0;
@@ -2598,7 +2635,7 @@ export async function genBack(o, item) {
     if (!(dur > 0)) dur = p.dur;
     if (!(w > 0 && h > 0)) { w = p.w; h = p.h; }
   }
-  if (video && !(dur > 0)) return { ok: false, why: 'The new clip\'s length could not be read.' };
+  if (video && !(dur > 0)) return { ok: false, why: T.t('The new clip\'s length could not be read.') };
   dur = _r2(dur);
   const inPlace = o.act === 'edit' || o.act === 'animate' || o.act === 'ref';
   // The crop is a piece of the FILE in shares of it: it carries only onto a file of the same shape.
@@ -2631,41 +2668,41 @@ export async function genBack(o, item) {
   const ok = Store.mutate(tl => {
     const tracks = tl.tracks || [];
     const f = find(tracks);
-    if (!f) { out = { ok: false, why: 'The clip is not on the timeline any more.' }; return; }
+    if (!f) { out = { ok: false, why: T.t('The clip is not on the timeline any more.') }; return; }
     const { t, c } = f;
     const look = {};
     for (const k of GEN_LOOK) if (c[k] != null && (k !== 'crop' || sameShape)) look[k] = JSON.parse(JSON.stringify(c[k]));
     if (o.act === 'edit') {
-      if (video) { out = { ok: false, why: 'A clip does not go in place of a picture this way.' }; return; }
+      if (video) { out = { ok: false, why: T.t('A clip does not go in place of a picture this way.') }; return; }
       c.src = item.src; c.thumb = item.thumb || item.src; c.name = String(item.name || c.name || '').slice(0, 200); c.libId = item.libId || null;
       if (!sameShape) delete c.crop;
       delete c.frame;
-      out = { ok: true, id: c.id, lane: t.name, at: +c.start || 0 };
+      out = { ok: true, id: c.id, lane: laneName(t.name), at: +c.start || 0 };
       return;
     }
     if (inPlace) {
-      if (!video) { out = { ok: false, why: 'A picture does not go in place of a clip this way.' }; return; }
+      if (!video) { out = { ok: false, why: T.t('A picture does not go in place of a clip this way.') }; return; }
       const at = +c.start || 0;
       const len = Math.min(dur, +c.dur || dur);
       _removeIn(tracks, t.id, c.id);
       const id = layFilm(tracks, t, at, len, look);
-      out = { ok: true, id, lane: t.name, at };
+      out = { ok: true, id, lane: laneName(t.name), at };
       return;
     }
     if (o.act === 'frame-pic') {
-      if (video) { out = { ok: false, why: 'Only a picture goes above it.' }; return; }
+      if (video) { out = { ok: false, why: T.t('Only a picture goes above it.') }; return; }
       const at = Math.max(+c.start || 0, Math.min((+c.start || 0) + (+c.dur || 0), _momentOf(c)));
       const vids = tracks.filter(x => x.kind === 'video');
       const i = vids.indexOf(t);
       const over = i > 0 ? vids[i - 1] : _newVideoLane(tracks);
-      if (!over) { out = { ok: false, why: 'There is no lane above it, and four video lanes is the most.' }; return; }
+      if (!over) { out = { ok: false, why: T.t('There is no lane above it, and four video lanes is the most.') }; return; }
       const id = _id();
       over.clips.push(Object.assign(base(at, STILL_DUR), { id, volume: 0, pairId: null }));
-      out = { ok: true, id, lane: over.name, at: _r2(at) };
+      out = { ok: true, id, lane: laneName(over.name), at: _r2(at) };
       return;
     }
     // continue / frame-vid: inserted, what is after it on this lane moving on.
-    if (!video) { out = { ok: false, why: 'Only a clip is inserted.' }; return; }
+    if (!video) { out = { ok: false, why: T.t('Only a clip is inserted.') }; return; }
     const s0 = +c.start || 0, e0 = s0 + (+c.dur || 0);
     let at = e0;
     if (o.act === 'frame-vid') {
@@ -2688,9 +2725,9 @@ export async function genBack(o, item) {
       if (other.kind === 'audio') other.clips.sort((a, b) => a.start - b.start);
     }
     const id = layFilm(tracks, t, at, dur, null);
-    out = { ok: true, id, lane: t.name, at };
+    out = { ok: true, id, lane: laneName(t.name), at };
   });
-  if (!out) return { ok: false, why: (!ok && Store.status()) || 'The timeline did not take it.' };
+  if (!out) return { ok: false, why: (!ok && Store.status()) || T.t('The timeline did not take it.') };
   if (!out.ok) return out;
   return { ok: true, lane: out.lane || '', at: out.at || 0 };
 }
@@ -2715,12 +2752,12 @@ function _freeSoundLane(tracks, a, b) {
  * Returns { ok, lane, at } or { ok: false, why }.
  */
 export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } = {}) {
-  if (!_on) return { ok: false, why: 'The timeline is not showing' };
-  if (!src) return { ok: false, why: 'There is no sound to lay' };
+  if (!_on) return { ok: false, why: T.t('The timeline is not showing') };
+  if (!src) return { ok: false, why: T.t('There is no sound to lay') };
   if (Views.isHlHome(Store.key())) { Views.noFragment(); return { ok: false, why: Views.NO_FRAGMENT[0] }; }
-  if (locked()) return { ok: false, why: 'The talking head is being built - the timeline takes nothing until it is done' };
+  if (locked()) return { ok: false, why: T.t('The talking head is being built - the timeline takes nothing until it is done') };
   const len = _r2(+dur || 0);
-  if (!(len >= 0.05)) return { ok: false, why: 'The piece is too short to lay' };
+  if (!(len >= 0.05)) return { ok: false, why: T.t('The piece is too short to lay') };
   const whole = _r2(Math.max(0, +srcDur || 0));
   const tin = _r2(Math.max(0, Math.min(+trimIn || 0, whole > 0 ? Math.max(0, whole - len) : Infinity)));
   const at = _r2(Math.max(0, _playhead));
@@ -2739,10 +2776,11 @@ export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } 
       ...(k === 'music' ? { bed: true } : (k === 'sfx' || k === 'sounds') ? { sfx: true } : {}),
     });
     to.clips.sort((x, y) => (+x.start || 0) - (+y.start || 0));
-    lane = to.name;
+    // The lane's name as it is said (only shown by the caller).
+    lane = laneName(to.name);
   });
-  if (full) return { ok: false, why: 'No audio lane is free there - four is the limit. Move the playhead, or clear a lane.' };
-  if (!ok || !lane) return { ok: false, why: Store.status() || 'The piece could not be laid' };
+  if (full) return { ok: false, why: T.t('No audio lane is free there - four is the limit. Move the playhead, or clear a lane.') };
+  if (!ok || !lane) return { ok: false, why: Store.status() || T.t('The piece could not be laid') };
   selectClipById(id);
   return { ok: true, lane, at };
 }
@@ -2756,13 +2794,13 @@ export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } 
  * Returns { ok, n, at } or { ok: false, why }.
  */
 export function placeVideoPieces(parts, file) {
-  if (!_on) return { ok: false, why: 'The timeline is not showing' };
+  if (!_on) return { ok: false, why: T.t('The timeline is not showing') };
   const f = file || {};
-  if (!f.src) return { ok: false, why: 'There is no video to lay' };
+  if (!f.src) return { ok: false, why: T.t('There is no video to lay') };
   if (Views.isHlHome(Store.key())) { Views.noFragment(); return { ok: false, why: Views.NO_FRAGMENT[0] }; }
-  if (locked()) return { ok: false, why: 'The talking head is being built - the timeline takes nothing until it is done' };
+  if (locked()) return { ok: false, why: T.t('The talking head is being built - the timeline takes nothing until it is done') };
   const list = (parts || []).filter((p) => p && +p.out - +p.in >= 0.05).sort((a, b) => +a.in - +b.in);
-  if (!list.length) return { ok: false, why: 'Nothing to lay' };
+  if (!list.length) return { ok: false, why: T.t('Nothing to lay') };
   const whole = _r2(Math.max(0, +f.dur || 0));
   const at = _r2(Math.max(0, _playhead));
   const mm = (s) => { const t = Math.max(0, Math.round(+s || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
@@ -2791,7 +2829,7 @@ export function placeVideoPieces(parts, file) {
     }
     if (mate) mate.clips.sort((x, y) => (+x.start || 0) - (+y.start || 0));
   });
-  if (!ok || !ids.length) return { ok: false, why: Store.status() || 'Not laid' };
+  if (!ok || !ids.length) return { ok: false, why: Store.status() || T.t('Not laid') };
   selectClipById(ids[ids.length - 1]);
   return { ok: true, n: ids.length, at };
 }
@@ -2958,7 +2996,7 @@ export function addCaption(trackId, at, text) {
     const t = _words(tl, trackId);
     if (!t) return;
     t.clips = (t.clips || []).concat([{
-      id: _id(), src: null, thumb: null, name: String(text || 'New line'),
+      id: _id(), src: null, thumb: null, name: String(text || T.t('New line')),
       start: Math.max(0, Math.round((+at || 0) * 100) / 100), dur: CAP_DUR,
       srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
       volume: null, pairId: null,
@@ -2996,7 +3034,7 @@ export function setCaptionText(trackId, clipId, text) {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     // Gone (a lay replaced it, or it was deleted): said, not swallowed - the caller still holds what was typed.
-    if (!c) { why = 'That line is not on the lane any more'; return; }
+    if (!c) { why = T.t('That line is not on the lane any more'); return; }
     if (!isHeard(c)) { c.name = String(text || '').slice(0, 400); return; }
     const r = retext(c.words, text, c.dur);
     if (r.why) { why = r.why; return; }
@@ -3018,21 +3056,21 @@ export function editWords(trackId, clipId, op, opts) {
   const done = Store.mutate(tl => {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
-    if (!c || !isHeard(c)) { why = 'That line is not on the lane any more'; return; }
+    if (!c || !isHeard(c)) { why = T.t('That line is not on the lane any more'); return; }
     // A line whose words do not spell its text is timed for its text first: the operation works on what is shown.
     const r = op(timedWords(c), c);
-    if (!r || r.why) { why = (r && r.why) || 'That cannot be done'; return; }
+    if (!r || r.why) { why = (r && r.why) || T.t('That cannot be done'); return; }
     if (r.remove) { t.clips = t.clips.filter(x => x !== c); return; }
     c.words = r.words;
     c.name = r.name;
   }, opts);
-  if (!why && !done) why = Store.status() || 'This project cannot be edited here';
+  if (!why && !done) why = Store.status() || T.t('This project cannot be edited here');
   return why ? { why } : null;
 }
 
 // ── The captions view's document ────────────────────────────────────────────
-const DOC_CHANGED = 'The line has changed meanwhile - your text was not written over it';
-const DOC_GONE = 'That line is not on the lane any more';
+const DOC_CHANGED = T.t('The line has changed meanwhile - your text was not written over it');
+const DOC_GONE = T.t('That line is not on the lane any more');
 
 /**
  * Lines of a lane of words rewritten from the document (captions/doc.js): `ids` - the lines, next to each other in the
@@ -3060,7 +3098,7 @@ export function rewriteLines(trackId, ids, painted, op) {
       if (painted && painted[k] != null && String(c.name || '') !== String(painted[k])) return { why: DOC_CHANGED };
     }
     const r = op(t, from, _id);
-    return r && !r.why ? Object.assign({ t, from, lines }, r) : (r || { why: 'That cannot be done' });
+    return r && !r.why ? Object.assign({ t, from, lines }, r) : (r || { why: T.t('That cannot be done') });
   };
   // A dry run on the timeline as it is: which picked lines go, and where the pick goes with them.
   const dry = run(Store.timeline() || { tracks: [] });
@@ -3086,7 +3124,7 @@ export function rewriteLines(trackId, ids, painted, op) {
   });
   if (!done || !res || res.why) {
     if (moved) { _sel.clear(); for (const id of was.sel) _sel.add(id); _selTrack = was.track; }
-    return { why: (res && res.why) || Store.status() || 'This project cannot be edited here' };
+    return { why: (res && res.why) || Store.status() || T.t('This project cannot be edited here') };
   }
   if (moved) _paintSel();
   return { ids: res.ids };
@@ -3141,7 +3179,7 @@ export function rewriteEach(edits) {
   const done = Store.mutate(tl => { res = apply(tl); });
   if (!done || !res) {
     if (lost.length) { _sel.clear(); for (const id of was.sel) _sel.add(id); _selTrack = was.track; }
-    return { done: 0, refused: list.map(e => ({ id: e.id, why: Store.status() || 'This project cannot be edited here' })) };
+    return { done: 0, refused: list.map(e => ({ id: e.id, why: Store.status() || T.t('This project cannot be edited here') })) };
   }
   if (lost.length) _paintSel();
   return { done: res.done, refused: res.refused };
@@ -3391,13 +3429,13 @@ function _laneMenu(e) {
     box.appendChild(b);
   };
   // The pictures chat, in its window (js/merge-v3/chat-window.js).
-  item('generate image', 'the pictures chat · drag a picture onto a lane',
-    'Make a picture with a model - it lands on the images shelf; drag it from the chat onto a lane',
+  item(T.t('generate image'), T.t('the pictures chat · drag a picture onto a lane'),
+    T.t('Make a picture with a model - it lands on the images shelf; drag it from the chat onto a lane'),
     () => import('./picchat.js').then(m => m.openPictures())
       .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
   // The video chat, the same way.
-  item('generate video', 'the video chat · drag a clip onto a lane',
-    'Make a clip with a model - it lands on the B-roll shelf; drag it from the chat onto a lane',
+  item(T.t('generate video'), T.t('the video chat · drag a clip onto a lane'),
+    T.t('Make a clip with a model - it lands on the B-roll shelf; drag it from the chat onto a lane'),
     () => import('./vidchat.js').then(m => m.openVideos())
       .catch(err => console.warn('[timeline] the video chat did not open:', (err && err.message) || err)));
 
@@ -3462,36 +3500,36 @@ function _clipMenu(e) {
   box.className = 'mv3-plus-menu u-menu is-float';
   const at = _playhead;
   const gen = (act) => import('./tl-gen.js').then(G => G.fromClip(act, { trackId: t.id, clipId: c.id, at }))
-    .catch(err => showError('The chat did not open', { detail: (err && err.message) || String(err) }));
+    .catch(err => showError(T.t('The chat did not open'), { detail: (err && err.message) || String(err) }));
   // An effect on the whole clip - first: the clip picked, its group Effects open with the panel of tiles.
   if (!c.halfer) {
-    _ctxItem(box, 'Add effect…', 'the effects of this clip · in the inspector',
-      'Open the effects of this clip in the inspector - a tile pressed covers the whole clip, Ctrl+Z takes it off',
+    _ctxItem(box, T.t('Add effect…'), T.t('the effects of this clip · in the inspector'),
+      T.t('Open the effects of this clip in the inspector - a tile pressed covers the whole clip, Ctrl+Z takes it off'),
       () => FXUI.openPanel(t, c));
   }
   if (!line && still) {
-    _ctxItem(box, 'Animate…', 'the video chat · this picture as the first frame',
-      'Open the video chat with this picture as the first frame of a new clip', () => gen('animate'));
-    _ctxItem(box, 'Change…', 'the pictures chat · this picture to change',
-      'Open the pictures chat with this picture - say what to change in it', () => gen('edit'));
+    _ctxItem(box, T.t('Animate…'), T.t('the video chat · this picture as the first frame'),
+      T.t('Open the video chat with this picture as the first frame of a new clip'), () => gen('animate'));
+    _ctxItem(box, T.t('Change…'), T.t('the pictures chat · this picture to change'),
+      T.t('Open the pictures chat with this picture - say what to change in it'), () => gen('edit'));
   }
   if (!line && !still) {
     const onIt = at >= (+c.start || 0) && at <= (+c.start || 0) + (+c.dur || 0);
-    _ctxItem(box, 'Continue…', 'the video chat · its last frame as the first frame',
-      'Open the video chat with the last frame of this clip as the first frame of a new clip that continues it', () => gen('continue'));
-    _ctxItem(box, 'As a reference…', 'the video chat · the part the timeline plays',
-      'Open the video chat with this clip as a reference - the part of its file the timeline plays', () => gen('ref'));
-    _ctxItem(box, 'Frame to the pictures chat…', onIt ? 'the frame at the playhead' : 'its first frame',
-      'Open the pictures chat with a frame of this clip - its own file, clean, at its size; saved in IMAGES → Screenshots', () => gen('frame-pic'));
+    _ctxItem(box, T.t('Continue…'), T.t('the video chat · its last frame as the first frame'),
+      T.t('Open the video chat with the last frame of this clip as the first frame of a new clip that continues it'), () => gen('continue'));
+    _ctxItem(box, T.t('As a reference…'), T.t('the video chat · the part the timeline plays'),
+      T.t('Open the video chat with this clip as a reference - the part of its file the timeline plays'), () => gen('ref'));
+    _ctxItem(box, T.t('Frame to the pictures chat…'), onIt ? T.t('the frame at the playhead') : T.t('its first frame'),
+      T.t('Open the pictures chat with a frame of this clip - its own file, clean, at its size; saved in IMAGES → Screenshots'), () => gen('frame-pic'));
   }
   if (!still) {
     const usd = 0.15 * (+c.dur || 0) / 60;
-    _ctxItem(box, 'Video to Music…', 'ElevenLabs scores this clip · ' + (Math.round((+c.dur || 0) * 10) / 10) + ' s · ≈ $' + usd.toFixed(3),
-      'Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes', () => {
+    _ctxItem(box, T.t('Video to Music…'), T.t('ElevenLabs scores this clip · {s} s · ≈ {usd}', { s: Math.round((+c.dur || 0) * 10) / 10, usd: '$' + usd.toFixed(3) }),
+      T.t('Music made for this clip by ElevenLabs - laid under it on a sound lane of its own when it comes'), () => {
         // The strip of a pick would cover the Library panel the clip goes to.
         _clearSel();
         import('./sound-host.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
-          .catch(err => showError('Video to Music did not open', { detail: (err && err.message) || String(err) }));
+          .catch(err => showError(T.t('Video to Music did not open'), { detail: (err && err.message) || String(err) }));
       });
   }
   _showCtx(box, e);

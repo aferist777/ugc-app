@@ -30,6 +30,8 @@ import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import { placeBySplit } from '../captions/split.js';
 import { showError, showToast } from '../notice.js';
+// The interface's words (`t` is a lane here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const SS_KEY = 'mv3_clip_buffer';
 let _acc = null;
@@ -104,7 +106,7 @@ export function copyPicked() {
     }
   }
   if (!items.length) {
-    if (left) showError('Subtitle lines are not copied', { detail: 'They are the words heard in the sound - a copy would say them twice. Clips and lines of the text lanes are copied.' });
+    if (left) showError(T.t('Subtitle lines are not copied'), { detail: T.t('They are the words heard in the sound - a copy would say them twice. Clips and lines of the text lanes are copied.') });
     return { ok: false, n: 0, left };
   }
   const s0 = Math.min(...items.map((x) => +x.clip.start || 0));
@@ -112,8 +114,8 @@ export function copyPicked() {
   _write({ v: 1, key: String(Store.key() || ''), span: [r2(s0), r2(s1)], items, laid: {} });
   // Counted as picked: a pair's other half came along by itself.
   const said = items.filter((x) => x.picked).length || items.length;
-  if (left) showToast({ mark: '⧉', title: 'Copied ' + said + (said === 1 ? ' clip' : ' clips'),
-    where: (left === 1 ? 'a subtitle line was' : left + ' subtitle lines were') + ' left out - they are not copied' });
+  if (left) showToast({ mark: '⧉', title: T.tn(said, 'Copied {n} clip', 'Copied {n} clips'),
+    where: T.tn(left, 'a subtitle line was left out - they are not copied', '{n} subtitle lines were left out - they are not copied') });
   return { ok: true, n: items.length, left };
 }
 
@@ -141,9 +143,9 @@ export function paste() {
   const b = _read();
   if (!b || !b.items.length || !_acc) return { ok: false };
   const key = String(Store.key() || '');
-  if (Views.isHlHome(key)) { Views.noFragment(); return { ok: false, why: 'Open a fragment first.' }; }
+  if (Views.isHlHome(key)) { Views.noFragment(); return { ok: false, why: T.t('Open a fragment first.') }; }
   const tl0 = Store.timeline();
-  if (!tl0 || !Array.isArray(tl0.tracks)) return { ok: false, why: 'Nothing is open' };
+  if (!tl0 || !Array.isArray(tl0.tracks)) return { ok: false, why: T.t('Nothing is open') };
   const head = +(_acc.playhead ? _acc.playhead() : 0) || 0;
   const at = _startFor(b, key, tl0, head);
   const shift = at - b.span[0];
@@ -225,11 +227,11 @@ export function paste() {
     }
     if (laid.some((c) => laneOf.get(c).kind === 'video')) placeBySplit(tl);
   });
-  if (!ok || !laid.length) return { ok: false, why: Store.status() || 'Nothing was laid' };
+  if (!ok || !laid.length) return { ok: false, why: Store.status() || T.t('Nothing was laid') };
   b.laid = Object.assign({}, b.laid || {}, { [key]: { ids: laid.map((c) => c.id), head } });
   _write(b);
   if (_acc.select) _acc.select(picked.length ? picked : laid.map((c) => c.id));
-  if (lost) showToast({ mark: '⧉', title: 'Pasted ' + (laid.length) + ' of ' + (laid.length + lost),
-    where: 'the rest found no lane - four lanes a side is the limit', failed: true });
+  if (lost) showToast({ mark: '⧉', title: T.t('Pasted {n} of {all}', { n: laid.length, all: laid.length + lost }),
+    where: T.t('the rest found no lane - four lanes a side is the limit'), failed: true });
   return { ok: true, n: laid.length };
 }

@@ -18,22 +18,22 @@ import * as WK from './workshop.js';
 import * as Layers from '../layers.js';
 import { isRead, isLive } from './scen-api.js';
 import { tipBox, placeBubble } from '../bubble.js';
+// The app's words as T.t: this module's own `t`s are tracks and a tip.
+import * as T from '../i18n/t.js';
 
 const LS = 'mv3_vo_tips_v1';
 const TICK_MS = 250;
 
 const TIPS = {
-  1: { title: 'Step 1 · the script', side: 'above',
-    text: 'Choose a scenario here - "use" on it - or press "+ your text" to paste your own.' },
-  2: { title: 'Step 2 · mood & voice', side: 'above',
-    text: 'Choose the mood and the voice, then press "generate" - every line is read in it.' },
-  3: { title: 'Step 3 · B-roll', side: 'below',
-    text: 'Press "find B-roll": videos and pictures from the stock are found for every sentence and laid over the voice on the '
-      + 'timeline.' },
-  4: { title: 'Step 4 · your clip', side: 'above',
-    text: 'The B-roll is laid - play the timeline to watch the clip.\n'
-      + 'Press a piece on main video to swap it: the "b-roll" crumb shows what else was found. Or bring B-roll from the Library, '
-      + 'or generate your own, and lay it on the timeline.' },
+  1: { title: T.t('Step 1 · the script'), side: 'above',
+    text: T.t('Choose a scenario here - "use" on it - or press "+ your text" to paste your own.') },
+  2: { title: T.t('Step 2 · mood & voice'), side: 'above',
+    text: T.t('Choose the mood and the voice, then press "generate" - every line is read in it.') },
+  3: { title: T.t('Step 3 · B-roll'), side: 'below',
+    text: T.t('Press "find B-roll": videos and pictures from the stock are found for every sentence and laid over the voice on the timeline.') },
+  4: { title: T.t('Step 4 · your clip'), side: 'above',
+    text: T.t('The B-roll is laid - play the timeline to watch the clip.') + '\n'
+      + T.t('Press a piece on main video to swap it: the "b-roll" crumb shows what else was found. Or bring B-roll from the Library, or generate your own, and lay it on the timeline.') },
 };
 
 // ── What is remembered ──────────────────────────────────────────────────────

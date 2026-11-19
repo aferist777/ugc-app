@@ -25,6 +25,8 @@ import { FONTS as CAP_FONTS } from '../captions/fonts.js';
 import { setClipFields, setClipsFields, selectClipById, fxLive } from './timeline-b.js';
 import { setLive } from './place-b.js';
 import * as C from './controls.js';
+// Its own variables are called t (a tile, a time): the words as T.t / T.tn.
+import * as T from '../i18n/t.js';
 
 // A graphic effect's colours as chosen last for it - a new one takes them (this computer only).
 const COLORS_KEY = 'mv3_fx_colors_v1';
@@ -58,7 +60,7 @@ const _isOpen = (clipId, fxId) => !!(_focus && _focus.clipId === String(clipId) 
 // (<key>.webm) played only while the pointer is on it; over it, the width of the strip, its line. A press puts the effect on the
 // whole clip at once, opens its row and outlines its tile. Open / shut and the chip are the viewer's convenience (localStorage).
 const PANEL_KEY = 'mv3_fx_panel_v1';
-const CHIPS = [...GROUPS, ['sets', 'Sets']];
+const CHIPS = [...GROUPS, ['sets', T.t('Sets')]];
 let _panel = null;
 function _panelNow() {
   if (!_panel) {
@@ -168,8 +170,9 @@ function _panelEl(g, onKey, press) {
   } else {
     for (const [k, d] of Object.entries(EFFECTS)) {
       if (d.group !== st.chip) continue;
-      const lim = d.kind !== 'intro' ? '' : d.hold != null ? ' It stands for as long as you set it.'
-        : ' Its length goes from ' + lengthRange(k).map((v) => v.toFixed(2)).join(' to ') + ' s.';
+      const [lo, hi] = lengthRange(k);
+      const lim = d.kind !== 'intro' ? '' : d.hold != null ? ' ' + T.t('It stands for as long as you set it.')
+        : ' ' + T.t('Its length goes from {lo} to {hi} s.', { lo: lo.toFixed(2), hi: hi.toFixed(2) });
       grid.appendChild(_tile(k, d.name, d.about + lim, onKey === k, () => press(k), tip));
     }
   }
@@ -189,10 +192,10 @@ const isMain = (track) => !!(track && track.kind === 'video' && track.main);
 const _pending = new Map();      // clipId -> { k, frac } - a face being found for an effect about to be added (or found again)
 const _why = new Map();          // effect id -> why it has no face, said under it until the page is reloaded
 const WHY = {
-  picture: 'A picture: it works where a face usually is in a vertical frame.',
-  noWorker: 'Faces are found in the app\'s own window - not here. It works where a face usually is.',
-  noFace: 'No face in this clip - it works where a face usually is.',
-  error: 'The faces could not be found - it works where a face usually is.',
+  picture: T.t('A picture: it works where a face usually is in a vertical frame.'),
+  noWorker: T.t('Faces are found in the app\'s own window - not here. It works where a face usually is.'),
+  noFace: T.t('No face in this clip - it works where a face usually is.'),
+  error: T.t('The faces could not be found - it works where a face usually is.'),
 };
 const _say = () => { for (const cb of _onFocus) { try { cb(); } catch (e) { /* the listener's own trouble */ } } };
 
@@ -427,8 +430,8 @@ function _kindRow(g, k, said, off) {
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'mv3-fx-x u-btn is-s is-icon is-quiet u-x';
-    x.title = 'Take ' + d.name + ' off all of them';
-    x.setAttribute('aria-label', 'Remove the effect from all of them');
+    x.title = T.t('Take {name} off all of them', { name: d.name });
+    x.setAttribute('aria-label', T.t('Remove the effect from all of them'));
     x.addEventListener('click', off);
     row.appendChild(x);
   }
@@ -442,9 +445,10 @@ function _waitRow(g, w) {
   const name = document.createElement('span');
   name.className = 'mv3-fx-name';
   const nm = document.createElement('span');
-  nm.textContent = d ? d.name : 'Effect';
+  nm.textContent = d ? d.name : T.t('Effect');
   const when = document.createElement('small');
-  when.textContent = 'finding the faces… ' + (w.n ? (w.i + 1) + ' of ' + w.n : '') + (w.frac > 0 ? ' · ' + Math.round(w.frac * 100) + ' %' : '');
+  when.textContent = (w.n ? T.t('finding the faces… {i} of {n}', { i: w.i + 1, n: w.n }) : T.t('finding the faces…'))
+    + (w.frac > 0 ? ' · ' + Math.round(w.frac * 100) + ' %' : '');
   name.append(nm, when);
   row.appendChild(name);
   g.appendChild(row);
@@ -452,7 +456,7 @@ function _waitRow(g, w) {
 /** The full-width "+ Effect" and, open, the panel - a tile's press handed to `press(k)`. */
 function _toggleAndPanel(g, press, title) {
   const st = _panelNow();
-  const tog = C.button('+ Effect', () => { st.open = !st.open; _panelSave(); _say(); }, { title: st.open ? 'Hide the effects' : title });
+  const tog = C.button(T.t('+ Effect'), () => { st.open = !st.open; _panelSave(); _say(); }, { title: st.open ? T.t('Hide the effects') : title });
   tog.classList.add('mv3-fx-add');
   if (st.open) tog.classList.add('is-on');
   tog.setAttribute('aria-expanded', st.open ? 'true' : 'false');
@@ -469,27 +473,30 @@ export function fxManyRows(g, items) {
   for (const { clip } of items) {
     for (const e of (clip.fx || [])) { if (effectOf(e.k)) { if (!kinds.has(e.k)) kinds.set(e.k, new Set()); kinds.get(e.k).add(clip.id); } }
   }
-  if (!kinds.size && !_many) g.appendChild(C.hint('None of the ' + n + ' clips has an effect.'));
-  for (const [k, ids] of kinds) _kindRow(g, k, ids.size === n ? 'on all ' + n : 'on ' + ids.size + ' of ' + n, () => _removeFromMany(items, k));
+  if (!kinds.size && !_many) g.appendChild(C.hint(T.tn(n, 'None of the {n} clip has an effect.', 'None of the {n} clips has an effect.')));
+  for (const [k, ids] of kinds) _kindRow(g, k, ids.size === n ? T.t('on all {n}', { n }) : T.t('on {m} of {n}', { m: ids.size, n }), () => _removeFromMany(items, k));
   if (_many) _waitRow(g, _many);
-  g.appendChild(C.hint('A tile puts the effect on each of the ' + n + ' clips, as on each one alone - a moment from its start, one that goes on to '
-    + 'its end; Ctrl+Z takes it off all of them. Its settings are each clip’s own: pick one clip to change them.'));
-  _toggleAndPanel(g, (k) => addToMany(items, k), 'Show the effects - a press on one puts it on each of the ' + n + ' clips');
+  g.appendChild(C.hint(T.tn(n,
+    'A tile puts the effect on each of the {n} clip, as on each one alone - a moment from its start, one that goes on to its end; Ctrl+Z takes it off all of them. Its settings are each clip’s own: pick one clip to change them.',
+    'A tile puts the effect on each of the {n} clips, as on each one alone - a moment from its start, one that goes on to its end; Ctrl+Z takes it off all of them. Its settings are each clip’s own: pick one clip to change them.')));
+  _toggleAndPanel(g, (k) => addToMany(items, k), T.tn(n, 'Show the effects - a press on one puts it on each of the {n} clip',
+    'Show the effects - a press on one puts it on each of the {n} clips'));
 }
 /**
  * The same for a group that is not this page's lanes - the ticked fragments of highlights (hl-group.js): the effects they have
  * (`kinds` [[k, how many]] of `n`, `off(k)`), the wait (`wait` { k, i, n, frac }), the toggle and the tiles - a press to `press(k)`.
  */
 export function fxGroupRows(g, { n, kinds, off, wait, press, note }) {
-  for (const [k, m] of kinds || []) if (effectOf(k)) _kindRow(g, k, m === n ? 'on all ' + n : 'on ' + m + ' of ' + n, off ? () => off(k) : null);
+  for (const [k, m] of kinds || []) if (effectOf(k)) _kindRow(g, k, m === n ? T.t('on all {n}', { n }) : T.t('on {m} of {n}', { m, n }), off ? () => off(k) : null);
   if (wait) _waitRow(g, wait);
   if (note) g.appendChild(C.hint(note));
-  _toggleAndPanel(g, press, 'Show the effects - a press on one puts it on each of the ' + n + ' fragments');
+  _toggleAndPanel(g, press, T.tn(n, 'Show the effects - a press on one puts it on each of the {n} fragment',
+    'Show the effects - a press on one puts it on each of the {n} fragments'));
 }
 
 // ── The inspector's group ───────────────────────────────────────────────────
 const _num = (v) => (Math.round(v * 100) / 100).toFixed(2);
-const _sec = (v) => _num(v) + ' s';
+const _sec = (v) => T.t('{s} s', { s: _num(v) });
 
 /** The group "Effects" of one clip into `g` (a group of the inspector, js/merge-v3/inspector.js). */
 export function fxRows(g, track, c) {
@@ -497,7 +504,7 @@ export function fxRows(g, track, c) {
   const dur = +c.dur || 0;
   const start = +c.start || 0;
   const write = (next) => setClipFields(track.id, c.id, { fx: next.length ? next : null });
-  if (!list.length && !_pending.has(c.id)) g.appendChild(C.hint('No effects. Added, one covers the whole clip - its start and end move here.'));
+  if (!list.length && !_pending.has(c.id)) g.appendChild(C.hint(T.t('No effects. Added, one covers the whole clip - its start and end move here.')));
   for (const e of list) {
     const d = effectOf(e.k);
     if (!d) continue;
@@ -510,18 +517,18 @@ export function fxRows(g, track, c) {
     const name = document.createElement('button');
     name.type = 'button';
     name.className = 'mv3-fx-name';
-    name.title = d.about + (outside ? ' - it lies outside the clip now (trimmed away).' : '');
+    name.title = outside ? T.t('{about} - it lies outside the clip now (trimmed away).', { about: d.about }) : d.about;
     const nm = document.createElement('span');
     nm.textContent = d.name;
     const when = document.createElement('small');
-    when.textContent = outside ? 'outside the clip' : (_sec(a) + ' – ' + (sp.whole ? 'end' : _sec(b)));
+    when.textContent = outside ? T.t('outside the clip') : (sp.whole ? T.t('{a} – end', { a: _sec(a) }) : _sec(a) + ' – ' + _sec(b));
     name.append(nm, when);
     name.addEventListener('click', () => { if (!outside) focus(c.id, open ? null : e.id); });
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'mv3-fx-x u-btn is-s is-icon is-quiet u-x';
-    x.title = 'Take this effect off the clip (Ctrl+Z puts it back)';
-    x.setAttribute('aria-label', 'Remove the effect');
+    x.title = T.t('Take this effect off the clip (Ctrl+Z puts it back)');
+    x.setAttribute('aria-label', T.t('Remove the effect'));
     x.addEventListener('click', () => write(list.filter((y) => y.id !== e.id)));
     row.append(name, x);
     g.appendChild(row);
@@ -551,16 +558,16 @@ export function fxRows(g, track, c) {
     // Its name over it, the strip's whole width, the clip's own length under it; the timeline's frame follows
     // the thumbs while they are held.
     g.appendChild(C.span({
-      label: 'Start – End', ends: ['0', _sec(dur)],
+      label: T.t('Start – End'), ends: ['0', _sec(dur)],
       min: 0, max: Math.max(STEP, dur), step: STEP, a: Math.max(0, a), b: Math.min(dur, Math.max(a, b)),
       fit,
-      fmt: (s, t) => _num(s) + '–' + (!intro && t >= dur - 0.01 ? 'end' : _num(t) + ' s'),
+      fmt: (s, t) => (!intro && t >= dur - 0.01 ? T.t('{a}–end', { a: _num(s) }) : T.t('{a}–{b} s', { a: _num(s), b: _num(t) })),
       onInput: (s, t) => fxLive(c.id, e.id, s, t),
       onChange: moveTo,
     }));
     g.appendChild(C.hint(d.about + (d.kind !== 'intro' ? ''
-      : d.hold != null ? ' Set it longer than ' + d.dur.toFixed(2) + ' s and the card stands - up to the clip\'s end; shorter - from ' + lo.toFixed(2) + ' s.'
-        : ' Its length goes from ' + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ' s.')));
+      : d.hold != null ? ' ' + T.t('Set it longer than {len} s and the card stands - up to the clip\'s end; shorter - from {lo} s.', { len: d.dur.toFixed(2), lo: lo.toFixed(2) })
+        : ' ' + T.t('Its length goes from {lo} to {hi} s.', { lo: lo.toFixed(2), hi: hi.toFixed(2) }))));
     // Its colours and its settings: a change is one undo step; a slider held shows on the
     // preview at once (place-b.js setLive - the clip drawn with the effect as it would be), written on release.
     const withIt = (next) => list.map((y) => (y.id === e.id ? next : y));
@@ -576,7 +583,7 @@ export function fxRows(g, track, c) {
         inp.className = 'u-in is-s mv3-fx-text';
         inp.maxLength = TEXT_MAX;
         inp.value = now[key];
-        inp.placeholder = 'nothing';
+        inp.placeholder = T.t('nothing');
         const withTxt = () => ({ ...e, txt: { ...(e.txt || {}), [key]: inp.value } });
         inp.addEventListener('input', () => live(withTxt()));
         inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } });
@@ -584,12 +591,12 @@ export function fxRows(g, track, c) {
         inp.addEventListener('blur', () => setLive(null));
         g.appendChild(C.row(label, inp));
       }
-      const sel = C.select([['', 'Inter (as made)'], ...CAP_FONTS.map((f) => [f.family, f.label])], e.font || '', async (v) => {
+      const sel = C.select([['', T.t('Inter (as made)')], ...CAP_FONTS.map((f) => [f.family, f.label])], e.font || '', async (v) => {
         if (v) await loadFamily(v);
         put(v ? { ...e, font: v } : (({ font, ...rest }) => rest)(e));
       });
       sel.classList.add('mv3-fx-font');
-      g.appendChild(C.row('Font', sel));
+      g.appendChild(C.row(T.t('Font'), sel));
     }
     if (d.colors && d.colors.length) {
       const now = colorsOf(e);
@@ -605,15 +612,16 @@ export function fxRows(g, track, c) {
         sw.setAttribute('aria-label', label);
         wrap.appendChild(sw);
       }
-      g.appendChild(C.row(d.colors.length > 1 ? 'Colors' : d.colors[0][1], wrap));
+      g.appendChild(C.row(d.colors.length > 1 ? T.t('Colors') : d.colors[0][1], wrap));
     }
     if (d.opts && d.opts.length) {
       const now = optsOf(e);
       for (const [key, label, olo, ohi, step, , kind] of d.opts) {
         const fmt = (v) => (kind === 'n' ? String(Math.round(v))
           : kind === 'pct' ? Math.round(v * 100) + ' %'
-            : kind === 's' ? (+v).toFixed(2) + ' s'
-            : kind === 'pos' ? (Math.abs(v) < 0.005 ? 'as made' : (v < 0 ? 'up ' : 'down ') + Math.round(Math.abs(v) * 100) + ' %')
+            : kind === 's' ? T.t('{s} s', { s: (+v).toFixed(2) })
+            : kind === 'pos' ? (Math.abs(v) < 0.005 ? T.t('as made')
+              : v < 0 ? T.t('up {p} %', { p: Math.round(Math.abs(v) * 100) }) : T.t('down {p} %', { p: Math.round(Math.abs(v) * 100) }))
               : (+v).toFixed(2) + '×');
         const withOpt = (v) => ({ ...e, opt: { ...(e.opt || {}), [key]: v } });
         // A switch for a setting that is on or off (the cover's barcode).
@@ -627,11 +635,11 @@ export function fxRows(g, track, c) {
     if (d.face) {
       const main = isMain(track);
       const moved = !!(e.path && e.pk && e.pk !== _placeKey(c, main));
-      const say = e.path ? (moved ? 'The clip lies in the frame otherwise now - find its face again.' : 'It follows the face found in the clip.')
-        : (WHY[_why.get(e.id)] || 'No face found - it works where a face usually is.');
+      const say = e.path ? (moved ? T.t('The clip lies in the frame otherwise now - find its face again.') : T.t('It follows the face found in the clip.'))
+        : (WHY[_why.get(e.id)] || T.t('No face found - it works where a face usually is.'));
       g.appendChild(C.hint(say));
       if (!_pending.has(c.id)) {
-        g.appendChild(C.row('', C.button('Find the face again', async () => {
+        g.appendChild(C.row('', C.button(T.t('Find the face again'), async () => {
           const mine = { k: e.k, frac: 0 };
           _pending.set(c.id, mine);
           _say();
@@ -647,7 +655,7 @@ export function fxRows(g, track, c) {
           if (r.path) { next.path = r.path; next.pk = r.pk; _why.delete(e.id); } else _why.set(e.id, r.why);
           setClipFields(lane.id, now.id, { fx: now.fx.map((y) => (y.id === e.id ? next : y)) });
           _say();
-        }, { title: 'Count the faces of this clip\'s film again and put the effect on the face where the clip shows it now' })));
+        }, { title: T.t('Count the faces of this clip\'s film again and put the effect on the face where the clip shows it now') })));
       }
     }
   }
@@ -660,17 +668,17 @@ export function fxRows(g, track, c) {
     const name = document.createElement('span');
     name.className = 'mv3-fx-name';
     const nm = document.createElement('span');
-    nm.textContent = d ? d.name : 'Effect';
+    nm.textContent = d ? d.name : T.t('Effect');
     const when = document.createElement('small');
-    when.textContent = 'finding the face…' + (wait.frac > 0 ? ' ' + Math.round(wait.frac * 100) + ' %' : '');
+    when.textContent = T.t('finding the face…') + (wait.frac > 0 ? ' ' + Math.round(wait.frac * 100) + ' %' : '');
     name.append(nm, when);
     row.appendChild(name);
     g.appendChild(row);
   }
   // The full-width "+ Effect" opens and shuts the panel of tiles; the panel stays until it is pressed again.
   const st = _panelNow();
-  const tog = C.button('+ Effect', () => { st.open = !st.open; _panelSave(); _say(); },
-    { title: st.open ? 'Hide the effects' : 'Show the effects - a press on one puts it on the whole clip, Ctrl+Z takes it off' });
+  const tog = C.button(T.t('+ Effect'), () => { st.open = !st.open; _panelSave(); _say(); },
+    { title: st.open ? T.t('Hide the effects') : T.t('Show the effects - a press on one puts it on the whole clip, Ctrl+Z takes it off') });
   tog.classList.add('mv3-fx-add');
   if (st.open) tog.classList.add('is-on');
   tog.setAttribute('aria-expanded', st.open ? 'true' : 'false');

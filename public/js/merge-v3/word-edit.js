@@ -32,6 +32,8 @@ import { replaceAt, insertAt, removeAt, joinAt, cutAt, markAt, edgeAt, LIMITS } 
 import { timedWords } from '../captions/pages.js';
 import { note } from '../ask.js';
 import { icon } from '../icons.js';
+// The module's own variables are called `t` (times): the words come in as T.t.
+import * as T from '../i18n/t.js';
 
 const S = {
   clip: null, track: null,   // the caption whose words are shown
@@ -79,9 +81,9 @@ export function leave() {
     // is said in a note that stays until it is read, with what was typed to put in again - opened
     // once the new pick is painted, over it on the timeline, and not closed by the scrolling that brings it in.
     if (!_commit('none')) {
-      const why = (S.msg && S.msg.text) || 'That cannot be done';
-      const head = e.mode === 'insert' ? 'The word after «' + e.w + '» was not put in.' : 'The correction of «' + e.w + '» was not applied.';
-      const sub = why + (typed.trim() ? ' - you typed: «' + typed + '»' : '');
+      const why = (S.msg && S.msg.text) || T.t('That cannot be done');
+      const head = e.mode === 'insert' ? T.t('The word after «{word}» was not put in.', { word: e.w }) : T.t('The correction of «{word}» was not applied.', { word: e.w });
+      const sub = typed.trim() ? T.t('{why} - you typed: «{typed}»', { why, typed }) : why;
       S.edit = null;
       _say('');
       setTimeout(() => {
@@ -147,7 +149,7 @@ export function paint(host, track, clip, opts) {
   const list = _el('div', 'mv3-wd-list');
   list.tabIndex = 0;
   list.setAttribute('role', 'listbox');
-  list.setAttribute('aria-label', 'The words of this line');
+  list.setAttribute('aria-label', T.t('The words of this line'));
   words.forEach((w, i) => {
     const chip = _el('span', 'mv3-wd-chip');
     chip.id = 'mv3-wd-' + i;
@@ -158,8 +160,8 @@ export function paint(host, track, clip, opts) {
     if ((+w.s || 0) >= S.dur - 1e-6) chip.classList.add('is-after');
     chip.appendChild(_el('span', 'mv3-wd-w', String(w.w)));
     chip.appendChild(_el('span', 'mv3-wd-t', (+w.s || 0).toFixed(2)));
-    chip.title = String(w.w) + ' · ' + _fmt(S.start + (+w.s || 0)) + (w.h ? ' · corrected' : '') + (w.k ? ' · stands out' : '')
-      + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - never lit" : '');
+    chip.title = [String(w.w), _fmt(S.start + (+w.s || 0)), w.h && T.t('corrected'), w.k && T.t('stands out'),
+      (+w.s || 0) >= S.dur - 1e-6 && T.t("after the line's end - never lit")].filter(Boolean).join(' · ');
     // The pick is made on the press, so a double click lands on the same chip and opens it.
     chip.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
@@ -185,8 +187,7 @@ export function paint(host, track, clip, opts) {
   box.appendChild(rowHost);
   const msg = _el('div', 'mv3-wd-msg');
   box.appendChild(msg);
-  box.appendChild(_el('div', 'mv3-wd-help', 'Click a word to put the playhead on it. ← → move · Enter edits · Delete '
-    + 'takes it out · K stands out · S cuts at the playhead · M joins · Insert adds after · [ ] move its start (Shift: its end)'));
+  box.appendChild(_el('div', 'mv3-wd-help', T.t('Click a word to put the playhead on it. ← → move · Enter edits · Delete takes it out · K stands out · S cuts at the playhead · M joins · Insert adds after · [ ] move its start (Shift: its end)')));
   box.addEventListener('keydown', _keys);
   host.appendChild(box);
   _box = box;
@@ -234,7 +235,7 @@ function _paintPick() {
   f.value = S.edit ? S.edit.value : String(w.w);
   // What the field was painted with: a field that still holds it has nothing of the person's (store.js setTyping).
   f.__painted = S.edit ? (S.edit.mode === 'edit' ? S.edit.w : '') : String(w.w);
-  f.placeholder = ins ? 'a word after «' + String(w.w) + '»' : '';
+  f.placeholder = ins ? T.t('a word after «{word}»', { word: String(w.w) }) : '';
   if (ins) f.classList.add('is-insert');
   // The field belongs to ONE edit (f.__edit): opened by focusing it, written by its typing, kept on its blur.
   f.__edit = S.edit;
@@ -263,15 +264,15 @@ function _paintPick() {
     row.appendChild(b);
     return b;
   };
-  btn('A', w.k ? 'Stands out - press to make it an ordinary word (K)' : 'Make this word stand out, for the whole page (K)', _mark, false, w.k ? 'is-on' : '');
-  btn('✂', 'Cut it in two at the playhead (S) - or type a space in it where it splits', _cut, false, '', 'scissors');
-  btn('⇥', 'Join it with the next word (M)', _join, S.sel >= n - 1, '', 'arrow-right-to-line');
-  btn('✕', n > 1 ? 'Take this word out - its time becomes a pause (Delete)' : ONLY, _remove, n <= 1, '', 'x');
-  btn('+', 'Put a word after it (Insert)', () => _open('insert'), false, '', 'plus');
+  btn('A', w.k ? T.t('Stands out - press to make it an ordinary word (K)') : T.t('Make this word stand out, for the whole page (K)'), _mark, false, w.k ? 'is-on' : '');
+  btn('✂', T.t('Cut it in two at the playhead (S) - or type a space in it where it splits'), _cut, false, '', 'scissors');
+  btn('⇥', T.t('Join it with the next word (M)'), _join, S.sel >= n - 1, '', 'arrow-right-to-line');
+  btn('✕', n > 1 ? T.t('Take this word out - its time becomes a pause (Delete)') : _only(), _remove, n <= 1, '', 'x');
+  btn('+', T.t('Put a word after it (Insert)'), () => _open('insert'), false, '', 'plus');
   _box.querySelector('.mv3-wd-pick').appendChild(row);
   const s = S.start + (+w.s || 0), e = S.start + (+w.e || 0);
-  const time = _el('div', 'mv3-wd-time', _fmt(s) + ' → ' + _fmt(e) + ' · ' + Math.max(0, (+w.e || 0) - (+w.s || 0)).toFixed(2) + ' s'
-    + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - never lit" : ''));
+  const time = _el('div', 'mv3-wd-time', [T.t('{from} → {to} · {secs} s', { from: _fmt(s), to: _fmt(e), secs: Math.max(0, (+w.e || 0) - (+w.s || 0)).toFixed(2) }),
+    (+w.s || 0) >= S.dur - 1e-6 && T.t("after the line's end - never lit")].filter(Boolean).join(' · '));
   host.appendChild(time);
 }
 
@@ -345,7 +346,7 @@ function _focusField(all) {
 // 'next' / 'prev' (on to that word, the field open - from the last word, on to the next line). The operations
 // are pure, so where the pick and the field land is worked out BEFORE the change: the change repaints the
 // strip at once, inside the mutation.
-const ONLY = "The line's only word - «Remove this line» below takes the line";
+const _only = () => T.t("The line's only word - «Remove this line» below takes the line");
 const _sameWords = (a, b) => a.length === b.length && a.every((x, i) => {
   const y = b[i];
   return String(x.w) === String(y.w) && Math.abs((+x.s || 0) - (+y.s || 0)) < 0.005 && Math.abs((+x.e || 0) - (+y.e || 0)) < 0.005
@@ -360,14 +361,14 @@ function _commit(then) {
   if (e.mode === 'edit') {
     if (v.trim() === e.w) op = null;
     else if (!v.trim()) {
-      if (n <= 1) { _say(ONLY); return false; }
+      if (n <= 1) { _say(_only()); return false; }
       op = (ws) => removeAt(ws, e.i);
     } else op = (ws) => replaceAt(ws, e.i, v, S.dur);
   } else if (v.trim()) op = (ws) => insertAt(ws, e.i + 1, v, S.dur);
   let W = S.words;
   if (op) {
     const r = op(S.words);
-    if (!r || r.why) { _say((r && r.why) || 'That cannot be done'); return false; }
+    if (!r || r.why) { _say((r && r.why) || T.t('That cannot be done')); return false; }
     W = r.words || [];
     // An edit that gives the same words back (two spaces where one was) is no change: the store would make none
     // and paint nothing, and the field would stay focused belonging to no edit, typing and Enter doing nothing
@@ -437,7 +438,7 @@ function _apply(op, i, opts) {
   const shown = S.words[i] || null;
   const r = editWords(S.track, S.clip, (ws, c) => {
     if (shown && (!ws[i] || ws[i].w !== shown.w || Math.abs((+ws[i].s || 0) - (+shown.s || 0)) > 0.005)) {
-      return { why: 'The line has changed meanwhile - pick the word again' };
+      return { why: T.t('The line has changed meanwhile - pick the word again') };
     }
     return op(ws, c);
   }, opts);
@@ -485,7 +486,7 @@ function _join() {
 function _remove() {
   if (S.sel == null) return;
   const n = S.words.length;
-  if (n <= 1) { _say(ONLY); return; }
+  if (n <= 1) { _say(_only()); return; }
   const i = S.sel;
   _run((ws) => removeAt(ws, i), i < n - 1 ? i : i - 1);
 }

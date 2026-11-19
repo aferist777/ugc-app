@@ -46,6 +46,8 @@ import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { icon } from '../icons.js';
 import { allow } from '../key-gate.js';
+// The app's words as T.t: this module's own `t`s are answers and rows.
+import * as T from '../i18n/t.js';
 
 const PAGE = 20;                       // results per page
 
@@ -122,7 +124,7 @@ function _playBtn(src, what, ico) {
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
-  b.title = src ? 'Play ' + what : 'It has no sample';
+  b.title = src ? T.t('Play {what}', { what }) : T.t('It has no sample');
   b.addEventListener('click', (e) => { e.stopPropagation(); _play(src); });
   return b;
 }
@@ -140,7 +142,7 @@ const _mine = (rec) => {
   const list = _saved(rec);
   const id = String((rec && rec.voice) || '');
   return (id && !list.some(v => v && String(v.voiceId) === id))
-    ? list.concat([{ voiceId: id, name: 'their voice', sample: '' }]) : list;
+    ? list.concat([{ voiceId: id, name: T.t('their voice'), sample: '' }]) : list;
 };
 const _active = (rec) => {
   const id = String((rec && rec.voice) || '');
@@ -169,25 +171,27 @@ export function paintRow(host, api, o) {
   const cur = now || (!mine.length ? pick : null);
 
   const row = el('div', 'mv3-wk-vrow is-now');
-  row.appendChild(_playBtn((cur && cur.sample) || '', 'our own demo'));
+  row.appendChild(_playBtn((cur && cur.sample) || '', T.t('our own demo')));
   const btn = el('button', 'mv3-wk-vpickbtn u-btn is-s is-field' + (cur ? '' : ' is-need'));
   btn.type = 'button';
-  btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
+  btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? T.t('taking it…') : T.t('choose a voice'))));
   btn.appendChild(el('span', 'mv3-wk-vpickarrow')).innerHTML = icon('chevron-down', 12);   // Lucide's
   btn.disabled = !!_busy;
+  const who = (rec && rec.name) || '';
   hint(btn, (now
-    ? 'The voice ' + (rec.name || 'the character') + ' is read in.'
+    ? (who ? T.t('The voice {name} is read in.', { name: who }) : T.t('The voice the character is read in.'))
     : cur
-      ? (rec ? 'The project’s voice - ' + (rec.name || 'the character') + ' has none of their own.'
-        : 'The project’s voice - a character with one of their own will speak in theirs.')
-      : rec ? (rec.name || 'This character') + ' has no voice yet - every line is read in the one chosen here.'
-        : 'No voice yet - choose one: a saved voice, or one from the ElevenLabs library.')
-    + (cur && _sub(cur) ? '\n' + _sub(cur) : '') + '\nPress for the saved voices and the ElevenLabs library.');
+      ? (rec ? (who ? T.t('The project’s voice - {name} has none of their own.', { name: who }) : T.t('The project’s voice - the character has none of their own.'))
+        : T.t('The project’s voice - a character with one of their own will speak in theirs.'))
+      : rec ? (who ? T.t('{name} has no voice yet - every line is read in the one chosen here.', { name: who })
+        : T.t('This character has no voice yet - every line is read in the one chosen here.'))
+        : T.t('No voice yet - choose one: a saved voice, or one from the ElevenLabs library.'))
+    + (cur && _sub(cur) ? '\n' + _sub(cur) : '') + '\n' + T.t('Press for the saved voices and the ElevenLabs library.'));
   btn.addEventListener('click', (e) => { e.stopPropagation(); _voiceMenu(btn, api); });
   row.appendChild(btn);
   host.appendChild(row);
 
-  if (mine.length && !now) notes.appendChild(api.note('None of them is set as the voice - pick one in the menu.', true));
+  if (mine.length && !now) notes.appendChild(api.note(T.t('None of them is set as the voice - pick one in the menu.'), true));
   // What the sub-level had to say - a voice that could not be taken, or a demo that failed - is said ONCE here, on the way
   // back, and then let go: it is news about what just happened, not a label.
   if (_said) { notes.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
@@ -246,12 +250,12 @@ async function _loadShelf() {
   _shelfFailed = false;
   try {
     const d = await (await fetch('/api/library/shelf/voices')).json();
-    if (!d || !d.success || !Array.isArray(d.items)) throw new Error((d && d.error) || 'the app did not answer');
+    if (!d || !d.success || !Array.isArray(d.items)) throw new Error((d && d.error) || T.t('the app did not answer'));
     _shelf = d.items;
   } catch (e) {
     // Not read is not "No saved voices yet": the menu says it did not load, read again next time (`_shelf` stays null).
     _shelfFailed = true;
-    showError('Could not read the saved voices', { detail: e.message });
+    showError(T.t('Could not read the saved voices'), { detail: e.message });
   }
   _shelfLoading = false;
 }
@@ -268,33 +272,33 @@ async function _voiceMenu(anchor, api) {
 
   const lib = el('button', 'mv3-plus-item u-mi is-lib');
   lib.type = 'button';
-  lib.appendChild(el('span', '', 'ElevenLabs library…'));
-  lib.appendChild(el('small', '', 'thousands of voices - search and listen free, take one'));
+  lib.appendChild(el('span', '', T.t('ElevenLabs library…')));
+  lib.appendChild(el('small', '', T.t('thousands of voices - search and listen free, take one')));
   lib.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); api.go('voice'); });
   box.appendChild(lib);
 
   const row = (src, name, sub, on, isOn, disabled) => {
     const r = el('div', 'mv3-wk-vmrow' + (isOn ? ' is-on' : '') + (disabled ? ' is-off' : ''));
-    r.appendChild(_playBtn(src || '', 'our own demo'));
+    r.appendChild(_playBtn(src || '', T.t('our own demo')));
     const t = el('div', 'mv3-wk-vtxt');
     t.appendChild(el('div', 'mv3-wk-vname', name));
     if (sub) t.appendChild(el('div', 'mv3-wk-vsub', sub));
     r.appendChild(t);
-    if (isOn) r.appendChild(el('span', 'mv3-wk-vtag', 'The voice'));
+    if (isOn) r.appendChild(el('span', 'mv3-wk-vtag', T.tc('voices menu', 'The voice')));
     if (!disabled && !isOn) r.addEventListener('click', () => { _closeMenu(); on(); });
     box.appendChild(r);
   };
   if (rec && mine.length) {
-    box.appendChild(el('div', 'mv3-sc-menu-sep', (rec.name || 'the character') + '’s voices'));
+    box.appendChild(el('div', 'mv3-sc-menu-sep', rec.name ? T.t('{name}’s voices', { name: rec.name }) : T.t('the character’s voices')));
     for (const v of mine) row(v.sample, v.name || v.voiceId, _sub(v), () => _star(api, v.voiceId), String(v.voiceId) === curId);
   }
-  box.appendChild(el('div', 'mv3-sc-menu-sep', 'Saved voices'));
+  box.appendChild(el('div', 'mv3-sc-menu-sep', T.t('Saved voices')));
   const savedAt = box.childNodes.length;
   if (_shelf === null) _shelfFailed = false;      // read again now: "Reading…" until its answer
   const paintSaved = () => {
     while (box.childNodes.length > savedAt) box.lastChild.remove();
     if (_shelf === null && _shelfFailed) {
-      box.appendChild(failedEl('The saved voices', async () => {
+      box.appendChild(failedEl(T.t('The saved voices'), async () => {
         _shelfFailed = false;
         paintSaved();
         await _loadShelf();
@@ -302,13 +306,13 @@ async function _voiceMenu(anchor, api) {
       }, { line: true, cls: 'mv3-wk-vmnote' }));
       return;
     }
-    if (_shelf === null) { box.appendChild(loadingEl('reading the saved voices…', { line: true, cls: 'mv3-wk-vmnote' })); return; }
+    if (_shelf === null) { box.appendChild(loadingEl(T.t('reading the saved voices…'), { line: true, cls: 'mv3-wk-vmnote' })); return; }
     const have = new Set(mine.map(v => String(v.voiceId)));
     const list = _shelf.filter(it => !have.has(String(it.id)));
-    if (!list.length) { box.appendChild(emptyEl('No saved voices yet - take one from the ElevenLabs library.', { line: true, cls: 'mv3-wk-vmnote' })); return; }
+    if (!list.length) { box.appendChild(emptyEl(T.t('No saved voices yet - take one from the ElevenLabs library.'), { line: true, cls: 'mv3-wk-vmnote' })); return; }
     for (const it of list) {
       const m = it.meta || {};
-      row(it.media, it.name, [_labelsSub(m.labels || {}), m.accountRemoved ? 'out of the account - taken back free when chosen' : ''].filter(Boolean).join(' · '),
+      row(it.media, it.name, [_labelsSub(m.labels || {}), m.accountRemoved ? T.t('out of the account - taken back free when chosen') : ''].filter(Boolean).join(' · '),
         () => _useSaved(api, it), String(it.id) === curId);
     }
   };
@@ -345,12 +349,12 @@ async function _useSaved(api, it) {
   try {
     let id = String(it.id), sample = it.media || '', dur = +m.dur || 0;
     if (m.accountRemoved) {
-      if (!m.publicOwnerId) throw new Error('it is out of the account and there is no way to take it back - take another');
+      if (!m.publicOwnerId) throw new Error(T.t('it is out of the account and there is no way to take it back - take another'));
       const t = await (await fetch('/api/scen3/voices/take', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ownerId: m.publicOwnerId, voiceId: m.sharedVoiceId || it.id, name: it.name }),
       })).json();
-      if (!t || !t.success) throw new Error((t && t.error) || 'it could not be taken back into the account');
+      if (!t || !t.success) throw new Error((t && t.error) || T.t('it could not be taken back into the account'));
       id = String(t.voiceId || id);
       sample = t.sample || sample;
       dur = t.dur || dur;
@@ -368,7 +372,7 @@ async function _useSaved(api, it) {
       await api.patchChar({ voice: id, voices: all.filter(v => String(v.voiceId) !== id).concat([entry]) });
     }
   } catch (e) {
-    _said = 'Could not take it: ' + e.message;
+    _said = T.t('Could not take it: {why}', { why: e.message });
     _bad = true;
   }
   _busy = '';
@@ -378,7 +382,7 @@ async function _useSaved(api, it) {
 // In its window (openVoices, below) the window's own ✕ closes it - no bar of its own.
 export function paintPicker(host, api) {
   const rec = api.char();
-  if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl('reading the filters…')); return; }
+  if (_filters === null) { _loadFilters(api); host.appendChild(loadingEl(T.t('reading the filters…'))); return; }
 
   const mine = _mine(rec);
   const now = String((rec && rec.voice) || '');
@@ -386,40 +390,41 @@ export function paintPicker(host, api) {
 
   if (rec) {
     host.appendChild(el('div', 'mv3-wk-vhead', mine.length
-      ? (rec.name || 'This character') + '’s voices'
-      : (rec.name || 'This character') + ' has no voice yet'));
+      ? (rec.name ? T.t('{name}’s voices', { name: rec.name }) : T.t('This character’s voices'))
+      : (rec.name ? T.t('{name} has no voice yet', { name: rec.name }) : T.t('This character has no voice yet'))));
   } else {
-    host.appendChild(el('div', 'mv3-wk-vhead', own ? 'The project’s voice' : 'No voice yet'));
+    host.appendChild(el('div', 'mv3-wk-vhead', own ? T.t('The project’s voice') : T.t('No voice yet')));
   }
   // The project's own pick, when it is what the reads use: no character, or one without a voice.
   if (own && !mine.length) {
     const row = el('div', 'mv3-wk-vrow is-on');
-    row.appendChild(_playBtn(own.sample || '', 'our own demo', true));
+    row.appendChild(_playBtn(own.sample || '', T.t('our own demo'), true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', own.name || own.voiceId));
-    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || 'no tags'));
+    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || T.t('no tags')));
     row.appendChild(txt);
-    row.appendChild(el('span', 'mv3-wk-vtag', 'Selected'));
+    row.appendChild(el('span', 'mv3-wk-vtag', T.t('Selected')));
     host.appendChild(row);
     host.appendChild(api.note(rec
-      ? 'Every line is read in it until ' + (rec.name || 'the character') + ' is given a voice of their own.'
-      : 'Every line is read in it. A character cast with a voice of their own speaks in theirs.'));
+      ? (rec.name ? T.t('Every line is read in it until {name} is given a voice of their own.', { name: rec.name })
+        : T.t('Every line is read in it until the character is given a voice of their own.'))
+      : T.t('Every line is read in it. A character cast with a voice of their own speaks in theirs.')));
   } else if (!rec && !own) {
-    host.appendChild(api.note('Take one from the library below - it becomes the project’s voice. A character cast later with a voice of their own speaks in theirs.'));
+    host.appendChild(api.note(T.t('Take one from the library below - it becomes the project’s voice. A character cast later with a voice of their own speaks in theirs.')));
   }
   for (const v of mine) {
     const row = el('div', 'mv3-wk-vrow' + (String(v.voiceId) === now ? ' is-on' : ''));
-    row.appendChild(_playBtn(v.sample || '', 'our own demo', true));
+    row.appendChild(_playBtn(v.sample || '', T.t('our own demo'), true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voiceId));
-    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
+    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || T.t('no tags')));
     row.appendChild(txt);
     if (String(v.voiceId) === now) {
-      row.appendChild(el('span', 'mv3-wk-vtag', 'Selected'));
+      row.appendChild(el('span', 'mv3-wk-vtag', T.t('Selected')));
     } else {
-      const use = el('button', 'mv3-wk-vuse u-btn is-s is-quiet', 'use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s is-quiet', T.t('use'));
       use.type = 'button';
-      use.title = 'Read every line in this one';
+      use.title = T.t('Read every line in this one');
       use.disabled = !!_busy;
       use.addEventListener('click', () => _star(api, v.voiceId));
       row.appendChild(use);
@@ -430,18 +435,18 @@ export function paintPicker(host, api) {
   if (_said) host.appendChild(api.note(_said, _bad));
 
   // ── the library ──
-  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'The ElevenLabs library'));
+  host.appendChild(el('div', 'mv3-wk-vhead is-lib', T.t('The ElevenLabs library')));
   const f = el('div', 'mv3-wk-vfilters');
   const search = el('input', 'mv3-wk-vsearch u-in is-s');
   search.type = 'search';
-  search.placeholder = 'a name, or a word from the description';
+  search.placeholder = T.t('a name, or a word from the description');
   search.value = _q.search;
   search.addEventListener('input', () => { _q.search = search.value; });
   search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _search(api, 1); } });
   f.appendChild(search);
 
   // Each filter's name over its menu.
-  const NAMES = { gender: 'Gender', age: 'Age', descriptives: 'Style', use_cases: 'Use case', accent: 'Accent', language: 'Language' };
+  const NAMES = { gender: T.t('Gender'), age: T.t('Age'), descriptives: T.t('Style'), use_cases: T.t('Use case'), accent: T.t('Accent'), language: T.t('Language') };
   const pick = (key, label, list) => {
     const cell = el('label', 'mv3-wk-vfcell');
     cell.appendChild(el('span', 'mv3-wk-vfname', NAMES[key] || key));
@@ -461,17 +466,18 @@ export function paintPicker(host, api) {
     cell.appendChild(s);
     f.appendChild(cell);
   };
-  pick('gender', 'any gender', _filters.genders || []);
-  pick('age', 'any age', _filters.ages || []);
-  pick('descriptives', 'any manner', _filters.descriptives || []);
-  pick('use_cases', 'any use', _filters.useCases || []);
-  pick('accent', 'any accent', _filters.accents || []);
-  pick('language', 'any language', _filters.languages || []);
+  // What each filter says while nothing is chosen in it; the values themselves are ElevenLabs' words, as they come.
+  pick('gender', T.t('any gender'), _filters.genders || []);
+  pick('age', T.t('any age'), _filters.ages || []);
+  pick('descriptives', T.t('any manner'), _filters.descriptives || []);
+  pick('use_cases', T.t('any use'), _filters.useCases || []);
+  pick('accent', T.t('any accent'), _filters.accents || []);
+  pick('language', T.t('any language'), _filters.languages || []);
   host.appendChild(f);
   // the filters not read: their menus are empty, and the window says so - with Try again
-  if (_filtersFailed) host.appendChild(failedEl('The filters', () => { _filters = null; _filtersFailed = false; api.repaint(); }, { line: true }));
+  if (_filtersFailed) host.appendChild(failedEl(T.t('The filters'), () => { _filters = null; _filtersFailed = false; api.repaint(); }, { line: true }));
 
-  const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? 'searching…' : 'search');
+  const go = el('button', 'mv3-wk-vsearchbtn u-btn is-s', _busy === 'search' ? T.t('searching…') : T.t('search'));
   go.type = 'button';
   go.disabled = !!_busy;
   go.addEventListener('click', () => _search(api, 1));
@@ -485,32 +491,32 @@ export function paintPicker(host, api) {
   if (pagerHost) pagerHost.textContent = '';
   if (!_asked && !_busy) { _asked = true; setTimeout(() => _search(api, 1), 0); }
   if (!_asked) {
-    host.appendChild(api.note('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.'));
+    host.appendChild(api.note(T.t('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.')));
     if (pagerHost) _pager(pagerHost, api);
     return;
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
-    host.appendChild(_busy === 'search' || (!_res && !_searchFailed) ? loadingEl('searching…')
-      : _searchFailed ? failedEl('The search', () => _search(api, _page))
-        : emptyEl('Nothing matches all of those. Drop a filter.', { icon: 'search' }));
+    host.appendChild(_busy === 'search' || (!_res && !_searchFailed) ? loadingEl(T.t('searching…'))
+      : _searchFailed ? failedEl(T.t('The search'), () => _search(api, _page))
+        : emptyEl(T.t('Nothing matches all of those. Drop a filter.'), { icon: 'search' }));
     if (pagerHost) _pager(pagerHost, api);
     return;
   }
   const have = new Set(mine.map(v => String(v.voiceId)));
   for (const v of found) {
     const row = el('div', 'mv3-wk-vrow');
-    row.appendChild(_playBtn(v.preview_url || '', 'the owner’s sample', true));
+    row.appendChild(_playBtn(v.preview_url || '', T.t('the owner’s sample'), true));
     const txt = el('div', 'mv3-wk-vtxt');
     txt.appendChild(el('div', 'mv3-wk-vname', v.name || v.voice_id));
-    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || 'no tags'));
+    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(v) || T.t('no tags')));
     row.appendChild(txt);
-    const take = el('button', 'mv3-wk-vuse u-btn is-s', _busy === 'take:' + v.voice_id ? '…' : 'take');
+    const take = el('button', 'mv3-wk-vuse u-btn is-s', _busy === 'take:' + v.voice_id ? '…' : T.t('take'));
     take.type = 'button';
-    take.title = !rec ? 'Add it to the account and make it the project’s voice'
+    take.title = !rec ? T.t('Add it to the account and make it the project’s voice')
       : have.has(String(v.voice_id))
-        ? 'This character already has it - taking it again only makes it their voice'
-        : 'Add it to the account and to this character';
+        ? T.t('This character already has it - taking it again only makes it their voice')
+        : T.t('Add it to the account and to this character');
     take.disabled = !!_busy;
     take.addEventListener('click', () => _take(api, v));
     row.appendChild(take);
@@ -534,8 +540,8 @@ function _pager(host, api) {
     pager.appendChild(b);
   };
   step('‹', _page - 1, !!_res && _page > 1);
-  pager.appendChild(el('span', 'mv3-wk-vcount', _busy === 'search' ? 'searching…'
-    : !_res ? 'the ElevenLabs library' : total + ' voices · page ' + _page + ' of ' + pages));
+  pager.appendChild(el('span', 'mv3-wk-vcount', _busy === 'search' ? T.t('searching…')
+    : !_res ? T.t('the ElevenLabs library') : T.t('{n} voices · page {k} of {pages}', { n: total, k: _page, pages })));
   step('›', _page + 1, !!_res && (_page < pages || !!_res.hasMore));
   host.appendChild(pager);
 }
@@ -547,8 +553,8 @@ function _loadFilters(api) {
   _filtersFailed = false;
   fetch('/api/scen3/voices/filters').then(r => r.json()).then((d) => {
     _filters = (d && d.success) ? d : {};
-    if (!d || !d.success) { _filtersFailed = true; showError('Could not read the filters', { detail: (d && d.error) || 'refused' }); }
-  }).catch((e) => { _filtersFailed = true; showError('Could not read the filters', { detail: e.message }); })
+    if (!d || !d.success) { _filtersFailed = true; showError(T.t('Could not read the filters'), { detail: (d && d.error) || T.t('refused') }); }
+  }).catch((e) => { _filtersFailed = true; showError(T.t('Could not read the filters'), { detail: e.message }); })
     .finally(() => api.repaint());
 }
 
@@ -566,12 +572,12 @@ async function _search(api, page) {
     p.set('page', String(_page - 1));             // the API counts from zero
     p.set('page_size', String(PAGE));
     const d = await (await fetch('/api/scen3/voices/library?' + p)).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'the library did not answer');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('the library did not answer'));
     _res = { voices: d.voices || [], total: d.total || 0, hasMore: !!d.hasMore };
     _searchFailed = false;
   } catch (e) {
     // said in the corner; the voices found before stay, with none the list says it did not load
-    showError('The search failed', { detail: e.message });
+    showError(T.t('The search failed'), { detail: e.message });
     if (!(_res && _res.voices && _res.voices.length)) { _res = null; _searchFailed = true; } else _page = was;   // the page shown stays
   }
   _busy = '';
@@ -588,7 +594,7 @@ async function _star(api, voiceId) {
   try {
     await api.patchChar({ voice: String(voiceId) });
   } catch (e) {
-    _said = 'Could not set the voice: ' + e.message;
+    _said = T.t('Could not set the voice: {why}', { why: e.message });
     _bad = true;
   }
   _busy = '';
@@ -609,7 +615,7 @@ async function _take(api, card) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerId: card.public_owner_id, voiceId: card.voice_id, name: card.name }),
     })).json();
-    if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
+    if (!t || !t.success) throw new Error((t && t.error) || T.t('the voice could not be taken'));
     _shelf = null;                                   // it is a saved voice now: field 1's menu reads the shelf afresh
 
     const rec = api.char();
@@ -622,7 +628,7 @@ async function _take(api, card) {
       // Nobody cast: the project's own voice (routes/scen3.js, voice.pick).
       await api.setPick(entry);
       // Taken is said by the row itself - the name is there now; only a demo that failed is news.
-      _said = t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
+      _said = t.sampleError ? T.t('Taken. Its demo failed to record, which is cosmetic.') : '';
       _bad = false;
       _busy = '';
       return _repaint(api);
@@ -636,10 +642,10 @@ async function _take(api, card) {
     // Three different things can have happened, and a sentence that blurs them sends somebody
     // looking for a second copy that does not exist.
     // The row shows the voice taken; only a demo that failed is said.
-    _said = !had && t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
+    _said = !had && t.sampleError ? T.t('Taken. Its demo failed to record, which is cosmetic.') : '';
     _bad = false;
   } catch (e) {
-    _said = 'Could not take it: ' + e.message;
+    _said = T.t('Could not take it: {why}', { why: e.message });
     _bad = true;
   }
   _busy = '';
@@ -702,7 +708,7 @@ export const reading = () => ({
 export async function saveText(api, i, text) {
   const raw = String(text || '').trim();
   const words = plainWords(raw);
-  if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return _repaint(api); }
+  if (!words) { _rsaid = T.t('A line cannot be empty.'); _rbad = true; return _repaint(api); }
   const p = api.project() || {};
   const l = (Array.isArray(p.lines) ? p.lines : [])[i];
   _rsaid = ''; _rbad = false;
@@ -712,10 +718,10 @@ export async function saveText(api, i, text) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(_tagged(l) ? { index: i, text: words, tagged: raw } : { index: i, text: words }),
     })).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('refused'));
     api.setProject(d.project);
   } catch (e) {
-    _rsaid = 'Could not save the words: ' + e.message;
+    _rsaid = T.t('Could not save the words: {why}', { why: e.message });
     _rbad = true;
   }
   _repaint(api);
@@ -745,7 +751,7 @@ export async function tagAll(api) {
     // line marked on its own argues with its neighbours. Otherwise only what is missing.
     await _tag(api, want.length === lines.length ? [] : want);
   } catch (e) {
-    _rsaid = 'The tagging failed: ' + e.message;
+    _rsaid = T.t('The tagging failed: {why}', { why: e.message });
     _rbad = true;
   }
   _tagging = false;
@@ -767,7 +773,7 @@ export async function tagLine(api, i) {
   try {
     await _tag(api, [i]);
   } catch (e) {
-    _rsaid = 'The tagging failed: ' + e.message;
+    _rsaid = T.t('The tagging failed: {why}', { why: e.message });
     _rbad = true;
   }
   _tagging = false;
@@ -781,7 +787,7 @@ async function _tag(api, only) {
   const d = await (await fetch('/api/scen3/voice/tag', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })).json();
-  if (!d || !d.success) throw new Error((d && d.error) || 'the tagging failed');
+  if (!d || !d.success) throw new Error((d && d.error) || T.t('the tagging failed'));
   api.setProject(d.project);
   return d.report || {};
 }
@@ -793,7 +799,7 @@ async function _tag(api, only) {
 export async function generate(api) {
   if (_tagging || _reading.length || _batch) return;
   if (!canSpeak(api.project() || {})) {
-    _rsaid = 'The script is not marked up yet - field 1, mood & voice, does that.';
+    _rsaid = T.t('The script is not marked up yet - field 1, mood & voice, does that.');
     _rbad = true;
     return _repaint(api);
   }
@@ -828,7 +834,7 @@ async function _speak(api, lines, inBatch) {
   // the lines around it.
   const some = Array.isArray(api.project() && api.project().lines) ? api.project().lines : [];
   if (lines.some(i => some[i] && !_tagged(some[i]))) {
-    _rsaid = 'This line has no tags yet - mark the script up first, in field 1, mood & voice.';
+    _rsaid = T.t('This line has no tags yet - mark the script up first, in field 1, mood & voice.');
     _rbad = true;
     _repaint(api);
     return false;
@@ -843,16 +849,18 @@ async function _speak(api, lines, inBatch) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: api.projectId(), only: lines }),
     })).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('refused'));
     api.setProject(d.project);
     const bad = ((d.report || {}).failed || []);
     if (bad.length) {
-      throw new Error((bad.length === 1 ? 'line ' + bad[0].line : 'lines ' + bad.map(b => b.line).join(', '))
-        + ' - ' + (bad[0].error || 'not read'));
+      const why = bad[0].error || T.t('not read');
+      throw new Error(bad.length === 1 ? T.t('line {n} - {why}', { n: bad[0].line, why })
+        : T.t('lines {list} - {why}', { list: bad.map(b => b.line).join(', '), why }));
     }
     ok = true;
   } catch (e) {
-    _rsaid = (lines.length === 1 ? 'Line ' + (lines[0] + 1) + ' was not read: ' : 'Not read: ') + e.message;
+    _rsaid = lines.length === 1 ? T.t('Line {n} was not read: {why}', { n: lines[0] + 1, why: e.message })
+      : T.t('Not read: {why}', { why: e.message });
     _rbad = true;
   }
   _reading = [];
@@ -887,12 +895,12 @@ export async function readAll(api, opts) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: api.projectId(), ...(settle ? { settle: true } : {}) }),
     })).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (!d || !d.success) throw new Error((d && d.error) || T.t('refused'));
     if (d.queued) _batch = { done: 0, total: d.queued };
     _repaint(api);
     await _watchRead(api);
   } catch (e) {
-    _rsaid = 'Not read: ' + e.message;
+    _rsaid = T.t('Not read: {why}', { why: e.message });
     _rbad = true;
   }
   _batch = null;
@@ -936,8 +944,9 @@ async function _watchRead(api) {
     if (st.running) continue;
     const bad = st.failed || [];
     if (bad.length) {
-      _rsaid = (bad.length === 1 ? 'Line ' + bad[0].line : bad.length + ' lines')
-        + ' not read: ' + (bad[0].error || 'refused');
+      const why = bad[0].error || T.t('refused');
+      _rsaid = bad.length === 1 ? T.t('Line {n} not read: {why}', { n: bad[0].line, why })
+        : T.tn(bad.length, '{n} line not read: {why}', '{n} lines not read: {why}', { why });
       _rbad = true;
     }
     return;
@@ -966,7 +975,7 @@ export function openVoices(api, o = {}) {
     name: 'voices', size: { w: 900, h: 660 }, geom: { key: 'voices', resize: true, move: true, keepSize: true },
     onClose: () => { if (_vwin && _vwin.win === win) _vwin = null; leave(); },
   });
-  win.setCrumbs([{ label: 'Voices' }]);
+  win.setCrumbs([{ label: T.t('Voices') }]);
   _vwin = { win, api };
   paintVoices();
   return win;

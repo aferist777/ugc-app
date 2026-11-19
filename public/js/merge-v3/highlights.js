@@ -51,6 +51,8 @@ import { initGroup, renderSubs as renderGroupSubs, changed as groupChanged } fro
 import { icon, iconEl } from '../icons.js';
 import { figures } from '../num.js';
 import { parseKey, homeKey } from '../highlights/keys.js';
+import { moodName } from './hl-music.js';
+import * as T from '../i18n/t.js';
 const _fig = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.appendChild(figures(text)); return e; };
 
 const NAME = 'highlights';
@@ -67,7 +69,7 @@ const _clock = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(Math.floor(s % 60)).padStart(2, '0');
   return h ? h + ':' + String(m).padStart(2, '0') + ':' + x : m + ':' + x;
 };
-const _secs = (s) => (Math.round((+s || 0) * 10) / 10) + ' s';
+const _secs = (s) => T.t('{n} s', { n: Math.round((+s || 0) * 10) / 10 });
 
 let _pid = '';                // the project shown
 let _shown = false;
@@ -90,7 +92,7 @@ const _renderSeen = new Map(); // project -> Map(n -> its render's time as this 
 const _api = async (url, opt) => {
   let r = null, d = null;
   try { r = await fetch(url, opt); d = await r.json(); } catch (e) { d = null; }
-  if (!r || !d || !d.success) throw new Error((d && d.error) || 'The app did not answer - try again in a moment.');
+  if (!r || !d || !d.success) throw new Error((d && d.error) || T.t('The app did not answer - try again in a moment.'));
   return d;
 };
 
@@ -155,10 +157,11 @@ function _capOpen() {
   const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
   const st = (lane && lane.style) || {};
   const id = String(st.preset || '');
-  // Several presets on its lane: their names, as the server says them for the others (highlights-cut.js capOf).
+  // Several presets on its lane: their names, as the server says them for the others (highlights-cut.js capOf). The name
+  // is only shown - said in the app's language.
   const mix = mixOf(st);
-  if (mix) return { preset: id, name: 'mix: ' + mix.map((e) => presetName(e.preset)).filter(Boolean).join(', '), edited: false };
-  const name = id ? presetName(id) : '';
+  if (mix) return { preset: id, name: T.t('mix: {names}', { names: mix.map((e) => presetName(e.preset)).filter(Boolean).map((n) => T.t(n)).join(', ') }), edited: false };
+  const name = id && presetName(id) ? T.t(presetName(id)) : '';
   return name ? { preset: id, name, edited: editedKeys(st).length > 0 } : { preset: '', name: '', edited: false };
 }
 const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited + '|' + !!titleLaneOf(Store.timeline()); };
@@ -193,9 +196,8 @@ Views.captionsAlt({
 // The tiles' part of the captions of several: what a preset, an animation or a font pressed does - and the target the captions view
 // lights its tiles by.
 function _tiles(host) {
-  host.appendChild(_el('p', 'mv3-ins-note', _applying ? 'Putting the style on them…'
-    : 'A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. '
-    + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
+  host.appendChild(_el('p', 'mv3-ins-note', _applying ? T.t('Putting the style on them…')
+    : T.t('A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.')));
   const list = _ticked();
   const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
   return { preset: ps.size === 1 ? [...ps][0] : '', presets: _hlMix.length > 1 ? _hlMix.slice() : null, edited: false,
@@ -204,7 +206,8 @@ function _tiles(host) {
 
 // The open fragment's subtitle lane, and the ticked ones that are not open - the page's and the server's (see _restyle).
 const _openLane = () => (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs') || null;
-async function _toServer(rest, open, body, said) {
+// `said` - what was done, in words; `what` - what the server's count of fragments is followed by when it names nothing.
+async function _toServer(rest, open, body, said, what) {
   if (!rest.length) { _say(said); _paintCard(); Views.altChanged(); return; }
   _applying = true;
   Views.altChanged();
@@ -212,7 +215,7 @@ async function _toServer(rest, open, body, said) {
     const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/style', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ ns: rest.map((f) => f.n) }, body)) });
     const n = d.n + (open ? 1 : 0);
-    _say('captions of ' + n + (n === 1 ? ' fragment' : ' fragments') + ': ' + (d.name || said.replace(/^captions: /, '')));
+    _say(T.tn(n, 'captions of {n} fragment: {what}', 'captions of {n} fragments: {what}', { what: d.name || what }));
   } catch (e) { _say(e.message, true); }
   _applying = false;
   await _load();
@@ -240,8 +243,8 @@ async function _restyle(presetId, o) {
       setSubsStyle(lane.id, Object.assign(keepMotion(st, lane.style || {}), many ? { mix: _hlMix.map(look), mixSeed: newSeed() } : { mix: [] }), true);
     }
   }
-  await _toServer(rest, open, { preset: first, ...(many ? { mix: _hlMix.slice() } : {}) },
-    'captions: ' + (many ? _hlMix.length + ' presets' : presetName(first) || first));
+  const what = many ? T.tn(_hlMix.length, '{n} preset', '{n} presets') : (presetName(first) ? T.t(presetName(first)) : first);
+  await _toServer(rest, open, { preset: first, ...(many ? { mix: _hlMix.slice() } : {}) }, T.t('captions: {name}', { name: what }), what);
 }
 
 // A pair of In and Out on the ticked fragments - several with Shift, each its own deal; the lanes are not cut again.
@@ -256,8 +259,9 @@ async function _reanimate(pair, o) {
     const patch = _hlAnims.length >= 2 ? { anims: _hlAnims.slice(), mixSeed: newSeed() } : Object.assign(pairOf(_hlAnims[0] || 'at-once|none'), { anims: [] });
     if (lane) setSubsStyle(lane.id, patch, false, (t) => deal(t.clips, t.style));
   }
-  await _toServer(rest, open, { anims: _hlAnims.length ? _hlAnims.slice() : ['at-once|none'] },
-    'animation: ' + (_hlAnims.length > 1 ? _hlAnims.length + ' pairs' : _hlAnims[0] || 'none'));
+  const said = _hlAnims.length > 1 ? T.tn(_hlAnims.length, 'animation: {n} pair', 'animation: {n} pairs')
+    : _hlAnims.length ? T.t('animation: {what}', { what: _hlAnims[0] }) : T.t('animation: none');
+  await _toServer(rest, open, { anims: _hlAnims.length ? _hlAnims.slice() : ['at-once|none'] }, said, said);
 }
 
 // The fonts tab on the ticked fragments: one font, or several with Shift dealt anew - each its own deal;
@@ -274,7 +278,9 @@ async function _refont(list) {
     if (_hlFonts.length >= 2 && !Number.isInteger(lane && lane.style && lane.style.mixSeed)) patch.mixSeed = newSeed();
     if (lane) setSubsStyle(lane.id, patch, false, (t) => redealFonts(t.clips, t.style));
   }
-  await _toServer(rest, open, { fonts: _hlFonts.slice() }, 'fonts: ' + (_hlFonts.length > 1 ? _hlFonts.length + ' fonts' : _hlFonts[0] || 'the presets\' own'));
+  const said = _hlFonts.length > 1 ? T.tn(_hlFonts.length, 'fonts: {n} font', 'fonts: {n} fonts')
+    : _hlFonts.length ? T.t('fonts: {what}', { what: _hlFonts[0] }) : T.t('fonts: the presets\' own');
+  await _toServer(rest, open, { fonts: _hlFonts.slice() }, said, said);
 }
 
 function _show(on) {
@@ -286,7 +292,7 @@ function _show(on) {
 export function initHighlights() {
   Views.registerChat(NAME, {
     root: 'mv3-hl', crumb: 'mv3-lib-hl',
-    crumbTitle: 'The fragments of this video - and the card of the one pressed',
+    crumbTitle: T.t('The fragments of this video - and the card of the one pressed'),
     onBack: () => _show(false), onYield: () => { _shown = false; },
     // From the captions view too: the captions let go of - the pick released - and the tiles are back.
     onCrumb: () => { Views.toBase(); setOpenColumn('library'); _show(true); _load(); },
@@ -371,7 +377,7 @@ async function _load() {
   else if (!_rec.rendering && _rStart) {
     const made = _frags().filter((f) => f.rendered && Date.parse(f.rendered.at || '') >= _rStart - 5000).length;
     _rStart = 0;
-    if (made && !_stoppedNow) _say(made + (made === 1 ? ' fragment rendered' : ' fragments rendered') + ' - Library -> Renders, or the card');
+    if (made && !_stoppedNow) _say(T.tn(made, '{n} fragment rendered - Library -> Renders, or the card', '{n} fragments rendered - Library -> Renders, or the card'));
     _stoppedNow = false;
   }
   _paint();
@@ -428,13 +434,20 @@ function _paint() {
 }
 
 const STEP = { download: 'downloading', copy: 'copying', hear: 'hearing', find: 'finding the moments', fragments: 'cutting' };
+const _step = (k) => (STEP[k] ? T.t(STEP[k]) : '');
+// A kind's or a length's name as shown - the server's table is English until it says it in the app's language.
+const _labelOf = (label) => T.t(String(label || ''));
+// What a fragmentation run cut out of the video (lib/highlights-agent.js SKIPS) - in words.
+const _skipSaid = (x) => T.tc('skip', String(x));
 
 // "auto → true crime · bodycam" - what auto found the video to be; a kind in development is cut as other.
 function _foundSaid(r) {
   const k = String((r && r.agent && r.agent.kind) || '');
   if (!k) return '';
   const K = r.kinds && r.kinds[k];
-  return 'auto → ' + (K ? K.label.toLowerCase() + (K.inDev ? ' (in development - cut as other)' : '') : k);
+  if (!K) return T.t('auto → {kind}', { kind: k });
+  const kind = _labelOf(K.label).toLowerCase();
+  return K.inDev ? T.t('auto → {kind} (in development - cut as other)', { kind }) : T.t('auto → {kind}', { kind });
 }
 
 function _paintTop() {
@@ -445,29 +458,33 @@ function _paintTop() {
   const what = _el('div', 'mv3-hl-what');
   // Not read: "did not load" with Try again - the reason is a popup (_load).
   if (!r) {
-    what.appendChild(_err ? failedEl('The project', () => { _err = ''; _paint(); _load(); }, { line: true })
-      : loadingEl('reading the project…', { line: true }));
+    what.appendChild(_err ? failedEl(T.t('The project'), () => { _err = ''; _paint(); _load(); }, { line: true })
+      : loadingEl(T.t('reading the project…'), { line: true }));
     top.appendChild(what);
     return;
   }
   const v = r.video;
-  what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
+  what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || T.t('the video')) : T.t('no video yet')));
   if (v && v.seconds) what.appendChild(_fig('span', 'mv3-hl-meta', _clock(v.seconds)));
   // And the kind of video, when one other than auto was chosen.
   // Auto - the kind its first call found the video to be, by that kind's name.
-  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label.toLowerCase()
+  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + _labelOf(r.kinds[r.ask.kind].label).toLowerCase()
     : (r.ask && r.agent && r.agent.kind ? ' · ' + _foundSaid(r) : '');
   // And the background music asked for - its moods; a record with no moods, its ticked tracks.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
-  const moods = r.ask && Array.isArray(r.ask.moods) ? r.ask.moods.map((m) => (m && m.label) || m).filter(Boolean) : [];
-  const musicSaid = moods.length ? ' · music: ' + moods.join(', ') : (nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '');
+  const moods = r.ask && Array.isArray(r.ask.moods) ? r.ask.moods.map((m) => (m && typeof m === 'object' ? moodName(m.id, m.label) : moodName(m, m))).filter(Boolean) : [];
+  const musicSaid = moods.length ? ' · ' + T.t('music: {name}', { name: moods.join(', ') })
+    : (nm ? ' · ' + T.t('music: {name}', { name: nm === 1 ? r.ask.music[0].title : T.tn(nm, '{n} track', '{n} tracks') }) : '');
   // fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
   const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
   const L = (K && K.whole && K.lengths) || r.lengths;
-  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label.toLowerCase() : (r.ask ? r.ask.length : '');
+  const lenSaid = L && r.ask && L[r.ask.length] ? _labelOf(L[r.ask.length].label).toLowerCase() : (r.ask ? r.ask.length : '');
   const cut = K && K.whole && r.agent && Array.isArray(r.agent.skipped) && r.agent.skipped.length
-    ? ' · cut out: ' + [...new Set(r.agent.skipped.map((x) => x.skip))].join(', ') : '';
-  if (r.ask) what.appendChild(_fig('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
+    ? ' · ' + T.t('cut out: {list}', { list: [...new Set(r.agent.skipped.map((x) => x.skip))].map(_skipSaid).join(', ') }) : '';
+  if (r.ask) {
+    what.appendChild(_fig('span', 'mv3-hl-meta', (K && K.whole ? T.t('{len} parts', { len: lenSaid }) : T.t('{len} · {n} asked', { len: lenSaid, n: r.ask.count }))
+      + kindSaid + musicSaid + cut));
+  }
   top.appendChild(what);
 
   const state = _el('div', 'mv3-hl-state');
@@ -476,23 +493,23 @@ function _paintTop() {
     // Before the moments are found the field's panel says the way in full: here only what is going.
     const panel = !_frags().length;
     state.appendChild(_fig('span', 'mv3-hl-words', _prog && !panel ? _prog.words
-      : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
+      : (_step((_prog && _prog.step) || w.step) || w.step || T.t('at work'))));
     const x = _el('button', 'mv3-c-btn danger u-btn is-s is-danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? REALLY : null);
-    if (_armed !== 'stop') x.append(iconEl('x', 14), document.createTextNode('stop'));   // Lucide's x
+    if (_armed !== 'stop') x.append(iconEl('x', 14), document.createTextNode(T.t('stop')));   // Lucide's x
     x.type = 'button';
-    x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
+    x.title = T.t('Stop it - what was paid for is kept; a video not heard yet is let go of');
     x.addEventListener('click', () => { if (_armed !== 'stop') { _arm('stop'); return; } _armed = ''; _stop(); });
     state.appendChild(x);
   } else if (w.state === 'failed') {
-    state.appendChild(_el('span', 'mv3-hl-words is-err', w.error === 'stopped' ? 'stopped' : (w.error || 'it failed')));
+    state.appendChild(_el('span', 'mv3-hl-words is-err', w.error === 'stopped' ? T.t('stopped') : (w.error || T.t('it failed'))));
     // Its video stays on the disk and was moved or deleted: pointed at again here (the same file -
     // its print says so - its words its own); deleting its source is the Library's (Scenarios -> its source).
     if (/not where it was/i.test(String(w.error || '')) && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
     if (_retry) {
       const armed = _armed === 'retry';
-      const b = _el('button', 'mv3-c-btn u-btn is-s' + (armed ? ' is-armed' : ''), armed ? 'spend again?' : 'retry');
+      const b = _el('button', 'mv3-c-btn u-btn is-s' + (armed ? ' is-armed' : ''), armed ? T.t('spend again?') : T.t('retry'));
       b.type = 'button';
-      b.title = _retryFree ? 'Go on from where it stopped - nothing is paid for' : 'Go on from where it stopped - this step is paid for again';
+      b.title = _retryFree ? T.t('Go on from where it stopped - nothing is paid for') : T.t('Go on from where it stopped - this step is paid for again');
       b.addEventListener('click', () => {
         if (!_retryFree && !armed) { _arm('retry'); return; }
         _armed = '';
@@ -507,30 +524,31 @@ function _paintTop() {
     const want = r.ask && r.ask.count ? r.ask.count : found;
     const made = _frags().filter((f) => f.state === 'ready').length;
     const whole = !!(r.ask && r.kinds && r.kinds[r.ask.kind] && r.kinds[r.ask.kind].whole);
-    const what = whole ? (n === 1 ? ' part' : ' parts') : made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
-    state.appendChild(_fig('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
+    const said = whole ? T.tn(n, '{n} part', '{n} parts') : made === n && n ? T.tn(n, '{n} short', '{n} shorts') : T.tn(n, '{n} moment', '{n} moments');
+    state.appendChild(_fig('span', 'mv3-hl-words', found >= want ? said : T.t('found {k} of {n}', { k: found, n: want })));
   }
   // The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
   const rd = r.rendering;
   if (rd) {
     const k = Math.min(rd.of, rd.done + 1);
-    state.appendChild(_fig('span', 'mv3-hl-words', 'rendering ' + k + ' of ' + rd.of + (rd.left > 0 ? ' · ~' + _clock(rd.left) + ' left' : '')));
+    state.appendChild(_fig('span', 'mv3-hl-words', rd.left > 0 ? T.t('rendering {k} of {n} · ~{time} left', { k, n: rd.of, time: _clock(rd.left) })
+      : T.t('rendering {k} of {n}', { k, n: rd.of })));
   }
   const tr = r.renderTrouble || {};
-  if (tr.interrupted) state.appendChild(_fig('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
-  if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', tr.failed + ' not rendered'));
+  if (tr.interrupted) state.appendChild(_fig('span', 'mv3-hl-meta', T.t('{n} interrupted - go on in Queue', { n: tr.interrupted })));
+  if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', T.t('{n} not rendered', { n: tr.failed })));
   // The project's renders folder, once one is made: Explorer on it.
   const one = _frags().find((f) => f.rendered && f.rendered.url);
   const dir = one ? String(one.rendered.url).replace(/[^/]+$/, '') : '';
-  const sf = dir ? _showInFolder(dir, 'Open the folder of this project\'s renders in Explorer') : null;
+  const sf = dir ? _showInFolder(dir, T.t('Open the folder of this project\'s renders in Explorer')) : null;
   if (sf) state.appendChild(sf);
   const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
-  if (gone) state.appendChild(_fig('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
+  if (gone) state.appendChild(_fig('span', 'mv3-hl-meta', T.t('{n} deleted - Ctrl+Z here brings back', { n: gone })));
   if (_said) state.appendChild(_el('span', 'mv3-hl-said', _said.text));
   if (!v && !_live) {
-    const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', '+ Add video');
+    const add = _el('button', 'mv3-c-btn mv3-hl-add u-btn is-s', T.t('+ Add video'));
     add.type = 'button';
-    add.title = 'A link, a file, or a source of the Library - and how long and how many';
+    add.title = T.t('A link, a file, or a source of the Library - and how long and how many');
     add.addEventListener('click', _popup);
     state.appendChild(add);
   }
@@ -544,8 +562,8 @@ function _paintBar() {
     const frags = _pid ? _frags() : [];
     all.hidden = !_pid;
     const every = frags.length > 0 && frags.every((f) => _checked.has(f.n));
-    all.textContent = every ? 'Select none' : 'Select all';
-    all.title = every ? 'Untick every fragment' : 'Tick every fragment - for the render beside, and for their captions';
+    all.textContent = every ? T.t('Select none') : T.t('Select all');
+    all.title = every ? T.t('Untick every fragment') : T.t('Tick every fragment - for the render beside, and for their captions');
     all.disabled = !frags.length;
   }
   paintExportButton();
@@ -556,13 +574,13 @@ const TARGET = {
   state() {
     if (_rec && _rec.rendering) {
       const armed = _armed === 'rstop';
-      return { label: armed ? REALLY : '✕ stop', stop: true, armed, enabled: true,
-        title: 'Stop rendering this project\'s fragments - all of them; the ones made stay' };
+      return { label: armed ? REALLY : T.t('✕ stop'), stop: true, armed, enabled: true,
+        title: T.t('Stop rendering this project\'s fragments - all of them; the ones made stay') };
     }
     const n = _checked.size;
-    return { label: n ? 'Render ' + n : 'Render', enabled: n > 0,
-      title: n ? 'Render the ' + n + ' ticked ' + (n === 1 ? 'fragment' : 'fragments') + ' - one after another, with one set of settings'
-        : 'Tick the fragments to render (or "select all" on the left)' };
+    return { label: n ? T.t('Render {n}', { n }) : T.t('Render'), enabled: n > 0,
+      title: n ? T.tn(n, 'Render the {n} ticked fragment - one after another, with one set of settings', 'Render the {n} ticked fragments - one after another, with one set of settings')
+        : T.t('Tick the fragments to render (or "select all" on the left)') };
   },
   click() {
     // "really?" pressed just as the last render ended: the press meant "stop", not a new render.
@@ -595,8 +613,8 @@ function _renderTicked() {
         if (open && (d.queued || []).includes(open.n)) Store.setAdv(adv);
         const q = (d.queued || []).length;
         const sk = d.skipped || [];
-        _say((q ? q + (q === 1 ? ' fragment' : ' fragments') + ' in line to render' : 'nothing to render')
-          + (sk.length ? ' - left out: ' + sk.map((s) => '«' + s.title + '» (' + s.why + ')').join(', ') : ''), !q);
+        const what = q ? T.tn(q, '{n} fragment in line to render', '{n} fragments in line to render') : T.t('nothing to render');
+        _say(sk.length ? T.t('{what} - left out: {list}', { what, list: sk.map((s) => '«' + s.title + '» (' + s.why + ')').join(', ') }) : what, !q);
       } catch (e) { _say(e.message, true); }
       _rStart = 0;
       await _load();
@@ -609,7 +627,7 @@ async function _stopRenders() {
   try {
     await _api('/api/highlights/' + encodeURIComponent(_pid) + '/render/stop', { method: 'POST' });
     _stoppedNow = true;
-    _say('rendering stopped - the ones made stay');
+    _say(T.t('rendering stopped - the ones made stay'));
   } catch (e) { _say(e.message, true); }
   _load();
 }
@@ -620,8 +638,8 @@ async function _renderAgain(f) {
   if (!id) return;
   try {
     const r = await fetch('/api/mv3q/retry/' + encodeURIComponent(id), { method: 'POST' });
-    if (!r.ok) throw new Error('the queue did not take it back');
-    _say('«' + f.title + '» in line again');
+    if (!r.ok) throw new Error(T.t('the queue did not take it back'));
+    _say(T.t('«{name}» in line again', { name: f.title }));
   } catch (e) { _say(e.message, true); }
   _load();
 }
@@ -658,8 +676,8 @@ function _paintField() {
   _ui.root.classList.toggle('is-empty', !r.video && !_live);
   if (!r.video && !_live) {
     // The shared "nothing here", its button the way in.
-    field.appendChild(emptyEl('A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.',
-      { icon: 'film', cls: 'mv3-hl-empty', action: { label: '+ add video', on: () => _popup() } }));
+    field.appendChild(emptyEl(T.t('A long video in, vertical shorts out: the agent finds its best moments, and each becomes a fragment with its own timeline.'),
+      { icon: 'film', cls: 'mv3-hl-empty', action: { label: T.t('+ add video'), on: () => _popup() } }));
     return;
   }
   const grid = _el('div', 'mv3-hl-grid');
@@ -680,7 +698,7 @@ function _paintField() {
     const now = cutting[f.n] || null;
     const t = _el('div', 'mv3-hl-tile' + (_sel === f.n ? ' is-sel' : '') + (open === f.n ? ' is-open' : '') + (_checked.has(f.n) ? ' is-checked' : '')
       + (ready ? ' is-ready' : ' is-making') + (failed ? ' is-failed' : ''));
-    t.title = f.title + (ready ? '\nPress to open its timeline' : failed ? '\n' + (f.error || 'not made') : '\nBeing made - press for its card');
+    t.title = f.title + '\n' + (ready ? T.t('Press to open its timeline') : failed ? (f.error || T.t('not made')) : T.t('Being made - press for its card'));
     const fr = _el('div', 'mv3-hl-frame');
     const pic = (ready && f.thumb) || r.poster;
     if (pic) fr.style.backgroundImage = 'url("' + pic + '")';
@@ -688,7 +706,7 @@ function _paintField() {
     const cb = _el('input', 'mv3-hl-check');
     cb.type = 'checkbox'; cb.classList.add('u-check');
     cb.checked = _checked.has(f.n);
-    cb.title = 'Tick it - for the captions of several and for rendering them together';
+    cb.title = T.t('Tick it - for the captions of several and for rendering them together');
     cb.addEventListener('click', (e) => e.stopPropagation());
     cb.addEventListener('change', () => { if (cb.checked) _checked.add(f.n); else _checked.delete(f.n); _paint(); });
     t.appendChild(cb);
@@ -697,7 +715,7 @@ function _paintField() {
     const armed = _armed === 'del' + f.n;
     const x = _el('button', 'mv3-hl-x u-onpic is-del' + (armed ? ' is-armed' : ' u-x'), armed ? REALLY : '');
     x.type = 'button';
-    x.title = 'Delete this fragment - Ctrl+Z here brings it back';
+    x.title = T.t('Delete this fragment - Ctrl+Z here brings it back');
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
     t.appendChild(x);
     // fragmentation's parts have no score: their place in the video instead - "3 / 38".
@@ -705,13 +723,14 @@ function _paintField() {
     // "Rendered" -; the tick and the ✕ stay in the top corners as on every tile.
     const marks = _el('div', 'mv3-hl-marks');
     marks.appendChild(_el('span', 'mv3-hl-score u-mono', Number.isFinite(f.score) ? String(f.score) : f.rank + ' / ' + _partsFound()));
-    if ((f.pieces || []).length > 1) marks.appendChild(_fig('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
+    if ((f.pieces || []).length > 1) marks.appendChild(_fig('span', 'mv3-hl-pieces', T.tn(f.pieces.length, '{n} piece', '{n} pieces')));
     // Rendered: a quiet mark with Lucide's play - "Changed since", dashed, when its timeline was edited after.
     if (ready && f.rendered) {
       const ch = _changed(f);
       const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''));
-      if (ch) mark.textContent = 'Changed since'; else mark.append(iconEl('play', 10), document.createTextNode('Rendered'));
-      mark.title = 'Rendered: ' + _fileOf(f.rendered.url) + (ch ? ' - its timeline was edited after; Render again to bring it up to date' : '');
+      if (ch) mark.textContent = T.t('Changed since'); else mark.append(iconEl('play', 10), document.createTextNode(T.t('Rendered')));
+      const file = _fileOf(f.rendered.url);
+      mark.title = ch ? T.t('Rendered: {file} - its timeline was edited after; Render again to bring it up to date', { file }) : T.t('Rendered: {file}', { file });
       marks.appendChild(mark);
     }
     const foot = _el('div', 'mv3-hl-foot');
@@ -724,9 +743,9 @@ function _paintField() {
       fill.style.width = Math.round(Math.max(0.02, now.pct || 0) * 100) + '%';
       bar.appendChild(fill);
       foot.appendChild(bar);
-      foot.appendChild(_fig('div', 'mv3-hl-step', now.words || 'cutting'));
+      foot.appendChild(_fig('div', 'mv3-hl-step', now.words || T.t('cutting')));
     } else if (failed) {
-      foot.appendChild(_fig('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
+      foot.appendChild(_fig('div', 'mv3-hl-step is-err', !_live && _retry ? T.t('not made - retry above') : T.t('not made')));
     } else if (rq && rq.state === 'running') {
       // Its render, where it is.
       const bar = _el('div', 'mv3-hl-bar');
@@ -734,22 +753,23 @@ function _paintField() {
       fill.style.width = Math.max(2, rq.percent || 0) + '%';
       bar.appendChild(fill);
       foot.appendChild(bar);
-      foot.appendChild(_fig('div', 'mv3-hl-step', rq.phase ? 'finishing…'
-        : 'rendering ' + (rq.percent || 0) + '%' + (rq.remain != null ? ' · ' + _clock(rq.remain) : '')));
+      const pct = T.t('rendering {pct}%', { pct: rq.percent || 0 });
+      foot.appendChild(_fig('div', 'mv3-hl-step', rq.phase ? T.t('finishing…')
+        : pct + (rq.remain != null ? ' · ' + _clock(rq.remain) : '')));
     } else if (rq && rq.state === 'line') {
-      foot.appendChild(_fig('div', 'mv3-hl-step', 'in line · ' + (rq.ahead ? rq.ahead + ' ahead' : 'next')));
+      foot.appendChild(_fig('div', 'mv3-hl-step', T.t('in line') + ' · ' + (rq.ahead ? T.t('{n} ahead', { n: rq.ahead }) : T.t('next'))));
     } else if (rq && rq.state === 'interrupted') {
-      foot.appendChild(_fig('div', 'mv3-hl-step is-warn', 'interrupted - go on in Queue'));
+      foot.appendChild(_fig('div', 'mv3-hl-step is-warn', T.t('interrupted - go on in Queue')));
     } else if (rq && rq.state === 'failed') {
-      const st = _fig('div', 'mv3-hl-step is-err', 'render failed');
+      const st = _fig('div', 'mv3-hl-step is-err', T.t('render failed'));
       st.title = rq.error || '';
       foot.appendChild(st);
-      const again = _el('button', 'mv3-hl-again u-btn is-s', 'Render again');   // the shared button, not red
+      const again = _el('button', 'mv3-hl-again u-btn is-s', T.t('Render again'));   // the shared button, not red
       again.type = 'button';
-      again.title = (rq.error ? rq.error + '\n' : '') + 'Put it back in line with the same settings';
+      again.title = (rq.error ? rq.error + '\n' : '') + T.t('Put it back in line with the same settings');
       again.addEventListener('click', (e) => { e.stopPropagation(); _renderAgain(f); });
       foot.appendChild(again);
-    } else foot.appendChild(_fig('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
+    } else foot.appendChild(_fig('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? T.t('waiting its turn') : T.t('not cut yet'))));
     t.appendChild(foot);
     t.addEventListener('click', () => {
       // The tile pressed again lets go: no card, and its timeline gives way to the project's own, empty one - the preview stops
@@ -775,18 +795,24 @@ function _paintField() {
 // left". It pops up once, not at every read of the record (the field is drawn again every 1.5 s).
 let _prepShown = false;        // the panel was there at the last paint
 let _stages = null;            // the steps as the record left them, while nothing is at work (GET /api/highlights/:id `stages`)
-const _mb = (b) => (b >= 1e9 ? (Math.round(b / 1e8) / 10) + ' GB' : Math.max(1, Math.round(b / 1e6)) + ' MB');
-const _min = (s) => Math.max(1, Math.round((+s || 0) / 60)) + ' min';
+const _mb = (b) => (b >= 1e9 ? T.t('{n} GB', { n: Math.round(b / 1e8) / 10 }) : T.t('{n} MB', { n: Math.max(1, Math.round(b / 1e6)) }));
+const _min = (s) => T.t('{n} min', { n: Math.max(1, Math.round((+s || 0) / 60)) });
+// Heard: how long and where - each its whole line.
+function _heardSaid(s) {
+  const time = s.seconds ? _min(s.seconds) : '';
+  if (s.engine === 'local') return time ? T.t('heard {time} on this computer', { time }) : T.t('heard on this computer');
+  if (s.engine === 'groq') return time ? T.t('heard {time} by Groq', { time }) : T.t('heard by Groq');
+  return time ? T.t('heard {time}', { time }) : T.t('heard');
+}
 function _stageSaid(s) {
   if (s.state === 'now' && _prog && _prog.words) return _prog.words;
   const done = s.state === 'done';
   switch (s.key) {
-    case 'download': return done ? (s.had ? 'in the Library already' : 'downloaded' + (s.bytes ? ' ' + _mb(s.bytes) : '')) : 'downloading the video';
-    case 'copy': return done ? 'copied' + (s.bytes ? ' ' + _mb(s.bytes) : '') : 'copying the video';
-    case 'hear': return done ? (s.kept ? 'its words were in already' : 'heard' + (s.seconds ? ' ' + _min(s.seconds) : '')
-      + (s.engine === 'local' ? ' on this computer' : s.engine === 'groq' ? ' by Groq' : '')) : 'hearing the words';
-    case 'find': return _whole() ? (done ? 'split into parts' : 'splitting the video into parts') : (done ? 'moments found' : 'finding the moments');
-    case 'fragments': return _whole() ? 'cutting the parts' : s.count ? 'cutting ' + s.count + (s.count === 1 ? ' fragment' : ' fragments') : 'cutting the fragments';
+    case 'download': return done ? (s.had ? T.t('in the Library already') : s.bytes ? T.t('downloaded {size}', { size: _mb(s.bytes) }) : T.t('downloaded')) : T.t('downloading the video');
+    case 'copy': return done ? (s.bytes ? T.t('copied {size}', { size: _mb(s.bytes) }) : T.t('copied')) : T.t('copying the video');
+    case 'hear': return done ? (s.kept ? T.t('its words were in already') : _heardSaid(s)) : T.t('hearing the words');
+    case 'find': return _whole() ? (done ? T.t('split into parts') : T.t('splitting the video into parts')) : (done ? T.t('moments found') : T.t('finding the moments'));
+    case 'fragments': return _whole() ? T.t('cutting the parts') : s.count ? T.tn(s.count, 'cutting {n} fragment', 'cutting {n} fragments') : T.t('cutting the fragments');
     default: return s.key;
   }
 }
@@ -800,7 +826,7 @@ function _prepPanel(stages, fresh) {
     const m = li.appendChild(_el('i', 'mv3-hl-stage-m'));
     if (s.state === 'done' || s.state === 'now' || s.state === 'failed') m.innerHTML = icon(s.state === 'done' ? 'check' : s.state === 'now' ? 'loader-circle' : 'x', 14);
     else m.classList.add('is-ring');
-    li.appendChild(_el('span', 'mv3-hl-stage-w', _stageSaid(s) + (s.state === 'failed' ? ' - stopped here' : '')));
+    li.appendChild(_el('span', 'mv3-hl-stage-w', s.state === 'failed' ? T.t('{what} - stopped here', { what: _stageSaid(s) }) : _stageSaid(s)));
     if (s.state === 'done' && s.took) li.appendChild(_fig('span', 'mv3-hl-stage-t', _clock(s.took / 1000)));
     list.appendChild(li);
   }
@@ -812,7 +838,8 @@ function _prepPanel(stages, fresh) {
     bar.appendChild(fill);
     box.appendChild(bar);
     const left = +_prog.leftMs || 0;
-    box.appendChild(_fig('div', 'mv3-hl-prep-t', _clock((+_prog.elapsedMs || 0) / 1000) + (left > 1500 ? ' · ~' + _clock(left / 1000) + ' left' : '')));
+    const time = _clock((+_prog.elapsedMs || 0) / 1000);
+    box.appendChild(_fig('div', 'mv3-hl-prep-t', left > 1500 ? T.t('{time} · ~{left} left', { time, left: _clock(left / 1000) }) : time));
   }
   return box;
 }
@@ -826,18 +853,18 @@ function _paintCard() {
   card.textContent = '';
   const frags = _frags();
   if (_checked.size > 1) {
-    card.appendChild(_el('div', 'mv3-hl-card-h', _checked.size + ' selected'));
+    card.appendChild(_el('div', 'mv3-hl-card-h', T.t('{n} selected', { n: _checked.size })));
     const ul = _el('ul', 'mv3-hl-list');
     for (const f of frags) if (_checked.has(f.n)) ul.appendChild(_el('li', null, f.title));
     card.appendChild(ul);
     // Their common settings are the buttons in place of the timeline (hl-group.js).
-    card.appendChild(_el('p', 'mv3-hl-note', 'Their common settings: the buttons in place of the timeline - Subtitles, main video, main audio, music - '
-      + 'for all of them at once. Rendering them: Render on the right of the project bar - one after another, with one set of settings.'));
+    card.appendChild(_el('p', 'mv3-hl-note', T.t('Their common settings: the buttons in place of the timeline - Subtitles, main video, main audio, music - for all of them at once. Rendering them: Render on the right of the project bar - one after another, with one set of settings.')));
     return;
   }
   const f = frags.find((x) => x.n === _sel);
   if (!f) {
-    card.appendChild(_el('p', 'mv3-hl-note', frags.length ? (_whole() ? 'Press a tile to read its part.' : 'Press a tile to read its moment.') : (_live ? (_whole() ? 'The parts come when the agent has read the video.' : 'The moments come when the agent has read the video.') : '')));
+    card.appendChild(_el('p', 'mv3-hl-note', frags.length ? (_whole() ? T.t('Press a tile to read its part.') : T.t('Press a tile to read its moment.'))
+      : (_live ? (_whole() ? T.t('The parts come when the agent has read the video.') : T.t('The moments come when the agent has read the video.')) : '')));
     return;
   }
   // Its name is edited here: the card's, and its timeline's - the name of the render file after it.
@@ -845,7 +872,7 @@ function _paintCard() {
   name.type = 'text';
   name.value = f.title;
   name.maxLength = 80;
-  name.title = 'The fragment\'s name - its timeline\'s and its render\'s. Enter to keep it, Escape to put it back.';
+  name.title = T.t('The fragment\'s name - its timeline\'s and its render\'s. Enter to keep it, Escape to put it back.');
   let kept = false;
   const keep = () => { if (kept) return; kept = true; const v = name.value.trim(); if (v && v !== f.title) _rename(f, v); else name.value = f.title; };
   name.addEventListener('keydown', (e) => {
@@ -854,9 +881,9 @@ function _paintCard() {
   });
   name.addEventListener('blur', keep);
   card.appendChild(name);
-  if (f.state === 'failed' && f.error) card.appendChild(_el('p', 'mv3-hl-note is-err', 'Not made: ' + f.error));
+  if (f.state === 'failed' && f.error) card.appendChild(_el('p', 'mv3-hl-note is-err', T.t('Not made: {why}', { why: f.error })));
   // Its faces could not be counted (no app window): framed from the middle - the clip's Framing switch can do it later.
-  if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', f.faceNote + ' - Framing on its clip can follow the face later.'));
+  if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', T.t('{note} - Framing on its clip can follow the face later.', { note: f.faceNote })));
   const facts = _el('div', 'mv3-hl-facts');
   // Auto: the kind it found - the rules it was cut by.
   if (_rec && _rec.ask && _rec.ask.kind === 'auto' && _rec.agent && _rec.agent.kind) {
@@ -866,13 +893,12 @@ function _paintCard() {
   }
   const score = _el('span', 'mv3-hl-fact');
   if (Number.isFinite(f.score)) {
-    score.appendChild(_el('b', null, String(f.score)));
-    score.appendChild(document.createTextNode(' / 100 · how complete the theme is'));
+    _around(score, T.t('{score} / 100 · how complete the theme is'), '{score}', _el('b', null, String(f.score)));
   } else {
     // A part of fragmentation: no score - its place in the video and its key moments (where it punches in).
-    score.appendChild(_el('b', null, 'part ' + f.rank + ' of ' + _partsFound()));
+    score.appendChild(_el('b', null, T.t('part {k} of {n}', { k: f.rank, n: _partsFound() })));
     const k = (f.keys || []).length;
-    if (k) score.appendChild(document.createTextNode(' · ' + k + (k === 1 ? ' key moment' : ' key moments')));
+    if (k) score.appendChild(document.createTextNode(' · ' + T.tn(k, '{n} key moment', '{n} key moments')));
   }
   facts.appendChild(score);
   facts.appendChild(_fig('span', 'mv3-hl-fact', _secs(f.seconds)));
@@ -882,11 +908,11 @@ function _paintCard() {
   _capShown = f.n === _openN() ? _capSig() : '';
   if (cap) {
     const line = _el('div', 'mv3-hl-cap');
-    line.appendChild(document.createTextNode('captions: '));
-    line.appendChild(_el('b', null, cap.name || 'a style of its own'));
-    if (cap.name && cap.edited) line.appendChild(_el('span', 'mv3-hl-cap-ed', ' · edited'));
-    line.title = f.n === _openN() ? 'Another style: the captions crumb above, or the subtitle lane on the timeline'
-      : 'Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style';
+    // A preset's name (the server says the others' in English) shown in the app's language.
+    _around(line, T.t('captions: {name}'), '{name}', _el('b', null, cap.name ? T.t(cap.name) : T.t('a style of its own')));
+    if (cap.name && cap.edited) line.appendChild(_el('span', 'mv3-hl-cap-ed', ' · ' + T.t('edited')));
+    line.title = f.n === _openN() ? T.t('Another style: the captions crumb above, or the subtitle lane on the timeline')
+      : T.t('Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style');
     card.appendChild(line);
     // The title on top: said when it is there, "add title" when it is not - a fragment made without one: this button is the
     // way to put the agent's headline on top.
@@ -895,20 +921,19 @@ function _paintCard() {
     const titled = open ? !!lane : !!(f.cap && f.cap.titled);
     const tl = _el('div', 'mv3-hl-cap');
     if (titled) {
-      tl.appendChild(document.createTextNode('title on top: '));
       const said = lane ? String(((lane.clips || []).find((c) => (+c.start || 0) < 0.05) || {}).name || '') : '';
-      tl.appendChild(_el('b', null, said || 'yes'));
-      tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
+      _around(tl, T.t('title on top: {title}'), '{title}', _el('b', null, said || T.t('yes')));
+      tl.title = T.t('A text line at the top for the first seconds - edit, move or delete it on the timeline');
       // Taken off this fragment with one press.
       const x = _el('button', 'mv3-hl-title-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
-      x.title = 'Take the title off this fragment';
+      x.title = T.t('Take the title off this fragment');
       x.addEventListener('click', () => _dropTitle(f));
       tl.appendChild(x);
     } else {
-      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle u-btn is-s', 'Add title');
+      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle u-btn is-s', T.t('Add title'));
       add.type = 'button';
-      add.title = 'Its headline at the top for the first three seconds: «' + topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' }) + '»';
+      add.title = T.t('Its headline at the top for the first three seconds: «{title}»', { title: topTitleOf(f, { whole: _whole(), language: (_rec && _rec.agent && _rec.agent.language) || '' }) });
       add.addEventListener('click', () => _addTitle(f));
       tl.appendChild(add);
     }
@@ -917,10 +942,9 @@ function _paintCard() {
   // Its background music - the track dealt to it, on "audio 2"; or why it was made without.
   if (f.music) {
     const ml = _el('div', 'mv3-hl-cap');
-    ml.appendChild(document.createTextNode('music: '));
-    ml.appendChild(_el('b', null, f.music.title || 'a track'));
+    _around(ml, T.t('music: {name}'), '{name}', _el('b', null, f.music.title || T.t('a track')));
     if (f.state === 'ready' && f.musicNote) ml.appendChild(_el('span', 'mv3-hl-cap-ed', ' · ' + f.musicNote));
-    ml.title = 'On the "audio 2" lane, quiet, from the part of the track where it has opened up - move, trim or delete it on the timeline';
+    ml.title = T.t('On the "audio 2" lane, quiet, from the part of the track where it has opened up - move, trim or delete it on the timeline');
     card.appendChild(ml);
   }
   // Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
@@ -929,17 +953,27 @@ function _paintCard() {
   const pcs = _el('div', 'mv3-hl-pcs');
   (f.pieces || []).forEach((p, k) => {
     const later = k === 0 && (f.pieces || []).length > 1 && p.start > f.pieces[1].start;
-    pcs.appendChild(_fig('span', 'mv3-hl-pc' + (later ? ' is-hook' : ''), (later ? 'hook ' : '') + _clock(p.start) + '–' + _clock(p.end)));
+    const time = _clock(p.start) + '–' + _clock(p.end);
+    pcs.appendChild(_fig('span', 'mv3-hl-pc' + (later ? ' is-hook' : ''), later ? T.t('hook {time}', { time }) : time));
   });
   card.appendChild(pcs);
   const sec = (label, text) => {
     if (!text) return;
-    card.appendChild(_el('div', 'mv3-x-hdr', label.charAt(0).toUpperCase() + label.slice(1)));   // sentence case
+    card.appendChild(_el('div', 'mv3-x-hdr', label));   // sentence case
     card.appendChild(_el('p', 'mv3-hl-text', text));
   };
-  sec('hook', f.hook);
-  sec('why it would work', f.why);
-  sec('what is said', f.text);
+  sec(T.tc('card', 'Hook'), f.hook);
+  sec(T.t('Why it would work'), f.why);
+  sec(T.t('What is said'), f.text);
+}
+
+// A line said in the app's language with an element in the place of its `hole` ({name}).
+function _around(host, said, hole, el) {
+  const i = said.indexOf(hole);
+  if (i < 0) { host.appendChild(document.createTextNode(said + ' ')); host.appendChild(el); return; }
+  if (i > 0) host.appendChild(document.createTextNode(said.slice(0, i)));
+  host.appendChild(el);
+  if (i + hole.length < said.length) host.appendChild(document.createTextNode(said.slice(i + hole.length)));
 }
 
 // "show in folder": Explorer on a library file or folder - only in the app's window
@@ -947,13 +981,13 @@ function _paintCard() {
 function _showInFolder(url, title) {
   const w = window.ugcWindow;
   if (!url || !w || typeof w.reveal !== 'function') return null;
-  const b = _el('button', 'mv3-c-btn u-btn is-s', 'Show in folder');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', T.t('Show in folder'));
   b.type = 'button';
   b.title = title;
   b.addEventListener('click', async () => {
     let ok = false;
     try { ok = await w.reveal(url); } catch (e) { ok = false; }
-    if (!ok) _say('that file is not in the library any more', true);
+    if (!ok) _say(T.t('that file is not in the library any more'), true);
   });
   return b;
 }
@@ -964,34 +998,33 @@ function _renderLine(f) {
   const rd = f.rendered;
   const rq = f.rq;
   if (rd) {
-    line.appendChild(document.createTextNode('render: '));
     const name = _el('b', null, _fileOf(rd.url));
     name.title = rd.url;
-    line.appendChild(name);
+    _around(line, T.t('render: {file}'), '{file}', name);
     const bits = [rd.seconds ? _secs(rd.seconds) : '', _hhmm(rd.at), rd.srt ? '+ .srt' : ''].filter(Boolean);
     if (bits.length) line.appendChild(_el('span', 'mv3-hl-cap-of', ' · ' + bits.join(' · ')));
     if (_changed(f)) {
-      const ch = _el('span', 'mv3-hl-cap-ed', ' · changed since');
-      ch.title = 'Its timeline was edited after the render - tick it and Render again';
+      const ch = _el('span', 'mv3-hl-cap-ed', ' · ' + T.t('changed since'));
+      ch.title = T.t('Its timeline was edited after the render - tick it and Render again');
       line.appendChild(ch);
     }
     const acts = _el('div', 'mv3-hl-racts');
     const play = _el('button', 'mv3-c-btn u-btn is-s');
-    play.append(iconEl('play', 14), document.createTextNode('play'));   // Lucide's play
+    play.append(iconEl('play', 14), document.createTextNode(T.tc('render', 'play')));   // Lucide's play
     play.type = 'button';
-    play.title = 'Play the render in the Library\'s viewer - Rename and Delete are there';
+    play.title = T.t('Play the render in the Library\'s viewer - Rename and Delete are there');
     play.addEventListener('click', () => openRender(rd.url, { onChanged: () => _load() }));
     acts.appendChild(play);
-    const shown = _showInFolder(rd.url, 'Show this file in its folder - Explorer, the file picked');
+    const shown = _showInFolder(rd.url, T.t('Show this file in its folder - Explorer, the file picked'));
     if (shown) acts.appendChild(shown);
     line.appendChild(acts);
   } else {
-    line.appendChild(document.createTextNode('render: '));
-    line.appendChild(_el('span', null, !rq ? 'not yet - tick it and Render'
-      : rq.state === 'running' ? 'rendering ' + (rq.percent || 0) + '%'
-      : rq.state === 'line' ? 'in line' + (rq.ahead ? ' · ' + rq.ahead + ' ahead' : ' · next')
-      : rq.state === 'interrupted' ? 'interrupted - go on in Queue'
-      : 'failed' + (rq.error ? ': ' + rq.error : '')));
+    const now = !rq ? T.t('not yet - tick it and Render')
+      : rq.state === 'running' ? T.t('rendering {pct}%', { pct: rq.percent || 0 })
+      : rq.state === 'line' ? T.t('in line') + ' · ' + (rq.ahead ? T.t('{n} ahead', { n: rq.ahead }) : T.t('next'))
+      : rq.state === 'interrupted' ? T.t('interrupted - go on in Queue')
+      : rq.error ? T.t('failed: {why}', { why: rq.error }) : T.t('failed');
+    _around(line, T.t('render: {file}'), '{file}', _el('span', null, now));
   }
   return line;
 }
@@ -1006,13 +1039,13 @@ async function _addTitle(f) {
     Store.mutate((tl) => { ok = putTitle(tl, text, f.length || f.seconds, () => 'ht' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)); });
     // Ctrl+Z next is the timeline's - it takes the title away - not the field's, which brings back deleted fragments.
     if (ok) _inField = false;
-    _say(ok ? 'the title is on top - Ctrl+Z takes it away' : 'it has a title already, or two text lanes', !ok);
+    _say(ok ? T.t('the title is on top - Ctrl+Z takes it away') : T.t('it has a title already, or two text lanes'), !ok);
     _paintCard();
     return;
   }
   try {
     await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title-on-top', { method: 'POST' });
-    _say('the title is on top of «' + f.title + '»');
+    _say(T.t('the title is on top of «{name}»', { name: f.title }));
   } catch (e) { _say(e.message, true); }
   _load();
 }
@@ -1023,13 +1056,13 @@ async function _dropTitle(f) {
     let ok = false;
     Store.mutate((tl) => { ok = dropTitle(tl); });
     if (ok) _inField = false;
-    _say(ok ? 'the title is off - Ctrl+Z puts it back' : 'it has no title on top', !ok);
+    _say(ok ? T.t('the title is off - Ctrl+Z puts it back') : T.t('it has no title on top'), !ok);
     _paintCard();
     return;
   }
   try {
     await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title-on-top/remove', { method: 'POST' });
-    _say('the title is off «' + f.title + '»');
+    _say(T.t('the title is off «{name}»', { name: f.title }));
   } catch (e) { _say(e.message, true); }
   _load();
 }
@@ -1042,7 +1075,7 @@ async function _delete(f) {
     if (Store.key() === f.key) await Store.open(homeKey(_pid));
     if (_sel === f.n) _sel = 0;
     _checked.delete(f.n);
-    _say('deleted «' + f.title + '» - Ctrl+Z here brings it back');
+    _say(T.t('deleted «{name}» - Ctrl+Z here brings it back', { name: f.title }));
   } catch (e) { _say(e.message, true); }
   _load();
 }
@@ -1051,7 +1084,7 @@ async function _restore() {
   try {
     const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/restore',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    _say(d.n ? 'brought back' : 'nothing deleted to bring back');
+    _say(d.n ? T.t('brought back') : T.t('nothing deleted to bring back'));
     if (d.n) _sel = d.n;
   } catch (e) { _say(e.message, true); }
   _load();
@@ -1095,9 +1128,9 @@ async function _retryNow() {
 // "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
 // file's path over (desktop/preload.js pathOf), the server checks it is the same video (its print) and the work goes on.
 function _relinkButton(sourceId) {
-  const b = _el('button', 'mv3-c-btn u-btn is-s', 'Point at the file…');
+  const b = _el('button', 'mv3-c-btn u-btn is-s', T.t('Point at the file…'));
   b.type = 'button';
-  b.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
+  b.title = T.t('The video was moved or renamed: show where it is now - the same file, its words are kept');
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'video/*';
@@ -1107,7 +1140,7 @@ function _relinkButton(sourceId) {
     const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
     let where = '';
     try { where = f && typeof pathOf === 'function' ? String(pathOf(f) || '') : ''; } catch (e) { where = ''; }
-    if (!where) { showError('Pointing at a file works in the app\'s own window - it hands the file over.'); return; }
+    if (!where) { showError(T.t('Pointing at a file works in the app\'s own window - it hands the file over.')); return; }
     try {
       await _api('/api/sources/' + encodeURIComponent(sourceId) + '/relink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: where }) });
       _err = '';

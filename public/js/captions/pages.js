@@ -35,6 +35,7 @@ import { isHeard, soundPieces } from './heard.js';
 import { tokensOf, spells, retext } from './words.js';
 import { mixOf } from './style.js';
 import { withoutRefs, deal, needsDeal } from './mix.js';
+import * as T from '../i18n/t.js';
 
 export { tokensOf };
 
@@ -607,7 +608,7 @@ export function timedWords(c) {
 /**
  * Is this heard caption more than ONE page of its lane - by the limits the cut keeps (a line grown by
  * corrections; a correction never cuts by itself)? More words than a page holds, wider than its lines, or
- * on screen longer than PAGE.maxDur. @returns what it is more than, in words, or null when it fits.
+ * on screen longer than PAGE.maxDur. @returns what it is more than, in words (the app's language), or null when it fits.
  */
 export function overPage(c, laneStyle, format) {
   const words = timedWords(c).filter((w) => w && String(w.w || '').trim());
@@ -619,15 +620,15 @@ export function overPage(c, laneStyle, format) {
   const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);
   const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
   const maxDur = sent ? SENT.maxDur : PAGE.maxDur;
-  if (words.length > N) return words.length + ' words, a page holds ' + N;
+  if (words.length > N) return T.tn(words.length, '{n} word, a page holds {max}', '{n} words, a page holds {max}', { max: N });
   const end = Math.max(...words.map((w) => r2(w.e)));
   const dur = end - r2(words[0].s);
-  if (dur > maxDur + 1e-9) return dur.toFixed(1) + ' s of words, a page is up to ' + maxDur + ' s';
+  if (dur > maxDur + 1e-9) return T.t('{secs} s of words, a page is up to {max} s', { secs: dur.toFixed(1), max: maxDur });
   const tokens = words.map((w) => String(w.w).trim());
   const m = meter(st);
-  if (tokens.some((t) => m.text(t) > LINE_MAX * F.w)) return 'a word wider than a line, which gets a page of its own';
+  if (tokens.some((t) => m.text(t) > LINE_MAX * F.w)) return T.t('a word wider than a line, which gets a page of its own');
   const got = breakLines(tokens, st, F.w).length;
-  if (got > lines) return got + ' lines, a page has ' + lines;
+  if (got > lines) return T.tn(got, '{n} line, a page has {max}', '{n} lines, a page has {max}', { max: lines });
   return null;
 }
 

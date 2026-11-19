@@ -32,9 +32,12 @@
    { remove: true } when no word is left. Limits on every one: 200 words, 60 characters a word, 400 the
    text.
 
-   Imports nothing: the server require()s the caption modules (lib/mv3b-subs.js), and this one is
-   imported by pages.js and ass.js - an import back would close a loop.
+   Imports only the interface's words (i18n/t.js, which imports nothing): the server require()s the caption modules
+   (lib/mv3b-subs.js), and this one is imported by pages.js and ass.js - an import back would close a loop. A refusal
+   (`why`) is said in the app's language.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as I18N from '../i18n/t.js';
 
 export const LIMITS = { words: 200, word: 60, text: 400 };
 /** The shortest a word is made (seconds). */
@@ -170,9 +173,9 @@ const _copy = (words) => (Array.isArray(words) ? words : []).filter((w) => w && 
 // without a word said. A word is measured as it IS, with the marks glued onto it: checked before the glue, a run of
 // dashes in front of a word would be stored cut - without the word.
 const _done = (words) => {
-  if (words.some((w) => String(w.w).length > LIMITS.word)) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+  if (words.some((w) => String(w.w).length > LIMITS.word)) return _wordMax();
   const name = textOf(words);
-  return name.length > LIMITS.text ? { why: 'A line holds at most ' + LIMITS.text + ' characters' } : { words, name };
+  return name.length > LIMITS.text ? _textMax() : { words, name };
 };
 
 // Where a word may be cut: between two characters as a reader sees them - never inside an emoji's
@@ -190,9 +193,9 @@ function _cuts(txt) {
 }
 
 function _limits(toks, total) {
-  if (total > LIMITS.words) return { why: 'A line holds at most ' + LIMITS.words + ' words' };
+  if (total > LIMITS.words) return { why: I18N.tn(LIMITS.words, 'A line holds at most {n} word', 'A line holds at most {n} words') };
   const long = toks.find((t) => String(t).length > LIMITS.word);
-  if (long) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+  if (long) return _wordMax();
   return null;
 }
 
@@ -282,8 +285,11 @@ function _place(seq, end) {
   return out;
 }
 
-const _noRoom = (words, end) => ({ why: 'No room for that many words: they need ' + (MINC * words / 100).toFixed(2)
-  + ' s at least, the line is ' + (end / 100).toFixed(2) + ' s - make it longer first' });
+const _noRoom = (words, end) => ({ why: I18N.t('No room for that many words: they need {need} s at least, the line is {len} s - make it longer first',
+  { need: (MINC * words / 100).toFixed(2), len: (end / 100).toFixed(2) }) });
+// The refusals said more than once.
+const _wordMax = () => ({ why: I18N.tn(LIMITS.word, 'A word holds at most {n} character', 'A word holds at most {n} characters') });
+const _textMax = () => ({ why: I18N.tn(LIMITS.text, 'A line holds at most {n} character', 'A line holds at most {n} characters') });
 
 // Where a line ends for the words in it: its length, or its last word's end when that runs past it.
 const _endOf = (ws, dur) => Math.max(cs(dur), ...ws.map((w) => cs(w.e)), 0);
@@ -325,7 +331,7 @@ function _align(a, b) {
  */
 export function retext(words, text, dur) {
   const t = String(text == null ? '' : text);
-  if (t.length > LIMITS.text) return { why: 'A line holds at most ' + LIMITS.text + ' characters' };
+  if (t.length > LIMITS.text) return _textMax();
   const ws = _copy(words);
   const nt = wordsIn(t, ws);
   if (!nt.length) return { remove: true };
@@ -358,7 +364,7 @@ export function retextLines(words, texts, dur) {
     for (const x of wordsIn(String(tx == null ? '' : tx), ws)) { nt.push(x); lnOf.push(k); }
   });
   if (!nt.length) return { remove: true };
-  const tooLong = { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+  const tooLong = _wordMax();
   if (nt.some((t) => String(t).length > LIMITS.word)) return tooLong;
   const end = _endOf(ws, dur);
   let out = null;
@@ -491,13 +497,13 @@ export function typedWords(text, dur) {
 
 // ── The word editor's operations ────────────────────────────────────────────
 const _at = (ws, i) => (Number.isInteger(i) && i >= 0 && i < ws.length ? ws[i] : null);
-const NO_WORD = { why: 'There is no such word in this line' };
+const NO_WORD = () => ({ why: I18N.t('There is no such word in this line') });
 
 /** Word `i` written as `text` - two words when it has a space (a mark goes with a word); nothing removes it. */
 export function replaceAt(words, i, text, dur) {
   const ws = _copy(words);
   const w = _at(ws, i);
-  if (!w) return NO_WORD;
+  if (!w) return NO_WORD();
   const nt = _glue(wordsIn(text));
   if (!nt.length) return removeAt(words, i);
   const bad = _limits(nt, ws.length - 1 + nt.length);
@@ -521,15 +527,15 @@ export function replaceAt(words, i, text, dur) {
  */
 export function insertAt(words, i, text, dur) {
   const ws = _copy(words);
-  if (!(Number.isInteger(i) && i >= 0 && i <= ws.length)) return NO_WORD;
+  if (!(Number.isInteger(i) && i >= 0 && i <= ws.length)) return NO_WORD();
   const raw = wordsIn(text);
-  if (!raw.length) return { why: 'Nothing to put in' };
+  if (!raw.length) return { why: I18N.t('Nothing to put in') };
   if (ws.length && !raw.some((x) => keyOf(x))) {
     const m = raw.join(' ');
     const at = i > 0 ? i - 1 : 0;
     const w = ws[at].w + ' ' + m;
     const next = i > 0 ? w : m + ' ' + ws[0].w;
-    if (next.length > LIMITS.word) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+    if (next.length > LIMITS.word) return _wordMax();
     ws[at] = { ...ws[at], w: next, h: true };
     return _done(ws);
   }
@@ -550,7 +556,7 @@ export function insertAt(words, i, text, dur) {
  */
 export function removeAt(words, i) {
   const ws = _copy(words);
-  if (!_at(ws, i)) return NO_WORD;
+  if (!_at(ws, i)) return NO_WORD();
   if (ws.length === 1) return { remove: true };
   ws.splice(i, 1);
   const n = ws[i > 0 ? i - 1 : 0];
@@ -562,10 +568,10 @@ export function removeAt(words, i) {
 export function joinAt(words, i) {
   const ws = _copy(words);
   const a = _at(ws, i), b = _at(ws, i + 1);
-  if (!a) return NO_WORD;
-  if (!b) return { why: 'The last word has no next word to join' };
+  if (!a) return NO_WORD();
+  if (!b) return { why: I18N.t('The last word has no next word to join') };
   const w = a.w + b.w;
-  if (w.length > LIMITS.word) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+  if (w.length > LIMITS.word) return _wordMax();
   const o = { w, s: a.s, e: Math.max(a.e, b.e), h: true };
   if (a.k || b.k) o.k = true;
   ws.splice(i, 2, o);
@@ -580,17 +586,17 @@ export function joinAt(words, i) {
 export function cutAt(words, i, at, pos) {
   const ws = _copy(words);
   const w = _at(ws, i);
-  if (!w) return NO_WORD;
+  if (!w) return NO_WORD();
   const txt = w.w;
   const cuts = _cuts(txt);
-  if (!cuts.length) return { why: 'A word of one letter cannot be cut' };
+  if (!cuts.length) return { why: I18N.t('A word of one letter cannot be cut') };
   const S = cs(w.s), E = Math.max(cs(w.s), cs(w.e));
-  if (E - S < 2 * MINC) return { why: 'Too short to cut - each half needs ' + WORD_MIN + ' s' };
+  if (E - S < 2 * MINC) return { why: I18N.t('Too short to cut - each half needs {min} s', { min: WORD_MIN }) };
   let p = Number.isInteger(pos) ? pos : null;
   let T = at == null ? null : cs(at);
   if (T != null && (T - S < MINC || E - T < MINC)) {
-    return { why: T <= S || T >= E ? 'Put the playhead inside the word - or type a space in it where it splits'
-      : 'Too close to the edge of the word - each half needs ' + WORD_MIN + ' s' };
+    return T <= S || T >= E ? { why: I18N.t('Put the playhead inside the word - or type a space in it where it splits') }
+      : { why: I18N.t('Too close to the edge of the word - each half needs {min} s', { min: WORD_MIN }) };
   }
   if (p == null) {
     const f = T == null ? 0.5 : (E > S ? (T - S) / (E - S) : 0.5);
@@ -601,9 +607,9 @@ export function cutAt(words, i, at, pos) {
   // Onto the nearest place a reader would see as between two characters.
   p = cuts.reduce((best, x) => (Math.abs(x - p) < Math.abs(best - p) ? x : best), cuts[0]);
   const left = txt.slice(0, p).trim(), right = txt.slice(p).trim();
-  if (!left || !right) return { why: 'Nothing would be left on one side of the cut' };
+  if (!left || !right) return { why: I18N.t('Nothing would be left on one side of the cut') };
   if (T == null) T = S + Math.round((E - S) * weight(left) / (weight(left) + weight(right)));
-  if (T - S < MINC || E - T < MINC) return { why: 'Too close to the edge of the word - each half needs ' + WORD_MIN + ' s' };
+  if (T - S < MINC || E - T < MINC) return { why: I18N.t('Too close to the edge of the word - each half needs {min} s', { min: WORD_MIN }) };
   const bad = _limits([left, right], ws.length + 1);
   if (bad) return bad;
   const a = { w: left, s: w.s, e: T / 100, h: true }, b = { w: right, s: T / 100, e: w.e, h: true };
@@ -616,7 +622,7 @@ export function cutAt(words, i, at, pos) {
 export function markAt(words, i, on) {
   const ws = _copy(words);
   const w = _at(ws, i);
-  if (!w) return NO_WORD;
+  if (!w) return NO_WORD();
   if (on) w.k = true; else delete w.k;
   return _done(ws);
 }
@@ -629,7 +635,7 @@ export function markAt(words, i, on) {
 export function edgeAt(words, i, side, t, dur) {
   const ws = _copy(words);
   const w = _at(ws, i);
-  if (!w) return NO_WORD;
+  if (!w) return NO_WORD();
   const end = _endOf(ws, dur);
   const S = cs(w.s), E = Math.max(cs(w.s), cs(w.e));
   let T = cs(t);
@@ -638,13 +644,13 @@ export function edgeAt(words, i, side, t, dur) {
     const shared = !!p && cs(p.e) >= S - 1;
     const lo = p ? (shared ? cs(p.s) + MINC : Math.min(cs(p.e), S)) : 0;
     const hi = E - MINC;
-    if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
+    if (lo > hi) return { why: I18N.t('These two words are at their shortest ({min} s)', { min: WORD_MIN }) };
     T = Math.max(lo, Math.min(hi, T));
     // Never the other way from the key: a word already shorter than the minimum would put the bound on
     // the far side of the edge, and the clamp would move the edge - and the neighbour - backwards.
     if ((T - S) * (cs(t) - S) < 0) {
-      return { why: cs(t) < S ? (shared ? 'The word before is at its shortest (' + WORD_MIN + ' s)' : 'The word before ends here')
-        : 'This word is at its shortest (' + WORD_MIN + ' s)' };
+      return cs(t) < S ? (shared ? { why: I18N.t('The word before is at its shortest ({min} s)', { min: WORD_MIN }) } : { why: I18N.t('The word before ends here') })
+        : { why: I18N.t('This word is at its shortest ({min} s)', { min: WORD_MIN }) };
     }
     if (T === S && !(shared && cs(p.e) !== S)) return _done(ws);
     w.s = T / 100;
@@ -655,16 +661,17 @@ export function edgeAt(words, i, side, t, dur) {
     const shared = !!n && cs(n.s) <= E + 1;
     const lo = S + MINC;
     const hi = n ? (shared ? Math.max(cs(n.s), cs(n.e)) - MINC : Math.max(cs(n.s), E)) : Math.max(end, E);
-    if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
+    if (lo > hi) return { why: I18N.t('These two words are at their shortest ({min} s)', { min: WORD_MIN }) };
     T = Math.min(hi, Math.max(lo, T));
     if ((T - E) * (cs(t) - E) < 0) {
-      return { why: cs(t) > E ? (shared ? 'The word after is at its shortest (' + WORD_MIN + ' s)' : (n ? 'The next word starts here' : 'The line ends here'))
-        : 'This word is at its shortest (' + WORD_MIN + ' s)' };
+      return cs(t) > E ? (shared ? { why: I18N.t('The word after is at its shortest ({min} s)', { min: WORD_MIN }) }
+        : { why: n ? I18N.t('The next word starts here') : I18N.t('The line ends here') })
+        : { why: I18N.t('This word is at its shortest ({min} s)', { min: WORD_MIN }) };
     }
     if (T === E && !(shared && cs(n.s) !== E)) return _done(ws);
     w.e = T / 100;
     w.h = true;
     if (shared) { n.s = T / 100; n.h = true; }
-  } else return { why: 'A word has a start and an end' };
+  } else return { why: I18N.t('A word has a start and an end') };
   return _done(ws);
 }

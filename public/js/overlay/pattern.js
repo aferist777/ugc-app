@@ -26,12 +26,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { normalizeOpacity, normalizeBlend, isPattern } from './look.js';
+import * as T from '../i18n/t.js';
 
 export const REF = 2160;         // the file size whose pixel, at 100 %, is a frame's long side / 2160
 export const SCALE = { min: 0.25, max: 4, step: 0.05 };
 export const ROTATE = { min: 0.5, max: 20, step: 0.5, def: 2 };
 export const DRIFT = { min: 5, max: 200, step: 5, def: 20 };
-export const MOVES = [['none', 'Still'], ['rotate', 'Rotate'], ['drift', 'Drift']];
+export const MOVES = [['none', T.t('Still')], ['rotate', T.t('Rotate')], ['drift', T.t('Drift')]];
 // The eight ways of a drift: id, arrow, the angle on the screen (0 = to the right, counter-clockwise as on a map).
 export const DIRS = [['e', '→', 0], ['ne', '↗', 45], ['n', '↑', 90], ['nw', '↖', 135],
   ['w', '←', 180], ['sw', '↙', 225], ['s', '↓', 270], ['se', '↘', 315]];

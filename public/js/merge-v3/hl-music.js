@@ -14,8 +14,13 @@ import { YOURS, BY_VIDEO } from './hl-kinds.js';
 // Being read, could not be read - the shared parts; the reason a popup in the corner.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { t, tc, tn } from '../i18n/t.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+/** A mood's name and words as shown - its id and label stay English (folder names, the presets' ids); "yours" is the root. */
+export const moodName = (id, label) => (id === YOURS ? t('yours') : id === BY_VIDEO ? t('by the video') : tc('mood', String(label || id)));
+export const moodAbout = (id, about) => (id === YOURS ? t('Your own tracks in the root of Music → highlights') : (about ? t(about) : ''));
 
 /**
  * The mood buttons in `host`. `onChange(moods)` on a press; `onReady()` once Music -> highlights is read. Returns { set(moods), get(), have(id), byVideo(on), recommend(ids) }.
@@ -41,33 +46,36 @@ export function moodPicker(host, { onChange, onReady } = {}) {
   function paint() {
     row.textContent = '';
     if (!data) {
-      row.appendChild(err ? failedEl('Music → highlights', () => read(), { line: true })
-        : loadingEl('reading Music → highlights…', { line: true }));
+      row.appendChild(err ? failedEl(t('Music → highlights'), () => read(), { line: true })
+        : loadingEl(t('reading Music → highlights…'), { line: true }));
       return;
     }
     if (byVideoOn) {
-      const by = _el('button', 'mv3-hlp-chip u-chip mv3-hlp-byvideo' + (chosen.includes(BY_VIDEO) ? ' is-on' : ''), 'by the video');
+      const by = _el('button', 'mv3-hlp-chip u-chip mv3-hlp-byvideo' + (chosen.includes(BY_VIDEO) ? ' is-on' : ''), t('by the video'));
       by.type = 'button';
-      by.title = 'The kind of video auto finds gives its own moods - as you last chose them for that kind (its standard at first)';
+      by.title = t('The kind of video auto finds gives its own moods - as you last chose them for that kind (its standard at first)');
       by.addEventListener('click', () => { chosen = [BY_VIDEO]; paint(); if (onChange) onChange(chosen.slice()); });
       row.appendChild(by);
     }
-    const none = _el('button', 'mv3-hlp-chip u-chip' + (chosen.length ? '' : ' is-on'), 'no music');
+    const none = _el('button', 'mv3-hlp-chip u-chip' + (chosen.length ? '' : ' is-on'), t('no music'));
     none.type = 'button';
-    none.title = 'No background music';
+    none.title = t('No background music');
     none.addEventListener('click', () => { chosen = []; paint(); if (onChange) onChange([]); });
     row.appendChild(none);
     const list = data.moods.map((m) => ({ id: m.id, label: m.label, about: m.about }));
-    if (data.root.length) list.push({ id: YOURS, label: 'yours', about: 'Your own tracks in the root of Music → highlights' });
+    if (data.root.length) list.push({ id: YOURS, label: 'yours', about: '' });
     for (const m of list) {
       const n = count(m.id);
       const r = rec.includes(m.id);
-      const b = _el('button', 'mv3-hlp-chip u-chip' + (chosen.includes(m.id) ? ' is-on' : '') + (r ? ' is-rec' : ''), m.label);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (chosen.includes(m.id) ? ' is-on' : '') + (r ? ' is-rec' : ''), moodName(m.id, m.label));
       b.type = 'button';
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
       b.disabled = !n;
-      b.title = (r ? 'Recommended for this kind of video. ' : '') + (n ? (m.about ? m.about + ' - ' : '') + n + (n === 1 ? ' track' : ' tracks') + '; each fragment gets one of them'
-        : 'No tracks in this mood yet - make them in Music → highlights');
+      const about = moodAbout(m.id, m.about);
+      const said = !n ? t('No tracks in this mood yet - make them in Music → highlights')
+        : about ? tn(n, '{about} - {n} track; each fragment gets one of them', '{about} - {n} tracks; each fragment gets one of them', { about })
+          : tn(n, '{n} track; each fragment gets one of them', '{n} tracks; each fragment gets one of them');
+      b.title = r ? t('Recommended for this kind of video. {more}', { more: said }) : said;
       b.addEventListener('click', () => {
         chosen = chosen.filter((x) => x !== BY_VIDEO);
         chosen = chosen.includes(m.id) ? chosen.filter((x) => x !== m.id) : chosen.concat([m.id]);
@@ -79,7 +87,7 @@ export function moodPicker(host, { onChange, onReady } = {}) {
   }
 
   // A read that fails: the row says "did not load" with Try again, the reason is a popup.
-  const SAID = 'Music → highlights could not be read';
+  const SAID = t('Music → highlights could not be read');
   async function read() {
     if (err) { err = ''; paint(); }
     try {

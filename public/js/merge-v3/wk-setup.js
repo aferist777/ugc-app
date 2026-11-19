@@ -74,6 +74,7 @@ import {
   showPicture, tileMenu, onlyHere, heldPlace, softScroll, paintChoose, lookGroups,
   holdHalf, endHalf, dropHalf, dropHalves, halfPlace,
 } from './wk-maker.js';
+import { t } from '../i18n/t.js';
 
 let _chars = null;
 let _state = 'idle';                     // 'idle' | 'loading' | 'failed' - the characters did not load (the reason was a popup)
@@ -128,7 +129,7 @@ async function _load(repaint) {
     _chars = [];
     // The reason a popup; the setup says the characters did not load, with Try again.
     _state = 'failed';
-    showError('Could not read the characters: ' + e.message);
+    showError(t('Could not read the characters: {why}', { why: e.message }));
   }
   repaint();
 }
@@ -151,11 +152,11 @@ async function _patch(casting) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: _ctx.project.id, casting }),
     }).then(x => x.json());
-    if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+    if (!r || !r.success) throw new Error((r && r.error) || t('refused'));
     _ctx.project = r.project;
   } catch (e) {
     // A refusal is a popup in the corner.
-    showError('Could not save the casting: ' + e.message);
+    showError(t('Could not save the casting: {why}', { why: e.message }));
   }
   _saving = false;
   _ctx.repaint();
@@ -179,7 +180,7 @@ async function _cast(look, anchor, sure, opts) {
       body: JSON.stringify(look ? { ...look, sure: !!sure } : { clear: true }),
     });
     try { r = await res.json(); } catch (e) { r = null; }
-    if (!r) throw new Error(res.status === 404 ? 'This is newer than the running app - close UGC Studio and open it again to finish the update.' : 'the server answered ' + res.status);
+    if (!r) throw new Error(res.status === 404 ? t('This is newer than the running app - close UGC Studio and open it again to finish the update.') : t('the server answered {status}', { status: res.status }));
   } catch (e) {
     r = { success: false, error: e.message };
   }
@@ -197,27 +198,33 @@ async function _cast(look, anchor, sure, opts) {
   _ctx.repaint();
   if (r.ask && look) {
     const a = r.ask;
-    const parts = [a.reads && !a.sameChar ? 'the reads (' + a.reads + ')' : '', a.frames ? 'frames (' + a.frames + ')' : '', a.clips ? 'clips (' + a.clips + ')' : ''].filter(Boolean);
-    const what = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0];
-    const whose = a.sameChar ? 'of this look' : 'of ' + (a.from || 'the character cast now');
-    const back = a.sameChar ? 'that look is chosen again' : (a.from || 'they') + ' is chosen again';
-    const text = 'Change to ' + (a.sameChar ? 'another look of ' + (a.to || 'this character') : (a.to || 'this character')) + '?';
-    const sub = 'The ' + what.replace(/^the /, '') + ' ' + whose + ' leave the fields - their files stay in this project and come back when ' + back + '.';
+    // What leaves the fields, as one list ("reads (3), frames (2) and clips (1)"), in whole sentences for the three cases.
+    const parts = [a.reads && !a.sameChar ? t('reads ({n})', { n: a.reads }) : '', a.frames ? t('frames ({n})', { n: a.frames }) : '',
+      a.clips ? t('clips ({n})', { n: a.clips }) : ''].filter(Boolean);
+    const what = parts.length > 1 ? t('{list} and {last}', { list: parts.slice(0, -1).join(', '), last: parts[parts.length - 1] }) : parts[0];
+    const text = a.sameChar
+      ? (a.to ? t('Change to another look of {name}?', { name: a.to }) : t('Change to another look of this character?'))
+      : (a.to ? t('Change to {name}?', { name: a.to }) : t('Change to this character?'));
+    const sub = a.sameChar
+      ? t('The {what} of this look leave the fields - their files stay in this project and come back when that look is chosen again.', { what })
+      : a.from ? t('The {what} of {name} leave the fields - their files stay in this project and come back when {name} is chosen again.', { what, name: a.from })
+        : t('The {what} of the character cast now leave the fields - their files stay in this project and come back when they is chosen again.', { what });
     const host = (anchor && anchor.isConnected) ? anchor : document.querySelector('#mv3-stage') || document.body;
     // "new project": this script, place and choices in a new talking head with
     // the look pressed - this project stays as it is. Not on the way back (↺): that one returns this project to its start.
     const forkHint = a.sameChar
-      ? 'A new talking head of this script in the look pressed - this project keeps its look and everything made in it.'
-      : 'A new talking head of this script with ' + (a.to || 'them') + ' - this project stays with ' + (a.from || 'the one cast now') + ' as it is.';
+      ? t('A new talking head of this script in the look pressed - this project keeps its look and everything made in it.')
+      : t('A new talking head of this script with {to} - this project stays with {from} as it is.',
+        { to: a.to || t('them'), from: a.from || t('the one cast now') });
     return new Promise((done) => {
       askChoice(host, text, sub, [
-        { label: 'Change', kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
-        ...((opts && opts.fork) ? [{ label: 'New project', hint: forkHint, on: () => { _fork(look).then(done); } }] : []),
-        { label: 'Cancel', on: () => done(false) },
+        { label: t('Change'), kind: 'yes', on: () => { _cast(look, anchor, true).then(done); } },
+        ...((opts && opts.fork) ? [{ label: t('New project'), hint: forkHint, on: () => { _fork(look).then(done); } }] : []),
+        { label: t('Cancel'), on: () => done(false) },
       ], { stay: true });
     });
   }
-  showError('The look was not changed: ' + (r.error || 'refused'));
+  showError(t('The look was not changed: {why}', { why: r.error || t('refused') }));
   return false;
 }
 
@@ -229,7 +236,7 @@ async function _fork(look) {
   _ctx.repaint();
   let key = '';
   try { key = await API.forkHead(_ctx.project.id, look); }
-  catch (e) { showError('The new project was not made: ' + e.message); }
+  catch (e) { showError(t('The new project was not made: {why}', { why: e.message })); }
   _saving = false;
   if (!key) { _ctx.repaint(); return false; }
   if (_who) _who.win.close();
@@ -251,7 +258,7 @@ function _savingWord() {
   if (!head) return;
   let w = head.querySelector('.mv3-wk-saving');
   if (!_saving || !_active) { if (w) w.remove(); return; }
-  if (!w) head.appendChild(_el('span', 'mv3-wk-saving', 'saving…'));
+  if (!w) head.appendChild(_el('span', 'mv3-wk-saving', t('saving…')));
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
@@ -273,9 +280,9 @@ export function paint(host, ctx) {
   // "saving…" stands grey at its right while the casting is saved.
   _savingWord();
 
-  if (!ctx.project) { root.appendChild(loadingEl('Reading the project…')); return; }
-  if (_chars === null) { _load(ctx.repaint); root.appendChild(loadingEl('reading the characters…')); return; }
-  if (_state === 'failed') root.appendChild(failedEl('The characters', () => { _chars = null; _state = 'idle'; ctx.repaint(); }, { line: true }));
+  if (!ctx.project) { root.appendChild(loadingEl(t('Reading the project…'))); return; }
+  if (_chars === null) { _load(ctx.repaint); root.appendChild(loadingEl(t('reading the characters…'))); return; }
+  if (_state === 'failed') root.appendChild(failedEl(t('The characters'), () => { _chars = null; _state = 'idle'; ctx.repaint(); }, { line: true }));
 
   const chosen = _castChar();
   const scroll = _el('div', 'mv3-wk-scroll');
@@ -358,7 +365,7 @@ function _fragApi(chosen) {
 function _whoHalf(chosen) {
   const cast = _casting();
   if (cast.obrazImage) return { src: cast.obrazImage, caption: cast.characterName || '' };
-  if (chosen) return { src: _faceOf(chosen).src, caption: chosen.name + ' · no look yet' };
+  if (chosen) return { src: _faceOf(chosen).src, caption: t('{name} · no look yet', { name: chosen.name }) };
   return { src: '', caption: '' };
 }
 // ...and the lower, with no caption (the word "environment" under the
@@ -396,8 +403,8 @@ function _stage(chosen) {
   PV.cropOff();
   const who = _whoHalf(chosen), where = _whereHalf();
   PV.showPair(
-    { src: who.src ? derived(who.src, 'main') : '', caption: who.caption, empty: 'choose a character' },
-    { src: where.src ? derived(where.src, 'main') : '', caption: where.caption, empty: 'choose an environment' },
+    { src: who.src ? derived(who.src, 'main') : '', caption: who.caption, empty: t('choose a character') },
+    { src: where.src ? derived(where.src, 'main') : '', caption: where.caption, empty: t('choose an environment') },
     _pick,
   );
   // A CROSS in the corner of each half that holds a choice takes it off the project. In the corner of
@@ -425,7 +432,7 @@ function _stageBack(withCross) {
   // Lucide's rotate-ccw is the "↺"
   b.append(iconEl('rotate-ccw', 12), document.createTextNode(back.characterName));
   b.type = 'button';
-  b.title = 'Back to ' + back.characterName + ' in the look this project began with - what was made for them comes back';
+  b.title = t('Back to {name} in the look this project began with - what was made for them comes back', { name: back.characterName });
   b.disabled = _saving;
   b.addEventListener('click', (e) => { e.stopPropagation(); _cast(back, b); });
   stage.appendChild(b);
@@ -438,10 +445,11 @@ function _clearHalf(half, anchor) {
   if (_saving) return;
   if (half === 'top') {
     // Asked at the cross, as a change is; nothing is put aside, and the question says so.
-    const name = _casting().characterName || 'the character';
-    askChoice(anchor || document.querySelector('#mv3-stage') || document.body, 'Take ' + name + ' off this project?',
-      'Nothing is lost - the reads, frames and clips stay. Choose the same look again and everything is as it was.',
-      [{ label: 'Take off', kind: 'yes', on: () => _cast(null) }, { label: 'Cancel' }]);
+    const name = _casting().characterName || '';
+    askChoice(anchor || document.querySelector('#mv3-stage') || document.body,
+      name ? t('Take {name} off this project?', { name }) : t('Take the character off this project?'),
+      t('Nothing is lost - the reads, frames and clips stay. Choose the same look again and everything is as it was.'),
+      [{ label: t('Take off'), kind: 'yes', on: () => _cast(null) }, { label: t('Cancel') }]);
     return;
   }
   _patch({ locationId: '', locationImage: '' });
@@ -469,8 +477,8 @@ function _stageClears(top, bottom) {
     b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half, b); });
     stage.appendChild(b);
   };
-  if (top) mk('top', 'Take ' + (cast.characterName || 'the character') + ' off this project');
-  if (bottom) mk('bottom', 'Take the environment off this project');
+  if (top) mk('top', cast.characterName ? t('Take {name} off this project', { name: cast.characterName }) : t('Take the character off this project'));
+  if (bottom) mk('bottom', t('Take the environment off this project'));
 }
 
 // WHAT CAN BE DONE TO THE PICTURE ON THE STAGE, in a row along its foot. The panel decides
@@ -500,7 +508,7 @@ function _pick(half, ev) {
   if (ev && ev.type === 'contextmenu') {
     const src = half === 'top' ? _whoHalf(_castChar()).src : _whereHalf().src;
     if (!src) return;
-    tileMenu(ev, [{ label: 'Open', sub: 'look at it, full size', on: () => showPicture({ src, name: src.split('/').pop() }) }],
+    tileMenu(ev, [{ label: t('Open'), sub: t('look at it, full size'), on: () => showPicture({ src, name: src.split('/').pop() }) }],
       half === 'top' ? 'character menu' : 'environment menu');
     return;
   }
@@ -567,7 +575,7 @@ function _voiceApi(chosen) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: _ctx.project.id, voice: { pick: entry || null } }),
       }).then(x => x.json());
-      if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+      if (!r || !r.success) throw new Error((r && r.error) || t('refused'));
       setProject(r.project);
     },
     go: _go,
@@ -580,7 +588,7 @@ function _voiceApi(chosen) {
       const d = await fetch('/api/char-store/' + encodeURIComponent(chosen.id), {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
       }).then(r => r.json());
-      if (!d || !d.success) throw new Error((d && d.error) || 'the character could not be updated');
+      if (!d || !d.success) throw new Error((d && d.error) || t('the character could not be updated'));
       // The record this panel holds is the one js/chars-store.js cached for every page that casts
       // somebody, so it is updated in place rather than re-read: a second read of forty-odd
       // characters to learn one field that just came back in the answer.
@@ -625,17 +633,17 @@ const _shownChar = () => (_chars || []).find(c => c.id === _whoState.group) || (
 function _whoCrumbs() {
   const win = _who.win;
   const c = _shownChar();
-  const list = { label: 'Characters', on: () => _whoGo('list') };
+  const list = { label: t('Characters'), on: () => _whoGo('list') };
   if (_who.page === 'list') {
-    win.setCrumbs([{ label: 'Characters' }].concat(c ? [{
+    win.setCrumbs([{ label: t('Characters') }].concat(c ? [{
       label: c.name,
-      act: { label: '+ new look', title: 'Dress ' + c.name + ' in a lookbook - or make a lookbook first', on: () => { _who.char = c; _whoGo('look'); } },
+      act: { label: t('+ new look'), title: t('Dress {name} in a lookbook - or make a lookbook first', { name: c.name }), on: () => { _who.char = c; _whoGo('look'); } },
     }] : []));
     return;
   }
-  const name = { label: c ? c.name : 'character', on: () => _whoGo('list') };
-  if (_who.page === 'look') win.setCrumbs([list, name, { label: 'New look' }]);
-  else win.setCrumbs([list, name, { label: 'New look', on: () => _whoGo('look') }, { label: 'Create lookbook' }]);
+  const name = { label: c ? c.name : t('character'), on: () => _whoGo('list') };
+  if (_who.page === 'look') win.setCrumbs([list, name, { label: t('New look') }]);
+  else win.setCrumbs([list, name, { label: t('New look'), on: () => _whoGo('look') }, { label: t('Create lookbook') }]);
 }
 
 function _paintWho() {
@@ -657,7 +665,7 @@ function _paintCharacters(body) {
   const cast = _casting();
   const castId = String(cast.characterId || '');
   // The groups are wk-maker.js lookGroups - the same list Home's talking head quick start chooses from.
-  const groups = lookGroups(_chars, { say: (c) => c.name + ' is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.' });
+  const groups = lookGroups(_chars, { say: (c) => t('{name} is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.', { name: c.name }) });
   paintChoose(body, {
     state: _whoState,
     groups,
@@ -669,7 +677,7 @@ function _paintCharacters(body) {
     } : null,
     // The crumb follows the character shown - "+ new look" stands by THAT name.
     onGroup: () => _whoCrumbs(),
-    mark: (it) => (it.look && cast.obrazImage && it.path === cast.obrazImage ? 'cast' : ''),
+    mark: (it) => (it.look && cast.obrazImage && it.path === cast.obrazImage ? t('cast') : ''),
     // Asked first at the look pressed when it would put work aside; the window closes once it is cast.
     press: (it, tile) => {
       if (!it.look) return;
@@ -677,11 +685,11 @@ function _paintCharacters(body) {
       _castLook(it.char, it.look, tile).then((ok) => { if (ok && win && _who && _who.win === win) win.close(); });
     },
     del: (it) => (it.look ? {
-      title: 'Delete this look of ' + it.char.name,
+      title: t('Delete this look of {name}', { name: it.char.name }),
       run: async () => {
         const d = await fetch('/api/library/item/obrazy/' + encodeURIComponent(it.look.id), { method: 'DELETE' })
           .then(r => r.json()).catch(() => null);
-        return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+        return d && d.success ? '' : ((d && d.error) || t('the app did not answer'));
       },
       done: async () => {
         _chars = byLooks(await loadCharacters(true));
@@ -689,8 +697,8 @@ function _paintCharacters(body) {
         _ctx.repaint();
       },
     } : null),
-    empty: _chars.length ? 'No looks yet - "+ new look" by the name dresses them in one.'
-      : 'No characters yet - make one with New Character on the Characters shelf of the Library.',
+    empty: _chars.length ? t('No looks yet - "+ new look" by the name dresses them in one.')
+      : t('No characters yet - make one with New Character on the Characters shelf of the Library.'),
   });
 }
 
@@ -708,17 +716,17 @@ function _paintDress(body, c) {
   softScroll(list);
   body.appendChild(list);
   if (_lbs === null) {
-    list.appendChild(loadingEl('reading the lookbooks…'));
+    list.appendChild(loadingEl(t('reading the lookbooks…')));
     API.lookbooks().then((files) => { _lbs = files || []; _paintWho(); })
       // Not read is not "No lookbooks yet": "did not load" with Try again, the reason a popup.
-      .catch((e) => { _lbs = false; showError('Could not read the lookbooks: ' + e.message); _paintWho(); });
+      .catch((e) => { _lbs = false; showError(t('Could not read the lookbooks: {why}', { why: e.message })); _paintWho(); });
   } else if (_lbs === false) {
-    list.appendChild(failedEl('The lookbooks', () => { _lbs = null; _paintWho(); }));
+    list.appendChild(failedEl(t('The lookbooks'), () => { _lbs = null; _paintWho(); }));
   } else {
     const grid = _el('div', 'gw-grid is-lookbook');
     const add = _el('button', 'gw-tile is-add', '+');
     add.type = 'button';
-    add.title = 'Make a lookbook from a photo and a sentence';
+    add.title = t('Make a lookbook from a photo and a sentence');
     add.addEventListener('click', () => _whoGo('lookbook'));
     grid.appendChild(add);
     for (const p of _lbs) {
@@ -726,7 +734,7 @@ function _paintDress(body, c) {
       if (path) grid.appendChild(_lbTile(path));
     }
     list.appendChild(grid);
-    if (!_lbs.length) list.appendChild(emptyEl('No lookbooks yet - the "+" makes one.', { icon: 'image' }));
+    if (!_lbs.length) list.appendChild(emptyEl(t('No lookbooks yet - the "+" makes one.'), { icon: 'image' }));
   }
 
   // The foot: who, in what, the line, and the press that dresses them.
@@ -743,12 +751,12 @@ function _paintDress(body, c) {
     fit.alt = '';
     fit.src = derived(_lbPick, 'card');
     pair.appendChild(fit);
-  } else pair.appendChild(_el('span', 'mk-pair-img is-empty', 'outfit'));
-  const said = _el('span', 'gw-hint u-status', _dressSaid || (_lbPick ? '' : 'pick an outfit'));
-  const go = _el('button', 'gw-create u-btn is-main', _dressing ? 'dressing…' : 'apply');
+  } else pair.appendChild(_el('span', 'mk-pair-img is-empty', t('outfit')));
+  const said = _el('span', 'gw-hint u-status', _dressSaid || (_lbPick ? '' : t('pick an outfit')));
+  const go = _el('button', 'gw-create u-btn is-main', _dressing ? t('dressing…') : t('apply'));
   go.type = 'button';
   go.disabled = _dressing || !_lbPick;
-  go.title = 'Dress ' + c.name + ' in this outfit and save it as a look - this spends credits';
+  go.title = t('Dress {name} in this outfit and save it as a look - this spends credits', { name: c.name });
   go.addEventListener('click', () => _apply(c));
   row.append(pair, said, go);
   foot.appendChild(row);
@@ -767,11 +775,11 @@ function _lbTile(path) {
   img.src = derived(path, 'card');
   tile.appendChild(img);
   tile.appendChild(delX({
-    host: tile, title: 'Delete this lookbook from the library',
+    host: tile, title: t('Delete this lookbook from the library'),
     run: async () => {
       const d = await fetch('/api/library/item/lookbooks/' + encodeURIComponent(path.split('/').pop()), { method: 'DELETE' })
         .then(r => r.json()).catch(() => null);
-      return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+      return d && d.success ? '' : ((d && d.error) || t('the app did not answer'));
     },
     done: async () => {
       if (_lbPick === path) _lbPick = '';
@@ -782,7 +790,7 @@ function _lbTile(path) {
   tile.addEventListener('click', () => { _lbPick = on ? '' : path; _dressSaid = _dressing ? _dressSaid : ''; _paintWho(); });
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    tileMenu(e, [{ label: 'Open', sub: 'look at it, full size', on: () => _openLb(path) }], 'lookbook menu');
+    tileMenu(e, [{ label: t('Open'), sub: t('look at it, full size'), on: () => _openLb(path) }], 'lookbook menu');
   });
   return tile;
 }
@@ -791,7 +799,7 @@ function _lbTile(path) {
 async function _openLb(path) {
   let meta = {};
   try { meta = ((await API.lookbookMeta()) || {})[path] || {}; } catch (e) { /* nothing known */ }
-  showPicture({ src: path, name: path.split('/').pop(), rows: [['description', meta.description], ['suits', meta.gender]], from: meta.from });
+  showPicture({ src: path, name: path.split('/').pop(), rows: [[t('description'), meta.description], [t('suits'), meta.gender]], from: meta.from });
 }
 
 // The lookbook bench's options for this project (js/gen-window.js): a lookbook made is the outfit picked to dress in; its
@@ -817,11 +825,11 @@ function _lbOpts() {
 async function _apply(c) {
   if (_dressing) return;
   const base = c.sheet || c.face || '';
-  if (!base) { _dressSaid = c.name + ' has no reference sheet to dress.'; _paintWho(); return; }
+  if (!base) { _dressSaid = t('{name} has no reference sheet to dress.', { name: c.name }); _paintWho(); return; }
   const lb = _lbPick;
   if (!lb) return;
   _dressing = true;
-  _dressSaid = 'asking…';
+  _dressSaid = t('asking…');
   _paintWho();
   try {
     const r = await API.dress({
@@ -833,16 +841,16 @@ async function _apply(c) {
     _beginDress(c.name, Date.now());
     await _followDress(r.alertId);
   } catch (e) {
-    _endDress((e && e.message) || 'the dressing failed');
-    _dressSaid = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _endDress((e && e.message) || t('the dressing failed'));
+    _dressSaid = t('The dressing failed: {why}', { why: (e && e.message) || t('unknown') });
     _paintWho();
   }
 }
 
 function _beginDress(name, startedAt) {
   _dressing = true;
-  _dress = { label: 'Dressing ' + name, estimateMs: 90000, startedAt: startedAt || Date.now(), key: (_ctx && _ctx.key) || '' };
-  _dressSaid = 'in Alerts · Dressing ' + name + '…';
+  _dress = { label: t('Dressing {name}', { name }), estimateMs: 90000, startedAt: startedAt || Date.now(), key: (_ctx && _ctx.key) || '' };
+  _dressSaid = t('in Alerts · {what}…', { what: _dress.label });
   _syncHalves();
   _paintWho();
 }
@@ -864,10 +872,10 @@ async function _followDress(id) {
     _chars = byLooks(await loadCharacters(true));
     await _ctx.reloadProject();
     _lbPick = '';
-    _dressSaid = 'in Alerts · done - the new look is cast';
+    _dressSaid = t('in Alerts · done - the new look is cast');
   } catch (e) {
-    _endDress((e && e.message) || 'the dressing failed');
-    _dressSaid = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _endDress((e && e.message) || t('the dressing failed'));
+    _dressSaid = t('The dressing failed: {why}', { why: (e && e.message) || t('unknown') });
   }
   _paintWho();
   _ctx.repaint();
@@ -901,7 +909,7 @@ function _pickUpRunning() {
       && r.where && r.where.spot && r.where.spot.key === key && r.where.spot.view === view);
     const look = mine('look', 'lookbooks');
     if (look && !_dressing) {
-      _beginDress(((_castChar() || {}).name || 'the character'), Date.parse(look.startedAt) || 0);
+      _beginDress(((_castChar() || {}).name || t('the character')), Date.parse(look.startedAt) || 0);
       _followDress(look.id);
     }
     const lb = mine('lookbook', 'newlb');

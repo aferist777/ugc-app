@@ -24,6 +24,7 @@ import { cssWeight } from '../captions/fonts.js';
 import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { BY_VIDEO, styleFor as _styleFor, settingsOf, standardOf, BY_VIDEO_KINDS } from './hl-kinds.js';
 import { KINDS as TABLE } from '../highlights/kinds.js';
+import * as T from '../i18n/t.js';
 
 const REC = 'rec';
 
@@ -53,12 +54,14 @@ function _loopOf(url) {
   return p;
 }
 
-/** A preset's name ('' for none); "by the video" for that choice. */
+/** A preset's name ('' for none); "by the video" for that choice - English, as the press sends it. */
 export function presetName(id) {
   if (id === BY_VIDEO) return 'by the video';
   const p = PRESETS.find((x) => x.id === id);
   return p ? p.name : '';
 }
+/** A preset's name as shown, in the app's language. */
+export const presetShown = (id) => { const n = presetName(id); return n ? T.t(n) : ''; };
 
 // ── The stills, and the loop under the cursor - a picker's tiles, for the presets and the animations alike ──
 // `tiles` - id -> { btn, box, img, over, loop, starting, end }; `ctx` - { state, alive } as the picker has them now.
@@ -189,16 +192,19 @@ export function stylePicker(host, { onPick, kind } = {}) {
     top.textContent = '';
     const recCats = rec ? rec.cats.filter((c) => CATEGORIES.some((x) => x.id === c)) : [];
     const cats = recCats.map((id) => CATEGORIES.find((x) => x.id === id)).concat(CATEGORIES.filter((c) => !recCats.includes(c.id)));
-    const chips = (recCats.length || (rec && rec.byVideo) ? [[REC, 'recommended', recCats.reduce((n, c) => n + countOf(c), rec.byVideo ? 1 : 0)]] : [])
-      .concat([['', 'All', PRESETS.length]])
-      .concat(cats.map((c) => [c.id, c.label, countOf(c.id)]));
+    const chips = (recCats.length || (rec && rec.byVideo) ? [[REC, T.t('recommended'), recCats.reduce((n, c) => n + countOf(c), rec.byVideo ? 1 : 0)]] : [])
+      .concat([['', T.t('All'), PRESETS.length]])
+      .concat(cats.map((c) => [c.id, T.t(c.label), countOf(c.id)]));
     for (const [id, label, n] of chips) {
       const b = _el('button', 'mv3-cap-cat' + (id === REC ? ' is-rec' : '') + (recCats.includes(id) ? ' is-rec-cat' : ''), label);
       b.type = 'button';
       b.dataset.cat = id;
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
-      if (id === REC) b.title = 'Recommended for this kind of video: ' + rec.said + (recCats.length ? ' - ' + recCats.map((c) => CATEGORIES.find((x) => x.id === c).label).join(', ') : '');
-      else if (recCats.includes(id)) b.title = 'Recommended for this kind of video';
+      if (id === REC) {
+        b.title = recCats.length
+          ? T.t('Recommended for this kind of video: {said} - {groups}', { said: rec.said, groups: recCats.map((c) => T.t(CATEGORIES.find((x) => x.id === c).label)).join(', ') })
+          : T.t('Recommended for this kind of video: {said}', { said: rec.said });
+      } else if (recCats.includes(id)) b.title = T.t('Recommended for this kind of video');
       b.addEventListener('click', () => { cat = id; _spot(grid, null); paintCat(); });
       top.appendChild(b);
     }
@@ -221,7 +227,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   byBtn.dataset.i = '-1';
   const byBox = _el('div', 'mv3-cap-box mv3-hls-by-box');
   const byName = _el('div', 'mv3-cap-name');
-  byName.appendChild(_el('span', 'mv3-cap-nm', 'by the video'));
+  byName.appendChild(_el('span', 'mv3-cap-nm', T.t('by the video')));
   byBtn.append(byBox, byName);
   byBtn.addEventListener('click', () => pick(BY_VIDEO, false));
   // Each kind auto may find, with the set it would wear - as that kind remembers its captions here.
@@ -234,12 +240,12 @@ export function stylePicker(host, { onPick, kind } = {}) {
       const l = _el('span', 'mv3-hls-by-l');
       const label = (TABLE[k] && TABLE[k].label) || k;
       l.appendChild(_el('small', null, label.split(' · ')[0]));
-      const nm = ids.length ? (presetName(ids[0]) || ids[0]) + (ids.length > 1 ? ' +' + (ids.length - 1) : '') : 'its standard';
+      const nm = ids.length ? (presetShown(ids[0]) || ids[0]) + (ids.length > 1 ? ' +' + (ids.length - 1) : '') : T.t('its standard');
       l.appendChild(_el('b', null, nm));
       byBox.appendChild(l);
       said.push(label + ' → ' + nm);
     }
-    byBtn.title = 'The agent finds out what the video is, and the fragments get that kind\'s captions as you last chose them for it: ' + said.join('; ');
+    byBtn.title = T.t('The agent finds out what the video is, and the fragments get that kind\'s captions as you last chose them for it: {list}', { list: said.join('; ') });
   }
 
   for (const p of PRESETS) {
@@ -248,9 +254,9 @@ export function stylePicker(host, { onPick, kind } = {}) {
     btn.dataset.id = p.id;
     btn.dataset.cat = p.category;
     btn.dataset.i = String(tiles.size);
-    btn.title = p.name + ' - the captions of every fragment; Shift adds it to those chosen - each page one of them';
+    btn.title = T.t('{name} - the captions of every fragment; Shift adds it to those chosen - each page one of them', { name: T.t(p.name) });
     const box = _el('div', 'mv3-cap-box');
-    const ph = _el('span', 'mv3-cap-ph', p.name);
+    const ph = _el('span', 'mv3-cap-ph', T.t(p.name));
     const s = p.style || {};
     ph.style.fontFamily = '"' + s.font + '", "Liberation Sans", sans-serif';
     ph.style.fontWeight = String(cssWeight(s.font, s.bold));
@@ -258,7 +264,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     if (s.casing === 'upper') ph.style.textTransform = 'uppercase';
     box.appendChild(ph);
     const name = _el('div', 'mv3-cap-name');
-    name.appendChild(_el('span', 'mv3-cap-nm', p.name));
+    name.appendChild(_el('span', 'mv3-cap-nm', T.t(p.name)));
     btn.append(box, name);
     const t = { btn, box, ph, img: null, over: false, loop: null, starting: false, end: 0 };
     btn.addEventListener('click', (e) => pick(p.id, !!(e && e.shiftKey)));
@@ -327,6 +333,8 @@ export function stylePicker(host, { onPick, kind } = {}) {
 
 /** A pair's name: "from the top → down"; '' for none. */
 export const pairName = (pair) => { const p = PAIRS.find((x) => x.id === pair); return p ? p.name : ''; };
+/** A pair's name as shown, in the app's language. */
+export const pairShown = (pair) => { const n = pairName(pair); return n ? T.t(n) : ''; };
 
 /**
  * THE ANIMATIONS: the In -> Out pairs' tiles in `host`, one chosen - or several with Shift, dealt page by
@@ -337,7 +345,7 @@ export function animPicker(host, { onPick } = {}) {
   const ctx = { state: null, alive: true };
   const tiles = new Map();         // tile id -> { btn, box, img, … }
   const P = _player(tiles, ctx);
-  host.appendChild(_el('div', 'mv3-cap-note', 'How a page comes in and goes out - one for every page, or several with Shift: each page one of them.'));
+  host.appendChild(_el('div', 'mv3-cap-note', T.t('How a page comes in and goes out - one for every page, or several with Shift: each page one of them.')));
   const grid = _el('div', 'mv3-cap-grid mv3-hls-grid');
   host.appendChild(grid);
   for (const p of PAIRS) {
@@ -346,14 +354,14 @@ export function animPicker(host, { onPick } = {}) {
     btn.type = 'button';
     btn.dataset.id = id;
     btn.dataset.pair = p.id;
-    btn.title = p.name + ' - every fragment\'s pages; Shift adds it to those chosen';
+    btn.title = T.t('{name} - every fragment\'s pages; Shift adds it to those chosen', { name: T.t(p.name) });
     const box = _el('div', 'mv3-cap-box');
-    const ph = _el('span', 'mv3-cap-ph', p.name);
+    const ph = _el('span', 'mv3-cap-ph', T.t(p.name));
     ph.style.fontFamily = '"Montserrat Black", "Liberation Sans", sans-serif';
     ph.style.color = '#ffffff';
     box.appendChild(ph);
     const name = _el('div', 'mv3-cap-name');
-    name.appendChild(_el('span', 'mv3-cap-nm', p.name));
+    name.appendChild(_el('span', 'mv3-cap-nm', T.t(p.name)));
     btn.append(box, name);
     const t = { btn, box, ph, img: null, over: false, loop: null, starting: false, end: 0 };
     btn.addEventListener('click', (e) => { _spot(grid, null); chosen = _press(chosen, p.id, !!(e && e.shiftKey)); paint(); if (onPick) onPick(chosen.slice()); });
@@ -372,7 +380,9 @@ export function animPicker(host, { onPick } = {}) {
     for (const t of tiles.values()) {
       const on = rec.includes(t.btn.dataset.pair);
       t.btn.classList.toggle('is-rec', on);
-      t.btn.title = (PAIRS.find((x) => x.id === t.btn.dataset.pair) || {}).name + (on ? ' - recommended for this kind of video' : '') + ' - every fragment\'s pages; Shift adds it to those chosen';
+      const name = pairShown(t.btn.dataset.pair);
+      t.btn.title = on ? T.t('{name} - recommended for this kind of video - every fragment\'s pages; Shift adds it to those chosen', { name })
+        : T.t('{name} - every fragment\'s pages; Shift adds it to those chosen', { name });
     }
     for (const el of [...grid.children].sort((a, b) => rank(a) - rank(b))) grid.appendChild(el);
   }

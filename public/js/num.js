@@ -1,6 +1,8 @@
+import { lang } from './i18n/t.js';
+
 /* ═══════════════════════════════════════════════════════════════════════════
    THE PAGES' FIGURES: every time, length, price and count is
-   drawn in mono, like a timecode, and a thousand reads "1,563". One place for both:
+   drawn in mono, like a timecode, and a thousand reads "1,563" ("1 563" in Russian). One place for both:
 
    - `int(n)`          a whole number with the thousands marked: 4500 -> "4,500";
    - `figures(text)`   a line of words with its figures in mono - a fragment of text nodes and `.u-mono` spans
@@ -10,10 +12,10 @@
    Only the digits change their face: the words around them stay in the interface's font.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** A whole number, thousands marked as "1,563". */
+/** A whole number, thousands marked the way the interface's language marks them: "1,563", "1 563". */
 export function int(n) {
   const v = Math.round(Number(n) || 0);
-  return v.toLocaleString('en-US');
+  return v.toLocaleString(lang() === 'ru' ? 'ru-RU' : 'en-US');
 }
 
 // A run of figures: digits with the separators that belong between them ("1,563", "0:12.3", "2/5", "12.34").

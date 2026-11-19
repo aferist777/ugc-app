@@ -1,0 +1,41 @@
+/* Merge's page markup (public/merge-v3.html): the project bar, the panels' heads, the transport, the preview's head. */
+
+export default {
+  'Merge v3': 'Монтаж',
+  'Start an empty project and open it': 'Создать пустой проект и открыть его',
+  '+ New project': '+ Новый проект',
+  'Project': 'Проект',
+  'Rename this project': 'Переименовать этот проект',
+  "Delete this project's timeline": 'Удалить таймлайн этого проекта',
+  'Render this timeline with FFmpeg': 'Отрендерить этот таймлайн через FFmpeg',
+  'Export': 'Экспорт',
+  'Setup': 'Подготовка',
+  'B-roll': 'B-roll',
+  'Settings of what is picked on the timeline': 'Настройки выбранного на таймлайне',
+  'Drag to resize · double-click to reset': 'Тяните, чтобы изменить размер · двойной щелчок — сброс',
+  'Timeline': 'Таймлайн',
+  'Undo': 'Отменить',
+  'Redo': 'Повторить',
+  'Cut the selected clip at the playhead': 'Разрезать выбранный клип по указателю',
+  'Split': 'Разрезать',
+  'Back to the start': 'В начало',
+  'Back 5 seconds': 'Назад на 5 секунд',
+  'Play (Space)': 'Воспроизвести (Пробел)',
+  'Forward 5 seconds': 'Вперёд на 5 секунд',
+  'Cut silence (S)': 'Убрать тишину (S)',
+  'The frame at the playhead into the pictures chat - as the preview shows it, without words':
+    'Кадр под указателем — в чат картинок, как его показывает превью, без надписей',
+  'The frame at the playhead into the video chat as the first frame of a new clip - as the preview shows it, without words':
+    'Кадр под указателем — в чат видео первым кадром нового клипа, как его показывает превью, без надписей',
+  'Fit the whole timeline into view': 'Вписать весь таймлайн в окно',
+  'Fit': 'Вписать',
+  'Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead':
+    'Масштаб таймлайна (пикс/с) — или Alt + колесо над таймлайном, к указателю',
+  'Zoom': 'Масштаб',
+  'Drag clips, pictures and sounds here from the Library': 'Перетащите сюда клипы, картинки и звуки из Библиотеки',
+  'Preview': 'Превью',
+  'Preview resolution - not the export': 'Разрешение превью — не экспорта',
+  'Quality': 'Качество',
+  'Enlarge the preview': 'Увеличить превью',
+  'Save this frame to the library (Images / Screenshots)': 'Сохранить этот кадр в библиотеку (Картинки / Скриншоты)',
+};

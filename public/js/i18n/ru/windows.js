@@ -49,7 +49,7 @@ export default {
   'Save {n} fragments · each…': 'Сохранить фрагменты ({n}) · по отдельности…',
   '{n} new clips, each its own': ['{n} новый клип, каждый свой', '{n} новых клипа, каждый свой', '{n} новых клипов, каждый свой'],
   'Add to timeline · separately': 'На таймлайн · по отдельности',
-  '{n} clips of this video from the playhead - no new file': ['{n} клип этого видео от бегунка — без нового файла', '{n} клипа этого видео от бегунка — без нового файла', '{n} клипов этого видео от бегунка — без нового файла'],
+  '{n} clips of this video from the playhead - no new file': ['{n} клип этого видео от указателя — без нового файла', '{n} клипа этого видео от указателя — без нового файла', '{n} клипов этого видео от указателя — без нового файла'],
   'Add to timeline · as one file': 'На таймлайн · одним файлом',
   'joined into one clip beside this video, then laid': 'склеить в один клип рядом с этим видео, потом положить',
   'Delete {n}': 'Удалить {n}',
@@ -71,7 +71,7 @@ export default {
 
   // the generators' window
   'Back to {place}': 'Назад к {place}',
-  'Drag to move · double-click: back to its own size and place': 'Тяните, чтобы переместить · двойное нажатие: обратно к своему размеру и месту',
+  'Drag to move · double-click: back to its own size and place': 'Тяните, чтобы переместить · двойной щелчок: обратно к своему размеру и месту',
   'new environment': 'новое окружение',
   'a photo from this computer, or pick an environment on the left': 'фото с этого компьютера или выберите окружение слева',
   'What place should it be? With a photo, say what to change - "evening, the lamps on".': 'Каким должно быть место? С фото — скажите, что изменить: «вечер, горят лампы».',

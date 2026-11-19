@@ -32,6 +32,8 @@ import { note } from '../ask.js';
 import { cutsOfPauses } from './tl-cut.js';
 import { wire as wireRange, fill as fillRange } from '../ui-range.js';
 import { setFigures } from '../num.js';
+// The interface's words (`t` is a lane here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const KEEP_DEFAULT = 0.30;
 const KEEP_MIN = 0.01, KEEP_MAX = 1.00;
@@ -78,7 +80,8 @@ function _mainSounds(tl) {
 // What the pauses were heard from - when it changes under the window, they are stale.
 const _print = (tl) => _mainSounds(tl).map(({ c }) => [c.id, c.src, c.start, c.dur, c.trimIn, c.speed].join('|')).join(';');
 
-const _dbText = (v) => (v < 0 ? '−' : '') + Math.abs(Math.round(v)) + ' dB';
+const _dbText = (v) => T.t('{db} dB', { db: (v < 0 ? '−' : '') + Math.abs(Math.round(v)) });
+const _secText = (v) => T.t('{n} s', { n: v.toFixed(2) });
 
 /** Open the window over the button (the button's press, the key S). */
 export function openSilence() {
@@ -86,7 +89,7 @@ export function openSilence() {
   if (_win) return;
   const span = _acc.span();
   if (!span || !span.length) {
-    note(_btn, 'Pick what to cut silence in', 'Draw a stretch over a wave, or pick clips - the pauses of main audio inside it are shortened.');
+    note(_btn, T.t('Pick what to cut silence in'), T.t('Draw a stretch over a wave, or pick clips - the pauses of main audio inside it are shortened.'));
     return;
   }
   const box = document.createElement('div');
@@ -94,27 +97,42 @@ export function openSilence() {
   // the 28-px ✕, no backdrop; the rows in its body, the one status line left of the gold "cut"; labels in sentence case
   box.className = 'mv3-silence u-win is-float';
   box.innerHTML =
-    '<div class="mv3-silence-h u-win-head"><span class="u-win-title">Cut silence</span>' +
-    '<button type="button" class="mv3-silence-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>' +
+    '<div class="mv3-silence-h u-win-head"><span class="u-win-title"></span>' +
+    '<button type="button" class="mv3-silence-x u-btn is-icon is-quiet u-x"></button></div>' +
     '<div class="mv3-silence-b">' +
-    '<label class="mv3-silence-row" title="A pause longer than this is shortened to it - half after the sound before, half before the sound after">' +
-    '<span>Keep pauses up to</span>' +
+    '<label class="mv3-silence-row is-keep">' +
+    '<span class="mv3-silence-l"></span>' +
     `<input type="range" min="${KEEP_MIN}" max="${KEEP_MAX}" step="0.01" class="mv3-silence-k">` +
     '<span class="mv3-silence-v u-range-v"></span></label>' +
-    '<label class="mv3-silence-row" title="Quieter than this is silence. auto - this sound\'s own noise floor + 6 dB, never above −36 dB">' +
-    '<span>Silent below</span>' +
+    '<label class="mv3-silence-row is-thr">' +
+    '<span class="mv3-silence-l"></span>' +
     `<input type="range" min="${DB_MIN}" max="${DB_MAX}" step="1" class="mv3-silence-d" disabled>` +
     '<span class="mv3-silence-v u-range-v is-db"></span>' +
-    '<button type="button" class="mv3-silence-auto u-chip is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
-    '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n u-status">listening to main audio…</span>' +
-    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" title="Cut them out of every lane (Enter)" disabled>Cut</button></div>' +
+    '<button type="button" class="mv3-silence-auto u-chip is-on" disabled></button></label>' +
+    '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n u-status"></span>' +
+    '<button type="button" class="mv3-silence-cut u-btn is-s is-main" disabled></button></div>' +
     '</div>';
+  // Its words, set as text (the markup above is the shape alone).
+  const words = (sel, text, title) => {
+    const el = box.querySelector(sel);
+    if (text != null) el.textContent = text;
+    if (title) el.title = title;
+  };
+  words('.u-win-title', T.t('Cut silence'));
+  words('.mv3-silence-x', null, T.t('Close (Esc)'));
+  words('.is-keep', null, T.t('A pause longer than this is shortened to it - half after the sound before, half before the sound after'));
+  words('.is-keep .mv3-silence-l', T.t('Keep pauses up to'));
+  words('.is-thr', null, T.t('Quieter than this is silence. auto - this sound\'s own noise floor + 6 dB, never above −36 dB'));
+  words('.is-thr .mv3-silence-l', T.t('Silent below'));
+  words('.mv3-silence-auto', T.t('auto'), T.t('Back to this sound\'s own threshold'));
+  words('.mv3-silence-n', T.t('listening to main audio…'));
+  words('.mv3-silence-cut', T.t('Cut'), T.t('Cut them out of every lane (Enter)'));
   const k = box.querySelector('.mv3-silence-k');
   const d = box.querySelector('.mv3-silence-d');
   k.value = String(_keep);
   wireRange(k);                                     // the shared slider
   wireRange(d);
-  box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
+  box.querySelector('.mv3-silence-v').textContent = _secText(_keep);
   document.body.appendChild(box);
   const away = (e) => { if (!box.contains(e.target) && !_btn.contains(e.target)) closeSilence(); };
   const keys = (e) => {
@@ -128,7 +146,7 @@ export function openSilence() {
     if (!_win) return;
     _win.why = '';
     _keep = Math.max(KEEP_MIN, Math.min(KEEP_MAX, r2(+k.value || KEEP_DEFAULT)));
-    box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
+    box.querySelector('.mv3-silence-v').textContent = _secText(_keep);
     _plan();
   });
   d.addEventListener('input', () => {
@@ -217,8 +235,8 @@ async function _listen() {
     const merged = ((t && t.clips) || []).some((c) => Array.isArray(c.merge) && c.merge.length
       && w.span.some(([a, b]) => (+c.start || 0) < b && (+c.start || 0) + (+c.dur || 0) > a));
     w.asks = [];
-    w.none = merged ? 'merged lines are one file - cut silence in them before merging (Ctrl+Z takes the merge back)'
-      : 'main audio has no sound here - nothing to listen to';
+    w.none = merged ? T.t('merged lines are one file - cut silence in them before merging (Ctrl+Z takes the merge back)')
+      : T.t('main audio has no sound here - nothing to listen to');
     _find();
     return;
   }
@@ -226,13 +244,13 @@ async function _listen() {
     const got = await Promise.all(asks.map((q) => fetch('/api/track-pauses?src=' + encodeURIComponent(q.c.src)
       + '&from=' + q.from.toFixed(3) + '&to=' + q.to.toFixed(3)).then((r) => r.json()).then((j) => ({ q, j }))));
     if (_win !== w || w.seq !== seq) return;
-    for (const { j } of got) if (!j || !j.success) throw new Error((j && j.error) || 'the sound could not be read');
+    for (const { j } of got) if (!j || !j.success) throw new Error((j && j.error) || T.t('the sound could not be read'));
     w.asks = got.map(({ q, j }) => ({ ...q, thr: +j.thr, loud: _loudOf(j), pauses: j.pauses || [] }));
     _find();
   } catch (e) {
     if (_win !== w) return;
     w.asks = [];
-    w.none = 'Not heard: ' + e.message;
+    w.none = T.t('Not heard: {why}', { why: e.message });
     _find();
   }
 }
@@ -293,8 +311,8 @@ function _plan() {
   const btn = w.box.querySelector('.mv3-silence-cut');
   btn.disabled = !w.cuts.length;
   if (w.why || w.none) _say(w.why || w.none, true);
-  else if (!w.cuts.length) _say('no pause here is longer than ' + _keep.toFixed(2) + ' s');
-  else _say(w.cuts.length + (w.cuts.length === 1 ? ' pause' : ' pauses') + ' · −' + sec.toFixed(1) + ' s');
+  else if (!w.cuts.length) _say(T.t('no pause here is longer than {n} s', { n: _keep.toFixed(2) }));
+  else _say(T.tn(w.cuts.length, '{n} pause · −{s} s', '{n} pauses · −{s} s', { s: sec.toFixed(1) }));
   _paintGlow();
 }
 
@@ -303,7 +321,7 @@ function _cut() {
   if (!w || !w.cuts.length) return;
   const r = _acc.cut(w.cuts) || {};
   if (!r.ok) {
-    w.why = r.why || 'Not cut';
+    w.why = r.why || T.t('Not cut');
     _say(w.why, true);
     return;
   }

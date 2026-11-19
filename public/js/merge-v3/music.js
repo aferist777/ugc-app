@@ -11,6 +11,8 @@
 
 import * as Store from './store.js';
 import * as C from './controls.js';
+// The interface's words (`t` is a lane here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 function _el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -34,13 +36,12 @@ function _lane(tl) {
 export function renderMusicTrack(host, track, more) {
   // The lane's master volume first: a setting for the music already down. A lane never set plays at its full level (null is 1
   // in the render and the preview) - so it shows 0 dB.
-  host.appendChild(C.row('Volume', C.volume(
+  host.appendChild(C.row(T.t('Volume'), C.volume(
     track.volume != null ? track.volume : 1,
     (v) => Store.mutate(tl => { const t = _lane(tl); if (t) t.volume = v; }),
   )));
   if (more) more(host);
   host.appendChild(_el('div', 'mv3-c-sep'));
-  const hint = C.hint('The tracks and sounds are in the Library panel - AUDIO: a press on a tile plays it, drag it onto this lane. '
-    + 'Two tracks overlapping cross into each other by themselves. New music and sounds: "generate" by AUDIO in the Library panel\'s tree opens the sound window.');
+  const hint = C.hint(T.t('The tracks and sounds are in the Library panel - AUDIO: a press on a tile plays it, drag it onto this lane. Two tracks overlapping cross into each other by themselves. New music and sounds: "generate" by AUDIO in the Library panel\'s tree opens the sound window.'));
   host.appendChild(hint);
 }

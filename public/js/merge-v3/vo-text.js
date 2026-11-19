@@ -18,6 +18,8 @@ import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { showError } from '../notice.js';
 import { int } from '../num.js';
+// The app's words as T.t: this module's own `t` is a text.
+import * as T from '../i18n/t.js';
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -44,47 +46,47 @@ export function openOwnText(put, done, o = {}) {
   ov.appendChild(box);
 
   const head = _el('div', 'mv3-x-head u-win-head');
-  head.appendChild(_el('h3', 'u-win-title', talking ? 'Talking head from your text' : 'Voiceover from your text'));
+  head.appendChild(_el('h3', 'u-win-title', talking ? T.t('Talking head from your text') : T.t('Voiceover from your text')));
   const close = _el('button', 'mv3-x-close u-btn is-icon is-quiet u-x', '');
   close.type = 'button';
-  close.title = 'Close (Esc)';
+  close.title = T.t('Close (Esc)');
   head.appendChild(close);
   box.appendChild(head);
 
   const body = _el('div', 'mv3-x-body');
   box.appendChild(body);
   const row = _el('div', 'mv3-x-row');
-  row.appendChild(_el('label', null, 'Name'));
+  row.appendChild(_el('label', null, T.t('Name')));
   const name = _el('input', 'mv3-sc-inp u-in');
   name.type = 'text';
-  name.placeholder = 'what this ' + (talking ? 'talking head' : 'voiceover') + ' is called - the first words when empty';
+  name.placeholder = talking ? T.t('what this talking head is called - the first words when empty')
+    : T.t('what this voiceover is called - the first words when empty');
   name.value = String(o.name || '');
   row.appendChild(name);
   body.appendChild(row);
 
-  body.appendChild(_el('div', 'mv3-x-hdr', 'The text'));
+  body.appendChild(_el('div', 'mv3-x-hdr', T.t('The text')));
   const text = _el('textarea', 'mv3-sc-lines is-votext u-area is-dark');
   text.spellcheck = false;
   text.maxLength = API.VO_MAX;
   text.placeholder = talking
-    ? 'Paste or type the text. Every paragraph is a line of the talking head - its own frame and clip: Enter starts the next.'
-    : 'Paste or type the whole text, in any language. It is read in one take, in the language it is written in.';
+    ? T.t('Paste or type the text. Every paragraph is a line of the talking head - its own frame and clip: Enter starts the next.')
+    : T.t('Paste or type the whole text, in any language. It is read in one take, in the language it is written in.');
   text.value = String(o.text || '').slice(0, API.VO_MAX);
   body.appendChild(text);
   const count = _el('p', 'mv3-x-note mv3-vo-count');
   body.appendChild(count);
   body.appendChild(_el('p', 'mv3-x-note', talking
-    ? 'Every paragraph is one line - a fragment with its own frame and clip, read by itself. Written in another language, it is '
-      + 'made English when the project is made.'
-    : 'The whole text is one line of the project. ' + _n(API.VO_MAX) + ' characters at most: ElevenLabs reads 5,000 at a time, '
-      + 'and the rest is left for the mood\'s tags.'));
+    ? T.t('Every paragraph is one line - a fragment with its own frame and clip, read by itself. Written in another language, it is made English when the project is made.')
+    : T.t('The whole text is one line of the project. {max} characters at most: ElevenLabs reads 5,000 at a time, and the rest is left for the mood\'s tags.',
+      { max: _n(API.VO_MAX) })));
 
   // the foot: the window's one status line (u-status) at the left, use at the right
   const foot = _el('div', 'mv3-x-foot u-win-foot');
   const note = _el('span', 'u-status');
-  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', 'Use');
+  const go = _el('button', 'mv3-c-btn mv3-x-use u-btn is-main', T.t('Use'));
   go.type = 'button';
-  go.title = talking ? 'Take this text - a line a paragraph' : 'Make this text the voiceover\'s script - one line';
+  go.title = talking ? T.t('Take this text - a line a paragraph') : T.t('Make this text the voiceover\'s script - one line');
   foot.append(note, go);
   box.appendChild(foot);
 
@@ -94,8 +96,8 @@ export function openOwnText(put, done, o = {}) {
   const gate = () => {
     const n = text.value.length;
     const lines = talking ? paragraphs(text.value).length : 0;
-    count.textContent = (talking ? lines + (lines === 1 ? ' line · ' : ' lines · ') : '') + _n(n) + ' / ' + _n(API.VO_MAX)
-      + (cut ? ' - the paste was longer and was cut at the limit' : '');
+    const said = (talking ? T.tn(lines, '{n} line', '{n} lines') + ' · ' : '') + _n(n) + ' / ' + _n(API.VO_MAX);
+    count.textContent = cut ? T.t('{count} - the paste was longer and was cut at the limit', { count: said }) : said;
     count.classList.toggle('is-full', n >= API.VO_MAX);
     go.disabled = !text.value.trim();
   };
@@ -116,7 +118,7 @@ export function openOwnText(put, done, o = {}) {
   go.addEventListener('click', async () => {
     if (!text.value.trim()) return;
     go.disabled = true;
-    note.textContent = 'saving…';
+    note.textContent = T.t('saving…');
     try {
       const r = await put(talking
         ? { lines: paragraphs(text.value), name: name.value.trim() }
@@ -126,7 +128,7 @@ export function openOwnText(put, done, o = {}) {
     } catch (e) {
       // a refusal is a popup in the corner (js/notice.js); the window stays, its line goes quiet
       note.textContent = '';
-      showError(e.message || 'The text could not be taken');
+      showError(e.message || T.t('The text could not be taken'));
       go.disabled = false;
     }
   });

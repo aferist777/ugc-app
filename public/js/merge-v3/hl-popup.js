@@ -38,8 +38,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openFrame, POPUP_SIZE } from '../gen-window.js';
-import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor } from './hl-style.js';
+import { stylePicker, animPicker, presetName, presetShown, pairShown, BY_VIDEO, styleFor } from './hl-style.js';
 import { moodPicker } from './hl-music.js';
+import * as T from '../i18n/t.js';
 import * as KIND from './hl-kinds.js';
 import { fontPicker, fontLabel } from './font-tiles.js';
 // Being read, nothing there, could not be read - the shared parts; the reason a popup in the corner.
@@ -52,9 +53,11 @@ const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls
 const _api = async (url, opt) => {
   let r = null, d = null;
   try { r = await fetch(url, opt); d = await r.json(); } catch (e) { d = null; }
-  if (!r || !d || !d.success) throw new Error((d && d.error) || 'The app did not answer - try again in a moment.');
+  if (!r || !d || !d.success) throw new Error((d && d.error) || T.t('The app did not answer - try again in a moment.'));
   return d;
 };
+// A kind's or a length's name as shown - the server's table is English until it says it in the app's language.
+const _shown = (label, k) => T.t(String(label || k));
 const _clock = (s) => {
   s = Math.max(0, Math.round(+s || 0));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(s % 60).padStart(2, '0');
@@ -120,11 +123,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   frame.body.append(cols);
 
   // ── The video ──
-  L.appendChild(_el('div', 'mv3-x-hdr', 'The video'));
+  L.appendChild(_el('div', 'mv3-x-hdr', T.t('The video')));
   const tabs = _el('div', 'mv3-hlp-tabs u-tabs');
   const panes = {};
   // "From the Library" is the default and stands right of "A link".
-  for (const [k, label] of [['link', 'A link'], ['source', 'From the Library'], ['file', 'A file']]) {
+  for (const [k, label] of [['link', T.t('A link')], ['source', T.t('From the Library')], ['file', T.t('A file')]]) {
     const b = _el('button', 'mv3-sc-tab u-tab', label);
     b.type = 'button';
     b.dataset.from = k;
@@ -135,7 +138,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   const link = _el('input', 'mv3-sc-inp mv3-hlp-url u-in');
   link.type = 'text';
-  link.placeholder = 'https://www.youtube.com/watch?v=…  - one video';
+  link.placeholder = T.t('https://www.youtube.com/watch?v=…  - one video');
   link.addEventListener('input', () => { st.url = link.value.trim(); paint(); });
   if (url) { st.url = String(url).trim(); link.value = st.url; }
   link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (st.step === 1) next(); else go(); } });
@@ -149,18 +152,18 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   fileIn.accept = 'video/*';
   fileIn.hidden = true;
   fileIn.addEventListener('change', () => takeFile(fileIn.files && fileIn.files[0]));
-  const pickBtn = _el('button', 'mv3-c-btn u-btn', 'Choose a video file…');
+  const pickBtn = _el('button', 'mv3-c-btn u-btn', T.t('Choose a video file…'));
   pickBtn.type = 'button';
   pickBtn.addEventListener('click', () => fileIn.click());
-  const fileSaid = _el('span', 'mv3-hlp-file', 'or let a file go anywhere on this window');
+  const fileSaid = _el('span', 'mv3-hlp-file', T.t('or let a file go anywhere on this window'));
   panes.file = _el('div', 'mv3-hlp-pane mv3-hlp-filepane');
   panes.file.append(pickBtn, fileSaid, fileIn);
   for (const k of Object.keys(panes)) L.appendChild(panes[k]);
   // A file with more than one sound track - a dub and the original, say - says so here: the one chosen is heard and is the parts' sound.
   const trackSel = _el('select', 'mv3-hlp-sel u-in is-s');
   trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
-  const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'Sound');
-  trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';
+  const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', T.tc('track', 'Sound'));
+  trackRow.title = T.t('The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts');
   trackRow.appendChild(trackSel);
   trackRow.hidden = true;
   L.appendChild(trackRow);
@@ -181,7 +184,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       st.tracks = d.tracks || [];
       st.audio = st.tracks.length > 1 ? +d.first || 0 : null;
       trackSel.textContent = '';
-      for (const t of st.tracks) { const o = _el('option', null, t.label + (t.def ? ' (default)' : '')); o.value = String(t.k); trackSel.appendChild(o); }
+      for (const t of st.tracks) { const o = _el('option', null, t.def ? T.t('{name} (default)', { name: t.label }) : t.label); o.value = String(t.k); trackSel.appendChild(o); }
       if (st.audio != null) trackSel.value = String(st.audio);
     } catch (e) { st.tracks = []; st.audio = null; }
     paint();
@@ -189,7 +192,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
 
   // ── The fragments: the kind, its words, the length and the count ──
-  const fragHdr = _el('div', 'mv3-x-hdr', 'The fragments');
+  const fragHdr = _el('div', 'mv3-x-hdr', T.t('The fragments'));
   P.appendChild(fragHdr);
   const kindRow = _el('div', 'mv3-hlp-kinds');
   const kindBtns = {};
@@ -197,26 +200,27 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const b = _el('button', 'mv3-hlp-kind');
     b.type = 'button';
     b.dataset.kind = k;
+    const name = _shown(v.label, k);
     const ic = _el('span', 'mv3-hlp-kind-ic');
     if (KIND.ICONS[k]) ic.innerHTML = KIND.ICONS[k];
-    else ic.textContent = String(v.label || k).slice(0, 1).toUpperCase();
-    b.append(ic, _el('span', 'mv3-hlp-kind-nm', v.label || k));
-    b.title = (v.label || k) + (KIND.ABOUT[k] ? ' - ' + KIND.ABOUT[k].short : '');
+    else ic.textContent = name.slice(0, 1).toUpperCase();
+    b.append(ic, _el('span', 'mv3-hlp-kind-nm', name));
+    b.title = KIND.ABOUT[k] ? T.t('{name} - {about}', { name, about: KIND.ABOUT[k].short }) : name;
     // A kind in development: grey, not pressed.
     if (v.inDev) {
       b.disabled = true;
       b.classList.add('is-dev');
-      b.appendChild(_el('span', 'mv3-hlp-kind-dev', 'In development'));
-      b.title = (v.label || k) + ' - in development';
+      b.appendChild(_el('span', 'mv3-hlp-kind-dev', T.t('In development')));
+      b.title = T.t('{name} - in development', { name });
     }
     b.addEventListener('click', () => { if (!v.inDev && st.kind !== k) setKind(k); });
     kindBtns[k] = b;
     kindRow.appendChild(b);
   }
   // The kind's standards back: its length, count, music, captions.
-  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', 'Reset to standard');
+  const reset = _el('button', 'mv3-hlp-reset u-btn is-s is-quiet', T.t('Reset to standard'));
   reset.type = 'button';
-  reset.title = 'Back to this kind\'s standard settings - the length, how many, the music and the captions';
+  reset.title = T.t('Back to this kind\'s standard settings - the length, how many, the music and the captions');
   reset.addEventListener('click', () => { if (st.kind) use(KIND.standardOf(st.kind, lengthsOf(st.kind))); });
   kindRow.appendChild(reset);
   P.appendChild(kindRow);
@@ -226,11 +230,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   const opts = _el('div', 'mv3-hlp-opts');
   const lenRow = _el('div', 'mv3-hlp-orow');
-  lenRow.appendChild(_el('span', 'mv3-hlp-olab', 'Length'));
+  lenRow.appendChild(_el('span', 'mv3-hlp-olab', T.t('Length')));
   const lenChips = _el('div', 'mv3-hlp-chips');
   lenRow.appendChild(lenChips);
   const cntRow = _el('div', 'mv3-hlp-orow');
-  cntRow.appendChild(_el('span', 'mv3-hlp-olab', 'How many'));
+  cntRow.appendChild(_el('span', 'mv3-hlp-olab', T.t('How many')));
   const cntChips = _el('div', 'mv3-hlp-chips');
   cntRow.appendChild(cntChips);
   // Each kind its own count buttons (30 for most, 50 for stream) - the server's.
@@ -241,7 +245,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   // ── The background music - the moods of Music → highlights ──
   const musicSec = _el('div', 'mv3-hlp-music');
-  musicSec.appendChild(_el('div', 'mv3-x-hdr', 'Music'));
+  musicSec.appendChild(_el('div', 'mv3-x-hdr', T.t('Music')));
   M.appendChild(musicSec);
   const music = moodPicker(musicSec, {
     onChange: (moods) => { st.moods = moods; keep(); },
@@ -252,10 +256,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   });
 
   // ── The captions: presets · animation, what is chosen, the tiles ──
-  R.appendChild(_el('div', 'mv3-x-hdr', 'Captions'));
+  R.appendChild(_el('div', 'mv3-x-hdr', T.t('Captions')));
   // The title on top: on / off - auto's "by the video" too; each kind remembers its own.
   const titleRow = _el('div', 'mv3-hlp-orow mv3-hlp-titlerow');
-  titleRow.appendChild(_el('span', 'mv3-hlp-olab', 'Title on top'));
+  titleRow.appendChild(_el('span', 'mv3-hlp-olab', T.t('Title on top')));
   const titleChips = _el('div', 'mv3-hlp-chips');
   titleRow.appendChild(titleChips);
   R.appendChild(titleRow);
@@ -269,10 +273,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     capTabs.appendChild(b);
     return b;
   };
-  tabBtn('presets', 'Presets', 'The style of the captions - one, or several with Shift: each page one of them');
-  const animTab = tabBtn('anim', 'Animation', 'How a page comes in and goes out - after a style is chosen');
+  tabBtn('presets', T.t('Presets'), T.t('The style of the captions - one, or several with Shift: each page one of them'));
+  const animTab = tabBtn('anim', T.t('Animation'), T.t('How a page comes in and goes out - after a style is chosen'));
   // The fonts over the presets' own: one, or several with Shift - each page one of them, as wide as in its preset's font.
-  const fontTab = tabBtn('fonts', 'Fonts', 'The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen');
+  const fontTab = tabBtn('fonts', T.t('Fonts'), T.t('The letters of the captions over the styles\' own - one, or several with Shift: each page one of them; after a style is chosen'));
   R.appendChild(capTabs);
   // What is chosen, right under the open tab.
   const chosen = _el('div', 'mv3-hlp-chosen');
@@ -290,7 +294,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   } });
   const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keep(); paint(); } });
   const fonts = fontPicker(fontBox, {
-    note: 'The letters of the captions - one font for every page, or several with Shift: each page one of them. Colors, outline and motion stay the style\'s; a page keeps the width it has in the style\'s own font.',
+    note: T.t('The letters of the captions - one font for every page, or several with Shift: each page one of them. Colors, outline and motion stay the style\'s; a page keeps the width it has in the style\'s own font.'),
     onPick: (list) => { st.fonts = list; keep(); paint(); },
   });
 
@@ -298,16 +302,16 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   const hear = _el('div', 'mv3-hlp-hear u-status is-line');
   const said = _el('div', 'mv3-hlp-said u-status is-line');
   const priceEl = _el('span', 'mv3-hlp-price u-price');
-  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Find moments');
+  const goBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', T.t('Find moments'));
   goBtn.type = 'button';
   goBtn.addEventListener('click', go);
   // The steps: "next →" on the first, "‹ back" beside the press on the second.
-  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', 'Next →');
+  const nextBtn = _el('button', 'mv3-c-btn mv3-hlp-go u-btn is-main', T.t('Next →'));
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => next());
-  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', '‹ Back');
+  const backBtn = _el('button', 'mv3-c-btn mv3-hlp-back u-btn', T.t('‹ Back'));
   backBtn.type = 'button';
-  backBtn.title = 'Back to the video and the parts';
+  backBtn.title = T.t('Back to the video and the parts');
   backBtn.addEventListener('click', () => toStep(1));
   const footL = _el('div', 'mv3-hlp-footl');
   footL.append(hear, said);
@@ -374,8 +378,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
     let where = '';
     try { where = typeof pathOf === 'function' ? String(pathOf(f) || '') : ''; } catch (e) { where = ''; }
-    if (!where) { say('A file is added in the app\'s own window - it hands the file over. Here, use a link or the Library.', true); return; }
-    if (!/^video\//.test(f.type || '') && !/\.(mp4|mov|webm|mkv|m4v|avi)$/i.test(f.name || '')) { say('Not a video file: ' + f.name, true); return; }
+    if (!where) { say(T.t('A file is added in the app\'s own window - it hands the file over. Here, use a link or the Library.'), true); return; }
+    if (!/^video\//.test(f.type || '') && !/\.(mp4|mov|webm|mkv|m4v|avi)$/i.test(f.name || '')) { say(T.t('Not a video file: {name}', { name: f.name }), true); return; }
     st.path = where;
     st.fileName = f.name || where;
     fileSaid.textContent = st.fileName;
@@ -393,31 +397,32 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function loadSources() {
     if (!sourcesP) {
       panes.source.textContent = '';
-      panes.source.appendChild(loadingEl('reading REFERENCES · YouTube · Videos…', { line: true }));
+      panes.source.appendChild(loadingEl(T.t('reading REFERENCES · YouTube · Videos…'), { line: true }));
       sourcesP = _api('/api/references/youtube').then((d) => { sources = d.items || []; paintSources(); })
         // Not read: "did not load" with Try again (read again), the reason a popup.
         .catch((e) => {
           sourcesP = null;
-          showError('Could not read REFERENCES · YouTube · Videos: ' + e.message);
-          panes.source.replaceChildren(failedEl('REFERENCES · YouTube · Videos', () => loadSources(), { line: true }));
+          showError(T.t('Could not read REFERENCES · YouTube · Videos: {why}', { why: e.message }));
+          panes.source.replaceChildren(failedEl(T.t('REFERENCES · YouTube · Videos'), () => loadSources(), { line: true }));
         });
     }
     return sourcesP;
   }
   function paintSources() {
     panes.source.textContent = '';
-    panes.source.appendChild(_el('div', 'mv3-ins-note', 'REFERENCES · YouTube · Videos'));
-    if (!sources.length) { panes.source.appendChild(emptyEl('Nothing there yet - give a link or a file.', { line: true })); return; }
+    panes.source.appendChild(_el('div', 'mv3-ins-note', T.t('REFERENCES · YouTube · Videos')));
+    if (!sources.length) { panes.source.appendChild(emptyEl(T.t('Nothing there yet - give a link or a file.'), { line: true })); return; }
     for (const s of sources) {
       const r = _el('button', 'mv3-hlp-src' + (st.pick === s ? ' is-on' : ''));
       r.type = 'button';
       if (s.thumb) { const im = _el('img', 'mv3-hlp-src-img'); im.src = s.thumb; im.alt = ''; im.loading = 'lazy'; r.appendChild(im); }
       const t = _el('span', 'mv3-hlp-src-t');
       t.appendChild(_el('b', null, s.title || s.id));
-      t.appendChild(_el('small', null, _clock(s.seconds) + (s.type === 'remote' ? ' · not downloaded - the project downloads it first'
-        : (s.words ? ' · its words are in' : ' · its words are heard first'))));
+      const time = _clock(s.seconds);
+      t.appendChild(_el('small', null, s.type === 'remote' ? T.t('{time} · not downloaded - the project downloads it first', { time })
+        : (s.words ? T.t('{time} · its words are in', { time }) : T.t('{time} · its words are heard first', { time }))));
       r.appendChild(t);
-      if (s.busy) { r.disabled = true; r.title = 'It is being read for the scenarios - it can be chosen when that has finished.'; }
+      if (s.busy) { r.disabled = true; r.title = T.t('It is being read for the scenarios - it can be chosen when that has finished.'); }
       r.addEventListener('click', () => {
         st.pick = s;
         st.sourceId = s.type === 'source' ? s.id : '';
@@ -456,8 +461,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   }
   // What the first step still waits for, in words ('' - nothing).
   function stepWait() {
-    if (!hasVideo()) return st.from === 'link' ? 'Give a link to the video first' : st.from === 'file' ? 'Choose a video file first' : 'Choose a video of the Library first';
-    return st.kind ? '' : 'Choose the kind of video first';
+    if (!hasVideo()) return st.from === 'link' ? T.t('Give a link to the video first') : st.from === 'file' ? T.t('Choose a video file first') : T.t('Choose a video of the Library first');
+    return st.kind ? '' : T.t('Choose the kind of video first');
   }
   function next() {
     const why = stepWait();
@@ -473,8 +478,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     A.className = two ? 'mv3-hlp-right' : 'mv3-hlp-left';
     cols.classList.toggle('is-s2', two);
     frame.setCrumbs(two
-      ? [{ label: 'Highlights · video & parts', on: () => toStep(1) }, { label: 'Music & captions' }]
-      : [{ label: 'Highlights · video & parts' }]);
+      ? [{ label: T.t('Highlights · video & parts'), on: () => toStep(1) }, { label: T.t('Music & captions') }]
+      : [{ label: T.t('Highlights · video & parts') }]);
   }
   function toStep(n) {
     st.step = n === 2 ? 2 : 1;
@@ -503,11 +508,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
       const c = _el('span', 'mv3-hlp-pick');
       const nm = _el('button', 'mv3-hlp-pick-nm', name);
       nm.type = 'button';
-      nm.title = 'Show it among the tiles';
+      nm.title = T.t('Show it among the tiles');
       nm.addEventListener('click', () => onShow(key));
       const x = _el('button', 'mv3-hlp-pick-x u-x', '');
       x.type = 'button';
-      x.title = 'Take it away';
+      x.title = T.t('Take it away');
       x.addEventListener('click', () => onDrop(key));
       c.append(nm, x);
       list.appendChild(c);
@@ -518,21 +523,21 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function paintChosen() {
     chosen.textContent = '';
     if (st.capTab === 'fonts') {
-      chosen.appendChild(chosenSet('fonts', st.fonts.map((f) => [f, fontLabel(f) || f]),
-        { text: 'None - each style\'s own font' },
+      chosen.appendChild(chosenSet(T.t('Fonts'), st.fonts.map((f) => [f, fontLabel(f) || f]),
+        { text: T.t('None - each style\'s own font') },
         (f) => fonts.reveal(f),
         (f) => { fonts.set(st.fonts.filter((x) => x !== f)); st.fonts = fonts.getAll(); keep(); paint(); }));
       return;
     }
     if (st.capTab === 'anim') {
-      chosen.appendChild(chosenSet('animations', st.anims.map((p) => [p, pairName(p) || p]),
-        { text: 'None - pages come and go as the style has them' },
+      chosen.appendChild(chosenSet(T.t('Animations'), st.anims.map((p) => [p, pairShown(p) || p]),
+        { text: T.t('None - pages come and go as the style has them') },
         (p) => anim.reveal(p),
         (p) => { anim.set(st.anims.filter((x) => x !== p)); st.anims = anim.getAll(); keep(); paint(); }));
       return;
     }
-    chosen.appendChild(chosenSet('presets', st.styles.map((idp) => [idp, presetName(idp) || idp]),
-      { text: 'Choose a style - Shift picks several, each page one of them', err: true },
+    chosen.appendChild(chosenSet(T.t('Presets'), st.styles.map((idp) => [idp, presetShown(idp) || idp]),
+      { text: T.t('Choose a style - Shift picks several, each page one of them'), err: true },
       (idp) => picker.reveal(idp),
       (idp) => { picker.set(st.styles.filter((x) => x !== idp)); st.styles = picker.getAll(); st.style = st.styles[0] || ''; keep(); paint(); }));
   }
@@ -540,16 +545,20 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
   function paintAbout() {
     about.textContent = '';
     if (!st.kind) {
-      about.appendChild(_el('div', 'mv3-hlp-about-h', 'Choose the kind of video - its settings open under it.'));
+      about.appendChild(_el('div', 'mv3-hlp-about-h', T.t('Choose the kind of video - its settings open under it.')));
       for (const [k, v] of Object.entries(kinds)) {
         const l = _el('div', 'mv3-hlp-about-l');
-        l.appendChild(_el('b', null, v.label || k));
-        l.appendChild(document.createTextNode(' - ' + ((KIND.ABOUT[k] && KIND.ABOUT[k].short) || '') + (v.inDev ? ' (in development)' : '')));
+        // The kind's name in bold where the sentence has it.
+        const short = (KIND.ABOUT[k] && KIND.ABOUT[k].short) || '';
+        const [a, b] = (v.inDev ? T.t('{name} - {about} (in development)', { about: short }) : T.t('{name} - {about}', { about: short })).split('{name}');
+        if (a) l.appendChild(document.createTextNode(a));
+        l.appendChild(_el('b', null, _shown(v.label, k)));
+        if (b) l.appendChild(document.createTextNode(b));
         about.appendChild(l);
       }
       return;
     }
-    about.appendChild(_el('p', 'mv3-hlp-about-p', (KIND.ABOUT[st.kind] && KIND.ABOUT[st.kind].long) || (kinds[st.kind].label || st.kind)));
+    about.appendChild(_el('p', 'mv3-hlp-about-p', (KIND.ABOUT[st.kind] && KIND.ABOUT[st.kind].long) || _shown(kinds[st.kind].label, st.kind)));
   }
 
   function paint() {
@@ -568,7 +577,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     const whole = isWhole(st.kind);
     lenChips.textContent = '';
     for (const [k, v] of Object.entries(lengthsOf(st.kind))) {
-      const b = _el('button', 'mv3-hlp-chip u-chip' + (k === st.length ? ' is-on' : ''), v.label || k);
+      const b = _el('button', 'mv3-hlp-chip u-chip' + (k === st.length ? ' is-on' : ''), _shown(v.label, k));
       b.type = 'button';
       b.addEventListener('click', () => { st.length = k; keep(); paint(); price(); });
       lenChips.appendChild(b);
@@ -583,18 +592,18 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     cntRow.hidden = whole;
     // The title on top.
     titleChips.textContent = '';
-    for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, 'by the video', 'As the kind auto finds has it']] : []).concat([
-      [true, 'on', 'The fragment\'s headline at the top for its first 3 s'], [false, 'off', 'No title - "add title" on a fragment\'s card puts one']])) {
+    for (const [v, label, tip] of (st.kind === 'auto' ? [[BY_VIDEO, T.t('by the video'), T.t('As the kind auto finds has it')]] : []).concat([
+      [true, T.t('on'), T.t('The fragment\'s headline at the top for its first 3 s')], [false, T.t('off'), T.t('No title - "add title" on a fragment\'s card puts one')]])) {
       const b = _el('button', 'mv3-hlp-chip u-chip' + (st.title === v ? ' is-on' : ''), label);
       b.type = 'button';
       b.title = tip;
       b.addEventListener('click', () => { st.title = v; keep(); paint(); });
       titleChips.appendChild(b);
     }
-    fragHdr.textContent = whole ? 'The parts' : 'The fragments';
+    fragHdr.textContent = whole ? T.t('The parts') : T.t('The fragments');
     fragNote.textContent = !st.kind ? '' : whole
-      ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
-      : 'The agent returns this many - the strongest first, weaker ones last with a lower score; fewer only when the video has no more. A fragment may be made of up to three pieces of the video.';
+      ? T.t('The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.')
+      : T.t('The agent returns this many - the strongest first, weaker ones last with a lower score; fewer only when the video has no more. A fragment may be made of up to three pieces of the video.');
     // The captions: the animations' tab open once a style is chosen.
     capBox.classList.toggle('is-missing', !st.style && !locked);
     animTab.disabled = !st.styles.length;
@@ -613,24 +622,25 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
     let cost = '';
     if (p) {
       const kept = p.hear.by === 'kept' || (st.from === 'source' && st.source && st.source.words);
-      if (kept) hear.textContent = 'Its words are in - not heard again.';
+      if (kept) hear.textContent = T.t('Its words are in - not heard again.');
       else if (p.hear.by === 'groq') {
-        hear.textContent = 'Words heard by Groq - ' + (p.hear.cost != null ? _usd(p.hear.cost) : '$' + p.hear.perHour.toFixed(2) + ' an hour of video') + '.';
-      } else if (p.hear.by === 'local') hear.textContent = 'Words heard on this computer, for nothing - about 40 minutes for an hour of video.';
-      else { hear.textContent = p.hear.why || 'Nobody can hear the words.'; hear.classList.add('is-err'); }
+        hear.textContent = p.hear.cost != null ? T.t('Words heard by Groq - {cost}.', { cost: _usd(p.hear.cost) })
+          : T.t('Words heard by Groq - ${rate} an hour of video.', { rate: p.hear.perHour.toFixed(2) });
+      } else if (p.hear.by === 'local') hear.textContent = T.t('Words heard on this computer, for nothing - about 40 minutes for an hour of video.');
+      else { hear.textContent = p.hear.why || T.t('Nobody can hear the words.'); hear.classList.add('is-err'); }
       const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
-      cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
+      cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : T.t('~{cost} + the words', { cost: _usd(p.agent.cost) });
     }
     // the price stands by the press, in mono - not inside its words
-    goBtn.textContent = st.busy ? 'Starting…' : (whole ? 'Split into parts' : 'Find moments');
+    goBtn.textContent = st.busy ? T.t('Starting…') : (whole ? T.t('Split into parts') : T.t('Find moments'));
     priceEl.textContent = cost && st.kind ? cost : '';
     goBtn.disabled = !ready();
-    goBtn.title = !st.kind ? 'Choose the kind of video first' : !st.style ? 'Choose the style of the captions first' : '';
+    goBtn.title = !st.kind ? T.t('Choose the kind of video first') : !st.style ? T.t('Choose the style of the captions first') : '';
     // The steps' buttons: "next →" on the first, "‹ back" and the press on the second.
     const wait = stepWait();
     nextBtn.hidden = st.step !== 1;
     nextBtn.disabled = !!wait || st.busy;
-    nextBtn.title = wait ? wait : 'The music and the captions';
+    nextBtn.title = wait ? wait : T.t('The music and the captions');
     backBtn.hidden = goBtn.hidden = st.step !== 2;
     priceEl.hidden = st.step !== 2 || !priceEl.textContent;
     backBtn.disabled = st.busy;
@@ -640,8 +650,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId, start } = {}) {
 
   async function go() {
     if (!ready()) {
-      if (!st.kind) say('Choose the kind of video first.', true);
-      else if (!st.style) say('Choose the style of the captions first.', true);
+      if (!st.kind) say(T.t('Choose the kind of video first.'), true);
+      else if (!st.style) say(T.t('Choose the style of the captions first.'), true);
       return;
     }
     st.busy = true;

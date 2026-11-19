@@ -202,7 +202,7 @@ export default {
   'Cut by the right flag makes the piece a new track in Music - the sound itself stays as it is.': '«Вырезать» у правого флажка делает кусок новым треком в «Музыке» — сам звук не меняется.',
   'Cut by the right flag makes the piece a new sound in My sounds - the sound itself stays as it is.': '«Вырезать» у правого флажка делает кусок новым звуком в «Моих звуках» — сам звук не меняется.',
   'from {a} to {b} · {len} s of {all} - drag the gold flags on the ruler; a press on the wave moves the playhead': 'от {a} до {b} · {len} с из {all} — тяните золотые флажки на линейке; нажатие на волну переносит бегунок',
-  'Laid on {lane} at {at} - Ctrl+Z on the timeline takes it off.': 'Положено на {lane} в {at} — Ctrl+Z на таймлайне уберёт его.',
+  'Laid on {lane} at {at} - Ctrl+Z on the timeline takes it off.': 'Положено на дорожку «{lane}» в {at} — Ctrl+Z на таймлайне уберёт его.',
   'an audio lane': 'звуковую дорожку',
   'The piece could not be laid.': 'Кусок не удалось положить.',
   'cutting…': 'вырезаю…',

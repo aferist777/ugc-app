@@ -50,9 +50,13 @@ import * as VOS from './vo-script.js';
 // Lucide's icons for the signs, the figures in mono, "4,500".
 import { icon, iconEl } from '../icons.js';
 import { figures, int } from '../num.js';
+// The app's words as T.t: this module's own `t`s are texts and targets.
+import * as T from '../i18n/t.js';
 
 // A word as a label shows it: sentence case - the words in the code stay as they are.
 const _cap = (s) => { const t = String(s == null ? '' : s); return t.charAt(0).toUpperCase() + t.slice(1); };
+// A list said as one: "a, b and c" in the app's language.
+const _and = (xs) => (xs.length > 1 ? T.t('{list} and {last}', { list: xs.slice(0, -1).join(', '), last: xs[xs.length - 1] }) : xs[0] || '');
 
 // The one ceiling a read has for the chosen model, from its quality (lib/th-video.js: Kling avatar's
 // tiers, OmniHuman's) - read from the kit when it has arrived, this only until then.
@@ -344,7 +348,7 @@ function _playBtn(src, what, then) {
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
-  b.title = src ? 'Play ' + what : 'Not read yet';
+  b.title = src ? T.t('Play {what}', { what }) : T.tc('a line', 'Not read yet');
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     _play(src);
@@ -382,9 +386,10 @@ async function _post(url, body) {
   let r = null;
   try { r = await res.json(); } catch (e) { r = null; }
   if (!r) {
-    throw new Error(res.status === 404 ? 'This is newer than the running app - close UGC Studio and open it again to finish the update.' : 'the server answered ' + res.status + ' ' + res.statusText);
+    throw new Error(res.status === 404 ? T.t('This is newer than the running app - close UGC Studio and open it again to finish the update.')
+      : T.t('the server answered {status}', { status: res.status + ' ' + res.statusText }));
   }
-  if (!r.success) throw new Error(r.error || 'refused');
+  if (!r.success) throw new Error(r.error || T.t('refused'));
   return r;
 }
 
@@ -425,7 +430,7 @@ async function _writeEnvMotion(p) {
     const r = await _post('/api/scen3/env/motion', { path });
     _envMeta = { ...(_envMeta || {}), [path]: r.entry || {} };
   } catch (e) {
-    _readErr = 'The animation of the place was not written: ' + e.message;
+    _readErr = T.t('The animation of the place was not written: {why}', { why: e.message });
   }
   _envWriting = false;
   _ctx.repaint();
@@ -486,9 +491,9 @@ async function _makeClips(p) {
     const queued = (r.queued || []).length;
     // Nothing went: say the first real reason rather than leaving a button that did nothing.
     const why = (r.skipped || []).find(x => !/already/.test(String(x.why || '')));
-    if (!queued && why) _readErr = 'Fragment ' + why.line + ': ' + why.why;
+    if (!queued && why) _readErr = T.t('Fragment {n}: {why}', { n: why.line, why: why.why });
   } catch (e) {
-    _readErr = 'The clips were not asked for: ' + e.message;
+    _readErr = T.t('The clips were not asked for: {why}', { why: e.message });
   }
 }
 
@@ -511,9 +516,9 @@ async function _writeVideo(p, opts) {
       const r = await _post('/api/scen3/video/prompts', { projectId: p.id });
       _adopt(r);
       const skipped = ((r.report || {}).skipped || []).length;
-      if (skipped) _readErr = 'The agent left ' + skipped + (skipped === 1 ? ' line' : ' lines') + ' without a prompt - press generate again.';
+      if (skipped) _readErr = T.tn(skipped, 'The agent left {n} line without a prompt - press generate again.', 'The agent left {n} lines without a prompt - press generate again.');
     } catch (e) {
-      _readErr = 'The animation was not written: ' + e.message;
+      _readErr = T.t('The animation was not written: {why}', { why: e.message });
     }
   }
   if (withClips && !_readErr) {
@@ -534,7 +539,7 @@ async function _writeVideo(p, opts) {
 // but a redraw of this frame will be asked for what is written here.
 async function _saveFramePrompt(p, frameId, prompt) {
   try { _adopt(await _post('/api/scen3/frames/prompt', { projectId: p.id, frameId, prompt })); }
-  catch (e) { _readErr = 'The prompt was not saved: ' + e.message; }
+  catch (e) { _readErr = T.t('The prompt was not saved: {why}', { why: e.message }); }
   _ctx.repaint();
 }
 
@@ -557,7 +562,7 @@ async function _dropRow(alertId, what) {
     await _post('/api/alerts/' + encodeURIComponent(alertId) + '/cancel', {});
   } catch (e) {
     _dropped.delete(alertId);
-    _readErr = 'Could not let go of ' + what + ': ' + e.message;
+    _readErr = T.t('Could not let go of {what}: {why}', { what, why: e.message });
   }
   _dropping = '';
   // The follower is still waiting on this row; it sees the failure on its next look and tidies up.
@@ -568,8 +573,7 @@ async function _dropRow(alertId, what) {
 function _dropX(alertId, what) {
   const b = el('button', 'mv3-wk-letgo u-onpic is-del u-x', '');
   b.type = 'button';
-  b.title = 'Stop waiting for ' + what + '. It was paid for when it was asked for - this does not'
-    + ' get that back; it takes the row out of Alerts and stops the app expecting a picture.';
+  b.title = T.t('Stop waiting for {what}. It was paid for when it was asked for - this does not get that back; it takes the row out of Alerts and stops the app expecting a picture.', { what });
   b.disabled = !alertId || !!_dropping;
   b.addEventListener('click', (e) => { e.stopPropagation(); _dropRow(alertId, what); });
   return b;
@@ -582,7 +586,7 @@ async function _pickFrame(i, frameId) {
   _picking = false;
   _pickView = '';
   try { _adopt(await _post('/api/scen3/fragments/pick-frame', { projectId: p.id, line: i, frameId })); }
-  catch (e) { _readErr = 'Could not pick that frame: ' + e.message; }
+  catch (e) { _readErr = T.t('Could not pick that frame: {why}', { why: e.message }); }
   _ctx.repaint();
 }
 
@@ -627,6 +631,8 @@ function _awayFromPick(e) {
 }
 try { document.addEventListener('click', _awayFromPick, true); } catch (e) { /* no document */ }
 
+const _frameName = (fr) => (fr && fr.n ? T.t('frame {n}', { n: fr.n }) : T.t('frame'));
+
 function _formatAspect(p) {
   const f = String((((p || {}).mix || {}).settings || {}).format || '9:16');
   const m = f.match(/^(\d+)\s*:\s*(\d+)$/);
@@ -646,7 +652,7 @@ async function _cropApply(p, fr, rect) {
     // address, so the selection goes with the old one.
     if (r.frameId) _setPick = r.frameId;
   } catch (e) {
-    _said = 'The frame was not cropped: ' + e.message;
+    _said = T.t('The frame was not cropped: {why}', { why: e.message });
   }
   _cropBusy = false;
   _ctx.repaint();
@@ -655,7 +661,7 @@ async function _cropApply(p, fr, rect) {
 // The ✕ / ✓ in the corner of a frame of the set: out of the rotation, and back into it.
 async function _banFrame(p, frameId, banned) {
   try { _adopt(await _post('/api/scen3/frames/ban', { projectId: p.id, frameId, banned })); }
-  catch (e) { _readErr = 'Could not switch that frame: ' + e.message; }
+  catch (e) { _readErr = T.t('Could not switch that frame: {why}', { why: e.message }); }
   _ctx.repaint();
 }
 
@@ -664,7 +670,7 @@ async function _banFrame(p, frameId, banned) {
 // a frame back on does not drop it somewhere unexpected.
 async function _saveOrder(p, ids) {
   try { _adopt(await _post('/api/scen3/frames/order', { projectId: p.id, order: ids })); }
-  catch (e) { _readErr = 'Could not move that frame: ' + e.message; }
+  catch (e) { _readErr = T.t('Could not move that frame: {why}', { why: e.message }); }
   _ctx.repaint();
 }
 
@@ -677,7 +683,7 @@ async function _saveShot(i, patch) {
   try {
     _adopt(await _post('/api/scen3/fragments/shot', { projectId: p.id, line: i, patch }));
   } catch (e) {
-    _readErr = 'Could not save it: ' + e.message;
+    _readErr = T.t('Could not save it: {why}', { why: e.message });
   }
   _ctx.repaint();
 }
@@ -685,7 +691,7 @@ const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
 // What films the clips - Kling avatar or OmniHuman 2.0, for the whole video - and the qualities it makes.
 const _modelOf = () => ((_kit && _kit.models) || []).find(m => m.id === _video().model) || null;
 const _omni = () => _video().model === 'omnihuman';
-const _modelName = () => ((_modelOf() || {}).label) || 'the model';
+const _modelName = () => ((_modelOf() || {}).label) || T.t('the model');
 const _qualities = () => ((_modelOf() || {}).qualities) || [];
 const _tier = () => _qualities().find(q => q.id === _video().quality) || _qualities()[0] || null;
 const _ceiling = () => ((_tier() || {}).maxAudioSec) || CEILING_FALLBACK;
@@ -704,10 +710,10 @@ async function _saveVideo(patch) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: p.id, video: patch }),
     }).then(x => x.json());
-    if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+    if (!r || !r.success) throw new Error((r && r.error) || T.t('refused'));
     p.video = r.project.video;
   } catch (e) {
-    _said = 'Could not save it: ' + e.message;
+    _said = T.t('Could not save it: {why}', { why: e.message });
   }
   _saving = false;
   _ctx.repaint();
@@ -720,7 +726,7 @@ export function paint(host, ctx, api) {
   _ctx = ctx;
   _api = api;
   const p = ctx.project;
-  if (!p) { host.appendChild(_note('Reading the project…')); return; }
+  if (!p) { host.appendChild(_note(T.t('Reading the project…'))); return; }
   if (_kit === null) _loadKit(ctx.repaint);
   const lines = Array.isArray(p.lines) ? p.lines : [];
 
@@ -764,7 +770,7 @@ export function paint(host, ctx, api) {
   _notes(right);
   // A voiceover draft with no script yet still has its fields - blurred until there is one (_all).
   if (!lines.length && !_isVo(p)) {
-    right.appendChild(_note('This project has no lines. A talking head takes its script when it is made - a scenario or your own text.'));
+    right.appendChild(_note(T.t('This project has no lines. A talking head takes its script when it is made - a scenario or your own text.')));
     return;
   }
   if (_inserting >= 0) _insertEditor(right, p, lines);
@@ -779,7 +785,7 @@ export function paint(host, ctx, api) {
   const mine = _open >= 0 ? _clipping.get(_open) : null;
   const place = mine ? 'clip' : null;
   onlyHere(place);
-  if (place) holdProgress(place, { label: 'Making the clip', estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
+  if (place) holdProgress(place, { label: T.t('Making the clip'), estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
 }
 
 // WHERE THE RIGHT COLUMN STOOD. Every repaint rebuilds the column, and a
@@ -802,7 +808,7 @@ function _applySplit(host, col) {
 }
 function _splitSash(host, col) {
   const s = el('div', 'mv3-wk-sash');
-  s.title = 'Drag to give the script more room · double-click to put it back';
+  s.title = T.t('Drag to give the script more room · double-click to put it back');
   s.addEventListener('mousedown', (e) => {
     e.preventDefault();
     const x0 = e.clientX;
@@ -865,8 +871,8 @@ function _missing(p) {
   const cast = p.casting || {};
   const out = [];
   if (_isVo(p)) return out;                          // a voiceover has nobody and nowhere to choose
-  if (!cast.obrazImage) out.push('a character in a look');
-  if (!cast.locationImage) out.push('an environment');
+  if (!cast.obrazImage) out.push(T.t('a character in a look'));
+  if (!cast.locationImage) out.push(T.t('an environment'));
   return out;
 }
 // Is there a voice to read in - the character's, or the project's own pick? The same rule the
@@ -881,12 +887,12 @@ const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 function _needs(p) {
   const v = (p && p.video) || {};
   const out = {};
-  if (!v.mood) out.mood = 'a mood';
-  if (!_canRead()) out.voice = 'a voice';
+  if (!v.mood) out.mood = T.t('a mood');
+  if (!_canRead()) out.voice = T.t('a voice');
   // The model first - Kling avatar or OmniHuman - then the quality it makes. A voiceover makes no clips.
   if (_isVo(p)) return out;
-  if (!v.model) out.video = 'the model';
-  else if (!v.quality) out.video = 'the quality';
+  if (!v.model) out.video = T.t('the model');
+  else if (!v.quality) out.video = T.t('the quality');
   return out;
 }
 // A VOICEOVER: the script in a voice - field 1 and the B-roll, no who / where, frames or clips.
@@ -900,12 +906,15 @@ function _voiceLock(p) {
   if (_missing(p).length) return '';                // the whole zone waits for who and where first
   const live = liveLines(p.lines);
   if (!live.length || _pool(p).length || live.some(x => _clipsOf(p, x.l).length)) return '';
-  return live.every(x => _everRead(x.l)) ? '' : 'Voice the lines first - field 1, mood & voice.';
+  return live.every(x => _everRead(x.l)) ? '' : _voiceFirst();
 }
+const _voiceFirst = () => T.t('Voice the lines first - field 1, mood & voice.');
+// What a lock says in its field's head: the voice's in a few words, any other its sentence.
+const _lockSub = (lock) => (lock === _voiceFirst() ? T.t('voice the lines first') : lock.replace(/\.$/, '').toLowerCase());
 
 // The "none" a menu shows while nothing is chosen in it: the first line, and it cannot be chosen back.
 function _noneOption(sel, word) {
-  const o = el('option', '', word || 'none');
+  const o = el('option', '', word || T.t('none'));
   o.value = '';
   o.disabled = true;
   o.selected = true;
@@ -924,7 +933,7 @@ function _noneOption(sel, word) {
 // over the anchors marked `data-tip`.
 function _all(host, p, lines) {
   const missing = _missing(p);
-  if (missing.length) host.appendChild(_note('Choose ' + missing.join(' and ') + ' first - on the preview. Then the fields open.'));
+  if (missing.length) host.appendChild(_note(T.t('Choose {what} first - on the preview. Then the fields open.', { what: _and(missing) })));
   const noText = _isVo(p) && !_live(lines).length;
   const zone = el('div', 'mv3-wk-zone' + ((missing.length || noText) ? ' is-locked' : ''));
   host.appendChild(zone);
@@ -988,16 +997,16 @@ function _stage(host, id, spec) {
   head.appendChild(el('span', 'mv3-wk-sname', _cap(spec.name)));
   if (done && spec.step) {
     const d = el('span', 'mv3-wk-sdone');
-    d.append(iconEl('circle-check', 14), document.createTextNode('Done'));
+    d.append(iconEl('circle-check', 14), document.createTextNode(T.t('Done')));
     head.appendChild(d);
   }
   // What the field IS, and then where it stands - in the head all the time: the field never shuts.
-  const sub = spec.lock ? spec.lock.replace(/ - field 1.*$/, '').replace(/\.$/, '').toLowerCase()
-    : spec.need ? 'choose ' + spec.need
-    : spec.blocked ? 'needs ' + spec.why
+  const sub = spec.lock ? _lockSub(spec.lock)
+    : spec.need ? T.t('choose {what}', { what: spec.need })
+    : spec.blocked ? T.t('needs {what}', { what: spec.why })
       : [spec.sub, spec.summary].filter(Boolean).join(' · ');
-  if (spec.need) head.title = 'Choose ' + spec.need + ' - nothing in this field is made until it is chosen';
-  else if (spec.blocked) head.title = 'Still missing: ' + spec.why;
+  if (spec.need) head.title = T.t('Choose {what} - nothing in this field is made until it is chosen', { what: spec.need });
+  else if (spec.blocked) head.title = T.t('Still missing: {what}', { what: spec.why });
   box.appendChild(head);
   if (sub) {
     const s = el('div', 'mv3-wk-vsub mv3-wk-ssub' + (spec.need ? ' is-need' : '') + (spec.lock ? ' is-lock' : ''));
@@ -1017,7 +1026,7 @@ function _stage(host, id, spec) {
 function _genButton(foot, spec) {
   // what the press is about - a line of its own over the button, wrapping, its prices and counts in mono
   if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub mv3-wk-gcap')).appendChild(figures(spec.cap));
-  const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || 'generate');
+  const b = el('button', 'mv3-wk-gen u-btn is-s is-main', spec.label || T.t('generate'));
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.disabled;
@@ -1074,7 +1083,7 @@ function _stageMoodVoice(host, p, lines) {
   const will = live.filter(l => !isRead(l)).length;
   const has = _canRead();
   const needs = _needs(p);
-  const need = [needs.mood, needs.voice].filter(Boolean).join(' and ');
+  const need = _and([needs.mood, needs.voice].filter(Boolean));
   const done = live.length > 0 && !untagged && !will && !redo.length && !g.busy && !need;
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
   const { body } = _stage(host, 'moodvoice', {
@@ -1083,9 +1092,9 @@ function _stageMoodVoice(host, p, lines) {
     work: g.tagging ? () => _byTime(g.tagAt, 'tag')
       : g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
         : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
-    name: 'mood & voice', sub: 'ElevenLabs v3', done, need,
-    summary: [untagged ? untagged + (untagged === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
-      read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
+    name: T.t('mood & voice'), sub: 'ElevenLabs v3', done, need,
+    summary: [untagged ? T.tn(untagged, '{n} line to mark up', '{n} lines to mark up') : T.t('marked up'),
+      T.t('{k}/{n} read', { k: read, n: live.length }) + (redo.length ? ' · ' + T.t('{n} to redo', { n: redo.length }) : '')].join(' · '),
   });
   // TWO LINES: the names of the controls on top, each with its bubble,
   // the controls under them - `generate` at the end of that second line. One grid, so a name stands over its control.
@@ -1094,7 +1103,7 @@ function _stageMoodVoice(host, p, lines) {
   const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', _cap(word)), tip);
   // The mood. What it means is said in the bubble of its name.
   const mood = el('select', 'u-in is-s mv3-wk-vsel is-small is-mood');
-  if (!now) _noneOption(mood, 'none');
+  if (!now) _noneOption(mood, T.t('none'));
   for (const m of (_kit && _kit.moods) || []) {
     const o = el('option', '', m.label);
     o.value = m.id;
@@ -1110,25 +1119,25 @@ function _stageMoodVoice(host, p, lines) {
   // How it is spoken.
   const how = _voiceSettings(p, g.busy);
   row.append(
-    name('mood', () => {
+    name(T.t('mood'), () => {
       const m = ((_kit && _kit.moods) || []).find(x => x.id === mood.value) || null;
       return (m ? m.label + (m.about ? ' - ' + m.about : '') + '\n' : '')
-        + 'The emotion of the whole video: the script is marked up by it, and the read, the frames and the clips all follow it.';
+        + T.t('The emotion of the whole video: the script is marked up by it, and the read, the frames and the clips all follow it.');
     }),
-    name('voice', 'The voice every line is read in - ElevenLabs v3. The character’s own when they have one, else the one chosen here for the project. "change" opens the saved voices and the ElevenLabs library.'),
-    name('stability', STAB_TIP), name('speed', SPEED_TIP),
+    name(T.t('voice'), T.t('The voice every line is read in - ElevenLabs v3. The character’s own when they have one, else the one chosen here for the project. "change" opens the saved voices and the ElevenLabs library.')),
+    name(T.t('stability'), STAB_TIP), name(T.t('speed'), SPEED_TIP),
     el('span', 'mv3-wk-mvname'),
     mood, voice, how.stab, how.speed,
   );
   const ctl = el('div', 'mv3-wk-mvgo');
   row.appendChild(ctl);
-  const label = g.tagging ? 'marking up…'
-    : g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
-      : g.lines.length ? 'reading…' : 'generate';
-  const wait = !live.length ? 'This script has no lines'
-    : !v.mood ? 'Choose the mood first - the script is marked up by it'
-      : !has ? 'Choose a voice first - a character with one, or one for the project'
-        : (!untagged && !will && !redo.length) ? 'Every line is marked up and read, with these settings'
+  const label = g.tagging ? T.t('marking up…')
+    : g.batch ? T.t('reading {k} of {n}…', { k: g.batch.done, n: g.batch.total })
+      : g.lines.length ? T.tc('a line', 'reading…') : T.t('generate');
+  const wait = !live.length ? T.t('This script has no lines')
+    : !v.mood ? T.t('Choose the mood first - the script is marked up by it')
+      : !has ? T.t('Choose a voice first - a character with one, or one for the project')
+        : (!untagged && !will && !redo.length) ? T.t('Every line is marked up and read, with these settings')
           : '';
   const again = redo.filter(w => w === 'stability').length;
   const retime = redo.length - again;
@@ -1136,11 +1145,13 @@ function _stageMoodVoice(host, p, lines) {
     label,
     disabled: g.busy || !!wait || !_kit,
     title: wait || [
-      untagged && 'Mark the script up by the mood - the [tags] go between the words of ' + untagged + (untagged === 1 ? ' line' : ' lines') + '. Credits.',
-      will && 'Then read every line that needs it (' + will + '), one a second - ElevenLabs v3, by those tags. Credits.',
-      again && 'Read again the ' + again + (again === 1 ? ' line' : ' lines') + ' read with another stability - ElevenLabs, credits.',
-      retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
-      redo.length && 'A line with a clip keeps it on the timeline until a new one is made.',
+      untagged && T.tn(untagged, 'Mark the script up by the mood - the [tags] go between the words of {n} line. Credits.',
+        'Mark the script up by the mood - the [tags] go between the words of {n} lines. Credits.'),
+      will && T.t('Then read every line that needs it ({n}), one a second - ElevenLabs v3, by those tags. Credits.', { n: will }),
+      again && T.tn(again, 'Read again the {n} line read with another stability - ElevenLabs, credits.',
+        'Read again the {n} lines read with another stability - ElevenLabs, credits.'),
+      retime && T.tn(retime, 'Retime the {n} line read at another speed - here, free.', 'Retime the {n} lines read at another speed - here, free.'),
+      redo.length && T.t('A line with a clip keeps it on the timeline until a new one is made.'),
     ].filter(Boolean).join(' '),
     on: () => VOICE.markAndRead(_api.voiceApi()),
   });
@@ -1151,15 +1162,15 @@ function _stageMoodVoice(host, p, lines) {
 // whole video, kept on the project. Changing either touches no read: the lines read before stay read,
 // and the field's `generate` redoes them - a read again for the stability, a retiming for the speed.
 const STABILITY = [
-  { v: 0, label: 'Creative', tip: 'More emotional and expressive - and more likely to stray from the words' },
-  { v: 0.5, label: 'Natural', tip: 'Balanced - the closest to the voice as it was recorded' },
-  { v: 1, label: 'Robust', tip: 'Very even - follows the tags less' },
+  { v: 0, label: T.t('Creative'), tip: T.t('More emotional and expressive - and more likely to stray from the words') },
+  { v: 0.5, label: T.t('Natural'), tip: T.t('Balanced - the closest to the voice as it was recorded') },
+  { v: 1, label: T.t('Robust'), tip: T.t('Very even - follows the tags less') },
 ];
 const SPEED = { min: 0.7, max: 1.2, step: 0.05 };
 // What the two are, said in the bubbles of their names in field 1.
-const STAB_TIP = 'How steady the voice is. ElevenLabs v3 knows three: creative - more emotional, and more likely to stray from the words; natural - the closest to the voice as recorded; robust - very even, follows the tags less. A line read before keeps its read until generate reads it again.';
-const SPEED_TIP = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
-  + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch, and the timeline follows. A line given its own speed in its fragment keeps it.';
+const STAB_TIP = T.t('How steady the voice is. ElevenLabs v3 knows three: creative - more emotional, and more likely to stray from the words; natural - the closest to the voice as recorded; robust - very even, follows the tags less. A line read before keeps its read until generate reads it again.');
+const SPEED_TIP = T.t('How fast the reads play: 1 is as ElevenLabs speaks, {min} to {max}. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch, and the timeline follows. A line given its own speed in its fragment keeps it.',
+  { min: SPEED.min, max: SPEED.max });
 // The two controls, for the second line of field 1 (their names stand over them, with STAB_TIP and SPEED_TIP).
 function _voiceSettings(p, busy) {
   const now = VOICE.params(p);
@@ -1224,10 +1235,10 @@ async function _saveSpeed(body) {
   try {
     const r = await _post('/api/scen3/voice/speed', { projectId: p.id, ...body });
     _adopt(r);
-    if ((r.failed || []).length) _readErr = 'Not retimed: line ' + r.failed.map(x => x.line).join(', ') + ' - ' + r.failed[0].error;
+    if ((r.failed || []).length) _readErr = T.t('Not retimed: line {list} - {why}', { list: r.failed.map(x => x.line).join(', '), why: r.failed[0].error });
     Store.refresh().catch(() => {});
   } catch (e) {
-    _readErr = 'The speed was not changed: ' + e.message;
+    _readErr = T.t('The speed was not changed: {why}', { why: e.message });
   }
   _saving = false;
   _ctx.repaint();
@@ -1246,10 +1257,10 @@ async function _saveVoice(ttsParams) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: p.id, voice: { ttsParams } }),
     }).then(x => x.json());
-    if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+    if (!r || !r.success) throw new Error((r && r.error) || T.t('refused'));
     p.voice = r.project.voice;
   } catch (e) {
-    _said = 'Could not save it: ' + e.message;
+    _said = T.t('Could not save it: {why}', { why: e.message });
   }
   _saving = false;
   _ctx.repaint();
@@ -1280,7 +1291,7 @@ function _voCount(p, box) {
 // videos and pictures mixed, videos only, pictures only - and lays it again when changed (the pieces chosen by hand stay).
 let _broll = null;            // { key, state } - the server's word on this project's B-roll
 let _brollT = 0;
-const BROLL_MODES = [['mixed', 'Videos and pictures'], ['video', 'Only videos'], ['image', 'Only pictures']];
+const BROLL_MODES = [['mixed', T.t('Videos and pictures')], ['video', T.t('Only videos')], ['image', T.t('Only pictures')]];
 function _brollWatch(p, now) {
   clearTimeout(_brollT);
   const id = String(p.id);
@@ -1312,22 +1323,22 @@ async function _brollPost(p, what, body) {
 
 function _stageBroll(host, p, lines) {
   const live = liveLines(lines);
-  const lock = !live.length ? 'Choose the script first - a scenario or your own text, on the right.' : _voiceLock(p);
+  const lock = !live.length ? T.t('Choose the script first - a scenario or your own text, on the right.') : _voiceLock(p);
   if (!_broll || _broll.key !== String(p.id)) { _broll = { key: String(p.id), state: null }; _brollWatch(p, true); }
   const st = (_broll && _broll.state) || {};
   const total = +st.total || 0, done = +st.done || 0;
   const { body, foot } = _stage(host, 'broll', {
     step: 2, wide: true, lock, done: !!st.laid && !st.running && !st.error && !st.left,
     work: st.running ? () => (total ? done / total : 0) : null,
-    name: 'B-roll', sub: 'videos and pictures from the stock, by the sentences',
-    summary: st.running ? (st.step || 'finding…') : st.sentences ? st.laid + ' pieces · ' + st.sentences + ' sentences' + (st.left ? ' · ' + st.left + ' without B-roll' : '') : '',
+    name: T.t('B-roll'), sub: T.t('videos and pictures from the stock, by the sentences'),
+    summary: st.running ? (st.step || T.t('finding…')) : st.sentences ? T.t('{n} pieces · {s} sentences', { n: st.laid, s: st.sentences })
+      + (st.left ? ' · ' + T.t('{n} without B-roll', { n: st.left }) : '') : '',
   });
-  if (!live.length) { body.appendChild(_note('The script first, then the voice. Then the B-roll is found for it.')); return; }
-  if (lock) { body.appendChild(_note('The voice first - every line read, then its captions heard. Then the B-roll is found for it.')); return; }
+  if (!live.length) { body.appendChild(_note(T.t('The script first, then the voice. Then the B-roll is found for it.'))); return; }
+  if (lock) { body.appendChild(_note(T.t('The voice first - every line read, then its captions heard. Then the B-roll is found for it.'))); return; }
   if (st.error) body.appendChild(_note(st.error, true));
   else if (!st.sentences && !st.running) {
-    body.appendChild(_note('Videos and pictures from the stock for every sentence of the voice, laid over it edge to edge - '
-      + 'free; the keywords are written by the agent (a fraction of a cent).'));
+    body.appendChild(_note(T.t('Videos and pictures from the stock for every sentence of the voice, laid over it edge to edge - free; the keywords are written by the agent (a fraction of a cent).')));
   }
   // What is laid, and laid again when changed.
   const mode = el('select', 'u-in is-s mv3-wk-vsel is-small mv3-wk-bmode');
@@ -1337,16 +1348,16 @@ function _stageBroll(host, p, lines) {
     if ((st.mode || 'mixed') === v) o.selected = true;
     mode.appendChild(o);
   }
-  mode.title = 'What is laid: videos and pictures mixed at random, only videos, or only pictures. Changed, every piece is laid again - but the ones you chose yourself.';
+  mode.title = T.t('What is laid: videos and pictures mixed at random, only videos, or only pictures. Changed, every piece is laid again - but the ones you chose yourself.');
   mode.disabled = !!st.running;
   mode.addEventListener('change', () => _brollPost(p, 'mode', { mode: mode.value }));
   foot.appendChild(mode);
   const find = _genButton(foot, {
-    label: st.running ? (st.step || 'finding…') : st.sentences && !st.left ? 'find again' : 'find B-roll',
+    label: st.running ? (st.step || T.t('finding…')) : st.sentences && !st.left ? T.t('find again') : T.t('find B-roll'),
     disabled: !!st.running,
-    title: st.running ? 'The B-roll is being found' : st.sentences && !st.left
-      ? 'Every sentence has its B-roll - this finds it for sentences new since (a line read again, put in)'
-      : 'Find the B-roll of every sentence that has none yet and lay it over the voice',
+    title: st.running ? T.t('The B-roll is being found') : st.sentences && !st.left
+      ? T.t('Every sentence has its B-roll - this finds it for sentences new since (a line read again, put in)')
+      : T.t('Find the B-roll of every sentence that has none yet and lay it over the voice'),
     on: () => _brollPost(p, 'find'),
   });
   find.dataset.tip = 'broll-find';        // the tip of step 3 stands under it (js/merge-v3/vo-tips.js)
@@ -1363,9 +1374,9 @@ function _stageFrames(host, p) {
   const v = _video();
   const { body, foot } = _stage(host, 'frames', {
     step: 2, half: true, lock: _voiceLock(p),
-    name: 'frames', sub: 'the set the lines take theirs from', done: s.framesDone,
-    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames')
-      : 'none yet - ask for one in the frames chat',
+    name: T.t('frames'), sub: T.t('the set the lines take theirs from'), done: s.framesDone,
+    summary: s.frames ? T.tn(s.frames, '{n} frame', '{n} frames')
+      : T.t('none yet - ask for one in the frames chat'),
   });
   const strip = el('div', 'mv3-wk-fset');
   const hidden = _off(p);
@@ -1404,11 +1415,11 @@ function _stageFrames(host, p) {
     });
     // ...and the products it was drawn with.
     const prods = (Array.isArray(fr.props) ? fr.props : []).map(x => x && x.name).filter(Boolean);
-    b.title = (fr.made === 'chat' ? 'from the frames chat · ' : '') + (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
-      + (prods.length ? 'product ' + prods.join(', ') + ' · ' : '')
-      + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
+    b.title = (fr.made === 'chat' ? T.t('from the frames chat') + ' · ' : '') + (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
+      + (prods.length ? T.t('product {names}', { names: prods.join(', ') }) + ' · ' : '')
+      + (gone ? T.t('switched off - no fragment takes it') : T.t('press to see it on the stage; right-click to open it large'));
     // A frame made to order in the frames chat says so on its tile.
-    if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'Chat'));
+    if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', T.t('Chat')));
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';
@@ -1420,11 +1431,11 @@ function _stageFrames(host, p) {
     const sw = el('button', 'mv3-wk-fsetx u-onpic' + (gone ? ' is-back' : ' u-x'));
     if (gone) sw.innerHTML = icon('check', 12);
     sw.type = 'button';
-    sw.title = gone ? 'Use this frame again' : 'Do not use this frame in any fragment';
+    sw.title = gone ? T.t('Use this frame again') : T.t('Do not use this frame in any fragment');
     sw.addEventListener('click', (e) => { e.stopPropagation(); _banFrame(p, fr.id, !gone); });
     b.appendChild(sw);
     b.addEventListener('click', () => { _setPick = _setPick === fr.id ? '' : fr.id; _ctx.repaint(); });
-    b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }); });
+    b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: _frameName(fr), rows: fr.prompt ? [[T.t('prompt'), fr.prompt]] : [] }); });
     strip.appendChild(b);
   }
   if (shown.length) body.appendChild(strip);
@@ -1436,15 +1447,15 @@ function _stageFrames(host, p) {
   box.checked = v.spread === 'random';
   box.disabled = _saving;
   box.addEventListener('change', () => _saveVideo({ spread: box.checked ? 'random' : 'cycle' }));
-  tick.append(box, el('span', '', 'scattered'));
-  hint(tick, 'Off - the lines take the frames in turn, in the order of this shelf (drag a frame to move it).\n'
-    + 'On - each line gets one of them drawn for it by its number, never reshuffled.\n'
-    + 'A frame picked by hand in a fragment stays that line\'s either way.');
+  tick.append(box, el('span', '', T.t('scattered')));
+  hint(tick, T.t('Off - the lines take the frames in turn, in the order of this shelf (drag a frame to move it).') + '\n'
+    + T.t('On - each line gets one of them drawn for it by its number, never reshuffled.') + '\n'
+    + T.t('A frame picked by hand in a fragment stays that line\'s either way.'));
   foot.appendChild(tick);
   _genButton(foot, {
-    label: 'Frames chat',
+    label: T.t('Frames chat'),
     disabled: _missing(p).length > 0,
-    title: 'Ask for a frame in words - the person and the place go with it; a frame you like goes into this set with "to frames"',
+    title: T.t('Ask for a frame in words - the person and the place go with it; a frame you like goes into this set with "to frames"'),
     on: () => { _setPick = ''; openChat(); },
   });
 }
@@ -1456,7 +1467,7 @@ function _stageFrames(host, p) {
 // on its `generate`, which stays shut until they are there.
 function _stageVideo(host, p, lines) {
   const missing = _missing(p);
-  const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a frame - the frames chat' : '';
+  const why = missing.length ? _and(missing) : !_pool(p).length ? T.t('a frame - the frames chat') : '';
   const motion = _envMotion(p);
   const live = _live(lines);
   const written = live.filter(_animated).length;
@@ -1471,8 +1482,8 @@ function _stageVideo(host, p, lines) {
     // The clips that have landed, plus the ones in flight; the place and the prompts, which come
     // first and are quick, go by the estimate of a clip.
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
-    name: 'video', sub: 'the place, then the person', done, need,
-    summary: 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated',
+    name: T.t('video'), sub: T.t('the place, then the person'), done, need,
+    summary: T.t('clips {k}/{n} · {w}/{m} animated', { k: s.clips, n: s.n, w: written, m: live.length }),
   });
   _needEnvMeta();
   const v = _video();
@@ -1482,7 +1493,7 @@ function _stageVideo(host, p, lines) {
   const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
   const model = el('select', 'u-in is-s mv3-wk-vsel is-small is-model');
-  model.title = 'What films the clips - for the whole video';
+  model.title = T.t('What films the clips - for the whole video');
   if (!v.model) _noneOption(model);
   for (const m of models) {
     const o = el('option', '', m.label);
@@ -1499,10 +1510,10 @@ function _stageVideo(host, p, lines) {
     _saveVideo({ model: model.value, quality: keep ? v.quality : '' });
   });
   const tier = el('select', 'u-in is-s mv3-wk-vsel is-small is-tier');
-  tier.title = 'How sharp the clips are, and what a second of them costs';
+  tier.title = T.t('How sharp the clips are, and what a second of them costs');
   if (!v.quality || !v.model) _noneOption(tier);
   for (const q of v.model ? _qualities() : []) {
-    const o = el('option', '', q.label + ' · $' + q.pricePerSec + '/s');
+    const o = el('option', '', q.label + ' · ' + T.t('${price}/s', { price: q.pricePerSec }));
     o.value = q.id;
     if (q.id === v.quality) o.selected = true;
     tier.appendChild(o);
@@ -1532,7 +1543,7 @@ function _stageVideo(host, p, lines) {
   // lines that are in it, added up - which is exactly the length the cut comes to, because a clip
   // is trimmed to its read (lib/frag-mirror.js). A line not read yet has no length to add.
   const secs = live.reduce((a, l) => a + (isRead(l) ? (_take(l) || {}).dur || 0 : 0), 0);
-  const whole = secs ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
+  const whole = secs ? T.t('{s}s in all', { s: (Math.round(secs * 10) / 10).toFixed(1) }) : '';
   // A clip in flight does not shut this button: the planner skips the fragments that are
   // already being made, so `generate` here starts the others.
   const busy = !!_writing || _envWriting;
@@ -1543,25 +1554,24 @@ function _stageVideo(host, p, lines) {
   // character and the place, a first frame to animate, the quality, and the mood the person moves in.
   const wait = [lock && lock.replace(/\.$/, ''), why, need, _needs(p).mood].filter(Boolean);
   _genButton(foot, {
-    label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
-      : _writing === 'lines' ? 'writing…'
-        : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
-          : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+    label: _writing === 'place' || (_envWriting && !_writing) ? T.t('the place…')
+      : _writing === 'lines' ? T.t('writing…')
+        : _writing === 'clips' ? T.t('clips {k}/{n}…', { k: _standing(p).clips, n: live.length })
+          : armed ? T.t('{price} · go?', { price: _money(clipCost) }) : done ? T.t('again') : T.t('generate'),
         armed,
     // What this press will SPEND and how long the video is - and nothing else. The chores it also
     // does - looking at the place, writing the prompts - cost credits, not dollars, and the button's
     // own tooltip says them.
-    cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
-      _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
-      clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
+    cap: busy ? whole : wait.length ? T.t('needs {what}', { what: wait.join(', ') }) : [
+      _clipping.size ? T.tn(_clipping.size, '{n} clip running', '{n} clips running') : '',
+      clips.length ? T.tn(clips.length, '{n} clip · {price}', '{n} clips · {price}', { price: _money(clipCost) }) : '',
       whole,
     ].filter(Boolean).join(' · '),
     disabled: busy || wait.length > 0 || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
-    title: wait.length ? 'First: ' + wait.join(', ')
-      : 'The place, then how the person moves on every line, then the clips of the fragments that'
-        + ' have none - ' + _modelName() + ', ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
-        + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
-        + (clips.length ? ' Press again to confirm.' : ''),
+    title: wait.length ? T.t('First: {what}', { what: wait.join(', ') })
+      : T.t('The place, then how the person moves on every line, then the clips of the fragments that have none - {model}, {what}. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.',
+        { model: _modelName(), what: clips.length ? T.t('{n} of them for {price}', { n: clips.length, price: _money(clipCost) }) : T.t('none to make') })
+        + (clips.length ? ' ' + T.t('Press again to confirm.') : ''),
     on: () => {
       if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
       _armedVideo = false;
@@ -1579,10 +1589,10 @@ function _list(host, p, lines) {
     adopt.repaint = () => _ctx.repaint();
     if (!lines.length) { VOS.paintChooser(host, p, adopt); return; }
     const bar = el('div', 'mv3-vos-bar');
-    bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? 'the scenario «' + (p.title || 'untitled') + '»' : 'your own text'));
-    const other = el('button', 'mv3-wk-vmore u-btn is-s', 'Other script');
+    bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? T.t('the scenario «{title}»', { title: p.title || T.t('untitled') }) : T.t('your own text')));
+    const other = el('button', 'mv3-wk-vmore u-btn is-s', T.t('Other script'));
     other.type = 'button';
-    other.title = 'Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.';
+    other.title = T.t('Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.');
     other.disabled = VOICE.reading().busy;
     other.addEventListener('click', () => VOS.clearScript(p, adopt));
     bar.appendChild(other);
@@ -1591,8 +1601,8 @@ function _list(host, p, lines) {
   // HOW THE TWO COLUMNS WORK, said over the list they are about: the first thing above the script,
   // where nobody scrolling the stages can miss it, and it changes with where you are.
   const hint = el('div', 'mv3-wk-fhint', _open < 0
-    ? 'Pick a fragment to work on it. Right-click one for more.'
-    : 'Press fragment ' + _no(lines, _open) + ' again to come back to the whole video.');
+    ? T.t('Pick a fragment to work on it. Right-click one for more.')
+    : T.t('Press fragment {n} again to come back to the whole video.', { n: _no(lines, _open) }));
   host.appendChild(hint);
   const list = el('div', 'mv3-wk-flist');
   host.appendChild(list);
@@ -1603,7 +1613,7 @@ function _list(host, p, lines) {
   live.forEach((x, pos) => list.appendChild(_row(p, x.l, x.i, pos + 1)));
   const off = lines.map((l, i) => ({ l, i })).filter(x => !isLive(x.l));
   if (off.length) {
-    list.appendChild(el('div', 'mv3-wk-flabel is-off', 'Taken off the script'));
+    list.appendChild(el('div', 'mv3-wk-flabel is-off', T.t('Taken off the script')));
     off.forEach(x => list.appendChild(_offRow(x.l, x.i)));
   }
   // Where it stood before this paint - a repaint rebuilds the column, and a rebuilt column starts
@@ -1630,25 +1640,27 @@ function _row(p, l, i, n) {
 
   const meta = el('div', 'mv3-wk-lmeta');
   meta.appendChild(el('span', 'mv3-wk-lnum', String(n)));
-  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
+  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? T.t('{n}s', { n: take.dur.toFixed(1) }) : ''));
   row.appendChild(meta);
   // The read, playable from the row: hearing a line is how it is judged, and
   // the row is where the eye already is. It PLAYS AND NOTHING ELSE: the
   // fragment does not open and the stage does not change - listening down the script must not
   // open every line of it.
-  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+  row.appendChild(_playBtn(take && take.path ? take.path : '', T.t('the read')));
   // ...and READ IT, beside its play.
   row.appendChild(_rowRead(p, l, i));
 
   // No thumbnail between the number and the words: the frame is judged in the fragment,
   // and the row is read for its words.
   const fr = _frameFor(p, l, i).v;
-  row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
+  row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || T.t('(no words)')));
 
   const dots = el('div', 'mv3-wk-fdots');
+  // What each dot is about, as the person reads it; `what` itself stays the code's word.
+  const DOT = { read: T.tc('dot', 'read'), frame: T.t('frame'), clip: T.t('clip') };
   const dot = (state, what) => {
     const d = el('span', 'mv3-wk-fdot is-' + state);
-    d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
+    d.title = (DOT[what] || what) + ': ' + (state === 'ok' ? T.t('done') : state === 'busy' ? T.t('being made') : state === 'stale' ? (what === 'shot' ? T.t('the words or the mood changed since') : T.t('the words changed since')) : T.t('not yet'));
     dots.appendChild(d);
   };
   dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
@@ -1685,14 +1697,14 @@ function _row(p, l, i, n) {
 
 // THE "+" UNDER A ROW. Not while anything is being made in the project: a read, a clip or a prompt lands
 // on its line by number, and a line put in above it would move it (the server refuses too - /line/insert).
-const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made'
-  : _writing ? 'the video is being written for' : '');
+const _insBusy = () => (VOICE.reading().busy ? T.t('the voice is busy') : _clipping.size ? T.t('a clip is being made')
+  : _writing ? T.t('the video is being written for') : '');
 function _insPlus(i) {
   const why = _insBusy();
   const plus = el('span', 'mv3-wk-fins u-btn is-icon' + (why ? ' is-off' : ''));   // not gold
   plus.innerHTML = icon('plus', 12);
   plus.setAttribute('role', 'button');
-  plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
+  plus.title = why ? T.t('Not now: {why}', { why }) : T.t('Put a new line in under this one');
   plus.addEventListener('click', (e) => {
     e.stopPropagation();
     if (why) return;
@@ -1714,14 +1726,14 @@ function _insertEditor(host, p, lines) {
   const cancel = () => { _inserting = -1; _insDraft = ''; _ctx.repaint(); };
   const shut = el('button', 'mv3-wk-fclose', '✕');
   shut.type = 'button';
-  shut.title = 'Do not put a line in - back to the whole video';
+  shut.title = T.t('Do not put a line in - back to the whole video');
   shut.addEventListener('click', cancel);
   host.appendChild(shut);
-  host.appendChild(el('div', 'mv3-wk-flabel', 'A new line after fragment ' + _no(lines, after)));
-  host.appendChild(el('div', 'mv3-wk-fwhy', 'After: “' + (_words(lines[after]) || '').slice(0, 160) + '”'));
+  host.appendChild(el('div', 'mv3-wk-flabel', T.t('A new line after fragment {n}', { n: _no(lines, after) })));
+  host.appendChild(el('div', 'mv3-wk-fwhy', T.t('After: “{words}”', { words: (_words(lines[after]) || '').slice(0, 160) })));
   const box = el('textarea', 'mv3-wk-ledit is-frag u-area is-s');
   box.rows = 3;
-  box.placeholder = 'The words of the new line';
+  box.placeholder = T.t('The words of the new line');
   box.value = _insDraft;
   box.disabled = _insSaving;
   const count = _voCount(p, box);
@@ -1732,19 +1744,19 @@ function _insertEditor(host, p, lines) {
   });
   host.appendChild(box);
   const acts = el('div', 'mv3-wk-vfoot is-tight');
-  const save = el('button', 'mv3-wk-vuse u-btn is-s', _insSaving ? 'putting it in…' : 'put it in');
+  const save = el('button', 'mv3-wk-vuse u-btn is-s', _insSaving ? T.t('putting it in…') : T.t('put it in'));
   save.type = 'button';
-  save.title = 'Put the line in (Ctrl+Enter)';
+  save.title = T.t('Put the line in (Ctrl+Enter)');
   save.disabled = _insSaving || !_insDraft.trim();
   save.addEventListener('click', () => _insertLine(p, after));
-  const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'Cancel');
+  const drop = el('button', 'mv3-wk-vuse u-btn is-s', T.t('Cancel'));
   drop.type = 'button';
   drop.disabled = _insSaving;
   drop.addEventListener('click', cancel);
   acts.append(save, drop);
   host.appendChild(acts);
-  host.appendChild(el('div', 'mv3-wk-fwhy', _isVo(p) ? 'Then, in its line: mood - its [tags] - and read.'
-    : 'It takes the next frame of the set. Then, in its fragment: mood - its [tags] - and read.'));
+  host.appendChild(el('div', 'mv3-wk-fwhy', _isVo(p) ? T.t('Then, in its line: mood - its [tags] - and read.')
+    : T.t('It takes the next frame of the set. Then, in its fragment: mood - its [tags] - and read.')));
   if (!_insSaving) setTimeout(() => { if (box.isConnected) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } }, 0);
 }
 async function _insertLine(p, after) {
@@ -1763,7 +1775,7 @@ async function _insertLine(p, after) {
     // The route re-laid the timeline before it answered - the cells are numbered by the lines.
     await Store.refresh();
   } catch (e) {
-    _readErr = 'The line was not put in: ' + e.message;
+    _readErr = T.t('The line was not put in: {why}', { why: e.message });
   }
   _insSaving = false;
   _ctx.repaint();
@@ -1774,10 +1786,10 @@ async function _insertLine(p, after) {
 // still in the project folder and come back with it.
 function _offRow(l, i) {
   const row = el('div', 'mv3-wk-frow is-off');
-  row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
-  const back = el('button', 'mv3-wk-vuse u-btn is-s', 'Restore');
+  row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || T.t('(no words)')));
+  const back = el('button', 'mv3-wk-vuse u-btn is-s', T.t('Restore'));
   back.type = 'button';
-  back.title = 'Put this line back where it was in the script';
+  back.title = T.t('Put this line back where it was in the script');
   back.disabled = _offing;
   back.addEventListener('click', () => _setOff(i, false));
   row.appendChild(back);
@@ -1802,7 +1814,7 @@ async function _setOff(i, want) {
     // can be brought up to date on the spot rather than on the watcher's next round.
     await Store.refresh();
   } catch (e) {
-    _readErr = (want ? 'The line was not taken off: ' : 'The line was not restored: ') + e.message;
+    _readErr = want ? T.t('The line was not taken off: {why}', { why: e.message }) : T.t('The line was not restored: {why}', { why: e.message });
   }
   _offing = false;
   _ctx.repaint();
@@ -1819,9 +1831,9 @@ function _rowRead(p, l, i) {
   b.innerHTML = icon(reading ? 'loader-circle' : has ? 'rotate-cw' : 'mic', 10);
   b.type = 'button';
   b.disabled = !ra.on || reading;
-  b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
-    : has ? "Read this line again - ElevenLabs, with the voice field's settings, in place of the take it has"
-      : "Read this line - ElevenLabs, with the voice field's settings";
+  b.title = reading ? T.t('This line is being read') : ra.why ? T.t('Cannot read now: {why}', { why: ra.why })
+    : has ? T.t("Read this line again - ElevenLabs, with the voice field's settings, in place of the take it has")
+      : T.t("Read this line - ElevenLabs, with the voice field's settings");
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     if (b.disabled || !ra.on) return;
@@ -1837,8 +1849,8 @@ function _lineSpeed(p, l, i) {
   const own = +l.speed > 0;
   const proj = VOICE.params(p).speed;
   const box = el('label', 'mv3-wk-vlab is-line' + (own ? ' is-own' : ''));
-  box.title = own ? "This line's own speed - the project's (" + proj + ') does not touch it. The read is retimed at once, free.'
-    : "The speed of this line's read - the project's, " + proj + ". Changed here, it becomes this line's own; the read is retimed at once, free.";
+  box.title = own ? T.t("This line's own speed - the project's ({speed}) does not touch it. The read is retimed at once, free.", { speed: proj })
+    : T.t("The speed of this line's read - the project's, {speed}. Changed here, it becomes this line's own; the read is retimed at once, free.", { speed: proj });
   const inp = el('input', 'mv3-wk-vnum u-in is-s');
   inp.type = 'number';
   inp.min = String(SPEED.min);
@@ -1847,12 +1859,12 @@ function _lineSpeed(p, l, i) {
   inp.value = String(VOICE.speedOf(p, l));
   inp.disabled = _saving || VOICE.reading().busy;
   _speedLater(inp, 'line' + i, () => VOICE.speedOf(_ctx.project, (_ctx.project.lines || [])[i]), v => ({ line: i, lineSpeed: v }));
-  box.append(el('span', '', 'Speed'), inp);
+  box.append(el('span', '', T.t('Speed')), inp);
   if (own) {
     const back = el('button', 'mv3-wk-vback u-btn is-s is-icon is-quiet');
     back.innerHTML = icon('rotate-ccw', 12);
     back.type = 'button';
-    back.title = "Back to the project's speed (" + proj + ')';
+    back.title = T.t("Back to the project's speed ({speed})", { speed: proj });
     back.disabled = inp.disabled;
     back.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); _saveSpeed({ line: i, lineSpeed: null }); });
     box.appendChild(back);
@@ -1876,10 +1888,10 @@ function _clipWindow(p, l, i, n) {
   // the one window frame (css/app-shell.css .u-win): its head - "Fragment N · its clips", the 28 px ✕
   const box = el('div', 'mv3-wk-cwin-box u-win is-float');
   const head = el('div', 'mv3-wk-cwin-head u-win-head');
-  head.appendChild(el('span', 'u-win-title', 'Fragment ' + n + ' · its clips'));
+  head.appendChild(el('span', 'u-win-title', T.t('Fragment {n} · its clips', { n })));
   const x = el('button', 'mv3-wk-cwin-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = T.t('Close (Esc)');
   x.addEventListener('click', _closeClipWindow);
   head.appendChild(x);
   box.appendChild(head);
@@ -1899,13 +1911,13 @@ function _clipWindow(p, l, i, n) {
     v.addEventListener('play', () => { grid.querySelectorAll('video').forEach(o => { if (o !== v) o.pause(); }); });
     card.appendChild(v);
     const meta = el('div', 'mv3-wk-cwin-meta');
-    meta.appendChild(el('span', 'mv3-wk-vname', c.dur ? c.dur.toFixed(1) + ' s' : 'take'));
-    if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
-    if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
+    meta.appendChild(el('span', 'mv3-wk-vname', c.dur ? T.t('{s} s', { s: c.dur.toFixed(1) }) : T.tc('a clip', 'take')));
+    if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', T.t('Stale')));
+    if (on) meta.appendChild(el('span', 'mv3-wk-vtag', T.t('The clip')));
     else {
-      const use = el('button', 'mv3-wk-vuse u-btn is-s', 'Use');
+      const use = el('button', 'mv3-wk-vuse u-btn is-s', T.t('Use'));
       use.type = 'button';
-      use.title = "Make this the fragment's clip - on the timeline too" + (stale ? ', stale as it is' : '');
+      use.title = stale ? T.t("Make this the fragment's clip - on the timeline too, stale as it is") : T.t("Make this the fragment's clip - on the timeline too");
       use.addEventListener('click', async () => { use.disabled = true; await _pickClip(i, c.id); _closeClipWindow(); });
       meta.appendChild(use);
     }
@@ -1937,11 +1949,12 @@ function _closeMenu() {
 function _readAct(p, l, i) {
   const rs = _readState(l);
   const busy = VOICE.reading().busy;
-  const why = !_canRead() ? 'choose a voice first'
-    : !VOICE.canSpeak(p) ? 'mark the script up first - field 1'
-      : busy ? 'the voice is busy' : '';
+  const why = !_canRead() ? T.t('choose a voice first')
+    : !VOICE.canSpeak(p) ? T.t('mark the script up first - field 1')
+      : busy ? T.t('the voice is busy') : '';
   const va = _api.voiceApi();
-  return { label: rs === 'none' ? 'Read' : 'Read again', why, on: why ? null : () => VOICE.readLine(va, i) };
+  // `first` - never read: what the button's words and its title are chosen by (the label is the app's language).
+  return { label: rs === 'none' ? T.tc('a line', 'Read') : T.tc('a line', 'Read again'), first: rs === 'none', why, on: why ? null : () => VOICE.readLine(va, i) };
 }
 
 function _rowMenu(ev, row, p, l, i, n) {
@@ -1958,19 +1971,19 @@ function _rowMenu(ev, row, p, l, i, n) {
   };
 
   const ra = _readAct(p, l, i);
-  item(ra.label, ra.why || 'in place of the take it has', ra.on);
+  item(ra.label, ra.why || T.t('in place of the take it has'), ra.on);
 
   // CHOOSE A CLIP: every clip the line has, in a window, each to be watched there
   // and picked - a line keeps the clip it had when its read is redone, and this is the way to another.
   const clips = _clipsOf(p, l).filter(c => c && c.path);
   if (!_isVo(p)) {
-    item('choose a clip', clips.length ? clips.length + (clips.length === 1 ? ' take' : ' takes') + ' · watch and pick' : 'no clips yet',
+    item(T.t('choose a clip'), clips.length ? T.tn(clips.length, '{n} take · watch and pick', '{n} takes · watch and pick') : T.t('no clips yet'),
       clips.length ? () => _clipWindow(p, l, i, n) : null);
   }
 
-  item('remove line', 'out of the video, kept in the project', () => {
-    askDelete(row, 'Take fragment ' + n + ' out of the video?',
-      'It moves to the foot of the script, dimmed, with a restore on it. Its read and its clips stay in the project folder, and the timeline closes over it.',
+  item(T.t('remove line'), T.t('out of the video, kept in the project'), () => {
+    askDelete(row, T.t('Take fragment {n} out of the video?', { n }),
+      T.t('It moves to the foot of the script, dimmed, with a restore on it. Its read and its clips stay in the project folder, and the timeline closes over it.'),
       () => _setOff(i, true));
   }, true);
 
@@ -1999,7 +2012,7 @@ function _fragment(host, p, l, i) {
   // on its row does the same.
   const shut = el('button', 'mv3-wk-fclose', '✕');
   shut.type = 'button';
-  shut.title = 'Close this fragment - back to the whole video';
+  shut.title = T.t('Close this fragment - back to the whole video');
   shut.addEventListener('click', () => { _open = -1; _remember(); _ctx.repaint(); });
   host.appendChild(shut);
   const rs = _readState(l);
@@ -2026,11 +2039,11 @@ function _fragment(host, p, l, i) {
     });
     host.appendChild(box);
     const acts = el('div', 'mv3-wk-vfoot is-tight');
-    const save = el('button', 'mv3-wk-vuse u-btn is-s', 'Save');
+    const save = el('button', 'mv3-wk-vuse u-btn is-s', T.t('Save'));
     save.type = 'button';
-    save.title = 'Save the words (Ctrl+Enter)';
+    save.title = T.t('Save the words (Ctrl+Enter)');
     save.addEventListener('click', () => _saveWords(va, i));
-    const drop = el('button', 'mv3-wk-vuse u-btn is-s', 'Cancel');
+    const drop = el('button', 'mv3-wk-vuse u-btn is-s', T.t('Cancel'));
     drop.type = 'button';
     drop.addEventListener('click', () => { _editWords = -1; _ctx.repaint(); });
     acts.append(save, drop);
@@ -2044,30 +2057,30 @@ function _fragment(host, p, l, i) {
     // spoken from them, and the voice will not start without them.
     const g = VOICE.reading();
     const marked = !!String(l.tagged || '').trim();
-    const mb = el('button', 'mv3-wk-fread u-btn is-s' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
+    const mb = el('button', 'mv3-wk-fread u-btn is-s' + (marked ? '' : ' is-need'), g.tagging ? T.t('mood…') : T.t('mood'));
     mb.type = 'button';
     mb.disabled = g.busy || !_video().mood;
-    mb.title = !_video().mood ? 'Choose the mood first (field 1)' : g.busy ? 'The voice is busy'
-      : marked ? 'Mark this line up again by the mood of the video - its [tags], keeping the arc of the lines around it'
-        : 'This line has no [tags] yet: mark it up by the mood of the video - it is read from them';
+    mb.title = !_video().mood ? T.t('Choose the mood first (field 1)') : g.busy ? T.t('The voice is busy')
+      : marked ? T.t('Mark this line up again by the mood of the video - its [tags], keeping the arc of the lines around it')
+        : T.t('This line has no [tags] yet: mark it up by the mood of the video - it is read from them');
     mb.addEventListener('click', () => { if (!mb.disabled) { mb.disabled = true; VOICE.tagLine(va, i); } });
     row.appendChild(mb);
     const ra = _readAct(p, l, i);
     const reading = (VOICE.reading().lines || []).includes(i);
-    const rb = el('button', 'mv3-wk-fread u-btn is-s' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+    const rb = el('button', 'mv3-wk-fread u-btn is-s' + (ra.on ? '' : ' is-off'), reading ? T.tc('a line', 'reading…') : ra.label);
     rb.type = 'button';
     rb.disabled = !ra.on || reading;
-    rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
-      : (ra.label === 'Read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
+    rb.title = reading ? T.t('This line is being read') : ra.why ? T.t('Cannot read now: {why}', { why: ra.why })
+      : (ra.first ? T.t('Read this line in the chosen voice') : T.t('Read this line again - in place of the take it has'));
     if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
     row.appendChild(rb);
     // THE LINE'S OWN SPEED and its play, between the read and the words: a new
     // speed retimes this read at once - the timeline and the play follow.
     row.appendChild(_lineSpeed(p, l, i));
-    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+    row.appendChild(_playBtn(take && take.path ? take.path : '', T.t('the read')));
     const words = el('div', 'mv3-wk-fwords is-edit');
     _sayWords(words, shown || '…');
-    words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');
+    words.title = shown !== _words(l) ? T.t('Change the words - and the [tags] between them') : T.t('Change the words');
     words.addEventListener('click', () => { _editWords = i; _wordsDraft = shown; _ctx.repaint(); });
     row.appendChild(words);
     host.appendChild(row);
@@ -2076,10 +2089,10 @@ function _fragment(host, p, l, i) {
     if (fail) host.appendChild(_note(fail, true));
   }
   if (rs === 'stale') {
-    host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
-    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', 'Put the words back');
+    host.appendChild(_note(T.t('The words changed after this line was read - read it again, or put the words back.'), true));
+    const back = el('button', 'mv3-wk-lback is-frag u-btn is-s', T.t('Put the words back'));
     back.type = 'button';
-    back.title = 'Restore the line to what the take says';
+    back.title = T.t('Restore the line to what the take says');
     back.disabled = busyRead;
     back.addEventListener('click', () => VOICE.saveText(va, i, take.said));
     host.appendChild(back);
@@ -2113,15 +2126,15 @@ function _fragment(host, p, l, i) {
 function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
-    host.appendChild(el('div', 'mv3-wk-flabel', 'Takes'));
+    host.appendChild(el('div', 'mv3-wk-flabel', T.t('Takes')));
     const now = _clipOf(p, l, i);
     for (const c of clips.slice().reverse()) {
       const on = !!(now && c.id === now.id);
       const r = el('button', 'mv3-wk-vrow is-take' + (on ? ' is-on' : ''));
       r.type = 'button';
       const stale = !_clipFresh(p, l, i, c);
-      r.title = on ? 'This is the fragment\'s clip' + (stale ? ' - stale, chosen by hand' : '')
-        : 'Make this the fragment\'s clip - on the timeline too' + (stale ? ', stale as it is' : '');
+      r.title = on ? (stale ? T.t('This is the fragment\'s clip - stale, chosen by hand') : T.t('This is the fragment\'s clip'))
+        : (stale ? T.t("Make this the fragment's clip - on the timeline too, stale as it is") : T.t("Make this the fragment's clip - on the timeline too"));
       if (c.thumb) {
         const img = el('img', 'mv3-wk-vshot');
         img.alt = '';
@@ -2130,10 +2143,10 @@ function _takes(host, p, l, i) {
         r.appendChild(img);
       }
       const by = ((_kit && _kit.models) || []).find(m => m.id === (c.model || 'kling'));
-      r.appendChild(el('span', 'mv3-wk-vname')).appendChild(figures('Take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')
+      r.appendChild(el('span', 'mv3-wk-vname')).appendChild(figures(T.t('Take · {len}', { len: c.dur ? T.t('{s} s', { s: c.dur.toFixed(1) }) : '' })
         + (by ? ' · ' + by.label : '')));
-      if (stale) r.appendChild(el('span', 'mv3-wk-fstale', 'Stale'));
-      if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'The clip'));
+      if (stale) r.appendChild(el('span', 'mv3-wk-fstale', T.t('Stale')));
+      if (on) r.appendChild(el('span', 'mv3-wk-vtag', T.t('The clip')));
       if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
       host.appendChild(r);
     }
@@ -2161,15 +2174,15 @@ function _sayWords(host, text) {
 function _framePromptCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-prompt');
   const { v: fr } = _frameFor(p, l, i);
-  col.appendChild(_colHead('frame prompt'));
+  col.appendChild(_colHead(T.t('frame prompt')));
   // The field stands there whether or not there is a frame, so the fragment
   // has the same shape from the first look; with no picture beside it there is nothing to edit, and
   // it says what is missing instead of pretending to take words.
   const box = fr
     ? _textField('f', fr.id, fr.prompt || '', 7,
-      'This frame was drawn before the prompt was kept with it.',
+      T.t('This frame was drawn before the prompt was kept with it.'),
       (v) => _saveFramePrompt(p, fr.id, v))
-    : _dead(7, 'No frame yet. Frames are asked for in the frames chat, in the general zone - press this fragment again to get there.');
+    : _dead(7, T.t('No frame yet. Frames are asked for in the frames chat, in the general zone - press this fragment again to get there.'));
   box.classList.add('is-tall');
   col.appendChild(box);
   return col;
@@ -2197,7 +2210,7 @@ function _colHead(label, action) {
 // pool under it to pick from. Pressing the picked one again hands the line back to the rule.
 function _frameCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-media');
-  col.appendChild(_colHead('frame'));
+  col.appendChild(_colHead(T.t('frame')));
   const { v: fr } = _frameFor(p, l, i);
   const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty'));
   if (fr) {
@@ -2205,14 +2218,14 @@ function _frameCol(p, l, i) {
     img.alt = '';
     img.src = derived(fr.preview || fr.path, 'card');
     box.appendChild(img);
-    box.title = 'Show it on the stage; right-click to open it large';
+    box.title = T.t('Show it on the stage; right-click to open it large');
     box.addEventListener('click', () => { _stagePick = 'frame'; _ctx.repaint(); });
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] });
+      showPicture({ src: fr.path, name: _frameName(fr), rows: fr.prompt ? [[T.t('prompt'), fr.prompt]] : [] });
     });
   } else {
-    box.appendChild(el('span', '', 'no frames yet'));
+    box.appendChild(el('span', '', T.t('no frames yet')));
   }
   col.appendChild(box);
   // No caption under the picture: whether the frame came from the rule or
@@ -2231,10 +2244,10 @@ function _pickRow(host, p, l, i) {
   const { v: fr, auto } = _frameFor(p, l, i);
   const bar = el('button', 'mv3-wk-fpick' + (_picking ? ' is-open' : ''));
   bar.type = 'button';
-  bar.title = 'Which frame this fragment opens on';
+  bar.title = T.t('Which frame this fragment opens on');
   bar.appendChild(el('span', 'mv3-wk-fpick-t')).appendChild(figures(fr
-    ? (auto ? 'Frame ' + (pool.findIndex(v => v.id === fr.id) + 1) + ' of ' + pool.length + ' · from the set, in turn' : 'Frame picked by hand')
-    : 'No frame yet'));
+    ? (auto ? T.t('Frame {k} of {n} · from the set, in turn', { k: pool.findIndex(v => v.id === fr.id) + 1, n: pool.length }) : T.t('Frame picked by hand'))
+    : T.t('No frame yet')));
   bar.appendChild(el('span', 'mv3-wk-fpick-c')).appendChild(iconEl(_picking ? 'chevron-up' : 'chevron-down', 12));
   bar.addEventListener('click', () => { _picking = !_picking; _pickView = ''; _ctx.repaint(); });
   host.appendChild(bar);
@@ -2245,7 +2258,7 @@ function _pickRow(host, p, l, i) {
   if (!auto) {
     const back = el('button', 'mv3-wk-fpickrule');
     back.type = 'button';
-    back.textContent = 'Back to the rule - the set in turn';
+    back.textContent = T.t('Back to the rule - the set in turn');
     back.addEventListener('click', () => _pickFrame(i, ''));
     list.appendChild(back);
   }
@@ -2253,7 +2266,7 @@ function _pickRow(host, p, l, i) {
     const row = el('div', 'mv3-wk-fpickrow' + (fr && v.id === fr.id ? ' is-on' : '') + (v.id === _pickView ? ' is-seen' : ''));
     const shot = el('button', 'mv3-wk-fpickshot');
     shot.type = 'button';
-    shot.title = 'Look at it on the stage';
+    shot.title = T.t('Look at it on the stage');
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';
@@ -2262,9 +2275,9 @@ function _pickRow(host, p, l, i) {
     shot.addEventListener('click', () => { _pickView = _pickView === v.id ? '' : v.id; _ctx.repaint(); });
     row.appendChild(shot);
     if (v.id === _pickView) {
-      const sel = el('button', 'mv3-wk-tileact is-pick u-btn is-s is-main', fr && v.id === fr.id ? 'this one' : 'select');
+      const sel = el('button', 'mv3-wk-tileact is-pick u-btn is-s is-main', fr && v.id === fr.id ? T.t('this one') : T.t('select'));
       sel.type = 'button';
-      sel.title = 'Open this fragment on this frame';
+      sel.title = T.t('Open this fragment on this frame');
       sel.disabled = !!(fr && v.id === fr.id && !auto);
       sel.addEventListener('click', (e) => { e.stopPropagation(); _pickFrame(i, v.id); });
       row.appendChild(sel);
@@ -2284,8 +2297,8 @@ function _motionCol(l, i, hasFrame) {
   // Nothing to animate until the line has a frame to animate FROM: the
   // field is there, says so, and takes no words yet.
   if (!hasFrame) {
-    col.appendChild(_colHead('animation prompt'));
-    const dead = _dead(7, 'The clip is made from the frame: this fills in once this line has one.');
+    col.appendChild(_colHead(T.t('animation prompt')));
+    const dead = _dead(7, T.t('The clip is made from the frame: this fills in once this line has one.'));
     dead.classList.add('is-tall');
     col.appendChild(dead);
     return col;
@@ -2295,24 +2308,23 @@ function _motionCol(l, i, hasFrame) {
   const staleWords = !!(sh && sh.motion && !_animated(l));
   if ((sh && sh.motionEdited) || staleWords) {
     action = el('span', 'mv3-wk-fedited-row');
-    if (sh && sh.motionEdited) action.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
+    if (sh && sh.motionEdited) action.appendChild(el('span', 'mv3-wk-fedited', T.t('Edited by hand')));
     if (staleWords) {
-      const s = el('span', 'mv3-wk-fstale', 'The words changed');
-      s.title = 'It was written for: “' + String(sh.said || '').slice(0, 120) + '”';
+      const s = el('span', 'mv3-wk-fstale', T.t('The words changed'));
+      s.title = T.t('It was written for: “{words}”', { words: String(sh.said || '').slice(0, 120) });
       action.appendChild(s);
     }
     if (sh && sh.motionEdited && sh.motionAgent) {
-      const back = el('button', 'mv3-wk-flink', 'Use the agent’s');
+      const back = el('button', 'mv3-wk-flink', T.t('Use the agent’s'));
       back.type = 'button';
       back.title = sh.motionAgent;
       back.addEventListener('click', () => { delete _drafts[i + ':motion']; _saveShot(i, { useAgentMotion: true }); });
       action.appendChild(back);
     }
   }
-  col.appendChild(_colHead('animation prompt', action));
+  col.appendChild(_colHead(T.t('animation prompt'), action));
   const box = _textField(i, 'motion', (sh && sh.motion) || '', 7,
-    'How the person moves while speaking - the expression, the head, the hands, the gaze. Written for every'
-    + ' line by the video zone; Kling hears nothing else.',
+    T.t('How the person moves while speaking - the expression, the head, the hands, the gaze. Written for every line by the video zone; Kling hears nothing else.'),
     (v) => _saveShot(i, { motion: v }));
   box.classList.add('is-tall');
   col.appendChild(box);
@@ -2328,8 +2340,8 @@ function _omniCol(l, i, hasFrame) {
   const col = el('div', 'mv3-wk-fcol is-motion');
   const o = l.omni || null;
   if (!hasFrame) {
-    col.appendChild(_colHead('omnihuman prompt'));
-    const dead = _dead(7, 'The clip is made from the frame: this fills in once this line has one.');
+    col.appendChild(_colHead(T.t('omnihuman prompt')));
+    const dead = _dead(7, T.t('The clip is made from the frame: this fills in once this line has one.'));
     dead.classList.add('is-tall');
     col.appendChild(dead);
     return col;
@@ -2338,24 +2350,24 @@ function _omniCol(l, i, hasFrame) {
   let action = null;
   if ((o && o.edited) || staleWords) {
     action = el('span', 'mv3-wk-fedited-row');
-    if (o && o.edited) action.appendChild(el('span', 'mv3-wk-fedited', 'Edited by hand'));
+    if (o && o.edited) action.appendChild(el('span', 'mv3-wk-fedited', T.t('Edited by hand')));
     if (staleWords) {
-      const st = el('span', 'mv3-wk-fstale', 'The words changed');
-      st.title = 'It was written for: “' + String(o.said || '').slice(0, 120) + '”';
+      const st = el('span', 'mv3-wk-fstale', T.t('The words changed'));
+      st.title = T.t('It was written for: “{words}”', { words: String(o.said || '').slice(0, 120) });
       action.appendChild(st);
     }
     if (o && o.edited && o.agent) {
-      const back = el('button', 'mv3-wk-flink', 'Use the agent’s');
+      const back = el('button', 'mv3-wk-flink', T.t('Use the agent’s'));
       back.type = 'button';
       back.title = o.agent;
       back.addEventListener('click', () => { delete _drafts[i + ':omni']; _saveOmni(i, { useAgentOmni: true }); });
       action.appendChild(back);
     }
   }
-  col.appendChild(_colHead('omnihuman prompt', action));
+  col.appendChild(_colHead(T.t('omnihuman prompt'), action));
   const box = _textField(i, 'omni', (o && o.prompt) || '', 7,
-    'How the person performs while speaking - the expression, the gaze, the head, the hands, the body, a calm camera.'
-    + ' At most ' + OMNI_MAX + ' characters, written for every line by the video zone; without it the motion preset goes.',
+    T.t('How the person performs while speaking - the expression, the gaze, the head, the hands, the body, a calm camera. At most {max} characters, written for every line by the video zone; without it the motion preset goes.',
+      { max: OMNI_MAX }),
     (v) => _saveOmni(i, { omni: v }));
   box.maxLength = OMNI_MAX;
   box.classList.add('is-tall');
@@ -2377,7 +2389,7 @@ async function _saveOmni(i, patch) {
   try {
     _adopt(await _post('/api/scen3/fragments/shot', { projectId: p.id, line: i, patch }));
   } catch (e) {
-    _readErr = 'Could not save it: ' + e.message;
+    _readErr = T.t('Could not save it: {why}', { why: e.message });
   }
   _ctx.repaint();
 }
@@ -2399,14 +2411,14 @@ async function _makeClip(p, i) {
   try {
     const r = await _post('/api/scen3/fragments/clip', { projectId: p.id, line: i, where: _whereLine(i) });
     if (r.skipped) {
-      _readErr = 'Fragment ' + (i + 1) + ': ' + r.skipped;
+      _readErr = T.t('Fragment {n}: {why}', { n: i + 1, why: r.skipped });
       _clipping.delete(i);
       return _ctx.repaint();
     }
     _clipping.set(i, { alertId: r.alertId, startedAt: Date.now() });
     await _followClip(i, r.alertId);
   } catch (e) {
-    _readErr = 'The clip was not asked for: ' + e.message;
+    _readErr = T.t('The clip was not asked for: {why}', { why: e.message });
     _clipping.delete(i);
     _ctx.repaint();
   }
@@ -2424,7 +2436,7 @@ async function _followClip(i, alertId) {
     });
     if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
   } catch (e) {
-    if (!_dropped.has(alertId)) _readErr = 'Fragment ' + _no(((_ctx && _ctx.project && _ctx.project.lines) || []), i) + ': the clip failed - ' + e.message;
+    if (!_dropped.has(alertId)) _readErr = T.t('Fragment {n}: the clip failed - {why}', { n: _no(((_ctx && _ctx.project && _ctx.project.lines) || []), i), why: e.message });
   }
   _dropped.delete(alertId);
   const was = _clipping.get(i);
@@ -2470,7 +2482,7 @@ async function _pickClip(i, clipId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
   try { _adopt(await _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId })); }
-  catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
+  catch (e) { _readErr = T.t('Could not pick that clip: {why}', { why: e.message }); }
   _ctx.repaint();
 }
 
@@ -2478,7 +2490,7 @@ async function _pickClip(i, clipId) {
 // said under the button.
 function _clipCol(p, l, i, rs, take) {
   const col = el('div', 'mv3-wk-fcol is-media');
-  col.appendChild(_colHead('clip'));
+  col.appendChild(_colHead(T.t('clip')));
   const c = _clipOf(p, l, i);
   const box = el('div', 'mv3-wk-fmedia' + (c && c.thumb ? '' : ' is-empty'));
   if (c && c.thumb) {
@@ -2487,22 +2499,23 @@ function _clipCol(p, l, i, rs, take) {
     img.src = c.thumb;
     box.appendChild(img);
   } else {
-    box.appendChild(el('span', '', _clipping.has(i) ? 'making…' : 'no clip'));
+    box.appendChild(el('span', '', _clipping.has(i) ? T.t('making…') : T.t('no clip')));
   }
   // The cross, while this fragment's clip is being made: the longest wait in the workshop,
   // and the one most worth being able to walk away from.
-  if (_clipping.has(i)) box.appendChild(_dropX((_clipping.get(i) || {}).alertId, 'this clip'));
+  if (_clipping.has(i)) box.appendChild(_dropX((_clipping.get(i) || {}).alertId, T.t('this clip')));
   if (c && c.thumb) {
     // Pressed, it goes ON the stage - it does not start. A thumbnail picks
     // which of the two the stage shows, the frame or the clip, and nothing else; PLAYING is a press
     // on the stage itself, where the film actually is, so switching frame and clip does not restart
     // the video. The window is on the right button, for looking at
     // one frame of it closely.
-    box.title = 'Show it on the stage; press the stage to play it. Right-click to open it large';
+    box.title = T.t('Show it on the stage; press the stage to play it. Right-click to open it large');
     box.addEventListener('click', () => { _stagePick = 'clip'; _ctx.repaint(); });
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      showPicture({ src: c.thumb, name: 'clip of fragment ' + _no((p.lines || []), i), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] });
+      showPicture({ src: c.thumb, name: T.t('clip of fragment {n}', { n: _no((p.lines || []), i) }),
+        rows: [[T.t('seconds'), c.dur ? c.dur.toFixed(1) : ''], [T.t('said'), c.said || '']] });
     });
   }
   col.appendChild(box);
@@ -2514,22 +2527,22 @@ function _clipCol(p, l, i, rs, take) {
   let price = '';
   const vlock = _voiceLock(p);
   if (vlock) cap = vlock.replace(/\.$/, '').toLowerCase();
-  else if (rs !== 'ok') cap = 'read this line first';
-  else if (!fr) cap = 'make a frame in the frames chat first';
-  else if (!_video().model) cap = 'choose the model of the clips first (field 3)';
-  else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
-  else if (take.dur > _ceiling()) cap = 'too long for ' + _modelName() + ' (' + take.dur.toFixed(1) + ' s) - split the line';
+  else if (rs !== 'ok') cap = T.t('read this line first');
+  else if (!fr) cap = T.t('make a frame in the frames chat first');
+  else if (!_video().model) cap = T.t('choose the model of the clips first (field 3)');
+  else if (!_video().quality) cap = T.t('choose the quality of the clips first (field 3)');
+  else if (take.dur > _ceiling()) cap = T.t('too long for {model} ({len} s) - split the line', { model: _modelName(), len: take.dur.toFixed(1) });
   else {
     ready = true;
     // A read shorter than the model's shortest sound is padded to it, and billed for it.
     const billed = _billSecs(take.dur, tier);
-    cap = take.dur.toFixed(1) + ' s' + (tier && tier.bill === 'up' && billed > take.dur + 0.05 ? ' · billed ' + billed + ' s' : '')
+    cap = T.t('{s} s', { s: take.dur.toFixed(1) }) + (tier && tier.bill === 'up' && billed > take.dur + 0.05 ? ' · ' + T.t('billed {n} s', { n: billed }) : '')
       + ' · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…');
   }
   if (ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
   const make = el('button', 'mv3-wk-vmore is-small is-media u-btn is-s' + (ready ? ' is-go' : ''),
-    busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
+    busy ? T.t('making…') : _armedClip === i ? (price ? price + '?' : T.t('go?')) : c ? T.t('again') : T.t('make clip'));
   make.type = 'button';
   make.disabled = !ready || busy;
   if (_armedClip === i && !busy) make.classList.add('is-armed');   // paid, armed: the light step
@@ -2537,13 +2550,14 @@ function _clipCol(p, l, i, rs, take) {
   // clip, and that is worth saying before it takes half a minute.
   const needsWords = !_animated(l) || !_envMotion(p);
   const padded = !!(tier && tier.minAudioSec && take && take.dur < tier.minAudioSec);
+  const bill = ready ? { len: take.dur.toFixed(1), n: _billSecs(take.dur, tier), rate: tier ? T.t('${price}/s', { price: tier.pricePerSec }) : '?' } : null;
   make.title = !ready ? cap
-    : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
-      + (_omni() ? 'OmniHuman 2.0: this frame speaks this read, performing as its OmniHuman prompt says. '
-        : 'Kling avatar: this frame speaks this read, moving as the animation prompt says. ')
-      + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur, tier) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?')
-      + (padded ? ' (the read is padded with silence to ' + tier.minAudioSec + ' s and the clip cut back to it)' : '')
-      + '. Press again to confirm.';
+    : [needsWords ? T.t('First the analysis - how this place moves and how the person moves on this line - then the clip.') : '',
+      _omni() ? T.t('OmniHuman 2.0: this frame speaks this read, performing as its OmniHuman prompt says.')
+        : T.t('Kling avatar: this frame speaks this read, moving as the animation prompt says.'),
+      padded ? T.t('{len} s - billed {n} whole s at {rate} (the read is padded with silence to {min} s and the clip cut back to it).', { ...bill, min: tier.minAudioSec })
+        : T.t('{len} s - billed {n} whole s at {rate}.', bill),
+      T.t('Press again to confirm.')].filter(Boolean).join(' ');
   make.addEventListener('click', () => {
     if (_armedClip !== i) { _armedClip = i; _ctx.repaint(); return; }
     _armedClip = -1;
@@ -2554,7 +2568,7 @@ function _clipCol(p, l, i, rs, take) {
   // "rendering" - so the half-minute before anything is sent to Kling is not silence.
   const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'))).appendChild(figures(
-    busy ? (stage || 'making the clip…') : (ready && needsWords) ? 'analysis, then ' + cap : cap));
+    busy ? (stage || T.t('making the clip…')) : (ready && needsWords) ? T.t('analysis, then {what}', { what: cap }) : cap));
   return col;
 }
 
@@ -2593,7 +2607,7 @@ export function openPicture(p) {
   // screen.
   if (l && _picking && _pickView) {
     const fr = _pool(p).find(v => v.id === _pickView);
-    if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
+    if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: T.t('frame {n} · press select to keep it', { n: fr.n || '' }) };
   }
   if (!l) {
     // No line open: a frame of the pool pressed in the general zone, if one is. The WHOLE strip is
@@ -2606,31 +2620,31 @@ export function openPicture(p) {
     const cut = _cropOn === fr.id;
     return {
       src: derived(fr.preview || fr.path, 'main'),
-      caption: cut ? '' : 'frame' + (fr.n ? ' ' + fr.n : ''),
+      caption: cut ? '' : _frameName(fr),
       crop: cut ? { aspect: _formatAspect(p) } : null,
       actions: cut
         ? [
-          { label: _cropBusy ? 'Cutting…' : 'Apply', go: true, busy: _cropBusy,
-            title: 'Cut the picture to the selection. The cut joins the set, beside this frame, and is saved in the project.',
+          { label: _cropBusy ? T.tc('crop', 'Cutting…') : T.t('Apply'), go: true, busy: _cropBusy,
+            title: T.t('Cut the picture to the selection. The cut joins the set, beside this frame, and is saved in the project.'),
             on: (rect) => _cropApply(p, fr, rect) },
-          { label: 'Cancel', busy: _cropBusy, title: 'Leave the frame as it is', on: () => { _cropOn = ''; _ctx.repaint(); } },
+          { label: T.t('Cancel'), busy: _cropBusy, title: T.t('Leave the frame as it is'), on: () => { _cropOn = ''; _ctx.repaint(); } },
         ]
-        : [{ label: 'Crop', title: 'Reframe this picture - drag a selection, and the cut joins the set as a frame of its own. It keeps the format of the project.',
+        : [{ label: T.tc('a frame', 'Crop'), title: T.t('Reframe this picture - drag a selection, and the cut joins the set as a frame of its own. It keeps the format of the project.'),
           on: () => { _cropOn = fr.id; _ctx.repaint(); } }],
     };
   }
   const c = _clipOf(p, l, _open);
   const fr = _frameFor(p, l, _open).v;
-  const name = 'fragment ' + _no(lines, _open);
+  const n = _no(lines, _open);
   // The clip, as a film with its own sound, unless the frame was asked for.
   if (c && c.path && _stagePick !== 'frame') {
     // What stands on the stage while the video opens: the clip's own poster, or - a clip
     // with none - the frame it was made from.
     const poster = c.thumb || (fr ? derived(fr.preview || fr.path, 'main') : '');
-    return { film: c.path, caption: name + ' · clip', poster };
+    return { film: c.path, caption: T.t('fragment {n} · clip', { n }), poster };
   }
-  if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: name + (c ? ' · frame' : '') };
-  if (c && c.thumb) return { src: c.thumb, caption: name + ' · clip' };
+  if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: c ? T.t('fragment {n} · frame', { n }) : T.t('fragment {n}', { n }) };
+  if (c && c.thumb) return { src: c.thumb, caption: T.t('fragment {n} · clip', { n }) };
   return null;
 }
 

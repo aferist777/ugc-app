@@ -17,6 +17,8 @@
                 "save" and "use" are two buttons and not one.
    ════════════════════════════════════════════════════════════════════════════ */
 
+import * as T from '../i18n/t.js';
+
 async function _json(url, opt) {
   const r = await fetch(url, opt);
   let d = null;
@@ -25,7 +27,7 @@ async function _json(url, opt) {
     // A 404 with no JSON is a route the running server does not have: the page is newer than the
     // app that serves it (right after an update, before a restart). Said as that.
     if (!d && r.status === 404) {
-      throw Object.assign(new Error('This is newer than the running app - close UGC Studio and open it again to finish the update.'), { status: 404 });
+      throw Object.assign(new Error(T.t('This is newer than the running app - close UGC Studio and open it again to finish the update.')), { status: 404 });
     }
     // What kind of "no" it was travels with it: an agent that REFUSED has answered, and a photo
     // that is GONE from the server's scratch can simply be sent again.
@@ -84,7 +86,7 @@ export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId
 export async function talkingHead(scenarioId) {
   const p = await project(scenarioId);
   const d = await _post('/api/mv3/timeline/new', { projectId: p.id });
-  if (!d.key) throw new Error('the timeline was refused');
+  if (!d.key) throw new Error(T.t('the timeline was refused'));
   return d.key;
 }
 
@@ -96,7 +98,7 @@ export async function talkingHead(scenarioId) {
 export async function forkHead(projectId, look) {
   const d = await _post('/api/scen3/projects/' + encodeURIComponent(projectId) + '/fork', look);
   const t = await _post('/api/mv3/timeline/new', { projectId: d.project.id });
-  if (!t.key) throw new Error('the timeline was refused');
+  if (!t.key) throw new Error(T.t('the timeline was refused'));
   try { await _post('/api/scen3/projects/' + encodeURIComponent(d.project.id) + '/cast', look); } catch (e) { /* named at its next cast */ }
   return t.key;
 }
@@ -113,7 +115,7 @@ export async function voiceoverDraft() {
   const d = await _post('/api/scen3/voiceover/draft', {});
   if (d.timeline) return d.key;
   const t = await _post('/api/mv3/timeline/new', { projectId: d.project.id });
-  if (!t.key) throw new Error('the timeline was refused');
+  if (!t.key) throw new Error(T.t('the timeline was refused'));
   return t.key;
 }
 
@@ -208,11 +210,11 @@ export async function follow(id, onTick) {
     if (rec) {
       if (onTick) { try { onTick(rec); } catch (e) { /* a progress reader */ } }
       if (rec.state === 'done') return rec;
-      if (rec.state === 'failed') throw new Error(rec.error || 'the generation failed');
+      if (rec.state === 'failed') throw new Error(rec.error || T.t('the generation failed'));
     }
     await new Promise(r => setTimeout(r, 2000));
   }
-  throw new Error('gave up following this generation');
+  throw new Error(T.t('gave up following this generation'));
 }
 
 // ── Making a lookbook ───────────────────────────────────────────────────────

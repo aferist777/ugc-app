@@ -19,6 +19,8 @@ import { wire as wireRange } from '../ui-range.js';
 // A pressed button may be a Lucide icon; a label's figures in mono (js/num.js)
 import { icon } from '../icons.js';
 import { setFigures } from '../num.js';
+// The interface's words (`t` is a text field here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 // A labelled row. The label column is fixed so every control on the panel lines up
 // down the left edge, which is what makes a stack of them readable at 240px.
@@ -73,7 +75,7 @@ export function slider({ min, max, step, value, fmt, onChange, onInput, mixed })
   const out = document.createElement('span');
   out.className = 'mv3-c-num';
   let moved = false;
-  const show = (v) => { out.textContent = (mixed && !moved) ? 'mixed' : (fmt ? fmt(v) : String(v)); };
+  const show = (v) => { out.textContent = (mixed && !moved) ? T.t('mixed') : (fmt ? fmt(v) : String(v)); };
   show(+value);
   // Live readout, no write.
   inp.addEventListener('input', () => { moved = true; show(+inp.value); if (onInput) onInput(+inp.value); });
@@ -169,7 +171,7 @@ export const DB_MIN = -40, DB_MAX = 12;
 
 export const toDb = (lin) => ((+lin > 0) ? Math.max(DB_MIN, 20 * Math.log10(+lin)) : DB_MIN);
 export const fromDb = (db) => ((+db <= DB_MIN) ? 0 : Math.pow(10, +db / 20));
-export const dbLabel = (db) => (+db <= DB_MIN ? 'muted' : (+db > 0 ? '+' : '') + (+db).toFixed(1) + ' dB');
+export const dbLabel = (db) => (+db <= DB_MIN ? T.t('muted') : T.t('{db} dB', { db: (+db > 0 ? '+' : '') + (+db).toFixed(1) }));
 
 export function volume(value, onChange) {
   return slider({
@@ -201,7 +203,7 @@ export function toggle(on, onChange) {
   b.className = 'mv3-c-sw u-switch' + (on ? ' is-on' : '');
   b.setAttribute('role', 'switch');
   b.setAttribute('aria-checked', on ? 'true' : 'false');
-  b.title = on ? 'On' : 'Off';
+  b.title = on ? T.t('On') : T.t('Off');
   b.addEventListener('click', () => { if (onChange) onChange(!on); });
   return b;
 }

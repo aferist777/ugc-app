@@ -17,6 +17,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { key as storeKey, timeline as storeTimeline } from './store.js';
+// The interface's words (`t` is a lane here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 // "...2" keys on purpose: a width saved under an earlier key - a 360px column beside a full-width
 // timeline - would put the timeline in a 360px box.
@@ -292,7 +294,7 @@ function _wireCross() {
   const cross = document.createElement('div');
   cross.className = 'mv3-sash-x';
   cross.id = 'mv3-sash-x';
-  cross.title = 'Drag to resize the column and the timeline at once · double-click to reset both';
+  cross.title = T.t('Drag to resize the column and the timeline at once · double-click to reset both');
   v.appendChild(cross);
   _placeCross();
 

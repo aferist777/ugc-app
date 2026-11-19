@@ -1,5 +1,5 @@
 {
-  "html": ["public/library.html"],
+  "html": ["public/library.html", "public/merge-v3.html"],
   "keep": ["UGC Studio", "Language · Язык"],
   "thanks": true
 }

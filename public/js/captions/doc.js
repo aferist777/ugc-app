@@ -32,6 +32,7 @@
 import { isHeard } from './heard.js';
 import { timedWords, PAGE } from './pages.js';
 import { retextLines, typedWords, textOf, tokensOf, LIMITS } from './words.js';
+import * as T from '../i18n/t.js';
 
 const cs = (t) => Math.round((+t || 0) * 100);
 const MINC = Math.round(PAGE.minClip * 100);
@@ -50,11 +51,12 @@ export function linesOf(track) {
 /** What a line says in the document - its text, as on the timeline. */
 export const textOfLine = (c) => String((c && c.name) || '');
 
+// Said in the app's language at the moment of the refusal.
 export const WHY = {
-  voice: 'Two lines of the script stay two captions - the words of one never join the other\'s',
-  words: 'A line holds at most ' + LIMITS.words + ' words',
-  text: 'A line holds at most ' + LIMITS.text + ' characters',
-  room: 'No room for that many lines here - each is on screen 0.1 s at least',
+  get voice() { return T.t('Two lines of the script stay two captions - the words of one never join the other\'s'); },
+  get words() { return T.tn(LIMITS.words, 'A line holds at most {n} word', 'A line holds at most {n} words'); },
+  get text() { return T.tn(LIMITS.text, 'A line holds at most {n} character', 'A line holds at most {n} characters'); },
+  get room() { return T.t('No room for that many lines here - each is on screen 0.1 s at least'); },
 };
 
 /**
@@ -64,7 +66,7 @@ export const WHY = {
  */
 export function rewrite(track, from, to, texts, makeId) {
   const lines = linesOf(track);
-  if (!(from >= 0 && to <= lines.length && from < to)) return { why: 'There is no such line' };
+  if (!(from >= 0 && to <= lines.length && from < to)) return { why: T.t('There is no such line') };
   const old = lines.slice(from, to);
   const tx = (texts || []).map((t) => String(t == null ? '' : t));
   if (new Set(old.map((c) => String(c.voice || ''))).size > 1) return { why: WHY.voice };
@@ -145,7 +147,7 @@ function _heard(old, tx, S, E) {
     else {
       if (!String(c.name || '').trim()) continue;
       const t = typedWords(c.name, c.dur);
-      if (!t) return { why: 'The typed line «' + _short(c.name) + '» is too short to time its words by their letters' };
+      if (!t) return { why: T.t('The typed line «{line}» is too short to time its words by their letters', { line: _short(c.name) }) };
       ws = t.words.map((w) => ({ ...w, h: true }));
     }
     const list = ws.filter((w) => w && String(w.w || '').trim()).map((w) => ({ ...w, s: (base + cs(w.s)) / 100, e: (base + cs(w.e)) / 100 }));
@@ -236,7 +238,7 @@ export function splitLine(track, i, text, at, makeId) {
  */
 export function joinLines(track, i, text, makeId) {
   const lines = linesOf(track);
-  if (i < 0 || i + 1 >= lines.length) return { why: 'The last line has no next line to join' };
+  if (i < 0 || i + 1 >= lines.length) return { why: T.t('The last line has no next line to join') };
   const a = String(text == null ? '' : text).replace(/\s+$/u, '');
   const b = textOfLine(lines[i + 1]).replace(/^\s+/u, '');
   return rewrite(track, i, i + 2, [a && b ? a + ' ' + b : a + b], makeId);

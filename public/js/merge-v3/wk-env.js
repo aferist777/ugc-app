@@ -24,6 +24,7 @@ import { openFrame, paintBench } from '../gen-window.js';
 // Being read, could not be read - the shared parts; the reason a popup in the corner.
 import { loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { t } from '../i18n/t.js';
 
 let _api = null;                   // the step's (wk-setup.js _envApi), as the window was last opened with it
 let _w = null;                     // { win, page: 'list' | 'make' }
@@ -86,40 +87,40 @@ function _paint() {
   win.body.textContent = '';
   win.body.className = 'gw-body';
   if (page === 'make') {
-    win.setCrumbs([{ label: 'Environments', on: () => _go('list') }, { label: 'New environment' }]);
+    win.setCrumbs([{ label: t('Environments'), on: () => _go('list') }, { label: t('New environment') }]);
     paintBench(win.body, benchOpts(api));
     return;
   }
-  win.setCrumbs([{ label: 'Environments', act: { label: '+ new environment', title: 'Make one from a photo or a sentence', on: () => _go('make') } }]);
+  win.setCrumbs([{ label: t('Environments'), act: { label: t('+ new environment'), title: t('Make one from a photo or a sentence'), on: () => _go('make') } }]);
   if (_envs === null) {
-    win.body.appendChild(loadingEl('reading the environments…'));
+    win.body.appendChild(loadingEl(t('reading the environments…')));
     API.environments().then((files) => { _envs = files || []; _paint(); })
       // Not read is not "No environments yet": "did not load" with Try again, the reason a popup.
-      .catch((e) => { _envs = false; showError('Could not read the environments: ' + e.message); _paint(); });
+      .catch((e) => { _envs = false; showError(t('Could not read the environments: {why}', { why: e.message })); _paint(); });
     return;
   }
-  if (_envs === false) { win.body.appendChild(failedEl('The environments', () => { _envs = null; _paint(); })); return; }
+  if (_envs === false) { win.body.appendChild(failedEl(t('The environments'), () => { _envs = null; _paint(); })); return; }
   const here = String(api.casting().locationImage || '');
   paintChoose(win.body, {
     state: _state,
     items: _envs.map(_pathOf).filter(Boolean).map(path => ({
       path, name: _nameOf(path).replace(/\.[^.]+$/, ''), aspect: '3:2', thumb: derived(path, 'card'),
     })),
-    mark: (it) => (it.path === here ? 'set here' : ''),
+    mark: (it) => (it.path === here ? t('set here') : ''),
     press: (it) => {
       if (it.path !== here) api.patch({ locationId: '', locationImage: it.path });
       win.close();
     },
     del: (it) => ({
-      title: 'Delete this environment from the library',
+      title: t('Delete this environment from the library'),
       run: async () => {
         const d = await fetch('/api/library/item/environments/' + encodeURIComponent(_nameOf(it.path)), { method: 'DELETE' })
           .then(r => r.json()).catch(() => null);
-        return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+        return d && d.success ? '' : ((d && d.error) || t('the app did not answer'));
       },
       done: () => { _envs = null; _paint(); },
     }),
-    empty: 'No environments yet - "+ new environment" makes the first one.',
+    empty: t('No environments yet - "+ new environment" makes the first one.'),
   });
 }
 

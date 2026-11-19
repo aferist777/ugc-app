@@ -16,8 +16,17 @@ import library from './ru/library.js';
 import scenarios from './ru/scenarios.js';
 import character from './ru/character.js';
 import shelf from './ru/shelf.js';
+import timeline from './ru/timeline.js';
+import merge from './ru/merge.js';
+import inspector from './ru/inspector.js';
+import captions from './ru/captions.js';
+import workshop from './ru/workshop.js';
+import highlights from './ru/highlights.js';
+import effects from './ru/effects.js';
+import mergepage from './ru/mergepage.js';
 
-export const PARTS = { common, shell, home, admin, tree, windows, thanks, library, scenarios, character, shelf };
+export const PARTS = { common, shell, home, admin, tree, windows, thanks, library, scenarios, character, shelf,
+  timeline, merge, inspector, captions, workshop, highlights, effects, mergepage };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

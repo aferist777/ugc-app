@@ -22,16 +22,20 @@
    same as, the W3C one - within 1.5-2.8 on average, 16 at most.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { t, tc } from '../i18n/t.js';
+
+// `id` is what a clip stores and the render reads (`canvas`, `ff`); `label` and `tip` are only shown - in the interface's
+// language (i18n/t.js; the server never shows them).
 export const BLENDS = [
-  { id: 'none', label: 'None', canvas: 'source-over', ff: '', tip: 'laid over what is under it' },
-  { id: 'screen', label: 'Screen', canvas: 'screen', ff: 'screen', tip: 'lightens - black vanishes, a glow or a light leak' },
-  { id: 'multiply', label: 'Multiply', canvas: 'multiply', ff: 'multiply', tip: 'darkens - white vanishes, ink or a shadow' },
-  { id: 'overlay', label: 'Overlay', canvas: 'overlay', ff: 'overlay', tip: 'more contrast - light over light, dark over dark' },
-  { id: 'soft-light', label: 'Soft light', canvas: 'soft-light', ff: 'softlight', tip: 'gentle contrast - a soft glow or a tint' },
-  { id: 'lighten', label: 'Lighten', canvas: 'lighten', ff: 'lighten', tip: 'the lighter of the two, pixel by pixel' },
-  { id: 'darken', label: 'Darken', canvas: 'darken', ff: 'darken', tip: 'the darker of the two, pixel by pixel' },
-  { id: 'add', label: 'Add', canvas: 'lighter', ff: 'addition', premultiplied: true, tip: 'adds the light - brighter than screen' },
-  { id: 'difference', label: 'Difference', canvas: 'difference', ff: 'difference', tip: 'the difference - white turns colors inside out' },
+  { id: 'none', label: tc('blend', 'None'), canvas: 'source-over', ff: '', tip: t('laid over what is under it') },
+  { id: 'screen', label: tc('blend', 'Screen'), canvas: 'screen', ff: 'screen', tip: t('lightens - black vanishes, a glow or a light leak') },
+  { id: 'multiply', label: tc('blend', 'Multiply'), canvas: 'multiply', ff: 'multiply', tip: t('darkens - white vanishes, ink or a shadow') },
+  { id: 'overlay', label: tc('blend', 'Overlay'), canvas: 'overlay', ff: 'overlay', tip: t('more contrast - light over light, dark over dark') },
+  { id: 'soft-light', label: tc('blend', 'Soft light'), canvas: 'soft-light', ff: 'softlight', tip: t('gentle contrast - a soft glow or a tint') },
+  { id: 'lighten', label: tc('blend', 'Lighten'), canvas: 'lighten', ff: 'lighten', tip: t('the lighter of the two, pixel by pixel') },
+  { id: 'darken', label: tc('blend', 'Darken'), canvas: 'darken', ff: 'darken', tip: t('the darker of the two, pixel by pixel') },
+  { id: 'add', label: tc('blend', 'Add'), canvas: 'lighter', ff: 'addition', premultiplied: true, tip: t('adds the light - brighter than screen') },
+  { id: 'difference', label: tc('blend', 'Difference'), canvas: 'difference', ff: 'difference', tip: t('the difference - white turns colors inside out') },
 ];
 const _BY = new Map(BLENDS.map(b => [b.id, b]));
 

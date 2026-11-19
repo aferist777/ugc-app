@@ -27,18 +27,21 @@ import * as Views from './lib-views.js';
 import { unbound } from './chat-owner.js';
 import { note } from '../ask.js';
 import { showError } from '../notice.js';
+// The interface's words (`t` is a lane and a time here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const LS = 'mv3_tl_gen_v1';
 const KEEP = 80;                            // origins remembered at most - the newest
 
-// What each act makes and the button that lays it back.
+// What each act makes and the button that lays it back. `label` and `title` are only shown (the button, and the chat's word
+// about it) - said in the running language.
 const ACTS = {
-  edit: { chat: 'pictures', makes: 'image', label: 'In its place', title: 'Put this picture in place of the picture on the timeline it was made from - its place, length and look stay' },
-  animate: { chat: 'videos', makes: 'video', label: 'In its place', title: 'Put this clip in place of the picture on the timeline it was made from - from the same second, no longer than the picture was' },
-  ref: { chat: 'videos', makes: 'video', label: 'In its place', title: 'Put this clip in place of the clip on the timeline it was made from - from the same second, no longer than that clip' },
-  continue: { chat: 'videos', makes: 'video', label: 'After the clip', title: 'Insert this clip right after the clip it continues - what is after it on that lane moves on by this clip\'s length' },
-  'frame-vid': { chat: 'videos', makes: 'video', label: 'Into the cut', title: 'Cut the clip on the timeline where its frame was taken and insert this clip there - what is after it on that lane moves on by this clip\'s length' },
-  'frame-pic': { chat: 'pictures', makes: 'image', label: 'Above it', title: 'Put this picture on the lane above the clip its frame was taken from, at that moment' },
+  edit: { chat: 'pictures', makes: 'image', label: T.t('In its place'), title: T.t('Put this picture in place of the picture on the timeline it was made from - its place, length and look stay') },
+  animate: { chat: 'videos', makes: 'video', label: T.t('In its place'), title: T.t('Put this clip in place of the picture on the timeline it was made from - from the same second, no longer than the picture was') },
+  ref: { chat: 'videos', makes: 'video', label: T.t('In its place'), title: T.t('Put this clip in place of the clip on the timeline it was made from - from the same second, no longer than that clip') },
+  continue: { chat: 'videos', makes: 'video', label: T.t('After the clip'), title: T.t('Insert this clip right after the clip it continues - what is after it on that lane moves on by this clip\'s length') },
+  'frame-vid': { chat: 'videos', makes: 'video', label: T.t('Into the cut'), title: T.t('Cut the clip on the timeline where its frame was taken and insert this clip there - what is after it on that lane moves on by this clip\'s length') },
+  'frame-pic': { chat: 'pictures', makes: 'image', label: T.t('Above it'), title: T.t('Put this picture on the lane above the clip its frame was taken from, at that moment') },
 };
 
 function _all() {
@@ -86,7 +89,7 @@ async function _frameOf(src, fileT, name, at) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ src, t: fileT, name, project: Store.title() || '', at }),
   }).then(r => r.json()).catch(() => null);
-  if (!d || !d.success || !d.item) throw new Error((d && d.error) || 'the frame could not be saved');
+  if (!d || !d.success || !d.item) throw new Error((d && d.error) || T.t('the frame could not be saved'));
   return d.item;
 }
 
@@ -142,7 +145,7 @@ export async function fromClip(act, { trackId, clipId, at }) {
     await _open(act === 'continue' ? 'videos' : 'pictures',
       { attach: { path: item.imagePath, name: item.name || '', kind: 'image' }, as: act === 'continue' ? 'first' : 'frame', act, back: ACTS[act].label });
   } catch (e) {
-    showError('The chat did not open', { detail: (e && e.message) || String(e) });
+    showError(T.t('The chat did not open'), { detail: (e && e.message) || String(e) });
   }
 }
 
@@ -157,7 +160,7 @@ export async function fromFrame(chat, btn) {
   if (btn) btn.disabled = true;
   try {
     const r = await P.grabFrame();
-    if (!r || !r.ok) throw new Error('the frame could not be read');
+    if (!r || !r.ok) throw new Error(T.t('the frame could not be read'));
     const title = Store.title() || '';
     const fd = new FormData();
     fd.append('image', r.blob, 'shot.png');
@@ -165,7 +168,7 @@ export async function fromFrame(chat, btn) {
     fd.append('project', title);
     fd.append('at', String(r.at));
     const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json()).catch(() => null);
-    if (!d || !d.success || !d.item) throw new Error((d && d.error) || 'the frame could not be saved');
+    if (!d || !d.success || !d.item) throw new Error((d && d.error) || T.t('the frame could not be saved'));
     // The clip it is a frame of - for "Into the cut" / "Above it" under the result; none (a talking head's line, an empty
     // moment) - the result is dragged.
     if (target) {
@@ -175,7 +178,7 @@ export async function fromFrame(chat, btn) {
     await _open(chat, { attach: { path: d.item.imagePath, name: d.item.name || '', kind: 'image' }, as: chat === 'videos' ? 'first' : 'frame',
       act: chat === 'videos' ? 'frame-vid' : 'frame-pic', back: target ? ACTS[chat === 'videos' ? 'frame-vid' : 'frame-pic'].label : '' });
   } catch (e) {
-    showError('The frame did not go to the chat', { detail: (e && e.message) || String(e) });
+    showError(T.t('The frame did not go to the chat'), { detail: (e && e.message) || String(e) });
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -199,15 +202,19 @@ export function backButton(g, paths, item, makes) {
   b.title = a.title + (o.title ? ' (' + o.title + ')' : '');
   b.addEventListener('click', async (ev) => {
     ev.stopPropagation();
-    if (Store.key() !== o.key) { note(b, 'Not laid.', 'Open "' + (o.title || 'its project') + '" first - the clip is on its timeline.'); return; }
+    if (Store.key() !== o.key) {
+      note(b, T.t('Not laid.'), o.title ? T.t('Open "{project}" first - the clip is on its timeline.', { project: o.title })
+        : T.t('Open its project first - the clip is on its timeline.'));
+      return;
+    }
     b.disabled = true;
     try {
       const Tl = await import('./timeline-b.js');
       const r = await Tl.genBack(o, Object.assign({ kind: makes }, item));
-      if (!r || !r.ok) note(b, 'Not laid.', (r && r.why) || 'the timeline did not take it');
-      else note(b, 'Laid on ' + (r.lane || 'the timeline') + '.', 'At ' + _clock(r.at) + ' - one step to undo.');
+      if (!r || !r.ok) note(b, T.t('Not laid.'), (r && r.why) || T.t('the timeline did not take it'));
+      else note(b, r.lane ? T.t('Laid on {lane}.', { lane: r.lane }) : T.t('Laid on the timeline.'), T.t('At {at} - one step to undo.', { at: _clock(r.at) }));
     } catch (e) {
-      note(b, 'Not laid.', (e && e.message) || String(e));
+      note(b, T.t('Not laid.'), (e && e.message) || String(e));
     } finally {
       b.disabled = false;
     }

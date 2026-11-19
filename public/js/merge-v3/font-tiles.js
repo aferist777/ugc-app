@@ -14,6 +14,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { FONTS, GROUPS, groupOf, drawnFamily, TILE_DIR, tileName } from '../captions/fonts.js';
+// The module's own variables are called `t` (tiles): the words come in as T.t.
+import * as T from '../i18n/t.js';
 
 const RU = 'Субтитры';
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -38,7 +40,8 @@ export function fontPicker(host, { onPick, note } = {}) {
 
   const order = GROUPS.map((g) => g[0]);
   const list = FONTS.slice().sort((a, b) => order.indexOf(groupOf(a)) - order.indexOf(groupOf(b)));
-  const chips = [['', 'All', list.length]].concat(GROUPS.map(([id, label]) => [id, label, list.filter((f) => groupOf(f) === id).length]));
+  // The groups' names are fonts.js's English, shown in the app's language; the fonts' own names are names.
+  const chips = [['', T.t('All'), list.length]].concat(GROUPS.map(([id, label]) => [id, T.t(label), list.filter((f) => groupOf(f) === id).length]));
   for (const [id, label, n] of chips) {
     const b = _el('button', 'mv3-cap-cat u-chip', label);   // the shared chip, its count in mono
     b.type = 'button';
@@ -54,12 +57,13 @@ export function fontPicker(host, { onPick, note } = {}) {
     btn.dataset.family = f.family;
     btn.dataset.cat = groupOf(f);
     const twin = drawnFamily(f.family, RU);
-    btn.title = f.label + (twin !== f.family ? ' - no Russian letters: a Russian line is drawn in ' + twin : '')
-      + '. A press - this font; Shift adds it to those chosen, each page one of them';
+    btn.title = twin !== f.family
+      ? T.t('{font} - no Russian letters: a Russian line is drawn in {twin}. A press - this font; Shift adds it to those chosen, each page one of them', { font: f.label, twin })
+      : T.t('{font}. A press - this font; Shift adds it to those chosen, each page one of them', { font: f.label });
     const box = _el('div', 'mv3-cap-box mv3-fnt-box');
     const name = _el('div', 'mv3-cap-name');
     name.appendChild(_el('span', 'mv3-cap-nm', f.label));
-    if (twin !== f.family) name.appendChild(_el('span', 'mv3-fnt-tw', 'Lat'));
+    if (twin !== f.family) name.appendChild(_el('span', 'mv3-fnt-tw', T.t('Lat')));
     btn.append(box, name);
     btn.addEventListener('click', (e) => {
       const shift = !!(e && e.shiftKey);
@@ -131,7 +135,7 @@ export function fontPicker(host, { onPick, note } = {}) {
       for (const b of top.children) {
         const on = rec.includes(b.dataset.cat || '');
         b.classList.toggle('is-rec-cat', on);
-        b.title = on ? 'Recommended for this kind of video' : '';
+        b.title = on ? T.t('Recommended for this kind of video') : '';
       }
       for (const b of [...top.children].sort((x, y) => rank(x) - rank(y))) top.appendChild(b);
     },

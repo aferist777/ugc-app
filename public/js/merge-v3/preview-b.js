@@ -49,6 +49,8 @@ import { onFontLoaded as fxOnFontLoaded } from '../fx/kit.js';
 // A sound at another pitch is played from its file's copy at that pitch (lib/pitch-copy.js).
 import { isPitched, pitchOf, tagOf } from '../sound/pitch.js';
 import { icon } from '../icons.js';
+// The interface's words (`t` is a time here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 const STAGE = 'mv3-stage';
 
@@ -2150,7 +2152,7 @@ export function showPair(top, bottom, onPick) {
 // nothing else; a frame or a clip on the stage is work being judged, not a step to take. The
 // label is an element rather than something drawn on the canvas, because it sits ON the border,
 // which the canvas is inside.
-const STEP_WORDS = 'First step';   // sentence case
+const STEP_WORDS = T.t('First step');   // sentence case
 function _firstStep(on) {
   const stage = document.getElementById(STAGE);
   if (!stage) return;
@@ -2311,7 +2313,7 @@ export const isPlaying = () => _playing;
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');
   // Lucide's play / pause, 14 px as the timeline head's other icons (bar.js initBar)
-  if (b) { b.innerHTML = icon(_playing ? 'pause' : 'play', 14); b.title = _playing ? 'Pause (Space)' : 'Play (Space)'; }
+  if (b) { b.innerHTML = icon(_playing ? 'pause' : 'play', 14); b.title = _playing ? T.t('Pause (Space)') : T.t('Play (Space)'); }
 }
 
 // ── Mounting ────────────────────────────────────────────────────────────────
@@ -2324,7 +2326,7 @@ function _wireFormat() {
   sel.id = 'mv3-pvb-fmt';
   // The shared field, as the quality picker beside it; its size by id with it.
   sel.className = 'u-in is-s';
-  sel.title = 'The shape of the finished video';
+  sel.title = T.t('The shape of the finished video');
   for (const [k, v] of Object.entries(FORMATS)) {
     const o = document.createElement('option');
     o.value = k; o.textContent = v.label;

@@ -21,6 +21,7 @@
 import * as Store from './store.js';
 import { soundPieces } from '../captions/heard.js';
 import { allow } from '../key-gate.js';
+import { t, tn, lang } from '../i18n/t.js';
 
 const POLL_MS = 1500;
 
@@ -37,17 +38,19 @@ const _get = (k) => { let s = _by.get(k); if (!s) { s = { job: null, last: null,
 const _when = (iso) => {
   const d = new Date(iso);
   if (isNaN(d)) return '';
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' '
-    + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const loc = lang() === 'ru' ? 'ru-RU' : 'en-US';
+  return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' }) + ' '
+    + d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
 };
 const _cap = (s) => String(s || '').replace(/^./, (m) => m.toUpperCase());
-const _n = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-const _mb = (b) => Math.round((+b || 0) / 1e6) + ' MB';
+const _mb = (b) => t('{n} MB', { n: Math.round((+b || 0) / 1e6) });
+// "12 pages from 40 words": each count said whole in its own words.
+const _pagesFrom = (pages, words) => tn(pages, '{n} page {from}', '{n} pages {from}', { from: tn(words, 'from {n} word', 'from {n} words') });
 
 // Why a run went to this computer (lib/captions-job.js FELL - the server sends the code).
-const FELL = { 'no-key': 'No Groq key', network: 'Groq could not be reached', down: 'Groq is not answering',
-  busy: 'Groq is busy', limit: "Groq's limit is used up", 'bad-key': 'Groq did not accept the key',
-  refused: 'Groq refused this sound', 'too-large': 'Groq refused this sound' };
+const _fell = (code) => ({ 'no-key': t('No Groq key'), network: t('Groq could not be reached'), down: t('Groq is not answering'),
+  busy: t('Groq is busy'), limit: t("Groq's limit is used up"), 'bad-key': t('Groq did not accept the key'),
+  refused: t('Groq refused this sound'), 'too-large': t('Groq refused this sound') })[code] || '';
 
 // ── This computer's ear ─────────────────────────────────────────────────────
 // Read once when a page asks, again after a model download: the program and the model.
@@ -67,10 +70,12 @@ function _linesNote(s) {
   const L = s.lines;
   const j = s.job;
   if (!L || !L.lane || !(L.bare > 0) || (j && j.state === 'listening')) return '';
-  if (L.pending) return 'New lines are heard in a moment.';
-  const n = L.bare === 1 ? '1 line has' : L.bare + ' lines have';
-  if (L.why) return j && j.state === 'failed' && j.auto ? '' : n + ' no captions - ' + L.why.replace(/^./, (m) => m.toLowerCase());
-  return n + ' no captions yet - Generate from the sound lays them.';
+  if (L.pending) return t('New lines are heard in a moment.');
+  if (L.why) {
+    return j && j.state === 'failed' && j.auto ? ''
+      : tn(L.bare, '{n} line has no captions - {why}', '{n} lines have no captions - {why}', { why: L.why.replace(/^./, (m) => m.toLowerCase()) });
+  }
+  return tn(L.bare, '{n} line has no captions yet - Generate from the sound lays them.', '{n} lines have no captions yet - Generate from the sound lays them.');
 }
 
 // What the line under the button says.
@@ -83,19 +88,21 @@ function _said(s) {
   if (s.refused) return s.refused;
   const j = s.job;
   if (j && j.state === 'listening') {
-    if (j.auto && !j.part && !j.dl && !j.wait && j.where !== 'local') return 'Hearing the new lines - ' + String(j.step || 'starting');
-    const step = String(j.step || 'starting');
-    if (step === 'collecting the sound' && j.part) return 'Listening - collecting the sound (' + j.part.i + ' of ' + j.part.n + ')';
-    if (j.dl) return 'Listening - downloading the speech model ' + Math.floor(100 * j.dl.got / Math.max(1, j.dl.total)) + '% of ' + _mb(j.dl.total);
-    if (j.wait) return 'Listening - ' + j.wait;
-    const part = j.part ? 'part ' + j.part.i + ' of ' + j.part.n + ', ' : '';
+    // The step is the server's words (compared here as it sends them); 'starting' until it says one.
+    if (j.auto && !j.part && !j.dl && !j.wait && j.where !== 'local') return t('Hearing the new lines - {step}', { step: String(j.step || t('starting')) });
+    const step = String(j.step || t('starting'));
+    if (step === 'collecting the sound' && j.part) return t('Listening - collecting the sound ({i} of {n})', { i: j.part.i, n: j.part.n });
+    if (j.dl) return t('Listening - downloading the speech model {pct}% of {size}', { pct: Math.floor(100 * j.dl.got / Math.max(1, j.dl.total)), size: _mb(j.dl.total) });
+    if (j.wait) return t('Listening - {step}', { step: j.wait });
     if (j.where === 'local') {
-      return 'Listening - ' + (j.fell ? FELL[j.fell] + '; ' : '') + part + 'on this computer' + (j.pct != null ? ' ' + j.pct + '%' : '');
+      const here = (j.part ? t('part {i} of {n}, on this computer', { i: j.part.i, n: j.part.n }) : t('on this computer'))
+        + (j.pct != null ? ' ' + j.pct + '%' : '');
+      return t('Listening - {step}', { step: j.fell ? _fell(j.fell) + '; ' + here : here });
     }
-    if (j.where === 'cloud' && j.part) return 'Listening - part ' + j.part.i + ' of ' + j.part.n;
-    return (j.stored ? 'Laying again - ' : 'Listening - ') + step;
+    if (j.where === 'cloud' && j.part) return t('Listening - part {i} of {n}', { i: j.part.i, n: j.part.n });
+    return j.stored ? t('Laying again - {step}', { step }) : t('Listening - {step}', { step });
   }
-  if (j && j.state === 'failed') return j.error || 'It did not finish.';
+  if (j && j.state === 'failed') return j.error || t('It did not finish.');
   if (j && j.state === 'done') {
     const r = j.result || {};
     const out = [];
@@ -103,44 +110,53 @@ function _said(s) {
     // as it is on purpose - so it does not say "Nothing was said", and the kept and stale counts are shown.
     const under = !r.lines && r.dropped && ((+r.dropped.fixed || 0) + (+r.dropped.typed || 0)) > 0;
     // A talking head's new lines, heard by themselves.
-    const lead = r.auto ? 'The new ' + (r.heardLines === 1 ? 'line was' : 'lines were') + ' heard by ' + (r.heardLines === 1 ? 'itself' : 'themselves') + ': '
-      : r.stored ? 'Laid again from what was heard: ' : '';
-    out.push(r.lines ? lead + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
-      : under ? 'Every word heard lies under lines you corrected or typed - the lane was left as it was.'
-        : 'Nothing was said on those tracks - the lane was left as it was.');
+    const pages = r.lines ? _pagesFrom(r.lines, r.words) : '';
+    out.push(!r.lines ? (under ? t('Every word heard lies under lines you corrected or typed - the lane was left as it was.')
+      : t('Nothing was said on those tracks - the lane was left as it was.'))
+      : r.auto ? (r.heardLines === 1 ? t('The new line was heard by itself: {pages}.', { pages }) : t('The new lines were heard by themselves: {pages}.', { pages }))
+        : r.stored ? t('Laid again from what was heard: {pages}.', { pages }) : pages + '.');
     // A line heard as other words than the script's (a clip that added its own) is laid as heard; a line never heard is
     // not laid again from nothing ("back to what was heard").
     const off = r.offScript || [];
-    if (off.length) out.push((off.length === 1 ? 'A line says' : off.length + ' lines say') + ' other words than the script, laid as heard: '
-      + off.slice(0, 3).join(', ') + (off.length > 3 ? '...' : '') + '.');
+    if (off.length) {
+      out.push(tn(off.length, 'A line says other words than the script, laid as heard: {list}.', '{n} lines say other words than the script, laid as heard: {list}.',
+        { list: off.slice(0, 3).join(', ') + (off.length > 3 ? '...' : '') }));
+    }
     const never = r.unheard || [];
-    if (never.length) out.push('Not heard yet: ' + never.slice(0, 3).join(', ') + (never.length > 3 ? '...' : '') + ' - Generate from the sound hears '
-      + (never.length === 1 ? 'it.' : 'them.'));
-    if (r.restLost) out.push('The other sound on the timeline was not laid again - it has changed since it was heard.');
+    if (never.length) {
+      const list = never.slice(0, 3).join(', ') + (never.length > 3 ? '...' : '');
+      out.push(never.length === 1 ? t('Not heard yet: {list} - Generate from the sound hears it.', { list })
+        : t('Not heard yet: {list} - Generate from the sound hears them.', { list }));
+    }
+    if (r.restLost) out.push(t('The other sound on the timeline was not laid again - it has changed since it was heard.'));
     if (r.stored) {
-      if (r.lines) out.push('Nothing asked, nothing paid.');
+      if (r.lines) out.push(t('Nothing asked, nothing paid.'));
     } else if (r.local) {
-      out.push('Heard on this computer in ' + Math.round(+r.took || 0) + ' s' + (r.fell ? ' - ' + FELL[r.fell]
-        + (r.fell !== 'no-key' ? '; press again to ask Groq.' : '.') : '.'));
-    } else if (r.lines && !r.paid) out.push('Nothing paid - heard before.');
-    if (r.timing === 'approximate') out.push('Some words are timed approximately.');
-    if (r.lines && !r.asked && r.language) out.push('Heard as ' + _cap(r.language) + '.');
+      const secs = Math.round(+r.took || 0);
+      out.push(!r.fell ? t('Heard on this computer in {secs} s.', { secs })
+        : r.fell !== 'no-key' ? t('Heard on this computer in {secs} s - {why}; press again to ask Groq.', { secs, why: _fell(r.fell) })
+          : t('Heard on this computer in {secs} s - {why}.', { secs, why: _fell(r.fell) }));
+    } else if (r.lines && !r.paid) out.push(t('Nothing paid - heard before.'));
+    if (r.timing === 'approximate') out.push(t('Some words are timed approximately.'));
+    // The language is the listener's own name for it (the server's words).
+    if (r.lines && !r.asked && r.language) out.push(t('Heard as {language}.', { language: _cap(r.language) }));
     const typed = r.dropped && r.dropped.typed;
-    if (typed) out.push(_n(typed, 'word', 'words') + ' under your typed lines ' + (typed === 1 ? 'was' : 'were') + ' left out.');
+    if (typed) out.push(tn(typed, '{n} word under your typed lines was left out.', '{n} words under your typed lines were left out.'));
     // The heard lines a person corrected stay as they are - and one that no longer looks like what is
     // heard under it is pointed out, for the person to look at: nothing takes it away by itself.
-    if (r.kept) out.push(_n(r.kept, 'corrected line', 'corrected lines') + ' kept.');
-    if (r.stale) out.push(_n(r.stale, 'corrected line', 'corrected lines') + ' no longer ' + (r.stale === 1 ? 'matches' : 'match')
-      + ' the sound under ' + (r.stale === 1 ? 'it' : 'them') + ' - have a look.');
-    if (r.missing && r.missing.length) out.push('Not found, heard as silence: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '...' : '') + '.');
-    if (r.moved) out.push('The sound changed while listening - press again to match it.');
-    if (r.suspect) out.push('Groq may have heard only part of it - press again to ask once more.');
-    else if (r.partial) out.push('Groq may have heard only part of it - it was asked twice, and this is its answer.');
+    if (r.kept) out.push(tn(r.kept, '{n} corrected line kept.', '{n} corrected lines kept.'));
+    if (r.stale) {
+      out.push(tn(r.stale, '{n} corrected line no longer matches the sound under it - have a look.',
+        '{n} corrected lines no longer match the sound under them - have a look.'));
+    }
+    if (r.missing && r.missing.length) out.push(t('Not found, heard as silence: {list}.', { list: r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '...' : '') }));
+    if (r.moved) out.push(t('The sound changed while listening - press again to match it.'));
+    if (r.suspect) out.push(t('Groq may have heard only part of it - press again to ask once more.'));
+    else if (r.partial) out.push(t('Groq may have heard only part of it - it was asked twice, and this is its answer.'));
     return out.join(' ');
   }
   if (s.last && s.last.at) {
-    return 'Last listened ' + _when(s.last.at) + ' - ' + _n(+s.last.lines || 0, 'page', 'pages') + ' from '
-      + _n(+s.last.words || 0, 'word', 'words') + '.';
+    return t('Last listened {when} - {pages}.', { when: _when(s.last.at), pages: _pagesFrom(+s.last.lines || 0, +s.last.words || 0) });
   }
   return '';
 }
@@ -220,15 +236,15 @@ export async function start(opts) {
   const s = _get(k);
   s.refused = '';
   if (!soundPieces(Store.timeline()).length) {
-    s.refused = 'There is no sound on the timeline to listen to.';
+    s.refused = t('There is no sound on the timeline to listen to.');
     _emit();
     return;
   }
-  s.job = { state: 'listening', step: 'saving the timeline', stored: !!(opts && opts.stored) };
+  s.job = { state: 'listening', step: t('saving the timeline'), stored: !!(opts && opts.stored) };
   _emit();
   if (!(await Store.flush())) {
     s.job = null;
-    s.refused = 'Not saved yet - the sound is taken from the saved timeline. Try again in a moment.';
+    s.refused = t('Not saved yet - the sound is taken from the saved timeline. Try again in a moment.');
     _emit();
     return;
   }
@@ -239,12 +255,12 @@ export async function start(opts) {
       body: JSON.stringify({ key: k, download: !!(opts && opts.download), stored: !!(opts && opts.stored) }),
     });
     d = await r.json();
-  } catch (e) { d = { success: false, error: 'The app did not answer - ' + e.message }; }
+  } catch (e) { d = { success: false, error: t('The app did not answer - {why}', { why: e.message }) }; }
   if (d && (d.success || d.job)) {
     s.job = d.job || null;
   } else {
     s.job = null;
-    s.refused = (d && d.error) || 'Refused.';
+    s.refused = (d && d.error) || t('Refused.');
   }
   _emit();
   if (k === _key && s.job && s.job.state === 'listening') _schedule();

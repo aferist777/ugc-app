@@ -47,14 +47,16 @@ import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as Doc from './caption-doc.js';
 import { fontPicker } from './font-tiles.js';
+// The module's own variables are called `t` (tabs, tiles): the words come in as T.t.
+import * as T from '../i18n/t.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
 const LS_TAB = 'mv3_cap_tab_v1';
-const TABS = [['presets', 'Presets', 'The preset styles - a press applies one to what is picked'],
-  ['anim', 'Animation', 'How a page comes in and goes out - a press puts a pair on what is picked'],
-  ['fonts', 'Fonts', 'The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them'],
-  ['text', 'Text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
+const TABS = [['presets', T.t('Presets'), T.t('The preset styles - a press applies one to what is picked')],
+  ['anim', T.t('Animation'), T.t('How a page comes in and goes out - a press puts a pair on what is picked')],
+  ['fonts', T.t('Fonts'), T.t('The letters - a press puts a font on what is picked; on a lane Shift picks several, each page one of them')],
+  ['text', T.t('Text'), T.t('The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace')]];
 const TAB_IDS = TABS.map((t) => t[0]);
 // The animations' tiles: the pair's In -> Out on plain white letters; until the still is made, its name in these.
 const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
@@ -108,7 +110,8 @@ function _build() {
   const chips = _el('div', 'mv3-cap-cats');
   // A row of chips per gallery, the other's hidden.
   for (const [kind, cats, list] of [['subs', CATEGORIES, PRESETS], ['text', TEXT_CATEGORIES, TEXT_PRESETS]]) {
-    const all = [['', 'All', list.length]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
+    // The categories' names are the tables' English, shown in the app's language (captions/presets.js, presets-text.js).
+    const all = [['', T.t('All'), list.length]].concat(cats.map((c) => [c.id, T.t(c.label), list.filter((p) => p.category === c.id).length]));
     for (const [id, label, n] of all) {
       // the shared chip, its count in mono
       const b = _el('button', 'mv3-cap-cat u-chip', label);
@@ -145,8 +148,7 @@ function _build() {
   // The animations: a line on what a press does, and the pairs' tiles.
   const anim = _el('div', 'mv3-cap-pane');
   const atop = _el('div', 'mv3-cap-top');
-  atop.appendChild(_el('div', 'mv3-cap-note', 'How a page comes in and goes out. A press puts the pair on what is picked; '
-    + 'In and Out on the right change each side by itself.'));
+  atop.appendChild(_el('div', 'mv3-cap-note', T.t('How a page comes in and goes out. A press puts the pair on what is picked; In and Out on the right change each side by itself.')));
   const agrid = _el('div', 'mv3-cap-grid');
   for (const p of PAIRS) {
     const t = _tile({ id: animTileId(p.id), name: p.name, pair: p.id, kind: 'anim', style: ANIM_LOOK });
@@ -159,8 +161,7 @@ function _build() {
   const ftop = _el('div', 'mv3-cap-top');
   fonts.appendChild(ftop);
   _fonts = fontPicker(fonts, { onPick: (list, o) => { if (_applyFonts) _applyFonts(list, o); } });
-  ftop.appendChild(_el('div', 'mv3-cap-note', 'The letters over the preset\'s own: on a lane one font for every page, or several with '
-    + 'Shift - each page one of them, as wide as in the preset\'s font; colors, outline and motion stay the preset\'s.'));
+  ftop.appendChild(_el('div', 'mv3-cap-note', T.t('The letters over the preset\'s own: on a lane one font for every page, or several with Shift - each page one of them, as wide as in the preset\'s font; colors, outline and motion stay the preset\'s.')));
   const text = _el('div', 'mv3-cap-pane');
   host.append(tabs, presets, anim, fonts, text);
   Doc.mount(text);
@@ -170,16 +171,18 @@ function _build() {
 }
 
 // One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and color.
+// The name is the table's English (it is also what a preset is stored and sent as), shown in the app's language.
 function _tile(p) {
   const btn = _el('button', 'mv3-cap-tile');
   const anim = p.kind === 'anim';
+  const shown = T.t(p.name);
   btn.type = 'button';
   btn.dataset.id = p.id;
   btn.dataset.cat = anim ? 'anim' : p.category;
   btn.dataset.kind = anim ? 'anim' : _kindOf(p);
-  btn.title = p.name + (anim ? ' - put it on what is picked' : ' - apply to what is picked');
+  btn.title = anim ? T.t('{name} - put it on what is picked', { name: shown }) : T.t('{name} - apply to what is picked', { name: shown });
   const box = _el('div', 'mv3-cap-box');
-  const ph = _el('span', 'mv3-cap-ph', p.name);
+  const ph = _el('span', 'mv3-cap-ph', shown);
   const s = p.style || {};
   ph.style.fontFamily = '"' + s.font + '", "Liberation Sans", sans-serif';
   ph.style.fontWeight = String(cssWeight(s.font, s.bold));
@@ -187,9 +190,9 @@ function _tile(p) {
   if (s.casing === 'upper') ph.style.textTransform = 'uppercase';
   box.appendChild(ph);
   const name = _el('div', 'mv3-cap-name');
-  const nm = _el('span', 'mv3-cap-nm', p.name);
+  const nm = _el('span', 'mv3-cap-nm', shown);
   name.appendChild(nm);
-  const ed = _el('span', 'mv3-cap-ed', 'Edited');
+  const ed = _el('span', 'mv3-cap-ed', T.t('Edited'));
   ed.hidden = true;
   name.appendChild(ed);
   btn.appendChild(box);
@@ -351,10 +354,13 @@ function _paintState() {
     t.img = img;
   }
   const n = (_state.ready || []).length;
-  _ui.status.textContent = _state.making ? 'making the previews ' + n + '/' + _state.total + (_state.waiting ? ' - waiting for the render' : '')
-    : _state.error ? 'the previews could not be made (' + _state.error + ') - the styles still apply'
-    : (_state.failed || []).length ? (_state.failed.length + ' previews could not be made - the styles still apply')
-    : _incomplete(_state) ? 'previews ' + n + '/' + _state.total : '';
+  const total = _state.total;
+  _ui.status.textContent = _state.making ? (_state.waiting ? T.t('making the previews {n}/{total} - waiting for the render', { n, total })
+      : T.t('making the previews {n}/{total}', { n, total }))
+    : _state.error ? T.t('the previews could not be made ({error}) - the styles still apply', { error: _state.error })
+    : (_state.failed || []).length ? T.tn(_state.failed.length, '{n} preview could not be made - the styles still apply',
+      '{n} previews could not be made - the styles still apply')
+    : _incomplete(_state) ? T.t('previews {n}/{total}', { n, total }) : '';
   _ui.status.hidden = !_ui.status.textContent;
 }
 

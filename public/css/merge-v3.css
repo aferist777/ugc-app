@@ -239,8 +239,9 @@ body:is(.mv3-noproject, .mv3-locked, .mv3-workshop) .mv3-tl-empty{display:none}
 
 /* Must match LBL_W in js/merge-v3/timeline-b.js: the playhead is positioned in px
    from the left edge of the scrolling area, so both sides need the same number. 88: the names in
-   500 11 px. */
+   500 11 px; 118 for the Russian names, which are longer. */
 :root{--mv3-lbl-w:88px}
+:root:lang(ru){--mv3-lbl-w:118px}
 
 /* The scroll box. Only this scrolls - the labels inside it are sticky, so they stay
    put while the lanes run right. */
@@ -628,6 +629,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:var(--fw-medium) var(--fs-10)/1.3 var(--font); color:var(--muted);   /* 500 - the scale's weights */
 }
 .mv3-c-ctl{flex:1 1 auto; min-width:0; display:flex; align-items:center}
+/* Russian's row names are longer («Непрозрачность», «Сохранять тембр»): a wider column, the hint under a row with it. */
+:root:lang(ru) .mv3-c-lbl{flex-basis:88px}
+:root:lang(ru) .mv3-c-hint{padding-left:96px}
 .mv3-c-sep{height:1px; margin:var(--sp-2) 0; background:var(--border-soft)}
 /* A section that opens when it is switched on (the Halfer band on a picture): the caret says
    whether there is more under the switch. */

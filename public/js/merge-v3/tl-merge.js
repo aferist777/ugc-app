@@ -22,6 +22,9 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { setFigures } from '../num.js';
+// The interface's words (`t` is a lane here, so the module's words are T.t). "Merge" is the verb here - clips glued into
+// one -, not the page: its own line, `verb::Merge`.
+import * as T from '../i18n/t.js';
 
 const SEAM = 0.011;
 let _acc = null;
@@ -82,12 +85,12 @@ export function mergeable(tl, ids) {
 // person's cell, the mirror would lay the same lines again over it and the voice would sound twice - so it is refused. A
 // sound cell laid before the voices were written does not say which take it speaks (opening the project tells
 // it - lib/frag-mirror.js catchUp); a line's picture without its sound is not a line.
-const OLD_CELLS = 'These lines were laid before they knew their takes - open the project again, then merge.';
+const OLD_CELLS = T.t('These lines were laid before they knew their takes - open the project again, then merge.');
 function _linesOf(m) {
   const ac = m.audio ? m.audio.clips : [];
   const vc = m.video ? m.video.clips : [];
   if (!ac.concat(vc).some((c) => Number(c.frag) > 0)) return null;
-  if (!ac.some((c) => Number(c.frag) > 0)) return { why: 'A talking head\'s lines merge with their sound - pick them on main audio too.' };
+  if (!ac.some((c) => Number(c.frag) > 0)) return { why: T.t('A talking head\'s lines merge with their sound - pick them on main audio too.') };
   const lines = [];
   const byVoice = new Map();
   for (const c of ac) {
@@ -120,9 +123,11 @@ export function offerMerge() {
   // button (`u-win is-float`) holding its head row alone (`u-win-head`), the 28-px ✕ at its right end
   box.className = 'mv3-mergeask u-win is-float';
   box.innerHTML = '<div class="mv3-mergeask-r u-win-head"><span class="mv3-mergeask-t"></span>'
-    + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main">Merge</button>'
-    + '<button type="button" class="mv3-mergeask-x u-btn is-icon is-quiet u-x" title="Close (Esc)"></button></div>';
-  setFigures(box.querySelector('.mv3-mergeask-t'), 'Merge ' + m.n + ' clips into one?');
+    + '<button type="button" class="mv3-mergeask-go u-btn is-s is-main"></button>'
+    + '<button type="button" class="mv3-mergeask-x u-btn is-icon is-quiet u-x"></button></div>';
+  box.querySelector('.mv3-mergeask-go').textContent = T.tc('verb', 'Merge');
+  box.querySelector('.mv3-mergeask-x').title = T.t('Close (Esc)');
+  setFigures(box.querySelector('.mv3-mergeask-t'), T.tn(m.n, 'Merge {n} clip into one?', 'Merge {n} clips into one?'));
   // Lines that cannot be merged as lines: the words in place of the offer, nothing to press.
   const why = (_linesOf(m) || {}).why;
   if (why) {
@@ -177,14 +182,14 @@ async function _go() {
   if (why) { go.remove(); _say(why, true); return; }
   go.disabled = true;
   go.style.display = 'none';
-  w.box.querySelector('.mv3-mergeask-x').title = 'Stop merging';
-  _say('merging…');
+  w.box.querySelector('.mv3-mergeask-x').title = T.t('Stop merging');
+  _say(T.t('merging…'));
   const tl = Store.timeline();
   try {
     const r = await fetch('/api/mv3/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: Store.key(), format: tl && tl.format,
         video: w.m.video ? w.m.video.clips : [], audio: w.m.audio ? w.m.audio.clips : [] }) }).then((x) => x.json());
-    if (!r.success) throw new Error(r.error || 'not merged');
+    if (!r.success) throw new Error(r.error || T.t('not merged'));
     w.job = r.job;
     _follow(w);
   } catch (e) {
@@ -203,11 +208,11 @@ function _follow(w) {
     if (_win !== w) return;
     if (!j) { _follow(w); return; }
     w.job = j;
-    if (j.state === 'running') { _say('merging… ' + (j.pct || 0) + '%'); _follow(w); return; }
+    if (j.state === 'running') { _say(T.t('merging… {pct}%', { pct: j.pct || 0 })); _follow(w); return; }
     if (j.state === 'done') { _lay(w, j); return; }
     w.job = null;
     if (j.state === 'cancelled') { closeMerge(); return; }
-    _say('Not merged: ' + (j.error || 'ffmpeg stopped'), true);
+    _say(T.t('Not merged: {why}', { why: j.error || T.t('ffmpeg stopped') }), true);
   }, 400);
 }
 
@@ -230,13 +235,13 @@ function _lay(w, j) {
   const name = 'merged · ' + m.n + ' clips';
   const mergeOf = _linesOf(m);                                // a talking head's lines inside
   // Lines that cannot be merged as lines are never laid as the person's cell.
-  if (mergeOf && mergeOf.why) { w.job = null; _say(mergeOf.why + ' The file is in the project\'s folder, nothing was laid.', true); return; }
+  if (mergeOf && mergeOf.why) { w.job = null; _say(T.t('{why} The file is in the project\'s folder, nothing was laid.', { why: mergeOf.why }), true); return; }
   let newVideo = null, newAudio = null;
   const ok = Store.mutate((tl) => {
     for (const set of sets) {
       const lane = tl.tracks.find((t) => t.id === set.lane);
       if (!lane || !set.clips.every((c) => same(c, (lane.clips || []).find((x) => x.id === c.id)))) {
-        throw new Error('The clips changed while they were being merged - the file is in the project\'s folder, nothing was laid.');
+        throw new Error(T.t('The clips changed while they were being merged - the file is in the project\'s folder, nothing was laid.'));
       }
     }
     for (const set of sets) {
@@ -255,7 +260,7 @@ function _lay(w, j) {
       if (lane.kind === 'audio') { lane.clips.sort((x, y) => x.start - y.start); newAudio = cell.id; } else newVideo = cell.id;
     }
   });
-  if (!ok) { w.job = null; _say(Store.status() || 'Not laid', true); return; }
+  if (!ok) { w.job = null; _say(Store.status() || T.t('Not laid'), true); return; }
   w.job = null;
   closeMerge();
   if (_acc.select) _acc.select(newVideo || newAudio);

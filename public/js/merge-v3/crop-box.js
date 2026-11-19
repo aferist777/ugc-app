@@ -22,6 +22,8 @@ import { mapsOf, mediaDims, frameSrc } from './preview-b.js';
 import { setLive } from './place-b.js';
 import { normalize, active, SHAPES, largest, pickMap, placeFor } from '../framing/crop.js';
 import { showError } from '../notice.js';
+// The interface's words - as T: in this module `t` is a time or a lane.
+import * as T from '../i18n/t.js';
 
 const isMain = (track) => !!(track && track.kind === 'video' && track.main);
 const _under = (c, t) => t >= +c.start - 1e-4 && t < +c.start + (+c.dur || 0);
@@ -148,7 +150,7 @@ export const pipOffCrop = (c) => (active(c) ? { crop: { ...active(c), off: true 
 /** Crop on or off for every clip of `items` ([{ track, clip }]), one undo step. */
 export async function setCrop(items, want) {
   const ds = await Promise.all(items.map((x) => _dimsOf(x.clip)));
-  if (ds.some((d) => !d)) { showError('The picture of this clip has not loaded yet - try again in a moment.'); return; }
+  if (ds.some((d) => !d)) { showError(T.t('The picture of this clip has not loaded yet - try again in a moment.')); return; }
   const now = _fresh(items);
   if (!now.length) return;
   const dOf = (it) => ds[items.findIndex((x) => x.clip.id === it.clip.id)];
@@ -209,7 +211,7 @@ async function _shape(items, name) {
   const ds = await Promise.all(now.map((it) => _dimsOf(it.clip)));
   const d = ds[0];
   const base = ds.every(Boolean) ? cropBases(items) : null;
-  if (!base) { showError('The picture of this clip has not loaded yet - try again in a moment.'); return; }
+  if (!base) { showError(T.t('The picture of this clip has not loaded yet - try again in a moment.')); return; }
   setLive(null);
   const nk = normalize(largest(SHAPES[name], d.w / d.h, k.x + k.w / 2, k.y + k.h / 2));
   if (nk) setClipsFields(cropPatches(base, nk, name));
@@ -223,32 +225,39 @@ export function cropRows(host, items) {
   const clips = items.map((x) => x.clip);
   const on = clips.every((c) => !!active(c));
   const many = items.length > 1;
-  const head = C.row('Crop', C.toggle(on, (v) => { setCrop(items, v); }));
-  head.title = on ? 'Cut a piece out of the picture - switch off for the whole picture again (the frame is remembered).'
-    : 'Cut a piece out of ' + (many ? 'these clips' : 'this clip') + ' - it stays where it is on the frame'
-      + (items.some((x) => isMain(x.track)) ? ' and becomes a picture in the picture' : '');
+  const head = C.row(T.t('Crop'), C.toggle(on, (v) => { setCrop(items, v); }));
+  const toPip = items.some((x) => isMain(x.track));
+  if (on) head.title = T.t('Cut a piece out of the picture - switch off for the whole picture again (the frame is remembered).');
+  else if (many) {
+    head.title = toPip ? T.t('Cut a piece out of these clips - it stays where it is on the frame and becomes a picture in the picture')
+      : T.t('Cut a piece out of these clips - it stays where it is on the frame');
+  } else {
+    head.title = toPip ? T.t('Cut a piece out of this clip - it stays where it is on the frame and becomes a picture in the picture')
+      : T.t('Cut a piece out of this clip - it stays where it is on the frame');
+  }
   host.appendChild(head);
   if (!on) {
-    if (clips.some((c) => active(c))) host.appendChild(C.hint('Some of the picked clips are cropped - switching on crops all of them by one frame.'));
+    if (clips.some((c) => active(c))) host.appendChild(C.hint(T.t('Some of the picked clips are cropped - switching on crops all of them by one frame.')));
     return false;
   }
   const k = active(clips[0]);
   const shapes = document.createElement('div');
   shapes.className = 'mv3-crop-shapes';
-  for (const [name, label] of [['', 'Free'], ...Object.keys(SHAPES).map((x) => [x, x])]) {
+  for (const [name, label] of [['', T.t('Free')], ...Object.keys(SHAPES).map((x) => [x, x])]) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'mv3-crop-shape u-chip' + ((k.shape || '') === name ? ' is-on' : '');
     b.textContent = label;
-    b.title = name ? 'The largest ' + name + ' frame about the middle of this one - kept ' + name + ' until Free'
-      : 'Any shape - Shift while dragging a side on the preview keeps the one it has';
+    b.title = name ? T.t('The largest {shape} frame about the middle of this one - kept {shape} until Free', { shape: name })
+      : T.t('Any shape - Shift while dragging a side on the preview keeps the one it has');
     b.addEventListener('click', () => _shape(items, name));
     shapes.appendChild(b);
   }
   host.appendChild(shapes);
-  host.appendChild(C.hint('On the preview: drag a side of the picked piece to cut it'
-    + (k.shape ? '' : ' (Shift keeps its shape)') + ', Alt + drag it to move the picture inside the frame.'
-    + (many ? ' One frame for all ' + items.length + ' picked clips.' : ''), true));
+  const how = k.shape
+    ? T.t('On the preview: drag a side of the picked piece to cut it, Alt + drag it to move the picture inside the frame.')
+    : T.t('On the preview: drag a side of the picked piece to cut it (Shift keeps its shape), Alt + drag it to move the picture inside the frame.');
+  host.appendChild(C.hint(many ? how + ' ' + T.t('One frame for all {n} picked clips.', { n: items.length }) : how, true));
   // Every clip's shape ready before the first gesture.
   for (const it of items) _dimsOf(it.clip);
   return true;

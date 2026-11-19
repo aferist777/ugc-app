@@ -26,6 +26,7 @@
 import { panelRoom, onColumnOpen } from './layout.js';
 import { showError } from '../notice.js';
 import { homeOf, isHome } from '../highlights/keys.js';
+import * as T from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -93,14 +94,14 @@ export const chatKey = homeOf;
 /** The open timeline is a highlights project's own (no fragment open). */
 export const isHlHome = isHome;
 /** What a drag of a chat's result says there. */
-export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
+export const NO_FRAGMENT = [T.t('Open a fragment first.'), T.t('Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.')];
 /**
  * Said wherever something would be laid on the home - a chat's result dragged
  * there and a drop on its lanes, refused on release: a popup (js/notice.js) with "to highlights", which brings the tiles back
  * (the highlights view's own crumb, highlights.js) and lets the popup go.
  */
 export function noFragment() {
-  showError(NO_FRAGMENT[0], { detail: NO_FRAGMENT[1], action: { label: 'To highlights', run: () => {
+  showError(NO_FRAGMENT[0], { detail: NO_FRAGMENT[1], action: { label: T.t('To highlights'), run: () => {
     const c = _chats.get('highlights');
     if (c && c.onCrumb) c.onCrumb();
   } } });
@@ -223,7 +224,7 @@ function _paint() {
   if (title) {
     // A link always: it leads to the Library's roots, from the shelf too.
     title.classList.add('is-link');
-    title.title = 'The Library - REFERENCES, VIDEO, IMAGES, AUDIO';
+    title.title = T.t('The Library - REFERENCES, VIDEO, IMAGES, AUDIO');
     // Blue while the gallery is what shows; white over a view or the captions.
     title.classList.toggle('is-on', t === 'shelf');
   }
@@ -240,7 +241,7 @@ function _paint() {
   const cap = $('mv3-lib-cap');
   if (cap) {
     cap.classList.toggle('is-on', t === 'captions');
-    cap.title = t === 'captions' ? '' : 'The subtitle lane - its look and the caption presets';
+    cap.title = t === 'captions' ? '' : T.t('The subtitle lane - its look and the caption presets');
   }
   _room();
 }

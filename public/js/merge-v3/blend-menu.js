@@ -11,6 +11,7 @@
 import * as Layers from '../layers.js';
 import { BLENDS } from '../overlay/look.js';
 import { iconEl } from '../icons.js';
+import { t } from '../i18n/t.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -65,7 +66,7 @@ export function blendButton({ current, title, live, write }) {
   b.className = 'mv3-blend-btn u-btn is-s is-field';
   const now = BLENDS.find((m) => m.id === current);
   // the field's chevron, Lucide's - not "▾"
-  b.appendChild(document.createTextNode(now ? now.label : 'mixed'));
+  b.appendChild(document.createTextNode(now ? now.label : t('mixed')));
   b.appendChild(iconEl('chevron-down', 14));
   if (title) b.title = title;
   b.addEventListener('click', (e) => { e.stopPropagation(); _open(b, current || '', live, write); });

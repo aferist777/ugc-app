@@ -16,6 +16,8 @@
    it is framed, cropped, blurred or placed (ffOf: colorchannelmixer, then lutrgb).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { t } from '../i18n/t.js';
+
 export const COLOR_KEYS = ['brightness', 'contrast', 'saturation', 'gamma'];
 // [min, max, neutral, step] of each - the sliders' and the stored value's.
 export const COLOR_RANGE = {
@@ -24,7 +26,8 @@ export const COLOR_RANGE = {
   saturation: [0, 2, 1, 0.05],
   gamma: [0.5, 2, 1, 0.05],
 };
-export const COLOR_LABEL = { brightness: 'Brightness', contrast: 'Contrast', saturation: 'Saturation', gamma: 'Gamma' };
+// The sliders' names - only shown, in the interface's language (i18n/t.js).
+export const COLOR_LABEL = { brightness: t('Brightness'), contrast: t('Contrast'), saturation: t('Saturation'), gamma: t('Gamma') };
 
 const _r2 = (v) => Math.round(v * 100) / 100;
 

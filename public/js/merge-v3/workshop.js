@@ -32,6 +32,8 @@ import * as PV from './preview-b.js';
 import { lock, softLock, setOpenColumn, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 import { hint } from '../bubble.js';
+// The app's words as T.t: this module's own `t`s are lanes and words.
+import * as T from '../i18n/t.js';
 
 // TWO STEPS: `setup` builds the project, `timeline` edits the result. The crumbs are the
 // switch. The Setup panel open is the setup step; a crumb of setup's way on (_paintOn, below) is the
@@ -242,8 +244,8 @@ function _paintRoute() {
 // (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left.
 // No "generate image / video / audio" - the chats are windows, opened by "generate" in the Library's tree.
 const ON = [
-  ['Library', 'mv3-lib-title', 'The timeline and the Library'],
-  ['captions', 'mv3-lib-cap', 'The captions of the timeline - their look and presets'],
+  [T.t('Library'), 'mv3-lib-title', T.t('The timeline and the Library')],
+  [T.t('Captions'), 'mv3-lib-cap', T.t('The captions of the timeline - their look and presets')],
 ];
 function _paintOn(wrap) {
   // A voiceover's "b-roll" first, right of SETUP: the B-roll's pieces, from the timeline step's Library panel
@@ -253,20 +255,20 @@ function _paintOn(wrap) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'mv3-lib-crumb is-post mv3-wk-on' + (on ? '' : ' is-off');
-    b.textContent = 'B-roll';
+    b.textContent = T.t('B-roll');
     b.addEventListener('click', (e) => { e.stopPropagation(); if (on) _goOn('mv3-lib-br'); });
-    if (on) b.title = 'The B-roll of a piece - what else was found for its sentence';
-    else { b.setAttribute('aria-disabled', 'true'); hint(b, 'Find the B-roll first - field 2, B-roll.'); }
+    if (on) b.title = T.t('The B-roll of a piece - what else was found for its sentence');
+    else { b.setAttribute('aria-disabled', 'true'); hint(b, T.t('Find the B-roll first - field 2, B-roll.')); }
     wrap.appendChild(b);
   }
   const ok = _ready();
   const n = _readCount();
   // Why it cannot be pressed, in so many words: what is missing, how much of it, and where it is made.
-  const left = !_project ? 'Reading the project…'
-    : !n.total ? (_isVo() ? 'Choose the script first - a scenario or your own text, on the right.' : 'This project has no lines.')
-      : _isVo() ? 'Not yet - nothing is on the timeline. Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline and the Library open.'
-        : 'Not yet - the timeline and the Library open when EVERY fragment has its video, and ' + n.clips + ' of ' + n.total
-          + ' have one now. Make the rest in field 3, video.';
+  const left = !_project ? T.t('Reading the project…')
+    : !n.total ? (_isVo() ? T.t('Choose the script first - a scenario or your own text, on the right.') : T.t('This project has no lines.'))
+      : _isVo() ? T.t('Not yet - nothing is on the timeline. Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline and the Library open.')
+        : T.t('Not yet - the timeline and the Library open when EVERY fragment has its video, and {k} of {n} have one now. Make the rest in field 3, video.',
+          { k: n.clips, n: n.total });
   for (const [label, id, what] of ON) {
     const c = document.createElement('button');
     c.type = 'button';
@@ -369,7 +371,7 @@ export function initWorkshop() {
   // "setup /", first in the Library panel's head: back to setup.
   const back = document.getElementById('mv3-lib-setup');
   if (back) {
-    back.title = 'Back to setup - the script and its fields';
+    back.title = T.t('Back to setup - the script and its fields');
     back.addEventListener('click', (e) => { e.stopPropagation(); if (_pid) setStep('setup'); });
   }
   // A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
@@ -412,9 +414,10 @@ export function paint(host) {
     // in the header has to say the place that is actually on screen.
     return _paintRoute();
   }
-  host.appendChild(_note('opening ' + _step + '…'));
+  // Only setup is a module of its own (MODULES).
+  host.appendChild(_note(T.t('opening setup…')));
   load().then((m) => { _loaded[_step] = m; _repaint(); })
-    .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });
+    .catch((e) => { host.textContent = ''; host.appendChild(_note(T.t('Could not open this step: {why}', { why: e.message }), true)); });
 }
 
 function _note(text, bad) {
