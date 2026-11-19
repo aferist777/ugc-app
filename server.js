@@ -49,6 +49,13 @@ const PROGRAM = require('./lib/app-version').current();
     console.warn('[format] no snapshot of the stores: ' + e.message);
   }
 }
+// The language the app runs in, taken once (lib/i18n.js) - before the stamp, which is what tells a library made by
+// this start: that one takes the system's language.
+const I18N = require('./lib/i18n');
+try {
+  const isNew = !fs.existsSync(path.join(ROOT_DIR, 'data', 'library.json'));
+  console.log(`[lang] ${I18N.boot({ root: ROOT_DIR, isNew })}${isNew ? ' (a new library)' : ''}`);
+} catch (e) { console.warn('[lang] ' + e.message); }
 // The format this program writes and the program that opened the library last (lib/library-format.js).
 try { LIB_FORMAT.stamp(ROOT_DIR, PROGRAM); } catch (e) { console.warn('[format] the library was not stamped: ' + e.message); }
 // What older versions left in the library and nothing reads goes, once, each file copied into backups/ first
@@ -131,12 +138,13 @@ app.use('/patterns', express.static(require('./lib/media').PATTERNS_DIR, {
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps its name: renaming it would churn every import
-// path under public/js/ for no gain.
+// path under public/js/ for no gain. A page goes out in the app's language, its dictionary's script first in <head>
+// (lib/i18n.js `page`).
 const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
-    res.sendFile(path.join(__dirname, 'public', file));
+    res.type('html').send(I18N.page(path.join(__dirname, 'public', file)));
   })
 );
 
@@ -146,6 +154,7 @@ app.use('/api', require('./routes/app-update'));   // a new commit in the progra
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/settings'));
+app.use('/api', require('./routes/i18n'));   // the app's language: Admin's switch, the pages' dictionary
 app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver
 app.use('/api', require('./routes/telegram'));     // the person's own bot: links and media into REFERENCES
 app.use('/api', require('./routes/home'));   // what the Home page's blocks read

@@ -108,6 +108,10 @@ function run() {
   process.env.UGC_DATA_DIR = LIBRARY;
   const { LOGS_DIR } = require('../lib/config');   // creates the library's folders
   app.commandLine.appendSwitch('disable-http-cache');
+  // The app's language (lib/lang-choice.js) is Chromium's too - its menus' Cut / Copy / Paste, the file dialogs, the
+  // dates. Set before the window, so a change takes a restart; none chosen - the system's own.
+  const LANG = require('../lib/lang-choice').known(LIBRARY);
+  if (LANG) app.commandLine.appendSwitch('lang', LANG === 'ru' ? 'ru' : 'en-US');
 
   const log = openLog(LOGS_DIR, { echo: DEV });
   log.line(`library: ${LIBRARY}`);
@@ -254,6 +258,8 @@ function run() {
       : null);
     guardSession();
     mainWindow = openMainWindow();
+    // A library made by this start takes the system's language (lib/lang-choice.js); the server learns it here.
+    try { process.env.UGC_SYSTEM_LANG = app.getLocale(); } catch { /* the server asks Intl instead */ }
     server.start();
   });
 
@@ -337,8 +343,8 @@ function run() {
     return response === 0;
   }
 
-  // A new version is in the program folder: the whole app (not the server alone) starts again on it. A running render
-  // is asked about first; the draft is not - it is on the disk, and the new run
+  // A new version is in the program folder, or another language was chosen: the whole app (not the server alone)
+  // starts again. A running render is asked about first; the draft is not - it is on the disk, and the new run
   // opens it as it was. will-quit stops the server and its ffmpeg as on any quit.
   async function restartApp(win) {
     if (asking || closeConfirmed) return;
@@ -346,7 +352,7 @@ function run() {
     let go = false;
     try { go = await askRender(win, 'Restart'); } finally { asking = false; }
     if (!go) return;
-    log.line('restarting for a new version');
+    log.line('restarting');
     closeConfirmed = true;
     // Started by the launcher, the launcher starts it again - and switches to a new version on the way.
     if (home && home.restart()) { app.quit(); return; }

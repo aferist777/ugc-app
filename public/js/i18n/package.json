@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The interface's words are ES modules: the page imports t.js, the server require()s it and the dictionaries (Node 24) - one rule for both."
+}

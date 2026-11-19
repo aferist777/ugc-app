@@ -57,12 +57,14 @@
     <div class="dio-body" id="ai-body"></div>
   </section>
 
-  <!-- Speech recognition on this computer: the program and the model (js/admin-local.js). -->
+  <!-- The interface's language first (js/admin-lang.js); then speech recognition on this computer: the program and the
+       model (js/admin-local.js). -->
   <section class="adm-panel" data-pane="local" hidden>
     <div class="adm-head">
       <span class="adm-title">This computer</span>
     </div>
-    <p class="adm-lead">Speech recognition for captions, and the yt-dlp links are read with</p>
+    <p class="adm-lead">The interface's language, speech recognition for captions, and the yt-dlp links are read with</p>
+    <div class="dio-body loc-lang" id="loc-lang"></div>
     <div class="dio-body" id="loc-body"></div>
   </section>
 
@@ -78,6 +80,7 @@
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
+<script type="module" src="js/admin-lang.js"></script>
 <script src="js/admin-keys.js"></script>
 <script src="js/admin-ai.js"></script>
 <script src="js/admin-local.js"></script>

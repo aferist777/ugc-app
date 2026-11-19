@@ -1,0 +1,14 @@
+/* ru.js - THE RUSSIAN DICTIONARY: English text -> Russian, in parts by the part of the app they belong to, so the parts
+   are translated and changed apart. Read by the server only (lib/i18n.js): a page gets the merged dictionary from
+   GET /api/i18n/dict.js, never this module, so a page in English loads no Russian.
+
+   A line is 'English': 'Русский'; a count's line is the English `other` text with its three forms - one, few, many:
+   '{n} files': ['{n} файл', '{n} файла', '{n} файлов']; a line for one place is 'ctx::English' (t.js tc). */
+
+import common from './ru/common.js';
+
+export const PARTS = { common };
+
+const all = {};
+for (const part of Object.values(PARTS)) Object.assign(all, part);
+export default all;

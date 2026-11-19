@@ -120,6 +120,9 @@
 .loc-state.ok{ color:var(--success); }
 .loc-state.bad{ color:var(--danger); }
 .loc-prog{ flex:0 0 200px; }
+/* The language's row above the rest (js/admin-lang.js): the pane's bottom padding once, under the rest. */
+.dio-body.loc-lang{ padding-bottom:0; }
+.dio-body.loc-lang:empty{ display:none; }
 
 .dio-sec{
   font:var(--fw-medium) var(--fs-11)/var(--lh-11) var(--font);   /* sentence case */

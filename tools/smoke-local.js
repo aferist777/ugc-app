@@ -13,6 +13,7 @@
      - the routes that were removed still answer 404;
      - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js), and THIRD_PARTY_NOTICES.md
        is made from that list as it is now (tools/third-party.js);
+     - every text the code asks t() for has its line in each dictionary, and no line is stale (tools/i18n.js);
      - (said, not failed) whether whisper.cpp for recognition on this computer is in vendor/whisper.
    It spends nothing: no request here starts a generation or a render.
 
@@ -180,6 +181,12 @@ function getRoutes() {
   console.log(`thanks: ${deps.length - unthanked.length}/${deps.length} dependencies thanked`);
   // THIRD_PARTY_NOTICES.md is made from that same list: a line added there needs the file made again.
   if (!require('./third-party.js').current()) { failed++; console.log('!! THIRD_PARTY_NOTICES.md is not current - node tools/third-party.js'); }
+  // The interface's words: a text given to t() has its line in every dictionary (tools/i18n.js).
+  {
+    const words = require('./i18n.js').check();
+    if (!words.ok) { failed++; console.log('!! the dictionaries - node tools/i18n.js --verbose'); }
+    console.log('words: ' + words.lines.join('\n  '));
+  }
 
   // Recognition on this computer needs whisper.cpp in vendor/ - laid out by npm install, and optional
   // there, so its absence is SAID, not failed: captions are still heard by Groq.
