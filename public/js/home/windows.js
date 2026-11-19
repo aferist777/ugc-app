@@ -21,6 +21,7 @@
 import { openGenerator } from '../gen-window.js';
 import * as W from '../merge-v3/chat-window.js';
 import { showError } from '../notice.js';
+import { t } from '../i18n/t.js';
 
 let _onMade = () => {};
 export function setOnMade(fn) { _onMade = typeof fn === 'function' ? fn : () => {}; }
@@ -70,7 +71,7 @@ export async function openChat(which) {
       if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
       if (W.wanted(which)) await P.openPictures();
     }
-  } catch (e) { W.dropEarly(which); showError('The chat did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { W.dropEarly(which); showError(t('The chat did not open: {why}', { why: (e && e.message) || e })); }
 }
 
 // ── the sound window ─────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ const HOST = {
   soundsNode: () => _soundsKey || 'sounds',
   where: (d, label) => ({
     page: 'library', href: '/library?shelf=media&kind=' + encodeURIComponent(d.node),
-    label: 'Library · ' + (d.label || 'Generate audio') + ' · ' + label, spot: { view: 'musicmake', key: d.node, label: d.label },
+    label: t('Library') + ' · ' + (d.label || t('Generate audio')) + ' · ' + label, spot: { view: 'musicmake', key: d.node, label: d.label },
   }),
   onLanded: () => _made(),
 };
@@ -107,10 +108,10 @@ export async function openSound() {
       SW = await import('../sound/sound-window.js');
       SW.configure(HOST);
     }
-    await SW.open({ place: () => ({ key: 'music', label: 'Music' }) });
+    await SW.open({ place: () => ({ key: 'music', label: t('Music') }) });
     // The key is wanted only by a sound's Alerts row, and the tree is a long read: asked once the window shows.
     _soundsGen();
-  } catch (e) { showError('The sound window did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { showError(t('The sound window did not open: {why}', { why: (e && e.message) || e })); }
 }
 
 // Home drawn and idle: the chats' and the sound window's code and sheets read beforehand, so a first opening is
@@ -128,8 +129,8 @@ export function preload() {
 // The Library's `where` (js/library/main.js GEN_WHERE): a row running opens the generator in the Library, one that ended
 // leads to the picture outlined in IMAGES → Environments / Lookbooks.
 const GEN_WHERE = {
-  environment: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
-  lookbook: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: 'Library · New lookbook', spot: { view: 'lbmake' } },
+  environment: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: t('Library · New environment'), spot: { view: 'envmake' } },
+  lookbook: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: t('Library · New lookbook'), spot: { view: 'lbmake' } },
 };
 const _gens = {};
 export function openGen(kind) {
@@ -142,7 +143,7 @@ export function openGen(kind) {
       onMade: () => _made(),
       onClose: () => { _gens[kind] = null; },
     });
-  } catch (e) { showError('The generator did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { showError(t('The generator did not open: {why}', { why: (e && e.message) || e })); }
 }
 
 // ── New prop ─────────────────────────────────────────────────────────────────
@@ -151,5 +152,5 @@ export async function openProp() {
     await _css(['media-tree.css', 'dialog.css']);
     const { openNewProp } = await import('../prop-window.js');
     openNewProp({ onAdded: () => _made() });
-  } catch (e) { showError('New prop did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { showError(t('New prop did not open: {why}', { why: (e && e.message) || e })); }
 }

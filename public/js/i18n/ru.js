@@ -7,8 +7,9 @@
 
 import common from './ru/common.js';
 import shell from './ru/shell.js';
+import home from './ru/home.js';
 
-export const PARTS = { common, shell };
+export const PARTS = { common, shell, home };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

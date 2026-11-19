@@ -15,9 +15,10 @@ import { el, api, ls, lsSet, when, frame } from './util.js';
 // popup), the empty list in the shared part.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import { t, tn, lang } from '../i18n/t.js';
 
-const CHIPS = [['all', 'All'], ['blank', 'Blank'], ['talking', 'Talking head'], ['voiceover', 'Voiceover'], ['highlights', 'Highlights']];
-const WORD = { draft: 'draft · not saved', blank: 'blank', talking: 'talking head', voiceover: 'voiceover', highlights: 'highlights' };
+const CHIPS = [['all', t('All')], ['blank', t('Blank')], ['talking', t('Talking head')], ['voiceover', t('Voiceover')], ['highlights', t('Highlights')]];
+const WORD = { draft: t('draft · not saved'), blank: t('blank'), talking: t('talking head'), voiceover: t('voiceover'), highlights: t('highlights') };
 const ICON_OF = { draft: 'blank', blank: 'blank', talking: 'talking', voiceover: 'voiceover', highlights: 'highlights' };
 const CHIP_KEY = 'ugc_home_proj_kind_v1';
 
@@ -26,20 +27,19 @@ const _len = (s) => {
   const t = Math.round(+s || 0);
   return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
 };
-const _n = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
-const _day = (iso) => { const t = Date.parse(iso); return t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; };
+const _day = (iso) => { const at = Date.parse(iso); return at ? new Date(at).toLocaleDateString(lang() === 'ru' ? 'ru-RU' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; };
 
 // What the card says of its length and of what it holds - by its kind.
 function _facts(p) {
   const out = [];
   if (p.kind === 'highlights') {
-    out.push(p.dur > 0 ? 'video ' + _len(p.dur) : 'no video yet');
-    out.push(p.fragsAll ? p.frags + ' of ' + _n(p.fragsAll, 'fragment') + ' made' : 'no fragments yet');
+    out.push(p.dur > 0 ? t('video {len}', { len: _len(p.dur) }) : t('no video yet'));
+    out.push(p.fragsAll ? tn(p.fragsAll, '{k} of {n} fragment made', '{k} of {n} fragments made', { k: p.frags }) : t('no fragments yet'));
     return out;
   }
-  out.push(p.dur > 0 ? _len(p.dur) : 'nothing on the timeline yet');
-  if (p.kind === 'talking') out.push(_n(+p.frags || 0, 'fragment'));
-  if (p.clips) out.push(_n(p.clips, 'clip'));
+  out.push(p.dur > 0 ? _len(p.dur) : t('nothing on the timeline yet'));
+  if (p.kind === 'talking') out.push(tn(+p.frags || 0, '{n} fragment', '{n} fragments'));
+  if (p.clips) out.push(tn(p.clips, '{n} clip', '{n} clips'));
   return out;
 }
 
@@ -62,11 +62,11 @@ function _showPeek(row, p) {
     const pic = el('div', 'hm-peek-pic' + (p.format === '16:9' ? ' is-wide' : ''));
     if (p.thumb) pic.style.backgroundImage = _bg(p.thumb);
     else { pic.classList.add('is-none'); pic.innerHTML = ICONS[ICON_OF[p.kind]] || ''; }
-    const t = el('div', 'hm-peek-t', p.title);
+    const ttl = el('div', 'hm-peek-t', p.title);
     const k = el('div', 'hm-peek-k', WORD[p.kind] || p.kind);
     const f = el('div', 'hm-peek-d', _facts(p).join(' · '));
-    const d = el('div', 'hm-peek-d', ['changed ' + (when(p.updatedAt) || '-'), p.createdAt ? 'made ' + _day(p.createdAt) : ''].filter(Boolean).join(' · '));
-    _peek.replaceChildren(pic, t, k, f, d);
+    const d = el('div', 'hm-peek-d', [t('changed {when}', { when: when(p.updatedAt) || '-' }), p.createdAt ? t('made {day}', { day: _day(p.createdAt) }) : ''].filter(Boolean).join(' · '));
+    _peek.replaceChildren(pic, ttl, k, f, d);
     _peek.hidden = false;
     // Beside the row - on its right while there is room, else on its left; its top with the row's, kept on the screen.
     const r = row.getBoundingClientRect();
@@ -82,11 +82,11 @@ window.addEventListener('scroll', _hidePeek, true);
 document.addEventListener('mousedown', _hidePeek, true);
 
 export function projectsBlock() {
-  const f = frame('projects', 'Projects');
-  f.what.textContent = '· the ones you changed last';
-  const all = el('a', null, 'all projects →');
+  const f = frame('projects', t('Projects'));
+  f.what.textContent = t('· the ones you changed last');
+  const all = el('a', null, t('all projects →'));
   all.href = '/merge';
-  all.title = 'Merge - every project in its list';
+  all.title = t('Merge - every project in its list');
   f.right.appendChild(all);
   const chips = el('div', 'hm-chips');
   const rows = el('div', 'hm-plist');
@@ -129,7 +129,7 @@ export function projectsBlock() {
     const list = (data.kinds && data.kinds[chip]) || [];
     if (!list.length) {
       const word = (CHIPS.find(c => c[0] === chip) || ['', ''])[1];
-      rows.replaceChildren(emptyEl(chip === 'all' ? 'No projects yet - start one in New project.' : 'No ' + word + ' projects yet.'));
+      rows.replaceChildren(emptyEl(chip === 'all' ? t('No projects yet - start one in New project.') : t('No {kind} projects yet.', { kind: word })));
       return;
     }
     rows.replaceChildren(...list.map(row));
@@ -137,7 +137,7 @@ export function projectsBlock() {
   const paint = async () => {
     try { data = await api('/api/home/projects'); }
     catch (e) {
-      showError('Could not read the projects', { detail: e.message, key: 'home-projects' });
+      showError(t('Could not read the projects'), { detail: e.message, key: 'home-projects' });
       paintChips();
       if (!data) rows.replaceChildren(failedEl('Projects', () => paint()));
       return;

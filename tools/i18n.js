@@ -107,8 +107,18 @@ function check({ verbose = false } = {}) {
     for (const s of HTML.texts(fs.readFileSync(path.join(APP_DIR, 'public', f), 'utf8'))) pageTexts.add(s);
   }
   for (const L of LANGS) {
-    const dict = require(path.join(APP_DIR, 'public', 'js', 'i18n', L + '.js')).default || {};
+    const mod = require(path.join(APP_DIR, 'public', 'js', 'i18n', L + '.js'));
+    const dict = mod.default || {};
     const missing = [], wrong = [], stale = [];
+    // A line in two parts: the later one wins silently - the same words are fine, different ones are a mistake.
+    const seenIn = new Map();
+    for (const [part, lines2] of Object.entries(mod.PARTS || {})) {
+      for (const [k, v] of Object.entries(lines2)) {
+        const had = seenIn.get(k);
+        if (had && JSON.stringify(had.v) !== JSON.stringify(v)) wrong.push(`${JSON.stringify(k)} - "${had.part}" and "${part}" say it differently`);
+        if (!had) seenIn.set(k, { part, v });
+      }
+    }
     for (const [key, { kind, where }] of keys) {
       const v = dict[key];
       if (v == null) { missing.push(`${where}  ${JSON.stringify(key)}`); continue; }

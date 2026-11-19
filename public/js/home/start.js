@@ -28,6 +28,7 @@ import { allow } from '../key-gate.js';
 import { loadingEl, failedEl } from '../ui-state.js';
 import { el, api, ls, lsSet } from './util.js';
 import { sheets } from './windows.js';
+import { t, tn } from '../i18n/t.js';
 
 const KEEP = 'ugc_home_start_v1';
 const _mem = (kind) => { const m = ls(KEEP, null); return (m && typeof m === 'object' && m[kind] && typeof m[kind] === 'object') ? m[kind] : {}; };
@@ -44,7 +45,7 @@ async function _post(url, body) {
     r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     d = await r.json();
   } catch (e) { d = null; }
-  if (!r || !d || d.success === false) throw new Error((d && d.error) || 'The app did not answer - try again in a moment.');
+  if (!r || !d || d.success === false) throw new Error((d && d.error) || t('The app did not answer - try again in a moment.'));
   return d;
 }
 const _merge = (key, step) => { location.href = '/merge?p=' + encodeURIComponent(key) + (step ? '&step=' + step : ''); };
@@ -65,7 +66,7 @@ export async function openStart(kind) {
     else if (kind === 'talking') await _talking();
     else if (kind === 'voiceover') await _voiceover();
     else if (kind === 'highlights') await _highlights();
-  } catch (e) { showError('The quick start did not open: ' + ((e && e.message) || e)); }
+  } catch (e) { showError(t('The quick start did not open: {why}', { why: (e && e.message) || e })); }
 }
 
 // A popup's window: the frame, its crumb, `onClose` - and `_cur` while it is open.
@@ -75,7 +76,7 @@ function _frame(kind, label, o) {
     name: label, size: o.size, geom: o.geom, foot: true,
     onClose: () => { if (_cur && _cur.frame === frame) _cur = null; if (o.onClose) o.onClose(); },
   });
-  frame.setCrumbs([{ label: 'New project · ' + label }]);
+  frame.setCrumbs([{ label: t('New project') + ' · ' + label }]);
   frame.body.classList.add('hm-qs');
   _cur = { kind, frame };
   return frame;
@@ -89,28 +90,28 @@ function _foot(frame, label, title) {
   if (title) go.title = title;
   foot.append(said, el('span', 'sp'), go);
   // a press that failed is a popup (`fail`); the line keeps what is being done and the hints
-  return { foot, said, go, say: (t, bad) => { said.textContent = t || ''; said.classList.toggle('is-bad', !!bad); },
-    fail: (t) => { said.textContent = ''; said.classList.remove('is-bad'); showError(t); } };
+  return { foot, said, go, say: (words, bad) => { said.textContent = words || ''; said.classList.toggle('is-bad', !!bad); },
+    fail: (words) => { said.textContent = ''; said.classList.remove('is-bad'); showError(words); } };
 }
 
 // ── BLANK: the name and the format ─────────────────────────────
 function _blank() {
   const st = { format: _mem('blank').format === '16:9' ? '16:9' : '9:16', busy: false };
-  const frame = _frame('blank', 'blank', { size: { w: 560, h: 330 }, geom: { key: 'start_blank', move: true, keepPos: true } });
+  const frame = _frame('blank', t('blank'), { size: { w: 560, h: 330 }, geom: { key: 'start_blank', move: true, keepPos: true } });
   const form = el('div', 'hm-qs-form');
   frame.body.appendChild(form);
-  form.appendChild(el('div', 'mv3-x-hdr', 'Name'));
+  form.appendChild(el('div', 'mv3-x-hdr', t('Name')));
   const name = el('input', 'mv3-sc-inp hm-qs-name u-in');
   name.type = 'text';
   name.maxLength = 120;
   name.value = _today() + ' - ';
-  name.placeholder = 'what the project is called';
+  name.placeholder = t('what the project is called');
   form.appendChild(name);
-  form.appendChild(el('div', 'mv3-x-hdr', 'Format'));
+  form.appendChild(el('div', 'mv3-x-hdr', t('Format')));
   const fmts = el('div', 'hm-qs-fmts');
   form.appendChild(fmts);
   const btns = {};
-  for (const [f, word] of [['9:16', 'Vertical'], ['16:9', 'Horizontal']]) {
+  for (const [f, word] of [['9:16', t('Vertical')], ['16:9', t('Horizontal')]]) {
     const b = el('button', 'hm-qs-fmt');
     b.type = 'button';
     b.append(el('span', 'hm-qs-shape ' + (f === '9:16' ? 'is-v' : 'is-h')), el('b', null, f), el('small', null, word));
@@ -118,17 +119,17 @@ function _blank() {
     btns[f] = b;
     fmts.appendChild(b);
   }
-  form.appendChild(el('p', 'mv3-x-note', 'An empty timeline - main video, main audio and Subtitles; the format can be changed in the preview later.'));
-  const F = _foot(frame, 'create', 'Make the empty project and open it in Merge');
+  form.appendChild(el('p', 'mv3-x-note', t('An empty timeline - main video, main audio and Subtitles; the format can be changed in the preview later.')));
+  const F = _foot(frame, t('create'), t('Make the empty project and open it in Merge'));
   const paint = () => {
     for (const [f, b] of Object.entries(btns)) b.classList.toggle('is-on', f === st.format);
     F.go.disabled = st.busy || !name.value.trim();
-    F.go.textContent = st.busy ? 'Creating…' : 'Create';
+    F.go.textContent = st.busy ? t('Creating…') : t('Create');
   };
   const go = async () => {
     const title = name.value.trim();
     if (st.busy) return;
-    if (!title) { F.say('A name is needed.', true); return; }
+    if (!title) { F.say(t('A name is needed.'), true); return; }
     st.busy = true;
     F.say('');
     paint();
@@ -158,7 +159,7 @@ async function _textCard(host, st, o) {
     if (body.scenarioId != null) {
       const sc = s || {};
       const g = String(sc.gender || ((sc.roles || [])[0] || {}).gender || '').toLowerCase();
-      st.text = { from: 'scenario', scenarioId: String(body.scenarioId), title: String(sc.title || 'untitled'),
+      st.text = { from: 'scenario', scenarioId: String(body.scenarioId), title: String(sc.title || t('untitled')),
         n: +sc.lineCount || (Array.isArray(sc.lines) ? sc.lines.length : 0), gender: g };
       if (Array.isArray(sc.lines)) lines[st.text.scenarioId] = sc.lines.map(l => String((l && l.text) || l || '')).filter(Boolean);
     } else if (o.talking) st.text = { from: 'text', lines: body.lines || [], name: String(body.name || '') };
@@ -181,29 +182,29 @@ async function _textCard(host, st, o) {
     if (!st.text) {
       VS.paintChooser(host, null, adopt, {
         put, talking: !!o.talking, ownText: own,
-        hint: o.talking ? 'The text of the talking head: a scenario, or your own - every paragraph a line, with its own frame and clip.'
-          : 'The script of the voiceover: a scenario, or your own text - all of it one take.',
+        hint: o.talking ? t('The text of the talking head: a scenario, or your own - every paragraph a line, with its own frame and clip.')
+          : t('The script of the voiceover: a scenario, or your own text - all of it one take.'),
       });
       return;
     }
-    const t = st.text;
+    const cur = st.text;
     const card = el('div', 'hm-qs-text');
     const head = el('div', 'hm-qs-text-h');
-    const title = t.from === 'scenario' ? t.title : (t.name || (o.talking ? (t.lines || [])[0] : t.text) || 'your text');
+    const title = cur.from === 'scenario' ? cur.title : (cur.name || (o.talking ? (cur.lines || [])[0] : cur.text) || t('your text'));
     head.appendChild(el('b', null, title));
     const sub = el('span', 'hm-qs-text-sub');
     head.appendChild(sub);
     head.appendChild(el('span', 'sp'));
-    if (t.from === 'text') {
-      const ed = el('button', 'mv3-sc-new u-btn is-s', 'Edit');
+    if (cur.from === 'text') {
+      const ed = el('button', 'mv3-sc-new u-btn is-s', t('Edit'));
       ed.type = 'button';
-      ed.title = 'Change the text';
+      ed.title = t('Change the text');
       ed.addEventListener('click', () => VT.openOwnText((b) => put(b), adopt, { talking: !!o.talking, ...own() }));
       head.appendChild(ed);
     }
-    const other = el('button', 'mv3-sc-new u-btn is-s', 'Other text');
+    const other = el('button', 'mv3-sc-new u-btn is-s', t('Other text'));
     other.type = 'button';
-    other.title = 'Back to the scenarios and your own text';
+    other.title = t('Back to the scenarios and your own text');
     other.addEventListener('click', () => { st.text = null; o.changed(); paint(); });
     head.appendChild(other);
     card.appendChild(head);
@@ -212,16 +213,16 @@ async function _textCard(host, st, o) {
     host.appendChild(card);
     const show = (arr) => {
       const n = arr.length;
-      sub.textContent = (t.from === 'scenario' ? 'scenario · ' : 'your text · ') + (o.talking ? n + (n === 1 ? ' line' : ' lines') : 'one take');
+      sub.textContent = (cur.from === 'scenario' ? t('scenario') : t('your text')) + ' · ' + (o.talking ? tn(n, '{n} line', '{n} lines') : t('one take'));
       list.textContent = '';
       for (const s of arr) list.appendChild(el('li', null, s));
     };
-    if (t.from === 'text') show(o.talking ? (t.lines || []) : [t.text]);
+    if (cur.from === 'text') show(o.talking ? (cur.lines || []) : [cur.text]);
     else {
       show([]);
-      sub.textContent = 'scenario · reading its lines…';
-      linesOf(t.scenarioId).then((arr) => { if (st.text === t) show(o.talking ? arr : [arr.join(' ')]); })
-        .catch(() => { if (st.text === t) { st.text = null; o.changed(); paint(); } });
+      sub.textContent = t('scenario') + ' · ' + t('reading its lines…');
+      linesOf(cur.scenarioId).then((arr) => { if (st.text === cur) show(o.talking ? arr : [arr.join(' ')]); })
+        .catch(() => { if (st.text === cur) { st.text = null; o.changed(); paint(); } });
     }
   }
   paint();
@@ -236,42 +237,42 @@ async function _talking() {
   const m = _mem('talking');
   const st = { text: m.text && typeof m.text === 'object' ? m.text : null, look: m.look && m.look.obrazId ? m.look : null, busy: false };
   // The chats' size, ONE column: the text, who under it.
-  const frame = _frame('talking', 'talking head', { size: POPUP_SIZE, geom: { key: 'start_talking', resize: true, move: true, keepSize: true, keepPos: true } });
+  const frame = _frame('talking', t('talking head'), { size: POPUP_SIZE, geom: { key: 'start_talking', resize: true, move: true, keepSize: true, keepPos: true } });
   const cols = el('div', 'hm-qs-cols is-one');
   const L = el('div', 'hm-qs-col is-text');
   const R = el('div', 'hm-qs-col is-who');
   cols.append(L, R);
   frame.body.appendChild(cols);
-  L.appendChild(el('div', 'mv3-x-hdr', 'The text'));
+  L.appendChild(el('div', 'mv3-x-hdr', t('The text')));
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
-  R.appendChild(el('div', 'mv3-x-hdr', 'Who'));
+  R.appendChild(el('div', 'mv3-x-hdr', t('Who')));
   const whoLine = el('div', 'hm-qs-who');
   R.appendChild(whoLine);
   const whoHost = el('div', 'hm-qs-box is-choose');
   R.appendChild(whoHost);
-  const F = _foot(frame, 'create', 'Make the talking head and open it in Merge, on its setup');
+  const F = _foot(frame, t('create'), t('Make the talking head and open it in Merge, on its setup'));
   const keep = () => _keep('talking', { text: st.text, look: st.look });
 
   let chars = null;
   const whoState = {};
   const paintFoot = () => {
-    const t = st.text;
-    F.go.disabled = st.busy || !t;
-    F.go.textContent = st.busy ? 'Creating…' : 'Create';
-    if (!st.busy) F.say(!t ? 'Choose the text first - a scenario, or your own.' : '');   // a hint, not red
+    const txt = st.text;
+    F.go.disabled = st.busy || !txt;
+    F.go.textContent = st.busy ? t('Creating…') : t('Create');
+    if (!st.busy) F.say(!txt ? t('Choose the text first - a scenario, or your own.') : '');   // a hint, not red
   };
   const paintWho = () => {
     whoLine.textContent = '';
     if (st.look) {
-      whoLine.appendChild(el('span', null, st.look.characterName + ' · in this look'));
-      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ None');
+      whoLine.appendChild(el('span', null, st.look.characterName + ' · ' + t('in this look')));
+      const x = el('button', 'mv3-sc-new u-btn is-s', '✕ ' + t('None'));
       x.type = 'button';
-      x.title = 'Choose nobody here - the character and the place are chosen in the project';
+      x.title = t('Choose nobody here - the character and the place are chosen in the project');
       x.addEventListener('click', () => { st.look = null; keep(); paintWho(); });
       whoLine.appendChild(x);
-    } else whoLine.appendChild(el('span', 'hm-qs-quiet', 'Not chosen - the character and the place are chosen in the project.'));
-    if (!chars) { if (!whoHost.querySelector('.u-failed')) whoHost.replaceChildren(loadingEl('reading the characters…', { line: true })); return; }
+    } else whoLine.appendChild(el('span', 'hm-qs-quiet', t('Not chosen - the character and the place are chosen in the project.')));
+    if (!chars) { if (!whoHost.querySelector('.u-failed')) whoHost.replaceChildren(loadingEl(t('reading the characters…'), { line: true })); return; }
     const g = st.text && st.text.gender ? st.text.gender : '';
     WM.paintChoose(whoHost, {
       state: whoState,
@@ -285,8 +286,8 @@ async function _talking() {
         keep();
         paintWho();
       },
-      empty: chars.length ? 'No looks yet - a character is dressed in a look in the project, "who".'
-        : 'No characters yet - make one with New Character (Library on Home).',
+      empty: chars.length ? t('No looks yet - a character is dressed in a look in the project, "who".')
+        : t('No characters yet - make one with New Character (Library on Home).'),
     });
   };
   await _textCard(textHost, st, { talking: true, changed: () => { keep(); paintFoot(); paintWho(); } });
@@ -300,22 +301,22 @@ async function _talking() {
     paintWho();
   }).catch((e) => {
     // did not load, with Try again; the reason a popup
-    showError('Could not read the characters', { detail: e.message });
-    whoHost.replaceChildren(failedEl('The characters', () => { whoHost.replaceChildren(loadingEl('reading the characters…', { line: true })); loadChars(); }, { line: true }));
+    showError(t('Could not read the characters'), { detail: e.message });
+    whoHost.replaceChildren(failedEl(t('The characters'), () => { whoHost.replaceChildren(loadingEl(t('reading the characters…'), { line: true })); loadChars(); }, { line: true }));
   });
   loadChars();
 
   F.go.addEventListener('click', async () => {
-    const t = st.text;
-    if (!t || st.busy) return;
+    const txt = st.text;
+    if (!txt || st.busy) return;
     st.busy = true;
     paintFoot();
-    F.say(t.from === 'text' && _foreign((t.lines || []).join(' ')) ? 'translating into English…' : 'making the project…');
+    F.say(txt.from === 'text' && _foreign((txt.lines || []).join(' ')) ? t('translating into English…') : t('making the project…'));
     try {
       let key = '';
-      if (t.from === 'scenario') key = await API.talkingHead(t.scenarioId);
+      if (txt.from === 'scenario') key = await API.talkingHead(txt.scenarioId);
       else {
-        const d = await _post('/api/scen3/projects', { lines: t.lines, name: t.name });
+        const d = await _post('/api/scen3/projects', { lines: txt.lines, name: txt.name });
         key = (await _post('/api/mv3/timeline/new', { projectId: d.project.id })).key;
       }
       if (st.look) {
@@ -336,7 +337,7 @@ async function _voiceover() {
   const m = _mem('voiceover');
   const st = { text: m.text && typeof m.text === 'object' ? m.text : null, pick: m.pick && m.pick.voiceId ? m.pick : null,
     mood: String(m.mood || ''), moods: null, busy: false };
-  const frame = _frame('voiceover', 'voiceover', {
+  const frame = _frame('voiceover', t('voiceover'), {
     size: GEN_SIZE, geom: { key: 'start_voiceover', resize: true, move: true, keepSize: true, keepPos: true },
     onClose: () => { VOICE.closeVoices(); VOICE.leave(); },
   });
@@ -345,21 +346,21 @@ async function _voiceover() {
   const R = el('div', 'hm-qs-col');
   cols.append(L, R);
   frame.body.appendChild(cols);
-  L.appendChild(el('div', 'mv3-x-hdr', 'The text'));
+  L.appendChild(el('div', 'mv3-x-hdr', t('The text')));
   const textHost = el('div', 'hm-qs-box');
   L.appendChild(textHost);
-  R.appendChild(el('div', 'mv3-x-hdr', 'Mood'));
+  R.appendChild(el('div', 'mv3-x-hdr', t('Mood')));
   const moodSel = el('select', 'mv3-wk-vsel hm-qs-mood u-in');
-  moodSel.title = 'The emotion of the whole voiceover: the text is marked up by it, and read by its [tags]';
+  moodSel.title = t('The emotion of the whole voiceover: the text is marked up by it, and read by its [tags]');
   R.appendChild(moodSel);
   const moodAbout = el('p', 'mv3-x-note');
   R.appendChild(moodAbout);
-  R.appendChild(el('div', 'mv3-x-hdr', 'Voice'));
+  R.appendChild(el('div', 'mv3-x-hdr', t('Voice')));
   const voiceHost = el('div', 'hm-qs-voice');
   const voiceNotes = el('div', 'hm-qs-vnotes');
   R.append(voiceHost, voiceNotes);
-  R.appendChild(el('p', 'mv3-x-note', 'What is not chosen here is chosen in the project\'s setup, field 1. A voice taken from the ElevenLabs library is saved with its demo - a little of ElevenLabs\' credits.'));
-  const F = _foot(frame, 'create', 'Put the text, the mood and the voice into the voiceover draft and open it in Merge, on its setup');
+  R.appendChild(el('p', 'mv3-x-note', t('What is not chosen here is chosen in the project\'s setup, field 1. A voice taken from the ElevenLabs library is saved with its demo - a little of ElevenLabs\' credits.')));
+  const F = _foot(frame, t('create'), t('Put the text, the mood and the voice into the voiceover draft and open it in Merge, on its setup'));
   const keep = () => _keep('voiceover', { text: st.text, pick: st.pick, mood: st.mood });
   const textOf = () => (!st.text ? '' : st.text.from === 'text' ? st.text.text : st.text.title);
 
@@ -371,8 +372,8 @@ async function _voiceover() {
     go: (v) => { if (v === 'voice') VOICE.openVoices(vapi, { key: 'home-voiceover', lang: VOICE.scriptLang(true, textOf()) }); },
     repaint: () => { paintVoice(); VOICE.paintVoices(vapi); },
     reload: () => Promise.resolve(),
-    note: (t, bad) => el('div', 'hm-qs-vnote u-status' + (bad ? ' is-bad' : ''), t),
-    patchChar: async () => { throw new Error('a voiceover has no character'); },
+    note: (words, bad) => el('div', 'hm-qs-vnote u-status' + (bad ? ' is-bad' : ''), words),
+    patchChar: async () => { throw new Error(t('a voiceover has no character')); },
   };
   function paintVoice() {
     voiceHost.textContent = '';
@@ -381,7 +382,7 @@ async function _voiceover() {
   }
   const paintMood = () => {
     moodSel.textContent = '';
-    const none = el('option', '', st.moods ? 'none - chosen in the project' : 'reading the moods…');
+    const none = el('option', '', st.moods ? t('none - chosen in the project') : t('reading the moods…'));
     none.value = '';
     moodSel.appendChild(none);
     for (const md of st.moods || []) {
@@ -396,7 +397,7 @@ async function _voiceover() {
   moodSel.addEventListener('change', () => { st.mood = moodSel.value; keep(); paintMood(); });
   const paintFoot = () => {
     F.go.disabled = st.busy;
-    F.go.textContent = st.busy ? 'Creating…' : 'Create';
+    F.go.textContent = st.busy ? t('Creating…') : t('Create');
   };
   await _textCard(textHost, st, { talking: false, changed: () => keep() });
   paintMood();
@@ -412,12 +413,12 @@ async function _voiceover() {
     if (st.busy) return;
     st.busy = true;
     paintFoot();
-    F.say('putting it into the voiceover draft…');
+    F.say(t('putting it into the voiceover draft…'));
     try {
       const key = await API.voiceoverDraft();
       const id = key.replace(/^sv3_/, '');
-      const t = st.text;
-      if (t) await API.voiceoverScript(id, t.from === 'scenario' ? { scenarioId: t.scenarioId } : { text: t.text, name: t.name });
+      const txt = st.text;
+      if (txt) await API.voiceoverScript(id, txt.from === 'scenario' ? { scenarioId: txt.scenarioId } : { text: txt.text, name: txt.name });
       const patch = {};
       if (st.pick) patch.voice = { pick: st.pick };
       if (st.mood) patch.video = { mood: st.mood };

@@ -32,6 +32,7 @@ import { $, el, api, ls, lsSet, when, frame, tiles } from './util.js';
 import { ICONS } from './icons.js';
 import { icon } from '../icons.js';
 import { figures } from '../num.js';
+import { t, tn, lang } from '../i18n/t.js';
 import * as WIN from './windows.js';
 import { projectsBlock } from './projects.js';
 import { openStart } from './start.js';
@@ -44,8 +45,8 @@ initNav();
 CM.init({
   onSaved: (id, name) => {
     showToast({
-      mark: '✓', title: 'Saved · ' + (name || 'the character'), where: 'Library · Characters - its voices are chosen there',
-      ms: 9000, act: { label: 'Open in Library', run: () => { location.href = '/library?shelf=characters&sel=' + encodeURIComponent(id || ''); } },
+      mark: '✓', title: t('Saved · {name}', { name: name || t('the character') }), where: t('Library · Characters - its voices are chosen there'),
+      ms: 9000, act: { label: t('Open in Library'), run: () => { location.href = '/library?shelf=characters&sel=' + encodeURIComponent(id || ''); } },
     });
     for (const k of Object.keys(made)) made[k].paint().catch(() => { /* the block says so itself */ });
   },
@@ -55,7 +56,7 @@ CM.init({
 function _newCharacter(e) {
   if (e.button !== 0 || e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
   e.preventDefault();
-  try { CM.open(); } catch (err) { showError('New Character did not open: ' + ((err && err.message) || 'no reason was given')); }
+  try { CM.open(); } catch (err) { showError(t('New Character did not open: {why}', { why: (err && err.message) || t('no reason was given') })); }
 }
 
 // ── the blocks ───────────────────────────────────────────────────────────────
@@ -69,13 +70,13 @@ const _none = async () => {};
 // head, voiceover - in this order. A voiceover is THE voiceover draft, on its setup.
 // Each opens its QUICK-START POPUP over Home (js/home/start.js): what the project starts with, then Merge.
 BLOCKS.start = () => {
-  const f = frame('start', 'New project');
-  f.what.textContent = '· a quick start, then Merge';
+  const f = frame('start', t('New project'));
+  f.what.textContent = t('· a quick start, then Merge');
   f.body.appendChild(tiles([
-    { icon: ICONS.blank, label: 'Blank', href: '/merge?new=blank', title: 'An empty project - your own clips on the timeline', run: () => openStart('blank') },
-    { icon: ICONS.highlights, label: 'Highlights', href: '/merge?new=highlights', title: 'A long video cut into vertical shorts', run: () => openStart('highlights') },
-    { icon: ICONS.talking, label: 'Talking head', href: '/merge?new=talking', title: 'A character reads a script - frames and clips by its lines', run: () => openStart('talking') },
-    { icon: ICONS.voiceover, label: 'Voiceover', href: '/merge?new=voiceover', title: 'A script read in a voice, B-roll over it', run: () => openStart('voiceover') },
+    { icon: ICONS.blank, label: t('Blank'), href: '/merge?new=blank', title: t('An empty project - your own clips on the timeline'), run: () => openStart('blank') },
+    { icon: ICONS.highlights, label: t('Highlights'), href: '/merge?new=highlights', title: t('A long video cut into vertical shorts'), run: () => openStart('highlights') },
+    { icon: ICONS.talking, label: t('Talking head'), href: '/merge?new=talking', title: t('A character reads a script - frames and clips by its lines'), run: () => openStart('talking') },
+    { icon: ICONS.voiceover, label: t('Voiceover'), href: '/merge?new=voiceover', title: t('A script read in a voice, B-roll over it'), run: () => openStart('voiceover') },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -84,12 +85,12 @@ BLOCKS.start = () => {
 // The chats and the sound window, as windows over Home (js/home/windows.js) - the Library's own; what they make lies in
 // IMAGES → Generated, VIDEO → Generated → <model>, Music and SFX → My sounds → Generated, and their Alerts rows lead there.
 BLOCKS.generate = () => {
-  const f = frame('generate', 'Generate');
-  f.what.textContent = '· made into the Library';
+  const f = frame('generate', t('Generate'));
+  f.what.textContent = t('· made into the Library');
   f.body.appendChild(tiles([
-    { icon: ICONS.pictures, label: 'Pictures', href: '/library?shelf=media&kind=images&open=pictures', title: 'The pictures chat', run: () => WIN.openChat('pictures') },
-    { icon: ICONS.video, label: 'Video', href: '/library?shelf=media&kind=video&open=videos', title: 'The video chat', run: () => WIN.openChat('videos') },
-    { icon: ICONS.audio, label: 'Music & sounds', href: '/library?shelf=media&kind=music&open=audio', title: 'Music and sounds - Suno and ElevenLabs', run: () => WIN.openSound() },
+    { icon: ICONS.pictures, label: t('Pictures'), href: '/library?shelf=media&kind=images&open=pictures', title: t('The pictures chat'), run: () => WIN.openChat('pictures') },
+    { icon: ICONS.video, label: t('Video'), href: '/library?shelf=media&kind=video&open=videos', title: t('The video chat'), run: () => WIN.openChat('videos') },
+    { icon: ICONS.audio, label: t('Music & sounds'), href: '/library?shelf=media&kind=music&open=audio', title: t('Music and sounds - Suno and ElevenLabs'), run: () => WIN.openSound() },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -98,16 +99,16 @@ BLOCKS.generate = () => {
 // What the Library keeps and makes: a character (New Character), a prop (New prop), a look (New
 // lookbook), an environment (New environment) - each its window over Home.
 BLOCKS.library = () => {
-  const f = frame('library', 'Library');
-  f.what.textContent = '· characters, props, looks, places';
-  const lib = el('a', null, 'Library →');
+  const f = frame('library', t('Library'));
+  f.what.textContent = t('· characters, props, looks, places');
+  const lib = el('a', null, t('Library →'));
   lib.href = '/library';
   f.right.appendChild(lib);
   f.body.appendChild(tiles([
-    { icon: ICONS.character, label: 'Character', href: '/library?shelf=characters&make=1', title: 'New Character - a portrait, then a 4K sheet', run: _newCharacter },
-    { icon: ICONS.prop, label: 'Prop', href: '/library?shelf=media&kind=props&make=1', title: 'New prop - a product for the frames', run: () => WIN.openProp() },
-    { icon: ICONS.look, label: 'Look', href: '/library?shelf=media&kind=lookbooks&make=1', title: 'New lookbook - what a character wears', run: () => WIN.openGen('lookbook') },
-    { icon: ICONS.environment, label: 'Environment', href: '/library?shelf=media&kind=environments&make=1', title: 'New environment - a place to stand in', run: () => WIN.openGen('environment') },
+    { icon: ICONS.character, label: t('Character'), href: '/library?shelf=characters&make=1', title: t('New Character - a portrait, then a 4K sheet'), run: _newCharacter },
+    { icon: ICONS.prop, label: t('Prop'), href: '/library?shelf=media&kind=props&make=1', title: t('New prop - a product for the frames'), run: () => WIN.openProp() },
+    { icon: ICONS.look, label: t('Look'), href: '/library?shelf=media&kind=lookbooks&make=1', title: t('New lookbook - what a character wears'), run: () => WIN.openGen('lookbook') },
+    { icon: ICONS.environment, label: t('Environment'), href: '/library?shelf=media&kind=environments&make=1', title: t('New environment - a place to stand in'), run: () => WIN.openGen('environment') },
   ]));
   return { el: f.st, paint: _none };
 };
@@ -128,13 +129,13 @@ const visit = (() => {
   return v;
 })();
 BLOCKS.new = () => {
-  const f = frame('new', 'New since you were here');
-  const seen = el('button', null, 'mark as seen');
+  const f = frame('new', t('New since you were here'));
+  const seen = el('button', null, t('mark as seen'));
   seen.type = 'button';
   seen.addEventListener('click', () => { visit.prev = new Date().toISOString(); lsSet(VISIT, visit); paint(); });
   f.right.appendChild(seen);
   const rows = el('div', 'hm-rows');
-  rows.appendChild(loadingEl('Loading'));
+  rows.appendChild(loadingEl(t('Loading')));
   f.body.appendChild(rows);
   let shown = false;           // painted once - a later failed read leaves what it shows
   const row = (ico, title, sub, go, href, bad) => {
@@ -156,34 +157,34 @@ BLOCKS.new = () => {
     return r;
   };
   const paint = async () => {
-    f.what.textContent = '· ' + (when(visit.prev) || 'the last visit');
+    f.what.textContent = '· ' + (when(visit.prev) || t('the last visit'));
     let d;
     try { d = await api('/api/home/news?since=' + encodeURIComponent(visit.prev)); }
     catch (e) {
-      showError('Could not read what is new', { detail: e.message, key: 'home-new' });
-      if (!shown) rows.replaceChildren(failedEl('What is new', () => paint()));
+      showError(t('Could not read what is new'), { detail: e.message, key: 'home-new' });
+      if (!shown) rows.replaceChildren(failedEl(t('What is new'), () => paint()));
       return;
     }
     const out = [];
-    const s = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
     if (d.refs && d.refs.n) {
-      out.push(row('download', s(d.refs.n, 'post') + ' from Telegram',
-        Object.entries(d.refs.where).map(([k, n]) => k + (n > 1 ? ' (' + n + ')' : '')).join(', '), 'look →', '/library?shelf=media'));
+      out.push(row('download', tn(d.refs.n, '{n} post from Telegram', '{n} posts from Telegram'),
+        Object.entries(d.refs.where).map(([k, n]) => k + (n > 1 ? ' (' + n + ')' : '')).join(', '), t('look →'), '/library?shelf=media'));
     }
     if (d.renders && d.renders.n) {
       const reveal = window.ugcWindow && window.ugcWindow.reveal;
-      out.push(row('film', s(d.renders.n, 'render') + ' finished',
+      out.push(row('film', tn(d.renders.n, '{n} render finished', '{n} renders finished'),
         Object.entries(d.renders.projects).map(([k, n]) => k + (n > 1 ? ' (' + n + ')' : '')).join(', ') + (d.renders.mb ? ' · ' + d.renders.mb + ' MB' : ''),
-        reveal ? 'show in folder' : 'Renders →', reveal ? () => reveal(d.renders.folder) : '/library?shelf=renders'));
+        reveal ? t('show in folder') : t('Renders →'), reveal ? () => reveal(d.renders.folder) : '/library?shelf=renders'));
     }
     const m = d.made || {};
-    const madeBits = [m.pictures && s(m.pictures, 'picture'), m.clips && s(m.clips, 'clip'), m.music && s(m.music, 'track')].filter(Boolean);
-    if (madeBits.length) out.push(row('image', madeBits.join(', ') + ' made', 'IMAGES · Generated, B-rolls, Music', 'Library →', '/library?shelf=media'));
+    const madeBits = [m.pictures && tn(m.pictures, '{n} picture', '{n} pictures'), m.clips && tn(m.clips, '{n} clip', '{n} clips'),
+      m.music && tn(m.music, '{n} track', '{n} tracks')].filter(Boolean);
+    if (madeBits.length) out.push(row('image', t('{what} made', { what: madeBits.join(', ') }), t('IMAGES · Generated, B-rolls, Music'), t('Library →'), '/library?shelf=media'));
     if (d.failed && d.failed.n) {
-      out.push(row('circle-alert', s(d.failed.n, 'generation') + ' failed', d.failed.last ? (d.failed.last.title + (d.failed.last.error ? ' · ' + d.failed.last.error : '')).slice(0, 140) : '',
-        'Alerts →', () => { const b = $('.sv3-alerts'); if (b) b.click(); }, true));
+      out.push(row('circle-alert', tn(d.failed.n, '{n} generation failed', '{n} generations failed'), d.failed.last ? (d.failed.last.title + (d.failed.last.error ? ' · ' + d.failed.last.error : '')).slice(0, 140) : '',
+        t('Alerts →'), () => { const b = $('.sv3-alerts'); if (b) b.click(); }, true));
     }
-    rows.replaceChildren(...(out.length ? out : [emptyEl('Nothing new since then.', { icon: 'circle-check' })]));
+    rows.replaceChildren(...(out.length ? out : [emptyEl(t('Nothing new since then.'), { icon: 'circle-check' })]));
     shown = true;
   };
   return { el: f.st, paint, every: 30000 };
@@ -195,19 +196,19 @@ BLOCKS.new = () => {
 // opening the book's window over Home at that chapter.
 const FIRST_CHAPTER = '01-getting-started';
 BLOCKS.guide = () => {
-  const f = frame('guide', 'Guide');
-  f.what.textContent = '· how everything here works · no key needed';
+  const f = frame('guide', t('Guide'));
+  f.what.textContent = t('· how everything here works · no key needed');
   const lead = el('div', 'hm-row hm-gd-lead');
   const list = el('div', 'hm-gd-list');
-  list.appendChild(loadingEl('Loading'));
+  list.appendChild(loadingEl(t('Loading')));
   f.body.append(lead, list);
   let shown = false;
   const paint = async () => {
     let toc;
     try { toc = await guideContents(); }
     catch (e) {
-      showError('Could not read the guide', { detail: e.message, key: 'home-guide' });
-      if (!shown) { lead.hidden = true; list.replaceChildren(failedEl('The guide', () => paint())); }
+      showError(t('Could not read the guide'), { detail: e.message, key: 'home-guide' });
+      if (!shown) { lead.hidden = true; list.replaceChildren(failedEl(t('The guide'), () => paint())); }
       return;
     }
     const at = placeKept();
@@ -217,13 +218,13 @@ BLOCKS.guide = () => {
     const mark = el('span', 'hm-ico');
     mark.innerHTML = icon('book-open', 14);
     const tx = el('div', 'hm-tx');
-    const go = el('button', 'hm-btn u-btn is-s ' + (ch ? 'is-quiet' : 'is-gen'), ch ? 'continue' : 'read');
+    const go = el('button', 'hm-btn u-btn is-s ' + (ch ? 'is-quiet' : 'is-gen'), ch ? t('continue') : t('read'));
     go.type = 'button';
     if (ch) {
-      tx.append(el('b', null, 'Continue'), el('span', null, ch.title + (sec ? ' › ' + sec.title : '')));
+      tx.append(el('b', null, t('Continue')), el('span', null, ch.title + (sec ? ' › ' + sec.title : '')));
       go.addEventListener('click', () => openGuide(at));
     } else {
-      tx.append(el('b', null, 'Start here · ' + (first ? first.title : 'Getting started')), el('span', null, 'the keys, Home, your first project'));
+      tx.append(el('b', null, t('Start here · {chapter}', { chapter: first ? first.title : t('Getting started') })), el('span', null, t('the keys, Home, your first project')));
       go.addEventListener('click', () => openGuide({ chapter: first ? first.id : FIRST_CHAPTER }));
     }
     lead.hidden = false;
@@ -248,20 +249,20 @@ BLOCKS.guide = () => {
 // none is, and the block stays until "hide" puts it away for good (back from Admin -> This computer).
 const STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
 const STEPS = [
-  { id: 'guide', title: 'Read Getting started', sub: 'the guide\'s first chapter - the keys, Home, your first project', go: 'read', href: '#', run: () => openGuide({ chapter: FIRST_CHAPTER }) },
-  { id: 'kie', title: 'Add the kie.ai key', sub: 'pictures, video, music - the main aggregator', go: 'add', href: '/admin#keys' },
-  { id: 'eleven', title: 'Add the ElevenLabs key', sub: 'the voices of the talking heads', go: 'add', href: '/admin#keys' },
-  { id: 'cf', title: 'Add the Cloudflare key', sub: 'hosts the references the models fetch · R2 needs a card once', go: 'add', href: '/admin#keys' },
-  { id: 'bot', title: 'Connect your Telegram bot', sub: 'send links and media from the phone into REFERENCES', go: 'connect', href: '/admin#keys' },
-  { id: 'char', title: 'Make your first character', sub: 'a portrait, then a 4K sheet - Library · Characters', go: 'start', href: '/library?shelf=characters&make=1' },
-  { id: 'head', title: 'Make a talking head', sub: 'a scenario → mood & voice → frames chat → video', go: 'start', href: '/merge?new=talking' },
-  { id: 'speech', title: 'Download the speech model', sub: 'captions heard on this computer, free · 574 MB', go: 'download', href: '/admin#local' },
+  { id: 'guide', title: t('Read Getting started'), sub: t('the guide\'s first chapter - the keys, Home, your first project'), go: t('read'), href: '#', run: () => openGuide({ chapter: FIRST_CHAPTER }) },
+  { id: 'kie', title: t('Add the kie.ai key'), sub: t('pictures, video, music - the main aggregator'), go: t('add'), href: '/admin#keys' },
+  { id: 'eleven', title: t('Add the ElevenLabs key'), sub: t('the voices of the talking heads'), go: t('add'), href: '/admin#keys' },
+  { id: 'cf', title: t('Add the Cloudflare key'), sub: t('hosts the references the models fetch · R2 needs a card once'), go: t('add'), href: '/admin#keys' },
+  { id: 'bot', title: t('Connect your Telegram bot'), sub: t('send links and media from the phone into REFERENCES'), go: t('connect'), href: '/admin#keys' },
+  { id: 'char', title: t('Make your first character'), sub: t('a portrait, then a 4K sheet - Library · Characters'), go: t('start'), href: '/library?shelf=characters&make=1' },
+  { id: 'head', title: t('Make a talking head'), sub: t('a scenario → mood & voice → frames chat → video'), go: t('start'), href: '/merge?new=talking' },
+  { id: 'speech', title: t('Download the speech model'), sub: t('captions heard on this computer, free · 574 MB'), go: t('download'), href: '/admin#local' },
 ];
 BLOCKS.steps = () => {
-  const f = frame('steps', 'First steps');
-  const hide = el('button', null, 'hide');
+  const f = frame('steps', t('First steps'));
+  const hide = el('button', null, t('hide'));
   hide.type = 'button';
-  hide.title = 'Put the first steps away for good - they come back from Admin -> This computer';
+  hide.title = t('Put the first steps away for good - they come back from Admin -> This computer');
   hide.addEventListener('click', () => {
     lsSet(STEPS_HIDDEN, true);
     f.st.remove();
@@ -275,7 +276,7 @@ BLOCKS.steps = () => {
   const count = el('span');
   prog.append(bar, count);
   const list = el('ol', 'hm-steps');
-  const wait = loadingEl('Loading');
+  const wait = loadingEl(t('Loading'));
   prog.hidden = true;
   f.body.append(prog, list, wait);
   let shown = false;
@@ -289,8 +290,8 @@ BLOCKS.steps = () => {
       read('/api/library/counts'), read('/api/library/shelf/media?filter=heads'), read('/api/speech/local'),
     ]);
     if (bad) {
-      showError('Could not read the first steps', { detail: bad.message, key: 'home-steps' });
-      if (!shown) { prog.hidden = true; list.replaceChildren(); wait.replaceWith(failedEl('First steps', () => paint())); }
+      showError(t('Could not read the first steps'), { detail: bad.message, key: 'home-steps' });
+      if (!shown) { prog.hidden = true; list.replaceChildren(); wait.replaceWith(failedEl(t('First steps'), () => paint())); }
       return;
     }
     f.body.querySelectorAll(':scope > .u-loading, :scope > .u-failed').forEach(x => x.remove());
@@ -311,7 +312,7 @@ BLOCKS.steps = () => {
     };
     const n = STEPS.filter((s) => done[s.id]).length;
     f.st.classList.toggle('is-todo', n < STEPS.length);
-    f.what.replaceChildren(figures('· ' + n + ' of ' + STEPS.length + ' done'));
+    f.what.replaceChildren(figures('· ' + t('{n} of {all} done', { n, all: STEPS.length })));
     fill.style.width = Math.round((n / STEPS.length) * 100) + '%';
     count.replaceChildren(figures(n + ' / ' + STEPS.length));
     // Gold only at the first step not done - its ring and its button; the others' buttons are quiet, a
@@ -341,8 +342,8 @@ BLOCKS.steps = () => {
 };
 
 // ── The app ──
-const ROLE = { 'kie.ai': 'pictures · video · music', elevenlabs: 'voices', openrouter: 'agents', replicate: 'pictures · sources',
-  groq: 'captions', anthropic: 'Claude' };
+const ROLE = { 'kie.ai': t('pictures · video · music'), elevenlabs: t('voices'), openrouter: t('agents'), replicate: t('pictures · sources'),
+  groq: t('captions'), anthropic: 'Claude' };
 const ORDER = ['kie.ai', 'elevenlabs', 'openrouter', 'replicate', 'groq', 'anthropic'];
 const BILLING = { replicate: 'https://replicate.com/account/billing', groq: 'https://console.groq.com/settings/usage',
   anthropic: 'https://console.anthropic.com/settings/billing' };
@@ -351,26 +352,27 @@ const BILLING = { replicate: 'https://replicate.com/account/billing', groq: 'htt
 function balanceOf(p) {
   const d = String(p.detail || '');
   let m = /^([\d,]+) cr$/.exec(d);
-  if (m) return { text: m[1] + ' credits' };
+  if (m) return { text: t('{n} credits', { n: m[1] }) };
   m = /^([\d,]+) of ([\d,]+) chars$/.exec(d);
   if (m) {
     const used = +m[1].replace(/,/g, ''), cap = +m[2].replace(/,/g, '');
     const left = Math.max(0, cap - used);
-    return { text: left.toLocaleString('en-US') + ' of ' + cap.toLocaleString('en-US') + ' chars left', low: cap > 0 && left / cap < 0.1 };
+    const loc = lang() === 'ru' ? 'ru-RU' : 'en-US';
+    return { text: t('{left} of {cap} chars left', { left: left.toLocaleString(loc), cap: cap.toLocaleString(loc) }), low: cap > 0 && left / cap < 0.1 };
   }
   m = /^active, (.+) left$/.exec(d);
-  if (m) return { text: m[1] + ' left' };
+  if (m) return { text: t('{what} left', { what: m[1] }) };
   return null;
 }
 BLOCKS.app = () => {
-  const f = frame('app', 'The app');
-  f.what.textContent = '· keys, balances, the bot, Cloudflare';
-  const adm = el('a', null, 'Admin →');
+  const f = frame('app', t('The app'));
+  f.what.textContent = t('· keys, balances, the bot, Cloudflare');
+  const adm = el('a', null, t('Admin →'));
   adm.href = '/admin';
   f.right.appendChild(adm);
   const box = el('div');
   box.style.display = 'contents';
-  box.appendChild(loadingEl('Loading'));
+  box.appendChild(loadingEl(t('Loading')));
   f.body.appendChild(box);
   let shown = false;
   const td = (cls, ...kids) => { const c = el('td', cls); for (const k of kids) c.append(k); return c; };
@@ -382,7 +384,7 @@ BLOCKS.app = () => {
     c.appendChild(s);
     return c;
   };
-  const WORD = { ok: 'works', down: 'not working', unset: 'no key' };
+  const WORD = { ok: t('works'), down: t('not working'), unset: t('no key') };
   const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
   const paint = async () => {
     // A failed read is said - never "not set - connect it in Admin" for a bot or a key that
@@ -392,13 +394,13 @@ BLOCKS.app = () => {
     const [health, tg, cf] = await Promise.all([read('keys', '/api/keys/health'), read('bot', '/api/telegram'), read('cf', '/api/cloudflare')]);
     const failed = Object.keys(bad);
     if (failed.length) {
-      showError('Could not read ' + failed.map(k => ({ keys: 'the keys', bot: 'the bot', cf: 'Cloudflare' })[k]).join(', '),
+      showError(t('Could not read {what}', { what: failed.map(k => ({ keys: t('the keys'), bot: t('the bot'), cf: 'Cloudflare' })[k]).join(', ') }),
         { detail: bad[failed[0]].message, key: 'home-app' });
       if (shown) return;
     }
     const parts = [];
     // keys and balances
-    parts.push(el('div', 'hm-subh', 'Keys and balances'));
+    parts.push(el('div', 'hm-subh', t('Keys and balances')));
     const t1 = el('table', 'hm-tbl');
     const provs = new Map(((health && health.providers) || []).map((p) => [p.id, p]));
     for (const id of ORDER) {
@@ -407,35 +409,35 @@ BLOCKS.app = () => {
       const tr = el('tr');
       const k = td('k', p.label || id);
       let v;
-      if (p.state === 'unset') v = td('hm-muted', Object.assign(el('a', null, 'add it in Admin'), { href: '/admin' }));
-      else if (p.state !== 'ok') v = td('', el('span', null, p.detail || 'no answer'));
+      if (p.state === 'unset') v = td('hm-muted', Object.assign(el('a', null, t('add it in Admin')), { href: '/admin' }));
+      else if (p.state !== 'ok') v = td('', el('span', null, p.detail || t('no answer')));
       else {
         const b = balanceOf(p);
         if (b) { const s = el('span'); s.appendChild(figures(b.text)); if (b.low) s.style.color = 'var(--warn)'; v = td('', s); }
-        else v = td('hm-muted', BILLING[id] ? 'no balance in its API - ' : '', ...(BILLING[id] ? [link('billing ↗', BILLING[id])] : []));
+        else v = td('hm-muted', BILLING[id] ? t('no balance in its API - ') : '', ...(BILLING[id] ? [link(t('billing ↗'), BILLING[id])] : []));
       }
-      tr.append(k, dot(p.state, WORD[p.state] || 'refused'), v, td('r', ROLE[id] || ''));
+      tr.append(k, dot(p.state, WORD[p.state] || t('refused')), v, td('r', ROLE[id] || ''));
       t1.appendChild(tr);
     }
-    if (bad.keys) parts.push(failedEl('The keys', () => paint(), { line: true }));
+    if (bad.keys) parts.push(failedEl(t('The keys'), () => paint(), { line: true }));
     else {
-      if (!t1.children.length) t1.appendChild(Object.assign(el('tr'), { innerHTML: '<td class="hm-muted">The keys could not be checked.</td>' }));
+      if (!t1.children.length) { const row = el('tr'); row.appendChild(el('td', 'hm-muted', t('The keys could not be checked.'))); t1.appendChild(row); }
       parts.push(t1);
     }
     // the bot
-    parts.push(el('div', 'hm-subh', 'Telegram bot'));
+    parts.push(el('div', 'hm-subh', t('Telegram bot')));
     const t2 = el('table', 'hm-tbl');
     const tr2 = el('tr');
-    if (bad.bot) tr2.appendChild(Object.assign(td('', failedEl('The bot', () => paint(), { line: true })), { colSpan: 4 }));
+    if (bad.bot) tr2.appendChild(Object.assign(td('', failedEl(t('The bot'), () => paint(), { line: true })), { colSpan: 4 }));
     else if (!tg || !tg.bot) {
-      tr2.append(td('k', 'bot'), dot('unset', 'not set'), td('hm-muted', 'send links and media from the phone into REFERENCES - ', Object.assign(el('a', null, 'connect it in Admin'), { href: '/admin' })), td('r', ''));
+      tr2.append(td('k', t('bot')), dot('unset', t('not set')), td('hm-muted', t('send links and media from the phone into REFERENCES - '), Object.assign(el('a', null, t('connect it in Admin')), { href: '/admin' })), td('r', ''));
     } else {
       const paired = tg.chat && tg.chat.name;
       const down = tg.error || tg.conflict;
-      tr2.append(td('k', '@' + tg.bot.username), dot(down ? 'down' : paired ? 'ok' : 'down', down ? 'not working' : paired ? 'works' : 'not connected'),
-        td('', paired ? 'listens to ' + tg.chat.name + ' only' + (tg.mode === 'receiver' ? ' · through your Cloudflare' : ' · while the app is open')
-          : 'send it the code shown in Admin'),
-        td('r', figures(tg.queue && tg.queue.waiting ? tg.queue.waiting + ' in the queue' : '')));
+      tr2.append(td('k', '@' + tg.bot.username), dot(down ? 'down' : paired ? 'ok' : 'down', down ? t('not working') : paired ? t('works') : t('not connected')),
+        td('', paired ? t('listens to {name} only', { name: tg.chat.name }) + ' · ' + (tg.mode === 'receiver' ? t('through your Cloudflare') : t('while the app is open'))
+          : t('send it the code shown in Admin')),
+        td('r', figures(tg.queue && tg.queue.waiting ? t('{n} in the queue', { n: tg.queue.waiting }) : '')));
     }
     t2.appendChild(tr2);
     parts.push(t2);
@@ -443,24 +445,24 @@ BLOCKS.app = () => {
     parts.push(el('div', 'hm-subh', 'Cloudflare'));
     const t3 = el('table', 'hm-tbl');
     const tr3 = el('tr');
-    if (bad.cf) tr3.appendChild(Object.assign(td('', failedEl('Cloudflare', () => paint(), { line: true })), { colSpan: 4 }));
+    if (bad.cf) tr3.appendChild(Object.assign(td('', failedEl(t('Cloudflare'), () => paint(), { line: true })), { colSpan: 4 }));
     else if (!cf || !cf.tokenSet) {
-      tr3.append(td('k', 'key · R2'), dot('unset', 'not set'), td('hm-muted', 'hosts the references the models fetch - ', Object.assign(el('a', null, 'add the key in Admin'), { href: '/admin' })), td('r', ''));
+      tr3.append(td('k', t('key · R2')), dot('unset', t('not set')), td('hm-muted', t('hosts the references the models fetch - '), Object.assign(el('a', null, t('add the key in Admin')), { href: '/admin' })), td('r', ''));
     } else {
       const c = cf.check || {};
       const acc = c.account || cf.account, bkt = c.bucket || cf.bucket;
       const failed = (c.steps || []).find((s) => !s.ok);
       const v = td('');
-      if (cf.inUse && acc && bkt) v.append('bucket ', el('b', null, bkt), ' - ', link('open it ↗', 'https://dash.cloudflare.com/' + encodeURIComponent(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt)));
+      if (cf.inUse && acc && bkt) v.append(t('bucket') + ' ', el('b', null, bkt), ' - ', link(t('open it ↗'), 'https://dash.cloudflare.com/' + encodeURIComponent(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt)));
       else if (failed) v.append(failed.id + ' · ' + String(failed.words || '').slice(0, 90));
-      else v.append(cf.checking ? '' : 'see Admin');
-      tr3.append(td('k', 'key · R2'), dot(cf.inUse ? 'ok' : failed ? 'down' : 'unset', cf.inUse ? 'works' : failed ? 'not working' : cf.checking ? 'checking' : 'not checked'),
-        v, td('r', cf.inUse ? 'R2 works' : ''));
+      else v.append(cf.checking ? '' : t('see Admin'));
+      tr3.append(td('k', t('key · R2')), dot(cf.inUse ? 'ok' : failed ? 'down' : 'unset', cf.inUse ? t('works') : failed ? t('not working') : cf.checking ? t('checking') : t('not checked')),
+        v, td('r', cf.inUse ? t('R2 works') : ''));
     }
     t3.appendChild(tr3);
     if (tg && tg.receiver && tg.receiver.script) {
       const r = el('tr');
-      r.append(td('k', 'receiver'), dot('ok', 'works'), td('', tg.receiver.script + ' on workers.dev - keeps messages while the app is closed'), td('r', ''));
+      r.append(td('k', t('receiver')), dot('ok', t('works')), td('', t('{script} on workers.dev - keeps messages while the app is closed', { script: tg.receiver.script })), td('r', ''));
       t3.appendChild(r);
     }
     parts.push(t3);
@@ -520,7 +522,7 @@ $('#hm-reset').addEventListener('click', () => { place(FIRST); keep(); });
 // ── painting, and painting again ──────────────────────────────────────────────
 // Each block paints at once; the ones about work in flight again on their own beat, while the page is looked at.
 // A block that throws while it draws is said - a popup, once per block - not lost.
-const _drawn = (id) => (e) => showError('A block of Home could not be drawn', { detail: id + ': ' + ((e && e.message) || e), key: 'home-paint-' + id });
+const _drawn = (id) => (e) => showError(t('A block of Home could not be drawn'), { detail: id + ': ' + ((e && e.message) || e), key: 'home-paint-' + id });
 const _paint = (id) => { const b = made[id]; return b ? b.paint().catch(_drawn(id)) : null; };
 const _first = [];
 for (const id of Object.keys(made)) {

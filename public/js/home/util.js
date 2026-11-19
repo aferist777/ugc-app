@@ -5,6 +5,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { icon } from '../icons.js';
+import { t, lang } from '../i18n/t.js';
 
 export const $ = (s, r) => (r || document).querySelector(s);
 export const el = (tag, cls, text) => {
@@ -16,22 +17,23 @@ export const el = (tag, cls, text) => {
 export const api = async (url) => {
   const r = await fetch(url);
   const d = await r.json().catch(() => null);
-  if (!d || d.success === false) throw new Error((d && d.error) || 'no answer');
+  if (!d || d.success === false) throw new Error((d && d.error) || t('no answer'));
   return d;
 };
 export const ls = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
 export const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
 
 export const when = (iso) => {
-  const t = Date.parse(iso);
-  if (!t) return '';
-  const d = new Date(t), now = new Date();
-  const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const at = Date.parse(iso);
+  if (!at) return '';
+  const d = new Date(at), now = new Date();
+  const loc = lang() === 'ru' ? 'ru-RU' : 'en-GB';
+  const hm = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86400000);
-  if (diff === 0) return 'today, ' + hm;
-  if (diff === 1) return 'yesterday, ' + hm;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + hm;
+  if (diff === 0) return t('today, {time}', { time: hm });
+  if (diff === 1) return t('yesterday, {time}', { time: hm });
+  return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' }) + ', ' + hm;
 };
 
 /** A block's frame: { st, head, what, right, body } - `body` is laid out by the frame itself (display: contents). */
@@ -42,7 +44,7 @@ export function frame(id, name) {
   // the handle is the interface's grip icon, "Drag" under the pointer; the name in sentence case
   const grip = el('span', 'hm-grip');
   grip.innerHTML = icon('grip-vertical', 14);
-  grip.title = 'Drag';
+  grip.title = t('Drag');
   head.appendChild(grip);
   head.appendChild(el('span', 'hm-name', name));
   const what = el('span', 'hm-what');
