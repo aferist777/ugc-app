@@ -84,9 +84,9 @@
 <!-- A pane's script is a module where it takes the app's words (js/i18n/t.js); modules run in their order after the page is
      read, so the tab strip below is one too - the panes hear its first `adm-pane`. -->
 <script type="module" src="js/admin-keys.js"></script>
-<script src="js/admin-ai.js"></script>
-<script src="js/admin-local.js"></script>
-<script src="js/admin-thanks.js"></script>
+<script type="module" src="js/admin-ai.js"></script>
+<script type="module" src="js/admin-local.js"></script>
+<script type="module" src="js/admin-thanks.js"></script>
 <script type="module">
   // The tab strip, after the panes' own scripts so they hear the first `adm-pane`. Panes are
   // hidden rather than rebuilt, so a half-typed key survives a switch.

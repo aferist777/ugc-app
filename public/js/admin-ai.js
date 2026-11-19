@@ -8,6 +8,8 @@
 
    GET /api/ai-settings when the pane shows, PUT /api/ai-settings { agents } on every change - the order written whole.
    ═══════════════════════════════════════════════════════════════════════════ */
+import { t } from './i18n/t.js';
+
 (function () {
   const body = document.getElementById('ai-body');
   if (!body) return;
@@ -16,8 +18,8 @@
   let busy = false;
   let failed = false;     // the settings could not be read and nothing is shown yet
   // A failure is a popup in the corner (js/notice.js); the pane being read or not read is the
-  // shared part (js/ui-state.js) - this is a classic script, so the modules come with import().
-  const sayError = (t, detail) => { import('/js/notice.js').then(m => m.showError(t, detail ? { detail } : {})).catch(() => {}); };
+  // shared part (js/ui-state.js), brought in when first needed.
+  const sayError = (words, detail) => { import('/js/notice.js').then(m => m.showError(words, detail ? { detail } : {})).catch(() => {}); };
   const stateEl = (make) => { const hold = el('div'); import('/js/ui-state.js').then(m => { if (hold.isConnected) hold.replaceWith(make(m)); }).catch(() => {}); return hold; };
 
   const el = (tag, cls, text) => {
@@ -37,49 +39,32 @@
     try { back = new URLSearchParams(location.search).get('back') || ''; } catch (e) { back = ''; }
     if (!btn || !/^\/library(\?|$)/.test(back)) return;
     btn.hidden = false;
-    btn.title = 'Back to the scenario generator, where you left it';
+    btn.title = t('Back to the scenario generator, where you left it');
     btn.addEventListener('click', () => { location.href = back; });
   })();
   // The verdict in a word or two for a menu entry; the whole sentence is the step's own line.
-  const offWord = (off) => (!off ? '' : /^no key/.test(off) ? 'no key' : 'key refused');
+  const offWord = (off) => (!off ? '' : /^no key/.test(off) ? t('no key') : t('key refused'));
 
   // ── What this is ─────────────────────────────────────────────────────────
   function explain() {
     // One line of what this is; the four paragraphs fold under "How it works".
     const box = el('div', 'ai-say');
-    box.appendChild(el('p', 'ai-line', 'The first step of the ladder is asked; the next one only when it fails.'));
+    box.appendChild(el('p', 'ai-line', t('The first step of the ladder is asked; the next one only when it fails.')));
     const more = el('details', 'ai-how');
-    more.appendChild(el('summary', null, 'How it works'));
+    more.appendChild(el('summary', null, t('How it works')));
     box.appendChild(more);
     const p = (html) => { const e = el('p'); e.innerHTML = html; more.appendChild(e); };
-    p('<b>Agents</b> read what you write and the pictures attached to it, look at the pictures, and answer: a prompt '
-      + 'shaped for the model you chose, a description, a plan, a script. Mostly short calls - words and a few pictures '
-      + 'in, a short answer back within a minute; some are long work (below).');
-    p('<b>Where they work:</b> the pictures chat (the prompt for the picture model); the video chat (the clip\'s '
-      + 'prompt, Kling\'s first frame, putting a prompt or a script\'s lines into English); the frames chat of a talking head '
-      + '(the frame\'s prompt, ideas); New Character (reading a photo, framing the 4K sheet); New look, New lookbook '
-      + 'and New environment (what to make); the talking head (the mood markup of the script, the plan of the first '
-      + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place); highlights (finding the '
-      + 'moments of a long video); the scenario generator (the hooks, the script, rewriting a paragraph or a '
-      + 'fragment of one, a scenario of the shelf in its narrator\'s voice), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, '
-      + 'and the generator, the topics and the narrator think at effort medium, highlights at high (the rest at low).');
-    p('<b>The ladder:</b> the first step is asked. If it answers nothing, refuses or runs out of time, the next one '
-      + 'is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the '
-      + 'last check, is stepped over - and such an aggregator cannot be chosen until its key works. Every model here '
-      + 'can see pictures. Long work is PAID ONCE: a step that runs out of time, drops the connection or stops at its '
-      + 'length may have been paid for, so the next one is not asked by itself - the work stops and says so, and is '
-      + 'asked again only when you press again. A refusal is not paid for: the next step is asked.');
-    p('<b>Cost:</b> a Gemini Flash answer is a fraction of a cent. Claude, asked directly with its key on API keys, '
-      + 'thinks briefly here and costs more: about 3-6 cents for a message with two pictures on Opus 5.5, about half that '
-      + 'on Sonnet 5.5, a fraction of a cent on Haiku 5.5. A script, its topics or the moments of an hour of video read '
-      + 'by Claude Sonnet 5.5 cost a few cents to about a dime, by Gemini Flash a cent or two.');
+    p(t('<b>Agents</b> read what you write and the pictures attached to it, look at the pictures, and answer: a prompt shaped for the model you chose, a description, a plan, a script. Mostly short calls - words and a few pictures in, a short answer back within a minute; some are long work (below).'));
+    p(t('<b>Where they work:</b> the pictures chat (the prompt for the picture model); the video chat (the clip\'s prompt, Kling\'s first frame, putting a prompt or a script\'s lines into English); the frames chat of a talking head (the frame\'s prompt, ideas); New Character (reading a photo, framing the 4K sheet); New look, New lookbook and New environment (what to make); the talking head (the mood markup of the script, the plan of the first frames, the animation prompts, how a place moves); the 3D Studio (describing a place); highlights (finding the moments of a long video); the scenario generator (the hooks, the script, rewriting a paragraph or a fragment of one, a scenario of the shelf in its narrator\'s voice), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, and the generator, the topics and the narrator think at effort medium, highlights at high (the rest at low).'));
+    p(t('<b>The ladder:</b> the first step is asked. If it answers nothing, refuses or runs out of time, the next one is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the last check, is stepped over - and such an aggregator cannot be chosen until its key works. Every model here can see pictures. Long work is PAID ONCE: a step that runs out of time, drops the connection or stops at its length may have been paid for, so the next one is not asked by itself - the work stops and says so, and is asked again only when you press again. A refusal is not paid for: the next step is asked.'));
+    p(t('<b>Cost:</b> a Gemini Flash answer is a fraction of a cent. Claude, asked directly with its key on API keys, thinks briefly here and costs more: about 3-6 cents for a message with two pictures on Opus 5.5, about half that on Sonnet 5.5, a fraction of a cent on Haiku 5.5. A script, its topics or the moments of an hour of video read by Claude Sonnet 5.5 cost a few cents to about a dime, by Gemini Flash a cent or two.'));
     return box;
   }
 
   // ── One step ─────────────────────────────────────────────────────────────
   function rung(step, i, n) {
     const p = prov(step.provider);
-    const off = p ? p.off : 'not an aggregator of this ladder';
+    const off = p ? p.off : t('not an aggregator of this ladder');
     const row = el('div', 'ai-rung' + (off ? ' is-off' : ''));
     row.appendChild(el('span', 'ai-no', String(i + 1)));
     // A pairing another step already holds cannot be chosen here: the server keeps one of two equal steps, and the
@@ -87,9 +72,9 @@
     const used = new Set(st.ladder.filter((_, k) => k !== i).map(s => s.provider + '|' + s.model));
 
     const ps = el('select', 'ai-sel ai-prov u-in is-s');
-    ps.title = 'The aggregator this step asks';
+    ps.title = t('The aggregator this step asks');
     for (const q of st.providers) {
-      const o = el('option', null, q.label + (q.off ? ' - ' + offWord(q.off) : '') + (q.unproven ? ' (not tried yet)' : ''));
+      const o = el('option', null, q.label + (q.off ? ' - ' + offWord(q.off) : '') + (q.unproven ? ' ' + t('(not tried yet)') : ''));
       o.value = q.id;
       // An aggregator that cannot be asked cannot be chosen, nor one whose every model is on the other steps; the one
       // this step already stands on stays shown.
@@ -108,9 +93,9 @@
     row.appendChild(ps);
 
     const ms = el('select', 'ai-sel ai-model u-in is-s');
-    ms.title = 'The model - every one of them sees pictures';
+    ms.title = t('The model - every one of them sees pictures');
     for (const m of ((p && p.models) || [{ id: step.model, label: step.model }])) {
-      const o = el('option', null, m.label + (used.has(step.provider + '|' + m.id) ? ' - on another step' : ''));
+      const o = el('option', null, m.label + (used.has(step.provider + '|' + m.id) ? ' - ' + t('on another step') : ''));
       o.value = m.id;
       o.disabled = used.has(step.provider + '|' + m.id);
       o.selected = m.id === step.model;
@@ -124,7 +109,7 @@
     });
     row.appendChild(ms);
 
-    row.appendChild(el('span', 'ai-off', off ? 'stepped over: ' + off : ''));
+    row.appendChild(el('span', 'ai-off', off ? t('stepped over: {why}', { why: off }) : ''));
 
     // the arrows and the minus are icons (css/admin.css .ai-ico, Lucide's), not ▲ ▼ −
     const move = (to, sym, title) => {
@@ -139,11 +124,11 @@
       });
       return b;
     };
-    row.appendChild(move(i - 1, 'up', 'Ask this one earlier'));
-    row.appendChild(move(i + 1, 'down', 'Ask this one later'));
+    row.appendChild(move(i - 1, 'up', t('Ask this one earlier')));
+    row.appendChild(move(i + 1, 'down', t('Ask this one later')));
     const del = el('button', 'u-btn is-s is-icon is-quiet ai-mini ai-ico is-minus');
     del.type = 'button';
-    del.title = n < 2 ? 'The ladder needs one step at least' : 'Remove this step';
+    del.title = n < 2 ? t('The ladder needs one step at least') : t('Remove this step');
     del.disabled = n < 2;
     del.addEventListener('click', () => save(st.ladder.filter((_, k) => k !== i)));
     row.appendChild(del);
@@ -164,22 +149,22 @@
 
   function paint() {
     body.textContent = '';
-    if (!st) { body.appendChild(stateEl(m => (failed ? m.failedEl('AI settings', load) : m.loadingEl('reading…', { line: true })))); return; }
+    if (!st) { body.appendChild(stateEl(m => (failed ? m.failedEl(t('AI settings'), load) : m.loadingEl(t('reading…'), { line: true })))); return; }
     body.appendChild(explain());
-    body.appendChild(el('div', 'dio-sec', 'Agents'));
+    body.appendChild(el('div', 'dio-sec', t('Agents')));
     const list = el('div', 'ai-ladder');
     st.ladder.forEach((s, i) => list.appendChild(rung(s, i, st.ladder.length)));
     body.appendChild(list);
     const free = nextFree();
     const full = st.ladder.length >= st.max;
-    const add = el('button', 'u-btn ai-add', '+ Add a step');
+    const add = el('button', 'u-btn ai-add', '+ ' + t('Add a step'));
     add.type = 'button';
     add.disabled = full || !free || busy;
-    add.title = full ? 'Five is the cap - more steps buy waiting, not reliability'
-      : !free ? 'Every model an aggregator with a working key offers is on the ladder already' : 'A step asked when the ones above it fail';
+    add.title = full ? t('Five is the cap - more steps buy waiting, not reliability')
+      : !free ? t('Every model an aggregator with a working key offers is on the ladder already') : t('A step asked when the ones above it fail');
     add.addEventListener('click', () => { const f = nextFree(); if (f) save(st.ladder.concat(f)); });
     const foot = el('div', 'dio-actions');
-    foot.append(add, el('span', 'adm-count', st.ladder.length + ' of ' + st.max));
+    foot.append(add, el('span', 'adm-count', t('{n} of {max}', { n: st.ladder.length, max: st.max })));
     body.appendChild(foot);
     body.appendChild(el('div', 'dio-status', msg));
     body.querySelectorAll('select, .ai-mini').forEach(c => { if (busy) c.disabled = true; });
@@ -188,24 +173,24 @@
   function take(d, what) {
     if (d && d.success) { st = { ladder: d.ladder, max: d.max, providers: d.providers }; return true; }
     msg = '';
-    sayError(what, (d && d.error) || 'the server did not answer');
+    sayError(what, (d && d.error) || t('the server did not answer'));
     return false;
   }
 
   function save(list) {
-    busy = true; msg = 'saving…';
+    busy = true; msg = t('saving…');
     paint();
     fetch('/api/ai-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: list }) })
       .then(r => r.json())
-      .then(d => { if (take(d, 'Not saved')) msg = 'Saved. The next agent asks this ladder.'; })
-      .catch(() => { msg = ''; sayError('Not saved - the server did not answer.'); })
+      .then(d => { if (take(d, t('Not saved'))) msg = t('Saved. The next agent asks this ladder.'); })
+      .catch(() => { msg = ''; sayError(t('Not saved - the server did not answer.')); })
       .finally(() => { busy = false; paint(); });
   }
 
   function load() {
     fetch('/api/ai-settings').then(r => r.json())
-      .then(d => { if (take(d, 'Could not read the settings.')) { msg = ''; failed = false; } else failed = !st; paint(); })
-      .catch(() => { failed = !st; sayError('Could not read the settings.'); paint(); });
+      .then(d => { if (take(d, t('Could not read the settings.'))) { msg = ''; failed = false; } else failed = !st; paint(); })
+      .catch(() => { failed = !st; sayError(t('Could not read the settings.')); paint(); });
   }
 
   document.addEventListener('adm-pane', (e) => { if (e.detail === 'ai') { paint(); load(); } });

@@ -30,8 +30,7 @@ export default [
     rules: PAGE_RULES,
   },
   {
-    files: ['public/js/admin-ai.js', 'public/js/admin-local.js', 'public/js/admin-thanks.js',
-      'public/js/storage-sync.js'],
+    files: ['public/js/storage-sync.js'],
     languageOptions: { sourceType: 'script' },
   },
   {

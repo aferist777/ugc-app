@@ -15,6 +15,18 @@
    alphabetical order): the case is ignored, so "dotenv" stands among the
    D's, and the group an entry belongs to is a pale tag on its line.
    ═══════════════════════════════════════════════════════════════════════════ */
+import { t } from './i18n/t.js';
+
+// The list stays English data (tools/third-party.js makes THIRD_PARTY_NOTICES.md from it); its group tags are said in the
+// app's language when drawn. The license line of UGC Studio itself is a legal notice and stays as it is.
+const GROUPS = {
+  '3D Studio': t('3D Studio'), 'App and server': t('App and server'), 'Caption presets': t('Caption presets'), 'Captions': t('Captions'),
+  'Desktop': t('Desktop'), 'Fonts': t('Fonts'), 'Ideas and rules we follow': t('Ideas and rules we follow'), 'Interface': t('Interface'),
+  'Patterns': t('Patterns'), 'Pictures and video': t('Pictures and video'), 'Sound effects': t('Sound effects'), 'Speech': t('Speech'),
+  'Text presets': t('Text presets'), 'Tools and build': t('Tools and build'), 'Video almanac': t('Video almanac'),
+  'Video and audio tools': t('Video and audio tools'),
+};
+
 (function () {
   var THANKS = [
     { group: "Video and audio tools", name: "Rubber Band Library",
@@ -745,7 +757,7 @@
   function build() {
     built = true;
     var count = document.getElementById('thx-count');
-    if (count) count.textContent = 'The open-source work this app is built on - ' + THANKS.length + ' repositories';
+    if (count) count.textContent = t('The open-source work this app is built on - {n} repositories', { n: THANKS.length });
     var legal = el('p', 'thx-intro', 'UGC Studio · Copyright (C) 2026 aferist777 · free software under the GNU Affero General Public License, '
       + 'version 3 or (at your option) any later version · it comes with ABSOLUTELY NO WARRANTY · its source code: ');
     var src = el('a', '', 'github.com/aferist777/ugc-app');
@@ -754,8 +766,7 @@
     src.rel = 'noopener noreferrer';
     legal.appendChild(src);
     body.appendChild(legal);
-    body.appendChild(el('p', 'thx-intro', 'UGC Studio stands on the work of these projects and the people behind them. '
-      + 'Each is listed with its license, what it is, and what it does in this app. Thank you.'));
+    body.appendChild(el('p', 'thx-intro', t('UGC Studio stands on the work of these projects and the people behind them. Each is listed with its license, what it is, and what it does in this app. Thank you.')));
     var coll = null;
     try { coll = new Intl.Collator('en', { sensitivity: 'base', numeric: true }); } catch (e) { /* plain compare then */ }
     var list = THANKS.slice().sort(function (a, b) {
@@ -764,20 +775,20 @@
       return x < y ? -1 : x > y ? 1 : 0;
     });
     var sec = el('section', 'thx-group');
-    list.forEach(function (t) {
+    list.forEach(function (it) {
       var row = el('div', 'thx-row');
       var top = el('div', 'thx-top');
-      var a = el('a', 'thx-name', t.name);
-      a.href = t.url;
+      var a = el('a', 'thx-name', it.name);
+      a.href = it.url;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
-      a.title = t.url;
+      a.title = it.url;
       top.appendChild(a);
-      top.appendChild(el('span', 'thx-lic', t.license));
-      top.appendChild(el('span', 'thx-grp', t.group));
+      top.appendChild(el('span', 'thx-lic', it.license));
+      top.appendChild(el('span', 'thx-grp', GROUPS[it.group] || it.group));
       row.appendChild(top);
-      row.appendChild(el('div', 'thx-what', t.what));
-      row.appendChild(el('div', 'thx-how', t.how));
+      row.appendChild(el('div', 'thx-what', it.what));
+      row.appendChild(el('div', 'thx-how', it.how));
       sec.appendChild(row);
     });
     body.appendChild(sec);
