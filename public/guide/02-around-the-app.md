@@ -15,8 +15,9 @@ Every page has the same strip.
 - **Library** - everything the app keeps: characters, media, voices, scenarios, renders.
 - **Assistant** - a chat with an AI: **Ideas** to brainstorm videos and prompts, **Help** to ask how to do something here.
 - On the right: **Queue** (renders waiting to run), the wait (how long the work in flight still takes), **Alerts** (every
-  generation), **Admin** (keys and settings), **Donate** (a page to thank the app's author), **Guide** (this book - on
-  every page, with no key needed). An **Update …** chip appears there when a new version is ready.
+  generation), **Donate** (a page to thank the app's author), **Guide** (this book - on every page, with no key needed),
+  and last the gear of **Admin** (keys and settings; its name shows under the pointer). An **Update …** chip appears there
+  when a new version is ready.
 - At the far right, in full screen: minimise, into a window, quit.
 
 The page you are on is lit.

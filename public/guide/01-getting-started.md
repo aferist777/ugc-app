@@ -36,8 +36,8 @@ where you stopped.
 
 ## The keys
 
-A key is how a service knows the work is yours and bills you for it. Keys are entered on **Admin → API keys**: paste a
-key, press **Save**, and the app asks the service whether the key works - a green line under it means yes, a red one says
+A key is how a service knows the work is yours and bills you for it. Keys are entered on **Admin → API keys** (Admin is the
+gear at the right end of the top strip): paste a key, press **Save**, and the app asks the service whether the key works - a green line under it means yes, a red one says
 why not. **Check again** asks every service anew. A key is shown as its first six and last four characters only.
 
 ![Admin → API keys](shots/start-admin-keys.webp)

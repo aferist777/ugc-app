@@ -604,7 +604,7 @@ export function createTree(host, o) {
     }
     // A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
     if (gens) {
-      const g = _el('button', 'mt-gen u-btn is-s is-gen', T.t('Generate'));
+      const g = _el('button', 'mt-gen u-btn is-s is-gen', T.tc('tree', 'Generate'));
       g.type = 'button';
       g.tabIndex = -1;
       g.title = GEN_TIP[n.key];

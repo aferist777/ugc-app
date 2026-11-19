@@ -38,6 +38,7 @@ export default {
   'The items stay on the disk.': 'Элементы остаются на диске.',
 
   // the tree
+  'tree::Generate': 'Создать',
   'Generate pictures - the pictures chat': 'Создать картинки — чат картинок',
   'Generate video - the video chat': 'Создать видео — чат видео',
   'Generate music and sounds': 'Создать музыку и звуки',

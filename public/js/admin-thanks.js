@@ -787,8 +787,8 @@ const GROUPS = {
       top.appendChild(el('span', 'thx-lic', it.license));
       top.appendChild(el('span', 'thx-grp', GROUPS[it.group] || it.group));
       row.appendChild(top);
-      row.appendChild(el('div', 'thx-what', it.what));
-      row.appendChild(el('div', 'thx-how', it.how));
+      row.appendChild(el('div', 'thx-what', t(it.what)));
+      row.appendChild(el('div', 'thx-how', t(it.how)));
       sec.appendChild(row);
     });
     body.appendChild(sec);

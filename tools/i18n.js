@@ -132,6 +132,12 @@ function check({ verbose = false } = {}) {
       const html = fs.readFileSync(path.join(APP_DIR, f), 'utf8');
       for (const s of HTML.texts(html)) if (!keep.has(s) && typeof dict[s] !== 'string') missing.push(`${f}  ${JSON.stringify(s)}`);
     }
+    // Admin -> Thanks: every entry's "what" and "how" is said in the app's language when drawn (tools/i18n.json `thanks`).
+    if (cfg.thanks) {
+      for (const e of require('./third-party.js').thanks()) {
+        for (const s of [e.what, e.how]) if (s && typeof dict[s] !== 'string') missing.push(`public/js/admin-thanks.js  ${JSON.stringify(s)}`);
+      }
+    }
     for (const key of Object.keys(dict)) {
       const text = key.includes('::') ? key.slice(key.indexOf('::') + 2) : key;
       if (!keys.has(key) && !literals.has(text) && !pageTexts.has(key) && !pageTexts.has(text)) stale.push(JSON.stringify(key));

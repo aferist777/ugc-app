@@ -61,7 +61,7 @@ function current() {
   return now === make();
 }
 
-module.exports = { make, current };
+module.exports = { make, current, thanks };
 
 if (require.main === module) {
   if (process.argv.includes('--check')) {
