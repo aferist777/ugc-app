@@ -20,6 +20,7 @@
 // buttons: Cancel LEFT, the verb right. The 3D Studio's page keeps a look and order of its own.
 
 import * as Layers from './layers.js';
+import { t } from './i18n/t.js';
 
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
 
@@ -62,18 +63,18 @@ export function askName(opts) {
   _close(null);
   return new Promise((resolve) => {
     const el = _el('div', 'nm-box u-ask is-float');
-    el.appendChild(_el('b', 'nm-t', o.title || 'Name'));
+    el.appendChild(_el('b', 'nm-t', o.title || t('Name')));
     const inp = _el('input', 'nm-in u-in');
     inp.type = 'text';
     inp.value = o.value || '';
-    inp.placeholder = o.placeholder || 'Name';
+    inp.placeholder = o.placeholder || t('Name');
     inp.maxLength = o.maxLength || 120;
     inp.spellcheck = false;
     const err = _el('div', 'nm-err');
     const row = _el('div', 'nm-r u-ask-r');
-    const ok = _el('button', 'nm-b is-ok u-btn is-s is-main', o.okLabel || 'OK');
+    const ok = _el('button', 'nm-b is-ok u-btn is-s is-main', o.okLabel || t('OK'));
     ok.type = 'button';
-    const no = _el('button', 'nm-b u-btn is-s', 'Cancel');
+    const no = _el('button', 'nm-b u-btn is-s', t('Cancel'));
     no.type = 'button';
     if (OLD_LOOK()) row.append(ok, no); else row.append(no, ok);
     el.append(inp, err, row);
@@ -89,7 +90,7 @@ export function askName(opts) {
     const go = async () => {
       if (busy) return;                                   // a second Enter while it is working
       const name = inp.value.trim();
-      if (!name) { err.textContent = 'Give it a name.'; inp.focus(); return; }
+      if (!name) { err.textContent = t('Give it a name.'); inp.focus(); return; }
       const why = typeof o.check === 'function' ? (o.check(name) || '') : '';
       if (why) { err.textContent = why; inp.select(); return; }
       if (typeof o.submit !== 'function') { _close(name); return; }

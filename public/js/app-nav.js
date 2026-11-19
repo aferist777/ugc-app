@@ -7,8 +7,12 @@
 //   • which entry is lit is read from the ADDRESS, not hardcoded. The page answers on
 //     the page's own address, whatever it is, and a hardcoded class would
 //     light the wrong one the day that changes.
-//   • the Admin entry, on a page whose strip leaves it out.
+//   • the Admin entry, on a page whose strip leaves it out - a gear alone, last before the window's own buttons.
+//
+// Its words are the app's language (js/i18n/t.js); the pages' own links are translated with their markup (lib/i18n-html.js,
+// "Merge" under data-tc="nav" - the page, not the verb).
 
+import { t, tc } from './i18n/t.js';
 import { mountAlerts } from './alerts-bell.js';
 import { mountUpdate } from './app-update.js';
 import { iconEl } from './icons.js';
@@ -17,6 +21,13 @@ import './key-gate.js';
 
 // The 3D Studio's page keeps its whole look - its strip too: nothing below adds to it there.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
+
+// "Merge" in a strip is the page, not the verb (tc 'nav'): set here as well, for a page whose markup is not translated
+// with that context.
+function _navWords(nav) {
+  const a = nav.querySelector('a[href="/merge"]');
+  if (a && a.textContent.trim() === 'Merge') a.textContent = tc('nav', 'Merge');
+}
 
 function _lightCurrent(nav) {
   const here = location.pathname.replace(/\/+$/, '') || '/';
@@ -37,34 +48,38 @@ function _soon3d(nav) {
   const a = nav.querySelector('a[href="/3d"]');
   if (!a || a.classList.contains('cur')) return;
   a.classList.add('is-soon');
-  a.title = 'In development';
+  a.title = t('In development');
   a.setAttribute('aria-disabled', 'true');
   a.tabIndex = -1;
   a.addEventListener('click', (e) => e.preventDefault());
 }
 
-// The Admin entry - API keys, AI settings - on a page whose strip does not carry one already.
-// There is one person and no sign-in, so there is nobody to hide it from.
 // HOME first in every strip, left of Merge - put in here, so no page's markup has to carry it.
 function _homeLink(nav) {
   if (nav.querySelector('a[href="/home"]')) return;
   const a = document.createElement('a');
-  a.href = '/home'; a.textContent = 'Home';
+  a.href = '/home'; a.textContent = t('Home');
   nav.insertBefore(a, nav.firstChild);
 }
 
+// The Admin entry - API keys, AI settings, this computer - on a page whose strip does not carry one already. There is one
+// person and no sign-in, so there is nobody to hide it from. A GEAR with no word, its name under the pointer; it goes last
+// in the strip, right of the Guide, once everything else is in (initNav) - only the window's own buttons are right of it.
 function _adminLink(nav) {
   let a = nav.querySelector('a[href="/admin"]');
   if (!a) {
     a = document.createElement('a');
-    a.href = '/admin'; a.textContent = 'Admin';
+    a.href = '/admin'; a.textContent = t('Admin');
     nav.appendChild(a);
   }
-  // Alerts and Admin - the two at the right end that are not places of work - are an icon and a word.
-  if (!OLD_LOOK() && !a.querySelector('.u-ico')) { a.classList.add('has-ico'); a.insertBefore(iconEl('settings', 14), a.firstChild); }
+  if (OLD_LOOK() || a.classList.contains('is-gear')) return;
+  a.classList.add('has-ico', 'is-gear');
+  a.title = t('Admin');
+  a.setAttribute('aria-label', t('Admin'));
+  a.replaceChildren(iconEl('settings', 16));
 }
 
-// DONATE, right of Admin: the author's DonationAlerts page, opened in the person's own browser (the window sends every
+// DONATE, right of Alerts: the author's DonationAlerts page, opened in the person's own browser (the window sends every
 // outside link there - desktop/main.js). Not on the 3D Studio's page (OLD_LOOK).
 const DONATE_URL = 'https://www.donationalerts.com/r/fellows';
 const HEART = '<svg class="u-ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13.6 2.7 8.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 5.3 4.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
@@ -76,9 +91,9 @@ function _donateLink(nav) {
   a.href = DONATE_URL;
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
-  a.title = 'Thank you for using UGC Studio! If it helps you, you can support it on DonationAlerts - and write there what you would like to see in the next updates.';
+  a.title = t('Thank you for using UGC Studio! If it helps you, you can support it on DonationAlerts - and write there what you would like to see in the next updates.');
   a.innerHTML = HEART;
-  a.appendChild(document.createTextNode('Donate'));
+  a.appendChild(document.createTextNode(t('Donate')));
   if (admin) admin.after(a); else nav.appendChild(a);
 }
 
@@ -92,8 +107,8 @@ function _queueButton(nav) {
   b.type = 'button';
   b.className = 'sv3-navbtn';
   b.id = 'mv3-queue';
-  b.title = 'Render queue - projects waiting to be rendered';
-  b.textContent = 'Queue';
+  b.title = t('Render queue - projects waiting to be rendered');
+  b.textContent = t('Queue');
   nav.insertBefore(b, nav.querySelector('a[href="/admin"]'));
   import('./merge-v3/queue.js').then((m) => m.initQueue()).catch(() => { b.hidden = true; });
 }
@@ -105,8 +120,8 @@ function _assistantButton(nav) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'sv3-navbtn sv3-asst has-ico';
-  b.title = 'Assistant - brainstorm ideas and prompts, or ask how to do something in the app';
-  b.append(iconEl('message-square', 14), document.createTextNode('Assistant'));
+  b.title = t('Assistant - brainstorm ideas and prompts, or ask how to do something in the app');
+  b.append(iconEl('message-square', 14), document.createTextNode(t('Assistant')));
   const lib = nav.querySelector('a[href="/library"]');
   nav.insertBefore(b, lib ? lib.nextSibling : nav.querySelector('.sp'));
   b.addEventListener('click', () => {
@@ -126,8 +141,8 @@ function _guideButton(nav) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'sv3-navbtn sv3-gd has-ico';
-  b.title = 'Guide - the app\'s book: how every part of UGC Studio works';
-  b.append(iconEl('book-open', 14), document.createTextNode('Guide'));
+  b.title = t('Guide - the app\'s book: how every part of UGC Studio works');
+  b.append(iconEl('book-open', 14), document.createTextNode(t('Guide')));
   const donate = nav.querySelector('.sv3-donate');
   if (donate) donate.after(b); else nav.appendChild(b);
   window.addEventListener('ugc:guide', (e) => b.classList.toggle('is-on', !!(e.detail && e.detail.open)));
@@ -162,10 +177,10 @@ function _windowButtons(nav) {
     box.appendChild(b);
     return b;
   };
-  const min = button('min', 'Minimise', () => W.minimize());
-  const win = button('win', 'Into a window', () => W.toggleFull());
-  const close = button('close', 'Quit UGC Studio', () => W.close());
-  const full = button('full', 'Full screen', () => W.toggleFull());
+  const min = button('min', t('Minimise'), () => W.minimize());
+  const win = button('win', t('Into a window'), () => W.toggleFull());
+  const close = button('close', t('Quit UGC Studio'), () => W.close());
+  const full = button('full', t('Full screen'), () => W.toggleFull());
   const paint = (isFull) => { min.hidden = win.hidden = close.hidden = !isFull; full.hidden = !!isFull; };
   // The window opens maximised - drawn so until the shell answers.
   paint(false);
@@ -178,6 +193,7 @@ export function initNav() {
   const nav = document.querySelector('.sv3-nav');
   if (!nav) return;
   _homeLink(nav);
+  _navWords(nav);
   _adminLink(nav);
   _donateLink(nav);
   _guideButton(nav);
@@ -190,5 +206,8 @@ export function initNav() {
   mountAlerts(nav);
   // A new version in the program folder: a chip left of the wait and Alerts, in the app window only.
   mountUpdate(nav);
+  // Admin last of the app's own: everything above was put in by it, left of it.
+  const admin = nav.querySelector('a[href="/admin"]');
+  if (admin && !OLD_LOOK()) nav.appendChild(admin);
   _windowButtons(nav);
 }

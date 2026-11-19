@@ -26,6 +26,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { normParts, MIN_PART } from './cuts/parts.js';
+import { t } from './i18n/t.js';
 
 const RULER = 16;           // the ruler's band, px
 const WAVE = 40;            // the wave's band, px
@@ -173,7 +174,7 @@ export function rangesBar(video, opts) {
       }
     } else {
       c.fillRect(0, top + WAVE / 2, w, 1);
-      if (mute) { c.globalAlpha = 0.7; c.font = '10px system-ui, sans-serif'; c.textBaseline = 'middle'; c.fillText('no sound', 6, top + WAVE / 2 - 8); }
+      if (mute) { c.globalAlpha = 0.7; c.font = '10px system-ui, sans-serif'; c.textBaseline = 'middle'; c.fillText(t('no sound'), 6, top + WAVE / 2 - 8); }
     }
     c.globalAlpha = 1;
 

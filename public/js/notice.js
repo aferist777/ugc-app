@@ -17,6 +17,8 @@
    it never covers Export or Upload.
    ════════════════════════════════════════════════════════════════════════════ */
 
+import { t } from './i18n/t.js';
+
 const MAX = 5;
 // The 3D Studio's page keeps its look: its cross keeps the glyph, everywhere else the part draws it.
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
@@ -87,7 +89,7 @@ function _putOnTop(it) {
 function _cross(it, title) {
   const x = _el('button', 'sv3-toast-x u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
-  x.title = title || 'Close';
+  x.title = title || t('Close');
   x.setAttribute('aria-label', x.title);
   x.addEventListener('click', (e) => { e.stopPropagation(); _drop(it); });
   return x;

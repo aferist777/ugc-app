@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { iconEl } from './icons.js';
+import { t } from './i18n/t.js';
 
 export const cap = (s) => { const t = String(s == null ? '' : s); return t ? t[0].toUpperCase() + t.slice(1) : t; };
 
@@ -44,7 +45,7 @@ export function loadingEl(text, o) {
   const el = _box('u-loading', opt);
   el.setAttribute('role', 'status');
   el.appendChild(iconEl('loader-circle', opt.line ? 14 : 16));
-  el.appendChild(Object.assign(document.createElement('span'), { textContent: cap(text || 'Loading') }));
+  el.appendChild(Object.assign(document.createElement('span'), { textContent: cap(text || t('Loading')) }));
   return el;
 }
 
@@ -52,14 +53,14 @@ export function failedEl(what, retry, o) {
   const opt = o || {};
   const el = _box('u-failed', opt);
   el.appendChild(iconEl('circle-alert', opt.line ? 14 : 16));
-  el.appendChild(Object.assign(document.createElement('span'), { textContent: cap(what) + ' did not load' }));
+  el.appendChild(Object.assign(document.createElement('span'), { textContent: t('{what} did not load', { what: cap(what) }) }));
   el.appendChild(Object.assign(document.createElement('span'), { className: 'sp' }));
   if (typeof retry === 'function') {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'u-btn is-s is-quiet';
     b.appendChild(iconEl('refresh-cw', 14));
-    b.appendChild(document.createTextNode('Try again'));
+    b.appendChild(document.createTextNode(t('Try again')));
     b.addEventListener('click', (e) => { e.stopPropagation(); retry(e); });
     el.appendChild(b);
   }

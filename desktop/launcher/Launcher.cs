@@ -52,7 +52,7 @@ static class Launcher
         catch (Exception e)
         {
             Log("failed: " + e);
-            Say("UGC Studio could not start:\n\n" + e.Message, MessageBoxIcon.Error);
+            Say(L("UGC Studio could not start:", "UGC Studio не смог запуститься:") + "\n\n" + e.Message, MessageBoxIcon.Error);
             return 1;
         }
     }
@@ -77,7 +77,8 @@ static class Launcher
         if (!HasExe(previous) || previous == current) previous = null;
         if (current == null)
         {
-            Say("There is no UGC Studio program in\n\n" + Versions + "\n\nCopy the UGC Studio folder again.", MessageBoxIcon.Error);
+            Say(L("There is no UGC Studio program in", "Нет программы UGC Studio в папке") + "\n\n" + Versions + "\n\n"
+                + L("Copy the UGC Studio folder again.", "Скопируйте папку UGC Studio заново."), MessageBoxIcon.Error);
             return 1;
         }
 
@@ -115,8 +116,10 @@ static class Launcher
             Log(current + " did not come up twice, but the library is in format " + LibraryFormat() + " and " + previous
                 + " reads " + FormatOf(previous) + ": not going back");
             if (tries == 2)
-                Say("UGC Studio " + current + " did not start twice in a row. It cannot go back to " + previous + ": the library is "
-                    + "already in the newer format.\n\nSend the file\n\n" + LogFile + "\n\nto the one who gave you UGC Studio.", MessageBoxIcon.Warning);
+                Say(L("UGC Studio " + current + " did not start twice in a row. It cannot go back to " + previous + ": the library is "
+                        + "already in the newer format.\n\nSend the file\n\n" + LogFile + "\n\nto the one who gave you UGC Studio.",
+                      "UGC Studio " + current + " дважды подряд не запустился. Вернуться к " + previous + " нельзя: библиотека "
+                        + "уже в новом формате.\n\nОтправьте файл\n\n" + LogFile + "\n\nтому, кто дал вам UGC Studio."), MessageBoxIcon.Warning);
         }
         else if (tries >= 2 && previous != null)
         {
@@ -127,8 +130,10 @@ static class Launcher
             previous = null;
             tries = 0;
             Write(current, previous, tries, bad);
-            Say("UGC Studio " + failed + " did not start twice in a row, so UGC Studio went back to " + current + ".\n\n"
-                + "That update will not be installed again.", MessageBoxIcon.Warning);
+            Say(L("UGC Studio " + failed + " did not start twice in a row, so UGC Studio went back to " + current + ".\n\n"
+                    + "That update will not be installed again.",
+                  "UGC Studio " + failed + " дважды подряд не запустился, поэтому UGC Studio вернулся к " + current + ".\n\n"
+                    + "Это обновление больше не будет ставиться."), MessageBoxIcon.Warning);
         }
 
         tries++;
@@ -291,6 +296,21 @@ static class Launcher
             File.AppendAllText(LogFile, DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'") + " " + line + Environment.NewLine);
         }
         catch (Exception) { }
+    }
+
+    // The app's language, as the app takes it (lib/lang-choice.js): UGC_LANG first, then the library's settings - while
+    // the language switch is closed (no UGC_LANG_OPEN=1) English. The launcher's few messages carry both texts.
+    static bool? ru;
+    static string L(string en, string ruText)
+    {
+        if (ru == null)
+        {
+            string forced = Environment.GetEnvironmentVariable("UGC_LANG") ?? "";
+            if (forced.StartsWith("ru") || forced.StartsWith("en")) ru = forced.StartsWith("ru");
+            else if (Environment.GetEnvironmentVariable("UGC_LANG_OPEN") != "1") ru = false;
+            else ru = (Str(ReadJson(Path.Combine(Root, "library", "data", "settings.json")), "lang") ?? "").StartsWith("ru");
+        }
+        return ru == true ? ruText : en;
     }
 
     static void Say(string text, MessageBoxIcon icon)

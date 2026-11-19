@@ -75,7 +75,8 @@ function compileLauncher(cs, icon, exe) {
   if (!fs.existsSync(cached)) {
     if (!fs.existsSync(fw)) throw new Error('the C# compiler of the .NET Framework is not there: ' + fw);
     fs.mkdirSync(cacheDir, { recursive: true });
-    run(fw, ['/nologo', '/target:winexe', '/optimize+', '/win32icon:' + icon, '/r:System.Web.Extensions.dll',
+    // /codepage:65001 - the source is UTF-8 without a mark, and its Russian messages would be read in the system's code page
+    run(fw, ['/nologo', '/target:winexe', '/optimize+', '/codepage:65001', '/win32icon:' + icon, '/r:System.Web.Extensions.dll',
       '/r:System.Windows.Forms.dll', '/out:' + cached, cs]);
   }
   fs.copyFileSync(cached, exe);

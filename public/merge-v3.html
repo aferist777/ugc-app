@@ -50,14 +50,14 @@
 <!-- Which entry is lit is read from the address by js/app-nav.js, so this markup
      does not change when the page moves from /merge-v3 to /merge. -->
 <nav class="sv3-nav">
-  <a href="/merge">Merge</a>
+  <a href="/merge" data-tc="nav">Merge</a>
   <a href="/3d">3D Studio</a>
   <a href="/library">Library</a>
   <span class="sp"></span>
   <!-- The render queue, up here beside Alerts: both are readings about
        work in flight, and neither belongs to the project the bar below is about. It opens the
        queue's window (js/merge-v3/queue.js). The bell and Admin are put in after it
-       by js/app-nav.js, so the right-hand end reads Queue, the wait, Alerts, Admin. -->
+       by js/app-nav.js, so the right-hand end reads Queue, the wait, Alerts, Donate, Guide and the gear of Admin. -->
   <button class="sv3-navbtn" id="mv3-queue" type="button"
           title="Render queue - projects waiting to be rendered">Queue</button>
 </nav>

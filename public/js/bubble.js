@@ -22,6 +22,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
+import { t } from './i18n/t.js';
 
 const OPEN_MS = 90;          // the pointer resting this long opens it - a sweep across a column opens nothing
 const SHUT_MS = 160;         // ...and gone this long from the thing and the bubble closes it
@@ -114,7 +115,7 @@ export function tipBox(o) {
   box.setAttribute('role', 'note');
   const x = _el('button', 'bub-x', '✕');
   x.type = 'button';
-  x.setAttribute('aria-label', 'Close');
+  x.setAttribute('aria-label', t('Close'));
   x.addEventListener('click', () => { if (opts.onClose) opts.onClose(); });
   box.appendChild(x);
   if (opts.title) box.appendChild(_el('b', null, opts.title));
@@ -124,7 +125,7 @@ export function tipBox(o) {
   tick.type = 'checkbox'; tick.classList.add('u-check');
   tick.checked = !!opts.never;
   tick.addEventListener('change', () => { if (opts.onNever) opts.onNever(tick.checked); });
-  never.append(tick, document.createTextNode(' don\'t show again'));
+  never.append(tick, document.createTextNode(' ' + t('don\'t show again')));
   box.appendChild(never);
   return box;
 }

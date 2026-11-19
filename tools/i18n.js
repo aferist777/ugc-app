@@ -124,7 +124,7 @@ function check({ verbose = false } = {}) {
     }
     for (const key of Object.keys(dict)) {
       const text = key.includes('::') ? key.slice(key.indexOf('::') + 2) : key;
-      if (!keys.has(key) && !literals.has(text) && !pageTexts.has(text)) stale.push(JSON.stringify(key));
+      if (!keys.has(key) && !literals.has(text) && !pageTexts.has(key) && !pageTexts.has(text)) stale.push(JSON.stringify(key));
     }
     bad += missing.length + wrong.length + stale.length;
     lines.push(`${L}: ${Object.keys(dict).length} lines, ${keys.size} texts asked for; ${missing.length} missing, ${wrong.length} wrong, ${stale.length} stale`);

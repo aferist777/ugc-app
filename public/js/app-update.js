@@ -12,6 +12,7 @@
 
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
+import { t } from './i18n/t.js';
 
 const EVERY_MS = 60000;
 const NOTICE_MS = 9000;
@@ -54,9 +55,9 @@ async function _check() {
 function _paintChip() {
   if (_chip || !_nav) return;
   const rel = _state && _state.release;
-  _chip = _el('button', 'sv3-navbtn sv3-upd' + (rel && rel.important ? ' is-important' : ''), rel ? 'Update ' + rel.version : 'Updated');
+  _chip = _el('button', 'sv3-navbtn sv3-upd' + (rel && rel.important ? ' is-important' : ''), rel ? t('Update {version}', { version: rel.version }) : t('Updated'));
   _chip.type = 'button';
-  _chip.title = rel ? 'UGC Studio ' + rel.version + ' is downloaded - restart to use it' : 'A new version of the app is in its folder - restart to use it';
+  _chip.title = rel ? t('UGC Studio {version} is downloaded - restart to use it', { version: rel.version }) : t('A new version of the app is in its folder - restart to use it');
   _chip.addEventListener('click', _ask);
   // Left of the wait, which stands left of Alerts: the two read as one thing (js/alerts-bell.js).
   const at = _nav.querySelector('.sv3-al-wait') || _nav.querySelector('.sv3-alerts') || _nav.querySelector('a[href="/admin"]');
@@ -67,11 +68,11 @@ function _paintChip() {
 function _notice(d) {
   const rel = d.release;
   if (rel) {
-    showToast({ mark: '↻', cls: 'is-update', title: 'An update is ready', where: 'UGC Studio ' + rel.version + ' - restart to use it',
+    showToast({ mark: '↻', cls: 'is-update', title: t('An update is ready'), where: t('UGC Studio {version} - restart to use it', { version: rel.version }),
       onClick: _ask, ms: rel.important ? 24 * 3600 * 1000 : NOTICE_MS });
     return;
   }
-  showToast({ mark: '↻', cls: 'is-update', title: 'The app was updated', where: d.subject || 'restart it to use the new version',
+  showToast({ mark: '↻', cls: 'is-update', title: t('The app was updated'), where: d.subject || t('restart it to use the new version'),
     onClick: _ask, ms: NOTICE_MS });
 }
 
@@ -83,7 +84,7 @@ function _ask() {
   box.setAttribute('role', 'dialog');
   const d = _state || {};
   const rel = d.release;
-  box.appendChild(_el('b', 'nm-t', rel ? 'UGC Studio ' + rel.version + ' is ready' : 'The app was updated'));
+  box.appendChild(_el('b', 'nm-t', rel ? t('UGC Studio {version} is ready', { version: rel.version }) : t('The app was updated')));
   if (d.subject) box.appendChild(_el('div', 'dr-holds', d.subject));
   if (rel && rel.notes) {
     const notes = _el('div', 'dr-holds u-notes', rel.notes);
@@ -92,11 +93,12 @@ function _ask() {
     notes.style.overflow = 'auto';
     box.appendChild(notes);
   }
-  box.appendChild(_el('div', 'dr-note', 'Restart to use the new version. What you have open is saved'
-    + (d.renderBusy ? '; a render is running - you will be asked about it first.' : '.')));
+  box.appendChild(_el('div', 'dr-note', d.renderBusy
+    ? t('Restart to use the new version. What you have open is saved; a render is running - you will be asked about it first.')
+    : t('Restart to use the new version. What you have open is saved.')));
   const row = _el('div', 'nm-r u-ask-r');
-  const go = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Restart and update');
-  const later = _el('button', 'nm-b u-btn is-s', 'Later');
+  const go = _el('button', 'nm-b is-ok u-btn is-s is-main', t('Restart and update'));
+  const later = _el('button', 'nm-b u-btn is-s', t('Later'));
   for (const b of [go, later]) b.type = 'button';
   // "Later" left, the verb right; the 3D Studio's page keeps an order of its own
   if (document.querySelector('link[href="css/studio3d.css"]')) row.append(go, later); else row.append(later, go);

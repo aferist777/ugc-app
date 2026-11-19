@@ -23,6 +23,7 @@
 
 import * as Layers from './layers.js';
 import { hint } from './bubble.js';
+import { t } from './i18n/t.js';
 
 let _ask = null;
 
@@ -86,7 +87,7 @@ function _panel(anchor, text, sub, buttons, opts) {
   // their order, the one meant and the one that deletes last. `made` keeps the order they were given in.
   const row = document.createElement('div');
   row.className = 'mv3-ask-r u-ask-r';
-  const rank = (b) => (/^(cancel|no|not now)$/i.test(String(b.label).trim()) ? 0 : b.kind === 'danger' ? 3 : b.kind === 'yes' ? 2 : 1);
+  const rank = (b) => (_isNo(b.label) ? 0 : b.kind === 'danger' ? 3 : b.kind === 'yes' ? 2 : 1);
   const made = buttons.map(b => {
     const el2 = document.createElement('button');
     el2.type = 'button';
@@ -135,14 +136,19 @@ function _panel(anchor, text, sub, buttons, opts) {
 }
 
 // The answer says the question's verb: "Delete X?" - Delete, "Remove X?" - Remove, "Take X out…?" - Take out,
-// "Replace…?" - Replace; `yes` names it where the question starts otherwise.
-const VERBS = { delete: 'Delete', remove: 'Remove', take: 'Take out', replace: 'Replace', clear: 'Clear', discard: 'Discard' };
+// "Replace…?" - Replace; `yes` names it where the question starts otherwise. The question comes in the app's language
+// (its caller's t()), so its first word is looked up in both: a Russian question starts with its verb as the button says it.
+const VERBS = { delete: 'Delete', remove: 'Remove', take: 'Take out', replace: 'Replace', clear: 'Clear', discard: 'Discard',
+  'удалить': 'Удалить', 'убрать': 'Убрать', 'вынуть': 'Вынуть', 'заменить': 'Заменить', 'очистить': 'Очистить', 'отбросить': 'Отбросить' };
+const _verbOf = (first) => { const v = VERBS[String(first || '').toLowerCase()]; return v ? t(v) : ''; };
+// Cancel, No, Not now - the answers that leave things as they are go left, whatever the language.
+const _isNo = (label) => { const s = String(label || '').trim(); return /^(cancel|no|not now)$/i.test(s) || [t('Cancel'), t('No'), t('Not now')].includes(s); };
 
 export function askDelete(anchor, text, sub, onYes, yes) {
-  const first = (/^\s*([A-Za-z]+)/.exec(String(text || '')) || [])[1] || '';
+  const first = (/^\s*(\p{L}+)/u.exec(String(text || '')) || [])[1] || '';
   _panel(anchor, text, sub, [
-    { label: 'Cancel' },
-    { label: yes || VERBS[first.toLowerCase()] || 'Delete', kind: 'danger', on: onYes },
+    { label: t('Cancel') },
+    { label: yes || _verbOf(first) || t('Delete'), kind: 'danger', on: onYes },
   ]);
 }
 
@@ -164,7 +170,7 @@ export function askChoice(anchor, text, sub, choices, opts) {
  * offering a choice where there is none is how a button ends up meaning nothing.
  */
 export function note(anchor, text, sub, opts) {
-  _panel(anchor, text, sub, [{ label: 'Got it' }], opts);
+  _panel(anchor, text, sub, [{ label: t('Got it') }], opts);
 }
 
 /**
@@ -188,13 +194,14 @@ export function ask(anchor, q, o) {
     while (parts.length && !parts[parts.length - 1].trim()) parts.pop();
     lines = parts;
   }
-  const m = /^\s*([A-Za-z]+)(\s+\d+)?/.exec(title) || [];
-  const verb = opt.yes || ((VERBS[String(m[1] || '').toLowerCase()] || 'OK') + (m[2] && VERBS[String(m[1] || '').toLowerCase()] ? m[2] : ''));
+  const m = /^\s*(\p{L}+)(\s+\d+)?/u.exec(title) || [];
+  const known = _verbOf(m[1]);
+  const verb = opt.yes || ((known || t('OK')) + (m[2] && known ? m[2] : ''));
   return new Promise((resolve) => {
     let done = false;
     const fin = (v) => { if (!done) { done = true; resolve(v); } };
     _panel(anchor, title, lines && lines.length ? lines : '', [
-      { label: 'Cancel', on: () => fin(false) },
+      { label: t('Cancel'), on: () => fin(false) },
       { label: verb, kind: opt.danger ? 'danger' : 'yes', on: () => fin(true) },
     ], { stay: opt.stay, onClose: () => fin(false) });
   });

@@ -11,6 +11,7 @@
 
 import { twoPress, REALLY } from './really.js';
 import { showError } from './notice.js';
+import { t } from './i18n/t.js';
 
 // The 3D Studio's page draws this cross itself (the shared parts never reach it).
 const OLD_LOOK = () => !!document.querySelector('link[href="css/studio3d.css"]');
@@ -51,7 +52,7 @@ export function delX(o) {
   x.type = 'button';
   x.className = old ? 'dx' : 'dx u-onpic is-del u-x';
   x.textContent = old ? '✕' : '';
-  x.title = o.title || 'Delete it from the library';
+  x.title = o.title || t('Delete it from the library');
   x.draggable = false;
   if (o.host) o.host.classList.add('dx-host');
   const stop = (e) => { e.stopPropagation(); };
@@ -59,7 +60,7 @@ export function delX(o) {
   x.addEventListener('mousedown', stop);
   x.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
   twoPress(x, {
-    text: old ? 'really?' : REALLY,
+    text: old ? t('really?') : REALLY,
     host: o.host,
     extra: typeof o.ask === 'function' ? o.ask : null,
     armed: () => { if (old) x.classList.add('is-ask'); },
@@ -69,10 +70,10 @@ export function delX(o) {
       e.stopPropagation();
       x.disabled = true;
       let why = '';
-      try { why = await o.run(); } catch (err) { why = (err && err.message) || 'it could not be deleted'; }
+      try { why = await o.run(); } catch (err) { why = (err && err.message) || t('it could not be deleted'); }
       if (why) {
         x.disabled = false;
-        showError('Not deleted: ' + why);
+        showError(t('Not deleted: {why}', { why }));
         return;
       }
       if (typeof o.done === 'function') o.done();

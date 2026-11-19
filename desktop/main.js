@@ -49,6 +49,15 @@ function libraryDir() {
   return path.join(path.dirname(path.dirname(version)), 'library');
 }
 const LIBRARY = libraryDir();
+// The shell's own words - its dialogs, its menu, the page while the server starts - in the app's language
+// (lib/lang-choice.js; the pages' rule, public/js/i18n/t.js). None known yet: English.
+const T = require('../public/js/i18n/t.js');
+{
+  let l = '';
+  try { l = LIBRARY ? require('../lib/lang-choice').known(LIBRARY) : ''; } catch { l = ''; }
+  if (l && l !== 'en') { try { T.setLang(l, require(`../public/js/i18n/${l}.js`).default); } catch { /* English */ } }
+}
+const { t } = T;
 // Started by the launcher: the taskbar's pin and its jump list start the LAUNCHER, never this
 // version's exe - an update deletes the folder it is in.
 const LAUNCHER = process.env.UGC_LAUNCHER || '';
@@ -73,21 +82,19 @@ const writable = !!LIBRARY && canWrite(LIBRARY);
 const refused = writable ? LIB_FORMAT.check(LIBRARY, require('../lib/app-version').current()) : null;
 
 if (!LIBRARY) {
-  dialog.showErrorBox('UGC Studio cannot start',
-    `This program is a version of UGC Studio:\n\n${path.dirname(process.execPath)}\n\n` +
-    'It is started by "UGC Studio.exe" in the UGC Studio folder - the one beside "versions" and "library". ' +
-    'Open that one.');
+  dialog.showErrorBox(t('UGC Studio cannot start'),
+    t('This program is a version of UGC Studio:\n\n{folder}\n\nIt is started by "UGC Studio.exe" in the UGC Studio folder - the one beside "versions" and "library". Open that one.',
+      { folder: path.dirname(process.execPath) }));
   app.exit(1);
 } else if (refused) {
-  dialog.showErrorBox('UGC Studio cannot open this library', refused.message);
+  dialog.showErrorBox(t('UGC Studio cannot open this library'), refused.message);
   app.exit(LIB_FORMAT.EXIT_REFUSED);
 } else if (writable) {
   run();
 } else {
-  dialog.showErrorBox('UGC Studio cannot start',
-    `UGC Studio keeps everything it makes in this folder:\n\n${LIBRARY}\n\n` +
-    'It cannot write there. Move the UGC Studio folder somewhere you can write - Documents, ' +
-    'the Desktop, another drive - and open it again.');
+  dialog.showErrorBox(t('UGC Studio cannot start'),
+    t('UGC Studio keeps everything it makes in this folder:\n\n{folder}\n\nIt cannot write there. Move the UGC Studio folder somewhere you can write - Documents, the Desktop, another drive - and open it again.',
+      { folder: LIBRARY }));
   app.exit(1);
 }
 
@@ -209,9 +216,9 @@ function run() {
       .map((l) => (l.length > 160 ? l.slice(0, 157) + '...' : l)).join('\n');
     const opts = {
       type: 'error', title: 'UGC Studio', noLink: true,
-      message: origin ? 'UGC Studio stopped working' : 'UGC Studio could not start',
-      detail: `${why}\n\nThe end of the log (${log.file}):\n\n${tail}`,
-      buttons: ['Show the log', 'Quit'], defaultId: 1, cancelId: 1,
+      message: origin ? t('UGC Studio stopped working') : t('UGC Studio could not start'),
+      detail: `${why}\n\n` + t('The end of the log ({file}):', { file: log.file }) + `\n\n${tail}`,
+      buttons: [t('Show the log'), t('Quit')], defaultId: 1, cancelId: 1,
     };
     const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     const { response } = await (parent ? dialog.showMessageBox(parent, opts) : dialog.showMessageBox(opts));
@@ -309,8 +316,19 @@ function run() {
       bake.close();
       app.quit();
     });
-    win.loadFile(path.join(__dirname, 'starting.html'));
+    loadStarting(win);
     return win;
+  }
+
+  // The page while the server starts, its one line in the app's language: the file as it is in English, else the same
+  // file with that line translated (its CSP allows no script to do it there).
+  function loadStarting(win) {
+    const file = path.join(__dirname, 'starting.html');
+    if (T.lang() === 'en') { win.loadFile(file); return; }
+    let html = '';
+    try { html = fs.readFileSync(file, 'utf8'); } catch { win.loadFile(file); return; }
+    html = html.replace('<html lang="en">', `<html lang="${T.lang()}">`).replace('>Starting...<', '>' + t('Starting...') + '<');
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   }
 
   // Closing the window stops the server, and a render with it. So a render still running is
@@ -336,9 +354,11 @@ function run() {
     if (!(await renderRunning())) return true;
     const { response } = await dialog.showMessageBox(win, {
       type: 'warning', title: 'UGC Studio', noLink: true,
-      message: 'A render is still running',
-      detail: (verb === 'Restart' ? 'Restarting' : 'Quitting') + ' stops it. It goes back to the Merge queue and starts over with Render all.',
-      buttons: [verb, 'Keep working'], defaultId: 1, cancelId: 1,
+      message: t('A render is still running'),
+      detail: verb === 'Restart'
+        ? t('Restarting stops it. It goes back to the Merge queue and starts over with Render all.')
+        : t('Quitting stops it. It goes back to the Merge queue and starts over with Render all.'),
+      buttons: [verb === 'Restart' ? t('Restart') : t('Quit'), t('Keep working')], defaultId: 1, cancelId: 1,
     });
     return response === 0;
   }
@@ -438,21 +458,21 @@ function run() {
     if (p.misspelledWord) {
       groups.push(p.dictionarySuggestions.length
         ? p.dictionarySuggestions.slice(0, 5).map((s) => ({ label: s, click: () => contents.replaceMisspelling(s) }))
-        : [{ label: 'No suggestions', enabled: false }]);
+        : [{ label: t('No suggestions'), enabled: false }]);
     }
     if (/^(https?|mailto):/i.test(p.linkURL)) {
       groups.push([
-        ...(internal(p.linkURL) ? [] : [{ label: 'Open link in browser', click: () => outside(p.linkURL) }]),
-        { label: 'Copy link address', click: () => clipboard.writeText(p.linkURL) },
+        ...(internal(p.linkURL) ? [] : [{ label: t('Open link in browser'), click: () => outside(p.linkURL) }]),
+        { label: t('Copy link address'), click: () => clipboard.writeText(p.linkURL) },
       ]);
     }
     if (p.mediaType === 'image' && p.srcURL) {
       groups.push([
-        { label: 'Copy image', click: () => contents.copyImageAt(p.x, p.y) },
-        { label: 'Save image as...', click: () => contents.downloadURL(p.srcURL) },
+        { label: t('Copy image'), click: () => contents.copyImageAt(p.x, p.y) },
+        { label: t('Save image as...'), click: () => contents.downloadURL(p.srcURL) },
       ]);
     } else if ((p.mediaType === 'video' || p.mediaType === 'audio') && /^https?:/.test(p.srcURL)) {
-      groups.push([{ label: `Save ${p.mediaType} as...`, click: () => contents.downloadURL(p.srcURL) }]);
+      groups.push([{ label: p.mediaType === 'audio' ? t('Save audio as...') : t('Save video as...'), click: () => contents.downloadURL(p.srcURL) }]);
     }
     if (p.isEditable) {
       groups.push([
@@ -487,8 +507,8 @@ function run() {
       item.once('done', (_d, state) => {
         if (win && !win.isDestroyed()) win.setProgressBar(-1);
         if (state !== 'interrupted') return;
-        const opts = { type: 'error', title: 'UGC Studio', message: 'The download stopped',
-                       detail: `${item.getFilename()} was not saved in full.` };
+        const opts = { type: 'error', title: 'UGC Studio', message: t('The download stopped'),
+                       detail: t('{file} was not saved in full.', { file: item.getFilename() }) };
         if (win && !win.isDestroyed()) dialog.showMessageBox(win, opts);
         else dialog.showMessageBox(opts);
       });

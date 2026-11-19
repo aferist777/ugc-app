@@ -23,14 +23,15 @@ import { MS } from './really.js';
 import { emptyEl } from './ui-state.js';
 import { icon } from './icons.js';
 import { setFigures } from './num.js';
+import { t, tn } from './i18n/t.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
 const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓', highlights: '✂' };
 // A row's kind as one of the interface's icons, its word under the pointer. The 3D Studio's
 // page keeps the marks above (OLD_LOOK).
-const KIND_ICON = { image: ['image', 'Picture'], video: ['film', 'Video'], music: ['music', 'Music'], source: ['download', 'Source'],
-  highlights: ['scissors', 'Highlights'] };
+const KIND_ICON = { image: ['image', t('Picture')], video: ['film', t('Video')], music: ['music', t('Music')], source: ['download', t('Source')],
+  highlights: ['scissors', t('Highlights')] };
 
 let _btn = null;
 let _menu = null;
@@ -166,12 +167,12 @@ function _keepRefs() { try { localStorage.setItem(LS_REFS, _refsSeen || ''); } c
 
 // ── what a row knows about itself ───────────────────────────────────────────
 function _ago(iso) {
-  const t = Date.parse(iso || '');
-  if (!t) return '';
-  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 60) return s + 's';
+  const at = Date.parse(iso || '');
+  if (!at) return '';
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 60) return t('{n}s', { n: s });
   const m = Math.round(s / 60);
-  return m < 60 ? m + ' min' : Math.round(m / 60) + ' h';
+  return m < 60 ? t('{n} min', { n: m }) : t('{n} h', { n: Math.round(m / 60) });
 }
 
 const _running = (r) => r.state === 'running';
@@ -290,10 +291,10 @@ function _leftMs() {
 // Rounded the way somebody reads a wait: seconds while it is seconds, then minutes.
 function _leftSays(ms) {
   const s = Math.round(ms / 1000);
-  if (s < 60) return '~' + Math.max(5, Math.round(s / 5) * 5) + 's left';
+  if (s < 60) return t('~{n}s left', { n: Math.max(5, Math.round(s / 5) * 5) });
   const m = Math.round(s / 60);
-  if (m < 60) return '~' + m + ' min left';
-  return '~' + Math.floor(m / 60) + ' h ' + (m % 60) + ' min left';
+  if (m < 60) return t('~{n} min left', { n: m });
+  return t('~{h} h {m} min left', { h: Math.floor(m / 60), m: m % 60 });
 }
 
 function _paintWait() {
@@ -303,10 +304,10 @@ function _paintWait() {
   const ms = _leftMs();
   _wait.hidden = false;
   // its figures in mono, so the chip keeps its width while it counts down
-  if (OLD_LOOK()) _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
-  else setFigures(_wait, ms ? _leftSays(ms) : 'any moment now');
-  _wait.title = n + (n === 1 ? ' thing is running' : ' things are running side by side')
-    + '. The wait is the longest of them, from how long the last ones of the same kind took.';
+  if (OLD_LOOK()) _wait.textContent = ms ? _leftSays(ms) : t('any moment now');
+  else setFigures(_wait, ms ? _leftSays(ms) : t('any moment now'));
+  _wait.title = tn(n, '{n} thing is running', '{n} things are running side by side')
+    + '. ' + t('The wait is the longest of them, from how long the last ones of the same kind took.');
 }
 
 // ── the button ──────────────────────────────────────────────────────────────
@@ -316,8 +317,8 @@ function _paintButton() {
   _btn.classList.toggle('has-running', !!_counts.running);
   _btn.classList.toggle('has-done', !_counts.running && !!_counts.unseen);
   _btn.title = _counts.running
-    ? _counts.running + ' running'
-    : (_counts.unseen ? 'Something finished' : 'What is being generated or added');
+    ? t('{n} running', { n: _counts.running })
+    : (_counts.unseen ? t('Something finished') : t('What is being generated or added'));
 }
 
 // ── the list ────────────────────────────────────────────────────────────────
@@ -325,7 +326,7 @@ function _row(rec) {
   const row = _el('div', 'sv3-al-row' + (rec.state === 'failed' ? ' is-failed' : ''));
   if (OLD_LOOK()) row.appendChild(_el('span', 'sv3-al-mark', KIND_MARK[rec.kind] || '▣'));
   else {
-    const [ico, word] = KIND_ICON[rec.kind] || ['image', rec.what ? String(rec.what) : 'Generation'];
+    const [ico, word] = KIND_ICON[rec.kind] || ['image', rec.what ? String(rec.what) : t('Generation')];
     const mark = _el('span', 'sv3-al-mark');
     mark.innerHTML = icon(ico, 14);
     mark.title = word;
@@ -333,7 +334,7 @@ function _row(rec) {
   }
 
   const main = _el('span', 'sv3-al-main');
-  main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || 'generation'));
+  main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || t('generation')));
   // Under the title: what went wrong, or - while it runs and says so - what it is doing right now.
   // A clip spends half a minute having the place and the fragment looked at before anything is
   // sent to a renderer, and a row that only says "Clip - fragment 3" looks stuck. Otherwise,
@@ -342,13 +343,13 @@ function _row(rec) {
   // A finished row may say what came of it in a word (a source: "12 topics").
   const note = rec.state === 'done' && rec.result && rec.result.note ? String(rec.result.note) : '';
   const under = rec.state === 'failed'
-    ? (rec.error || 'it did not come')
+    ? (rec.error || t('it did not come'))
     : (stage || note || (rec.where && rec.where.label) || '');
   main.appendChild(_el('span', 'sv3-al-where' + (stage ? ' is-stage' : ''), under));
   row.appendChild(main);
 
   const when = _el('span', 'sv3-al-state');
-  const ago = _running(rec) ? _ago(rec.startedAt) : (rec.state === 'done' ? _ago(rec.doneAt) + ' ago' : '');
+  const ago = _running(rec) ? _ago(rec.startedAt) : (rec.state === 'done' ? t('{time} ago', { time: _ago(rec.doneAt) }) : '');
   // the time in mono, as every figure of the pages
   if (OLD_LOOK()) when.textContent = ago; else setFigures(when, ago);
   row.appendChild(when);
@@ -356,17 +357,17 @@ function _row(rec) {
   // "open" and "retry" are quiet buttons: the row itself is the way to the work
   const acts = _el('span', 'sv3-al-acts');
   if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', 'Open');
+    const open = _el('button', 'sv3-al-act u-btn is-s is-quiet', t('Open'));
     open.type = 'button';
-    open.title = 'Look at what came out';
+    open.title = t('Look at what came out');
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
     acts.appendChild(open);
   }
   if (rec.state === 'failed' && rec.retryable) {
     const again = _el('button', 'sv3-al-act u-btn is-s is-quiet' + (_armed === rec.id ? ' is-armed' : ''),
-      _armed === rec.id ? 'spend again?' : 'retry');
+      _armed === rec.id ? t('spend again?') : t('retry'));
     again.type = 'button';
-    again.title = rec.retryFree ? 'Go on from where it stopped - this costs nothing' : 'Ask for it again - this spends credits';
+    again.title = rec.retryFree ? t('Go on from where it stopped - this costs nothing') : t('Ask for it again - this spends credits');
     again.addEventListener('click', (e) => {
       e.stopPropagation();
       // Asked before it spends, and the question is the button itself: a second press inside a
@@ -392,7 +393,7 @@ function _row(rec) {
   const href = _hrefOf(rec);
   if (href) {
     row.classList.add('is-linked');
-    row.title = /[?&]reveal=/.test(href) ? 'Show it in the Library' : 'Go to where this was started';
+    row.title = /[?&]reveal=/.test(href) ? t('Show it in the Library') : t('Go to where this was started');
     row.addEventListener('click', () => { _close(); _goTo(href); });
   }
   return row;
@@ -403,18 +404,18 @@ function _paintMenu() {
   _menu.textContent = '';
 
   const head = _el('div', 'sv3-al-head');
-  head.appendChild(_el('span', 'sv3-al-h', 'Alerts'));
+  head.appendChild(_el('span', 'sv3-al-h', t('Alerts')));
   head.appendChild(_el('span', 'sp'));
-  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', OLD_LOOK() ? 'clear' : 'Clear');
+  const clear = _el('button', 'sv3-al-clear u-btn is-s is-quiet', OLD_LOOK() ? t('clear') : t('Clear'));
   clear.type = 'button';
-  clear.title = 'Forget the finished ones. What is still running stays.';
+  clear.title = t('Forget the finished ones. What is still running stays.');
   clear.addEventListener('click', () => { _json('/api/alerts/clear', { method: 'POST' }).then(_poll); });
   head.appendChild(clear);
   _menu.appendChild(head);
 
   const list = _el('div', 'sv3-al-list');
   // the shared empty part (js/ui-state.js); `sv3-al-empty` its place in the menu
-  const none = 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.';
+  const none = t('Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.');
   if (!_items.length) list.appendChild(OLD_LOOK() ? _el('div', 'sv3-al-empty', none) : emptyEl(none, { icon: 'bell', cls: 'sv3-al-empty' }));
   for (const rec of _items) list.appendChild(_row(rec));
   _menu.appendChild(list);
@@ -496,9 +497,9 @@ function _announce(rec) {
   const href = _hrefOf(rec);
   showToast({
     mark: KIND_MARK[rec.kind] || '▣', failed: rec.state === 'failed',
-    title: rec.title || rec.what || 'generation',
-    where: rec.state === 'failed' ? (rec.error || 'it did not come') : 'ready',
-    act: _canOpen(rec) ? { label: 'Open', run: () => _open(rec) } : null,
+    title: rec.title || rec.what || t('generation'),
+    where: rec.state === 'failed' ? (rec.error || t('it did not come')) : t('ready'),
+    act: _canOpen(rec) ? { label: t('Open'), run: () => _open(rec) } : null,
     onClick: href ? () => _goTo(href) : null,
     ms: TOAST_MS,
   });
@@ -593,7 +594,7 @@ export function mountAlerts(nav) {
   _btn.type = 'button';
   // an icon and a word, as Admin beside it
   if (!OLD_LOOK()) _btn.insertAdjacentHTML('beforeend', icon('bell', 14));
-  _btn.appendChild(_el('span', null, 'Alerts'));
+  _btn.appendChild(_el('span', null, t('Alerts')));
   _btn.appendChild(_el('span', 'sv3-al-count'));
   _btn.addEventListener('click', _toggle);
   // ANCHORED ON ADMIN: Admin is the last thing in the strip on every page and is put

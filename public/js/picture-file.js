@@ -4,6 +4,8 @@
 // HEIC, and a phone's HEIC often arrives with no type at all - so it is known by its name too.
 
 /** What a picture's file picker offers: every image type, and a HEIC/HEIF/AVIF a system may not list. */
+import { t } from './i18n/t.js';
+
 export const PICTURE_ACCEPT = 'image/*,.heic,.heif,.avif';
 
 const EXT = /\.(jpe?g|png|webp|avif|heic|heif|gif|tiff?|svg)$/i;
@@ -22,13 +24,13 @@ export async function pictureDataUrl(file) {
   const raw = await new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(String(fr.result || ''));
-    fr.onerror = () => reject(new Error('could not read the file'));
+    fr.onerror = () => reject(new Error(t('could not read the file')));
     fr.readAsDataURL(file);
   });
   if (!_isHeic(file)) return raw;
   const d = await fetch('/api/images/sendable', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: raw }),
   }).then(r => r.json()).catch(() => null);
-  if (!d || !d.success) throw new Error((d && d.error) || 'that photo could not be read');
+  if (!d || !d.success) throw new Error((d && d.error) || t('that photo could not be read'));
   return d.dataUrl;
 }

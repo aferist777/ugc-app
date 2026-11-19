@@ -1,0 +1,27 @@
+/* The desktop shell's words (desktop/main.js): its dialogs, the right button's menu, the page while the server starts. */
+
+export default {
+  'UGC Studio cannot start': 'UGC Studio не может запуститься',
+  'This program is a version of UGC Studio:\n\n{folder}\n\nIt is started by "UGC Studio.exe" in the UGC Studio folder - the one beside "versions" and "library". Open that one.': 'Это одна из версий программы UGC Studio:\n\n{folder}\n\nЕё запускает «UGC Studio.exe» в папке UGC Studio — той, что рядом с «versions» и «library». Откройте его.',
+  'UGC Studio cannot open this library': 'UGC Studio не может открыть эту библиотеку',
+  'UGC Studio keeps everything it makes in this folder:\n\n{folder}\n\nIt cannot write there. Move the UGC Studio folder somewhere you can write - Documents, the Desktop, another drive - and open it again.': 'UGC Studio хранит всё, что делает, в этой папке:\n\n{folder}\n\nЗаписать туда не получается. Перенесите папку UGC Studio туда, где можно писать, — в «Документы», на рабочий стол, на другой диск — и откройте снова.',
+  'UGC Studio stopped working': 'UGC Studio перестал работать',
+  'UGC Studio could not start': 'UGC Studio не смог запуститься',
+  'The end of the log ({file}):': 'Конец журнала ({file}):',
+  'Show the log': 'Показать журнал',
+  'Quit': 'Выйти',
+  'Starting...': 'Запускается…',
+  'A render is still running': 'Ещё идёт рендер',
+  'Restarting stops it. It goes back to the Merge queue and starts over with Render all.': 'Перезапуск его остановит. Он вернётся в очередь Монтажа и начнётся заново по «Рендерить всё».',
+  'Quitting stops it. It goes back to the Merge queue and starts over with Render all.': 'Выход его остановит. Он вернётся в очередь Монтажа и начнётся заново по «Рендерить всё».',
+  'Keep working': 'Продолжить работу',
+  'No suggestions': 'Нет вариантов',
+  'Open link in browser': 'Открыть ссылку в браузере',
+  'Copy link address': 'Копировать адрес ссылки',
+  'Copy image': 'Копировать картинку',
+  'Save image as...': 'Сохранить картинку как…',
+  'Save audio as...': 'Сохранить звук как…',
+  'Save video as...': 'Сохранить видео как…',
+  'The download stopped': 'Скачивание остановилось',
+  '{file} was not saved in full.': '{file} сохранён не полностью.',
+};

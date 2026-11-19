@@ -6,8 +6,9 @@
    '{n} files': ['{n} файл', '{n} файла', '{n} файлов']; a line for one place is 'ctx::English' (t.js tc). */
 
 import common from './ru/common.js';
+import shell from './ru/shell.js';
 
-export const PARTS = { common };
+export const PARTS = { common, shell };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

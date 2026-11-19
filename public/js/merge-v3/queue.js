@@ -31,6 +31,7 @@ import { openRender } from '../library/render-view.js';
 import { emptyEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
 import { iconEl } from '../icons.js';
+import { t, tn } from '../i18n/t.js';
 
 let _pop = null;
 let _layer = null;
@@ -110,25 +111,25 @@ function _row(it, refresh) {
   // Four states, said plainly: queued (yours, not started), in line (started, the encoder
   // is on something else), rendering (with the number when there is one), and the two ends.
   const running = it.status === 'running';
-  const named = it.phase === 'normalizing' ? 'preparing clips…'
-              : it.phase === 'speeding' ? 'speeding up…'
-              : it.phase === 'poster' ? 'finishing…'
+  const named = it.phase === 'normalizing' ? t('preparing clips…')
+              : it.phase === 'speeding' ? t('speeding up…')
+              : it.phase === 'poster' ? t('finishing…')
               : null;
-  st.textContent = it.status === 'done' ? 'ready'
+  st.textContent = it.status === 'done' ? t('ready')
                  : running
-                     ? (named || ((it.percent ? it.percent + '%' : 'rendering…')
-                        + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : '')))
-                 : it.status === 'failed' ? 'failed'
-                 : it.armed ? ('in line' + (it.ahead ? ' · ' + it.ahead + ' ahead' : ' · next'))
+                     ? (named || ((it.percent ? it.percent + '%' : t('rendering…'))
+                        + (it.remain != null ? ' · ' + t('{time} left', { time: _mmss(it.remain) }) : '')))
+                 : it.status === 'failed' ? t('failed')
+                 : it.armed ? (t('in line') + ' · ' + (it.ahead ? t('{n} ahead', { n: it.ahead }) : t('next')))
                  // Stopped by a closed or restarted app: Render all starts it over.
-                 : it.interrupted ? 'interrupted · Render all starts it over'
-                 : 'queued';
+                 : it.interrupted ? t('interrupted · Render all starts it over')
+                 : t('queued');
   top.appendChild(st);
   main.appendChild(top);
 
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = (it.hl ? 'fragment' : 'blank') + ' · ' + (it.summary || '');
+  sub.textContent = (it.hl ? t('fragment') : t('blank')) + ' · ' + (it.summary || '');
   main.appendChild(sub);
 
   // The bar, only while the encoder is on this one. Indeterminate when the phase reports no
@@ -159,8 +160,8 @@ function _row(it, refresh) {
     const a = document.createElement('button');
     a.type = 'button';
     a.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
-    a.textContent = 'Open';
-    a.title = 'Watch it in the Library\'s viewer - Rename and Delete are there';
+    a.textContent = t('Open');
+    a.title = t('Watch it in the Library\'s viewer - Rename and Delete are there');
     a.addEventListener('click', (e) => {
       e.stopPropagation();
       _close();
@@ -175,7 +176,7 @@ function _row(it, refresh) {
     const r = document.createElement('button');
     // the icon, its words in the title
     r.type = 'button'; r.className = 'mv3-qx u-btn is-s is-icon is-quiet'; r.appendChild(iconEl('refresh-cw', 14));
-    r.title = 'Try this one again';
+    r.title = t('Try this one again');
     r.addEventListener('click', async (e) => {
       e.stopPropagation();
       await fetch('/api/mv3q/retry/' + encodeURIComponent(it.id), { method: 'POST' });
@@ -187,7 +188,7 @@ function _row(it, refresh) {
     const x = document.createElement('button');
     // the one ✕ - "take out of a row", red under the pointer
     x.type = 'button'; x.className = 'mv3-qx u-btn is-s is-icon is-quiet is-del u-x';
-    x.title = 'Remove from the queue';
+    x.title = t('Remove from the queue');
     x.addEventListener('click', async (e) => {
       e.stopPropagation();
       await fetch('/api/mv3q/' + encodeURIComponent(it.id), { method: 'DELETE' });
@@ -200,8 +201,8 @@ function _row(it, refresh) {
   // A highlights project's renders keep their own stop on the project bar.
   if (running && !it.hl) {
     const s = document.createElement('button');
-    s.type = 'button'; s.className = 'mv3-c-btn mv3-qstop u-btn is-s is-danger'; s.textContent = 'Stop';
-    s.title = it.phase ? 'Finishing its file - it is kept' : 'Stop this render - nothing of it is kept';
+    s.type = 'button'; s.className = 'mv3-c-btn mv3-qstop u-btn is-s is-danger'; s.textContent = t('Stop');
+    s.title = it.phase ? t('Finishing its file - it is kept') : t('Stop this render - nothing of it is kept');
     s.disabled = !!it.phase;
     s.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -225,10 +226,10 @@ function _askClear(head, waiting, onDone) {
   _asking = true;
   const box = document.createElement('div');
   box.className = 'mv3-qask u-ask';                // the shared question, in the list
-  const t = document.createElement('b');
-  t.className = 'mv3-qask-t';
-  t.textContent = waiting + (waiting === 1 ? ' project has' : ' projects have') + ' not been rendered yet.';
-  box.appendChild(t);
+  const q = document.createElement('b');
+  q.className = 'mv3-qask-t';
+  q.textContent = tn(waiting, '{n} project has not been rendered yet.', '{n} projects have not been rendered yet.');
+  box.appendChild(q);
 
   const row = document.createElement('div');
   row.className = 'mv3-qask-r u-ask-r';
@@ -249,7 +250,7 @@ function _askClear(head, waiting, onDone) {
     });
     return b;
   };
-  row.append(mk('Cancel', '', null), mk('Finished only', '', 'done'), mk('Everything', 'danger', 'all'));
+  row.append(mk(t('Cancel'), '', null), mk(t('Finished only'), '', 'done'), mk(t('Everything'), 'danger', 'all'));
   box.appendChild(row);
   head.after(box);
 }
@@ -261,9 +262,9 @@ async function _paintList() {
   // A read that fails is not an empty queue: what is shown stays and the popup says why, once;
   // with nothing shown yet, "did not load" and Try again.
   if (!d || !d.success) {
-    if (!_failing) showError('The render queue did not load: ' + ((d && d.error) || 'the app did not answer'));
+    if (!_failing) showError(t('The render queue did not load: {why}', { why: (d && d.error) || t('the app did not answer') }));
     _failing = true;
-    if (!_pop.querySelector('.mv3-qhead')) _pop.replaceChildren(failedEl('The render queue', () => _paintList()));
+    if (!_pop.querySelector('.mv3-qhead')) _pop.replaceChildren(failedEl(t('The render queue'), () => _paintList()));
     return;
   }
   _failing = false;
@@ -275,7 +276,7 @@ async function _paintList() {
   head.className = 'mv3-qhead u-win-head';
   const ttl = document.createElement('span');
   ttl.className = 'u-win-title';
-  ttl.textContent = 'Render queue';
+  ttl.textContent = t('Render queue');
   head.appendChild(ttl);
   const sp = document.createElement('span');
   sp.className = 'sp';
@@ -285,14 +286,14 @@ async function _paintList() {
   all.type = 'button';
   // The app's own buttons - `mv3-btn` has no look in Merge, and they drew as the browser's.
   all.className = 'mv3-c-btn mv3-x-go u-btn is-s is-main';
-  all.textContent = 'Render all';
+  all.textContent = t('Render all');
   // Yours that have not been started. Once started they are in line whatever the encoder is
   // doing, so the button has nothing left to do for them.
   const waiting = (d.items || []).filter(x => x.status === 'queued' && !x.armed).length;
   const inLine = (d.items || []).some(x => x.status === 'running' || (x.status === 'queued' && x.armed));
   all.disabled = !waiting;
-  all.title = waiting ? 'Start everything of yours that is queued, one after another'
-            : inLine ? 'Yours are started and in line' : 'Nothing queued';
+  all.title = waiting ? t('Start everything of yours that is queued, one after another')
+            : inLine ? t('Yours are started and in line') : t('Nothing queued');
   all.addEventListener('click', async (e) => {
     e.stopPropagation();
     await fetch('/api/mv3q/run', { method: 'POST' });
@@ -303,7 +304,7 @@ async function _paintList() {
   const clr = document.createElement('button');
   clr.type = 'button';
   clr.className = 'mv3-c-btn u-btn is-s is-quiet';
-  clr.textContent = 'Clear';
+  clr.textContent = t('Clear');
   clr.addEventListener('click', async (e) => {
     e.stopPropagation();
     const left = (d.items || []).filter(x => x.status === 'queued').length;
@@ -316,7 +317,7 @@ async function _paintList() {
   const shut = document.createElement('button');
   shut.type = 'button';
   shut.className = 'mv3-qclose u-btn is-icon is-quiet u-x';
-  shut.title = 'Close (Esc)';
+  shut.title = t('Close (Esc)');
   shut.addEventListener('click', (e) => { e.stopPropagation(); _close(); });
   head.appendChild(shut);
   _pop.appendChild(head);
@@ -324,7 +325,7 @@ async function _paintList() {
   const list = document.createElement('div');
   list.className = 'mv3-qlist';
   if (!(d.items || []).length) {
-    list.appendChild(emptyEl('Nothing queued. Add a project from its render window.', { icon: 'list' }));
+    list.appendChild(emptyEl(t('Nothing queued. Add a project from its render window.'), { icon: 'list' }));
   } else {
     const again = () => { _paintList(); _paintBadge(); };
     // A highlights project's entries are one row, where its first one stands.
@@ -401,8 +402,8 @@ function _group(id, items, refresh) {
   top.className = 'mv3-qrow-top';
   const nm = document.createElement('span');
   nm.className = 'mv3-qrow-t';
-  nm.textContent = (open ? '▾ ' : '▸ ') + (items[0].hlName || 'highlights');
-  nm.title = open ? 'Close its fragments' : 'Show its fragments';
+  nm.textContent = (open ? '▾ ' : '▸ ') + (items[0].hlName || t('highlights'));
+  nm.title = open ? t('Close its fragments') : t('Show its fragments');
   top.appendChild(nm);
   const st = document.createElement('span');
   st.className = 'mv3-qrow-s';
@@ -411,13 +412,13 @@ function _group(id, items, refresh) {
   const bn = way.batch.length;
   const bdone = way.batch.filter(x => x.status === 'done').length;
   st.textContent = live
-    ? 'rendering ' + Math.min(bn, bdone + 1) + ' of ' + bn + (way.left ? ' · ' + _mmss(way.left) + ' left' : '')
-    : [done ? done + ' rendered' : '', cut ? cut + ' interrupted' : '', failed ? failed + ' failed' : ''].filter(Boolean).join(' · ') || 'queued';
+    ? t('rendering {k} of {n}', { k: Math.min(bn, bdone + 1), n: bn }) + (way.left ? ' · ' + t('{time} left', { time: _mmss(way.left) }) : '')
+    : [done ? t('{n} rendered', { n: done }) : '', cut ? t('{n} interrupted', { n: cut }) : '', failed ? t('{n} failed', { n: failed }) : ''].filter(Boolean).join(' · ') || t('queued');
   top.appendChild(st);
   main.appendChild(top);
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = 'highlights · ' + n + (n === 1 ? ' fragment' : ' fragments');
+  sub.textContent = t('highlights') + ' · ' + tn(n, '{n} fragment', '{n} fragments');
   main.appendChild(sub);
   if (live) {
     const bar = document.createElement('div');
@@ -437,8 +438,8 @@ function _group(id, items, refresh) {
     const go = document.createElement('button');
     go.type = 'button';
     go.className = 'mv3-c-btn mv3-qrow-a u-btn is-s';
-    go.textContent = 'Continue';
-    go.title = 'Render this project\'s interrupted and failed fragments - nothing else in the queue starts';
+    go.textContent = t('Continue');
+    go.title = t('Render this project\'s interrupted and failed fragments - nothing else in the queue starts');
     go.addEventListener('click', async (e) => {
       e.stopPropagation();
       await fetch('/api/mv3q/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hl: id }) });

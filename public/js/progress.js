@@ -11,6 +11,8 @@
 // Library, Merge and Home (New Character's window opens there too) - and a page should not reach
 // sideways into another page's folder to get it.
 
+import { t } from './i18n/t.js';
+
 const EMA_KEY = 'sv3_gen_ema_v1';
 const EMA_ALPHA = 0.35;
 const FALLBACK_MS = 45000;
@@ -49,12 +51,11 @@ function _emaPut(label, ms) {
 // forty seconds, and hasty for one that takes eight minutes.
 const CANCEL_AT = 1.4;      // past this, waiting is unusual: offer the way out
 const STUCK_AT  = 3;        // past this, it is not going to arrive on its own
-const OVER_NOTE  = 'Longer than usual - it may still be rendering.';
+const OVER_NOTE  = t('Longer than usual - it may still be rendering.');
 // Deliberately not "check for banned words": a refusal comes back
 // within seconds with its own reason, so a job still going at three times its estimate is stuck
 // rather than rejected - and saying otherwise would send the user editing text that is fine.
-const STUCK_NOTE = 'Well past normal. A refusal would have been reported by now, so this looks '
-  + 'stuck rather than rejected - canceling and rendering again is safe.';
+const STUCK_NOTE = t('Well past normal. A refusal would have been reported by now, so this looks stuck rather than rejected - canceling and rendering again is safe.');
 
 export function startProgress(host, { label, total = 1, startedAt = 0, estimateMs = 0, onCancel = null } = {}) {
   if (!host) return { tick() {}, step() {}, finish() {}, fail() {}, detach() {} };
@@ -97,7 +98,7 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
     elCancel = document.createElement('button');
     elCancel.type = 'button';
     elCancel.className = 'sv3-gen-cancel u-btn is-s';
-    elCancel.textContent = 'Cancel';
+    elCancel.textContent = t('Cancel');
     elCancel.hidden = true;
     elCancel.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -121,9 +122,9 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
     // Past the estimate the countdown stops pretending and starts counting UP. A frozen
     // "finishing…" is indistinguishable from a job that has quietly died, and a slow
     // model will sit there for minutes.
-    const tail = left > 0 ? '~' + left + 's'
-      : elapsed > est * CANCEL_AT ? `still working · ${Math.round(elapsed / 1000)}s`
-      : 'finishing…';
+    const tail = left > 0 ? t('~{n}s', { n: left })
+      : elapsed > est * CANCEL_AT ? t('still working · {n}s', { n: Math.round(elapsed / 1000) })
+      : t('finishing…');
     elEta.textContent = total > 1 ? `${done}/${total} · ${tail}` : tail;
     // The same moment the countdown admits it is over its estimate is the moment a way out
     // becomes reasonable. One threshold, one story.
@@ -157,9 +158,9 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
       if (closed) return;
       clearInterval(timer);
       card.querySelector('.sv3-gen-spin').style.display = 'none';
-      elLabel.textContent = msg || 'Generation failed';
+      elLabel.textContent = msg || t('Generation failed');
       elLabel.classList.add('err');
-      elEta.textContent = 'click to dismiss';
+      elEta.textContent = t('click to dismiss');
       ov.style.cursor = 'pointer';
       // dismissing must also lift the blur and the positioning tweak
       ov.addEventListener('click', () => {
@@ -204,18 +205,18 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
     <span class="sv3-inline-label"></span>
     <span class="sv3-inline-bar"><i></i></span>
     <span class="sv3-inline-eta"></span>`;
-  row.querySelector('.sv3-inline-label').textContent = label || 'Working…';
+  row.querySelector('.sv3-inline-label').textContent = label || t('Working…');
   if (typeof onCancel === 'function') {
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'sv3-inline-x u-btn is-s is-icon is-quiet is-del u-x';
-    x.title = 'Cancel - what was already sent is paid for';
-    x.setAttribute('aria-label', 'Cancel');
+    x.title = t('Cancel - what was already sent is paid for');
+    x.setAttribute('aria-label', t('Cancel'));
     x.addEventListener('click', (e) => {
       e.stopPropagation();
       if (closed || x.disabled) return;
       x.disabled = true;
-      row.querySelector('.sv3-inline-label').textContent = 'canceling…';
+      row.querySelector('.sv3-inline-label').textContent = t('canceling…');
       try { onCancel(); } catch (err) { /* the caller says what happened */ }
     });
     row.appendChild(x);
@@ -231,9 +232,9 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
     const left = Math.round((est - elapsed) / 1000);
     // Past the estimate it counts UP rather than freezing on "finishing" — a stuck label is
     // indistinguishable from a job that died.
-    eta.textContent = left > 0 ? '~' + left + 's'
-      : elapsed > est * 1.4 ? `still working · ${Math.round(elapsed / 1000)}s`
-      : 'finishing…';
+    eta.textContent = left > 0 ? t('~{n}s', { n: left })
+      : elapsed > est * 1.4 ? t('still working · {n}s', { n: Math.round(elapsed / 1000) })
+      : t('finishing…');
   };
   paint();
   const timer = setInterval(paint, 500);
@@ -249,7 +250,7 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
       if (closed) return;
       clearInterval(timer);
       row.querySelector('.sv3-inline-spin').style.display = 'none';
-      row.querySelector('.sv3-inline-label').textContent = msg || 'Failed';
+      row.querySelector('.sv3-inline-label').textContent = msg || t('Failed');
       row.querySelector('.sv3-inline-label').classList.add('err');
       eta.textContent = '';
       // Nothing left to cancel: a cross that stayed would look live and do nothing.

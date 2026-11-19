@@ -21,8 +21,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
+import { t } from './i18n/t.js';
 
-export const REALLY = 'Really?';
+export const REALLY = t('Really?');
 export const MS = 3000;
 
 export function twoPress(btn, o) {

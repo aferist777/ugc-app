@@ -14,6 +14,8 @@
   color:var(--muted); text-decoration:none; font-size:12px; font-weight:600;
   padding:5px 10px; border-radius:var(--r-xs); transition:.12s var(--ease);
 }
+/* one line each, whatever the language: "3D-студия" breaks at its hyphen otherwise */
+.sv3-nav a, .sv3-nav .sv3-navbtn, .sv3-nav .sv3-alerts{ white-space:nowrap }
 .sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
 .sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
 .sv3-nav .sp{flex:1}
@@ -178,6 +180,8 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon{ filter:blur(1.2px); opacity:.5; cursor:default }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon:hover{ color:var(--muted); background:none }
+/* Admin: a gear alone, last of the app's entries (js/app-nav.js) - as tall as the words beside it, square */
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-gear{ padding:4px 7px; margin-left:var(--sp-1) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts.is-caught{ animation-name:sv3-al-caught-v73 }
 @keyframes sv3-al-caught-v73{
   0%{ transform:scale(1); }

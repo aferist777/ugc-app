@@ -23,6 +23,7 @@
 
 import { showError } from './notice.js';
 import { saveAudio } from './cut.js';
+import { t } from './i18n/t.js';
 
 const PICTURES = new Set(['images', 'environments', 'lookbooks', 'props']);
 const VIDEOS = new Set(['birols', 'uploads', 'hooks', 'heads', 'youtube']);
@@ -47,9 +48,9 @@ async function _lastFrame(f, name) {
   const d = await fetch('/api/images/frame', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     // Its end: the frame route takes the file's last frame at or past it (lib/video-thumb.js frameAt).
-    body: JSON.stringify({ src: f.path, t: f.dur > 0 ? f.dur : 1e6, name: (name || 'clip') + ' · last frame' }),
+    body: JSON.stringify({ src: f.path, t: f.dur > 0 ? f.dur : 1e6, name: t('{name} · last frame', { name: name || t('clip') }) }),
   }).then(r => r.json()).catch(() => null);
-  if (!d || !d.success || !d.item) throw new Error((d && d.error) || 'the frame could not be saved');
+  if (!d || !d.success || !d.item) throw new Error((d && d.error) || t('the frame could not be saved'));
   return d.item;
 }
 
@@ -58,24 +59,24 @@ export function rowsFor(it, open) {
   if (!f || typeof open !== 'function') return [];
   const name = it.name || '';
   const go = (which, o) => Promise.resolve(open(which, Object.assign({ from: 'library' }, o)))
-    .catch(e => showError('The chat did not open', { detail: (e && e.message) || String(e) }));
+    .catch(e => showError(t('The chat did not open'), { detail: (e && e.message) || String(e) }));
   if (f.kind === 'image') {
     return [
-      ['Animate…', 'the video chat · this picture as the first frame',
+      [t('Animate…'), t('the video chat · this picture as the first frame'),
         () => go('videos', { attach: { path: f.path, name, kind: 'image' }, as: 'first', act: 'animate' })],
-      ['Change…', 'the pictures chat · this picture to change',
+      [t('Change…'), t('the pictures chat · this picture to change'),
         () => go('pictures', { attach: { path: f.path, name, kind: 'image' }, as: 'change', act: 'edit' })],
     ];
   }
   return [
-    ['Continue…', 'the video chat · its last frame as the first frame', async () => {
+    [t('Continue…'), t('the video chat · its last frame as the first frame'), async () => {
       try {
         const item = await _lastFrame(f, name);
         await go('videos', { attach: { path: item.imagePath, name: item.name || '', kind: 'image' }, as: 'first', act: 'continue' });
-      } catch (e) { showError('The last frame was not taken', { detail: (e && e.message) || String(e) }); }
+      } catch (e) { showError(t('The last frame was not taken'), { detail: (e && e.message) || String(e) }); }
     }],
-    ['As a reference…', 'the video chat · this clip as a reference',
+    [t('As a reference…'), t('the video chat · this clip as a reference'),
       () => go('videos', { attach: { path: f.path, name, kind: 'video', poster: f.thumb, dur: f.dur }, as: 'clip', act: 'ref' })],
-    ['Save audio', 'its sound · into AUDIO', () => saveAudio({ src: f.path, name })],
+    [t('Save audio'), t('its sound · into AUDIO'), () => saveAudio({ src: f.path, name })],
   ];
 }
