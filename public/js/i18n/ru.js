@@ -11,8 +11,9 @@ import home from './ru/home.js';
 import admin from './ru/admin.js';
 import tree from './ru/tree.js';
 import windows from './ru/windows.js';
+import thanks from './ru/thanks.js';
 
-export const PARTS = { common, shell, home, admin, tree, windows };
+export const PARTS = { common, shell, home, admin, tree, windows, thanks };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);
