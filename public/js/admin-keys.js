@@ -18,6 +18,8 @@
    Typing replaces on Save. The × beside a field removes the key on Save - the button asks
    "really?" first, because an empty key is a feature that stops working. */
 
+import { t, tn } from './i18n/t.js';
+
 (function () {
 
 // Claude first; every description says what the key does in the app.
@@ -26,69 +28,69 @@ const ROWS = [
     label: 'Claude (Anthropic):', settingsKey: 'anthropicApiKey', probe: 'anthropic',
     placeholder: 'sk-ant-••• (console.anthropic.com)',
     link: 'https://console.anthropic.com/settings/keys', linkText: 'console.anthropic.com → API keys',
-    desc: 'Claude directly - Opus, Sonnet and Haiku 5.5. Used only where you choose it: as a step of the agents\' ladder on AI settings - which writes the scenario generator\'s scripts too.',
+    desc: t('Claude directly - Opus, Sonnet and Haiku 5.5. Used only where you choose it: as a step of the agents\' ladder on AI settings - which writes the scenario generator\'s scripts too.'),
   },
   {
     label: 'kie.ai API:', settingsKey: 'kieApiKey', probe: 'kie.ai',
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key', linkText: 'kie.ai/api-key',
-    desc: 'Pictures and video in the chats, New Character and the talking head; Suno music; the agents (the scenario generator among them) on Gemini; the 3D Studio\'s Claude. The number beside it is the credit balance.',
+    desc: t('Pictures and video in the chats, New Character and the talking head; Suno music; the agents (the scenario generator among them) on Gemini; the 3D Studio\'s Claude. The number beside it is the credit balance.'),
   },
   {
     label: 'OpenRouter API:', settingsKey: 'openRouterApiKey', probe: 'openrouter',
     placeholder: 'sk-or-v1-••• (openrouter.ai)',
     link: 'https://openrouter.ai/settings/keys', linkText: 'openrouter.ai → keys',
-    desc: 'Not used at the moment - kept so it can be connected: with a working key it becomes an aggregator of the agents\' ladder on AI settings.',
+    desc: t('Not used at the moment - kept so it can be connected: with a working key it becomes an aggregator of the agents\' ladder on AI settings.'),
   },
   {
     label: 'Replicate API:', settingsKey: 'replicateApiKey', probe: 'replicate',
     placeholder: 'r8_••• (replicate.com)',
     link: 'https://replicate.com/account/api-tokens', linkText: 'replicate.com → API tokens',
-    desc: 'Pictures and video in the chats and New Character; transcribing sources and narrator samples; the agents (the scenario generator among them) on Gemini and GPT.',
+    desc: t('Pictures and video in the chats and New Character; transcribing sources and narrator samples; the agents (the scenario generator among them) on Gemini and GPT.'),
   },
   {
     label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey', probe: 'elevenlabs',
     placeholder: 'sk_••• (elevenlabs.io)',
     link: 'https://elevenlabs.io/app/settings/api-keys', linkText: 'elevenlabs.io → API keys',
-    desc: 'The talking head\'s voice (text to speech), and the voices of characters from the ElevenLabs library.',
+    desc: t('The talking head\'s voice (text to speech), and the voices of characters from the ElevenLabs library.'),
   },
   {
     label: 'Groq (Whisper STT):', settingsKey: 'groqApiKey', probe: 'groq',
     placeholder: 'gsk_••• (console.groq.com)',
     link: 'https://console.groq.com/keys', linkText: 'console.groq.com → API keys',
-    desc: 'Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.',
+    desc: t('Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.'),
   },
   {
     // Finding sound effects online - Freesound directly; Openverse without it.
     label: 'Freesound API:', settingsKey: 'freesoundApiKey', probe: 'freesound',
     placeholder: '••• (freesound.org → API credentials)',
-    link: 'https://freesound.org/apiv2/apply', linkText: 'freesound.org/apiv2/apply (a free account)',
-    desc: 'SFX → "find online…": free sound effects (CC0 only) straight from Freesound. Without it the search goes through Openverse, which is often down.',
+    link: 'https://freesound.org/apiv2/apply', linkText: t('freesound.org/apiv2/apply (a free account)'),
+    desc: t('SFX → "find online…": free sound effects (CC0 only) straight from Freesound. Without it the search goes through Openverse, which is often down.'),
   },
   {
     // A voiceover's B-roll - stock videos and photos from Pixabay (lib/pixabay.js).
     label: 'Pixabay API:', settingsKey: 'pixabayApiKey', probe: 'pixabay',
     placeholder: '12345678-••• (pixabay.com → API docs)',
-    link: 'https://pixabay.com/api/docs/', linkText: 'pixabay.com/api/docs (a free account - the key is on that page)',
-    desc: 'Voiceover → field 2 "find B-roll": stock videos (1080p) and photos for every sentence of the voice. Free.',
+    link: 'https://pixabay.com/api/docs/', linkText: t('pixabay.com/api/docs (a free account - the key is on that page)'),
+    desc: t('Voiceover → field 2 "find B-roll": stock videos (1080p) and photos for every sentence of the voice. Free.'),
   },
   {
     // The person's own bot, its key above Cloudflare's: what it is sent goes into
     // REFERENCES. Under it: who it listens to (the code), how its messages come in, the queue (lib/telegram.js).
-    group: 'Telegram bot · links, photos and videos you send it go into REFERENCES',
-    label: 'Telegram bot token:', settingsKey: 'telegramBotToken', probe: 'telegram', telegram: true,
+    group: t('Telegram bot · links, photos and videos you send it go into REFERENCES'),
+    label: t('Telegram bot token:'), settingsKey: 'telegramBotToken', probe: 'telegram', telegram: true,
     placeholder: '123456789:AA••• (@BotFather)',
-    desc: 'Your own bot: send it links to posts, or photos and videos, from your phone. It answers only you.',
-    link: 'https://t.me/BotFather', linkText: '@BotFather in Telegram',
+    desc: t('Your own bot: send it links to posts, or photos and videos, from your phone. It answers only you.'),
+    link: 'https://t.me/BotFather', linkText: t('@BotFather in Telegram'),
   },
   {
     // ONE key for Cloudflare: R2 is spoken to with the
     // pair made from it, and the Telegram receiver is set up with it. Checked step by step once saved
     // (lib/cloudflare.js).
-    group: 'Cloudflare · where reference media are hosted (R2)',
-    label: 'Cloudflare API token:', settingsKey: 'cloudflareApiToken', probe: 'cloudflare', cloudflare: true,
-    placeholder: 'cfut_••• (one key for R2)',
-    desc: 'One key for R2: the app finds your account and its bucket (or makes one), and hosts every reference image and clip the models fetch there. Without it the models cannot be handed a reference.',
+    group: t('Cloudflare · where reference media are hosted (R2)'),
+    label: t('Cloudflare API token:'), settingsKey: 'cloudflareApiToken', probe: 'cloudflare', cloudflare: true,
+    placeholder: t('cfut_••• (one key for R2)'),
+    desc: t('One key for R2: the app finds your account and its bucket (or makes one), and hosts every reference image and clip the models fetch there. Without it the models cannot be handed a reference.'),
   },
 ];
 
@@ -100,30 +102,31 @@ const CF_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens';
 // R2 of whichever account is signed in (Cloudflare's own deep link, `?to=/:account/...`); after a check, the account's own.
 const CF_R2 = 'https://dash.cloudflare.com/?to=/:account/r2/overview';
 const CF_ACC = (id) => 'https://dash.cloudflare.com/' + encodeURIComponent(id);
+// A step is its words, a link's place in them `{link}`, and that link [its words on the site, address] - whole sentences,
+// so a language can put the link where it belongs. Cloudflare's own buttons are named as Cloudflare names them.
 const CF_HOWTO = [
-  ['Open ', ['dash.cloudflare.com → My Profile → API Tokens', CF_TOKENS], ' and sign in.'],
-  ['Press “Create Token”.'],
-  ['Find the template “Edit Cloudflare Workers” and press “Use template”.'],
-  ['Give it a name, for example “UGC Studio”.'],
-  ['Account Resources: Include → your account (the one with R2). Zone Resources: Include → All zones.'],
-  ['Leave Client IP Address Filtering and TTL empty.'],
-  ['Press “Continue to summary”, then “Create Token”.'],
-  ['Copy the token - it starts with cfut_ and is shown only once - paste it in the field above and press Save. The app checks it step by step: the key, the account, the bucket, an upload.'],
-  ['Turn R2 on once in ', ['dash.cloudflare.com → R2 Object Storage', CF_R2], ' - Cloudflare asks for a payment card for it, even within the free allowance. Then press “check” beside the steps.'],
-  ['The bucket “ugc-studio” (or the one you had) is then in ', ['dash.cloudflare.com → R2 Object Storage → Buckets', CF_R2], '; the line “bucket” of the check links straight to it.'],
+  [t('Open {link} and sign in.'), ['dash.cloudflare.com → My Profile → API Tokens', CF_TOKENS]],
+  [t('Press “Create Token”.')],
+  [t('Find the template “Edit Cloudflare Workers” and press “Use template”.')],
+  [t('Give it a name, for example “UGC Studio”.')],
+  [t('Account Resources: Include → your account (the one with R2). Zone Resources: Include → All zones.')],
+  [t('Leave Client IP Address Filtering and TTL empty.')],
+  [t('Press “Continue to summary”, then “Create Token”.')],
+  [t('Copy the token - it starts with cfut_ and is shown only once - paste it in the field above and press Save. The app checks it step by step: the key, the account, the bucket, an upload.')],
+  [t('Turn R2 on once in {link} - Cloudflare asks for a payment card for it, even within the free allowance. Then press “check” beside the steps.'), ['dash.cloudflare.com → R2 Object Storage', CF_R2]],
+  [t('The bucket “ugc-studio” (or the one you had) is then in {link}; the line “bucket” of the check links straight to it.'), ['dash.cloudflare.com → R2 Object Storage → Buckets', CF_R2]],
 ];
 // Cloudflare asks for a payment card to turn R2 on, even within its free allowance.
-const CF_NOTE = 'The bucket is found, or made, by the app. The free allowance of R2 - 10 GB stored, a million uploads a month - is far '
-  + 'more than the app uses.';
-const CF_STEP = { key: 'key', account: 'account', bucket: 'bucket', upload: 'upload' };
+const CF_NOTE = t('The bucket is found, or made, by the app. The free allowance of R2 - 10 GB stored, a million uploads a month - is far more than the app uses.');
+const CF_STEP = { key: t('key'), account: t('account'), bucket: t('bucket'), upload: t('upload') };
 // How to make the bot.
 const TG_HOWTO = [
-  ['In Telegram open ', ['@BotFather', 'https://t.me/BotFather'], ' and send /newbot.'],
-  ['Give the bot a name, then a username that ends in “bot” (for example ugc_studio_inbox_bot).'],
-  ['BotFather answers with a token like 123456789:AA… - paste it in the field above and press Save.'],
-  ['Then send your bot the code that appears here (or open the link beside it and press Start): from then on it listens to you only.'],
+  [t('In Telegram open {link} and send /newbot.'), ['@BotFather', 'https://t.me/BotFather']],
+  [t('Give the bot a name, then a username that ends in “bot” (for example ugc_studio_inbox_bot).')],
+  [t('BotFather answers with a token like 123456789:AA… - paste it in the field above and press Save.')],
+  [t('Then send your bot the code that appears here (or open the link beside it and press Start): from then on it listens to you only.')],
 ];
-const TG_NOTE = 'With the Cloudflare key below working, what you send waits on your Cloudflare while the app is closed; without it, Telegram keeps it for 24 hours.';
+const TG_NOTE = t('With the Cloudflare key below working, what you send waits on your Cloudflare while the app is closed; without it, Telegram keeps it for 24 hours.');
 
 function _help(title, steps, note) {
   const d = document.createElement('details');
@@ -132,16 +135,17 @@ function _help(title, steps, note) {
   s.textContent = title;
   d.appendChild(s);
   const ol = document.createElement('ol');
-  for (const parts of steps) {
+  for (const [words, link] of steps) {
     const li = document.createElement('li');
-    for (const p of parts) {
-      if (Array.isArray(p)) {
+    String(words).split('{link}').forEach((bit, i) => {
+      if (i && link) {
         const a = document.createElement('a');
-        a.href = p[1]; a.target = '_blank'; a.rel = 'noopener';
-        a.textContent = p[0];
+        a.href = link[1]; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = link[0];
         li.appendChild(a);
-      } else li.appendChild(document.createTextNode(p));
-    }
+      }
+      if (bit) li.appendChild(document.createTextNode(bit));
+    });
     ol.appendChild(li);
   }
   d.appendChild(ol);
@@ -192,7 +196,7 @@ function buildRow(r) {
   const x = document.createElement('button');
   x.type = 'button';
   x.className = 'bk-x u-btn is-icon is-quiet is-del u-x';
-  x.title = 'Remove this key (on Save)';
+  x.title = t('Remove this key (on Save)');
   frow.appendChild(x);
 
   // The verdict and the description sit to the RIGHT of the field, on the same line, so a
@@ -231,11 +235,11 @@ function buildRow(r) {
     again = document.createElement('button');
     again.type = 'button';
     again.className = 'bk-mini u-btn is-s';
-    again.textContent = 'Check';
-    again.title = 'Check the key again: the key, the account, the bucket, an upload';
+    again.textContent = t('Check');
+    again.title = t('Check the key again: the key, the account, the bucket, an upload');
     sr.append(steps, again);
     side.appendChild(sr);
-    col.appendChild(_help('How to get this key', CF_HOWTO, CF_NOTE));
+    col.appendChild(_help(t('How to get this key'), CF_HOWTO, CF_NOTE));
   }
   // The bot's state - who it listens to, how messages come in, the queue - with "connect" and "unpair".
   let tg = null;
@@ -243,7 +247,7 @@ function buildRow(r) {
     tg = document.createElement('div');
     tg.className = 'bk-tg';
     side.appendChild(tg);
-    col.appendChild(_help('How to make a bot', TG_HOWTO, TG_NOTE));
+    col.appendChild(_help(t('How to make a bot'), TG_HOWTO, TG_NOTE));
   }
   line.appendChild(side);
   wrap.appendChild(line);
@@ -303,15 +307,16 @@ function paint(row) {
   x.textContent = '';
   x.classList.toggle('u-x', row.mode !== 'cleared');
   x.classList.toggle('bk-undo', row.mode === 'cleared');
-  x.title = row.mode === 'cleared' ? 'Keep it after all' : 'Remove this key (on Save)';
+  x.title = row.mode === 'cleared' ? t('Keep it after all') : t('Remove this key (on Save)');
   x.disabled = !(row.present || row.mode === 'typed' || row.mode === 'cleared');
 
   if (row.mode === 'cleared') {
     field.value = '';
-    field.placeholder = 'removed on Save';
+    field.placeholder = t('removed on Save');
     field.classList.add('is-cleared');
-    state.textContent = 'will be removed when you press Save'
-      + (row.key === 'cloudflareApiToken' ? ' - uploads to R2 stop until a new key' : '');
+    state.textContent = row.key === 'cloudflareApiToken'
+      ? t('will be removed when you press Save - uploads to R2 stop until a new key')
+      : t('will be removed when you press Save');
     state.className = 'bk-state missing';
     return;
   }
@@ -323,15 +328,15 @@ function paint(row) {
   const h = row.health;
   let cls = '', text = '';
   if (h && row.mode !== 'typed') {
-    if (h.state === 'ok') { cls = 'is-ok'; text = 'ok' + (h.detail ? ' · ' + h.detail : ''); }
-    else if (h.state === 'down') { cls = 'is-down'; text = 'refused · ' + (h.detail || 'no answer'); }
-    else { cls = 'is-missing'; text = 'no key'; }
+    if (h.state === 'ok') { cls = 'is-ok'; text = t('ok') + (h.detail ? ' · ' + h.detail : ''); }
+    else if (h.state === 'down') { cls = 'is-down'; text = t('refused') + ' · ' + (h.detail || t('no answer')); }
+    else { cls = 'is-missing'; text = t('no key'); }
   } else if (have) {
     cls = 'is-ok';
-    text = row.mode === 'typed' ? 'new value · saved and checked on Save' : 'present · checking…';
+    text = row.mode === 'typed' ? t('new value · saved and checked on Save') : t('present · checking…');
   } else {
     cls = 'is-missing';
-    text = 'no key';
+    text = t('no key');
   }
   if (cls) field.classList.add(cls);
   state.textContent = text;
@@ -355,30 +360,30 @@ async function load() {
     await tgLoad();
   } catch (e) {
     setStatus('');
-    sayError('Could not read the current settings - saving is disabled so nothing gets overwritten.', e.message);
+    sayError(t('Could not read the current settings - saving is disabled so nothing gets overwritten.'), e.message);
   }
 }
 
 // ── the check ─────────────────────────────────────────────────────────────
-const ago = (ms) => ms < 60000 ? Math.round(ms / 1000) + ' s ago' : Math.round(ms / 60000) + ' min ago';
+const ago = (ms) => ms < 60000 ? t('{n} s ago', { n: Math.round(ms / 1000) }) : t('{n} min ago', { n: Math.round(ms / 60000) });
 async function health(force) {
   const line = $('adm-keys-health');
   const btn = $('adm-keys-check');
   if (btn) btn.disabled = true;
-  if (line) line.textContent = 'checking…';
+  if (line) line.textContent = t('checking…');
   try {
     const d = await fetch('/api/keys/health' + (force ? '?force=1' : '')).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'no answer');
+    if (!d || !d.success) throw new Error((d && d.error) || t('no answer'));
     let ok = 0, down = 0, unset = 0;
     for (const p of d.providers || []) {
       const row = byProbe.get(p.id);
       if (row) { row.health = { state: p.state, detail: p.detail }; paint(row); }
       if (p.state === 'ok') ok++; else if (p.state === 'down') down++; else unset++;
     }
-    if (line) line.textContent = `checked ${ago(d.ageMs || 0)} · ${ok} ok · ${down} refused · ${unset} missing`;
+    if (line) line.textContent = t('checked {ago} · {ok} ok · {down} refused · {unset} missing', { ago: ago(d.ageMs || 0), ok, down, unset });
   } catch (e) {
     if (line) line.textContent = '';
-    sayError('The keys could not be checked', e.message);
+    sayError(t('The keys could not be checked'), e.message);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -393,9 +398,9 @@ function cfPaint(v) {
   row.again.hidden = !(v && v.tokenSet);
   row.again.disabled = !!(v && v.checking);
   if (!v || !v.tokenSet) return;
-  if (v.checking) { row.steps.textContent = 'checking the key…'; return; }
+  if (v.checking) { row.steps.textContent = t('checking the key…'); return; }
   const c = v.check;
-  if (!c) { row.steps.textContent = 'not checked yet'; return; }
+  if (!c) { row.steps.textContent = t('not checked yet'); return; }
   for (const s of c.steps || []) {
     const e = document.createElement('div');
     e.className = 'bk-step ' + (s.ok ? 'ok' : 'down');
@@ -405,8 +410,8 @@ function cfPaint(v) {
     if (s.id === 'bucket' && acc) {
       const a = document.createElement('a');
       a.target = '_blank'; a.rel = 'noopener';
-      if (s.ok && bkt) { a.href = CF_ACC(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt); a.textContent = 'open it in Cloudflare'; }
-      else { a.href = CF_ACC(acc) + '/r2/overview'; a.textContent = 'R2 in this account'; }
+      if (s.ok && bkt) { a.href = CF_ACC(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt); a.textContent = t('open it in Cloudflare'); }
+      else { a.href = CF_ACC(acc) + '/r2/overview'; a.textContent = t('R2 in this account'); }
       e.append(' · ', a);
     }
     row.steps.appendChild(e);
@@ -414,7 +419,7 @@ function cfPaint(v) {
   if (c.ok) {
     const e = document.createElement('div');
     e.className = 'bk-step ok';
-    e.textContent = 'R2 works with this key';
+    e.textContent = t('R2 works with this key');
     row.steps.appendChild(e);
   }
 }
@@ -422,24 +427,24 @@ function cfPaint(v) {
 async function cfLoad() {
   try {
     const v = await fetch('/api/cloudflare').then(r => r.json());
-    if (!v || !v.success) sayError('Could not read the Cloudflare key', (v && v.error) || 'no answer');   // said, not silent
+    if (!v || !v.success) sayError(t('Could not read the Cloudflare key'), (v && v.error) || t('no answer'));   // said, not silent
     cfPaint(v && v.success ? v : null);
     return v;
-  } catch (e) { sayError('Could not read the Cloudflare key', e.message); cfPaint(null); return null; }
+  } catch (e) { sayError(t('Could not read the Cloudflare key'), e.message); cfPaint(null); return null; }
 }
 
 async function cfCheck() {
   const row = byKey.get('cloudflareApiToken');
-  if (row && row.steps) { row.steps.textContent = 'checking the key - the account, the bucket, an upload…'; row.again.disabled = true; }
+  if (row && row.steps) { row.steps.textContent = t('checking the key - the account, the bucket, an upload…'); row.again.disabled = true; }
   try {
     const v = await fetch('/api/cloudflare/check', { method: 'POST' }).then(r => r.json());
-    if (!v || !v.success) throw new Error((v && v.error) || 'no answer');
+    if (!v || !v.success) throw new Error((v && v.error) || t('no answer'));
     await load();
     cfPaint(v);
     return v;
   } catch (e) {
     if (row && row.steps) { row.steps.textContent = ''; row.again.disabled = false; }
-    sayError('The Cloudflare key could not be checked', e.message);
+    sayError(t('The Cloudflare key could not be checked'), e.message);
     return null;
   }
 }
@@ -474,78 +479,78 @@ function tgPaint(v) {
   box.textContent = '';
   clearTimeout(_tgTimer);
   if (!v || !v.tokenSet) return;
-  if (v.connecting) { box.appendChild(_tgLine('', 'connecting…')); _tgTimer = setTimeout(tgLoad, 2000); return; }
-  if (v.error) box.appendChild(_tgLine('down', '✗ ' + v.error, { button: 'connect', title: 'Look at the keys again and connect', click: tgConnect }));
+  if (v.connecting) { box.appendChild(_tgLine('', t('connecting…'))); _tgTimer = setTimeout(tgLoad, 2000); return; }
+  if (v.error) box.appendChild(_tgLine('down', '✗ ' + v.error, { button: t('connect'), title: t('Look at the keys again and connect'), click: tgConnect }));
   const bot = v.bot && v.bot.username ? v.bot.username : '';
   if (bot && v.code) {
     // The code alone is enough (Start pressed on the bot itself sends "/start" without the code).
-    box.appendChild(_tgLine('down', `✗ not connected yet: send the code ${v.code} to @${bot} in Telegram - or open `,
-      { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` }, ' and press Start'));
+    const [before, after] = t('✗ not connected yet: send the code {code} to @{bot} in Telegram - or open {link} and press Start', { code: v.code, bot }).split('{link}');
+    box.appendChild(_tgLine('down', before, { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` }, after || ''));
     _tgTimer = setTimeout(tgLoad, 3000);
   } else if (bot && v.chat) {
-    box.appendChild(_tgLine('ok', `✓ @${bot} listens to ${v.chat.name} only`, { button: 'unpair', title: 'Forget this chat - a new code is made', click: tgUnpair }));
+    box.appendChild(_tgLine('ok', t('✓ @{bot} listens to {name} only', { bot, name: v.chat.name }), { button: t('unpair'), title: t('Forget this chat - a new code is made'), click: tgUnpair }));
   }
   if (v.mode === 'receiver') {
-    box.appendChild(_tgLine('ok', '✓ messages wait on your Cloudflare (' + (v.receiver ? v.receiver.script : 'receiver') + ') while the app is closed'));
+    box.appendChild(_tgLine('ok', t('✓ messages wait on your Cloudflare ({script}) while the app is closed', { script: v.receiver ? v.receiver.script : t('receiver') })));
   } else if (v.mode === 'poll') {
-    box.appendChild(_tgLine('', '· the app reads the bot while it is open - Telegram keeps what you send for 24 hours (the Cloudflare key below keeps it for good)'));
+    box.appendChild(_tgLine('', t('· the app reads the bot while it is open - Telegram keeps what you send for 24 hours (the Cloudflare key below keeps it for good)')));
   }
   if (v.receiverError) box.appendChild(_tgLine('down', '✗ ' + v.receiverError));
   if (v.conflict) box.appendChild(_tgLine('down', '✗ ' + v.conflict));
   if (v.delivery) box.appendChild(_tgLine('down', '✗ ' + v.delivery));
   const q = v.queue || {};
-  if (q.waiting || q.error) box.appendChild(_tgLine('', `in the queue: ${q.waiting || 0}` + (q.error ? ` · ${q.error} could not be taken` : '')));
+  if (q.waiting || q.error) box.appendChild(_tgLine('', t('{n} in the queue', { n: q.waiting || 0 }) + (q.error ? ' · ' + t('{n} could not be taken', { n: q.error }) : '')));
 }
 
 async function tgLoad() {
   try {
     const v = await fetch('/api/telegram').then(r => r.json());
-    if (!v || !v.success) sayError('Could not read the bot', (v && v.error) || 'no answer');   // said, not silent
+    if (!v || !v.success) sayError(t('Could not read the bot'), (v && v.error) || t('no answer'));   // said, not silent
     tgPaint(v && v.success ? v : null);
     return v;
-  } catch (e) { sayError('Could not read the bot', e.message); tgPaint(null); return null; }
+  } catch (e) { sayError(t('Could not read the bot'), e.message); tgPaint(null); return null; }
 }
 async function tgConnect() {
   const row = byKey.get('telegramBotToken');
-  if (row && row.tg) { row.tg.textContent = ''; row.tg.appendChild(_tgLine('', 'connecting the bot…')); }
+  if (row && row.tg) { row.tg.textContent = ''; row.tg.appendChild(_tgLine('', t('connecting the bot…'))); }
   try {
     const v = await fetch('/api/telegram/connect', { method: 'POST' }).then(r => r.json());
-    if (!v || !v.success) sayError('The bot was not connected', (v && v.error) || 'no answer');
+    if (!v || !v.success) sayError(t('The bot was not connected'), (v && v.error) || t('no answer'));
     tgPaint(v && v.success ? v : null);
     return v;
-  } catch (e) { sayError('The bot was not connected', e.message); tgPaint(null); return null; }
+  } catch (e) { sayError(t('The bot was not connected'), e.message); tgPaint(null); return null; }
 }
 async function tgUnpair() {
   try {
     const v = await fetch('/api/telegram/unpair', { method: 'POST' }).then(r => r.json());
-    if (!v || !v.success) { sayError('The bot was not unpaired', (v && v.error) || 'no answer'); return; }
+    if (!v || !v.success) { sayError(t('The bot was not unpaired'), (v && v.error) || t('no answer')); return; }
     tgPaint(v);
-  } catch (e) { sayError('The bot was not unpaired', e.message); /* the line stays as it was */ }
+  } catch (e) { sayError(t('The bot was not unpaired'), e.message); /* the line stays as it was */ }
 }
 
 // ── saving ────────────────────────────────────────────────────────────────
 let _armed = null;
 async function save(btn) {
-  if (!_loaded) { sayError('Not saving: the current settings never loaded.'); return; }
+  if (!_loaded) { sayError(t('Not saving: the current settings never loaded.')); return; }
   const payload = {};
   let removals = 0;
   for (const [key, row] of byKey) {
     if (row.mode === 'typed' && row.field.value.trim()) payload[key] = row.field.value.trim();
     else if (row.mode === 'cleared') { payload[key] = ''; removals++; }
   }
-  if (!Object.keys(payload).length) { setStatus('Nothing to change - type a key to replace it, or × to remove one.', 'ok'); return; }
+  if (!Object.keys(payload).length) { setStatus(t('Nothing to change - type a key to replace it, or × to remove one.'), 'ok'); return; }
   // Removing is asked about once: an empty key is a feature that stops working.
   // one "Really?" (js/really.js's words and time - this script is not a module): "Really? · 2 keys", the red fill, 3 s.
   if (removals && !_armed) {
-    _armed = setTimeout(() => { _armed = null; btn.textContent = 'Save'; btn.classList.remove('is-danger', 'is-armed'); }, 3000);
-    btn.textContent = 'Really? · ' + removals + (removals === 1 ? ' key' : ' keys');
+    _armed = setTimeout(() => { _armed = null; btn.textContent = t('Save'); btn.classList.remove('is-danger', 'is-armed'); }, 3000);
+    btn.textContent = t('Really?') + ' · ' + tn(removals, '{n} key', '{n} keys');
     btn.classList.add('is-danger', 'is-armed');
     return;
   }
   if (_armed) { clearTimeout(_armed); _armed = null; }
   btn.classList.remove('is-danger', 'is-armed');
   btn.disabled = true;
-  btn.textContent = 'Saving';   // no emoji, no dots
+  btn.textContent = t('Saving');   // no emoji, no dots
   try {
     const r = await fetch('/api/settings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -560,15 +565,15 @@ async function save(btn) {
     // The bot's way in depends on both keys: the receiver needs the Cloudflare key working.
     if ('telegramBotToken' in payload || 'cloudflareApiToken' in payload) await tgConnect();
     await health(true);
-    setStatus('Saved' + (removals ? ` · ${removals} removed` : '') + ' · checked'
-      + (cf && cf.check ? (cf.check.ok ? ' · the Cloudflare key works for R2' : ' · the Cloudflare key did not pass - see its steps') : ''),
+    setStatus(t('Saved') + (removals ? ' · ' + t('{n} removed', { n: removals }) : '') + ' · ' + t('checked')
+      + (cf && cf.check ? ' · ' + (cf.check.ok ? t('the Cloudflare key works for R2') : t('the Cloudflare key did not pass - see its steps')) : ''),
       cf && cf.check && !cf.check.ok ? 'err' : 'ok');
   } catch (e) {
     setStatus('');
-    sayError('Not saved', e.message);
+    sayError(t('Not saved'), e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Save';
+    btn.textContent = t('Save');
   }
 }
 
@@ -592,7 +597,7 @@ function backAndNeed() {
   const btn = $('adm-keys-back');
   if (btn && /^\/(?!\/)/.test(back) && !/^\/admin\b/.test(back)) {
     btn.hidden = false;
-    btn.title = 'Back to where the key was needed';
+    btn.title = t('Back to where the key was needed');
     btn.addEventListener('click', () => { location.href = back; });
   }
   const need = String(q.get('need') || '').split(',').filter(k => byKey.has(k));
