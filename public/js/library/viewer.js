@@ -148,8 +148,9 @@ function _paint() {
   // the caller made editable is dropped from the read-only set — otherwise the panel
   // shows "kind" twice, once as a dropdown and once as text that cannot be changed.
   const extra = (typeof _extraRows === 'function' ? (_extraRows(it) || []) : []);
-  const owned = new Set(extra.map(([k]) => k));
-  const rows = extra.concat(_meta(it).filter(([k]) => !owned.has(k)));
+  // Matched whatever the case: a caller's 'kind' row stands for the fact 'Kind'.
+  const owned = new Set(extra.map(([k]) => String(k).toLowerCase()));
+  const rows = extra.concat(_meta(it).filter(([k]) => !owned.has(String(k).toLowerCase())));
   for (const [k, v] of rows) {
     if (!v) continue;
     const row = document.createElement('div');

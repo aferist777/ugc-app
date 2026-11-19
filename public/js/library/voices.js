@@ -17,7 +17,7 @@
 // "no voices yet" as the shared part (css/app-shell.css .u-empty)
 import { emptyEl } from '../ui-state.js';
 import { icon } from '../icons.js';
-import { t, tn } from '../i18n/t.js';
+import { t, tc, tn } from '../i18n/t.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -182,7 +182,7 @@ function _info() {
   const info = document.createElement('div');
   info.className = 'lib-vi';
   _line(info, t('voice id'), m.voiceId, { mono: true, copy: true });
-  _line(info, t('category'), _pretty(m.category));
+  _line(info, tc('voice', 'category'), _pretty(m.category));
   for (const k of (_hooks.labelKeys || Object.keys(m.labels || {}))) {
     if (m.labels && m.labels[k]) _line(info, LABEL[k] || _pretty(k), _pretty(m.labels[k]));
   }

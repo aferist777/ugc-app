@@ -76,7 +76,7 @@ export function videoSrc(it) {
 export function originalRow(it, repaint) {
   const o = it && it.meta && it.meta.original;
   if (!o || !o.path) return null;
-  return ['original', originalTick(o, _whole.has(_key(it)), (on) => {
+  return [T.t('original'), originalTick(o, _whole.has(_key(it)), (on) => {
     if (on) _whole.add(_key(it)); else _whole.delete(_key(it));
     repaint();
   })];
