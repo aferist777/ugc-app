@@ -29,6 +29,8 @@ import { menuAt } from './tile-select.js';
 import { showError, showToast } from './notice.js';
 import { hint } from './bubble.js';
 import * as Layers from './layers.js';
+// The app's words as T.t / T.tn: this module's own `t`s are seconds and tracks.
+import * as T from './i18n/t.js';
 
 const CUTTABLE = new Set(['birols', 'uploads', 'hooks', 'youtube']);
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|mkv)(\?|$)/i;
@@ -43,7 +45,12 @@ export const mmss = (s) => {
   const t = Math.max(0, Math.round(+s || 0));
   return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
 };
-const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+// A count with its noun, in the app's language.
+const COUNT = {
+  piece: (n) => T.tn(n, '{n} piece', '{n} pieces'), fragment: (n) => T.tn(n, '{n} fragment', '{n} fragments'),
+  clip: (n) => T.tn(n, '{n} clip', '{n} clips'), scene: (n) => T.tn(n, '{n} scene', '{n} scenes'),
+};
+const plural = (n, w) => (COUNT[w] ? COUNT[w](n) : n + ' ' + w + (n === 1 ? '' : 's'));
 const clean = (p) => String(p || '').split('?')[0];
 
 // Which pieces show their whole video now - by viewer item. Forgotten when a viewer opens (`reset`).
@@ -78,20 +85,20 @@ export function originalRow(it, repaint) {
 /** The tick itself: "whole video" and what the piece is of it. */
 export function originalTick(o, on, onToggle) {
   const lab = el('label', 'cut-orig');
-  lab.title = 'Show the whole video this piece was cut from - and cut another piece from it (a new clip again)';
+  lab.title = T.t('Show the whole video this piece was cut from - and cut another piece from it (a new clip again)');
   const box = el('input');
   box.type = 'checkbox'; box.classList.add('u-check');
   box.checked = !!on;
   box.addEventListener('change', () => onToggle(box.checked));
   const txt = el('span', 'cut-orig-txt');
-  txt.appendChild(el('b', null, 'show the whole video'));
+  txt.appendChild(el('b', null, T.t('show the whole video')));
   const nm = String(o.name || '');
   const parts = Array.isArray(o.parts) && o.parts.length ? o.parts : null;
   txt.appendChild(el('small', null, (parts
-    ? 'this clip is ' + plural(parts.length, 'piece') + (o.dur ? ' of ' + mmss(o.dur) : '') + ', joined'
-    : 'this piece is ' + mmss(o.in) + '–' + mmss(o.out) + (o.dur ? ' of ' + mmss(o.dur) : ''))
+    ? (o.dur ? T.t('this clip is {what} of {len}, joined', { what: plural(parts.length, 'piece'), len: mmss(o.dur) }) : T.t('this clip is {what}, joined', { what: plural(parts.length, 'piece') }))
+    : (o.dur ? T.t('this piece is {from}–{to} of {len}', { from: mmss(o.in), to: mmss(o.out), len: mmss(o.dur) }) : T.t('this piece is {from}–{to}', { from: mmss(o.in), to: mmss(o.out) })))
     + (nm ? ' · ' + (nm.length > 48 ? nm.slice(0, 46) + '…' : nm) : '')));
-  if (nm) lab.title += ' - of: ' + nm;
+  if (nm) lab.title += ' - ' + T.t('of: {name}', { name: nm });
   lab.append(box, txt);
   return lab;
 }
@@ -163,19 +170,19 @@ export function cutBox(video, piece, o) {
   });
   _bars.add(bar);
   _wireKeys();
-  wrap.append(el('div', 'cut-how', 'Drag across the wave to mark a fragment - again for one more; drag an edge to change it.'), bar.el);
+  wrap.append(el('div', 'cut-how', T.t('Drag across the wave to mark a fragment - again for one more; drag an edge to change it.')), bar.el);
 
   const row = el('div', 'cut-row');
   const play = el('button', 'cut-play u-btn is-s', '▶');
   play.type = 'button';
-  play.title = 'Play - only the fragments, one after another (as the join will be); with none, the whole video';
-  const scenes = el('button', 'cut-scenes u-btn is-s', 'Scenes');
+  play.title = T.t('Play - only the fragments, one after another (as the join will be); with none, the whole video');
+  const scenes = el('button', 'cut-scenes u-btn is-s', T.t('Scenes'));
   scenes.type = 'button';
-  const SCENES_TIP = 'Find where the shots change and lay every scene as a fragment';
-  hint(scenes, () => (scenes.classList.contains('is-off') ? 'Delete your fragments to lay the scenes' : ''));
+  const SCENES_TIP = T.t('Find where the shots change and lay every scene as a fragment');
+  hint(scenes, () => (scenes.classList.contains('is-off') ? T.t('Delete your fragments to lay the scenes') : ''));
   const info = el('span', 'cut-info');
   // "Delete original": only for the video's own record of B-rolls, Uploads or Hooks, shown as itself.
-  const drop = piece.here && !piece.whole && piece.libId ? el('button', 'cut-drop u-btn is-s is-quiet', 'Delete original') : null;
+  const drop = piece.here && !piece.whole && piece.libId ? el('button', 'cut-drop u-btn is-s is-quiet', T.t('Delete original')) : null;
   if (drop) {
     drop.type = 'button';
     drop.setAttribute('aria-pressed', 'false');
@@ -186,7 +193,7 @@ export function cutBox(video, piece, o) {
     });
   }
   const dropOn = () => !!(drop && drop.getAttribute('aria-pressed') === 'true');
-  const save = el('button', 'cut-save u-btn is-s is-main', 'Save…');
+  const save = el('button', 'cut-save u-btn is-s is-main', T.t('Save…'));
   save.type = 'button';
   row.append(play, scenes, info);
   if (drop) row.appendChild(drop);
@@ -198,16 +205,17 @@ export function cutBox(video, piece, o) {
     const n = parts.length;
     if (!_busy) info.textContent = n ? plural(n, 'fragment') + ' · ' + mmss(joinedLen(parts)) : '';
     save.disabled = !n || !!_busy;
-    save.title = !n ? 'Draw a fragment over the bar first'
-      : 'Save the fragments as one new clip' + (dropOn() ? ' - then this video is deleted, unless a project uses it' : '; this video stays');
+    save.title = !n ? T.t('Draw a fragment over the bar first')
+      : dropOn() ? T.t('Save the fragments as one new clip - then this video is deleted, unless a project uses it')
+        : T.t('Save the fragments as one new clip; this video stays');
     // Your own fragments on the bar: no scenes laid over them until they go.
     scenes.classList.toggle('is-off', n > 0);
     scenes.setAttribute('aria-disabled', n > 0 ? 'true' : 'false');
     scenes.title = n > 0 ? '' : SCENES_TIP;
     if (drop) {
       drop.disabled = !!_busy;
-      drop.title = dropOn() ? 'On: after Save this video is deleted from the library - unless a project uses it. Press to keep it'
-        : 'Off: this video stays after Save. Press to delete it once the pieces are saved';
+      drop.title = dropOn() ? T.t('On: after Save this video is deleted from the library - unless a project uses it. Press to keep it')
+        : T.t('Off: this video stays after Save. Press to delete it once the pieces are saved');
     }
   }
   const playPaint = () => { play.textContent = video.paused ? '▶' : '❚❚'; };
@@ -220,7 +228,7 @@ export function cutBox(video, piece, o) {
     info.replaceChildren(el('span', null, text));
     info.classList.remove('is-hint');
     if (stop) {
-      const x = el('button', 'cut-stop u-btn is-s is-quiet', 'stop');
+      const x = el('button', 'cut-stop u-btn is-s is-quiet', T.t('stop'));
       x.type = 'button';
       x.addEventListener('click', stop);
       info.appendChild(x);
@@ -234,7 +242,7 @@ export function cutBox(video, piece, o) {
       body: JSON.stringify({ src: piece.src, parts, join, to: { kind: to.kind, cat: to.cat || '', label: to.label || '' },
         drop: dropIt ? { kind: piece.kind, id: piece.libId } : null }),
     }).then((x) => x.json()).catch((e) => ({ success: false, error: e.message }));
-    if (!res || !res.success) { say('Not saved: ' + ((res && res.error) || 'no answer'), true); return null; }
+    if (!res || !res.success) { say(T.t('Not saved: {why}', { why: (res && res.error) || T.t('no answer') }), true); return null; }
     const job = res.job;
     const stop = () => fetch('/api/library/cuts/' + job, { method: 'DELETE' }).catch(() => {});
     _busy = { kind: 'save', stop };
@@ -243,25 +251,25 @@ export function cutBox(video, piece, o) {
     for (;;) {
       st = await fetch('/api/library/cuts/' + job).then((x) => x.json()).catch(() => null);
       if (!st || !st.success) break;
-      if (wrap.isConnected) busyRow((join ? 'Joining ' + plural(parts.length, 'fragment') + '…' : 'Saving ' + Math.min(st.done + 1, st.total || parts.length) + ' / ' + (st.total || parts.length) + '…'), stop);
+      if (wrap.isConnected) busyRow((join ? T.t('Joining {what}…', { what: plural(parts.length, 'fragment') }) : T.t('Saving {k} / {n}…', { k: Math.min(st.done + 1, st.total || parts.length), n: st.total || parts.length })), stop);
       if (st.state !== 'working') break;
       await new Promise((r) => setTimeout(r, 700));
     }
     _busy = null;
     if (wrap.isConnected) paint();
-    if (!st || !st.success) { say('Not saved: the work was lost', true); return null; }
+    if (!st || !st.success) { say(T.t('Not saved: the work was lost'), true); return null; }
     const pieces = st.pieces || [];
     const where = whereText(to);
-    if (st.state === 'failed') say('Not saved: ' + (st.error || 'the cut failed') + (pieces.length ? ' (' + plural(pieces.length, 'clip') + ' saved first)' : ''), true);
-    else if (st.state === 'stopped') say('Stopped - ' + plural(pieces.length, 'clip') + ' saved in ' + where + '.');
-    else say('Saved ' + (join ? 'as one clip' : plural(pieces.length, 'clip')) + ' in ' + where + '.'
-      + (st.dropped ? ' The original is deleted.' : st.kept ? ' ' + st.kept : ''));
+    if (st.state === 'failed') say(T.t('Not saved: {why}', { why: st.error || T.t('the cut failed') }) + (pieces.length ? ' ' + T.t('({what} saved first)', { what: plural(pieces.length, 'clip') }) : ''), true);
+    else if (st.state === 'stopped') say(T.t('Stopped - {what} saved in {place}.', { what: plural(pieces.length, 'clip'), place: where }));
+    else say((join ? T.t('Saved as one clip in {place}.', { place: where }) : T.t('Saved {what} in {place}.', { what: plural(pieces.length, 'clip'), place: where }))
+      + (st.dropped ? ' ' + T.t('The original is deleted.') : st.kept ? ' ' + st.kept : ''));
     if (pieces.length && typeof opt.onSaved === 'function') { try { opt.onSaved({ where, pieces, to, dropped: !!st.dropped }); } catch (e) { /* the page's */ } }
     // The video is gone: its viewer with it.
     if (st.dropped) {
       _states.delete(key);
       import('./library/viewer.js').then((V) => V.closeViewer()).catch(() => {});
-      showToast({ mark: '✂', title: 'Saved · the original is deleted', where });
+      showToast({ mark: '✂', title: T.t('Saved · the original is deleted'), where });
     } else if (st.kept) showToast({ mark: '✂', title: st.kept, where, ms: 9000 });
     return { state: st.state, pieces };
   }
@@ -288,19 +296,19 @@ export function cutBox(video, piece, o) {
     for (;;) {
       d = await fetch('/api/library/scenes?src=' + encodeURIComponent(src)).then((x) => x.json()).catch(() => null);
       if (cancelled || !d || !d.success || d.state !== 'working' || !wrap.isConnected) break;
-      busyRow('Finding the scenes… ' + (d.pct || 0) + ' %', stop);
+      busyRow(T.t('Finding the scenes… {pct} %', { pct: d.pct || 0 }), stop);
       await new Promise((r) => setTimeout(r, 700));
     }
     _busy = null;
     scenes.disabled = false;
     if (!wrap.isConnected) return;
-    if (cancelled) { paint(); say('The scenes were not looked for.'); return; }
-    if (!d || !d.success || d.state !== 'done') { paint(); say('The scenes were not found: ' + ((d && d.error) || 'no answer'), true); return; }
-    const list = (d.scenes || []).map((s, i) => ({ in: s.in, out: s.out, label: 'scene ' + (i + 1) }));
+    if (cancelled) { paint(); say(T.t('The scenes were not looked for.')); return; }
+    if (!d || !d.success || d.state !== 'done') { paint(); say(T.t('The scenes were not found: {why}', { why: (d && d.error) || T.t('no answer') }), true); return; }
+    const list = (d.scenes || []).map((s, i) => ({ in: s.in, out: s.out, label: T.t('scene {n}', { n: i + 1 }) }));
     bar.setParts(list);
     bar.setMarks(list.slice(1).map((s) => s.in));
     paint();
-    say(plural(list.length, 'scene') + ' - each is a fragment now. Ctrl + a press picks several; Ctrl+Z brings back what was drawn.');
+    say(T.t('{what} - each is a fragment now. Ctrl + a press picks several; Ctrl+Z brings back what was drawn.', { what: plural(list.length, 'scene') }));
   });
 
   // ── the right button on a fragment ──
@@ -310,24 +318,24 @@ export function cutBox(video, piece, o) {
     const n = list.length;
     const rows = [];
     if (n === 1) {
-      rows.push(['Save this fragment…', mmss(list[0].in) + '–' + mmss(list[0].out) + ' as a new clip', () => _places(save, piece, list, false, (to) => run(list, false, to))]);
-      rows.push(['Save its audio', 'its sound · into AUDIO', () => saveAudio({ src: piece.src, name: piece.name, in: list[0].in, out: list[0].out, say })]);
+      rows.push([T.t('Save this fragment…'), T.t('{from}–{to} as a new clip', { from: mmss(list[0].in), to: mmss(list[0].out) }), () => _places(save, piece, list, false, (to) => run(list, false, to))]);
+      rows.push([T.t('Save its audio'), T.t('its sound · into AUDIO'), () => saveAudio({ src: piece.src, name: piece.name, in: list[0].in, out: list[0].out, say })]);
     } else {
-      rows.push(['Save ' + n + ' fragments · joined…', 'one new clip of them, in the order of time', () => _places(save, piece, list, true, (to) => run(list, true, to))]);
-      rows.push(['Save ' + n + ' fragments · each…', n + ' new clips, each its own', () => _places(save, piece, list, false, (to) => run(list, false, to))]);
+      rows.push([T.t('Save {n} fragments · joined…', { n }), T.t('one new clip of them, in the order of time'), () => _places(save, piece, list, true, (to) => run(list, true, to))]);
+      rows.push([T.t('Save {n} fragments · each…', { n }), T.tn(n, '{n} new clip, each its own', '{n} new clips, each its own'), () => _places(save, piece, list, false, (to) => run(list, false, to))]);
     }
     if (opt.lay && typeof opt.lay.pieces === 'function') {
-      rows.push(['Add to timeline · separately', (n === 1 ? 'a clip' : n + ' clips') + ' of this video from the playhead - no new file', () => _laySeparately(list)]);
-      rows.push(['Add to timeline · as one file', 'joined into one clip beside this video, then laid', () => _layJoined(list)]);
+      rows.push([T.t('Add to timeline · separately'), T.tn(n, 'a clip of this video from the playhead - no new file', '{n} clips of this video from the playhead - no new file'), () => _laySeparately(list)]);
+      rows.push([T.t('Add to timeline · as one file'), T.t('joined into one clip beside this video, then laid'), () => _layJoined(list)]);
     }
-    rows.push([n === 1 ? 'Delete' : 'Delete ' + n, 'take ' + (n === 1 ? 'it' : 'them') + ' off the bar (Ctrl+Z brings back)', () => bar.del(), true]);
+    rows.push([n === 1 ? T.t('Delete') : T.t('Delete {n}', { n }), n === 1 ? T.t('take it off the bar (Ctrl+Z brings back)') : T.t('take them off the bar (Ctrl+Z brings back)'), () => bar.del(), true]);
     menuAt(e.clientX, e.clientY, rows);
   }
 
   async function _laySeparately(list) {
     const tr = await tracksOf(piece.src);
     const file = { src: clean(piece.src), name: piece.name || '', thumb: '', dur: bar.dur(), kind: piece.kind || '', libId: piece.libId || '', sound: tr.length > 0 };
-    try { opt.lay.pieces(list, file); } catch (e) { showError('Not laid', { detail: e.message }); }
+    try { opt.lay.pieces(list, file); } catch (e) { showError(T.t('Not laid'), { detail: e.message }); }
   }
   async function _layJoined(list) {
     const to = piece.here && ['birols', 'uploads', 'hooks'].includes(piece.here.kind) ? piece.here : { kind: 'uploads', cat: '', label: '' };
@@ -338,7 +346,7 @@ export function cutBox(video, piece, o) {
     try {
       opt.lay.pieces([{ in: 0, out: +p.dur || joinedLen(list) }],
         { src: p.src, name: p.name, thumb: p.thumb || '', dur: +p.dur || 0, kind: to.kind, libId: '', sound: tr.length > 0 });
-    } catch (e) { showError('Not laid', { detail: e.message }); }
+    } catch (e) { showError(T.t('Not laid'), { detail: e.message }); }
   }
 
   // The video's own right button: Save audio, Save video as…
@@ -360,14 +368,14 @@ async function _places(anchor, piece, parts, join, go) {
   if (!anchor.isConnected) return;
   const n = parts.length;
   const title = n === 1
-    ? 'Save the piece ' + mmss(parts[0].in) + '–' + mmss(parts[0].out) + ' (' + (parts[0].out - parts[0].in).toFixed(1) + ' s) as a new clip in'
-    : join ? 'Save the ' + n + ' fragments joined (' + mmss(joinedLen(parts)) + ') as a new clip in'
-      : 'Save the ' + n + ' fragments as ' + n + ' new clips in';
+    ? T.t('Save the piece {from}–{to} ({len} s) as a new clip in', { from: mmss(parts[0].in), to: mmss(parts[0].out), len: (parts[0].out - parts[0].in).toFixed(1) })
+    : join ? T.t('Save the {n} fragments joined ({len}) as a new clip in', { n, len: mmss(joinedLen(parts)) })
+      : T.t('Save the {n} fragments as {n} new clips in', { n });
   openPlaces(anchor, {
     title, tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
-    places: { images: false, refHome: 'its site\'s folder (no folder of yours)', newCats: ['references', 'uploads', 'birols'] },
+    places: { images: false, refHome: T.t('its site\'s folder (no folder of yours)'), newCats: ['references', 'uploads', 'birols'] },
     // A folder is chosen first; "Save here" saves.
-    confirm: 'Save here',
+    confirm: T.t('Save here'),
     onPick: go,
   });
 }
@@ -390,17 +398,17 @@ export async function saveAudio(o) {
   const body = { src: clean(o.src), name: o.name || '' };
   if (o.track != null) body.track = o.track;
   if (o.in != null && o.out != null) { body.in = o.in; body.out = o.out; }
-  say('Taking the sound…');
+  say(T.t('Taking the sound…'));
   const d = await fetch('/api/audio/from-video', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }).then((r) => r.json()).catch((e) => ({ success: false, error: e.message }));
   if (!d || !d.success) {
     say('');
-    showError('The sound was not saved', { detail: (d && d.error) || 'no answer' });
+    showError(T.t('The sound was not saved'), { detail: (d && d.error) || T.t('no answer') });
     return null;
   }
-  say('Saved the sound in AUDIO.');
-  showToast({ mark: '♪', title: 'Saved · ' + ((d.item && d.item.name) || 'the sound'), where: 'AUDIO' });
+  say(T.t('Saved the sound in AUDIO.'));
+  showToast({ mark: '♪', title: T.t('Saved · {name}', { name: (d.item && d.item.name) || T.t('the sound') }), where: T.t('AUDIO') });
   return d.item;
 }
 
@@ -420,10 +428,10 @@ export async function videoMenu(e, o) {
   const x = e.clientX, y = e.clientY;
   const tr = await tracksOf(o.src);
   const rows = [];
-  if (!tr.length) rows.push(['Save audio', 'this video has no sound', null]);
-  else tr.forEach((t) => rows.push(['Save audio' + (tr.length > 1 ? ' · ' + t.label : ''), 'its sound · into AUDIO',
+  if (!tr.length) rows.push([T.t('Save audio'), T.t('this video has no sound'), null]);
+  else tr.forEach((t) => rows.push([T.t('Save audio') + (tr.length > 1 ? ' · ' + t.label : ''), T.t('its sound · into AUDIO'),
     () => saveAudio({ src: o.src, name: o.name, track: t.k, say: o.say })]));
-  rows.push(['Save video as…', 'a copy of the file wherever you choose', () => _download(o.src, o.name)]);
+  rows.push([T.t('Save video as…'), T.t('a copy of the file wherever you choose'), () => _download(o.src, o.name)]);
   menuAt(x, y, rows);
 }
 

@@ -37,6 +37,8 @@ import { delX } from './del-x.js';
 import { showError } from './notice.js';
 import { emptyEl, loadingEl, failedEl } from './ui-state.js';
 import { allow } from './key-gate.js';
+// The app's words as T.t: this module's own `t`s are drag types and targets.
+import * as T from './i18n/t.js';
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -104,7 +106,7 @@ export function openFrame(o) {
   const crumbs = el('div', 'gw-crumbs u-crumbs');
   const x = el('button', 'gw-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = T.t('Close (Esc)');
   head.append(crumbs, x);
   const body = el('div', 'gw-body');
   box.append(head, body);
@@ -195,7 +197,7 @@ function _crumbs(host, list) {
     if (i) host.appendChild(el('span', 'gw-sep', '/'));
     const last = i === items.length - 1;
     const b = el(last || !c.on ? 'span' : 'button', 'gw-crumb' + (last ? ' is-here' : ''), c.label);
-    if (!last && c.on) { b.type = 'button'; b.title = 'Back to ' + c.label; b.addEventListener('click', c.on); }
+    if (!last && c.on) { b.type = 'button'; b.title = T.t('Back to {place}', { place: c.label }); b.addEventListener('click', c.on); }
     host.appendChild(b);
     if (c.act) {
       // a generator's place in the head: the button with the gold line ("+ new look", "+ new environment")
@@ -253,7 +255,7 @@ function _wireGeom(box, head, G, place, setLive) {
   const W = () => window.innerWidth, H = () => window.innerHeight;
   if (G.move) {
     box.classList.add('is-movable');
-    head.title = 'Drag to move · double-click: back to its own size and place';
+    head.title = T.t('Drag to move · double-click: back to its own size and place');
     head.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || (e.target.closest && e.target.closest('button, a, input, select, textarea, .qm'))) return;
       drag(e, (r0, dx, dy) => ({ w: r0.w, h: r0.h,
@@ -291,18 +293,23 @@ function _wireGeom(box, head, G, place, setLive) {
 // ── The bench ───────────────────────────────────────────────────────────────
 const KINDS = {
   environment: {
-    what: 'environment', noun: 'environment', title: 'new environment', estimateMs: 120000,
+    what: 'environment', noun: 'environment', title: T.t('new environment'), estimateMs: 120000,
     list: () => API.environments(), meta: () => API.envMeta(), del: 'environments',
-    empty: 'a photo from this computer, or pick an environment on the left',
-    say: 'What place should it be? With a photo, say what to change - "evening, the lamps on".',
-    none: 'No environments yet. The first one is made on the right.',
+    empty: T.t('a photo from this computer, or pick an environment on the left'),
+    say: T.t('What place should it be? With a photo, say what to change - "evening, the lamps on".'),
+    none: T.t('No environments yet. The first one is made on the right.'),
+    // its words with its noun in them, whole - a language puts the noun where it belongs
+    plural: T.t('environments'), reading: T.t('reading the environments…'), unread: T.t('Could not read the environments: {why}'),
+    failed: T.t('The environment failed: {why}'), making: T.t('Making the environment'), del1: T.t('Delete this environment from the library'),
   },
   lookbook: {
-    what: 'lookbook', noun: 'lookbook', title: 'new lookbook', estimateMs: 45000,
+    what: 'lookbook', noun: 'lookbook', title: T.t('new lookbook'), estimateMs: 45000,
     list: () => API.lookbooks(), meta: () => API.lookbookMeta(), del: 'lookbooks',
-    empty: 'a photo from this computer, or pick a lookbook on the left',
-    say: 'What should it be? With a photo, say what to change - "shoes to white Nike trainers".',
-    none: 'No lookbooks yet. The first one is made on the right.',
+    empty: T.t('a photo from this computer, or pick a lookbook on the left'),
+    say: T.t('What should it be? With a photo, say what to change - "shoes to white Nike trainers".'),
+    none: T.t('No lookbooks yet. The first one is made on the right.'),
+    plural: T.t('lookbooks'), reading: T.t('reading the lookbooks…'), unread: T.t('Could not read the lookbooks: {why}'),
+    failed: T.t('The lookbook failed: {why}'), making: T.t('Making the lookbook'), del1: T.t('Delete this lookbook from the library'),
   },
 };
 const _blank = () => ({ list: null, loading: false, failed: false, ref: null, base: '', note: '', options: null, optionsWhy: '', picked: new Set(),
@@ -352,7 +359,7 @@ function _read(kind) {
     .then((files) => { s.list = files || []; })
     .catch((e) => {
       if (s.list === null) s.failed = true;
-      showError('Could not read the ' + KINDS[kind].noun + 's: ' + ((e && e.message) || 'the app did not answer'));
+      showError(T.t(KINDS[kind].unread, { why: (e && e.message) || T.t('the app did not answer') }));
     })
     .finally(() => { s.loading = false; _render(kind); });
 }
@@ -384,25 +391,27 @@ function _mode(kind) {
 function _why(kind) {
   const s = S[kind];
   const note = s.note.trim();
-  if (kind === 'environment' && s.options && s.options.length && !s.picked.size) return 'pick a place above';
-  if (!s.ref && !s.base && !note) return 'a photo or a sentence';
-  if (kind === 'environment' && s.base && !s.ref && !note) return 'say what to change';
+  if (kind === 'environment' && s.options && s.options.length && !s.picked.size) return T.t('pick a place above');
+  if (!s.ref && !s.base && !note) return T.t('a photo or a sentence');
+  if (kind === 'environment' && s.base && !s.ref && !note) return T.t('say what to change');
   if (!s.ref && !s.base) {
-    if (note.length < MIN_WORDS_ALONE) return (MIN_WORDS_ALONE - note.length) + ' more characters';
-    if (nonsense(note)) return 'that is not a description';
+    if (note.length < MIN_WORDS_ALONE) return T.t('{n} more characters', { n: MIN_WORDS_ALONE - note.length });
+    if (nonsense(note)) return T.t('that is not a description');
   } else if (note && nonsense(note)) {
-    return 'that is not a description';
+    return T.t('that is not a description');
   }
   return '';
 }
 
 const MODE_WORDS = {
-  environment: { picked: 'make the place you picked', photoWords: 'read the photo and apply the words', photo: 'take the place out of the photo', edit: 'change this environment', draw: 'draw it from the words' },
-  lookbook: { edit: 'read the photo and apply the words', extract: 'take the outfit out of the photo', draw: 'draw it from the words' },
+  environment: { picked: T.t('make the place you picked'), photoWords: T.t('read the photo and apply the words'), photo: T.t('take the place out of the photo'),
+    edit: T.t('change this environment'), draw: T.t('draw it from the words') },
+  lookbook: { edit: T.t('read the photo and apply the words'), extract: T.t('take the outfit out of the photo'), draw: T.t('draw it from the words') },
 };
 const LABELS = {
-  environment: { picked: 'Making the place you picked', edit: 'Changing the environment', draw: 'Drawing the place', photo: 'Reading the photo', photoWords: 'Reading the photo' },
-  lookbook: { extract: 'Taking the outfit out of the photo', edit: 'Reading the photo and your words', draw: 'Drawing the outfit' },
+  environment: { picked: T.t('Making the place you picked'), edit: T.t('Changing the environment'), draw: T.t('Drawing the place'),
+    photo: T.t('Reading the photo'), photoWords: T.t('Reading the photo') },
+  lookbook: { extract: T.t('Taking the outfit out of the photo'), edit: T.t('Reading the photo and your words'), draw: T.t('Drawing the outfit') },
 };
 
 function _render(kind) {
@@ -417,8 +426,8 @@ function _render(kind) {
   // LEFT: the shelf a base is drawn from. What is made joins it, so the pile grows while you work.
   const left = el('div', 'gw-half is-shelf');
   // the shared parts - reading, empty, did not load (js/ui-state.js); `gw-note` is their place here
-  if (s.failed) left.appendChild(failedEl(K.noun + 's', () => { s.failed = false; _render(kind); _read(kind); }, { cls: 'gw-note' }));
-  else if (s.list === null) left.appendChild(loadingEl('reading the ' + K.noun + 's…', { cls: 'gw-note' }));
+  if (s.failed) left.appendChild(failedEl(K.plural, () => { s.failed = false; _render(kind); _read(kind); }, { cls: 'gw-note' }));
+  else if (s.list === null) left.appendChild(loadingEl(K.reading, { cls: 'gw-note' }));
   else if (!s.list.length) left.appendChild(emptyEl(K.none, { icon: 'image', cls: 'gw-note' }));
   else {
     const grid = el('div', 'gw-grid is-' + kind);
@@ -442,26 +451,26 @@ function _render(kind) {
   const foot = el('div', 'gw-foot');
   const said = s.said ? el('div', 'gw-said u-status is-bad', s.said) : null;
   if (said) foot.appendChild(said);
-  const go = el('button', 'gw-create u-btn is-main', 'Create');
+  const go = el('button', 'gw-create u-btn is-main', T.t('Create'));
   go.type = 'button';
   const hint = el('span', 'gw-hint u-status');
   const sync = () => {
     const why = _why(kind);
     go.disabled = !!why || s.making;
-    go.textContent = s.making ? 'Making…' : 'Create';
-    go.title = why || 'Make it - this spends credits';
+    go.textContent = s.making ? T.t('Making…') : T.t('Create');
+    go.title = why || T.t('Make it - this spends credits');
     hint.textContent = s.making ? '' : (why || MODE_WORDS[kind][_mode(kind)] || '');
     hint.classList.toggle('is-why', !!why && !s.making);
   };
   if (kind === 'environment' && s.options && s.options.length) {
     const ask = el('div', 'gw-choice');
-    ask.appendChild(el('div', 'gw-choice-why', s.optionsWhy || 'There is no place in this picture. What should it become?'));
+    ask.appendChild(el('div', 'gw-choice-why', s.optionsWhy || T.t('There is no place in this picture. What should it become?')));
     const chips = el('div', 'gw-chips');
     for (const opt of s.options) {
       // the shared chip (.u-chip): several may be lit
       const c = el('button', 'gw-chip u-chip' + (s.picked.has(opt) ? ' is-on' : ''), opt);
       c.type = 'button';
-      c.title = 'Pick any number of them - they are made into one place';
+      c.title = T.t('Pick any number of them - they are made into one place');
       c.addEventListener('click', () => {
         if (s.picked.has(opt)) s.picked.delete(opt); else s.picked.add(opt);
         c.classList.toggle('is-on', s.picked.has(opt));
@@ -499,7 +508,7 @@ function _field(kind) {
   const s = S[kind];
   const src = s.ref ? s.ref.dataUrl : (s.base ? derived(s.base, 'card') : '');
   const box = el('div', 'gw-drop' + (src ? ' is-full' : ''));
-  box.title = src ? 'Press to look at it large - let another photo go here to replace it' : 'Let a photo go here, or press to choose one from this computer';
+  box.title = src ? T.t('Press to look at it large - let another photo go here to replace it') : T.t('Let a photo go here, or press to choose one from this computer');
   const input = el('input');
   input.type = 'file';
   input.accept = PICTURE_ACCEPT;
@@ -507,9 +516,9 @@ function _field(kind) {
   const take = async (file) => {
     if (!file) return;
     // a refused or unread file is said in the corner (js/notice.js)
-    if (!isPictureFile(file)) { showError('That is not a picture'); return; }
+    if (!isPictureFile(file)) { showError(T.t('That is not a picture')); return; }
     try { s.ref = { name: file.name || 'photo', dataUrl: await pictureDataUrl(file), token: '' }; s.base = ''; _forget(s); }
-    catch (e) { showError((e && e.message) || 'The file could not be read'); return; }
+    catch (e) { showError((e && e.message) || T.t('The file could not be read')); return; }
     _render(kind);
   };
   input.addEventListener('change', () => take(input.files && input.files[0]));
@@ -520,7 +529,7 @@ function _field(kind) {
     box.appendChild(img);
     const clear = el('button', 'gw-dropx u-onpic is-del u-x', '');
     clear.type = 'button';
-    clear.title = 'Take it off';
+    clear.title = T.t('Take it off');
     clear.addEventListener('click', (e) => { e.stopPropagation(); s.ref = null; s.base = ''; _forget(s); _render(kind); });
     box.appendChild(clear);
   } else box.appendChild(el('span', null, KINDS[kind].empty));
@@ -554,14 +563,14 @@ function _shelfTile(kind, path, on, pick) {
   img.src = derived(path, 'card');
   tile.appendChild(img);
   tile.appendChild(delX({
-    host: tile, title: 'Delete this ' + KINDS[kind].noun + ' from the library',
+    host: tile, title: KINDS[kind].del1,
     run: () => _delete(kind, path),
     done: () => _deleted(kind, path),
   }));
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    tileMenu(e, [{ label: 'Open', sub: 'look at it, full size', on: () => _open(kind, path) }], KINDS[kind].noun + ' menu');
+    tileMenu(e, [{ label: T.t('Open'), sub: T.t('look at it, full size'), on: () => _open(kind, path) }], KINDS[kind].noun + ' menu');
   });
   return tile;
 }
@@ -569,7 +578,7 @@ function _shelfTile(kind, path, on, pick) {
 async function _delete(kind, path) {
   const d = await fetch('/api/library/item/' + KINDS[kind].del + '/' + encodeURIComponent(_nameOf(path)), { method: 'DELETE' })
     .then(r => r.json()).catch(() => null);
-  return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+  return d && d.success ? '' : ((d && d.error) || T.t('the app did not answer'));
 }
 
 async function _deleted(kind, path) {
@@ -584,7 +593,7 @@ async function _open(kind, path) {
   if (!path) return;
   let meta = {};
   try { meta = ((await KINDS[kind].meta()) || {})[path] || {}; } catch (e) { /* nothing known */ }
-  showPicture({ src: path, name: _nameOf(path), rows: [['description', meta.description], ['suits', meta.gender]], from: meta.from });
+  showPicture({ src: path, name: _nameOf(path), rows: [[T.t('description'), meta.description], [T.t('suits'), meta.gender]], from: meta.from });
 }
 
 // ── Making it ───────────────────────────────────────────────────────────────
@@ -594,7 +603,7 @@ async function _make(kind, o) {
   if (!mode || _why(kind) || s.making) return;
   s.making = true;
   s.said = '';
-  s.status = 'asking…';
+  s.status = T.t('asking…');
   _render(kind);
   const where = typeof o.where === 'function' ? o.where() : (o.where || null);
   const body = { prompt: s.note.trim(), refName: s.ref ? s.ref.name : '', title: kind === 'environment' ? 'Environment' : 'Lookbook', where };
@@ -627,7 +636,7 @@ async function _make(kind, o) {
       _render(kind);
       return;
     }
-    _begin(kind, o, LABELS[kind][mode] || 'Making it', Date.now(), where);
+    _begin(kind, o, LABELS[kind][mode] || T.t('Making it'), Date.now(), where);
     await _follow(kind, r.alertId);
   } catch (e) {
     const msg = (e && e.message) || 'unknown';
@@ -636,7 +645,7 @@ async function _make(kind, o) {
     // A refusal of the agent is an answer about what was asked for, and it reads better as that than as an error - it stays
     // on the bench's line; a failure of the press is an error, in the corner.
     if (e && e.refused) s.said = msg;
-    else showError('The ' + KINDS[kind].noun + ' failed: ' + msg);
+    else showError(T.t(KINDS[kind].failed, { why: msg }));
     _end(kind, msg);
     _render(kind);
   }
@@ -648,7 +657,7 @@ function _begin(kind, o, label, startedAt, where) {
   s.making = true;
   s.job = { label, estimateMs: KINDS[kind].estimateMs, startedAt: startedAt || Date.now(), spot: (where && where.spot) || null,
     onMade: o.onMade, onEnd: o.onEnd };
-  s.status = 'in Alerts · ' + label + '…';
+  s.status = T.t('in Alerts · {what}…', { what: label });
   if (typeof o.onStart === 'function') { try { o.onStart(running(kind)); } catch (e) { /* the caller's */ } }
   _render(kind);
 }
@@ -671,7 +680,7 @@ async function _follow(kind, id) {
     s.ref = null;
     s.note = '';
     _forget(s);
-    s.status = 'in Alerts · done - it is on the left';
+    s.status = T.t('in Alerts · done - it is on the left');
     s.making = false;
     _end(kind, '');
     if (made && j && typeof j.onMade === 'function') { try { await j.onMade(made); } catch (e) { /* the caller's */ } }
@@ -679,7 +688,7 @@ async function _follow(kind, id) {
     const msg = (e && e.message) || 'unknown';
     s.making = false;
     s.status = '';
-    s.said = 'The ' + KINDS[kind].noun + ' failed: ' + msg;
+    s.said = T.t(KINDS[kind].failed, { why: msg });
     _end(kind, msg);
   }
   _render(kind);
@@ -692,7 +701,7 @@ export function adopt(kind, row, o) {
   if (!s || s.making || !row) return;
   const where = typeof o.where === 'function' ? o.where() : (o.where || null);
   s.looked = _spotKey(where && where.spot);
-  _begin(kind, o, 'Making the ' + KINDS[kind].noun, Date.parse(row.startedAt) || 0, where);
+  _begin(kind, o, KINDS[kind].making, Date.parse(row.startedAt) || 0, where);
   _follow(kind, row.id);
 }
 
@@ -709,7 +718,7 @@ function _pickUp(kind, o) {
     if (s.making) return;
     const mine = (d.items || []).find(r => r.state === 'running' && r.what === KINDS[kind].what && r.where && _spotKey(r.where.spot) === key);
     if (!mine) return;
-    _begin(kind, o, 'Making the ' + KINDS[kind].noun, Date.parse(mine.startedAt) || 0, where);
+    _begin(kind, o, KINDS[kind].making, Date.parse(mine.startedAt) || 0, where);
     _follow(kind, mine.id);
   }).catch(() => { /* without the list the bench simply shows nothing running */ });
 }
