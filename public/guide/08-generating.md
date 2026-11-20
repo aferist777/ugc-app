@@ -10,7 +10,7 @@ Merge, into **THIS PROJECT** too.
 - The tree: **generate** beside IMAGES, VIDEO and AUDIO; **create** beside Environments, Lookbooks and Props.
 - **Home → Generate**: **Pictures**, **Video**, **Music & sounds**; **Home → Library**: **Character**, **Prop**, **Look**,
   **Environment**.
-- The right button on a lane, on a tile of the Library (**Animate**, **Change**, **Continue**, **As a reference**) or on
+- The right button on a lane, on a tile of the Library (**Animate…**, **Change…**, **Continue…**, **As a reference…**) or on
   a picture or a clip of the timeline - the chat opens with it attached.
 
 ## The pictures chat
@@ -47,7 +47,7 @@ The same three columns. The models - each says what it is under the list:
   length and the shape: "as the clip".
 - **Writer** - on, it writes the prompt from your message and attachments; Seedance's clips are watched second by second
   first. Its prompt stands in the message as a field you can change, **Write it again** writes another, **Make the video**
-  pays for the clip. Off, your words go as typed (in English).
+  pays for the clip. Off, your words go as typed (translated into English when they are not).
 - **Storyboard** (Seedance) - first a sheet of numbered panels drawn from your words, then the video made with it.
 - **Kling motion control** - the writer writes the first frame's prompt: you see the prompt, then the picture, then the
   video, each paid by its own press.
@@ -67,7 +67,7 @@ column keeps notes on prompting - a chip of it goes into your words.
 - **Custom** (Suno) - you write the title, the style and the lyrics ([Verse], [Chorus]…), or tick it instrumental. Two
   tracks.
 - **Lyrics** (Suno) - song lyrics from an idea; **use in custom** or **save** into Music → Lyrics. Text only.
-- **From a description** (ElevenLabs) - music from your words, instrumental unless you untick it.
+- **Music from a description** (ElevenLabs) - music from your words, instrumental unless you untick it.
 - **Video to Music** (ElevenLabs) - music made for a video up to 10 minutes: pick it in the VIDEO folders on the right
   (in Merge also a clip of the timeline, by its right button - the track is laid under it).
 - **Sounds** (Suno) - a sound or a loop from a description. **Sound effects** (ElevenLabs) - up to 30 s.

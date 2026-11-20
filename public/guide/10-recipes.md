@@ -38,7 +38,7 @@ Whole paths from an idea to a rendered video, a step a line. Each step leads to 
 ## A B-roll clip from a picture
 
 1. **IMAGES → generate** - the pictures chat: describe the picture, the shape 9:16 ([The pictures chat](08-generating.md#the-pictures-chat)).
-2. The right button on the picture made (in the Library, or on the timeline) → **Animate** - the video chat opens with it
+2. The right button on the picture made (in the Library, or on the timeline) → **Animate…** - the video chat opens with it
    as the first frame.
 3. A cheap model for a try - **Seedance 2.0 mini** or **Grok** -, a sentence of what moves → send; with the writer on,
    look at its prompt and press **Make the video** ([The video chat](08-generating.md#the-video-chat)).

@@ -158,7 +158,7 @@ The right button on a clip offers what can be made from it:
 - **Frame to the pictures chat…** - the clip's first frame in the pictures chat.
 - **Video to Music…** - ElevenLabs scores the clip; the price is said before anything is paid.
 
-On a picture the menu offers **Animate** and **Change**. A result made this way has a button that lays it back on the
+On a picture the menu offers **Animate…** and **Change…**. A result made this way has a button that lays it back on the
 timeline - in the clip's place, after it, or above it - in one undo step.
 
 ## Captions
@@ -176,10 +176,10 @@ timeline - in the clip's place, after it, or above it - in one undo step.
 ![The Text tab: find and replace, every line with its time](shots/merge-captions-text.webp)
 
 In **Text**, correct a word in place; **Enter** cuts a line, **Delete** at its end joins the next, **Backspace** at its
-start joins the one before. **Find** and **Replace** work over the whole lane (**Aa** - the same case, **W** - whole
+start joins the one before. The **find** field and **Replace** / **Replace all** work over the whole lane (**Aa** - the same case, **W** - whole
 words). A word keeps its moment wherever it ends up.
 
-The lane's own settings - **Text**, **Look**, **Motion**, **Place** - are on the right. **Rows: two** shows the next
+The lane's own settings - **Text**, **Look**, **Motion**, **Place** - are on the right. **Rows**: **Two** shows the next
 page in a second row while the first is spoken. Drag a caption on the preview to place it; it is written when you
 let go.
 

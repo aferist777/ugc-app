@@ -41,7 +41,7 @@ nothing.
 
 ![The three fields: mood & voice, frames, video](shots/th-fields.webp)
 
-- **Mood** - how the script is spoken (calm and sincere, excited, …). The script is marked up for it before it is read.
+- **Mood** - how the script is spoken (Calm and sincere, Energetic, excited, …). The script is marked up for it before it is read.
 - **Voice** - a menu: **ElevenLabs library…** (thousands of voices, searched and listened to for free, one taken into the
   app), the character's own voices, and the voices saved before.
 - **Stability** - **Creative** (more expressive, may stray from the words), **Natural** (as the voice was recorded),
@@ -61,7 +61,7 @@ The frames are the pictures the lines are spoken from - the person, in the place
   goes into the set. It keeps the person's face and clothes, and up to two **products** of IMAGES → Props, held exactly
   as on their picture. On its left: the model, the quality and the **Shot** - selfie, half body or full body; the shape
   is the project's own.
-- On an open line, pick which frame of the set it is spoken from; **Back to the rule** returns it to the set in turn.
+- On an open line, pick which frame of the set it is spoken from; **Back to the rule - the set in turn** returns it there.
   **Crop** reframes a picture as a frame of its own.
 
 ![The frames chat](shots/th-fchat.webp)
@@ -85,8 +85,8 @@ clip - green when done.
 
 - Press a line to open it on the stage: its frame, its read, its clip.
 - Change a line's words, then read it again - the line keeps its frame.
-- The right button on a line: **Read again**, take it off the script, or add a new line after it. A line taken off keeps
-  its place and its number - nothing else moves.
+- The right button on a line: **Read again**, **choose a clip**, **remove line**; the **+** under a line puts a new one in
+  under it. A line removed moves to the foot of the script, dimmed, and keeps its number - nothing else moves.
 
 ## The timeline
 

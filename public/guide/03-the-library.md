@@ -47,9 +47,9 @@ window; **create** beside Environments, Lookbooks and Props opens their makers.
   go.
 - Drag the picked tiles onto a folder in the tree to move them; **Delete** deletes them (asked first - and the question
   names the projects that use them).
-- The right button on ONE tile opens a chat with it, in a window over the Library: on a picture **Animate** (the video
-  chat, the picture as the first frame) and **Change** (the pictures chat, the picture to change); on a clip
-  **Continue** and **As a reference**.
+- The right button on ONE tile opens a chat with it, in a window over the Library: on a picture **Animate…** (the video
+  chat, the picture as the first frame) and **Change…** (the pictures chat, the picture to change); on a clip
+  **Continue…** and **As a reference…**.
 
 ![The right button on a picture](shots/lib-tile-menu.webp)
 
@@ -110,7 +110,7 @@ product's description - and you can correct it there.
 AUDIO keeps the sounds:
 
 - **Music** - your tracks and the generated ones. A track pressed plays in the **player** under the gallery; its right
-  button has **Cut…** (a piece of it as a new track), **Rename**, **Move to**, **Delete**. **highlights** holds the moods
+  button has **Cut…** (a piece of it as a new track), **Rename**, **Move to …** (AUDIO, My sounds), **Delete**. **highlights** holds the moods
   the highlights projects draw their music from; **Lyrics** keeps the texts written for songs.
 - **SFX** - **Favorites** (★), **Built-in** (the app's own set of sound effects), **My sounds** (generated and your own).
   **find online…** searches free CC0 sound effects.

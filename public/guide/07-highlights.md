@@ -87,8 +87,8 @@ its length, "2 pieces" when it is made of more than one piece.
   Merge chapter works on it.
 
 **The frame follows the faces.** After a fragment is cut, its faces are counted and its window planned - the largest face
-per shot, a jump at a cut, the whole frame over its blur where there is no face. The **Framing** row of a clip's inspector
-changes it: fixed, follow the face, middle, whole + blur, two faces, the speaker - and Shift. **Punch-ins** switches the
+per shot, a jump at a cut, the whole frame over its blur where there is no face. The **Tracking** row of a clip's inspector
+changes it: fixed, follow the face, middle, whole + blur, two faces, the speaker - and **Offset** shifts it. **Punch-ins** switches the
 ×1.2 zooms on key phrases.
 
 ## Several fragments at once

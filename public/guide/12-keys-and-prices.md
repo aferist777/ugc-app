@@ -79,7 +79,7 @@ Seedance with a reference clip is billed by its own rate - the video chat says i
 | Suno - **Simple**, **Custom** | 12 kie.ai credits, $0.06 - two tracks |
 | Suno - **Lyrics** | $0.002 - two or three texts |
 | Suno - **Sounds** | $0.0125 |
-| ElevenLabs - **From a description**, **Video to Music** | about $0.15 a minute of music (a paid ElevenLabs plan) |
+| ElevenLabs - **Music from a description**, **Video to Music** | about $0.15 a minute of music (a paid ElevenLabs plan) |
 | ElevenLabs - **Sound effects** | 40 ElevenLabs credits a second |
 
 A kie.ai credit is $0.005.
