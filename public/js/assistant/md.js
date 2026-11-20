@@ -16,6 +16,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { slug } from './guide-toc.js';
+import * as T from '../i18n/t.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
@@ -46,12 +47,12 @@ function _copyBtn(text, label) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'as-copy u-btn is-s is-quiet';
-  b.textContent = label || 'copy';
-  b.title = 'Copy it to the clipboard';
+  b.textContent = label || T.t('copy');
+  b.title = T.t('Copy it to the clipboard');
   b.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(text); b.textContent = 'copied'; }
-    catch (e) { b.textContent = 'not copied'; }
-    setTimeout(() => { b.textContent = label || 'copy'; }, 1400);
+    try { await navigator.clipboard.writeText(text); b.textContent = T.t('copied'); }
+    catch (e) { b.textContent = T.t('not copied'); }
+    setTimeout(() => { b.textContent = label || T.t('copy'); }, 1400);
   });
   return b;
 }
@@ -67,7 +68,7 @@ function _fence(lang, info, body, open) {
   head.className = 'as-fhead';
   const name = document.createElement('span');
   name.className = 'as-fname';
-  name.textContent = isPrompt ? (info ? 'prompt · for ' + info : 'prompt') : (lang || 'code');
+  name.textContent = isPrompt ? (info ? T.t('prompt · for {what}', { what: info }) : T.t('prompt')) : (lang || T.t('code'));
   head.appendChild(name);
   const text = body.replace(/\n+$/, '');
   if (!open && text) head.appendChild(_copyBtn(text));

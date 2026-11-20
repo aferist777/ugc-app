@@ -15,6 +15,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { t } from '../i18n/t.js';
 
 export const DRAG_TYPE = Store.DRAG_TYPE;
 export const DRAG_MEDIA = Store.DRAG_MEDIA;
@@ -28,7 +29,7 @@ export function useDraft() {
   _draft.ready = fetch('/api/mv3/timeline/new', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: true }) })
     .then(r => r.json())
     .then((d) => {
-      if (!d || !d.success || !d.key) throw new Error((d && d.error) || 'the draft did not answer');
+      if (!d || !d.success || !d.key) throw new Error((d && d.error) || t('the draft did not answer'));
       _draft.key = String(d.key);
       for (const fn of _subs) { try { fn(); } catch (e) { /* one listener's */ } }
       return _draft.key;

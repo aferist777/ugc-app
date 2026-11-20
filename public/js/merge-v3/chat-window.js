@@ -25,6 +25,7 @@
 import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { loadingEl } from '../ui-state.js';
 import { allow } from '../key-gate.js';
+import { t } from '../i18n/t.js';
 
 // Where a chat's root waits while its window is closed: in the document (the chat finds its root by its id when it hides
 // and when it is built), never seen.
@@ -71,8 +72,9 @@ function _frame(name, title, onClose) {
 // "loading…" in it; the chat's open() takes that frame when its sheets, modules and conversation are in. Closed meanwhile (✕, Escape, a press beside it),
 // it is gone and the page opens nothing later (wanted()); pressed again meanwhile, the one window stays.
 // The two chats' names and titles - picchat.js and vidchat.js take theirs from here, so the early window is always theirs.
-export const CHAT_WIN = { pictures: { name: 'pictures chat', title: 'generate image', gate: 'pictures' },
-  videos: { name: 'video chat', title: 'generate video', gate: 'videos' } };
+// `name` is the window's on the stack of layers; `title` - its crumb - is only shown.
+export const CHAT_WIN = { pictures: { name: 'pictures chat', title: t('generate image'), gate: 'pictures' },
+  videos: { name: 'video chat', title: t('generate video'), gate: 'videos' } };
 const EARLY = CHAT_WIN;
 const _early = new Map();     // a window's name -> { win, park } - shown, not taken by its chat yet
 const _shown = (name) => [..._all].some(w => w.name === name && w.isOpen());
@@ -90,7 +92,7 @@ export function openEarly(which) {
     if (_early.get(E.name) === rec) _early.delete(E.name);
     if (rec.park) rec.park();
   });
-  rec.win.body.appendChild(loadingEl('loading…', { cls: 'gw-wait' }));
+  rec.win.body.appendChild(loadingEl(t('loading…'), { cls: 'gw-wait' }));
   _early.set(E.name, rec);
 }
 /** Whether the chat loaded is still to be opened: its early window is open, or its own. */

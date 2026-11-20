@@ -27,6 +27,9 @@
    countdown's words) up to date. `start`: the step a message opens on before the person pages anywhere (else its newest).
    ════════════════════════════════════════════════════════════════════════════ */
 
+// The interface's words (`t` is a step or a variant here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
+
 const _mem = new Map();     // message id -> { step, vars: { [setKey]: variantKey }, counts: { [setKey]: n }, n }
 
 function el(tag, cls, text) {
@@ -75,24 +78,25 @@ export function stepCard(id) {
   const stepsOf = () => (spec ? spec.steps.filter(Boolean) : []);
 
   // The small pager of a set of the step shown: "‹ 2 of 3 ›", each arrow saying what it pages - null for one variant.
+  // A set's `word` comes already in the app's language; the sentences around it are this module's.
   function pager(setKey) {
     const s = stepsOf().find(x => x.key === mem().step);
     const set = s ? _sets(s).find(x => x.key === (setKey || s.key)) : null;
     if (!set || set.variants.length < 2) return null;
     const i = set.variants.findIndex(v => v.key === mem().vars[set.key]);
     const n = set.variants.length;
-    const w = set.word || 'variant';
+    const w = set.word || T.t('variant');
     const box = el('span', 'vm-pg');
     const p = arrow('is-prev', '‹');
-    const t = el('span', 'vm-pg-t', (i + 1) + ' of ' + n);
+    const t = el('span', 'vm-pg-t', T.t('{i} of {n}', { i: i + 1, n }));
     const x = arrow('is-next', '›');
     p.disabled = i <= 0;
     x.disabled = i >= n - 1;
     const v = set.variants[i];
     const said = set.note && v ? set.note(v) : '';
-    t.title = w + ' ' + (i + 1) + ' of ' + n + (said ? ' · ' + said : '');
-    p.title = i > 0 ? '‹ The previous ' + w + ' (' + i + ' of ' + n + ')' : 'This is the first ' + w;
-    x.title = i < n - 1 ? 'The next ' + w + ' (' + (i + 2) + ' of ' + n + ') ›' : 'This is the newest ' + w;
+    t.title = said ? T.t('{word} {i} of {n} · {note}', { word: w, i: i + 1, n, note: said }) : T.t('{word} {i} of {n}', { word: w, i: i + 1, n });
+    p.title = i > 0 ? T.t('‹ The previous {word} ({i} of {n})', { word: w, i, n }) : T.t('This is the first {word}', { word: w });
+    x.title = i < n - 1 ? T.t('The next {word} ({i} of {n}) ›', { word: w, i: i + 2, n }) : T.t('This is the newest {word}', { word: w });
     p.setAttribute('aria-label', p.title);
     x.setAttribute('aria-label', x.title);
     p.addEventListener('click', (e) => { e.stopPropagation(); vary(set.key, -1); });
@@ -141,11 +145,11 @@ export function stepCard(id) {
 
     // The steps, at the top - only where there are two.
     top.hidden = steps.length < 2;
-    sText.textContent = 'step ' + (si + 1) + ' of ' + steps.length + ' · ' + s.title;
+    sText.textContent = T.t('step {k} of {n} · {title}', { k: si + 1, n: steps.length, title: s.title });
     sPrev.disabled = si === 0;
     sNext.disabled = si === steps.length - 1;
-    sPrev.title = si > 0 ? '‹ The previous step of this video: ' + steps[si - 1].title : 'This is the first step of this video';
-    sNext.title = si < steps.length - 1 ? 'The next step of this video: ' + steps[si + 1].title + ' ›' : 'This is the last step so far - the next appears when it begins';
+    sPrev.title = si > 0 ? T.t('‹ The previous step of this video: {title}', { title: steps[si - 1].title }) : T.t('This is the first step of this video');
+    sNext.title = si < steps.length - 1 ? T.t('The next step of this video: {title} ›', { title: steps[si + 1].title }) : T.t('This is the last step so far - the next appears when it begins');
     sPrev.setAttribute('aria-label', sPrev.title);
     sNext.setAttribute('aria-label', sNext.title);
 

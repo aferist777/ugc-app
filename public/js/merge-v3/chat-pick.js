@@ -69,6 +69,9 @@ import { nodeFiles, folderIndex, pruneTree, filesUnder } from '../folder-column.
 // corner. The 3D Studio's page keeps its own line, `.pk-none`, and no popup (its look is its own).
 import { emptyEl, loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
+// The app's words as I18N.t / I18N.tn: this module's own `t`s are tiles and `T` the tree's options. The words a caller
+// hands in (titles, hints, rows, `computer.word`, why a thing cannot go) are shown as they come.
+import * as I18N from '../i18n/t.js';
 
 const PAGE = 120;                 // tiles drawn at once - the next ones as the grid is scrolled to its end
 const LS_SRC = 'mv3_vpick_v1';    // { <kind>: <source id> } - where each kind was last taken from
@@ -110,7 +113,13 @@ function _styled(ov) {
 }
 
 const _lc = (s) => String(s || '').trim().toLowerCase();
-const _secs = (v) => (+v).toFixed(1).replace(/\.0$/, '') + ' s';
+const _secs = (v) => I18N.t('{n} s', { n: (+v).toFixed(1).replace(/\.0$/, '') });
+// What the drop says: the caller's word for the files ("pictures"), else "them"; where they go, when it is known.
+function _dropSay(word, place, home) {
+  const what = word || I18N.tc('pick', 'them');
+  if (place) return I18N.t('Let go to add {what} into {place}', { what, place });
+  return home ? I18N.t('Let go to add {what} from this computer', { what }) : I18N.t('Let go to add {what}', { what });
+}
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -239,7 +248,7 @@ function _build() {
   const left = el('span', 'pk-room', '');
   const x = el('button', 'pk-close u-btn is-s is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = I18N.t('Close (Esc)');
   head.append(h, hint, left, x);
 
   const side = el('div', 'pk-side');
@@ -248,11 +257,11 @@ function _build() {
   const q = document.createElement('input');
   q.type = 'search';
   q.className = 'pk-q u-in is-s';
-  q.placeholder = 'search by name';
+  q.placeholder = I18N.t('search by name');
   q.spellcheck = false;
   const cat = document.createElement('select');
   cat.className = 'pk-cat u-in is-s';
-  cat.title = 'A folder of this shelf';
+  cat.title = I18N.t('A folder of this shelf');
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
   const grid = el('div', 'pk-grid');
@@ -265,7 +274,7 @@ function _build() {
 
   const foot = el('div', 'pk-foot');
   const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done u-btn', 'Done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn', I18N.t('Done'));
   done.type = 'button';
   foot.append(said, done);
 
@@ -290,7 +299,7 @@ function _build() {
   _takeFiles(ov, box);
 
   _w = { ov, box, h, hint, left, side, q, cat, count, grid, said, drop, layer, io: null, shut: 0, sentinel: null };
-  drop.textContent = 'Let go to add ' + (_o.computer.word || 'them') + ' from this computer';
+  drop.textContent = _dropSay(_o.computer.word, '', true);
 }
 
 // Files let go anywhere over the window come in through the door of this kind - and only there: the Library panel's own
@@ -319,13 +328,13 @@ function _takeFiles(ov, box) {
     const all = [...((e.dataTransfer && e.dataTransfer.files) || [])];
     if (!all.length && _o.computer.link) {
       const url = dropLink(e.dataTransfer);
-      if (!url) { pickSay('Only ' + _o.computer.word + ' here.'); return; }
-      pickSay('downloading the picture…');
+      if (!url) { pickSay(I18N.t('Only {what} here.', { what: _o.computer.word })); return; }
+      pickSay(I18N.t('downloading the picture…'));
       Promise.resolve(_o.computer.link(url)).then((why) => { if (_w) pickSay(why || ''); });
       return;
     }
     const mine = all.filter(f => _o.computer.accepts(f));
-    if (!mine.length) { pickSay('Only ' + _o.computer.word + ' here.'); return; }
+    if (!mine.length) { pickSay(I18N.t('Only {what} here.', { what: _o.computer.word })); return; }
     _o.computer.drop(mine);
   });
 }
@@ -333,14 +342,14 @@ function _takeFiles(ov, box) {
 // What the drop says while something is held over the window: where it will go - the folder open, else the root.
 function _dropWords() {
   if (!_w || !_w.drop) return;
-  const word = (_o.computer && _o.computer.word) || 'them';
+  const word = (_o.computer && _o.computer.word) || '';
   let where = '';
   if (_t && _t.tree) {
     const cat = pickFolder();
     const n = cat ? _t.node : _t.tree.node(_o.tree.home || '');
-    where = n ? ' into ' + (n.label || '') : '';
+    where = n ? (n.label || '') : '';
   }
-  _w.drop.textContent = 'Let go to add ' + word + where;
+  _w.drop.textContent = _dropSay(word, where, false);
 }
 
 /**
@@ -374,14 +383,14 @@ function _paintHead() {
   _w.hint.title = hint;
   const n = Math.max(0, o.left());
   const words = typeof o.room === 'function' ? o.room() : '';
-  _w.left.textContent = words || (n ? (n === 1 ? 'one more goes here' : n + ' more go here') : 'no room left');
+  _w.left.textContent = words || (n ? I18N.tn(n, 'one more goes here', '{n} more go here') : I18N.t('no room left'));
 }
 
 function _paintSources() {
   if (_t) { _paintRows(); return; }
   const S = _w.side;
   S.textContent = '';
-  S.appendChild(el('div', 'pk-lab', 'From the library'));
+  S.appendChild(el('div', 'pk-lab', I18N.t('From the library')));
   for (const s of _o.sources) {
     const b = el('button', 'pk-src' + (s.id === _st.src ? ' on' : ''), s.label);
     b.type = 'button';
@@ -397,23 +406,23 @@ function _paintSources() {
     S.appendChild(b);
   }
   const c = _o.computer;
-  S.appendChild(el('div', 'pk-lab', 'From this computer'));
-  const up = el('button', 'pk-src is-up', '+ Choose ' + (c.word || 'files') + '…');
+  S.appendChild(el('div', 'pk-lab', I18N.t('From this computer')));
+  const up = el('button', 'pk-src is-up', I18N.t('+ Choose {what}…', { what: c.word || I18N.t('files') }));
   up.type = 'button';
   up.addEventListener('click', () => c.open());
   S.appendChild(up);
-  S.appendChild(el('div', 'pk-up-note', (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.'));
+  S.appendChild(el('div', 'pk-up-note', (c.hint ? c.hint + ' ' : '') + I18N.t('Or let files go anywhere over this window.')));
   // A clip by a link, where the description takes one (`link`): the server downloads it and it goes into
   // this place - the place says how far meanwhile.
   const L = _o.link;
   if (!L) return;
-  S.appendChild(el('div', 'pk-lab', 'From a link'));
+  S.appendChild(el('div', 'pk-lab', I18N.t('From a link')));
   const row = el('div', 'pk-link');
   const inp = document.createElement('input');
   inp.type = 'text';
   inp.className = 'u-in is-s';
   inp.placeholder = 'YouTube, TikTok, Instagram…';
-  const b = el('button', 'pk-link-go u-btn is-s', 'Add');
+  const b = el('button', 'pk-link-go u-btn is-s', I18N.t('Add'));
   b.type = 'button';
   row.appendChild(inp);
   row.appendChild(b);
@@ -422,14 +431,14 @@ function _paintSources() {
   S.appendChild(said);
   const go = async () => {
     const url = inp.value.trim();
-    if (!/^https?:\/\/\S+$/i.test(url)) { said.textContent = 'That is not a link.'; return; }
+    if (!/^https?:\/\/\S+$/i.test(url)) { said.textContent = I18N.t('That is not a link.'); return; }
     inp.value = '';
     b.disabled = true;
-    said.textContent = 'Coming in - its place says how far.';
+    said.textContent = I18N.t('Coming in - its place says how far.');
     const why = await L.add(url);
     if (!_w || !said.isConnected) return;
     b.disabled = false;
-    said.textContent = why || 'In, and in its place.';
+    said.textContent = why || I18N.t('In, and in its place.');
   };
   b.addEventListener('click', go);
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
@@ -442,7 +451,7 @@ const _memoKey = () => (_o.project.key || '') + '|' + _st.src;
 function _failedAs(got, what, retry) {
   if (!got || !got.failed) return null;
   if (OLD_LOOK()) return null;
-  showError(what + ' did not load: ' + (got.reason || got.why || 'it could not be read'));
+  showError(I18N.t('{what} did not load: {why}', { what, why: got.reason || got.why || I18N.t('it could not be read') }));
   return { what, retry };
 }
 const _none = (text, icon) => (OLD_LOOK() ? el('div', 'pk-none', text) : emptyEl(text, { icon }));
@@ -460,16 +469,16 @@ async function _load(keepCat) {
   if (!got) {
     _st.loading = true;
     _paintGrid();
-    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: 'it could not be read', failed: true, reason: e && e.message }; }
+    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: I18N.t('it could not be read'), failed: true, reason: e && e.message }; }
     if (!_w || mine !== _seq) return;
     _st.loading = false;
-    got = got || { items: [], cats: [], why: 'it could not be read', failed: true };
+    got = got || { items: [], cats: [], why: I18N.t('it could not be read'), failed: true };
     if (!got.failed || OLD_LOOK()) _cache.set(s.id, got);
   }
   _st.items = got.items || [];
   _st.cats = (got.cats || []).filter(c => c && c.id && (+c.count > 0 || c.id === _st.cat));
   _st.why = got.why || '';
-  _st.failed = _failedAs(got, s.label || 'The shelf', () => _load(keepCat));
+  _st.failed = _failedAs(got, s.label || I18N.t('The shelf'), () => _load(keepCat));
   if (!keepCat) {
     // The category last shown here in this project, else the project's own, else all of them.
     const was = _catMemo.get(_memoKey());
@@ -499,7 +508,7 @@ function _paintCats() {
   sel.hidden = !_st.cats.length;
   if (!_st.cats.length) return;
   const opt = (v, t) => { const e = document.createElement('option'); e.value = v; e.textContent = t; return e; };
-  sel.appendChild(opt(ALL, 'all · ' + _st.items.length));
+  sel.appendChild(opt(ALL, I18N.t('all · {n}', { n: _st.items.length })));
   for (const c of _st.cats) sel.appendChild(opt(c.id, c.label || c.name || c.id));
   sel.value = _st.cat;
 }
@@ -523,7 +532,7 @@ function _paintGrid() {
   G.textContent = '';
   G.scrollTop = 0;
   G.classList.toggle('is-rows', _o.kind === 'audio');
-  if (_st.loading) { G.appendChild(OLD_LOOK() ? el('div', 'pk-none', 'reading…') : loadingEl('reading…')); _w.count.textContent = ''; return; }
+  if (_st.loading) { G.appendChild(OLD_LOOK() ? el('div', 'pk-none', I18N.t('reading…')) : loadingEl(I18N.t('reading…'))); _w.count.textContent = ''; return; }
   // With the tree: the open folder's own folders first, as tiles - not while a search looks deeper.
   const node = _t && !_st.src ? _t.node : null;
   const look = _st.q.trim();
@@ -531,18 +540,18 @@ function _paintGrid() {
   if (fold) G.appendChild(fold);
   _st.list = _shown();
   _st.drawn = 0;
-  _w.count.textContent = _st.list.length === _st.items.length ? String(_st.items.length) : _st.list.length + ' of ' + _st.items.length;
+  _w.count.textContent = _st.list.length === _st.items.length ? String(_st.items.length) : I18N.t('{n} of {total}', { n: _st.list.length, total: _st.items.length });
   // The folder's own folders stay over it (the tree drew them, not this read).
   if (_st.failed) { G.appendChild(failedEl(_st.failed.what, _st.failed.retry)); _w.count.textContent = ''; return; }
   if (!_st.list.length && node) {
-    const words = look ? 'Nothing here or in the folders under it is called “' + look + '”.' : _st.why || (fold ? '' : 'Nothing in this folder.');
+    const words = look ? I18N.t('Nothing here or in the folders under it is called “{name}”.', { name: look }) : _st.why || (fold ? '' : I18N.t('Nothing in this folder.'));
     if (words) G.appendChild(_none(words, look ? 'search' : 'folder'));
     return;
   }
   if (!_st.list.length) {
     const src = _o.sources.find(x => x.id === _st.src) || {};
-    G.appendChild(_none(_st.items.length ? (_st.q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing in this folder.')
-      : (_st.why || src.empty || 'Nothing on this shelf.'), _st.items.length ? (_st.q ? 'search' : 'folder') : _kindIcon()));
+    G.appendChild(_none(_st.items.length ? (_st.q ? I18N.t('Nothing here is called “{name}”.', { name: _st.q.trim() }) : I18N.t('Nothing in this folder.'))
+      : (_st.why || src.empty || I18N.t('Nothing on this shelf.')), _st.items.length ? (_st.q ? 'search' : 'folder') : _kindIcon()));
     return;
   }
   _more();
@@ -583,7 +592,7 @@ function _press(it) {
   _peekHide();
   const on = !!_o.mark(it.path);
   // The place filled a moment ago and the window is about to close: a second press goes nowhere else.
-  const why = on ? '' : _o.left() <= 0 ? 'No room left here.' : _o.why(it);
+  const why = on ? '' : _o.left() <= 0 ? I18N.t('No room left here.') : _o.why(it);
   if (why) { pickSay(why); return; }
   pickSay('');
   _o.press(it);
@@ -618,7 +627,7 @@ function _tile(it) {
   t.appendChild(el('span', 'pk-cap', it.name || ''));
   if (_subOf(it)) t.appendChild(el('span', 'pk-sub', _subOf(it)));
   const why = _o.why(it);
-  if (why) { t.classList.add('is-off'); t.appendChild(el('span', 'pk-why', why)); hit.title += ' - ' + why; }
+  if (why) { t.classList.add('is-off'); t.appendChild(el('span', 'pk-why', why)); hit.title = I18N.t('{name} - {why}', { name: hit.title, why }); }
   hit.addEventListener('click', () => _press(it));
   if (_o.kind === 'video' && it.src) {
     // The clip plays in its tile while the pointer rests there; ▶ plays it at once with its sound.
@@ -626,7 +635,7 @@ function _tile(it) {
     t.addEventListener('pointerleave', () => _hp.off(t));
     const play = el('button', 'pk-play', '▶');
     play.type = 'button';
-    play.title = 'Play it with its sound';
+    play.title = I18N.t('Play it with its sound');
     play.addEventListener('click', () => {
       if (_hp.loud(t)) { _hp.stop(); play.textContent = '▶'; return; }
       for (const p of _w.grid.querySelectorAll('.pk-play')) p.textContent = '▶';
@@ -654,18 +663,18 @@ function _soundRow(it) {
   const box = el('span', 'pk-box');
   box.appendChild(el('span', 'pk-note', '♪'));
   const words = el('span', 'pk-snd');
-  words.appendChild(el('span', 'pk-cap', it.name || 'sound'));
+  words.appendChild(el('span', 'pk-cap', it.name || I18N.t('sound')));
   if (_subOf(it)) words.appendChild(el('span', 'pk-sub', _subOf(it)));
   box.appendChild(words);
   if (it.dur) box.appendChild(el('span', 'pk-dur', _secs(it.dur)));
   hit.appendChild(box);
   t.appendChild(hit);
   const why = _o.why(it);
-  if (why) { t.classList.add('is-off'); t.appendChild(el('span', 'pk-why', why)); hit.title += ' - ' + why; }
+  if (why) { t.classList.add('is-off'); t.appendChild(el('span', 'pk-why', why)); hit.title = I18N.t('{name} - {why}', { name: hit.title, why }); }
   hit.addEventListener('click', () => _press(it));
   const play = el('button', 'pk-play', '▶');
   play.type = 'button';
-  play.title = 'Listen';
+  play.title = I18N.t('Listen');
   play.addEventListener('click', () => {
     if (_sound && _sound.path === it.path) { _quiet(); return; }
     _quiet();
@@ -722,7 +731,7 @@ function _buildTree() {
   const left = el('span', 'pk-room u-win-sub', '');
   const x = el('button', 'pk-close u-btn is-icon is-quiet u-x', OLD_LOOK() ? '✕' : '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = I18N.t('Close (Esc)');
   head.append(h, hint, left, x);
 
   // Left: the rows that are not folders, then the tree - or, while a row read in groups is open, its groups.
@@ -738,8 +747,8 @@ function _buildTree() {
   const q = document.createElement('input');
   q.type = 'search';
   q.className = 'pk-q u-in is-s';
-  q.placeholder = 'search here and deeper';
-  q.title = 'By name - in the open folder and every folder under it';
+  q.placeholder = I18N.t('search here and deeper');
+  q.title = I18N.t('By name - in the open folder and every folder under it');
   q.spellcheck = false;
   // Kept for the code the rows share with the window above: rows have no categories, so it stays hidden.
   const cat = document.createElement('select');
@@ -758,16 +767,16 @@ function _buildTree() {
   // A window opened without `computer` takes only what is in the library (the assistant's attachments).
   const c = _o.computer;
   if (c) {
-    const up = el('button', 'pk-up u-btn is-s', '+ From this computer…');
+    const up = el('button', 'pk-up u-btn is-s', I18N.t('+ From this computer…'));
     up.type = 'button';
-    up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
+    up.title = (c.hint ? c.hint + ' ' : '') + I18N.t('Or let files go anywhere over this window.');
     up.addEventListener('click', () => c.open());
     foot.appendChild(up);
   }
   // The place's own way to make what goes into it: the product place's "+ new prop".
   const M = _o.make;
   if (M && typeof M.on === 'function') {
-    const mk = el('button', 'pk-up is-make u-btn is-s is-gen', M.label || '+ new');
+    const mk = el('button', 'pk-up is-make u-btn is-s is-gen', M.label || I18N.t('+ new'));
     mk.type = 'button';
     if (M.title) mk.title = M.title;
     mk.addEventListener('click', () => M.on());
@@ -779,32 +788,32 @@ function _buildTree() {
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.className = 'u-in is-s';
-    inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
+    inp.placeholder = I18N.t('a link - YouTube, TikTok, Instagram…');
     inp.title = L.hint || '';
-    const b = el('button', 'pk-link-go u-btn is-s', 'Add');
+    const b = el('button', 'pk-link-go u-btn is-s', I18N.t('Add'));
     b.type = 'button';
     row.append(inp, b);
     foot.appendChild(row);
     const go = async () => {
       const url = inp.value.trim();
-      if (!/^https?:\/\/\S+$/i.test(url)) { pickSay('That is not a link.'); return; }
+      if (!/^https?:\/\/\S+$/i.test(url)) { pickSay(I18N.t('That is not a link.')); return; }
       inp.value = '';
       b.disabled = true;
-      pickSay('Coming in - its place says how far.');
+      pickSay(I18N.t('Coming in - its place says how far.'));
       const why = await L.add(url);
       if (!_w || !b.isConnected) return;
       b.disabled = false;
-      pickSay(why || 'In, and in its place.');
+      pickSay(why || I18N.t('In, and in its place.'));
     };
     b.addEventListener('click', go);
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   }
   const said = el('span', 'pk-said u-status is-line', '');
-  const done = el('button', 'mv3-c-btn pk-done u-btn is-main', 'Done');
+  const done = el('button', 'mv3-c-btn pk-done u-btn is-main', I18N.t('Done'));
   done.type = 'button';
   foot.append(said, done);
 
-  const drop = el('div', 'pk-drop', c ? 'Let go to add ' + (c.word || 'them') + ' from this computer' : '');
+  const drop = el('div', 'pk-drop', c ? _dropSay(c.word, '', true) : '');
   box.append(head, body, foot, drop);
   ov.appendChild(box);
   document.body.appendChild(ov);
@@ -905,7 +914,7 @@ function _paintRows() {
     const b = el('button', 'pk-src' + (s.id === _st.src ? ' on' : ''), s.label);
     b.type = 'button';
     // Pressed again, the open row lets go: the tree comes back, on the kind's root.
-    b.title = s.id === _st.src ? 'Press again to go back to the folders' : '';
+    b.title = s.id === _st.src ? I18N.t('Press again to go back to the folders') : '';
     b.addEventListener('click', () => { if (_st.src === s.id) _leaveRow(); else _openRow(s.id); });
     R.appendChild(b);
   }
@@ -965,8 +974,8 @@ const _fits = (x) => !(_o && _o.tree && typeof _o.tree.fit === 'function') || !!
 async function _rowItems(s) {
   let got = _cache.get(s.id);
   if (!got) {
-    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: 'it could not be read', failed: true, reason: e && e.message }; }
-    got = got || { items: [], cats: [], why: 'it could not be read', failed: true };
+    try { got = await s.load(); } catch (e) { got = { items: [], cats: [], why: I18N.t('it could not be read'), failed: true, reason: e && e.message }; }
+    got = got || { items: [], cats: [], why: I18N.t('it could not be read'), failed: true };
     // A row shows only what the window takes too (the clips made in this project, by their length).
     if (got.items) got = Object.assign({}, got, { items: got.items.filter(_fits) });
     if (Array.isArray(got.groups)) got.groups = got.groups.map(g => Object.assign({}, g, { items: (g.items || []).filter(_fits) })).filter(g => g.items.length);
@@ -1045,7 +1054,7 @@ async function _openRow(id) {
   if (!_w || mine !== _seq || _st.src !== id) return;
   _st.loading = false;
   _st.why = got.why || '';
-  _st.failed = _failedAs(got, s.label || 'The shelf', () => _openRow(id));
+  _st.failed = _failedAs(got, s.label || I18N.t('The shelf'), () => _openRow(id));
   _t.all = got.items || [];
   _t.groups = Array.isArray(got.groups) && got.groups.length ? got.groups : null;
   if (_t.groups) {
@@ -1103,13 +1112,13 @@ async function _openNode(n, reveal) {
     _st.loading = true;
     _paintGrid();
     try { got = { items: (await nodeFiles(n, _o.tree.type)).filter(_fits).map(_itemOf).filter(Boolean), why: '' }; }
-    catch (e) { got = { items: [], why: e.message || 'the folder could not be read', failed: true }; }
+    catch (e) { got = { items: [], why: e.message || I18N.t('the folder could not be read'), failed: true }; }
     if (!_w || mine !== _seq) return;
   }
   _st.loading = false;
   _st.items = got.items;
   _st.why = got.why;
-  _st.failed = _failedAs(got, n.label || n.name || 'The folder', () => _openNode(n, reveal));
+  _st.failed = _failedAs(got, n.label || n.name || I18N.t('The folder'), () => _openNode(n, reveal));
   _paintGrid();
   if (reveal) _reveal(reveal);
 }
@@ -1137,10 +1146,10 @@ function _searchTree(now) {
     }
     if (!_t.index && !OLD_LOOK()) {
       const t = _t;
-      if (!t.indexSaid) { t.indexSaid = true; showError('The folders did not load', { detail: t.indexError || 'they could not be read in one go' }); }
+      if (!t.indexSaid) { t.indexSaid = true; showError(I18N.t('The folders did not load'), { detail: t.indexError || I18N.t('they could not be read in one go') }); }
       _st.items = [];
       _st.why = '';
-      _st.failed = { what: 'The folders', retry: async () => {
+      _st.failed = { what: I18N.t('The folders'), retry: async () => {
         t.indexSaid = false;
         _st.failed = null;
         _st.loading = true;
@@ -1154,7 +1163,7 @@ function _searchTree(now) {
       return;
     }
     _st.items = _t.index ? filesUnder(n, _t.index).map(_itemOf).filter(Boolean) : [];
-    _st.why = _t.index ? '' : 'the folders could not be read';
+    _st.why = _t.index ? '' : I18N.t('the folders could not be read');
     _paintGrid();
   };
   if (now) run(); else _t.qT = setTimeout(run, 180);

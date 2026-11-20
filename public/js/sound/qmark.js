@@ -13,6 +13,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { hint, showBubble, closeBubble } from '../bubble.js';
+import { t } from '../i18n/t.js';
 
 export const closeQ = closeBubble;
 
@@ -22,7 +23,7 @@ export function qmark(text, o) {
   const q = document.createElement('span');
   q.className = 'qm';
   q.textContent = '?';
-  q.setAttribute('aria-label', typeof text === 'string' ? text : 'help');
+  q.setAttribute('aria-label', typeof text === 'string' ? text : t('help'));
   hint(q, text, { title: opts.title, on: 'is-on' });
   // A press on it is its own: nothing under it folds, unfolds, ticks or is chosen. Without a pointer that rests (a touch) it
   // opens the popup.

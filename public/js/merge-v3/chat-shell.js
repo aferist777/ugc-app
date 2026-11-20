@@ -68,6 +68,8 @@ import { icon } from '../icons.js';
 import { hoverPlayer } from './hover-play.js';
 import { openViewer } from '../library/viewer.js';
 import * as KG from '../key-gate.js';
+// The interface's words (`t` is a tile and a rectangle here and `T` the description's own words, so the module's are I18N.t).
+import * as I18N from '../i18n/t.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -103,7 +105,7 @@ export function mediaBtn(kind, open) {
   const clip = kind === 'video';
   const b = el('button', 'mv3-ig-mb ' + (clip ? 'is-play' : 'is-big'), clip ? '▶' : '⤢');
   b.type = 'button';
-  b.title = clip ? 'Play full screen' : 'Open large';
+  b.title = clip ? I18N.t('Play full screen') : I18N.t('Open large');
   b.draggable = false;
   b.addEventListener('click', (e) => { e.stopPropagation(); _hp.stop(); open(); });
   return b;
@@ -151,7 +153,7 @@ export function refCell(a, k, n, all) {
       hoverClip(c, a.path);
     } else c.appendChild(el('span', 'ic', k === 'audio' ? '♪' : '▶'));
     const secs = Math.max(0, (+a.out || 0) - (+a.in || 0));
-    if (secs) c.appendChild(el('span', 'dur', secs.toFixed(1) + 's'));
+    if (secs) c.appendChild(el('span', 'dur', I18N.t('{n}s', { n: secs.toFixed(1) })));
   }
   c.appendChild(el('span', 'n', String(n)));
   return c;
@@ -180,9 +182,9 @@ export function switchRow(word, on, off, onChange) {
 /** The almanac of a chat that has none yet, at the foot of the column: the video chat's gold button, blurred and dimmed
  *  as the strip's 3D Studio entry (css/app-nav.css .is-soon), not pressed, "In development" under the pointer. */
 export function almanacSoon() {
-  const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen is-soon', 'Almanac');
+  const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen is-soon', I18N.t('Almanac'));
   b.type = 'button';
-  b.title = 'In development';
+  b.title = I18N.t('In development');
   b.setAttribute('aria-disabled', 'true');
   b.tabIndex = -1;
   return b;
@@ -209,6 +211,12 @@ export const json = (url, opts) => fetch(url, opts).then(r => r.json()).catch(()
 export const stored = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? fb; } catch (e) { return fb; } };
 export const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
 const _gensOf = (m) => ((m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []));
+// What a model takes none of, and how many it takes, by the kind of the thing - each a whole sentence.
+const _takesNo = (kind) => (kind === 'video' ? I18N.t('This model takes no video.')
+  : kind === 'audio' ? I18N.t('This model takes no audio.') : I18N.t('This model takes no image.'));
+const _takesN = (kind, n) => (kind === 'video' ? I18N.tn(n, 'This model takes {n} clip.', 'This model takes {n} clips.')
+  : kind === 'audio' ? I18N.tn(n, 'This model takes {n} sound.', 'This model takes {n} sounds.')
+    : I18N.tn(n, 'This model takes {n} picture.', 'This model takes {n} pictures.'));
 
 /**
  * One chat. `make(ctx)` returns its description; the answer is { open, isOpen, init }.
@@ -246,6 +254,10 @@ export function createChat(make) {
   // results still being made at the last read there, and the row's hand-change counter.
   const _memo = new Map();
   let _uploading = null;        // the upload in flight - a send waits for it
+  // The lines said while a file comes in ("adding 2 files…", "downloading the picture…") - the last of each, so its end
+  // knows whether it still stands over the box.
+  let _addingSaid = '';
+  let _fetchingSaid = '';
   let _made = false;            // something landed or was added while the chat showed - the shelf reads again
   // The page's own word at the end of the thread - what came in from the timeline and how to change
   // it: never kept, never sent; it goes with the next send or another project.
@@ -423,7 +435,7 @@ export function createChat(make) {
   async function _ensureProject() {
     if (Store.key()) return;
     await Store.openBlank();
-    if (!Store.key()) throw new Error('could not open the draft for this');
+    if (!Store.key()) throw new Error(I18N.t('could not open the draft for this'));
   }
 
   // ── What was being written, per project ───────────────────────────────────
@@ -543,7 +555,7 @@ export function createChat(make) {
     let into = null;
     if (z) {
       const p = z.parts.find(x => x.kind === kind);
-      if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
+      if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || _takesNo(kind)); return; }
       // A slot named by the description - the frames chat puts the character and the place into their own:
       // its empty numbered place when it has one, else a new place in it while the slot and the part have room.
       const named = o && typeof o.slot === 'string' && p.slots ? p.slots.find(s => s.key === o.slot) : null;
@@ -554,20 +566,21 @@ export function createChat(make) {
         slot = named.key;
         const inS = _atts.filter(a => _kindOf(a) === kind && a.slot === named.key && !a.hole).length;
         if (!into && (inS >= named.max || _atts.filter(a => _kindOf(a) === kind).length >= p.room)) {
-          _say(_cap(named.label || named.key) + ' has no more room.');
+          _say(I18N.t('{what} has no more room.', { what: _cap(named.label || named.key) }));
           return;
         }
       } else if (into) slot = into.slot != null ? into.slot : _slotFor(p);
       else {
         // Its places - the empty ones too - are as many as the model takes.
         const n = _atts.filter(a => _kindOf(a) === kind).length;
-        if (n >= p.room) { _say(p.full || ('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.')); return; }
+        if (n >= p.room) { _say(p.full || _takesN(p.kind, p.room)); return; }
         slot = _slotFor(p);
       }
     } else {
       const room = set.room();
       if (_atts.length >= room) {
-        _say(room ? 'This model takes ' + room + ' ' + (room === 1 ? S.noun.one : S.noun.many) + '.' : 'This model takes no ' + S.noun.many + '.');
+        // Every chat's noun is the picture (`S.noun`), so the sentences are the pictures' own.
+        _say(room ? _takesN('image', room) : I18N.t('This model takes no pictures.'));
         return;
       }
     }
@@ -674,8 +687,8 @@ export function createChat(make) {
       if (!h) continue;
       const s = p.slots ? p.slots.find(x => x.key === h.slot) : null;
       _flashCell(_ui && _ui.atts.querySelector('.mv3-ig-cell.is-hole[data-hole="' + CSS.escape(h.id) + '"]'));
-      return [_cap(s ? (s.label || s.key) : p.one) + ' ' + (mine.indexOf(h) + 1) + ' is empty.',
-        'Put one in its place, or close the place with its ✕ - the numbers after it move up.'];
+      return [I18N.t('{what} {n} is empty.', { what: _cap(s ? (s.label || s.key) : p.one), n: mine.indexOf(h) + 1 }),
+        I18N.t('Put one in its place, or close the place with its ✕ - the numbers after it move up.')];
     }
     return null;
   }
@@ -748,7 +761,7 @@ export function createChat(make) {
         slot.addEventListener('click', () => _ui.file.click());
         host.appendChild(slot);
       }
-      if (_atts.length >= 2) host.appendChild(el('span', 'mv3-ig-att-note', 'Say which one you mean by its number.'));
+      if (_atts.length >= 2) host.appendChild(el('span', 'mv3-ig-att-note', I18N.t('Say which one you mean by its number.')));
       set.onAtts();
       return;
     }
@@ -815,7 +828,7 @@ export function createChat(make) {
         for (const a of real) row.appendChild(_cell(_filled(a, num(a)), '', ''));
       } else if (p.slots && p.slots.length) {
         for (const s of p.slots) row.appendChild(_empty(p, s, true));
-      } else row.appendChild(el('span', 'mv3-ig-part-off', !p.room ? 'none' : 'next step'));
+      } else row.appendChild(el('span', 'mv3-ig-part-off', !p.room ? I18N.t('none') : I18N.t('next step')));
       box.appendChild(row);
       return box;
     }
@@ -825,10 +838,10 @@ export function createChat(make) {
     // A thing, or its empty place, in a cell wearing its slot's name. A slot or a part with an empty place offers no
     // other: that place is where the next one goes.
     // A voice and a storyboard wear their word, so the message can say what each is by its number.
-    const tag = (a) => (a.role === 'voice' || a.role === 'storyboard' ? a.role : '');
+    const tag = (a) => (a.role === 'voice' ? I18N.t('voice') : a.role === 'storyboard' ? I18N.t('storyboard') : '');
     const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
       : _cell(_filled(a, num(a), p), tag(a) || (s ? (s.label || s.key) : ''),
-        a.role === 'voice' ? a.label : a.role === 'storyboard' ? 'The storyboard - the video follows it panel by panel' : s && s.hint));
+        a.role === 'voice' ? a.label : a.role === 'storyboard' ? I18N.t('The storyboard - the video follows it panel by panel') : s && s.hint));
     if (p.slots) {
       for (const s of p.slots) {
         const inS = mine.filter(a => a.slot === s.key);
@@ -837,7 +850,7 @@ export function createChat(make) {
         if (!inS.some(a => a.hole) && inS.length < s.max && mine.length < p.room) row.appendChild(_empty(p, s, false, must));
       }
       const keys = _keysOf(p);
-      const other = { key: '', label: p.otherLabel || 'other', hint: p.other || '' };
+      const other = { key: '', label: p.otherLabel || I18N.t('other'), hint: p.other || '' };
       const rest = mine.filter(x => !keys.includes(x.slot));
       for (const a of rest) put(a, other, false);
       // "other" only where the room is more than the part's own slots can still take - an "other" beside a slot that
@@ -872,7 +885,7 @@ export function createChat(make) {
       img.loading = 'lazy';
       img.decoding = 'async';
       // Gone from the library since it was attached: it goes from the row, and the row says so.
-      img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
+      img.addEventListener('error', () => { _detach(a.path); _say(I18N.t('A picture in the row is not in the library any more.')); }, { once: true });
       cell.appendChild(img);
       cell.addEventListener('mouseenter', () => peekShow({ img: thumbOf(a.path, 'main') }, cell));
       cell.addEventListener('mouseleave', peekHide);
@@ -898,9 +911,10 @@ export function createChat(make) {
       // What the description says of it: `bad` - it cannot go like this, and why; `cut` - only a part of it goes.
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
       if (secs || +a.dur > 0) {
-        const d = el('button', 'dur' + (st.cut ? ' is-cut' : ''), secs.toFixed(1) + 's');
+        const d = el('button', 'dur' + (st.cut ? ' is-cut' : ''), I18N.t('{n}s', { n: secs.toFixed(1) }));
         d.type = 'button';
-        d.title = (st.cut ? secs.toFixed(1) + ' s of ' + (+a.dur).toFixed(1) + ' go' : 'all ' + secs.toFixed(1) + ' s go') + ' - press to choose the part';
+        d.title = st.cut ? I18N.t('{secs} s of {dur} go - press to choose the part', { secs: secs.toFixed(1), dur: (+a.dur).toFixed(1) })
+          : I18N.t('all {secs} s go - press to choose the part', { secs: secs.toFixed(1) });
         d.addEventListener('click', (ev) => {
           ev.stopPropagation();
           peekHide();
@@ -914,7 +928,7 @@ export function createChat(make) {
     cell.appendChild(el('span', 'n', String(n)));
     const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
-    x.title = zoned ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
+    x.title = zoned ? I18N.t('Not this one - its place stays, empty, and keeps its number') : I18N.t('Not this one');
     x.addEventListener('click', (ev) => { ev.stopPropagation(); _detach(a.path); });
     cell.appendChild(x);
     return cell;
@@ -950,7 +964,7 @@ export function createChat(make) {
       _linkShown = true;
       c.classList.add('is-linking');
       b.textContent = _linking.text;
-      b.title = 'A clip by a link is coming in here';
+      b.title = I18N.t('A clip by a link is coming in here');
       b.disabled = true;
       return c;
     }
@@ -969,7 +983,7 @@ export function createChat(make) {
     const go = el('button', 'go', '+');
     go.type = 'button';
     const what = s && s.key ? (s.label || s.key) : p.one;
-    go.title = _cap(what) + ' ' + n + ' is empty - press to put one in its place; the prompt still calls it ' + n;
+    go.title = I18N.t('{what} {n} is empty - press to put one in its place; the prompt still calls it {n}', { what: _cap(what), n });
     go.addEventListener('click', () => {
       if (S.pick) { _openPick(p, s, h); return; }
       const input = _fileOf(p.kind);
@@ -979,7 +993,7 @@ export function createChat(make) {
     box.appendChild(el('span', 'n', String(n)));
     const x = el('button', 'x u-onpic is-del u-x', '');
     x.type = 'button';
-    x.title = 'Close this place - the numbers after it move up';
+    x.title = I18N.t('Close this place - the numbers after it move up');
     x.addEventListener('click', () => _closeHole(h));
     box.appendChild(x);
     const c = _cell(box, s ? (s.label || s.key) : '', s && s.hint);
@@ -993,7 +1007,7 @@ export function createChat(make) {
       _linkShown = true;
       c.classList.add('is-linking');
       go.textContent = _linking.text;
-      go.title = 'A clip by a link is coming in here';
+      go.title = I18N.t('A clip by a link is coming in here');
       go.disabled = true;
     }
     return c;
@@ -1030,13 +1044,13 @@ export function createChat(make) {
       start: P.start(kind, s),
       first: (P.first || {})[kind] || '',
       left: _pickLeft,
-      room: () => (_pickAt && _pickAt.target && !_pickAt.filled ? 'its place is empty - one goes here' : ''),
+      room: () => (_pickAt && _pickAt.target && !_pickAt.filled ? I18N.t('its place is empty - one goes here') : ''),
       mark: _markOf,
       press: (it) => {
         const here = _atts.find(a => a.path === it.path);
         if (here) {
           // Opened on another place: one place per file - it stays where it is.
-          if (_pickAt && _pickAt.target && _pickAt.target !== here) { _say(_cap(_markOf(it.path)) + ' is this one already - one place per file.'); return; }
+          if (_pickAt && _pickAt.target && _pickAt.target !== here) { _say(I18N.t('{what} is this one already - one place per file.', { what: _cap(_markOf(it.path)) })); return; }
           _detach(it.path);
           return;
         }
@@ -1056,7 +1070,7 @@ export function createChat(make) {
       },
       // A clip by a link, where the description takes them (`S.links`: { video: true }).
       link: (S.links && S.links[kind]) ? {
-        hint: 'At the best quality there is, without a login - into VIDEO → Uploads itself, and into this place.',
+        hint: I18N.t('At the best quality there is, without a login - into VIDEO → Uploads itself, and into this place.'),
         add: (url) => _linkIn(url, kind),
       } : null,
       onClose: () => {
@@ -1106,7 +1120,7 @@ export function createChat(make) {
     const z = _zone();
     const p = z && z.parts.find(x => x.kind === k);
     const s = p && p.slots ? p.slots.find(x => x.key === a.slot) : null;
-    return (s ? (s.label || s.key) : p && p.slots ? 'other' : (p && p.one) || S.noun.one) + ' ' + n;
+    return (s ? (s.label || s.key) : p && p.slots ? I18N.t('other') : (p && p.one) || I18N.t('picture')) + ' ' + n;
   }
 
   // A row too long for its part scrolls sideways - the wheel too, while it has somewhere to go.
@@ -1128,11 +1142,11 @@ export function createChat(make) {
   let _linkShown = false;       // its place painted already in this paint
 
   function _linkIn(url, kind) {
-    if (_linking) return Promise.resolve('One link is coming in already - wait for it.');
-    if (_picking && _pickAt && _pickLeft() < 1) return Promise.resolve('This place has no room.');
+    if (_linking) return Promise.resolve(I18N.t('One link is coming in already - wait for it.'));
+    if (_picking && _pickAt && _pickLeft() < 1) return Promise.resolve(I18N.t('This place has no room.'));
     const at = _pickAt ? { kind, slot: _pickAt.slot, target: _pickAt.target && _pickAt.target.hole ? _pickAt.target : null }
       : { kind, slot: null, target: null };
-    _linking = Object.assign(at, { text: 'reading…' });
+    _linking = Object.assign(at, { text: I18N.t('reading…') });
     _made = true;
     _paintAtts();
     const run = (async () => {
@@ -1154,13 +1168,13 @@ export function createChat(make) {
         if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '', [att.path], _landAt(kind, it));
         if (_atts.some(a => a.path === att.path)) return '';
         // On the shelf, but the zone did not take it - the model's rules said why, over the box.
-        const said = (_ui && _ui.said && _ui.said.textContent) || 'this place did not take it';
-        return 'In Uploads, but not in its place: ' + said;
+        const said = (_ui && _ui.said && _ui.said.textContent) || I18N.t('this place did not take it');
+        return I18N.t('In Uploads, but not in its place: {why}', { why: said });
       }
       if (_ui) _paintAtts();
-      const why = job && job.state === 'stopped' ? 'stopped' : ((job && job.error) || 'it could not be added');
-      _say('Not added: ' + why);
-      return 'Not added: ' + why;
+      const why = job && job.state === 'stopped' ? I18N.t('stopped') : ((job && job.error) || I18N.t('it could not be added'));
+      _say(I18N.t('Not added: {why}', { why }));
+      return I18N.t('Not added: {why}', { why });
     })();
     const all = Promise.all([_uploading, run]);
     _uploading = all;
@@ -1174,10 +1188,10 @@ export function createChat(make) {
     if (!_linking) return;
     const step = String(j.step || '');
     const pct = /(\d+)%/.exec(step);
-    _linking.text = pct ? pct[1] + '%' : /join/i.test(step) ? 'joining…' : /shelf/i.test(step) ? 'filing…' : 'reading…';
+    _linking.text = pct ? pct[1] + '%' : /join/i.test(step) ? I18N.t('joining…') : /shelf/i.test(step) ? I18N.t('filing…') : I18N.t('reading…');
     const c = _ui && _ui.atts ? _ui.atts.querySelector('.is-linking .mv3-ig-att-slot, .is-linking .go') : null;
     if (c) c.textContent = _linking.text;
-    _say('link: ' + LK.shortStep(step));
+    _say(I18N.t('link: {step}', { step: LK.shortStep(step) }));
   }
 
   // ── Bringing files in from this computer ──────────────────────────────────
@@ -1221,8 +1235,8 @@ export function createChat(make) {
       const U = _U(_pickAt.kind);
       const mine = all.filter(f => U && U.ok(f));
       const room = _pickLeft();
-      if (mine.length > room) note = 'Only ' + room + ' more ' + (room === 1 ? 'goes' : 'go') + ' here - the rest were not added.';
-      else if (mine.length < all.length) note = 'Only files of this kind go here - the others were not added.';
+      if (mine.length > room) note = I18N.tn(room, 'Only {n} more goes here - the rest were not added.', 'Only {n} more go here - the rest were not added.');
+      else if (mine.length < all.length) note = I18N.t('Only files of this kind go here - the others were not added.');
       all = mine.slice(0, room);
     }
     if (!all.length) { _say(note || T.onlyFiles); return; }
@@ -1233,7 +1247,8 @@ export function createChat(make) {
     const list = all.filter(f => takes(_kindOfFile(f)));
     if (!list.length) { const p = partOf(_kindOfFile(all[0])); _say((p && (p.off || p.none)) || T.onlyFiles); return; }
     _made = true;
-    _say('adding ' + list.length + ' ' + (list.length === 1 ? 'file' : 'files') + '…');
+    _addingSaid = I18N.tn(list.length, 'adding {n} file…', 'adding {n} files…');
+    _say(_addingSaid);
     let bad = list.length < all.length ? ((partOf(_kindOfFile(all.find(f => !list.includes(f)))) || {}).none || '') : '';
     const filed = new Map();      // kind -> { paths, at } - what came in, and the node it went into
     for (const f of list.slice(0, S.maxAtts)) {
@@ -1250,13 +1265,13 @@ export function createChat(make) {
         const was = filed.get(k) || { paths: [], at: '' };
         filed.set(k, { paths: was.paths.concat(a.path), at: _landAt(k, d.item) });
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
-      } else bad = (d && d.error) || 'it could not be added';
+      } else bad = (d && d.error) || I18N.t('it could not be added');
     }
     // What the attaching said of a file that came in ("…the first 15 s go", why it was not taken) stays: only
     // the "adding…" line goes, or the words of what was not added stand in its place.
-    if (bad) _say('Not added: ' + bad);
+    if (bad) _say(I18N.t('Not added: {why}', { why: bad }));
     else if (note) _say(note);
-    else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
+    else if (_ui && (_ui.said.textContent || '') === _addingSaid) _say('');
     _loadColumn();
     // The picker opens the folder a file went into, the file in view.
     if (_picking) for (const [k, got] of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '', got.paths, got.at);
@@ -1274,30 +1289,35 @@ export function createChat(make) {
     if (!U) return T.onlyFiles;
     const z = _zone();
     const p = z ? z.parts.find(x => x.kind === 'image') : null;
-    if (z && !(p && p.room && !p.off)) { const w = (p && (p.off || p.none)) || 'This model takes no pictures.'; _say(w); return w; }
-    if (_picking && _pickAt && _pickAt.kind !== 'image') { const w = 'Only ' + (S.noun.many || 'files') + ' of this kind here.'; _say(w); return w; }
+    if (z && !(p && p.room && !p.off)) { const w = (p && (p.off || p.none)) || I18N.t('This model takes no pictures.'); _say(w); return w; }
+    if (_picking && _pickAt && _pickAt.kind !== 'image') { const w = I18N.t('Only pictures of this kind here.'); _say(w); return w; }
     if (/^data:image\//i.test(url)) {
       try {
         const blob = await fetch(url).then(r => r.blob());
         const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '');
         await _upload([new File([blob], 'picture.' + ext, { type: blob.type })], into);
         return '';
-      } catch (e) { _say('Not added: the picture could not be read'); return 'Not added: the picture could not be read'; }
+      } catch (e) {
+        const w = I18N.t('Not added: {why}', { why: I18N.t('the picture could not be read') });
+        _say(w);
+        return w;
+      }
     }
     _made = true;
-    _say('downloading the picture…');
+    _fetchingSaid = I18N.t('downloading the picture…');
+    _say(_fetchingSaid);
     const run = (async () => {
       const d = await json('/api/mv3/img/link', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, project: _key || '', categoryId: (into && into.kind === 'image' && into.cat) || '' }),
       });
       if (!d || !d.success || !d.item) {
-        const why = (d && d.error) || 'it could not be downloaded';
-        _say('Not added: ' + why);
-        return 'Not added: ' + why;
+        const why = (d && d.error) || I18N.t('it could not be downloaded');
+        _say(I18N.t('Not added: {why}', { why }));
+        return I18N.t('Not added: {why}', { why });
       }
       const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
-      if (_ui && /^downloading the picture/.test(_ui.said.textContent || '')) _say('');
+      if (_ui && (_ui.said.textContent || '') === _fetchingSaid) _say('');
       _attach(a.path, a.name, Object.assign({}, a, { kind: 'image' }));
       _loadColumn();
       if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {}).image || '', [a.path], _landAt('image', d.item));
@@ -1311,7 +1331,7 @@ export function createChat(make) {
 
   // ── The thread ────────────────────────────────────────────────────────────
   function _stageWords(g) {
-    if (g.error && !g.stage) return g.error.slice(0, 60) + ' - trying the next…';
+    if (g.error && !g.stage) return I18N.t('{error} - trying the next…', { error: g.error.slice(0, 60) });
     return g.stage ? g.stage + '…' : S.busyWord + '…';
   }
 
@@ -1468,7 +1488,7 @@ export function createChat(make) {
     // the shared cross, "Really?" by js/really.js (3 s, Escape and the pointer leaving the message let go)
     const x = el('button', 'mv3-ig-del u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
-    x.title = 'Delete this message - what it made stays on its shelf and on the timeline';
+    x.title = I18N.t('Delete this message - what it made stays on its shelf and on the timeline');
     twoPress(x, { host: b, go: async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1478,7 +1498,7 @@ export function createChat(make) {
       });
       if (!d || !d.success) {
         x.disabled = false;
-        if (x.isConnected) note(x, 'Not deleted.', (d && d.error) || 'the app did not answer');
+        if (x.isConnected) note(x, I18N.t('Not deleted.'), (d && d.error) || I18N.t('the app did not answer'));
         return;
       }
       // Gone at once; the thread read again takes away what went with it.
@@ -1565,8 +1585,8 @@ export function createChat(make) {
         onCancel: g.alertId ? () => _letGo(g) : null,
       }));
     } else {
-      cell.appendChild(el('div', 'mv3-ig-bad', g.error || 'nothing came back'));
-      if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) cell.appendChild(el('div', 'mv3-ig-note', 'Alerts can try it again'));
+      cell.appendChild(el('div', 'mv3-ig-bad', g.error || I18N.t('nothing came back')));
+      if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) cell.appendChild(el('div', 'mv3-ig-note', I18N.t('Alerts can try it again')));
     }
     return cell;
   }
@@ -1575,7 +1595,7 @@ export function createChat(make) {
   // that came out wrong can be argued with.
   function _facts(g) {
     const wrap = el('div', 'mv3-ig-more');
-    const btn = el('button', 'mv3-ig-more-b', 'Read more');
+    const btn = el('button', 'mv3-ig-more-b', I18N.t('Read more'));
     btn.type = 'button';
     const body = el('div', 'mv3-ig-more-body');
     body.hidden = true;
@@ -1588,7 +1608,7 @@ export function createChat(make) {
     }
     btn.addEventListener('click', () => {
       body.hidden = !body.hidden;
-      btn.textContent = body.hidden ? 'Read more' : 'Less';
+      btn.textContent = body.hidden ? I18N.t('Read more') : I18N.t('Less');
     });
     wrap.append(btn, body);
     return wrap;
@@ -1653,11 +1673,11 @@ export function createChat(make) {
     }
     try {
       // A file still on its way into the row goes with this message, not after it.
-      if (_uploading) { _say('waiting for the ' + S.noun.one + ' to be added…'); await _uploading.catch(() => {}); _say(''); }
+      if (_uploading) { _say(I18N.t('waiting for the picture to be added…')); await _uploading.catch(() => {}); _say(''); }
       if (!Store.key()) {
         _adopt = true;
         try { await _ensureProject(); }
-        catch (e) { _adopt = false; note(at, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
+        catch (e) { _adopt = false; note(at, I18N.t('Could not start a project.'), String(e.message || e).slice(0, 120)); return; }
       }
       // The conversation's key: a highlights fragment talks in its project's, and its Alerts row leads back to
       // the project with this chat open.
@@ -1672,7 +1692,7 @@ export function createChat(make) {
           where: typeof S.where === 'function' ? S.where(key) : Store.whereOf(key, S.name),
         })),
       });
-      if (!d || !d.success) { _dropPend(); note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { _dropPend(); note(at, I18N.t('Not sent.'), (d && d.error) || I18N.t('the server did not answer')); return; }
       if (_pend) _pend.id = d.send || '';
       ta.value = '';
       _notice = '';
@@ -1702,8 +1722,9 @@ export function createChat(make) {
     const b = _ui && _ui.nBtn;
     if (!b) return;
     b.innerHTML = icon('layers', 14) + '<span class="u-mono">' + _n + '</span>';
-    b.title = 'How many to make at once: ' + _n + ' - press for ' + S.counts[(S.counts.indexOf(_n) + 1) % S.counts.length] + '. Each is its own attempt.';
-    b.setAttribute('aria-label', 'How many at once: ' + _n);
+    b.title = I18N.t('How many to make at once: {n} - press for {next}. Each is its own attempt.',
+      { n: _n, next: S.counts[(S.counts.indexOf(_n) + 1) % S.counts.length] });
+    b.setAttribute('aria-label', I18N.t('How many at once: {n}', { n: _n }));
   }
   // THE PRICE BY THE SEND: the column's price box (a model column paints it) is read into the bar - its
   // figure beside the button, the whole phrase in the title - and the box itself is not shown.
@@ -1727,10 +1748,10 @@ export function createChat(make) {
     pen.classList.toggle('on', on);
     pen.classList.toggle('is-on', on);   // pressed: the selected look
     pen.classList.toggle('is-keyshut', !KG.isOpen('writer'));
-    if (!KG.isOpen('writer')) { pen.title = 'The writer needs an AI key for the agents - press to see which'; return; }
+    if (!KG.isOpen('writer')) { pen.title = I18N.t('The writer needs an AI key for the agents - press to see which'); return; }
     pen.title = on
-      ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
-      : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
+      ? I18N.t('The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.')
+      : I18N.t('Sending your words exactly as typed. Press to let the writer shape them for this model.');
   }
   function _setWriting(v) {
     // Switched on with no agent to write: the popup says which key, and nothing changes.
@@ -1873,9 +1894,9 @@ export function createChat(make) {
       t.appendChild(mediaBtn('image', () => viewPictures((_col ? _col.items() : [it])
         .filter(x => x && x.path && (x.state || 'done') === 'done' && x.ftype !== 'video' && x.ftype !== 'audio'), it.path)));
     } else if (it.state === 'pending') {
-      t.appendChild(el('span', 'sp', 'making…'));
+      t.appendChild(el('span', 'sp', I18N.t('making…')));
     } else {
-      t.appendChild(el('span', 'sp', String(it.error || 'failed').slice(0, 70)));
+      t.appendChild(el('span', 'sp', String(it.error || I18N.t('failed')).slice(0, 70)));
     }
     return t;
   }
@@ -1901,7 +1922,7 @@ export function createChat(make) {
     });
     t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
   }
-  const _secsOf = (v) => (+v > 0 ? (+v).toFixed(1) + 's' : '');
+  const _secsOf = (v) => (+v > 0 ? I18N.t('{n}s', { n: (+v).toFixed(1) }) : '');
 
   // A clip: its poster at its shape, its length; ▶ in its middle plays it in the Library's viewer and the pointer resting on
   // it plays it in place without its sound.
@@ -1912,7 +1933,7 @@ export function createChat(make) {
     if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
     t.title = it.name || '';
     if ((it.state || 'done') !== 'done' || !it.path) {
-      t.appendChild(el('span', 'sp', it.state === 'pending' ? 'making…' : String(it.error || 'failed').slice(0, 70)));
+      t.appendChild(el('span', 'sp', it.state === 'pending' ? I18N.t('making…') : String(it.error || I18N.t('failed')).slice(0, 70)));
       return t;
     }
     const poster = it.thumb || posterOf(it.path);
@@ -1927,7 +1948,7 @@ export function createChat(make) {
     const secs = _secsOf(it.dur);
     if (secs) t.appendChild(el('span', 'mv3-ig-dur', secs));
     const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, 'video') : '';
-    if (why) { t.classList.add('is-short'); t.title = (it.name ? it.name + ' - ' : '') + why; }
+    if (why) { t.classList.add('is-short'); t.title = it.name ? I18N.t('{name} - {why}', { name: it.name, why }) : why; }
     t.appendChild(mediaBtn('video', () => viewClip(it.path, it.name, it.thumb)));
     hoverClip(t, it.path);
     _colDrag(t, {
@@ -1951,7 +1972,7 @@ export function createChat(make) {
     t.title = it.name || '';
     const play = el('button', 'mv3-ig-splay u-btn is-s is-icon', _hear && _hear.path === it.path ? '❚❚' : '▶');
     play.type = 'button';
-    play.title = 'Listen';
+    play.title = I18N.t('Listen');
     play.draggable = false;
     // Drawn again while it plays: this button is the one that stops it now.
     if (_hear && _hear.path === it.path) _hear.btn = play;
@@ -1966,9 +1987,9 @@ export function createChat(make) {
       _hear = { audio: a, btn: play, path: it.path };
       play.textContent = '❚❚';
     });
-    t.append(play, el('span', 'nm', it.name || 'sound'), el('span', 'du', _secsOf(it.dur)));
+    t.append(play, el('span', 'nm', it.name || I18N.t('sound')), el('span', 'du', _secsOf(it.dur)));
     const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, 'audio') : '';
-    if (why) { t.classList.add('is-short'); t.title = (it.name ? it.name + ' - ' : '') + why; }
+    if (why) { t.classList.add('is-short'); t.title = it.name ? I18N.t('{name} - {why}', { name: it.name, why }) : why; }
     _colDrag(t, {
       libId: it.libId || '', src: it.path, thumb: null, name: (it.name || '').slice(0, 60),
       group: it.kind || 'sounds', dur: +it.dur || 0, bed: it.kind === 'music',
@@ -2132,8 +2153,8 @@ export function createChat(make) {
     const go = el('button', 'b u-btn is-s is-icon is-main');
     go.type = 'button';
     go.innerHTML = icon('arrow-right', 14);
-    go.title = 'Send (Enter) · a new line is Shift+Enter';
-    go.setAttribute('aria-label', 'Send');
+    go.title = I18N.t('Send (Enter) · a new line is Shift+Enter');
+    go.setAttribute('aria-label', I18N.t('Send'));
     const price = el('span', 'mv3-ig-price u-price');
     price.hidden = true;
     bar.append(...[ta, pen, nBtn, price, go].filter(Boolean));
@@ -2154,7 +2175,7 @@ export function createChat(make) {
     let sash = null, stripBox = null;
     if (S.column) {
       sash = el('div', 'mv3-sash is-v mv3-ig-sash');
-      sash.title = 'Drag to resize · double-click to reset';
+      sash.title = I18N.t('Drag to resize · double-click to reset');
       stripBox = el('div', 'mv3-ig-strip');
       main.append(setBox, chat, sash, stripBox);
     } else main.append(setBox, chat);
@@ -2163,15 +2184,18 @@ export function createChat(make) {
     _paintN();
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
-        roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
+        roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || I18N.t('Show'),
         // THIS PROJECT's folders - the project's; none in the Library's unbound chat.
         plinks: () => (Store.unbound() ? '' : (_key || '')),
         // The Library's unbound chat has no project: no "this project" row.
         // ONE "this project": what this chat made here, and THIS PROJECT's folders and links.
         // A draft has no THIS PROJECT: there the row is what this chat made in the draft - "This draft".
         own: Store.unbound() ? null : {
-          get label() { return Store.isDraft() ? 'This draft' : 'THIS PROJECT'; },
-          get empty() { return Store.isDraft() ? 'Nothing made in this draft yet.' : 'Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.'; },
+          get label() { return Store.isDraft() ? I18N.t('This draft') : I18N.t('THIS PROJECT'); },
+          get empty() {
+            return Store.isDraft() ? I18N.t('Nothing made in this draft yet.')
+              : I18N.t('Nothing here yet - what this chat makes in the project lies here, with the links of THIS PROJECT.');
+          },
         },
         tile: _tile, lead: _plusTile,
         // "this project" opened: its own results are read now, not at the next tick.
@@ -2228,7 +2252,7 @@ export function createChat(make) {
         ev.stopPropagation();
         const url = Pick.dropLink(ev.dataTransfer);
         if (url) _linkPicture(url, null);
-        else _say('Only a picture\'s own link comes in this way.');
+        else _say(I18N.t('Only a picture\'s own link comes in this way.'));
         return;
       }
       ev.preventDefault();

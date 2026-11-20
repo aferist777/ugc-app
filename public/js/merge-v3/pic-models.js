@@ -13,6 +13,8 @@ import { el, money, json, stored, keep } from './chat-shell.js';
 // The model table being read or not read - the shared parts (a row of the column); the reason a popup.
 import { loadingEl, failedEl, cap } from '../ui-state.js';
 import { showError } from '../notice.js';
+// The interface's words (`t` is a quality tier here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 /**
  * The column for `ctx` (the shell's handles). `o`: { lsKey - where the choice is remembered, maxAtts - the most
@@ -33,7 +35,7 @@ export function modelColumn(ctx, o) {
     const d = await json('/api/mv3/img/matrix');
     if (d && d.success) { _table = d; _tableErr = ''; }
     else {
-      _tableErr = (d && d.error) || 'could not read the model table';
+      _tableErr = (d && d.error) || T.t('could not read the model table');
       showError(cap(_tableErr));
     }
     paint();
@@ -75,9 +77,9 @@ export function modelColumn(ctx, o) {
     if (!_table || !_table.engines.length) {
       host.textContent = '';
       // Not read: "did not load" with Try again - the reason is the popup (load).
-      host.appendChild(_tableErr ? failedEl('The models', () => { _tableErr = ''; paint(); load(); }, { line: true })
-        : _table ? el('div', 'mv3-ig-fall', 'No picture model is available - check the API keys in Admin.')
-          : loadingEl('reading the models…', { line: true }));
+      host.appendChild(_tableErr ? failedEl(T.t('The models'), () => { _tableErr = ''; paint(); load(); }, { line: true })
+        : _table ? el('div', 'mv3-ig-fall', T.t('No picture model is available - check the API keys in Admin.'))
+          : loadingEl(T.t('reading the models…'), { line: true }));
       _set = null;
       return;
     }
@@ -96,24 +98,24 @@ export function modelColumn(ctx, o) {
       const id = (k) => (opts.idPrefix || 'mv3-pc') + '-' + k;
       const prov = document.createElement('select');
       prov.id = id('prov');
-      prov.title = 'Who is asked';
-      row('aggregator', prov, 'is-prov');
+      prov.title = T.t('Who is asked');
+      row(T.t('aggregator'), prov, 'is-prov');
       const eng = document.createElement('select');
       eng.id = id('eng');
-      eng.title = 'The model';
-      row('model', eng);
+      eng.title = T.t('The model');
+      row(T.t('model'), eng);
       const q = document.createElement('select');
       q.id = id('q');
-      q.title = 'Quality';
-      row('quality', q);
+      q.title = T.t('Quality');
+      row(T.t('quality'), q);
       let arSel = null, arWrap = null, shape = null;
       if (opts.shapes) {
         // The shape twice: buttons in the wide column, a dropdown in the folded row.
         arSel = document.createElement('select');
         arSel.id = id('ar');
-        arSel.title = 'Shape';
-        row('shape', arSel, 'is-arsel');
-        host.appendChild(el('div', 'mv3-ig-sep', 'Shape'));
+        arSel.title = T.t('Shape');
+        row(T.t('shape'), arSel, 'is-arsel');
+        host.appendChild(el('div', 'mv3-ig-sep', T.t('Shape')));
         arWrap = el('div', 'mv3-ig-ar-row');
         host.appendChild(arWrap);
       } else {
@@ -160,7 +162,11 @@ export function modelColumn(ctx, o) {
     if (want && !list.some(e => e.id === want)) {
       const was = (_table.engines.find(e => e.id === want) || {}).label || want;
       _set.eng.value = (list[0] || {}).id || '';
-      if (had) ctx.say(was + ' cannot take ' + n + (n === 1 ? ' reference' : ' references') + ' - using ' + ((list[0] || {}).label || 'nothing'));
+      if (had) {
+        const other = (list[0] || {}).label;
+        ctx.say(other ? T.tn(n, '{model} cannot take {n} reference - using {other}', '{model} cannot take {n} references - using {other}', { model: was, other })
+          : T.tn(n, '{model} cannot take {n} reference - using nothing', '{model} cannot take {n} references - using nothing', { model: was }));
+      }
     }
     _paintProviders();
     _paintQuality();
@@ -208,17 +214,17 @@ export function modelColumn(ctx, o) {
     const box = _set.cost;
     if (val == null) {
       box.className = 'mv3-ig-cost is-unknown';
-      box.innerHTML = '<b>&mdash;</b><span>no published price for this one</span>';
+      box.innerHTML = '<b>&mdash;</b><span>' + T.t('no published price for this one') + '</span>';
     } else {
       box.className = 'mv3-ig-cost';
       box.innerHTML = '<b>' + (chosen.approx ? '≈' : '') + money(val) + '</b>'
-        + '<span>per picture' + (many > 1 ? ' · ' + money(val * many) + ' for ' + many : '') + '</span>';
+        + '<span>' + T.t('per picture') + (many > 1 ? ' · ' + T.t('{sum} for {n}', { sum: money(val * many), n: many }) : '') + '</span>';
     }
     if (ctx.priceFrom) ctx.priceFrom(box);
     // WHO CATCHES A REFUSAL, and what that would cost - known before it happens rather than after.
     const others = _houses(e, n).filter(r => r !== chosen && (r.price || {})[q] != null);
     _set.fall.innerHTML = others.length
-      ? 'if it refuses: ' + others.map(x => '<b>' + x.label + '</b> ' + money(x.price[q])).join(', ')
+      ? T.t('if it refuses: {list}', { list: others.map(x => '<b>' + x.label + '</b> ' + money(x.price[q])).join(', ') })
       : '';
     keep(opts.lsKey, { engine: e.id, provider: _set.prov.value, quality: q, aspect: opts.shapes ? _set.ar : (stored(opts.lsKey, {}).aspect || '') });
   }
@@ -227,8 +233,8 @@ export function modelColumn(ctx, o) {
     if (!opts.shapes) {
       if (_set.shape) {
         _set.shape.textContent = '';
-        _set.shape.append(el('span', 'k', 'Shape'), el('b', null, _aspect()), el('span', null, "the project's own"));
-        _set.shape.title = 'Every frame is drawn in the project\'s shape - a frame of another shape would go to the clip with bars';
+        _set.shape.append(el('span', 'k', T.t('Shape')), el('b', null, _aspect()), el('span', null, T.t("the project's own")));
+        _set.shape.title = T.t('Every frame is drawn in the project\'s shape - a frame of another shape would go to the clip with bars');
       }
       return;
     }
@@ -240,7 +246,7 @@ export function modelColumn(ctx, o) {
       b.textContent = a;
       if (a === _set.fmt) {
         b.appendChild(el('span', 'dot', ' •'));
-        b.title = "the project's own shape";
+        b.title = T.t("the project's own shape");
       }
       b.addEventListener('click', () => { _set.ar = a; _paintAspects(); _paintPrice(); });
       _set.arWrap.appendChild(b);
@@ -268,7 +274,7 @@ export function modelColumn(ctx, o) {
     // The project's own shape is the dot among the shapes - or, without the shapes, the shape.
     onProject: () => { if (_set) { _set.fmt = (Store.timeline() || {}).format || '9:16'; _paintAspects(); } },
     room,
-    ready: () => (_set ? '' : ['No picture model.', _tableErr || 'Check the API keys in Admin.']),
+    ready: () => (_set ? '' : [T.t('No picture model.'), _tableErr || T.t('Check the API keys in Admin.')]),
     body: () => ({ engine: engine().id, provider: _set.prov.value, quality: _set.q.value, aspect: _aspect() }),
     engine: () => (_table && _set ? engine() : null),
     price,

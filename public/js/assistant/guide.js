@@ -21,6 +21,7 @@
 import { openFrame, GEN_SIZE } from '../gen-window.js';
 import { render as md } from './md.js';
 import { loadingEl, failedEl } from '../ui-state.js';
+import * as T from '../i18n/t.js';
 
 const GEOM = Object.freeze({ key: 'guide', resize: true, move: true, keepSize: true, keepPos: true });
 const LS = 'gd_place_v1';
@@ -112,7 +113,7 @@ function _build() {
     _go(chapter || _at.chapter, section || '');
   });
   W = { win, nav, page, doc };
-  win.setCrumbs([{ label: 'guide' }]);
+  win.setCrumbs([{ label: T.t('guide') }]);
   _tell(true);
 }
 
@@ -120,7 +121,7 @@ async function _loadToc() {
   try { await contents(); }
   catch (e) {
     _toc = null;
-    if (W) { W.doc.textContent = ''; W.doc.appendChild(failedEl('The guide', () => openGuide(_at))); }
+    if (W) { W.doc.textContent = ''; W.doc.appendChild(failedEl(T.t('The guide'), () => openGuide(_at))); }
   }
 }
 
@@ -141,14 +142,14 @@ async function _go(chapter, section) {
   _at = { chapter, section: section || '' };
   _keep();
   _markRead(chapter);
-  W.win.setCrumbs([{ label: 'guide', on: () => _go(_toc[0].id, '') }, { label: ch.title }]);
+  W.win.setCrumbs([{ label: T.t('guide'), on: () => _go(_toc[0].id, '') }, { label: ch.title }]);
   _paintNav();
   if (!same) {
     W.doc.textContent = '';
-    W.doc.appendChild(loadingEl('reading the chapter'));
+    W.doc.appendChild(loadingEl(T.t('reading the chapter')));
     let text;
     try { text = await _text(ch); }
-    catch (e) { W.doc.textContent = ''; W.doc.appendChild(failedEl('The chapter', () => _go(chapter, section))); return; }
+    catch (e) { W.doc.textContent = ''; W.doc.appendChild(failedEl(T.t('The chapter'), () => _go(chapter, section))); return; }
     if (!W || _at.chapter !== chapter) return;
     W.doc.textContent = '';
     W.doc.dataset.ch = chapter;

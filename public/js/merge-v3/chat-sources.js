@@ -5,9 +5,10 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { thumbOf, json } from './chat-shell.js';
+import { t, tn } from '../i18n/t.js';
 
 // A shelf that could not be read: `failed` - the attachment window says "did not load" with Try again.
-export const gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read', failed: true });
+export const gone = (d) => ({ items: [], cats: [], why: (d && d.error) || t('the shelf could not be read'), failed: true });
 export const shape = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
 export const pic = (path, name, sub, x) => Object.assign({ path, name: name || '', sub: sub || '',
   thumb: thumbOf(path, 'strip'), big: thumbOf(path, 'main') }, x || {});
@@ -20,17 +21,18 @@ export async function people() {
   if (!c || !c.success) return gone(c);
   const chars = c.items || [];
   const looks = (l && l.success) ? l.items || [] : [];
-  const nLooks = (n) => (n === 1 ? '1 look' : n + ' looks');
+  const nLooks = (n) => tn(n, '{n} look', '{n} looks');
   const groups = chars.map((ch) => {
     const mine = looks.filter(x => (x.meta || {}).charId === ch.id);
-    const items = [pic(ch.media, ch.name, 'character', { aspect: '16:9' })]
-      .concat(mine.map(lk => pic(lk.media, lk.name, ch.name + ' · look'))).filter(x => x.path);
-    return { key: 'c:' + ch.id, label: ch.name || 'character', n: mine.length, sub: nLooks(mine.length), items };
+    // The words under a picture (`sub`) and a group's `label` are only shown - and searched in as shown.
+    const items = [pic(ch.media, ch.name, t('character'), { aspect: '16:9' })]
+      .concat(mine.map(lk => pic(lk.media, lk.name, t('{name} · look', { name: ch.name })))).filter(x => x.path);
+    return { key: 'c:' + ch.id, label: ch.name || t('character'), n: mine.length, sub: nLooks(mine.length), items };
   }).filter(g => g.items.length);
   // The most looks first; one count keeps the shelf's order.
   groups.sort((a, b) => b.n - a.n);
-  const loose = looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId)).map(lk => pic(lk.media, lk.name, 'look')).filter(x => x.path);
-  if (loose.length) groups.push({ key: 'loose', label: 'Looks of no character', n: loose.length, sub: nLooks(loose.length), items: loose });
+  const loose = looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId)).map(lk => pic(lk.media, lk.name, t('look'))).filter(x => x.path);
+  if (loose.length) groups.push({ key: 'loose', label: t('Looks of no character'), n: loose.length, sub: nLooks(loose.length), items: loose });
   return { items: groups.flatMap(g => g.items), groups };
 }
 
@@ -50,7 +52,7 @@ export const TREE = {
 };
 
 /** The row of the characters and their looks - in every chat that attaches pictures. */
-export const PEOPLE_ROW = { id: 'people', label: 'Characters & looks', load: people, empty: 'No characters yet - New Character makes one in the Library.' };
+export const PEOPLE_ROW = { id: 'people', label: t('Characters & looks'), load: people, empty: t('No characters yet - New Character makes one in the Library.') };
 
 /** Where the window opens for a picture's slot by what it is for: a person on characters & looks, a place on IMAGES ->
  *  Environments, clothes on IMAGES -> Lookbooks (IMAGES when that folder holds no pictures), anything else on IMAGES. */

@@ -31,29 +31,40 @@ import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openFrame, GEN_SIZE, GEOM_CHAT } from '../gen-window.js';
 import { markText, markField } from './image-words.js';
+// The app's words as T.t / T.tn: this module's own `t`s are a shot's label and a prompt variant. The words handed to the
+// chat's shell (the zone's places, the nouns, the texts, the facts' names) are given already in the app's language.
+import * as T from '../i18n/t.js';
 
 const MAX_ATTS = 6;
 const LS_LAST = 'mv3-fc-last';           // the model choice of this chat
+// The words of the zone's places - their keys are what the code and the server compare.
+const ROLE_WORD = {
+  character: T.t('character'), place: T.tc('frames chat', 'place'), frame: T.t('frame'),
+  extra: T.tc('frames chat', 'extra'), product: T.tc('frames chat', 'product'),
+};
 // THE ZONE IS TWO FIELDS: the BASE - the person and the place, or the frame
 // being changed once one is put there with "to reference" - and the EXTRA pictures, up to four, whatever the person
 // wants in the frame, said in words what each is. The numbers count across both: the base first.
 const BASE_CAST = [
-  { key: 'character', label: 'character', max: 1, min: 0, hint: 'The person - their look\'s sheet. The frame takes only the person from it, never the sheet itself.' },
-  { key: 'place', label: 'place', max: 1, min: 0, hint: 'The place - the environment the person is in' },
+  { key: 'character', label: ROLE_WORD.character, max: 1, min: 0, hint: T.t('The person - their look\'s sheet. The frame takes only the person from it, never the sheet itself.') },
+  { key: 'place', label: ROLE_WORD.place, max: 1, min: 0, hint: T.t('The place - the environment the person is in') },
 ];
 const BASE_FRAME = [
-  { key: 'frame', label: 'frame', max: 1, min: 0, hint: 'The frame being changed - its cross puts the person and the place back' },
+  { key: 'frame', label: ROLE_WORD.frame, max: 1, min: 0, hint: T.t('The frame being changed - its cross puts the person and the place back') },
 ];
-const EXTRA = { key: 'extra', label: 'extra', max: 4, min: 0, hint: 'Anything else for the frame - an object, a pose to copy, a look; say in the message what it is' };
+const EXTRA = { key: 'extra', label: ROLE_WORD.extra, max: 4, min: 0, hint: T.t('Anything else for the frame - an object, a pose to copy, a look; say in the message what it is') };
 // THE PRODUCT - up to two products of IMAGES -> Props, between the base and
 // the extra pictures; each goes with its name and description, drawn exactly as on its picture. It stays from message to
 // message until taken off (the zone is never emptied by a send). The pictures stay at most 6: the extra ones take the rest.
-const PRODUCT = { key: 'product', label: 'product', max: 2, min: 0, hint: 'A product of IMAGES → Props - drawn exactly as on its picture; its description goes with it' };
+const PRODUCT = { key: 'product', label: ROLE_WORD.product, max: 2, min: 0, hint: T.t('A product of IMAGES → Props - drawn exactly as on its picture; its description goes with it') };
 const PROPS_AT = '/media/props/';
 const _isProp = (path) => String(path || '').split('?')[0].startsWith(PROPS_AT);
-const NOT_PROP = 'A product comes from IMAGES → Props - add it there with New prop, or put the picture into extra';
-// The shot sizes of the set (routes/scen3.js FRAME_SETS) - here only as where the frame's edge is.
-const SHOTS = [['', 'none'], ['selfie', 'selfie'], ['half', 'half body'], ['full', 'full body']];
+const NOT_PROP = T.t('A product comes from IMAGES → Props - add it there with New prop, or put the picture into extra');
+// The shot sizes of the set (routes/scen3.js FRAME_SETS) - here only as where the frame's edge is: the value sent, the
+// words shown.
+const SHOTS = [['', T.t('none')], ['selfie', T.t('selfie')], ['half', T.t('half body')], ['full', T.t('full body')]];
+// A frame of the set says the shot size it was drawn to (its `framing` - one of SHOTS' values) in a word.
+const FRAMING_WORD = { selfie: T.tc('shot', 'selfie'), half: T.tc('shot', 'half'), full: T.tc('shot', 'full') };
 
 let _proj = null;              // the talking head's project record, handed in by every paint
 let _hooks = {};               // { added(project) } from the panel
@@ -82,12 +93,12 @@ function FRAMES(ctx) {
     extra: (host) => {
       // WHERE THE EDGE IS: a dropdown, words only, `none` first and by default.
       const r = el('div', 'mv3-ig-row');
-      const l = el('label', null, 'shot');
+      const l = el('label', null, T.t('shot'));
       const s = document.createElement('select');
       s.className = 'u-in is-s';
       s.id = 'mv3-fc-shot';
       l.htmlFor = s.id;
-      s.title = 'Where the frame\'s edge is. none - your words decide how much of the person is in it; the pose is always your words.';
+      s.title = T.t('Where the frame\'s edge is. none - your words decide how much of the person is in it; the pose is always your words.');
       for (const [v, t] of SHOTS) {
         const o = document.createElement('option');
         o.value = v; o.textContent = t;
@@ -100,9 +111,8 @@ function FRAMES(ctx) {
       _shotSel = s;
       // The writer, a switch of the column (as in the video chat).
       // the shared switch (.u-switch), its word beside it
-      const wr = switchRow('Writer', ctx.writing(), false, (v) => ctx.setWriting(v));
-      wr.title = 'On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. '
-        + 'Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.';
+      const wr = switchRow(T.t('Writer'), ctx.writing(), false, (v) => ctx.setWriting(v));
+      wr.title = T.t('On: the writer writes the frame\'s prompt from your words and the pictures, and stops - you look at it, edit it, and `draw` spends. Off: one press - your words are put into English and the pictures named for the model, and the frame is drawn.');
       const sw = el('div', 'mv3-vc-switches');
       sw.appendChild(wr);
       host.appendChild(sw);
@@ -116,16 +126,16 @@ function FRAMES(ctx) {
     const prod = Object.assign({}, PRODUCT, { max: Math.max(0, Math.min(PRODUCT.max, room - base.length)) });
     const extra = Object.assign({}, EXTRA, { max: Math.max(0, Math.min(EXTRA.max, room - base.length)) });
     return { parts: [{
-      kind: 'image', word: 'pictures', one: 'picture', room,
+      kind: 'image', word: T.t('pictures'), one: T.t('picture'), room,
       // The fields; the shell still knows every slot of the part, in the order the numbers count.
       slots: base.concat(prod.max ? [prod] : [], extra.max ? [extra] : []),
       groups: [
-        { word: _base === 'frame' ? 'frame to change' : 'person & place', slots: base, cls: 'is-base' },
-        ...(prod.max ? [{ word: 'product', slots: [prod], labels: false, cls: 'is-product', note: 'from Props', noteLong: 'Up to two products of IMAGES → Props - each drawn exactly as on its picture, its description going with it; it stays from message to message until you take it off' }] : []),
-        ...(extra.max ? [{ word: 'extra', slots: [extra], labels: false, cls: 'is-extra', note: 'say what each is', noteLong: 'Whatever else goes into the frame - say in your message what each picture is and what to take from it' }] : []),
+        { word: _base === 'frame' ? T.t('frame to change') : T.t('person & place'), slots: base, cls: 'is-base' },
+        ...(prod.max ? [{ word: ROLE_WORD.product, slots: [prod], labels: false, cls: 'is-product', note: T.t('from Props'), noteLong: T.t('Up to two products of IMAGES → Props - each drawn exactly as on its picture, its description going with it; it stays from message to message until you take it off') }] : []),
+        ...(extra.max ? [{ word: T.tc('frames chat zone', 'extra'), slots: [extra], labels: false, cls: 'is-extra', note: T.t('say what each is'), noteLong: T.t('Whatever else goes into the frame - say in your message what each picture is and what to take from it') }] : []),
       ],
-      none: 'This model takes no pictures.',
-      full: 'This model takes ' + room + ' pictures.',
+      none: T.t('This model takes no pictures.'),
+      full: T.tn(room, 'This model takes {n} picture.', 'This model takes {n} pictures.'),
     }] };
   }
 
@@ -134,19 +144,20 @@ function FRAMES(ctx) {
   async function _frames() {
     const vs = (((_proj || {}).mix || {}).variants) || [];
     const ar = _format() === '16:9' ? '16:9' : '9:16';
-    const set = vs.filter(v => v && v.path).map(v => Src.pic(v.path, 'frame' + (v.n ? ' ' + v.n : ''),
-      v.made === 'chat' ? 'in the set · from the chat' : 'in the set' + (v.framing ? ' · ' + v.framing : ''),
+    const set = vs.filter(v => v && v.path).map(v => Src.pic(v.path, v.n ? T.t('frame {n}', { n: v.n }) : T.t('frame'),
+      v.made === 'chat' ? T.t('in the set · from the chat')
+        : v.framing ? T.t('in the set · {shot}', { shot: FRAMING_WORD[v.framing] || v.framing }) : T.t('in the set'),
       { aspect: ar, thumb: thumbOf(v.preview || v.path, 'strip') }));
     const k = ctx.key();
     const d = k ? await json('/api/scen3/fchat/feed?project=' + encodeURIComponent(k)) : null;
     const inSet = new Set(set.map(x => x.path));
     const made = ((d && d.success && d.items) || []).filter(g => !inSet.has(g.imagePath))
-      .map(g => Src.pic(g.imagePath, String(g.prompt || '').slice(0, 60), 'from the chat', { aspect: g.aspect || ar }));
+      .map(g => Src.pic(g.imagePath, String(g.prompt || '').slice(0, 60), T.t('from the chat'), { aspect: g.aspect || ar }));
     return { items: set.concat(made) };
   }
   // The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
   const SOURCES = [
-    { id: 'frames', label: 'This project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
+    { id: 'frames', label: T.t('This project\'s frames'), load: _frames, empty: T.t('No frames in this project yet.') },
     Src.PEOPLE_ROW,
   ];
   const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'],
@@ -167,7 +178,6 @@ function FRAMES(ctx) {
   const COUNTS_D = [1, 2, 4];
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const _cardUrl = (m, tail) => '/api/scen3/fchat/card/' + encodeURIComponent(m.id) + (tail || '');
-  const ROLE_WORD = { character: 'character', place: 'place', frame: 'frame', extra: 'extra', product: 'product' };
 
   // What was asked: the words, and the pictures by number with the field each was in.
   function _askedHead(words, media) {
@@ -196,7 +206,7 @@ function FRAMES(ctx) {
     if (!gens.length) {
       const empty = el('div', 'mv3-fc-shotbox is-empty');
       empty.style.aspectRatio = ar;
-      empty.appendChild(el('span', null, 'the frame lands here'));
+      empty.appendChild(el('span', null, T.t('the frame lands here')));
       host.appendChild(empty);
       return;
     }
@@ -215,7 +225,7 @@ function FRAMES(ctx) {
       img.alt = g.prompt || '';
       // A press on it does nothing: ⤢ in its corner opens the message's frames large.
       const big = mediaBtn('image', () => _view(gens, i));
-      img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', 'not on the disk any more')); big.remove(); }, { once: true });
+      img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', T.t('not on the disk any more'))); big.remove(); }, { once: true });
       box.append(img, big);
     } else if (g.state === 'pending') {
       const strip = el('div', 'mv3-ig-prog');
@@ -225,7 +235,7 @@ function FRAMES(ctx) {
         onCancel: g.alertId ? async () => { await json('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', { method: 'POST' }); ctx.reload(); } : null,
       }));
     } else {
-      box.appendChild(el('div', 'mv3-ig-bad', g.error || 'nothing came back'));
+      box.appendChild(el('div', 'mv3-ig-bad', g.error || T.t('nothing came back')));
     }
     host.appendChild(box);
     if (gens.length > 1) {
@@ -235,12 +245,12 @@ function FRAMES(ctx) {
       prev.type = 'button'; next.type = 'button';
       prev.disabled = i === 0;
       next.disabled = i === gens.length - 1;
-      prev.title = 'The previous frame of this message';
-      next.title = 'The next frame of this message';
+      prev.title = T.t('The previous frame of this message');
+      next.title = T.t('The next frame of this message');
       const go = (d) => { _shotAt.set(m.id, { i: i + d, n: gens.length }); _shotBox(host, m, gens, progs, verOf); };
       prev.addEventListener('click', () => go(-1));
       next.addEventListener('click', () => go(1));
-      nav.append(prev, el('span', 'vc-vars-t', 'frame ' + (i + 1) + ' of ' + gens.length), next);
+      nav.append(prev, el('span', 'vc-vars-t', T.t('frame {k} of {n}', { k: i + 1, n: gens.length })), next);
       host.appendChild(nav);
     }
     const from = verOf ? verOf(g) : '';
@@ -252,20 +262,20 @@ function FRAMES(ctx) {
   function _shotActs(g) {
     const acts = el('div', 'mv3-ig-acts mv3-fc-acts');
     const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
-    const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? 'in frames' : 'to frames');
+    const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? T.t('in frames') : T.t('to frames'));
     add.type = 'button';
     add.disabled = inSet();
-    add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
+    add.title = inSet() ? T.t('This frame is in the set') : T.t('Put it into the set of first frames - the fragments take their frames from it by the rule');
     add.addEventListener('click', async () => {
       add.disabled = true;
       const d = await _post('/api/scen3/fchat/to-set', { genId: g.id });
-      if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
-      add.textContent = 'In frames';
+      if (!d || !d.success) { add.disabled = false; note(add, T.t('Not added.'), (d && d.error) || T.t('the server did not answer')); return; }
+      add.textContent = T.t('In frames');
       if (_hooks.added) _hooks.added(d.project);
     });
-    const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
+    const use = el('button', 'mv3-c-btn u-btn is-s', T.t('To reference'));
     use.type = 'button';
-    use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the products and the extra pictures stay';
+    use.title = T.t('Change this frame with the next message: it takes the place of the person and the place above the box; the products and the extra pictures stay');
     use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
     acts.append(add, use);
     return acts;
@@ -292,15 +302,15 @@ function FRAMES(ctx) {
     cols.append(left, right);
     box.appendChild(cols);
     const g = gens[gens.length - 1];
-    left.appendChild(el('div', 'mv3-fc-k', 'sent without the writer'));
+    left.appendChild(el('div', 'mv3-fc-k', T.t('sent without the writer')));
     if (g && g.state === 'pending' && !g.taskId) left.appendChild(el('div', 'mv3-fc-note', ctx.stageWords(g)));
     if (g && g.prompt && g.prompt !== g.said) {
       const more = el('details', 'mv3-fc-sent');
-      more.appendChild(el('summary', null, 'sent as'));
+      more.appendChild(el('summary', null, T.t('sent as')));
       more.appendChild(markText(el('div', 'mv3-fc-sent-t'), g.prompt));
       left.appendChild(more);
     }
-    if (g && (g.fell || g.writer)) left.appendChild(el('div', 'mv3-fc-note', g.fell || ('put into English by ' + g.writer)));
+    if (g && (g.fell || g.writer)) left.appendChild(el('div', 'mv3-fc-note', g.fell || T.t('put into English by {name}', { name: g.writer })));
     _shotBox(right, m, gens, progs, null);
     return box;
   }
@@ -319,13 +329,13 @@ function FRAMES(ctx) {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
         progs.set('w:' + m.id, startInlineProgress(strip, {
-          label: 'writing the prompt…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+          label: T.t('writing the prompt…'), key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
         }));
         return box;
       }
-      box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
+      box.appendChild(el('div', 'mv3-ig-bad', c.error || T.t('it was not written')));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'Write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', T.t('Write it again'));
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -355,14 +365,14 @@ function FRAMES(ctx) {
     const v = vs[vi];
     l.left.textContent = '';
     l.ta = null; l.ver = v.id;
-    const head = el('div', 'mv3-fc-k', 'Prompt' + (c.model ? ' · written for ' + c.model : ''));
+    const head = el('div', 'mv3-fc-k', c.model ? T.t('Prompt · written for {model}', { model: c.model }) : T.t('Prompt'));
     l.left.appendChild(head);
-    if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', T.t('The last writing did not work: {why}', { why: c.error })));
     const ta = document.createElement('textarea');
     ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = v.prompt || '';
-    ta.title = 'The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.';
+    ta.title = T.t('The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.');
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
     requestAnimationFrame(grow);
     const key = 'p:' + m.id + ':' + v.id;
@@ -382,7 +392,7 @@ function FRAMES(ctx) {
       for (const p of l.progs.values()) p.detach();
       l.progs.clear();
       l.progs.set('w', startInlineProgress(strip, {
-        label: 'writing another variant…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        label: T.t('writing another variant…'), key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       }));
     }
     if (vs.length > 1) {
@@ -392,8 +402,8 @@ function FRAMES(ctx) {
       prev.type = 'button'; next.type = 'button';
       prev.disabled = vi === 0;
       next.disabled = vi === vs.length - 1;
-      prev.title = 'The previous variant of the prompt';
-      next.title = 'The next variant of the prompt';
+      prev.title = T.t('The previous variant of the prompt');
+      next.title = T.t('The next variant of the prompt');
       const go = (d) => {
         if (_patchT.has(key)) save();
         const t = vs[vi + d];
@@ -404,26 +414,26 @@ function FRAMES(ctx) {
       };
       prev.addEventListener('click', () => go(-1));
       next.addEventListener('click', () => go(1));
-      nav.append(prev, el('span', 'vc-vars-t', 'variant ' + (vi + 1) + ' of ' + vs.length + ' · "draw" sends this one'), next);
+      nav.append(prev, el('span', 'vc-vars-t', T.t('variant {k} of {n} · "draw" sends this one', { k: vi + 1, n: vs.length })), next);
       l.left.appendChild(nav);
     }
     const acts = el('div', 'vc-card-acts');
     const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
-    nBtn.title = 'How many frames to draw from it - each lands in the box on the right';
+    nBtn.title = T.t('How many frames to draw from it - each lands in the box on the right');
     nBtn.addEventListener('click', () => {
       const i = COUNTS_D.indexOf(_cardN.get(m.id) || 1);
       _cardN.set(m.id, COUNTS_D[(i + 1) % COUNTS_D.length]);
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshen(l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Draw');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', T.t('Draw'));
     go.type = 'button';
     go.addEventListener('click', () => _draw(l, go));
     const price = el('span', 'vc-card-why');
-    const again = el('button', 'vc-link', 'Write it again');
+    const again = el('button', 'vc-link', T.t('Write it again'));
     again.type = 'button';
-    again.title = 'Another variant of the prompt from the same words and pictures - this one stays';
+    again.title = T.t('Another variant of the prompt from the same words and pictures - this one stays');
     again.addEventListener('click', () => _rewrite(m, again));
     acts.append(nBtn, go, price, again);
     l.left.appendChild(acts);
@@ -442,7 +452,7 @@ function FRAMES(ctx) {
       if (vs.length < 2) return '';
       const send = (c.sends || []).find(s => (s.genIds || []).includes(g.id));
       const k = send ? vs.findIndex(v => v.id === send.ver) : -1;
-      return k >= 0 ? 'from prompt variant ' + (k + 1) : '';
+      return k >= 0 ? T.t('from prompt variant {n}', { n: k + 1 }) : '';
     };
     _shotBox(l.right, m, gens, l.progs, verOf);
   }
@@ -453,7 +463,7 @@ function FRAMES(ctx) {
     const c = l.m.card;
     const n = _cardN.get(l.m.id) || 1;
     const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
-    l.go.textContent = (made ? 'Draw again' : 'Draw') + (n > 1 ? ' ×' + n : '');
+    l.go.textContent = n > 1 ? (made ? T.t('Draw again ×{n}', { n }) : T.t('Draw ×{n}', { n })) : (made ? T.t('Draw again') : T.t('Draw'));
     l.go.disabled = c.state === 'writing';
     const p = M.price();
     l.price.textContent = p ? (p.approx ? '≈' : '') + money(p.usd * n) + ' · ' + p.model + ' · ' + p.agg : '';
@@ -475,7 +485,7 @@ function FRAMES(ctx) {
       where: WHERE(k),
     });
     btn.disabled = false;
-    if (!d || !d.success) { note(btn, 'Not drawn.', (d && d.error) || 'the server did not answer'); return; }
+    if (!d || !d.success) { note(btn, T.t('Not drawn.'), (d && d.error) || T.t('the server did not answer')); return; }
     ctx.reload();
   }
 
@@ -483,7 +493,7 @@ function FRAMES(ctx) {
     btn.disabled = true;
     const d = await _post(_cardUrl(m, '/rewrite'), { project: m.project, engine: (M.engine() || {}).id || '' });
     btn.disabled = false;
-    if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+    if (!d || !d.success) { note(btn, T.t('Not written.'), (d && d.error) || T.t('the server did not answer')); return; }
     _verAt.delete(m.id);
     ctx.reload();
   }
@@ -493,9 +503,9 @@ function FRAMES(ctx) {
   // message of the thread; a press on one puts it into the box. In English.
   let _ideasBtn = null;
   function _ideasSide() {
-    const b = el('button', 'mv3-fc-ideas u-btn is-gen', 'Ideas');
+    const b = el('button', 'mv3-fc-ideas u-btn is-gen', T.t('Ideas'));
     b.type = 'button';
-    b.title = 'The agent looks at the pictures above the box - the person, the place, the products, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
+    b.title = T.t('The agent looks at the pictures above the box - the person, the place, the products, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.');
     b.addEventListener('click', () => _askIdeas(b));
     return [b];
   }
@@ -503,15 +513,15 @@ function FRAMES(ctx) {
     const k = ctx.key();
     if (!k || b.disabled) return;
     const atts = ctx.atts();
-    if (!atts.some(a => a.slot === 'character' || a.slot === 'place' || a.slot === 'frame')) { note(b, 'Nothing to look at.', 'Put the person or the place above the box first.'); return; }
+    if (!atts.some(a => a.slot === 'character' || a.slot === 'place' || a.slot === 'frame')) { note(b, T.t('Nothing to look at.'), T.t('Put the person or the place above the box first.')); return; }
     b.disabled = true;
-    b.textContent = 'Thinking…';
+    b.textContent = T.t('Thinking…');
     const d = await _post('/api/scen3/fchat/ideas', {
       project: k, projectId: (_proj && _proj.id) || '', refs: atts.map(a => a.path), roles: atts.map(a => a.slot || ''), shot: _shot,
     });
     b.disabled = false;
-    b.textContent = 'Ideas';
-    if (!d || !d.success) { note(b, 'No ideas.', (d && d.error) || 'the server did not answer'); return; }
+    b.textContent = T.t('Ideas');
+    if (!d || !d.success) { note(b, T.t('No ideas.'), (d && d.error) || T.t('the server did not answer')); return; }
     ctx.reload(true);
   }
   // Six, in two columns; one a message went from wears gold and "used".
@@ -520,7 +530,7 @@ function FRAMES(ctx) {
   const _againBusy = new Set();          // '<message id>:<i>' being written again
   function _ideasBubble(m) {
     const box = el('div', 'mv3-ig-msg is-agent mv3-fc-ideasmsg');
-    box.appendChild(el('div', 'mv3-ig-text', m.text || 'Ideas for a frame'));
+    box.appendChild(el('div', 'mv3-ig-text', m.text || T.t('Ideas for a frame')));
     const used = new Set((m.used || []).map(Number));
     const list = el('div', 'mv3-fc-ideaslist');
     m.ideas.forEach((idea, i) => {
@@ -528,8 +538,9 @@ function FRAMES(ctx) {
       const it = el('button', 'mv3-fc-idea' + (used.has(i) ? ' is-used' : ''));
       it.type = 'button';
       it.appendChild(markText(el('span', 't'), idea));
-      if (used.has(i)) it.appendChild(el('span', 'u', 'Used'));
-      it.title = (used.has(i) ? 'A frame was asked for from this one. ' : '') + 'Put it into the message box - change it as you like, then send';
+      if (used.has(i)) it.appendChild(el('span', 'u', T.t('Used')));
+      it.title = used.has(i) ? T.t('A frame was asked for from this one. Put it into the message box - change it as you like, then send')
+        : T.t('Put it into the message box - change it as you like, then send');
       it.addEventListener('click', () => {
         if (cell.classList.contains('is-again')) return;
         ctx.setText(idea);
@@ -539,7 +550,7 @@ function FRAMES(ctx) {
       });
       const re = el('button', 'mv3-fc-idea-re u-btn is-icon', '↻');
       re.type = 'button';
-      re.title = 'Another take on this idea - the same spot, another pose or angle - in its place. Fractions of a cent.';
+      re.title = T.t('Another take on this idea - the same spot, another pose or angle - in its place. Fractions of a cent.');
       re.addEventListener('click', (ev) => { ev.stopPropagation(); _ideaAgain(m, i, cell, re); });
       if (_againBusy.has(m.id + ':' + i)) cell.classList.add('is-again');
       cell.append(it, re);
@@ -559,7 +570,7 @@ function FRAMES(ctx) {
     });
     _againBusy.delete(lock);
     cell.classList.remove('is-again');
-    if (!d || !d.success) { note(re.isConnected ? re : cell, 'Not written again.', (d && d.error) || 'the server did not answer'); return; }
+    if (!d || !d.success) { note(re.isConnected ? re : cell, T.t('Not written again.'), (d && d.error) || T.t('the server did not answer')); return; }
     // The box keeps its words; a send from them no longer marks the new idea used.
     if (_armedIdea && _armedIdea.id === m.id && _armedIdea.i === i) _armedIdea = null;
     ctx.reload();
@@ -581,19 +592,19 @@ function FRAMES(ctx) {
     keys: { draft: 'mv3_fc_draft_v1', write: 'mv3_fc_write_v1' },
     maxAtts: MAX_ATTS,
     counts: [1, 2, 4],
-    noun: { one: 'picture', many: 'pictures' },
-    busyWord: 'drawing',
+    noun: { one: T.t('picture'), many: T.t('pictures') },
+    busyWord: T.t('drawing'),
     eta: 40000,
     progressKey: (g) => 'mv3-imagen-' + (g.engine || ''),
     sendUrl: '/api/scen3/fchat/send',
     // A frame that lands goes into the `frame` place only when asked ("to reference").
     landAsRef: false,
     text: {
-      placeholder: 'Describe the frame - where the person is, the pose, the hands, where they look.',
-      empty: 'Describe a frame of this video in words. The person and the place are attached already; what comes back is this project\'s, and "to frames" puts it into the set.',
-      emptyNoProject: 'Open a talking head first.',
-      onlyFiles: 'Only pictures can be attached here.',
-      slot: 'A picture - from the Library or this computer',
+      placeholder: T.t('Describe the frame - where the person is, the pose, the hands, where they look.'),
+      empty: T.t('Describe a frame of this video in words. The person and the place are attached already; what comes back is this project\'s, and "to frames" puts it into the set.'),
+      emptyNoProject: T.t('Open a talking head first.'),
+      onlyFiles: T.t('Only pictures can be attached here.'),
+      slot: T.t('A picture - from the Library or this computer'),
     },
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
     pick: {
@@ -605,7 +616,7 @@ function FRAMES(ctx) {
       // ...and makes one: New prop over the chat, the product added going straight into the
       // place.
       make: (kind, slot) => (slot !== 'product' ? null : {
-        label: '+ new prop', title: 'A product of your own - its photo and what you know about it; it goes into IMAGES → Props and into this place',
+        label: T.t('+ new prop'), title: T.t('A product of your own - its photo and what you know about it; it goes into IMAGES → Props and into this place'),
         on: async () => {
           closePick();
           const { openNewProp } = await import('../prop-window.js');
@@ -614,14 +625,14 @@ function FRAMES(ctx) {
             onAdded: (it) => {
               if (!it || !it.media || taken === it.media) return;
               taken = it.media;
-              ctx.attach(it.media, it.name || 'product', { slot: 'product' });
+              ctx.attach(it.media, it.name || ROLE_WORD.product, { slot: 'product' });
               ctx.saveDraft();
             },
           });
         },
       }),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
+      upWords: { image: T.t('A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.') },
     },
     penInBar: false,
     columnFoot: () => [almanacSoon()],
@@ -648,8 +659,8 @@ function FRAMES(ctx) {
       const keep = ctx.zoneAtts().filter(x => (x.slot === 'extra' || x.slot === 'product') && !x.hole);
       const c = _cast();
       const back = [];
-      if (c.obrazImage) back.push({ path: c.obrazImage, name: c.characterName || 'the character', slot: 'character' });
-      if (c.locationImage) back.push({ path: c.locationImage, name: 'the place', slot: 'place' });
+      if (c.obrazImage) back.push({ path: c.obrazImage, name: c.characterName || T.t('the character'), slot: 'character' });
+      if (c.locationImage) back.push({ path: c.locationImage, name: T.t('the place'), slot: 'place' });
       _auto = { character: c.obrazImage || '', place: c.locationImage || '' };
       ctx.useAtts(back.concat(keep));
       ctx.saveDraft();
@@ -711,25 +722,25 @@ function FRAMES(ctx) {
       // next change.
       const acts = el('div', 'mv3-ig-acts');
       const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
-      const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? 'in frames' : 'to frames');
+      const add = el('button', 'mv3-c-btn u-btn is-s', inSet() ? T.t('in frames') : T.t('to frames'));
       add.type = 'button';
       add.disabled = inSet();
-      add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
+      add.title = inSet() ? T.t('This frame is in the set') : T.t('Put it into the set of first frames - the fragments take their frames from it by the rule');
       add.addEventListener('click', async () => {
         add.disabled = true;
         const d = await json('/api/scen3/fchat/to-set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ genId: g.id }) });
-        if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
-        add.textContent = 'In frames';
+        if (!d || !d.success) { add.disabled = false; note(add, T.t('Not added.'), (d && d.error) || T.t('the server did not answer')); return; }
+        add.textContent = T.t('In frames');
         if (_hooks.added) _hooks.added(d.project);
       });
-      const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', T.t('To reference'));
       use.type = 'button';
-      use.title = 'Put it into the "frame" place above the message box, to change it with the next message';
+      use.title = T.t('Put it into the "frame" place above the message box, to change it with the next message');
       use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
       acts.append(add, use);
       cell.appendChild(acts);
       img.addEventListener('error', () => {
-        const gone = el('div', 'mv3-ig-gone', 'not on the disk any more');
+        const gone = el('div', 'mv3-ig-gone', T.t('not on the disk any more'));
         gone.style.aspectRatio = img.style.aspectRatio;
         img.replaceWith(gone);
         big.remove();
@@ -737,14 +748,14 @@ function FRAMES(ctx) {
       }, { once: true });
     },
     facts: (g) => [
-      ['model', (g.engine || '') + ' · ' + (g.provider || '?') + ' · ' + (g.quality || '')],
-      ['asked as', g.model || ''],
-      ['shape', (g.aspect || '') + ((g.w && g.h) ? ' · ' + g.w + '×' + g.h : '')],
-      ['took', g.secs ? g.secs + 's' : ''],
-      ['references', (g.refs || []).length ? String(g.refs.length) : ''],
-      ['writer', g.fell ? g.fell : (g.writer || '')],
-      ['you said', g.said || ''],
-      ['sent as', (g.prompt && g.prompt !== g.said) ? g.prompt : ''],
+      [T.t('model'), (g.engine || '') + ' · ' + (g.provider || '?') + ' · ' + (g.quality || '')],
+      [T.t('asked as'), g.model || ''],
+      [T.t('shape'), (g.aspect || '') + ((g.w && g.h) ? ' · ' + g.w + '×' + g.h : '')],
+      [T.t('took'), g.secs ? T.t('{n}s', { n: g.secs }) : ''],
+      [T.t('references'), (g.refs || []).length ? String(g.refs.length) : ''],
+      [T.t('writer'), g.fell ? g.fell : (g.writer || '')],
+      [T.t('you said'), g.said || ''],
+      [T.t('sent as'), (g.prompt && g.prompt !== g.said) ? g.prompt : ''],
     ],
     view(done, at) {
       import('../library/viewer.js').then(V => V.openViewer(
@@ -775,7 +786,7 @@ function _autoCast(opening) {
   if (_base === 'frame') return;
   const c = _cast();
   const want = { character: c.obrazImage || '', place: c.locationImage || '' };
-  const names = { character: c.characterName || 'the character', place: 'the place' };
+  const names = { character: c.characterName || T.t('the character'), place: T.t('the place') };
   const zoneNow = () => CHAT.ctx.zoneAtts();
   let changed = false;
   for (const slot of ['character', 'place']) {
@@ -826,7 +837,7 @@ export function open(p, hooks) {
   if (!isOpen()) {
     // The chats' one size and place, the person's (gen-window.js GEOM_CHAT).
     _win = openFrame({ name: 'frames chat', size: GEN_SIZE, geom: GEOM_CHAT, cls: 'is-fchat', onClose: _park });
-    _win.setCrumbs([{ label: 'Frames chat' }]);
+    _win.setCrumbs([{ label: T.t('Frames chat') }]);
     root.removeAttribute('style');        // the place the old overlay measured for it
     _win.body.appendChild(root);
     if (!_ro && window.ResizeObserver) _ro = new ResizeObserver(() => { if (isOpen()) CHAT.fit(); });
@@ -867,7 +878,7 @@ export function toReference(path, name) {
   if (was && was.path === path) return;
   const keep = z.filter(a => (a.slot === 'extra' || a.slot === 'product') && !a.hole && a.path !== path);
   _base = 'frame';
-  CHAT.ctx.useAtts([{ path, name: name || 'frame', slot: 'frame' }].concat(keep));
+  CHAT.ctx.useAtts([{ path, name: name || T.t('frame'), slot: 'frame' }].concat(keep));
   CHAT.ctx.saveDraft();
 }
 

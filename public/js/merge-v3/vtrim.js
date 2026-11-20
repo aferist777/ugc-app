@@ -17,6 +17,8 @@
 
 import * as Layers from '../layers.js';
 import { wire as wireRange, fill as fillRange } from '../ui-range.js';
+// The interface's words (`t` is a time here, so the module's words are T.t).
+import * as T from '../i18n/t.js';
 
 let _open = null;
 
@@ -50,10 +52,10 @@ export function openTrim(opts) {
   // holds under the head in its own padded column (`body`)
   const box = _el('div', 'vtrim u-win is-float');
   const head = _el('div', 'vtrim-h u-win-head');
-  head.append(_el('b', 'u-win-title', o.title || (o.kind === 'audio' ? 'the sound' : 'the clip')), _el('span', 'u-win-sub', _t(dur) + ' in all'));
+  head.append(_el('b', 'u-win-title', o.title || (o.kind === 'audio' ? T.t('the sound') : T.t('the clip'))), _el('span', 'u-win-sub', T.t('{time} in all', { time: _t(dur) })));
   const x = _el('button', 'vtrim-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = T.t('Close (Esc)');
   head.appendChild(x);
   box.appendChild(head);
   const body = _el('div', 'vtrim-body');
@@ -75,10 +77,10 @@ export function openTrim(opts) {
     range.min = '0';
     range.max = String(Math.max(0, dur - min));
     range.step = '0.04';
-    range.title = 'The first frame: the moment the character is seen best - the moves go from here';
+    range.title = T.t('The first frame: the moment the character is seen best - the moves go from here');
     wireRange(range);                               // the shared slider, in the trimmer's gold
     const at = _el('span', 'vtrim-still-at u-range-v');
-    still.append(_el('span', 'k', 'First frame'), range, at);
+    still.append(_el('span', 'k', T.t('First frame')), range, at);
     body.appendChild(still);
     still.range = range;
     still.at = at;
@@ -98,9 +100,9 @@ export function openTrim(opts) {
 
   const foot = _el('div', 'vtrim-foot');
   const span = _el('span', 'vtrim-span');
-  const play = _el('button', 'mv3-c-btn u-btn is-s', '▶ Play the part');
+  const play = _el('button', 'mv3-c-btn u-btn is-s', T.t('▶ Play the part'));
   play.type = 'button';
-  const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', 'Done');
+  const done = _el('button', 'mv3-c-btn vtrim-done u-btn is-s is-main', T.t('Done'));
   done.type = 'button';
   foot.append(span, play, done);
   body.appendChild(foot);
@@ -108,7 +110,7 @@ export function openTrim(opts) {
   const paint = () => {
     win.style.left = (from / dur * 100) + '%';
     win.style.width = ((to - from) / dur * 100) + '%';
-    span.textContent = _t(from) + ' – ' + _t(to) + ' · ' + (to - from).toFixed(1) + ' s go';
+    span.textContent = T.t('{from} – {to} · {secs} s go', { from: _t(from), to: _t(to), secs: (to - from).toFixed(1) });
     if (still) { still.range.value = String(from); fillRange(still.range); still.at.textContent = _t(from); }
   };
   const show = (t) => { try { media.currentTime = Math.max(0, Math.min(dur - 0.05, t)); } catch (e) { /* not loaded yet */ } };
@@ -188,13 +190,13 @@ export function openTrim(opts) {
   });
   media.addEventListener('timeupdate', () => {
     head2.style.left = (media.currentTime / dur * 100) + '%';
-    if (!media.paused && media.currentTime >= to) { media.pause(); play.textContent = '▶ Play the part'; }
+    if (!media.paused && media.currentTime >= to) { media.pause(); play.textContent = T.t('▶ Play the part'); }
   });
-  media.addEventListener('pause', () => { play.textContent = '▶ Play the part'; });
+  media.addEventListener('pause', () => { play.textContent = T.t('▶ Play the part'); });
   play.addEventListener('click', () => {
     if (!media.paused) { media.pause(); return; }
     show(from);
-    media.play().then(() => { play.textContent = '■ Stop'; }).catch(() => { /* it could not play */ });
+    media.play().then(() => { play.textContent = T.t('■ Stop'); }).catch(() => { /* it could not play */ });
   });
   media.addEventListener('loadedmetadata', () => show(from), { once: true });
 

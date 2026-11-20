@@ -43,6 +43,9 @@ import { showError } from '../notice.js';
 import { startInlineProgress } from '../progress.js';
 import { wire as wireRange } from '../ui-range.js';
 import { backButton } from './tl-gen.js';
+// The interface's words (`t` is a time and a target here, so the module's words are T.t). What goes to a model or the
+// server stays English: the box's text, the prompts, a slot's `label`, the zone's `noun`.
+import * as T from '../i18n/t.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
 const SHOW_ATTS = 9;                       // the row's places at most (the zone grows instead)
@@ -97,12 +100,12 @@ function VIDEOS(ctx) {
   const _asOf = () => { const m = model(); return m && m.family === 'seedance' ? (params().picturesAs || 'refs') : 'refs'; };
   const _framesMode = () => _asOf() === 'frame' || _asOf() === 'fl';
   function _frameSlots() {
-    const s = [{ key: 'first', label: 'first frame', kind: 'frame-first', role: '', min: 1, max: 1, required: true, hint: 'The video starts exactly on this picture' }];
-    if (_asOf() === 'fl') s.push({ key: 'last', label: 'last frame', kind: 'frame-last', role: '', min: 1, max: 1, required: true, hint: 'The video ends exactly on this picture' });
+    const s = [{ key: 'first', label: T.t('first frame'), kind: 'frame-first', role: '', min: 1, max: 1, required: true, hint: T.t('The video starts exactly on this picture') }];
+    if (_asOf() === 'fl') s.push({ key: 'last', label: T.t('last frame'), kind: 'frame-last', role: '', min: 1, max: 1, required: true, hint: T.t('The video ends exactly on this picture') });
     return s;
   }
   const _frameKeys = () => _frameSlots().map(s => s.key);
-  const _onlyFrames = () => 'In this mode only the ' + (_asOf() === 'fl' ? 'first and last frames go' : 'first frame goes');
+  const _onlyFrames = () => (_asOf() === 'fl' ? T.t('In this mode only the first and last frames go') : T.t('In this mode only the first frame goes'));
   // The column's STORYBOARD: ticked, under Seedance, with the writer, and not with frames
   // (the sheet goes as a reference). ">" writes its sheet's prompt, and every paid step waits for its press on its message.
   const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && ctx.writing() && !_framesMode(); };
@@ -111,9 +114,12 @@ function VIDEOS(ctx) {
   const _pics = () => ctx.atts().filter(a => _kind(a) === 'image');
   const _clips = () => ctx.atts().filter(a => _kind(a) === 'video');
   const _sounds = () => ctx.atts().filter(a => _kind(a) === 'audio');
+  // "<model> takes no pictures / clips / sounds." - whole, by the kind.
+  const _takesNo = (k, model) => (k === 'video' ? T.t('{model} takes no clips.', { model })
+    : k === 'audio' ? T.t('{model} takes no sounds.', { model }) : T.t('{model} takes no pictures.', { model }));
   // The seconds of a clip or a sound that go - its part.
   const _span = (a) => Math.max(0, (+a.out || 0) - (+a.in || 0));
-  const _s = (v) => (+v).toFixed(1).replace(/\.0$/, '') + ' s';
+  const _s = (v) => T.t('{n} s', { n: (+v).toFixed(1).replace(/\.0$/, '') });
 
   // ── The part of a clip or a sound that goes ────────────────────
   // How long it may be on the chosen model: Seedance takes clips of 2-15 s (2.5: 2-30) and all of them together that
@@ -131,7 +137,8 @@ function VIDEOS(ctx) {
         const img = params().orientation === 'image';
         const cap = img ? (L.videoSecsImage || 10) : (L.videoSecs || 30);
         return { min: r.duration.min || 3, max: cap, all: cap,
-          why: m.label + ' follows ' + (r.duration.min || 3) + '-' + cap + ' s of the moves' + (img ? ' when the character keeps the picture\'s orientation' : '') + ' - and is billed by them.' };
+          why: img ? T.t('{model} follows {min}-{max} s of the moves when the character keeps the picture\'s orientation - and is billed by them.', { model: m.label, min: r.duration.min || 3, max: cap })
+            : T.t('{model} follows {min}-{max} s of the moves - and is billed by them.', { model: m.label, min: r.duration.min || 3, max: cap }) };
       }
       const [lo, hi] = L.clipSecs || [2, 15];
       const all = L.videoSecs || hi;
@@ -140,33 +147,40 @@ function VIDEOS(ctx) {
       if (alone) {
         const least = Math.max(lo, r.oneClip.least || 4);
         return { min: least, max: Math.min(hi, all), all,
-          why: m.label + ' makes the video as long as its clip: ' + least + '-' + hi + ' s' + (r.agg === 'kie' ? ' - kie bills its seconds too.' : '.') };
+          why: r.agg === 'kie' ? T.t('{model} makes the video as long as its clip: {min}-{max} s - kie bills its seconds too.', { model: m.label, min: least, max: hi })
+            : T.t('{model} makes the video as long as its clip: {min}-{max} s.', { model: m.label, min: least, max: hi }) };
       }
       return { min: lo, max: Math.min(hi, Math.max(0, all - others)), all,
-        why: m.label + ' takes clips of ' + lo + '-' + hi + ' s, ' + all + ' s in all' + (r.agg === 'kie' ? ' - kie bills their seconds too.' : '.') };
+        why: r.agg === 'kie' ? T.t('{model} takes clips of {min}-{max} s, {all} s in all - kie bills their seconds too.', { model: m.label, min: lo, max: hi, all })
+          : T.t('{model} takes clips of {min}-{max} s, {all} s in all.', { model: m.label, min: lo, max: hi, all }) };
     }
     if (k === 'audio') {
       if (!(L.audios > 0)) return null;
       const all = L.audioSecs || 15;
-      return { min: 0.5, max: Math.max(0, all - others), all, why: m.label + ' takes ' + all + ' s of sound in all.' };
+      return { min: 0.5, max: Math.max(0, all - others), all, why: T.t('{model} takes {all} s of sound in all.', { model: m.label, all }) };
     }
     return null;
   }
   // Why a clip or a sound cannot go as it is ('' when it can) - the cell turns red and the send says it.
   function _spanWrong(a) {
     const k = _kind(a), m = model();
-    const what = k === 'video' ? 'clip' : 'sound';
-    if (!(+a.dur > 0)) return 'its length is not known yet - is the file whole?';
+    const clip = k === 'video';
+    if (!(+a.dur > 0)) return T.t('its length is not known yet - is the file whole?');
     const rule = _spanRule(a);
-    if (!rule) return ((m && m.label) || 'This model') + ' takes no ' + what + 's.';
+    if (!rule) return _takesNo(k, (m && m.label) || T.t('This model'));
     const span = _span(a);
-    if (!(span > 0)) return 'no part of it is chosen - press its seconds';
-    if (+a.dur < rule.min - 0.05) return 'it is ' + _s(a.dur) + ' - ' + m.label + ' needs a ' + what + ' of at least ' + _s(rule.min);
-    if (span < rule.min - 0.05) return 'the part is ' + _s(span) + ' - ' + m.label + ' needs at least ' + _s(rule.min) + ' - press its seconds';
+    if (!(span > 0)) return T.t('no part of it is chosen - press its seconds');
+    if (+a.dur < rule.min - 0.05) {
+      const o = { secs: _s(a.dur), model: m.label, min: _s(rule.min) };
+      return clip ? T.t('it is {secs} - {model} needs a clip of at least {min}', o) : T.t('it is {secs} - {model} needs a sound of at least {min}', o);
+    }
+    if (span < rule.min - 0.05) return T.t('the part is {secs} - {model} needs at least {min} - press its seconds', { secs: _s(span), model: m.label, min: _s(rule.min) });
     if (span > rule.max + 0.05) {
-      return rule.max < (rule.all || 0) - 0.05
-        ? 'with the other ' + what + 's it is more than ' + _s(rule.all) + ' in all - shorten one'
-        : 'the part is ' + _s(span) + ' - ' + m.label + ' takes ' + _s(rule.max) + ' - press its seconds';
+      if (rule.max < (rule.all || 0) - 0.05) {
+        return clip ? T.t('with the other clips it is more than {all} in all - shorten one', { all: _s(rule.all) })
+          : T.t('with the other sounds it is more than {all} in all - shorten one', { all: _s(rule.all) });
+      }
+      return T.t('the part is {secs} - {model} takes {max} - press its seconds', { secs: _s(span), model: m.label, max: _s(rule.max) });
     }
     return '';
   }
@@ -174,7 +188,7 @@ function VIDEOS(ctx) {
   // beyond the frames' places dimmed, with the reason.
   function _attState(a) {
     if (_kind(a) === 'image') {
-      return _framesMode() && !_frameKeys().includes(a.slot) ? { off: _onlyFrames() + ' - take this one off, or set "pictures are" to references' } : null;
+      return _framesMode() && !_frameKeys().includes(a.slot) ? { off: T.t('{only} - take this one off, or set "pictures are" to references', { only: _onlyFrames() }) } : null;
     }
     const bad = _spanWrong(a);
     if (bad) return { bad };
@@ -196,7 +210,7 @@ function VIDEOS(ctx) {
       if (d && d.success && +d.duration > 0) dur = Math.round(+d.duration * 100) / 100;
       if (d && d.success && ((k === 'video' && !(d.w > 0)) || (k === 'audio' && !d.audio))) {
         ctx.detach(a.path);
-        ctx.say('Not attached: it has no ' + (k === 'video' ? 'picture' : 'sound') + ' in it.');
+        ctx.say(k === 'video' ? T.t('Not attached: it has no picture in it.') : T.t('Not attached: it has no sound in it.'));
         return;
       }
     }
@@ -206,7 +220,7 @@ function VIDEOS(ctx) {
     const rule = _spanRule(now);
     if (rule && rule.max < rule.min - 0.05) {
       ctx.detach(a.path);
-      ctx.say(rule.why + ' ' + _s(rule.all - rule.max) + ' of it ' + (rule.all - rule.max === 1 ? 'is' : 'are') + ' taken - shorten one first.');
+      ctx.say(T.tn(rule.all - rule.max, '{why} {secs} of it is taken - shorten one first.', '{why} {secs} of it are taken - shorten one first.', { why: rule.why, secs: _s(rule.all - rule.max) }));
       return;
     }
     let from = +now.in >= 0 && +now.out > +now.in ? Math.max(0, Math.min(+now.in, dur)) : 0;
@@ -219,7 +233,8 @@ function VIDEOS(ctx) {
     // Kling motion control: the clip opens on its first frame's slider at once.
     if (k === 'video' && isMC()) { setTimeout(() => _autoStill(a.path), 150); return; }
     if (dur > to - from + 0.05) {
-      ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press its seconds to choose another part.');
+      ctx.say(from ? T.t('{dur} → {secs} from {from} go - press its seconds to choose another part.', { dur: _s(dur), secs: _s(to - from), from: _s(from) })
+        : T.t('{dur} → the first {secs} go - press its seconds to choose another part.', { dur: _s(dur), secs: _s(to - from) }));
     }
   }
   function _autoStill(path) {
@@ -234,7 +249,7 @@ function VIDEOS(ctx) {
   let _trimPath = '';
   function _trimFor(a, cell) {
     const dur = +a.dur || 0;
-    if (!dur) { ctx.say('Its length is not known - it cannot be cut.'); return; }
+    if (!dur) { ctx.say(T.t('Its length is not known - it cannot be cut.')); return; }
     const k = _kind(a);
     const rule = _spanRule(a) || { min: 0.5, max: dur, why: '' };
     // Under Kling motion control the part starts on the first frame, picked on a slider.
@@ -243,9 +258,9 @@ function VIDEOS(ctx) {
       anchor: cell, kind: k, src: a.path, poster: a.poster ? thumbOf(a.poster, 'main') : '', dur,
       from: +a.in || 0, to: +a.out || Math.min(dur, rule.max),
       min: Math.min(rule.min, dur), max: Math.max(Math.min(rule.min, dur), rule.max),
-      title: a.name || (k === 'audio' ? 'the sound' : 'the clip'),
-      why: (still ? (ctx.writing() ? 'Pick the moment your character is seen best: the first frame is drawn from it, and the moves go from there. '
-        : 'Pick the moment the moves start from. ') : '') + rule.why,
+      title: a.name || (k === 'audio' ? T.t('the sound') : T.t('the clip')),
+      why: !still ? rule.why : ctx.writing() ? T.t('Pick the moment your character is seen best: the first frame is drawn from it, and the moves go from there. {why}', { why: rule.why })
+        : T.t('Pick the moment the moves start from. {why}', { why: rule.why }),
       still,
       onStill: (url) => ctx.setAtt(a.path, { still: url }),
       onChange: (f, t) => ctx.setAtt(a.path, { in: f, out: t }),
@@ -274,8 +289,8 @@ function VIDEOS(ctx) {
   // How long the video made beside that clip is (0 while its part is not known).
   const _clipOut = (r, a) => { const s = _span(a); return !(s > 0) ? 0 : r.oneClip.auto ? s : clamp(Math.round(s), r.duration.min, r.duration.max); };
   // The seconds a price is made of, in words.
-  const _secsWords = (pr) => (pr.byClip ? _s(pr.out) + ' (as long as the clip)' + (pr.vidIn ? ' + ' + _s(pr.vidIn) + ' of the clip' : '')
-    : pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s');
+  const _secsWords = (pr) => (pr.byClip ? (pr.vidIn ? T.t('{out} (as long as the clip) + {in} of the clip', { out: _s(pr.out), in: _s(pr.vidIn) }) : T.t('{out} (as long as the clip)', { out: _s(pr.out) }))
+    : pr.vidIn ? T.t('{out} s + {in} of the clips', { out: pr.out, in: _s(pr.vidIn) }) : T.t('{n} s', { n: pr.secs }));
 
   // A clip or a sound kept with a draft that has left the library since (deleted on its shelf): it goes from the zone,
   // in words - a picture does the same when its miniature does not load (the shell). One that MOVED is followed.
@@ -290,8 +305,8 @@ function VIDEOS(ctx) {
     }));
     if (ctx.key() !== k || !gone.length) return;
     for (const a of gone) ctx.detach(a.path);
-    ctx.say(gone.length === 1 ? 'A ' + (_kind(gone[0]) === 'video' ? 'clip' : 'sound') + ' of the zone is not in the library any more.'
-      : gone.length + ' clips and sounds of the zone are not in the library any more.');
+    ctx.say(gone.length === 1 ? (_kind(gone[0]) === 'video' ? T.t('A clip of the zone is not in the library any more.') : T.t('A sound of the zone is not in the library any more.'))
+      : T.t('{n} clips and sounds of the zone are not in the library any more.', { n: gone.length }));
   }
 
   // A clip let go over the zone from a lane of the timeline (timeline-b.js): the part of its file the timeline plays.
@@ -299,11 +314,11 @@ function VIDEOS(ctx) {
     const d = ev.detail || {};
     if (!ctx.shown() || !d.src) return;
     const k = d.kind === 'audio' ? 'audio' : 'video';
-    if (!_takes(k)) { ctx.say(((model() || {}).label || 'This model') + ' takes no ' + (k === 'video' ? 'clips' : 'sounds') + '.'); return; }
+    if (!_takes(k)) { ctx.say(_takesNo(k, (model() || {}).label || T.t('This model'))); return; }
     const was = ctx.atts().find(x => x.path === d.src);
     if (was) {
       // One place per file: a clip's sound twin let go over the sounds is not the clip attached already.
-      if (_kind(was) !== k) { ctx.say('This file is attached already as a ' + (_kind(was) === 'video' ? 'clip' : 'sound') + ' - one place per file.'); return; }
+      if (_kind(was) !== k) { ctx.say(_kind(was) === 'video' ? T.t('This file is attached already as a clip - one place per file.') : T.t('This file is attached already as a sound - one place per file.')); return; }
       // Attached already: the part the timeline plays replaces the one it had.
       ctx.setAtt(d.src, { in: d.in, out: d.out });
       return;
@@ -357,8 +372,8 @@ function VIDEOS(ctx) {
     const r = recOf(m, m.defaultAgg) || m.records[0];
     if (!r) return m.label;
     const t = r.tenSeconds || {};
-    if (r.duration.fromClip) return m.label + ' · ' + money(_perSec(r, r.resDef)) + ' / s of clip';
-    return m.label + (t.usd != null ? ' · ≈' + money(t.usd) + ' / 10 s' : '');
+    if (r.duration.fromClip) return T.t('{model} · {price} / s of clip', { model: m.label, price: money(_perSec(r, r.resDef)) });
+    return t.usd != null ? T.t('{model} · ≈{price} / 10 s', { model: m.label, price: money(t.usd) }) : m.label;
   }
 
   async function load() {
@@ -366,7 +381,7 @@ function VIDEOS(ctx) {
     const d = await json('/api/mv3/video/matrix');
     if (d && d.success) { _table = d; _err = ''; }
     else {
-      _err = (d && d.error) || 'could not read the models';
+      _err = (d && d.error) || T.t('could not read the models');
       showError(capFirst(_err));
     }
     paint();
@@ -405,25 +420,25 @@ function VIDEOS(ctx) {
       host.textContent = '';
       // Not read: "did not load" with Try again - the reason a popup (load). A table with no
       // model says so rather than "reading" for ever.
-      host.appendChild(_err ? failedEl('The models', () => { _err = ''; paint(); load(); }, { line: true })
-        : _table ? emptyEl('No video models.', { line: true }) : loadingEl('reading the models…', { line: true }));
+      host.appendChild(_err ? failedEl(T.t('The models'), () => { _err = ''; paint(); load(); }, { line: true })
+        : _table ? emptyEl(T.t('No video models.'), { line: true }) : loadingEl(T.t('reading the models…'), { line: true }));
       _set = null;
       return;
     }
     if (!_set) {
       host.textContent = '';
-      const mSel = _select('mv3-vc-model', 'The model - each its own price', models().map(m => ({
+      const mSel = _select('mv3-vc-model', T.t('The model - each its own price'), models().map(m => ({
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
       })), _last.model, (v) => { _last.model = v; _recent(v); _remember(); _paintModel(); ctx.paintAtts(); });
-      _row(host, 'model', mSel);
+      _row(host, T.t('model'), mSel);
       // What the chosen model does and what to attach - under its dropdown.
       const brief = el('div', 'mv3-vc-brief');
       host.appendChild(brief);
       const aSel = document.createElement('select');
       aSel.id = 'mv3-vc-agg';
-      aSel.title = 'Who is asked';
+      aSel.title = T.t('Who is asked');
       aSel.addEventListener('change', () => { const m = model(); if (m) { _last.agg[m.id] = aSel.value; _remember(); } _paintParams(); ctx.paintAtts(); });
-      _row(host, 'aggregator', aSel, 'is-prov');
+      _row(host, T.t('aggregator'), aSel, 'is-prov');
       const box = el('div', 'mv3-vc-params');
       host.appendChild(box);
       // The writer and the storyboard - the switches of how the message goes.
@@ -454,19 +469,19 @@ function VIDEOS(ctx) {
     if (!m) return;
     // The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on
     // - and holds it on while it is ticked.
-    const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'
-      : _framesMode() ? 'The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references'
-      : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
+    const bWhy = m.family !== 'seedance' ? T.t('A storyboard is drawn for Seedance - pick a Seedance model')
+      : _framesMode() ? T.t('The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references')
+      : !(_table && _table.r2) ? T.t('The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys') : '';
     const held = !bWhy && _boardOn();
     // The writer is a switch like the storyboard - on by default: the shared switch (.u-switch), its word beside it.
-    const wr = switchRow('Writer', ctx.writing(), held, (v) => ctx.setWriting(v));
+    const wr = switchRow(T.t('Writer'), ctx.writing(), held, (v) => ctx.setWriting(v));
     if (held) wr.classList.add('is-held');
     // Under Kling motion control the writer writes the first frame's picture prompt.
-    wr.title = held ? 'The storyboard is written by the writer - untick the storyboard first'
-      : isMC() ? 'On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.'
-        : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
+    wr.title = held ? T.t('The storyboard is written by the writer - untick the storyboard first')
+      : isMC() ? T.t('On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.')
+        : T.t('The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).');
     box.appendChild(wr);
-    const sb = switchRow('Storyboard', !bWhy && _boardOn(), !!bWhy, (v) => {
+    const sb = switchRow(T.t('Storyboard'), !bWhy && _boardOn(), !!bWhy, (v) => {
       setParam('storyboard', v);
       if (v && !ctx.writing()) ctx.setWriting(true);
       _paintSwitches();
@@ -474,7 +489,7 @@ function VIDEOS(ctx) {
       ctx.paintAtts();
     });
     if (bWhy) sb.classList.add('is-off');
-    sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into the prompt of a sheet of numbered panels - nothing is paid at ">". On its message "draw the storyboard" draws the sheet (4K), "write the video" writes the video with it among the pictures and "make the video" makes it - each paid step by its own press. While it is ticked the writer stays on.';
+    sb.title = bWhy || T.t('A storyboard first: the writer turns your message and pictures into the prompt of a sheet of numbered panels - nothing is paid at ">". On its message "draw the storyboard" draws the sheet (4K), "write the video" writes the video with it among the pictures and "make the video" makes it - each paid step by its own press. While it is ticked the writer stays on.');
     box.appendChild(sb);
   }
 
@@ -489,7 +504,7 @@ function VIDEOS(ctx) {
       o.value = r.agg;
       const per = _perSec(r, r.resDef);
       // The reason already names the aggregator ("kie.ai - no key ...").
-      o.textContent = r.usable ? r.aggLabel + (per != null ? ' · ' + money(per) + '/s' : '') : (r.why || r.aggLabel + ' - cannot be asked');
+      o.textContent = r.usable ? (per != null ? T.t('{agg} · {price}/s', { agg: r.aggLabel, price: money(per) }) : r.aggLabel) : (r.why || T.t('{agg} - cannot be asked', { agg: r.aggLabel }));
       o.disabled = !r.usable;
       _set.agg.appendChild(o);
     }
@@ -519,18 +534,18 @@ function VIDEOS(ctx) {
     const one = _byClip(r);
     if (!r.duration.fromClip && one) {
       const out = _clipOut(r, one);
-      const sel = _select('mv3-vc-dur', '', [{ value: 'clip', text: 'As the clip' + (out ? ' · ' + _s(out) : '') }], 'clip');
+      const sel = _select('mv3-vc-dur', '', [{ value: 'clip', text: out ? T.t('As the clip · {secs}', { secs: _s(out) }) : T.t('As the clip') }], 'clip');
       sel.disabled = true;
-      sel.title = 'With one clip ' + m.label + ' makes the video as long as the clip' + (r.oneClip.auto ? '' : ', rounded to a whole second')
-        + '. With several clips the length is chosen here.';
-      _row(box, 'length', sel);
+      sel.title = r.oneClip.auto ? T.t('With one clip {model} makes the video as long as the clip. With several clips the length is chosen here.', { model: m.label })
+        : T.t('With one clip {model} makes the video as long as the clip, rounded to a whole second. With several clips the length is chosen here.', { model: m.label });
+      _row(box, T.t('length'), sel);
     } else if (!r.duration.fromClip) {
       const opts = [];
-      for (let s = r.duration.min; s <= r.duration.max; s++) opts.push({ value: String(s), text: s + ' s' });
-      _row(box, 'length', _select('mv3-vc-dur', 'How long the clip is', opts, clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
+      for (let s = r.duration.min; s <= r.duration.max; s++) opts.push({ value: String(s), text: T.t('{n} s', { n: s }) });
+      _row(box, T.t('length'), _select('mv3-vc-dur', T.t('How long the clip is'), opts, clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         (v) => { setParam('duration', +v); _paintPrice(); }));
     }
-    _row(box, 'quality', _select('mv3-vc-res', 'Resolution', r.resolutions.map(x => ({ value: x, text: x })),
+    _row(box, T.t('quality'), _select('mv3-vc-res', T.t('Resolution'), r.resolutions.map(x => ({ value: x, text: x })),
       r.resolutions.includes(p.resolution) ? p.resolution : r.resDef, (v) => {
         setParam('resolution', v);
         _paintPrice();
@@ -540,23 +555,23 @@ function VIDEOS(ctx) {
     // The shape: with a picture Grok takes the picture's (Grok 1.5 on kie: with one - several are references, and the
     // shape is chosen again), and Seedance's frames take theirs.
     if (r.aspects && r.aspects.length && one) {
-      const sel = _select('mv3-vc-ar', '', [{ value: 'clip', text: 'As the clip' }], 'clip');
+      const sel = _select('mv3-vc-ar', '', [{ value: 'clip', text: T.t('As the clip') }], 'clip');
       sel.disabled = true;
-      sel.title = 'With one clip the video takes the clip\'s shape. With several clips the shape is chosen here.';
-      _row(box, 'shape', sel);
+      sel.title = T.t('With one clip the video takes the clip\'s shape. With several clips the shape is chosen here.');
+      _row(box, T.t('shape'), sel);
     } else if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
       // Frames on their own make the clip in their shape; beside a clip or a sound they go as references.
       const fixed = n > 0 && ((fam === 'grok' && !(r.aspectWithImages && n > 1)) || (fam === 'seedance' && _framesMode() && !mixed));
-      const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
+      const sel = _select('mv3-vc-ar', T.t('Shape'), r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
         r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => { setParam('aspect', v); _freshenCards(); });
       sel.disabled = fixed;
-      if (fixed) sel.title = 'The clip takes the shape of the picture';
-      _row(box, 'shape', sel);
+      if (fixed) sel.title = T.t('The clip takes the shape of the picture');
+      _row(box, T.t('shape'), sel);
     }
     if (r.extra && r.extra.mode) {
-      _row(box, 'mode', _select('mv3-vc-mode', 'How Grok plays it', r.extra.mode.map(x => ({
-        value: x, text: x, disabled: x === 'spicy' && n > 0, title: 'spicy only from words - an outside picture plays it normal',
+      _row(box, T.t('mode'), _select('mv3-vc-mode', T.t('How Grok plays it'), r.extra.mode.map(x => ({
+        value: x, text: x, disabled: x === 'spicy' && n > 0, title: T.t('spicy only from words - an outside picture plays it normal'),
       })), p.mode || 'normal', (v) => setParam('mode', v)));
     }
     if (fam === 'seedance') {
@@ -566,41 +581,42 @@ function VIDEOS(ctx) {
       // reference clip says the clip's words over again. The choice beside a clip is remembered on its own
       // (`clipSound`), so "with sound" chosen for words alone does not turn it back.
       const withClip = _takes('video') && _clips().length > 0;
-      const opts = [{ value: 'on', text: withClip ? 'the model\'s sound' : 'with sound' }];
-      if (withClip) opts.push({ value: 'clip', text: 'The clip\'s sound' });
-      opts.push({ value: 'off', text: 'Silent' });
+      const opts = [{ value: 'on', text: withClip ? T.t('the model\'s sound') : T.t('with sound') }];
+      if (withClip) opts.push({ value: 'clip', text: T.t('The clip\'s sound') });
+      opts.push({ value: 'off', text: T.t('Silent') });
       const now = withClip ? _clipSoundOf(p) : (p.audio !== false ? 'on' : 'off');
-      const sel = _select('mv3-vc-audio', withClip ? 'With a clip, the first clip\'s sound is laid under the video when it lands - Seedance\'s own sound would say the clip\'s words over again' : 'Seedance makes its own sound',
+      const sel = _select('mv3-vc-audio', withClip ? T.t('With a clip, the first clip\'s sound is laid under the video when it lands - Seedance\'s own sound would say the clip\'s words over again') : T.t('Seedance makes its own sound'),
         opts, now, (v) => { if (withClip) setParam('clipSound', v); else setParam('audio', v === 'on'); });
-      _row(box, 'sound', sel);
+      _row(box, T.t('sound'), sel);
       // Chosen first, even before a picture: the zone lays out the frames' places for it.
-      _row(box, 'pictures are', _select('mv3-vc-as', 'What the pictures are for: references the video uses, or the frame it starts on (and the one it ends on)', [
-        { value: 'refs', text: 'References' },
-        { value: 'frame', text: 'The first frame' },
-        { value: 'fl', text: 'First and last frames' },
+      _row(box, T.t('pictures are'), _select('mv3-vc-as', T.t('What the pictures are for: references the video uses, or the frame it starts on (and the one it ends on)'), [
+        { value: 'refs', text: T.t('References') },
+        { value: 'frame', text: T.t('The first frame') },
+        { value: 'fl', text: T.t('First and last frames') },
       ], _asOf(), (v) => { setParam('picturesAs', v); ctx.reslot(); _paintParams(); }));
     }
     if (fam === 'kmc') {
-      _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
-        { value: 'video', text: 'As in the clip (up to 30 s)' }, { value: 'image', text: 'As on the picture (up to 10 s)' },
+      _row(box, T.t('orientation'), _select('mv3-vc-or', T.t('Which way the character faces'), [
+        { value: 'video', text: T.t('As in the clip (up to 30 s)') }, { value: 'image', text: T.t('As on the picture (up to 10 s)') },
       ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); ctx.columnChanged(); }));
       // Whose background: the picture's, always - Kling puts the moves into the picture's place (kie's "keep the
       // clip's room" for 3.0 comes back on the picture's background too). Said, not chosen.
-      const bg = _select('mv3-vc-bg', 'Kling puts the moves into your picture\'s place - the room of the clip does not come along. For another place, keep the writer on: it draws the first frame with your character there.',
-        [{ value: 'image', text: 'From your picture' }], 'image', () => {});
+      const bg = _select('mv3-vc-bg', T.t('Kling puts the moves into your picture\'s place - the room of the clip does not come along. For another place, keep the writer on: it draws the first frame with your character there.'),
+        [{ value: 'image', text: T.t('From your picture') }], 'image', () => {});
       bg.disabled = true;
-      _row(box, 'background', bg);
+      _row(box, T.t('background'), bg);
       // The clip's sound: Replicate's Kling keeps it itself; on kie it is laid under the video when it lands.
-      _row(box, 'sound', _select('mv3-vc-keep', r.keepSound ? 'The clip\'s own sound - Kling keeps it' : 'The clip\'s own sound - laid under the video when it lands',
-        [{ value: 'on', text: 'Keep the clip\'s sound' }, { value: 'off', text: 'Silent' }],
+      _row(box, T.t('sound'), _select('mv3-vc-keep', r.keepSound ? T.t('The clip\'s own sound - Kling keeps it') : T.t('The clip\'s own sound - laid under the video when it lands'),
+        [{ value: 'on', text: T.t('Keep the clip\'s sound') }, { value: 'off', text: T.t('Silent') }],
         p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
     }
     // With frames the words may be left out - the writer decides the motion from the frames. Under
     // Kling the box says what it is for: with the writer, what to take from which picture; without it, Kling's prompt.
     ctx.placeholder(isMC()
-      ? (ctx.writing() ? 'What to take from which picture - "the character from 1, the place from 2, the hat from 3 on her head" - or nothing, and the writer works it out. Kling gets its own prompt.'
-        : 'The prompt Kling gets, in English - empty, the standard one')
-      : _framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
+      ? (ctx.writing() ? T.t('What to take from which picture - "the character from 1, the place from 2, the hat from 3 on her head" - or nothing, and the writer works it out. Kling gets its own prompt.')
+        : T.t('The prompt Kling gets, in English - empty, the standard one'))
+      : !_framesMode() ? '' : _asOf() === 'fl' ? T.t('What happens from the first frame to the last - or leave it empty, and the writer decides')
+        : T.t('What happens from the first frame - or leave it empty, and the writer decides'));
     _paintSwitches();
     _paintPrice();
     // The right column follows the model: its VIDEO and AUDIO, the longest clip it shows.
@@ -615,17 +631,17 @@ function VIDEOS(ctx) {
     const many = ctx.n();
     if (!r || !pr || pr.none) {
       box.className = 'mv3-ig-cost is-unknown';
-      box.innerHTML = '<b>&mdash;</b><span>no published price for this one</span>';
+      box.innerHTML = '<b>&mdash;</b><span>' + T.t('no published price for this one') + '</span>';
     } else if (pr.fromClip) {
       box.className = 'mv3-ig-cost';
       box.innerHTML = pr.usd != null
-        ? '<b>≈' + money(pr.usd) + '</b><span>at most · ' + _s(pr.secs) + ' of your clip × ' + money(pr.per) + '/s · ' + pr.res + ' · ' + r.aggLabel
-          + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>'
-        : '<b>≈' + money(pr.per) + '</b><span>per second of your clip · ' + pr.res + ' · ' + r.aggLabel + '</span>';
+        ? '<b>≈' + money(pr.usd) + '</b><span>' + T.t('at most · {secs} of your clip × {per}/s · {res} · {agg}', { secs: _s(pr.secs), per: money(pr.per), res: pr.res, agg: r.aggLabel })
+          + (many > 1 ? ' · ' + T.t('{sum} for {n}', { sum: money(pr.usd * many), n: many }) : '') + '</span>'
+        : '<b>≈' + money(pr.per) + '</b><span>' + T.t('per second of your clip · {res} · {agg}', { res: pr.res, agg: r.aggLabel }) + '</span>';
     } else {
       box.className = 'mv3-ig-cost';
-      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + _secsWords(pr)
-        + ' · ' + pr.res + ' · ' + r.aggLabel + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
+      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>' + T.t('per clip · {secs} · {res} · {agg}', { secs: _secsWords(pr), res: pr.res, agg: r.aggLabel })
+        + (many > 1 ? ' · ' + T.t('{sum} for {n}', { sum: money(pr.usd * many), n: many }) : '') + '</span>';
     }
     // The storyboard first: what the sheet costs now, and the video's price for later - its own press.
     if (_boardOn() && pr && !pr.none && !pr.fromClip) {
@@ -633,7 +649,7 @@ function VIDEOS(ctx) {
       box.className = 'mv3-ig-cost';
       box.textContent = '';
       box.append(el('b', null, sp.usd != null ? '≈' + money(sp.usd) : '—'),
-        el('span', null, 'the storyboard first · ' + sp.words + ' · then, by its own press, the video ≈' + money(pr.usd * many)));
+        el('span', null, T.t('the storyboard first · {what} · then, by its own press, the video ≈{price}', { what: sp.words, price: money(pr.usd * many) })));
     }
     // Kling step by step: the first frame first, and the video after it - each by its own press.
     if (_mcSteps() && pr && !pr.none) {
@@ -641,24 +657,27 @@ function VIDEOS(ctx) {
       const fp = fi && (fi.providers || []).find(p => p.usable);
       box.className = 'mv3-ig-cost';
       box.textContent = '';
+      const vp = pr.usd != null ? '≈' + money(pr.usd * many) : T.t('≈{price} per second of the clip', { price: money(pr.per) });
       box.append(el('b', null, fp && fp.price != null ? '≈' + money(fp.price) : '—'),
-        el('span', null, 'the first frame first' + (fi ? ' · ' + fi.quality + ' · ' + fi.label : '') + ' · then, by its own press, the video '
-          + (pr.usd != null ? '≈' + money(pr.usd * many) : '≈' + money(pr.per) + ' per second of the clip')));
+        el('span', null, fi ? T.t('the first frame first · {quality} · {engine} · then, by its own press, the video {price}', { quality: fi.quality, engine: fi.label, price: vp })
+          : T.t('the first frame first · then, by its own press, the video {price}', { price: vp })));
     }
     if (ctx.priceFrom) ctx.priceFrom(box);
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
-    if (r && r.duration.fromClip) notes.push(r.billWhole ? 'the most it costs: billed by the whole seconds that come back, rounded down' : 'the most it costs: billed by the seconds that come back');
-    else if (pr && pr.vidIn && r.agg === 'kie') notes.push('the most it costs: kie.ai has billed a second less');
+    if (r && r.duration.fromClip) notes.push(r.billWhole ? T.t('the most it costs: billed by the whole seconds that come back, rounded down') : T.t('the most it costs: billed by the seconds that come back'));
+    else if (pr && pr.vidIn && r.agg === 'kie') notes.push(T.t('the most it costs: kie.ai has billed a second less'));
     // The fallback rung, with its own price: asked only when the chosen one turns the clip down.
     const other = r && model() ? model().records.find(x => x.agg !== r.agg && x.usable) : null;
     if (other && !(_table && _table.fake)) {
       const po = priceOf(other);
-      notes.push('if ' + r.aggLabel + ' turns it down: ' + other.aggLabel + ' '
-        + (!po || po.cannot ? '- skipped, it does not make ' + ((po && po.cannot) || 'this')
-          : po.none ? '(no published price)' : po.fromClip ? '≈' + money(po.per) + '/s' : '≈' + money(po.usd)));
+      const o = { agg: r.aggLabel, other: other.aggLabel };
+      notes.push(po && po.cannot ? T.t('if {agg} turns it down: {other} - skipped, it does not make {res}', Object.assign({ res: po.cannot }, o))
+        : !po ? T.t('if {agg} turns it down: {other} - skipped, it does not make this', o)
+          : po.none ? T.t('if {agg} turns it down: {other} (no published price)', o)
+            : T.t('if {agg} turns it down: {other} {price}', Object.assign({ price: po.fromClip ? T.t('≈{price}/s', { price: money(po.per) }) : '≈' + money(po.usd) }, o)));
     }
-    if (_table && _table.fake) notes.push('FAKE aggregator - nothing is paid');
+    if (_table && _table.fake) notes.push(T.t('FAKE aggregator - nothing is paid'));
     _set.fall.textContent = notes.join(' · ');
     _last.model = (model() || {}).id || _last.model;
     _remember();
@@ -718,19 +737,25 @@ function VIDEOS(ctx) {
     const lines = [];
     // From the Library too (js/gen-menu.js) - its words say where it came from.
     const lib = o.from === 'library';
-    const src = lib ? 'the Library' : 'the timeline';
-    if (kind === 'video') lines.push(lib ? 'The clip from the Library is a REFERENCE: its first seconds the model takes go.'
-      : 'The clip from the timeline is a REFERENCE: the part the timeline plays, ' + _s(+a.in || 0) + ' - ' + _s(+a.out || 0) + ' of its file.');
-    else if (o.act === 'continue') lines.push('The last frame of the clip ' + (lib ? 'from the Library' : 'on the timeline') + ' is the FIRST FRAME - the new clip starts on it.');
-    else if (first) lines.push('The ' + (o.act === 'frame-vid' ? 'frame' : 'picture') + ' from ' + src + ' is the FIRST FRAME - the clip starts on it.');
-    else lines.push('The picture from ' + src + ' is in the zone.');
-    if (!m || !_takesFrom(m, kind, o.as)) lines.push('No model here takes it - a key is set on Admin → API keys.');
-    else if (switched) lines.push(switched + (kind === 'video' ? ' takes no clips' : ' does not start a clip on a picture') + ' - the model is ' + m.label + ' now.');
-    if (first && seed) lines.push('To send it as a reference instead, set "pictures are" on the left to References; the model and its settings are on the left too.');
-    else if (kind === 'video') lines.push('Its part is set on it in the zone; the model and its settings are on the left.');
-    else lines.push('The model and its settings are on the left.');
-    if (o.back) lines.push('When the clip is made, "' + o.back + '" under it puts it on the timeline.');
-    else if (lib && m) lines.push('What it makes lies in VIDEO → Generated → ' + m.label + '.');
+    if (kind === 'video') lines.push(lib ? T.t('The clip from the Library is a REFERENCE: its first seconds the model takes go.')
+      : T.t('The clip from the timeline is a REFERENCE: the part the timeline plays, {from} - {to} of its file.', { from: _s(+a.in || 0), to: _s(+a.out || 0) }));
+    else if (o.act === 'continue') lines.push(lib ? T.t('The last frame of the clip from the Library is the FIRST FRAME - the new clip starts on it.')
+      : T.t('The last frame of the clip on the timeline is the FIRST FRAME - the new clip starts on it.'));
+    else if (first && o.act === 'frame-vid') lines.push(lib ? T.t('The frame from the Library is the FIRST FRAME - the clip starts on it.')
+      : T.t('The frame from the timeline is the FIRST FRAME - the clip starts on it.'));
+    else if (first) lines.push(lib ? T.t('The picture from the Library is the FIRST FRAME - the clip starts on it.')
+      : T.t('The picture from the timeline is the FIRST FRAME - the clip starts on it.'));
+    else lines.push(lib ? T.t('The picture from the Library is in the zone.') : T.t('The picture from the timeline is in the zone.'));
+    if (!m || !_takesFrom(m, kind, o.as)) lines.push(T.t('No model here takes it - a key is set on Admin → API keys.'));
+    else if (switched) {
+      lines.push(kind === 'video' ? T.t('{was} takes no clips - the model is {model} now.', { was: switched, model: m.label })
+        : T.t('{was} does not start a clip on a picture - the model is {model} now.', { was: switched, model: m.label }));
+    }
+    if (first && seed) lines.push(T.t('To send it as a reference instead, set "pictures are" on the left to References; the model and its settings are on the left too.'));
+    else if (kind === 'video') lines.push(T.t('Its part is set on it in the zone; the model and its settings are on the left.'));
+    else lines.push(T.t('The model and its settings are on the left.'));
+    if (o.back) lines.push(T.t('When the clip is made, "{back}" under it puts it on the timeline.', { back: o.back }));
+    else if (lib && m) lines.push(T.t('What it makes lies in VIDEO → Generated → {model}.', { model: m.label }));
     ctx.notice(lines.join('\n'));
     const ui = ctx.ui();
     if (ui) ui.ta.focus();
@@ -744,9 +769,9 @@ function VIDEOS(ctx) {
   // What a sheet of the column's storyboard costs: the first aggregator that draws from this many pictures.
   function _sheetPrice(n) {
     const info = _table && _table.board;
-    if (!info) return { usd: null, words: 'the storyboard engine is not in this program' };
+    if (!info) return { usd: null, words: T.t('the storyboard engine is not in this program') };
     const p = (info.providers || []).find(x => x.usable && (!n || (x.maxRefs || 1) >= n));
-    if (!p) return { usd: null, words: ((info.providers || []).find(x => x.why) || {}).why || (info.label + ' cannot take ' + n + ' pictures') };
+    if (!p) return { usd: null, words: ((info.providers || []).find(x => x.why) || {}).why || T.tn(n, '{engine} cannot take {n} pictures', '{engine} cannot take {n} pictures', { engine: info.label }) };
     return { usd: p.price, words: info.quality + ' · ' + info.label + ' · ' + p.label };
   }
   const _boardCap = () => {
@@ -777,21 +802,21 @@ function VIDEOS(ctx) {
   function _zone() {
     const r = rec(), m = model();
     const lim = r ? r.limits : { images: 0, videos: 0, audios: 0 };
-    const who = (m && m.label) || 'This model';
+    const who = (m && m.label) || T.t('This model');
     // Frames: their places alone; beside a clip or a sound they go as references - said over the zone.
     const frames = _framesMode();
     const asRefs = frames && ctx.anyAtt(a => a.kind === 'video' || a.kind === 'audio');
     return { parts: [
-      { kind: 'image', word: 'pictures', one: 'picture', room: frames ? _frameSlots().length : Math.min(MAX_PICS, r ? _picRoom(r) : 0), slots: _slotsOf('image'),
-        full: frames ? _onlyFrames() + ' - set "pictures are" to references for more pictures.'
-          : _mcSteps() ? 'Up to ' + _frameRoom() + ' pictures - the still of the clip is the picture model\'s other reference.'
-          : _seat() ? 'Room for ' + (r ? _picRoom(r) : 0) + ' - the storyboard goes to the video as one more picture, and it is drawn with these.' : '',
-        note: asRefs ? 'go as references - may not match exactly' : '',
-        noteLong: asRefs ? 'With a clip or a sound Seedance takes the frames as references: the video aims at them, but may not start and end on them exactly. Without clips and sounds they are the model\'s own frames.' : '',
-        otherLabel: frames ? 'not sent' : '',
-        none: who + ' takes no pictures.', other: frames ? _onlyFrames() + ' - take it off, or set "pictures are" to references' : '' },
-      { kind: 'video', word: 'clips', one: 'clip', room: lim.videos || 0, slots: null, none: who + ' takes no clips.' },
-      { kind: 'audio', word: 'sounds', one: 'sound', room: lim.audios || 0, slots: null, none: who + ' takes no sounds.' },
+      { kind: 'image', word: T.t('pictures'), one: T.t('picture'), room: frames ? _frameSlots().length : Math.min(MAX_PICS, r ? _picRoom(r) : 0), slots: _slotsOf('image'),
+        full: frames ? T.t('{only} - set "pictures are" to references for more pictures.', { only: _onlyFrames() })
+          : _mcSteps() ? T.tn(_frameRoom(), 'Up to {n} pictures - the still of the clip is the picture model\'s other reference.', 'Up to {n} pictures - the still of the clip is the picture model\'s other reference.')
+          : _seat() ? T.t('Room for {n} - the storyboard goes to the video as one more picture, and it is drawn with these.', { n: r ? _picRoom(r) : 0 }) : '',
+        note: asRefs ? T.t('go as references - may not match exactly') : '',
+        noteLong: asRefs ? T.t('With a clip or a sound Seedance takes the frames as references: the video aims at them, but may not start and end on them exactly. Without clips and sounds they are the model\'s own frames.') : '',
+        otherLabel: frames ? T.t('not sent') : '',
+        none: _takesNo('image', who), other: frames ? T.t('{only} - take it off, or set "pictures are" to references', { only: _onlyFrames() }) : '' },
+      { kind: 'video', word: T.t('clips'), one: T.t('clip'), room: lim.videos || 0, slots: null, none: _takesNo('video', who) },
+      { kind: 'audio', word: T.t('sounds'), one: T.t('sound'), room: lim.audios || 0, slots: null, none: _takesNo('audio', who) },
     ] };
   }
   // ── Where attachments come from (the picker, chat-pick.js) ─────
@@ -804,7 +829,7 @@ function VIDEOS(ctx) {
   // The clips this chat made in this project.
   async function _made() {
     const k = ctx.key();
-    if (!k) return { items: [], why: 'No project is open yet - nothing has been made in it.' };
+    if (!k) return { items: [], why: T.t('No project is open yet - nothing has been made in it.') };
     const d = await json('/api/mv3/video/feed?project=' + encodeURIComponent(k));
     if (!d || !d.success) return _gone(d);
     return { items: (d.items || []).filter(g => g && g.state === 'done' && g.videoPath).map(g => _clip(g.videoPath, g.posterPath,
@@ -822,7 +847,7 @@ function VIDEOS(ctx) {
       const looks = [L.gender, L.age, L.accent, L.descriptive].filter(Boolean).map(v => String(v).replace(/_/g, ' ')).join(' · ');
       const whose = (m.characters || []).map(c => c.name + (c.gold ? ' ★' : '')).join(', ');
       return { path: i.media, src: i.media, name: i.name || '', dur: +m.dur || 0, role: 'voice', label: i.name || '',
-        sub: [looks, whose ? 'voice of ' + whose : ''].filter(Boolean).join(' · ') };
+        sub: [looks, whose ? T.t('voice of {who}', { who: whose }) : ''].filter(Boolean).join(' · ') };
     }) };
   }
   // What is not a folder, as rows above the window's tree; the rest - REFERENCES, IMAGES, VIDEO,
@@ -831,8 +856,8 @@ function VIDEOS(ctx) {
     image: [Src.PEOPLE_ROW],
     // With THIS PROJECT in the window's tree the row is left out (`unless`) - its clips lie
     // in THIS PROJECT's top (js/merge-v3/chat-pick.js _madeIntoProject).
-    video: [{ id: 'made', label: 'Made in this project', load: _made, empty: 'No clips made in this project yet.', unless: 'plinks' }],
-    audio: [{ id: 'voices', label: 'Voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' }],
+    video: [{ id: 'made', label: T.t('Made in this project'), load: _made, empty: T.t('No clips made in this project yet.'), unless: 'plinks' }],
+    audio: [{ id: 'voices', label: T.t('Voices'), load: _voices, empty: T.t('No saved voices yet - they are kept on the Library\'s Voices shelf.') }],
   };
   // Where the window opens: a frame's place on IMAGES (chat-sources.js pictureStart); else ('') where this kind was last
   // taken from - the window remembers -, the first time the tree's own (chat-sources.js TREE fallback).
@@ -843,7 +868,7 @@ function VIDEOS(ctx) {
   // ── The almanac - the prompt reference (at the foot of the column, vhelp.js) ──
   // One for the whole chat: a tip pressed there is copied, and the note says so on the prompt
   // field typed in last - the chat's box, or the prompt of a card.
-  const _helpNote = () => (isMC() ? 'Kling motion control: the camera follows your clip - a camera tip may not take.' : '');
+  const _helpNote = () => (isMC() ? T.t('Kling motion control: the camera follows your clip - a camera tip may not take.') : '');
   let _lastField = null;
   const _seen = (e) => !!(e && e.isConnected && e.offsetParent !== null);
   function _fieldForHelp() {
@@ -855,9 +880,9 @@ function VIDEOS(ctx) {
     return cards[cards.length - 1] || null;
   }
   function _almanacBtn() {
-    const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen', 'Almanac');
+    const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen', T.t('Almanac'));
     b.type = 'button';
-    b.title = 'The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt';
+    b.title = T.t('The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt');
     b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, note: _helpNote }); });
     return b;
   }
@@ -877,7 +902,7 @@ function VIDEOS(ctx) {
       : ((L.clipSecs || [2, 15])[1] || 15);
     return {
       fit: (x) => !(+(x && x.dur) > 0) || +x.dur <= cap + 0.05,
-      note: 'clips up to ' + cap + ' s - ' + m.label + ' takes no longer',
+      note: T.t('clips up to {n} s - {model} takes no longer', { n: cap, model: m.label }),
     };
   }
 
@@ -886,7 +911,7 @@ function VIDEOS(ctx) {
     const rule = _spanRule({ kind, path: it.path });
     const m = model();
     if (!rule || !m || +it.dur >= rule.min - 0.05) return '';
-    return _s(it.dur) + ' - ' + m.label + ' needs at least ' + _s(rule.min);
+    return T.t('{secs} - {model} needs at least {min}', { secs: _s(it.dur), model: m.label, min: _s(rule.min) });
   }
   // The first frame's place - or the last one's - that is empty: the send waits for it.
   function _missing() {
@@ -896,10 +921,10 @@ function VIDEOS(ctx) {
   }
 
   function _ready() {
-    if (!_table) return ['No video models.', _err || 'reading the models…'];
+    if (!_table) return [T.t('No video models.'), _err || T.t('reading the models…')];
     const m = model(), r = rec();
-    if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
-    if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
+    if (!m || !m.usable) return [T.t('Not available now.'), (m && m.why) || T.t('no model can be asked')];
+    if (!r || !r.usable) return [T.t('{agg} cannot be asked.', { agg: r ? r.aggLabel : T.t('That aggregator') }), (r && r.why) || ''];
     // An empty numbered place: the numbers in the prompt would move under it.
     const hole = ctx.holeWhy();
     if (hole) return hole;
@@ -907,11 +932,11 @@ function VIDEOS(ctx) {
     const miss = _missing();
     if (miss) {
       ctx.flash(miss.part, miss.key);
-      return ['The ' + miss.label + ' is empty.', miss.hint + ' - press its place, then a picture.'];
+      return [miss.key === 'last' ? T.t('The last frame is empty.') : T.t('The first frame is empty.'), T.t('{hint} - press its place, then a picture.', { hint: miss.hint })];
     }
     // A picture beyond the frames' places does not go - it stands dimmed with the reason.
     if (_framesMode() && _pics().some(a => !_frameKeys().includes(a.slot))) {
-      return [_onlyFrames() + '.', 'Take the other pictures off, or set "pictures are" to references.'];
+      return [_onlyFrames() + '.', T.t('Take the other pictures off, or set "pictures are" to references.')];
     }
     const n = _pics().length;
     const L = r.limits || {};
@@ -919,40 +944,47 @@ function VIDEOS(ctx) {
     // its prompt, in English (translated when not), up to its limit. With the writer on: the person's pictures
     // - the character, and whatever else they want taken from where - and the clip; the first frame is drawn from them.
     if (isMC()) {
-      const secs = (r.duration.min || 3) + '-' + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s';
+      const secs = T.t('{min}-{max} s', { min: r.duration.min || 3, max: params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30) });
       if (_mcSteps()) {
         if (n < 1 || _clips().length !== 1) {
-          return ['Kling needs your character and a clip.', 'Pictures: your character - and a place, clothes or a thing if you like (say in the box what to take from which); the clip: the moves (' + secs + ').'];
+          return [T.t('Kling needs your character and a clip.'), T.t('Pictures: your character - and a place, clothes or a thing if you like (say in the box what to take from which); the clip: the moves ({secs}).', { secs })];
         }
         const fi = _table.frame;
-        if (!fi || !(fi.providers || []).some(p => p.usable)) return ['The first frame cannot be drawn.', ((fi && (fi.providers || []).find(p => p.why)) || {}).why || 'no picture model can be asked'];
+        if (!fi || !(fi.providers || []).some(p => p.usable)) return [T.t('The first frame cannot be drawn.'), ((fi && (fi.providers || []).find(p => p.why)) || {}).why || T.t('no picture model can be asked')];
       } else {
-        if (n !== 1 || _clips().length !== 1) return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + secs + ').'];
+        if (n !== 1 || _clips().length !== 1) return [T.t('Kling needs one picture and one clip.'), T.t('The picture is the person and the place, the clip the moves ({secs}).', { secs })];
         const words = String(ctx.text() || '').trim();
-        if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
+        if (r.promptMax && words.length > r.promptMax) return [T.t('The prompt is too long.'), T.tn(r.promptMax, '{model} takes {n} characters - this one is {len}.', '{model} takes {n} characters - this one is {len}.', { model: m.label, len: words.length })];
       }
     }
-    if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
+    if (r.needs && r.needs.images && n < r.needs.images) return [T.t('It needs a picture.'), T.t('{model} on {agg} starts from one.', { model: m.label, agg: r.aggLabel })];
     if (n > _picRoom(r)) {
-      return ['Too many pictures.', _seat() ? 'Room for ' + _picRoom(r) + ': the storyboard goes to ' + m.label + ' as one more picture, and it is drawn with these.'
-        : _mcSteps() ? 'Up to ' + _picRoom(r) + ' - the still of the clip is the picture model\'s other reference.'
-          : m.label + ' on ' + r.aggLabel + ' takes ' + _imgCap(r) + (_imgCap(r) < (L.images || 0) ? ' at ' + (params().resolution || r.resDef) : '') + '.'];
+      const cap = _imgCap(r);
+      return [T.t('Too many pictures.'), _seat() ? T.t('Room for {n}: the storyboard goes to {model} as one more picture, and it is drawn with these.', { n: _picRoom(r), model: m.label })
+        : _mcSteps() ? T.t('Up to {n} - the still of the clip is the picture model\'s other reference.', { n: _picRoom(r) })
+          : cap < (L.images || 0) ? T.t('{model} on {agg} takes {n} at {res}.', { model: m.label, agg: r.aggLabel, n: cap, res: params().resolution || r.resDef })
+            : T.t('{model} on {agg} takes {n}.', { model: m.label, agg: r.aggLabel, n: cap })];
     }
     // Clips and sounds: as many as the model takes, each with a part it takes.
     const vi = _clips(), au = _sounds();
-    if (vi.length > (L.videos || 0)) return ['Too many clips.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.videos ? L.videos : 'no clips') + '.'];
-    if (au.length > (L.audios || 0)) return ['Too many sounds.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.audios ? L.audios : 'no sounds') + '.'];
-    if (L.total && n + vi.length + au.length + _seat() > L.total) return ['Too many attachments.', m.label + ' takes ' + L.total + ' files in all.'];
+    const on = { model: m.label, agg: r.aggLabel };
+    if (vi.length > (L.videos || 0)) return [T.t('Too many clips.'), L.videos ? T.t('{model} on {agg} takes {n}.', Object.assign({ n: L.videos }, on)) : T.t('{model} on {agg} takes no clips.', on)];
+    if (au.length > (L.audios || 0)) return [T.t('Too many sounds.'), L.audios ? T.t('{model} on {agg} takes {n}.', Object.assign({ n: L.audios }, on)) : T.t('{model} on {agg} takes no sounds.', on)];
+    if (L.total && n + vi.length + au.length + _seat() > L.total) return [T.t('Too many attachments.'), T.tn(L.total, '{model} takes {n} files in all.', '{model} takes {n} files in all.', { model: m.label })];
     const wrong = vi.concat(au).map(a => [a, _spanWrong(a)]).find(x => x[1]);
     if (wrong) {
       const a = wrong[0];
       const k = _kind(a);
-      return [(k === 'video' ? 'Clip ' : 'Sound ') + (ctx.atts().filter(x => _kind(x) === k).indexOf(a) + 1) + ' cannot go like this.', wrong[1] + '.'];
+      const i = ctx.atts().filter(x => _kind(x) === k).indexOf(a) + 1;
+      return [k === 'video' ? T.t('Clip {n} cannot go like this.', { n: i }) : T.t('Sound {n} cannot go like this.', { n: i }), wrong[1] + '.'];
     }
-    if (au.length && !n && !vi.length) return ['A sound goes beside a picture or a clip.', m.label + ' takes sounds as references to something it sees.'];
+    if (au.length && !n && !vi.length) return [T.t('A sound goes beside a picture or a clip.'), T.t('{model} takes sounds as references to something it sees.', { model: m.label })];
     // A two-step video always sends a picture - its storyboard.
     const any = n + vi.length + au.length;
-    if ((any || _seat()) && !_table.r2) return ['Attachments need R2.', (_seat() ? 'The storyboard goes to the video as a picture - ' : 'The models read what is attached ') + 'from a public link: set R2 on Admin → API keys.'];
+    if ((any || _seat()) && !_table.r2) {
+      return [T.t('Attachments need R2.'), _seat() ? T.t('The storyboard goes to the video as a picture - from a public link: set R2 on Admin → API keys.')
+        : T.t('The models read what is attached from a public link: set R2 on Admin → API keys.')];
+    }
     return '';
   }
 
@@ -1084,18 +1116,22 @@ function VIDEOS(ctx) {
 
   // Whether a card can go to the model chosen now - the card's own attachments are the server's to check.
   function _readyFor(m) {
-    if (!_table) return ['No video models.', _err || 'reading the models…'];
+    if (!_table) return [T.t('No video models.'), _err || T.t('reading the models…')];
     const mm = model(), r = rec();
-    if (!mm || !mm.usable) return ['Not available now.', (mm && mm.why) || 'no model can be asked'];
-    if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
+    if (!mm || !mm.usable) return [T.t('Not available now.'), (mm && mm.why) || T.t('no model can be asked')];
+    if (!r || !r.usable) return [T.t('{agg} cannot be asked.', { agg: r ? r.aggLabel : T.t('That aggregator') }), (r && r.why) || ''];
     // A two-step card always sends a picture - its storyboard.
     // A card whose character or place is not in this library any more: what is missing, before the press.
     const gone = (m.media || []).filter(a => a && a.gone);
     if (gone.length) {
-      const what = gone.map(a => a.label ? '«' + a.label + '»' : (a.kind === 'video' ? 'a clip' : a.kind === 'audio' ? 'a sound' : 'a picture')).join(', ');
-      return ['Not in this library.', what + (gone.length === 1 ? ' is' : ' are') + ' not here - it stayed in the library this chat came from. Send it again with another in its place.'];
+      const what = gone.map(a => a.label ? '«' + a.label + '»' : (a.kind === 'video' ? T.t('a clip') : a.kind === 'audio' ? T.t('a sound') : T.t('a picture'))).join(', ');
+      return [T.t('Not in this library.'), T.tn(gone.length, '{what} is not here - it stayed in the library this chat came from. Send it again with another in its place.', '{what} are not here - it stayed in the library this chat came from. Send it again with another in its place.', { what })];
     }
-    if (((m.media || []).length || m.card.board) && !_table.r2) return ['Attachments need R2.', (m.card.board ? 'The ' + (m.card.board.kind === 'frame' ? 'picture' : 'storyboard') + ' goes to the video as a picture - ' : 'The models read pictures ') + 'from a public link: set R2 on Admin → API keys.'];
+    if (((m.media || []).length || m.card.board) && !_table.r2) {
+      return [T.t('Attachments need R2.'), !m.card.board ? T.t('The models read pictures from a public link: set R2 on Admin → API keys.')
+        : m.card.board.kind === 'frame' ? T.t('The picture goes to the video as a picture - from a public link: set R2 on Admin → API keys.')
+          : T.t('The storyboard goes to the video as a picture - from a public link: set R2 on Admin → API keys.')];
+    }
     return '';
   }
 
@@ -1105,21 +1141,22 @@ function VIDEOS(ctx) {
     const mm = model();
     // A message makes from the variant shown - written for its own model.
     if (mm && mm.family !== _familyOf(l.vmodel || m.card.model)) {
-      if (l.kind === 'swap') { note(go, 'Kling makes it.', 'A first frame\'s video is made by Kling motion control - pick it on the left.'); return; }
-      if (l.story) { note(go, 'Seedance makes it.', 'A video that follows a storyboard is made by Seedance - pick a Seedance model on the left.'); return; }
+      if (l.kind === 'swap') { note(go, T.t('Kling makes it.'), T.t('A first frame\'s video is made by Kling motion control - pick it on the left.')); return; }
+      if (l.story) { note(go, T.t('Seedance makes it.'), T.t('A video that follows a storyboard is made by Seedance - pick a Seedance model on the left.')); return; }
       return _rewrite(m, go);
     }
     // Kling's first frame has no prompt field: Kling's own prompt is the card's.
     const prompt = l.kind === 'swap' ? String(m.card.prompt || (_table && _table.standardPrompt) || '').trim() : toNeutral(l.ta.value).trim();
-    if (!prompt) { note(go, 'The prompt is empty.', 'Write what the clip shows, or write it again.'); return; }
+    if (!prompt) { note(go, T.t('The prompt is empty.'), T.t('Write what the clip shows, or write it again.')); return; }
     const why = _readyFor(m);
     if (why) { note(go, why[0], why[1]); return; }
     // Kling's first frame's video follows the picture shown on its second step.
     const follows = l.kind === 'swap';
     const sheet = follows ? _chosenSheet(l) : null;
     if (follows && !sheet) {
-      if ((l.m.boards || []).some(g => g.state === 'pending')) note(go, 'The ' + l.W + ' is being drawn.', 'The video follows it - make it when it has landed.');
-      else note(go, 'The ' + l.W + ' first.', 'Draw the ' + l.W + ' - the video follows the one shown on its step.');
+      const pic = l.W === 'picture';
+      if ((l.m.boards || []).some(g => g.state === 'pending')) note(go, pic ? T.t('The picture is being drawn.') : T.t('The storyboard is being drawn.'), T.t('The video follows it - make it when it has landed.'));
+      else note(go, pic ? T.t('The picture first.') : T.t('The storyboard first.'), pic ? T.t('Draw the picture - the video follows the one shown on its step.') : T.t('Draw the storyboard - the video follows the one shown on its step.'));
       return;
     }
     go.disabled = true;
@@ -1134,7 +1171,7 @@ function VIDEOS(ctx) {
         boardId: l.kind === 'column' ? (l.boardId || undefined) : sheet ? sheet.id : undefined,
         ver: l.ver || undefined,
       });
-      if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { note(go, T.t('Not made.'), (d && d.error) || T.t('the server did not answer')); return; }
       _cardN.delete(m.id);
       await ctx.reload(true);
     } finally {
@@ -1145,8 +1182,8 @@ function VIDEOS(ctx) {
   async function _rewrite(m, btn) {
     // Under Kling the writer writes the first frame's prompt - nothing else.
     const frameCard = !!(m.card.board && m.card.board.kind === 'frame');
-    if (isMC() && !frameCard) { note(btn, 'No writer here.', 'Under Kling motion control the writer writes only the first frame - pick another model on the left.'); return; }
-    if (frameCard && !isMC()) { note(btn, 'Kling makes this one.', 'The first frame is Kling motion control\'s - pick it on the left.'); return; }
+    if (isMC() && !frameCard) { note(btn, T.t('No writer here.'), T.t('Under Kling motion control the writer writes only the first frame - pick another model on the left.')); return; }
+    if (frameCard && !isMC()) { note(btn, T.t('Kling makes this one.'), T.t('The first frame is Kling motion control\'s - pick it on the left.')); return; }
     const why = _readyFor(m);
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
@@ -1155,7 +1192,7 @@ function VIDEOS(ctx) {
       await _flushWatch(m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/rewrite', { project: m.project, model: b.model, agg: b.agg, params: b.params });
-      if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { note(btn, T.t('Not written.'), (d && d.error) || T.t('the server did not answer')); return; }
       await ctx.reload(true);
     } finally {
       if (btn.isConnected) btn.disabled = false;
@@ -1175,6 +1212,8 @@ function VIDEOS(ctx) {
   }
   const _watchBusy = (c) => (c.watch || []).some(w => w && (w.state === 'watching' || w.state === 'waiting'));
   const _clipT = (v) => { const x = Math.max(0, +v || 0); const mm = Math.floor(x / 60); return mm + ':' + (x - mm * 60).toFixed(1).padStart(4, '0'); };
+  // Who watched a clip - the model the server names, or "an agent".
+  const _watchedBy = (w) => (w.cached ? T.t('watched before by {who}', { who: w.by || T.t('an agent') }) : T.t('watched by {who}', { who: w.by || T.t('an agent') }));
   // The step, or null when the message watched nothing. `written` - whether a prompt of it has been written.
   function _watchStep(m, l, written) {
     const c = m.card;
@@ -1186,8 +1225,9 @@ function VIDEOS(ctx) {
     // is a variant of the step - "‹ 1 of 2 ›" in its title line.
     const variants = list.map(w => ({ key: 'c' + w.n, sig: w.n + ':' + w.state + ':' + (w.why ? 1 : 0) + tail, w }));
     return {
-      key: 'watch', title: list.length > 1 ? 'clips watched' : 'clip watched', word: 'clip', variants, pick: variants[0].key,
-      note: (x) => (!x ? '' : x.w.state === 'done' ? 'what the agent saw in it' : x.w.state === 'failed' ? 'not watched' : x.w.state),
+      key: 'watch', title: list.length > 1 ? T.t('clips watched') : T.t('clip watched'), word: T.t('clip'), variants, pick: variants[0].key,
+      note: (x) => (!x ? '' : x.w.state === 'done' ? T.t('what the agent saw in it') : x.w.state === 'failed' ? T.t('not watched')
+        : x.w.state === 'watching' ? T.t('watching') : x.w.state === 'waiting' ? T.t('waiting') : x.w.state),
       body: (x, b, progs, nav) => _watchBody(l.m, b, progs, failed, x ? { w: x.w, nav } : null),
       acts: (x, a) => _watchActs(l.m, a),
     };
@@ -1214,8 +1254,8 @@ function VIDEOS(ctx) {
       h.appendChild(el('span', null, _clipT(w.in) + '–' + _clipT(w.out)));
       if (lab) h.appendChild(el('span', null, lab));
       if (w.state === 'done') {
-        h.appendChild(el('span', null, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent')));
-        if (w.edited) h.appendChild(el('span', 'is-mine', 'corrected by you'));
+        h.appendChild(el('span', null, _watchedBy(w)));
+        if (w.edited) h.appendChild(el('span', 'is-mine', T.t('corrected by you')));
       }
       if (w.state === 'done') {
         const ta = _watchTa(m, w, locked, saves);
@@ -1223,8 +1263,8 @@ function VIDEOS(ctx) {
         // Folded into one line; open, its part, who watched it, the description and - one line,
         // no empty block under it - what the writer does with it.
         const open = [h, ta];
-        if (!locked) open.push(el('div', 'vc-card-note', 'The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".'));
-        box.appendChild(_foldLine({ id: m.id, key: 'watch' + w.n, word: 'clip ' + w.n, lead: _clipT(w.in) + '–' + _clipT(w.out) + ' · ', text: () => ta.value, ta, open }));
+        if (!locked) open.push(el('div', 'vc-card-note', T.t('The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".')));
+        box.appendChild(_foldLine({ id: m.id, key: 'watch' + w.n, word: T.t('clip {n}', { n: w.n }), lead: _clipT(w.in) + '–' + _clipT(w.out) + ' · ', text: () => ta.value, ta, open }));
         b.appendChild(box);
         continue;
       }
@@ -1233,18 +1273,18 @@ function VIDEOS(ctx) {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
         progs.set('watch:' + w.n, startInlineProgress(strip, {
-          label: 'watching clip ' + w.n + (list.length > 1 ? ' of ' + list.length : '') + ' with its sound…', key: 'mv3-clip-watch', estimateMs: 60000,
+          label: list.length > 1 ? T.t('watching clip {n} of {all} with its sound…', { n: w.n, all: list.length }) : T.t('watching clip {n} with its sound…', { n: w.n }), key: 'mv3-clip-watch', estimateMs: 60000,
           startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
         }));
       } else if (w.state === 'waiting') {
         // A note of one line - not `vc-card-why`, which is the row of presses' and would stand 180 px tall here.
-        box.appendChild(el('div', 'vc-card-note', 'waits for clip ' + (w.n - 1)));
+        box.appendChild(el('div', 'vc-card-note', T.t('waits for clip {n}', { n: w.n - 1 })));
       } else {
-        box.appendChild(el('div', 'mv3-ig-bad', 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.'));
+        box.appendChild(el('div', 'mv3-ig-bad', T.t('Clip not watched - {why}. The writer saw three of its frames instead.', { why: w.why || T.t('no model watched it') })));
       }
       b.appendChild(box);
     }
-    if (failed) b.appendChild(el('div', 'mv3-ig-bad', 'The prompt was not written: ' + (c.error || 'no writer answered')));
+    if (failed) b.appendChild(el('div', 'mv3-ig-bad', T.t('The prompt was not written: {why}', { why: c.error || T.t('no writer answered') })));
   }
   // A clip's description to correct: written 0.6 s after the typing stops, or when the field is left; read-only while the
   // prompt is being written from it.
@@ -1255,8 +1295,8 @@ function VIDEOS(ctx) {
     ta.maxLength = 40000;
     ta.value = w.text || '';
     ta.readOnly = locked;
-    ta.title = locked ? 'The prompt is being written from this now'
-      : 'What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.';
+    ta.title = locked ? T.t('The prompt is being written from this now')
+      : T.t('What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.');
     const key = 'w:' + m.id + ':' + w.n;
     let last = ta.value;
     const save = () => {
@@ -1278,32 +1318,32 @@ function VIDEOS(ctx) {
     const c = m.card;
     const n = (c.watch || []).filter(Boolean).length;
     const part = _clipT(w.in) + '–' + _clipT(w.out);
-    const base = { nav, word: 'clip ' + w.n, always: true, pager: nav ? nav.pager() : null };
+    const base = { nav, word: T.t('clip {n}', { n: w.n }), always: true, pager: nav ? nav.pager() : null };
     if (w.state === 'done') {
       const ta = _watchTa(m, w, locked, saves);
-      const lead = [part, lab, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent'), w.edited ? 'corrected by you' : ''].filter(Boolean).join(' · ');
+      const lead = [part, lab, _watchedBy(w), w.edited ? T.t('corrected by you') : ''].filter(Boolean).join(' · ');
       b.appendChild(_field(Object.assign(base, { lead, text: () => ta.value, ta })));
       return;
     }
     const lead = [part, lab].filter(Boolean).join(' · ');
     if (w.state === 'watching') {
       b.appendChild(_waitField(Object.assign(base, { lead, progs, progKey: 'watch:' + w.n, prog: {
-        label: 'watching clip ' + w.n + (n > 1 ? ' of ' + n : '') + ' with its sound…', key: 'mv3-clip-watch', estimateMs: 60000,
+        label: n > 1 ? T.t('watching clip {n} of {all} with its sound…', { n: w.n, all: n }) : T.t('watching clip {n} with its sound…', { n: w.n }), key: 'mv3-clip-watch', estimateMs: 60000,
         startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
       } })));
     } else if (w.state === 'waiting') {
-      b.appendChild(_waitField(Object.assign(base, { lead, words: 'waits for clip ' + (w.n - 1) })));
+      b.appendChild(_waitField(Object.assign(base, { lead, words: T.t('waits for clip {n}', { n: w.n - 1 }) })));
     } else {
       b.appendChild(_waitField(Object.assign(base, { lead, bad: true,
-        words: 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.' })));
+        words: T.t('Clip not watched - {why}. The writer saw three of its frames instead.', { why: w.why || T.t('no model watched it') }) })));
     }
   }
   function _watchActs(m, a) {
     const c = m.card;
     if (c.state === 'writing') return;
-    const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'Write it again');
+    const again = el('button', 'mv3-c-btn vc-go u-btn is-s', T.t('Write it again'));
     again.type = 'button';
-    again.title = 'Another variant of the prompt, written from these descriptions as they stand - a clip not watched is watched again';
+    again.title = T.t('Another variant of the prompt, written from these descriptions as they stand - a clip not watched is watched again');
     again.addEventListener('click', () => _rewrite(m, again));
     a.appendChild(again);
     if (c.plain && (m.media || []).length && !(c.versions || []).length) a.appendChild(_backLink(m));
@@ -1312,16 +1352,16 @@ function VIDEOS(ctx) {
   // What the storyboard - or Kling's first frame, drawn at 2K from the clip's still and every picture of the person
   // - costs, and whether it can be drawn.
   function _boardPrice(l) {
-    if (!_table) return { ok: false, text: 'reading the prices…' };
+    if (!_table) return { ok: false, text: T.t('reading the prices…') };
     const frame = l.kind === 'swap';
     const info = frame ? _table.frame : _table.board;
-    if (!info) return { ok: false, text: 'the picture engine is not in this program' };
+    if (!info) return { ok: false, text: T.t('the picture engine is not in this program') };
     // The sheet always goes to the video as a picture: without R2 it would be bought for nothing.
-    if (!_table.r2) return { ok: false, text: 'the ' + l.W + ' goes to the video as a picture - set R2 on Admin → API keys' };
+    if (!_table.r2) return { ok: false, text: frame ? T.t('the picture goes to the video as a picture - set R2 on Admin → API keys') : T.t('the storyboard goes to the video as a picture - set R2 on Admin → API keys') };
     const pics = (l.m.media || []).filter(x => x.kind === 'image').length;
     const n = frame ? pics + 1 : pics;
     const p = (info.providers || []).find(x => x.usable && (!n || (x.maxRefs || 1) >= n));
-    if (!p) return { ok: false, text: ((info.providers || []).find(x => x.why) || {}).why || (info.label + ' cannot take ' + n + ' pictures') };
+    if (!p) return { ok: false, text: ((info.providers || []).find(x => x.why) || {}).why || T.tn(n, '{engine} cannot take {n} pictures', '{engine} cannot take {n} pictures', { engine: info.label }) };
     return { ok: true, text: (p.price != null ? '≈' + money(p.price) + ' · ' : '') + info.quality + ' · ' + info.label + ' · ' + p.label };
   }
   // The sheets the video can follow: landed, and still on the Images shelf (the server says `gone`).
@@ -1344,7 +1384,7 @@ function VIDEOS(ctx) {
         project: m.project, where: _where(m.project),
         board: two.bta ? (two.frame ? toNeutral(two.bta.value) : two.bta.value) : undefined,
       });
-      if (!d || !d.success) { note(btn, 'Not drawn.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { note(btn, T.t('Not drawn.'), (d && d.error) || T.t('the server did not answer')); return; }
       // Read in place - the new countdown is on this message, not at the end of the thread.
       await ctx.reload();
     } finally {
@@ -1361,7 +1401,8 @@ function VIDEOS(ctx) {
   // the storyboard's sheet in its row under the prompt, 72 px high at its shape; Kling's first frame fills its step down to the
   // bottom of the video (css .vm-fill).
   function _boardThumb(g, all, W, how) {
-    const word = W || 'storyboard';
+    const pic = W === 'picture';
+    const word = pic ? T.t('picture') : T.t('storyboard');
     const t = el('button', 'vc-board' + (how ? ' is-' + how : ''));
     t.type = 'button';
     t.dataset.id = g.id;
@@ -1370,9 +1411,9 @@ function VIDEOS(ctx) {
     img.src = '/api/thumb?src=' + encodeURIComponent(g.imagePath) + '&v=' + (how ? 'preset' : 'strip');
     img.loading = 'lazy'; img.decoding = 'async'; img.alt = word;
     // Gone from the shelf since it was read: said, and never followed (the server says so too at the next read).
-    img.addEventListener('error', () => { t.classList.add('is-gone'); t.title = 'Not on the Images shelf any more'; }, { once: true });
+    img.addEventListener('error', () => { t.classList.add('is-gone'); t.title = T.t('Not on the Images shelf any more'); }, { once: true });
     t.appendChild(img);
-    t.title = 'The ' + word + ' · press: large';
+    t.title = pic ? T.t('The picture · press: large') : T.t('The storyboard · press: large');
     const list = (all && all.length ? all : [g]);
     t.addEventListener('click', () => openViewer(list.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: word })),
       Math.max(0, list.findIndex(x => x.id === g.id))));
@@ -1381,9 +1422,11 @@ function VIDEOS(ctx) {
   // A sheet still being drawn: its countdown in the person's words (the asking's stage first), and the cross.
   function _boardWords(g, W) {
     if (g.stage) return g.stage + '…';
-    if (g.error) return String(g.error).slice(0, 60) + ' - trying the next…';
-    return 'drawing the ' + (W || 'storyboard') + '…';
+    if (g.error) return T.t('{error} - trying the next…', { error: String(g.error).slice(0, 60) });
+    return W === 'picture' ? T.t('drawing the picture…') : T.t('drawing the storyboard…');
   }
+  // A press's word by what it draws.
+  const _drawWord = (W) => (W === 'picture' ? T.t('draw the picture') : T.t('draw the storyboard'));
   function _boardBusy(g, progs, key, W) {
     const cell = el('div', 'vc-board is-busy');
     const bar = el('div', 'mv3-ig-prog');
@@ -1434,11 +1477,11 @@ function VIDEOS(ctx) {
     const h = el('div', 'vc-card-h');
     // Kling's first frame of the plain chat is the person's message.
     const own = kind === 'swap' && c.plain;
-    h.appendChild(el('span', 'k', kind === 'column' ? 'Storyboard' : 'Video'));
-    if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model) + (kind === 'column' ? '' : ' · the first frame, then the video')));
+    h.appendChild(el('span', 'k', kind === 'column' ? T.t('Storyboard') : T.t('Video')));
+    if (c.model) h.appendChild(el('span', 'm', kind === 'column' ? T.t('for {model}', { model: _labelOf(c.model) }) : T.t('for {model} · the first frame, then the video', { model: _labelOf(c.model) })));
     box.appendChild(h);
     // What was asked, at the head - seen on every step.
-    const asked = _askedOf({ words: c.text, media: m.media, none: own ? 'from your pictures' : 'from the attachments alone' });
+    const asked = _askedOf({ words: c.text, media: m.media, none: own ? T.t('from your pictures') : T.t('from the attachments alone') });
     // What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
     const foot = el('div', 'vm-foot');
     const vid = _vidField(m.id, foot);
@@ -1449,18 +1492,18 @@ function VIDEOS(ctx) {
     if (!((B.versions || []).length || B.prompt) && !(c.watch || []).length) {
       vid.paint(_clipsOf(m), _shapeNow(m.media || []));
       // Nothing written yet: the writer at work, or why not - in the place the prompt will stand in.
-      const word = kind === 'swap' ? 'first frame prompt' : 'storyboard prompt';
+      const word = kind === 'swap' ? T.t('first frame prompt') : T.t('storyboard prompt');
       if (c.state === 'writing') {
         hd.left.appendChild(_waitField({ word, progs, progKey: 'w:' + m.id, prog: {
-          label: kind === 'column' ? 'writing the storyboard prompt…' : 'writing the first frame\'s prompt…',
+          label: kind === 'column' ? T.t('writing the storyboard prompt…') : T.t('writing the first frame\'s prompt…'),
           key: kind === 'column' ? 'mv3-board-writer' : 'mv3-video-writer',
           estimateMs: kind === 'column' ? 20000 : 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
         } }));
         return box;
       }
-      hd.left.appendChild(_waitField({ word, bad: true, words: c.error || 'it was not written' }));
+      hd.left.appendChild(_waitField({ word, bad: true, words: c.error || T.t('it was not written') }));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'Write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', T.t('Write it again'));
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -1504,9 +1547,9 @@ function VIDEOS(ctx) {
     const say = (x) => { const p = x && x.g && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(_boardWords(x.g, l.W)); };
     // Its sheets (Kling: its pictures) - every one drawn a variant; the one paged to, when it has landed, is the one chosen.
     const sheetSet = {
-      key: 'board', word: kind === 'swap' ? 'picture' : 'sheet', pick: B.chosen, variants: sheets,
-      note: (x) => (!x ? '' : x.g.state === 'pending' ? 'being drawn' : !_boardOk(x.g) ? (x.g.gone ? 'not on the Images shelf any more' : 'not drawn')
-        : 'the video follows this one'),
+      key: 'board', word: kind === 'swap' ? T.tc('pager', 'picture') : T.t('sheet'), pick: B.chosen, variants: sheets,
+      note: (x) => (!x ? '' : x.g.state === 'pending' ? T.t('being drawn') : !_boardOk(x.g) ? (x.g.gone ? T.t('not on the Images shelf any more') : T.t('not drawn'))
+        : T.t('the video follows this one')),
       page: (x) => { if (x && _boardOk(x.g) && x.key !== B.chosen) patch({ chosen: x.key }); },
     };
     const bpage = (x) => { if (x && x.v && x.key !== B.cur) patch({ bcur: x.key }); };
@@ -1517,8 +1560,8 @@ function VIDEOS(ctx) {
       // the video from it (Kling's prompt is its own, put in by the server).
       if (bvars.length) {
         steps.push({
-          key: 'picture-prompt', title: 'first frame prompt', word: 'variant', pick: B.cur, variants: bvars,
-          note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw the picture" draws this one'),
+          key: 'picture-prompt', title: T.t('first frame prompt'), word: T.t('variant'), pick: B.cur, variants: bvars,
+          note: (x) => (!x ? '' : x.writing ? T.t('being written') : T.t('"draw the picture" draws this one')),
           body: (x, b, progs, nav) => _momentStep(m, l, x, b, progs, nav),
           acts: (x, a) => _boardPromptActs(m, l, x, a),
           page: bpage,
@@ -1527,7 +1570,7 @@ function VIDEOS(ctx) {
       }
       if (sheets.length || bvars.some(x => !x.writing)) {
         steps.push(Object.assign({}, sheetSet, {
-          title: 'first frame',
+          title: T.t('first frame'),
           body: (x, b, progs, nav) => _sheetStep(m, l, x, b, progs, nav),
           acts: (x, a) => _sheetActs(m, l, x, a),
           freshen: (x) => { say(x); _freshenStory(id, l); },
@@ -1538,9 +1581,9 @@ function VIDEOS(ctx) {
       const watchSig = (c.watch || []).filter(Boolean).map(w => w.n + ':' + w.state + ':' + (w.why ? 1 : 0)).join(',') + '|' + (c.state === 'writing' ? 'w' : 'r');
       if ((c.watch || []).length || bvars.length) {
         steps.push({
-          key: 'board-prompt', title: 'storyboard', word: 'variant', pick: B.cur, variants: bvars, more: [sheetSet],
+          key: 'board-prompt', title: T.t('storyboard'), word: T.t('variant'), pick: B.cur, variants: bvars, more: [sheetSet],
           sig: () => watchSig,
-          note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw" draws from this one'),
+          note: (x) => (!x ? '' : x.writing ? T.t('being written') : T.t('"draw" draws from this one')),
           body: (x, b, progs, nav) => _storyStep(m, l, x, b, progs, nav),
           acts: (x, a, nav) => _storyActs(m, l, x, a, nav),
           page: bpage,
@@ -1549,8 +1592,8 @@ function VIDEOS(ctx) {
       }
       if (vvars.length) {
         steps.push({
-          key: 'prompt', title: 'video prompt', word: 'variant', pick: c.cur, variants: vvars,
-          note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
+          key: 'prompt', title: T.t('video prompt'), word: T.t('variant'), pick: c.cur, variants: vvars,
+          note: (x) => (!x ? '' : x.writing ? T.t('being written') : T.t('"make the video" sends this one')),
           body: (x, b, progs, nav) => _videoPromptStep(m, l, x, b, progs, nav),
           acts: (x, a) => _videoPromptActs(m, l, x, a),
           page: (x) => { if (x && x.v && x.key !== c.cur) patch({ cur: x.key }); },
@@ -1581,12 +1624,12 @@ function VIDEOS(ctx) {
     const row = el('div', 'vm-sheet');
     const pg = nav ? nav.pager('board') : null;
     const g = x ? x.g : null;
-    if (!g) row.appendChild(el('span', 'vc-card-note', 'Not drawn yet - "draw the storyboard" below. The video follows the one shown here.'));
+    if (!g) row.appendChild(el('span', 'vc-card-note', T.t('Not drawn yet - "draw the storyboard" below. The video follows the one shown here.')));
     else if (g.state === 'pending') row.appendChild(_boardBusy(g, progs, g.id, l.W));
-    else if (!_boardOk(g)) row.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+    else if (!_boardOk(g)) row.appendChild(el('div', 'vc-board is-bad', g.gone ? T.t('not on the Images shelf any more - it cannot be followed') : String(g.error || T.t('it was not drawn')).slice(0, 200)));
     else {
       row.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, 'row'));
-      row.appendChild(el('span', 'vc-card-note', 'the storyboard - the video follows this one'));
+      row.appendChild(el('span', 'vc-card-note', T.t('the storyboard - the video follows this one')));
     }
     if (pg) row.appendChild(pg);
     b.appendChild(row);
@@ -1599,24 +1642,24 @@ function VIDEOS(ctx) {
     const sx = nav.shown('board');
     const ok = !!(sx && _boardOk(sx.g));
     if (l.kind === 'column') {
-      const write = el('button', 'mv3-c-btn vc-go u-btn is-s' + (ok ? ' is-make is-main' : ''), 'write the video');
+      const write = el('button', 'mv3-c-btn vc-go u-btn is-s' + (ok ? ' is-make is-main' : ''), T.t('write the video'));
       write.type = 'button';
-      write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
+      write.title = T.t('The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made');
       write.addEventListener('click', () => _writeVideo(l.m, l, write));
       write.disabled = !ok;
       a.appendChild(write);
     }
     const drawn = (l.m.boards || []).length > 0;
-    const go = el('button', 'mv3-c-btn vc-go u-btn is-s' + (drawn && l.kind === 'column' ? '' : ' is-make is-main'), drawn ? 'draw again' : 'draw the ' + l.W);
+    const go = el('button', 'mv3-c-btn vc-go u-btn is-s' + (drawn && l.kind === 'column' ? '' : ' is-make is-main'), drawn ? T.t('draw again') : _drawWord(l.W));
     go.type = 'button';
-    go.title = 'A sheet from the storyboard prompt shown - as you edited it';
+    go.title = T.t('A sheet from the storyboard prompt shown - as you edited it');
     const two = { bta: l.bta, range: null, frame: false, busy: false };
     go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
     const price = el('span', 'vc-card-why');
     a.append(go, price);
-    const again = el('button', 'vc-link', 'write it again');
+    const again = el('button', 'vc-link', T.t('write it again'));
     again.type = 'button';
-    again.title = 'Another variant of the storyboard prompt from the same words and pictures - this one stays';
+    again.title = T.t('Another variant of the storyboard prompt from the same words and pictures - this one stays');
     again.addEventListener('click', () => _rewrite(l.m, again));
     a.appendChild(again);
     if (l.kind === 'column' && (l.m.media || []).length) a.appendChild(_backLink(l.m));
@@ -1632,19 +1675,19 @@ function VIDEOS(ctx) {
       const B = c.board || {};
       const first = !((B.versions || []).length || B.prompt);
       // In the place the prompt will stand in.
-      b.appendChild(_waitField({ nav, word: 'prompt', always: true, pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
-        label: first ? 'writing the storyboard prompt…' : 'writing another variant of the storyboard prompt…',
+      b.appendChild(_waitField({ nav, word: T.t('prompt'), always: true, pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
+        label: first ? T.t('writing the storyboard prompt…') : T.t('writing another variant of the storyboard prompt…'),
         key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       } }));
       return;
     }
-    if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', T.t('The last writing did not work: {why}', { why: c.error })));
     const bta = document.createElement('textarea');
     bta.className = 'vc-prompt-ta is-board u-area';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = x.v.prompt || '';
-    bta.title = 'The storyboard sheet\'s prompt - numbered panels, one per beat of the clip; Image 1, Image 2 are the pictures below.';
+    bta.title = T.t('The storyboard sheet\'s prompt - numbered panels, one per beat of the clip; Image 1, Image 2 are the pictures below.');
     const key = 'b:' + m.id + ':' + x.key;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -1656,7 +1699,7 @@ function VIDEOS(ctx) {
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     // A field down to the bottom of the video (less the sheet's row under it), its variants' pager in its
     // title line.
-    b.appendChild(_field({ nav, word: 'prompt', always: true, text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null }));
+    b.appendChild(_field({ nav, word: T.t('prompt'), always: true, text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null }));
     l.bta = bta;
   }
   // 1 · Kling's first frame: the moment of the clip it is drawn from and the prompt the writer wrote - [clip 1] is
@@ -1667,12 +1710,12 @@ function VIDEOS(ctx) {
     l.bta = null; l.range = null;
     if (!x || x.writing) {
       // In the place the prompt will stand in.
-      b.appendChild(_waitField({ nav, word: 'first frame prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
-        label: 'writing another variant of the first frame\'s prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      b.appendChild(_waitField({ nav, word: T.t('first frame prompt'), pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
+        label: T.t('writing another variant of the first frame\'s prompt…'), key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       } }));
       return;
     }
-    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', T.t('The last writing did not work: {why}', { why: c.error })));
     const clip = (l.m.media || []).find(y => y.kind === 'video') || {};
     const len = Math.max(3, +B.len || ((+clip.out || 0) - (+clip.in || 0)));
     const lo = 0;
@@ -1688,10 +1731,10 @@ function VIDEOS(ctx) {
     range.min = String(lo); range.max = String(hi); range.step = '0.04';
     range.value = String(Math.max(lo, Math.min(hi, +clip.in || 0)));
     wireRange(range);                               // the shared slider
-    range.title = 'The first frame: the moment your character is seen best - the moves go from here';
+    range.title = T.t('The first frame: the moment your character is seen best - the moves go from here');
     const said = el('span', 'vc-moment-at');
     const say = () => {
-      said.textContent = 'the first frame: ' + _t(range.value) + ' · the moves ' + _t(range.value) + ' – ' + _t(Math.min(B.dur, +range.value + len));
+      said.textContent = T.t('the first frame: {at} · the moves {from} – {to}', { at: _t(range.value), from: _t(range.value), to: _t(Math.min(B.dur, +range.value + len)) });
     };
     say();
     let raf = 0;
@@ -1700,14 +1743,14 @@ function VIDEOS(ctx) {
     range.addEventListener('input', () => { say(); show(); });
     // The drawing waits for the moment to be written (`atSave`): it reads it from the card.
     range.addEventListener('change', () => { l.atSave = _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, at: +range.value }, 'PATCH'); });
-    side.append(range, said, el('span', 'vc-card-note', 'A new moment needs a new picture: the first frame is drawn from it.'));
+    side.append(range, said, el('span', 'vc-card-note', T.t('A new moment needs a new picture: the first frame is drawn from it.')));
     mo.append(v, side);
     const bta = document.createElement('textarea');
     bta.className = 'vc-prompt-ta is-board u-area';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = toShown(x.v.prompt || '');
-    bta.title = 'The first frame\'s prompt: [clip 1] is the clip\'s still at the moment above, [picture 1], [picture 2]... your pictures by their numbers.';
+    bta.title = T.t('The first frame\'s prompt: [clip 1] is the clip\'s still at the moment above, [picture 1], [picture 2]... your pictures by their numbers.');
     const key = 'b:' + m.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -1719,7 +1762,7 @@ function VIDEOS(ctx) {
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     // Its title line (the steps, the variants' pager), the moment of the clip under it, then the
     // prompt as a field down to the bottom of the video.
-    const f = _field({ nav, word: 'first frame prompt', text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null });
+    const f = _field({ nav, word: T.t('first frame prompt'), text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null });
     f.insertBefore(mo, bta);
     b.appendChild(f);
     l.bta = bta;
@@ -1728,17 +1771,17 @@ function VIDEOS(ctx) {
   function _boardPromptActs(m, l, x, a) {
     l.drawGo = null; l.drawPrice = null;
     if (!x || x.writing) return;
-    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Draw the ' + l.W);
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', l.W === 'picture' ? T.t('Draw the picture') : T.t('Draw the storyboard'));
     go.type = 'button';
     const two = { bta: l.bta, range: l.range, frame: l.kind === 'swap', busy: false };
     go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
     const price = el('span', 'vc-card-why');
     a.append(go, price);
     // Kling's first frame and the storyboard: their own prompt written again.
-    const again = el('button', 'vc-link', 'write it again');
+    const again = el('button', 'vc-link', T.t('write it again'));
     again.type = 'button';
-    again.title = l.kind === 'swap' ? 'Another variant of the first frame\'s prompt from the same words and pictures - this one stays'
-      : 'Another variant of the storyboard prompt from the same words and pictures - this one stays';
+    again.title = l.kind === 'swap' ? T.t('Another variant of the first frame\'s prompt from the same words and pictures - this one stays')
+      : T.t('Another variant of the storyboard prompt from the same words and pictures - this one stays');
     again.addEventListener('click', () => _rewrite(l.m, again));
     a.appendChild(again);
     if ((l.kind === 'column' || (l.kind === 'swap' && l.m.card.plain)) && (l.m.media || []).length) a.appendChild(_backLink(l.m));
@@ -1755,15 +1798,15 @@ function VIDEOS(ctx) {
     const ok = !!(g && _boardOk(g));
     if (!g) {
       fill.classList.add('is-empty');
-      fill.appendChild(el('span', 'w', 'Not drawn yet - "draw the picture" on the step before. The video follows the one shown here.'));
+      fill.appendChild(el('span', 'w', T.t('Not drawn yet - "draw the picture" on the step before. The video follows the one shown here.')));
     } else if (g.state === 'pending') fill.appendChild(_boardBusy(g, progs, g.id, l.W));
-    else if (!ok) fill.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+    else if (!ok) fill.appendChild(el('div', 'vc-board is-bad', g.gone ? T.t('not on the Images shelf any more - it cannot be followed') : String(g.error || T.t('it was not drawn')).slice(0, 200)));
     else fill.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, 'frame'));
-    b.appendChild(_field({ nav, word: 'first frame', pager: nav ? nav.pager('board') : null, wait: fill }));
+    b.appendChild(_field({ nav, word: T.t('first frame'), pager: nav ? nav.pager('board') : null, wait: fill }));
     // Kling's prompt is its own: said, not a field.
     if (ok) {
       const clip = (l.m.media || []).find(y => y.kind === 'video') || {};
-      const said = 'Kling moves this picture with the clip ' + _t(clip.in) + ' – ' + _t(clip.out) + ' and gets: ' + (l.m.card.prompt || '');
+      const said = T.t('Kling moves this picture with the clip {from} – {to} and gets: {prompt}', { from: _t(clip.in), to: _t(clip.out), prompt: l.m.card.prompt || '' });
       const n = el('div', 'vc-card-note vm-note2', said);
       n.title = said;
       b.appendChild(n);
@@ -1778,13 +1821,13 @@ function VIDEOS(ctx) {
       if (x && _boardOk(x.g)) {
         const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
         nBtn.type = 'button';
-        nBtn.title = 'How many to make from it - each clip is its own variant of the video';
+        nBtn.title = T.t('How many to make from it - each clip is its own variant of the video');
         nBtn.addEventListener('click', () => {
           _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
           nBtn.textContent = '×' + _cardN.get(m.id);
           _freshenStory(m.id, l);
         });
-        const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Make the video');
+        const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', T.t('Make the video'));
         go.type = 'button';
         go.addEventListener('click', () => _make(l.m, go));
         const price = el('span', 'vc-card-why');
@@ -1792,9 +1835,9 @@ function VIDEOS(ctx) {
         l.go = go;
         l.price = price;
       }
-      const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (x && _boardOk(x.g) ? '' : ' is-make is-main'), x ? 'draw again' : 'draw the picture');
+      const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (x && _boardOk(x.g) ? '' : ' is-make is-main'), x ? T.t('draw again') : T.t('draw the picture'));
       redo.type = 'button';
-      redo.title = 'Another picture from the prompt chosen on the step before';
+      redo.title = T.t('Another picture from the prompt chosen on the step before');
       redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: true, busy: false }, redo, e));
       const dp = el('span', 'vc-card-why');
       a.append(redo, dp);
@@ -1805,16 +1848,16 @@ function VIDEOS(ctx) {
     }
     // The column's storyboard: the video's prompt is written now, with this sheet among the pictures.
     if (l.kind === 'column') {
-      const write = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Write the video');
+      const write = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', T.t('Write the video'));
       write.type = 'button';
-      write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
+      write.title = T.t('The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made');
       write.addEventListener('click', () => _writeVideo(l.m, l, write));
       write.disabled = !(x && _boardOk(x.g));
       a.appendChild(write);
     }
-    const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (l.kind === 'column' ? '' : ' is-make is-main'), x ? 'draw again' : 'draw the ' + l.W);
+    const redo = el('button', 'mv3-c-btn vc-go u-btn is-s' + (l.kind === 'column' ? '' : ' is-make is-main'), x ? T.t('draw again') : _drawWord(l.W));
     redo.type = 'button';
-    redo.title = 'Another sheet from the prompt chosen on the step before';
+    redo.title = T.t('Another sheet from the prompt chosen on the step before');
     redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: false, busy: false }, redo, e));
     const price = el('span', 'vc-card-why');
     a.append(redo, price);
@@ -1826,7 +1869,7 @@ function VIDEOS(ctx) {
   async function _writeVideo(m, l, btn) {
     if (btn.disabled) return;
     const g = _chosenSheet(l);
-    if (!g) { note(btn, 'No storyboard yet.', 'Draw it first - the video follows it.'); return; }
+    if (!g) { note(btn, T.t('No storyboard yet.'), T.t('Draw it first - the video follows it.')); return; }
     const why = _readyFor(m);
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
@@ -1834,7 +1877,7 @@ function VIDEOS(ctx) {
       await _flushWatch(m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/video', { project: m.project, model: b.model, agg: b.agg, params: b.params, boardId: g.id });
-      if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { note(btn, T.t('Not written.'), (d && d.error) || T.t('the server did not answer')); return; }
       await ctx.reload(true);
     } finally {
       if (btn.isConnected) btn.disabled = false;
@@ -1847,19 +1890,19 @@ function VIDEOS(ctx) {
     l.ta = null; l.ver = ''; l.vmodel = ''; l.boardId = ''; l.patchKey = '';
     if (!x || x.writing) {
       // In the place the prompt will stand in.
-      b.appendChild(_waitField({ nav, word: 'prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
-        label: 'writing the video prompt…', key: 'mv3-video-writer', estimateMs: 25000,
+      b.appendChild(_waitField({ nav, word: T.t('prompt'), pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
+        label: T.t('writing the video prompt…'), key: 'mv3-video-writer', estimateMs: 25000,
         startedAt: Date.parse(c.startedAt || m.at) || 0,
       } }));
       return;
     }
     const v = x.v;
-    if (c.error && c.writing !== 'board') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    if (c.error && c.writing !== 'board') b.appendChild(el('div', 'mv3-ig-bad', T.t('The last writing did not work: {why}', { why: c.error })));
     const ta = document.createElement('textarea');
     ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
-    ta.title = 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
+    ta.title = T.t('The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.');
     const key = 'p:' + m.id + ':' + v.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -1872,14 +1915,14 @@ function VIDEOS(ctx) {
     const media = l.m.media || [];
     const sheet = (l.m.boards || []).find(g => g.id === v.boardId);
     const has = !!(sheet && sheet.imagePath);
-    const all = media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
+    const all = media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: T.t('storyboard') }] : [])
       .concat(media.filter(a => a.kind !== 'image'));
     // Open at once, down to the bottom of the video; what goes with it under it, in
     // small cells.
-    b.appendChild(_field({ nav, word: 'video prompt', text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
+    b.appendChild(_field({ nav, word: T.t('video prompt'), text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
     const row = _mediaRow(all);
     if (row) { row.classList.add('vm-refs-s'); b.appendChild(row); }
-    if (sheet && sheet.gone) b.appendChild(el('div', 'mv3-ig-bad', 'Its storyboard is not on the Images shelf any more - write the video again from another sheet.'));
+    if (sheet && sheet.gone) b.appendChild(el('div', 'mv3-ig-bad', T.t('Its storyboard is not on the Images shelf any more - write the video again from another sheet.')));
     Object.assign(l, { ta, save, ver: v.id, vmodel: v.model || c.model, boardId: v.boardId || '', patchKey: key });
   }
   function _videoPromptActs(m, l, x, a) {
@@ -1887,20 +1930,20 @@ function VIDEOS(ctx) {
     if (!x || x.writing) return;
     const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
-    nBtn.title = 'How many to make from it - each clip is its own variant of the video';
+    nBtn.title = T.t('How many to make from it - each clip is its own variant of the video');
     nBtn.addEventListener('click', () => {
       _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshenStory(m.id, l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Make the video');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', T.t('Make the video'));
     go.type = 'button';
     go.addEventListener('click', () => _make(l.m, go));
     const price = el('span', 'vc-card-why');
     a.append(nBtn, go, price);
-    const again = el('button', 'vc-link', 'write it again');
+    const again = el('button', 'vc-link', T.t('write it again'));
     again.type = 'button';
-    again.title = 'Another variant of the video prompt, with the storyboard shown on its step - this one stays';
+    again.title = T.t('Another variant of the video prompt, with the storyboard shown on its step - this one stays');
     again.addEventListener('click', () => _writeVideo(l.m, l, again));
     a.appendChild(again);
     l.go = go;
@@ -1923,8 +1966,8 @@ function VIDEOS(ctx) {
       if (!fits) {
         l.go.disabled = true;
         l.go.classList.add('is-make', 'is-main');
-        l.go.textContent = 'Make the video';
-        l.price.textContent = 'this video is made by ' + (l.kind === 'swap' ? 'Kling motion control' : 'Seedance') + ' - pick it on the left';
+        l.go.textContent = T.t('Make the video');
+        l.price.textContent = T.t('this video is made by {model} - pick it on the left', { model: l.kind === 'swap' ? 'Kling motion control' : 'Seedance' });
         l.price.title = l.price.textContent;
       }
     }
@@ -1949,9 +1992,9 @@ function VIDEOS(ctx) {
     requestAnimationFrame(() => {
       if (!t.isConnected || !t.clientHeight) { if (tries < 30) _fold(t, tries + 1); return; }
       if (t.scrollHeight <= t.clientHeight + 1 || t.nextSibling && t.nextSibling.classList && t.nextSibling.classList.contains('vc-asked-more')) return;
-      const more = el('button', 'vc-asked-more', 'More');
+      const more = el('button', 'vc-asked-more', T.t('More'));
       more.type = 'button';
-      more.addEventListener('click', () => { const open = t.classList.toggle('is-open'); more.textContent = open ? 'Less' : 'More'; });
+      more.addEventListener('click', () => { const open = t.classList.toggle('is-open'); more.textContent = open ? T.t('Less') : T.t('More'); });
       t.after(more);
     });
   }
@@ -1962,14 +2005,14 @@ function VIDEOS(ctx) {
     const box = el('div', 'mv3-ig-msg is-agent is-sending vc-card');
     const h = el('div', 'vc-card-h');
     const m = model();
-    h.appendChild(el('span', 'k', _boardOn() ? 'storyboard' : 'video'));
-    if (m) h.appendChild(el('span', 'm', 'for ' + m.label));
+    h.appendChild(el('span', 'k', _boardOn() ? T.t('storyboard') : T.t('video')));
+    if (m) h.appendChild(el('span', 'm', T.t('for {model}', { model: m.label })));
     box.appendChild(h);
-    const asked = _askedOf({ words: o.text, media: o.media, none: 'from the attachments alone' });
+    const asked = _askedOf({ words: o.text, media: o.media, none: T.t('from the attachments alone') });
     const vid = _vidField('pend:' + (++_pendSeq), null);
     vid.paint([], _shapeNow(o.media || null));
     const hd = _headOf(asked, vid);
-    hd.left.appendChild(_waitField({ words: 'sending…', pulse: true }));
+    hd.left.appendChild(_waitField({ words: T.t('sending…'), pulse: true }));
     box.appendChild(hd.el);
     return box;
   }
@@ -1982,8 +2025,8 @@ function VIDEOS(ctx) {
     if (!gens.length) return null;
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-plain-msg');
     const h = el('div', 'vc-card-h');
-    h.appendChild(el('span', 'k', 'Video'));
-    if (gens[0].model) h.appendChild(el('span', 'm', 'for ' + _labelOf(gens[0].model)));
+    h.appendChild(el('span', 'k', T.t('Video')));
+    if (gens[0].model) h.appendChild(el('span', 'm', T.t('for {model}', { model: _labelOf(gens[0].model) })));
     box.appendChild(h);
     const media = (m.media || []).length ? m.media : ((asked && asked.media) || []);
     const words = String((m.asked != null ? m.asked : (asked ? asked.text : '')) || '').trim();
@@ -2013,9 +2056,10 @@ function VIDEOS(ctx) {
       const k = count[a.kind] != null ? a.kind : 'image';
       count[k]++;
       const cell = refCell(a, k, count[k], media);
-      cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
+      const what = k === 'video' ? T.t('clip {n}', { n: count[k] }) : k === 'audio' ? T.t('sound {n}', { n: count[k] }) : T.t('picture {n}', { n: count[k] });
+      const named = a.label ? T.t('{what} - {label}', { what, label: a.label }) : what;
+      cell.title = a.gone ? T.t('{what} - not in this library', { what: named }) : named;
       const wrap = el('div', 'vc-ref' + (a.gone ? ' is-gone' : ''));
-      if (a.gone) cell.title += ' - not in this library';
       wrap.appendChild(cell);
       if (a.label) wrap.appendChild(el('span', 'lab', a.label));
       row.appendChild(wrap);
@@ -2037,7 +2081,7 @@ function VIDEOS(ctx) {
     for (const f of _folds) { if (f.el.isConnected) f.fold(); else _folds.delete(f); }
   }
   const _flat = (t) => String(t || '').replace(/\s+/g, ' ').trim();
-  const _chars = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' chars';
+  const _chars = (n) => T.tn(n, '{n} chars', '{n} chars', { n: String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') });
   // o: { id, key, word, lead, text(), ta, open: [what the open line shows], pager }
   function _foldLine(o) {
     const key = o.id + ':' + o.key;
@@ -2065,7 +2109,7 @@ function VIDEOS(ctx) {
       wrap.classList.toggle('is-open', on);
       part.hidden = !on;
       tw.textContent = on ? '▾' : '▸';
-      btn.title = on ? 'Fold it into one line' : 'Open the whole text - to read and edit';
+      btn.title = on ? T.t('Fold it into one line') : T.t('Open the whole text - to read and edit');
       if (on) _open.add(key); else _open.delete(key);
     };
     // Folded with a change being typed: its blur writes it.
@@ -2184,7 +2228,7 @@ function VIDEOS(ctx) {
       if (!g) {
         const e = el('div', 'vm-vid-box is-empty');
         e.style.aspectRatio = _arOf(shape);
-        e.appendChild(el('span', 'w', 'the video will appear here'));
+        e.appendChild(el('span', 'w', T.t('the video will appear here')));
         box.appendChild(e);
         return;
       }
@@ -2210,26 +2254,26 @@ function VIDEOS(ctx) {
       } else {
         face = el('div', 'vm-vid-box is-bad');
         face.style.aspectRatio = _arOf(shp);
-        face.appendChild(el('span', 'w', g.error || 'nothing came back'));
+        face.appendChild(el('span', 'w', g.error || T.t('nothing came back')));
         box.appendChild(face);
-        if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) box.appendChild(el('div', 'mv3-ig-note', 'Alerts can try it again'));
+        if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) box.appendChild(el('div', 'mv3-ig-note', T.t('Alerts can try it again')));
       }
       // Which attempt it is, under the pointer.
       const when = x.at ? new Date(x.at) : null;
-      const said = [x.n ? 'attempt ' + x.n : '', when && !isNaN(when) ? when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-        x.ver ? 'from prompt variant ' + x.ver : ''].filter(Boolean).join(' · ');
+      const said = [x.n ? T.t('attempt {n}', { n: x.n }) : '', when && !isNaN(when) ? when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        x.ver ? T.t('from prompt variant {n}', { n: x.ver }) : ''].filter(Boolean).join(' · ');
       if (face && said) face.title = (face.title ? face.title + ' · ' : '') + said;
       if (clips.length > 1) {
         const pg = el('span', 'vm-pg is-vid');
         const p = el('button', 'vc-nav is-prev u-btn is-s is-icon', '‹');
-        const t = el('span', 'vm-pg-t', (i + 1) + ' of ' + clips.length);
+        const t = el('span', 'vm-pg-t', T.t('{i} of {n}', { i: i + 1, n: clips.length }));
         const nx = el('button', 'vc-nav is-next u-btn is-s is-icon', '›');
         p.type = 'button'; nx.type = 'button';
         p.disabled = i <= 0;
         nx.disabled = i >= clips.length - 1;
-        t.title = 'clip ' + (i + 1) + ' of ' + clips.length + (said ? ' · ' + said : '');
-        p.title = i > 0 ? '‹ The clip before (' + i + ' of ' + clips.length + ')' : 'This is the first clip';
-        nx.title = i < clips.length - 1 ? 'The next clip (' + (i + 2) + ' of ' + clips.length + ') ›' : 'This is the newest clip';
+        t.title = said ? T.t('clip {i} of {n} · {note}', { i: i + 1, n: clips.length, note: said }) : T.t('clip {i} of {n}', { i: i + 1, n: clips.length });
+        p.title = i > 0 ? T.t('‹ The clip before ({i} of {n})', { i, n: clips.length }) : T.t('This is the first clip');
+        nx.title = i < clips.length - 1 ? T.t('The next clip ({i} of {n}) ›', { i: i + 2, n: clips.length }) : T.t('This is the newest clip');
         const to = (d) => { const c = clips[i + d]; if (!c) return; _vidShown.set(id, { key: c.key, n: clips.length }); sig = null; paint(...last); };
         p.addEventListener('click', () => to(-1));
         nx.addEventListener('click', () => to(1));
@@ -2274,12 +2318,12 @@ function VIDEOS(ctx) {
     _forget(m.id);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
     const h = el('div', 'vc-card-h');
-    h.appendChild(el('span', 'k', 'Video'));
-    if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
+    h.appendChild(el('span', 'k', T.t('Video')));
+    if (c.model) h.appendChild(el('span', 'm', T.t('for {model}', { model: _labelOf(c.model) })));
     box.appendChild(h);
     // What was asked, at the head - seen on every step.
     const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
-    const asked = _askedOf({ words: c.text, media: m.media, none: frames ? 'from the frames alone' : 'from the attachments alone' });
+    const asked = _askedOf({ words: c.text, media: m.media, none: frames ? T.t('from the frames alone') : T.t('from the attachments alone') });
     // What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
     const foot = el('div', 'vm-foot');
     const vid = _vidField(m.id, foot);
@@ -2290,14 +2334,14 @@ function VIDEOS(ctx) {
       vid.paint(_clipsOf(m), _shapeNow(m.media || []));
       // The prompt's place, with its countdown or why it was not written.
       if (c.state === 'writing') {
-        hd.left.appendChild(_waitField({ word: 'prompt', progs, progKey: 'w:' + m.id, prog: {
-          label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        hd.left.appendChild(_waitField({ word: T.t('prompt'), progs, progKey: 'w:' + m.id, prog: {
+          label: T.t('writing the prompt…'), key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
         } }));
         return box;
       }
-      hd.left.appendChild(_waitField({ word: 'prompt', bad: true, words: c.error || 'it was not written' }));
+      hd.left.appendChild(_waitField({ word: T.t('prompt'), bad: true, words: c.error || T.t('it was not written') }));
       const acts = el('div', 'vc-card-acts');
-      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', 'Write it again');
+      const again = el('button', 'mv3-c-btn vc-go u-btn is-s', T.t('Write it again'));
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
@@ -2325,8 +2369,8 @@ function VIDEOS(ctx) {
     const watch = _watchStep(m, l, written);
     if (watch) steps.push(watch);
     if (vers.length) steps.push({
-      key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur, variants: vers,
-      note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
+      key: 'prompt', title: T.t('prompt'), word: T.t('variant'), pick: c.cur, variants: vers,
+      note: (x) => (!x ? '' : x.writing ? T.t('being written') : T.t('"make the video" sends this one')),
       body: (x, b, progs, nav) => _promptStep(m, l, x, b, progs, nav),
       acts: (x, a) => _promptActs(m, l, x, a),
       // The variant paged to is the chosen one (the server keeps it for the next read).
@@ -2343,19 +2387,19 @@ function VIDEOS(ctx) {
       // Counted from the end of the watching, when the clips were watched first.
       const watched = (c.watch || []).map(w => Date.parse((w && w.at) || '') || 0);
       // In the place the prompt will stand in.
-      b.appendChild(_waitField({ nav, word: 'prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
-        label: (c.versions || []).length ? 'writing another variant…' : 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000,
+      b.appendChild(_waitField({ nav, word: T.t('prompt'), pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
+        label: (c.versions || []).length ? T.t('writing another variant…') : T.t('writing the prompt…'), key: 'mv3-video-writer', estimateMs: 25000,
         startedAt: Math.max(Date.parse(c.startedAt || m.at) || 0, ...watched),
       } }));
       return;
     }
     const v = x.v;
-    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', T.t('The last writing did not work: {why}', { why: c.error })));
     const ta = document.createElement('textarea');
     ta.className = 'vc-prompt-ta u-area';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
-    ta.title = 'The prompt the model gets - edit it before the video is made. [picture 1], [clip 1] name what is attached, by its number in its part.';
+    ta.title = T.t('The prompt the model gets - edit it before the video is made. [picture 1], [clip 1] name what is attached, by its number in its part.');
     const key = 'p:' + m.id + ':' + v.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -2367,7 +2411,7 @@ function VIDEOS(ctx) {
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     // Open at once, down to the bottom of the video; the steps and its variants'
     // pager in its title line.
-    b.appendChild(_field({ nav, word: 'prompt', text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
+    b.appendChild(_field({ nav, word: T.t('prompt'), text: () => ta.value, ta, pager: nav ? nav.pager() : null }));
     Object.assign(l, { ta, save, ver: v.id, vmodel: v.model || c.model, patchKey: key });
   }
   function _promptActs(m, l, x, a) {
@@ -2376,19 +2420,19 @@ function VIDEOS(ctx) {
     const c = l.m.card;
     const nBtn = el('button', 'vc-n u-btn is-s', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
-    nBtn.title = 'How many to make from it - each clip is its own variant of the video';
+    nBtn.title = T.t('How many to make from it - each clip is its own variant of the video');
     nBtn.addEventListener('click', () => {
       _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
       nBtn.textContent = '×' + _cardN.get(m.id);
       _freshenReview(m.id, l);
     });
-    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', 'Make the video');
+    const go = el('button', 'mv3-c-btn vc-go is-make u-btn is-s is-main', T.t('Make the video'));
     go.type = 'button';
     go.addEventListener('click', () => _make(l.m, go));
     const price = el('span', 'vc-card-why');
-    const again = el('button', 'vc-link', 'Write it again');
+    const again = el('button', 'vc-link', T.t('Write it again'));
     again.type = 'button';
-    again.title = 'Another variant of the prompt from the same words and attachments - this one stays';
+    again.title = T.t('Another variant of the prompt from the same words and attachments - this one stays');
     again.addEventListener('click', () => _rewrite(l.m, again));
     a.append(nBtn, go, price, again);
     // The plain chat's attachments go back to the zone for the next message.
@@ -2408,14 +2452,14 @@ function VIDEOS(ctx) {
     const other = !!(mm && _familyOf(vm) && mm.family !== _familyOf(vm));
     const n = _cardN.get(id) || 1;
     const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
-    l.go.textContent = other ? 'Write it again for ' + mm.label : (made ? 'Make the video again' : 'Make the video') + (n > 1 ? ' ×' + n : '');
+    l.go.textContent = other ? T.t('Write it again for {model}', { model: mm.label }) : (made ? T.t('Make the video again') : T.t('Make the video')) + (n > 1 ? ' ×' + n : '');
     l.go.classList.toggle('is-make', !other);
     l.go.classList.toggle('is-main', !other);
     l.go.disabled = c.state === 'writing';
     const pr = priceOf(rec(), l.m.media || []);
-    l.price.textContent = other ? 'this variant was written for ' + _labelOf(vm)
-      : !pr || pr.none ? (mm ? mm.label + ' · no published price' : '')
-        : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
+    l.price.textContent = other ? T.t('this variant was written for {model}', { model: _labelOf(vm) })
+      : !pr || pr.none ? (mm ? T.t('{model} · no published price', { model: mm.label }) : '')
+        : pr.fromClip ? (pr.usd != null ? T.t('≈{price} at most · {secs} of the clip', { price: money(pr.usd * n), secs: _s(pr.secs) }) : T.t('≈{price} per second of clip', { price: money(pr.per) })) + ' · ' + (mm ? mm.label : '')
           : '≈' + money(pr.usd * n) + ' · ' + _secsWords(pr) + ' · ' + pr.res + ' · '
             + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
     // The row of presses stays one line: the price gives way, whole under the pointer.
@@ -2439,8 +2483,8 @@ function VIDEOS(ctx) {
       box.appendChild(img);
     }
     box.appendChild(mediaBtn('video', open));
-    if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', (+g.duration).toFixed(1) + 's'));
-    box.title = 'Drag it onto a lane';
+    if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', T.t('{n}s', { n: (+g.duration).toFixed(1) })));
+    box.title = T.t('Drag it onto a lane');
     hoverClip(box, g.videoPath);
     const item = {
       clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
@@ -2465,15 +2509,15 @@ function VIDEOS(ctx) {
   // "attachments back to the zone": this message's attachments in the zone again, for the next
   // message - what is there now is replaced, after a question.
   function _backLink(m) {
-    const back = el('button', 'vc-link', 'Attachments back to the zone');
+    const back = el('button', 'vc-link', T.t('Attachments back to the zone'));
     back.type = 'button';
-    back.title = 'Put this message\'s attachments into the zone again, for the next message';
+    back.title = T.t('Put this message\'s attachments into the zone again, for the next message');
     back.addEventListener('click', () => {
       const list = (m.media || []).filter(a => a && a.path);
       if (!list.length) return;
       const put = () => { ctx.useAtts(list); const ui = ctx.ui(); if (ui) ui.ta.focus(); };
       const n = ctx.atts().length;
-      if (n) askDelete(back, 'Replace what is in the zone?', n + ' attachment' + (n === 1 ? ' is' : 's are') + ' there now - this message\'s ' + list.length + ' come in their place.', put);
+      if (n) askDelete(back, T.t('Replace what is in the zone?'), T.tn(n, '{n} attachment is there now - this message\'s {m} come in their place.', '{n} attachments are there now - this message\'s {m} come in their place.', { m: list.length }), put);
       else put();
     });
     return back;
@@ -2487,7 +2531,7 @@ function VIDEOS(ctx) {
     maxAtts: MAX_ATTS,
     counts: [1, 2],
     noun: { one: 'picture', many: 'pictures' },
-    busyWord: 'making the clip',
+    busyWord: T.t('making the clip'),
     // A first guess; each model learns its own pace from its first clips (startInlineProgress keeps an average per key).
     eta: 180000,
     progressKey: (g) => 'mv3-video-' + (g.model || ''),
@@ -2495,17 +2539,17 @@ function VIDEOS(ctx) {
     // A clip that lands is not put in the zone by itself: it is one press on it in the picker - "made in this project".
     landAsRef: false,
     text: {
-      placeholder: 'Describe a clip, or say what to change.',
-      empty: 'Describe a clip. What comes back stays in this project - and on the B-roll shelf.',
+      placeholder: T.t('Describe a clip, or say what to change.'),
+      empty: T.t('Describe a clip. What comes back stays in this project - and on the B-roll shelf.'),
       emptyIcon: 'film',
       // From Home or the Library - THE draft's conversation (chat-owner.js unbound): VIDEO → Generated →
       // the model's folder.
-      emptyDraft: 'Describe a clip. What comes back lies in the Library, in VIDEO → Generated → its model.',
-      emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
-      onlyFiles: 'Only pictures, clips and sounds can be attached here.',
-      slot: 'From the Library or this computer',
-      plus: 'Add a picture, a clip or a sound from this computer - into the folder open here when it is one of yours of its kind (IMAGES, VIDEO → Uploads, My sounds), else into the root of its kind - and straight into the zone.',
-      cat: 'This project\'s clips, or a folder of the Library',
+      emptyDraft: T.t('Describe a clip. What comes back lies in the Library, in VIDEO → Generated → its model.'),
+      emptyNoProject: T.t('Describe a clip. A project is started for it with the first message.'),
+      onlyFiles: T.t('Only pictures, clips and sounds can be attached here.'),
+      slot: T.t('From the Library or this computer'),
+      plus: T.t('Add a picture, a clip or a sound from this computer - into the folder open here when it is one of yours of its kind (IMAGES, VIDEO → Uploads, My sounds), else into the root of its kind - and straight into the zone.'),
+      cat: T.t('This project\'s clips, or a folder of the Library'),
     },
     // The right column's "this project": the clips made in it.
     feed: {
@@ -2540,9 +2584,9 @@ function VIDEOS(ctx) {
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {
-        image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.',
-        video: 'A clip goes into the folder open here when it is one of yours in VIDEO → Uploads - else into Uploads itself.',
-        audio: 'A sound goes into the folder open here when it is one of yours in My sounds - else into My sounds itself.',
+        image: T.t('A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.'),
+        video: T.t('A clip goes into the folder open here when it is one of yours in VIDEO → Uploads - else into Uploads itself.'),
+        audio: T.t('A sound goes into the folder open here when it is one of yours in My sounds - else into My sounds itself.'),
       },
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),
@@ -2625,15 +2669,15 @@ function VIDEOS(ctx) {
     shot: _shotOf,
 
     facts: (g) => [
-      ['model', (g.model || '') + ' · ' + (g.agg || '?') + ' · ' + (((g.params || {}).resolution) || '')],
-      ['length', g.duration ? (+g.duration).toFixed(1) + ' s' + (g.w && g.h ? ' · ' + g.w + '×' + g.h : '') : ''],
-      ['took', g.secs ? g.secs + 's' : ''],
-      ['cost', g.credits ? g.credits + ' kie credits (≈' + money(g.credits * 0.005) + ')' : ''],
-      ['references', (g.media || []).length ? String(g.media.length) : ''],
+      [T.t('model'), (g.model || '') + ' · ' + (g.agg || '?') + ' · ' + (((g.params || {}).resolution) || '')],
+      [T.t('length'), g.duration ? T.t('{n} s', { n: (+g.duration).toFixed(1) }) + (g.w && g.h ? ' · ' + g.w + '×' + g.h : '') : ''],
+      [T.t('took'), g.secs ? T.t('{n}s', { n: g.secs }) : ''],
+      [T.t('cost'), g.credits ? T.t('{n} kie credits (≈{price})', { n: g.credits, price: money(g.credits * 0.005) }) : ''],
+      [T.t('references'), (g.media || []).length ? String(g.media.length) : ''],
       // Where the model did not keep the clip's sound itself.
-      ['sound', g.underlay === 'laid' ? 'the clip\'s sound, laid under it' : (g.underlay || '')],
-      ['writer', g.fell ? 'sent as typed - ' + g.fell : (g.writer || '')],
-      ['sent as', (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
+      [T.t('sound'), g.underlay === 'laid' ? T.t('the clip\'s sound, laid under it') : (g.underlay || '')],
+      [T.t('writer'), g.fell ? T.t('sent as typed - {why}', { why: g.fell }) : (g.writer || '')],
+      [T.t('sent as'), (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
     ],
 
     // Every clip this thread finished, played in the Library's viewer.

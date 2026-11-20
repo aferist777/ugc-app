@@ -24,9 +24,14 @@ import workshop from './ru/workshop.js';
 import highlights from './ru/highlights.js';
 import effects from './ru/effects.js';
 import mergepage from './ru/mergepage.js';
+import vchat from './ru/vchat.js';
+import chats from './ru/chats.js';
+import pick from './ru/pick.js';
+import soundwin from './ru/soundwin.js';
+import assistant from './ru/assistant.js';
 
 export const PARTS = { common, shell, home, admin, tree, windows, thanks, library, scenarios, character, shelf,
-  timeline, merge, inspector, captions, workshop, highlights, effects, mergepage };
+  timeline, merge, inspector, captions, workshop, highlights, effects, mergepage, vchat, chats, pick, soundwin, assistant };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

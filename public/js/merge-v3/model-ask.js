@@ -15,6 +15,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { t } from '../i18n/t.js';
 
 const LS = 'speech_model_asked_v1';
 
@@ -37,18 +38,16 @@ export async function askModelOnce() {
   const back = _el('div', 'dr-back');
   const box = _el('div', 'nm-box dr-box u-ask is-float');   // the shared question, in the middle
   box.setAttribute('role', 'dialog');
-  box.appendChild(_el('b', 'nm-t', 'Subtitles on this computer'));
-  box.appendChild(_el('div', 'dr-holds', 'Speech can be heard right here, with no key and no cost - the captions of a talking head '
-    + 'are then laid by themselves even without a Groq key. Download the speech model now? ' + mb + ' MB, once.'));
+  box.appendChild(_el('b', 'nm-t', t('Subtitles on this computer')));
+  box.appendChild(_el('div', 'dr-holds', t('Speech can be heard right here, with no key and no cost - the captions of a talking head are then laid by themselves even without a Groq key. Download the speech model now? {mb} MB, once.', { mb })));
   const err = _el('div', 'nm-err');
   const row = _el('div', 'nm-r u-ask-r');
-  const yes = _el('button', 'nm-b is-ok u-btn is-s is-main', 'Download');
-  const no = _el('button', 'nm-b u-btn is-s', 'Not now');
+  const yes = _el('button', 'nm-b is-ok u-btn is-s is-main', t('Download'));
+  const no = _el('button', 'nm-b u-btn is-s', t('Not now'));
   for (const b of [yes, no]) b.type = 'button';
   row.append(no, yes);                                  // "Not now" left, the verb right
   // the note above the buttons, as the update's question has it
-  box.append(_el('div', 'dr-note', 'From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> '
-    + 'This computer offer it later.'), err, row);
+  box.append(_el('div', 'dr-note', t('From Hugging Face, checked when it arrives. Not now: the Subtitles lane and Admin -> This computer offer it later.')), err, row);
   document.body.append(back, box);
   yes.focus();
 
@@ -64,10 +63,10 @@ export async function askModelOnce() {
     try {
       const d = await fetch('/api/speech/local/download', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ what: 'model' }) }).then((r) => r.json());
-      if (!d || !d.success) throw new Error((d && d.error) || 'the download did not start');
+      if (!d || !d.success) throw new Error((d && d.error) || t('the download did not start'));
       close('download');
     } catch (e) {
-      err.textContent = 'Not started: ' + e.message;
+      err.textContent = t('Not started: {why}', { why: e.message });
       yes.disabled = no.disabled = false;
     }
   });

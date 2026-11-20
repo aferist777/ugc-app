@@ -28,26 +28,28 @@ import * as Layers from '../layers.js';
 import { loadingEl, failedEl } from '../ui-state.js';
 import { openGuide, ensureCss } from './guide.js';
 import { allow } from '../key-gate.js';
+import * as T from '../i18n/t.js';
 
 const GEOM = Object.freeze({ key: 'assistant', resize: true, move: true, keepSize: true, keepPos: true });
 const LS = 'as_state_v1';                     // { mode, cur: {ideas, help}, pick: {ideas, help} }
 const MAX_ATTACH = 6;
+// A start's words become the person's own message, in the app's language - the model answers in the language it is asked in.
 const STARTS = {
   ideas: [
-    ['Hook ideas for an ad', 'Hook ideas for an ad: '],
-    ['Music for my short', 'Music for my short: '],
-    ['Prompt for a video clip', 'Prompt for a video clip: '],
-    ['Script outline', 'Script outline: '],
+    [T.t('Hook ideas for an ad'), T.t('Hook ideas for an ad: ')],
+    [T.t('Music for my short'), T.t('Music for my short: ')],
+    [T.t('Prompt for a video clip'), T.t('Prompt for a video clip: ')],
+    [T.t('Script outline'), T.t('Script outline: ')],
   ],
   help: [
-    ['How do I make a talking head?', 'How do I make a talking head?'],
-    ['How do I cut silences?', 'How do I cut silences?'],
-    ['Where are my renders?', 'Where are my renders?'],
+    [T.t('How do I make a talking head?'), T.t('How do I make a talking head?')],
+    [T.t('How do I cut silences?'), T.t('How do I cut silences?')],
+    [T.t('Where are my renders?'), T.t('Where are my renders?')],
   ],
 };
 const ABOUT = {
-  ideas: 'Brainstorm ideas for videos, hooks, music and prompts for the app\'s generators.',
-  help: 'Ask how to do something in the app - where a button is, what a window does.',
+  ideas: T.t('Brainstorm ideas for videos, hooks, music and prompts for the app\'s generators.'),
+  help: T.t('Ask how to do something in the app - where a button is, what a window does.'),
 };
 
 const el = (tag, cls, text) => {
@@ -58,7 +60,7 @@ const el = (tag, cls, text) => {
 };
 const json = (url, opts) => fetch(url, opts).then(async (r) => {
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.success === false) throw new Error(j.error || ('HTTP ' + r.status));
+  if (!r.ok || j.success === false) throw Object.assign(new Error(j.error || ('HTTP ' + r.status)), { status: r.status });
   return j;
 });
 const post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -95,12 +97,12 @@ function money(usd) {
   if (usd < 0.001) return '<$0.001';
   return '$' + (usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2));
 }
-const tokens = (n) => (n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)) + ' tokens';
+const tokens = (n) => T.tn(n, '{k} token', '{k} tokens', { k: n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n) });
 function priceLine(sum) {
   if (!sum || !sum.n) return '';
-  if (sum.usd > 0 && sum.priced) return '≈ ' + money(sum.usd) + ' this chat';
-  if (sum.usd > 0) return '≈ ' + money(sum.usd) + ' this chat · ' + tokens(sum.tokens) + ' in all';
-  return sum.tokens ? tokens(sum.tokens) + ' this chat' : '';
+  if (sum.usd > 0 && sum.priced) return T.t('≈ {usd} this chat', { usd: money(sum.usd) });
+  if (sum.usd > 0) return T.t('≈ {usd} this chat · {tokens} in all', { usd: money(sum.usd), tokens: tokens(sum.tokens) });
+  return sum.tokens ? T.t('{tokens} this chat', { tokens: tokens(sum.tokens) }) : '';
 }
 function when(iso) {
   const t = Date.parse(iso);
@@ -108,7 +110,7 @@ function when(iso) {
   const d = new Date(t);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return d.toTimeString().slice(0, 5);
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(T.lang() === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
 }
 
 // ── Opening ─────────────────────────────────────────────────────────────────
@@ -148,21 +150,21 @@ function _build(win) {
     tabs.appendChild(b);
     return b;
   };
-  const tIdeas = tab('ideas', 'Ideas');
-  const tHelp = tab('help', 'Help');
+  const tIdeas = tab('ideas', T.t('Ideas'));
+  const tHelp = tab('help', T.t('Help'));
   const mrow = el('label', 'as-mrow');
-  mrow.appendChild(el('span', 'u-label', 'Model'));
+  mrow.appendChild(el('span', 'u-label', T.t('Model')));
   const model = el('select', 'as-model u-in is-s');
-  model.title = 'Which model answers - a chat keeps its own. The models whose key is on Admin -> API keys.';
+  model.title = T.t('Which model answers - a chat keeps its own. The models whose key is on Admin -> API keys.');
   model.addEventListener('change', _modelChosen);
   mrow.appendChild(model);
-  const nb = el('button', 'as-new u-btn is-s', '+ New chat');
+  const nb = el('button', 'as-new u-btn is-s', T.t('+ New chat'));
   nb.type = 'button';
   nb.addEventListener('click', _newChat);
   // Help's book: the app's guide in its own window, at the place read last.
-  const gb = el('button', 'as-guide u-btn is-s', 'Guide');
+  const gb = el('button', 'as-guide u-btn is-s', T.t('Guide'));
   gb.type = 'button';
-  gb.title = 'The guide to the app - every page, window and button, with pictures';
+  gb.title = T.t('The guide to the app - every page, window and button, with pictures');
   gb.addEventListener('click', () => openGuide());
   const brow = el('div', 'as-brow');
   brow.append(nb, gb);
@@ -179,7 +181,7 @@ function _build(win) {
   const box = el('div', 'as-box');
   const plus = el('button', 'as-plus u-btn is-icon', '+');
   plus.type = 'button';
-  plus.title = 'Attach a character\'s look, a product of IMAGES → Props or a scenario - the model reads them as words';
+  plus.title = T.t('Attach a character\'s look, a product of IMAGES → Props or a scenario - the model reads them as words');
   plus.addEventListener('click', _openAttach);
   const field = el('textarea', 'as-field u-area');
   field.rows = 1;
@@ -188,7 +190,7 @@ function _build(win) {
   field.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); _send(); }
   });
-  const go = el('button', 'as-go u-btn is-main', 'Send');
+  const go = el('button', 'as-go u-btn is-main', T.t('Send'));
   go.type = 'button';
   go.addEventListener('click', () => (_isBusy(S.cur[S.mode]) ? _stop() : _send()));
   box.append(plus, field, go);
@@ -240,8 +242,9 @@ async function _loadChat(id) {
     if (j.live && !(S.live.get(id) || {}).mine) { S.live.set(id, { text: j.live.text || '', by: j.live.by, mine: false }); _follow(id); }
     else if (!j.live && S.live.has(id) && !S.live.get(id).mine) S.live.delete(id);
   } catch (e) {
-    if (String(e.message).includes('no such chat')) { _forget(id); return; }
-    showError('The chat could not be read: ' + e.message);
+    // A chat that is gone: the server's 404 (its words checked too).
+    if (e.status === 404 || String(e.message).includes('no such chat')) { _forget(id); return; }
+    showError(T.t('The chat could not be read: {why}', { why: e.message }));
   }
   S.loading = false;
   if (S.cur[S.mode] === id) { _paintModel(); _paintChat(); }
@@ -288,14 +291,14 @@ function _forget(id) {
 // ── Painting ────────────────────────────────────────────────────────────────
 function _paint() {
   if (!W) return;
-  W.win.setCrumbs([{ label: 'assistant' }, { label: S.mode }]);
+  W.win.setCrumbs([{ label: T.t('assistant') }, { label: S.mode === 'ideas' ? T.t('ideas') : T.t('help') }]);
   W.tIdeas.classList.toggle('is-cur', S.mode === 'ideas');
   W.tHelp.classList.toggle('is-cur', S.mode === 'help');
   W.plus.hidden = S.mode !== 'ideas';
   W.gb.hidden = S.mode !== 'help';
   W.field.value = S.draft[S.mode] || '';
-  W.field.placeholder = S.mode === 'ideas' ? 'Ask for ideas, hooks, music, a prompt…  (Enter sends, Shift+Enter a new line)'
-    : 'Ask how to do something in the app…  (Enter sends, Shift+Enter a new line)';
+  W.field.placeholder = S.mode === 'ideas' ? T.t('Ask for ideas, hooks, music, a prompt…  (Enter sends, Shift+Enter a new line)')
+    : T.t('Ask how to do something in the app…  (Enter sends, Shift+Enter a new line)');
   _grow();
   _paintModel();
   _paintList();
@@ -312,22 +315,23 @@ function _paintModel() {
   if (!W) return;
   const sel = W.model;
   sel.textContent = '';
-  if (S.modelsFailed) { sel.appendChild(el('option', null, 'the models did not load')); sel.disabled = true; return; }
-  if (!S.models) { sel.appendChild(el('option', null, 'reading…')); sel.disabled = true; return; }
-  if (S.fake) { const o = el('option', null, 'fake model (test stand)'); o.value = ''; sel.appendChild(o); }
-  if (!S.models.length && !S.fake) { sel.appendChild(el('option', null, 'no model - add a key on Admin → API keys')); sel.disabled = true; return; }
+  if (S.modelsFailed) { sel.appendChild(el('option', null, T.t('the models did not load'))); sel.disabled = true; return; }
+  if (!S.models) { sel.appendChild(el('option', null, T.t('reading…'))); sel.disabled = true; return; }
+  if (S.fake) { const o = el('option', null, T.t('fake model (test stand)')); o.value = ''; sel.appendChild(o); }
+  if (!S.models.length && !S.fake) { sel.appendChild(el('option', null, T.t('no model - add a key on Admin → API keys'))); sel.disabled = true; return; }
   sel.disabled = false;
   const groups = new Map();
   for (const m of S.models) {
     if (!groups.has(m.group)) { const g = document.createElement('optgroup'); g.label = m.group; groups.set(m.group, g); sel.appendChild(g); }
-    const o = el('option', null, m.label.replace(/ · [^·]+$/, '') + (m.unproven ? ' (not checked)' : ''));
+    const name = m.label.replace(/ · [^·]+$/, '');
+    const o = el('option', null, m.unproven ? T.t('{model} (not checked)', { model: name }) : name);
     o.value = keyOf(m);
     groups.get(m.group).appendChild(o);
   }
   const want = _chosenKey();
   if (want && ![...sel.options].some(o => o.value === want)) {
     const s = stepOf(want);
-    const o = el('option', null, (s ? s.model : want) + ' (cannot be asked now)');
+    const o = el('option', null, T.t('{model} (cannot be asked now)', { model: s ? s.model : want }));
     o.value = want;
     o.disabled = true;
     sel.insertBefore(o, sel.firstChild);
@@ -345,7 +349,7 @@ async function _modelChosen() {
     const j = await post('/api/assistant/chats/' + id, { step: stepOf(k) }, 'PATCH');
     S.full.set(id, j.chat);
     _summaryIn(j.summary);
-  } catch (e) { showError('The model was not changed: ' + e.message); }
+  } catch (e) { showError(T.t('The model was not changed: {why}', { why: e.message })); }
 }
 
 function _paintList() {
@@ -353,21 +357,21 @@ function _paintList() {
   const L = W.list;
   L.textContent = '';
   const list = S.lists[S.mode];
-  if (S.listFailed[S.mode]) { L.appendChild(failedEl('The chats', () => _loadList(S.mode), { line: true })); return; }
-  if (!list) { L.appendChild(loadingEl('reading the chats', { line: true })); return; }
-  if (!list.length) { L.appendChild(el('div', 'as-none', 'No chats yet - the first message starts one.')); return; }
+  if (S.listFailed[S.mode]) { L.appendChild(failedEl(T.t('The chats'), () => _loadList(S.mode), { line: true })); return; }
+  if (!list) { L.appendChild(loadingEl(T.t('reading the chats'), { line: true })); return; }
+  if (!list.length) { L.appendChild(el('div', 'as-none', T.t('No chats yet - the first message starts one.'))); return; }
   for (const c of list) L.appendChild(_row(c));
 }
 
 function _row(c) {
   const row = el('div', 'as-row' + (c.id === S.cur[S.mode] ? ' is-cur' : ''));
   row.tabIndex = 0;
-  const name = el('span', 'as-rname', c.title || 'New chat');
-  name.title = (c.title || 'New chat') + ' - a double press renames it';
-  const sub = el('span', 'as-rsub', [when(c.updatedAt), c.usd > 0 ? '≈ ' + money(c.usd) : '', S.running.has(c.id) || S.live.has(c.id) ? 'writing…' : ''].filter(Boolean).join(' · '));
+  const name = el('span', 'as-rname', c.title || T.t('New chat'));
+  name.title = T.t('{name} - a double press renames it', { name: c.title || T.t('New chat') });
+  const sub = el('span', 'as-rsub', [when(c.updatedAt), c.usd > 0 ? '≈ ' + money(c.usd) : '', S.running.has(c.id) || S.live.has(c.id) ? T.t('writing…') : ''].filter(Boolean).join(' · '));
   const x = el('button', 'as-rx u-btn is-s is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Delete this chat';
+  x.title = T.t('Delete this chat');
   twoPress(x, { host: row, go: (e) => { e.stopPropagation(); _delete(c.id); } });
   row.append(name, sub, x);
   row.addEventListener('click', (e) => { if (e.target.closest('button, input')) return; _open(c.id); });
@@ -396,7 +400,7 @@ function _rename(c, nameEl) {
         const j = await post('/api/assistant/chats/' + c.id, { title: t }, 'PATCH');
         S.full.set(c.id, j.chat);
         _summaryIn(j.summary);
-      } catch (e) { showError('Not renamed: ' + e.message); }
+      } catch (e) { showError(T.t('Not renamed: {why}', { why: e.message })); }
     }
     _paintList();
     _paintHead();
@@ -407,7 +411,7 @@ function _rename(c, nameEl) {
 
 async function _delete(id) {
   try { await json('/api/assistant/chats/' + id, { method: 'DELETE' }); _forget(id); }
-  catch (e) { showError('The chat was not deleted: ' + e.message); }
+  catch (e) { showError(T.t('The chat was not deleted: {why}', { why: e.message })); }
 }
 
 function _open(id) {
@@ -442,9 +446,9 @@ function _paintHead() {
   if (!W) return;
   const id = S.cur[S.mode];
   const sum = id && S.lists[S.mode] ? S.lists[S.mode].find(c => c.id === id) : null;
-  W.title.textContent = sum ? (sum.title || 'New chat') : (S.mode === 'ideas' ? 'New chat · Ideas' : 'New chat · Help');
+  W.title.textContent = sum ? (sum.title || T.t('New chat')) : (S.mode === 'ideas' ? T.t('New chat · Ideas') : T.t('New chat · Help'));
   W.price.textContent = priceLine(sum);
-  W.price.title = sum && !sum.priced ? 'Some answers came with no price (Replicate says none) - their tokens are counted' : '';
+  W.price.title = sum && !sum.priced ? T.t('Some answers came with no price (Replicate says none) - their tokens are counted') : '';
 }
 
 function _paintChat() {
@@ -452,29 +456,29 @@ function _paintChat() {
   _paintHead();
   _paintAtts();
   _paintGo();
-  const T = W.thread;
-  T.textContent = '';
+  const TH = W.thread;
+  TH.textContent = '';
   W.liveEl = null;
   const id = S.cur[S.mode];
   const chat = id ? S.full.get(id) : null;
-  if (id && !chat) { T.appendChild(S.loading ? loadingEl('reading the chat') : el('div')); return; }
+  if (id && !chat) { TH.appendChild(S.loading ? loadingEl(T.t('reading the chat')) : el('div')); return; }
   const msgs = chat ? chat.messages : [];
   const live = id ? S.live.get(id) : null;
-  if (!msgs.length && !live) { T.appendChild(_starts()); return; }
-  for (const m of msgs) T.appendChild(m.role === 'user' ? _userEl(m) : _answerEl(m));
-  if (live) { W.liveEl = _answerEl({ text: live.text, by: live.by, stage: live.stage }, true); T.appendChild(W.liveEl); }
-  T.scrollTop = T.scrollHeight;
+  if (!msgs.length && !live) { TH.appendChild(_starts()); return; }
+  for (const m of msgs) TH.appendChild(m.role === 'user' ? _userEl(m) : _answerEl(m));
+  if (live) { W.liveEl = _answerEl({ text: live.text, by: live.by, stage: live.stage }, true); TH.appendChild(W.liveEl); }
+  TH.scrollTop = TH.scrollHeight;
 }
 
 function _starts() {
   const box = el('div', 'as-starts');
-  box.appendChild(el('div', 'as-sh', S.mode === 'ideas' ? 'Ideas' : 'Help'));
+  box.appendChild(el('div', 'as-sh', S.mode === 'ideas' ? T.t('Ideas') : T.t('Help')));
   box.appendChild(el('div', 'as-sabout', ABOUT[S.mode]));
   const row = el('div', 'as-srow');
   for (const [label, text] of STARTS[S.mode]) {
     const b = el('button', 'as-start u-btn', label);
     b.type = 'button';
-    b.title = 'Put it into the field - nothing is sent';
+    b.title = T.t('Put it into the field - nothing is sent');
     b.addEventListener('click', () => {
       W.field.value = text;
       S.draft[S.mode] = text;
@@ -485,11 +489,17 @@ function _starts() {
     row.appendChild(b);
   }
   box.appendChild(row);
-  if (S.mode === 'ideas') box.appendChild(el('div', 'as-shint', '+ beside the field attaches a character\'s look, a product or a scenario.'));
+  if (S.mode === 'ideas') box.appendChild(el('div', 'as-shint', T.t('+ beside the field attaches a character\'s look, a product or a scenario.')));
   return box;
 }
 
-const KIND_WORD = { look: 'character', prop: 'product', scenario: 'scenario' };
+// An attachment's chip: what it is and its name.
+const KIND_CHIP = {
+  look: (name) => T.t('character · {name}', { name }),
+  prop: (name) => T.t('product · {name}', { name }),
+  scenario: (name) => T.t('scenario · {name}', { name }),
+};
+const _chipText = (a) => (KIND_CHIP[a.kind] ? KIND_CHIP[a.kind](a.name) : String(a.name || ''));
 
 function _userEl(m) {
   const w = el('div', 'as-msg is-user');
@@ -498,7 +508,7 @@ function _userEl(m) {
   w.appendChild(b);
   if (m.attached && m.attached.length) {
     const chips = el('div', 'as-uatt');
-    for (const a of m.attached) chips.appendChild(el('span', 'as-chip', KIND_WORD[a.kind] + ' · ' + a.name));
+    for (const a of m.attached) chips.appendChild(el('span', 'as-chip', _chipText(a)));
     w.appendChild(chips);
   }
   return w;
@@ -514,24 +524,24 @@ function _answerEl(m, live) {
   }
   const foot = el('div', 'as-afoot');
   const who = m.by ? m.by.label : '';
-  if (live) foot.appendChild(el('span', 'as-by', who ? 'writing · ' + who : (m.stage || 'asking…')));
+  if (live) foot.appendChild(el('span', 'as-by', who ? T.t('writing · {model}', { model: who }) : (m.stage || T.t('asking…'))));
   else {
     if (who) foot.appendChild(el('span', 'as-by', who));
     if (m.usd != null && m.usd > 0) foot.appendChild(el('span', 'as-cost u-mono', '≈ ' + money(m.usd)));
     else if (m.usage && (m.usage.in || m.usage.out)) foot.appendChild(el('span', 'as-cost u-mono', tokens((m.usage.in || 0) + (m.usage.out || 0) + (m.usage.cacheRead || 0))));
     // Help's answer: the section of the guide it was answered from - the book opens there.
     if (m.guide && m.guide.chapter) {
-      const g = el('button', 'as-glink-b', 'Guide: ' + (m.guide.title || 'open'));
+      const g = el('button', 'as-glink-b', T.t('Guide: {place}', { place: m.guide.title || T.t('open') }));
       g.type = 'button';
-      g.title = 'Open the guide at this place';
+      g.title = T.t('Open the guide at this place');
       g.addEventListener('click', () => openGuide({ chapter: m.guide.chapter, section: m.guide.section || '' }));
       foot.appendChild(g);
     }
-    if (m.text) foot.appendChild(copyButton(m.text, 'copy answer'));
+    if (m.text) foot.appendChild(copyButton(m.text, T.t('copy answer')));
   }
   w.appendChild(foot);
   if (!live && (m.error || m.stopped || m.cut)) {
-    const why = m.stopped ? 'Stopped.' : m.cut ? 'Cut off at its length.' : (m.text ? 'Broken off - ' : 'No answer - ') + m.error;
+    const why = m.stopped ? T.t('Stopped.') : m.cut ? T.t('Cut off at its length.') : m.text ? T.t('Broken off - {why}', { why: m.error }) : T.t('No answer - {why}', { why: m.error });
     const line = el('div', 'as-err' + (m.stopped ? ' is-quiet' : ''), why);
     if (m.tried && m.tried.length) line.title = m.tried.join('\n');
     w.appendChild(line);
@@ -544,11 +554,11 @@ function _isBusy(id) { return !!id && (S.live.has(id) || S.running.has(id)); }
 function _paintGo() {
   if (!W) return;
   const busy = _isBusy(S.cur[S.mode]);
-  W.go.textContent = busy ? 'Stop' : 'Send';
+  W.go.textContent = busy ? T.t('Stop') : T.t('Send');
   W.go.classList.toggle('is-main', !busy);
-  W.go.title = busy ? 'Stop the answer where it is' : 'Send (Enter)';
+  W.go.title = busy ? T.t('Stop the answer where it is') : T.t('Send (Enter)');
   const live = S.cur[S.mode] ? S.live.get(S.cur[S.mode]) : null;
-  W.note.textContent = live ? (live.by ? 'writing · ' + live.by.label : (live.stage || 'asking the model…')) : '';
+  W.note.textContent = live ? (live.by ? T.t('writing · {model}', { model: live.by.label }) : (live.stage || T.t('asking the model…'))) : '';
 }
 
 // The answer being written, drawn again at most once a frame.
@@ -561,13 +571,13 @@ function _paintLive() {
     const id = S.cur[S.mode];
     const live = id ? S.live.get(id) : null;
     if (!live) return;
-    const T = W.thread;
-    const atEnd = T.scrollHeight - T.scrollTop - T.clientHeight < 40;
+    const TH = W.thread;
+    const atEnd = TH.scrollHeight - TH.scrollTop - TH.clientHeight < 40;
     const fresh = _answerEl({ text: live.text, by: live.by, stage: live.stage }, true);
     if (W.liveEl && W.liveEl.isConnected) W.liveEl.replaceWith(fresh);
-    else { const s = T.querySelector('.as-starts'); if (s) s.remove(); T.appendChild(fresh); }
+    else { const s = TH.querySelector('.as-starts'); if (s) s.remove(); TH.appendChild(fresh); }
     W.liveEl = fresh;
-    if (atEnd) T.scrollTop = T.scrollHeight;
+    if (atEnd) TH.scrollTop = TH.scrollHeight;
     _paintGo();
   });
 }
@@ -580,10 +590,10 @@ function _paintAtts() {
   A.hidden = S.mode !== 'ideas' || !S.atts.length;
   if (A.hidden) return;
   for (const a of S.atts) {
-    const chip = el('span', 'as-chip is-att', KIND_WORD[a.kind] + ' · ' + a.name);
+    const chip = el('span', 'as-chip is-att', _chipText(a));
     const x = el('button', 'as-chipx', '✕');
     x.type = 'button';
-    x.title = 'Take it off';
+    x.title = T.t('Take it off');
     x.addEventListener('click', () => { S.atts = S.atts.filter(t => t !== a); _paintAtts(); });
     chip.appendChild(x);
     A.appendChild(chip);
@@ -593,22 +603,22 @@ function _paintAtts() {
 // The rows of the attachment window: the characters with their looks (in groups), the scenarios.
 async function _people() {
   const [c, l] = await Promise.all([json('/api/library/shelf/characters').catch(() => null), json('/api/library/shelf/looks').catch(() => null)]);
-  if (!c) return { items: [], why: 'the characters could not be read', failed: true };
+  if (!c) return { items: [], why: T.t('the characters could not be read'), failed: true };
   const looks = (l && l.items) || [];
   const groups = (c.items || []).map((ch) => {
     const mine = looks.filter(x => (x.meta || {}).charId === ch.id);
-    const items = [{ path: ch.media, name: ch.name, sub: 'character', thumb: thumbOf(ch.media), as: 'look', aspect: '16:9' }]
-      .concat(mine.map(lk => ({ path: lk.media, name: lk.name, sub: ch.name + ' · look', thumb: thumbOf(lk.media), as: 'look' })))
+    const items = [{ path: ch.media, name: ch.name, sub: T.t('character'), thumb: thumbOf(ch.media), as: 'look', aspect: '16:9' }]
+      .concat(mine.map(lk => ({ path: lk.media, name: lk.name, sub: T.t('{name} · look', { name: ch.name }), thumb: thumbOf(lk.media), as: 'look' })))
       .filter(x => x.path);
-    return { key: 'c:' + ch.id, label: ch.name || 'character', n: mine.length, sub: mine.length === 1 ? '1 look' : mine.length + ' looks', items };
+    return { key: 'c:' + ch.id, label: ch.name || T.t('character'), n: mine.length, sub: T.tn(mine.length, '{n} look', '{n} looks'), items };
   }).filter(g => g.items.length).sort((a, b) => b.n - a.n);
   return { items: groups.flatMap(g => g.items), groups };
 }
 
 async function _scenarios() {
   const j = await json('/api/library/shelf/scenarios').catch(() => null);
-  if (!j) return { items: [], why: 'the scenarios could not be read', failed: true };
-  return { items: (j.items || []).map(s => ({ path: 'scen:' + s.id, id: s.id, name: s.name || 'untitled', sub: 'scenario', as: 'scenario' })) };
+  if (!j) return { items: [], why: T.t('the scenarios could not be read'), failed: true };
+  return { items: (j.items || []).map(s => ({ path: 'scen:' + s.id, id: s.id, name: s.name || T.t('untitled'), sub: T.t('scenario'), as: 'scenario' })) };
 }
 
 const _isProp = (p) => String(p || '').split('?')[0].startsWith('/media/props/');
@@ -619,27 +629,27 @@ async function _openAttach() {
   if (S.mode !== 'ideas') return;
   let Pick;
   try { Pick = await import('../merge-v3/chat-pick.js'); }
-  catch (e) { showError('The attachment window could not be opened: ' + e.message); return; }
+  catch (e) { showError(T.t('The attachment window could not be opened: {why}', { why: e.message })); return; }
   const has = (it) => S.atts.find(a => a.kind === _kindOf(it) && a.ref === _refOf(it));
   Pick.openPick({
-    kind: 'image', title: 'attach to the message', hint: 'A character\'s look, a product of IMAGES → Props or a scenario - read as words',
+    kind: 'image', title: T.t('attach to the message'), hint: T.t('A character\'s look, a product of IMAGES → Props or a scenario - read as words'),
     project: { key: '', title: '' },
     sources: [
-      { id: 'people', label: 'Characters & looks', load: _people, empty: 'No characters yet - New Character makes one in the Library.' },
-      { id: 'scenarios', label: 'Scenarios', load: _scenarios, empty: 'No scenarios yet - the Library makes them.' },
+      { id: 'people', label: T.t('Characters & looks'), load: _people, empty: T.t('No characters yet - New Character makes one in the Library.') },
+      { id: 'scenarios', label: T.t('Scenarios'), load: _scenarios, empty: T.t('No scenarios yet - the Library makes them.') },
     ],
     tree: { roots: ['images'], page: 'pk_assistant', fallback: 'images', home: 'images', type: 'photo',
             map: (f) => ({ path: f.path, name: f.name || '', thumb: thumbOf(f.path), aspect: f.aspect || '' }) },
     start: ['row:people'],
     anchor: W ? W.win.box : null,
     left: () => MAX_ATTACH - S.atts.length,
-    room: () => (MAX_ATTACH - S.atts.length > 0 ? (MAX_ATTACH - S.atts.length) + ' more can go with the message' : ''),
-    mark: (path) => (S.atts.some(a => (a.kind === 'scenario' ? 'scen:' + a.ref : a.ref) === String(path || '').split('?')[0]) ? 'attached' : ''),
-    why: (it) => (it.as || _isProp(it.path) ? '' : 'only a product of Props'),
+    room: () => (MAX_ATTACH - S.atts.length > 0 ? T.t('{n} more can go with the message', { n: MAX_ATTACH - S.atts.length }) : ''),
+    mark: (path) => (S.atts.some(a => (a.kind === 'scenario' ? 'scen:' + a.ref : a.ref) === String(path || '').split('?')[0]) ? T.t('attached') : ''),
+    why: (it) => (it.as || _isProp(it.path) ? '' : T.t('only a product of Props')),
     press: (it) => {
       const here = has(it);
       if (here) S.atts = S.atts.filter(a => a !== here);
-      else S.atts.push({ kind: _kindOf(it), ref: _refOf(it), name: it.name || 'untitled' });
+      else S.atts.push({ kind: _kindOf(it), ref: _refOf(it), name: it.name || T.t('untitled') });
       _paintAtts();
       Pick.pickChanged();
     },
@@ -671,7 +681,7 @@ async function _send() {
       S.cur[mode] = id;
       _keep();
     } catch (e) {
-      showError('The chat could not be started: ' + e.message);
+      showError(T.t('The chat could not be started: {why}', { why: e.message }));
       _restore(mode, text, shown);
       return;
     }
@@ -690,7 +700,7 @@ async function _send() {
     const j = res ? await res.json().catch(() => ({})) : {};
     S.live.delete(id);
     if (chat) chat.messages = chat.messages.filter(m => m !== local);
-    showError('Not sent: ' + (j.error || 'the app did not answer'));
+    showError(T.t('Not sent: {why}', { why: j.error || T.t('the app did not answer') }));
     _restore(mode, text, shown);
     if (S.cur[S.mode] === id) _paintChat();
     return;
@@ -728,7 +738,7 @@ async function _read(id, res, local) {
       S.running.delete(id);
       if (chat) chat.messages.push(o.message);
       _summaryIn(o.summary);
-      if (o.message && o.message.error && !o.message.text) showError('No answer: ' + o.message.error);
+      if (o.message && o.message.error && !o.message.text) showError(T.t('No answer: {why}', { why: o.message.error }));
       if (_visible(id)) _paintChat();
       _paintList();
     }
@@ -761,5 +771,5 @@ async function _stop() {
   const id = S.cur[S.mode];
   if (!id) return;
   try { await post('/api/assistant/chats/' + id + '/stop', {}); }
-  catch (e) { showError('Not stopped: ' + e.message); }
+  catch (e) { showError(T.t('Not stopped: {why}', { why: e.message })); }
 }

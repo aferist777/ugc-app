@@ -25,6 +25,7 @@ import { isTalking } from './workshop.js';
 import { refuseHome } from './chat-shell.js';
 import * as SW from '../sound/sound-window.js';
 import { isHl } from '../highlights/keys.js';
+import { laneName } from './timeline-b.js';
 
 const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
 const _hl = isHl;
@@ -46,14 +47,14 @@ function _videoSecs() {
 }
 
 // The clip in "The video" as it is NOW on the open timeline - moved, trimmed, sped up, its name; one taken off it says so; a
-// clip of another fragment of the same highlights project as it was put in.
+// clip of another fragment of the same highlights project as it was put in. `lane` - its lane's name as it is shown.
 function _clipNow(c) {
   if (!c || Store.key() !== c.key) return null;
   for (const t of ((Store.timeline() || {}).tracks || [])) {
     const x = (t.clips || []).find(y => y.id === c.clipId);
     if (x && t.kind === 'video') {
       return { live: true, gone: false, name: x.name || c.name || 'clip', start: +x.start || 0, dur: Math.round((+x.dur || 0) * 10) / 10,
-        thumb: x.thumb || c.thumb || '', lane: t.name || '' };
+        thumb: x.thumb || c.thumb || '', lane: laneName(t.name || '') };
     }
   }
   return { live: false, gone: true, name: c.name || 'clip', start: +c.start || 0, dur: Math.round((+c.dur || 0) * 10) / 10, thumb: c.thumb || '', lane: '' };
@@ -62,7 +63,8 @@ function _clipNow(c) {
 const HOST = {
   page: 'merge', view: 'audio', store: 'mv3_audio_v1', made: true,
   key: _key,
-  title: () => Store.title() || 'this project',
+  title: () => Store.title() || '',
+  laneName,
   writerKind: () => WRITER_KIND[_kind()] || 'blank',
   videoSecs: _videoSecs,
   clipNow: _clipNow,

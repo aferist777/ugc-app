@@ -17,6 +17,7 @@ import * as Layers from '../layers.js';
 // Being read, nothing here, could not be read - the shared parts; the reason a popup in the corner.
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { showError } from '../notice.js';
+import * as T from '../i18n/t.js';
 
 const BASE = '/presets/helper/';
 const LS = 'mv3_vhelp_v1';            // { sec, cat } - where the reference was left
@@ -28,6 +29,41 @@ let _w = null;                        // the open window
 let _st = { sec: '', cat: '', q: '' };
 let _toastT = 0;
 
+// The reference's data is English - index.json's sections, camera.json's categories as the site names them: what a person
+// reads of it is said in the app's language here, a line each (the dictionary's check reads the code, not the data). A
+// word the data gains shows as the data writes it until it has its line here. The moves' names stay the site's, and
+// their prompts English: a prompt goes to the model as it is.
+const SAY = {
+  'Camera movement': T.t('Camera movement'),
+  'How the camera moves through the shot - 46 moves, each with a looping example.': T.t('How the camera moves through the shot - 46 moves, each with a looping example.'),
+  'Light': T.t('Light'),
+  'Time of day, hard and soft light, backlight and rim light, neon, candlelight, practical lamps - and how to ask for them.': T.t('Time of day, hard and soft light, backlight and rim light, neon, candlelight, practical lamps - and how to ask for them.'),
+  'Shot size & angle': T.t('Shot size & angle'),
+  'From an extreme close-up to an establishing shot; eye level, low and high angle, top-down, Dutch tilt, point of view.': T.t('From an extreme close-up to an establishing shot; eye level, low and high angle, top-down, Dutch tilt, point of view.'),
+  'Lens & focus': T.t('Lens & focus'),
+  'Wide, normal and portrait lenses, macro, telephoto compression, shallow depth of field, rack focus.': T.t('Wide, normal and portrait lenses, macro, telephoto compression, shallow depth of field, rack focus.'),
+  'Style & film look': T.t('Style & film look'),
+  'Film grain, 16 mm, VHS, glossy commercial, documentary, the phone-shot UGC look, colour grades.': T.t('Film grain, 16 mm, VHS, glossy commercial, documentary, the phone-shot UGC look, colour grades.'),
+  'Speed & time': T.t('Speed & time'),
+  'Slow motion, speed ramps, time-lapse, hyperlapse, freeze frames, reverse.': T.t('Slow motion, speed ramps, time-lapse, hyperlapse, freeze frames, reverse.'),
+  'Acting & movement': T.t('Acting & movement'),
+  'How the person moves and plays: gestures, gaze, pace, emotion, talking to the camera.': T.t('How the person moves and plays: gestures, gaze, pace, emotion, talking to the camera.'),
+  'Sound & speech': T.t('Sound & speech'),
+  'Spoken lines in their own language, voice, ambience, room tone, music - for the models that make sound.': T.t('Spoken lines in their own language, voice, ambience, room tone, music - for the models that make sound.'),
+  'Transitions between shots': T.t('Transitions between shots'),
+  'Shot 1, Shot 2, match cuts, whip transitions, cutting on action - for a clip of several shots.': T.t('Shot 1, Shot 2, match cuts, whip transitions, cutting on action - for a clip of several shots.'),
+  'UGC techniques': T.t('UGC techniques'),
+  'A selfie at arm\'s length, a phone\'s handheld shake, the mirror shot, unboxing, the product held to the camera, a testimonial.': T.t('A selfie at arm\'s length, a phone\'s handheld shake, the mirror shot, unboxing, the product held to the camera, a testimonial.'),
+  'Dolly/Track': T.t('Dolly/Track'),
+  'Zoom/Lens': T.t('Zoom/Lens'),
+  'Drone/Crane': T.t('Drone/Crane'),
+  'Pan/Tilt': T.t('Pan/Tilt'),
+  'Physical Moves': T.t('Physical Moves'),
+  'Human Camera': T.t('Human Camera'),
+  'Specials': T.t('Specials'),
+};
+const say = (s) => (Object.prototype.hasOwnProperty.call(SAY, s) ? SAY[s] : String(s || ''));
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -36,7 +72,7 @@ function el(tag, cls, text) {
 }
 // A read that fails says why: the index or a section's file is "did not load" with Try again, never
 // "nothing here".
-const _read = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error('the app answered ' + r.status); return r.json(); });
+const _read = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(T.t('the app answered {status}', { status: r.status })); return r.json(); });
 function _stored() { try { return JSON.parse(localStorage.getItem(LS) || '') || {}; } catch (e) { return {}; } }
 function _keep() { try { localStorage.setItem(LS, JSON.stringify({ sec: _st.sec, cat: _st.cat })); } catch (e) { /* a private window */ } }
 const _lc = (s) => String(s || '').toLowerCase();
@@ -60,19 +96,19 @@ export async function openHelp(o) {
 async function _start() {
   if (!_w) return;
   if (!_index) {
-    _w.list.replaceChildren(loadingEl('reading…'));
+    _w.list.replaceChildren(loadingEl(T.t('reading…')));
     let why = '';
     try {
       const d = await _read(BASE + 'index.json');
       if (d && Array.isArray(d.sections) && d.sections.length) _index = d;
-      else why = 'it lists no sections';
-    } catch (e) { why = e.message || 'it could not be read'; }
+      else why = T.t('it lists no sections');
+    } catch (e) { why = e.message || T.t('it could not be read'); }
     if (!_w) return;
     if (!_index) {
-      showError('The reference could not be read.', { detail: why });
+      showError(T.t('The reference could not be read.'), { detail: why });
       _paintSide();
       _w.q.parentElement.hidden = true;
-      _w.list.replaceChildren(failedEl('The reference', () => _start()));
+      _w.list.replaceChildren(failedEl(T.t('The reference'), () => _start()));
       return;
     }
   }
@@ -98,12 +134,12 @@ function _build(o) {
   // the one window frame (css/app-shell.css .u-win): its head - the name, a quiet note, the 28 px ✕
   const box = el('div', 'hp u-win is-float');
   box.setAttribute('role', 'dialog');
-  box.setAttribute('aria-label', 'Almanac');
+  box.setAttribute('aria-label', T.t('Almanac'));
   const head = el('div', 'hp-head u-win-head');
-  head.append(el('b', 'u-win-title', 'Almanac'), el('span', 'hp-sub u-win-sub', 'press a tip to copy it'));
+  head.append(el('b', 'u-win-title', T.t('Almanac')), el('span', 'hp-sub u-win-sub', T.t('press a tip to copy it')));
   const x = el('button', 'hp-x u-btn is-icon is-quiet u-x', '');
   x.type = 'button';
-  x.title = 'Close (Esc)';
+  x.title = T.t('Close (Esc)');
   head.appendChild(x);
   const side = el('nav', 'hp-side');
   const main = el('div', 'hp-main');
@@ -111,7 +147,7 @@ function _build(o) {
   const q = document.createElement('input');
   q.type = 'search';
   q.className = 'hp-q u-in is-s';
-  q.placeholder = 'search';
+  q.placeholder = T.t('search');
   q.spellcheck = false;
   const count = el('span', 'hp-count', '');
   bar.append(q, count);
@@ -155,15 +191,15 @@ async function _open(id, keepCat) {
   _w.q.value = '';
   if (sec && sec.file && !_files.has(id)) {
     _paintSide();
-    _w.list.replaceChildren(loadingEl('reading…'));
+    _w.list.replaceChildren(loadingEl(T.t('reading…')));
     let d = null;
     try { d = await _read(BASE + sec.file); }
     catch (e) {
       if (!_w || _st.sec !== id) return;
-      showError(sec.label + ' did not load: ' + (e.message || 'it could not be read'));
+      showError(T.t('{section} did not load: {why}', { section: say(sec.label), why: e.message || T.t('it could not be read') }));
       _w.q.parentElement.hidden = true;
       _w.note.hidden = true;
-      _w.list.replaceChildren(failedEl(sec.label, () => _open(id, true)));
+      _w.list.replaceChildren(failedEl(say(sec.label), () => _open(id, true)));
       return;
     }
     _files.set(id, d || { items: [], cats: [] });
@@ -187,16 +223,16 @@ function _paintSide() {
     const on = s.id === _st.sec;
     const b = el('button', 'hp-sec' + (on ? ' on' : '') + (ready ? '' : ' is-soon'));
     b.type = 'button';
-    b.appendChild(el('span', 'nm', s.label));
+    b.appendChild(el('span', 'nm', say(s.label)));
     const f = _files.get(s.id);
     if (ready && f) b.appendChild(el('small', null, String((f.items || []).length)));
-    if (!ready) b.appendChild(el('i', null, 'In development'));
-    b.title = s.about || '';
+    if (!ready) b.appendChild(el('i', null, T.t('In development')));
+    b.title = say(s.about);
     b.addEventListener('click', () => { if (_st.sec !== s.id || _st.cat) _open(s.id); });
     S.appendChild(b);
     // The open section's categories under it.
     if (on && ready && f && (f.cats || []).length) {
-      const cats = [{ id: '', label: 'All', count: (f.items || []).length }].concat(f.cats);
+      const cats = [{ id: '', label: T.t('All'), count: (f.items || []).length }].concat(f.cats.map(c => Object.assign({}, c, { label: say(c.label) })));
       for (const c of cats) {
         const cb = el('button', 'hp-cat' + (c.id === _st.cat ? ' on' : ''));
         cb.type = 'button';
@@ -221,23 +257,25 @@ function _paintList() {
     bar.hidden = true;
     _w.note.hidden = true;
     const soon = el('div', 'hp-soon');
-    soon.append(el('b', null, sec.label), el('i', null, 'In development'), el('p', null, sec.about || ''),
-      el('p', 'hp-soon-more', 'This part of the reference is being filled in step by step.'));
+    soon.append(el('b', null, say(sec.label)), el('i', null, T.t('In development')), el('p', null, say(sec.about)),
+      el('p', 'hp-soon-more', T.t('This part of the reference is being filled in step by step.')));
     L.appendChild(soon);
     return;
   }
   bar.hidden = false;
   const f = _files.get(sec.id) || { items: [], cats: [] };
-  const catOf = new Map((f.cats || []).map(c => [c.id, c.label]));
+  // A category as shown, and as the data writes it - a search finds it by either.
+  const catOf = new Map((f.cats || []).map(c => [c.id, say(c.label)]));
+  const catEn = new Map((f.cats || []).map(c => [c.id, c.label]));
   const words = sec.id === 'camera' && typeof _w.noteOf === 'function' ? _w.noteOf() : '';
   _w.note.textContent = words || '';
   _w.note.hidden = !words;
   const q = _lc(_st.q).trim();
   const shown = (f.items || []).filter(it => (!_st.cat || it.cat === _st.cat)
-    && (!q || _lc(it.name).includes(q) || _lc(it.prompt).includes(q) || _lc(catOf.get(it.cat)).includes(q)));
+    && (!q || _lc(it.name).includes(q) || _lc(it.prompt).includes(q) || _lc(catOf.get(it.cat)).includes(q) || _lc(catEn.get(it.cat)).includes(q)));
   const all = (f.items || []).filter(it => !_st.cat || it.cat === _st.cat).length;
-  _w.count.textContent = shown.length === all ? String(all) : shown.length + ' of ' + all;
-  if (!shown.length) { L.appendChild(emptyEl(q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing here yet.', { icon: q ? 'search' : 'film' })); return; }
+  _w.count.textContent = shown.length === all ? String(all) : T.t('{n} of {total}', { n: shown.length, total: all });
+  if (!shown.length) { L.appendChild(emptyEl(q ? T.t('Nothing here is called “{q}”.', { q: _st.q.trim() }) : T.t('Nothing here yet.'), { icon: q ? 'search' : 'film' })); return; }
   for (const it of shown) L.appendChild(_tile(it, catOf.get(it.cat) || ''));
   if (f.source && f.source.url) {
     const src = el('div', 'hp-src');
@@ -245,7 +283,8 @@ function _paintList() {
     a.href = f.source.url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    src.append('From ', a, ' - a free reference for AI filmmakers.');
+    const [before, after] = T.t('From {link} - a free reference for AI filmmakers.').split('{link}');
+    src.append(before || '', a, after || '');
     L.appendChild(src);
   }
 }
@@ -273,7 +312,7 @@ function _tile(it, catLabel) {
   if (catLabel) nm.appendChild(el('i', null, catLabel));
   words.append(nm, el('span', 'hp-text', it.prompt));
   // "copy" wears the quiet button - the whole tip is still what is pressed
-  t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', 'Copy'));
+  t.append(pv, words, el('span', 'hp-copy u-btn is-s is-quiet', T.t('Copy')));
   t.addEventListener('click', () => _copy(it, t));
   return t;
 }
@@ -307,7 +346,7 @@ async function _copy(it, tile) {
   // no blinking: the note on the prompt field says it was copied; a tip not copied is outlined red a moment
   tile.classList.remove('is-fail');
   if (!ok) { tile.classList.add('is-fail'); setTimeout(() => tile.classList.remove('is-fail'), 1000); }
-  _toast(_w.fieldOf(), ok ? 'Copied: ' + it.name + ' - paste it into the prompt (Ctrl+V)' : 'Could not copy - the words are selected: copy them yourself', !ok);
+  _toast(_w.fieldOf(), ok ? T.t('Copied: {name} - paste it into the prompt (Ctrl+V)', { name: it.name }) : T.t('Could not copy - the words are selected: copy them yourself'), !ok);
   // Not copied: its words are selected, one Ctrl+C away.
   if (!ok) _select(tile.querySelector('.hp-text'));
 }

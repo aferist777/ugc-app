@@ -26,12 +26,13 @@
      page, view       where the Alerts row says it was started ('merge', 'audio' | 'library', 'musicmake')
      store            the browser's key of the form's state
      key()            the open project's key ('' - none: the Library); a press is the project's
-     title()          its name, for the card's head
+     title()          its name, for the card's head ('' - none yet)
      writerKind()     Simple's writer told the project's kind ('blank' when none)
      videoSecs()      the video's length for "by the video" (0 - none)
      clipNow(clip)    a timeline's clip in "The video" as it is now { live, gone, name, start, dur, thumb, lane } (Merge)
      flush(clip)      -> Promise<boolean>: the timeline saved before the server reads the clip from it (Merge)
      where(dest, label) -> the Alerts row's place { page, href, label, spot }
+     laneName(name)   a lane's stored name in the interface's language (Merge) - the lane a track was laid on
      made             true - the project's presses as cards under the card (Merge)
      showFile(path)   "show" on a result - where it lies
      drag             { type, media, refuse(el, ev) } - a result dragged onto a lane (Merge)
@@ -55,25 +56,26 @@ import { ask } from '../ask.js';
 import { showError } from '../notice.js';
 import { emptyEl, loadingEl, failedEl } from '../ui-state.js';
 import { allow } from '../key-gate.js';
+import * as T from '../i18n/t.js';
 
 // ── the modes, in two groups ──────────────────────────────────────────────────
 const GROUPS = { music: ['simple', 'custom', 'lyrics', 'compose', 'video'], sounds: ['sounds', 'sfx'] };
-const GROUP_WORD = { music: 'Music', sounds: 'Sounds' };
+const GROUP_WORD = { music: T.t('Music'), sounds: T.t('Sounds') };
 const groupOf = (mode) => (GROUPS.sounds.includes(mode) ? 'sounds' : 'music');
 // Simple, Custom and Lyrics say what they are in js/sound/suno-form.js (modeHelp); these are the other four's.
 const MODE_HELP = {
-  sounds: 'A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.',
-  compose: 'Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.',
-  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in the VIDEO folders on the right - in Merge also a clip of the timeline by its right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.',
-  sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
+  sounds: T.t('A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.'),
+  compose: T.t('Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.'),
+  video: T.t('Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in the VIDEO folders on the right - in Merge also a clip of the timeline by its right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.'),
+  sfx: T.t('A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.'),
 };
-const GROUP_HELP = 'Music - Simple, Custom and Lyrics by Suno; music from a description and Video to Music by ElevenLabs.\nSounds - a sound or a loop by Suno; sound effects by ElevenLabs.';
-const LOOP = 'The end joins the start, so it can be laid again and again with no seam.';
+const GROUP_HELP = T.t('Music - Simple, Custom and Lyrics by Suno; music from a description and Video to Music by ElevenLabs.\nSounds - a sound or a loop by Suno; sound effects by ElevenLabs.');
+const LOOP = T.t('The end joins the start, so it can be laid again and again with no seam.');
 const KEY_SASH = 'lib_music_sash_v1';
 const SET_W = 260, SET_MIN = 200, SET_MAX = 460, RIGHT_MIN = 480;
 const LYR_MAX = 12;
 const V2M_MAX = 600;
-const SOUNDS_HOME = 'SFX → My sounds → Generated';
+const SOUNDS_HOME = T.t('SFX → My sounds → Generated');
 
 let H = null;              // the page's host
 let F = null;              // the form - made at the first open, kept for the page
@@ -101,8 +103,11 @@ const S = () => F.S;
 const _cat = () => (F ? F.cat() : null);
 const _mode = () => (_cat() ? _cat().modes.find(x => x.id === S().mode) : null);
 const _engineOf = (id) => ((_cat() && _cat().modes.find(x => x.id === id)) || {}).engine || 'suno';
-const _modeName = (id) => ((_cat() && _cat().modes.find(m => m.id === id)) || { label: id }).label;
+// A mode's name as it is shown: the catalog's English label (lib/audio-engines.js MODES) in the interface's language.
+const _modeName = (id) => { const m = _cat() && _cat().modes.find(x => x.id === id); return m ? T.t(m.label) : id; };
 const _hook = (name, ...a) => (H && typeof H[name] === 'function' ? H[name](...a) : undefined);
+// A lane's stored name as it is shown - the host's word for it when it has one.
+const _lane = (name) => String(_hook('laneName', name) || name || '');
 const _place = () => (typeof _o.place === 'function' ? _o.place() : null) || null;
 const _key = () => String(_hook('key') || '');
 
@@ -124,7 +129,7 @@ export function configure(host) { H = host || null; }
 function _form() {
   if (F) return F;
   F = createSunoForm({
-    store: (H && H.store) || 'sound_window_v1', title: 'Generate audio',
+    store: (H && H.store) || 'sound_window_v1', title: T.t('Generate audio'),
     base: { mode: 'simple', model: 'V6', lastMode: { music: 'simple', sounds: 'sounds' } },
     fields: {
       sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
@@ -145,12 +150,12 @@ function _form() {
     videoSecs: () => +_hook('videoSecs') || 0,
     onSaved: () => { _hook('onSaved'); if (_ui && S().mode === 'lyrics') paintMake(); },
     // Without a video the length is said in seconds.
-    lengthNote: (mode) => (+_hook('videoSecs') > 0 ? '' : mode === 'simple' ? 'up to 360 s - the bed comes out a little longer' : mode === 'custom' ? '10–360 s' : ''),
+    lengthNote: (mode) => (+_hook('videoSecs') > 0 ? '' : mode === 'simple' ? T.t('up to 360 s - the bed comes out a little longer') : mode === 'custom' ? T.t('10–360 s') : ''),
     priceOf: (mode, p) => {
       if (mode !== 'video' || !p.usdPerMin) return null;
       const sec = _v2m().dur;
-      return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: secs(sec) + ' of music, as long as the video · ElevenLabs' }
-        : { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+      return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: T.t('{length} of music, as long as the video · ElevenLabs', { length: secs(sec) }) }
+        : { big: T.t('≈ ${n}/min', { n: p.usdPerMin }), small: T.t('of music, as long as the video') };
     },
   });
   const st = F.S;
@@ -171,7 +176,7 @@ function setMode(id, how) {
   F.save();
   _err = '';
   paint();
-  if (carried) _say('The mood\'s Style and Exclude are in Custom - its tracks go into Music → highlights.');
+  if (carried) _say(T.t('The mood\'s Style and Exclude are in Custom - its tracks go into Music → highlights.'));
 }
 function setGroup(g) {
   if (groupOf(S().mode) === g) return;
@@ -212,7 +217,7 @@ function _say(text, bad) {
 
 // ── where it goes ─────────────────────────────────────────────────────────────
 // { node: the Library tree's key of the folder it lies in, into: the folder's id for the server ('' - Music's root),
-//   label: its path in words, note: why it is not the folder open, sound: SFX }
+//   label: its path in words, note: why it is not the folder open, sound: SFX, clip: Music's root and under its clip }
 function _dest() {
   const mode = S().mode;
   const p = _place();
@@ -221,32 +226,32 @@ function _dest() {
   if (groupOf(mode) === 'sounds') return { node: String(_hook('soundsNode') || 'sounds'), into: '', label: SOUNDS_HOME, sound: true };
   if (!p) {
     const clip = mode === 'video' && S().f.video.clip;
-    return { node: 'music', into: '', label: clip ? 'Music, and under its clip' : 'Music' };
+    return { node: 'music', into: '', label: T.t('Music'), clip: !!clip };
   }
   const key = String(p.key || '');
   const hl = /^music:highlights(:|$)/.test(key) || p.folder === 'highlights';
   const lyr = key === 'music:lyrics';
-  if (p.cat && !hl && !lyr) return { node: key, into: p.cat, label: 'Music → ' + (p.trail || p.label) };
+  if (p.cat && !hl && !lyr) return { node: key, into: p.cat, label: T.t('Music → {place}', { place: p.trail || p.label }) };
   // A mood folder open: Simple makes its mood, and the server files the tracks there.
   const mood = F.preset();
-  if (mood) return { node: key, into: '', label: 'Music → highlights → ' + mood.label };
+  if (mood) return { node: key, into: '', label: T.t('Music → highlights → {mood}', { mood: T.tc('mood', mood.label) }) };
   // Custom on a mood folder: into highlights itself - the mood folder keeps only what its preset made.
-  if (_moodOpen()) return { node: 'music:highlights', into: 'highlights', label: 'Music → highlights' };
-  return { node: 'music', into: '', label: 'Music',
-    note: hl ? 'highlights takes only a mood\'s preset - open a mood\'s folder' : lyr ? 'Lyrics holds texts only' : '' };
+  if (_moodOpen()) return { node: 'music:highlights', into: 'highlights', label: T.t('Music → highlights') };
+  return { node: 'music', into: '', label: T.t('Music'),
+    note: hl ? T.t('highlights takes only a mood\'s preset - open a mood\'s folder') : lyr ? T.t('Lyrics holds texts only') : '' };
 }
 
 // ── the head: the engine, the mode, its "?" ───────────────────────────────────
 const _engineWord = (mode) => (_engineOf(mode) === 'eleven' ? 'ElevenLabs' : 'Suno');
 function _helpText() {
   const d = _dest();
-  return F.helpText('AUDIO → ' + (d.label || 'Music')) || MODE_HELP[S().mode] || '';
+  return F.helpText(T.t('AUDIO → {place}', { place: d.label || T.t('Music') })) || MODE_HELP[S().mode] || '';
 }
 function paintHead() {
   if (!_win || !_win.alive()) return;
   closeQ();
   const m = _mode();
-  const name = _engineWord(S().mode) + ' · ' + (m ? m.label : 'music');
+  const name = _engineWord(S().mode) + ' · ' + (m ? T.t(m.label) : T.t('music'));
   _win.setCrumbs([{ label: name }]);
   _win.crumbs.appendChild(qmark(() => _helpText(), { title: name }));
 }
@@ -287,12 +292,12 @@ function paintCol() {
   const eng = _engineOf(S().mode);
   // A missing key stays in words: it is why nothing would come.
   const noKey = !CAT.fake && CAT.keys && !CAT.keys[eng === 'eleven' ? 'eleven' : 'kie'];
-  row('Mode', F.modeSelect(modes.map(m => Object.assign({}, m, { label: (m.engine === 'eleven' ? 'ElevenLabs · ' : '') + m.label }))),
-    modeRowHelp(modes), noKey ? 'No ' + (eng === 'eleven' ? 'ElevenLabs' : 'kie.ai') + ' key - add it on Admin → API keys.' : '');
-  if (eng === 'suno' && S().mode !== 'lyrics') row('Model', F.modelSelect(), MODEL_ROW_HELP);
+  row(T.t('Mode'), F.modeSelect(modes.map(m => Object.assign({}, m, { label: (m.engine === 'eleven' ? 'ElevenLabs · ' : '') + T.t(m.label) }))),
+    modeRowHelp(modes), noKey ? T.t('No {name} key - add it on Admin → API keys.', { name: eng === 'eleven' ? 'ElevenLabs' : 'kie.ai' }) : '');
+  if (eng === 'suno' && S().mode !== 'lyrics') row(T.t('Model'), F.modelSelect(), MODEL_ROW_HELP);
   else if (eng === 'eleven') {
-    row('Model', el('div', 'au-val', S().mode === 'sfx' ? 'eleven_text_to_sound_v2' : S().mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'),
-      'ElevenLabs has one model for each mode - nothing to choose.');
+    row(T.t('Model'), el('div', 'au-val', S().mode === 'sfx' ? 'eleven_text_to_sound_v2' : S().mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'),
+      T.t('ElevenLabs has one model for each mode - nothing to choose.'));
   }
   F.lengthRows(row);
   F.chipRows(col);
@@ -314,44 +319,49 @@ function paintMake() {
   const card = el('div', 'au-card');
   const title = H && H.made ? String(_hook('title') || '') : '';
   const h = el('div', 'au-card-h');
-  h.appendChild(el('span', 'au-card-n', _engineWord(S().mode) + ' · ' + m.label));
-  if (title) h.appendChild(el('span', 'au-muted', 'for ' + title));
+  h.appendChild(el('span', 'au-card-n', _engineWord(S().mode) + ' · ' + T.t(m.label)));
+  // Merge: the project it is for - by its name, or "this project" while it has none.
+  if (H && H.made) h.appendChild(el('span', 'au-muted', title ? T.t('for {name}', { name: title }) : T.t('for this project')));
   card.appendChild(h);
   const f = S().f[S().mode];
+  // The examples in the fields an engine reads as they are stay in English - the engines are best spoken to in English.
   if (F.paintFields(card)) { /* Simple, Custom, Lyrics - the shared form's */ } else if (S().mode === 'sounds') {
-    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }),
-      { max: 500, help: 'What the sound is, as a sound designer says it - the source, the action, the material; a loop with its tempo and key. Up to 500 characters.' }));
+    card.appendChild(_field(T.t('The sound'), _text(f, 'prompt', { area: true, rows: 3, placeholder: T.t('e.g. {example}', { example: 'a soft camera shutter click with a short mechanical whir' }) }),
+      { max: 500, help: T.t('What the sound is, as a sound designer says it - the source, the action, the material; a loop with its tempo and key. Up to 500 characters.') }));
     const r2 = el('div', 'au-row2');
     const tempo = el('input', 'au-in u-in');
-    tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = 'auto';
+    tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = T.t('auto');
     tempo.value = f.tempo ? String(f.tempo) : '';
     tempo.addEventListener('change', () => { f.tempo = Math.max(0, Math.min(300, Math.round(+tempo.value || 0))); F.save(); });
-    r2.appendChild(_field('Tempo', tempo, { help: 'Beats per minute, for a loop. Empty - Suno\'s own.' }));
+    r2.appendChild(_field(T.t('Tempo'), tempo, { help: T.t('Beats per minute, for a loop. Empty - Suno\'s own.') }));
     const key = el('select', 'au-sel u-in');
-    for (const k of (_cat().soundKeys || ['Any'])) { const op = el('option', null, k); op.value = k; key.appendChild(op); }
+    // 'Any' is said in the interface's language; the keys themselves are music's own names.
+    for (const k of (_cat().soundKeys || ['Any'])) { const op = el('option', null, k === 'Any' ? T.t('Any') : k); op.value = k; key.appendChild(op); }
     key.value = f.key || 'Any';
     key.addEventListener('change', () => { f.key = key.value; F.save(); });
-    r2.appendChild(_field('Key', key, { help: 'The key of a musical loop. Any - Suno\'s own.' }));
+    r2.appendChild(_field(T.t('Key'), key, { help: T.t('The key of a musical loop. Any - Suno\'s own.') }));
     card.appendChild(r2);
-    card.appendChild(_check(f, 'loop', 'a seamless loop', null, LOOP));
+    card.appendChild(_check(f, 'loop', T.t('a seamless loop'), null, LOOP));
   } else if (S().mode === 'compose') {
-    card.appendChild(_field('The music', _text(f, 'prompt', { area: true, rows: 4, placeholder: 'e.g. calm lo-fi with soft piano and vinyl crackle, steady, nothing that jumps out - under a voiceover' }),
-      { max: 4100, help: 'In sentences: what it is for first, then the genre, the instruments, the tempo, the key and its shape. "no …" is honoured here. A chip on the left adds its words. Up to 4100 characters.' }));
-    card.appendChild(_check(f, 'instrumental', 'instrumental', null, 'No voice. Off - ElevenLabs may sing.'));
+    card.appendChild(_field(T.t('The music'), _text(f, 'prompt', { area: true, rows: 4, placeholder: T.t('e.g. {example}', { example: 'calm lo-fi with soft piano and vinyl crackle, steady, nothing that jumps out - under a voiceover' }) }),
+      { max: 4100, help: T.t('In sentences: what it is for first, then the genre, the instruments, the tempo, the key and its shape. "no …" is honoured here. A chip on the left adds its words. Up to 4100 characters.') }));
+    card.appendChild(_check(f, 'instrumental', T.t('instrumental'), null, T.t('No voice. Off - ElevenLabs may sing.')));
   } else if (S().mode === 'video') {
-    card.appendChild(_field('The video', _attachment(f), { help: 'The video ElevenLabs scores: a press on a video in the VIDEO folders on the right' + (H && H.clipNow ? ', a clip of the timeline by its right button (its track is then laid under it)' : '') + ', "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.' }));
-    card.appendChild(_field('What you want', _text(f, 'description', { area: true, rows: 3, placeholder: 'optional - e.g. upbeat and modern, builds to the reveal at the end' }),
-      { max: 4100, help: 'Optional - the feel, where it builds, what to keep out. Up to 4100 characters.' }));
-    card.appendChild(_field('Tags', _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { help: 'Up to 10 words, by commas - upbeat, cinematic…' }));
-    card.appendChild(_check(f, 'sfx', 'add sound effects', null, 'ElevenLabs adds sound effects from what happens in the video.'));
-    card.appendChild(_check(f, 'useAudio', 'use the video\'s own sound', null, 'The video\'s own sound is taken as a reference - its genre, tempo and mood.'));
+    card.appendChild(_field(T.t('The video'), _attachment(f), { help: H && H.clipNow
+      ? T.t('The video ElevenLabs scores: a press on a video in the VIDEO folders on the right, a clip of the timeline by its right button (its track is then laid under it), "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.')
+      : T.t('The video ElevenLabs scores: a press on a video in the VIDEO folders on the right, "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.') }));
+    card.appendChild(_field(T.t('What you want'), _text(f, 'description', { area: true, rows: 3, placeholder: T.t('optional - e.g. {example}', { example: 'upbeat and modern, builds to the reveal at the end' }) }),
+      { max: 4100, help: T.t('Optional - the feel, where it builds, what to keep out. Up to 4100 characters.') }));
+    card.appendChild(_field(T.t('Tags'), _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { help: T.t('Up to 10 words, by commas - upbeat, cinematic…') }));
+    card.appendChild(_check(f, 'sfx', T.t('add sound effects'), null, T.t('ElevenLabs adds sound effects from what happens in the video.')));
+    card.appendChild(_check(f, 'useAudio', T.t('use the video\'s own sound'), null, T.t('The video\'s own sound is taken as a reference - its genre, tempo and mood.')));
   } else if (S().mode === 'sfx') {
-    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a quick airy whoosh, left to right' }),
-      { max: 1000, help: 'The source, the action, the material, the space, the distance, how it starts and ends. Up to 1000 characters; the length on the left (0.5–30 s) or its own.' }));
+    card.appendChild(_field(T.t('The sound'), _text(f, 'prompt', { area: true, rows: 3, placeholder: T.t('e.g. {example}', { example: 'a quick airy whoosh, left to right' }) }),
+      { max: 1000, help: T.t('The source, the action, the material, the space, the distance, how it starts and ends. Up to 1000 characters; the length on the left (0.5–30 s) or its own.') }));
     const inf = el('div');
-    inf.appendChild(_knob(f, 'influence', 'follow the words', 0, 1, 0.05, 'Higher - closer to the description, less varied.'));
+    inf.appendChild(_knob(f, 'influence', T.t('follow the words'), 0, 1, 0.05, T.t('Higher - closer to the description, less varied.')));
     card.appendChild(_field('', inf));
-    card.appendChild(_check(f, 'loop', 'a seamless loop', null, LOOP));
+    card.appendChild(_check(f, 'loop', T.t('a seamless loop'), null, LOOP));
   }
   host.appendChild(card);
   // Merge: the open project's presses; the Library: in Lyrics, the texts.
@@ -383,23 +393,29 @@ function _attachment(f) {
     if (f.clip || f.video) {
       if (v.thumb) { const im = el('img'); im.src = v.thumb; att.appendChild(im); } else att.appendChild(el('div', 'au-att-ph'));
       const tx = el('div', 'au-att-tx');
-      tx.appendChild(el('b', null, f.clip ? v.name : (f.name || f.video.split('/').pop())));
+      // a clip with no name of its own is sent as 'clip' and shown in the interface's words
+      tx.appendChild(el('b', null, f.clip ? (v.name === 'clip' ? T.t('clip') : v.name) : (f.name || f.video.split('/').pop())));
       if (f.clip) {
-        tx.appendChild(el('span', 'au-muted', 'a clip' + (v.lane ? ' of ' + v.lane : '') + ' · ' + _clock(v.start) + ' – ' + _clock(v.start + v.dur) + ' · ' + secs(v.dur)));
-        if (v.gone) tx.appendChild(el('span', 'au-err', 'Not on the timeline any more - press a clip with the right button again.'));
-        else if (v.dur > V2M_MAX) tx.appendChild(el('span', 'au-err', 'Longer than 10 minutes - Video to Music takes up to 10.'));
-        else tx.appendChild(el('span', 'au-muted', _usd(v.dur) + ' for its ' + secs(v.dur) + ' · the track is laid under it'));
+        const at = { from: _clock(v.start), to: _clock(v.start + v.dur), length: secs(v.dur) };
+        tx.appendChild(el('span', 'au-muted', v.lane ? T.t('a clip of {lane} · {from} – {to} · {length}', Object.assign({ lane: v.lane }, at))
+          : T.t('a clip · {from} – {to} · {length}', at)));
+        if (v.gone) tx.appendChild(el('span', 'au-err', T.t('Not on the timeline any more - press a clip with the right button again.')));
+        else if (v.dur > V2M_MAX) tx.appendChild(el('span', 'au-err', T.t('Longer than 10 minutes - Video to Music takes up to 10.')));
+        else tx.appendChild(el('span', 'au-muted', T.t('{price} for its {length} · the track is laid under it', { price: _usd(v.dur), length: secs(v.dur) })));
       } else {
-        tx.appendChild(el('span', 'au-muted', (v.dur ? secs(v.dur) + ' · ' + _usd(v.dur) + ' · ' : '') + 'into Music only - not onto the timeline'));
+        tx.appendChild(el('span', 'au-muted', v.dur ? T.t('{length} · {price} · into Music only - not onto the timeline', { length: secs(v.dur), price: _usd(v.dur) })
+          : T.t('into Music only - not onto the timeline')));
       }
       att.appendChild(tx);
     } else {
       att.appendChild(el('div', 'au-att-ph'));
-      att.appendChild(el('div', 'au-att-tx', 'Press a video in the VIDEO folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
+      att.appendChild(el('div', 'au-att-tx', H && H.clipNow
+        ? T.t('Press a video in the VIDEO folders on the right, or a clip on the timeline with the right button - or drop a file here. Up to 10 minutes and 200 MB.')
+        : T.t('Press a video in the VIDEO folders on the right - or drop a file here. Up to 10 minutes and 200 MB.')));
     }
-    const up = el('button', 'au-btn u-btn is-s', 'From this computer…');
+    const up = el('button', 'au-btn u-btn is-s', T.t('From this computer…'));
     up.type = 'button';
-    up.title = 'A video from this computer - it is copied into VIDEO → Uploads first';
+    up.title = T.t('A video from this computer - it is copied into VIDEO → Uploads first');
     up.addEventListener('click', () => {
       const inp = el('input');
       inp.type = 'file'; inp.accept = 'video/*';
@@ -415,7 +431,7 @@ function _attachment(f) {
     if (f.video || f.clip) {
       const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
       x.type = 'button';
-      x.title = 'no video';
+      x.title = T.t('no video');
       x.addEventListener('click', () => { Object.assign(f, { video: '', name: '', thumb: '', dur: 0, clip: null }); F.save(); paintMake(); paintFoot(); });
       att.appendChild(x);
     }
@@ -436,13 +452,13 @@ function _attachment(f) {
   return att;
 }
 async function _uploadVideo(file) {
-  _say('Bringing the video in (VIDEO → Uploads)…');
+  _say(T.t('Bringing the video in (VIDEO → Uploads)…'));
   const fd = new FormData();
   fd.append('video', file);
   fd.append('name', file.name);
   try {
     const d = await api('/api/mv3/video/upload', { method: 'POST', body: fd });
-    _say('"' + file.name + '" is in VIDEO → Uploads.');
+    _say(T.t('"{name}" is in VIDEO → Uploads.', { name: file.name }));
     const it = d.item || {};
     return { video: it.videoPath, name: it.name || file.name, thumb: it.thumbPath || '', dur: +it.duration || 0 };
   } catch (e) { _say(e.message, true); return null; }
@@ -476,7 +492,7 @@ function _v2mOpen() {
     const n = _vtree.selected();
     if (n) { _v2mLoad(n); return; }
     // The tree not read (its reason said in the corner by `status`): the gallery says so - not empty.
-    if (_ui) _ui.v2mGal.replaceChildren(failedEl('the videos', () => { _vRead = 0; _v2mOpen(); }));
+    if (_ui) _ui.v2mGal.replaceChildren(failedEl(T.t('the videos'), () => { _vRead = 0; _v2mOpen(); }));
   });
 }
 async function _v2mLoad(n) {
@@ -491,19 +507,19 @@ async function _v2mLoad(n) {
   gal.appendChild(grid);
   // empty, reading and did not load are the shared parts (js/ui-state.js); a folder not read says so with
   // Try again, the reason in the corner - never "No videos here."
-  if (!n.q) { if (!fold) grid.appendChild(emptyEl('Nothing here.', { icon: 'folder' })); return; }
-  grid.appendChild(loadingEl('reading…'));
+  if (!n.q) { if (!fold) grid.appendChild(emptyEl(T.t('Nothing here.'), { icon: 'folder' })); return; }
+  grid.appendChild(loadingEl(T.t('reading…')));
   let items = [];
   try {
     const d = await api('/api/library/shelf/media?' + new URLSearchParams(n.q));
     items = (d.items || []).filter(i => i && i.media && /\.(mp4|mov|webm|m4v|mkv)$/i.test(String(i.media).split('?')[0]));
   } catch (e) {
-    if (mine === _vseq) { grid.textContent = ''; grid.appendChild(failedEl('the videos', () => _v2mLoad(n))); showError(e.message); }
+    if (mine === _vseq) { grid.textContent = ''; grid.appendChild(failedEl(T.t('the videos'), () => _v2mLoad(n))); showError(e.message); }
     return;
   }
   if (mine !== _vseq || !_ui) return;
   grid.textContent = '';
-  if (!items.length && !fold) grid.appendChild(emptyEl('No videos here.', { icon: 'film' }));
+  if (!items.length && !fold) grid.appendChild(emptyEl(T.t('No videos here.'), { icon: 'film' }));
   for (const it of items) grid.appendChild(_v2mTile(it));
 }
 function _v2mTile(it) {
@@ -516,10 +532,11 @@ function _v2mTile(it) {
   if (it.thumb) { const im = el('img'); im.src = it.thumb; im.loading = 'lazy'; im.alt = ''; b.appendChild(im); } else b.appendChild(el('div', 'au-att-ph'));
   b.appendChild(el('span', 'nm', it.name || String(it.media).split('/').pop()));
   if (dur) b.appendChild(el('span', 'd', secs(dur)));
-  b.title = (it.name || '') + (dur ? ' · ' + secs(dur) : '') + (long ? ' - longer than 10 minutes: Video to Music takes up to 10'
-    : ' - a press puts it into "The video"; its music goes to Music only');
+  const named = (it.name || '') + (dur ? ' · ' + secs(dur) : '');
+  b.title = long ? T.t('{name} - longer than 10 minutes: Video to Music takes up to 10', { name: named })
+    : T.t('{name} - a press puts it into "The video"; its music goes to Music only', { name: named });
   b.addEventListener('click', () => {
-    if (long) { _say('"' + (it.name || 'that video') + '" is ' + secs(dur) + ' - Video to Music takes up to 10 minutes.', true); return; }
+    if (long) { _say(T.t('"{name}" is {length} - Video to Music takes up to 10 minutes.', { name: it.name || T.t('that video'), length: secs(dur) }), true); return; }
     Object.assign(f, { clip: null, video: it.media, name: it.name || '', thumb: it.thumb || '', dur });
     F.save();
     paintMake();
@@ -534,19 +551,23 @@ function paintFoot() {
   if (!_ui) return;
   const lyr = S().mode === 'lyrics';
   const d = _dest();
-  const into = lyr ? 'texts only · save → Music → Lyrics' : 'into ' + d.label + (d.note ? ' - ' + d.note : '');
+  const into = lyr ? T.t('texts only · save → Music → Lyrics')
+    : d.clip ? T.t('into Music, and under its clip')
+      : d.note ? T.t('into {place} - {note}', { place: d.label, note: d.note }) : T.t('into {place}', { place: d.label });
   _ui.into.textContent = into;
-  _ui.into.title = lyr ? 'Texts only - nothing is filed by itself; "save" keeps a text in Music → Lyrics' : into;
+  _ui.into.title = lyr ? T.t('Texts only - nothing is filed by itself; "save" keeps a text in Music → Lyrics') : into;
   const p = F.price();
   _ui.price.textContent = '';
   if (p.big) {
     _ui.price.appendChild(el('b', 'u-price', p.big));
     _ui.price.appendChild(el('span', null, p.small + (_cat() && _cat().fake ? ' · FAKE' : '')));
   }
-  _ui.price.title = p.big ? 'per press · ' + p.big + ' · ' + p.small : '';
-  _ui.go.textContent = lyr ? 'Write the lyrics' : 'Generate';
+  _ui.price.title = p.big ? T.t('per press · {price} · {what}', { price: p.big, what: p.small }) : '';
+  _ui.go.textContent = lyr ? T.t('Write the lyrics') : T.t('Generate');
   _paintLine();
 }
+// Where a press being made is: the server's stage, else who is making it, else starting.
+const _stageOf = (g) => g.stage || (g.taskId ? T.t('{name} is making it', { name: g.engine === 'eleven' ? 'ElevenLabs' : 'Suno' }) : T.t('starting'));
 // The line of the last press: where it is in Alerts, what came of it - or why it did not start.
 function _paintLine() {
   const line = _ui && _ui.line;
@@ -561,15 +582,19 @@ function _paintLine() {
   const lyr = g.kind === 'lyrics';
   let t;
   if (g.state === 'pending') {
-    t = (lyr ? 'writing the lyrics' : 'in Alerts · ' + (g.stage || (g.taskId ? (g.engine === 'eleven' ? 'ElevenLabs is making it' : 'Suno is making it') : 'starting'))) + '…';
+    t = lyr ? T.t('writing the lyrics…') : T.t('in Alerts · {stage}…', { stage: _stageOf(g) });
   } else if (g.state === 'done') {
     const n = (g.results || []).length;
-    const what = g.kind === 'sound' ? (n === 1 ? 'sound' : 'sounds') : (n === 1 ? 'track' : 'tracks');
-    t = lyr ? 'the lyrics are written - ' + (S().mode === 'lyrics' && !(H && H.made) ? 'above' : 'in Lyrics')
-      : 'in Alerts · done - ' + n + ' ' + what + ' in ' + ((r.dest && r.dest.label) || 'Music').replace(/, and under its clip$/, '')
-        + (g.laid ? ', and laid under its clip on ' + g.laid.lane : g.notLaid ? '; not laid on the timeline - ' + g.notLaid : '');
+    const place = (r.dest && r.dest.label) || T.t('Music');
+    if (lyr) t = S().mode === 'lyrics' && !(H && H.made) ? T.t('the lyrics are written - above') : T.t('the lyrics are written - in Lyrics');
+    else if (g.kind === 'sound') t = T.tn(n, 'in Alerts · done - {n} sound in {place}', 'in Alerts · done - {n} sounds in {place}', { place });
+    else if (g.laid) t = T.tn(n, 'in Alerts · done - {n} track in {place}, and laid under its clip on {lane}', 'in Alerts · done - {n} tracks in {place}, and laid under its clip on {lane}', { place, lane: _lane(g.laid.lane) });
+    else if (g.notLaid) t = T.tn(n, 'in Alerts · done - {n} track in {place}; not laid on the timeline - {why}', 'in Alerts · done - {n} tracks in {place}; not laid on the timeline - {why}', { place, why: g.notLaid });
+    else t = T.tn(n, 'in Alerts · done - {n} track in {place}', 'in Alerts · done - {n} tracks in {place}', { place });
   } else {
-    t = (lyr ? '' : 'in Alerts · ') + (g.refused ? 'refused' : 'failed') + ' - ' + (g.error || 'it did not come');
+    const why = g.error || T.t('it did not come');
+    t = lyr ? (g.refused ? T.t('refused - {why}', { why }) : T.t('failed - {why}', { why }))
+      : (g.refused ? T.t('in Alerts · refused - {why}', { why }) : T.t('in Alerts · failed - {why}', { why }));
     line.classList.add('is-bad');
   }
   line.textContent = t;
@@ -605,7 +630,7 @@ async function _generate(btn) {
   try {
     // A clip of the open timeline: the server reads it from the SAVED timeline - what is not saved yet goes first.
     const vc = S().mode === 'video' ? S().f.video.clip : null;
-    if (vc && H && typeof H.flush === 'function' && !(await H.flush(vc))) throw new Error('The timeline could not be saved - the clip is read from the saved one. Try again in a moment.');
+    if (vc && H && typeof H.flush === 'function' && !(await H.flush(vc))) throw new Error(T.t('The timeline could not be saved - the clip is read from the saved one. Try again in a moment.'));
     const b = _body();
     const d = _dest();
     const m = _mode();
@@ -617,7 +642,7 @@ async function _generate(btn) {
     const r = await F.press(b);
     _track(r.gen, d);
     if (H && H.made) { GENS = [r.gen].concat(GENS.filter(g => g.id !== r.gen.id)); _paintMade(); _followProject(); }
-    _say(r.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can close this window, the app files it when it comes.');
+    _say(r.gen.kind === 'lyrics' ? T.t('Writing the lyrics…') : T.t('Asked - it is in Alerts too; you can close this window, the app files it when it comes.'));
   } catch (e) {
     // A press refused or failed before it started is an error - in the corner (js/notice.js); a field left
     // empty at the press ("The mood's style is empty…", js/sound/suno-form.js - `hint`) is said on the foot's line, as a hint.
@@ -683,12 +708,14 @@ function _lyricsList() {
   const box = el('div', 'au-lyrs');
   const gens = _lyricGens.slice(0, LYR_MAX);
   if (!gens.length) {
-    box.appendChild(emptyEl('The texts come here - a row each, to save into Music → Lyrics or to use in Custom.', { line: true }));
+    box.appendChild(emptyEl(T.t('The texts come here - a row each, to save into Music → Lyrics or to use in Custom.'), { line: true }));
     return box;
   }
   gens.forEach((g, gi) => {
     const grp = el('div', 'au-lyr-g');
-    grp.appendChild(el('div', 'au-made-h', (gi ? 'written ' : 'written last · ') + _when(g.doneAt || g.at) + (g.said ? ' · ' + g.said : '')));
+    const when = _when(g.doneAt || g.at);
+    // what the press asked for (the server's words) after it
+    grp.appendChild(el('div', 'au-made-h', (gi ? T.t('written {when}', { when }) : T.t('written last · {when}', { when })) + (g.said ? ' · ' + g.said : '')));
     (g.lyrics || []).forEach((l, i) => grp.appendChild(_lyricRow(l, g, gi === 0, g.id + ':' + i)));
     box.appendChild(grp);
   });
@@ -700,7 +727,7 @@ function _lyricRow(l, g, latest, key) {
   const h = el('div', 'au-lr-h');
   const t = el('button', 'au-lr-t');
   t.type = 'button';
-  t.title = 'Open or fold the text';
+  t.title = T.t('Open or fold the text');
   const peek = String(l.text || '').split('\n').map(s => s.trim()).filter(s => s && !/^\[[^\]]*\]$/.test(s)).slice(0, 2).join(' / ');
   t.append(el('span', 'au-chips-tw', '▸'), el('b', null, l.title || titleOf(l.text)), el('span', 'au-lr-peek', peek ? '- ' + peek : ''));
   t.addEventListener('click', () => {
@@ -708,12 +735,12 @@ function _lyricRow(l, g, latest, key) {
     _rowOpen.set(key, now);
     row.classList.toggle('is-open', now);
   });
-  const use = el('button', 'au-link', 'Use in custom');
+  const use = el('button', 'au-link', T.t('Use in custom'));
   use.type = 'button';
   use.addEventListener('click', () => F.useLyric(l));
-  const copy = el('button', 'au-link', 'Copy');
+  const copy = el('button', 'au-link', T.t('Copy'));
   copy.type = 'button';
-  copy.addEventListener('click', async () => { const ok = await copyText(l.text); _say(ok ? 'Copied.' : 'Not copied - the clipboard refused it.', !ok); });
+  copy.addEventListener('click', async () => { const ok = await copyText(l.text); _say(ok ? T.t('Copied.') : T.t('Not copied - the clipboard refused it.'), !ok); });
   h.append(t, F.saveButton(l, g), use, copy);
   row.append(h, el('pre', 'au-lr-text', l.text || ''));
   return row;
@@ -727,14 +754,16 @@ function _when(iso) {
 }
 
 // ── Merge: the open project's presses under the card ─────────────────────────
-const _ago = (iso) => {
+// How long ago - "12 s ago", "3 min ago", an older one its day and time; `bare` - without "ago" (a press still being made).
+const _ago = (iso, bare) => {
   const t = Date.parse(iso);
   if (!t) return '';
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 60) return s + ' s ago';
-  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  const span = s < 60 ? T.t('{s} s', { s }) : s < 3600 ? T.t('{n} min', { n: Math.round(s / 60) }) : '';
+  if (span) return bare ? span : T.t('{time} ago', { time: span });
   const d = new Date(t);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const loc = T.lang() === 'ru' ? 'ru-RU' : 'en-GB';
+  return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
 };
 function _madeBox() {
   const box = el('div', 'au-made-box');
@@ -748,7 +777,7 @@ function _madeBox() {
 }
 function _paintMade() {
   if (!_ui || !_ui.made || !_ui.made.isConnected) return;
-  _ui.madeH.textContent = 'this project · ' + (GENS.length ? GENS.length : 'nothing made here yet');
+  _ui.madeH.textContent = GENS.length ? T.t('this project · {n}', { n: GENS.length }) : T.t('this project · nothing made here yet');
   _ui.made.textContent = '';
   for (const g of GENS) _ui.made.appendChild(_genCard(g));
 }
@@ -756,14 +785,14 @@ function _genCard(g) {
   const card = el('div', 'au-gen' + (g.state === 'failed' ? ' is-failed' : ''));
   const h = el('div', 'au-gen-h');
   h.appendChild(el('span', 'au-state ' + (g.state === 'pending' ? 'run' : g.state === 'done' ? 'ok' : 'bad'),
-    g.state === 'pending' ? 'making' : g.state === 'done' ? 'done' : (g.refused ? 'refused' : 'failed')));
+    g.state === 'pending' ? T.t('making') : g.state === 'done' ? T.t('done') : (g.refused ? T.t('refused') : T.t('failed'))));
   h.appendChild(el('b', null, g.said || _modeName(g.mode)));
   h.appendChild(el('span', 'sp'));
   h.appendChild(el('span', null, (g.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + _modeName(g.mode) + (g.fake ? ' · FAKE' : '') + ' · ' + _ago(g.at)));
   if (g.state !== 'pending') {
     const x = el('button', 'au-x u-btn is-s is-icon is-quiet is-del u-x', '');
     x.type = 'button';
-    x.title = 'Off this list - the files stay where they are';
+    x.title = T.t('Off this list - the files stay where they are');
     x.addEventListener('click', async () => {
       try { await api('/api/audio/gens/' + encodeURIComponent(g.id), { method: 'DELETE' }); GENS = GENS.filter(y => y.id !== g.id); _paintMade(); }
       catch (e) { _say(e.message, true); }
@@ -773,7 +802,7 @@ function _genCard(g) {
   card.appendChild(h);
   if (g.mode === 'simple' && g.written && g.written.style) {
     const w = el('div', 'au-said');
-    w.appendChild(el('b', null, (g.written.by === 'as picked' ? 'Sent as picked' : g.written.by === 'preset' ? 'The mood\'s preset' : 'The writer wrote') + ': '));
+    w.appendChild(el('b', null, (g.written.by === 'as picked' ? T.t('Sent as picked') : g.written.by === 'preset' ? T.t('The mood\'s preset') : T.t('The writer wrote')) + ': '));
     w.appendChild(document.createTextNode(g.written.title + ' - ' + g.written.style));
     if (g.fell) w.appendChild(el('div', 'au-muted', g.fell));
     card.appendChild(w);
@@ -783,12 +812,12 @@ function _genCard(g) {
     bar.appendChild(el('i'));
     card.appendChild(bar);
     const row = el('div', 'au-gen-h');
-    row.appendChild(el('span', null, (g.stage || (g.taskId ? (g.engine === 'eleven' ? 'ElevenLabs is making it' : 'Suno is making it') : 'starting')) + ' · ' + _ago(g.at).replace(' ago', '')));
+    row.appendChild(el('span', null, _stageOf(g) + ' · ' + _ago(g.at, true)));
     row.appendChild(el('span', 'sp'));
     if (g.alertId) {
-      const st = el('button', 'au-link', 'Stop waiting');
+      const st = el('button', 'au-link', T.t('Stop waiting'));
       st.type = 'button';
-      st.title = 'It stops being waited for and is not filed - the money is not given back';
+      st.title = T.t('It stops being waited for and is not filed - the money is not given back');
       st.addEventListener('click', async () => {
         try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', {}); _pollProject(); } catch (e) { _say(e.message, true); }
       });
@@ -796,14 +825,15 @@ function _genCard(g) {
     }
     card.appendChild(row);
   } else if (g.state === 'failed') {
-    card.appendChild(el('div', 'au-err', g.error || 'it did not come'));
+    card.appendChild(el('div', 'au-err', g.error || T.t('it did not come')));
     if (g.alertId && !g.refused) {
-      const again = el('button', 'au-link', 'Try again (pays again)');
+      const again = el('button', 'au-link', T.t('Try again (pays again)'));
       again.type = 'button';
       again.addEventListener('click', async () => {
         // the question at the button, a plain answer - it is paid
-        if (!await ask(again, 'Ask for it again? It costs ' + (g.engine === 'eleven' ? 'ElevenLabs credits' : 'kie credits') + ' again.', { yes: 'Ask again' })) return;
-        try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/retry', {}); _say('Asked again.'); _followProject(); _pollProject(); } catch (e) { _say(e.message, true); }
+        const q = g.engine === 'eleven' ? T.t('Ask for it again? It costs ElevenLabs credits again.') : T.t('Ask for it again? It costs kie credits again.');
+        if (!await ask(again, q, { yes: T.t('Ask again') })) return;
+        try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/retry', {}); _say(T.t('Asked again.')); _followProject(); _pollProject(); } catch (e) { _say(e.message, true); }
       });
       card.appendChild(again);
     }
@@ -812,8 +842,8 @@ function _genCard(g) {
   } else {
     for (const r of (g.results || [])) card.appendChild(_result(r));
     // Made from a clip: where its track was laid, or why not.
-    if (g.laid) card.appendChild(el('div', 'au-said', 'Laid under its clip on ' + g.laid.lane + ' at ' + _clock(g.laid.at) + '.'));
-    else if (g.notLaid) card.appendChild(el('div', 'au-said', 'Not laid on the timeline: ' + g.notLaid + '.'));
+    if (g.laid) card.appendChild(el('div', 'au-said', T.t('Laid under its clip on {lane} at {time}.', { lane: _lane(g.laid.lane), time: _clock(g.laid.at) })));
+    else if (g.notLaid) card.appendChild(el('div', 'au-said', T.t('Not laid on the timeline: {why}.', { why: g.notLaid })));
   }
   return card;
 }
@@ -834,7 +864,7 @@ function _hearToggle(path, row) {
   row.classList.add('is-playing');
   audio.addEventListener('timeupdate', () => { if (_hear && _hear.audio === audio && audio.duration) row.style.setProperty('--p', (audio.currentTime / audio.duration * 100).toFixed(1) + '%'); });
   audio.addEventListener('ended', () => { if (_hear && _hear.audio === audio) _stopHearing(); });
-  audio.play().catch(() => { _stopHearing(); _say('That file will not play', true); });
+  audio.play().catch(() => { _stopHearing(); _say(T.t('That file will not play'), true); });
 }
 function _result(r) {
   const it = LIBIDX.get(r.path);
@@ -850,7 +880,7 @@ function _result(r) {
     const fav = !!(it.meta && it.meta.favorite);
     const star = el('button', 'au-star u-btn is-s is-icon is-quiet' + (fav ? ' on' : ''), fav ? '★' : '☆');
     star.type = 'button';
-    star.title = fav ? 'Take it out of Favorites' : 'Into Favorites';
+    star.title = fav ? T.t('Take it out of Favorites') : T.t('Into Favorites');
     star.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
@@ -863,14 +893,14 @@ function _result(r) {
     });
     row.appendChild(star);
     if (H && typeof H.showFile === 'function') {
-      const show = el('button', 'au-link', 'Show');
+      const show = el('button', 'au-link', T.t('Show'));
       show.type = 'button';
-      show.title = 'Where it lies - on the shelf, in its place in the tree';
+      show.title = T.t('Where it lies - on the shelf, in its place in the tree');
       show.addEventListener('click', (e) => { e.stopPropagation(); _stopHearing(); H.showFile(r.path); });
       row.appendChild(show);
     }
   } else {
-    row.appendChild(el('span', 'au-muted', 'deleted'));
+    row.appendChild(el('span', 'au-muted', T.t('deleted')));
   }
   row.addEventListener('click', () => _hearToggle(r.path, row));
   // Onto an audio lane, as a tile of the shelf is: a track of music lies as a bed, a sound as a sound effect. The window lays
@@ -878,7 +908,7 @@ function _result(r) {
   const drag = H && H.drag;
   if (it && drag) {
     row.draggable = true;
-    row.title = 'A press plays it · drag it onto an audio lane';
+    row.title = T.t('A press plays it · drag it onto an audio lane');
     row.addEventListener('dragstart', (e) => {
       // Not onto a highlights project's own timeline - a fragment is opened first.
       if (typeof drag.refuse === 'function' && drag.refuse(row, e)) return;
@@ -983,7 +1013,7 @@ function _apply(o) {
   } else if (o.mode && _modes(groupOf(o.mode)).includes(o.mode)) S().mode = o.mode;
   if (o.lyric) { F.useLyric(o.lyric); return; }
   paint();
-  if (o.clip) _say('The clip is in "The video" - say what you want if you like, then generate. Its track is laid under it when it comes.');
+  if (o.clip) _say(T.t('The clip is in "The video" - say what you want if you like, then generate. Its track is laid under it when it comes.'));
 }
 
 /**
@@ -1020,7 +1050,7 @@ export async function open(o) {
       _attPaint = null;
     },
   });
-  _win.setCrumbs([{ label: 'Generate audio' }]);
+  _win.setCrumbs([{ label: T.t('Generate audio') }]);
   const body = _win.body;
   body.classList.add('au-win');
   const set = el('div', 'mv3-ig-set au-set');
@@ -1029,7 +1059,7 @@ export async function open(o) {
   const alm = el('div', 'au-alm');
   set.append(col, alm);
   const sash = el('div', 'au-msash');
-  sash.title = 'Drag to widen the settings - a double press puts it back';
+  sash.title = T.t('Drag to widen the settings - a double press puts it back');
   const right = el('div', 'au-right');
   const pair = el('div', 'au-pair');
   const mid = el('div', 'au-mid');
@@ -1050,7 +1080,7 @@ export async function open(o) {
   const line = el('div', 'au-line');
   const into = el('div', 'au-into');
   const price = el('div', 'au-price');
-  const go = el('button', 'au-go u-btn is-main', 'Generate');
+  const go = el('button', 'au-go u-btn is-main', T.t('Generate'));
   go.type = 'button';
   go.addEventListener('click', () => _generate(go));
   foot.append(line, el('span', 'sp'), into, price, go);
@@ -1070,10 +1100,10 @@ export async function open(o) {
 // load" and Try again there, the reason in the corner (the form says it, js/sound/suno-form.js ready).
 async function _start(win, opt) {
   if (!_ui || win !== _win) return;
-  _ui.col.replaceChildren(loadingEl('reading…', { line: true }));
+  _ui.col.replaceChildren(loadingEl(T.t('reading…'), { line: true }));
   const ok = await F.ready();
   if (!_ui || win !== _win) return;
-  if (!ok) { _ui.col.replaceChildren(failedEl('the settings', () => _start(win, opt), { line: true })); return; }
+  if (!ok) { _ui.col.replaceChildren(failedEl(T.t('the settings'), () => _start(win, opt), { line: true })); return; }
   _ui.alm.replaceChildren();
   F.almanacButton(_ui.alm);
   _fitMode();

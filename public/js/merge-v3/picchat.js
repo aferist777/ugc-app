@@ -28,6 +28,7 @@ import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { backButton } from './tl-gen.js';
+import { t } from '../i18n/t.js';
 
 const MAX_ATTS = 5;
 const LS_LAST = 'mv3-imagen-last';       // the model choice - kept under its earlier key, so a saved choice is still read
@@ -48,10 +49,15 @@ function PICTURES(ctx) {
       ctx.attach(a.path, a.name || '');
       // From the Library too (js/gen-menu.js).
       const lib = o.from === 'library';
-      const what = (o.as === 'frame' ? 'The frame' : 'The picture') + (lib ? ' from the Library' : ' from the timeline');
-      ctx.notice(what + ' is in the zone - say what to change in it.'
-        + (o.back ? '\nWhen the picture is made, "' + o.back + '" under it puts it on the timeline.'
-          : lib ? '\nWhat it makes lies in IMAGES → Generated.' : ''));
+      const frame = o.as === 'frame';
+      const first = lib
+        ? (frame ? t('The frame from the Library is in the zone - say what to change in it.')
+          : t('The picture from the Library is in the zone - say what to change in it.'))
+        : (frame ? t('The frame from the timeline is in the zone - say what to change in it.')
+          : t('The picture from the timeline is in the zone - say what to change in it.'));
+      const then = o.back ? t('When the picture is made, "{button}" under it puts it on the timeline.', { button: o.back })
+        : lib ? t('What it makes lies in IMAGES → Generated.') : '';
+      ctx.notice(first + (then ? '\n' + then : ''));
       const ui = ctx.ui();
       if (ui) ui.ta.focus();
     },
@@ -64,24 +70,25 @@ function PICTURES(ctx) {
     keys: { draft: 'mv3_pc_draft_v1', write: 'mv3_pc_write_v1', strip: 'mv3-ig-strip-w' },
     maxAtts: MAX_ATTS,
     counts: [1, 2, 4],
+    // English: the name a file brought in without one is sent with.
     noun: { one: 'picture', many: 'pictures' },
-    busyWord: 'drawing',
+    busyWord: t('drawing'),
     // Only the first guess. startInlineProgress keeps a running average per key, so each model learns its
     // own pace after one picture - and they differ by a factor of ten.
     eta: 40000,
     progressKey: (g) => 'mv3-imagen-' + (g.engine || ''),
     sendUrl: '/api/mv3/img/send',
     text: {
-      placeholder: 'Describe a picture, or say what to change.',
-      empty: 'Describe a picture. What comes back stays in this project - and in the Library.',
+      placeholder: t('Describe a picture, or say what to change.'),
+      empty: t('Describe a picture. What comes back stays in this project - and in the Library.'),
       // Opened from Home or the Library the chat is on THE draft's conversation (chat-owner.js unbound):
       // no project to stay in - what it makes lies in IMAGES → Generated.
-      emptyDraft: 'Describe a picture. What comes back lies in the Library, in IMAGES → Generated.',
-      emptyNoProject: 'Describe a picture. A project is started for it with the first message.',
-      onlyFiles: 'Only pictures can be attached here.',
-      slot: 'A picture to work from - from the Library or this computer',
-      plus: 'Add a picture from this computer. It goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself - and straight into the row above the message box.',
-      cat: 'This project\'s pictures, or a folder of the Library',
+      emptyDraft: t('Describe a picture. What comes back lies in the Library, in IMAGES → Generated.'),
+      emptyNoProject: t('Describe a picture. A project is started for it with the first message.'),
+      onlyFiles: t('Only pictures can be attached here.'),
+      slot: t('A picture to work from - from the Library or this computer'),
+      plus: t('Add a picture from this computer. It goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself - and straight into the row above the message box.'),
+      cat: t('This project\'s pictures, or a folder of the Library'),
     },
     // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in.
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
@@ -101,7 +108,7 @@ function PICTURES(ctx) {
       start: () => '',
       why: () => '',
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
+      upWords: { image: t('A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.') },
     },
     resultPath: (g) => g.imagePath,
 
@@ -115,7 +122,8 @@ function PICTURES(ctx) {
       onProject: M.onProject,
       room: M.room,
       // One part, as the video chat's: as many places as the model takes.
-      zone: () => ({ parts: [{ kind: 'image', word: 'pictures', one: 'picture', room: M.room(), none: 'This model takes no pictures.' }] }),
+      // Its words are only shown: the part's head, the empty places' names, why nothing goes.
+      zone: () => ({ parts: [{ kind: 'image', word: t('pictures'), one: t('picture'), room: M.room(), none: t('This model takes no pictures.') }] }),
       ready: M.ready,
       body: M.body,
     },
@@ -129,7 +137,7 @@ function PICTURES(ctx) {
       img.alt = g.prompt || '';
       img.loading = 'lazy'; img.decoding = 'async';
       img.style.aspectRatio = String(g.aspect || '9:16').replace(':', '/');
-      img.title = 'Drag it onto a lane';
+      img.title = t('Drag it onto a lane');
       // Dragged onto a lane as a tile of the right column is - the shelf's own payload.
       img.draggable = true;
       img.addEventListener('dragstart', (ev) => {
@@ -143,9 +151,9 @@ function PICTURES(ctx) {
       const big = mediaBtn('image', open);
       cell.appendChild(big);
       const acts = el('div', 'mv3-ig-acts');
-      const use = el('button', 'mv3-c-btn u-btn is-s', 'To reference');
+      const use = el('button', 'mv3-c-btn u-btn is-s', t('To reference'));
       use.type = 'button';
-      use.title = 'Put it in the row above the message box and carry on from it';
+      use.title = t('Put it in the row above the message box and carry on from it');
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));
       acts.append(use);
       // Made from a thing of the timeline: the button that lays it back there (js/merge-v3/tl-gen.js).
@@ -155,7 +163,7 @@ function PICTURES(ctx) {
       cell.appendChild(acts);
       // Taken off the shelf since: said, instead of a broken picture, and nothing builds on it.
       img.addEventListener('error', () => {
-        const gone = el('div', 'mv3-ig-gone', 'not in the Library any more');
+        const gone = el('div', 'mv3-ig-gone', t('not in the Library any more'));
         gone.style.aspectRatio = img.style.aspectRatio;
         img.replaceWith(gone);
         big.remove();
@@ -165,13 +173,13 @@ function PICTURES(ctx) {
 
     // The technical half of a turn, folded away under "read more".
     facts: (g) => [
-      ['model', (g.engine || '') + ' · ' + (g.provider || '?') + ' · ' + (g.quality || '')],
-      ['asked as', g.model || ''],
-      ['shape', (g.aspect || '') + ((g.w && g.h) ? ' · ' + g.w + '×' + g.h : '')],
-      ['took', g.secs ? g.secs + 's' : ''],
-      ['references', (g.refs || []).length ? String(g.refs.length) : ''],
-      ['writer', g.fell ? 'sent as typed - ' + g.fell : (g.writer || '')],
-      ['sent as', (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
+      [t('model'), (g.engine || '') + ' · ' + (g.provider || '?') + ' · ' + (g.quality || '')],
+      [t('asked as'), g.model || ''],
+      [t('shape'), (g.aspect || '') + ((g.w && g.h) ? ' · ' + g.w + '×' + g.h : '')],
+      [t('took'), g.secs ? t('{n}s', { n: g.secs }) : ''],
+      [t('references'), (g.refs || []).length ? String(g.refs.length) : ''],
+      [t('writer'), g.fell ? t('sent as typed - {why}', { why: g.fell }) : (g.writer || '')],
+      [t('sent as'), (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
     ],
 
     // Every picture this thread finished, in the Library's viewer - drawn from the 2048px tier, never the
