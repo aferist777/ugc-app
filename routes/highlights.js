@@ -38,6 +38,7 @@ const ALERTS = require('../lib/alerts');
 const MSTORE = require('../lib/merge-store');
 const CUT = require('../lib/highlights-cut');
 const RENDER = require('../lib/highlights-render');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -137,7 +138,7 @@ router.get('/highlights/tracks', async (req, res) => {
 
 router.get('/highlights/:id', (req, res) => {
   const rec = HL.get(req.params.id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
   // Whether "retry" has something to go on with, and whether it costs (the row's own answer - lib/alerts.js view).
   const row = rec.work && rec.work.alertId ? ALERTS.get(rec.work.alertId) : null;
   const rv = row && row.state === 'failed' && !JOB.live(rec.id) ? ALERTS.view(row) : null;
@@ -158,7 +159,7 @@ router.post('/highlights/:id/start', async (req, res) => {
 });
 
 router.post('/highlights/:id/stop', (req, res) => {
-  if (!JOB.stop(req.params.id)) return res.status(409).json({ success: false, error: 'it is not at work' });
+  if (!JOB.stop(req.params.id)) return res.status(409).json({ success: false, error: I18N.t('it is not at work') });
   res.json({ success: true });
 });
 
@@ -182,11 +183,11 @@ router.post('/highlights/:id/fragments/:n/title', (req, res) => {
 router.post('/highlights/:id/style', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const ns = new Set((Array.isArray(b.ns) ? b.ns : []).map(Number).filter((n) => n > 0));
     const keys = (rec.fragments || []).filter((f) => ns.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key).map((f) => f.key);
-    if (!keys.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!keys.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     // Animations alone (no preset): put on the lanes as they are, not cut again (CUT.reanimate).
     if (!b.preset && Array.isArray(b.anims)) {
       const a = CUT.reanimate(keys, b.anims);
@@ -219,10 +220,10 @@ function _made(rec, ns) {
 router.post('/highlights/:id/title-on-top', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     const TT = require('../public/js/captions/title.js');
     // All of them in one pass of the store.
     const texts = b.on ? new Map(frags.map((f) => [String(f.key), TT.topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' })])) : null;
@@ -236,10 +237,10 @@ router.post('/highlights/:id/title-on-top', (req, res) => {
 router.post('/highlights/:id/volume', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     const out = CUT.laneVolume(frags.map((f) => f.key), b.lane === 'music' ? 'music' : 'speech', b.volume);
     res.json({ success: true, n: out.keys.length });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
@@ -250,11 +251,11 @@ router.post('/highlights/:id/volume', (req, res) => {
 router.post('/highlights/:id/patterns', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
-    if (!Array.isArray(b.patterns)) return res.status(400).json({ success: false, error: 'which patterns?' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
+    if (!Array.isArray(b.patterns)) return res.status(400).json({ success: false, error: I18N.t('which patterns?') });
     const out = CUT.setPatterns(frags.map((f) => f.key), b.patterns);
     res.json({ success: true, n: out.keys.length });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
@@ -266,17 +267,17 @@ router.post('/highlights/:id/patterns', (req, res) => {
 router.post('/highlights/:id/fx', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     let out;
     if (b.remove) {
       const frags = _made(rec, b.ns);
-      if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+      if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
       out = CUT.fxRemove(frags.map((f) => f.key), String(b.remove));
     } else {
       const add = b.add && typeof b.add === 'object' ? b.add : {};
       const frags = _made(rec, Object.keys(add));
-      if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+      if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
       out = CUT.fxAdd(Object.fromEntries(frags.map((f) => [f.key, add[f.n] || add[String(f.n)] || {}])));
     }
     const FXB = require('../lib/fx-bake');
@@ -291,10 +292,10 @@ router.post('/highlights/:id/fx', (req, res) => {
 router.post('/highlights/:id/video', async (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     if (b.framing) {
       const openF = frags.find((f) => f.n === Number(b.open)) || null;
       const out = await CUT.reframe(frags.map((f) => f.key), String(b.framing), { openKey: openF ? openF.key : '' });
@@ -310,10 +311,10 @@ router.post('/highlights/:id/video', async (req, res) => {
 router.post('/highlights/:id/pitch', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     const out = CUT.lanePitch(frags.map((f) => f.key), b.pitch);
     res.json({ success: true, n: out.keys.length });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
@@ -325,11 +326,11 @@ const _trackOf = (t) => (t ? { id: t.id, title: t.title, path: t.path, dur: t.du
 async function _music(rec, f, track, open, later) {
   const HLM = require('../lib/highlights-music');
   const tl = MSTORE.one(f.key);
-  if (!tl) throw Object.assign(new Error('its timeline is not there'), { status: 409 });
+  if (!tl) throw Object.assign(new Error(I18N.t('its timeline is not there')), { status: 409 });
   let clips = [];
   if (track) {
     clips = await HLM.clipsForMade(track, tl);
-    if (!clips.length) throw Object.assign(new Error('"' + track.title + '" is not in Music any more'), { status: 409 });
+    if (!clips.length) throw Object.assign(new Error(I18N.t('"{title}" is not in Music any more', { title: track.title })), { status: 409 });
   }
   const laid = open ? CUT.bedClips(clips, CUT.filmEnd(tl)) : null;
   // `later` - a Map the clips wait in, written with the others' in one pass (POST /music).
@@ -354,14 +355,14 @@ router.post('/highlights/:id/fragments/:n/music', async (req, res) => {
   try {
     const rec = HL.get(req.params.id);
     const f = rec && _made(rec, [Number(req.params.n)])[0];
-    if (!f) return res.status(404).json({ success: false, error: 'no such made fragment' });
+    if (!f) return res.status(404).json({ success: false, error: I18N.t('no such made fragment') });
     const b = req.body || {};
     const how = String(b.how || 'another');
     let track = null;
     if (how !== 'none') {
       const HLM = require('../lib/highlights-music');
       track = HLM.pickOne(how, f.music || null, Array.isArray(b.taken) ? b.taken : [], (rec.ask && rec.ask.music) || []);
-      if (!track) return res.status(409).json({ success: false, error: how === 'another' ? 'no other track in this mood' : 'no tracks in this mood' });
+      if (!track) return res.status(409).json({ success: false, error: how === 'another' ? I18N.t('no other track in this mood') : I18N.t('no tracks in this mood') });
     }
     const m = await _music(rec, f, track, !!b.open);
     _keepMusic(rec.id, new Map([[f.n, m]]));
@@ -375,15 +376,15 @@ router.post('/highlights/:id/fragments/:n/music', async (req, res) => {
 router.post('/highlights/:id/music', async (req, res) => {
   try {
     const rec = HL.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     const b = req.body || {};
     const frags = _made(rec, b.ns);
-    if (!frags.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    if (!frags.length) return res.status(400).json({ success: false, error: I18N.t('none of these fragments is made') });
     const HLM = require('../lib/highlights-music');
     let dealt = frags.map(() => null);
     if (!b.none) {
       const tracks = HLM.ofMoods(Array.isArray(b.moods) ? b.moods : []).tracks;
-      if (!tracks.length) return res.status(400).json({ success: false, error: 'no tracks in these moods' });
+      if (!tracks.length) return res.status(400).json({ success: false, error: I18N.t('no tracks in these moods') });
       dealt = HLM.deal(tracks, frags.length);
       // "Dealt AGAIN": a fragment does not get back the track it wears while a swap with another gives both something new.
       const was = (k) => (frags[k].music && frags[k].music.id) || '';
@@ -422,11 +423,11 @@ router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
     const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
-    if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
-    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
+    if (!f) return res.status(404).json({ success: false, error: I18N.t('no such fragment') });
+    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: I18N.t('the fragment is not made yet') });
     // A part of fragmentation with its number, in the video's language ("Part 3 · ..." in its words).
     const text = require('../public/js/captions/title.js').topTitleOf(f, { whole: HL.isWhole(HL.kindOf(rec)), language: (rec.agent && rec.agent.language) || '' });
-    if (!CUT.addTitle(f.key, text)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
+    if (!CUT.addTitle(f.key, text)) return res.status(409).json({ success: false, error: I18N.t('it has a title already, or two text lanes') });
     res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
@@ -437,9 +438,9 @@ router.post('/highlights/:id/fragments/:n/title-on-top/remove', (req, res) => {
   try {
     const rec = HL.get(req.params.id);
     const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
-    if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
-    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
-    if (!CUT.dropTitle(f.key)) return res.status(409).json({ success: false, error: 'it has no title on top' });
+    if (!f) return res.status(404).json({ success: false, error: I18N.t('no such fragment') });
+    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: I18N.t('the fragment is not made yet') });
+    if (!CUT.dropTitle(f.key)) return res.status(409).json({ success: false, error: I18N.t('it has no title on top') });
     res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
@@ -454,7 +455,7 @@ router.post('/highlights/:id/render', (req, res) => {
 });
 router.post('/highlights/:id/render/stop', (req, res) => {
   try {
-    if (!HL.get(req.params.id)) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    if (!HL.get(req.params.id)) return res.status(404).json({ success: false, error: I18N.t('no such highlights project') });
     res.json({ success: true, ...RENDER.stop(req.params.id) });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });

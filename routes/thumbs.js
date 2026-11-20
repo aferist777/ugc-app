@@ -13,12 +13,13 @@ const express = require('express');
 const router = express.Router();
 
 const { ensureThumb, VARIANTS } = require('../lib/thumbs');
+const I18N = require('../lib/i18n');
 
 router.get('/thumb', async (req, res) => {
   const src = String(req.query.src || '');
   const v = String(req.query.v || '');
   if (!src || !VARIANTS[v]) {
-    return res.status(400).json({ success: false, error: 'src and a known v are required',
+    return res.status(400).json({ success: false, error: I18N.t('src and a known v are required'),
       variants: Object.keys(VARIANTS) });
   }
   try {
@@ -28,7 +29,7 @@ router.get('/thumb', async (req, res) => {
   } catch (e) {
     // A missing source is the page asking for something that has been deleted - a 404 is the
     // honest answer, and the <img> shows its broken state rather than the server pretending.
-    const code = /no such image/.test(e.message) ? 404 : 500;
+    const code = e && e.missing ? 404 : 500;
     res.status(code).json({ success: false, error: e.message });
   }
 });

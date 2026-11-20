@@ -939,7 +939,7 @@ export function createTree(host, o) {
     if (act === 'link') { await _link(n, it); return; }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category lies in Generated, the rest in their kind.
-    const where = t.aroot ? 'AUDIO' : t.cat ? n.label : homeName(t.kind);
+    const where = t.aroot ? T.t('AUDIO') : t.cat ? n.label : homeName(t.kind);
     // Several picked tiles: one request; each goes as it would alone, or stays and says why.
     if (Array.isArray(it.many) && it.many.length > 1) { await _takeMany(n, t, it.many, where); return; }
     // A sound or a track into the other, or into AUDIO's root, or out of it: the server

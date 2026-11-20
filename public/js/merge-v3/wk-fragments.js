@@ -490,7 +490,7 @@ async function _makeClips(p) {
     _pickUpClips();
     const queued = (r.queued || []).length;
     // Nothing went: say the first real reason rather than leaving a button that did nothing.
-    const why = (r.skipped || []).find(x => !/already/.test(String(x.why || '')));
+    const why = (r.skipped || []).find(x => !(x.code === 'already' || /already/.test(String(x.why || ''))));
     if (!queued && why) _readErr = T.t('Fragment {n}: {why}', { n: why.line, why: why.why });
   } catch (e) {
     _readErr = T.t('The clips were not asked for: {why}', { why: e.message });
@@ -2455,7 +2455,7 @@ function _whereLine(i) {
     href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
     // The label is what a person reads in the journal, so it says the fragment's place in the
     // VIDEO; the address and `spot` keep the real index, which is what the panel opens by.
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + _no(p.lines || [], i),
+    label: T.t('Merge · {project} · fragment {n}', { project: String(p.title || p.name || T.t('talking head')), n: _no(p.lines || [], i) }),
     spot: { key, step: 'setup', line: i + 1 },
   };
 }

@@ -37,6 +37,7 @@ const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const JOB = require('../lib/mv3b-job');
 const BUSY = require('../lib/render-busy');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 const { DATA_DIR } = require('../lib/config');
@@ -161,7 +162,7 @@ async function runBlank(item) {
     built.dispose();
     const t = read();
     const it = t.items.find(x => x.id === item.id);
-    if (it) { it.status = 'failed'; it.error = 'no place for its file (' + e.message + ')'; }
+    if (it) { it.status = 'failed'; it.error = I18N.t('no place for its file ({why})', { why: e.message }); }
     write(t);
     _active = null;
     return next();
@@ -206,7 +207,7 @@ async function runBlank(item) {
       return next();
     }
     let ok = code === 0 && fs.existsSync(out);
-    let error = ok ? null : 'ffmpeg exited ' + code;
+    let error = ok ? null : I18N.t('ffmpeg exited {code}', { code });
     let warning = null;
     if (ok) {
       // The settings that work on the finished file (lib/render-finish.js), said in the list as
@@ -273,11 +274,12 @@ function summarise(item) {
       else if (tr.kind === 'audio') { if (c.pairId) sounds++; else beds++; }
     }
   }
+  // Written in the interface's language as it is queued - the entry keeps the words it was made with.
   const bits = [];
-  if (pieces) bits.push(pieces + (pieces === 1 ? ' clip' : ' clips'));
-  if (sounds) bits.push(sounds + (sounds === 1 ? ' sound' : ' sounds'));
-  if (beds) bits.push(beds + (beds === 1 ? ' bed' : ' beds'));
-  return bits.join(' · ') || 'empty';
+  if (pieces) bits.push(I18N.tn(pieces, '{n} clip', '{n} clips'));
+  if (sounds) bits.push(I18N.tn(sounds, '{n} sound', '{n} sounds'));
+  if (beds) bits.push(I18N.tn(beds, '{n} bed', '{n} beds'));
+  return bits.join(' · ') || I18N.t('empty');
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
@@ -323,18 +325,18 @@ router.post('/mv3q/add', (req, res) => {
   try {
     const b = req.body || {};
     if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
-      return res.status(400).json({ success: false, error: 'an entry needs its timeline' });
+      return res.status(400).json({ success: false, error: I18N.t('an entry needs its timeline') });
     }
     // Not with a clip whose file is gone - the render would refuse it anyway (lib/mv3b-job.js prepare).
     const gone = require('../lib/mv3b-job').missingCount(b.timeline);
     if (gone) {
       return res.status(409).json({ success: false, missing: gone,
-        error: gone + (gone === 1 ? ' clip has' : ' clips have') + ' no file - replace or remove ' + (gone === 1 ? 'it' : 'them') + ' (red on the timeline)' });
+        error: I18N.tn(gone, '{n} clip has no file - replace or remove it (red on the timeline)', '{n} clips have no file - replace or remove them (red on the timeline)') });
     }
     const s = read();
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
-      key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
+      key: String(b.key || ''), title: String(b.title || I18N.t('Untitled')).slice(0, 120),
       status: 'queued', addedAt: new Date().toISOString(),
       timeline: b.timeline,
       // The export settings, frozen with the timeline: the render is of what was queued.
@@ -356,7 +358,7 @@ router.delete('/mv3q/:id', (req, res) => {
   const s = read();
   const id = String(req.params.id || '');
   const it = s.items.find(x => x.id === id);
-  if (it && it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
+  if (it && it.status === 'running') return res.status(409).json({ success: false, error: I18N.t('that one is rendering') });
   s.items = s.items.filter(x => x.id !== id);
   write(s);
   res.json({ success: true });
@@ -399,16 +401,16 @@ router.post('/mv3q/render', (req, res) => {
   try {
     const b = req.body || {};
     if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
-      return res.status(400).json({ success: false, error: 'a render needs its timeline' });
+      return res.status(400).json({ success: false, error: I18N.t('a render needs its timeline') });
     }
     const gone = JOB.missingCount(b.timeline);
     if (gone) {
       return res.status(409).json({ success: false, missing: gone,
-        error: gone + (gone === 1 ? ' clip has' : ' clips have') + ' no file - replace or remove ' + (gone === 1 ? 'it' : 'them') + ' (red on the timeline)' });
+        error: I18N.tn(gone, '{n} clip has no file - replace or remove it (red on the timeline)', '{n} clips have no file - replace or remove them (red on the timeline)') });
     }
     const was = !!_active;
     const ids = addArmed([{ key: b.key, title: b.title, timeline: b.timeline, adv: b.adv, dur: b.dur }]);
-    if (!ids.length) return res.status(400).json({ success: false, error: 'a render needs its timeline' });
+    if (!ids.length) return res.status(400).json({ success: false, error: I18N.t('a render needs its timeline') });
     res.json({ success: true, id: ids[0], started: !was && _active === ids[0] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -419,7 +421,7 @@ router.post('/mv3q/render', (req, res) => {
 router.post('/mv3q/stop/:id', (req, res) => {
   const id = String(req.params.id || '');
   const it = read().items.find(x => x.id === id);
-  if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
+  if (!it) return res.status(404).json({ success: false, error: I18N.t('no such entry') });
   if (it.status === 'done' || it.status === 'failed') return res.json({ success: true, removed: 0, stopping: false, finished: true });
   const r = stopWhere(x => x.id === id);
   res.json({ success: true, removed: r.removed, stopping: r.stopping, finishing: !r.removed && !r.stopping });
@@ -436,10 +438,10 @@ router.post('/mv3q/stop/:id', (req, res) => {
 router.post('/mv3q/retry/:id', (req, res) => {
   const s = read();
   const it = s.items.find(x => x.id === String(req.params.id || ''));
-  if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
-  if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
+  if (!it) return res.status(404).json({ success: false, error: I18N.t('no such entry') });
+  if (it.status === 'running') return res.status(409).json({ success: false, error: I18N.t('that one is rendering') });
   if (!(it.timeline && Array.isArray(it.timeline.tracks))) {
-    return res.status(409).json({ success: false, error: 'This render is finished - render it again from its project.' });
+    return res.status(409).json({ success: false, error: I18N.t('This render is finished - render it again from its project.') });
   }
   // Trying again is asking for it: armed, and started at once if the encoder is idle.
   it.status = 'queued'; it.armed = true;
@@ -495,7 +497,7 @@ function addArmed(list) {
     if (!(b && b.timeline && Array.isArray(b.timeline.tracks))) continue;
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
-      key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
+      key: String(b.key || ''), title: String(b.title || I18N.t('Untitled')).slice(0, 120),
       status: 'queued', addedAt: new Date().toISOString(),
       timeline: b.timeline, adv: b.adv && typeof b.adv === 'object' ? b.adv : null,
       url: null, error: null,

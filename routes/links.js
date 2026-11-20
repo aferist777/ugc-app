@@ -20,6 +20,7 @@
 const express = require('express');
 const YTDLP = require('../lib/ytdlp');
 const LINKS = require('../lib/link-queue');
+const I18N = require('../lib/i18n');
 
 // One press of "add" is a handful of links, not a list to crawl.
 const MAX_LINKS = 20;
@@ -47,12 +48,12 @@ router.post('/links', async (req, res) => {
   const b = req.body || {};
   const raw = Array.isArray(b.urls) ? b.urls : [b.url];
   const urls = [...new Set(raw.map(u => String(u || '').trim()).filter(Boolean))];
-  if (!urls.length) return res.status(400).json({ success: false, error: 'a link is required' });
-  if (urls.length > MAX_LINKS) return res.status(400).json({ success: false, error: `at most ${MAX_LINKS} links at once` });
+  if (!urls.length) return res.status(400).json({ success: false, error: I18N.t('a link is required') });
+  if (urls.length > MAX_LINKS) return res.status(400).json({ success: false, error: I18N.tn(MAX_LINKS, 'at most {n} link at once', 'at most {n} links at once') });
   const bad = urls.find(u => !/^https?:\/\/\S+$/i.test(u));
-  if (bad) return res.status(400).json({ success: false, error: 'that is not a link: ' + bad.slice(0, 80) });
+  if (bad) return res.status(400).json({ success: false, error: I18N.t('that is not a link: {link}', { link: bad.slice(0, 80) }) });
   if (b.kind != null && !LINKS.KINDS.includes(String(b.kind)) && b.from !== 'chat') {
-    return res.status(400).json({ success: false, error: 'a clip goes to B-rolls, Uploads or Hooks' });
+    return res.status(400).json({ success: false, error: I18N.t('a clip goes to B-rolls, Uploads or Hooks') });
   }
   if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
   const jobs = urls.map(url => LINKS.add({ url, kind: String(b.kind || ''), project: b.project, from: b.from }));
@@ -66,7 +67,7 @@ router.get('/links', (req, res) => {
 
 router.post('/links/:id/stop', (req, res) => {
   const job = LINKS.stop(req.params.id);
-  if (!job) return res.status(404).json({ success: false, error: 'no such link' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such link') });
   res.json({ success: true, job });
 });
 

@@ -16,6 +16,7 @@ const router  = express.Router();
 
 const { MEDIA } = require('../lib/config');
 const VT = require('../lib/video-thumb');
+const I18N = require('../lib/i18n');
 
 // ── Upload: bring a local video into the library ────────────────────────────
 // The file lands in media/work/ and moves to its shelf's folder when POST /library/media/record
@@ -90,9 +91,9 @@ router.post('/media/thumbs/audit', async (req, res) => {
 router.post('/media/thumb', async (req, res) => {
   try {
     const video = String((req.body || {}).video || '');
-    if (!video) return res.status(400).json({ success: false, error: 'video required' });
+    if (!video) return res.status(400).json({ success: false, error: I18N.t('video required') });
     const abs = VT.localFromUrl(video);
-    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'video not on disk' });
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: I18N.t('video not on disk') });
     const r = await VT.makeThumb(video);
     res.json({ success: true, thumbPath: r.thumb, width: r.w, bytes: r.bytes });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -106,14 +107,14 @@ router.get('/media/probe', async (req, res) => {
     const src = String(req.query.src || '');
     // A library address only, and one that has moved since the page took it is followed (lib/moves.js).
     const abs = src ? require('../lib/media').toDiskExisting(src) : null;
-    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not on disk' });
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: I18N.t('not on disk') });
     const p = await require('../lib/media-probe').probe(abs);
     res.json({ success: true, ...p });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  if (!req.file) return res.status(400).json({ success: false, error: I18N.t('no file') });
   const videoPath = '/media/work/' + req.file.filename;
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
@@ -128,7 +129,7 @@ router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   res.json({ success: true, name, videoPath, thumbPath });
 });
 router.use('/biroly/upload', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('upload failed') });
 });
 
 module.exports = router;

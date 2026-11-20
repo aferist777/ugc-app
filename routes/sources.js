@@ -45,6 +45,7 @@ const store = require('../lib/sources-store');
 const YTDLP = require('../lib/ytdlp');
 const DRAFTS = require('../lib/script-drafts');
 const INTAKE = require('../lib/source-intake');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -71,7 +72,9 @@ function _markInterrupted() {
       if (!LIVE.has(s.state)) continue;
       store.update(s.id, {
         state: 'error',
-        error: 'interrupted - the app was closed while this was being ' + (s.state === 'downloading' ? 'downloaded' : 'read'),
+        error: s.state === 'downloading' ? I18N.t('interrupted - the app was closed while this was being downloaded')
+          : I18N.t('interrupted - the app was closed while this was being read'),
+        errorCode: 'interrupted',
         transcript: t.state === 'ready' ? t : { ...t, state: 'error' },
       });
     }
@@ -110,7 +113,7 @@ router.get('/sources', (_req, res) => {
 router.get('/sources/jobs/:jobId', (req, res) => {
   _sweep();
   const job = _jobs[String(req.params.jobId)];
-  if (!job) return res.status(404).json({ success: false, error: 'no such job' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such job') });
   res.json({ success: true, ...job });
 });
 
@@ -119,15 +122,15 @@ const _mineOf = (b) => (b && typeof b.mineWith === 'object' ? b.mineWith : {});
 
 router.post('/sources/add/link', async (req, res) => {
   const url = String((req.body || {}).url || '').trim();
-  if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
-  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
+  if (!url) return res.status(400).json({ success: false, error: I18N.t('a link is required') });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: I18N.t('that is not a URL') });
   if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
   res.json({ success: true, read: INTAKE.addLink({ url, mineWith: _mineOf(req.body) }) });
 });
 
 router.post('/sources/add/file', (req, res) => {
   const b = req.body || {};
-  if (!b.path) return res.status(400).json({ success: false, error: 'adding a file works in the app\'s own window - it hands the file over' });
+  if (!b.path) return res.status(400).json({ success: false, error: I18N.t('adding a file works in the app\'s own window - it hands the file over') });
   res.json({ success: true, read: INTAKE.addFile({ path: String(b.path), title: b.title, mineWith: _mineOf(b) }) });
 });
 
@@ -135,7 +138,7 @@ router.get('/sources/add', (_req, res) => res.json({ success: true, asks: INTAKE
 
 router.get('/sources/add/:readId', (req, res) => {
   const r = INTAKE.read(req.params.readId);
-  if (!r) return res.status(404).json({ success: false, error: 'no such read - add it again' });
+  if (!r) return res.status(404).json({ success: false, error: I18N.t('no such read - add it again') });
   res.json({ success: true, read: r });
 });
 
@@ -145,7 +148,7 @@ router.post('/sources/add/:readId/answer', (req, res) => {
 });
 
 router.post('/sources/:id/stop', (req, res) => {
-  if (!INTAKE.stop(req.params.id)) return res.status(409).json({ success: false, error: 'it is not being added' });
+  if (!INTAKE.stop(req.params.id)) return res.status(409).json({ success: false, error: I18N.t('it is not being added') });
   res.json({ success: true });
 });
 
@@ -156,7 +159,7 @@ router.post('/sources/:id/to-uploads', async (req, res) => {
 
 router.get('/sources/:id', (req, res) => {
   const rec = store.get(req.params.id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such source') });
   res.json({ success: true, source: _withJob(rec) });
 });
 
@@ -168,7 +171,7 @@ router.get('/sources/:id', (req, res) => {
 router.get('/sources/:id/video', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec || !rec.diskPath) return res.status(404).end();
-  if (!fs.existsSync(rec.diskPath)) return res.status(410).json({ success: false, error: 'The video is not where it was: ' + rec.diskPath, missing: true });
+  if (!fs.existsSync(rec.diskPath)) return res.status(410).json({ success: false, error: I18N.t('The video is not where it was: {path}', { path: rec.diskPath }), missing: true });
   res.sendFile(path.resolve(rec.diskPath), { acceptRanges: true, dotfiles: 'allow' });
 });
 // The same video pointed at again where it lies now: its print must be the source's (the same file, moved or renamed) -
@@ -176,18 +179,18 @@ router.get('/sources/:id/video', (req, res) => {
 router.post('/sources/:id/relink', (req, res) => {
   try {
     const rec = store.get(req.params.id);
-    if (!rec || !rec.diskPath) return res.status(404).json({ success: false, error: 'no such source on the disk' });
+    if (!rec || !rec.diskPath) return res.status(404).json({ success: false, error: I18N.t('no such source on the disk') });
     const abs = String((req.body || {}).path || '');
-    if (!abs || !path.isAbsolute(abs)) return res.status(400).json({ success: false, error: 'pointing at a file works in the app\'s own window - it hands the file over' });
+    if (!abs || !path.isAbsolute(abs)) return res.status(400).json({ success: false, error: I18N.t('pointing at a file works in the app\'s own window - it hands the file over') });
     let st = null;
     try { st = fs.statSync(abs); } catch (e) { st = null; }
-    if (!st || !st.isFile()) return res.status(400).json({ success: false, error: 'That file is not there.' });
+    if (!st || !st.isFile()) return res.status(400).json({ success: false, error: I18N.t('That file is not there.') });
     const print = store.printOf(abs);
     if (rec.diskPrint && print !== rec.diskPrint) {
-      return res.status(409).json({ success: false, error: 'This is not the same video - its size or its content differ. Point at the very file, moved or renamed.' });
+      return res.status(409).json({ success: false, error: I18N.t('This is not the same video - its size or its content differ. Point at the very file, moved or renamed.') });
     }
     const other = store.findOnDisk(abs, '');
-    if (other && String(other.id) !== String(rec.id)) return res.status(409).json({ success: false, error: 'That file is the video of another source ("' + (other.title || other.id) + '").' });
+    if (other && String(other.id) !== String(rec.id)) return res.status(409).json({ success: false, error: I18N.t('That file is the video of another source ("{title}").', { title: other.title || other.id }) });
     const saved = store.update(rec.id, { diskPath: abs, diskPrint: print || rec.diskPrint || '' });
     res.json({ success: true, source: store.summary(saved) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -196,10 +199,10 @@ router.post('/sources/:id/relink', (req, res) => {
 router.post('/sources/:id/transcribe', async (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such source') });
   // Its file, in the library or where it stays on the disk.
-  if (!store.fileOf(rec)) return res.status(400).json({ success: false, error: rec.diskPath ? 'The video is not where it was: ' + rec.diskPath : 'this source has no file' });
-  if (LIVE.has(rec.state) || INTAKE.live(id)) return res.status(409).json({ success: false, error: 'this source is being read already' });
+  if (!store.fileOf(rec)) return res.status(400).json({ success: false, error: rec.diskPath ? I18N.t('The video is not where it was: {path}', { path: rec.diskPath }) : I18N.t('this source has no file') });
+  if (LIVE.has(rec.state) || INTAKE.live(id)) return res.status(409).json({ success: false, error: I18N.t('this source is being read already') });
   // Its way in was cut off or failed: the same retry as its row in Alerts - one piece of work, not two.
   try {
     const alertId = await INTAKE.retryOf(id);
@@ -207,7 +210,7 @@ router.post('/sources/:id/transcribe', async (req, res) => {
   } catch (e) { return res.status(409).json({ success: false, error: e.message }); }
 
   const jobId = _newJobId();
-  const job = _jobs[jobId] = { state: 'running', step: 'starting', at: Date.now(), error: null, source: null, sourceId: id };
+  const job = _jobs[jobId] = { state: 'running', step: I18N.t('starting'), at: Date.now(), error: null, source: null, sourceId: id };
   // Marked at once, not when _process gets to it: a second press in between would start a second read.
   store.update(id, { state: 'transcribing', error: '' });
   res.json({ success: true, jobId });
@@ -218,7 +221,7 @@ router.post('/sources/:id/transcribe', async (req, res) => {
       // Read again and no topics yet: they are found now, by the agents' ladder.
       if (!(saved.topics || []).length) _startMining(id);
       job.state = 'done';
-      job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
+      job.step = I18N.t('{cues} cues, {chars}k chars', { cues: saved.transcript.cues, chars: Math.round(saved.transcript.chars / 1000) });
       job.source = store.summary(store.get(id) || saved);
       job.at = Date.now();
     } catch (e) {
@@ -237,15 +240,15 @@ router.post('/sources/:id/transcribe', async (req, res) => {
 router.post('/sources/:id/topics', async (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such source') });
   const t = store.readTranscript(id);
   if (!t || !Array.isArray(t.cues) || !t.cues.length) {
-    return res.status(400).json({ success: false, error: 'this source has no transcript yet' });
+    return res.status(400).json({ success: false, error: I18N.t('this source has no transcript yet') });
   }
-  if (INTAKE.live(id)) return res.status(409).json({ success: false, error: 'this source is being added - its topics come with it' });
+  if (INTAKE.live(id)) return res.status(409).json({ success: false, error: I18N.t('this source is being added - its topics come with it') });
   const busy = _mining.get(id);
   if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
-    return res.status(409).json({ success: false, error: 'the topics of this source are being found already', ...busy });
+    return res.status(409).json({ success: false, error: I18N.t('the topics of this source are being found already'), ...busy });
   }
   // Its way in was cut off while the topics were found: the row's retry.
   try {
@@ -259,13 +262,13 @@ router.post('/sources/:id/topics', async (req, res) => {
 // Answers its id.
 function _startMining(id) {
   const jobId = _newJobId();
-  const job = _jobs[jobId] = { state: 'running', step: 'reading the transcript', at: Date.now(), error: null, sourceId: id };
+  const job = _jobs[jobId] = { state: 'running', step: I18N.t('reading the transcript'), at: Date.now(), error: null, sourceId: id };
   _mining.set(id, { kind: 'topics', jobId, startedAt: job.at });
   (async () => {
     try {
       const { found, topics, saved } = await INTAKE.mineSource(id, { onStep: (st) => { job.step = st; } });
       job.state = 'done';
-      job.step = `${found.topics.length} topics from ${found.blocks} blocks`;
+      job.step = I18N.t('{n} topics from {blocks} blocks', { n: found.topics.length, blocks: found.blocks });
       job.topics = topics.map(x => ({ id: x.id, title: x.title, start: x.start, end: x.end }));
       job.videoSummary = found.videoSummary;
       job.source = store.summary(saved);
@@ -287,7 +290,7 @@ function _startMining(id) {
 router.patch('/sources/:id', (req, res) => {
   try {
     const title = String((req.body || {}).title || '').trim();
-    if (!title) return res.status(400).json({ success: false, error: 'a name is required' });
+    if (!title) return res.status(400).json({ success: false, error: I18N.t('a name is required') });
     const rec = store.update(req.params.id, { title: title.slice(0, 200) });
     res.json({ success: true, source: store.summary(rec) });
   } catch (e) { res.status(404).json({ success: false, error: e.message }); }
@@ -299,9 +302,9 @@ router.delete('/sources/:id', (req, res) => {
   try {
     const id = String(req.params.id);
     const rec = store.get(id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such source') });
     if (LIVE.has(rec.state) || _mining.has(id) || INTAKE.live(id)) {
-      return res.status(409).json({ success: false, error: 'this source is being read - delete it when that has finished' });
+      return res.status(409).json({ success: false, error: I18N.t('this source is being read - delete it when that has finished') });
     }
     // The scenarios written from it keep the name it has now, not the one it had when they were saved.
     try { require('./scen3').keepSourceTitle(id, rec.title || rec.originalName || ''); } catch (e) { /* a name, not the delete */ }

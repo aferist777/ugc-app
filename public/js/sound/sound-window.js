@@ -672,9 +672,15 @@ async function _poll() {
   _timer = 0;
   let lyricsCame = false;
   for (const [id, r] of [..._runs]) {
-    let g;
-    try { g = (await api('/api/audio/gens/' + encodeURIComponent(id))).gen; }
-    catch (e) { if (/not found/i.test(e.message)) _runs.delete(id); continue; }
+    // A record the server no longer has (404, whatever its words' language) is let go of; anything else is asked again.
+    let g = null;
+    try {
+      const res = await fetch('/api/audio/gens/' + encodeURIComponent(id));
+      if (res.status === 404) { _runs.delete(id); continue; }
+      const d = await res.json().catch(() => null);
+      g = d && d.success !== false ? d.gen || null : null;
+    } catch (e) { g = null; }
+    if (!g) continue;
     r.gen = g;
     if (_last && _last.gen.id === id) _last.gen = g;
     if (g.state === 'pending') continue;

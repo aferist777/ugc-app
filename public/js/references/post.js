@@ -517,7 +517,8 @@ async function _toSources(it, btn) {
     }
     if (read && read.state === 'ask') read = (await api('/api/sources/add/' + encodeURIComponent(read.id) + '/answer', { as: 'source' })).read;
   } catch (e) { say(T.t('not added: {why}', { why: e.message }), true); btn.disabled = false; return; }
-  const already = read && read.state === 'error' && /source already/i.test(String(read.error || ''));
+  // A source already: the read's `code` says so; its English words are read too.
+  const already = read && read.state === 'error' && (read.code === 'already' || /source already/i.test(String(read.error || '')));
   if (!read || (read.state !== 'source' && !already)) {
     say(T.t('not added: {why}', { why: (read && (read.error || read.step)) || T.t('the link was not read') }), true);
     btn.disabled = false;

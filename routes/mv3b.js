@@ -22,6 +22,7 @@ const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const JOB = require('../lib/mv3b-job');
 const BUSY = require('../lib/render-busy');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 const { toUrl } = require('../lib/media');
@@ -65,7 +66,7 @@ router.post('/mv3b/render', async (req, res) => {
     });
     proc.on('close', async (code) => {
       ready.dispose();
-      if (code !== 0 || !fs.existsSync(out)) { JOB.dropDraft(out); done(); job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
+      if (code !== 0 || !fs.existsSync(out)) { JOB.dropDraft(out); done(); job.status = 'failed'; job.error = I18N.t('ffmpeg exited {code}', { code }); return; }
       const s = ready.settings;
       const spans = { speeding: ready.dur / s.speed };
       try {
@@ -93,7 +94,7 @@ router.post('/mv3b/render', async (req, res) => {
 
 router.get('/mv3b/render/:id', (req, res) => {
   const j = _jobs.get(String(req.params.id || ''));
-  if (!j) return res.status(404).json({ success: false, error: 'no such job' });
+  if (!j) return res.status(404).json({ success: false, error: I18N.t('no such job') });
   const elapsed = (Date.now() - j.phaseAt) / 1000;
   const frac = j.span > 0 ? Math.max(0, Math.min(1, j.at / j.span)) : 0;
   // Remaining is only offered once there is something to base it on. An estimate made from

@@ -7,6 +7,7 @@
 
 const express = require('express');
 const UPD = require('../lib/app-update');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.post('/app/update/announced', (_req, res) => {
 // server only passes the ask on - the page reads GET /api/app/update for what came of it.
 router.post('/app/update/check', (_req, res) => {
   const port = process.parentPort;
-  if (!port || !process.env.UGC_HOME) return res.status(409).json({ success: false, error: 'This copy is not updated through the launcher.' });
+  if (!port || !process.env.UGC_HOME) return res.status(409).json({ success: false, error: I18N.t('This copy is not updated through the launcher.') });
   port.postMessage({ type: 'update-check' });
   res.json({ success: true, asked: true });
 });

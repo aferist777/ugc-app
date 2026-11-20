@@ -51,6 +51,8 @@ const MUSIC = require('../lib/music-store');
 const LY = require('../lib/lyrics-store');
 // Folders in folders: renamed, moved, emptied with everything in them.
 const FOLDERS = require('../lib/folders');
+// The interface's words (lib/i18n.js) - every text a person reads here is said through it when it is made.
+const I18N = require('../lib/i18n');
 
 // The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
 // folded into the first - before anything reads a category.
@@ -139,7 +141,7 @@ function _charactersShelf() {
     const thumb = sheet ? sheet.replace(/\/([^/]+)$/, '/thumbs/$1').replace(/\.[^.]+$/, '.jpg') : '';
     return {
       id: String(c.id),
-      name: String(c.name || '').trim() || 'character',
+      name: String(c.name || '').trim() || I18N.t('character'),
       kind: 'characters',
       media: sheet || null,
       thumb: (thumb && _onDisk(thumb)) ? thumb : (sheet || null),
@@ -176,7 +178,7 @@ function _looks() {
     const known = o.charId != null && charName[String(o.charId)];
     return {
       id: String(o.id),
-      name: String(o.name || '').trim() || 'look',
+      name: String(o.name || '').trim() || I18N.t('look'),
       kind: 'obrazy',
       media: main || null,
       thumb: (thumbAbs && fs.existsSync(thumbAbs)) ? thumb : (main || null),
@@ -264,7 +266,7 @@ function _mediaShelf(opts) {
 
   const fromArchive = arch.filter(e => e && e.videoPath).map(e => ({
     id: String(e.id),
-    name: String(e.name || '').trim() || 'clip',
+    name: String(e.name || '').trim() || I18N.t('clip'),
     kind: _isUpload(e) ? 'uploads' : 'birols',
     media: e.videoPath,
     thumb: _posterOf(e.thumbPath, e.videoPath),
@@ -289,7 +291,7 @@ function _mediaShelf(opts) {
   }));
   const fromHooks =(Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
     id: String(h.id || ('hook:' + i)),
-    name: String(h.name || '').trim() || 'hook',
+    name: String(h.name || '').trim() || I18N.t('hook'),
     kind: 'hooks',
     media: h.videoPath,
     thumb: _posterOf(h.thumbPath, h.videoPath),
@@ -304,7 +306,7 @@ function _mediaShelf(opts) {
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
     id: String(e.id),
-    name: String(e.name || '').trim() || 'image',
+    name: String(e.name || '').trim() || I18N.t('image'),
     kind: 'images',
     media: e.imagePath,
     thumb: '/api/thumb?src=' + encodeURIComponent(e.imagePath) + '&v=card',
@@ -322,7 +324,7 @@ function _mediaShelf(opts) {
   // author, licence and page; one made here: what was asked) and the sound a piece was cut from - the tile's "About".
   const fromSounds = SND.read().filter(e => e && e.audioPath).map(e => ({
     id: String(e.id),
-    name: String(e.name || '').trim() || 'sound',
+    name: String(e.name || '').trim() || I18N.t('sound'),
     kind: 'sounds',
     media: e.audioPath,
     thumb: null,
@@ -341,7 +343,7 @@ function _mediaShelf(opts) {
   const placeOf = typeof MUSIC.placeOf === 'function' ? MUSIC.placeOf : () => ({ folder: '', mood: '', moodMade: '' });
   const fromMusic = !(opts && opts.music) ? [] : MUSIC.read().filter(t => t && t.audioPath).map(t => ({
     id: String(t.id || t.audioPath),
-    name: String(t.title || '').trim() || 'track',
+    name: String(t.title || '').trim() || I18N.t('track'),
     kind: 'music',
     media: String(t.audioPath),
     thumb: null,
@@ -358,9 +360,11 @@ function _mediaShelf(opts) {
   let fromSfx = [];
   if (opts && opts.sfx) {
     const favs = new Set(require('../lib/sfx-favorites').list().map(f => f.path));
-    fromSfx = require('../lib/sfx-builtin').read().sounds.map(s => ({
+    const SFXB = require('../lib/sfx-builtin');
+    fromSfx = SFXB.read().sounds.map(s => ({
       id: s.id, name: s.name, kind: 'sfx', media: s.path, thumb: null, dur: s.dur,
-      meta: { categoryId: s.category, categoryLabel: s.categoryLabel, date: null, favorite: favs.has(s.path), source: 'built-in',
+      // its category as the tree says it - shown, and searched by
+      meta: { categoryId: s.category, categoryLabel: SFXB.labelSaid(s.categoryLabel), date: null, favorite: favs.has(s.path), source: 'built-in',
               wave: s.wave, tags: s.tags,
               info: { author: s.author, authorUrl: s.authorUrl, license: s.license, licenseUrl: s.licenseUrl, from: s.source, url: s.url } },
     }));
@@ -376,7 +380,7 @@ function _mediaShelf(opts) {
     const used = require('../lib/timeline-media').allSrcs();
     fromHeads = require('../lib/heads').list().map(h => ({
       id: h.id,
-      name: 'Line ' + h.line + ' · ' + String(h.said || '').replace(/\s+/g, ' ').trim().slice(0, 70),
+      name: I18N.t('Line {n} · {said}', { n: h.line, said: String(h.said || '').replace(/\s+/g, ' ').trim().slice(0, 70) }),
       kind: 'heads',
       media: h.path,
       thumb: h.thumb,
@@ -405,7 +409,7 @@ function _mediaShelf(opts) {
       if (!s || !s.videoPath || !_onDisk(s.videoPath) || !SRCS.fromYouTube(s)) continue;
       if (s.linkKey) ytKeys.add(s.linkKey);
       items.push({
-        id: String(s.id), name: String(s.title || '').trim() || 'video', kind: 'youtube', media: s.videoPath,
+        id: String(s.id), name: String(s.title || '').trim() || I18N.t('video'), kind: 'youtube', media: s.videoPath,
         thumb: s.thumbPath && _onDisk(s.thumbPath) ? s.thumbPath : null, dur: +s.seconds || 0,
         meta: { categoryId: '', date: s.addedAt || null, favorite: false, link: s.url || '', channel: s.channel || '',
           words: !!(s.words || (s.transcript && s.transcript.length)), source: s.id, folder: 'videos',
@@ -427,7 +431,7 @@ function _mediaShelf(opts) {
       const one = files.length === 1 && first.type === 'video';
       items.push({
         id: String(p.id),
-        name: String(p.title || '').trim() || 'post',
+        name: String(p.title || '').trim() || I18N.t('post'),
         kind: 'references',
         media: first ? first.path : (p.poster || ''),
         thumb: p.poster || (first && first.thumb) || null,
@@ -496,7 +500,7 @@ function _mediaCats(items, kind, labelFor) {
     catKind: c.kind,        // which list owns it, so a rename knows what it is editing
     count: c.count,
   }));
-  return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
+  return [{ id: UNCAT, label: I18N.t('Uncategorized · {n}', { n: uncat }), name: I18N.t('Uncategorized'), pinned: true, count: uncat }].concat(cats);
 }
 
 // ── The media tree ──
@@ -511,7 +515,8 @@ function _mediaCats(items, kind, labelFor) {
 // `children` its folders, `key` what a page remembers it by. In a branch: the locked first, then those with
 // something in them, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; numbers as numbers,
 // "file 9" before "file 10"). Generated, Hooks and Uploads are locked; so are the required categories.
-const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
+const _kindLabel = (kind) => ({ birols: I18N.t('B-rolls'), hooks: I18N.t('Hooks'), uploads: I18N.t('Uploads'), images: I18N.t('IMAGES'),
+  music: I18N.t('Music'), sounds: I18N.t('SFX'), heads: I18N.t('Talking heads') })[kind];
 // AUDIO holds the built-in sounds too (`sfx`), and SFX is the own and the built-in together (`sfxall`).
 const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds', 'sfx'],
   sfxall: ['sounds', 'sfx'],
@@ -555,19 +560,23 @@ function _musicNode(list, folders) {
   const lyrics = _lyricsNode();
   // `make`: its
   // "Generate music" in its menu opens the sound window on Music, on both pages (js/media-tree.js onMake).
-  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length + lyrics.count, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
-    loose: 'music', direct: rootN, make: 'music', makeLabel: 'Generate music' };
+  const node = { key: 'music', kind: 'music', label: I18N.t('Music'), count: list.length + lyrics.count, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
+    loose: 'music', direct: rootN, make: 'music', makeLabel: I18N.t('Generate music') };
   const own = folders || [];
   if (!moods.length) { node.children = [lyrics, ...own]; return node; }
   const inHl = list.filter(i => i.meta.folder === 'highlights');
   const hlRootN = inHl.filter(i => !i.meta.mood).length;
-  const hl = { key: 'music:highlights', kind: 'music', folder: 'highlights', label: 'highlights', locked: true, noAdd: true, count: inHl.length,
-    tip: 'highlights - the highlights popup offers every track in it; your own tracks go here, its moods take only what their presets made',
+  const hl = { key: 'music:highlights', kind: 'music', folder: 'highlights', label: I18N.t('highlights'), locked: true, noAdd: true, count: inHl.length,
+    tip: I18N.t('highlights - the highlights popup offers every track in it; your own tracks go here, its moods take only what their presets made'),
     q: { filter: 'music', folder: 'highlights', mood: UNCAT }, loose: 'music', direct: hlRootN, empty: !inHl.length,
     children: moods.map(m => {
       const n = inHl.filter(i => i.meta.mood === m.id).length;
-      return { key: 'music:highlights:' + m.id, kind: 'music', folder: 'highlights', mood: m.id, label: m.label, count: n, empty: !n,
-        locked: true, noAdd: true, moodLock: true, tip: m.label + ' - only the tracks made by its preset' + (m.about ? ' (' + m.about + ')' : ''),
+      // A mood's name and words as the highlights popup says them (`tc('mood')`); its id stays.
+      const said = I18N.tc('mood', m.label);
+      return { key: 'music:highlights:' + m.id, kind: 'music', folder: 'highlights', mood: m.id, label: said, count: n, empty: !n,
+        locked: true, noAdd: true, moodLock: true,
+        tip: m.about ? I18N.t('{mood} - only the tracks made by its preset ({about})', { mood: said, about: I18N.t(m.about) })
+          : I18N.t('{mood} - only the tracks made by its preset', { mood: said }),
         q: { filter: 'music', folder: 'highlights', mood: m.id } };
     }) };
   return Object.assign(node, { children: [hl, lyrics, ...own] });
@@ -578,8 +587,9 @@ function _musicNode(list, folders) {
 // moved into it by hand (`noAdd`, `lyrics` - js/media-tree.js refuses in words); its tiles open the text.
 function _lyricsNode() {
   const n = LY.list().length;
-  return { key: 'music:lyrics', kind: 'lyrics', label: 'Lyrics', locked: true, noAdd: true, lyrics: true, count: n, direct: n, empty: !n,
-    tip: 'Lyrics - the texts saved from Generate music (its Lyrics, and "save" by Custom\'s Lyrics); a press on one opens it',
+  // The FOLDER's word (Suno's mode Lyrics is another one: `folder::`).
+  return { key: 'music:lyrics', kind: 'lyrics', label: I18N.tc('folder', 'Lyrics'), locked: true, noAdd: true, lyrics: true, count: n, direct: n, empty: !n,
+    tip: I18N.t('Lyrics - the texts saved from Generate music (its Lyrics, and "save" by Custom\'s Lyrics); a press on one opens it'),
     q: { filter: 'lyrics' } };
 }
 // A saved text as a tile of the media shelf: its title, the text itself (the tile shows its first lines, the viewer all).
@@ -639,7 +649,7 @@ function _tree(opts) {
   // A kind: its categories as folders, and what has none lies in it.
   const kindNode = (kind, key, label, extra) => {
     const list = byKind[kind] || [];
-    const node = Object.assign({ key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind },
+    const node = Object.assign({ key: key || kind, kind, label: label || _kindLabel(kind), count: list.length, q: { filter: kind },
       loose: kind, direct: list.length }, extra || {});
     if (!LC.KINDS.includes(kind)) return node;
     const { out, uncat } = catsOf(kind, list);
@@ -657,7 +667,7 @@ function _tree(opts) {
   const bTop = catsOf('birols', birols).out;
   const modelNodes = bTop.filter(n => MF.isModelCat(n.cat) && n.count > 0)
     .map(n => Object.assign(n, { model: String(n.cat).slice(LC.MODEL_PREFIX.length),
-      tip: n.label + ' - the clips it made, and your folders of them; a clip of another model goes into its own' }))
+      tip: I18N.t('{name} - the clips it made, and your folders of them; a clip of another model goes into its own', { name: n.label }) }))
     .sort((a, b) => ((a.model === MF.OTHER) - (b.model === MF.OTHER)) || _abc(a.label, b.label));
   const strayNodes = bTop.filter(n => !MF.isModelCat(n.cat));
   const heads = byKind.heads || [];
@@ -669,15 +679,15 @@ function _tree(opts) {
     projects.set(id, p);
   }
   // Every take is its project's: the projects are its folders, nothing lies in Talking heads itself.
-  const headsNode = { key: 'heads', kind: 'heads', label: 'Talking heads', count: heads.length,
+  const headsNode = { key: 'heads', kind: 'heads', label: I18N.t('Talking heads'), count: heads.length,
     children: [...projects.values()].sort((a, b) => _abc(a.title, b.title)).map(p => ({
       key: 'heads:' + p.id, kind: 'heads', cat: p.id, label: p.title, count: p.n, project: true, q: { filter: 'heads', cat: p.id },
     })) };
   if (!headsNode.children.length) delete headsNode.children;
   const loose = birols.length - inCat.length;
-  const generated = { key: 'generated', label: 'Generated', locked: true, count: birols.length + heads.length,
+  const generated = { key: 'generated', label: I18N.t('Generated'), locked: true, count: birols.length + heads.length,
     q: { filter: 'birols', cat: UNCAT }, loose: 'birols', direct: loose, children: [...modelNodes, ...strayNodes, headsNode] };
-  const video = { key: 'video', label: 'VIDEO',
+  const video = { key: 'video', label: I18N.t('VIDEO'),
     children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
   video.count = video.children.reduce((n, c) => n + c.count, 0);
   // SFX: every starred sound first; the
@@ -689,24 +699,25 @@ function _tree(opts) {
   byKind.sounds = (byKind.sounds || []).filter(i => !i.meta.inAudio);
   const own = byKind.sounds;
   const built = byKind.sfx || [];
-  const set = require('../lib/sfx-builtin').read();
-  const mine = kindNode('sounds', 'sounds', 'My sounds');
+  const SFXB = require('../lib/sfx-builtin');
+  const set = SFXB.read();
+  const mine = kindNode('sounds', 'sounds', I18N.t('My sounds'));
   if (mine.q) mine.q.aroot = '0';
-  const builtin = { key: 'sfx', kind: 'sfx', label: 'Built-in', locked: true, noAdd: true, builtin: true, count: built.length,
+  const builtin = { key: 'sfx', kind: 'sfx', label: I18N.t('Built-in'), locked: true, noAdd: true, builtin: true, count: built.length,
     children: set.categories.map(c => {
       const n = built.filter(i => i.meta.categoryId === c.id).length;
-      return { key: 'sfx:' + c.id, kind: 'sfx', cat: c.id, label: c.label, count: n, locked: true, builtin: true, empty: !n,
+      return { key: 'sfx:' + c.id, kind: 'sfx', cat: c.id, label: SFXB.labelSaid(c.label), count: n, locked: true, builtin: true, empty: !n,
         q: { filter: 'sfx', cat: c.id } };
     }) };
   if (!builtin.children.length) delete builtin.children;
   const favN = own.concat(built).filter(i => i.meta.favorite).length;
-  const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1', aroot: '0' } };
+  const fav = { key: 'sfx-fav', label: I18N.t('★ Favorites'), count: favN, empty: !favN, q: { group: 'sfxall', fav: '1', aroot: '0' } };
   // SFX holds its three folders; its search looks through all of them (js/sound/shelf.js).
-  const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, children: [fav, builtin, mine] };
+  const sfx = { key: 'sfx-all', label: I18N.t('SFX'), count: own.length + built.length, children: [fav, builtin, mine] };
   // AUDIO is a folder too: Music and SFX, then what lies in it itself - a sound to be filed from there into
   // Music or SFX (lib/audio-kind.js). `aroot` - the page's sign of that place (js/media-tree.js _target).
-  const audio = { key: 'audio', label: 'AUDIO', loose: 'sounds', aroot: true, direct: aroot.length, q: { filter: 'sounds', aroot: '1' },
-    tip: 'AUDIO - Music and SFX; what lies in it itself ("Save audio" of a video) waits to be dragged into Music or SFX',
+  const audio = { key: 'audio', label: I18N.t('AUDIO'), loose: 'sounds', aroot: true, direct: aroot.length, q: { filter: 'sounds', aroot: '1' },
+    tip: I18N.t('AUDIO - Music and SFX; what lies in it itself ("Save audio" of a video) waits to be dragged into Music or SFX'),
     children: [_musicNode(byKind.music || [], catsOf('music', byKind.music || []).out), sfx] };
   audio.count = aroot.length + audio.children.reduce((n, c) => n + c.count, 0);
   // REFERENCES - first, above VIDEO - the posts the Telegram bot brought in, a
@@ -716,13 +727,14 @@ function _tree(opts) {
   // `kind` on the root: its "+" makes an own category; the sources' folders make none (`noAdd`).
   // Nothing lies in REFERENCES itself: a post is in its source's folder or in an own category. A source with
   // folders of its own (Instagram: Posts, Reels) holds in itself only a post of none of them.
-  const references = { key: 'references', kind: 'references', label: 'REFERENCES', count: refs.length,
-    children: require('../lib/references-store').SOURCES.map((s) => {
-      const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: s.label, locked: true, noAdd: true,
+  const REFS = require('../lib/references-store');
+  const references = { key: 'references', kind: 'references', label: I18N.t('REFERENCES'), count: refs.length,
+    children: REFS.SOURCES.map((s) => {
+      const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: REFS.sayLabel(s.label), locked: true, noAdd: true,
         count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.folders.length ? s.id + '/' + UNCAT : s.id } };
       if (s.folders.length) {
         node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
-          label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id },
+          label: REFS.sayLabel(f.label), locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id },
           // YouTube's videos are horizontal: their tiles are 16:9, in the Library and in Merge.
           ...(s.id === 'youtube' && f.id === 'videos' ? { tiles: 'wide' } : {}) }));
       }
@@ -730,7 +742,7 @@ function _tree(opts) {
     }) };
   // The person's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
   references.children.push(...catsOf('references', refs, false).out);
-  const images = kindNode('images', 'images', 'IMAGES');
+  const images = kindNode('images', 'images', I18N.t('IMAGES'));
   _madeFolders(images);
   const roots = [references, video, images, audio];
   _stampNewest(roots, items, (opts && opts.srcFrom) || 0);
@@ -777,8 +789,8 @@ function _plinksNode(key, items) {
   });
   const kids = build('');
   const n = direct.get('') || 0;
-  return { key: 'plinks', kind: 'plinks', label: 'THIS PROJECT', count: n + kids.reduce((s, c) => s + c.count, 0), direct: n,
-    tip: 'This project\'s own folders - links to the library\'s media; the files stay where they are',
+  return { key: 'plinks', kind: 'plinks', label: I18N.t('THIS PROJECT'), count: n + kids.reduce((s, c) => s + c.count, 0), direct: n,
+    tip: I18N.t('This project\'s own folders - links to the library\'s media; the files stay where they are'),
     q: { plinks: k, plfolder: '' }, children: kids, newest: 0 };
 }
 
@@ -796,24 +808,36 @@ function _plinksNode(key, items) {
 // IMAGES -> PROPS, the third - the products a character holds in a frame,
 // one picture each, added by the New prop window (lib/props.js) and described by an agent. No references: the photo IS the
 // product. Its tiles show the product whole (`tiles: 'whole'`).
+// `name` - what the pages find such a node by ('images/Environments', js/merge-v3/chat-sources.js), whatever its label says.
 const MADE = [
-  { kind: 'environments', label: 'Environments', refs: 'uploads_environments', make: 'New environment', noun: 'environment' },
-  { kind: 'lookbooks', label: 'Lookbooks', refs: 'uploads_lookbooks', make: 'New lookbook', noun: 'lookbook' },
-  { kind: 'props', label: 'Props', refs: '', make: 'New prop', noun: 'prop' },
+  { kind: 'environments', name: 'Environments', refs: 'uploads_environments' },
+  { kind: 'lookbooks', name: 'Lookbooks', refs: 'uploads_lookbooks' },
+  { kind: 'props', name: 'Props', refs: '' },
 ];
+// What the tree says of each: its name, its generator's, its tip and its references' tip.
+const _madeSaid = (kind) => ({
+  environments: { label: I18N.t('Environments'), make: I18N.t('New environment'),
+    tip: I18N.t('Environments - the environments its generator made (+ opens it); the photos it was given lie in its references'),
+    refs: I18N.t('references - the photos New environment was given; nothing is put here by hand. Required: it cannot be renamed, moved or deleted') },
+  lookbooks: { label: I18N.t('Lookbooks'), make: I18N.t('New lookbook'),
+    tip: I18N.t('Lookbooks - the lookbooks its generator made (+ opens it); the photos it was given lie in its references'),
+    refs: I18N.t('references - the photos New lookbook was given; nothing is put here by hand. Required: it cannot be renamed, moved or deleted') },
+  props: { label: I18N.t('Props'), make: I18N.t('New prop'),
+    tip: I18N.t('Props - the products a character holds in a frame, each with what is known about it (+ adds one); the frames chat takes them') },
+})[kind];
 const MADE_KINDS = new Set(MADE.map(m => m.kind));
 const MADE_DIRS = { environments: ENVIRONMENTS_DIR, lookbooks: LOOKBOOKS_DIR, props: PROPS_DIR };
 // Why a made picture does not move, in words (the batch's and the item route's refusal).
 const MADE_STAYS = {
-  environments: 'a made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
-  lookbooks: 'a made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
-  props: 'a prop stays in Props - its description is kept by its place there',
+  environments: () => I18N.t('a made environment stays in Environments - its description, 3D layout and the videos filmed there point at it'),
+  lookbooks: () => I18N.t('a made lookbook stays in Lookbooks - its description and the looks dressed in it point at it'),
+  props: () => I18N.t('a prop stays in Props - its description is kept by its place there'),
 };
 // ...and why nothing is moved INTO them.
 const MADE_TAKES = {
-  environments: 'only New environment puts pictures into Environments',
-  lookbooks: 'only New lookbook puts pictures into Lookbooks',
-  props: 'only New prop puts pictures into Props',
+  environments: () => I18N.t('only New environment puts pictures into Environments'),
+  lookbooks: () => I18N.t('only New lookbook puts pictures into Lookbooks'),
+  props: () => I18N.t('only New prop puts pictures into Props'),
 };
 function _madeFolders(images) {
   const kids = images.children || [];
@@ -822,19 +846,17 @@ function _madeFolders(images) {
     const at = g.refs ? kids.findIndex(c => c.locked && String(c.name || '') === g.refs) : -1;
     const ref = at >= 0 ? kids.splice(at, 1)[0] : null;
     const all = n + (ref ? ref.count : 0);
-    const node = { key: g.kind, kind: g.kind, label: g.label, locked: true, count: all, direct: n, empty: !all,
-      q: { filter: g.kind }, make: g.kind, makeLabel: g.make,
+    const said = _madeSaid(g.kind);
+    const node = { key: g.kind, kind: g.kind, label: said.label, name: g.name, locked: true, count: all, direct: n, empty: !all,
+      q: { filter: g.kind }, make: g.kind, makeLabel: said.make,
       // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (`tiles: 'wide'`); a product is
       // shown whole, never cut to fill its square.
       ...(g.kind === 'environments' ? { tiles: 'wide' } : g.kind === 'props' ? { tiles: 'whole' } : {}),
-      tip: g.kind === 'props'
-        ? 'Props - the products a character holds in a frame, each with what is known about it (+ adds one); the frames chat takes them'
-        : g.label + ' - the ' + g.noun + 's its generator made (+ opens it); the photos it was given lie in its references' };
+      tip: said.tip };
     if (ref) {
       const shut = (n) => { n.closed = true; n.noAdd = true; for (const c of n.children || []) shut(c); };
       shut(ref);
-      node.children = [Object.assign(ref, { label: 'references',
-        tip: 'references - the photos ' + g.make + ' was given; nothing is put here by hand. Required: it cannot be renamed, moved or deleted' })];
+      node.children = [Object.assign(ref, { label: I18N.t('references'), tip: said.refs })];
     }
     return node;
   });
@@ -935,7 +957,7 @@ router.get('/library/tree', (req, res) => {
 //   POST   /api/plinks/put           { key, folder, items: [{ kind, id, media, link? }] } -> { added, moved, had }
 //   POST   /api/plinks/unlink        { key, ids }            -> { removed }      links taken off - files stay
 const _plErr = (res, e) => res.status(e.status || 500).json({ success: false, error: e.message });
-const _plKey = (k) => { const key = String(k || ''); if (!key) { const e = new Error('Which project?'); e.status = 400; throw e; } return key; };
+const _plKey = (k) => { const key = String(k || ''); if (!key) { const e = new Error(I18N.t('Which project?')); e.status = 400; throw e; } return key; };
 router.post('/plinks/folder', (req, res) => {
   try { const b = req.body || {}; const f = PLINKS.addFolder(_plKey(b.key), b.name, b.parent); res.json({ success: true, folder: f, cat: { id: f.id, label: f.name } }); }
   catch (e) { _plErr(res, e); }
@@ -986,7 +1008,7 @@ function _voicesShelf() {
     const sheet = String(c.sheet || c.baseFace || '');
     const who = {
       id: String(c.id),
-      name: String(c.name || '').trim() || 'character',
+      name: String(c.name || '').trim() || I18N.t('character'),
       gender: String(c.gender || ''),
       sheet: (sheet && _onDisk(sheet)) ? sheet : null,
       thumb: (sheet && _onDisk(sheet)) ? '/api/thumb?src=' + encodeURIComponent(sheet) + '&v=card' : null,
@@ -1136,7 +1158,7 @@ function _scenariosShelf() {
 function _scRow(s) {
   return {
     id: String(s.id),
-    name: s.title || 'untitled',
+    name: s.title || I18N.t('untitled'),
     kind: 'scenarios',
     media: null,
     thumb: null,
@@ -1185,7 +1207,7 @@ router.get('/library/shelf/:kind', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
-    if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
+    if (!build) return res.status(404).json({ success: false, error: I18N.t('no shelf "{kind}"', { kind }) });
     // THIS PROJECT: what lies directly in one of its folders (`plfolder`, '' - itself) - the library's items, each
     // with its `link`.
     if (kind === 'media' && req.query.plinks) {
@@ -1339,12 +1361,12 @@ router.patch('/library/meta/:kind/:id', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
     const fields = META_FIELDS[kind];
-    if (!fields) return res.status(404).json({ success: false, error: `nothing to write on "${kind}"` });
+    if (!fields) return res.status(404).json({ success: false, error: I18N.t('nothing to write on "{kind}"', { kind }) });
     const media = _flatEntry(MADE_DIRS[kind], String(req.params.id || ''));
-    if (!media) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
+    if (!media) return res.status(404).json({ success: false, error: I18N.t('not on this shelf any more') });
     const b = req.body || {};
     if (b.gender != null && b.gender !== '' && !GENDERS.includes(String(b.gender))) {
-      return res.status(400).json({ success: false, error: 'gender is male, female, unisex or nothing' });
+      return res.status(400).json({ success: false, error: I18N.t('gender is male, female, unisex or nothing') });
     }
     const all = SM.read(kind);
     const m = { ...(all[media] || {}) };
@@ -1384,9 +1406,9 @@ router.post('/props/add', async (req, res) => {
 router.post('/props/:id/read', (req, res) => {
   try {
     const media = _flatEntry(PROPS_DIR, String(req.params.id || ''));
-    if (!media) return res.status(404).json({ success: false, error: 'not in Props any more' });
+    if (!media) return res.status(404).json({ success: false, error: I18N.t('not in Props any more') });
     const P = require('../lib/props');
-    if (P.reading(media)) return res.status(409).json({ success: false, error: 'it is being described already' });
+    if (P.reading(media)) return res.status(409).json({ success: false, error: I18N.t('it is being described already') });
     P.describe(media).catch((e) => console.warn('[props] ' + media + ' was not described: ' + e.message));
     res.json({ success: true, reading: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1397,9 +1419,9 @@ router.get('/library/info/:kind/:id', (req, res) => {
     const kind = String(req.params.kind || '');
     const id = String(req.params.id || '');
     const build = INFO[kind];
-    if (!build) return res.status(404).json({ success: false, error: `no right column for "${kind}"` });
+    if (!build) return res.status(404).json({ success: false, error: I18N.t('no right column for "{kind}"', { kind }) });
     const out = build(id);
-    if (!out) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
+    if (!out) return res.status(404).json({ success: false, error: I18N.t('not on this shelf any more') });
     res.json({ success: true, kind, id, ...out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1667,13 +1689,13 @@ function _patchOne(kindIn, idIn, bodyIn) {
     if (kind === 'renders') {
       const id = String(req.params.id || '').replace(/\\/g, '/');
       const base = path.basename(id);
-      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: 'not a render' });
+      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: I18N.t('not a render') });
       const abs = toDiskWithin('/media/renders/' + id, [FINALS_DIR]);
-      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: 'not found' });
+      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: I18N.t('not found') });
       const b = req.body || {};
-      if (Object.keys(b).some(k => k !== 'name')) return _r(409, { success: false, error: 'only a render\'s name changes here' });
+      if (Object.keys(b).some(k => k !== 'name')) return _r(409, { success: false, error: I18N.t('only a render\'s name changes here') });
       const name = String(b.name || '').trim();
-      if (!name) return _r(400, { success: false, error: 'a name is needed' });
+      if (!name) return _r(400, { success: false, error: I18N.t('a name is needed') });
       const moved = require('../lib/render-files').rename(abs, name);
       const stem = path.basename(moved.abs).replace(VID_RE, '');
       // Its entry in Queue says the name too (the move rewrote its address already).
@@ -1687,29 +1709,29 @@ function _patchOne(kindIn, idIn, bodyIn) {
     // A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
     if (kind === 'sfx') {
       const s = require('../lib/sfx-builtin').read().sounds.find(x => x.id === String(req.params.id || ''));
-      if (!s) return _r(404, { success: false, error: 'no such built-in sound' });
+      if (!s) return _r(404, { success: false, error: I18N.t('no such built-in sound') });
       const b = req.body || {};
       if (!('favorite' in b) || Object.keys(b).some(k => k !== 'favorite')) {
-        return _r(409, { success: false, error: 'A built-in sound is part of the app - only its star can change. Cut a piece of it to have one of your own.' });
+        return _r(409, { success: false, error: I18N.t('A built-in sound is part of the app - only its star can change. Cut a piece of it to have one of your own.') });
       }
       require('../lib/sfx-favorites').set(s.path, !!b.favorite);
       return _r(200, { success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
     }
     // A made environment or lookbook: written about on its shelf (PATCH /library/meta), never filed elsewhere.
-    if (MADE_KINDS.has(kind)) return _r(409, { success: false, error: MADE_STAYS[kind] });
+    if (MADE_KINDS.has(kind)) return _r(409, { success: false, error: MADE_STAYS[kind]() });
     const store = RECORD_STORES[kind];
-    if (!store) return _r(400, { success: false, error: `"${kind}" cannot be edited here` });
+    if (!store) return _r(400, { success: false, error: I18N.t('"{kind}" cannot be edited here', { kind }) });
     const id = String(req.params.id || '');
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
-    if (!it) return _r(404, { success: false, error: 'not found' });
+    if (!it) return _r(404, { success: false, error: I18N.t('not found') });
 
     const patch = {};
     for (const k of store.fields) if (k in (req.body || {})) patch[k] = req.body[k];
-    if (!Object.keys(patch).length) return _r(400, { success: false, error: 'nothing to set' });
+    if (!Object.keys(patch).length) return _r(400, { success: false, error: I18N.t('nothing to set') });
     if ('name' in patch) {
       const n = String(patch.name || '').trim();
-      if (!n) return _r(400, { success: false, error: 'name cannot be empty' });
+      if (!n) return _r(400, { success: false, error: I18N.t('name cannot be empty') });
       patch.name = n.slice(0, 120);
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
@@ -1734,7 +1756,7 @@ function _patchOne(kindIn, idIn, bodyIn) {
     // A category is a folder that is there - a nested one is chosen by its id, never guessed from a name.
     if (patch.categoryId && LC.KINDS.includes(kind)) {
       const cat = LC.find(kind, patch.categoryId);
-      if (!cat && LC.isOwn(null, patch.categoryId)) return _r(400, { success: false, error: 'that folder is not one of ' + kind });
+      if (!cat && LC.isOwn(null, patch.categoryId)) return _r(400, { success: false, error: I18N.t('that folder is not one of {kind}', { kind }) });
       if (cat) patch.categoryLabel = cat.label;
     }
 
@@ -1778,8 +1800,8 @@ function _cutTo(b) {
   const kind = String(to.kind || '');
   const cat = String(to.cat || '');
   const label = String(to.label || '').trim().slice(0, 60);
-  if (!CUT_KINDS.includes(kind)) { const e = new Error('a piece goes into VIDEO or REFERENCES'); e.status = 400; throw e; }
-  if (kind === 'references' && cat && !LC.find('references', cat)) { const e = new Error('no such folder in REFERENCES'); e.status = 400; throw e; }
+  if (!CUT_KINDS.includes(kind)) { const e = new Error(I18N.t('a piece goes into VIDEO or REFERENCES')); e.status = 400; throw e; }
+  if (kind === 'references' && cat && !LC.find('references', cat)) { const e = new Error(I18N.t('no such folder in REFERENCES')); e.status = 400; throw e; }
   return { kind, cat, label };
 }
 
@@ -1853,15 +1875,17 @@ function _dropOf(d, src) {
   const kind = String((d && d.kind) || '');
   const id = String((d && d.id) || '');
   const bad = (m) => Object.assign(new Error(m), { status: 400 });
-  if (!['birols', 'uploads', 'hooks'].includes(kind) || !id) throw bad('which video to delete?');
+  if (!['birols', 'uploads', 'hooks'].includes(kind) || !id) throw bad(I18N.t('which video to delete?'));
   const store = RECORD_STORES[kind === 'uploads' ? 'birols' : kind];
   const rec = store.read().find(e => e && String(e.id) === id);
   const file = String(src || '').split('?')[0];
-  if (!rec || !(store.files(rec) || []).some(p => String(p || '').split('?')[0] === file)) throw bad('that is not this video\'s record');
-  const names = require('../lib/timeline-media').usage([file]).map(p => (p.draft ? 'the draft' : '"' + p.title + '"'))
-    .concat(PLINKS.usage([file]).map(p => '"' + p.title + '" (this project)'));
-  const kept = names.length ? 'The original stays: it is used in ' + [...new Set(names)].slice(0, 4).join(', ')
-    + (names.length > 4 ? ' and ' + (names.length - 4) + ' more' : '') + '.' : '';
+  if (!rec || !(store.files(rec) || []).some(p => String(p || '').split('?')[0] === file)) throw bad(I18N.t('that is not this video\'s record'));
+  const names = require('../lib/timeline-media').usage([file]).map(p => (p.draft ? I18N.t('the draft') : I18N.t('"{name}"', { name: p.title })))
+    .concat(PLINKS.usage([file]).map(p => I18N.t('"{name}" (this project)', { name: p.title })));
+  const list = [...new Set(names)].slice(0, 4).join(', ');
+  const kept = !names.length ? ''
+    : names.length > 4 ? I18N.t('The original stays: it is used in {list} and {n} more.', { list, n: names.length - 4 })
+    : I18N.t('The original stays: it is used in {list}.', { list });
   // Uploads live in the B-rolls' store (`source` says which): deleted as a record of that store.
   return { kind: kind === 'uploads' ? 'birols' : kind, id, kept };
 }
@@ -1872,7 +1896,7 @@ router.post('/library/cuts', (req, res) => {
   let to;
   try { to = _cutTo(b); } catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
   const parts = Array.isArray(b.parts) ? b.parts.slice(0, 2000) : [];
-  if (!parts.length) return res.status(400).json({ success: false, error: 'draw a fragment over the bar first' });
+  if (!parts.length) return res.status(400).json({ success: false, error: I18N.t('draw a fragment over the bar first') });
   let drop = null;
   if (b.drop) {
     try { drop = _dropOf(b.drop, b.src); } catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
@@ -1898,7 +1922,7 @@ router.post('/library/cuts', (req, res) => {
       if (drop && !drop.kept) {
         const r = _deleteOne(drop.kind, drop.id);
         if (r.status === 200 && r.body && r.body.success) job.dropped = true;
-        else job.kept = 'The original stays: ' + ((r.body && r.body.error) || 'it could not be deleted') + '.';
+        else job.kept = I18N.t('The original stays: {why}.', { why: (r.body && r.body.error) || I18N.t('it could not be deleted') });
       }
     } catch (e) {
       job.state = (e && e.stopped) || job.ctl.signal.aborted ? 'stopped' : 'failed';
@@ -1912,14 +1936,14 @@ router.post('/library/cuts', (req, res) => {
 
 router.get('/library/cuts/:job', (req, res) => {
   const j = _cutJobs.get(String(req.params.job || ''));
-  if (!j) return res.status(404).json({ success: false, error: 'no such work' });
+  if (!j) return res.status(404).json({ success: false, error: I18N.t('no such work') });
   res.json({ success: true, state: j.state, done: j.done, total: j.total, pieces: j.pieces, error: j.error,
     dropped: !!j.dropped, kept: j.kept || '' });
 });
 
 router.delete('/library/cuts/:job', (req, res) => {
   const j = _cutJobs.get(String(req.params.job || ''));
-  if (!j) return res.status(404).json({ success: false, error: 'no such work' });
+  if (!j) return res.status(404).json({ success: false, error: I18N.t('no such work') });
   if (j.ctl) j.ctl.abort();
   res.json({ success: true });
 });
@@ -1927,7 +1951,7 @@ router.delete('/library/cuts/:job', (req, res) => {
 const _scenesFile = (q) => toDiskExisting(String((q && q.src) || '').split('?')[0]);
 router.get('/library/scenes', (req, res) => {
   const abs = _scenesFile(req.query);
-  if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('src - a video of the library') });
   const SC = require('../lib/scenes');
   const st = SC.start(abs);
   if (st.state === 'done') {
@@ -1939,14 +1963,14 @@ router.get('/library/scenes', (req, res) => {
 
 router.delete('/library/scenes', (req, res) => {
   const abs = _scenesFile(req.query);
-  if (!abs) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  if (!abs) return res.status(400).json({ success: false, error: I18N.t('src - a video of the library') });
   res.json({ success: true, stopped: require('../lib/scenes').cancel(abs) });
 });
 
 function _deleteOne(kindIn, idIn, filesIn) {
     const req = { params: { kind: kindIn, id: idIn }, query: { files: filesIn === false ? '0' : '1' } };
     const kind = String(req.params.kind || '');
-    if (kind === 'sfx') return _r(409, { success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
+    if (kind === 'sfx') return _r(409, { success: false, error: I18N.t('A built-in sound is part of the app - it is not deleted.') });
     const id = String(req.params.id || '');
     // A saved text of Music -> Lyrics: no file goes with it.
     if (kind === 'lyrics') {
@@ -1960,8 +1984,8 @@ function _deleteOne(kindIn, idIn, filesIn) {
     if (shelf) {
       // The id IS the filename. basename() it so nothing can walk out of the dir.
       const base = path.basename(id);
-      if (!base || !IMG_RE.test(base)) return _r(400, { success: false, error: 'not an image on this shelf' });
-      if (!fs.existsSync(path.join(shelf.dir, base))) return _r(404, { success: false, error: 'not found' });
+      if (!base || !IMG_RE.test(base)) return _r(400, { success: false, error: I18N.t('not an image on this shelf') });
+      if (!fs.existsSync(path.join(shelf.dir, base))) return _r(404, { success: false, error: I18N.t('not found') });
       // An environment a talking head is set in, or a 3D scene was laid out from, stays - in words.
       if (kind === 'environments') {
         const why = require('../lib/casting-use').envRefusal(`${shelf.url}/${base}`);
@@ -1982,10 +2006,10 @@ function _deleteOne(kindIn, idIn, filesIn) {
     // poster and what lies beside it (below).
     if (kind === 'renders') {
       const base = path.basename(id);
-      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: 'not a render' });
+      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: I18N.t('not a render') });
       // The id is the render's path inside media/renders/ - its project folder and name.
       const abs = toDiskWithin('/media/renders/' + String(id).replace(/\\/g, '/'), [FINALS_DIR]);
-      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: 'not found' });
+      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: I18N.t('not found') });
       const url = toUrl(abs);
       if (_unlink(url)) removed.push(base);
       const turl = VT.thumbUrlFor(url);
@@ -1999,11 +2023,11 @@ function _deleteOne(kindIn, idIn, filesIn) {
     }
 
     const store = RECORD_STORES[kind];
-    if (!store) return _r(400, { success: false, error: `"${kind}" cannot be deleted here` });
+    if (!store) return _r(400, { success: false, error: I18N.t('"{kind}" cannot be deleted here', { kind }) });
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
-    if (!it && kind === 'heads') return _r(409, { success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
-    if (!it) return _r(404, { success: false, error: 'not found' });
+    if (!it && kind === 'heads') return _r(409, { success: false, error: I18N.t('This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.') });
+    if (!it) return _r(404, { success: false, error: I18N.t('not found') });
     // A look a talking head is cast in stays - in words, with the project's name.
     if (kind === 'obrazy') {
       let dir = '';
@@ -2056,14 +2080,14 @@ router.delete('/library/voices/:voiceId', (req, res) => {
   try {
     const voiceId = String(req.params.voiceId || '');
     const entry = VS.get(voiceId);
-    if (!entry) return res.status(404).json({ success: false, error: 'not on the shelf' });
+    if (!entry) return res.status(404).json({ success: false, error: I18N.t('not on the shelf') });
 
     const { items } = _voicesShelf();
     const shown = items.find(i => i.meta.voiceId === voiceId);
     const users = (shown && shown.meta.characters) || [];
     if (users.length) {
       return res.status(409).json({ success: false,
-        error: 'still in use by ' + users.map(u => u.name).join(', ') + ' - unbind it there first',
+        error: I18N.t('still in use by {names} - unbind it there first', { names: users.map(u => u.name).join(', ') }),
         characters: users.map(u => ({ id: u.id, name: u.name })) });
     }
 
@@ -2089,14 +2113,14 @@ function _kindOne(fromIn, idIn, toIn) {
     const to = String(toIn || '');
     const id = String(idIn || '');
     const KINDS = ['birols', 'uploads', 'hooks'];
-    if (!KINDS.includes(from) || !KINDS.includes(to)) return _r(400, { success: false, error: 'kind must be birols, uploads or hooks' });
+    if (!KINDS.includes(from) || !KINDS.includes(to)) return _r(400, { success: false, error: I18N.t('kind must be birols, uploads or hooks') });
     if (from === to) return _r(200, { success: true, kind: to, id, unchanged: true });
 
     const src = RECORD_STORES[from];
     const dst = RECORD_STORES[to];
     const srcList = src.read();
     const it = srcList.find(x => x && String(x.id) === id);
-    if (!it) return _r(404, { success: false, error: 'not found' });
+    if (!it) return _r(404, { success: false, error: I18N.t('not found') });
 
     // Same store: flip the flag that decides which kind it reads as. `categoryId` is
     // kept — moving a birol to uploads and back should not lose which category it was in.
@@ -2196,12 +2220,12 @@ const _BVIDEO = new Set(['birols', 'uploads', 'hooks']);
 function _batchItems(b) {
   const seen = new Set();
   const raw = Array.isArray(b && b.items) ? b.items : [];
-  if (raw.length > BATCH_MAX) throw Object.assign(new Error('At most ' + BATCH_MAX + ' at once - ' + raw.length + ' were picked. Nothing was done.'), { status: 400 });
+  if (raw.length > BATCH_MAX) throw Object.assign(new Error(I18N.t('At most {max} at once - {n} were picked. Nothing was done.', { max: BATCH_MAX, n: raw.length })), { status: 400 });
   return raw
     .map(x => ({ kind: String((x && x.kind) || ''), id: String((x && x.id) || '') }))
     .filter(x => x.kind && x.id && !seen.has(x.kind + ':' + x.id) && seen.add(x.kind + ':' + x.id));
 }
-const _whyOf = (r) => (r && r.body && r.body.error) || 'not done';
+const _whyOf = (r) => (r && r.body && r.body.error) || I18N.t('not done');
 function _recOf(kind, id) {
   const st = RECORD_STORES[kind];
   if (!st) return null;
@@ -2218,28 +2242,28 @@ const _nameOfRec = (kind, id) => {
 };
 
 // What Music -> Lyrics says to a move - the same words as js/media-tree.js.
-const LYRICS_STAY = 'a text stays in Music → Lyrics';
-const LYRICS_TAKE = 'only Generate music saves texts into Music → Lyrics';
+const LYRICS_STAY = () => I18N.t('a text stays in Music → Lyrics');
+const LYRICS_TAKE = () => I18N.t('only Generate music saves texts into Music → Lyrics');
 
 // One item to `to`: '' when it went (or was there already), else why not.
 function _moveOne(it, to) {
   const from = it.kind;
-  if (from === 'sfx') return 'a built-in sound stays in Built-in';
-  if (from === 'heads') return 'a talking head is its project\'s';
-  if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
+  if (from === 'sfx') return I18N.t('a built-in sound stays in Built-in');
+  if (from === 'heads') return I18N.t('a talking head is its project\'s');
+  if (from === 'youtube') return I18N.t('a YouTube source stays in REFERENCES');
   // A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
-  if (MADE_KINDS.has(from)) return MADE_STAYS[from];
-  if (MADE_KINDS.has(to.kind)) return MADE_TAKES[to.kind];
+  if (MADE_KINDS.has(from)) return MADE_STAYS[from]();
+  if (MADE_KINDS.has(to.kind)) return MADE_TAKES[to.kind]();
   // A saved text stays in Music -> Lyrics, and only Generate music saves into it.
-  if (from === 'lyrics') return LYRICS_STAY;
-  if (to.kind === 'lyrics') return LYRICS_TAKE;
+  if (from === 'lyrics') return LYRICS_STAY();
+  if (to.kind === 'lyrics') return LYRICS_TAKE();
   // A sound and a track: between Music, SFX -> My sounds and AUDIO's root, either way.
   if (AUDIO_MOVES.has(from) && AUDIO_MOVES.has(to.kind) && (from !== to.kind || from === 'sounds')) return _audioMove(it, to);
   if (from === 'music' || to.kind === 'music') {
-    if (from !== to.kind) return from === 'music' ? 'a track goes into Music, SFX or AUDIO' : 'only tracks and sounds go into Music';
+    if (from !== to.kind) return from === 'music' ? I18N.t('a track goes into Music, SFX or AUDIO') : I18N.t('only tracks and sounds go into Music');
     if (to.cat) {
       const rec = _recOf('music', it.id);
-      if (!rec) return 'not found';
+      if (!rec) return I18N.t('not found');
       if (String(rec.categoryId || '') === to.cat) return '';
       const r = _patchOne('music', it.id, { categoryId: to.cat, categoryLabel: to.label || '' });
       return r.status === 200 ? '' : _whyOf(r);
@@ -2253,10 +2277,10 @@ function _moveOne(it, to) {
     catch (e) { return e.message; }
   }
   if (from === 'references' || to.kind === 'references') {
-    return from === 'references' ? 'a post goes out of REFERENCES by itself - from its own window' : 'only posts go into REFERENCES';
+    return from === 'references' ? I18N.t('a post goes out of REFERENCES by itself - from its own window') : I18N.t('only posts go into REFERENCES');
   }
   const rec = _recOf(from, it.id);
-  if (!rec) return 'not found';
+  if (!rec) return I18N.t('not found');
   if (to.kind === from) {
     if (String(rec.categoryId || '') === String(to.cat || '')) return '';
     const r = _patchOne(from, it.id, { categoryId: to.cat || '', categoryLabel: to.cat ? (to.label || '') : '' });
@@ -2276,9 +2300,9 @@ function _moveOne(it, to) {
     }
     return '';
   }
-  if (from === 'images') return 'a picture never becomes a clip or a sound';
-  if (to.kind === 'images') return 'only pictures go into IMAGES';
-  return 'it cannot go there';
+  if (from === 'images') return I18N.t('a picture never becomes a clip or a sound');
+  if (to.kind === 'images') return I18N.t('only pictures go into IMAGES');
+  return I18N.t('it cannot go there');
 }
 
 // A sound into My sounds, a folder of it or AUDIO's own root (`to.aroot`); a sound into Music, a
@@ -2294,23 +2318,20 @@ function _placeAudio(kind, id) {
 function _audioMove(it, to) {
   const from = it.kind;
   const rec = _recOf(from, it.id);
-  if (!rec) return 'not found';
+  if (!rec) return I18N.t('not found');
   if (to.kind === 'music') {
     // A sound into Music: an own folder of it, or Music itself / highlights / the mood its preset made it for.
     let place;
     if (to.cat) {
       const c = LC.find('music', to.cat);
-      if (!c) return 'that folder is not one of Music';
+      if (!c) return I18N.t('that folder is not one of Music');
       place = { categoryId: c.id, categoryLabel: c.label };
     } else {
-      if (to.folder && to.folder !== MUSIC.HIGHLIGHTS) return 'there is no folder "' + to.folder + '" in Music';
+      if (to.folder && to.folder !== MUSIC.HIGHLIGHTS) return I18N.t('there is no folder "{name}" in Music', { name: to.folder });
       if (to.mood) {
         const was = AK.carriedOf(rec);
         const made = was && was.kind === 'music' ? MUSIC.placeOf(was.rec).moodMade : '';
-        if (made !== to.mood) {
-          const m = MUSIC.moods().find(x => x.id === to.mood);
-          return '"' + (m ? m.label : to.mood) + '" takes only the tracks made by its preset - yours go into highlights itself';
-        }
+        if (made !== to.mood) return MUSIC.moodTakes(to.mood);
       }
       place = { folder: to.folder || '', mood: to.folder ? (to.mood || '') : '' };
     }
@@ -2323,7 +2344,7 @@ function _audioMove(it, to) {
   let label = '';
   if (cat) {
     const c = LC.find('sounds', cat);
-    if (!c) return 'that folder is not one of My sounds';
+    if (!c) return I18N.t('that folder is not one of My sounds');
     label = c.label;
   }
   if (from === 'music') {
@@ -2339,7 +2360,7 @@ function _audioMove(it, to) {
   // Into AUDIO's root: out of its folder, its file into media/sounds/nocat/.
   const list = SND.read();
   const s = list.find(x => x && String(x.id) === String(it.id));
-  if (!s) return 'not found';
+  if (!s) return I18N.t('not found');
   s.categoryId = ''; s.categoryLabel = ''; s.inAudio = true;
   SND.write(list);
   _placeAudio('sounds', it.id);
@@ -2350,7 +2371,7 @@ function _audioMove(it, to) {
 function _postsTo(ids, to) {
   const REFS = require('../lib/references-store');
   const cat = String(to.cat || '');
-  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such folder in REFERENCES' }));
+  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: I18N.t('no such folder in REFERENCES') }));
   const moved = [];
   const found = new Set();
   REFS.apply((list) => {
@@ -2365,7 +2386,7 @@ function _postsTo(ids, to) {
     }
   });
   if (moved.length) REFS.placePosts(REFS.read().filter(p => p && moved.includes(String(p.id))));
-  return ids.filter(id => !found.has(id)).map(id => ({ id, why: 'no such post' }));
+  return ids.filter(id => !found.has(id)).map(id => ({ id, why: I18N.t('no such post') }));
 }
 
 function _batchAnswer(res, items, skipped, extra) {
@@ -2379,7 +2400,7 @@ router.post('/library/batch/move', (req, res) => {
     const t = (req.body || {}).to || {};
     const to = { kind: String(t.kind || ''), cat: String(t.cat || ''), label: String(t.label || ''),
       folder: String(t.folder || ''), mood: String(t.mood || ''), aroot: !!t.aroot && String(t.kind || '') === 'sounds' };
-    if (!items.length || !to.kind) return res.status(400).json({ success: false, error: 'what, and where to' });
+    if (!items.length || !to.kind) return res.status(400).json({ success: false, error: I18N.t('what, and where to') });
     if (to.cat === UNCAT) to.cat = '';
     // The references of Environments / Lookbooks take nothing by hand - said once, nothing moved.
     const shut = LC.closedWhy(to.kind, to.cat);
@@ -2410,11 +2431,11 @@ router.post('/library/batch/move', (req, res) => {
 router.post('/library/batch/favorite', (req, res) => {
   try {
     const items = _batchItems(req.body);
-    if (!items.length) return res.status(400).json({ success: false, error: 'nothing chosen' });
+    if (!items.length) return res.status(400).json({ success: false, error: I18N.t('nothing chosen') });
     const favorite = !!(req.body || {}).favorite;
     const skipped = [];
     for (const x of items) {
-      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube' || x.kind === 'lyrics' || MADE_KINDS.has(x.kind)) { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
+      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube' || x.kind === 'lyrics' || MADE_KINDS.has(x.kind)) { skipped.push({ kind: x.kind, id: x.id, why: I18N.t('it has no star') }); continue; }
       const r = _patchOne(x.kind, x.id, { favorite });
       if (r.status !== 200) skipped.push({ kind: x.kind, id: x.id, why: _whyOf(r) });
     }
@@ -2425,11 +2446,11 @@ router.post('/library/batch/favorite', (req, res) => {
 router.post('/library/batch/delete', (req, res) => {
   try {
     const items = _batchItems(req.body);
-    if (!items.length) return res.status(400).json({ success: false, error: 'nothing chosen' });
+    if (!items.length) return res.status(400).json({ success: false, error: I18N.t('nothing chosen') });
     const skipped = [];
     const removed = [];
     for (const x of items) {
-      if (x.kind === 'youtube') { skipped.push({ kind: x.kind, id: x.id, why: 'a YouTube source is deleted on its own tile' }); continue; }
+      if (x.kind === 'youtube') { skipped.push({ kind: x.kind, id: x.id, why: I18N.t('a YouTube source is deleted on its own tile') }); continue; }
       const name = _nameOfRec(x.kind, x.id);
       const r = _deleteOne(x.kind, x.id, true);
       if (r.status !== 200) { skipped.push({ kind: x.kind, id: x.id, name, why: _whyOf(r) }); continue; }
@@ -2460,7 +2481,7 @@ function _brokenIn(kind) {
   const inKind = (e) => (kind === 'hooks' ? true : _isUpload(e) === (kind === 'uploads'));
   const brief = (e, why) => ({
     id: String(e.id), kind, why,
-    name: String(e.name || '').trim() || '(unnamed)',
+    name: String(e.name || '').trim() || I18N.t('(unnamed)'),
     videoPath: e.videoPath || null,
     status: e.status || '',
     date: e.date || null,
@@ -2469,8 +2490,8 @@ function _brokenIn(kind) {
   const missingFile = [], noFile = [];
   for (const e of list) {
     if (!e || !inKind(e)) continue;
-    if (!e.videoPath) noFile.push(brief(e, 'never produced a file'));
-    else if (!_onDisk(e.videoPath)) missingFile.push(brief(e, 'file is gone from disk'));
+    if (!e.videoPath) noFile.push(brief(e, I18N.t('never produced a file')));
+    else if (!_onDisk(e.videoPath)) missingFile.push(brief(e, I18N.t('file is gone from disk')));
   }
   return { missingFile, noFile };
 }
@@ -2483,7 +2504,7 @@ function _brokenLooks() {
   const urls = (o) => [o && o.char].concat(Array.isArray(o && o.variations) ? o.variations : [])
     .filter(u => u && u !== 'error');
   return arr.filter(o => { const u = urls(o); return u.length && !u.some(_onDisk); })
-    .map(o => ({ id: String(o.id), name: String(o.name || '').trim() || '(unnamed)' }));
+    .map(o => ({ id: String(o.id), name: String(o.name || '').trim() || I18N.t('(unnamed)') }));
 }
 
 router.get('/library/broken', (_req, res) => {
@@ -2514,7 +2535,7 @@ router.post('/library/broken/clean', (_req, res) => {
       const next = list.filter(e => !(e && doomed.has(String(e.id))));
       // Refuse rather than half-apply: if the count does not match, the store moved.
       if (list.length - next.length !== doomed.size) {
-        return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
+        return res.status(409).json({ success: false, error: I18N.t('the archive changed while this ran - nothing was written') });
       }
       store.write(next);
       for (const id of doomed) dropped.push({ id, store: kind });
@@ -2540,14 +2561,14 @@ router.post('/library/media/record', (req, res) => {
 function _fileRecord(b) {
   const _no = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
   const { videoPath, thumbPath, name, refImage, prompt, categoryLabel, categoryId } = b;
-  if (!videoPath || !_onDisk(videoPath)) throw _no(400, 'videoPath must be a file that exists');
+  if (!videoPath || !_onDisk(videoPath)) throw _no(400, I18N.t('videoPath must be a file that exists'));
   // Which kind the clip is filed as follows what the page had open, so uploading while
   // looking at Hooks puts it among the hooks. Uploads is the default: it is where a file
   // you brought in belongs when nothing says otherwise.
   const kind = ['birols', 'uploads', 'hooks'].includes(String(b.kind)) ? String(b.kind) : 'uploads';
   const store = RECORD_STORES[kind];
   const list = store.read();
-  if (list.some(e => e && e.videoPath === videoPath)) throw _no(409, 'already on the shelf');
+  if (list.some(e => e && e.videoPath === videoPath)) throw _no(409, I18N.t('already on the shelf'));
   const rec = {
     id: 'lib' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name: String(name || '').trim().slice(0, 120) || String(videoPath).split('/').pop(),
@@ -2640,7 +2661,7 @@ function _fileRecord(b) {
 // file and are told apart by a flag, so "the records of this kind" is a filter, not a store.
 function _kindRecords(kind) {
   const store = RECORD_STORES[kind];
-  if (!store) throw new Error(`no such kind "${kind}"`);
+  if (!store) throw new Error(I18N.t('no such kind "{kind}"', { kind }));
   const list = store.read();
   const inKind = (e) => {
     if (!e) return false;
@@ -2709,9 +2730,9 @@ router.post('/library/cats', (req, res) => {
   try {
     const b = req.body || {};
     const kind = String(b.kind || '');
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: I18N.t('kind must be one of {kinds}', { kinds: LC.KINDS.join(', ') }) });
     // Filed by name at the top of B-rolls - there is no such place: the top is the models' folders.
-    if (kind === 'birols' && !('parent' in b)) return res.status(409).json({ success: false, error: LC.MODELS_TOP });
+    if (kind === 'birols' && !('parent' in b)) return res.status(409).json({ success: false, error: LC.modelsTop() });
     // A folder made where the person asked - in `parent`, or the kind itself.
     const { cat, created } = ('parent' in b) ? LC.make(kind, b.label, String(b.parent || '')) : LC.add(kind, b.label);
     res.json({ success: true, cat, created });
@@ -2723,10 +2744,10 @@ router.patch('/library/cats/:id', (req, res) => {
     const id = String(req.params.id || '');
     const kind = String((req.body || {}).kind || '');
     const label = String((req.body || {}).label || '').trim();
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be renamed. Folders inside it can.' });
-    if (!label) return res.status(400).json({ success: false, error: 'A folder needs a name.' });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: I18N.t('kind must be one of {kinds}', { kinds: LC.KINDS.join(', ') }) });
+    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: I18N.t('Uncategorized is not a category') });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: I18N.t('This folder is required - it cannot be renamed. Folders inside it can.') });
+    if (!label) return res.status(400).json({ success: false, error: I18N.t('A folder needs a name.') });
 
     // An orphan becomes a real category first, under the name its records carry.
     if (!LC.isOwn(kind, id)) {
@@ -2747,8 +2768,8 @@ router.post('/library/cats/:id/move', (req, res) => {
     const id = String(req.params.id || '');
     const b = req.body || {};
     const kind = String(b.kind || '');
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    if (!LC.isOwn(kind, id)) return res.status(404).json({ success: false, error: 'That folder is not there any more.' });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: I18N.t('kind must be one of {kinds}', { kinds: LC.KINDS.join(', ') }) });
+    if (!LC.isOwn(kind, id)) return res.status(404).json({ success: false, error: I18N.t('That folder is not there any more.') });
     const cat = FOLDERS.move(kind, id, String(b.parent || ''));
     res.json({ success: true, cat });
   } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
@@ -2767,10 +2788,10 @@ router.delete('/library/cats/:id', (req, res) => {
     const id = String(req.params.id || '');
     const kind = String(req.query.kind || '');
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: I18N.t('kind must be one of {kinds}', { kinds: LC.KINDS.join(', ') }) });
+    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: I18N.t('Uncategorized is not a category') });
     // Refused BEFORE its media are moved or deleted below.
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be deleted. Folders inside it can.' });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: I18N.t('This folder is required - it cannot be deleted. Folders inside it can.') });
     const own = LC.isOwn(kind, id);
     if (mode === 'move') {
       if (own) {

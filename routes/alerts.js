@@ -16,6 +16,7 @@
 
 const express = require('express');
 const ALERTS = require('../lib/alerts');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.get('/alerts', (_req, res) => {
 router.get('/alerts/:id', (req, res) => {
   try {
     const rec = ALERTS.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such alert' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such alert') });
     res.json({ success: true, item: ALERTS.view(rec) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -45,7 +46,7 @@ router.post('/alerts/seen', (req, res) => {
 router.post('/alerts/notified', (req, res) => {
   try {
     const ids = (req.body || {}).ids;
-    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids are required' });
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: I18N.t('ids are required') });
     res.json({ success: true, marked: ALERTS.markNotified(ids) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -56,7 +57,7 @@ router.post('/alerts/notified', (req, res) => {
 router.post('/alerts/:id/cancel', (req, res) => {
   try {
     const rec = ALERTS.cancel(req.params.id, (req.body || {}).why);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such alert' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such alert') });
     if (rec.cancelled) require('../lib/gen-jobs').cancelled(rec);
     console.log('[alerts] ' + rec.what + ' ' + rec.id + ' given up on');
     res.json({ success: true, item: ALERTS.view(rec) });

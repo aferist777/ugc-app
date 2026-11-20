@@ -15,6 +15,7 @@ const express = require('express');
 const router = express.Router();
 
 const AGENTS = require('../lib/agents');
+const I18N = require('../lib/i18n');
 
 async function _state() {
   try { await require('../lib/keys-health').getHealth(); } catch (e) { /* no verdict is no refusal */ }
@@ -32,7 +33,7 @@ router.get('/ai-settings', async (_req, res) => {
 router.put('/ai-settings', async (req, res) => {
   try {
     const list = (req.body || {}).agents;
-    if (!Array.isArray(list) || !list.length) return res.status(400).json({ success: false, error: 'the ladder needs a step' });
+    if (!Array.isArray(list) || !list.length) return res.status(400).json({ success: false, error: I18N.t('the ladder needs a step') });
     AGENTS.setLadder(list);
     res.json({ success: true, ...(await _state()) });
   } catch (e) {

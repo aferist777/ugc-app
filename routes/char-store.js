@@ -17,6 +17,7 @@ const router  = express.Router();
 
 const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
+const I18N = require('../lib/i18n');
 const {
   uploadToPublicHost, resolveTask, resolveLocalMedia,
 } = require('../lib/helpers');
@@ -68,7 +69,7 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     // its own - so a cached one is not evidence that it still works.
     let imageUrl = src.imageUrl || '';
     if (!imageUrl) {
-      stage('uploading the face');
+      stage(I18N.t('uploading the face'));
       // In a format the engines take (lib/image-in.js).
       const pic = await require('../lib/image-in').sendable(src.buf);
       imageUrl = await uploadToPublicHost(pic.buf, { verify: true, ext: pic.ext });
@@ -78,11 +79,11 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     // delays the save's own response.
     let prompt = src.prompt || '';
     if (!prompt) {
-      stage('reading the body');
+      stage(I18N.t('reading the body'));
       prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
       if (gone()) return _sheetLetGo(charId, '');
     }
-    stage('asking the engines');
+    stage(I18N.t('asking the engines'));
     const sub = await _sheetTask(prompt, imageUrl, alertId);
     // sheetJob is what makes the SECOND half of the walk possible - a task that is accepted and
     // then fails resumes below the steps that have already had their turn, without asking the
@@ -91,7 +92,7 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     // Let go of while the ladder was answering: the task exists and was paid for, but nobody waits.
     if (gone()) return _sheetLetGo(charId, sub.taskId);
     // The row now has something to follow (lib/gen-jobs.js polls it from here).
-    if (alertId) ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine + ' @ ' + sub.provider, stage: 'drawing' });
+    if (alertId) ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine + ' @ ' + sub.provider, stage: I18N.t('drawing') });
     console.log('[char-store] sheet submitted', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
   } catch (e) {
     // Written onto the character, not just into the log. This runs in the background, so the page
@@ -103,8 +104,8 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     // on - or when one gave no answer and may have taken the money: then it says so.
     const why = reasonOf(e);
     console.warn('[char-store] sheet submit failed everywhere:', why);
-    patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || 'the sheet could not be submitted') });
-    if (alertId && !gone()) ALERTS.fail(alertId, String(why || 'the sheet could not be submitted'), !(e && e.unsure) && _refusedEverywhere(e) ? { refused: true } : undefined);
+    patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || I18N.t('the sheet could not be submitted')) });
+    if (alertId && !gone()) ALERTS.fail(alertId, String(why || I18N.t('the sheet could not be submitted')), !(e && e.unsure) && _refusedEverywhere(e) ? { refused: true } : undefined);
   } finally {
     if (kick) _kicking.delete(kick);
   }
@@ -132,9 +133,9 @@ function _runningSheet(charId, exceptId) {
 // Answers { id, kick } - the row, and the token its kickoff registers under (see _kicking). Always a
 // row: it is the only thing that resolves a sheet, so a request without a place to lead back to gets
 // the Characters shelf.
-const SHELF_WHERE = { page: 'library', href: '/library?shelf=characters', label: 'Library · Characters' };
+const SHELF_WHERE = () => ({ page: 'library', href: '/library?shelf=characters', label: I18N.t('Library · Characters') });
 function _openSheetRow(charId, where, name) {
-  if (!where || typeof where !== 'object') where = SHELF_WHERE;
+  if (!where || typeof where !== 'object') where = SHELF_WHERE();
   const kick = _kickToken();
   _kicking.add(kick);
   try {
@@ -142,8 +143,8 @@ function _openSheetRow(charId, where, name) {
     const spot = { ...((where && where.spot) || {}), key: String(charId) };
     const id = JOBS.submitted({
       kind: 'image', what: 'sheet',
-      title: 'Sheet · ' + String(name || 'character').slice(0, 60),
-      where: { ...where, spot }, stage: 'starting', taskIds: [],
+      title: I18N.t('Sheet · {name}', { name: String(name || I18N.t('character')).slice(0, 60) }),
+      where: { ...where, spot }, stage: I18N.t('starting'), taskIds: [],
       job: { type: 'sheet', params: { charId: String(charId), kick, request: { charId: String(charId) } } },
     }).id;
     return { id, kick };
@@ -160,7 +161,7 @@ function _openSheetRow(charId, where, name) {
 function _sheetLetGo(charId, taskId) {
   try {
     patchChar(charId, { sheetTask: null, sheetJob: null,
-      sheetError: 'the sheet was let go of', sheetLetGo: taskId ? String(taskId) : null });
+      sheetError: I18N.t('the sheet was let go of'), sheetLetGo: taskId ? String(taskId) : null });
   } catch (e) { /* the character is gone */ }
 }
 
@@ -235,18 +236,18 @@ function _keepFace(folder, folderNm, buf, previous) {
 router.post('/char-store/create', async (req, res) => {
   try {
     const { name, gender, faceImagePath, faceImageBase64, figure } = req.body || {};
-    if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
+    if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: I18N.t('faceImagePath or faceImageBase64 is required') });
 
     // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
     // is uploaded straight to the public host and never touches our disk.
     let faceBuffer = null;
     if (faceImageBase64) {
       faceBuffer = Buffer.from(String(faceImageBase64).replace(/^data:image\/\w+;base64,/, ''), 'base64');
-      if (!faceBuffer.length) return res.status(400).json({ success: false, error: 'faceImageBase64 is empty' });
+      if (!faceBuffer.length) return res.status(400).json({ success: false, error: I18N.t('faceImageBase64 is empty') });
     } else {
       // Both roots: a preset is served out of public/, everything else lives at the top.
       const srcAbs = resolveLocalMedia(faceImagePath);
-      if (!srcAbs) return res.status(404).json({ success: false, error: 'face image not found: ' + faceImagePath });
+      if (!srcAbs) return res.status(404).json({ success: false, error: I18N.t('face image not found: {path}', { path: faceImagePath }) });
       faceBuffer = fs.readFileSync(srcAbs);
     }
 
@@ -338,7 +339,7 @@ function _readRel(rel) {
 function _identitySource(c) {
   const stored = (rel, from) => { const buf = _readRel(rel); return buf ? { buf, from } : null; };
 
-  const hit = stored(c.sheet, 'the current sheet') || stored(c.baseFace, 'the saved face');
+  const hit = stored(c.sheet, I18N.t('the current sheet')) || stored(c.baseFace, I18N.t('the saved face'));
   if (hit) return hit;
 
   // Last resort: any picture in the character's folder. A record can point at a file that is no
@@ -350,7 +351,7 @@ function _identitySource(c) {
     const files = fs.readdirSync(folder)
       .filter(n => /\.(jpe?g|png|webp)$/i.test(n))
       .sort((a, b2) => rank(a) - rank(b2) || a.localeCompare(b2));
-    if (files.length) return { buf: fs.readFileSync(path.join(folder, files[0])), from: 'the folder (' + files[0] + ')' };
+    if (files.length) return { buf: fs.readFileSync(path.join(folder, files[0])), from: I18N.t('the folder ({name})', { name: files[0] }) };
   } catch (e) {}
   return null;
 }
@@ -364,14 +365,14 @@ router.post('/char-store/regen-ref', async (req, res) => {
   try {
     const { charId } = req.body || {};
     const c = findChar(charId);
-    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
+    if (!c) return res.status(404).json({ success: false, error: I18N.t('char not found') });
     // One sheet at a time per character: the one running is answered, for the page to follow.
     const busy = _runningSheet(charId);
-    if (busy) return res.status(409).json({ success: false, running: true, alertId: busy.id, error: 'its 4K sheet is already being made' });
+    if (busy) return res.status(409).json({ success: false, running: true, alertId: busy.id, error: I18N.t('its 4K sheet is already being made') });
     const src = _identitySource(c);
     if (!src) {
       return res.status(404).json({ success: false,
-        error: 'nothing to draw it from - this character has no sheet, no saved face and no files. Make it again with New Character on the Characters shelf.' });
+        error: I18N.t('nothing to draw it from - this character has no sheet, no saved face and no files. Make it again with New Character on the Characters shelf.') });
     }
     console.log('[char-store/regen-ref]', charId, 'from', src.from);
 
@@ -435,8 +436,7 @@ async function _retrySheetElsewhere(c, why) {
   const aggName = (a) => PROVIDER_LABELS[L.AGG_TO_MATRIX[a] || a] || String(a);
   if (job.asking) {
     const who = aggName(job.asking);
-    return { unsure: 'the app was closed while the sheet was being asked for on ' + who
-      + ' - it may have been paid for and not followed; look at ' + who + '\'s own history before asking again' };
+    return { unsure: I18N.t('the app was closed while the sheet was being asked for on {agg} - it may have been paid for and not followed; look at {agg}\'s own history before asking again', { agg: who }) };
   }
   const tried = Array.isArray(job.tried) ? job.tried : [];
   try {
@@ -457,8 +457,7 @@ async function _retrySheetElsewhere(c, why) {
       onAsk: (agg) => { try { patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: agg } }); } catch (e) {} },
       onStep: () => { try { patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: null } }); } catch (e) {} },
     });
-    const note = (tried[tried.length - 1] || 'the last step') + ' failed: ' + String(why).slice(0, 120)
-      + ' — retrying on ' + sub.provider + '…';
+    const note = I18N.t('{step} failed: {why} — retrying on {agg}…', { step: tried[tried.length - 1] || I18N.t('the last step'), why: String(why).slice(0, 120), agg: sub.provider });
     const done = (sub.steps || []).filter(s => s.state !== 'skipped').map(s => String(s.label));
     patchChar(c.id, {
       sheetTask: sub.taskId,
@@ -494,11 +493,11 @@ function _refusedEverywhere(e) {
 // accepted and then fails - happens here, so it happens either way.
 async function _resolveSheet(taskId, charId) {
   const c = charId ? findChar(charId) : null;
-  if (!c) throw Object.assign(new Error('char not found'), { status: 404 });
+  if (!c) throw Object.assign(new Error(I18N.t('char not found')), { status: 404 });
 
   // Let go of (the cross in Alerts): whatever this task brings is not filed onto the character.
   const letGo = (rec) => rec && rec.sheetLetGo && String(rec.sheetLetGo) === String(taskId);
-  if (letGo(c)) return { state: 'failed', error: 'the sheet was let go of' };
+  if (letGo(c)) return { state: 'failed', error: I18N.t('the sheet was let go of') };
 
   const folder = charAbsFolderRec(c);
   if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
@@ -506,8 +505,8 @@ async function _resolveSheet(taskId, charId) {
   const result = await resolveTask(taskId, folder, 'sheet');
   // Read again after the wait: a cancel that landed meanwhile, or a character deleted meanwhile.
   const now = findChar(charId);
-  if (!now) return { state: 'failed', error: 'the character was deleted' };
-  if (letGo(now)) return { state: 'failed', error: 'the sheet was let go of' };
+  if (!now) return { state: 'failed', error: I18N.t('the character was deleted') };
+  if (letGo(now)) return { state: 'failed', error: I18N.t('the sheet was let go of') };
   if (result.state === 'success') {
     patchChar(charId, {
       sheet: result.imagePath, sheetTask: null, sheetError: null, sheetJob: null,
@@ -524,7 +523,7 @@ async function _resolveSheet(taskId, charId) {
     const refused = next && !next.unsure && next.refused !== undefined ? !!next.refused : REFUSAL.isRefusal(result.error);
     // The next aggregator gave no answer: it may have started the sheet - said so, not the
     // first task's error.
-    const why = (next && next.unsure) || result.error || 'the generation failed';
+    const why = (next && next.unsure) || result.error || I18N.t('the generation failed');
 
     // Kept on the record as well as answered here: whoever opens this character next deserves
     // to know why it has no sheet, not just that it has none.
@@ -546,7 +545,7 @@ const ALERTS = require('../lib/alerts');
 
 // PAID ONCE: a row with no task whose kickoff is not alive here and that is marked `asked` was
 // closed on in the middle of a create - it may have been paid for, and it says so instead of "try again".
-const SHEET_MAYBE_PAID = 'the app was closed while the sheet was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again';
+const SHEET_MAYBE_PAID = () => I18N.t('the app was closed while the sheet was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again');
 
 JOBS.register('sheet', {
   timeoutMs: 30 * 60 * 1000,
@@ -556,7 +555,7 @@ JOBS.register('sheet', {
     const p = (rec.job || {}).params || {};
     if (rec.taskIds[0]) return _resolveSheet(rec.taskIds[0], p.charId);
     if (_kicking.has(p.kick)) return { state: 'pending' };
-    return { state: 'failed', error: p.asked ? SHEET_MAYBE_PAID : 'the app was closed before the sheet was asked for - try again' };
+    return { state: 'failed', error: p.asked ? SHEET_MAYBE_PAID() : I18N.t('the app was closed before the sheet was asked for - try again') };
   },
   file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
   // Let go of in Alerts: the character stops waiting for this sheet (lib/gen-jobs.js cancelled).
@@ -573,16 +572,16 @@ JOBS.register('sheet', {
   submit: async (request, rec) => {
     const id = String((request || {}).charId || ((rec && rec.job && rec.job.params) || {}).charId || '');
     const c = findChar(id);
-    if (!c) throw new Error('that character is gone');
-    if (_runningSheet(id, rec && rec.id)) throw new Error('another 4K sheet for this character is being made - wait for it, or let it go first');
+    if (!c) throw new Error(I18N.t('that character is gone'));
+    if (_runningSheet(id, rec && rec.id)) throw new Error(I18N.t('another 4K sheet for this character is being made - wait for it, or let it go first'));
     const job = c.sheetJob;
     const src = (job && job.prompt && job.imageUrl) ? { prompt: job.prompt, imageUrl: job.imageUrl } : _identitySource(c);
-    if (!src) throw new Error('nothing to draw it from - this character has no sheet, no saved face and no files');
+    if (!src) throw new Error(I18N.t('nothing to draw it from - this character has no sheet, no saved face and no files'));
     const kick = _kickToken();
     _kicking.add(kick);
     patchChar(c.id, { sheetError: null, sheetLetGo: null });
     return {
-      stage: 'starting',
+      stage: I18N.t('starting'),
       params: { charId: String(c.id), kick, asked: false, request: { charId: String(c.id) } },
       later: () => _kickoffSheets(c.id, src, { figure: c.figure || '' }, rec.id, kick),
     };
@@ -603,7 +602,7 @@ router.patch('/char-store/:id', (req, res) => {
     if (k in (req.body || {})) allowed[k] = req.body[k];
   }
   const c = patchChar(req.params.id, allowed);
-  if (!c) return res.status(404).json({ success: false, error: 'char not found' });
+  if (!c) return res.status(404).json({ success: false, error: I18N.t('char not found') });
   res.json({ success: true, char: c });
 });
 
@@ -647,7 +646,7 @@ async function _releaseCharVoices(char) {
 
     if (heldBy.length || heldByLook) {
       out.push({ voiceId, released: false,
-        reason: 'still used by ' + (heldBy.map(c => c.name).join(', ') || 'a look') });
+        reason: I18N.t('still used by {who}', { who: heldBy.map(c => c.name).join(', ') || I18N.t('a look') }) });
       continue;
     }
 
@@ -693,12 +692,12 @@ router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
   try {
     const voiceId = String(req.params.voiceId || '');
     const char = findChar(req.params.id);
-    if (!char) return res.status(404).json({ success: false, error: 'char not found' });
+    if (!char) return res.status(404).json({ success: false, error: I18N.t('char not found') });
 
     const voices = Array.isArray(char.voices) ? char.voices : [];
     const entry = voices.find(v => v && String(v.voiceId) === voiceId);
     if (!entry && String(char.voice || '') !== voiceId) {
-      return res.status(404).json({ success: false, error: 'this character does not have that voice' });
+      return res.status(404).json({ success: false, error: I18N.t('this character does not have that voice') });
     }
 
     // 1 + 2. On the shelf with everything the account still knows. Whatever the entry itself
@@ -764,7 +763,7 @@ router.delete('/char-store/:id', async (req, res) => {
   // Not while its 4K sheet is being made: the wait would be left with nothing to file into.
   // Let the sheet go in Alerts first, or wait for it.
   const busy = _runningSheet(req.params.id);
-  if (busy) return res.status(409).json({ success: false, error: 'its 4K sheet is being made - wait for it, or let it go in Alerts first' });
+  if (busy) return res.status(409).json({ success: false, error: I18N.t('its 4K sheet is being made - wait for it, or let it go in Alerts first') });
   const char = findChar(req.params.id);   // capture the voices before the record is removed
   const ok = deleteChar(req.params.id);
   let voices = [];

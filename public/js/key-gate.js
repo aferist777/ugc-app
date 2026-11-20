@@ -27,7 +27,7 @@ import { askChoice } from './ask.js';
 import { iconEl } from './icons.js';
 import { t } from './i18n/t.js';
 
-let _state = null;          // { all, places: { id: { open, label, why, missing: [[{ id, label, why }]] } } }
+let _state = null;          // { all, places: { id: { open, label, why, missing: [[{ id, label, code, why, reason }]] } } }
 let _reading = null;
 const _subs = new Set();
 const _locks = new Set();   // { el, place, cover, small }
@@ -69,6 +69,12 @@ const FIELDS = { kie: 'kieApiKey', replicate: 'replicateApiKey', elevenlabs: 'el
   pixabay: 'pixabayApiKey', cloudflare: 'cloudflareApiToken', telegram: 'telegramBotToken', freesound: 'freesoundApiKey' };
 const LADDER_KEYS = ['kieApiKey', 'replicateApiKey', 'anthropicApiKey', 'openRouterApiKey'];
 
+// What an atom lacks: the server's `code` (its `why` is in the interface's language), else the English words it said
+// before it had one.
+const OLD_CODES = { 'no key': 'nokey', 'not checked': 'unchecked', 'not in the ladder': 'unladdered', 'not installed': 'uninstalled', 'not downloaded': 'undownloaded' };
+const _code = (a) => a.code || OLD_CODES[a.why] || (/^refused/.test(a.why || '') ? 'refused' : '');
+const _reason = (a) => (a.code ? a.reason || '' : (a.why && a.why.length > 8 ? a.why.slice(9) : ''));
+
 function _words(p) {
   const groups = p.missing || [];
   const title = t('{place} needs {what}', { place: p.label, what: _and(groups.map(g => _or(g.map(a => a.label)))) });
@@ -76,10 +82,10 @@ function _words(p) {
   if (p.why) lines.push(p.why.charAt(0).toUpperCase() + p.why.slice(1) + '.');
   const atoms = groups.flat();
   for (const a of atoms) {
-    if (/^refused/.test(a.why)) lines.push(t('{name} refused its key', { name: a.label }) + (a.why.length > 8 ? ' (' + a.why.slice(9) + ')' : '') + '.');
-    if (a.id === 'cloudflare' && a.why === 'not checked') lines.push(t('The Cloudflare key is there but has not passed its check yet - press its check on API keys.'));
-    if (a.id === 'ladder' && a.why === 'not in the ladder') lines.push(t('A key is there, but the ladder on AI settings has no step with it - add one there.'));
-    if (a.id === 'whisper') lines.push(a.why === 'not installed'
+    if (_code(a) === 'refused') lines.push(t('{name} refused its key', { name: a.label }) + (_reason(a) ? ' (' + _reason(a) + ')' : '') + '.');
+    if (a.id === 'cloudflare' && _code(a) === 'unchecked') lines.push(t('The Cloudflare key is there but has not passed its check yet - press its check on API keys.'));
+    if (a.id === 'ladder' && _code(a) === 'unladdered') lines.push(t('A key is there, but the ladder on AI settings has no step with it - add one there.'));
+    if (a.id === 'whisper') lines.push(_code(a) === 'uninstalled'
       ? t('Hearing on this computer is not installed with this copy of the app.')
       : t('Or hear the words on this computer, for free: download the speech model (574 MB) on Admin → This computer.'));
   }
@@ -108,12 +114,12 @@ export function explain(place, anchor, o) {
   const { title, lines, atoms } = _words(p);
   const keys = [...new Set(atoms.map(a => FIELDS[a.id]).filter(Boolean))];
   const ladder = atoms.find(a => a.id === 'ladder');
-  if (ladder && ladder.why === 'no key') keys.push(...LADDER_KEYS);
+  if (ladder && _code(ladder) === 'nokey') keys.push(...LADDER_KEYS);
   const choices = [{ label: t('Cancel') }];
-  if (atoms.some(a => a.id === 'whisper' && a.why === 'not downloaded')) {
+  if (atoms.some(a => a.id === 'whisper' && _code(a) === 'undownloaded')) {
     choices.push({ label: t('This computer'), on: () => { location.href = _href('local', [], o); } });
   }
-  if (ladder && ladder.why === 'not in the ladder') {
+  if (ladder && _code(ladder) === 'unladdered') {
     choices.push({ label: t('AI settings'), on: () => { location.href = _href('ai', [], o); } });
   }
   if (keys.length) choices.push({ label: t('Open API keys'), kind: 'yes', on: () => { location.href = _href('keys', keys, o); } });

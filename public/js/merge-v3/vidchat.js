@@ -2256,7 +2256,7 @@ function VIDEOS(ctx) {
         face.style.aspectRatio = _arOf(shp);
         face.appendChild(el('span', 'w', g.error || T.t('nothing came back')));
         box.appendChild(face);
-        if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) box.appendChild(el('div', 'mv3-ig-note', T.t('Alerts can try it again')));
+        if (!g.cancelled && g.alertId && !(g.question || /question instead/.test(g.error || ''))) box.appendChild(el('div', 'mv3-ig-note', T.t('Alerts can try it again')));
       }
       // Which attempt it is, under the pointer.
       const when = x.at ? new Date(x.at) : null;

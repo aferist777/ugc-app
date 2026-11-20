@@ -26,6 +26,7 @@ const LC  = require('../lib/library-cats');
 // GIF, TIFF, a phone's HEIC - is taken and turned into a JPEG once it is down
 // (lib/image-in.js), rather than turned away or kept in a format the aggregators refuse.
 const IMGIN = require('../lib/image-in');
+const I18N = require('../lib/i18n');
 const _upload = multer({
   storage: multer.diskStorage({
     destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
@@ -45,7 +46,7 @@ const _upload = multer({
 });
 
 router.post('/images/upload', _upload.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  if (!req.file) return res.status(400).json({ success: false, error: I18N.t('no file') });
   // Not into the references of Environments / Lookbooks: only the photos their generators
   // are given lie there (lib/library-cats.js closedWhy) - the file brought goes, refused in words.
   const shut = LC.closedWhy('images', String((req.body || {}).categoryId || ''));
@@ -77,7 +78,7 @@ router.post('/images/upload', _upload.single('image'), async (req, res) => {
 });
 
 router.use('/images/upload', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('upload failed') });
 });
 
 // ── A picture the page cannot show, made one it can ─────────────────────────
@@ -106,14 +107,14 @@ router.post('/images/sendable', async (req, res) => {
 // idempotent by label - it hands back the existing chip rather than making a second one
 // with the same name - so this can simply ask for it every time.
 router.post('/images/shot', _upload.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  if (!req.file) return res.status(400).json({ success: false, error: I18N.t('no file') });
   const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to its category's folder
   try {
     // NO WORDS ON IT: the page draws the captions and the text lanes with libass on a layer of
     // its own, so the frame arrives without them - and stays so: what is wanted is the picture.
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add(imagePath, {
-      name: String((req.body || {}).name || '').trim().slice(0, 120) || 'screenshot',
+      name: String((req.body || {}).name || '').trim().slice(0, 120) || I18N.t('screenshot'),
       source: 'screenshot',
       categoryId: cat.id,
       categoryLabel: cat.label,
@@ -131,7 +132,7 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
 });
 
 router.use('/images/shot', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'could not save the shot' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('could not save the shot') });
 });
 
 // ── A frame out of a clip's own file ─────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ router.post('/images/frame', express.json({ limit: '64kb' }), async (req, res) =
   const b = req.body || {};
   const src = String(b.src || '').split(/[?#]/)[0];
   const abs = src ? MEDIA_LIB.toDiskExisting(src) : null;
-  if (!abs || !VIDEO_RE.test(abs) || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'The clip\'s file is not in the library.' });
+  if (!abs || !VIDEO_RE.test(abs) || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: I18N.t('The clip\'s file is not in the library.') });
   const t = Math.max(0, Number(b.t) || 0);
   const name = 'shot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.jpg';
   const out = path.join(MEDIA.work, name);
@@ -156,7 +157,7 @@ router.post('/images/frame', express.json({ limit: '64kb' }), async (req, res) =
     await VT.frameAt(abs, out, t);
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add('/media/work/' + name, {
-      name: String(b.name || '').trim().slice(0, 120) || 'frame',
+      name: String(b.name || '').trim().slice(0, 120) || I18N.t('frame'),
       source: 'screenshot',
       categoryId: cat.id,
       categoryLabel: cat.label,

@@ -159,7 +159,7 @@ async function _pollRefs() {
   try { window.dispatchEvent(new CustomEvent('ugc-references', { detail: d })); } catch (e) { /* an old page */ }
   if (d.latest && d.latest > was) {
     _tgChime();
-    showToast({ mark: '✈', title: d.title || 'a post', where: 'from Telegram · REFERENCES · ' + (d.where || ''),
+    showToast({ mark: '✈', title: d.title || t('a post'), where: t('from Telegram · REFERENCES · {where}', { where: d.where || '' }),
       onClick: () => _goTo('/library?shelf=media'), ms: TOAST_MS });
   }
 }

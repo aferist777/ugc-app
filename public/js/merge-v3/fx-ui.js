@@ -274,6 +274,8 @@ const _newId = () => 'fx' + Date.now().toString(36) + (_idn++).toString(36) + Ma
 /**
  * ONE new effect `k` on clip `clip`, `from` seconds into it (0 - its start): its length `len` when given (a set's), else its own,
  * cut to what is left of the clip from there; a cover's date the month it is made in; a graphic's colours as chosen last for it.
+ * In an interface that is not English a card's default words are written into it in that language at once (`txt`), so the
+ * clip keeps them whatever the interface says later; in English nothing is written and the table's words are drawn.
  */
 function _one(clip, k, from = 0, len = 0) {
   const e = newEffect(clip, k, _newId());
@@ -284,13 +286,26 @@ function _one(clip, k, from = 0, len = 0) {
     const [lo, hi] = lengthRange(k);
     e.len = _r3(Math.max(lo, Math.min(hi, e.len, (+clip.dur || 0) - from)));
   }
+  const said = _saidTexts(k);
+  if (said) e.txt = said;
   if (k === 'magazine') {
     const now = new Date();
-    e.txt = { date: now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
+    const ru = T.lang() === 'ru';
+    e.txt = { ...(e.txt || {}), date: now.toLocaleString(ru ? 'ru-RU' : 'en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear() };
   }
   const mem = effectOf(k).colors ? _colorsMem()[k] : null;
   if (mem && typeof mem === 'object') e.col = { ...mem };
   return e;
+}
+/** A card's default words in the interface's language - only those it says otherwise than the table; null in English. */
+function _saidTexts(k) {
+  if (T.lang() === 'en') return null;
+  const out = {};
+  for (const [key, , def] of ((effectOf(k) || {}).texts || [])) {
+    const v = def ? T.tc('fx.words', def) : '';
+    if (v && v !== def) out[key] = v;
+  }
+  return Object.keys(out).length ? out : null;
 }
 /** What `k` (an effect, or 'set:<id>' - each its own afterwards) puts on the whole of clip `clip`: the new effects. */
 function _effectsFor(clip, k) {

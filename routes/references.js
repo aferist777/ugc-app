@@ -8,6 +8,7 @@
 
 const express = require('express');
 const REFS = require('../lib/references-store');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ router.get('/references/youtube', (_req, res) => {
     for (const p of REFS.read()) {
       if (!p || !p.remote || p.source !== 'youtube' || p.folder !== 'videos' || p.categoryId || !p.link) continue;
       if (p.linkKey && keys.has(p.linkKey)) continue;
-      items.push({ type: 'remote', id: String(p.id), title: p.title || 'video', thumb: p.poster || null,
+      items.push({ type: 'remote', id: String(p.id), title: p.title || I18N.t('video'), thumb: p.poster || null,
         seconds: +((p.remote || {}).dur) || 0, link: p.link, at: p.receivedAt || '' });
     }
     items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -75,17 +76,17 @@ router.post('/references/:id/move', async (req, res) => {
     const cat = String(to.cat || '');
     const label = String(to.label || '');
     const post = REFS.read().find(p => p && String(p.id) === id);
-    if (!post) return res.status(404).json({ success: false, error: 'no such post' });
+    if (!post) return res.status(404).json({ success: false, error: I18N.t('no such post') });
     const all = b.files === 'all';
     const want = all ? (post.media || []).map(m => m.id) : (Array.isArray(b.files) ? b.files.map(String) : []);
     const chosen = (post.media || []).filter(m => want.includes(String(m.id)));
-    if (!chosen.length && !(all && post.remote && kind === 'references')) return res.status(400).json({ success: false, error: 'nothing chosen' });
+    if (!chosen.length && !(all && post.remote && kind === 'references')) return res.status(400).json({ success: false, error: I18N.t('nothing chosen') });
 
     // ── within REFERENCES ──
     if (kind === 'references') {
       if (cat) {
         const LC = require('../lib/library-cats');
-        if (!LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such folder in REFERENCES' });
+        if (!LC.find('references', cat)) return res.status(400).json({ success: false, error: I18N.t('no such folder in REFERENCES') });
       }
       const whole = all || chosen.length === (post.media || []).length;
       let target = null;
@@ -114,7 +115,7 @@ router.post('/references/:id/move', async (req, res) => {
     }
 
     // ── out of REFERENCES, into VIDEO or IMAGES ──
-    if (!VIDEO_KINDS.includes(kind) && kind !== 'images') return res.status(400).json({ success: false, error: 'it goes to REFERENCES, VIDEO or IMAGES' });
+    if (!VIDEO_KINDS.includes(kind) && kind !== 'images') return res.status(400).json({ success: false, error: I18N.t('it goes to REFERENCES, VIDEO or IMAGES') });
     // Not into the references of Environments / Lookbooks (lib/library-cats.js closedWhy).
     const shut = require('../lib/library-cats').closedWhy(kind, cat);
     if (shut) return res.status(409).json({ success: false, error: shut });
@@ -125,14 +126,14 @@ router.post('/references/:id/move', async (req, res) => {
     let n = 0;
     for (const m of chosen) {
       n++;
-      const name = (post.title || 'post') + (chosen.length > 1 || (post.media || []).length > 1 ? ' · ' + n : '');
+      const name = (post.title || I18N.t('post')) + (chosen.length > 1 || (post.media || []).length > 1 ? ' · ' + n : '');
       try {
         if (m.type === 'video') {
-          if (!VIDEO_KINDS.includes(kind)) { skipped.push({ id: m.id, why: 'a video does not go into IMAGES' }); continue; }
+          if (!VIDEO_KINDS.includes(kind)) { skipped.push({ id: m.id, why: I18N.t('a video does not go into IMAGES') }); continue; }
           fileRecord({ videoPath: m.path, thumbPath: m.thumb || null, name, kind, categoryLabel: kind === 'hooks' ? '' : label,
             link: post.link || '', original: m.original || null, duration: m.dur || 0, w: m.w || 0, h: m.h || 0 });
         } else {
-          if (kind !== 'images') { skipped.push({ id: m.id, why: 'a picture does not go into VIDEO' }); continue; }
+          if (kind !== 'images') { skipped.push({ id: m.id, why: I18N.t('a picture does not go into VIDEO') }); continue; }
           await IMG.add(m.path, { categoryId: cat, categoryLabel: label, name, source: 'upload',
             meta: { from: 'references', link: post.link || '', author: post.author || '' } });
         }
@@ -163,8 +164,8 @@ router.post('/references/:id/move', async (req, res) => {
 router.get('/references/:id/watch', async (req, res) => {
   try {
     const p = REFS.read().find(x => x && String(x.id) === String(req.params.id));
-    if (!p) return res.status(404).json({ success: false, error: 'no such post' });
-    if (!p.link) return res.status(400).json({ success: false, error: 'this post has no link' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such post') });
+    if (!p.link) return res.status(400).json({ success: false, error: I18N.t('this post has no link') });
     res.json({ success: true, url: await require('../lib/ytdlp').streamUrl(p.link) });
   } catch (e) { res.status(502).json({ success: false, error: e.message }); }
 });
@@ -179,7 +180,7 @@ router.delete('/references/:id', (req, res) => {
       const i = list.findIndex(p => p && String(p.id) === id);
       return i < 0 ? null : list.splice(i, 1)[0];
     });
-    if (!gone) return res.status(404).json({ success: false, error: 'no such post' });
+    if (!gone) return res.status(404).json({ success: false, error: I18N.t('no such post') });
     const fs = require('fs');
     const path = require('path');
     const { toDiskWithin } = require('../lib/media');

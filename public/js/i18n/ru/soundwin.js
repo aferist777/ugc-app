@@ -101,7 +101,7 @@ export default {
   'Texts only - nothing is filed by itself; "save" keeps a text in Music → Lyrics': 'Только тексты — сами никуда не кладутся; «Сохранить» оставляет текст в «Музыка → Тексты»',
   'per press · {price} · {what}': 'за запуск · {price} · {what}',
   'Write the lyrics': 'Написать текст',
-  '{name} is making it': '{name} работает',
+  '{name} is making it': '{name} генерирует',
   'writing the lyrics…': 'пишу тексты…',
   'in Alerts · {stage}…': 'в Оповещениях · {stage}…',
   'the lyrics are written - above': 'тексты написаны — выше',

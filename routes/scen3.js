@@ -22,6 +22,8 @@ const path    = require('path');
 const sharp   = require('sharp');
 // A picture brought in, in a format the aggregators take.
 const IMGIN   = require('../lib/image-in');
+// The interface's words (lib/i18n.js): what is said to a person goes through it, every prompt stays English.
+const I18N    = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -60,7 +62,7 @@ function _norm(r, now) {
   const src = r || {};
   return {
     id:        String(src.id != null ? src.id : Date.now()),
-    title:     String(src.title || '').trim() || 'untitled',
+    title:     String(src.title || '').trim() || I18N.t('untitled'),
     lines:     Array.isArray(src.lines)
       ? src.lines.map(l => ({ text: String((l && l.text) || '') }))   // single track: any legacy textColored is dropped
       : [],
@@ -230,12 +232,12 @@ router.post('/scen3/values/remove', (req, res) => {
   const field = String(b.field || '');
   const value = String(b.value || '').trim();
   if (!Object.prototype.hasOwnProperty.call(VALUE_FIELDS, field)) {
-    return res.status(400).json({ success: false, error: 'only a type, role, vertical or product can be removed' });
+    return res.status(400).json({ success: false, error: I18N.t('only a type, role, vertical or product can be removed') });
   }
-  if (!value) return res.status(400).json({ success: false, error: 'which value?' });
+  if (!value) return res.status(400).json({ success: false, error: I18N.t('which value?') });
   const same = (v) => String(v || '').trim().toLowerCase() === value.toLowerCase();
   if (field === 'type' && same(DEFAULT_TYPE)) {
-    return res.status(400).json({ success: false, error: DEFAULT_TYPE + ' is the type every scenario falls back to - it stays' });
+    return res.status(400).json({ success: false, error: I18N.t('{type} is the type every scenario falls back to - it stays', { type: DEFAULT_TYPE }) });
   }
   try {
     const list = _load();
@@ -334,7 +336,7 @@ function _bySource(live) {
   }
   const sources = [...groups.values()]
     .sort((a, b) => b.last.localeCompare(a.last))
-    .map(g => ({ id: g.id, title: g.gone ? (g.title || 'deleted source') : (titles.get(g.id) || g.title || 'untitled source'), n: g.n, gone: g.gone }));
+    .map(g => ({ id: g.id, title: g.gone ? (g.title || I18N.t('deleted source')) : (titles.get(g.id) || g.title || I18N.t('untitled source')), n: g.n, gone: g.gone }));
   return { sources, noSource };
 }
 
@@ -385,7 +387,7 @@ router.get('/scen3/scenarios', (req, res) => {
 router.get('/scen3/scenarios/:id', (req, res) => {
   try {
     const s = _load().find(x => String(x.id) === String(req.params.id));
-    if (!s) return res.status(404).json({ success: false, error: 'not found' });
+    if (!s) return res.status(404).json({ success: false, error: I18N.t('not found') });
     res.json({ success: true, scenario: _full(s) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -394,14 +396,14 @@ router.get('/scen3/scenarios/:id', (req, res) => {
 // are kept - the scenario window's save, the Library column's lines when they are left, a talking head made from a
 // scenario, a line of one edited or put in, the generator's save. { texts, translated } or { fail } in words.
 async function _englishLines(texts) {
-  try { return await AGENT.toEnglishLines(texts); } catch (e) { return { fail: 'the lines could not be translated: ' + e.message }; }
+  try { return await AGENT.toEnglishLines(texts); } catch (e) { return { fail: I18N.t('the lines could not be translated: {why}', { why: e.message }) }; }
 }
 // The same for ONE prompt typed in a field - a line's motion or OmniHuman prompt, a place's "how it moves", a
 // dressing note: English goes as typed, another language is translated (quoted words too). { text } or { fail }.
 async function _englishText(text) {
   const t = String(text || '').trim();
   if (!t || AGENT.english(t)) return { text: t };
-  try { return await AGENT.toEnglish(t); } catch (e) { return { fail: 'it could not be translated: ' + e.message }; }
+  try { return await AGENT.toEnglish(t); } catch (e) { return { fail: I18N.t('it could not be translated: {why}', { why: e.message }) }; }
 }
 
 // ── Upsert by id: creates when the id is unknown, else saves edits in place ──
@@ -422,7 +424,7 @@ router.post('/scen3/scenarios', async (req, res) => {
     const i    = b.id != null ? list.findIndex(x => String(x.id) === String(b.id)) : -1;
     // An EDIT of a scenario that is gone is not a creation: the Library's column sends only the
     // lines, and a scenario made from them would have lost its roles and where it came from.
-    if (edit && i < 0) return res.status(404).json({ success: false, error: 'this scenario no longer exists' });
+    if (edit && i < 0) return res.status(404).json({ success: false, error: I18N.t('this scenario no longer exists') });
 
     if (i >= 0) {
       // keep the original id + createdAt; the request may only carry changed fields
@@ -443,11 +445,11 @@ router.post('/scen3/scenarios', async (req, res) => {
     // never make an autosave fail (_norm falls back to "untitled").
     const rec = _norm({ ...b, id: b.id || _newId(list), createdAt: now, updatedAt: now }, now);
     if (!String(b.title || '').trim()) {
-      return res.status(400).json({ success: false, error: 'title is required' });
+      return res.status(400).json({ success: false, error: I18N.t('title is required') });
     }
     const filled = rec.lines.filter(l => l.text.trim()).length;
     if (filled < MIN_LINES) {
-      return res.status(400).json({ success: false, error: `at least ${MIN_LINES} lines are required (got ${filled})` });
+      return res.status(400).json({ success: false, error: I18N.tn(MIN_LINES, 'at least {n} line is required (got {got})', 'at least {n} lines are required (got {got})', { got: filled }) });
     }
     list.unshift(rec);
     _save(list);
@@ -466,9 +468,9 @@ router.createScenario = function createScenario(body) {
   const now = new Date().toISOString();
   const list = _load();
   const rec = _norm({ ...b, id: _newId(list), createdAt: now, updatedAt: now }, now);
-  if (!String(b.title || '').trim()) throw new Error('title is required');
+  if (!String(b.title || '').trim()) throw new Error(I18N.t('title is required'));
   const filled = rec.lines.filter(l => l.text.trim()).length;
-  if (filled < MIN_LINES) throw new Error(`at least ${MIN_LINES} lines are required (got ${filled})`);
+  if (filled < MIN_LINES) throw new Error(I18N.tn(MIN_LINES, 'at least {n} line is required (got {got})', 'at least {n} lines are required (got {got})', { got: filled }));
   list.unshift(rec);
   _save(list);
   _harvest(rec);
@@ -526,7 +528,7 @@ router.delete('/scen3/scenarios/:id', (req, res) => {
   try {
     const list = _load();
     const gone = list.find(x => String(x.id) === String(req.params.id));
-    if (!gone) return res.status(404).json({ success: false, error: 'not found' });
+    if (!gone) return res.status(404).json({ success: false, error: I18N.t('not found') });
     _save(list.filter(x => x !== gone));
     _unmarkTopic(gone);
     res.json({ success: true });
@@ -706,11 +708,11 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
   ];
   const rawOut = await _ask([{ role: 'user', content }]);
   const m = String(rawOut || '').match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('the agent did not say how to dress this');
+  if (!m) throw new Error(I18N.t('the agent did not say how to dress this'));
   let plan;
-  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error(I18N.t('the agent answered with something unreadable')); }
   const prompt = String((plan && plan.prompt) || '').trim();
-  if (!prompt) throw new Error('the agent wrote no prompt');
+  if (!prompt) throw new Error(I18N.t('the agent wrote no prompt'));
   return { kind: plan.kind === 'costume' ? 'costume' : 'outfit', prompt };
 }
 
@@ -754,7 +756,10 @@ async function _readLookbookIdea(note, imageUrl) {
     'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
     'A costume ALWAYS leaves the wearer face uncovered in an open face opening, in the prompt and in the description alike: never mesh, a net, a screen, glass, a visor or a veil over it. Whoever wears it will speak to the camera, and the face has to be seen.',
     // Everything in English, whatever the person typed in.
-    'Write everything in English - the prompt, the description and "why" - whatever language the person wrote in.',
+    // ...but "why" is said to the person, in the interface's language.
+    I18N.lang() === 'en'
+      ? 'Write everything in English - the prompt, the description and "why" - whatever language the person wrote in.'
+      : 'Write the prompt and the description in English, whatever language the person wrote in; write "why" in ' + I18N.langName() + '.',
   ].join(' ');
   const ask = rules
     + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
@@ -767,15 +772,15 @@ async function _readLookbookIdea(note, imageUrl) {
   // Models wrap JSON in prose or fences often enough that fishing the object out is the rule,
   // not the fallback.
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('the agent did not answer with a plan');
+  if (!m) throw new Error(I18N.t('the agent did not answer with a plan'));
   let plan;
-  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error(I18N.t('the agent answered with something unreadable')); }
   if (!plan || plan.ok === false) {
-    const why = String((plan && plan.why) || 'that does not describe an outfit').trim();
+    const why = String((plan && plan.why) || I18N.t('that does not describe an outfit')).trim();
     return { ok: false, why };
   }
   const prompt = String(plan.prompt || '').trim();
-  if (!prompt) throw new Error('the agent wrote no prompt');
+  if (!prompt) throw new Error(I18N.t('the agent wrote no prompt'));
   return {
     ok: true,
     kind: plan.kind === 'costume' ? 'costume' : 'outfit',
@@ -849,7 +854,7 @@ router.get('/scen3/lookbook-meta', (_req, res) => {
 async function _hostLocal(urlPath, opts) {
   const { exts, ...up } = (opts || {});
   const hit = _resolveMedia(urlPath, exts);
-  if (!hit || !fs.existsSync(hit.abs)) throw new Error('reference not found: ' + urlPath);
+  if (!hit || !fs.existsSync(hit.abs)) throw new Error(I18N.t('reference not found: {path}', { path: urlPath }));
   const buf = fs.readFileSync(hit.abs);
   const ext = path.extname(hit.abs).replace('.', '') || 'jpg';
   const t0 = Date.now();
@@ -878,7 +883,7 @@ async function _kieTask(model, input) {
     { headers: H.kieHeaders(), timeout: 30000 },
   );
   const id = r.data && r.data.data && r.data.data.taskId;
-  if (!id) throw new Error('kie returned no taskId: ' + JSON.stringify(r.data).slice(0, 200));
+  if (!id) throw new Error(I18N.t('kie returned no taskId: {answer}', { answer: JSON.stringify(r.data).slice(0, 200) }));
   return id;
 }
 
@@ -921,7 +926,7 @@ async function _ratioOf(urlPath) {
 async function _i2i(prompt, urls, aspect, quality) {
   const ar = aspect || '1:1';
   const imgs = (urls || []).filter(Boolean);
-  if (imgs.length > 14) throw new Error(`nano-banana-2 takes at most 14 reference images, got ${imgs.length}`);
+  if (imgs.length > 14) throw new Error(I18N.t('nano-banana-2 takes at most 14 reference images, got {n}', { n: imgs.length }));
   return await _kieTask('nano-banana-2', {
     prompt, image_input: imgs, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
   });
@@ -945,7 +950,7 @@ async function _submitLookbook(b) {
   const ref  = String(b.imagePath || '').trim();
   let refToken = String(b.refToken || '').trim();
   if (!note && !b64 && !ref && !refToken) {
-    throw Object.assign(new Error('describe an outfit or add a photo'), { status: 400 });
+    throw Object.assign(new Error(I18N.t('describe an outfit or add a photo')), { status: 400 });
   }
 
   // The engines fetch their references over the internet, so either way the picture goes to
@@ -975,7 +980,7 @@ async function _submitLookbook(b) {
     const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
     const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
     const taskId = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
-    if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
+    if (!taskId) throw Object.assign(new Error(I18N.t('the engine did not accept the task')), { status: 502 });
     // What filing it will need when it lands - the fields _fileGenerated reads. A
     // picture that came by its path is where it was made from; one that came as bytes is filed in
     // Images when the lookbook lands (_fileRef) and says so then.
@@ -1206,7 +1211,10 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
     rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
   }
   // Everything in English, whatever the person typed in.
-  rules.push('Write everything in English - the prompt, the description, "why" and any options - whatever language the person wrote in.');
+  // ...but "why" and the places offered are said to the person, in the interface's language.
+  rules.push(I18N.lang() === 'en'
+    ? 'Write everything in English - the prompt, the description, "why" and any options - whatever language the person wrote in.'
+    : 'Write the prompt and the description in English, whatever language the person wrote in; write "why" and any options in ' + I18N.langName() + '.');
   rules.push('description: 150 words or more, English, for whoever will later compose frames in this place'
     + (editing ? ' - the whole place as it will be AFTER the change, not the change alone' : '') + ': what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
 
@@ -1218,22 +1226,22 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
     : ask;
   const rawOut = await _ask([{ role: 'user', content }]);
   const m = String(rawOut || '').match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('the agent did not answer with a plan');
+  if (!m) throw new Error(I18N.t('the agent did not answer with a plan'));
   let plan;
-  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error(I18N.t('the agent answered with something unreadable')); }
   if (!plan || plan.ok === false) {
-    return { ok: false, why: String((plan && plan.why) || 'that does not describe a place').trim() };
+    return { ok: false, why: String((plan && plan.why) || I18N.t('that does not describe a place')).trim() };
   }
   if (plan.choose) {
     const options = (Array.isArray(plan.options) ? plan.options : [])
       .map(o => String(o || '').trim()).filter(Boolean).slice(0, 6);
     // Asked when it may not be - or asked with nothing to pick from. Either way there is no
     // place to make and no question the panel can put, so it is said as a failure.
-    if (!canChoose || !options.length) throw new Error('the agent could not decide what place to make');
+    if (!canChoose || !options.length) throw new Error(I18N.t('the agent could not decide what place to make'));
     return { ok: true, choose: true, why: String(plan.why || '').trim(), options };
   }
   const prompt = String(plan.prompt || '').trim();
-  if (!prompt) throw new Error('the agent wrote no prompt');
+  if (!prompt) throw new Error(I18N.t('the agent wrote no prompt'));
   return { ok: true, prompt, description: String(plan.description || '').trim() };
 }
 
@@ -1281,7 +1289,7 @@ function _unstash(token) {
 async function _takeUpload(dataUrl) {
   const raw = String(dataUrl || '').replace(/^data:[^;,]*;base64,/i, '');
   const got = Buffer.from(raw, 'base64');
-  if (!got.length) throw Object.assign(new Error('unreadable photo'), { status: 400 });
+  if (!got.length) throw Object.assign(new Error(I18N.t('unreadable photo')), { status: 400 });
   const pic = await IMGIN.sendable(got);
   const buf = pic.buf, ext = pic.ext;
   const token = _stashRef(buf, ext);
@@ -1299,7 +1307,7 @@ async function _takeUpload(dataUrl) {
 // The same photo again, by its token: the URL it already has, or the file sent up once more.
 async function _reuseUpload(token) {
   const file = _stashed(token);
-  if (!file) throw Object.assign(new Error('the photo is no longer here - add it again'), { status: 400, gone: true });
+  if (!file) throw Object.assign(new Error(I18N.t('the photo is no longer here - add it again')), { status: 400, gone: true });
   const buf = fs.readFileSync(file);
   let url = _refUrls.get(token);
   if (!url) {
@@ -1360,10 +1368,10 @@ async function _submitEnv(b) {
   const canChoose = Array.isArray(b.choices);
   const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
   if (!note && !b.imageBase64 && !b.refToken && !saved) {
-    throw Object.assign(new Error('describe a place or add a photo'), { status: 400 });
+    throw Object.assign(new Error(I18N.t('describe a place or add a photo')), { status: 400 });
   }
   if (saved && !note && !b.imageBase64 && !b.refToken) {
-    throw Object.assign(new Error('say what to change in this environment'), { status: 400 });
+    throw Object.assign(new Error(I18N.t('say what to change in this environment')), { status: 400 });
   }
 
   try {
@@ -1403,7 +1411,7 @@ async function _submitEnv(b) {
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
       + (mode === 'edit' ? '' : ENV_TAIL);
     const taskId = await _envTask(prompt, url ? [url] : []);
-    if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
+    if (!taskId) throw Object.assign(new Error(I18N.t('the engine did not accept the task')), { status: 502 });
     console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
       + (shape && shape.extend && mode !== 'picked' ? ` extend=${shape.extend}` : '') + (choices.length ? ` picked=${choices.length}` : ''));
     // An environment changed by its path is where the place was made from (a photo as bytes is filed
@@ -1494,7 +1502,7 @@ function _askEnvMotion(url) {
       { type: 'text', text: ENV_MOTION_ASK },
       { type: 'image_url', image_url: { url: imageUrl } },
     ] }])).slice(0, 600);
-    if (!motion) throw new Error('the agent said nothing about this place');
+    if (!motion) throw new Error(I18N.t('the agent said nothing about this place'));
     return _keepEnvMotion(url, motion);
   })().finally(() => { _envMotionAsking.delete(key); });
   _envMotionAsking.set(key, p);
@@ -1505,13 +1513,13 @@ router.post('/scen3/env/motion', async (req, res) => {
   try {
     const b = req.body || {};
     const url = String(b.path || '').trim();
-    if (!url) return res.status(400).json({ success: false, error: 'path is required' });
+    if (!url) return res.status(400).json({ success: false, error: I18N.t('path is required') });
     // The picture has to be one on the environments shelf: the store is keyed by address, and an
     // entry under an address that is not a place would never be read by anything.
     const hit = _resolveMedia(url);
-    if (!hit || !fs.existsSync(hit.abs)) return res.status(404).json({ success: false, error: 'no such picture' });
+    if (!hit || !fs.existsSync(hit.abs)) return res.status(404).json({ success: false, error: I18N.t('no such picture') });
     if (!hit.abs.startsWith(path.resolve(CFG.ENVIRONMENTS_DIR) + path.sep)) {
-      return res.status(400).json({ success: false, error: 'that picture is not an environment' });
+      return res.status(400).json({ success: false, error: I18N.t('that picture is not an environment') });
     }
 
     let given = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
@@ -1559,7 +1567,7 @@ function _journal(type, kind, out, b) {
   return JOBS.submitted({
     kind,
     what: type,
-    title: String(b.title || '').trim() || WHAT_TITLE[type] || type,
+    title: String(b.title || '').trim() || (WHAT_TITLE[type] ? I18N.t(WHAT_TITLE[type]) : type),
     where: b.where,
     engine: out.engine || '',
     taskIds: [out.taskId],
@@ -1602,7 +1610,7 @@ const _fileParams = (rec) => ((rec.job || {}).params || {}).file || {};
 // task was asked for and left so when the app closed: it fails in words, never asked for again by itself.
 function _pollMaker(rec) {
   if (rec.taskIds && rec.taskIds[0]) return _pollTask(rec);
-  return { state: 'failed', error: 'the app was closed before the picture was asked for - try again' };
+  return { state: 'failed', error: I18N.t('the app was closed before the picture was asked for - try again') };
 }
 
 JOBS.register('lookbook', {
@@ -1627,7 +1635,7 @@ JOBS.register('environment', {
     const out = await _submitEnv(request);
     // A picture with no place in it asks a question instead of making anything, and a question
     // cannot be answered without the person.
-    if (out.choose) throw new Error('that picture has no place in it - pick one on the page');
+    if (out.choose) throw new Error(I18N.t('that picture has no place in it - pick one on the page'));
     return { taskId: out.taskId, engine: out.engine, file: out.file };
   },
 });
@@ -1656,12 +1664,12 @@ async function _submitDress(b) {
   const base = String(b.basePath || '').trim();       // the image being dressed
   const lb   = String(b.lookbookPath || '').trim();   // optional lookbook reference
   let note   = String(b.note || '').trim();           // optional clothing-only steering
-  if (!base) throw Object.assign(new Error('basePath is required'), { status: 400 });
-  if (!lb && !note) throw Object.assign(new Error('pick a lookbook or write a note'), { status: 400 });
+  if (!base) throw Object.assign(new Error(I18N.t('basePath is required')), { status: 400 });
+  if (!lb && !note) throw Object.assign(new Error(I18N.t('pick a lookbook or write a note')), { status: 400 });
   // A note in another language goes into the picture's prompt in English.
   if (note) {
     const t = await _englishText(note);
-    if (t.fail) throw Object.assign(new Error('the note ' + t.fail), { status: 502 });
+    if (t.fail) throw Object.assign(new Error(I18N.t('the note {why}', { why: t.fail })), { status: 502 });
     note = t.text;
   }
 
@@ -1684,7 +1692,7 @@ async function _submitDress(b) {
   // 4K: the result is a reference sheet every frame of the ad is built from, so it is
   // the one picture in the chain that must not be soft.
   const taskId = await _i2i(prompt, urls, aspect, DRESS_RES);
-  if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
+  if (!taskId) throw Object.assign(new Error(I18N.t('the engine did not accept the task')), { status: 502 });
   console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
   return {
     taskId, kind, prompt, mode: lb ? 'apply' : 'redress',
@@ -1694,7 +1702,7 @@ async function _submitDress(b) {
     // A dressed picture is filed as a LOOK on the character, and when the dressing was asked for
     // by a project, that project wears it from then on.
     file: {
-      charId: String(b.charId || ''), charName: String(b.charName || 'look'),
+      charId: String(b.charId || ''), charName: String(b.charName || I18N.t('look')),
       gender: String(b.gender || ''), lookbookPath: lb, engine: IMG_ENGINE,
       projectId: String(b.projectId || ''),
     },
@@ -1724,12 +1732,12 @@ const OStore = require('../lib/obrazy-store');
 // the way the route does.
 async function _saveObraz(b) {
   const charId   = String(b.charId || '');
-  const charName = String(b.charName || 'look');
+  const charName = String(b.charName || I18N.t('look'));
   const src      = String(b.imagePath || '');
-  if (!charId) throw Object.assign(new Error('charId is required'), { status: 400 });
+  if (!charId) throw Object.assign(new Error(I18N.t('charId is required')), { status: 400 });
 
   const hit = _resolveMedia(src);
-  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('image not found'), { status: 400 });
+  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error(I18N.t('image not found')), { status: 400 });
 
     // Refuse to touch the library if it exists but cannot be parsed — appending
     // to a fresh array would silently wipe every obraz the user owns.
@@ -1737,13 +1745,13 @@ async function _saveObraz(b) {
   if (fs.existsSync(OBRAZY_JSON)) {
     const parsed = _read(OBRAZY_JSON);
     if (!Array.isArray(parsed)) {
-      throw Object.assign(new Error('obrazy.json is unreadable - refusing to write'), { status: 500 });
+      throw Object.assign(new Error(I18N.t('obrazy.json is unreadable - refusing to write')), { status: 500 });
     }
     list = parsed;
   }
 
   const id   = String(Date.now());
-  const name = `${charName} - look ${new Date().toISOString().slice(0, 10)}`;
+  const name = I18N.t('{name} - look {day}', { name: charName, day: new Date().toISOString().slice(0, 10) });
   const folder = OStore.obrazAbsFolder(name, id);
   fs.mkdirSync(folder, { recursive: true });
 
@@ -1788,7 +1796,7 @@ async function _saveObraz(b) {
 // (lib/gen-jobs.js), and it has to be filed exactly as the route files it.
 async function _fileGenerated(kind, src, b) {
   const hit = _resolveMedia(src);
-  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('result not found'), { status: 400 });
+  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error(I18N.t('result not found')), { status: 400 });
 
   // A generated environment or lookbook is filed into its shared library folder.
   const LIB = kind === 'environment'
@@ -1887,7 +1895,7 @@ router.get('/scen3/motion-presets', (_req, res) => {
   res.json({
     success: true,
     models: TH.models(),
-    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about })),
+    moods: MP.MOODS.map(m => ({ id: m.id, label: I18N.t(m.label), about: I18N.t(m.about) })),
   });
 });
 
@@ -1957,7 +1965,9 @@ async function _tagOnce(mood, texts) {
   const j = H.parseLooseJson(raw);
   const got = (j && Array.isArray(j.lines)) ? j.lines.map(x => String(x == null ? '' : x)) : null;
   if (!got || got.length !== texts.length) {
-    throw new Error(`the model returned ${got ? got.length : 'no'} lines for ${texts.length}`);
+    throw new Error(got
+      ? I18N.tn(got.length, 'the model returned {n} lines for {m}', 'the model returned {n} lines for {m}', { m: texts.length })
+      : I18N.t('the model returned no lines for {m}', { m: texts.length }));
   }
   return got;
 }
@@ -2008,14 +2018,14 @@ async function _retagOnce(mood, lines, want) {
   const raw = await _ask([{ role: 'user', content: _retagPrompt(mood, lines, want) }]);
   const j = H.parseLooseJson(raw);
   const arr = (j && Array.isArray(j.lines)) ? j.lines : null;
-  if (!arr) throw new Error('the model returned no lines');
+  if (!arr) throw new Error(I18N.t('the model returned no lines'));
   const out = {};
   arr.forEach(e => {
     const n = parseInt((e && e.n), 10);
     if (Number.isInteger(n) && want.includes(n - 1)) out[n - 1] = String((e && e.text) || '');
   });
   const missing = want.filter(i => out[i] === undefined);
-  if (missing.length) throw new Error(`no answer for line(s) ${missing.map(i => i + 1).join(', ')}`);
+  if (missing.length) throw new Error(I18N.t('no answer for line(s) {list}', { list: missing.map(i => i + 1).join(', ') }));
   return out;
 }
 
@@ -2028,11 +2038,11 @@ router.post('/scen3/voice/tag', async (req, res) => {
 async function _tagRoute(req, res) {
   try {
     const id = String((req.body || {}).projectId || '').trim();
-    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    if (!id) return res.status(400).json({ success: false, error: I18N.t('projectId is required') });
 
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no project "{id}"', { id }) });
 
     // A line TAKEN OFF the script is tagged with the rest, and deliberately: tags belong
     // to the WORDS, not to the cut, so a line put back comes back already marked and needs no
@@ -2040,7 +2050,7 @@ async function _tagRoute(req, res) {
     // tagging counts only the lines that are in the video when it decides it is done.
     const lines = (proj.lines || []).map(_normLine);
     const texts = lines.map(l => l.text);
-    if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
+    if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: I18N.t('this project has no lines') });
 
     const voice = _normVoice(proj.voice);
     // The mood of the VIDEO, always: one vocabulary for the read, the frames and the animation
@@ -2048,7 +2058,7 @@ async function _tagRoute(req, res) {
     // back as `tagged`, marked or not, so the tagged read IS the read and the project is switched
     // to it.
     const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
-    if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'a mood is needed' });
+    if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? I18N.t('no such mood') : I18N.t('a mood is needed') });
     const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags, voiceover: proj.type === 'voiceover' };
 
     // `only` re-tags just those lines, leaving every approved line untouched. Sent
@@ -2069,7 +2079,7 @@ async function _tagRoute(req, res) {
         const idx = partial ? only : texts.map((_, i) => i);
         const changed = idx.filter(i => _words(answer[i]) !== _words(texts[i]));
         if (!changed.length) { got = answer; break; }
-        lastErr = `the wording changed on line(s) ${changed.map(i => i + 1).join(', ')}`;
+        lastErr = I18N.t('the wording changed on line(s) {list}', { list: changed.map(i => i + 1).join(', ') });
         console.warn(`[scen3/voice/tag] attempt ${attempt}: ${lastErr}`);
         if (attempt === 2) got = answer;      // keep it; the mismatched lines fall back below
       } catch (e) {
@@ -2077,7 +2087,7 @@ async function _tagRoute(req, res) {
         console.warn(`[scen3/voice/tag] attempt ${attempt} failed: ${e.message}`);
       }
     }
-    if (!got) return res.status(502).json({ success: false, error: lastErr || 'the tagging pass failed' });
+    if (!got) return res.status(502).json({ success: false, error: lastErr || I18N.t('the tagging pass failed') });
 
     const report = { tagged: 0, plain: 0, rejected: [], dropped: [], only };
     const touch = partial ? only : lines.map((_, i) => i);
@@ -2334,7 +2344,7 @@ function _tempo(abs, speed) {
     proc.stderr.on('data', c => { err += c.toString(); });
     proc.on('error', reject);
     proc.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve(out)
-      : reject(new Error('the read could not be retimed' + (err ? ': ' + err.trim().slice(0, 160) : '')))));
+      : reject(new Error(err ? I18N.t('the read could not be retimed: {why}', { why: err.trim().slice(0, 160) }) : I18N.t('the read could not be retimed')))));
   });
 }
 
@@ -2375,7 +2385,7 @@ async function _retempoOne(ctx, i, quiet) {
   const t = (ctx.lines[i].audio || {})[ctx.variant];
   const rawUrl = t.raw || t.path;
   const rawAbs = toDiskWithin(rawUrl, [CFG.PROJECTS_DIR]);
-  if (!rawAbs || !fs.existsSync(rawAbs)) throw new Error('the original read is gone - read the line again');
+  if (!rawAbs || !fs.existsSync(rawAbs)) throw new Error(I18N.t('the original read is gone - read the line again'));
   const speed = _speedOf(ctx.lines[i], ctx);
   const play = speed === 1 ? rawAbs : await _tempo(rawAbs, speed);
   const dur = await _audioDur(play);
@@ -2421,11 +2431,11 @@ async function _speakRoute(req, res) {
   try {
     const b  = req.body || {};
     const id = String(b.projectId || '').trim();
-    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    if (!id) return res.status(400).json({ success: false, error: I18N.t('projectId is required') });
     const key = _elKey();
-    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    if (!key) return res.status(400).json({ success: false, error: I18N.t('no ElevenLabs key in settings') });
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no project "{id}"', { id }) });
 
     const ctx = _readCtx(proj);
     if (!ctx.cast.has) return res.status(400).json({ success: false, error: ctx.cast.reason });
@@ -2483,11 +2493,11 @@ router.post('/scen3/voice/speak-all', (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
-    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    if (!id) return res.status(400).json({ success: false, error: I18N.t('projectId is required') });
     const key = _elKey();
-    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    if (!key) return res.status(400).json({ success: false, error: I18N.t('no ElevenLabs key in settings') });
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no project "{id}"', { id }) });
     const now = _reads.get(id);
     if (now && now.running) return res.json({ success: true, queued: 0, already: true, state: now });
 
@@ -2532,15 +2542,15 @@ async function _speedRoute(req, res) {
   try {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
-    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    if (!id) return res.status(400).json({ success: false, error: I18N.t('projectId is required') });
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no project "{id}"', { id }) });
     const hasLine = b.line !== undefined && b.line !== null;
     const li = parseInt(b.line, 10);
-    if (hasLine && !(li >= 0 && li < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
-    if (!hasLine && !(Number(b.speed) > 0)) return res.status(400).json({ success: false, error: 'speed is required' });
+    if (hasLine && !(li >= 0 && li < (proj.lines || []).length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
+    if (!hasLine && !(Number(b.speed) > 0)) return res.status(400).json({ success: false, error: I18N.t('speed is required') });
     const st = _reads.get(id);
-    if (st && st.running) return res.status(409).json({ success: false, error: 'the script is being read - change the speed when it is done' });
+    if (st && st.running) return res.status(409).json({ success: false, error: I18N.t('the script is being read - change the speed when it is done') });
 
     const saved = PROJECTS.apply(id, (fresh) => {
       if (hasLine) {
@@ -2554,7 +2564,7 @@ async function _speedRoute(req, res) {
       }
       fresh.updatedAt = new Date().toISOString();
     });
-    if (!saved) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!saved) return res.status(404).json({ success: false, error: I18N.t('no project "{id}"', { id }) });
 
     const ctx = _readCtx(saved);
     const want = ctx.lines.map((_, i) => i).filter(i => !ctx.lines[i].removed && _unsettled(ctx.lines[i], ctx) === 'speed');
@@ -2620,10 +2630,10 @@ async function _fetchClip(taskId, projectId, cutTo) {
     const out = JSON.parse(data.resultJson);
     url = (out.resultUrls && out.resultUrls[0]) || out.video_url || out.url || null;
   } catch (e) {}
-  if (!url) return { state: 'failed', error: 'the render came back without a video URL' };
+  if (!url) return { state: 'failed', error: I18N.t('the render came back without a video URL') };
 
   const dir = PROJECTS.dirOf(projectId, 'clips');
-  if (!dir) return { state: 'failed', error: 'the project is gone' };
+  if (!dir) return { state: 'failed', error: I18N.t('the project is gone') };
   const name = `c${taskId}_${Date.now()}.mp4`;
   const abs = path.join(dir, name);
   const dl = await axios({ url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
@@ -2925,7 +2935,7 @@ function _normProject(p, now) {
     // How the look and the place read, for the frames of the fragments step: the person to keep,
     // the place, its light. Read once for a look and a place, and again only when either changes.
     frameRef:   _normFrameRef(src.frameRef),
-    name:       String(src.name || '').trim() || 'untitled project',
+    name:       String(src.name || '').trim() || I18N.t('untitled project'),
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
     // A voiceover is the same record with no who / where, frames or clips; everything else is a talking head.
     type:       src.type === 'voiceover' ? 'voiceover' : 'talking_head',
@@ -3167,12 +3177,12 @@ const _normVideo = (v) => {
 function _unchosen(video, which) {
   const v = video || {};
   const words = {
-    mood: !v.mood && 'the mood (field 1)',
-    model: !v.model && 'the model of the clips (field 3)',
-    quality: !v.quality && 'the quality of the clips (field 3)',
+    mood: !v.mood && I18N.t('the mood (field 1)'),
+    model: !v.model && I18N.t('the model of the clips (field 3)'),
+    quality: !v.quality && I18N.t('the quality of the clips (field 3)'),
   };
   const miss = which.map(k => words[k]).filter(Boolean);
-  return miss.length ? 'choose ' + miss.join(', ') + ' first' : '';
+  return miss.length ? I18N.t('choose {what} first', { what: miss.join(', ') }) : '';
 }
 // Voice settings live on the PROJECT: one read for the whole ad.
 const _normVoice = (v) => {
@@ -3242,14 +3252,14 @@ function _castVoiceOf(p) {
   // no voice of their own.
   const pick = _normVoice((p || {}).voice).pick;
   const own = pick ? { has: true, id: pick.voiceId, character: '', index: 1, count: 1, own: true, name: pick.name } : null;
-  if (!cast.characterId && !cast.characterName) return own || { has: false, reason: 'no character cast yet' };
+  if (!cast.characterId && !cast.characterName) return own || { has: false, reason: I18N.t('no character cast yet') };
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
   const arr = Array.isArray(chars) ? chars : [];
   const ch = arr.find(c => String(c.id) === cast.characterId)
           || arr.find(c => String(c.name) === cast.characterName);
-  if (!ch) return own || { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
+  if (!ch) return own || { has: false, reason: I18N.t('"{name}" is not in the character library any more', { name: cast.characterName }) };
   const id = String(ch.voice || '').trim();
-  if (!id) return own || { has: false, reason: `"${ch.name}" has no voice saved — give it one in its column on the Library's Characters shelf` };
+  if (!id) return own || { has: false, reason: I18N.t('"{name}" has no voice saved — give it one in its column on the Library\'s Characters shelf', { name: ch.name }) };
   // The voice is NAMED after the character plus its number in that character's list, because
   // "Adrian - Cinematic Deep Male" says nothing about whose voice it is while a project is
   // being read. An id not in the list yet still counts as the first one.
@@ -3276,7 +3286,7 @@ const _projFull = p => ({
 router.get('/scen3/projects/:id', (req, res) => {
   try {
     const p = _loadProjects().find(x => String(x.id) === String(req.params.id));
-    if (!p) return res.status(404).json({ success: false, error: 'not found' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('not found') });
     // Opening a project is when the timeline catches up with what was made
     // while this app was not running. It asks a cheap question first and
     // lays nothing unless the answer differs from what is there.
@@ -3319,7 +3329,7 @@ router.post('/scen3/projects', async (req, res) => {
 
     if (b.id != null) {
       const i = list.findIndex(x => String(x.id) === String(b.id));
-      if (i < 0) return res.status(404).json({ success: false, error: 'not found' });
+      if (i < 0) return res.status(404).json({ success: false, error: I18N.t('not found') });
       // CASTING IS MERGED, not replaced. The server can write a finished look into it while a page
       // is open (lib/gen-jobs.js), and that page's next save - which carries its own older copy of
       // the casting - must not put the old one back. Every caller sends the keys it changed.
@@ -3346,16 +3356,16 @@ router.post('/scen3/projects', async (req, res) => {
 
     if (b.scenarioId == null && Array.isArray(b.lines)) {
       let texts = b.lines.map(l => String((l && typeof l === 'object' ? l.text : l) || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
-      if (!texts.length) return res.status(400).json({ success: false, error: 'the text is empty' });
-      if (texts.length > 200) return res.status(400).json({ success: false, error: 'at most 200 lines' });
-      if (texts.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: 'a line is longer than ' + VO_MAX + ' characters' });
+      if (!texts.length) return res.status(400).json({ success: false, error: I18N.t('the text is empty') });
+      if (texts.length > 200) return res.status(400).json({ success: false, error: I18N.t('at most 200 lines') });
+      if (texts.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: I18N.t('a line is longer than {n} characters', { n: VO_MAX }) });
       if (texts.some(t => !AGENT.english(t))) {
         const t = await _englishLines(texts);
         if (t.fail) return res.status(502).json({ success: false, error: t.fail });
         texts = t.texts;
       }
       const title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120)
-        || texts[0].split(' ').slice(0, 6).join(' ').slice(0, 120) || 'talking head';
+        || texts[0].split(' ').slice(0, 6).join(' ').slice(0, 120) || I18N.t('talking head');
       const rec = _normProject({
         id: _newId(list), name: `${now.slice(0, 10)} — ${title}`,
         scenarioId: '', gender: '', title, lines: texts.map(text => ({ text })),
@@ -3369,7 +3379,7 @@ router.post('/scen3/projects', async (req, res) => {
     }
 
     const scen = _load().find(x => String(x.id) === String(b.scenarioId || ''));
-    if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
+    if (!scen) return res.status(400).json({ success: false, error: I18N.t('scenarioId not found') });
     // '' when the scenario does not say, and that is allowed: the casting then offers
     // every character rather than none.
     const gender = GENDERS.includes(_genderOf(scen)) ? _genderOf(scen) : '';
@@ -3452,22 +3462,22 @@ router.post('/scen3/projects/:id/cast', async (req, res) => {
   try {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
-    if (proj.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('not found') });
+    if (proj.type === 'voiceover') return res.status(400).json({ success: false, error: I18N.t('a voiceover has nobody to cast') });
     const b = req.body || {};
     const next = b.clear ? null : _normLook(b);
-    if (!b.clear && !(next && next.obrazId)) return res.status(400).json({ success: false, error: 'a look is needed' });
+    if (!b.clear && !(next && next.obrazId)) return res.status(400).json({ success: false, error: I18N.t('a look is needed') });
     const plan = _castPlan(proj, next);
     // A question, not a refusal: answered 200, so the page's console stays clean at every ask.
     if (plan.ask && !b.sure) return res.json({ success: false, ask: plan.ask, error: 'asked' });
     if (next && (plan.look || plan.char)) {
       const busy = _castBusy(id);
-      if (busy) return res.status(409).json({ success: false, error: busy + ' - change the look when it is done' });
+      if (busy) return res.status(409).json({ success: false, error: I18N.t('{busy} - change the look when it is done', { busy }) });
     }
     const now = new Date().toISOString();
     let moved = false;
     const saved = PROJECTS.apply(id, (fresh) => { moved = _applyCast(fresh, next, _castPlan(fresh, next), now); });
-    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    if (!saved) return res.status(404).json({ success: false, error: I18N.t('not found') });
     if (moved) {
       try { await MIRROR.rebuild(id, { project: saved }); }
       catch (e) { console.warn('[scen3/cast] the timeline was not re-laid:', e.message); }
@@ -3493,10 +3503,10 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
     const id = String(req.params.id);
     const list = _loadProjects();
     const src = list.find(p => String(p.id) === id);
-    if (!src) return res.status(404).json({ success: false, error: 'not found' });
-    if (src.type === 'voiceover') return res.status(400).json({ success: false, error: 'a voiceover has nobody to cast' });
+    if (!src) return res.status(404).json({ success: false, error: I18N.t('not found') });
+    if (src.type === 'voiceover') return res.status(400).json({ success: false, error: I18N.t('a voiceover has nobody to cast') });
     const look = _normLook(req.body || {});
-    if (!(look && look.obrazId)) return res.status(400).json({ success: false, error: 'a look is needed' });
+    if (!(look && look.obrazId)) return res.status(400).json({ success: false, error: I18N.t('a look is needed') });
     const now = new Date().toISOString();
     const lines = (src.lines || []).map(_normLine).map(l => ({
       text: l.text, tagged: l.tagged, removed: l.removed,
@@ -3506,7 +3516,7 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
     const place = _normCasting(src.casting);
     const rec = _normProject({
       id: _newId(list),
-      name: `${now.slice(0, 10)} — ${String(src.title || '').trim() || 'talking head'} · ${look.characterName}`,
+      name: `${now.slice(0, 10)} — ${String(src.title || '').trim() || I18N.t('talking head')} · ${look.characterName}`,
       scenarioId: src.scenarioId, gender: src.gender, title: src.title, lines,
       vertical: src.vertical, product: src.product, roles: src.roles,
       video: src.video,
@@ -3534,7 +3544,8 @@ router.post('/scen3/projects/:id/fork', (req, res) => {
         its folder that name; cleared, it is "voiceover draft" again. Its mood and voice stay. The first read files it as a
         project (_fileTake) - from then on its script is its own.
    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
-const VO_DRAFT_NAME = 'voiceover draft';
+// The draft's name, written in the interface's language when the draft is made or emptied.
+const _voDraftName = () => I18N.t('voiceover draft');
 const _voDraftOf = (list) => list.find(p => p && p.type === 'voiceover' && p.draft) || null;
 
 router.post('/scen3/voiceover/draft', (req, res) => {
@@ -3545,7 +3556,7 @@ router.post('/scen3/voiceover/draft', (req, res) => {
     if (!rec) {
       rec = _normProject({
         id: _newId(list), type: 'voiceover', draft: true,
-        name: VO_DRAFT_NAME, title: '', lines: [], video: { v: 2 }, createdAt: now, updatedAt: now,
+        name: _voDraftName(), title: '', lines: [], video: { v: 2 }, createdAt: now, updatedAt: now,
       }, now);
       list.unshift(rec);
       _saveProjects(list);
@@ -3559,28 +3570,28 @@ router.post('/scen3/projects/:id/script', async (req, res) => {
   try {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('not found') });
     if (proj.type !== 'voiceover' || !proj.draft) {
-      return res.status(409).json({ success: false, error: 'its voices are read - the script is this project\'s now; another one is a new voiceover' });
+      return res.status(409).json({ success: false, error: I18N.t('its voices are read - the script is this project\'s now; another one is a new voiceover') });
     }
     const busy = _scriptBusy(id);
-    if (busy) return res.status(409).json({ success: false, error: busy + ' - change the script when it is done' });
+    if (busy) return res.status(409).json({ success: false, error: I18N.t('{busy} - change the script when it is done', { busy }) });
     const b = req.body || {};
     let lines = [], title = '', scenarioId = '', extra = {};
     if (b.clear) { /* back to the list: no script */ }
     else if (b.scenarioId != null) {
       const scen = _load().find(x => String(x.id) === String(b.scenarioId));
-      if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
+      if (!scen) return res.status(400).json({ success: false, error: I18N.t('scenarioId not found') });
       lines = (scen.lines || []).map(l => String((l && l.text) || '').trim()).filter(Boolean);
-      if (!lines.length) return res.status(400).json({ success: false, error: 'this scenario has no lines' });
-      if (lines.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: 'a line of this scenario is longer than ' + VO_MAX + ' characters' });
-      title = String(scen.title || '').trim() || 'untitled';
+      if (!lines.length) return res.status(400).json({ success: false, error: I18N.t('this scenario has no lines') });
+      if (lines.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: I18N.t('a line of this scenario is longer than {n} characters', { n: VO_MAX }) });
+      title = String(scen.title || '').trim() || I18N.t('untitled');
       scenarioId = String(scen.id);
       extra = { vertical: scen.vertical || '', product: scen.product || '', roles: scen.roles || [] };
     } else {
       const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
-      if (!text) return res.status(400).json({ success: false, error: 'the text is empty' });
-      if (text.length > VO_MAX) return res.status(400).json({ success: false, error: 'the text is longer than ' + VO_MAX + ' characters' });
+      if (!text) return res.status(400).json({ success: false, error: I18N.t('the text is empty') });
+      if (text.length > VO_MAX) return res.status(400).json({ success: false, error: I18N.t('the text is longer than {n} characters', { n: VO_MAX }) });
       lines = [text];
       title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120) || text.split(' ').slice(0, 6).join(' ').slice(0, 120);
     }
@@ -3592,14 +3603,14 @@ router.post('/scen3/projects/:id/script', async (req, res) => {
       fresh.scenarioId = scenarioId;
       Object.assign(fresh, { vertical: '', product: '', roles: [] }, extra);
       // The name, and so the folder (lib/projects-store.js): given now, while the folder holds nothing but the timeline.
-      fresh.name = lines.length ? `${day} — ${title}` : VO_DRAFT_NAME;
+      fresh.name = lines.length ? `${day} — ${title}` : _voDraftName();
       fresh.updatedAt = now;
     });
-    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    if (!saved) return res.status(404).json({ success: false, error: I18N.t('not found') });
     // The timeline's name follows, as a new talking head's is made (routes/mergev3.js /mv3/timeline/new).
     try {
       require('../lib/merge-store').update('sv3_' + id, (t) => {
-        t.title = lines.length ? `${day} - ${title}` : VO_DRAFT_NAME;
+        t.title = lines.length ? `${day} - ${title}` : _voDraftName();
         t.updatedAt = now;
       });
     } catch (e) { console.warn('[scen3/script] the timeline was not renamed:', e.message); }
@@ -3631,10 +3642,10 @@ router.post('/scen3/projects/:id/script', async (req, res) => {
 router.post('/scen3/projects/:id/line', async (req, res) => {
   try {
     let text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
-    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+    if (!text) return res.status(400).json({ success: false, error: I18N.t('a line cannot be empty') });
     // A voiceover's line is kept in its own language, and no longer than VO_MAX.
     const vo = (_loadProjects().find(p => String(p.id) === String(req.params.id)) || {}).type === 'voiceover';
-    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
+    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: I18N.t('a line is at most {n} characters', { n: VO_MAX }) });
     // Typed in another language, the words are made English before they are kept - the field shows the
     // English. Then the project is read and written in one go.
     if (!vo && !AGENT.english(text)) {
@@ -3644,11 +3655,11 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
     }
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === String(req.params.id));
-    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('not found') });
 
     const lines = (proj.lines || []).map(_normLine);
     const i = parseInt((req.body || {}).index, 10);
-    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
 
     // The words with their [tags], when the page edits those too (Merge). Kept only when
     // the words in it are these words: tags belong to the words they sit between. Sent nothing, a
@@ -3692,9 +3703,9 @@ function _lineBusy(id, i) {
   const clip = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
     && r.job && r.job.params && r.job.params.file
     && String(r.job.params.file.projectId) === String(id) && Number(r.job.params.file.line) === i);
-  if (clip) return 'this fragment is being filmed right now';
+  if (clip) return I18N.t('this fragment is being filmed right now');
   const run = _reads.get(String(id));
-  if (run && run.running && Array.isArray(run.only) && run.only.includes(i)) return 'this fragment is being read right now';
+  if (run && run.running && Array.isArray(run.only) && run.only.includes(i)) return I18N.t('this fragment is being read right now');
   return '';
 }
 
@@ -3703,11 +3714,11 @@ router.post('/scen3/projects/:id/line/state', async (req, res) => {
     const id = String(req.params.id);
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('not found') });
 
     const lines = (proj.lines || []).map(_normLine);
     const i = parseInt((req.body || {}).index, 10);
-    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
     const off = !!(req.body || {}).removed;
     if (off) {
       const busy = _lineBusy(id, i);
@@ -3758,36 +3769,36 @@ function _holdLines(id) {
 // Is anything being made in this project that a line put in would move? '' when nothing is.
 function _scriptBusy(id) {
   const key = String(id);
-  if (_lineWork.get(key)) return 'a line is being marked up, read or written for';
+  if (_lineWork.get(key)) return I18N.t('a line is being marked up, read or written for');
   const run = _reads.get(key);
-  if (run && run.running) return 'the script is being read';
+  if (run && run.running) return I18N.t('the script is being read');
   const clip = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
     && r.job && r.job.params && r.job.params.file && String(r.job.params.file.projectId) === key);
-  return clip ? 'a clip is being made' : '';
+  return clip ? I18N.t('a clip is being made') : '';
 }
 
 router.post('/scen3/projects/:id/line/insert', async (req, res) => {
   try {
     const id = String(req.params.id);
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('not found') });
     const b = req.body || {};
     let text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
-    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+    if (!text) return res.status(400).json({ success: false, error: I18N.t('a line cannot be empty') });
     const after = parseInt(b.after, 10);
-    if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
     const busy = _scriptBusy(id);
-    if (busy) return res.status(409).json({ success: false, error: busy + ' - put the line in when it is done' });
+    if (busy) return res.status(409).json({ success: false, error: I18N.t('{busy} - put the line in when it is done', { busy }) });
     // A voiceover's line goes in as typed, in its own language, and no longer than VO_MAX.
     const vo = proj.type === 'voiceover';
-    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
+    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: I18N.t('a line is at most {n} characters', { n: VO_MAX }) });
     // Typed in another language, it goes in English - and nothing may have started while it was translated.
     if (!vo && !AGENT.english(text)) {
       const t = await _englishLines([text]);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
       text = String(t.texts[0] || '').replace(/\s+/g, ' ').trim();
       const busy2 = _scriptBusy(id);
-      if (busy2) return res.status(409).json({ success: false, error: busy2 + ' - put the line in when it is done' });
+      if (busy2) return res.status(409).json({ success: false, error: I18N.t('{busy} - put the line in when it is done', { busy: busy2 }) });
     }
 
     const saved = PROJECTS.apply(id, (fresh) => {
@@ -3810,7 +3821,7 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
       _shelfSplice(fresh, after + 1);        // the work put aside keeps its lines' numbers too
       fresh.updatedAt = new Date().toISOString();
     });
-    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    if (!saved) return res.status(404).json({ success: false, error: I18N.t('not found') });
     try { await MIRROR.rebuild(id, { project: saved }); }
     catch (e) { console.warn('[scen3/line/insert] the timeline was not re-laid:', e.message); }
     console.log('[scen3/line/insert] ' + id + ' a line put in after line ' + (after + 1));
@@ -3842,10 +3853,10 @@ router.post('/scen3/fragments/shot', async (req, res) => {
     const motion = tm.text;
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
-    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
     const patch = (b.patch && typeof b.patch === 'object') ? b.patch : {};
     const at = new Date().toISOString();
     const mood = _normVideo(p.video).mood;
@@ -4032,14 +4043,14 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     const b = req.body || {};
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
-    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
     const want = String(b.frameId || '');
     if (want) {
       const v = _normMix(p.mix).variants.find(x => x.id === want);
-      if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
+      if (!v) return res.status(404).json({ success: false, error: I18N.t('no such frame') });
       p.lines[i].frameId = v.id;
     } else {
       p.lines[i].frameId = '';
@@ -4196,12 +4207,12 @@ async function _writePrompts(id, want) {
 async function _writePromptsNow(id, want) {
   const list = _loadProjects();
   const proj = list.find(x => String(x.id) === id);
-  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  if (!proj) throw Object.assign(new Error(I18N.t('no such project')), { status: 404 });
   {
     const lines = (proj.lines || []).map(_normLine);
-    if (!lines.length) throw Object.assign(new Error('this project has no lines'), { status: 400 });
+    if (!lines.length) throw Object.assign(new Error(I18N.t('this project has no lines')), { status: 400 });
     const pool = _framePool(proj);
-    if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip is made from one'), { status: 400 });
+    if (!pool.length) throw Object.assign(new Error(I18N.t('make a frame in the frames chat first: a clip is made from one')), { status: 400 });
     const video = _normVideo(proj.video);
     const omni = video.model === 'omnihuman';
     // The person moves in the mood they chose: not chosen yet is said, not assumed.
@@ -4286,10 +4297,10 @@ async function _writePromptsNow(id, want) {
     const content = [{ type: 'text', text: ask }];
     for (const url of urls) content.push({ type: 'image_url', image_url: { url } });
     const raw = await _ask([{ role: 'user', content }]);
-    if (!String(raw || '').match(/\{[\s\S]*\}/)) throw new Error('the agent did not answer with the prompts');
+    if (!String(raw || '').match(/\{[\s\S]*\}/)) throw new Error(I18N.t('the agent did not answer with the prompts'));
     // [{ n, prompt }] - Kling's writer answers `motion`, OmniHuman's `prompt`; both are read here.
     const got = OMNI.read(raw);
-    if (!got.length) throw new Error('the agent wrote nothing usable');
+    if (!got.length) throw new Error(I18N.t('the agent wrote nothing usable'));
 
     const now = new Date().toISOString();
     const report = { written: 0, skipped: [] };
@@ -4344,7 +4355,7 @@ router.post('/scen3/video/prompts', async (req, res) => {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     const out = await _writePrompts(id, b.only);
     res.json({ success: true, project: _projFull(out.project), report: out.report });
   } catch (e) {
@@ -4365,10 +4376,10 @@ router.post('/scen3/frames/ban', (req, res) => {
     const b = req.body || {};
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.mix = _normMix(p.mix);
     const id = String(b.frameId || '');
-    if (!p.mix.variants.some(v => v.id === id)) return res.status(404).json({ success: false, error: 'no such frame' });
+    if (!p.mix.variants.some(v => v.id === id)) return res.status(404).json({ success: false, error: I18N.t('no such frame') });
     const off = new Set(p.mix.banned.map(String));
     if (b.banned === false) off.delete(id); else off.add(id);
     p.mix.banned = [...off];
@@ -4397,11 +4408,11 @@ router.post('/scen3/frames/order', (req, res) => {
     const b = req.body || {};
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.mix = _normMix(p.mix);
     const have = new Set(p.mix.variants.map(v => String(v.id)));
     const want = [...new Set((Array.isArray(b.order) ? b.order : []).map(String))].filter(id => have.has(id));
-    if (!want.length) return res.status(400).json({ success: false, error: 'no frames in that order' });
+    if (!want.length) return res.status(400).json({ success: false, error: I18N.t('no frames in that order') });
     p.mix.order = want;
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
@@ -4432,26 +4443,25 @@ router.post('/scen3/frames/crop', async (req, res) => {
     const b = req.body || {};
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.mix = _normMix(p.mix);
     const src = p.mix.variants.find(x => x.id === String(b.frameId || ''));
-    if (!src) return res.status(404).json({ success: false, error: 'no such frame' });
+    if (!src) return res.status(404).json({ success: false, error: I18N.t('no such frame') });
     const hit = _resolveMedia(src.path);
     if (!hit || !fs.existsSync(hit.abs)) {
-      return res.status(400).json({ success: false, error: 'the frame is missing: ' + src.path });
+      return res.status(400).json({ success: false, error: I18N.t('the frame is missing: {path}', { path: src.path }) });
     }
     const r = b.rect || {};
     const fx = Number(r.x), fy = Number(r.y), fw = Number(r.w), fh = Number(r.h);
     if (![fx, fy, fw, fh].every(Number.isFinite)) {
-      return res.status(400).json({ success: false, error: 'rect must be {x,y,w,h} as fractions of the frame' });
+      return res.status(400).json({ success: false, error: I18N.t('rect must be {x,y,w,h} as fractions of the frame') });
     }
     if (fw < CROP_MIN - 1e-6 || fh < CROP_MIN - 1e-6) {
       return res.status(400).json({ success: false,
-        error: 'the selection must cover at least a third of the frame - got '
-          + Math.round(fw * 100) + '% x ' + Math.round(fh * 100) + '%' });
+        error: I18N.t('the selection must cover at least a third of the frame - got {w}% x {h}%', { w: Math.round(fw * 100), h: Math.round(fh * 100) }) });
     }
     const meta = await sharp(hit.abs).metadata();
-    if (!meta.width || !meta.height) return res.status(500).json({ success: false, error: 'could not measure the frame' });
+    if (!meta.width || !meta.height) return res.status(500).json({ success: false, error: I18N.t('could not measure the frame') });
     // Fractions -> pixels, then clamped so rounding can never ask for a pixel that is not there
     // (sharp throws on an extract that leaves the image).
     const left = Math.max(0, Math.min(Math.round(fx * meta.width), meta.width - 1));
@@ -4515,10 +4525,10 @@ router.post('/scen3/frames/prompt', async (req, res) => {
     if (t.fail) return res.status(502).json({ success: false, error: t.fail });
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.mix = _normMix(p.mix);
     const v = p.mix.variants.find(x => x.id === String(b.frameId || ''));
-    if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
+    if (!v) return res.status(404).json({ success: false, error: I18N.t('no such frame') });
     v.prompt = String(t.text || '').trim().slice(0, 4000);
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
@@ -4592,7 +4602,7 @@ async function _addChatFrame(projectId, o) {
     if (Array.isArray(fresh.mix.order) && fresh.mix.order.length) fresh.mix.order.push(variant.id);
     fresh.updatedAt = variant.at;
   });
-  if (!saved) throw Object.assign(new Error('no such project'), { status: 404 });
+  if (!saved) throw Object.assign(new Error(I18N.t('no such project')), { status: 404 });
   if (!already) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines: a frame added
   return { project: _projFull(saved), frameId: variant.id, already };
 }
@@ -4609,14 +4619,14 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
     const b = req.body || {};
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
-    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: I18N.t('no such line') });
     const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
     const want = String(b.clipId || '');
     if (want && !(p.lines[i].video[variant] || []).some(c => c.id === want)) {
-      return res.status(404).json({ success: false, error: 'no such clip on this fragment' });
+      return res.status(404).json({ success: false, error: I18N.t('no such clip on this fragment') });
     }
     p.lines[i].pick = { ...(p.lines[i].pick || {}), [variant]: want };
     // Chosen by hand: the line's clip on the timeline whether or not it is fresh.
@@ -4652,8 +4662,8 @@ const TS = require('../lib/task-started');
 function _clipPlan(proj, i) {
   const lines = (proj.lines || []).map(_normLine);
   const line = lines[i];
-  if (!line) return { skipped: 'no such fragment' };
-  if (line.removed) return { skipped: 'this fragment is taken off the script' };
+  if (!line) return { skipped: I18N.t('no such fragment') };
+  if (line.removed) return { skipped: I18N.t('this fragment is taken off the script') };
   const video = _normVideo(proj.video);
   const voice = _normVoice(proj.voice);
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
@@ -4663,17 +4673,17 @@ function _clipPlan(proj, i) {
   if (missing) return { skipped: missing };
   const model = video.model;
   const quality = TH.qualityOf(model, video.quality);
-  if (!quality) return { skipped: 'choose the quality of the clips (field 3) first' };
+  if (!quality) return { skipped: I18N.t('choose {what} first', { what: I18N.t('the quality of the clips (field 3)') }) };
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
-  if (!said.trim()) return { skipped: 'this fragment has no words' };
+  if (!said.trim()) return { skipped: I18N.t('this fragment has no words') };
   const frame = _frameOfLine(_framePool(proj), line, i, video.spread, proj.id);
-  if (!frame || !frame.path) return { skipped: 'no frame for this fragment - make one in the frames chat' };
+  if (!frame || !frame.path) return { skipped: I18N.t('no frame for this fragment - make one in the frames chat') };
   const take = (line.audio || {})[variant];
-  if (!take || !take.path) return { skipped: 'this fragment is not read yet' };
-  if (take.said !== said) return { skipped: 'the read is of other words - read it again' };
+  if (!take || !take.path) return { skipped: I18N.t('this fragment is not read yet') };
+  if (take.said !== said) return { skipped: I18N.t('the read is of other words - read it again') };
   if (take.dur > quality.maxAudioSec) {
-    return { skipped: 'the read is ' + take.dur.toFixed(1) + 's and ' + ((TH.byId(model) || {}).label || 'the model') + ' takes '
-      + quality.maxAudioSec + 's at most' };
+    return { skipped: I18N.t('the read is {dur}s and {model} takes {max}s at most',
+      { dur: take.dur.toFixed(1), model: (TH.byId(model) || {}).label || I18N.t('the model'), max: quality.maxAudioSec }) };
   }
   // The line's own prompt for this model - Kling's animation prompt, or OmniHuman's (_normOmni). A Kling line that has
   // none falls back to the project's motion preset rather than refusing to render at all; an OmniHuman clip is not asked
@@ -4719,21 +4729,21 @@ async function _readyForClip(id, i, onStage) {
   const n = (wantPlace ? 1 : 0) + (wantLine ? 1 : 0);
   let at = 0;
   if (wantPlace) {
-    say('analysis ' + (++at) + '/' + n + ' · the place');
+    say(I18N.t('analysis {at}/{n} · the place', { at: ++at, n }));
     try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/clip] the place was not analysed:', e.message); }
   }
   if (wantLine) {
-    say('analysis ' + (++at) + '/' + n + ' · this fragment');
+    say(I18N.t('analysis {at}/{n} · this fragment', { at: ++at, n }));
     try { await _writePrompts(id, [i]); }
     catch (e) {
       // OmniHuman is told what its own writer wrote: no prompt, no clip - refused here, before the money.
-      if (omni) throw new Error('the OmniHuman prompt was not written: ' + e.message + ' - try again');
+      if (omni) throw new Error(I18N.t('the OmniHuman prompt was not written: {why} - try again', { why: e.message }));
       console.warn('[scen3/clip] the animation was not written:', e.message);
     }
   }
   if (omni) {
     const now = ((_loadProjects().find(p => String(p.id) === id) || {}).lines || []).map(_normLine)[i];
-    if (!(now && String((now.omni || {}).prompt || '').trim())) throw new Error('the OmniHuman prompt was not written - try again');
+    if (!(now && String((now.omni || {}).prompt || '').trim())) throw new Error(I18N.t('the OmniHuman prompt was not written - try again'));
   }
 }
 
@@ -4741,8 +4751,8 @@ async function _readyForClip(id, i, onStage) {
 // frame and the read go up to (R2, made from the Cloudflare key). '' when both are there.
 function _clipKeysMissing() {
   const st = _read(path.join(DATA_DIR, 'settings.json')) || {};
-  if (!String(st.kieApiKey || '').trim()) return 'no kie.ai key - add it on Admin -> API keys';
-  if (!require('../lib/r2').isConfigured()) return 'nowhere to host the frame and the read for kie.ai - a checked Cloudflare key on Admin -> API keys';
+  if (!String(st.kieApiKey || '').trim()) return I18N.t('no kie.ai key - add it on Admin -> API keys');
+  if (!require('../lib/r2').isConfigured()) return I18N.t('nowhere to host the frame and the read for kie.ai - a checked Cloudflare key on Admin -> API keys');
   return '';
 }
 
@@ -4757,15 +4767,15 @@ async function _kieClip(model, input) {
   const taskId = d.data && d.data.taskId;
   if (taskId) return String(taskId);
   // kie answers a refusal INSIDE a 200: { code, msg } - an answer, so nothing was started.
-  if (d.code != null && Number(d.code) !== 200) throw Object.assign(new Error('kie.ai did not start it: ' + (TS.said(d) || ('code ' + d.code))), { unsure: false });
-  throw Object.assign(new Error('kie.ai answered without a task number - it may have started it all the same'), { unsure: true });
+  if (d.code != null && Number(d.code) !== 200) throw Object.assign(new Error(I18N.t('kie.ai did not start it: {why}', { why: TS.said(d) || I18N.t('code {code}', { code: d.code }) })), { unsure: false });
+  throw Object.assign(new Error(I18N.t('kie.ai answered without a task number - it may have started it all the same')), { unsure: true });
 }
 
 // The read as it goes up: as it is, or - shorter than the model takes - padded with silence (lib/th-video.js padTo) into
 // a scratch file that is deleted once it is hosted.
 async function _hostRead(plan) {
   const src = toDiskExisting(plan.take.path);
-  if (!src || !fs.existsSync(src)) throw new Error('the read of this line is not in the library any more');
+  if (!src || !fs.existsSync(src)) throw new Error(I18N.t('the read of this line is not in the library any more'));
   if (!plan.pad) {
     const why = TH.readRefusal(plan.model, fs.statSync(src).size);
     if (why) throw Object.assign(new Error(why), { status: 400 });
@@ -4808,7 +4818,7 @@ async function _submitClip(b, onStage, onAsk) {
     if (first && !_clipPlan(first, i0).skipped) await _readyForClip(id, i0, say);
   }
   const proj = _loadProjects().find(p => String(p.id) === id);
-  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  if (!proj) throw Object.assign(new Error(I18N.t('no such project')), { status: 404 });
   const i = parseInt(b.line, 10);
   const plan = _clipPlan(proj, i);
   if (plan.skipped) throw Object.assign(new Error(plan.skipped), { status: 400 });
@@ -4816,23 +4826,23 @@ async function _submitClip(b, onStage, onAsk) {
   // What the model takes of a picture, before anything is sent.
   if (plan.model === 'omnihuman') {
     const abs = toDiskExisting(plan.frame.path);
-    if (!abs || !fs.existsSync(abs)) throw new Error('the frame of this line is not in the library any more');
+    if (!abs || !fs.existsSync(abs)) throw new Error(I18N.t('the frame of this line is not in the library any more'));
     let meta = {};
     try { meta = await sharp(abs).metadata(); } catch (e) { meta = {}; }
     const why = TH.frameRefusal(plan.model, { width: meta.width, height: meta.height, bytes: fs.statSync(abs).size });
     if (why) throw Object.assign(new Error(why), { status: 400 });
   }
-  say('sending the frame and the read');
+  say(I18N.t('sending the frame and the read'));
   const imageUrl = await _hostLocal(plan.frame.path, { forceFresh: true, verify: true });
   const audioUrl = await _hostRead(plan);
   const req = _clipRequest(plan, imageUrl, audioUrl);
-  say('asking kie.ai');
+  say(I18N.t('asking kie.ai'));
   ask(true);                                    // THE PAID MOMENT
   let taskId;
   try {
     taskId = await _kieClip(req.model, req.input);
   } catch (e) {
-    if (e.unsure) throw new Error(e.message + ' - it may have been paid for and not followed; look at kie.ai’s own history before asking again');
+    if (e.unsure) throw new Error(I18N.t('{why} - it may have been paid for and not followed; look at kie.ai’s own history before asking again', { why: e.message }));
     ask(false);
     throw e;
   }
@@ -4867,7 +4877,7 @@ function _startClip(rec, request) {
   return _submitClip(request, (st) => ALERTS.update(rec.id, { stage: st }), mark)
     .then((out) => {
       ALERTS.update(rec.id, {
-        taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
+        taskIds: [out.taskId], engine: out.engine, stage: I18N.t('rendering'),
         job: { type: 'clip', params: { request, file: out.file, asked: true } },
       });
     })
@@ -4884,7 +4894,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const id = String(b.projectId || '').trim();
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     const i = parseInt(b.line, 10);
     const plan = _clipPlan(proj, i);
     if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
@@ -4895,7 +4905,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const running = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
       && r.job && r.job.params && r.job.params.file
       && String(r.job.params.file.projectId) === id && Number(r.job.params.file.line) === i);
-    if (running) return res.json({ success: true, skipped: 'this fragment is already being made' });
+    if (running) return res.json({ success: true, skipped: I18N.t('this fragment is already being made'), code: 'already' });
 
     // THE ROW IS WRITTEN FIRST, before any agent is asked anything. A clip
     // begins with up to two analyses, and the half-minute they take would otherwise show the person
@@ -4905,9 +4915,9 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const request = { projectId: id, line: i };
     const rec = JOBS.submitted({
       kind: 'video', what: 'clip',
-      title: 'Clip · fragment ' + _lineNo((proj.lines || []).map(_normLine), i),
+      title: I18N.t('Clip · fragment {n}', { n: _lineNo((proj.lines || []).map(_normLine), i) }),
       where: b.where || null,
-      stage: 'getting ready',
+      stage: I18N.t('getting ready'),
       taskIds: [],
       job: { type: 'clip', params: { request, file: { projectId: id, line: i }, asked: false } },
     });
@@ -4968,7 +4978,7 @@ function _clipDone(proj, i) {
 const _whereClip = (key, title, i, n) => ({
   page: 'merge',
   href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
-  label: 'Merge \u00b7 ' + title + ' \u00b7 fragment ' + (n || i + 1),
+  label: I18N.t('Merge · {project} · fragment {n}', { project: title, n: n || i + 1 }),
   spot: { key, step: 'setup', line: i + 1 },
 });
 /** A line's place among the lines that are in the video, counted from one. */
@@ -4992,9 +5002,9 @@ router.post('/scen3/fragments/clips', (req, res) => {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
     const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('no such project') });
     const key = String(b.key || '');
-    const title = String(proj.name || proj.title || 'talking head');
+    const title = String(proj.name || proj.title || I18N.t('talking head'));
     const lines = (proj.lines || []).map(_normLine);
 
     // The journal is what says a fragment is already being made - not a flag on the project - so a
@@ -5010,17 +5020,17 @@ router.post('/scen3/fragments/clips', (req, res) => {
     // Every line that needs a clip.
     const queued = [], skipped = [];
     for (let i = 0; i < lines.length; i++) {
-      if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
+      if (busy.has(i)) { skipped.push({ line: i + 1, why: I18N.t('already being made'), code: 'already' }); continue; }
       const plan = _clipPlan(proj, i);
       if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
-      if (_clipDone(proj, i)) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
+      if (_clipDone(proj, i)) { skipped.push({ line: i + 1, why: I18N.t('already clipped'), code: 'already' }); continue; }
       const request = { projectId: id, line: i };
       const no = _lineNo(lines, i);
       const rec = JOBS.submitted({
         kind: 'video', what: 'clip',
-        title: 'Clip \u00b7 fragment ' + no,
+        title: I18N.t('Clip · fragment {n}', { n: no }),
         where: _whereClip(key, title, i, no),
-        stage: 'getting ready',
+        stage: I18N.t('getting ready'),
         taskIds: [],
         job: { type: 'clip', params: { request, file: { projectId: id, line: i }, asked: false } },
       });
@@ -5048,8 +5058,8 @@ JOBS.register('clip', {
       // Nobody is asking and there is no task: the app was closed meanwhile. Asked - it may have been paid for.
       const asked = !!(((rec.job || {}).params || {}).asked);
       return { state: 'failed', error: asked
-        ? 'the app closed while kie.ai was being asked - it may have been paid for: look at kie.ai’s history before trying again'
-        : 'the app closed before kie.ai was asked - nothing was paid; try again' };
+        ? I18N.t('the app closed while kie.ai was being asked - it may have been paid for: look at kie.ai’s history before trying again')
+        : I18N.t('the app closed before kie.ai was asked - nothing was paid; try again') };
     }
     const p = _fileParams(rec);
     const s = await _fetchClip(rec.taskIds[0], p.projectId, p.cutTo);
@@ -5067,17 +5077,17 @@ JOBS.register('clip', {
       console.log('[scen3/clip] re-asked with fresh links ->', String(again.taskId).slice(0, 24));
       return { state: 'pending', taskId: again.taskId };
     } catch (e) {
-      return { state: 'failed', error: s.error + ' (and the retry failed: ' + e.message + ')' };
+      return { state: 'failed', error: I18N.t('{error} (and the retry failed: {why})', { error: s.error, why: e.message }) };
     }
   },
   file: async (rec, landed) => {
     const p = _fileParams(rec);
     const list = _loadProjects();
     const proj = list.find(x => String(x.id) === String(p.projectId));
-    if (!proj) throw new Error('the project is gone');
+    if (!proj) throw new Error(I18N.t('the project is gone'));
     proj.lines = (proj.lines || []).map(_normLine);
     const line = proj.lines[Number(p.line)];
-    if (!line) throw new Error('that fragment is gone');
+    if (!line) throw new Error(I18N.t('that fragment is gone'));
     const clip = _normTake({
       path: landed.path, dur: landed.dur, thumb: landed.thumb, at: new Date().toISOString(),
       said: p.said, fromAudio: p.fromAudio, fromFrame: p.fromFrame,
@@ -5105,7 +5115,7 @@ JOBS.register('clip', {
     const keys = _clipKeysMissing();
     if (keys) throw new Error(keys);
     return {
-      stage: 'getting ready', params: { asked: false, refetch: 0 },
+      stage: I18N.t('getting ready'), params: { asked: false, refetch: 0 },
       later: () => _startClip(ALERTS.get(rec.id) || rec, request),
     };
   },
@@ -5130,7 +5140,7 @@ router.get('/scen3/voices/filters', (_req, res) => {
 router.get('/scen3/voices/library', async (req, res) => {
   try {
     const key = _elKey();
-    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    if (!key) return res.status(400).json({ success: false, error: I18N.t('no ElevenLabs key in settings') });
 
     // Only the keys the API knows, and only when they carry a value: an empty `accent=`
     // is not "any accent" to this endpoint, it is a filter that matches nothing.
@@ -5169,17 +5179,17 @@ router.get('/scen3/voices/library', async (req, res) => {
 router.post('/scen3/voices/take', async (req, res) => {
   try {
     const key = _elKey();
-    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    if (!key) return res.status(400).json({ success: false, error: I18N.t('no ElevenLabs key in settings') });
     const b = req.body || {};
     const owner = String(b.ownerId || '').trim();
     const voice = String(b.voiceId || '').trim();
     const name  = String(b.name || '').trim() || 'Library voice';
-    if (!owner || !voice) return res.status(400).json({ success: false, error: 'ownerId and voiceId are required' });
+    if (!owner || !voice) return res.status(400).json({ success: false, error: I18N.t('ownerId and voiceId are required') });
 
     const r = await axios.post(`${EL_BASE}/voices/add/${owner}/${voice}`,
       { new_name: name }, { headers: { 'xi-api-key': key }, timeout: 30000 });
     const id = (r.data && (r.data.voice_id || r.data.voiceId)) || '';
-    if (!id) return res.status(502).json({ success: false, error: 'ElevenLabs added no voice id', detail: r.data });
+    if (!id) return res.status(502).json({ success: false, error: I18N.t('ElevenLabs added no voice id'), detail: r.data });
     console.log('[scen3/voices] took', name, '->', id);
 
     // Do we already know this voice? Taking one we have is an ordinary thing to do - the

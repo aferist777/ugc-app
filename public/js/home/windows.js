@@ -83,7 +83,8 @@ async function _soundsGen() {
     const d = await fetch('/api/library/tree').then(r => r.json());
     const find = (ns) => { for (const n of ns || []) { if (n.key === 'sounds') return n; const f = find(n.children); if (f) return f; } return null; };
     const s = find(d && d.nodes);
-    const g = s ? (s.children || []).find(c => c.label === 'Generated') : null;
+    // Found by its stored name: the label is said in the interface's language.
+    const g = s ? (s.children || []).find(c => (c.name || c.label) === 'Generated') : null;
     _soundsKey = g ? g.key : '';
   } catch (e) { _soundsKey = ''; }
   return _soundsKey || 'sounds';

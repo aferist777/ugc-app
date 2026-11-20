@@ -252,4 +252,17 @@ export default {
   'Put it into this piece': 'Вставить в этот кусок',
   'Could not put it in: {why}': 'Не удалось вставить: {why}',
   'Find the B-roll first - field 2 of setup, B-roll.': 'Сначала найдите B-roll — поле 2 подготовки, B-roll.',
+  // Alerts rows' places written by Merge (chat-owner.js, fchat.js, wk-setup.js, wk-fragments.js, sound-host.js)
+  'Library · video chat': 'Библиотека · чат видео',
+  'Library · pictures chat': 'Библиотека · чат картинок',
+  'project': 'проект',
+  'Merge · {project} · videos': 'Монтаж · {project} · чат видео',
+  'Merge · {project} · pictures': 'Монтаж · {project} · чат картинок',
+  'Merge · {project} · frames chat': 'Монтаж · {project} · чат кадров',
+  'Merge · {project} · setup': 'Монтаж · {project} · подготовка',
+  'Merge · {project} · setup › {window}': 'Монтаж · {project} · подготовка › {window}',
+  'new look': 'новый образ',
+  'Look · {name}': 'Образ · {name}',
+  'Merge · {project} · fragment {n}': 'Монтаж · {project} · фрагмент {n}',
+  'Merge · {project} · audio · {what}': 'Монтаж · {project} · звук · {what}',
 };

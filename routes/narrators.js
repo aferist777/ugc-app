@@ -36,6 +36,7 @@ const { callLadder } = require('../lib/llm-json');
 const STT = require('../lib/stt-replicate');
 const SOURCES = require('../lib/sources-store');
 const YTDLP = require('../lib/ytdlp');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -73,14 +74,14 @@ router.get('/narrators', (_req, res) => {
 router.get('/narrators/jobs/:jobId', (req, res) => {
   _sweep();
   const job = _jobs[String(req.params.jobId)];
-  if (!job) return res.status(404).json({ success: false, error: 'no such job' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such job') });
   res.json({ success: true, ...job });
 });
 
 router.get('/narrators/:id', (req, res) => {
   try {
     const rec = store.get(req.params.id);
-    if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such narrator') });
     // The rendered block goes back too: it is what a model will actually be told, and being
     // able to read that is the difference between tuning a narrator and guessing at it. The samples go with
     // their first lines only - the column shows no more - and a reading that runs is said, for a page opened later.
@@ -120,7 +121,7 @@ router.post('/narrators/:id/samples', (req, res) => {
 
 router.delete('/narrators/:id/samples/:index', (req, res) => {
   // Not while a reading runs: it marks the samples it read by their places when it lands.
-  if (_reading(req.params.id)) return res.status(409).json({ success: false, error: 'The narrator is being read - remove the sample when it has landed.' });
+  if (_reading(req.params.id)) return res.status(409).json({ success: false, error: I18N.t('The narrator is being read - remove the sample when it has landed.') });
   try {
     const rec = store.removeSample(req.params.id, req.params.index);
     res.json({ success: true, narrator: rec, words: store.totalWords(rec) });
@@ -143,19 +144,22 @@ function _sameWords(a, b) {
 router.post('/narrators/:id/samples/source', (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such narrator') });
   const sourceId = String((req.body || {}).sourceId || '');
   const src = sourceId ? SOURCES.get(sourceId) : null;
-  if (!src) return res.status(404).json({ success: false, error: 'no such source' });
+  if (!src) return res.status(404).json({ success: false, error: I18N.t('no such source') });
   const t = SOURCES.readTranscript(sourceId);
   const text = t && Array.isArray(t.cues) ? t.cues.map(c => String(c.text || '').trim()).filter(Boolean).join(' ') : '';
-  if (!text) return res.status(400).json({ success: false, error: 'This source has no words yet - it has not been heard.' });
-  const title = src.title || src.originalName || 'a source';
+  if (!text) return res.status(400).json({ success: false, error: I18N.t('This source has no words yet - it has not been heard.') });
+  const title = src.title || src.originalName || I18N.t('a source');
   const had = (rec.samples || []).find(s => (s.sourceId && String(s.sourceId) === sourceId)
     || (src.url && s.url && s.url === src.url) || (src.linkKey && s.linkKey && s.linkKey === src.linkKey));
-  if (had) return res.status(409).json({ success: false, error: `"${title}" is a sample of this narrator already.` });
+  if (had) return res.status(409).json({ success: false, error: I18N.t('"{title}" is a sample of this narrator already.', { title }) });
   const same = (rec.samples || []).find(s => _sameWords(s.text, text));
-  if (same) return res.status(409).json({ success: false, error: `"${title}" is the same video as the sample "${same.label || 'a sample'}" - its words are there already.` });
+  if (same) {
+    return res.status(409).json({ success: false,
+      error: I18N.t('"{title}" is the same video as the sample "{sample}" - its words are there already.', { title, sample: same.label || I18N.t('a sample') }) });
+  }
   try {
     const saved = store.addSample(id, { kind: 'source', label: title, text, sourceId, url: src.url || '', linkKey: src.linkKey || '' });
     res.json({ success: true, narrator: store.view(saved), words: store.countWords(text) });
@@ -166,20 +170,20 @@ router.post('/narrators/:id/samples/source', (req, res) => {
 router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) => {
   const id = String(req.params.id);
   const file = req.file;
-  if (!file) return res.status(400).json({ success: false, error: 'no file' });
+  if (!file) return res.status(400).json({ success: false, error: I18N.t('no file') });
   if (!store.get(id)) {
     try { fs.unlinkSync(file.path); } catch (e) {}
-    return res.status(404).json({ success: false, error: 'no such narrator' });
+    return res.status(404).json({ success: false, error: I18N.t('no such narrator') });
   }
 
   const jobId = _newJobId();
-  const job = _jobs[jobId] = { state: 'running', step: 'reading the file', at: Date.now(), error: null, narrator: null };
+  const job = _jobs[jobId] = { state: 'running', step: I18N.t('reading the file'), at: Date.now(), error: null, narrator: null };
   res.json({ success: true, jobId });
 
   (async () => {
     try {
       const out = await STT.transcribeFile(file.path, { onProgress: (s) => { job.step = s; } });
-      job.step = 'storing the sample';
+      job.step = I18N.t('storing the sample');
       // The same latin-1 filename trap as in routes/sources.js: a Russian name arrives as
       // "ÐÐ°Ð»Ð¾Ð³" unless its bytes are read back as UTF-8.
       const raw = String(file.originalname || '');
@@ -189,7 +193,7 @@ router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) =
         text: out.text,
       });
       job.state = 'done';
-      job.step = `${store.countWords(out.text)} words from ${Math.round(out.sourceSeconds / 60)} min`;
+      job.step = I18N.tn(store.countWords(out.text), '{n} words from {min} min', '{n} words from {min} min', { min: Math.round(out.sourceSeconds / 60) });
       job.narrator = store.summary(rec);
       job.cost = out.cost;
       job.at = Date.now();
@@ -209,13 +213,13 @@ router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) =
 router.post('/narrators/:id/samples/link', async (req, res) => {
   const id = String(req.params.id);
   const url = String((req.body || {}).url || '').trim();
-  if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
-  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
-  if (!store.get(id)) return res.status(404).json({ success: false, error: 'no such narrator' });
+  if (!url) return res.status(400).json({ success: false, error: I18N.t('a link is required') });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: I18N.t('that is not a URL') });
+  if (!store.get(id)) return res.status(404).json({ success: false, error: I18N.t('no such narrator') });
   if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
 
   const jobId = _newJobId();
-  const job = _jobs[jobId] = { state: 'running', step: 'reading the link', at: Date.now(), error: null, narrator: null };
+  const job = _jobs[jobId] = { state: 'running', step: I18N.t('reading the link'), at: Date.now(), error: null, narrator: null };
   res.json({ success: true, jobId });
 
   (async () => {
@@ -224,23 +228,23 @@ router.post('/narrators/:id/samples/link', async (req, res) => {
     try {
       const meta = await YTDLP.info(url, { onProgress: (s) => { job.step = s; } });
       const rec = store.get(id);
-      if (!rec) throw new Error('The narrator went away.');
+      if (!rec) throw new Error(I18N.t('The narrator went away.'));
       const had = (rec.samples || []).find(s => (meta.key && s.linkKey === meta.key) || (s.url && s.url === meta.url));
-      if (had) throw new Error(`This video is a sample of this narrator already: "${had.label || meta.label}".`);
+      if (had) throw new Error(I18N.t('This video is a sample of this narrator already: "{title}".', { title: had.label || meta.label }));
 
-      job.step = 'fetching the sound';
+      job.step = I18N.t('fetching the sound');
       await YTDLP.download(url, path.join(os.tmpdir(), stem + '.%(ext)s'),
         { onProgress: (s) => { job.step = s; }, audioOnly: true, items: meta.count > 1 ? '1' : '' });
       // The extension is whatever the site's best sound came in, so the file is found, not assumed.
       const landed = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(stem + '.') && !/\.part$/.test(f))[0];
-      if (!landed) throw new Error('The download finished but left no file behind.');
+      if (!landed) throw new Error(I18N.t('The download finished but left no file behind.'));
       file = path.join(os.tmpdir(), landed);
 
       const out = await STT.transcribeFile(file, { onProgress: (s) => { job.step = s; } });
-      job.step = 'storing the sample';
+      job.step = I18N.t('storing the sample');
       const saved = store.addSample(id, { kind: 'link', label: meta.label, text: out.text, url: meta.url, linkKey: meta.key });
       job.state = 'done';
-      job.step = `${store.countWords(out.text)} words from ${Math.round(out.sourceSeconds / 60)} min`;
+      job.step = I18N.tn(store.countWords(out.text), '{n} words from {min} min', '{n} words from {min} min', { min: Math.round(out.sourceSeconds / 60) });
       job.narrator = store.summary(saved);
       job.cost = out.cost;
       job.at = Date.now();
@@ -268,24 +272,24 @@ const _reading = (id) => { const j = _readingNow.get(String(id)); return !!(j &&
 router.post('/narrators/:id/read', (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
-  if (_reading(id)) return res.status(409).json({ success: false, error: 'This narrator is being read already.', jobId: _readingNow.get(id) });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such narrator') });
+  if (_reading(id)) return res.status(409).json({ success: false, error: I18N.t('This narrator is being read already.'), jobId: _readingNow.get(id) });
   const unread = store.unreadSamples(rec);
   if (!unread.length) {
     return res.status(400).json({ success: false, error: (rec.samples || []).length
-      ? 'Every sample has been read - add a new one to read it.' : 'No samples to read - add one first.' });
+      ? I18N.t('Every sample has been read - add a new one to read it.') : I18N.t('No samples to read - add one first.') });
   }
   // Refused rather than run: below the floor the model describes writing in general instead of this author, and a
   // generic voice is worse than none - it looks like one. Only the first time: a voice there is only grows.
   const words = unread.reduce((n, x) => n + (x.s.words || store.countWords(x.s.text)), 0);
   if (!store.hasVoice(rec) && words < store.MIN_SAMPLE_WORDS) {
     return res.status(400).json({ success: false,
-      error: `${words} words is not enough to read a voice from — at least ${store.MIN_SAMPLE_WORDS} are needed.` });
+      error: I18N.t('{n} words is not enough to read a voice from — at least {min} are needed.', { n: words, min: store.MIN_SAMPLE_WORDS }) });
   }
 
   const jobId = _newJobId();
   const n = unread.length;
-  const job = _jobs[jobId] = { state: 'running', step: `reading ${n} new ${n === 1 ? 'sample' : 'samples'}`, at: Date.now(), startedAt: Date.now(), error: null, narrator: null };
+  const job = _jobs[jobId] = { state: 'running', step: I18N.tn(n, 'reading {n} new sample', 'reading {n} new samples'), at: Date.now(), startedAt: Date.now(), error: null, narrator: null };
   _readingNow.set(id, jobId);
   res.json({ success: true, jobId });
 
@@ -301,12 +305,12 @@ router.post('/narrators/:id/read', (req, res) => {
         effort: 'medium',
       });
       if (!store.hasVoice(store.get(id) || rec) && !(data.summary || []).some(t => String(t).trim())) {
-        throw new Error('That reading came back without a summary — nothing was stored; press again.');
+        throw new Error(I18N.t('That reading came back without a summary — nothing was stored; press again.'));
       }
       const readId = 'rd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const { rec: saved, added } = store.applyReading(id, data, { readId, model: by.model, samples: unread.map(x => x.i) });
       job.state = 'done';
-      job.step = added ? `${added} new ${added === 1 ? 'line' : 'lines'} in the voice` : 'nothing new in the voice';
+      job.step = added ? I18N.tn(added, '{n} new line in the voice', '{n} new lines in the voice') : I18N.t('nothing new in the voice');
       job.narrator = store.summary(saved);
       job.at = Date.now();
     } catch (e) {

@@ -33,6 +33,8 @@ const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
 const { toDiskExisting } = require('../lib/media');
+// The interface's words (lib/i18n.js): what is said to the person; every prompt stays English.
+const I18N = require('../lib/i18n');
 
 const KIND = 'fchat';
 const AT_ONCE = 5;
@@ -76,15 +78,15 @@ router.post('/scen3/fchat/send', (req, res) => {
   let kick = '';
   try {
     const { key, id, proj } = _projectOf(b);
-    if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
+    if (!key || !proj) return res.status(400).json({ success: false, error: I18N.t('open a talking head first') });
     const text = String(b.text || '').trim().slice(0, 20000);
-    if (!text) return res.status(400).json({ success: false, error: 'say what the frame is' });
+    if (!text) return res.status(400).json({ success: false, error: I18N.t('say what the frame is') });
     const engine = String(b.engine || '');
-    if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
+    if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: I18N.t('no such model: {engine}', { engine }) });
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 6);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} is not in the library any more', { n: i + 1 }) });
     }
     const pr = _products(refs, refs.map((x, i) => _roleOf((b.roles || [])[i])));
     const roles = pr.roles;
@@ -95,7 +97,7 @@ router.post('/scen3/fchat/send', (req, res) => {
     // THE WRITER STOPS FOR A LOOK (as in the video chat): the person's turn and a prompt card, the writer behind the
     // answer, and the frame drawn only from the card (`draw`).
     if (write) {
-      if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: I18N.tn(WRITE_AT_ONCE, '{n} prompt is being written already - wait for it', '{n} prompts are being written already - wait for one of them') });
       const before = CHAT.read(key, KIND).slice(-4).map(m => ({ role: m.role, text: m.text }));
       const turn = CHAT.add({ project: key, kind: KIND, role: 'user', text, refs, media });
       const kickW = 'w' + crypto.randomBytes(8).toString('hex');
@@ -113,7 +115,7 @@ router.post('/scen3/fchat/send', (req, res) => {
       return;
     }
     if (GENS.runningSends(key, true) >= AT_ONCE) {
-      return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
+      return res.status(409).json({ success: false, error: I18N.tn(AT_ONCE, '{n} message is being drawn already - wait for it', '{n} messages are being drawn already - wait for one of them') });
     }
     const aspect = (facts && facts.format) || '9:16';
     const msgId = CHAT.newId();
@@ -123,7 +125,7 @@ router.post('/scen3/fchat/send', (req, res) => {
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(GENS.create({
-        project: key, send: msgId, kick, where: b.where, stage: 'reading your message',
+        project: key, send: msgId, kick, where: b.where, stage: I18N.t('reading your message'),
         engine, provider: b.provider, prompt: text, said: text, aspect, quality: b.quality, refs,
         frame: true, scen: id, shot: String(b.shot || ''), props: pr.props,
       }).id);
@@ -149,7 +151,7 @@ async function _light(o) {
       const t = await AGENT.frameLight({ text: o.text, roles: o.roles, notes: o.notes, edge: o.edge });
       over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
     } catch (err) {
-      over = { prompt: [o.text, AGENT.frameListing(o.roles, o.notes), o.edge].filter(Boolean).join('\n\n'), fell: 'the writer could not be reached' };
+      over = { prompt: [o.text, AGENT.frameListing(o.roles, o.notes), o.edge].filter(Boolean).join('\n\n'), fell: I18N.t('the writer could not be reached') };
     }
     await Promise.all(o.ids.map(id => GENS.submit(id, over, o.kick)));
   } catch (err) {
@@ -183,9 +185,9 @@ async function _writeCard(cardId, kick, o) {
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(o.refs); } catch (e) { picUrls = []; }
     const t = await AGENT.thinkShot({ engine: o.engine, text: o.text, roles: o.roles, notes: o.notes, facts: o.facts, picUrls, thread: o.before || [] });
-    out = t.prompt ? { prompt: t.prompt, writer: t.writer || '' } : { error: t.fail || 'the writer answered nothing usable - write it again' };
+    out = t.prompt ? { prompt: t.prompt, writer: t.writer || '' } : { error: t.fail || I18N.t('the writer answered nothing usable - write it again') };
   } catch (e) {
-    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+    out = { error: I18N.t('the writer broke off: {why}', { why: String(e.message || e).slice(0, 300) }) };
   }
   try {
     CHAT.update(cardId, (m) => {
@@ -205,8 +207,8 @@ async function _writeCard(cardId, kick, o) {
 function _cardOf(req) {
   const b = req.body || {};
   const m = CHAT.get(String(req.params.id || ''));
-  if (!m || !m.card || m.card.type !== 'prompt' || String(m.kind || '') !== KIND) return { status: 404, error: 'no such card' };
-  if (String(b.project || '') && String(m.project || '') !== String(b.project)) return { status: 400, error: 'the card is not this project\'s' };
+  if (!m || !m.card || m.card.type !== 'prompt' || String(m.kind || '') !== KIND) return { status: 404, error: I18N.t('no such card') };
+  if (String(b.project || '') && String(m.project || '') !== String(b.project)) return { status: 400, error: I18N.t('the card is not this project\'s') };
   return { m };
 }
 
@@ -242,15 +244,15 @@ router.post('/scen3/fchat/card/:id/rewrite', (req, res) => {
     const c = _cardOf(req);
     if (c.error) return res.status(c.status).json({ success: false, error: c.error });
     const m = c.m;
-    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
+    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: I18N.t('it is being written') });
     const engine = MV.ENGINES[String(b.engine || '')] ? String(b.engine) : (m.card.model || '');
     const key = String(m.project || '');
-    if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+    if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: I18N.tn(WRITE_AT_ONCE, '{n} prompt is being written already - wait for it', '{n} prompts are being written already - wait for one of them') });
     const media = Array.isArray(m.media) ? m.media : [];
     const refs = media.map(a => String(a.path || '')).filter(Boolean);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} is not in the library any more', { n: i + 1 }) });
     }
     const pr = _products(refs, media.map(a => _roleOf(a.role)));
     const roles = pr.roles;
@@ -273,24 +275,24 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
     const c = _cardOf(req);
     if (c.error) return res.status(c.status).json({ success: false, error: c.error });
     const m = c.m;
-    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompt is being written' });
+    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: I18N.t('the prompt is being written') });
     const vs = m.card.versions || [];
     const ver = vs.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
     const v = vs.find(y => y.id === ver);
     const prompt = String(b.prompt != null ? b.prompt : (v ? v.prompt : '')).trim().slice(0, 20000);
-    if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
+    if (!prompt) return res.status(400).json({ success: false, error: I18N.t('the prompt is empty') });
     const engine = String(b.engine || '');
-    if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
+    if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: I18N.t('no such model: {engine}', { engine }) });
     const key = String(m.project || '');
     const { id, proj } = _projectOf({ project: key });
-    if (!proj) return res.status(400).json({ success: false, error: 'the project of this card is gone' });
+    if (!proj) return res.status(400).json({ success: false, error: I18N.t('the project of this card is gone') });
     const refs = (Array.isArray(m.media) ? m.media : []).map(a => String(a.path || '')).filter(Boolean);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} is not in the library any more', { n: i + 1 }) });
     }
     if (GENS.runningSends(key, true) >= AT_ONCE) {
-      return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
+      return res.status(409).json({ success: false, error: I18N.tn(AT_ONCE, '{n} message is being drawn already - wait for it', '{n} messages are being drawn already - wait for one of them') });
     }
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
@@ -302,7 +304,7 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(GENS.create({
-        project: key, send: m.id, kick, where: b.where, stage: 'asking ' + (b.provider || 'the model'),
+        project: key, send: m.id, kick, where: b.where, stage: I18N.t('asking {who}', { who: b.provider || I18N.t('the model') }),
         engine, provider: b.provider, prompt, said: m.card.text || prompt, aspect, quality: b.quality, refs,
         frame: true, scen: id, shot: String((m.card.params || {}).shot || ''), props: pr.props,
       }).id);
@@ -351,14 +353,14 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
   try {
     const b = req.body || {};
     const { key, id, proj } = _projectOf(b);
-    if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
+    if (!key || !proj) return res.status(400).json({ success: false, error: I18N.t('open a talking head first') });
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
     const pr = _products(refs, refs.map((x, i) => _roleOf((b.roles || [])[i])));
     const roles = pr.roles;
-    if (!roles.includes('character') && !roles.includes('place') && !roles.includes('frame')) return res.status(400).json({ success: false, error: 'put the person or the place above the box first' });
+    if (!roles.includes('character') && !roles.includes('place') && !roles.includes('frame')) return res.status(400).json({ success: false, error: I18N.t('put the person or the place above the box first') });
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} is not in the library any more', { n: i + 1 }) });
     }
     // Everything in the zone: the base and the extra pictures.
     const keep = refs.map((p, i) => i);
@@ -366,9 +368,9 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(keep.map(i => refs[i])); } catch (e) { picUrls = []; }
     const t = await AGENT.frameIdeas({ roles: keep.map(i => roles[i]), notes: keep.map(i => pr.notes[i]), facts, picUrls });
-    if (!t.ideas) return res.status(502).json({ success: false, error: t.fail || 'no ideas came back' });
+    if (!t.ideas) return res.status(502).json({ success: false, error: t.fail || I18N.t('no ideas came back') });
     const media = keep.map(i => ({ path: refs[i], kind: 'image', role: roles[i], label: roles[i] }));
-    const m = CHAT.add({ project: key, kind: KIND, role: 'agent', text: 'Ideas for a frame - press one to put it into the box.', refs: media.map(a => a.path), media, ideas: t.ideas });
+    const m = CHAT.add({ project: key, kind: KIND, role: 'agent', text: I18N.t('Ideas for a frame - press one to put it into the box.'), refs: media.map(a => a.path), media, ideas: t.ideas });
     res.json({ success: true, id: m.id, ideas: t.ideas });
   } catch (e) {
     console.error('[fchat/ideas]', e.message);
@@ -387,16 +389,16 @@ router.post('/scen3/fchat/ideas/again', async (req, res) => {
   let mine = false;
   try {
     const { key, id, proj } = _projectOf(b);
-    if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
+    if (!key || !proj) return res.status(400).json({ success: false, error: I18N.t('open a talking head first') });
     const m = CHAT.get(b.id);
-    if (!m || !Array.isArray(m.ideas) || String(m.project || '') !== String(key)) return res.status(404).json({ success: false, error: 'those ideas are gone' });
-    if (!(i >= 0 && i < m.ideas.length)) return res.status(400).json({ success: false, error: 'no such idea' });
-    if (_againNow.has(lock)) return res.status(409).json({ success: false, error: 'this idea is being written again already' });
+    if (!m || !Array.isArray(m.ideas) || String(m.project || '') !== String(key)) return res.status(404).json({ success: false, error: I18N.t('those ideas are gone') });
+    if (!(i >= 0 && i < m.ideas.length)) return res.status(400).json({ success: false, error: I18N.t('no such idea') });
+    if (_againNow.has(lock)) return res.status(409).json({ success: false, error: I18N.t('this idea is being written again already') });
     const media = (Array.isArray(m.media) ? m.media : []).filter(a => a && a.path);
     const refs = media.map(a => String(a.path).split('?')[0]);
     for (let k = 0; k < refs.length; k++) {
       const abs = toDiskExisting(refs[k]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (k + 1) + ' of these ideas is not in the library any more - ask for new ideas' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} of these ideas is not in the library any more - ask for new ideas', { n: k + 1 }) });
     }
     _againNow.add(lock);
     mine = true;
@@ -406,7 +408,7 @@ router.post('/scen3/fchat/ideas/again', async (req, res) => {
     try { picUrls = await GENS.hostRefs(refs); } catch (e) { picUrls = []; }
     const t = await AGENT.frameIdeas({ roles: pr.roles, notes: pr.notes, facts, picUrls,
       again: { idea: m.ideas[i], others: m.ideas.filter((x, k) => k !== i) } });
-    if (!t.ideas || !t.ideas[0]) return res.status(502).json({ success: false, error: t.fail || 'no idea came back' });
+    if (!t.ideas || !t.ideas[0]) return res.status(502).json({ success: false, error: t.fail || I18N.t('no idea came back') });
     const idea = String(t.ideas[0]).trim().slice(0, 600);
     const now = CHAT.update(m.id, (x) => {
       if (!Array.isArray(x.ideas) || i >= x.ideas.length) return false;
@@ -414,7 +416,7 @@ router.post('/scen3/fchat/ideas/again', async (req, res) => {
       x.used = (Array.isArray(x.used) ? x.used.map(Number) : []).filter(k => k !== i);
       return undefined;
     });
-    if (!now) return res.status(404).json({ success: false, error: 'those ideas are gone' });
+    if (!now) return res.status(404).json({ success: false, error: I18N.t('those ideas are gone') });
     res.json({ success: true, idea });
   } catch (e) {
     console.error('[fchat/ideas/again]', e.message);
@@ -428,11 +430,11 @@ router.post('/scen3/fchat/ideas/again', async (req, res) => {
 router.post('/scen3/fchat/to-set', async (req, res) => {
   try {
     const g = GENS.get(String((req.body || {}).genId || ''));
-    if (!g || !g.frame || g.state !== 'done' || !g.imagePath) return res.status(400).json({ success: false, error: 'this frame is not ready' });
+    if (!g || !g.frame || g.state !== 'done' || !g.imagePath) return res.status(400).json({ success: false, error: I18N.t('this frame is not ready') });
     const proj = SCEN().loadProjects().find(p => String(p.id) === String(g.scen || ''));
-    if (!proj) return res.status(404).json({ success: false, error: 'the project of this frame is gone' });
+    if (!proj) return res.status(404).json({ success: false, error: I18N.t('the project of this frame is gone') });
     const abs = toDiskExisting(g.imagePath);
-    if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'the frame is not on the disk any more' });
+    if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('the frame is not on the disk any more') });
     // The frame keeps the edge it was asked with - the clip's writer reads its shot from it.
     // ...and the products it was drawn with - the clip's writers read them.
     const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id, shot: g.shot || '', props: g.props || [] });

@@ -56,8 +56,13 @@ const sources = require('../lib/sources-store');
 const scen3 = require('./scen3');
 const drafts = require('../lib/script-drafts');
 const AGENT = require('../lib/mv3-agent');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
+
+// A stage's code (`what` of a running mark) as a person reads it in a refusal.
+const _whatSaid = (what) => (what === 'hooks' ? I18N.tc('draft stage', 'hooks') : what === 'remake' ? I18N.tc('draft stage', 'remake')
+  : what === 'script' ? I18N.tc('draft stage', 'script') : what === 'rewrite' ? I18N.tc('draft stage', 'rewrite') : String(what || ''));
 
 // The fewest lines a scenario is saved with is the scenarios store's (routes/scen3.js
 // MIN_LINES, three) - one number. The form offers scripts of FORM_LINES lines and up: a choice of the form, not a gate.
@@ -91,7 +96,7 @@ function _start(res, step, work, keep, run, extra) {
   const key = (run && run.key) || '';
   const busy = key ? _running.get(key) : null;
   if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
-    return res.status(409).json({ success: false, error: `This draft is already being written (${busy.what}).`, ...busy });
+    return res.status(409).json({ success: false, error: I18N.t('This draft is already being written ({what}).', { what: _whatSaid(busy.what) }), ...busy });
   }
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step, at: Date.now(), error: null, result: null };
@@ -109,7 +114,7 @@ function _start(res, step, work, keep, run, extra) {
       if (job.state !== 'running') return;          // cancelled meanwhile: the answer is not kept
       job.result = result;
       job.state = 'done';
-      job.step = 'done';
+      job.step = I18N.t('done');
       job.at = Date.now();
       if (keep) { try { keep(job.result); } catch (e) { /* the result stands even unsaved */ } }
     } catch (e) {
@@ -161,7 +166,7 @@ function _narrator(id) {
     return { block: P.NEUTRAL_BLOCK, name: 'Neutral', id: 'neutral', rec: null };
   }
   const rec = narrators.get(id);
-  if (!rec) throw new Error('No such narrator.');
+  if (!rec) throw new Error(I18N.t('No such narrator.'));
   return { block: P.narratorBlock(rec), name: rec.name, id: rec.id, ready: narrators.hasVoice(rec), rec };
 }
 
@@ -177,10 +182,10 @@ const _productOf = (s) => String(s || '').trim().split(/\r?\n/)[0].replace(/[.;:
 function _sourceText(sourceId, topicId) {
   if (!sourceId) return { text: '', sourceTitle: '', topicTitle: '' };
   const rec = sources.get(sourceId);
-  if (!rec) throw new Error('No such source.');
+  if (!rec) throw new Error(I18N.t('No such source.'));
   if (topicId) {
     const topic = (rec.topics || []).find(t => String(t.id) === String(topicId));
-    if (!topic) throw new Error('No such topic on that source.');
+    if (!topic) throw new Error(I18N.t('No such topic on that source.'));
     return { text: topic.text || '', sourceTitle: rec.title, topicTitle: topic.title };
   }
   const t = sources.readTranscript(sourceId);
@@ -251,7 +256,7 @@ router.get('/scriptgen/models', (_req, res) => {
 router.get('/scriptgen/jobs/:jobId', (req, res) => {
   _sweep();
   const job = _jobs[String(req.params.jobId)];
-  if (!job) return res.status(404).json({ success: false, error: 'no such job' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such job') });
   res.json({ success: true, ...job });
 });
 
@@ -262,10 +267,10 @@ router.get('/scriptgen/jobs/:jobId', (req, res) => {
 router.post('/scriptgen/jobs/:jobId/cancel', (req, res) => {
   const id = String(req.params.jobId);
   const job = _jobs[id];
-  if (!job) return res.status(404).json({ success: false, error: 'no such job' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such job') });
   if (job.state !== 'running') return res.json({ success: true, state: job.state, already: true });
   job.state = 'cancelled';
-  job.step = 'cancelled';
+  job.step = I18N.t('cancelled');
   job.at = Date.now();
   const h = _aborts.get(id);
   if (h) {
@@ -280,7 +285,7 @@ router.post('/scriptgen/jobs/:jobId/cancel', (req, res) => {
 router.post('/scriptgen/hooks', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
-  if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
+  if (!topic) return res.status(400).json({ success: false, error: I18N.t('a topic is required') });
   let nar, src, m;
   try {
     nar = _narrator(b.narratorId);
@@ -292,7 +297,7 @@ router.post('/scriptgen/hooks', (req, res) => {
   // forty (public/js/library/hook-types.js) - picked here, so what the writer is asked for is what the draft keeps.
   const count = HT.hookCount(b.hookCount);
   const types = HT.pickTypes(count);
-  _start(res, `Writing ${count} ${count === 1 ? 'hook' : 'hooks'}`, async (_step, signal) => {
+  _start(res, I18N.tn(count, 'Writing {n} hook', 'Writing {n} hooks'), async (_step, signal) => {
     const { data, by } = await callLadder({
       system: P.HOOKS_SYSTEM,
       user: P.hooksUserPrompt({ topic, tone: m.tone,
@@ -309,7 +314,7 @@ router.post('/scriptgen/hooks', (req, res) => {
       given.add(id);
       return { type: id, text: String(h.text).trim() };
     });
-    if (!hooks.length) throw new Error('No hooks came back.');
+    if (!hooks.length) throw new Error(I18N.t('No hooks came back.'));
     return { hooks, narrator: nar.name, model: by.model, by };
   // New hooks leave the chosen one where it is - in box 2 - until another is picked.
   }, _keeper(b, (r) => ({ hooks: r.hooks })),
@@ -324,12 +329,12 @@ router.post('/scriptgen/hooks', (req, res) => {
 router.post('/scriptgen/hooks/remake', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
-  if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
+  if (!topic) return res.status(400).json({ success: false, error: I18N.t('a topic is required') });
   const type = HT.hookType(b.type);
-  if (!type) return res.status(400).json({ success: false, error: 'this hook has no type to write it again in' });
+  if (!type) return res.status(400).json({ success: false, error: I18N.t('this hook has no type to write it again in') });
   const index = parseInt(b.index, 10);
   if (!Number.isInteger(index) || index < 0 || index >= HT.HOOK_COUNT.max) {
-    return res.status(400).json({ success: false, error: 'no such hook' });
+    return res.status(400).json({ success: false, error: I18N.t('no such hook') });
   }
   const current = String(b.text || '').trim().slice(0, 1000);
   const others = (Array.isArray(b.others) ? b.others : []).map(s => String(s || '').trim().slice(0, 1000))
@@ -341,7 +346,7 @@ router.post('/scriptgen/hooks/remake', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  _start(res, 'Writing the hook again', async (_step, signal) => {
+  _start(res, I18N.t('Writing the hook again'), async (_step, signal) => {
     const { data, by } = await callLadder({
       system: P.HOOK_REMAKE_SYSTEM,
       user: P.hookRemakeUserPrompt({ topic, tone: m.tone, narratorBlock: nar.block, sourceText: src.text,
@@ -349,7 +354,7 @@ router.post('/scriptgen/hooks/remake', (req, res) => {
       schema: P.HOOK_REMAKE_SCHEMA, name: 'hook', effort: EFFORT, signal,
     });
     const text = String(data.text || '').trim();
-    if (!text) throw new Error('No hook came back.');
+    if (!text) throw new Error(I18N.t('No hook came back.'));
     return { index, type: type.id, text, narrator: nar.name, model: by.model, by };
   }, _keeper(b, (r) => {
     const cur = b.draftId ? drafts.get(String(b.draftId)) : null;
@@ -368,8 +373,8 @@ router.post('/scriptgen/script', (req, res) => {
   const hook = String(b.hook || '').trim();
   // The chosen hook's type: the script is carried the way that opening works (none for a hook typed by hand).
   const hookType = HT.hookType(b.hookType);
-  if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
-  if (!hook) return res.status(400).json({ success: false, error: 'pick or write a hook first' });
+  if (!topic) return res.status(400).json({ success: false, error: I18N.t('a topic is required') });
+  if (!hook) return res.status(400).json({ success: false, error: I18N.t('pick or write a hook first') });
   let nar, src, m;
   try {
     nar = _narrator(b.narratorId);
@@ -377,11 +382,14 @@ router.post('/scriptgen/script', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  _start(res, `Writing ${m.scenes} paragraphs`, async (step, signal) => {
+  _start(res, I18N.tn(m.scenes, 'Writing {n} paragraphs', 'Writing {n} paragraphs'), async (step, signal) => {
     // WITH a transcript the rules change, not just the input: "select, do not summarise" and
     // "facts only from the transcript" only make sense when there is one.
     const withSource = !!src.text;
-    if (withSource) step(`Writing ${m.scenes} paragraphs from ${Math.round(src.text.length / 1000)}k of transcript`);
+    if (withSource) {
+      step(I18N.tn(m.scenes, 'Writing {n} paragraphs from {k}k of transcript', 'Writing {n} paragraphs from {k}k of transcript',
+        { k: Math.round(src.text.length / 1000) }));
+    }
     const { data, by } = await callLadder({
       system: withSource ? P.SOURCE_SCRIPT_SYSTEM : P.SCRIPT_SYSTEM,
       user: withSource
@@ -392,7 +400,7 @@ router.post('/scriptgen/script', (req, res) => {
       schema: P.SCRIPT_SCHEMA, name: 'script', effort: EFFORT, signal,
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
-    if (!paragraphs.length) throw new Error('The script came back empty.');
+    if (!paragraphs.length) throw new Error(I18N.t('The script came back empty.'));
     return {
       title: String(data.title || topic).slice(0, 80),
       paragraphs,
@@ -414,12 +422,12 @@ router.post('/scriptgen/rewrite', (req, res) => {
   const b = req.body || {};
   const script = (Array.isArray(b.script) ? b.script : []).map(p => String(p || ''));
   const index = parseInt(b.index, 10);
-  if (!script.length) return res.status(400).json({ success: false, error: 'no script' });
+  if (!script.length) return res.status(400).json({ success: false, error: I18N.t('no script') });
   if (!Number.isInteger(index) || index < 0 || index >= script.length) {
-    return res.status(400).json({ success: false, error: 'no such paragraph' });
+    return res.status(400).json({ success: false, error: I18N.t('no such paragraph') });
   }
   if (index === 0) {
-    return res.status(400).json({ success: false, error: 'the first paragraph is the hook — change the hook instead' });
+    return res.status(400).json({ success: false, error: I18N.t('the first paragraph is the hook — change the hook instead') });
   }
   let m;
   try { m = WM.normalise(b); } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
@@ -434,14 +442,14 @@ router.post('/scriptgen/rewrite', (req, res) => {
   let frag = null;
   if (b.fragment && typeof b.fragment === 'object') {
     const text = String(b.fragment.text || '');
-    if (!text.trim()) return res.status(400).json({ success: false, error: 'select some words of the paragraph first' });
+    if (!text.trim()) return res.status(400).json({ success: false, error: I18N.t('select some words of the paragraph first') });
     const s0 = parseInt(b.fragment.start, 10);
     const at = Number.isInteger(s0) && para.slice(s0, s0 + text.length) === text ? s0 : para.indexOf(text);
-    if (at < 0) return res.status(400).json({ success: false, error: 'the selected words are not in that paragraph any more' });
+    if (at < 0) return res.status(400).json({ success: false, error: I18N.t('the selected words are not in that paragraph any more') });
     frag = { text, before: para.slice(0, at), after: para.slice(at + text.length) };
   }
 
-  _start(res, frag ? `Rewriting a fragment of paragraph ${index + 1}` : `Rewriting paragraph ${index + 1}`, async (_step, signal) => {
+  _start(res, frag ? I18N.t('Rewriting a fragment of paragraph {n}', { n: index + 1 }) : I18N.t('Rewriting paragraph {n}', { n: index + 1 }), async (_step, signal) => {
     if (frag) {
       const { data } = await callLadder({
         system: P.FRAGMENT_SYSTEM,
@@ -453,7 +461,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
       const lead = (frag.text.match(/^\s*/) || [''])[0];
       const tail = (frag.text.match(/\s*$/) || [''])[0];
       const fresh = String(data.fragment || '').trim();
-      if (!fresh) throw new Error('The rewrite came back empty.');
+      if (!fresh) throw new Error(I18N.t('The rewrite came back empty.'));
       const fragment = lead + fresh + tail;
       return { index, paragraph: frag.before + fragment + frag.after, fragment, was: frag.text };
     }
@@ -463,7 +471,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
       schema: P.REWRITE_SCHEMA, name: 'rewrite', effort: EFFORT, signal,
     });
     const paragraph = String(data.paragraph || '').trim();
-    if (!paragraph) throw new Error('The rewrite came back empty.');
+    if (!paragraph) throw new Error(I18N.t('The rewrite came back empty.'));
     return { index, paragraph };
   }, _keeper(b, (r) => {
     // Into the draft's own paragraphs as they are NOW - the page may have edited others meanwhile -
@@ -503,7 +511,7 @@ router.get('/scriptgen/drafts', (_req, res) => {
 
 router.get('/scriptgen/drafts/:id', (req, res) => {
   const d = drafts.get(req.params.id);
-  if (!d) return res.status(404).json({ success: false, error: 'no such draft' });
+  if (!d) return res.status(404).json({ success: false, error: I18N.t('no such draft') });
   res.json({ success: true, draft: _liveSource(d, _titles()), running: _runningFor(d) });
 });
 
@@ -514,7 +522,7 @@ router.get('/scriptgen/drafts/:id', (req, res) => {
 // not bring it back beside the scenario it became.
 router.post('/scriptgen/drafts', (req, res) => {
   const b = req.body || {};
-  if (b.id && !drafts.get(b.id)) return res.status(404).json({ success: false, error: 'no such draft' });
+  if (b.id && !drafts.get(b.id)) return res.status(404).json({ success: false, error: I18N.t('no such draft') });
   // The source's name comes from the source, not from the page: a form opened before a rename
   // would otherwise save the old name back.
   if (b.sourceId) { const rec = sources.get(b.sourceId); if (rec) b.sourceTitle = rec.title || rec.originalName || ''; }
@@ -525,9 +533,9 @@ router.post('/scriptgen/drafts', (req, res) => {
 // Not while a stage writes into it: its keeper would bring the draft back the moment it lands.
 router.delete('/scriptgen/drafts/:id', (req, res) => {
   const d = drafts.get(req.params.id);
-  if (!d) return res.status(404).json({ success: false, error: 'no such draft' });
+  if (!d) return res.status(404).json({ success: false, error: I18N.t('no such draft') });
   const run = _runningFor(d);
-  if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - discard it when it has landed.`, ...run });
+  if (run) return res.status(409).json({ success: false, error: I18N.t('A stage is still writing into this draft ({what}) - discard it when it has landed.', { what: _whatSaid(run.what) }), ...run });
   drafts.remove(d.id);
   res.json({ success: true });
 });
@@ -539,30 +547,30 @@ router.post('/scriptgen/save', async (req, res) => {
   const b = req.body || {};
   const title = String(b.title || '').trim();
   let paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
-  if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
+  if (!title) return res.status(400).json({ success: false, error: I18N.t('a title is required') });
   // Not while a stage still writes into the draft: saving removes it, and the keeper would bring it
   // back beside the scenario the moment its answer landed.
   const run = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
-  if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - save when it has landed.`, ...run });
+  if (run) return res.status(409).json({ success: false, error: I18N.t('A stage is still writing into this draft ({what}) - save when it has landed.', { what: _whatSaid(run.what) }), ...run });
   if (paragraphs.length < MIN_LINES) {
     return res.status(400).json({ success: false,
-      error: `the scenarios store needs at least ${MIN_LINES} lines — this script has ${paragraphs.length}` });
+      error: I18N.t('the scenarios store needs at least {min} lines — this script has {n}', { min: MIN_LINES, n: paragraphs.length }) });
   }
   // The third gate, said here rather than let through to a 500: the store reads the narrator's
   // gender off the first role, and refuses a scenario without one.
   const gender = String(b.gender || '').toLowerCase();
   if (!['male', 'female'].includes(gender)) {
-    return res.status(400).json({ success: false, error: 'a narrator gender is required (male or female)' });
+    return res.status(400).json({ success: false, error: I18N.t('a narrator gender is required (male or female)') });
   }
   // A paragraph typed or edited in another language goes into
   // the scenario in English - the writer writes English, so it is a hand's. A stage started meanwhile still stops it.
   if (paragraphs.some(p => !AGENT.english(p))) {
     let t;
-    try { t = await AGENT.toEnglishLines(paragraphs); } catch (e) { t = { fail: 'the paragraphs could not be translated: ' + e.message }; }
+    try { t = await AGENT.toEnglishLines(paragraphs); } catch (e) { t = { fail: I18N.t('the paragraphs could not be translated: {why}', { why: e.message }) }; }
     if (t.fail) return res.status(502).json({ success: false, error: t.fail });
     paragraphs = t.texts.map(p => String(p || '').trim());
     const run2 = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
-    if (run2) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run2.what}) - save when it has landed.`, ...run2 });
+    if (run2) return res.status(409).json({ success: false, error: I18N.t('A stage is still writing into this draft ({what}) - save when it has landed.', { what: _whatSaid(run2.what) }), ...run2 });
   }
 
   // WHAT WROTE IT comes from the draft the stages kept, not from the form as it is now: the step of the

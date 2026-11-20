@@ -56,8 +56,13 @@ export async function follow(ids, onTick) {
   }
 }
 
-/** yt-dlp's step, short enough for a status line or a place: "40% of 23MB · 0:12 left". */
-export function shortStep(step) {
+/** yt-dlp's step, short enough for a status line or a place: "40% of 23MB · 0:12 left". `dl` - the download's numbers
+ *  the server sends beside its words (GET /api/links: { p, size, left }), read whatever the language of the words. */
+export function shortStep(step, dl) {
+  if (dl && dl.p != null && dl.size) {
+    return dl.left && dl.left !== '00:00' ? T.t('{p}% of {size} · {time} left', { p: dl.p, size: dl.size, time: dl.left })
+      : T.t('{p}% of {size}', { p: dl.p, size: dl.size });
+  }
   const s = String(step || '');
   const m = /(\d+)% of ([\d.]+\w+)(?: at [^\s·]+)?(?: · ([\d:]+) left)?/.exec(s);
   if (m) {

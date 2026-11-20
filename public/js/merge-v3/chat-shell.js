@@ -1187,11 +1187,15 @@ export function createChat(make) {
   function _linkTick(j) {
     if (!_linking) return;
     const step = String(j.step || '');
-    const pct = /(\d+)%/.exec(step);
-    _linking.text = pct ? pct[1] + '%' : /join/i.test(step) ? I18N.t('joining…') : /shelf/i.test(step) ? I18N.t('filing…') : I18N.t('reading…');
+    // Which step by the server's code (`stepKey`, `dl`) whatever the language of its words; its English words for an
+    // older answer.
+    const pct = j.dl && j.dl.p != null ? [step, String(j.dl.p)] : /(\d+)%/.exec(step);
+    const joining = j.stepKey ? j.stepKey === 'join' : /join/i.test(step);
+    const filing = j.stepKey ? (j.stepKey === 'shelf' || j.stepKey === 'had') : /shelf/i.test(step);
+    _linking.text = pct ? pct[1] + '%' : joining ? I18N.t('joining…') : filing ? I18N.t('filing…') : I18N.t('reading…');
     const c = _ui && _ui.atts ? _ui.atts.querySelector('.is-linking .mv3-ig-att-slot, .is-linking .go') : null;
     if (c) c.textContent = _linking.text;
-    _say(I18N.t('link: {step}', { step: LK.shortStep(step) }));
+    _say(I18N.t('link: {step}', { step: LK.shortStep(step, j.dl) }));
   }
 
   // ── Bringing files in from this computer ──────────────────────────────────
@@ -1586,7 +1590,7 @@ export function createChat(make) {
       }));
     } else {
       cell.appendChild(el('div', 'mv3-ig-bad', g.error || I18N.t('nothing came back')));
-      if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) cell.appendChild(el('div', 'mv3-ig-note', I18N.t('Alerts can try it again')));
+      if (!g.cancelled && g.alertId && !(g.question || /question instead/.test(g.error || ''))) cell.appendChild(el('div', 'mv3-ig-note', I18N.t('Alerts can try it again')));
     }
     return cell;
   }

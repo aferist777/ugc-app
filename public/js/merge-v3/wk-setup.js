@@ -525,11 +525,12 @@ function _pick(half, ev) {
 function _where(view) {
   const key = (_ctx && _ctx.key) || '';
   const p = (_ctx && _ctx.project) || {};
-  const name = String(p.title || p.name || 'talking head');
+  const name = String(p.title || p.name || t('talking head'));
   return {
     page: 'merge',
     href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&view=' + encodeURIComponent(view),
-    label: 'Merge · ' + name + ' · setup' + (WHERE_WIN[view] ? ' › ' + WHERE_WIN[view] : ''),
+    label: WHERE_WIN[view] ? t('Merge · {project} · setup › {window}', { project: name, window: t(WHERE_WIN[view]) })
+      : t('Merge · {project} · setup', { project: name }),
     spot: { key, step: 'setup', view },
   };
 }
@@ -836,7 +837,7 @@ async function _apply(c) {
       basePath: base, lookbookPath: lb, note: '',
       charId: c.id, charName: c.name, gender: c.gender || '',
       projectId: String((_ctx.project || {}).id || ''),
-      title: 'Look · ' + c.name, where: _where('lookbooks'),
+      title: t('Look · {name}', { name: c.name }), where: _where('lookbooks'),
     });
     _beginDress(c.name, Date.now());
     await _followDress(r.alertId);

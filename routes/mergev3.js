@@ -44,6 +44,7 @@ const path = require('path');
 const router = express.Router();
 
 const MSTORE = require('../lib/merge-store');
+const I18N = require('../lib/i18n');
 
 // The shape of a timeline and the empty project (lib/timeline-shape.js).
 const SHAPE = require('../lib/timeline-shape');
@@ -111,7 +112,7 @@ router.get('/mv3/timelines', (req, res) => {
       const vo = pr.type === 'voiceover';
       // THE voiceover draft: "draft · voiceover", under Merge's draft.
       const vod = vo && !!pr.draft;
-      return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
+      return { key, title: t.title || I18N.t('Untitled'), createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
                kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft,
                ...(HLS.ofKey(key) ? { highlights: true } : {}), ...(vo ? { voiceover: true } : {}), ...(vod ? { vodraft: true } : {}) };
     // The draft first, then the voiceover draft, then newest first.
@@ -140,7 +141,7 @@ router.get('/mv3/timeline', (req, res) => {
     res.json({
       // `found`: false when there is no timeline at all - the empty shape under LOCAL_KEY; the page opens the draft instead.
       success: true, version: _revOf(t), key, found: !!t,
-      title: t ? t.title : 'Untitled', draft: !!(t && t.draft),
+      title: t ? t.title : I18N.t('Untitled'), draft: !!(t && t.draft),
       adv: t ? (t.adv || null) : null,
       timeline: t ? { kind: BLANK_KIND, format: t.format || '9:16', tracks: t.tracks } : _emptyBlank(),
       // The clips whose file is not on the disk - deleted from the library, most often: red on the
@@ -174,7 +175,7 @@ function _ensureDraft(avoid) {
   if (was) return { key: was, title: cur.timelines[was].title, version: cur.version, made: false };
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  const base = 'draft ' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const base = I18N.t('draft {when}', { when: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) });
   const off = String(avoid || '').trim().toLowerCase();
   const bad = (t) => _titleTaken(cur.timelines, t, null) || (!!off && t.toLowerCase() === off);
   let title = base;
@@ -206,7 +207,7 @@ router.get('/mv3/timeline/version', (req, res) => {
     if (!key) return res.json({ success: true, version: MSTORE.stateVersion() });
     // Its own timeline, not all of them - the page asks this every 20 s.
     const t = MSTORE.one(key);
-    if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!t) return res.status(404).json({ success: false, error: I18N.t('no project "{key}"', { key }) });
     res.json({ success: true, version: _revOf(t), key });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -215,24 +216,24 @@ router.put('/mv3/timeline', (req, res) => {
   try {
     const claimed = Number((req.body || {}).version);
     if (!Number.isFinite(claimed)) {
-      return res.status(400).json({ success: false, error: 'version is required - a write that does not say what it replaces cannot be checked' });
+      return res.status(400).json({ success: false, error: I18N.t('version is required - a write that does not say what it replaces cannot be checked') });
     }
     // A save names its project, and the project must be there: a project is made by POST .../new (or by the
     // server laying one), never by a save. A save that arrives after its project was deleted - an edit still waiting when a
     // project or a highlights fragment went - is refused with 404 `gone`, and a save with no key with 400; the edit is
     // not saved.
     const key = String((req.body || {}).key || '').trim();
-    if (!key) return res.status(400).json({ success: false, error: 'which project? - the edit was not saved' });
+    if (!key) return res.status(400).json({ success: false, error: I18N.t('which project? - the edit was not saved') });
     // ITS OWN TIMELINE read and written, not the whole store (~0.2 s for 299 timelines, the server answering nothing else
     // meanwhile).
     const prev = MSTORE.one(key);
-    if (!prev) return res.status(404).json({ success: false, gone: true, key, error: 'this project is not there any more - the edit was not saved' });
+    if (!prev) return res.status(404).json({ success: false, gone: true, key, error: I18N.t('this project is not there any more - the edit was not saved') });
     // The refusal that makes this store different, checked against THIS project's rev - see
     // the top of the file. The current state goes back with it, so the caller can reconcile
     // in one round trip instead of two.
     if (claimed !== _revOf(prev)) {
       return res.status(409).json({
-        success: false, error: 'stale version', expected: _revOf(prev), got: claimed,
+        success: false, error: I18N.t('stale version'), expected: _revOf(prev), got: claimed,
         version: _revOf(prev), key,
         timeline: { kind: BLANK_KIND, format: prev.format || '9:16', tracks: prev.tracks },
       });
@@ -241,7 +242,7 @@ router.put('/mv3/timeline', (req, res) => {
     // and storing it would store no lanes at all - refused, not saved.
     const incoming = (req.body || {}).timeline;
     if (!Array.isArray(incoming && incoming.tracks)) {
-      return res.status(400).json({ success: false, error: 'this project keeps its lanes as a list - the edit was not saved, reload the project' });
+      return res.status(400).json({ success: false, error: I18N.t('this project keeps its lanes as a list - the edit was not saved, reload the project') });
     }
     const now = new Date().toISOString();
     const clean = _sanitizeBlank(incoming);
@@ -292,7 +293,7 @@ router.post('/mv3/merge', (req, res) => {
 });
 router.get('/mv3/merge/:id', (req, res) => {
   const job = require('../lib/merge-clips').get(req.params.id);
-  if (!job) return res.status(404).json({ success: false, error: 'no such merge' });
+  if (!job) return res.status(404).json({ success: false, error: I18N.t('no such merge') });
   res.json({ success: true, job });
 });
 router.post('/mv3/merge/:id/cancel', (req, res) => {
@@ -307,7 +308,7 @@ router.post('/mv3/adv', (req, res) => {
     const key = String(b.key || '');
     const cur = _read();
     const t = cur.timelines[key];
-    if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!t) return res.status(404).json({ success: false, error: I18N.t('no project "{key}"', { key }) });
     t.adv = (b.adv && typeof b.adv === 'object') ? b.adv : null;
     t.updatedAt = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: t.updatedAt, timelines: cur.timelines });
@@ -348,7 +349,7 @@ router.post('/mv3/timeline/new', (req, res) => {
     let title = '';
     if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
-      if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+      if (!p) return res.status(404).json({ success: false, error: I18N.t('no such project') });
       // The FIRST free one: sv3_<id>, then _2, _3 - in practice sv3_<id> itself.
       const base = 'sv3_' + projectId;
       key = base;
@@ -356,15 +357,15 @@ router.post('/mv3/timeline/new', (req, res) => {
       // Named after the project and the day. Uniqueness is not
       // checked: for an sv3_ key the folder is the PROJECT's folder (lib/merge-store.js), so
       // two same-named timelines cannot collide over a folder the way Merge's own do.
-      title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || p.name || '').trim() || 'talking head'}`;
+      title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || p.name || '').trim() || I18N.t('talking head')}`;
     } else {
       title = String(b.title || '').trim();
-      if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
-      if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
+      if (!title) return res.status(400).json({ success: false, error: I18N.t('a title is required') });
+      if (title.length > 120) return res.status(400).json({ success: false, error: I18N.t('title is too long (120 max)') });
       // Two projects with one name cannot be told apart in the picker. The rename route refuses
       // it; creation has to as well, or the rule only holds half the time.
       if (_titleTaken(cur.timelines, title, null)) {
-        return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+        return res.status(409).json({ success: false, error: I18N.t('a project called "{title}" already exists', { title }) });
       }
       // The stamp is unique in practice; the loop is for the case it is not (two clicks inside one
       // millisecond, or a clock that went backwards) so a new project can never land on top of an
@@ -408,16 +409,16 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
   try {
     const key = String(req.params.key || '');
     const title = String((req.body || {}).title || '').trim();
-    if (!title) return res.status(400).json({ success: false, error: 'a name is needed' });
-    if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
+    if (!title) return res.status(400).json({ success: false, error: I18N.t('a name is needed') });
+    if (title.length > 120) return res.status(400).json({ success: false, error: I18N.t('title is too long (120 max)') });
 
     const cur = _read();
     const rec = cur.timelines[key];
-    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!rec) return res.status(404).json({ success: false, error: I18N.t('no project "{key}"', { key }) });
     // A draft named is a draft saved - even under the name it had.
     if (String(rec.title || '') === title && !rec.draft) return res.json({ success: true, title, version: _revOf(rec) });
     if (_titleTaken(cur.timelines, title, key)) {
-      return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+      return res.status(409).json({ success: false, error: I18N.t('a project called "{title}" already exists', { title }) });
     }
 
     const was = String(rec.title || '');
@@ -491,19 +492,19 @@ router.delete('/mv3/timeline/:key', (req, res) => {
   try {
     const key = String(req.params.key || '');
     const cur = _read();
-    if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!cur.timelines[key]) return res.status(404).json({ success: false, error: I18N.t('no project "{key}"', { key }) });
     // THE DRAFT is not deleted: "clear" empties its lanes, "save" names it - there is always one.
-    if (cur.timelines[key].draft) return res.status(409).json({ success: false, error: 'the draft is not deleted - "clear" empties its lanes, "save" gives it a name' });
+    if (cur.timelines[key].draft) return res.status(409).json({ success: false, error: I18N.t('the draft is not deleted - "clear" empties its lanes, "save" gives it a name') });
     // A HIGHLIGHTS PROJECT is deleted whole by its own timeline: its work stopped, its folder - the fragments'
     // timelines and pieces - gone; its video stays, a source of the Library. A fragment goes from its tile, not from here.
     const HLS = require('../lib/highlights-store');
     const hk = HLS.ofKey(key);
-    if (hk && hk.n > 0) return res.status(409).json({ success: false, error: 'a fragment is deleted on its tile in the highlights field' });
+    if (hk && hk.n > 0) return res.status(409).json({ success: false, error: I18N.t('a fragment is deleted on its tile in the highlights field') });
     if (hk && HLS.entry(hk.id)) {
       try { require('../lib/highlights-job').stop(hk.id); } catch (e) { /* not at work */ }
       const rec = HLS.get(hk.id);
       const row = rec && rec.work && rec.work.alertId;
-      if (row) require('../lib/alerts').cancel(row, 'stopped - the project was deleted');
+      if (row) require('../lib/alerts').cancel(row, I18N.t('stopped - the project was deleted'));
       const talks = _hlChatKeys(hk.id, cur.timelines);
       const { moved } = HLS.remove(hk.id);
       // Its chats' conversations and the finished records of what they made go too, as any project's
@@ -522,14 +523,14 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const e = at ? PROJECTS.entries().find(x => x.kind === 'scenarios' && x.folder === at.folder) : null;
       if (e) {
         if (!_folderFiles(Object.keys(cur.timelines)).has(key)) {
-          return res.status(409).json({ success: false, error: 'Another timeline of this project still uses its files - delete the timeline only.' });
+          return res.status(409).json({ success: false, error: I18N.t('Another timeline of this project still uses its files - delete the timeline only.') });
         }
         const running = require('../lib/alerts').list().filter(r => r && r.state === 'running' && r.where && r.where.spot
           && String(r.where.spot.key || '') === key).length;
         if (running) {
           return res.status(409).json({ success: false, running,
-            error: running + (running === 1 ? ' thing is' : ' things are') + ' still being made for this project - wait for '
-              + (running === 1 ? 'it' : 'them') + ' or let ' + (running === 1 ? 'it' : 'them') + ' go in Alerts first.' });
+            error: I18N.tn(running, '{n} thing is still being made for this project - wait for it or let it go in Alerts first.',
+              '{n} things are still being made for this project - wait for them or let them go in Alerts first.') });
         }
         proj = e;
       }
@@ -590,7 +591,7 @@ router.post('/mv3/drop-file/known', (req, res) => {
 });
 
 router.post('/mv3/drop-file', _dropUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(415).json({ success: false, error: 'not a video, a picture or a sound' });
+  if (!req.file) return res.status(415).json({ success: false, error: I18N.t('not a video, a picture or a sound') });
   try {
     const b = req.body || {};
     const r = await DROP.take(req.file.path, { name: _dropName(req, req.file), mime: req.file.mimetype,
@@ -601,7 +602,7 @@ router.post('/mv3/drop-file', _dropUpload.single('file'), async (req, res) => {
   }
 });
 router.use('/mv3/drop-file', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'the file did not arrive' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('the file did not arrive') });
 });
 
 module.exports = router;

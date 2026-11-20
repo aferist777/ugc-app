@@ -209,4 +209,7 @@ export default {
   'Restart the app to switch the language - here there is no window to restart.': 'Перезапустите приложение, чтобы сменить язык, — здесь нет окна, которое можно перезапустить.',
   'The language was not saved': 'Язык не сохранён',
   'The language switch is closed': 'Переключатель языка закрыт',
+  // alerts-bell.js - a post the bot brought in
+  'a post': 'пост',
+  'from Telegram · REFERENCES · {where}': 'из Telegram · РЕФЕРЕНСЫ · {where}',
 };

@@ -35,26 +35,27 @@ const { HEARD } = require('../lib/mv3b-subs');
 const TILES = require('../lib/caption-tiles');
 const { CATEGORIES } = require('../public/js/captions/presets.js');
 const { TEXT_CATEGORIES } = require('../public/js/captions/presets-text.js');
+const I18N = require('../lib/i18n');
 
 router.post('/mv3/captions/transcribe', (req, res) => {
   try {
     const key = String((req.body && req.body.key) || '');
-    if (!KEY_RE.test(key)) return res.status(400).json({ success: false, error: 'A project key is needed.' });
+    if (!KEY_RE.test(key)) return res.status(400).json({ success: false, error: I18N.t('A project key is needed.') });
     // The project asked for, never the newest one the way an open falls back to.
     const t = MSTORE.read().timelines[key];
-    if (!t) return res.status(404).json({ success: false, error: 'No project "' + key + '".' });
+    if (!t) return res.status(404).json({ success: false, error: I18N.t('No project "{key}".', { key }) });
     const lane = (Array.isArray(t.tracks) ? t.tracks : []).find((x) => x && x.kind === 'subs');
     const here = (HEARD.listenOf(lane) || {}).engine === 'local';
     // "Back to what was heard" asks nobody: neither the key nor the program is needed.
     const stored = !!(req.body && req.body.stored);
     if (!stored && here && !LOCAL.hasProgram()) {
-      return res.status(400).json({ success: false, code: 'no-build', error: 'Speech recognition on this computer is not installed - the lane can listen through Groq.' });
+      return res.status(400).json({ success: false, code: 'no-build', error: I18N.t('Speech recognition on this computer is not installed - the lane can listen through Groq.') });
     }
     // No key is no refusal while this computer can hear.
     if (!stored && !here && !GROQ.keyOf() && !LOCAL.hasProgram()) {
-      return res.status(400).json({ success: false, code: 'no-key', error: 'No Groq API key - add it on Admin -> API keys.' });
+      return res.status(400).json({ success: false, code: 'no-key', error: I18N.t('No Groq API key - add it on Admin -> API keys.') });
     }
-    if (JOB.busy(key)) return res.status(409).json({ success: false, code: 'busy', error: 'Already listening to this project.', job: JOB.get(key) });
+    if (JOB.busy(key)) return res.status(409).json({ success: false, code: 'busy', error: I18N.t('Already listening to this project.'), job: JOB.get(key) });
     const ok = JOB.precheck(t);
     if (ok.code) return res.status(400).json({ success: false, code: ok.code, error: ok.error });
     res.json({ success: true, job: JOB.start(key, t, ok.pieces, { download: !stored && !!(req.body && req.body.download), stored }) });
@@ -106,7 +107,7 @@ router.get('/speech/local', (req, res) => {
 
 router.post('/speech/local/download', (req, res) => {
   const what = String((req.body && req.body.what) || '');
-  if (what !== 'model') return res.status(400).json({ success: false, error: 'Download what? Only the model.' });
+  if (what !== 'model') return res.status(400).json({ success: false, error: I18N.t('Download what? Only the model.') });
   // In the background: the state says how far it got, and why it stopped if it did.
   LOCAL.download(what).catch(() => { /* kept in the state's error */ });
   res.json({ success: true, state: LOCAL.state() });

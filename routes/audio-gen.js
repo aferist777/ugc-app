@@ -21,6 +21,7 @@
 const express = require('express');
 const ENG = require('../lib/audio-engines');
 const AG = require('../lib/audio-gens');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.get('/audio/gens', (req, res) => {
 
 router.get('/audio/gens/:id', (req, res) => {
   const g = AG.get(req.params.id);
-  if (!g) return res.status(404).json({ success: false, error: 'not found' });
+  if (!g) return res.status(404).json({ success: false, error: I18N.t('not found') });
   res.json({ success: true, gen: g });
 });
 

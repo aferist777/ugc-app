@@ -40,6 +40,7 @@ const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
 const IMG = require('../lib/images-store');
+const I18N = require('../lib/i18n');
 const { MEDIA } = require('../lib/config');
 const { toDiskExisting } = require('../lib/media');
 
@@ -71,16 +72,16 @@ router.post('/mv3/img/send', (req, res) => {
   let kick = '';
   try {
     const project = String(b.project || '').trim();
-    if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
+    if (!project) return res.status(400).json({ success: false, error: I18N.t('open a project first') });
     const text = String(b.text || '').trim().slice(0, 20000);
-    if (!text) return res.status(400).json({ success: false, error: 'say what to make' });
+    if (!text) return res.status(400).json({ success: false, error: I18N.t('say what to make') });
     const engine = String(b.engine || '');
     const e = MV.ENGINES[engine];
-    if (!e) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
+    if (!e) return res.status(400).json({ success: false, error: I18N.t('no such model: {model}', { model: engine }) });
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 5);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
-      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: I18N.t('picture {n} is not in the library any more', { n: i + 1 }) });
     }
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const write = b.write !== false;
@@ -93,7 +94,7 @@ router.post('/mv3/img/send', (req, res) => {
       return res.json({ success: true, asked: true });
     }
     if (GENS.runningSends(project) >= AT_ONCE) {
-      return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
+      return res.status(409).json({ success: false, error: I18N.tn(AT_ONCE, '{n} message is being drawn already - wait for it', '{n} messages are being drawn already - wait for one of them') });
     }
 
     // What was said before this message, for "the same but at night" - read before this turn is written,
@@ -103,7 +104,7 @@ router.post('/mv3/img/send', (req, res) => {
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);                 // before the rows: the runner asks about them at once
     CHAT.add({ project, kind: 'image', role: 'user', text, refs });
-    const first = write ? 'reading your message' : (refs.length ? 'sending the pictures' : 'asking ' + (b.provider || 'the model'));
+    const first = write ? I18N.t('reading your message') : (refs.length ? I18N.t('sending the pictures') : I18N.t('asking {who}', { who: b.provider || I18N.t('the model') }));
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(GENS.create({
@@ -143,14 +144,14 @@ async function _work(o) {
           aspects: MV.ASPECTS, tiers: e ? e.tiers : [],
         });
         if (t && t.ask) {
-          for (const id of o.ids) GENS.refuse(id, 'the analyst asked a question instead', o.kick);
+          for (const id of o.ids) GENS.refuse(id, I18N.t('the analyst asked a question instead'), o.kick, { question: true });
           CHAT.add({ project: o.project, kind: 'image', role: 'agent', text: t.ask });
           return;
         }
         over = { prompt: (t && t.prompt) || o.text, aspect: t && t.aspect, quality: t && t.quality,
                  fell: (t && t.fell) || '', writer: (t && t.writer) || '' };
       } catch (err) {
-        over = { prompt: o.text, fell: 'the analyst could not be reached' };
+        over = { prompt: o.text, fell: I18N.t('the analyst could not be reached') };
       }
     }
     await Promise.all(o.ids.map(id => GENS.submit(id, over, o.kick)));
@@ -221,7 +222,7 @@ const _upload = multer({
 });
 
 router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  if (!req.file) return res.status(400).json({ success: false, error: I18N.t('no file') });
   let abs = req.file.path;
   try { abs = await IMGIN.sendableFile(abs); }
   catch (e) {
@@ -248,7 +249,7 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
 });
 
 router.use('/mv3/img/upload', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('upload failed') });
 });
 
 /**
@@ -277,7 +278,7 @@ function _folderFor(kind, id) {
 // is: into IMAGES itself from the chat, into the person's folder open from the window or the column.
 const LINK_MAX = 64 * 1024 * 1024;           // the upload's own limit
 const LINK_MS = 45000;
-const PAGE_WORDS = 'This is a page, not a picture - drag the picture itself, or open it and drag it from there (a post goes to the Telegram bot).';
+const PAGE_WORDS = () => I18N.t('This is a page, not a picture - drag the picture itself, or open it and drag it from there (a post goes to the Telegram bot).');
 
 async function _fetchPicture(url) {
   const ac = new AbortController();
@@ -287,21 +288,21 @@ async function _fetchPicture(url) {
     try {
       r = await fetch(url, { signal: ac.signal, redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' } });
     } catch (e) {
-      throw Object.assign(new Error(ac.signal.aborted ? 'the site did not answer in time' : 'the site could not be reached'), { status: 502 });
+      throw Object.assign(new Error(ac.signal.aborted ? I18N.t('the site did not answer in time') : I18N.t('the site could not be reached')), { status: 502 });
     }
-    if (!r.ok) throw Object.assign(new Error('the site answered ' + r.status), { status: 502 });
+    if (!r.ok) throw Object.assign(new Error(I18N.t('the site answered {status}', { status: r.status })), { status: 502 });
     const type = String(r.headers.get('content-type') || '').toLowerCase();
     if (/^text\/|html|json|xml/.test(type) && !/svg/.test(type)) {
       try { await r.body.cancel(); } catch (e) { /* let it go */ }
-      throw Object.assign(new Error(PAGE_WORDS), { status: 400 });
+      throw Object.assign(new Error(PAGE_WORDS()), { status: 400 });
     }
     const len = +r.headers.get('content-length') || 0;
-    if (len > LINK_MAX) throw Object.assign(new Error('the picture is over 64 MB'), { status: 400 });
+    if (len > LINK_MAX) throw Object.assign(new Error(I18N.t('the picture is over 64 MB')), { status: 400 });
     const parts = [];
     let got = 0;
     for await (const chunk of r.body) {
       got += chunk.length;
-      if (got > LINK_MAX) { ac.abort(); throw Object.assign(new Error('the picture is over 64 MB'), { status: 400 }); }
+      if (got > LINK_MAX) { ac.abort(); throw Object.assign(new Error(I18N.t('the picture is over 64 MB')), { status: 400 }); }
       parts.push(Buffer.from(chunk));
     }
     return Buffer.concat(parts);
@@ -310,18 +311,27 @@ async function _fetchPicture(url) {
   }
 }
 
+// Bytes with something in them that sharp names no format of - what lib/image-in.js refuses as "not a picture".
+async function _notPicture(buf) {
+  if (!buf || !buf.length) return false;
+  let meta = null;
+  try { meta = await require('sharp')(buf).metadata(); } catch (e) { meta = null; }
+  return !(meta && meta.format);
+}
+
 router.post('/mv3/img/link', async (req, res) => {
   const b = req.body || {};
   const url = String(b.url || '').trim();
-  if (!/^https?:\/\/\S+$/i.test(url) || url.length > 4000) return res.status(400).json({ success: false, error: 'that is not a link' });
+  if (!/^https?:\/\/\S+$/i.test(url) || url.length > 4000) return res.status(400).json({ success: false, error: I18N.t('that is not a link') });
   let buf;
   try { buf = await _fetchPicture(url); }
   catch (e) { return res.status(e.status || 502).json({ success: false, error: e.message }); }
   let pic;
   try { pic = await IMGIN.sendable(buf); }
   catch (e) {
-    // Bytes that are no picture - a page that did not say it was one - are the page's words too.
-    return res.status(400).json({ success: false, error: e.status === 400 && /not a picture/.test(e.message) ? PAGE_WORDS : e.message });
+    // Bytes that are no picture - a page that did not say it was one - are the page's words too: told by the bytes
+    // themselves (no format sharp can name), never by the words of the error.
+    return res.status(400).json({ success: false, error: e.status === 400 && await _notPicture(buf) ? PAGE_WORDS() : e.message });
   }
   try {
     fs.mkdirSync(MEDIA.work, { recursive: true });
@@ -330,7 +340,7 @@ router.post('/mv3/img/link', async (req, res) => {
     // Its name: the link's last part, without its query - else "picture".
     let name = '';
     try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || '').replace(/\.[^.]+$/, ''); } catch (e) { name = ''; }
-    name = name.replace(/[^\p{L}\p{N} ._-]+/gu, ' ').trim().slice(0, 120) || 'picture';
+    name = name.replace(/[^\p{L}\p{N} ._-]+/gu, ' ').trim().slice(0, 120) || I18N.t('picture');
     const cat = _folderFor('images', b.categoryId);
     const { item } = await IMG.add('/media/work/' + file, {
       name, source: 'upload', categoryId: cat.id, categoryLabel: cat.label,

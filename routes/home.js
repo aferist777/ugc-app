@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { MEDIA } = require('../lib/config');
 const { toDiskExisting, toUrl } = require('../lib/media');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -77,7 +78,7 @@ router.get('/home/projects', (_req, res) => {
       const hl = HLS.ofKey(key);
       if (hl && hl.n > 0) continue;
       const it = {
-        key, title: t.title || 'Untitled', kind: 'blank', format: t.format === '16:9' ? '16:9' : '9:16',
+        key, title: t.title || I18N.t('Untitled'), kind: 'blank', format: t.format === '16:9' ? '16:9' : '9:16',
         updatedAt: t.updatedAt || t.createdAt || null, createdAt: t.createdAt || null,
         thumb: _thumbOf(t), dur: _durOf(t), clips: _clipsOf(t), frags: null, fragsAll: null,
       };
@@ -160,7 +161,7 @@ router.get('/home/news', (req, res) => {
       if (!p || p.from !== 'telegram' || p.handled) continue;
       if ((Date.parse(p.receivedAt) || 0) <= sinceMs) continue;
       nRefs++;
-      const label = p.categoryId ? 'REFERENCES · ' + (p.categoryLabel || 'a category') : REFS.labelOf(p.source, p.folder);
+      const label = p.categoryId ? I18N.t('REFERENCES · {name}', { name: p.categoryLabel || I18N.t('a category') }) : REFS.labelOf(p.source, p.folder);
       where[label] = (where[label] || 0) + 1;
     }
     // The journal: what was made, and what failed, since.

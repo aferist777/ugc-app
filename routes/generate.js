@@ -5,6 +5,7 @@
 
 const express = require('express');
 const axios   = require('axios');
+const I18N    = require('../lib/i18n');
 const router  = express.Router();
 
 
@@ -19,7 +20,7 @@ router.get('/random-face', async (_req, res) => {
     const buf = Buffer.from(response.data);
     // TPDNE sometimes serves an HTML interstitial instead of the JPEG — reject it
     // so the client can simply re-click instead of showing a broken face.
-    if (!ct.startsWith('image/') || buf.length < 10000) throw new Error('TPDNE returned non-image (' + (ct || 'unknown') + ') — try again');
+    if (!ct.startsWith('image/') || buf.length < 10000) throw new Error(I18N.t('TPDNE returned non-image ({type}) — try again', { type: ct || I18N.t('unknown') }));
     res.json({ success: true, dataUrl: 'data:' + ct + ';base64,' + buf.toString('base64') });
   } catch (err) {
     res.status(502).json({ success: false, error: err.message });

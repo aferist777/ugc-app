@@ -42,8 +42,9 @@ import { t } from './i18n/t.js';
     btn.title = t('Back to the scenario generator, where you left it');
     btn.addEventListener('click', () => { location.href = back; });
   })();
-  // The verdict in a word or two for a menu entry; the whole sentence is the step's own line.
-  const offWord = (off) => (!off ? '' : /^no key/.test(off) ? t('no key') : t('key refused'));
+  // The verdict in a word or two for a menu entry; the whole sentence is the step's own line. The server's `offCode`
+  // ('nokey' | 'refused' | ...) - its `off` is in the interface's language -, else the English words it said before.
+  const offWord = (q) => (!q.off ? '' : (q.offCode ? q.offCode === 'nokey' : /^no key/.test(q.off)) ? t('no key') : t('key refused'));
 
   // ── What this is ─────────────────────────────────────────────────────────
   function explain() {
@@ -74,7 +75,7 @@ import { t } from './i18n/t.js';
     const ps = el('select', 'ai-sel ai-prov u-in is-s');
     ps.title = t('The aggregator this step asks');
     for (const q of st.providers) {
-      const o = el('option', null, q.label + (q.off ? ' - ' + offWord(q.off) : '') + (q.unproven ? ' ' + t('(not tried yet)') : ''));
+      const o = el('option', null, (q.off ? t('{name} - {why}', { name: q.label, why: offWord(q) }) : q.label) + (q.unproven ? ' ' + t('(not tried yet)') : ''));
       o.value = q.id;
       // An aggregator that cannot be asked cannot be chosen, nor one whose every model is on the other steps; the one
       // this step already stands on stays shown.
@@ -95,7 +96,7 @@ import { t } from './i18n/t.js';
     const ms = el('select', 'ai-sel ai-model u-in is-s');
     ms.title = t('The model - every one of them sees pictures');
     for (const m of ((p && p.models) || [{ id: step.model, label: step.model }])) {
-      const o = el('option', null, m.label + (used.has(step.provider + '|' + m.id) ? ' - ' + t('on another step') : ''));
+      const o = el('option', null, (used.has(step.provider + '|' + m.id) ? t('{name} - {why}', { name: m.label, why: t('on another step') }) : m.label));
       o.value = m.id;
       o.disabled = used.has(step.provider + '|' + m.id);
       o.selected = m.id === step.model;

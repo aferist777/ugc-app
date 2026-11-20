@@ -502,9 +502,11 @@ function _paintTop() {
     state.appendChild(x);
   } else if (w.state === 'failed') {
     state.appendChild(_el('span', 'mv3-hl-words is-err', w.error === 'stopped' ? T.t('stopped') : (w.error || T.t('it failed'))));
-    // Its video stays on the disk and was moved or deleted: pointed at again here (the same file -
-    // its print says so - its words its own); deleting its source is the Library's (Scenarios -> its source).
-    if (/not where it was/i.test(String(w.error || '')) && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
+    // Its video stays on the disk and was moved or deleted (`code` 'missing'; an older record says so in its English
+    // words alone): pointed at again here (the same file - its print says so - its words its own); deleting its source is
+    // the Library's (Scenarios -> its source).
+    const missing = w.code === 'missing' || /not where it was/i.test(String(w.error || ''));
+    if (missing && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
     if (_retry) {
       const armed = _armed === 'retry';
       const b = _el('button', 'mv3-c-btn u-btn is-s' + (armed ? ' is-armed' : ''), armed ? T.t('spend again?') : T.t('retry'));

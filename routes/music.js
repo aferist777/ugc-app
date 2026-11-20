@@ -26,6 +26,7 @@ const crypto     = require('crypto');
 const multer     = require('multer');
 const { MEDIA } = require('../lib/config');
 const MUSIC = require('../lib/music-store');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -46,7 +47,7 @@ const _uploadMusic = multer({
 });
 
 router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'no music - mp3, wav, m4a, aac, ogg, flac or opus' });
+  if (!req.file) return res.status(400).json({ success: false, error: I18N.t('no music - mp3, wav, m4a, aac, ogg, flac or opus') });
   try {
     const name = String((req.body || {}).name || '').trim() || path.basename(req.file.originalname).replace(/\.[^.]+$/, '');
     // Let go on an own folder of Music: into it.
@@ -59,7 +60,7 @@ router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res
 });
 
 router.use('/audio/music/upload', (err, _req, res, _next) => {
-  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+  res.status(400).json({ success: false, error: (err && err.message) || I18N.t('upload failed') });
 });
 
 // ── Music -> highlights and its moods (the rule is lib/music-store.js `place`) ──────────
@@ -71,7 +72,7 @@ router.get('/audio/music/highlights', (_req, res) => {
 // Where a track lies: { folder: '' | 'highlights', mood, moodMade }.
 router.get('/audio/music/:id/place', (req, res) => {
   const rec = MUSIC.read().find(x => x && String(x.id) === String(req.params.id || ''));
-  if (!rec) return res.status(404).json({ success: false, error: 'no such track' });
+  if (!rec) return res.status(404).json({ success: false, error: I18N.t('no such track') });
   res.json({ success: true, ...MUSIC.placeOf(rec), moods: MUSIC.moods() });
 });
 // Put it somewhere: { folder: '' | 'highlights', mood? } - a mood folder only for the track its preset made (409 otherwise).

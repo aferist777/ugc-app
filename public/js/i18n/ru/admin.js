@@ -192,4 +192,6 @@ export default {
   'Video and audio tools': 'Инструменты видео и звука',
   'The open-source work this app is built on - {n} repositories': 'Открытый код, на котором построено приложение, — репозиториев: {n}',
   'UGC Studio stands on the work of these projects and the people behind them. Each is listed with its license, what it is, and what it does in this app. Thank you.': 'UGC Studio стоит на работе этих проектов и их авторов. У каждого — лицензия, что это такое и что оно делает в приложении. Спасибо.',
+  // admin-ai.js - a provider or a model with why it is not picked
+  '{name} - {why}': '{name} — {why}',
 };

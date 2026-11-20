@@ -30,6 +30,7 @@ const {
 const { reasonOf } = require('../lib/img-providers');
 const RUN = require('../lib/cv2-run');
 const WATCH = require('../lib/cv2-watch');
+const I18N = require('../lib/i18n');
 
 // Only the two the flow has a meaning for: 3:2 builds the house format, and match_input_image
 // edits a photo where it stands. Anything else would be a request the design cannot honour, so
@@ -44,14 +45,14 @@ async function _refUrl(body) {
   let buf = null;
   if (body.imageBase64) {
     buf = Buffer.from(String(body.imageBase64).replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
-    if (!buf.length) throw new Error('imageBase64 is empty');
+    if (!buf.length) throw new Error(I18N.t('imageBase64 is empty'));
   } else if (body.imagePath) {
     // Both roots: presets are static assets under public/, everything else is at the top.
     const abs = resolveLocalMedia(body.imagePath);
-    if (!abs) throw new Error('reference image not found: ' + body.imagePath);
+    if (!abs) throw new Error(I18N.t('reference image not found: {path}', { path: body.imagePath }));
     buf = fs.readFileSync(abs);
   } else {
-    throw new Error('no reference image was sent');
+    throw new Error(I18N.t('no reference image was sent'));
   }
   // In a format the engines take (lib/image-in.js): a photo brought in as AVIF, GIF or a
   // phone's HEIC is made into one first. verify reads the link back before it is handed to an engine -
@@ -73,7 +74,9 @@ router.post('/character-v2/analyze', async (req, res) => {
     const text = String(b.text || '').trim();
     const imageUrl = await _refUrl(b);
 
-    const prompt = String(CV2_APPEARANCE_PROMPT || '').replace(/\{USER_TEXT\}/g, text);
+    // The refusal's reason is the person's to read: asked in the interface's language (in English the prompt is as it was).
+    const prompt = String(CV2_APPEARANCE_PROMPT || '').replace(/\{USER_TEXT\}/g, text)
+      .replace('"reason":"one short sentence in English"', '"reason":"one short sentence in ' + I18N.langName() + '"');
     const raw = await callAIVisionWithFallback([{
       role: 'user',
       content: [
@@ -85,15 +88,15 @@ router.post('/character-v2/analyze', async (req, res) => {
     const j = parseLooseJson(raw);
     if (!j || typeof j !== 'object') {
       console.warn('[cv2/analyze] unparsable answer:', String(raw || '').slice(0, 200));
-      throw new Error('the analyzer did not answer with JSON');
+      throw new Error(I18N.t('the analyzer did not answer with JSON'));
     }
     if (j.ok === false) {
-      const reason = String(j.reason || '').trim() || 'That change cannot be applied to this image.';
+      const reason = String(j.reason || '').trim() || I18N.t('That change cannot be applied to this image.');
       console.log('[cv2/analyze] refused:', reason);
       return res.json({ success: true, ok: false, reason, imageUrl });
     }
     const who = String(j.who || '').trim();
-    if (!who) throw new Error('the analyzer returned no description');
+    if (!who) throw new Error(I18N.t('the analyzer returned no description'));
     const change = String(j.change || '').trim();
     console.log('[cv2/analyze] who:', who.slice(0, 120), change ? ('| change: ' + change) : '| no change asked');
     res.json({ success: true, ok: true, who, change, imageUrl });
@@ -115,8 +118,8 @@ const REFUSAL = require('../lib/gen-refusal');
 // create that costs money and the mark is taken back when the aggregator ANSWERS no (lib/cv2-run.js `onAsk` /
 // `onStep`); a create with no answer stops the ladder. A row found with no task, `asked`, and its asking not alive
 // here - the app was closed in the middle of it - may have been paid for: it says so, and nothing asks again by itself.
-const NOT_ASKED = 'the app was closed before the portrait was asked for - try again';
-const MAYBE_PAID = 'the app was closed while the portrait was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again';
+const NOT_ASKED = () => I18N.t('the app was closed before the portrait was asked for - try again');
+const MAYBE_PAID = () => I18N.t('the app was closed while the portrait was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again');
 
 JOBS.register('portrait', {
   timeoutMs: 20 * 60 * 1000,
@@ -126,12 +129,12 @@ JOBS.register('portrait', {
     if (!rec.taskIds[0]) {
       const p = (rec.job || {}).params || {};
       if (_asking.has(p.kick)) return { state: 'pending' };
-      return { state: 'failed', error: p.asked ? MAYBE_PAID : NOT_ASKED };
+      return { state: 'failed', error: p.asked ? MAYBE_PAID() : NOT_ASKED() };
     }
     const seen = WATCH.peek(rec.taskIds[0]);
     if (seen && seen.state === 'success') return { state: 'success', imagePath: seen.imagePath };
     if (seen && (seen.state === 'failed' || seen.state === 'gaveup')) {
-      return { state: 'failed', error: seen.error || 'it did not come' };
+      return { state: 'failed', error: seen.error || I18N.t('it did not come') };
     }
     return await resolveTask(rec.taskIds[0], MEDIA.work, 'generated');
   },
@@ -143,10 +146,10 @@ JOBS.register('portrait', {
   // goes on behind it as on the first press - marked `asked` and stopped on no answer the same way.
   submit: async (request, row) => {
     const b = { ...(request || {}) };
-    if (!String(b.prompt || '').trim()) throw new Error('prompt is required');
+    if (!String(b.prompt || '').trim()) throw new Error(I18N.t('prompt is required'));
     const kick = _kickToken();
     _asking.add(kick);
-    return { stage: 'asking the engine', params: { kick, asked: false }, later: () => _askBehind(row.id, kick, b) };
+    return { stage: I18N.t('asking the engine'), params: { kick, asked: false }, later: () => _askBehind(row.id, kick, b) };
   },
 });
 
@@ -161,7 +164,7 @@ JOBS.register('portrait', {
 async function _submitPortrait(b, hooks) {
   {
     const prompt = String(b.prompt || '').trim();
-    if (!prompt) throw Object.assign(new Error('prompt is required'), { status: 400 });
+    if (!prompt) throw Object.assign(new Error(I18N.t('prompt is required')), { status: 400 });
 
     const hasRef = !!(b.imageUrl || b.imageBase64 || b.imagePath);
     const dir = hasRef ? 'i2i' : 't2i';
@@ -221,22 +224,22 @@ router.post('/character-v2/generate', async (req, res) => {
   // The asking goes on behind the answer: it hands the row its task, or fails it with the reason. The
   // server watches the task to the end (WATCH.watch in _submitPortrait).
   // Always a row: it is what resolves the portrait - a request with no place gets the Characters shelf.
-  if (!b.where || typeof b.where !== 'object') b.where = { page: 'library', href: '/library?shelf=characters&make=1', label: 'Library · New Character · portrait' };
+  if (!b.where || typeof b.where !== 'object') b.where = { page: 'library', href: '/library?shelf=characters&make=1', label: I18N.t('Library · New Character · portrait') };
   {
-    if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: 'prompt is required' });
+    if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: I18N.t('prompt is required') });
     const kick = _kickToken();
     _asking.add(kick);                           // before the row: JOBS.submitted polls straight away
     let alertId = '';
     try {
       alertId = JOBS.submitted({
         kind: 'image', what: 'portrait',
-        title: 'Portrait · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
-        where: b.where, stage: 'asking the engine', taskIds: [],
+        title: I18N.t('Portrait · {what}', { what: String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60) }),
+        where: b.where, stage: I18N.t('asking the engine'), taskIds: [],
         job: { type: 'portrait', params: { kick, request: { ...b, where: null } } },
       }).id;
     } catch (e) {
       _asking.delete(kick);
-      return res.status(500).json({ success: false, error: 'the Alerts row could not be written: ' + e.message });
+      return res.status(500).json({ success: false, error: I18N.t('the Alerts row could not be written: {why}', { why: e.message }) });
     }
     res.json({ success: true, alertId });
     await _askBehind(alertId, kick, b);

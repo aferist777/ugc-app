@@ -368,7 +368,8 @@ async function _arrived(p) {
 // tracks or sounds outlined there when they land.
 function _soundsGenKey() {
   const n = _tree ? _tree.node('sounds') : null;
-  const g = n ? (n.children || []).find(c => c.label === 'Generated') : null;
+  // Found by its stored name: the label is said in the interface's language.
+  const g = n ? (n.children || []).find(c => (c.name || c.label) === 'Generated') : null;
   return g ? g.key : 'sounds';
 }
 const _soundHost = {
@@ -1953,7 +1954,7 @@ async function _addLinks(urls, kind) {
         _linking.reading = (_tree ? _tree.load() : Promise.resolve()).then(() => _load()).then(() => _counts());
       }
       if (stop) { stop.hidden = !run; stop.dataset.id = run ? run.id : ''; }
-      if (run) _status(T.t('link {k}/{n} · {step}', { k: Math.min(done + 1, _linking.total), n: _linking.total, step: LK.shortStep(run.step) }));
+      if (run) _status(T.t('link {k}/{n} · {step}', { k: Math.min(done + 1, _linking.total), n: _linking.total, step: LK.shortStep(run.step, run.dl) }));
     });
     // Links added while these came in are followed too.
     if (_linking.ids.length === ids.length) break;

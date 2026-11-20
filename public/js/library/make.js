@@ -385,7 +385,8 @@ function _stateLine(it) {
   if (it.state === 'nospeech') return T.t('no speech - not a source');
   if (it.state === 'notopics') return T.t('no topics - not a source');
   if (it.state === 'error') {
-    const cut = /interrupted/i.test(it.error || '');
+    // Cut off by the app closing: its `errorCode` says so - an older record, its English words.
+    const cut = it.errorCode === 'interrupted' || /interrupted/i.test(it.error || '');
     // Its way in is an Alerts row: "retry" is there.
     if (way && way.alertId) return cut ? T.t('interrupted - retry in Alerts') : T.t('failed - retry in Alerts');
     return cut ? T.t('interrupted') : T.t('failed');

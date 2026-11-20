@@ -29,9 +29,16 @@ import chats from './ru/chats.js';
 import pick from './ru/pick.js';
 import soundwin from './ru/soundwin.js';
 import assistant from './ru/assistant.js';
+import srvhead from './ru/srvhead.js';
+import srvchats from './ru/srvchats.js';
+import srvlib from './ru/srvlib.js';
+import srvsound from './ru/srvsound.js';
+import srvhl from './ru/srvhl.js';
+import srvcore from './ru/srvcore.js';
 
 export const PARTS = { common, shell, home, admin, tree, windows, thanks, library, scenarios, character, shelf,
-  timeline, merge, inspector, captions, workshop, highlights, effects, mergepage, vchat, chats, pick, soundwin, assistant };
+  timeline, merge, inspector, captions, workshop, highlights, effects, mergepage, vchat, chats, pick, soundwin, assistant,
+  srvhead, srvchats, srvlib, srvsound, srvhl, srvcore };
 
 const all = {};
 for (const part of Object.values(PARTS)) Object.assign(all, part);

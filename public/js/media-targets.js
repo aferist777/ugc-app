@@ -46,7 +46,7 @@ export function placesOf(tree, opts) {
     let to = null;
     if (n.kind === 'music' && o.audio) to = { kind: 'music', cat: n.cat || '', label: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '', text: path || n.label };
     else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label, ...(n.aroot ? { aroot: true } : {}) };
-    else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
+    else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, said: n.label, text: path };
     const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
     // A kind's own node (its key is the kind) and every folder of it take a new folder - not the app's
     // (highlights, its moods, the sources' folders: `noAdd`).
@@ -82,6 +82,8 @@ export function placesOf(tree, opts) {
 /** Where a place is, in words: "Uploads · Reels", "REFERENCES · its site's folder". */
 export function whereText(to) {
   if (!to) return '';
+  // A folder of the app (Generated, Stock...) keeps its stored name in `label` and is shown as the tree says it (`said`).
+  if (to.said) to = { ...to, label: to.said };
   // A folder in a folder: the whole path the picker built.
   if (to.cat && to.text && to.kind !== 'references') return to.text;
   if (to.kind === 'references') return REFS + ' · ' + (to.cat ? (to.text ? to.text.replace(REFS + ' · ', '') : to.label) : T.t('its site\'s folder'));

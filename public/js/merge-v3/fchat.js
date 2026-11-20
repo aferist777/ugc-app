@@ -80,7 +80,7 @@ const _cast = () => ((_proj || {}).casting) || {};
 // Where Alerts brings the person back: the project, its setup, this chat.
 const WHERE = (key) => ({
   page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&view=fchat',
-  label: 'Merge · ' + (Store.title() || 'project') + ' · frames chat',
+  label: T.t('Merge · {project} · frames chat', { project: Store.title() || T.t('project') }),
   spot: { key, view: 'fchat' },
 });
 

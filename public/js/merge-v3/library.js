@@ -951,7 +951,7 @@ async function _addLinks(urls) {
         if (!_showLanded(_linking.kind)) _linking.reading = _reload();
         else _linking.reading = _tree.load();
       }
-      if (run) _linkStatus(T.t('link {k}/{n} · {step}', { k: Math.min(done + 1, _linking.total), n: _linking.total, step: LK.shortStep(run.step) }), run.id);
+      if (run) _linkStatus(T.t('link {k}/{n} · {step}', { k: Math.min(done + 1, _linking.total), n: _linking.total, step: LK.shortStep(run.step, run.dl) }), run.id);
     });
     if (_linking.ids.length === ids.length) break;
   }

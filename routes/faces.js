@@ -18,6 +18,7 @@ const fs = require('fs');
 const router = express.Router();
 
 const FACES = require('../lib/faces');
+const I18N = require('../lib/i18n');
 const { MEDIA_DIR, PROJECTS_DIR } = require('../lib/config');
 const { toDiskWithin } = require('../lib/media');
 
@@ -35,12 +36,12 @@ router.post('/faces/:id/fail', (req, res) => FACES.fail(req, res));
 router.get('/faces/state', (_req, res) => res.json({ success: true, ...FACES.state() }));
 router.get('/faces/of', (req, res) => {
   const abs = _film(req.query.src);
-  if (!abs) return res.status(404).json({ success: false, error: 'not a film on the disk' });
+  if (!abs) return res.status(404).json({ success: false, error: I18N.t('not a film on the disk') });
   res.json({ success: true, ...FACES.status(abs, String(req.query.full || '') === '1') });
 });
 router.post('/faces/find', (req, res) => {
   const abs = _film((req.body || {}).src);
-  if (!abs) return res.status(404).json({ success: false, error: 'not a film on the disk' });
+  if (!abs) return res.status(404).json({ success: false, error: I18N.t('not a film on the disk') });
   // A film that could not be counted a moment ago (no window) is asked again: the window may be there now.
   FACES.find(abs).catch((e) => { if (!e.cancelled && !e.noWorker) console.warn('[faces] find:', e.message); });
   res.json({ success: true, ...FACES.status(abs), worker: FACES.workerSeen() });

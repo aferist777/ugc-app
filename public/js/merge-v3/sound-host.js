@@ -26,6 +26,7 @@ import { refuseHome } from './chat-shell.js';
 import * as SW from '../sound/sound-window.js';
 import { isHl } from '../highlights/keys.js';
 import { laneName } from './timeline-b.js';
+import * as T from '../i18n/t.js';
 
 const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
 const _hl = isHl;
@@ -72,7 +73,7 @@ const HOST = {
   flush: async (clip) => (clip && clip.key === Store.key() ? Store.flush() : true),
   where: (dest, label) => ({
     page: 'merge', href: '/merge?p=' + encodeURIComponent(_key()) + '&open=audio',
-    label: 'Merge · ' + (Store.title() || 'project') + ' · audio · ' + label,
+    label: T.t('Merge · {project} · audio · {what}', { project: Store.title() || T.t('project'), what: label }),
     spot: { key: _key(), view: 'audio' },
   }),
   // "show": the window goes, the file is shown in the Library panel.

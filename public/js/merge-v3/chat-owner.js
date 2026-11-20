@@ -56,10 +56,11 @@ export function onChange(fn) {
 export function whereOf(key, view) {
   if (_draft) {
     return { page: 'library', href: '/library?shelf=media&kind=' + (view === 'videos' ? 'video' : 'images') + '&open=' + view,
-      label: 'Library · ' + (view === 'videos' ? 'video chat' : 'pictures chat'), spot: { key, view } };
+      label: view === 'videos' ? t('Library · video chat') : t('Library · pictures chat'), spot: { key, view } };
   }
   return { page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&open=' + view,
-    label: 'Merge · ' + (Store.title() || 'project') + ' · ' + view, spot: { key, view } };
+    label: view === 'videos' ? t('Merge · {project} · videos', { project: Store.title() || t('project') })
+      : t('Merge · {project} · pictures', { project: Store.title() || t('project') }), spot: { key, view } };
 }
 export async function openBlank() {
   if (_draft) { await _draft.ready; return; }

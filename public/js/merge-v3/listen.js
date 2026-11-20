@@ -88,10 +88,12 @@ function _said(s) {
   if (s.refused) return s.refused;
   const j = s.job;
   if (j && j.state === 'listening') {
-    // The step is the server's words (compared here as it sends them); 'starting' until it says one.
+    // The step is the server's words, in the interface's language; 'starting' until it says one. Which step it is, by its
+    // code (`stepKey`) - the English words for a server that sends none.
     if (j.auto && !j.part && !j.dl && !j.wait && j.where !== 'local') return t('Hearing the new lines - {step}', { step: String(j.step || t('starting')) });
     const step = String(j.step || t('starting'));
-    if (step === 'collecting the sound' && j.part) return t('Listening - collecting the sound ({i} of {n})', { i: j.part.i, n: j.part.n });
+    const collecting = j.stepKey ? j.stepKey === 'collect' : step === 'collecting the sound';
+    if (collecting && j.part) return t('Listening - collecting the sound ({i} of {n})', { i: j.part.i, n: j.part.n });
     if (j.dl) return t('Listening - downloading the speech model {pct}% of {size}', { pct: Math.floor(100 * j.dl.got / Math.max(1, j.dl.total)), size: _mb(j.dl.total) });
     if (j.wait) return t('Listening - {step}', { step: j.wait });
     if (j.where === 'local') {

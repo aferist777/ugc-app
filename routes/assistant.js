@@ -26,6 +26,7 @@ const STORE = require('../lib/assistant-store');
 const KNOW = require('../lib/assistant-know');
 const AGENTS = require('../lib/agents');
 const FAKE = require('../lib/fake-agg');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 const TEXT_MAX = 20000;
@@ -90,7 +91,7 @@ const _livePart = (id) => {
 
 router.get('/assistant/chats/:id', (req, res) => {
   const c = STORE.get(req.params.id);
-  if (!c) return _bad(res, 404, 'no such chat');
+  if (!c) return _bad(res, 404, I18N.t('no such chat'));
   res.json({ success: true, chat: c, summary: STORE.summary(c), live: _livePart(c.id) });
 });
 
@@ -100,24 +101,24 @@ router.patch('/assistant/chats/:id', (req, res) => {
   const c = STORE.apply(req.params.id, (x) => {
     if (b.title != null) {
       const t = String(b.title).replace(/\s+/g, ' ').trim().slice(0, STORE.TITLE_MAX);
-      if (!t) { bad = 'a name is needed'; return false; }
+      if (!t) { bad = I18N.t('a name is needed'); return false; }
       x.title = t;
       x.named = true;
     }
     if (b.step !== undefined) {
-      if (b.step && !_stepOk(b.step)) { bad = 'not a model of this app'; return false; }
+      if (b.step && !_stepOk(b.step)) { bad = I18N.t('not a model of this app'); return false; }
       x.step = b.step ? { provider: b.step.provider, model: b.step.model } : null;
     }
     return true;
   });
   if (bad) return _bad(res, 400, bad);
-  if (!c) return _bad(res, 404, 'no such chat');
+  if (!c) return _bad(res, 404, I18N.t('no such chat'));
   res.json({ success: true, chat: c, summary: STORE.summary(c) });
 });
 
 router.delete('/assistant/chats/:id', (req, res) => {
   const id = String(req.params.id || '');
-  if (!STORE.get(id)) return _bad(res, 404, 'no such chat');
+  if (!STORE.get(id)) return _bad(res, 404, I18N.t('no such chat'));
   const L = _live.get(id);
   if (L) { L.gone = true; L.ctl.abort(); }
   STORE.remove(id);
@@ -184,12 +185,12 @@ router.post('/assistant/chats/:id/send', async (req, res) => {
   const id = String(req.params.id || '');
   const b = req.body || {};
   const text = String(b.text || '').trim();
-  if (!text) return _bad(res, 400, 'nothing to send');
-  if (text.length > TEXT_MAX) return _bad(res, 400, 'the message is ' + text.length + ' characters - up to ' + TEXT_MAX);
-  if (_live.has(id)) return _bad(res, 409, 'this chat is answering - stop it first');
+  if (!text) return _bad(res, 400, I18N.t('nothing to send'));
+  if (text.length > TEXT_MAX) return _bad(res, 400, I18N.tn(text.length, 'the message is {n} characters - up to {max}', 'the message is {n} characters - up to {max}', { max: TEXT_MAX }));
+  if (_live.has(id)) return _bad(res, 409, I18N.t('this chat is answering - stop it first'));
   const was = STORE.get(id);
-  if (!was) return _bad(res, 404, 'no such chat');
-  if (was.mode !== 'ideas' && Array.isArray(b.attach) && b.attach.length) return _bad(res, 400, 'nothing is attached in Help');
+  if (!was) return _bad(res, 404, I18N.t('no such chat'));
+  if (was.mode !== 'ideas' && Array.isArray(b.attach) && b.attach.length) return _bad(res, 400, I18N.t('nothing is attached in Help'));
   const items = was.mode === 'ideas' ? KNOW.attached(b.attach) : [];
   const userMsg = { id: STORE.newId('m'), role: 'user', text, at: new Date().toISOString(),
                     attached: items.map(a => ({ kind: a.kind, ref: a.ref, name: a.name })), context: KNOW.contextOf(items) };
@@ -198,7 +199,7 @@ router.post('/assistant/chats/:id/send', async (req, res) => {
     if (!x.named && x.messages.filter(m => m.role === 'user').length === 1) x.title = STORE.titleOf(text);
     return true;
   });
-  if (!c) return _bad(res, 404, 'no such chat');
+  if (!c) return _bad(res, 404, I18N.t('no such chat'));
 
   const ctl = new AbortController();
   const L = { ctl, text: '', by: null, at: Date.now(), gone: false };
@@ -223,7 +224,7 @@ router.post('/assistant/chats/:id/send', async (req, res) => {
   try {
     // Help: first the chapters that answer it.
     if (c.mode === 'help') {
-      say({ t: 'stage', text: 'looking in the guide…' });
+      say({ t: 'stage', text: I18N.t('looking in the guide…') });
       if (FAKE.on()) pick = _fakePick();
       else {
         const p = await AGENTS.stream(KNOW.pickMessages(c), { step: c.step, signal: ctl.signal, maxTokens: 2000 });
@@ -244,7 +245,7 @@ router.post('/assistant/chats/:id/send', async (req, res) => {
   if (r.cut) answer.cut = true;
   if (r.stopped) answer.stopped = true;
   if (r.error) answer.error = r.error;
-  if (r.error && !answer.text && r.tried && r.tried.length) answer.tried = r.tried.slice(0, 8);
+  if (r.error && !answer.text && r.tried && r.tried.length) answer.tried = require('../lib/agents').saidTrail(r.tried.slice(0, 8));
   const after = STORE.apply(id, (x) => { x.messages.push(answer); return true; });
   say({ t: 'done', message: answer, summary: after ? STORE.summary(after) : null });
   if (open) res.end();

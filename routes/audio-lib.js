@@ -19,6 +19,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
+const I18N = require('../lib/i18n');
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.post('/audio/cut', async (req, res) => {
 
 router.get('/audio/tracks', async (req, res) => {
   const abs = require('../lib/media').toDiskExisting(String(req.query.src || '').split('?')[0]);
-  if (!abs) return res.status(400).json({ success: false, error: 'src - a video of the library' });
+  if (!abs) return res.status(400).json({ success: false, error: I18N.t('src - a video of the library') });
   try {
     const TR = require('../lib/audio-tracks');
     const tracks = await TR.tracksOf(abs);

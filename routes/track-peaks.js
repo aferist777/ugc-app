@@ -24,10 +24,11 @@ const PEAKS = require('../lib/track-peaks');
 const PAUSES = require('../lib/track-pauses');
 const PITCH = require('../lib/pitch-copy');
 const { normalizePitch } = require('../public/js/sound/pitch.js');
+const I18N = require('../lib/i18n');
 
 router.get('/track-peaks', async (req, res) => {
   const abs = toDiskExisting(String(req.query.src || ''));
-  if (!abs) return res.status(404).json({ success: false, error: 'not a file of the library' });
+  if (!abs) return res.status(404).json({ success: false, error: I18N.t('not a file of the library') });
   try {
     const buf = await PEAKS.peaksOf(abs);
     res.set('Content-Type', 'application/octet-stream');
@@ -44,10 +45,10 @@ const MAX_SPAN = 3 * 3600;
 
 router.get('/track-pauses', async (req, res) => {
   const abs = toDiskExisting(String(req.query.src || ''));
-  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not a file of the library' });
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: I18N.t('not a file of the library') });
   const from = Number(req.query.from), to = Number(req.query.to);
   if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || !(to > from) || to - from > MAX_SPAN) {
-    return res.status(400).json({ success: false, error: 'from and to are seconds of the file, from before to' });
+    return res.status(400).json({ success: false, error: I18N.t('from and to are seconds of the file, from before to') });
   }
   try {
     res.json({ success: true, ...(await PAUSES.pausesIn(abs, from, to)) });
@@ -58,13 +59,13 @@ router.get('/track-pauses', async (req, res) => {
 
 router.get('/pitch-copy', async (req, res) => {
   const abs = toDiskExisting(String(req.query.src || ''));
-  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not a file of the library' });
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: I18N.t('not a file of the library') });
   const p = normalizePitch({ st: Number(req.query.st), shift: String(req.query.shift || '') === '1' });
-  if (!p) return res.status(400).json({ success: false, error: 'st is semitones, -12 to 12, not 0' });
+  if (!p) return res.status(400).json({ success: false, error: I18N.t('st is semitones, -12 to 12, not 0') });
   try {
     const copy = await PITCH.copyOf(abs, p, { rev: String(req.query.rev || '') === '1' });
     const url = toUrl(copy);
-    if (!url) throw new Error('the copy is not in the library');
+    if (!url) throw new Error(I18N.t('the copy is not in the library'));
     res.json({ success: true, url });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
