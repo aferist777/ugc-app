@@ -129,7 +129,9 @@ export default {
   'What made this clip is not known - it stays in Other, not in {there}.': 'Неизвестно, чем сделан этот клип, — он остаётся в папке «Другое», а не в папке «{there}».',
   'Made by {model} - it stays in {model}, not in {there}.': 'Сделан моделью {model} — он остаётся в папке «{model}», а не в папке «{there}».',
   'The clips in "{name}" were made by {model} - the folder stays in {model}.': 'Клипы в «{name}» сделаны моделью {model} — папка остаётся в «{model}».',
-  'this folder': 'этой папке',
+  'What made the clips in "{name}" is not known - the folder stays in Other.': 'Неизвестно, чем сделаны клипы в «{name}», — папка остаётся в «Другом».',
+  'What made the clips of this folder is not known - it stays in Other.': 'Неизвестно, чем сделаны клипы этой папки, — она остаётся в «Другом».',
+  'The clips of this folder were made by {model} - it stays in {model}.': 'Клипы этой папки сделаны моделью {model} — она остаётся в «{model}».',
 
   // lib/project-links.js - THIS PROJECT
   'A draft has no THIS PROJECT - save it under a name first.': 'У черновика нет ЭТОГО ПРОЕКТА — сначала сохраните его под именем.',

@@ -73,6 +73,8 @@
   overflow-wrap:anywhere;
 }
 .mv3-cap-tile.is-on .mv3-cap-nm{ color:var(--ink) }
+/* Russian names run longer: three lines, so a name is not cut where the English one fits in two. */
+:root:lang(ru) .mv3-cap-nm{ -webkit-line-clamp:3 }
 .mv3-cap-ed{ flex:0 0 auto; font-size:var(--fs-9); color:var(--ink) }   /* "Edited", sentence case */
 .mv3-cap-ed[hidden]{ display:none }
 .mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
