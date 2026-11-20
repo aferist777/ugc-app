@@ -108,7 +108,8 @@ hears by itself never downloads it. Merge also offers it once, the first time yo
 ![Admin → This computer](shots/start-admin-local.webp)
 
 The same page keeps **yt-dlp** - what downloads videos by a link - up to date, and says which version of the app you
-have.
+have. Its first row, **Language · Язык**, switches the app between **English** and **Русский** - the app restarts to
+take it (**Restart now?**), and the guide follows.
 
 ## Updates
 

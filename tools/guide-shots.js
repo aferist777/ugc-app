@@ -140,8 +140,8 @@ async function main() {
       const port = await freePort();
       const log = fs.openSync(path.join(work, 'server.log'), 'w');
       const srv = spawn(process.execPath, [path.join(APP, 'server.js')], {
-        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '', UGC_KEYS_OPEN: '1' },
-          LANG === 'en' ? {} : { UGC_LANG: LANG, UGC_LANG_OPEN: '1' }),
+        // The book's language forced (nothing written): the copy's own saved choice never decides a picture's words.
+        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '', UGC_KEYS_OPEN: '1', UGC_LANG: LANG }),
         stdio: ['ignore', log, log], windowsHide: true });
       kids.push(srv.pid);
       base = 'http://127.0.0.1:' + port;
