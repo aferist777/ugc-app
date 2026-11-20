@@ -1,0 +1,58 @@
+{
+ "success": true,
+ "chat": {
+  "id": "cmwgtnmxy036e16",
+  "mode": "ideas",
+  "title": "Три идеи хуков для 30-секундной UGC-рекламы…",
+  "named": false,
+  "step": {
+   "provider": "kie",
+   "model": "gemini-3-8-flash-openai"
+  },
+  "createdAt": "2026-11-14T19:51:55.367Z",
+  "updatedAt": "2026-11-14T19:52:18.748Z",
+  "messages": [
+   {
+    "id": "mmwgtnmyne3ffac",
+    "role": "user",
+    "text": "Три идеи хуков для 30-секундной UGC-рекламы дорожного вакуумного насоса, который сжимает одежду в чемодане, — и промпт для первого кадра.",
+    "at": "2026-11-14T19:51:55.391Z",
+    "attached": [],
+    "context": ""
+   },
+   {
+    "id": "mmwgto4zea875b5",
+    "role": "assistant",
+    "text": "**Идеи хуков:**\n\n1. **Хук «Лайфхак для перелёта» (любопытство / боль):**  \n   *Картинка:* человек отчаянно садится на переполненный чемодан, чтобы застегнуть молнию.  \n   *Текст на экране:* «Авиакомпании ненавидят этот лайфхак за $20».  \n   *Голос:* «Хватит платить $60 за багаж только потому, что взяли лишние свитера».\n\n2. **Хук «Мгновенный контраст» (визуальный шок):**  \n   *Картинка:* сплит-экран или резкая склейка: огромный раздутый пакет с одеждой за секунды становится плоским.  \n   *Текст на экране:* «Я уместила две недели одежды в рюкзак...»  \n   *Голос:* «Смотрите, как 14 зимних образов исчезают в одной ручной клади».\n\n3. **Хук «Хаос сборов» (узнаваемая проблема):**  \n   *Картинка:* гостиничная кровать завалена одеждой, путешественница держится за голову.  \n   *Текст на экране:* «Кто берёт слишком много — не листайте».  \n   *Голос:* «Если сборы на четыре дня выглядят так, вам нужно это увидеть».\n\n---\n\n**Промпт для первого кадра:**  \nИспользуйте **seedream-4.5** в чате картинок — он хорошо передаёт фактуру тканей и чемоданов и живой свет комнаты, как в настоящем UGC.\n\n```prompt seedream-4.5 · чат картинок\nA frustrated young woman in casual travel clothes sitting on top of an overstuffed open carry-on suitcase on a bedroom floor, trying with both hands to zip it closed. Piles of folded and messy sweaters and jackets surround her on a light wood floor. Natural soft morning light from a window, eye-level candid shot, authentic UGC smartphone camera aesthetic, 9:16 vertical format.\n```",
+    "at": "2026-11-14T19:52:18.746Z",
+    "by": {
+     "provider": "kie",
+     "model": "gemini-3-8-flash-openai",
+     "label": "Gemini 3.8 Flash · kie.ai"
+    },
+    "usage": {
+     "in": 1844,
+     "out": 394
+    },
+    "usd": 0.0008500000000000001
+   }
+  ]
+ },
+ "summary": {
+  "id": "cmwgtnmxy036e16",
+  "mode": "ideas",
+  "title": "Three hook ideas for a 30-second UGC ad of a…",
+  "named": false,
+  "step": {
+   "provider": "kie",
+   "model": "gemini-3-8-flash-openai"
+  },
+  "createdAt": "2026-11-14T19:51:55.367Z",
+  "updatedAt": "2026-11-14T19:52:18.748Z",
+  "n": 2,
+  "usd": 0.0008500000000000001,
+  "tokens": 2238,
+  "priced": true
+ },
+ "live": null
+}

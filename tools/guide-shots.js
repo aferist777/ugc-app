@@ -5,6 +5,9 @@
        node tools/guide-shots.js --library <a library with no keys> [--only a,b] [--base http://127.0.0.1:<port>]
        node tools/guide-shots.js --check
    --list <file> another list than tools/guide-shots.json, --out <folder> another folder than public/guide/shots (a preview).
+   --lang ru the book of another language: its chapters public/guide/ru/, its pictures public/guide/ru/shots/, the app run
+   in that language (UGC_LANG), its recorded answers tools/guide-answers/ru/. The rows are the same for every language: a
+   step that finds an element by its words (__byText, __said) finds it by the English or by the interface's own words.
    The README's pictures are such a list: --list tools/readme-shots.json --out docs/readme.
    --masks <file> the private words, by default ~/.ugc-release/guide-masks.json: { masks: { <name>: [[word, in its place,
    're' for a pattern], ...] } }. They are kept OUTSIDE the project and never in git - the lists name the masks only - and a
@@ -39,7 +42,9 @@ const { spawn, execFile } = require('child_process');
 const APP = path.join(__dirname, '..');
 const LIST = arg('--list') ? path.resolve(arg('--list')) : path.join(__dirname, 'guide-shots.json');
 const GUIDE = path.join(APP, 'public', 'guide');
-const SHOTS = arg('--out') ? path.resolve(arg('--out')) : path.join(GUIDE, 'shots');
+const LANG = String(arg('--lang') || 'en').toLowerCase();
+const BOOK = LANG === 'en' ? GUIDE : path.join(GUIDE, LANG);
+const SHOTS = arg('--out') ? path.resolve(arg('--out')) : path.join(BOOK, 'shots');
 
 function arg(k) { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : ''; }
 const say = (s) => console.log('[shots] ' + s);
@@ -67,8 +72,8 @@ function readList() {
 // The pictures the chapters name: name -> [chapter files].
 function named() {
   const out = new Map();
-  for (const f of fs.readdirSync(GUIDE).filter((n) => /\.md$/.test(n))) {
-    const text = fs.readFileSync(path.join(GUIDE, f), 'utf8');
+  for (const f of fs.readdirSync(BOOK).filter((n) => /\.md$/.test(n))) {
+    const text = fs.readFileSync(path.join(BOOK, f), 'utf8');
     for (const m of text.matchAll(/!\[[^\]]*\]\(shots\/([a-z0-9-]+)\.webp\)/g)) out.set(m[1], (out.get(m[1]) || []).concat(f));
   }
   return out;
@@ -119,7 +124,7 @@ async function main() {
     if (!s.answers) continue;
     s.answerData = {};
     for (const [url, file] of Object.entries(s.answers)) {
-      s.answerData[url] = JSON.parse(fs.readFileSync(path.join(__dirname, 'guide-answers', path.basename(file)), 'utf8'));
+      s.answerData[url] = JSON.parse(fs.readFileSync(path.join(__dirname, 'guide-answers', ...(LANG === 'en' ? [] : [LANG]), path.basename(file)), 'utf8'));
     }
   }
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'guide-shots-'));
@@ -135,7 +140,8 @@ async function main() {
       const port = await freePort();
       const log = fs.openSync(path.join(work, 'server.log'), 'w');
       const srv = spawn(process.execPath, [path.join(APP, 'server.js')], {
-        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '', UGC_KEYS_OPEN: '1' }),
+        cwd: APP, env: Object.assign({}, process.env, { UGC_DATA_DIR: lib, PORT: String(port), UGC_VIDEO_FAKE: '', UGC_KEYS_OPEN: '1' },
+          LANG === 'en' ? {} : { UGC_LANG: LANG, UGC_LANG_OPEN: '1' }),
         stdio: ['ignore', log, log], windowsHide: true });
       kids.push(srv.pid);
       base = 'http://127.0.0.1:' + port;
@@ -258,7 +264,15 @@ const HELPERS = `(() => {
     const b = el.getBoundingClientRect();
     return { x: Math.round(b.x + (fx == null ? 0.5 : fx) * b.width), y: Math.round(b.y + (fy == null ? 0.5 : fy) * b.height) };
   };
-  window.__byText = (sel, text) => [...document.querySelectorAll(sel)].find((e) => e.textContent.trim() === text) || null;
+  // An element by its words: the English of the row, or the same words as the interface's dictionary says them (ctx - the
+  // place's own line, tc), so one row shoots the book of every language.
+  window.__said = (text, ctx) => {
+    const d = (globalThis.UGC_I18N && globalThis.UGC_I18N.dict) || {};
+    const v = d[ctx ? ctx + '::' + text : text];
+    return typeof v === 'string' ? v : text;
+  };
+  window.__byText = (sel, text, ctx) => [...document.querySelectorAll(sel)]
+    .find((e) => { const x = e.textContent.trim(); return x === text || x === window.__said(text, ctx); }) || null;
   // Recorded answers: a GET of exactly one of these addresses (path and query) is answered with its JSON instead of the
   // server's - what a library with no keys cannot show, recorded once on a library with them.
   window.__answer = (map) => {

@@ -22,7 +22,7 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
 const LINK_WEB = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
-const LINK_GUIDE = /\[([^\]\n]+)\]\(((?:\d\d-[a-z0-9-]+\.md)?(?:#[a-z0-9-]+)?)\)/g;
+const LINK_GUIDE = /\[([^\]\n]+)\]\(((?:\d\d-[a-z0-9-]+\.md)?(?:#[a-z0-9а-яё-]+)?)\)/g;
 const PICTURE = /^\s*!\[([^\]]*)\]\(([a-z0-9/_.-]+\.(?:webp|png|jpe?g))\)\s*$/i;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
 const TABLE_RULE = /^\s*\|?\s*:?-{2,}/;

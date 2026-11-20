@@ -24,7 +24,8 @@ import { loadingEl, failedEl } from '../ui-state.js';
 import * as T from '../i18n/t.js';
 
 const GEOM = Object.freeze({ key: 'guide', resize: true, move: true, keepSize: true, keepPos: true });
-const LS = 'gd_place_v1';
+// Where the book was left - each language's book its own (its sections are other ids).
+const LS = 'gd_place_v1' + (T.lang() === 'en' ? '' : '_' + T.lang());
 const READ = 'gd_read_v1';
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -49,6 +50,7 @@ export function ensureCss() {
 
 let W = null;               // { win, nav, page, doc }
 let _toc = null;            // [{ id, file, title, sections }]
+let _base = '/guide/';      // where the book's files are - the interface's language's book
 const _texts = new Map();   // chapter id -> its text
 let _at = { chapter: '', section: '' };
 
@@ -79,6 +81,7 @@ export function contents() {
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.success) throw new Error(j.error || 'HTTP ' + r.status);
       _toc = j.chapters || [];
+      if (j.base) _base = j.base;
       return _toc;
     }).finally(() => { _tocAsk = null; });
   }
@@ -127,7 +130,7 @@ async function _loadToc() {
 
 async function _text(ch) {
   if (_texts.has(ch.id)) return _texts.get(ch.id);
-  const r = await fetch('/guide/' + encodeURIComponent(ch.file));
+  const r = await fetch(_base + encodeURIComponent(ch.file));
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const t = await r.text();
   _texts.set(ch.id, t);
@@ -153,7 +156,7 @@ async function _go(chapter, section) {
     if (!W || _at.chapter !== chapter) return;
     W.doc.textContent = '';
     W.doc.dataset.ch = chapter;
-    W.doc.appendChild(md(text, { page: true, base: '/guide/' }));
+    W.doc.appendChild(md(text, { page: true, base: _base }));
   }
   const target = section ? W.doc.querySelector('#g-' + CSS.escape(section)) : null;
   W.page.scrollTop = target ? Math.max(0, target.offsetTop - 12) : 0;

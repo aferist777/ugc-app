@@ -63,7 +63,7 @@ router.get('/assistant/models', (req, res) => {
 });
 
 router.get('/assistant/guide', (req, res) => {
-  try { res.json({ success: true, chapters: KNOW.contents() }); }
+  try { res.json({ success: true, chapters: KNOW.contents(), base: KNOW.guideBase() }); }
   catch (e) { _bad(res, 500, e.message); }
 });
 

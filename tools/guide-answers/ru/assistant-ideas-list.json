@@ -1,0 +1,22 @@
+{
+ "success": true,
+ "chats": [
+  {
+   "id": "cmwgtnmxy036e16",
+   "mode": "ideas",
+   "title": "Три идеи хуков для 30-секундной UGC-рекламы…",
+   "named": false,
+   "step": {
+    "provider": "kie",
+    "model": "gemini-3-8-flash-openai"
+   },
+   "createdAt": "2026-11-14T19:51:55.367Z",
+   "updatedAt": "2026-11-14T19:52:18.748Z",
+   "n": 2,
+   "usd": 0.0008500000000000001,
+   "tokens": 2238,
+   "priced": true
+  }
+ ],
+ "running": []
+}

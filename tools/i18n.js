@@ -9,6 +9,8 @@
      - the markup of the pages listed in tools/i18n.json `html` is translated whole (lib/i18n-html.js reads it as the
        server does), but for the words in `keep` (names, the same in every language);
      - a line whose English is nowhere in the code or the pages any more is stale - it fails too.
+     - the guide of the language (public/guide/<lang>/), once there is one, has every chapter of the English book, the
+       pictures its chapters name in its shots/, and the sections its links name.
    Only files that take t.js (`i18n/t.js` imported, lib/i18n.js required) are read for calls; a call with a text
    built at run time cannot be checked and is listed with --verbose.
    --check: the summary and the exit code alone (tools/smoke-local.js runs `check()`). */
@@ -21,6 +23,7 @@ const espree = require(path.join(APP_DIR, 'node_modules', 'espree'));
 const HTML = require('../lib/i18n-html');
 
 const LANGS = ['ru'];
+const GUIDE = path.join(APP_DIR, 'public', 'guide');
 const ROOTS = ['public/js', 'lib', 'routes', 'desktop', 'server.js'];
 const FN = new Set(['t', 'tc', 'tn']);
 
@@ -142,12 +145,15 @@ function check({ verbose = false } = {}) {
       const text = key.includes('::') ? key.slice(key.indexOf('::') + 2) : key;
       if (!keys.has(key) && !literals.has(text) && !pageTexts.has(key) && !pageTexts.has(text)) stale.push(JSON.stringify(key));
     }
-    bad += missing.length + wrong.length + stale.length;
-    lines.push(`${L}: ${Object.keys(dict).length} lines, ${keys.size} texts asked for; ${missing.length} missing, ${wrong.length} wrong, ${stale.length} stale`);
+    const book = bookOf(L);
+    bad += missing.length + wrong.length + stale.length + book.length;
+    lines.push(`${L}: ${Object.keys(dict).length} lines, ${keys.size} texts asked for; ${missing.length} missing, ${wrong.length} wrong, ${stale.length} stale`
+      + (fs.existsSync(path.join(GUIDE, L)) ? `; the guide: ${book.length ? book.length + ' problems' : 'whole'}` : ''));
     const list = (title, xs) => { if (xs.length) lines.push(`  ${title}:`, ...xs.slice(0, verbose ? xs.length : 20).map((x) => '    ' + x), ...(xs.length > 20 && !verbose ? [`    ... ${xs.length - 20} more (--verbose)`] : [])); };
     list('missing', missing);
     list('wrong', wrong);
     list('stale (the English is nowhere any more)', stale);
+    list('the guide', book);
   }
   if (verbose && dynamic.length) lines.push(`texts built at run time (not checked): ${dynamic.length}`, ...dynamic.map((x) => '    ' + x));
   return { ok: !bad, lines };
@@ -157,6 +163,32 @@ if (require.main === module) {
   const r = check({ verbose: process.argv.includes('--verbose') });
   console.log(r.lines.join('\n'));
   process.exitCode = r.ok ? 0 : 1;
+}
+
+// THE GUIDE of a language (public/guide/<lang>/, when there is one): every chapter of the English book is there, every
+// picture a chapter names is in its shots/, every link to a section names a section of that language's chapter.
+function bookOf(L) {
+  const dir = path.join(GUIDE, L);
+  if (!fs.existsSync(dir)) return [];
+  const TOC = require('../public/js/assistant/guide-toc.js');
+  const out = [];
+  const chapters = fs.readdirSync(GUIDE).filter((n) => TOC.CHAPTER_RE.test(n));
+  const ids = {};
+  for (const n of chapters) {
+    if (!fs.existsSync(path.join(dir, n))) { out.push(`public/guide/${L}/${n} is missing`); continue; }
+    ids[n.replace(/\.md$/, '')] = new Set(TOC.tocOf(fs.readFileSync(path.join(dir, n), 'utf8')).sections.map((s) => s.id));
+  }
+  for (const n of chapters.filter((x) => fs.existsSync(path.join(dir, x)))) {
+    const text = fs.readFileSync(path.join(dir, n), 'utf8');
+    for (const m of text.matchAll(/!\[[^\]]*\]\((shots\/[a-z0-9-]+\.webp)\)/g)) {
+      if (!fs.existsSync(path.join(dir, m[1]))) out.push(`public/guide/${L}/${n}: no picture ${m[1]}`);
+    }
+    for (const m of text.matchAll(/\]\(((\d\d-[a-z0-9-]+)\.md)?#([^)\s]+)\)/g)) {
+      const ch = m[2] || n.replace(/\.md$/, '');
+      if (!ids[ch] || !ids[ch].has(m[3])) out.push(`public/guide/${L}/${n}: no section ${ch}#${m[3]}`);
+    }
+  }
+  return out;
 }
 
 module.exports = { check, scan };

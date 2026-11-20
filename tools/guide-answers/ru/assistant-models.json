@@ -1,0 +1,42 @@
+{
+ "success": true,
+ "models": [
+  {
+   "provider": "kie",
+   "model": "gemini-3-8-flash-openai",
+   "label": "Gemini 3.8 Flash · kie.ai",
+   "group": "kie.ai",
+   "ladder": true,
+   "unproven": false
+  },
+  {
+   "provider": "replicate",
+   "model": "google/gemini-3.5-flash",
+   "label": "Gemini 3.5 Flash · Replicate",
+   "group": "Replicate",
+   "ladder": true,
+   "unproven": false
+  },
+  {
+   "provider": "kie",
+   "model": "gemini-3-7-flash-openai",
+   "label": "Gemini 3.7 Flash · kie.ai",
+   "group": "kie.ai",
+   "ladder": false,
+   "unproven": false
+  },
+  {
+   "provider": "replicate",
+   "model": "openai/gpt-5.6-luna",
+   "label": "GPT-5.6 luna · Replicate",
+   "group": "Replicate",
+   "ladder": false,
+   "unproven": false
+  }
+ ],
+ "def": {
+  "provider": "kie",
+  "model": "gemini-3-8-flash-openai"
+ },
+ "off": []
+}

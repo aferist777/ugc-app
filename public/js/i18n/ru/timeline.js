@@ -254,5 +254,5 @@ export default {
 
   // music.js - an audio lane's panel
   'Volume': 'Громкость',
-  'The tracks and sounds are in the Library panel - AUDIO: a press on a tile plays it, drag it onto this lane. Two tracks overlapping cross into each other by themselves. New music and sounds: "generate" by AUDIO in the Library panel\'s tree opens the sound window.': 'Треки и звуки — в панели Библиотеки, в папке ЗВУК: нажатие на плитку воспроизводит её, перетащите её на эту дорожку. Два наложенных трека сами переходят друг в друга. Новая музыка и звуки: «сгенерировать» у папки ЗВУК в дереве панели Библиотеки открывает окно звука.',
+  'The tracks and sounds are in the Library panel - AUDIO: a press on a tile plays it, drag it onto this lane. Two tracks overlapping cross into each other by themselves. New music and sounds: "generate" by AUDIO in the Library panel\'s tree opens the sound window.': 'Треки и звуки — в панели Библиотеки, в папке ЗВУК: нажатие на плитку воспроизводит её, перетащите её на эту дорожку. Два наложенных трека сами переходят друг в друга. Новая музыка и звуки: «Создать» у папки ЗВУК в дереве панели Библиотеки открывает окно звука.',
 };
