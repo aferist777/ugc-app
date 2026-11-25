@@ -25,6 +25,7 @@
 // Queue is on every page. Merge's store is asked only by addCurrent - Merge's own
 // render window -, so it is brought in there: on the other pages the queue loads nothing of Merge but this module.
 import * as Layers from '../layers.js';
+import { placeBeside } from '../side-nav.js';
 // A ready render opens in the Library's viewer - Rename and Delete there
 import { openRender } from '../library/render-view.js';
 // An empty queue, a queue not read - the shared parts; the reason a popup in the corner.
@@ -70,7 +71,8 @@ async function _paintBadge(known) {
   if (!dot) {
     dot = document.createElement('span');
     dot.className = 'mv3-qbadge';
-    b.appendChild(dot);
+    // on the side menu's tile, as Alerts' count
+    (b.querySelector('.sn-ico') || b).appendChild(dot);
   }
   dot.textContent = String(n);
 }
@@ -79,6 +81,9 @@ function _close() {
   _asking = false;
   if (_pop) { _pop.remove(); _pop = null; }
   if (_layer) { Layers.close(_layer); _layer = null; }
+  // the button lit while its panel is open, as Alerts'
+  const b = $('mv3-queue');
+  if (b) b.classList.remove('is-on');
   clearInterval(_timer);
   _timer = 0;
 }
@@ -467,11 +472,15 @@ function _open() {
   _pop = document.createElement('div');
   _pop.className = 'mv3-qpop u-win is-float';
   document.body.appendChild(_pop);
-  const r = btn.getBoundingClientRect();
-  _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';
-  _pop.style.top = Math.round(r.bottom + 6) + 'px';
+  // the side menu's tile: right of the folded menu, at the tile's height; the 3D Studio's strip: under the button
+  if (!placeBeside(btn, _pop)) {
+    const r = btn.getBoundingClientRect();
+    _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';
+    _pop.style.top = Math.round(r.bottom + 6) + 'px';
+  }
   // A panel, not a window: Escape closes it, the page keeps its shortcuts.
   _layer = Layers.open(_pop, { modal: false, name: 'queue', onEsc: _close });
+  btn.classList.add('is-on');
   _failing = false;
   _paintList();
   // While it is open it follows the queue: a render finishing behind it should show, not wait
@@ -481,7 +490,7 @@ function _open() {
 }
 
 function _away(e) {
-  if (_pop && !_pop.contains(e.target) && e.target.id !== 'mv3-queue') {
+  if (_pop && !_pop.contains(e.target) && !e.target.closest('#mv3-queue')) {
     _close();
     document.removeEventListener('mousedown', _away);
   }

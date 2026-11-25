@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// THE ASSISTANT - a chat with a model on every page but the 3D Studio's, opened by its button in the top strip
+// THE ASSISTANT - a chat with a model on every page but the 3D Studio's, opened by its tile in the side menu
 // (js/app-nav.js loads this module at the first press). A generation's window (js/gen-window.js openFrame, 1280×800,
 // moved and stretched, kept under `assistant`), the page under it darkened.
 //
@@ -88,7 +88,7 @@ const S = {
   loading: false,
 };
 let W = null;              // the open window's parts
-let _onOpenChange = null;  // the strip's button follows the window
+let _onOpenChange = null;  // the menu's tile follows the window
 let _poll = 0;
 
 // ── Money and time in words ─────────────────────────────────────────────────
@@ -117,7 +117,7 @@ function when(iso) {
 /** Whether the window is open now. */
 export const isOpen = () => !!(W && W.win.alive());
 
-/** `fn(open)` is told when the window opens and closes - the strip's button lights while it is open. */
+/** `fn(open)` is told when the window opens and closes - the menu's tile lights while it is open. */
 export function onOpenChange(fn) { _onOpenChange = fn; }
 
 /** Opens the window (or, open already, puts the cursor in its field). */

@@ -1,26 +1,33 @@
 # Around the app
 
-Four pages, one strip on top of each, and windows that open over them. This chapter is the map: where things are and how
+Four pages, one menu along the left edge of each, and windows that open over them. This chapter is the map: where things are and how
 the parts of the app behave everywhere.
 
-![The top strip](shots/around-strip.webp)
+![The side menu](shots/around-menu.webp)
 
-## The top strip
+## The side menu
 
-Every page has the same strip.
+Every page has the same menu along the left edge of the window: a column of square tiles, one for each place. Rest the
+pointer on it and it unfolds over the page, each tile with its name - the page stays where it is. It folds again a second
+after the pointer leaves it, or at once by **Collapse** at its top.
 
+![The side menu, unfolded](shots/around-menu-open.webp)
+
+- At the top: **Full screen** - pressed in full screen it reads **Into a window**, as F11 does; under it the app's sign,
+  which is **Collapse** while the menu is unfolded.
 - **Home** - the start page: quick starts, the generators, your latest projects, your keys.
 - **Merge** - the editor: every project, its timeline and its render.
 - **3D Studio** - blurred: it is still being built.
 - **Library** - everything the app keeps: characters, media, voices, scenarios, renders.
 - **Assistant** - a chat with an AI: **Ideas** to brainstorm videos and prompts, **Help** to ask how to do something here.
-- On the right: **Queue** (renders waiting to run), the wait (how long the work in flight still takes), **Alerts** (every
-  generation), **Donate** (a page to thank the app's author), **Guide** (this book - on every page, with no key needed),
-  and last the gear of **Admin** (keys and settings; its name shows under the pointer). An **Update …** chip appears there
-  when a new version is ready.
-- At the far right, in full screen: minimise, into a window, quit.
+- **Queue** (renders waiting to run) and **Alerts** (every generation): a number on the tile says how many are waiting
+  or running, and under Alerts' name, how long the work in flight still takes.
+- **Update …** - a gold tile over the bottom ones when a new version is ready.
+- At the bottom: **Guide** (this book - on every page, with no key needed), **Donate** (a page to thank the app's author)
+  and **Admin** (keys and settings).
 
-The page you are on is lit.
+The page you are on has a gold frame. Out of full screen the window has Windows' own buttons; in full screen F11 or
+**Into a window** brings them back, and Alt+F4 closes the app.
 
 ## Home
 
@@ -60,9 +67,10 @@ The app's windows open over the page and darken it, so it is clear what has your
 Every paid generation - a picture, a clip, a talking head's frames and clips, music, sounds, a character, an environment,
 a lookbook, a long video turned into highlights - is a row of **Alerts** from the moment you press its button.
 
-![The Alerts list](shots/around-alerts.webp)
+![The Alerts list beside its tile](shots/around-alerts.webp)
 
-- A running row says its stage ("drawing the place…", "rendering") and how long is left; the strip's wait sums them up.
+- A running row says its stage ("drawing the place…", "rendering") and how long is left; Alerts' tile in the menu sums
+  them up.
 - The work belongs to the app, not to the page: leave the page, close the window - the result is still downloaded and
   filed where it belongs.
 - A finished row has **open** - it leads to the place the result went, the file outlined.

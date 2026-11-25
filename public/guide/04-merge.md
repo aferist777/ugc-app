@@ -202,7 +202,7 @@ blend mode, scale, colour and motion; ↑ ↓ change their order.
   preset**, **Playback speed**.
 - **Audio**: **Audio bitrate**.
 - **Subtitles**: **.srt file beside the video** - the Subtitles lane also as a file, for the platforms that read one.
-- **Render** starts now; **Add to queue** puts it in **Queue** (the top strip) to run later, one after another.
+- **Render** starts now; **Add to queue** puts it in **Queue** (the side menu) to run later, one after another.
 
 The video goes into the project's renders folder - Library → **Renders**. The right button on a render offers **Show in
 folder**. A render is refused while a clip on the timeline points at a deleted file - those clips are red; let a tile go

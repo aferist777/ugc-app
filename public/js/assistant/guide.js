@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// THE GUIDE - the app's book in a window, opened by "Guide" in the top strip (js/app-nav.js), by Home's Guide block and its
+// THE GUIDE - the app's book in a window, opened by "Guide" in the side menu (js/app-nav.js), by Home's Guide block and its
 // first step (js/home/main.js), by "Guide" in the assistant's Help and by "Guide: <section>" under a Help answer. The book
 // needs no key: nothing here asks for one. A generation's window (js/gen-window.js openFrame, 1280×800, moved and
 // stretched, kept under `guide`) over the page.

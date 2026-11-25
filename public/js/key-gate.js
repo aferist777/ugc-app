@@ -128,8 +128,8 @@ export function explain(place, anchor, o) {
 }
 
 // The popup in the top right corner, where the app's notices come (js/notice.js): the same place whatever was pressed -
-// a button at the window's foot or a page with no button at all - below the page's own top bars.
-const BARS = ['.sv3-nav', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
+// a button at the window's foot or a page with no button at all - below the page's own top bars (the side menu is none).
+const BARS = ['.sv3-nav:not(.is-side)', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
 function _toCorner() {
   const all = document.querySelectorAll('.u-ask.is-float');
   const el = all[all.length - 1];
@@ -144,7 +144,7 @@ function _toCorner() {
   el.classList.add('kg-ask');
   el.style.left = 'auto';
   el.style.right = '12px';
-  el.style.top = Math.round((top || 40) + 6) + 'px';
+  el.style.top = Math.round((top || 6) + 6) + 'px';
 }
 
 /** Whether the place can be used now; when it cannot - the popup, and false. */

@@ -9,7 +9,7 @@ of a cent.
 
 ## Opening it
 
-**Assistant**, right of Library in the top strip, opens its window over the page. It needs an AI key for the agents -
+**Assistant**, under Library in the side menu, opens its window over the page. It needs an AI key for the agents -
 kie.ai, Replicate, Claude or OpenRouter (see Getting started). The window can be moved and stretched; closing it does
 not stop an answer being written - the answer is kept and shows when the chat is opened again.
 
@@ -44,7 +44,7 @@ guide that answer the question, then answers by them alone, so its answer is the
 **Guide: <chapter › section>** opens the guide at the place the answer came from.
 
 **Guide**, beside **+ New chat** in Help, opens the guide where you stopped reading. Help needs an AI key; the guide
-itself needs none - it also opens from **Guide** at the right end of the top strip and from Home's **Guide** block.
+itself needs none - it also opens from **Guide** at the bottom of the side menu and from Home's **Guide** block.
 
 ## The guide
 

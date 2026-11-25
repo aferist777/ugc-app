@@ -180,7 +180,7 @@ export function switchRow(word, on, off, onChange) {
   return row;
 }
 /** The almanac of a chat that has none yet, at the foot of the column: the video chat's gold button, blurred and dimmed
- *  as the strip's 3D Studio entry (css/app-nav.css .is-soon), not pressed, "In development" under the pointer. */
+ *  as the menu's 3D Studio entry (css/app-nav.css .is-soon), not pressed, "In development" under the pointer. */
 export function almanacSoon() {
   const b = el('button', 'mv3-vc-almanac u-btn is-l is-gen is-soon', I18N.t('Almanac'));
   b.type = 'button';

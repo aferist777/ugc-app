@@ -1,8 +1,8 @@
 // "THE APP WAS UPDATED".
 //
-// A new commit lands in the program folder while the app is open (the server says so - lib/app-update.js): a chip
-// stands in the strip LEFT of the wait and Alerts, a short notice says it once, and the chip opens a window to restart
-// and update. Only in the app window: the restart is the desktop shell's (desktop/preload.js
+// A new commit lands in the program folder while the app is open (the server says so - lib/app-update.js): a tile
+// stands in the side menu over its foot (in the 3D Studio's top strip a chip LEFT of the wait and Alerts), a short notice
+// says it once, and the tile opens a window to restart and update. Only in the app window: the restart is the desktop shell's (desktop/preload.js
 // `restart`, desktop/main.js) - it asks about a running render first, as closing the window does - and in a browser
 // there is nothing to restart from a page.
 //
@@ -13,11 +13,13 @@
 import * as Layers from './layers.js';
 import { showToast } from './notice.js';
 import { t } from './i18n/t.js';
+import { sideItem } from './side-nav.js';
 
 const EVERY_MS = 60000;
 const NOTICE_MS = 9000;
 
 let _nav = null;
+let _side = null;      // the side menu's group for the tile; none - the 3D Studio's strip
 let _chip = null;
 let _state = null;
 let _timer = null;
@@ -30,11 +32,12 @@ function _el(tag, cls, text) {
   return e;
 }
 
-/** In the app window only: start looking for a new version. */
-export function mountUpdate(nav) {
+/** In the app window only: start looking for a new version. `side` - the side menu's group its tile goes into. */
+export function mountUpdate(nav, side) {
   const W = window.ugcWindow;
   if (!nav || _nav || !W || typeof W.restart !== 'function') return;
   _nav = nav;
+  _side = side || null;
   _check();
   _timer = setInterval(_check, EVERY_MS);
   window.addEventListener('beforeunload', () => clearInterval(_timer));
@@ -55,7 +58,17 @@ async function _check() {
 function _paintChip() {
   if (_chip || !_nav) return;
   const rel = _state && _state.release;
-  _chip = _el('button', 'sv3-navbtn sv3-upd' + (rel && rel.important ? ' is-important' : ''), rel ? t('Update {version}', { version: rel.version }) : t('Updated'));
+  const label = rel ? t('Update {version}', { version: rel.version }) : t('Updated');
+  if (_side) {
+    _chip = sideItem('update', label);
+    _chip.classList.add('sv3-upd');
+    if (rel && rel.important) _chip.classList.add('is-important');
+    _chip.title = rel ? t('UGC Studio {version} is downloaded - restart to use it', { version: rel.version }) : t('A new version of the app is in its folder - restart to use it');
+    _chip.addEventListener('click', _ask);
+    _side.appendChild(_chip);
+    return;
+  }
+  _chip = _el('button', 'sv3-navbtn sv3-upd' + (rel && rel.important ? ' is-important' : ''), label);
   _chip.type = 'button';
   _chip.title = rel ? t('UGC Studio {version} is downloaded - restart to use it', { version: rel.version }) : t('A new version of the app is in its folder - restart to use it');
   _chip.addEventListener('click', _ask);

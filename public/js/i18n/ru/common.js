@@ -1,8 +1,8 @@
-/* The words shared by every page: the top strip, the notices, the questions, Alerts and the render queue, the language
+/* The words shared by every page: the menu, the notices, the questions, Alerts and the render queue, the language
    switch and its restart, Admin's own markup. */
 
 export default {
-  // The top strip (public/js/app-nav.js, the pages' markup)
+  // The menu (public/js/app-nav.js, the pages' markup): the side menu, the 3D Studio's top strip
   'Home': 'Главная',
   'nav::Merge': 'Монтаж',
   '3D Studio': '3D-студия',
@@ -22,6 +22,8 @@ export default {
   'Into a window': 'В окно',
   'Quit UGC Studio': 'Закрыть UGC Studio',
   'Full screen': 'На весь экран',
+  // The side menu's top button (public/js/app-nav.js): folds the menu
+  'Collapse': 'Свернуть',
 
   // The update (public/js/app-update.js)
   'Update {version}': 'Обновление {version}',
