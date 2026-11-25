@@ -21,8 +21,8 @@ anything is paid.
 
 ## The first start
 
-**UGC Studio.exe** opens the app in its own window, filling the screen. **F11** (or the button at the right end of the top
-strip) switches to full screen and back.
+**UGC Studio.exe** opens the app in its own window, filling the screen. **F11** (or **Full screen** at the top of the side
+menu) switches to full screen and back.
 
 Everything the app makes or keeps is in its **library** - a folder named `library` beside the program. Projects,
 characters, pictures, clips, music, renders, the app's lists and backups all live there, and nothing is written anywhere
@@ -31,13 +31,13 @@ else. To move your work to another computer, copy that folder.
 Only one window of the app can be open on one library. Closing it while a render is running asks first.
 
 This guide is there from the first start, before any key is added: the **Guide** block on Home - first in the right
-column - and **Guide** at the right end of the top strip, on every page. Its window opens over the page and remembers
+column - and **Guide** at the bottom of the side menu, on every page. Its window opens over the page and remembers
 where you stopped.
 
 ## The keys
 
 A key is how a service knows the work is yours and bills you for it. Keys are entered on **Admin → API keys** (Admin is the
-gear at the right end of the top strip): paste a key, press **Save**, and the app asks the service whether the key works - a green line under it means yes, a red one says
+gear at the bottom of the side menu): paste a key, press **Save**, and the app asks the service whether the key works - a green line under it means yes, a red one says
 why not. **Check again** asks every service anew. A key is shown as its first six and last four characters only.
 
 ![Admin → API keys](shots/start-admin-keys.webp)
@@ -113,7 +113,7 @@ take it (**Restart now?**), and the guide follows.
 
 ## Updates
 
-When a new version of the app is ready, a gold chip **Update …** appears in the top strip, left of Alerts. Press it to
+When a new version of the app is ready, a gold tile **Update …** appears in the side menu, above the Guide. Press it to
 see what is new and **Restart and update**: the app closes, the new version opens on the same library. **Admin → This
 computer → Check now** asks at once; otherwise the app asks by itself a minute after it starts and every six hours.
 
@@ -121,6 +121,6 @@ Before the first start of a new version the app copies every list of your librar
 
 ## Where to go next
 
-- **Around the app** - the top strip, Home, the windows, Alerts and the Queue.
+- **Around the app** - the side menu, Home, the windows, Alerts and the Queue.
 - **Merge** - the editor every project ends up in.
 - **Talking head**, **Voiceover**, **Highlights** - one chapter each.

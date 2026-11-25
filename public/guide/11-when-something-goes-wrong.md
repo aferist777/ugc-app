@@ -56,7 +56,7 @@ not where it was": **Point at the file…** - the same file in its new place; it
 
 ## A render that stopped
 
-**Queue** in the top strip lists the renders. One that was running when the app closed is **interrupted** - **Render
+**Queue** in the side menu lists the renders. One that was running when the app closed is **interrupted** - **Render
 all** starts it over; one that **failed** has **Try this one again**. A highlights project's renders are one row with
 its own **Continue**. Closing the app while a render runs asks first.
 

@@ -299,8 +299,11 @@ function camera() {
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
   app.setPath('userData', job.profile);
   app.whenReady().then(async () => {
+    // The app's own preload, so a page draws what it draws in the app's window (the side menu's full screen tile); the
+    // window is never in full screen here, and what a page asks of it (`ugc-window`) is not done.
+    require('electron').ipcMain.handle('ugc-window-full', () => false);
     const win = new BrowserWindow({ width: job.size[0], height: job.size[1], useContentSize: true, show: false, paintWhenInitiallyHidden: true,
-      frame: false, webPreferences: { backgroundThrottling: false } });
+      frame: false, webPreferences: { backgroundThrottling: false, preload: path.join(APP, 'desktop', 'preload.js') } });
     win.webContents.setAudioMuted(true);
     const wc = win.webContents;
     const js = (code) => wc.executeJavaScript(code, true);
