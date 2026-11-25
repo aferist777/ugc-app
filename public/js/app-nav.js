@@ -1,4 +1,5 @@
-// The top nav strip, shared by every page of the app.
+// The app's menu, shared by every page: the SIDE MENU along the window's left edge (js/side-nav.js) on every page but
+// the 3D Studio's, which keeps its top strip and its whole look (OLD_LOOK below).
 //
 // Plain links, so cross-page navigation needs no router: this page hosts one tab and
 // every other entry is a different URL. Two things are done here rather than in the
@@ -7,7 +8,7 @@
 //   • which entry is lit is read from the ADDRESS, not hardcoded. The page answers on
 //     the page's own address, whatever it is, and a hardcoded class would
 //     light the wrong one the day that changes.
-//   • the Admin entry, on a page whose strip leaves it out - a gear alone, last before the window's own buttons.
+//   • the entries no page's markup carries - Home, the Assistant, the render queue, Alerts, the Guide, Donate, Admin.
 //
 // Its words are the app's language (js/i18n/t.js); the pages' own links are translated with their markup (lib/i18n-html.js,
 // "Merge" under data-tc="nav" - the page, not the verb).
@@ -15,7 +16,8 @@
 import { t, tc } from './i18n/t.js';
 import { mountAlerts } from './alerts-bell.js';
 import { mountUpdate } from './app-update.js';
-import { iconEl } from './icons.js';
+import { NAV_ICONS } from './nav-icons.js';
+import { dress, sideItem, sideGroup, foldButton, startSide } from './side-nav.js';
 // Which places the keys there are open - read on every page from its first moment (js/key-gate.js).
 import './key-gate.js';
 
@@ -54,7 +56,11 @@ function _soon3d(nav) {
   a.addEventListener('click', (e) => e.preventDefault());
 }
 
-// HOME first in every strip, left of Merge - put in here, so no page's markup has to carry it.
+// THE 3D STUDIO'S TOP STRIP keeps the look it had: Home first, Admin last, Alerts and the update's chip left of Admin, and
+// the window's buttons at the far right - in the app only, the shell gives its pages `ugcWindow` (desktop/preload.js);
+// a browser has none and draws none. Full screen: minimise, into a window, quit - the quit goes the way of the window's own
+// close, a running render asked about first. In a window Windows' own title bar has those three, and the strip keeps one:
+// back to full screen.
 function _homeLink(nav) {
   if (nav.querySelector('a[href="/home"]')) return;
   const a = document.createElement('a');
@@ -62,99 +68,13 @@ function _homeLink(nav) {
   nav.insertBefore(a, nav.firstChild);
 }
 
-// The Admin entry - API keys, AI settings, this computer - on a page whose strip does not carry one already. There is one
-// person and no sign-in, so there is nobody to hide it from. A GEAR with no word, its name under the pointer; it goes last
-// in the strip, right of the Guide, once everything else is in (initNav) - only the window's own buttons are right of it.
 function _adminLink(nav) {
-  let a = nav.querySelector('a[href="/admin"]');
-  if (!a) {
-    a = document.createElement('a');
-    a.href = '/admin'; a.textContent = t('Admin');
-    nav.appendChild(a);
-  }
-  if (OLD_LOOK() || a.classList.contains('is-gear')) return;
-  a.classList.add('has-ico', 'is-gear');
-  a.title = t('Admin');
-  a.setAttribute('aria-label', t('Admin'));
-  a.replaceChildren(iconEl('settings', 16));
-}
-
-// DONATE, right of Alerts: the author's DonationAlerts page, opened in the person's own browser (the window sends every
-// outside link there - desktop/main.js). Not on the 3D Studio's page (OLD_LOOK).
-const DONATE_URL = 'https://www.donationalerts.com/r/fellows';
-const HEART = '<svg class="u-ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13.6 2.7 8.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 5.3 4.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
-function _donateLink(nav) {
-  if (OLD_LOOK() || nav.querySelector('.sv3-donate')) return;
-  const admin = nav.querySelector('a[href="/admin"]');
+  if (nav.querySelector('a[href="/admin"]')) return;
   const a = document.createElement('a');
-  a.className = 'sv3-donate has-ico';
-  a.href = DONATE_URL;
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  a.title = t('Thank you for using UGC Studio! If it helps you, you can support it on DonationAlerts - and write there what you would like to see in the next updates.');
-  a.innerHTML = HEART;
-  a.appendChild(document.createTextNode(t('Donate')));
-  if (admin) admin.after(a); else nav.appendChild(a);
+  a.href = '/admin'; a.textContent = t('Admin');
+  nav.appendChild(a);
 }
 
-// THE RENDER QUEUE on every page, right of the spacer and left
-// of the wait - Merge's markup carries its own button and Merge starts it (js/merge-v3/main.js); on every other page it is put
-// in here and the same module (js/merge-v3/queue.js - the server's /api/mv3q list, open / Continue / Stop / Clear) is brought
-// in for it. Not on the 3D Studio's page (OLD_LOOK).
-function _queueButton(nav) {
-  if (OLD_LOOK() || document.getElementById('mv3-queue')) return;
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'sv3-navbtn';
-  b.id = 'mv3-queue';
-  b.title = t('Render queue - projects waiting to be rendered');
-  b.textContent = t('Queue');
-  nav.insertBefore(b, nav.querySelector('a[href="/admin"]'));
-  import('./merge-v3/queue.js').then((m) => m.initQueue()).catch(() => { b.hidden = true; });
-}
-
-// THE ASSISTANT right of Library - an icon and a word, lit while its window is open; its module and look are brought in
-// at the first press (js/assistant/assistant.js), so no page loads them before. Not on the 3D Studio's page (OLD_LOOK).
-function _assistantButton(nav) {
-  if (OLD_LOOK() || nav.querySelector('.sv3-asst')) return;
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'sv3-navbtn sv3-asst has-ico';
-  b.title = t('Assistant - brainstorm ideas and prompts, or ask how to do something in the app');
-  b.append(iconEl('message-square', 14), document.createTextNode(t('Assistant')));
-  const lib = nav.querySelector('a[href="/library"]');
-  nav.insertBefore(b, lib ? lib.nextSibling : nav.querySelector('.sp'));
-  b.addEventListener('click', () => {
-    import('./assistant/assistant.js').then((m) => {
-      m.onOpenChange((open) => b.classList.toggle('is-on', !!open));
-      return m.openAssistant();
-    }).catch((e) => { console.warn('[assistant]', e); });
-  });
-}
-
-// THE GUIDE right of Donate - the app's book in its window (js/assistant/guide.js), an icon and a word, lit while the book is
-// open (the window says so by the event `ugc:guide`, wherever it was opened from). The book needs no key, so the button is
-// there from the very first start, when the assistant is still closed. Its module and look are brought in at the first
-// press. Not on the 3D Studio's page (OLD_LOOK).
-function _guideButton(nav) {
-  if (OLD_LOOK() || nav.querySelector('.sv3-gd')) return;
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'sv3-navbtn sv3-gd has-ico';
-  b.title = t('Guide - the app\'s book: how every part of UGC Studio works');
-  b.append(iconEl('book-open', 14), document.createTextNode(t('Guide')));
-  const donate = nav.querySelector('.sv3-donate');
-  if (donate) donate.after(b); else nav.appendChild(b);
-  window.addEventListener('ugc:guide', (e) => b.classList.toggle('is-on', !!(e.detail && e.detail.open)));
-  b.addEventListener('click', () => {
-    import('./assistant/guide.js').then((m) => m.openGuide()).catch((e) => { console.warn('[guide]', e); });
-  });
-}
-
-// THE WINDOW'S BUTTONS at the far right, in the app only - the shell gives its pages
-// `ugcWindow` (desktop/preload.js); a browser has none and draws none. Full screen: minimise, into a window, quit - the
-// quit goes the way of the window's own close, a running render asked about first. In a window Windows' own title bar
-// has those three, and the strip keeps one: back to full screen.
 const ICONS = {
   min: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5h8"/></svg>',
   win: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5h5v5h-5z M4.5 4.5v-2h5v5h-2"/></svg>',
@@ -189,25 +109,121 @@ function _windowButtons(nav) {
   nav.appendChild(box);
 }
 
+// DONATE: the author's DonationAlerts page, opened in the person's own browser (the window sends every outside link
+// there - desktop/main.js).
+const DONATE_URL = 'https://www.donationalerts.com/r/fellows';
+
+// THE SIDE MENU, in its groups, top to bottom: full screen (in the app only) and the app's sign - "Collapse" while it
+// is unfolded; the pages - Home, Merge, 3D Studio, Library and the Assistant; the work in flight - the render queue and
+// Alerts, the wait in Alerts' word; an empty stretch; "Update …" when a new version is ready; at the foot the Guide,
+// Donate and Admin. The pages' markup gives Merge, 3D Studio, Library (Admin's page Admin, Merge's the queue's button):
+// they are dressed here as tiles, keeping what the page tied to them.
+function _sideFull(group) {
+  const W = window.ugcWindow;
+  if (!W || typeof W.toggleFull !== 'function') return;
+  const b = sideItem('full', t('Full screen'));
+  b.classList.add('sn-full');
+  const ico = b.querySelector('.sn-ico');
+  ico.insertAdjacentHTML('beforeend', NAV_ICONS.window);
+  const word = b.querySelector('.sn-t');
+  const paint = (isFull) => {
+    b.classList.toggle('is-full', !!isFull);
+    word.textContent = isFull ? t('Into a window') : t('Full screen');
+    b.setAttribute('aria-label', word.textContent);
+  };
+  // The window opens maximised - drawn so until the shell answers.
+  paint(false);
+  Promise.resolve(W.isFull()).then(paint).catch(() => { /* as drawn */ });
+  W.onFull(paint);
+  b.addEventListener('click', () => W.toggleFull());
+  group.appendChild(b);
+}
+
+function _sideNav(nav) {
+  const top = sideGroup('sn-top');
+  const pages = sideGroup('sn-pages');
+  const work = sideGroup('sn-work');
+  const upd = sideGroup('sn-upd');
+  const foot = sideGroup('sn-foot');
+  const stretch = document.createElement('div');
+  stretch.className = 'sn-sp';
+
+  const link = (href) => nav.querySelector('a[href="' + href + '"]');
+
+  _sideFull(top);
+  top.appendChild(foldButton(t('Collapse')));
+
+  const page = (href, kind, label) => {
+    const a = link(href) || document.createElement('a');
+    a.href = href;
+    pages.appendChild(dress(a, kind, label));
+  };
+  page('/home', 'home', t('Home'));
+  page('/merge', 'merge', tc('nav', 'Merge'));
+  page('/3d', 'studio3d', t('3D Studio'));
+  page('/library', 'library', t('Library'));
+
+  const asst = sideItem('assistant', t('Assistant'));
+  asst.classList.add('sv3-asst');
+  asst.title = t('Assistant - brainstorm ideas and prompts, or ask how to do something in the app');
+  asst.addEventListener('click', () => {
+    import('./assistant/assistant.js').then((m) => {
+      m.onOpenChange((open) => asst.classList.toggle('is-on', !!open));
+      return m.openAssistant();
+    }).catch((e) => { console.warn('[assistant]', e); });
+  });
+  pages.appendChild(asst);
+
+  // The render queue: Merge's markup has its button and Merge starts it; elsewhere it is made here.
+  let queue = document.getElementById('mv3-queue');
+  const fresh = !queue;
+  if (fresh) { queue = document.createElement('button'); queue.type = 'button'; queue.id = 'mv3-queue'; }
+  queue.title = t('Render queue - projects waiting to be rendered');
+  work.appendChild(dress(queue, 'queue', t('Queue')));
+
+  const guide = sideItem('guide', t('Guide'));
+  guide.classList.add('sv3-gd');
+  guide.title = t('Guide - the app\'s book: how every part of UGC Studio works');
+  window.addEventListener('ugc:guide', (e) => guide.classList.toggle('is-on', !!(e.detail && e.detail.open)));
+  guide.addEventListener('click', () => {
+    import('./assistant/guide.js').then((m) => m.openGuide()).catch((e) => { console.warn('[guide]', e); });
+  });
+  foot.appendChild(guide);
+
+  const donate = sideItem('donate', t('Donate'), 'a');
+  donate.classList.add('sv3-donate');
+  donate.href = DONATE_URL;
+  donate.target = '_blank';
+  donate.rel = 'noopener noreferrer';
+  donate.title = t('Thank you for using UGC Studio! If it helps you, you can support it on DonationAlerts - and write there what you would like to see in the next updates.');
+  foot.appendChild(donate);
+
+  const admin = link('/admin') || document.createElement('a');
+  admin.href = '/admin';
+  foot.appendChild(dress(admin, 'settings', t('Admin')));
+
+  nav.replaceChildren(top, pages, work, stretch, upd, foot);
+  _lightCurrent(nav);
+  _soon3d(nav);
+  if (fresh) import('./merge-v3/queue.js').then((m) => m.initQueue()).catch(() => { queue.hidden = true; });
+  // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
+  // the list is the same wherever you are standing.
+  mountAlerts(nav, work);
+  // A new version in the program folder: its tile over the foot, in the app window only.
+  mountUpdate(nav, upd);
+  startSide(nav);
+}
+
 export function initNav() {
   const nav = document.querySelector('.sv3-nav');
   if (!nav) return;
+  if (!OLD_LOOK()) { _sideNav(nav); return; }
+  // the 3D Studio's own strip
   _homeLink(nav);
   _navWords(nav);
   _adminLink(nav);
-  _donateLink(nav);
-  _guideButton(nav);
   _lightCurrent(nav);
-  _soon3d(nav);
-  _assistantButton(nav);
-  _queueButton(nav);
-  // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
-  // the list is the same wherever you are standing.
   mountAlerts(nav);
-  // A new version in the program folder: a chip left of the wait and Alerts, in the app window only.
   mountUpdate(nav);
-  // Admin last of the app's own: everything above was put in by it, left of it.
-  const admin = nav.querySelector('a[href="/admin"]');
-  if (admin && !OLD_LOOK()) nav.appendChild(admin);
   _windowButtons(nav);
 }

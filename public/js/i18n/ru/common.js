@@ -22,6 +22,8 @@ export default {
   'Into a window': 'В окно',
   'Quit UGC Studio': 'Закрыть UGC Studio',
   'Full screen': 'На весь экран',
+  // The side menu's top button (public/js/app-nav.js): folds the menu
+  'Collapse': 'Свернуть',
 
   // The update (public/js/app-update.js)
   'Update {version}': 'Обновление {version}',

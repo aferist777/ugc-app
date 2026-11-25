@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   ALERTS — the button in the top bar, on every page.
+   ALERTS — the button in the app's menu, on every page (the side menu's tile; the 3D Studio's top strip).
 
    What is being generated right now, and what came of what was generated before.
    The work itself is the server's: it waits for every
@@ -22,6 +22,7 @@ import { showToast } from './notice.js';
 import { MS } from './really.js';
 import { emptyEl } from './ui-state.js';
 import { icon } from './icons.js';
+import { sideItem, placeBeside } from './side-nav.js';
 import { setFigures } from './num.js';
 import { t, tn } from './i18n/t.js';
 
@@ -423,6 +424,8 @@ function _paintMenu() {
 
 function _place() {
   if (!_menu || !_btn) return;
+  // the side menu's tile: right of the folded menu, at the tile's height
+  if (placeBeside(_btn, _menu)) return;
   const r = _btn.getBoundingClientRect();
   const w = _menu.offsetWidth || 340;
   _menu.style.top = Math.round(r.bottom + 6) + 'px';
@@ -569,7 +572,8 @@ export function flyToAlerts(el) {
     try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduce = false; }
     if (reduce) { pulseAlerts(); resolve(); return; }
     const a = el.getBoundingClientRect();
-    const b = _btn.getBoundingClientRect();
+    // into the tile itself, whether the menu is folded or not
+    const b = (_btn.querySelector('.sn-ico') || _btn).getBoundingClientRect();
     const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
     const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
     el.style.transformOrigin = '50% 50%';
@@ -587,25 +591,34 @@ export function flyToAlerts(el) {
   });
 }
 
-/** Put the button in the top bar, left of Admin, and start reading the journal. */
-export function mountAlerts(nav) {
+/** Put the button in the menu and start reading the journal: into `side`, a group of the side menu - a tile, its count on
+ *  the tile, the wait in its word -, or without it into the 3D Studio's top strip, left of Admin. */
+export function mountAlerts(nav, side) {
   if (!nav || _btn) return;
-  _btn = _el('button', 'sv3-alerts');
-  _btn.type = 'button';
-  // an icon and a word, as Admin beside it
-  if (!OLD_LOOK()) _btn.insertAdjacentHTML('beforeend', icon('bell', 14));
-  _btn.appendChild(_el('span', null, t('Alerts')));
-  _btn.appendChild(_el('span', 'sv3-al-count'));
-  _btn.addEventListener('click', _toggle);
-  // ANCHORED ON ADMIN: Admin is the last thing in the strip on every page and is put
-  // there before this runs (initNav), so the bell lands at the right-hand end wherever it is.
-  const at = nav.querySelector('a[href="/admin"]');
-  // The wait stands to the LEFT of the button, so the two read as one thing: what is running, and
-  // how long it has to go.
-  _wait = _el('span', 'sv3-al-wait');
-  _wait.hidden = true;
-  nav.insertBefore(_wait, at);
-  nav.insertBefore(_btn, at);
+  if (side) {
+    _btn = sideItem('alerts', t('Alerts'));
+    _btn.classList.add('sv3-alerts');
+    _btn.querySelector('.sn-ico').appendChild(_el('span', 'sv3-al-count'));
+    // the wait under the word, so the two read as one thing: what is running, and how long it has to go
+    _wait = _el('span', 'sv3-al-wait');
+    _wait.hidden = true;
+    _btn.querySelector('.sn-t').appendChild(_wait);
+    _btn.addEventListener('click', _toggle);
+    side.appendChild(_btn);
+  } else {
+    _btn = _el('button', 'sv3-alerts');
+    _btn.type = 'button';
+    _btn.appendChild(_el('span', null, t('Alerts')));
+    _btn.appendChild(_el('span', 'sv3-al-count'));
+    _btn.addEventListener('click', _toggle);
+    // ANCHORED ON ADMIN: Admin is the last thing in the strip and is put there before this runs (initNav), so the bell
+    // lands at the right-hand end. The wait stands to the LEFT of the button, so the two read as one thing.
+    const at = nav.querySelector('a[href="/admin"]');
+    _wait = _el('span', 'sv3-al-wait');
+    _wait.hidden = true;
+    nav.insertBefore(_wait, at);
+    nav.insertBefore(_btn, at);
+  }
   _paintButton();
   _poll();
   _pollRefs();

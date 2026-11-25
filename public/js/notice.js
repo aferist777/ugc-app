@@ -13,8 +13,8 @@
 
    NOT A LAYER (js/layers.js): Escape never closes one - it keeps clearing the timeline's pick - and neither does a press
    elsewhere or a scroll. Progress and calm news stay where they are said (the bars' lines); only errors come here.
-   The corner stands below the page's own top bars (the strip and the bar under it - Merge's project bar, the Library's), so
-   it never covers Export or Upload.
+   The corner stands below the page's own top bars (Merge's project bar, the Library's; the 3D Studio's strip and bar), so
+   it never covers Export or Upload. The side menu is not a top bar: the corner is right of it whatever its height.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { t } from './i18n/t.js';
@@ -33,10 +33,10 @@ const _el = (tag, cls, text) => {
   return e;
 };
 
-// Below the page's own top bars, measured when a popup is shown (a bar may wrap in a narrow window): the strip, and the
-// bar under it whose right end has buttons - Merge's project bar (Export), the Library's (Upload, From a link), the 3D
-// Studio's.
-const BARS = ['.sv3-nav', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
+// Below the page's own top bars, measured when a popup is shown (a bar may wrap in a narrow window): the bar whose right
+// end has buttons - Merge's project bar (Export), the Library's (Upload, From a link) - and the 3D Studio's strip and bar.
+// The side menu (.is-side) runs the window's whole height and is no top bar.
+const BARS = ['.sv3-nav:not(.is-side)', '.mv3-bar', '.lib-bar', '.hm-sub', '.s3-bar'];
 function _place(box) {
   let top = 0;
   for (const sel of BARS) {
@@ -45,7 +45,7 @@ function _place(box) {
     const r = b.getBoundingClientRect();
     if (r.height > 0 && r.top < 160) top = Math.max(top, r.bottom);
   }
-  box.style.top = Math.round((top || 40) + 6) + 'px';
+  box.style.top = Math.round((top || 6) + 6) + 'px';
 }
 
 function _corner() {

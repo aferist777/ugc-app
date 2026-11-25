@@ -1,28 +1,29 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   APP NAV — the one definition of the top bar. Every page loads it right after
-   css/app-shell.css, whose tokens the rules below use.
+   APP NAV — the one definition of the app's menu. Every page loads it right after
+   css/app-shell.css, whose tokens the rules below use. The SIDE MENU on every page but the 3D Studio's (its section
+   at the end - .sv3-nav.is-side); the 3D Studio keeps its TOP STRIP and its whole look (.sv3-nav:not(.is-side)).
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Top nav ────────────────────────────────────────────────────────────────
+/* ── The 3D Studio's top strip ───────────────────────────────────────────────
    Which entry is lit is set from the address by js/app-nav.js, so the markup
    does not have to know where the page is mounted. */
 .sv3-nav{
   display:flex; align-items:center; gap:4px; flex:0 0 auto;
   padding:8px 14px; background:var(--surface); border-bottom:1px solid var(--border);
 }
-.sv3-nav a{
+.sv3-nav:not(.is-side) a{
   color:var(--muted); text-decoration:none; font-size:12px; font-weight:600;
   padding:5px 10px; border-radius:var(--r-xs); transition:.12s var(--ease);
 }
 /* one line each, whatever the language: "3D-студия" breaks at its hyphen otherwise */
-.sv3-nav a, .sv3-nav .sv3-navbtn, .sv3-nav .sv3-alerts{ white-space:nowrap }
-.sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
-.sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
-.sv3-nav .sp{flex:1}
+.sv3-nav:not(.is-side) a, .sv3-nav:not(.is-side) .sv3-navbtn, .sv3-nav:not(.is-side) .sv3-alerts{ white-space:nowrap }
+.sv3-nav:not(.is-side) a:hover{color:var(--ink); background:var(--surface-2)}
+.sv3-nav:not(.is-side) a.cur{color:var(--primary-ink); background:var(--primary)}
+.sv3-nav:not(.is-side) .sp{flex:1}
 /* No chips in the header: the lit link already says which page or shelf you are on. Only what
    can be pressed is there. */
 
-/* The window's buttons at the far right - in the app only (js/app-nav.js): minimise,
+/* The window's buttons at the far right of the 3D Studio's strip - in the app only (js/app-nav.js): minimise,
    into a window, quit; in a window, back to full screen. */
 .sv3-win{ display:flex; align-items:center; gap:2px; flex:0 0 auto; margin-left:10px; padding-left:10px; border-left:1px solid var(--border) }
 .sv3-win-b{
@@ -36,34 +37,34 @@
 
 /* A button that stands in the strip and reads like one of its entries: the render queue on
    Merge. Same shape as Alerts, without the count. */
-.sv3-nav .sv3-navbtn{
+.sv3-nav:not(.is-side) .sv3-navbtn{
   flex:0 0 auto; margin-right:2px; padding:5px 10px; cursor:pointer;
   background:none; border:1px solid transparent; border-radius:var(--r-xs);
   color:var(--muted); font:600 12px/1 var(--font); transition:.12s var(--ease);
 }
-.sv3-nav .sv3-navbtn:hover{ color:var(--ink); background:var(--surface-2); }
+.sv3-nav:not(.is-side) .sv3-navbtn:hover{ color:var(--ink); background:var(--surface-2); }
 
 /* ── Alerts ──────────────────────────────────────────────────────────────────
    What is being generated, on every page (js/alerts-bell.js). At the right-hand end, before
    Admin, because it is a reading about work in flight and not a place to go; the count on it is
    the same red as the render queue's, so two numbers about waiting work look alike. */
-.sv3-nav .sv3-alerts{
+.sv3-nav:not(.is-side) .sv3-alerts{
   position:relative; display:flex; align-items:center; gap:5px; flex:0 0 auto;
   margin-right:2px; padding:5px 10px; cursor:pointer;
   background:none; border:1px solid transparent; border-radius:var(--r-xs);
   color:var(--muted); font:600 12px/1 var(--font); transition:.12s var(--ease);
 }
-.sv3-nav .sv3-alerts:hover{ color:var(--ink); background:var(--surface-2); }
-.sv3-nav .sv3-alerts.is-on{ color:var(--ink); border-color:var(--border); background:var(--surface-2); }
-.sv3-nav .sv3-alerts.has-running{ color:var(--ink); }
+.sv3-nav:not(.is-side) .sv3-alerts:hover{ color:var(--ink); background:var(--surface-2); }
+.sv3-nav:not(.is-side) .sv3-alerts.is-on{ color:var(--ink); border-color:var(--border); background:var(--surface-2); }
+.sv3-nav:not(.is-side) .sv3-alerts.has-running{ color:var(--ink); }
 .sv3-al-count{ display:none; }
-.sv3-alerts.has-running .sv3-al-count{
+.sv3-nav:not(.is-side) .sv3-alerts.has-running .sv3-al-count{
   display:inline-block; min-width:15px; height:15px; padding:0 4px; border-radius:var(--pill);
   background:var(--danger); color:#fff; font:700 9px/15px var(--font); text-align:center;
 }
 /* A window handed over to Alerts lands here (js/alerts-bell.js pulseAlerts): the button grows a little
    and blinks twice, so it is clear where to look later. */
-.sv3-nav .sv3-alerts.is-caught{ animation:sv3-al-caught .9s var(--ease) 1; }
+.sv3-nav:not(.is-side) .sv3-alerts.is-caught{ animation:sv3-al-caught .9s var(--ease) 1; }
 @keyframes sv3-al-caught{
   0%{ transform:scale(1); }
   18%{ transform:scale(1.22); color:var(--ink); background:var(--primary); }
@@ -73,7 +74,7 @@
   100%{ transform:scale(1); }
 }
 /* Something finished while you were looking elsewhere. It goes out when the list is opened. */
-.sv3-alerts.has-done::after{
+.sv3-nav:not(.is-side) .sv3-alerts.has-done::after{
   content:''; position:absolute; top:4px; right:5px; width:7px; height:7px;
   border-radius:50%; background:var(--ok, #3fbf7f);
 }
@@ -108,18 +109,18 @@
 .sv3-al-mark{ flex:0 0 auto; width:16px; text-align:center; color:var(--primary); font-size:12px; }
 .sv3-al-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .sv3-al-title{ font:600 11.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* How long is left, left of the Alerts button. Quiet: it is a number to glance at, not a
+/* How long is left, left of the 3D Studio strip's Alerts button. Quiet: it is a number to glance at, not a
    thing to press. */
-.sv3-al-wait{
+.sv3-nav:not(.is-side) .sv3-al-wait{
   align-self:center; margin-right:6px; padding:3px 8px; border-radius:999px; white-space:nowrap;
   border:1px solid var(--border-soft); background:var(--surface);
   font:600 10px/1.2 var(--font); color:var(--muted);
 }
-.sv3-al-wait[hidden]{display:none}
+.sv3-al-wait[hidden]{display:none !important}
 /* A new version of the app is in its folder: the chip left of the wait, the window to restart. */
-.sv3-nav .sv3-navbtn.sv3-upd{ align-self:center; margin-right:6px; padding:3px 9px; border-radius:999px;
+.sv3-nav:not(.is-side) .sv3-navbtn.sv3-upd{ align-self:center; margin-right:6px; padding:3px 9px; border-radius:999px;
   border-color:var(--primary); color:var(--primary); font-size:10.5px }
-.sv3-nav .sv3-navbtn.sv3-upd:hover{ background:var(--primary); color:var(--primary-ink, #fff) }
+.sv3-nav:not(.is-side) .sv3-navbtn.sv3-upd:hover{ background:var(--primary); color:var(--primary-ink, #fff) }
 .sv3-al-where{ font:400 10px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* While it runs and says what it is doing - the analyses a clip makes before it renders. */
 .sv3-al-where.is-stage{ color:var(--gold, #d8b45a); }
@@ -137,7 +138,7 @@
    you are, and goes by itself; an error stays until its ✕ or its button. Newest on top, five at most, below the page's top
    bars (top is set by the module). Over every window (the highest is 9700): an error said from inside one is seen. */
 .sv3-toasts{
-  position:fixed; top:46px; right:12px; z-index:9800;
+  position:fixed; top:12px; right:12px; z-index:9800;
   display:flex; flex-direction:column; gap:6px; pointer-events:none;
 }
 .sv3-toast{
@@ -172,17 +173,8 @@
 /* A track has nothing to look at: the viewer gives it a player instead of a picture. */
 .lib-view-audio{ width:min(560px, 80%); }
 
-/* ── The strip's look ───────────────────────────────────────────────────────────────────────
-   The strip's colours on every page but the 3D Studio's, which keeps its whole look: the rules above are
-   what the 3D Studio's strip shows, these are guarded by `:root:not(:has(link[href="css/studio3d.css"]))`. The lit entry is
-   a step with a line under it; the 3D Studio's entry, while it is built, is blurred and not pressed (js/app-nav.js
-   marks it .is-soon on every page but /3d, which opens by its address). */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.cur{ color:var(--ink); background:var(--sel-bg); box-shadow:inset 0 -2px 0 var(--ink) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon{ filter:blur(1.2px); opacity:.5; cursor:default }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-soon:hover{ color:var(--muted); background:none }
-/* Admin: a gear alone, last of the app's entries (js/app-nav.js) - as tall as the words beside it, square */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.is-gear{ padding:4px 7px; margin-left:var(--sp-1) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts.is-caught{ animation-name:sv3-al-caught-v73 }
+/* ── The notices and Alerts' rows on every page but the 3D Studio's ──────────────────────────────────
+   Guarded by `:root:not(:has(link[href="css/studio3d.css"]))`: the rules above are what the 3D Studio's page shows. */
 @keyframes sv3-al-caught-v73{
   0%{ transform:scale(1); }
   18%{ transform:scale(1.22); color:var(--ink); background:var(--sel-line); }
@@ -191,14 +183,7 @@
   72%{ background:transparent; }
   100%{ transform:scale(1); }
 }
-/* the count of work in flight is not an error: a quiet mark; what finished is the one green */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-running .sv3-al-count{ background:var(--surface-3); color:var(--ink) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-done::after{ background:var(--success) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-mark{ color:var(--muted) }
-/* a new version waiting: "look here" - gold */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd{ border-color:var(--warn); color:var(--warn) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd:hover{ background:var(--warn); color:var(--on-fill) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-win-b.is-close:hover{ color:var(--on-danger); background:var(--danger-fill) }
 /* news in a quiet frame, an error in red */
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast{ border-color:var(--border) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-failed,
@@ -208,31 +193,9 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast.is-error .sv3-toast-mark{ color:var(--on-danger); background:var(--danger-fill) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-toast-n{ color:var(--on-danger); background:var(--danger-fill) }
 
-/* ── The strip's right end and the Alerts menu ─────────────────────────────────────────────────────
-   Every page but the 3D Studio's (the same guard as above; js/app-nav.js and js/alerts-bell.js add nothing there).
-   - Alerts and Admin: an icon and a word.
-   - "Updated", the wait and Alerts' count: ONE label form - a small rounded square, its figures in mono (so the wait does
-     not change its width every second); the count is the shared `.u-count`'s look.
-   - The menu: a head "Alerts" with a quiet "Clear"; a row's kind an icon (its word under the pointer), its time in mono,
-     "open" / "retry" quiet buttons. */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico,
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.has-ico,
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts{ display:inline-flex; align-items:center; gap:6px }
-/* the assistant right of Library and the guide right of Donate (js/app-nav.js): lit while their window is open */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-asst.is-on,
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-gd.is-on{ color:var(--ink); background:var(--sel-bg) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav a.has-ico .u-ico,
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-alerts .u-ico{ color:currentColor }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait,
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd{
-  display:inline-flex; align-items:center; height:22px; padding:0 var(--sp-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
-  background:none; font:var(--fw-medium) var(--fs-11)/1 var(--font); letter-spacing:0 }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait{ color:var(--muted) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-al-wait .u-mono{ font-size:var(--fs-11) }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-running .sv3-al-count{
-  display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 5px; border-radius:var(--r-2xs);
-  font:var(--fw-medium) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums }
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-alerts.has-done::after{ top:3px; right:3px }
+/* ── The Alerts menu ─────────────────────────────────────────────────────
+   Every page but the 3D Studio's (the same guard as above): a head "Alerts" with a quiet "Clear"; a row's kind an icon (its
+   word under the pointer), its time in mono, "open" / "retry" quiet buttons. */
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-head{ height:40px; padding:0 var(--sp-1) 0 var(--sp-3); border-bottom-color:var(--border-soft) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-h{ color:var(--ink); font:var(--fw-medium) var(--fs-13)/var(--lh-13) var(--font); letter-spacing:0; text-transform:none }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-row{ gap:var(--sp-2); padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3) }
@@ -246,9 +209,8 @@
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state{ color:var(--faint); font:var(--fw-regular) var(--fs-11)/1 var(--font) }
 :root:not(:has(link[href="css/studio3d.css"])) .sv3-al-state .u-mono{ font-size:var(--fs-11) }
 
-/* ── THE RENDER QUEUE: its button stands in the top
-   strip of every page but the 3D Studio's (js/app-nav.js _queueButton; Merge's markup has its own), its panel is
-   js/merge-v3/queue.js. ── */
+/* ── THE RENDER QUEUE: its tile stands in the side menu of every page but the 3D Studio's (js/app-nav.js; Merge's markup
+   has its own button, dressed as the tile), its panel is js/merge-v3/queue.js. ── */
 #mv3-queue{position:relative}
 /* The badge counts what is still to happen. Red because it is a claim on attention: work is
    sitting there unfinished. */
@@ -297,5 +259,90 @@
    dialogue that covered the list would hide the very thing being asked about. */
 .mv3-qask{ width:auto; margin:6px }   /* the shared question (.u-ask), in the list */
 .mv3-qask-r{ flex-wrap:wrap }
-/* An important update (the release says so): the chip filled gold - nothing is forced, it only stands out. */
-:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav .sv3-navbtn.sv3-upd.is-important{ background:var(--gold); border-color:var(--gold); color:var(--on-fill) }
+
+/* ══ THE SIDE MENU (js/side-nav.js, built by js/app-nav.js) ══════════════════════════════════════════════════
+   Along the window's left edge, the whole height, on every page but the 3D Studio's. Folded: a column of square tiles
+   (--sn-w); unfolded: --sn-open wide OVER the page, each tile with its word - the page keeps its place. The page gives the
+   column its width from its first moment (the body's left padding), and the markup's links stay unseen until the module
+   has dressed them, so nothing jumps. Under every window (their backdrop starts at 8900), over the page's own menus.
+   A tile: Home's look - a gold filled icon in a quiet square (js/nav-icons.js); the page you are on - the gold frame; a
+   window or list of its open - lit; a count - a small mark on the tile's corner. Groups apart: the top, the pages, the
+   work in flight, an empty stretch, the update, the foot. */
+:root{ --sn-w:56px; --sn-open:216px }
+:root:not(:has(link[href="css/studio3d.css"])) body:has(> nav.sv3-nav){ padding-left:var(--sn-w) }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav{
+  position:fixed; z-index:8800; left:0; top:0; bottom:0; width:var(--sn-w);
+  flex-direction:column; align-items:stretch; gap:0; padding:8px 0;
+  background:var(--surface); border-bottom:0; border-right:1px solid var(--border-soft);
+  overflow:hidden auto; scrollbar-width:none; transition:width .16s var(--ease), box-shadow .16s var(--ease);
+}
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav:not(.is-side){ visibility:hidden }
+.sv3-nav.is-side::-webkit-scrollbar{ display:none }
+:root:not(:has(link[href="css/studio3d.css"])) .sv3-nav.is-side.is-open{ width:var(--sn-open); box-shadow:10px 0 30px -12px oklch(0 0 0 / .7) }
+
+.sn-grp{ position:relative; display:flex; flex-direction:column; gap:4px; padding:0 8px; flex:0 0 auto }
+/* a quiet line between the groups */
+.sn-pages, .sn-work, .sn-foot{ margin-top:10px; padding-top:10px }
+.sn-pages::before, .sn-work::before, .sn-foot::before{ content:''; position:absolute; top:0; left:16px; width:24px; height:1px; background:var(--border) }
+.sn-sp{ flex:1 1 auto; min-height:8px }
+.sn-upd:empty{ display:none }
+.sn-upd{ margin-top:10px }
+
+.sn-item{
+  position:relative; display:flex; align-items:center; gap:12px; width:100%; height:40px; padding:0; margin:0;
+  border:0; border-radius:var(--r-sm); background:none; color:var(--ink); text-decoration:none; text-align:left;
+  font:var(--fw-medium) var(--fs-13)/1.2 var(--font); white-space:nowrap; cursor:pointer;
+}
+.sn-ico{
+  position:relative; flex:0 0 40px; width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--bg); color:var(--gold);
+  transition:border-color .12s, background .12s;
+}
+.sn-ico svg{ display:block; width:20px; height:20px }
+.sn-t{ display:flex; flex-direction:column; min-width:0; opacity:0; transition:opacity .12s }
+.sv3-nav.is-open .sn-t{ opacity:1 }
+.sv3-nav.is-open .sn-item:hover{ background:var(--hover) }
+.sn-item:hover .sn-ico{ border-color:var(--gold); background:var(--surface-2) }
+.sn-item:focus-visible{ outline:2px solid var(--focus); outline-offset:-2px }
+/* the page you are on: the gold frame */
+.sn-item.cur .sn-ico{ border-color:var(--gold); background:var(--gold-soft) }
+/* the Assistant's or the Guide's window open, the list of the queue or Alerts open */
+.sn-item.is-on .sn-ico{ border-color:var(--gold-line); background:var(--sel-bg) }
+/* the 3D Studio while it is built: blurred, not pressed, "In development" under the pointer */
+.sn-item.is-soon{ cursor:default }
+.sn-item.is-soon .sn-ico, .sn-item.is-soon .sn-t{ filter:blur(1.2px); opacity:.5 }
+.sv3-nav.is-open .sn-item.is-soon .sn-t{ opacity:.5 }
+.sn-item.is-soon:hover .sn-ico{ border-color:var(--border-soft); background:var(--bg) }
+.sv3-nav.is-open .sn-item.is-soon:hover{ background:none }
+
+/* the top: full screen - its icon the way it will go; the app's sign, "Collapse" in its place while unfolded */
+.sn-full .sn-ico svg + svg, .sn-full.is-full .sn-ico svg:first-child{ display:none }
+.sn-full.is-full .sn-ico svg + svg{ display:block }
+.sn-fold .sn-ico svg + svg{ display:none }
+.sv3-nav.is-open .sn-fold .sn-ico svg:first-child{ display:none }
+.sv3-nav.is-open .sn-fold .sn-ico svg + svg{ display:block }
+.sv3-nav:not(.is-open) .sn-fold{ cursor:default }
+.sv3-nav:not(.is-open) .sn-fold:hover .sn-ico{ border-color:var(--border-soft); background:var(--bg) }
+
+/* the counts: the queue's (js/merge-v3/queue.js) and Alerts' (js/alerts-bell.js) on the tile's corner; what finished - the
+   one green dot; the wait in Alerts' word, its figures in mono */
+.sv3-nav.is-side .mv3-qbadge,
+.sv3-nav.is-side .sv3-alerts.has-running .sv3-al-count{
+  position:absolute; top:-5px; right:-5px; display:inline-flex; align-items:center; justify-content:center;
+  min-width:16px; height:16px; padding:0 4px; border-radius:var(--pill); background:var(--surface-3); color:var(--ink);
+  font:var(--fw-medium) var(--fs-10)/1 var(--mono); font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px var(--surface);
+}
+.sv3-nav.is-side .sv3-alerts .sv3-al-count{ display:none }
+.sv3-nav.is-side .sv3-alerts.has-running .sv3-al-count{ display:inline-flex }
+.sv3-nav.is-side .sv3-alerts.has-done .sn-ico::after{
+  content:''; position:absolute; top:-3px; right:-3px; width:9px; height:9px; border-radius:50%;
+  background:var(--success); box-shadow:0 0 0 2px var(--surface);
+}
+.sv3-nav.is-side .sv3-al-wait{ margin-top:2px; color:var(--muted); font:var(--fw-regular) var(--fs-11)/1.2 var(--font) }
+.sv3-nav.is-side .sv3-al-wait .u-mono{ font-size:var(--fs-11) }
+/* a window handed over to Alerts lands on its tile: the tile grows a little and blinks twice (js/alerts-bell.js) */
+.sv3-nav.is-side .sv3-alerts.is-caught .sn-ico{ animation:sv3-al-caught-v73 .9s var(--ease) 1 }
+
+/* a new version waiting: "look here" - gold; an important one filled gold - nothing is forced, it only stands out */
+.sn-item.sv3-upd .sn-ico{ border-color:var(--gold-line); background:var(--gold-soft) }
+.sn-item.sv3-upd.is-important .sn-ico{ border-color:var(--gold); background:var(--gold); color:var(--on-fill) }
